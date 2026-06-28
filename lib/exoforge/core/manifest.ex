@@ -1,6 +1,6 @@
 defmodule Exoforge.Core.Manifest do
   @moduledoc """
-  Represents a module metadata
+  Represents an ExoModule metadata
   """
 
   defstruct id: "",
