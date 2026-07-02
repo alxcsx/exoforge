@@ -6,7 +6,7 @@ defmodule Exoforge.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      Exoforge.Core.ExoModuleRegistry
+      Exoforge.Domain.ExoModuleRegistry
     ]
 
     opts = [strategy: :one_for_one, name: Exoforge.Supervisor]

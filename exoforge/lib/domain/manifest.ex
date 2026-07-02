@@ -1,4 +1,4 @@
-defmodule Exoforge.Core.Manifest do
+defmodule Exoforge.Domain.Manifest do
   @moduledoc """
   Represents an ExoModule metadata
   """

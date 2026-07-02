@@ -1,6 +1,6 @@
-defmodule Exoforge.Core.ExoModuleRegistry do
+defmodule Exoforge.Domain.ExoModuleRegistry do
   use GenServer
-  alias Exoforge.Core.Manifest
+  alias Exoforge.Domain.Manifest
   # -- Client API
   def start_link(_opt) do
     GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
