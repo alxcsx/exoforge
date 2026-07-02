@@ -1,24 +1,40 @@
-# The directory Mix will write compiled artifacts to.
+# === Elixir & BEAM Build Artifacts ===
+# Since all sub-projects share the root directories, this catches everything
 /_build/
-
-# If you run "mix test --cover", coverage assets end up here.
 /cover/
-
-# The directory Mix downloads your dependencies sources to.
 /deps/
-
-# Where third-party dependencies like ExDoc output generated docs.
 /doc/
-
-# Temporary files, for example, from tests.
-/tmp/
-
-# If the VM crashes, it generates a dump, let's ignore it too.
-erl_crash.dump
-
-# Also ignore archive artifacts (built via "mix archive.build").
-*.ez
-
-# Ignore package tarball (built via "mix hex.build").
+/*.ez
+/*.beam
+/erl_crash.dump
+/mix.lock
 exoforge-*.tar
 
+# === Development Environment & IDEs ===
+# Language Server artifacts (ElixirLS / Lexical / NextLS)
+/.elixir_ls/
+/.lexical/
+/.nextls/
+.fetch
+
+# Code Editor Specifics
+/.idea/
+/.vscode/
+/.zed/
+*.swp
+*~
+
+# === Test & Coverage Reports ===
+/cover/
+/.htmlcov/
+/log/*.log
+
+# === ExoForge Engine Specifics ===
+# Ignore compiled release binaries or target runtime packages if generated locally
+/priv/static/components/
+
+# === Environment & Secrets ===
+# Ignore local environment variable overrides
+.env
+.env.local
+.env.*.local
