@@ -1,4 +1,4 @@
-defmodule Exoforge.MixProject do
+defmodule Exoforge do
   use Mix.Project
 
   def project do

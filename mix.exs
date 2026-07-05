@@ -6,15 +6,30 @@ defmodule Exoforge.Meta do
       app: :exoforge_meta,
       version: "1.0.0",
       elixir: "~> 1.20",
-      start_permanent: Mix.env() == :prod,
-      deps: [],
+      deps: deps(),
       aliases: aliases()
     ]
   end
 
+  defp deps do
+    [
+      {:exoforge, path: "exoforge"}
+    ] ++ component_deps()
+  end
+
+  defp component_deps do
+    "components/*"
+    |> Path.wildcard()
+    |> Enum.filter(&File.dir?/1)
+    |> Enum.map(fn dir ->
+      app_name = dir |> Path.basename() |> String.to_atom()
+      {app_name, path: dir}
+    end)
+  end
+
   defp aliases do
     [
-      compile: &compile_all/1,
+      build: &compile_all/1,
       test: &test_all/1,
       "deps.get": &deps_get_all/1
     ]

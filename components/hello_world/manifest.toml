@@ -1,0 +1,5 @@
+name = "Hello World"
+namespace = "Exoforge.Std.HelloWorld"
+version = "0.1.0"
+description = "A standard diagnostic component to test the ExoForge event bus."
+author = "ExoForge Core Team"

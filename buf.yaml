@@ -1,0 +1,4 @@
+version: v2
+lint:
+  except:
+    - PACKAGE_DIRECTORY_MATCH
