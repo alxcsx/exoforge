@@ -11,7 +11,11 @@ defmodule Exoforge.Std.HelloWorld.MixProject do
       config_path: "../../config/config.exs",
       deps_path: "../../deps",
       lockfile: "../../mix.lock",
-      deps: deps()
+      deps: deps(),
+      compilers: Mix.compilers() ++ [:exoforge_manifest],
+      exo_module: [
+        entrypoint: Exoforge.Std.HelloWorld
+      ]
     ]
   end
 
