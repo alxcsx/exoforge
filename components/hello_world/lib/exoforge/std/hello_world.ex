@@ -3,6 +3,7 @@ defmodule Exoforge.Std.HelloWorld do
 
   @impl true
   def init(_m) do
+    {:ok, []}
   end
 
   def hello do
