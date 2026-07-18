@@ -6,7 +6,8 @@ defmodule Exoforge.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      Exoforge.Domain.ExoModuleRegistry
+      Exoforge.Domain.ExoModuleRegistry,
+      Task.child_spec(fn -> Exoforge.Domain.ModuleBootstrapper.run() end)
     ]
 
     opts = [strategy: :one_for_one, name: Exoforge.Supervisor]
