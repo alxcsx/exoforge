@@ -3,22 +3,22 @@ defmodule Exoforge.Domain.Manifest do
   Represents an ExoModule metadata
   """
 
-  defstruct id: "",
-            name: "",
-            version: "",
-            type: "elixir",
-            physical_path: "",
-            dependencies: %{},
-            entry_point: ""
+  @enforce_keys [:id, :name, :version, :type, :entry_point]
 
-  @typedoc "The parsed representation of a plugin's manifest.toml"
+  defstruct id: "",
+              name: "",
+              version: nil,
+              type: :elixir,
+              physical_path: "", # automatically set by the loader.
+              entry_point: nil
+
+  @typedoc "The parsed representation of a plugin's manifest.exs"
   @type t :: %__MODULE__{
           id: String.t(),
           name: String.t(),
-          version: String.t(),
-          type: String.t(),
+          version: Version.t(),
+          type: :elixir | :wasm | atom(),
           physical_path: String.t(),
-          dependencies: map(),
-          entry_point: module() | nil
+          entry_point: module() | String.t()
         }
-end
+  end

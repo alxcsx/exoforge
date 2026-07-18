@@ -26,7 +26,6 @@ defmodule Exoforge do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:toml_elixir, "~> 3.0.0"}
     ]
   end
 end

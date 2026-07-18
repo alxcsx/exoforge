@@ -1,5 +1,6 @@
 defmodule Mix.Tasks.Compile.ExoforgeManifest do
   use Mix.Task
+  alias Exoforge.Domain.Manifest
 
   @impl true
   def run(_args) do
@@ -15,25 +16,31 @@ defmodule Mix.Tasks.Compile.ExoforgeManifest do
     app = config[:app]
     version = config[:version]
     type = Keyword.get(exo_config, :type, :elixir)
-
+    name = Keyword.get(exo_config, :name, to_string(app))
     entrypoint_mod = Keyword.fetch!(exo_config, :entrypoint)
-    entrypoint = to_string(entrypoint_mod)
 
-    toml_content = """
-        [module]
-        name = "#{app}"
-        version = "#{version}"
-        type = "#{type}"
-        entrypoint = "#{entrypoint}"
-    """
+    manifest = %Manifest{
+      id: app,
+      name: name,
+      version: version,
+      type: type,
+      physical_path: nil, # set by the loader.
+      entry_point: entrypoint_mod
+    }
+
+    manifest_map = Map.from_struct(manifest)
+
+    exs_content = manifest_map
+                   |> Map.delete(:physical_path)
+                   |> inspect(pretty: true, limit: :infinity)
 
     out_dir = Mix.Project.app_path()
-    out_path = Path.join(out_dir, "manifest.toml")
+    out_path = Path.join(out_dir, "manifest.exs")
 
     File.mkdir_p!(out_dir)
-    File.write!(out_path, toml_content)
+    File.write!(out_path, exs_content)
 
-    Mix.shell().info("[:exoforge_manifest] Generated manifest.toml for :#{app}")
+    Mix.shell().info("[:exoforge_manifest] Generated manifest.exs for :#{app}")
     :ok
   end
 end
