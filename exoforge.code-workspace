@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"name": "hello_world",
+			"path": "components/hello_world"
+		},
+		{
+			"name": "exoforge",
+			"path": "exoforge"
+		},
+		{
+			"name": "exoforge.meta",
+			"path": "."
+		}
+	],
+	"settings": {}
+}
