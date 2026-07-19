@@ -8,7 +8,7 @@ defmodule Exoforge.Domain.ModuleBootstrapper do
     |> Enum.each(&initialize_and_register/1)
   end
 
-  defp initialize_and_register(%Manifest{type: "elixir"} = manifest) do
+  defp initialize_and_register(%Manifest{type: :elixir} = manifest) do
     ElixirModuleRunner.load(manifest)
     ExoModuleRegistry.register(manifest)
   end

@@ -1,5 +1,6 @@
 defmodule Exoforge.Domain.ExoModuleRegistry do
   use GenServer
+  require Logger
   alias Exoforge.Domain.Manifest
   # -- Client API
   def start_link(_opt) do
@@ -62,6 +63,9 @@ defmodule Exoforge.Domain.ExoModuleRegistry do
   # -- Server Callbacks
   @impl true
   def init(_opts) do
+    # Prevent the process from crashing on exit signals, so we can clean up the ETS tables and DETS file properly.
+    Process.flag(:trap_exit, true)
+
     # This ETS Table holds the current registered modules.
     :ets.new(:exo_modules_mem, [:set, :named_table, :protected, read_concurrency: true])
 
@@ -76,6 +80,8 @@ defmodule Exoforge.Domain.ExoModuleRegistry do
 
   @impl true
   def terminate(_reason, _state) do
+    Logger.info("[ExoModuleRegistry] Gracefully closing DETS file before shutdown...")
+    :dets.sync(:exo_config_disk)
     :dets.close(:exo_config_disk)
   end
 

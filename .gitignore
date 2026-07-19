@@ -2,8 +2,9 @@
 # Since all sub-projects share the root directories, this catches everything
 /_build/
 /cover/
-/deps/
+/_deps/
 /doc/
+*.dets
 /*.ez
 /*.beam
 /erl_crash.dump

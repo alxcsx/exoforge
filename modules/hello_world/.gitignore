@@ -2,7 +2,7 @@
 # Since all sub-projects share the root directories, this catches everything
 /_build/
 /cover/
-/deps/
+/_deps/
 /doc/
 /*.ez
 /*.beam

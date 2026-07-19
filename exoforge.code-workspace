@@ -1,15 +1,15 @@
 {
 	"folders": [
 		{
-			"name": "hello_world",
-			"path": "components/hello_world"
+			"name": "std.hello_world",
+			"path": "modules/hello_world"
 		},
 		{
-			"name": "exoforge",
-			"path": "exoforge"
+			"name": "exoforge.core",
+			"path": "core"
 		},
 		{
-			"name": "exoforge.meta",
+			"name": "exoforge.app",
 			"path": "."
 		}
 	],

@@ -24,15 +24,17 @@ defmodule Mix.Tasks.Compile.ExoforgeManifest do
       name: name,
       version: version,
       type: type,
-      physical_path: nil, # set by the loader.
+      # set by the loader.
+      physical_path: nil,
       entry_point: entrypoint_mod
     }
 
     manifest_map = Map.from_struct(manifest)
 
-    exs_content = manifest_map
-                   |> Map.delete(:physical_path)
-                   |> inspect(pretty: true, limit: :infinity)
+    exs_content =
+      manifest_map
+      |> Map.delete(:physical_path)
+      |> inspect(pretty: true, limit: :infinity)
 
     out_dir = Mix.Project.app_path()
     out_path = Path.join(out_dir, "manifest.exs")
@@ -40,7 +42,7 @@ defmodule Mix.Tasks.Compile.ExoforgeManifest do
     File.mkdir_p!(out_dir)
     File.write!(out_path, exs_content)
 
-    Mix.shell().info("[:exoforge_manifest] Generated manifest.exs for :#{app}")
+    Mix.shell().info("#{IO.ANSI.green()}[ExoForge Manifest]#{IO.ANSI.reset()} Generated manifest.exs for :#{app}")
     :ok
   end
 end

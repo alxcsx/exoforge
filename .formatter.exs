@@ -1,4 +1,4 @@
 # .formatter.exs
 [
-  line_length: 120
+  line_length: 160
 ]

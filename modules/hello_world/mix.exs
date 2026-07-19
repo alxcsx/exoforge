@@ -9,7 +9,7 @@ defmodule Exoforge.Std.HelloWorld.MixProject do
       start_permanent: Mix.env() == :prod,
       build_path: "../../_build",
       config_path: "../../config/config.exs",
-      deps_path: "../../deps",
+      deps_path: "../../_deps",
       lockfile: "../../mix.lock",
       deps: deps(),
       compilers: Mix.compilers() ++ [:exoforge_manifest],
@@ -19,17 +19,15 @@ defmodule Exoforge.Std.HelloWorld.MixProject do
     ]
   end
 
-  # Run "mix help compile.app" to learn about applications.
   def application do
     [
       extra_applications: [:logger]
     ]
   end
 
-  # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:exoforge, path: "../../exoforge"}
+      {:exoforge_core, path: "../../core"}
     ]
   end
 end
