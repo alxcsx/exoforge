@@ -4,13 +4,12 @@ defmodule Exoforge.Drivers.Loaders.ManifestLoader do
   require Logger
 
   @impl true
-  def load_modules do
-    base_dir = Application.get_env(:exoforge, :modules_dir)
-    if is_nil(base_dir), do: raise("Modules dir not found. Please set :modules_dir in your config")
+  def load_modules(path) do
+    if is_nil(path), do: raise("Modules dir not found. Please set :modules_dir in your config")
 
-    Logger.info("[ManifestLoader] Loading modules from #{base_dir}")
+    Logger.info("[ManifestLoader] Loading modules from #{path}")
 
-    Path.join([base_dir, "*", "manifest.exs"])
+    Path.join([path, "*", "manifest.exs"])
     |> Path.wildcard()
     |> Enum.map(&parse_manifest/1)
     |> Enum.reject(&is_nil/1)

@@ -3,10 +3,8 @@ defmodule Exoforge.Domain.ModuleBootstrapper do
   alias Exoforge.Domain.Manifest
   alias Exoforge.Drivers.Runtime.ElixirModuleRunner
 
-  def run do
-    loader = Application.get_env(:exoforge, :module_loader, Exoforge.Drivers.Loaders.ManifestLoader)
-
-    loader.load_modules()
+  def run(driver, path) do
+    driver.load_modules(path)
     |> Enum.each(&initialize_and_register/1)
   end
 
