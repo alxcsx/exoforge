@@ -1,14 +1,39 @@
 defmodule Exoforge.Plugin do
   @moduledoc "Public DSL for creating Exoforge plugins."
 
-  defmacro __using__(_opts) do
+  defmacro __using__(opts) do
+    implements_ast = Keyword.get(opts, :implements, Keyword.get(opts, :provides, []))
+    implements_list = if is_list(implements_ast), do: implements_ast, else: [implements_ast]
+
+    behavior_injections =
+      Enum.map(implements_list, fn
+        {:__aliases__, _, _} = alias_ast ->
+          contract_module = Macro.expand(alias_ast, __CALLER__)
+          quote do: @behaviour(unquote(contract_module))
+
+        {:{}, _, [:beam, beam_module]} when is_atom(beam_module) ->
+          quote do: @behaviour(unquote(beam_module))
+
+        {:beam, beam_module} when is_atom(beam_module) ->
+          quote do: @behaviour(unquote(beam_module))
+
+        shorthand when is_atom(shorthand) ->
+          contract_module = Module.concat([Exoforge, Contracts, Services, Macro.camelize(to_string(shorthand))])
+          quote do: @behaviour(unquote(contract_module))
+      end)
+
     quote do
       @behaviour Exoforge.Contracts.Plugin
       import Exoforge.Plugin, only: [defaction: 2, defevent: 2]
       Module.register_attribute(__MODULE__, :exo_actions, accumulate: true)
       Module.register_attribute(__MODULE__, :exo_events, accumulate: true)
-      Module.register_attribute(__MODULE__, :has_custom_init, accumulate: false)
 
+      @exo_provides unquote(implements_list)
+
+      def on_init(_manifest), do: :ok
+      defoverridable on_init: 1
+
+      unquote(behavior_injections)
       @before_compile Exoforge.Plugin
     end
   end
@@ -27,28 +52,18 @@ defmodule Exoforge.Plugin do
     end
   end
 
-  defmacro on_init({_name, _meta, [manifest_arg]}, do: block) do
-    quote do
-      @has_custom_init true
-      def __custom_init(unquote(manifest_arg)) do
-        unquote(block)
-      end
-    end
-  end
-
   defmacro __before_compile__(_env) do
     quote do
-      def __custom_init(_manifest), do: :ok
-
       @impl Exoforge.Contracts.Plugin
       def init(manifest) do
-        __custom_init(manifest)
+        on_init(manifest)
 
         {:ok,
          %{
            plugin: __MODULE__,
            actions: @exo_actions,
-           events: @exo_events
+           events: @exo_events,
+           provides: @exo_provides
          }}
       end
 
