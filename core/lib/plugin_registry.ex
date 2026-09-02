@@ -1,6 +1,5 @@
 defmodule Exoforge.PluginRegistry do
   use GenServer
-  require Logger
   alias Exoforge.Domain.Manifest
 
   def start_link(_opt) do
@@ -44,17 +43,7 @@ defmodule Exoforge.PluginRegistry do
     :ets.new(:exo_plugins_mem, [:set, :named_table, :protected, read_concurrency: true])
     :ets.new(:exo_services_mem, [:set, :named_table, :protected, read_concurrency: true])
 
-    {:ok, _} = :dets.open_file(:exo_services_disk, type: :set, file: ~c"exo_services.dets")
-    :dets.to_ets(:exo_services_disk, :exo_services_mem)
-
     {:ok, %{}}
-  end
-
-  @impl true
-  def terminate(_reason, _state) do
-    Logger.info("[PluginRegistry] Gracefully closing DETS files...")
-    :dets.sync(:exo_services_disk)
-    :dets.close(:exo_services_disk)
   end
 
   @impl true
@@ -69,7 +58,6 @@ defmodule Exoforge.PluginRegistry do
       key = {service_type, context}
       # Store the manifest or its entry point as the service handler
       :ets.insert(:exo_services_mem, {key, manifest})
-      :dets.insert(:exo_services_disk, {key, manifest})
     end)
 
     {:reply, :ok, state}
