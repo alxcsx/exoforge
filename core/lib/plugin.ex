@@ -14,9 +14,6 @@ defmodule Exoforge.Plugin do
         {:{}, _, [:beam, beam_module]} when is_atom(beam_module) ->
           quote do: @behaviour(unquote(beam_module))
 
-        {:beam, beam_module} when is_atom(beam_module) ->
-          quote do: @behaviour(unquote(beam_module))
-
         shorthand when is_atom(shorthand) ->
           contract_module = Module.concat([Exoforge, Contracts, Services, Macro.camelize(to_string(shorthand))])
           quote do: @behaviour(unquote(contract_module))
@@ -59,7 +56,25 @@ defmodule Exoforge.Plugin do
   end
 
   defmacro __before_compile__(env) do
-    manifest = Module.get_attribute(env.module, :manifest)
+    manifest = Module.get_attribute(env.module, :manifest) || %{}
+    infra = Module.get_attribute(env.module, :infra) || %{}
+
+    # Manifest Validation
+    valid_keys = Map.keys(struct(Exoforge.Domain.Manifest)) -- [:__struct__]
+    provided_keys = Map.keys(manifest)
+    invalid_keys = provided_keys -- valid_keys
+
+    if invalid_keys != [] do
+      raise CompileError,
+        file: env.file,
+        description: "Invalid keys in @manifest: #{inspect(invalid_keys)}. Allowed keys are: #{inspect(valid_keys)}"
+    end
+
+    if not is_map(infra) do
+      raise CompileError,
+        file: env.file,
+        description: "@infra must be a map. Got: #{inspect(infra)}"
+    end
 
     quote do
       def manifest_data, do: unquote(Macro.escape(manifest))

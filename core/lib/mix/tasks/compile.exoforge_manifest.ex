@@ -36,6 +36,7 @@ defmodule Mix.Tasks.Compile.ExoforgeManifest do
       name: Map.get(user_manifest, :name, to_string(app)),
       version: Map.get(user_manifest, :version, version),
       type: Map.get(user_manifest, :type, :elixir),
+      context: Map.get(user_manifest, :context, :global),
       physical_path: "",
       entry_point: entrypoint_mod,
       dependencies: Map.get(user_manifest, :dependencies, []),

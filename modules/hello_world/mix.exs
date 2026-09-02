@@ -8,7 +8,7 @@ defmodule Exoforge.Std.HelloWorld.MixProject do
       elixir: "~> 1.20",
       deps: deps(),
       compilers: Mix.compilers() ++ [:exoforge_manifest]
-    ]e
+    ]
   end
 
   def application do
