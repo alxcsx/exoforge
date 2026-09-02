@@ -6,29 +6,40 @@ defmodule Mix.Tasks.Compile.ExoforgeManifest do
   def run(_args) do
     config = Mix.Project.config()
 
-    case config[:exo_module] do
+    case find_plugin_entrypoint() do
       nil -> :noop
-      exo_config -> generate_manifest(config, exo_config)
+      entrypoint_mod -> generate_manifest(config, entrypoint_mod)
     end
   end
 
-  defp generate_manifest(config, exo_config) do
+  defp find_plugin_entrypoint do
+    Mix.Project.compile_path()
+    |> Path.join("*.beam")
+    |> Path.wildcard()
+    |> Enum.map(fn path ->
+      path |> Path.basename(".beam") |> String.to_atom()
+    end)
+    |> Enum.find(fn module ->
+      Code.ensure_loaded?(module) and function_exported?(module, :__exoforge_plugin__?, 0)
+    end)
+  end
+
+  defp generate_manifest(config, entrypoint_mod) do
     app = config[:app]
     version = config[:version]
-    type = Keyword.get(exo_config, :type, :elixir)
-    name = Keyword.get(exo_config, :name, to_string(app))
-    entrypoint_mod = Keyword.fetch!(exo_config, :entrypoint)
+
+    # Get the @manifest overrides from the plugin module
+    user_manifest = entrypoint_mod.manifest_data()
 
     manifest = %Manifest{
       id: app,
-      name: name,
-      version: version,
-      type: type,
-      # set by the loader.
+      name: Map.get(user_manifest, :name, to_string(app)),
+      version: Map.get(user_manifest, :version, version),
+      type: Map.get(user_manifest, :type, :elixir),
       physical_path: "",
       entry_point: entrypoint_mod,
-      dependencies: Keyword.get(exo_config, :dependencies, []),
-      provides: Keyword.get(exo_config, :provides, [])
+      dependencies: Map.get(user_manifest, :dependencies, []),
+      provides: entrypoint_mod.provides_contracts()
     }
 
     manifest_map = Map.from_struct(manifest)
@@ -44,9 +55,7 @@ defmodule Mix.Tasks.Compile.ExoforgeManifest do
     File.mkdir_p!(out_dir)
     File.write!(out_path, exs_content)
 
-    Mix.shell().info(
-      "#{IO.ANSI.green()}[ExoForge Manifest]#{IO.ANSI.reset()} Generated manifest.exs for :#{app}"
-    )
+    Mix.shell().info("#{IO.ANSI.green()}[ExoForge Manifest]#{IO.ANSI.reset()} Generated manifest.exs for :#{app}")
 
     :ok
   end

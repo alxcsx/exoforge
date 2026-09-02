@@ -7,10 +7,7 @@ defmodule Database.MixProject do
       version: "0.1.0",
       elixir: "~> 1.20",
       deps: deps(),
-      compilers: Mix.compilers() ++ [:exoforge_manifest],
-      exo_module: [
-        entrypoint: Exoforge.Std.Database
-      ]
+      compilers: Mix.compilers() ++ [:exoforge_manifest]
     ]
   end
 

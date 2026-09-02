@@ -27,9 +27,15 @@ defmodule Exoforge.Plugin do
       import Exoforge.Plugin, only: [defaction: 2, defevent: 2]
       Module.register_attribute(__MODULE__, :exo_actions, accumulate: true)
       Module.register_attribute(__MODULE__, :exo_events, accumulate: true)
+      Module.register_attribute(__MODULE__, :manifest, accumulate: false)
+      Module.register_attribute(__MODULE__, :infra, accumulate: false)
 
       @exo_provides unquote(implements_list)
 
+      @manifest %{}
+      @infra %{}
+
+      def __exoforge_plugin__?, do: true
       def on_init(_manifest), do: :ok
       defoverridable on_init: 1
 
@@ -52,8 +58,14 @@ defmodule Exoforge.Plugin do
     end
   end
 
-  defmacro __before_compile__(_env) do
+  defmacro __before_compile__(env) do
+    manifest = Module.get_attribute(env.module, :manifest)
+
     quote do
+      def manifest_data, do: unquote(Macro.escape(manifest))
+      def infra_requirements, do: @infra
+      def provides_contracts, do: @exo_provides
+
       @impl Exoforge.Contracts.Plugin
       def init(manifest) do
         on_init(manifest)
