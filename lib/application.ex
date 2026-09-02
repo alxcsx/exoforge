@@ -10,8 +10,8 @@ defmodule Exoforge.Application do
     path = Keyword.get(loader_config, :scan_path)
 
     children = [
-      Exoforge.Domain.ExoModuleRegistry,
-      Task.child_spec(fn -> Exoforge.Domain.ModuleBootstrapper.run(driver, path) end)
+      Exoforge.PluginRegistry,
+      Task.child_spec(fn -> Exoforge.PluginBootstrapper.run(driver, path) end)
     ]
 
     opts = [strategy: :one_for_one, name: Exoforge.Supervisor]

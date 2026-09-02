@@ -1,5 +1,5 @@
 defmodule Exoforge.Drivers.Loaders.ManifestLoader do
-  @behaviour Exoforge.Contracts.ModuleLoader
+  @behaviour Exoforge.Contracts.PluginLoader
   alias Exoforge.Domain.Manifest
   require Logger
 

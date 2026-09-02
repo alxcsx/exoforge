@@ -1,7 +1,7 @@
-defmodule Exoforge.Domain.ModuleBootstrapper do
-  alias Exoforge.Domain.ExoModuleRegistry
+defmodule Exoforge.PluginBootstrapper do
   alias Exoforge.Domain.Manifest
-  alias Exoforge.Drivers.Runtime.ElixirModuleRunner
+  alias Exoforge.PluginRegistry
+  alias Exoforge.Drivers.Runtime.ElixirPluginRunner
 
   def run(driver, path) do
     driver.load_modules(path)
@@ -9,7 +9,7 @@ defmodule Exoforge.Domain.ModuleBootstrapper do
   end
 
   defp initialize_and_register(%Manifest{type: :elixir} = manifest) do
-    ElixirModuleRunner.load(manifest)
-    ExoModuleRegistry.register(manifest)
+    ElixirPluginRunner.load(manifest)
+    PluginRegistry.register(manifest)
   end
 end

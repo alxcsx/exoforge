@@ -1,10 +1,5 @@
 defmodule Exoforge.Std.HelloWorld do
-  @behaviour Exoforge.Contracts.ExoModule
-
-  @impl true
-  def init(_m) do
-    {:ok, []}
-  end
+  use Exoforge.Plugin
 
   def hello do
     :world

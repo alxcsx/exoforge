@@ -25,8 +25,10 @@ defmodule Mix.Tasks.Compile.ExoforgeManifest do
       version: version,
       type: type,
       # set by the loader.
-      physical_path: nil,
-      entry_point: entrypoint_mod
+      physical_path: "",
+      entry_point: entrypoint_mod,
+      dependencies: Keyword.get(exo_config, :dependencies, []),
+      provides: Keyword.get(exo_config, :provides, [])
     }
 
     manifest_map = Map.from_struct(manifest)
@@ -42,7 +44,10 @@ defmodule Mix.Tasks.Compile.ExoforgeManifest do
     File.mkdir_p!(out_dir)
     File.write!(out_path, exs_content)
 
-    Mix.shell().info("#{IO.ANSI.green()}[ExoForge Manifest]#{IO.ANSI.reset()} Generated manifest.exs for :#{app}")
+    Mix.shell().info(
+      "#{IO.ANSI.green()}[ExoForge Manifest]#{IO.ANSI.reset()} Generated manifest.exs for :#{app}"
+    )
+
     :ok
   end
 end
