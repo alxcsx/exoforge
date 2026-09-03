@@ -19,9 +19,10 @@ defmodule Exoforge.Plugin do
           quote do: @behaviour(unquote(contract_module))
       end)
 
-    quote do
+    quote location: :keep do
       @behaviour Exoforge.Contracts.Plugin
       import Exoforge.Plugin, only: [defaction: 2, defevent: 2]
+
       Module.register_attribute(__MODULE__, :exo_actions, accumulate: true)
       Module.register_attribute(__MODULE__, :exo_events, accumulate: true)
       Module.register_attribute(__MODULE__, :manifest, accumulate: false)
@@ -31,8 +32,9 @@ defmodule Exoforge.Plugin do
 
       @manifest %{}
       @infra %{}
-
+      @doc false
       def __exoforge_plugin__?, do: true
+      @doc "lifecycle hook: callend when the plugin is first loaded"
       def on_init(_manifest), do: :ok
       defoverridable on_init: 1
 
@@ -41,16 +43,24 @@ defmodule Exoforge.Plugin do
     end
   end
 
-  defmacro defaction({name, _meta, args}, do: block) do
-    quote do
+  defmacro defaction({name, meta, args}, do: block) do
+    spec_args = if args, do: Enum.map(args, fn _ -> quote do: term() end), else: []
+    line = Keyword.get(meta, :line, __CALLER__.line)
+
+    quote line: line do
       @exo_actions unquote(name)
+      @spec unquote(name)(unquote_splicing(spec_args)) :: term()
       def unquote(name)(unquote_splicing(args)), do: unquote(block)
     end
   end
 
-  defmacro defevent({name, _meta, args}, do: block) do
-    quote do
+  defmacro defevent({name, meta, args}, do: block) do
+    spec_args = if args, do: Enum.map(args, fn _ -> quote do: term() end), else: []
+    line = Keyword.get(meta, :line, __CALLER__.line)
+
+    quote line: line do
       @exo_events unquote(name)
+      @spec unquote(name)(unquote_splicing(spec_args)) :: term()
       def unquote(name)(unquote_splicing(args)), do: unquote(block)
     end
   end
@@ -76,11 +86,15 @@ defmodule Exoforge.Plugin do
         description: "@infra must be a map. Got: #{inspect(infra)}"
     end
 
-    quote do
+    quote location: :keep do
+      @doc false
       def manifest_data, do: unquote(Macro.escape(manifest))
+      @doc false
       def infra_requirements, do: @infra
+      @doc false
       def provides_contracts, do: @exo_provides
 
+      @doc false
       @impl Exoforge.Contracts.Plugin
       def init(manifest) do
         on_init(manifest)
@@ -88,12 +102,13 @@ defmodule Exoforge.Plugin do
         {:ok,
          %{
            plugin: __MODULE__,
-           actions: @exo_actions,
-           events: @exo_events,
+           actions: Enum.reverse(@exo_actions),
+           events: Enum.reverse(@exo_events),
            provides: @exo_provides
          }}
       end
 
+      @doc false
       def manifest do
         Exoforge.PluginRegistry.fetch_manifest(__MODULE__)
       end

@@ -19,14 +19,8 @@ defmodule Exoforge.PluginRegistry do
   end
 
   def fetch_services(type) do
-    :ets.foldl(
-      fn
-        {{^type, _context}, manifest}, acc -> [manifest | acc]
-        _, acc -> acc
-      end,
-      [],
-      :exo_services_mem
-    )
+    :ets.match_object(:exo_services_mem, {{type, :_}, :_})
+    |> Enum.map(fn {_key, manifest} -> manifest end)
   end
 
   def fetch_manifest(manifest_id) do

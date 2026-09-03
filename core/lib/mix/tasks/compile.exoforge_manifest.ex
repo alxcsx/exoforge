@@ -49,6 +49,8 @@ defmodule Mix.Tasks.Compile.ExoforgeManifest do
       manifest_map
       |> Map.delete(:physical_path)
       |> inspect(pretty: true, limit: :infinity)
+      |> Code.format_string!()
+      |> IO.iodata_to_binary()
 
     out_dir = Mix.Project.app_path()
     out_path = Path.join(out_dir, "manifest.exs")
