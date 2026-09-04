@@ -2,11 +2,11 @@ defmodule Exoforge.Plugin do
   @moduledoc "Public DSL for creating Exoforge plugins."
 
   defmacro __using__(opts) do
-    implements_ast = Keyword.get(opts, :implements, Keyword.get(opts, :provides, []))
-    implements_list = if is_list(implements_ast), do: implements_ast, else: [implements_ast]
+    provides_ast = Keyword.get(opts, :provides, [])
+    provides_list = if is_list(provides_ast), do: provides_ast, else: [provides_ast]
 
     behavior_injections =
-      Enum.map(implements_list, fn
+      Enum.map(provides_list, fn
         {:__aliases__, _, _} = alias_ast ->
           contract_module = Macro.expand(alias_ast, __CALLER__)
           quote do: @behaviour(unquote(contract_module))
@@ -21,17 +21,26 @@ defmodule Exoforge.Plugin do
 
     quote location: :keep do
       @behaviour Exoforge.Contracts.Plugin
-      import Exoforge.Plugin, only: [defaction: 2, defevent: 2]
+      import Exoforge.Plugin,
+        only: [
+          defaction: 2,
+          defaction: 3,
+          defevent: 1,
+          defevent: 2,
+          handle_event: 2
+        ]
 
       Module.register_attribute(__MODULE__, :exo_actions, accumulate: true)
       Module.register_attribute(__MODULE__, :exo_events, accumulate: true)
+      Module.register_attribute(__MODULE__, :exo_handlers, accumulate: true)
+
       Module.register_attribute(__MODULE__, :manifest, accumulate: false)
       Module.register_attribute(__MODULE__, :infra, accumulate: false)
 
-      @exo_provides unquote(implements_list)
-
+      @exo_provides unquote(provides_list)
       @manifest %{}
       @infra %{}
+
       @doc false
       def __exoforge_plugin__?, do: true
       @doc "lifecycle hook: callend when the plugin is first loaded"
@@ -43,25 +52,95 @@ defmodule Exoforge.Plugin do
     end
   end
 
-  defmacro defaction({name, meta, args}, do: block) do
-    spec_args = if args, do: Enum.map(args, fn _ -> quote do: term() end), else: []
+  defmacro defaction(call, opts \\ [], do: block) do
+    {name, meta, args} = extract_call_signature(call)
+    param_names = extract_param_names(args)
+
     line = Keyword.get(meta, :line, __CALLER__.line)
+    mode = Keyword.get(opts, :mode, :sync)
+
+    spec_args = Enum.map(args, fn _ -> quote do: term() end)
 
     quote line: line do
-      @exo_actions unquote(name)
+      @exo_actions %{
+        name: unquote(name),
+        mode: unquote(mode),
+        params: unquote(param_names),
+        arity: unquote(length(args))
+      }
       @spec unquote(name)(unquote_splicing(spec_args)) :: term()
-      def unquote(name)(unquote_splicing(args)), do: unquote(block)
+      def unquote(call), do: unquote(block)
     end
   end
 
-  defmacro defevent({name, meta, args}, do: block) do
-    spec_args = if args, do: Enum.map(args, fn _ -> quote do: term() end), else: []
+  defmacro defevent(call, opts \\ []) do
+    {name, meta, args} = extract_call_signature(call)
+    param_names = extract_param_names(args)
     line = Keyword.get(meta, :line, __CALLER__.line)
 
+    scope = Keyword.get(opts, :scope, :server)
+    topic_key = Keyword.get(opts, :topic)
+
+    topic_val_ast =
+      if topic_key in param_names, do: Macro.var(topic_key, nil), else: :global
+
+    payload_ast =
+      {:%{}, [], Enum.map(param_names, fn key -> {key, Macro.var(key, nil)} end)}
+
+    spec_args = Enum.map(args, fn _ -> quote do: term() end)
+
     quote line: line do
-      @exo_events unquote(name)
-      @spec unquote(name)(unquote_splicing(spec_args)) :: term()
-      def unquote(name)(unquote_splicing(args)), do: unquote(block)
+      @exo_events %{
+        name: unquote(name),
+        arity: unquote(length(args)),
+        scope: unquote(scope),
+        topic_key: unquote(topic_key)
+      }
+
+      @spec unquote(name)(unquote_splicing(spec_args)) :: {:ok, unquote(name)}
+      defp unquote(call) do
+        payload = unquote(payload_ast)
+        dispatch_opts = [topic: unquote(topic_val_ast), scope: unquote(scope), source: __MODULE__]
+
+        Exoforge.Dispatcher.broadcast(unquote(name), payload, dispatch_opts)
+        {:ok, unquote(name)}
+      end
+    end
+  end
+
+  defmacro handle_event(call, do: block) do
+    {name, meta, args} = extract_call_signature(call)
+    line = Keyword.get(meta, :line, __CALLER__.line)
+
+    safe_payload_arg =
+      case args do
+        [] ->
+          quote do: _payload
+
+        [payload_ast] ->
+          payload_ast
+
+        _ ->
+          raise CompileError,
+            description: "handle_event #{name} must accept exactly zero or one argument (the payload map)"
+      end
+
+    handler_call =
+      case call do
+        {:when, when_meta, [_func_call, guard]} ->
+          {:when, when_meta, [{:handle_inbound_event, meta, [name, safe_payload_arg]}, guard]}
+
+        _ ->
+          {:handle_inbound_event, meta, [name, safe_payload_arg]}
+      end
+
+    quote line: line do
+      @exo_handlers unquote(name)
+
+      @doc false
+      def unquote(handler_call) do
+        unquote(block)
+      end
     end
   end
 
@@ -97,6 +176,9 @@ defmodule Exoforge.Plugin do
       @doc false
       @impl Exoforge.Contracts.Plugin
       def init(manifest) do
+        events_to_subscribe = Enum.uniq(@exo_handlers)
+        # TODO: event subscription logic.
+
         on_init(manifest)
 
         {:ok,
@@ -104,14 +186,36 @@ defmodule Exoforge.Plugin do
            plugin: __MODULE__,
            actions: Enum.reverse(@exo_actions),
            events: Enum.reverse(@exo_events),
+           handlers: events_to_subscribe,
            provides: @exo_provides
          }}
       end
+
+      @spec handle_inbound_event(atom(), map() | keyword()) :: :ignored | term()
+      def handle_inbound_event(_event, _payload), do: :ignored
 
       @doc false
       def manifest do
         Exoforge.PluginRegistry.fetch_manifest(__MODULE__)
       end
+
+      # DEBUG UTILITIES
+      @doc "Returns a list of all action names provided by this plugin."
+      def __actions__, do: Enum.map(@exo_actions, & &1.name)
+      @doc "Returns a list of all events emitted by this plugin."
+      def __events__, do: Enum.map(@exo_events, & &1.name)
+      @doc "Returns a list of all events this plugin handles."
+      def __handlers__, do: @exo_handlers
     end
+  end
+
+  defp extract_call_signature({:when, _, [call, _guard]}), do: extract_call_signature(call)
+  defp extract_call_signature({name, meta, args}), do: {name, meta, args || []}
+
+  defp extract_param_names(args) do
+    Enum.map(args, fn
+      {var_name, _, _} when is_atom(var_name) -> var_name
+      _ -> :arg
+    end)
   end
 end
