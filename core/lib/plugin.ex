@@ -102,7 +102,7 @@ defmodule Exoforge.Plugin do
         payload = unquote(payload_ast)
         dispatch_opts = [topic: unquote(topic_val_ast), scope: unquote(scope), source: __MODULE__]
 
-        Exoforge.Dispatcher.broadcast(unquote(name), payload, dispatch_opts)
+        # TODO: dispatch logic
         {:ok, unquote(name)}
       end
     end

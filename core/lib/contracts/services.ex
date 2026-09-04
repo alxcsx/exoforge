@@ -34,6 +34,9 @@ defmodule Exoforge.Contracts.Services do
     end
 
     @doc "Fired when the underlying database pool drops connection."
-    event(:connection_lost, do: payload(reason: :string, timestamp: :integer))
+    event :connection_lost do
+      payload(reason: :string, timestamp: :integer)
+      scope(:server)
+    end
   end
 end
