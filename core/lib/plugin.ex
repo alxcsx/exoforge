@@ -4,20 +4,7 @@ defmodule Exoforge.Plugin do
   defmacro __using__(opts) do
     provides_ast = Keyword.get(opts, :provides, [])
     provides_list = if is_list(provides_ast), do: provides_ast, else: [provides_ast]
-
-    behavior_injections =
-      Enum.map(provides_list, fn
-        {:__aliases__, _, _} = alias_ast ->
-          contract_module = Macro.expand(alias_ast, __CALLER__)
-          quote do: @behaviour(unquote(contract_module))
-
-        {:{}, _, [:beam, beam_module]} when is_atom(beam_module) ->
-          quote do: @behaviour(unquote(beam_module))
-
-        shorthand when is_atom(shorthand) ->
-          contract_module = Module.concat([Exoforge, Contracts, Services, Macro.camelize(to_string(shorthand))])
-          quote do: @behaviour(unquote(contract_module))
-      end)
+    contract_modules = resolve_contract_modules(provides_list, __CALLER__)
 
     quote location: :keep do
       @behaviour Exoforge.Contracts.Plugin
@@ -30,24 +17,11 @@ defmodule Exoforge.Plugin do
           handle_event: 2
         ]
 
-      Module.register_attribute(__MODULE__, :exo_actions, accumulate: true)
-      Module.register_attribute(__MODULE__, :exo_events, accumulate: true)
-      Module.register_attribute(__MODULE__, :exo_handlers, accumulate: true)
+      unquote(setup_attributes(provides_list))
+      unquote(inject_behaviors(contract_modules))
+      unquote(inject_events(contract_modules))
+      unquote(setup_lifecycle())
 
-      Module.register_attribute(__MODULE__, :manifest, accumulate: false)
-      Module.register_attribute(__MODULE__, :infra, accumulate: false)
-
-      @exo_provides unquote(provides_list)
-      @manifest %{}
-      @infra %{}
-
-      @doc false
-      def __exoforge_plugin__?, do: true
-      @doc "lifecycle hook: callend when the plugin is first loaded"
-      def on_init(_manifest), do: :ok
-      defoverridable on_init: 1
-
-      unquote(behavior_injections)
       @before_compile Exoforge.Plugin
     end
   end
@@ -208,6 +182,82 @@ defmodule Exoforge.Plugin do
       def __handlers__, do: @exo_handlers
     end
   end
+
+  ## ---- HELPER FUNCTIONS -----
+
+  # ---- __using__
+
+  defp resolve_contract_modules(provides_list, caller) do
+    Enum.map(provides_list, fn
+      {:__aliases__, _, _} = alias_ast ->
+        Macro.expand(alias_ast, caller)
+
+      {:{}, _, [:beam, beam_module]} when is_atom(beam_module) ->
+        beam_module
+
+      shorthand when is_atom(shorthand) ->
+        Module.concat([Exoforge, Contracts, Services, Macro.camelize(to_string(shorthand))])
+    end)
+  end
+
+  defp inject_behaviors(contract_modules) do
+    Enum.map(contract_modules, fn mod -> quote do: @behaviour(unquote(mod)) end)
+  end
+
+  defp inject_events(contract_modules) do
+    Enum.flat_map(contract_modules, fn contract_module ->
+      Code.ensure_compiled(contract_module)
+
+      if function_exported?(contract_module, :__service_metadata__, 0) do
+        metadata = contract_module.__service_metadata__()
+
+        Enum.map(metadata.events, fn event ->
+          param_vars = Enum.map(event.payload, fn {key, _type} -> Macro.var(key, nil) end)
+          call_ast = {event.name, [], param_vars}
+          arity = length(event.payload)
+
+          quote do
+            @compile {:nowarn_unused_function, {unquote(event.name), unquote(arity)}}
+            Exoforge.Plugin.defevent(
+              unquote(call_ast),
+              scope: unquote(event.scope || :server),
+              topic: unquote(event.topic)
+            )
+          end
+        end)
+      else
+        []
+      end
+    end)
+  end
+
+  defp setup_attributes(provides_list) do
+    quote do
+      Module.register_attribute(__MODULE__, :exo_actions, accumulate: true)
+      Module.register_attribute(__MODULE__, :exo_events, accumulate: true)
+      Module.register_attribute(__MODULE__, :exo_handlers, accumulate: true)
+
+      Module.register_attribute(__MODULE__, :manifest, accumulate: false)
+      Module.register_attribute(__MODULE__, :infra, accumulate: false)
+
+      @exo_provides unquote(provides_list)
+      @manifest %{}
+      @infra %{}
+    end
+  end
+
+  defp setup_lifecycle do
+    quote do
+      @doc false
+      def __exoforge_plugin__?, do: true
+
+      @doc "Lifecycle hook: called when the plugin is first loaded."
+      def on_init(_manifest), do: :ok
+      defoverridable on_init: 1
+    end
+  end
+
+  # ---- defaction / defevent
 
   defp extract_call_signature({:when, _, [call, _guard]}), do: extract_call_signature(call)
   defp extract_call_signature({name, meta, args}), do: {name, meta, args || []}

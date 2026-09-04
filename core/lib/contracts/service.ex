@@ -22,12 +22,8 @@ defmodule Exoforge.Contracts.Service do
         def __service_name__, do: unquote(name)
         @doc false
         def __service_metadata__ do
-          doc_data = Module.get_attribute(__MODULE__, :moduledoc)
-          doc_string = if is_tuple(doc_data), do: elem(doc_data, 1), else: nil
-
           %{
             name: unquote(name),
-            doc: doc_string,
             actions: @exo_actions_meta,
             events: @exo_events_meta
           }
