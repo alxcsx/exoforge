@@ -29,7 +29,7 @@ defmodule Mix.Tasks.Compile.ExoforgeManifest do
     version = config[:version]
 
     # Get the @manifest overrides from the plugin module
-    user_manifest = entrypoint_mod.manifest_data()
+    user_manifest = entrypoint_mod.manifest_overrides()
 
     manifest = %Manifest{
       id: app,
