@@ -5,6 +5,7 @@ defmodule Exoforge.Plugin do
     provides_ast = Keyword.get(opts, :provides, [])
     provides_list = if is_list(provides_ast), do: provides_ast, else: [provides_ast]
     contract_modules = resolve_contract_modules(provides_list, __CALLER__)
+    assets_path = Keyword.get(opts, :assets, "assets")
 
     quote location: :keep do
       @behaviour Exoforge.Contracts.Plugin
@@ -17,6 +18,7 @@ defmodule Exoforge.Plugin do
           handle_event: 2
         ]
 
+      @exo_assets unquote(assets_path)
       unquote(setup_attributes(contract_modules))
       unquote(inject_behaviors(contract_modules))
       unquote(inject_events(contract_modules))
@@ -32,17 +34,28 @@ defmodule Exoforge.Plugin do
 
     line = Keyword.get(meta, :line, __CALLER__.line)
     mode = Keyword.get(opts, :mode, :sync)
-
+    scope = Keyword.get(opts, :scope, :global)
+    arity = length(args)
     spec_args = Enum.map(args, fn _ -> quote do: term() end)
 
     quote line: line do
-      @exo_actions %{
-        name: unquote(name),
-        mode: unquote(mode),
-        params: unquote(param_names),
-        arity: unquote(length(args))
-      }
-      @spec unquote(name)(unquote_splicing(spec_args)) :: term()
+      existing_actions = Module.get_attribute(__MODULE__, :exo_actions) || []
+
+      is_first_clause? =
+        not Enum.any?(existing_actions, fn a -> a.name == unquote(name) and a.arity == unquote(arity) end)
+
+      if is_first_clause? do
+        @exo_actions %{
+          name: unquote(name),
+          mode: unquote(mode),
+          scope: unquote(scope),
+          params: unquote(param_names),
+          arity: unquote(arity)
+        }
+
+        @spec unquote(name)(unquote_splicing(spec_args)) :: term()
+      end
+
       def unquote(call), do: unquote(block)
     end
   end
@@ -146,6 +159,8 @@ defmodule Exoforge.Plugin do
       def infra_requirements, do: @infra
       @doc false
       def provides_contracts, do: @exo_provides
+      @doc false
+      def assets_path, do: @exo_assets
 
       @doc false
       @impl Exoforge.Contracts.Plugin
@@ -252,7 +267,10 @@ defmodule Exoforge.Plugin do
       def supervisor(), do: Module.concat([__MODULE__, Supervisor])
       @doc "Lifecycle hook: called when the plugin is first loaded."
       def on_init(_manifest), do: :ok
-      defoverridable on_init: 1
+      @doc "Lifecycle hook: inject custom children into the plugin supervision tree."
+      def children(), do: []
+
+      defoverridable on_init: 1, children: 0
     end
   end
 

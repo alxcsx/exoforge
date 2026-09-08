@@ -11,12 +11,19 @@ defmodule Exoforge.Drivers.Runtime.ElixirPluginRunner do
     snapshot_mgr_name = Module.concat(plugin_mod, SnapshotManager)
     worker_sup_name = Module.concat(plugin_mod, WorkerSupervisor)
 
+    custom_children =
+      if function_exported?(plugin_mod, :children, 0) do
+        plugin_mod.children()
+      else
+        []
+      end
+
     children = [
       {Task.Supervisor, name: task_sup_name},
       {Exoforge.Workers.SnapshotManager, name: snapshot_mgr_name},
       {DynamicSupervisor, name: worker_sup_name, strategy: :one_for_one},
       %{id: __MODULE__, start: {__MODULE__, :start_link, [{manifest, task_sup_name}]}}
-    ]
+    ] ++ custom_children
 
     DynamicSupervisor.start_child(
       Exoforge.PluginRootSupervisor,

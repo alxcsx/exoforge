@@ -35,6 +35,7 @@ defmodule Exoforge.Contracts.Service do
   defmacro action(name, do: block) do
     meta = parse_block(block)
     mode = Map.get(meta, :mode) || :sync
+    scope = Map.get(meta, :scope) || :global
 
     callback_return_type =
       case mode do
@@ -52,12 +53,13 @@ defmodule Exoforge.Contracts.Service do
         name: unquote(name),
         doc: elem(doc_tuple, 1),
         mode: unquote(mode),
+        scope: unquote(scope),
         params: unquote(Macro.escape(meta.params)),
         returns: unquote(Macro.escape(meta.returns)),
         errors: unquote(Macro.escape(meta.errors))
       }
 
-      @callback unquote(name)(payload :: map() | keyword()) :: unquote(callback_return_type)
+      @callback unquote(name)(payload :: term()) :: unquote(callback_return_type)
     end
   end
 
@@ -86,7 +88,7 @@ defmodule Exoforge.Contracts.Service do
   defp parse_block(calls) when not is_list(calls), do: parse_block([calls])
 
   defp parse_block(nodes) do
-    defaults = %{params: [], mode: :sync, returns: nil, errors: [], payload: [], scope: :server, topic: nil}
+    defaults = %{params: [], mode: :sync, returns: nil, errors: [], payload: [], scope: :global, topic: nil}
 
     Enum.reduce(nodes, defaults, fn
       {key, _meta, [value]}, acc when key in @valid_keys -> Map.put(acc, key, value)
