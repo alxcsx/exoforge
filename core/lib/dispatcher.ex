@@ -1,5 +1,14 @@
 defmodule Exoforge.Dispatcher do
-  @registry Exoforge.EventRegistry
+  @registry __MODULE__.Registry
+
+  def registry_name, do: @registry
+
+  def child_spec(_opts \\ []) do
+    %{
+      id: @registry,
+      start: {Registry, :start_link, [[keys: :duplicate, name: @registry]]}
+    }
+  end
 
   def subscribe(event_key, opts \\ []) do
     topic = Keyword.get(opts, :topic, :global)

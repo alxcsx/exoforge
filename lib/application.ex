@@ -5,13 +5,12 @@ defmodule Exoforge.Application do
 
   @impl true
   def start(_type, _args) do
-    loader_config = Application.get_env(:exoforge, :module_loader)
-    driver = Keyword.get(loader_config, :driver)
-    path = Keyword.get(loader_config, :scan_path)
-
     children = [
+      Exoforge.Dispatcher,
+      Exoforge.WorkerRegistry,
       Exoforge.PluginRegistry,
-      Task.child_spec(fn -> Exoforge.PluginBootstrapper.run(driver, path) end)
+      Exoforge.PluginSupervisor,
+      Exoforge.PluginBootstrapper
     ]
 
     opts = [strategy: :one_for_one, name: Exoforge.Supervisor]

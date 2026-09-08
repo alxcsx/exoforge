@@ -3,6 +3,18 @@ defmodule Exoforge.PluginBootstrapper do
   alias Exoforge.PluginRegistry
   alias Exoforge.Drivers.Runtime.ElixirPluginRunner
 
+  def child_spec(_opts) do
+    loader_config = Application.get_env(:exoforge, :module_loader)
+    driver = Keyword.get(loader_config, :driver)
+    path = Keyword.get(loader_config, :scan_path)
+
+    %{
+      id: __MODULE__,
+      start: {Task, :start_link, [fn -> run(driver, path) end]},
+      restart: :temporary
+    }
+  end
+
   def run(driver, path) do
     driver.load_modules(path)
     |> sort!()
