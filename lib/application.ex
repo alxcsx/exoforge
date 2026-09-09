@@ -6,7 +6,7 @@ defmodule Exoforge.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      Exoforge.Dispatcher,
+      Exoforge.EventDispatcher,
       Exoforge.WorkerRegistry,
       Exoforge.PluginRegistry,
       Exoforge.PluginSupervisor,

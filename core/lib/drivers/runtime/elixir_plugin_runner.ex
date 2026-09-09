@@ -18,12 +18,13 @@ defmodule Exoforge.Drivers.Runtime.ElixirPluginRunner do
         []
       end
 
-    children = [
-      {Task.Supervisor, name: task_sup_name},
-      {Exoforge.Workers.SnapshotManager, name: snapshot_mgr_name},
-      {DynamicSupervisor, name: worker_sup_name, strategy: :one_for_one},
-      %{id: __MODULE__, start: {__MODULE__, :start_link, [{manifest, task_sup_name}]}}
-    ] ++ custom_children
+    children =
+      [
+        {Task.Supervisor, name: task_sup_name},
+        {Exoforge.Workers.SnapshotManager, name: snapshot_mgr_name},
+        {DynamicSupervisor, name: worker_sup_name, strategy: :one_for_one},
+        %{id: __MODULE__, start: {__MODULE__, :start_link, [{manifest, task_sup_name}]}}
+      ] ++ custom_children
 
     DynamicSupervisor.start_child(
       Exoforge.PluginRootSupervisor,
@@ -44,7 +45,7 @@ defmodule Exoforge.Drivers.Runtime.ElixirPluginRunner do
     events = if function_exported?(plugin_mod, :events, 0), do: plugin_mod.events(), else: []
 
     Enum.each(events, fn event_key ->
-      Exoforge.Dispatcher.subscribe(event_key)
+      Exoforge.EventDispatcher.subscribe(event_key)
     end)
 
     if function_exported?(plugin_mod, :on_init, 1) do

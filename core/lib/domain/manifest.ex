@@ -3,7 +3,7 @@ defmodule Exoforge.Domain.Manifest do
   Represents an Plugin metadata
   """
 
-  @enforce_keys [:id, :name, :version, :type, :entry_point, :dependencies, :provides]
+  @enforce_keys [:id, :name, :version, :entry_point]
 
   defstruct id: "",
             name: "",
@@ -14,5 +14,6 @@ defmodule Exoforge.Domain.Manifest do
             physical_path: "",
             entry_point: nil,
             dependencies: [],
-            provides: []
+            provides: [],
+            assets_path: "assets"
 end

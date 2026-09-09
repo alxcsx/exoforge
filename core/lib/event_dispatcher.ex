@@ -1,4 +1,4 @@
-defmodule Exoforge.Dispatcher do
+defmodule Exoforge.EventDispatcher do
   @registry __MODULE__.Registry
 
   def registry_name, do: @registry

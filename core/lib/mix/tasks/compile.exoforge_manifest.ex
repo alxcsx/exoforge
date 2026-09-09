@@ -28,21 +28,17 @@ defmodule Mix.Tasks.Compile.ExoforgeManifest do
     app = config[:app]
     version = config[:version]
 
-    # Get the @manifest overrides from the plugin module
-    user_manifest = entrypoint_mod.manifest_overrides()
-
-    manifest = %Manifest{
+    system_defaults = %{
       id: app,
-      name: Map.get(user_manifest, :name, to_string(app)),
-      version: Map.get(user_manifest, :version, version),
-      type: Map.get(user_manifest, :type, :elixir),
-      context: Map.get(user_manifest, :context, :global),
-      physical_path: "",
+      name: to_string(app),
+      version: version,
       entry_point: entrypoint_mod,
-      dependencies: Map.get(user_manifest, :dependencies, []),
       provides: entrypoint_mod.provides_contracts()
     }
 
+    user_manifest = entrypoint_mod.manifest_overrides() || %{}
+    merged_attrs = Map.merge(system_defaults, user_manifest)
+    manifest = struct!(Exoforge.Domain.Manifest, merged_attrs)
     manifest_map = Map.from_struct(manifest)
 
     exs_content =

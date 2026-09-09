@@ -5,7 +5,6 @@ defmodule Exoforge.Plugin do
     provides_ast = Keyword.get(opts, :provides, [])
     provides_list = if is_list(provides_ast), do: provides_ast, else: [provides_ast]
     contract_modules = resolve_contract_modules(provides_list, __CALLER__)
-    assets_path = Keyword.get(opts, :assets, "assets")
 
     quote location: :keep do
       @behaviour Exoforge.Contracts.Plugin
@@ -18,7 +17,6 @@ defmodule Exoforge.Plugin do
           handle_event: 2
         ]
 
-      @exo_assets unquote(assets_path)
       unquote(setup_attributes(contract_modules))
       unquote(inject_behaviors(contract_modules))
       unquote(inject_events(contract_modules))
@@ -85,7 +83,7 @@ defmodule Exoforge.Plugin do
         payload = unquote(payload_ast)
         dispatch_opts = [topic: unquote(topic_val_ast), scope: unquote(scope), source: __MODULE__]
 
-        Exoforge.Dispatcher.broadcast(unquote(event_full_id), payload, dispatch_opts)
+        Exoforge.EventDispatcher.broadcast(unquote(event_full_id), payload, dispatch_opts)
         {:ok, unquote(event_full_id)}
       end
 
@@ -159,8 +157,6 @@ defmodule Exoforge.Plugin do
       def infra_requirements, do: @infra
       @doc false
       def provides_contracts, do: @exo_provides
-      @doc false
-      def assets_path, do: @exo_assets
 
       @doc false
       @impl Exoforge.Contracts.Plugin
