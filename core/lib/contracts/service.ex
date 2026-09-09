@@ -34,15 +34,28 @@ defmodule Exoforge.Contracts.Service do
 
   defmacro action(name, do: block) do
     meta = parse_block(block)
+
     mode = Map.get(meta, :mode) || :sync
     scope = Map.get(meta, :scope) || :global
+    params = Map.get(meta, :params) || []
+    returns = Map.get(meta, :returns)
+    errors = Map.get(meta, :errors) || []
+
+    success_type = if returns, do: quote(do: map()), else: quote(do: term())
 
     callback_return_type =
       case mode do
-        :sync -> quote(do: {:ok, term()} | {:error, term()})
+        :sync -> quote(do: {:ok, unquote(success_type)} | {:error, term()})
         :async -> quote(do: {:ok, Task.t()} | {:error, term()})
         :cast -> quote(do: :ok)
         _ -> raise CompileError, description: "Invalid action mode: #{mode}"
+      end
+
+    callback_ast =
+      if params == [] do
+        quote do: @callback(unquote(name)() :: unquote(callback_return_type))
+      else
+        quote do: @callback(unquote(name)(payload :: map()) :: unquote(callback_return_type))
       end
 
     quote location: :keep do
@@ -54,12 +67,12 @@ defmodule Exoforge.Contracts.Service do
         doc: elem(doc_tuple, 1),
         mode: unquote(mode),
         scope: unquote(scope),
-        params: unquote(Macro.escape(meta.params)),
-        returns: unquote(Macro.escape(meta.returns)),
-        errors: unquote(Macro.escape(meta.errors))
+        params: unquote(Macro.escape(params)),
+        returns: unquote(Macro.escape(returns)),
+        errors: unquote(Macro.escape(errors))
       }
 
-      @callback unquote(name)(payload :: term()) :: unquote(callback_return_type)
+      unquote(callback_ast)
     end
   end
 

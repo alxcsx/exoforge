@@ -27,34 +27,57 @@ defmodule Exoforge.Plugin do
   end
 
   defmacro defaction(call, opts \\ [], do: block) do
-    {name, meta, args, _guard} = extract_call_signature(call)
-    param_names = extract_param_names(args)
+    {name, meta, args, guard} = extract_call_signature(call)
 
+    if length(args) > 1 do
+      raise CompileError,
+        file: __CALLER__.file,
+        line: Keyword.get(meta, :line, __CALLER__.line),
+        description: "defaction #{name} must accept zero or one argument"
+    end
+
+    arity = length(args)
     line = Keyword.get(meta, :line, __CALLER__.line)
     mode = Keyword.get(opts, :mode, :sync)
     scope = Keyword.get(opts, :scope, :global)
-    arity = length(args)
-    spec_args = Enum.map(args, fn _ -> quote do: term() end)
+
+    # ignore payload case no argument was passed to the defaction
+    inner_args = if arity == 1, do: args, else: [quote(do: _payload)]
+    clean_call = {:__execute_action__, meta, [name | inner_args]}
+
+    inner_def =
+      if guard do
+        quote do: def(unquote(clean_call) when unquote(guard), do: unquote(block))
+      else
+        quote do: def(unquote(clean_call), do: unquote(block))
+      end
 
     quote line: line do
       existing_actions = Module.get_attribute(__MODULE__, :exo_actions) || []
-
-      is_first_clause? =
-        not Enum.any?(existing_actions, fn a -> a.name == unquote(name) and a.arity == unquote(arity) end)
+      is_first_clause? = not Enum.any?(existing_actions, &(&1.name == unquote(name)))
 
       if is_first_clause? do
         @exo_actions %{
           name: unquote(name),
           mode: unquote(mode),
           scope: unquote(scope),
-          params: unquote(param_names),
           arity: unquote(arity)
         }
 
-        @spec unquote(name)(unquote_splicing(spec_args)) :: term()
+        # 1. Statically generate the public facade exactly once
+        if unquote(arity) == 1 do
+          def unquote(name)(payload) do
+            Exoforge.ActionDispatcher.dispatch(__MODULE__, unquote(name), payload)
+          end
+        else
+          def unquote(name)() do
+            Exoforge.ActionDispatcher.dispatch(__MODULE__, unquote(name), %{})
+          end
+        end
       end
 
-      def unquote(call), do: unquote(block)
+      @doc false
+      unquote(inner_def)
     end
   end
 
@@ -178,6 +201,11 @@ defmodule Exoforge.Plugin do
       @doc false
       def manifest do
         Exoforge.PluginRegistry.fetch_manifest(__MODULE__)
+      end
+
+      @doc false
+      def __execute_action__(action, _payload) do
+        {:error, {:action_not_found, action}}
       end
 
       # DEBUG UTILITIES

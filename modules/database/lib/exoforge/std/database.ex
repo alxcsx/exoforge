@@ -8,7 +8,7 @@ defmodule Exoforge.Std.Database do
   end
 
   @impl true
-  defaction connection_config(_namespace \\ nil) do
+  defaction connection_config(_namespace) do
     %{
       url: "postgres://user:pass@localhost/db",
       pool_size: 10,
@@ -17,7 +17,7 @@ defmodule Exoforge.Std.Database do
   end
 
   @impl true
-  defaction health_check(_) do
+  defaction health_check() do
     %{status: "ok"}
   end
 

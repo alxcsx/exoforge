@@ -1,8 +1,10 @@
 defmodule Exoforge.ActionDispatcher do
-  @alias Exoforge.PluginRegistry
+  alias Exoforge.PluginRegistry
+  alias Exoforge.Domain.Manifest
 
   def dispatch(service, action, payload, opts \\ []) do
-    resolved_mod = resolve_module(service)
+    context = Keyword.get(opts, :context, :global)
+    resolved_mod = resolve_module(service, context)
 
     result = run_action(resolved_mod, action, payload)
 
@@ -21,15 +23,15 @@ defmodule Exoforge.ActionDispatcher do
     end
   end
 
-  defp resolve_module(%Manifest{entry_point: mod}), do: mod
+  defp resolve_module(%Manifest{entry_point: mod}, _), do: mod
 
-  defp resolve_module(mod) when is_atom(mod) do
+  defp resolve_module(mod, ctx) when is_atom(mod) do
     if function_exported?(mod, :__exoforge_plugin__?, 0) do
       mod
     else
-      resolve_module(PluginRegistry.fetch_service(mod))
+      resolve_module(PluginRegistry.fetch_service(mod, ctx), ctx)
     end
   end
 
-  defp resolve_module(_), do: nil
+  defp resolve_module(_, _), do: nil
 end

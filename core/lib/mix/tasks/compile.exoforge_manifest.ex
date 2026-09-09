@@ -38,7 +38,7 @@ defmodule Mix.Tasks.Compile.ExoforgeManifest do
 
     user_manifest = entrypoint_mod.manifest_overrides() || %{}
     merged_attrs = Map.merge(system_defaults, user_manifest)
-    manifest = struct!(Exoforge.Domain.Manifest, merged_attrs)
+    manifest = struct!(Manifest, merged_attrs)
     manifest_map = Map.from_struct(manifest)
 
     exs_content =
