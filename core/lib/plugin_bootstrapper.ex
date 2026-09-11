@@ -16,7 +16,7 @@ defmodule Exoforge.PluginBootstrapper do
   end
 
   def run(driver, path) do
-    driver.load_modules(path)
+    driver.load_load_plugins(path)
     |> sort!()
     |> Enum.each(&initialize_and_register/1)
   end

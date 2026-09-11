@@ -1,8 +1,10 @@
 defmodule Exoforge.Drivers.Runtime.ElixirPluginRunner do
+  @behaviour Exoforge.Contracts.PluginRunner
   use GenServer
   alias Exoforge.Domain.Manifest
 
   # -- Public Static API
+  @impl true
   def load(%Manifest{entry_point: plugin_mod} = manifest) do
     Code.append_path(Path.join(manifest.physical_path, "ebin"))
 
