@@ -1,3 +1,4 @@
 [tools]
-elixir = "1.20.2-otp-29"
+elixir = "latest"
 erlang = "29.0.2"
+just = "latest"
