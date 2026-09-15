@@ -1,32 +1,39 @@
 defmodule Exoforge.PluginBootstrapper do
+  require Logger
   alias Exoforge.Domain.Manifest
   alias Exoforge.PluginRegistry
   alias Exoforge.Drivers.Runtime.ElixirPluginRunner
 
-  def child_spec(_opts) do
-    loader_config = Application.get_env(:exoforge, :module_loader)
-    driver = Keyword.get(loader_config, :driver)
-    path = Keyword.get(loader_config, :scan_path)
+  def boot do
+    loader_config = Application.get_env(:exoforge, :module_loader, [])
+    driver = Keyword.get(loader_config, :driver, Exoforge.Drivers.Loaders.ManifestLoader)
+    path = Keyword.get(loader_config, :scan_path, "plugins")
 
-    %{
-      id: __MODULE__,
-      start: {Task, :start_link, [fn -> run(driver, path) end]},
-      restart: :temporary
-    }
+    PluginRegistry.initialize_ets()
+
+    case run(driver, path) do
+      [] ->
+        Logger.warning("[Exoforge] no plugins found at #{path}")
+
+      loaded ->
+        Logger.info("[Exoforge] loaded #{length(loaded)} plugins: #{Enum.map_join(loaded, ", ", & &1.id)}")
+    end
+
+    :ok
   end
 
   def run(driver, path) do
-    driver.load_load_plugins(path)
-    |> sort!()
-    |> Enum.each(&initialize_and_register/1)
+    manifests = driver.load_plugins(path) |> sort!()
+    Enum.each(manifests, &initialize_and_register/1)
+    manifests
   end
 
   defp initialize_and_register(%Manifest{type: :elixir} = manifest) do
-    ElixirPluginRunner.load(manifest)
     PluginRegistry.register(manifest)
+    ElixirPluginRunner.load(manifest)
   end
 
-  @spec sort!([Manifest.t()]) :: [Manifest.t()]
+  @spec sort!([%Manifest{}]) :: [%Manifest{}]
   def sort!(manifests) do
     graph = :digraph.new()
 

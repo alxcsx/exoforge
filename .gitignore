@@ -8,7 +8,6 @@
 /*.ez
 /*.beam
 /erl_crash.dump
-/mix.lock
 exoforge-*.tar
 
 # === Development Environment & IDEs ===

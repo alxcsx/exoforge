@@ -39,7 +39,15 @@ defmodule Exoforge.EventDispatcher do
   defp do_dispatch(event_key, topic, payload, context) do
     Registry.dispatch(@registry, {event_key, topic}, fn entries ->
       for {pid, _opts} <- entries do
-        send(pid, {:exo_event, event_key, payload, context})
+        try do
+          send(pid, {:exo_event, event_key, payload, context})
+          :ok
+        rescue
+          _e in ArgumentError ->
+            # Process terminated or invalid message
+            Registry.unregister(@registry, {event_key, topic})
+            :ok
+        end
       end
     end)
   end

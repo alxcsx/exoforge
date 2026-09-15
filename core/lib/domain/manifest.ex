@@ -5,15 +5,17 @@ defmodule Exoforge.Domain.Manifest do
 
   @enforce_keys [:id, :name, :version, :entry_point]
 
-  defstruct id: "",
-            name: "",
-            version: nil,
-            type: :elixir,
-            context: :global,
-            # automatically set by the loader.
-            physical_path: "",
-            entry_point: nil,
-            dependencies: [],
-            provides: [],
-            assets_path: "assets"
+  defstruct [
+    :id,
+    :name,
+    :version,
+    :entry_point,
+    type: :elixir,
+    context: :global,
+    # automatically set by the loader.
+    physical_path: "",
+    dependencies: [],
+    provides: [],
+    assets_path: "assets"
+  ]
 end

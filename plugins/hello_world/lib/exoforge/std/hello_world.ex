@@ -1,7 +1,7 @@
 defmodule Exoforge.Std.HelloWorld do
   use Exoforge.Plugin
 
-  def hello do
-    :world
+  defaction hello do
+    {:ok, %{}}
   end
 end

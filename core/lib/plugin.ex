@@ -57,12 +57,20 @@ defmodule Exoforge.Plugin do
       is_first_clause? = not Enum.any?(existing_actions, &(&1.name == unquote(name)))
 
       if is_first_clause? do
-        @exo_actions %{
+        existing_map = Module.get_attribute(__MODULE__, :exo_actions_map)
+        action_map = if is_map(existing_map) do
+          existing_map
+        else
+          %{}
+        end
+        action_map = Map.put(action_map, unquote(name), %{
           name: unquote(name),
           mode: unquote(mode),
           scope: unquote(scope),
           arity: unquote(arity)
-        }
+        })
+        Module.put_attribute(__MODULE__, :exo_actions_map, action_map)
+        @exo_actions MapSet.new(Map.values(action_map))
 
         # 1. Statically generate the public facade exactly once
         if unquote(arity) == 1 do
@@ -133,31 +141,27 @@ defmodule Exoforge.Plugin do
   end
 
   defmacro handle_event(call, do: block) do
-    {name, meta, args, guard} = extract_call_signature(call)
+    {event_id, meta, args, guard} = extract_event_signature(call, __CALLER__)
     line = Keyword.get(meta, :line, __CALLER__.line)
-    event_id = Macro.expand(name, __CALLER__)
 
-    safe_payload_arg =
-      case args do
-        [] -> quote do: _payload
-        [payload_ast] -> payload_ast
-        _ -> raise CompileError, description: "handle_event #{name} must accept exactly zero or one argument"
-      end
+    if length(args) > 2 do
+      raise CompileError,
+        file: __CALLER__.file,
+        line: line,
+        description: "handle_event must accept zero, one, or two arguments"
+    end
 
-    clean_handler_call = {:handle_inbound_event, meta, [name, safe_payload_arg]}
+    payload_arg = if args == [], do: quote(do: _payload), else: hd(args)
+    context_arg = if length(args) == 2, do: Enum.at(args, 1), else: quote(do: _context)
 
-    handler_call =
-      if guard do
-        {:when, meta, [clean_handler_call, guard]}
-      else
-        clean_handler_call
-      end
+    clause = {:handle_inbound_event, meta, [event_id, payload_arg, context_arg]}
+    clause = if guard, do: {:when, meta, [clause, guard]}, else: clause
 
     quote line: line do
       @exo_handlers unquote(event_id)
 
       @doc false
-      def unquote(handler_call) do
+      def unquote(clause) do
         unquote(block)
       end
     end
@@ -180,27 +184,21 @@ defmodule Exoforge.Plugin do
       def infra_requirements, do: @infra
       @doc false
       def provides_contracts, do: @exo_provides
+      @doc false
+      def handled_events, do: Enum.uniq(@exo_handlers)
 
       @doc false
       @impl Exoforge.Contracts.Plugin
       def init(manifest) do
         on_init(manifest)
-
-        {:ok,
-         %{
-           plugin: __MODULE__,
-           actions: Enum.reverse(@exo_actions),
-           events: Enum.reverse(@exo_events),
-           provides: @exo_provides
-         }}
       end
 
-      @spec handle_inbound_event(atom(), map() | keyword()) :: :ignored | term()
-      def handle_inbound_event(_event, _payload), do: :ignored
+      @spec handle_inbound_event(atom(), map() | keyword(), map()) :: :ignored | term()
+      def handle_inbound_event(_event, _payload, _context), do: :ignored
 
       @doc false
       def manifest do
-        Exoforge.PluginRegistry.fetch_manifest(__MODULE__)
+        Exoforge.PluginRegistry.fetch_by_module(__MODULE__)
       end
 
       @doc false
@@ -210,17 +208,96 @@ defmodule Exoforge.Plugin do
 
       # DEBUG UTILITIES
       @doc "Returns a list of all action names provided by this plugin."
-      def __actions__, do: Enum.map(@exo_actions, & &1.name)
+      def __actions__, do: Module.get_attribute(__MODULE__, :exo_actions_map) || %{}
       @doc "Returns a list of all events emitted by this plugin."
       def __events__, do: Enum.map(@exo_events, & &1.name)
-      @doc "Returns a list of all events this plugin handles."
-      def __handlers__, do: @exo_handlers
     end
   end
 
   ## ---- HELPER FUNCTIONS -----
 
   # ---- __using__
+
+  ## ---- handle_event resolution ----
+
+  # handle_event service.event(payload) when guard do ... end
+  defp extract_event_signature({:when, meta, [call, guard]}, caller) do
+    {event_id, call_meta, args, nil} = extract_event_signature(call, caller)
+    {event_id, Keyword.merge(call_meta, meta), args, guard}
+  end
+
+  # handle_event Some.Alias do ... end
+  defp extract_event_signature({:__aliases__, meta, _} = alias_ast, caller) do
+    {Macro.expand(alias_ast, caller), meta, [], nil}
+  end
+
+  # handle_event service.event(payload) do ... end
+  defp extract_event_signature({{:., _, [svc_ast, event]}, meta, args}, caller) when is_atom(event) do
+    contract = expand_service!(svc_ast, caller)
+
+    unless Enum.any?(contract_events(contract), fn e -> e.name == event end) do
+      raise CompileError,
+        file: caller.file,
+        line: Keyword.get(meta, :line, caller.line),
+        description: "Event #{event} is not defined in service #{inspect(contract)}"
+    end
+
+    {Module.concat([contract, Macro.camelize(to_string(event))]), meta, args || [], nil}
+  end
+
+  # handle_event event_name(payload) do ... end
+  defp extract_event_signature({name, meta, args}, caller) when is_atom(name) do
+    {resolve_event_id!(name, caller), meta, args || [], nil}
+  end
+
+  defp extract_event_signature(other, caller) do
+    raise CompileError,
+      file: caller.file,
+      description: "Invalid handle_event target: #{Macro.to_string(other)}"
+  end
+
+  defp resolve_event_id!(name, caller) do
+    case event_ids_for(name, caller) |> Enum.uniq() do
+      [event_id] ->
+        event_id
+
+      [] ->
+        Module.concat([caller.module, Macro.camelize(to_string(name))])
+
+      many ->
+        raise CompileError,
+          file: caller.file,
+          line: caller.line,
+          description:
+            "Ambiguous event name #{name}. Found multiple event IDs: #{inspect(many)}. Qualify the event with the specific service or module."
+    end
+  end
+
+  defp event_ids_for(name, caller) do
+    for contract <- Module.get_attribute(caller.module, :exo_provides) || [],
+        event <- contract_events(contract),
+        event.name == name do
+      Module.concat([contract, Macro.camelize(to_string(name))])
+    end
+  end
+
+  defp contract_events(contract) do
+    with {:ok, _} <- Code.ensure_compiled(contract) do
+      if function_exported?(contract, :__service_metadata__, 0) do
+        contract.__service_metadata__().events
+      else
+        []
+      end
+    else
+      _ -> []
+    end
+  end
+
+  defp expand_service!({svc, _, ctx}, caller) when is_atom(svc) and is_atom(ctx),
+    do: hd(resolve_contract_modules([svc], caller))
+
+  defp expand_service!({:__aliases__, _, _} = alias_ast, caller),
+    do: hd(resolve_contract_modules([alias_ast], caller))
 
   defp resolve_contract_modules(provides_list, caller) do
     Enum.map(provides_list, fn
@@ -231,7 +308,7 @@ defmodule Exoforge.Plugin do
         beam_module
 
       shorthand when is_atom(shorthand) ->
-        Module.concat([Exoforge, Contracts, Services, Macro.camelize(to_string(shorthand))])
+        Module.concat([Exoforge, Std, Services, Macro.camelize(to_string(shorthand))])
     end)
   end
 
@@ -270,7 +347,7 @@ defmodule Exoforge.Plugin do
 
   defp setup_attributes(contract_modules) do
     quote do
-      Module.register_attribute(__MODULE__, :exo_actions, accumulate: true)
+      Module.register_attribute(__MODULE__, :exo_actions_map, accumulate: true)
       Module.register_attribute(__MODULE__, :exo_events, accumulate: true)
       Module.register_attribute(__MODULE__, :exo_handlers, accumulate: true)
 

@@ -10,7 +10,6 @@ defmodule Exoforge.Drivers.Runtime.ElixirPluginRunner do
 
     plugin_sup_name = Module.concat(plugin_mod, Supervisor)
     task_sup_name = Module.concat(plugin_mod, TaskSupervisor)
-    snapshot_mgr_name = Module.concat(plugin_mod, SnapshotManager)
     worker_sup_name = Module.concat(plugin_mod, WorkerSupervisor)
 
     custom_children =
@@ -23,13 +22,13 @@ defmodule Exoforge.Drivers.Runtime.ElixirPluginRunner do
     children =
       [
         {Task.Supervisor, name: task_sup_name},
-        {Exoforge.Workers.SnapshotManager, name: snapshot_mgr_name},
+        # TODO: SnapshotManager child goes here
         {DynamicSupervisor, name: worker_sup_name, strategy: :one_for_one},
         %{id: __MODULE__, start: {__MODULE__, :start_link, [{manifest, task_sup_name}]}}
       ] ++ custom_children
 
     DynamicSupervisor.start_child(
-      Exoforge.PluginRootSupervisor,
+      Exoforge.PluginSupervisor,
       %{
         id: plugin_sup_name,
         start: {Supervisor, :start_link, [children, [name: plugin_sup_name, strategy: :one_for_one]]},
@@ -44,17 +43,16 @@ defmodule Exoforge.Drivers.Runtime.ElixirPluginRunner do
 
   @impl true
   def init({%Manifest{entry_point: plugin_mod} = manifest, task_sup_name}) do
-    events = if function_exported?(plugin_mod, :events, 0), do: plugin_mod.events(), else: []
+    events = plugin_mod.handled_events()
 
     Enum.each(events, fn event_key ->
       Exoforge.EventDispatcher.subscribe(event_key)
     end)
 
-    if function_exported?(plugin_mod, :on_init, 1) do
-      plugin_mod.on_init(manifest)
+    case plugin_mod.init(manifest) do
+      :ok -> {:ok, %{manifest: manifest, plugin_mod: plugin_mod, task_sup_name: task_sup_name}}
+      {:error, reason} -> {:stop, reason}
     end
-
-    {:ok, %{manifest: manifest, plugin_mod: plugin_mod, task_sup_name: task_sup_name}}
   end
 
   @impl true

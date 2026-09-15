@@ -8,7 +8,7 @@ defmodule Exoforge.Project do
       elixir: "~> 1.20",
       aliases: aliases(),
       start_permanent: Mix.env() == :prod,
-      deps: deps(),
+      deps: deps(Mix.env()),
       config_path: "config/config.exs",
       deps_path: "_deps",
       lockfile: "mix.lock"
@@ -25,14 +25,16 @@ defmodule Exoforge.Project do
   defp extra_applications(:dev), do: [:logger, :wx, :observer, :runtime_tools]
   defp extra_applications(_), do: [:logger]
 
-  defp deps do
+  defp deps(:dev), do: deps(:prod) ++ module_deps()
+
+  defp deps(_) do
     [
       {:exoforge_core, path: "core"}
-    ] ++ module_deps()
+    ]
   end
 
   defp module_deps do
-    Path.wildcard("modules/*")
+    Path.wildcard("plugins/*")
     |> Enum.filter(&File.dir?/1)
     |> Enum.map(fn path ->
       app_name = Path.basename(path) |> String.to_atom()

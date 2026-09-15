@@ -12,6 +12,8 @@ defmodule Mix.Tasks.Compile.ExoforgeManifest do
     end
   end
 
+  # Find the first plugin entrypoint by scanning compiled .beam files.
+  # This task must be run after compilation (e.g., from plugins project after compile).
   defp find_plugin_entrypoint do
     Mix.Project.compile_path()
     |> Path.join("*.beam")

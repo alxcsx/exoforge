@@ -1,9 +1,9 @@
-defmodule Database.MixProject do
+defmodule Exoforge.Std.Database.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :database,
+      app: :exoforge_std_database,
       version: "0.1.0",
       elixir: "~> 1.20",
       deps: deps(),

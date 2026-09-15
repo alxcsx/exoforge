@@ -4,21 +4,22 @@ defmodule Exoforge.Std.Database do
   # TODO: these should be required, currently it's just a warning.
   @impl true
   defaction execute(_operation) do
-    %{rows: []}
+    {:ok, %{rows: []}}
   end
 
   @impl true
   defaction connection_config(_namespace) do
-    %{
-      url: "postgres://user:pass@localhost/db",
-      pool_size: 10,
-      driver: :postgres
-    }
+    {:ok,
+     %{
+       url: "postgres://user:pass@localhost/db",
+       pool_size: 10,
+       driver: :postgres
+     }}
   end
 
   @impl true
   defaction health_check() do
-    %{status: "ok"}
+    {:ok, %{}}
   end
 
   handle_event connection_lost(_payload) do

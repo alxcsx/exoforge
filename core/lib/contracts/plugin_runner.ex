@@ -4,5 +4,5 @@ defmodule Exoforge.Contracts.PluginRunner do
   """
   alias Exoforge.Domain.Manifest
 
-  @callback load(manifest :: Manifest.t()) :: :ok | {:error, term()}
+  @callback load(manifest :: %Manifest{}) :: :ok | {:error, term()}
 end

@@ -4,5 +4,5 @@ defmodule Exoforge.Contracts.PluginLoader do
   """
   alias Exoforge.Domain.Manifest
 
-  @callback load_plugins(path :: String.t()) :: [Manifest.t()]
+  @callback load_plugins(path :: String.t()) :: [%Manifest{}]
 end

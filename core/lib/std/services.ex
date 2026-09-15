@@ -1,4 +1,4 @@
-defmodule Exoforge.Contracts.Services do
+defmodule Exoforge.Std.Services do
   @moduledoc "Registry of built-in Exoforge service contracts."
   import Exoforge.Contracts.Service
 

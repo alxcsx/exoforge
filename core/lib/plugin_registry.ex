@@ -1,15 +1,30 @@
 defmodule Exoforge.PluginRegistry do
-  use GenServer
   alias Exoforge.Domain.Manifest
 
-  def start_link(_opt) do
-    GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
+  def initialize_ets do
+    Process.flag(:trap_exit, true)
+
+    :ets.new(:exo_plugins_mem, [:set, :named_table, :protected, read_concurrency: true])
+    :ets.new(:exo_services_mem, [:set, :named_table, :protected, read_concurrency: true])
   end
 
+  # Register a plugin manifest
   def register(%Manifest{} = manifest) do
-    GenServer.call(__MODULE__, {:register, manifest})
+    id = Map.get(manifest, :id)
+    :ets.insert(:exo_plugins_mem, {id, manifest})
+
+    provides = Map.get(manifest, :provides, [])
+    context = Map.get(manifest, :context, :global)
+
+    Enum.each(provides, fn service_type ->
+      key = {service_type, context}
+      :ets.insert(:exo_services_mem, {key, manifest})
+    end)
+
+    :ok
   end
 
+  # Fetch service by type and context
   def fetch_service(type, context \\ :global) do
     case :ets.lookup(:exo_services_mem, {type, context}) do
       [{{^type, ^context}, manifest}] -> manifest
@@ -18,11 +33,13 @@ defmodule Exoforge.PluginRegistry do
     end
   end
 
+  # Fetch all services of a given type
   def fetch_services(type) do
     :ets.match_object(:exo_services_mem, {{type, :_}, :_})
     |> Enum.map(fn {_key, manifest} -> manifest end)
   end
 
+  # Fetch manifest by ID
   def fetch_manifest(manifest_id) do
     case :ets.lookup(:exo_plugins_mem, manifest_id) do
       [{^manifest_id, manifest}] -> manifest
@@ -30,30 +47,11 @@ defmodule Exoforge.PluginRegistry do
     end
   end
 
-  @impl true
-  def init(_opts) do
-    Process.flag(:trap_exit, true)
-
-    :ets.new(:exo_plugins_mem, [:set, :named_table, :protected, read_concurrency: true])
-    :ets.new(:exo_services_mem, [:set, :named_table, :protected, read_concurrency: true])
-
-    {:ok, %{}}
-  end
-
-  @impl true
-  def handle_call({:register, %Manifest{id: id} = manifest}, _from, state) do
-    :ets.insert(:exo_plugins_mem, {id, manifest})
-
-    # 2. Automatically register everything this manifest provides
-    provides = Map.get(manifest, :provides, [])
-    context = Map.get(manifest, :context, :global)
-
-    Enum.each(provides, fn service_type ->
-      key = {service_type, context}
-      # Store the manifest or its entry point as the service handler
-      :ets.insert(:exo_services_mem, {key, manifest})
-    end)
-
-    {:reply, :ok, state}
+  # Fetch manifest by entry point module
+  def fetch_by_module(module) do
+    case :ets.match_object(:exo_plugins_mem, {:_, %{entry_point: module}}) do
+      [{_, manifest} | _] -> manifest
+      [] -> nil
+    end
   end
 end

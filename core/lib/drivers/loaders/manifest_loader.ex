@@ -5,7 +5,7 @@ defmodule Exoforge.Drivers.Loaders.ManifestLoader do
 
   @impl true
   def load_plugins(path) do
-    if is_nil(path), do: raise("Modules dir not found. Please set :modules_dir in your config")
+    if is_nil(path), do: raise("Modules dir not found. Please set :scan_path in your config")
 
     Logger.info("[ManifestLoader] Loading modules from #{path}")
 
