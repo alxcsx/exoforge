@@ -3,6 +3,7 @@
 /_build/
 /cover/
 /_deps/
+/deps/
 /doc/
 /*.ez
 /*.beam

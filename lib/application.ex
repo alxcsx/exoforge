@@ -8,6 +8,8 @@ defmodule Exoforge.Application do
     children = [
       Exoforge.EventDispatcher,
       Exoforge.WorkerRegistry,
+      Exoforge.PluginRegistry,
+      Exoforge.DrawerRegistry,
       Exoforge.PluginSupervisor
     ]
 

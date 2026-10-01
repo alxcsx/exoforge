@@ -25,11 +25,17 @@ defmodule Exoforge.Project do
   defp extra_applications(:dev), do: [:logger, :wx, :observer, :runtime_tools]
   defp extra_applications(_), do: [:logger]
 
-  defp deps(:dev), do: deps(:prod) ++ module_deps()
+  defp deps(_env), do: base_deps() ++ module_deps()
 
-  defp deps(_) do
+  defp base_deps do
     [
-      {:exoforge_core, path: "core"}
+      {:exoforge_core, path: "core"},
+      {:bandit, "~> 1.12"},
+      {:websock_adapter, "~> 0.6.0"},
+      {:jason, "~> 1.4"},
+      {:wasmex, "~> 0.15.1"},
+      {:postgrex, ">= 0.0.0"},
+      {:lazy_html, ">= 0.1.0", only: :test}
     ]
   end
 

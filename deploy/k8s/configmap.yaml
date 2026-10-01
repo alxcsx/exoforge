@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: exoforge-config
+  namespace: exoforge
+  labels:
+    app.kubernetes.io/name: exoforge
+data:
+  MIX_ENV: "prod"
+  PORT: "4005"
+  DASHBOARD_PORT: "4005"
+  GATEWAY_PORT: "4000"
+  HTTP_PORT: "4001"
+  PHX_HOST: "localhost"
+  PLUGINS_PATH: "/app/plugins_elixir"

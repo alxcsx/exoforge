@@ -1,40 +1,39 @@
 # === Elixir & BEAM Build Artifacts ===
-# Since all sub-projects share the root directories, this catches everything
-/_build/
-/cover/
-/_deps/
-/doc/
+_build/
+deps/
+_deps/
+cover/
+doc/
 *.dets
-/*.ez
-/*.beam
-/erl_crash.dump
+*.ez
+*.beam
+erl_crash.dump
 exoforge-*.tar
 
-# === Development Environment & IDEs ===
-# Language Server artifacts (ElixirLS / Lexical / NextLS)
-/.elixir_ls/
-/.lexical/
-/.nextls/
-.fetch
+# === .NET Build Artifacts ===
+bin/
+obj/
 
-# Code Editor Specifics
-/.idea/
-/.vscode/
-/.zed/
+# === Development Environment & IDEs ===
+.pi/
+.elixir_ls/
+.lexical/
+.nextls/
+.fetch
+.idea/
+.vscode/
+.zed/
 *.swp
 *~
 
 # === Test & Coverage Reports ===
-/cover/
-/.htmlcov/
-/log/*.log
+.htmlcov/
+log/*.log
 
 # === ExoForge Engine Specifics ===
-# Ignore compiled release binaries or target runtime packages if generated locally
-/priv/static/components/
+priv/static/components/
 
 # === Environment & Secrets ===
-# Ignore local environment variable overrides
 .env
 .env.local
 .env.*.local

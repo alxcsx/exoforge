@@ -16,6 +16,8 @@ defmodule Exoforge.Domain.Manifest do
     physical_path: "",
     dependencies: [],
     provides: [],
+    services: [],
+    events: [],
     assets_path: "assets"
   ]
 end

@@ -20,9 +20,15 @@ defmodule Exoforge.PluginPipelineTest do
     Process.register(self(), :pipeline_spy)
 
     [{plugin, _}] =
-      Code.eval_string("""
+      Code.compile_string("""
       defmodule Exoforge.Fixture.PipelinePlugin do
         use Exoforge.Plugin, provides: [:lldb]
+
+        @impl true
+        defaction connection_config(_payload), do: {:ok, %{url: "", pool_size: 1, driver: :test}}
+
+        @impl true
+        defaction health_check(), do: {:ok, %{status: "ok"}}
 
         handle_event connection_lost(payload) do
           send(:pipeline_spy, {:handled, payload})

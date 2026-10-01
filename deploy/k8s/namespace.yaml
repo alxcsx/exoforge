@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: exoforge
+  labels:
+    app.kubernetes.io/name: exoforge
+    app.kubernetes.io/part-of: exoforge

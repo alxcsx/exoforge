@@ -4,9 +4,15 @@ defmodule Exoforge.Drivers.Loaders.ManifestLoader do
   require Logger
 
   @impl true
-  def load_plugins(path) do
-    if is_nil(path), do: raise("Modules dir not found. Please set :scan_path in your config")
+  def load_plugins(nil), do: raise("Modules dir not found. Please set :scan_path in your config")
 
+  def load_plugins(paths) when is_list(paths) do
+    paths
+    |> Enum.flat_map(&load_plugins/1)
+    |> Enum.uniq_by(& &1.id)
+  end
+
+  def load_plugins(path) when is_binary(path) do
     Logger.info("[ManifestLoader] Loading modules from #{path}")
 
     Path.join([path, "*", "manifest.exs"])
@@ -17,7 +23,8 @@ defmodule Exoforge.Drivers.Loaders.ManifestLoader do
 
   defp parse_manifest(file_path) do
     try do
-      {manifest_map, _binding} = Code.eval_file(file_path)
+      content = File.read!(file_path) |> String.trim_leading("\uFEFF")
+      {manifest_map, _binding} = Code.eval_string(content, [], file: file_path)
 
       if not is_map(manifest_map) do
         raise "Invalid manifest file: #{file_path}. Expected a map, got: #{inspect(manifest_map)}"

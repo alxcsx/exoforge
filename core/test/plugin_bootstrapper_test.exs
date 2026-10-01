@@ -4,7 +4,7 @@ defmodule Exoforge.PluginBootstrapperTest do
   alias Exoforge.Domain.Manifest
   alias Exoforge.PluginBootstrapper
 
-  defp manifest(id, provides \\ [], dependencies \\ []) do
+  defp manifest(id, provides, dependencies \\ []) do
     %Manifest{
       id: id,
       name: "#{id}",
@@ -20,6 +20,13 @@ defmodule Exoforge.PluginBootstrapperTest do
     dependent = manifest(:dependent, [], [:svc])
 
     assert PluginBootstrapper.sort!([dependent, provider]) == [provider, dependent]
+  end
+
+  test "resolves shorthand service name against full contract module" do
+    db_provider = manifest(:db, [Exoforge.Std.Services.Database])
+    auth_dependent = manifest(:auth, [Exoforge.Std.Services.Auth], [:database])
+
+    assert PluginBootstrapper.sort!([auth_dependent, db_provider]) == [db_provider, auth_dependent]
   end
 
   test "raises on missing dependency" do

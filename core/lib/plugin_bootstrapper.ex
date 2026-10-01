@@ -28,10 +28,23 @@ defmodule Exoforge.PluginBootstrapper do
     manifests
   end
 
-  defp initialize_and_register(%Manifest{type: :elixir} = manifest) do
+  defp initialize_and_register(%Manifest{} = manifest) do
+    runner = runner_for(manifest.type)
+
+    manifest =
+      if function_exported?(runner, :prepare_manifest, 1) do
+        runner.prepare_manifest(manifest)
+      else
+        manifest
+      end
+
     PluginRegistry.register(manifest)
-    ElixirPluginRunner.load(manifest)
+    runner.load(manifest)
   end
+
+  defp runner_for(:elixir), do: ElixirPluginRunner
+  defp runner_for(:wasm), do: Exoforge.Drivers.Runtime.WasmPluginRunner
+  defp runner_for(mod) when is_atom(mod), do: mod
 
   @spec sort!([%Manifest{}]) :: [%Manifest{}]
   def sort!(manifests) do
@@ -43,12 +56,16 @@ defmodule Exoforge.PluginBootstrapper do
 
       service_providers =
         manifests
-        |> Enum.flat_map(fn m -> Enum.map(m.provides, &{&1, m.id}) end)
+        |> Enum.flat_map(fn m ->
+          Enum.flat_map(m.provides, fn p ->
+            Enum.map(service_keys(p), &{&1, m.id})
+          end)
+        end)
         |> Enum.group_by(fn {service, _id} -> service end, fn {_service, id} -> id end)
 
       # Create Links
       for m <- manifests, req <- m.dependencies do
-        case Map.fetch(service_providers, req) do
+        case find_providers(service_providers, req) do
           {:ok, providers} -> Enum.each(providers, &:digraph.add_edge(graph, &1, m.id))
           :error -> raise "[Missing Dependency]: Plugin `#{m.id}` requires service `#{req}`, which is not provided."
         end
@@ -66,5 +83,16 @@ defmodule Exoforge.PluginBootstrapper do
     after
       :digraph.delete(graph)
     end
+  end
+
+  defp service_keys(service), do: PluginRegistry.service_keys(service)
+
+  defp find_providers(service_providers, req) do
+    Enum.find_value(service_keys(req), :error, fn key ->
+      case Map.fetch(service_providers, key) do
+        {:ok, providers} -> {:ok, providers}
+        :error -> nil
+      end
+    end)
   end
 end

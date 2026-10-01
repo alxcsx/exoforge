@@ -26,28 +26,23 @@ defmodule Exoforge.EventDispatcher do
     context = %{
       source: Keyword.get(opts, :source),
       topic: topic,
-      scope: Keyword.get(opts, :scope, :server)
+      scope: Keyword.get(opts, :scope, :server),
+      event: event_key
     }
 
-    do_dispatch(event_key, topic, payload, context)
+    do_dispatch(event_key, topic, event_key, payload, context)
+    do_dispatch(:all, topic, event_key, payload, context)
 
     if topic != :global do
-      do_dispatch(event_key, :global, payload, context)
+      do_dispatch(event_key, :global, event_key, payload, context)
+      do_dispatch(:all, :global, event_key, payload, context)
     end
   end
 
-  defp do_dispatch(event_key, topic, payload, context) do
-    Registry.dispatch(@registry, {event_key, topic}, fn entries ->
+  defp do_dispatch(reg_key, topic, actual_event_key, payload, context) do
+    Registry.dispatch(@registry, {reg_key, topic}, fn entries ->
       for {pid, _opts} <- entries do
-        try do
-          send(pid, {:exo_event, event_key, payload, context})
-          :ok
-        rescue
-          _e in ArgumentError ->
-            # Process terminated or invalid message
-            Registry.unregister(@registry, {event_key, topic})
-            :ok
-        end
+        send(pid, {:exo_event, actual_event_key, payload, context})
       end
     end)
   end

@@ -11,6 +11,9 @@ defmodule Exoforge.Core do
   end
 
   defp deps do
-    []
+    [
+      {:wasmex, "~> 0.15.1"},
+      {:jason, "~> 1.4"}
+    ]
   end
 end

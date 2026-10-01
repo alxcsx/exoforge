@@ -6,6 +6,9 @@ defmodule Exoforge.Plugin do
     provides_list = if is_list(provides_ast), do: provides_ast, else: [provides_ast]
     contract_modules = resolve_contract_modules(provides_list, __CALLER__)
 
+    Module.register_attribute(__CALLER__.module, :exo_provides, accumulate: false, persist: true)
+    Module.put_attribute(__CALLER__.module, :exo_provides, contract_modules)
+
     quote location: :keep do
       @behaviour Exoforge.Contracts.Plugin
       import Exoforge.Plugin,
@@ -169,19 +172,11 @@ defmodule Exoforge.Plugin do
 
   defmacro __before_compile__(env) do
     manifest = Module.get_attribute(env.module, :manifest) || %{}
-    infra = Module.get_attribute(env.module, :infra) || %{}
-
-    if not is_map(infra) do
-      raise CompileError,
-        file: env.file,
-        description: "@infra must be a map. Got: #{inspect(infra)}"
-    end
+    actions_map = Module.get_attribute(env.module, :exo_actions_map) || %{}
 
     quote location: :keep do
       @doc false
       def manifest_overrides, do: unquote(Macro.escape(manifest))
-      @doc false
-      def infra_requirements, do: @infra
       @doc false
       def provides_contracts, do: @exo_provides
       @doc false
@@ -208,7 +203,7 @@ defmodule Exoforge.Plugin do
 
       # DEBUG UTILITIES
       @doc "Returns a list of all action names provided by this plugin."
-      def __actions__, do: Module.get_attribute(__MODULE__, :exo_actions_map) || %{}
+      def __actions__, do: unquote(Macro.escape(actions_map))
       @doc "Returns a list of all events emitted by this plugin."
       def __events__, do: Enum.map(@exo_events, & &1.name)
     end
@@ -282,14 +277,25 @@ defmodule Exoforge.Plugin do
   end
 
   defp contract_events(contract) do
-    with {:ok, _} <- Code.ensure_compiled(contract) do
-      if function_exported?(contract, :__service_metadata__, 0) do
-        contract.__service_metadata__().events
-      else
-        []
-      end
-    else
-      _ -> []
+    case Code.ensure_compiled(contract) do
+      {:module, mod} ->
+        if function_exported?(mod, :__service_metadata__, 0) do
+          mod.__service_metadata__().events
+        else
+          []
+        end
+
+      _ ->
+        cond do
+          function_exported?(contract, :__service_metadata__, 0) ->
+            contract.__service_metadata__().events
+
+          Module.open?(contract) ->
+            (Module.get_attribute(contract, :exo_events_meta) || []) |> Enum.reverse()
+
+          true ->
+            []
+        end
     end
   end
 
@@ -347,16 +353,15 @@ defmodule Exoforge.Plugin do
 
   defp setup_attributes(contract_modules) do
     quote do
-      Module.register_attribute(__MODULE__, :exo_actions_map, accumulate: true)
+      Module.register_attribute(__MODULE__, :exo_actions_map, accumulate: false)
       Module.register_attribute(__MODULE__, :exo_events, accumulate: true)
       Module.register_attribute(__MODULE__, :exo_handlers, accumulate: true)
 
       Module.register_attribute(__MODULE__, :manifest, accumulate: false)
-      Module.register_attribute(__MODULE__, :infra, accumulate: false)
+      Module.register_attribute(__MODULE__, :exo_provides, accumulate: false)
 
       @exo_provides unquote(contract_modules)
       @manifest %{}
-      @infra %{}
     end
   end
 
