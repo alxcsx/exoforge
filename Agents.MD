@@ -196,6 +196,8 @@ Phoenix LiveView (Real-Time Reactive BEAM)
 | **Stop Production Release Daemon** | `just stop-release` |
 | **Build Production Container Image** | `just docker-build` |
 | **Run Stack + Postgres (Compose)** | `just compose-up` |
+| **Start Only Local Postgres Container** | `just postgres-up` |
+| **Stop Only Local Postgres Container** | `just postgres-down` |
 | **Follow Compose Logs** | `just compose-logs` |
 | **Stop Stack + Postgres (Compose)** | `just compose-down` |
 | **Deploy to Kubernetes (Kustomize)** | `just k8s-deploy` |

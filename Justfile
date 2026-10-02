@@ -111,6 +111,14 @@ compose-down:
 # Restart Compose stack
 compose-restart: compose-down compose-up
 
+# Start only the local PostgreSQL 16 database container
+postgres-up:
+	{{compose_cmd}} up -d postgres
+
+# Stop the local PostgreSQL 16 database container
+postgres-down:
+	{{compose_cmd}} stop postgres
+
 # Deploy to local or remote Kubernetes cluster via Kustomize
 k8s-deploy:
 	kubectl apply -k deploy/k8s
