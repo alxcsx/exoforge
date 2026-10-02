@@ -411,4 +411,397 @@ defmodule Exoforge.Std.Dashboard.Components do
     <% end %>
     """
   end
+
+  @doc """
+  Action Execution Modal & Form Generator component.
+  Renders interactive service/action selection, dynamically generated parameter inputs,
+  caller scopes configuration, and formatted execution feedback.
+  """
+  attr :open, :boolean, default: false
+  attr :catalog, :list, default: []
+  attr :selected_service, :string, default: nil
+  attr :selected_action, :string, default: nil
+  attr :action_params, :map, default: %{}
+  attr :caller_scopes, :string, default: "admin, player"
+  attr :result, :any, default: nil
+  attr :latency_ms, :any, default: nil
+  attr :on_close, :string, default: "close_action_modal"
+  attr :on_select_service, :string, default: "select_action_service"
+  attr :on_select_action, :string, default: "select_action_name"
+  attr :on_change_form, :string, default: "change_action_form"
+  attr :on_dispatch, :string, default: "dispatch_action"
+
+  def action_runner_modal(assigns) do
+    current_svc =
+      Enum.find(assigns.catalog, &(&1.name == assigns.selected_service)) ||
+        List.first(assigns.catalog)
+
+    current_act =
+      if current_svc do
+        Enum.find(current_svc.actions, &(&1.name == assigns.selected_action)) ||
+          List.first(current_svc.actions)
+      end
+
+    assigns =
+      assigns
+      |> assign(:current_svc, current_svc)
+      |> assign(:current_act, current_act)
+
+    ~H"""
+    <%= if @open do %>
+      <div id="action_runner_modal" class="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
+        <div class="min-h-screen px-4 text-center flex items-center justify-center py-8">
+          <!-- Backdrop -->
+          <div
+            class="fixed inset-0 bg-gray-900/40 backdrop-blur-sm transition-opacity animate-fade-in"
+            phx-click={@on_close}
+          ></div>
+
+          <!-- Dialog Box -->
+          <div class="relative bg-white rounded-2xl max-w-xl w-full p-6 text-left shadow-2xl border border-gray-100 z-10 animate-fade-in space-y-4">
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between pb-3 border-b border-gray-100">
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center font-bold text-sm">
+                  ⚡
+                </div>
+                <div>
+                  <h3 class="font-bold text-gray-900 text-base">Action Dispatcher &amp; Form Generator</h3>
+                  <p class="text-xs text-gray-500">Execute backend service actions across BEAM &amp; WASM plugins</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                phx-click={@on_close}
+                class="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center transition-colors text-xs font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <!-- Service & Action Selection Pickers -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[11px] font-bold text-gray-600 uppercase mb-1">Target Service</label>
+                <form id="action_service_picker_form" phx-change={@on_select_service}>
+                  <select
+                    name="service"
+                    class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:outline-none focus:border-primary-500"
+                  >
+                    <%= for svc <- @catalog do %>
+                      <option value={svc.name} selected={@current_svc && svc.name == @current_svc.name}>
+                        <%= svc.name %> (<%= length(svc.actions) %> actions)
+                      </option>
+                    <% end %>
+                  </select>
+                </form>
+              </div>
+
+              <div>
+                <label class="block text-[11px] font-bold text-gray-600 uppercase mb-1">Target Action</label>
+                <form id="action_name_picker_form" phx-change={@on_select_action}>
+                  <select
+                    name="action"
+                    class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:outline-none focus:border-primary-500"
+                  >
+                    <%= if @current_svc do %>
+                      <%= for act <- @current_svc.actions do %>
+                        <option value={act.name} selected={@current_act && act.name == @current_act.name}>
+                          <%= act.name %> [<%= act.mode %>]
+                        </option>
+                      <% end %>
+                    <% end %>
+                  </select>
+                </form>
+              </div>
+            </div>
+
+            <!-- Action Description & Meta Banner -->
+            <%= if @current_act do %>
+              <div class="p-3 bg-gray-50/80 rounded-xl border border-gray-100 text-xs space-y-1">
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-gray-800 font-mono text-xs">
+                    <%= @current_svc.name %>.<%= @current_act.name %>
+                  </span>
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary-100 text-primary-800 uppercase">
+                    <%= @current_act.mode %>
+                  </span>
+                </div>
+                <p class="text-[11px] text-gray-500"><%= @current_act.doc %></p>
+              </div>
+            <% end %>
+
+            <!-- Dynamic Form Generator -->
+            <form id="action_execution_form" phx-change={@on_change_form} phx-submit={@on_dispatch} class="space-y-4">
+              <%= if @current_act && @current_act.params != [] do %>
+                <div class="space-y-2.5">
+                  <span class="block text-[11px] font-bold text-gray-600 uppercase tracking-wider">
+                    Parameters (<%= length(@current_act.params) %>)
+                  </span>
+                  <div class="space-y-2">
+                    <%= for param <- @current_act.params do %>
+                      <div>
+                        <label class="flex items-center justify-between text-xs font-semibold text-gray-700 mb-1">
+                          <span class="font-mono text-gray-900"><%= param.name %></span>
+                          <span class="text-[10px] text-gray-400 font-mono bg-gray-100 px-1.5 py-0.2 rounded">
+                            <%= param.type %>
+                          </span>
+                        </label>
+
+                        <%= case param.type do %>
+                          <% t when t in [:integer, :float] -> %>
+                            <input
+                              type="number"
+                              name={"param_#{param.name}"}
+                              value={Map.get(@action_params, param.name, if(t == :integer, do: "1", else: "1.0"))}
+                              step={if t == :float, do: "0.1", else: "1"}
+                              class="w-full px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-gray-800 focus:outline-none focus:border-primary-500"
+                            />
+                          <% :boolean -> %>
+                            <select
+                              name={"param_#{param.name}"}
+                              class="w-full px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-gray-800 focus:outline-none focus:border-primary-500"
+                            >
+                              <option value="true" selected={Map.get(@action_params, param.name) in ["true", true]}>true</option>
+                              <option value="false" selected={Map.get(@action_params, param.name) in ["false", false]}>false</option>
+                            </select>
+                          <% :map -> %>
+                            <textarea
+                              name={"param_#{param.name}"}
+                              rows="2"
+                              class="w-full px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-gray-800 focus:outline-none focus:border-primary-500"
+                              placeholder="{}"
+                            ><%= Map.get(@action_params, param.name, "{}") %></textarea>
+                          <% _ -> %>
+                            <input
+                              type="text"
+                              name={"param_#{param.name}"}
+                              value={Map.get(@action_params, param.name, "")}
+                              placeholder={"Enter #{param.name}..."}
+                              class="w-full px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-gray-800 focus:outline-none focus:border-primary-500"
+                            />
+                        <% end %>
+                      </div>
+                    <% end %>
+                  </div>
+                </div>
+              <% else %>
+                <div class="p-3 bg-gray-50/70 border border-dashed border-gray-200 rounded-xl text-center text-xs text-gray-400">
+                  This action takes no parameters.
+                </div>
+              <% end %>
+
+              <div>
+                <label class="block text-[11px] font-bold text-gray-600 uppercase mb-1">
+                  Caller Scopes (comma-separated RBAC scopes)
+                </label>
+                <input
+                  type="text"
+                  name="caller_scopes"
+                  value={@caller_scopes}
+                  placeholder="admin, player"
+                  class="w-full px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-gray-800 focus:outline-none focus:border-primary-500"
+                />
+              </div>
+
+              <div class="pt-2 border-t border-gray-100 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  phx-click={@on_close}
+                  class="px-3 py-1.5 rounded-xl text-xs font-semibold text-gray-500 hover:bg-gray-100 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  class="px-4 py-2 rounded-xl text-xs font-bold bg-primary-600 hover:bg-primary-700 text-white shadow-sm transition-all flex items-center gap-1.5 active:scale-95"
+                >
+                  <span>Dispatch Action</span>
+                  <span>⚡</span>
+                </button>
+              </div>
+            </form>
+
+            <!-- Execution Result Panel -->
+            <%= if @result != nil do %>
+              <div class="mt-4 pt-4 border-t border-gray-100 space-y-2 animate-fade-in">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold text-gray-700 uppercase">Execution Output</span>
+                  <div class="flex items-center gap-2">
+                    <%= if match?({:ok, _}, @result) or @result == :ok do %>
+                      <span class="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">
+                        SUCCESS (200)
+                      </span>
+                    <% else %>
+                      <span class="px-2 py-0.5 rounded-full bg-red-50 text-red-700 text-[10px] font-bold border border-red-200">
+                        ERROR
+                      </span>
+                    <% end %>
+                    <%= if @latency_ms do %>
+                      <span class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[10px] font-mono font-bold">
+                        ⚡ <%= @latency_ms %> ms
+                      </span>
+                    <% end %>
+                  </div>
+                </div>
+
+                <pre class="p-3 bg-gray-900 text-emerald-300 rounded-xl font-mono text-xs overflow-x-auto max-h-48 custom-scrollbar border border-gray-800"><%= format_action_runner_result(@result) %></pre>
+              </div>
+            <% end %>
+          </div>
+        </div>
+      </div>
+    <% end %>
+    """
+  end
+
+  @doc """
+  Live Cluster Event Stream Dock component.
+  Renders a real-time console dock listening to :pg / EventDispatcher with
+  pause/resume, topic search, payload viewer, and test simulator.
+  """
+  attr :open, :boolean, default: false
+  attr :events, :list, default: []
+  attr :paused, :boolean, default: false
+  attr :filter_topic, :string, default: ""
+  attr :on_toggle, :string, default: "toggle_event_dock"
+  attr :on_pause, :string, default: "toggle_event_pause"
+  attr :on_clear, :string, default: "clear_events"
+  attr :on_filter, :string, default: "filter_event_dock"
+  attr :on_simulate, :string, default: "simulate_test_event"
+
+  def event_stream_dock(assigns) do
+    ~H"""
+    <%= if @open do %>
+      <div class="fixed bottom-0 inset-x-0 z-40 bg-gray-950/95 text-gray-100 border-t border-gray-800 shadow-2xl backdrop-blur flex flex-col h-80 sm:h-96 transition-all duration-300 animate-fade-in">
+        <!-- Dock Top Bar -->
+        <div class="px-4 py-2.5 bg-gray-900 border-b border-gray-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2">
+              <span class={"w-2.5 h-2.5 rounded-full #{if @paused, do: "bg-amber-400", else: "bg-emerald-400 animate-pulse"}"}></span>
+              <span class="font-bold text-gray-200 tracking-tight">Cluster Event Stream (:pg / EventDispatcher)</span>
+            </div>
+            <span class="px-2 py-0.5 rounded-full bg-gray-800 font-mono font-bold text-[10px] text-gray-300 border border-gray-700">
+              <%= length(@events) %> captured
+            </span>
+            <%= if @paused do %>
+              <span class="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30">
+                STREAM PAUSED
+              </span>
+            <% end %>
+          </div>
+
+          <!-- Filter input & Controls -->
+          <div class="flex items-center gap-2">
+            <form id="event_dock_filter_form" phx-change={@on_filter} class="m-0">
+              <input
+                type="text"
+                name="topic"
+                value={@filter_topic}
+                placeholder="Filter event / payload..."
+                class="px-2.5 py-1 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-primary-500 w-36 sm:w-48 font-mono"
+              />
+            </form>
+
+            <button
+              type="button"
+              phx-click={@on_pause}
+              class={"px-2.5 py-1 rounded-lg font-bold text-xs flex items-center gap-1 transition-colors #{if @paused, do: "bg-emerald-600 hover:bg-emerald-500 text-white", else: "bg-gray-800 hover:bg-gray-700 text-gray-300"}"}
+            >
+              <%= if @paused, do: "▶ Resume", else: "⏸ Pause" %>
+            </button>
+
+            <button
+              type="button"
+              phx-click={@on_simulate}
+              class="px-2.5 py-1 bg-primary-600 hover:bg-primary-500 text-white rounded-lg font-bold text-xs transition-colors flex items-center gap-1 shadow-sm"
+              title="Broadcast simulated event to cluster"
+            >
+              <span>⚡ Simulate Event</span>
+            </button>
+
+            <button
+              type="button"
+              phx-click={@on_clear}
+              class="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-gray-200 rounded-lg font-bold text-xs transition-colors"
+            >
+              Clear
+            </button>
+
+            <button
+              type="button"
+              phx-click={@on_toggle}
+              class="w-7 h-7 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white flex items-center justify-center transition-colors text-xs font-bold"
+              title="Close Event Console"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
+        <!-- Dock Event Log Stream Window -->
+        <div class="flex-1 overflow-y-auto p-4 space-y-2 font-mono text-xs custom-scrollbar">
+          <%= if Enum.empty?(@events) do %>
+            <div class="h-full flex flex-col items-center justify-center text-gray-500 text-center py-12 space-y-2">
+              <svg class="w-8 h-8 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              <p class="text-xs font-sans text-gray-400">Waiting for live cluster events on <code class="text-primary-400">EventDispatcher</code> bus...</p>
+              <p class="text-[11px] font-sans text-gray-500">Dispatch an action or click "Simulate Event" above to verify.</p>
+            </div>
+          <% else %>
+            <%= for ev <- @events do %>
+              <div class="p-3 bg-gray-900/90 rounded-xl border border-gray-800/80 flex flex-col gap-1.5 hover:border-gray-700 transition-colors">
+                <div class="flex items-center justify-between text-[11px]">
+                  <div class="flex items-center gap-2">
+                    <span class="px-2 py-0.5 rounded bg-primary-950 text-primary-300 font-bold border border-primary-800/60 font-mono">
+                      <%= ev.event %>
+                    </span>
+                    <span class="text-gray-500 text-[10px]"><%= ev.time %></span>
+                    <%= if Map.get(ev, :context) do %>
+                      <span class="text-gray-600 text-[10px] hidden sm:inline">ctx: <%= inspect(ev.context) %></span>
+                    <% end %>
+                  </div>
+                  <span class="text-[10px] text-gray-500 font-mono">#<%= ev.id %></span>
+                </div>
+                <pre class="text-[11px] text-emerald-400 overflow-x-auto p-2.5 bg-black/60 rounded-lg border border-gray-800/60 font-mono"><%= Jason.encode!(ev.payload, pretty: true) %></pre>
+              </div>
+            <% end %>
+          <% end %>
+        </div>
+      </div>
+    <% end %>
+    """
+  end
+
+  defp format_action_runner_result({:ok, val}) do
+    case Jason.encode(sanitize_data(val), pretty: true) do
+      {:ok, json} -> json
+      _ -> inspect(val, pretty: true)
+    end
+  end
+
+  defp format_action_runner_result(:ok), do: Jason.encode!(%{status: "ok"}, pretty: true)
+
+  defp format_action_runner_result({:error, reason}) do
+    case Jason.encode(sanitize_data(reason), pretty: true) do
+      {:ok, json} -> json
+      _ -> inspect(reason, pretty: true)
+    end
+  end
+
+  defp format_action_runner_result(other) do
+    inspect(other, pretty: true)
+  end
+
+  defp sanitize_data(data) do
+    cond do
+      is_map(data) -> Map.new(data, fn {k, v} -> {to_string(k), sanitize_data(v)} end)
+      is_list(data) -> Enum.map(data, &sanitize_data/1)
+      is_tuple(data) -> Tuple.to_list(data) |> Enum.map(&sanitize_data/1)
+      is_atom(data) -> to_string(data)
+      true -> data
+    end
+  end
 end
+

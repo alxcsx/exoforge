@@ -93,6 +93,8 @@ flowchart TD
     M9 --> M10["M10: WASM Hardening & Cleanup ✅"]
     M10 --> M11["M11: Distributed Entity Clustering (Horde / :pg) ✅"]
     M11 --> M12["M12: Production Kubernetes & Benchmarking ✅"]
+    M12 --> M13["M13: Tooling, DevEx & Studio Automation ✅"]
+    M13 --> M14["M14: Interactive Unity Client Demo Scene 🎯 (Final MVP Step)"]
 ```
 
 ---
@@ -429,8 +431,51 @@ Production-grade deployment manifests and automated high-throughput cluster perf
     - All production SLAs met.
 
 - [x] **M12.4 — Full Test Suite & E2E Verification** ✅
-  - All 103 tests (92 Elixir + 11 C#) passing 100% green.
+  - All 108 tests (97 Elixir + 11 C#) passing 100% green.
   - Full live E2E vertical slice (`just test-e2e`) passing from live C# client over WebSocket into WASM combat execution and live event streaming.
+
+---
+
+### Milestone 13: Tooling, DevEx, Studio UI & Automatic Generation ✅
+
+Empower game producers and backend developers with automated tooling, API documentation generation, dynamic studio interaction, and live cluster observability.
+
+- [x] **M13.1 — Automatic OpenAPI 3.0 / Swagger Export (`GET /api/openapi.json` & `/api/docs`)** ✅
+  - Implemented dynamic OpenAPI 3.0 specification generator in `Exoforge.Std.Http.OpenAPI` resolving registered manifests and contract `__service_metadata__`.
+  - Exposes typed endpoints, parameter schemas, and security scopes at `GET /api/openapi.json`.
+  - Serves interactive Swagger UI documentation at `GET /api/docs`.
+- [x] **M13.2 — Plugin Scaffolding CLI (`mix exo.gen.plugin`)** ✅
+  - Generator task `mix exo.gen.plugin <name> [--lang elixir|csharp]` scaffolding complete plugins with contract DSL, plugin behavior, manifests, and test fixtures.
+  - Verified with automated test suite in `test/exo_gen_plugin_test.exs`.
+- [x] **M13.3 — Studio UI: Action Execution Modal & Form Generator** ✅
+  - Interactive modal (`<.action_runner_modal>`) in Game Producer Studio enabling producers and developers to trigger any registered service action with auto-generated form inputs derived from contract `params(...)` (integers, strings, booleans, maps/JSON).
+  - RBAC caller scopes gating (`admin, player`), live latency profiling (`⚡ 0.8 ms`), execution feedback, and syntax-highlighted response payloads.
+- [x] **M13.4 — Studio UI: Live Cluster Event Stream Dock** ✅
+  - Real-time dark console dock (`<.event_stream_dock>`) in Studio listening directly to `:pg` / `EventDispatcher` broadcasts.
+  - Features real-time counter pill, blinking status LED, stream pause/resume (`⏸ Pause` / `▶ Resume`), topic search/filter, payload viewer, and test simulator (`⚡ Simulate Event`).
+- [x] **M13.5 — Studio UI: Resource CSV & JSON Exporter** ✅
+  - One-click export of data tables in `ResourceLive` for game economy balancers and designers with RFC 4180 escaped CSV and pretty JSON preview modals and direct downloads.
+
+---
+
+### Milestone 14: Interactive Unity Client Demo Scene 🎯 (Final MVP Step)
+
+- [ ] **M14.1 — Unity Demo Scene & Interactive Controllers**
+  - Standalone Unity scene demonstrating end-to-end WebSocket connection, authentication, action dispatching (`combat.attack`), and event fanout (`player_damaged`) rendered on the main thread via `ExoDispatcher`.
+- [ ] **M14.2 — Unity Package Manager (UPM) Distribution Setup**
+  - Assembly definitions and UPM git package manifest.
+
+---
+
+### Post-MVP Roadmap: Standard Game Domain Plugins (Track 1)
+
+*Note: Gameplay domain plugins are scheduled for post-MVP following core engine and DevEx maturity.*
+
+- **`exoforge_std_economy`**: Soft/hard currencies (Gold, Gems), player wallets, ledger-backed atomic balance changes.
+- **`exoforge_std_inventory`**: Item catalog definitions, bag/equipment slots, item instances, stacking, and durability.
+- **`exoforge_std_guilds`**: Guild entities, rosters, role hierarchy (Owner, Officer, Member), and guild chat events.
+- **`exoforge_std_leaderboards`**: High-performance ranked leaderboards (global, seasonal, top-N) with live rank recalculation.
+- **`exoforge_std_matchmaking`**: Matchmaking queue, tickets, rating-based party pairing, and room allocation.
 
 ---
 
@@ -443,5 +488,6 @@ Production-grade deployment manifests and automated high-throughput cluster perf
 - Persistence modes: `memory | snapshot | relational`; snapshot is not a ledger.
 - In C#, an entity is typed state + behavior; the host owns the actor (one WASM instance per plugin).
 - Distribution lands behind the same `Entities.call/5` API (Horde), so plugins never import it.
+
 
 

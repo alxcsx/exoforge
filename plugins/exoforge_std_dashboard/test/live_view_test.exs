@@ -17,7 +17,9 @@ defmodule Exoforge.DashboardLiveViewTest do
 
   setup do
     PluginRegistry.initialize_ets()
-    start_supervised!({DbManager, [driver: :sandbox]})
+    unless Process.whereis(DbManager) do
+      start_supervised!({DbManager, [driver: :sandbox]})
+    end
 
     unless Process.whereis(EventDispatcher.registry_name()) do
       start_supervised!(EventDispatcher)
@@ -31,7 +33,9 @@ defmodule Exoforge.DashboardLiveViewTest do
       start_supervised!({Phoenix.PubSub, name: Exoforge.Std.Dashboard.PubSub})
     end
 
-    start_supervised!(Endpoint)
+    unless Process.whereis(Endpoint) do
+      start_supervised!(Endpoint)
+    end
 
     PluginRegistry.register(%Exoforge.Domain.Manifest{
       id: :exoforge_std_database,
@@ -175,6 +179,69 @@ defmodule Exoforge.DashboardLiveViewTest do
 
       html = render(view)
       assert html =~ "player_created"
+    end
+
+    test "action runner modal opens, generates form inputs, and dispatches actions" do
+      conn = build_conn() |> Plug.Test.init_test_session(%{})
+      {:ok, view, _html} = live(conn, "/")
+
+      # 1. Open action runner modal
+      html = render_click(view, "open_action_modal", %{})
+      assert html =~ "Action Dispatcher &amp; Form Generator"
+      assert html =~ "Target Service"
+      assert html =~ "Target Action"
+
+      # 2. Select service and action
+      html = render_change(view, "select_action_service", %{"service" => "lldb"})
+      assert html =~ "lldb"
+
+      html = render_change(view, "select_action_name", %{"action" => "health_check"})
+      assert html =~ "health_check"
+
+      # 3. Update form inputs and scopes
+      html =
+        render_change(view, "change_action_form", %{
+          "caller_scopes" => "admin"
+        })
+
+      assert html =~ "caller_scopes"
+
+      # 4. Dispatch the action
+      html = render_submit(view, "dispatch_action", %{"caller_scopes" => "admin"})
+      assert html =~ "Execution Output"
+      assert html =~ "SUCCESS (200)"
+      assert html =~ "healthy" or html =~ "ok" or html =~ "status"
+    end
+
+    test "cluster event stream dock toggles, pauses, clears, and streams events" do
+      conn = build_conn() |> Plug.Test.init_test_session(%{})
+      {:ok, view, _html} = live(conn, "/")
+
+      # 1. Open event dock
+      html = render_click(view, "toggle_event_dock", %{})
+      assert html =~ "Cluster Event Stream (:pg / EventDispatcher)"
+      assert html =~ "Clear"
+      assert html =~ "Simulate Event"
+
+      # 2. Simulate broadcasting a cluster telemetry event
+      html = render_click(view, "simulate_test_event", %{})
+      assert html =~ "Simulated telemetry event"
+
+      :timer.sleep(50)
+      html = render(view)
+      assert html =~ "studio_telemetry"
+
+      # 3. Filter event dock
+      html = render_change(view, "filter_event_dock", %{"topic" => "studio_telemetry"})
+      assert html =~ "studio_telemetry"
+
+      # 4. Toggle pause
+      html = render_click(view, "toggle_event_pause", %{})
+      assert html =~ "STREAM PAUSED" or html =~ "Resume"
+
+      # 5. Clear events
+      html = render_click(view, "clear_events", %{})
+      assert html =~ "Waiting for live cluster events"
     end
   end
 end

@@ -33,6 +33,13 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       }
     ]
 
+    action_catalog = fetch_action_catalog()
+    default_service = List.first(action_catalog)
+    default_service_name = if default_service, do: default_service.name, else: nil
+    default_action = if default_service, do: List.first(default_service.actions), else: nil
+    default_action_name = if default_action, do: default_action.name, else: nil
+    default_params = default_params_for(default_action)
+
     {:ok,
      assign(socket,
        current_tab: :overview,
@@ -56,7 +63,19 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
        settings_tab: "project",
        app_drawer_open: false,
        activity_events: initial_events,
-       quick_toast: nil
+       filtered_activity_events: initial_events,
+       quick_toast: nil,
+       action_catalog: action_catalog,
+       selected_action_service: default_service_name,
+       selected_action_name: default_action_name,
+       action_form_params: default_params,
+       caller_scopes: "admin, player",
+       action_modal_open: false,
+       action_result: nil,
+       action_latency_ms: nil,
+       event_dock_open: false,
+       events_paused: false,
+       event_filter_topic: ""
      )}
   end
 
@@ -232,6 +251,185 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     handle_quick_action(action, socket)
   end
 
+  # ---- ACTION EXECUTION MODAL (M13.3) ----
+
+  def handle_event("open_action_modal", params, socket) do
+    svc_name = Map.get(params, "service") || socket.assigns.selected_action_service
+    act_name = Map.get(params, "action")
+
+    svc =
+      Enum.find(socket.assigns.action_catalog, &(&1.name == svc_name)) ||
+        List.first(socket.assigns.action_catalog)
+
+    selected_svc_name = if svc, do: svc.name, else: nil
+
+    act =
+      if svc do
+        if act_name do
+          Enum.find(svc.actions, &(&1.name == act_name)) || List.first(svc.actions)
+        else
+          List.first(svc.actions)
+        end
+      end
+
+    selected_act_name = if act, do: act.name, else: nil
+    initial_params = default_params_for(act)
+
+    {:noreply,
+     assign(socket,
+       action_modal_open: true,
+       selected_action_service: selected_svc_name,
+       selected_action_name: selected_act_name,
+       action_form_params: initial_params,
+       action_result: nil,
+       action_latency_ms: nil
+     )}
+  end
+
+  def handle_event("close_action_modal", _params, socket) do
+    {:noreply, assign(socket, action_modal_open: false, action_result: nil)}
+  end
+
+  def handle_event("select_action_service", %{"service" => svc_name}, socket) do
+    svc = Enum.find(socket.assigns.action_catalog, &(&1.name == svc_name))
+    first_act = if svc, do: List.first(svc.actions)
+    first_act_name = if first_act, do: first_act.name, else: nil
+    initial_params = default_params_for(first_act)
+
+    {:noreply,
+     assign(socket,
+       selected_action_service: svc_name,
+       selected_action_name: first_act_name,
+       action_form_params: initial_params,
+       action_result: nil,
+       action_latency_ms: nil
+     )}
+  end
+
+  def handle_event("select_action_name", %{"action" => act_name}, socket) do
+    svc = Enum.find(socket.assigns.action_catalog, &(&1.name == socket.assigns.selected_action_service))
+    act = if svc, do: Enum.find(svc.actions, &(&1.name == act_name))
+    initial_params = default_params_for(act)
+
+    {:noreply,
+     assign(socket,
+       selected_action_name: act_name,
+       action_form_params: initial_params,
+       action_result: nil,
+       action_latency_ms: nil
+     )}
+  end
+
+  def handle_event("change_action_form", params, socket) do
+    caller_scopes = Map.get(params, "caller_scopes", socket.assigns.caller_scopes)
+
+    updated_params =
+      Enum.reduce(params, socket.assigns.action_form_params, fn
+        {"param_" <> name, val}, acc -> Map.put(acc, name, val)
+        _other, acc -> acc
+      end)
+
+    {:noreply, assign(socket, action_form_params: updated_params, caller_scopes: caller_scopes)}
+  end
+
+  def handle_event("dispatch_action", params, socket) do
+    caller_scopes_str = Map.get(params, "caller_scopes") || socket.assigns.caller_scopes
+
+    updated_params =
+      Enum.reduce(params, socket.assigns.action_form_params, fn
+        {"param_" <> name, val}, acc -> Map.put(acc, name, val)
+        _other, acc -> acc
+      end)
+
+    svc = Enum.find(socket.assigns.action_catalog, &(&1.name == socket.assigns.selected_action_service))
+    act = if svc, do: Enum.find(svc.actions, &(&1.name == socket.assigns.selected_action_name))
+
+    if svc && act do
+      payload =
+        Enum.reduce(act.params, %{}, fn p, acc ->
+          val_str = Map.get(updated_params, p.name, "")
+          casted = cast_param_value(val_str, p.type)
+          Map.put(acc, String.to_atom(p.name), casted)
+        end)
+
+      scopes =
+        caller_scopes_str
+        |> String.split(",")
+        |> Enum.map(&String.trim/1)
+        |> Enum.reject(&(&1 == ""))
+
+      scopes = if scopes == [], do: ["admin"], else: scopes
+
+      start_time = System.monotonic_time(:microsecond)
+      service_atom = String.to_atom(svc.name)
+      action_atom = String.to_atom(act.name)
+
+      result =
+        try do
+          ActionDispatcher.dispatch(service_atom, action_atom, payload, caller_scopes: scopes)
+        rescue
+          e -> {:error, Exception.message(e)}
+        catch
+          :exit, reason -> {:error, inspect(reason)}
+        end
+
+      duration_us = System.monotonic_time(:microsecond) - start_time
+      latency_ms = Float.round(duration_us / 1000, 2)
+
+      # If player was created or modified, refresh player table
+      socket =
+        if svc.name == "player_data" and act.name in ["create_player", "update_player"] do
+          players = fetch_players()
+          assign(socket, players: players, filtered_players: players)
+        else
+          socket
+        end
+
+      {:noreply,
+       assign(socket,
+         action_result: result,
+         action_latency_ms: latency_ms,
+         action_form_params: updated_params,
+         caller_scopes: caller_scopes_str
+       )}
+    else
+      {:noreply, put_flash(socket, :error, "Selected service or action not found.")}
+    end
+  end
+
+  # ---- LIVE CLUSTER EVENT STREAM DOCK (M13.4) ----
+
+  def handle_event("toggle_event_dock", _params, socket) do
+    {:noreply, assign(socket, :event_dock_open, !socket.assigns.event_dock_open)}
+  end
+
+  def handle_event("toggle_event_pause", _params, socket) do
+    {:noreply, assign(socket, :events_paused, !socket.assigns.events_paused)}
+  end
+
+  def handle_event("filter_event_dock", %{"topic" => topic}, socket) do
+    filtered = filter_activity_events(socket.assigns.activity_events, topic)
+    {:noreply, assign(socket, event_filter_topic: topic, filtered_activity_events: filtered)}
+  end
+
+  def handle_event("clear_events", _params, socket) do
+    {:noreply, assign(socket, activity_events: [], filtered_activity_events: [])}
+  end
+
+  def handle_event("simulate_test_event", _params, socket) do
+    ping_id = System.unique_integer([:positive])
+
+    payload = %{
+      simulated: true,
+      ping_id: ping_id,
+      node: to_string(node()),
+      timestamp: System.system_time(:millisecond)
+    }
+
+    EventDispatcher.broadcast(:studio_telemetry, payload)
+    {:noreply, put_flash(socket, :info, "Simulated telemetry event ##{ping_id} broadcasted!")}
+  end
+
   # ---- REAL-TIME EVENT STREAM FROM BEAM EventDispatcher ----
 
   @impl true
@@ -241,10 +439,17 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       event: to_string(event_key),
       payload: payload,
       context: context,
-      time: "Just now"
+      time: Calendar.strftime(DateTime.utc_now(), "%H:%M:%S")
     }
 
-    new_events = [ev_item | Enum.take(socket.assigns.activity_events, 24)]
+    new_events =
+      if socket.assigns.events_paused do
+        socket.assigns.activity_events
+      else
+        [ev_item | Enum.take(socket.assigns.activity_events, 99)]
+      end
+
+    filtered = filter_activity_events(new_events, socket.assigns.event_filter_topic)
 
     # If player lifecycle event, reload players
     ev_str = to_string(event_key)
@@ -257,7 +462,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         socket
       end
 
-    {:noreply, assign(socket, activity_events: new_events)}
+    {:noreply, assign(socket, activity_events: new_events, filtered_activity_events: filtered)}
   end
 
   def handle_info(_msg, socket) do
@@ -395,6 +600,8 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     ]
 
     action_items = [
+      %{id: "open_action_runner", title: "Action Runner: Dispatch Plugin Actions", subtitle: "Interactive form to execute backend RPCs", type: "action"},
+      %{id: "toggle_event_dock", title: "Event Console: Live Cluster Event Stream", subtitle: "Real-time telemetry from :pg and EventDispatcher", type: "action"},
       %{id: "ping_auth", title: "Quick Action: Ping Auth Service", subtitle: "Verify session issuance", type: "action"},
       %{id: "simulate_combat", title: "Quick Action: Simulate Combat Attack", subtitle: "Invoke C# WASM sandbox", type: "action"},
       %{id: "create_sample_player", title: "Quick Action: Create Sample Player", subtitle: "Persist record to database", type: "action"}
@@ -412,6 +619,12 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
   defp handle_quick_action(action, socket) do
     case action do
+      "open_action_runner" ->
+        {:noreply, assign(socket, action_modal_open: true, action_result: nil)}
+
+      "toggle_event_dock" ->
+        {:noreply, assign(socket, event_dock_open: !socket.assigns.event_dock_open)}
+
       "ping_auth" ->
         _ = ActionDispatcher.dispatch(:auth, :authenticate, %{token: "dev:admin"})
         {:noreply, put_flash(socket, :info, "Auth service responded successfully!")}
@@ -430,6 +643,170 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         {:noreply, socket}
     end
   end
+
+  defp filter_activity_events(events, query) do
+    q = String.downcase(String.trim(query || ""))
+
+    if q == "" do
+      events
+    else
+      Enum.filter(events, fn ev ->
+        String.contains?(String.downcase(ev.event), q) or
+          String.contains?(String.downcase(to_string(ev.id)), q) or
+          (is_map(ev.payload) and String.contains?(String.downcase(Jason.encode!(ev.payload)), q))
+      end)
+    end
+  end
+
+  defp fetch_action_catalog do
+    from_extensions =
+      try do
+        PluginRegistry.dashboard_extensions()
+        |> Enum.flat_map(fn ext -> Map.get(ext, :services, []) end)
+      rescue
+        _ -> []
+      end
+
+    from_known =
+      [
+        Exoforge.Std.Services.Combat,
+        Exoforge.Std.Services.Auth,
+        Exoforge.Std.Services.PlayerData,
+        Exoforge.Std.Services.Database,
+        Exoforge.Std.Services.Lldb,
+        Exoforge.Std.Services.Ws,
+        Exoforge.Std.Services.Http
+      ]
+      |> Enum.filter(&(Code.ensure_loaded?(&1) and function_exported?(&1, :__service_metadata__, 0)))
+      |> Enum.map(& &1.__service_metadata__())
+
+    (from_extensions ++ from_known)
+    |> Enum.filter(fn svc ->
+      actions = svc[:actions] || svc["actions"] || []
+      is_list(actions) and actions != []
+    end)
+    |> Enum.map(fn svc ->
+      name = to_string(svc[:name] || svc["name"])
+      actions = svc[:actions] || svc["actions"] || []
+
+      %{
+        name: name,
+        actions:
+          Enum.map(actions, fn act ->
+            act_name = to_string(act[:name] || act["name"])
+            doc = act[:doc] || act["doc"] || "No description provided."
+            mode = to_string(act[:mode] || act["mode"] || "sync")
+            raw_params = act[:params] || act["params"] || []
+            params = normalize_action_params(raw_params)
+
+            %{
+              name: act_name,
+              doc: doc,
+              mode: mode,
+              params: params
+            }
+          end)
+      }
+    end)
+    |> Enum.uniq_by(& &1.name)
+    |> Enum.sort_by(& &1.name)
+  end
+
+  defp normalize_action_params(params) do
+    cond do
+      is_map(params) ->
+        Enum.map(params, fn {k, v} ->
+          type =
+            case v do
+              m when is_map(m) -> Map.get(m, :type) || Map.get(m, "type") || :string
+              l when is_list(l) -> Keyword.get(l, :type, :string)
+              atom when is_atom(atom) -> atom
+              str when is_binary(str) -> String.to_atom(str)
+              _ -> :string
+            end
+
+          %{name: to_string(k), type: type}
+        end)
+
+      is_list(params) and Keyword.keyword?(params) ->
+        Enum.map(params, fn {k, v} ->
+          type =
+            case v do
+              m when is_map(m) -> Map.get(m, :type) || Map.get(m, "type") || :string
+              l when is_list(l) -> Keyword.get(l, :type, :string)
+              atom when is_atom(atom) -> atom
+              str when is_binary(str) -> String.to_atom(str)
+              _ -> :string
+            end
+
+          %{name: to_string(k), type: type}
+        end)
+
+      is_list(params) ->
+        Enum.map(params, fn
+          {k, v} ->
+            %{name: to_string(k), type: if(is_atom(v), do: v, else: :string)}
+
+          item when is_map(item) ->
+            name = Map.get(item, :name) || Map.get(item, "name") || "param"
+            type = Map.get(item, :type) || Map.get(item, "type") || :string
+            %{name: to_string(name), type: if(is_atom(type), do: type, else: String.to_atom(to_string(type)))}
+
+          other ->
+            %{name: to_string(other), type: :string}
+        end)
+
+      true ->
+        []
+    end
+  end
+
+  defp default_params_for(nil), do: %{}
+
+  defp default_params_for(%{params: params}) do
+    Enum.reduce(params, %{}, fn p, acc ->
+      default_val =
+        case p.type do
+          :integer -> "1"
+          :float -> "1.0"
+          :boolean -> "true"
+          :map -> "{}"
+          _ -> ""
+        end
+
+      Map.put(acc, p.name, default_val)
+    end)
+  end
+
+  defp cast_param_value(val_str, param_type) when is_binary(val_str) do
+    case param_type do
+      :integer ->
+        case Integer.parse(String.trim(val_str)) do
+          {int, _} -> int
+          :error -> 0
+        end
+
+      :float ->
+        case Float.parse(String.trim(val_str)) do
+          {flt, _} -> flt
+          :error -> 0.0
+        end
+
+      :boolean ->
+        String.trim(String.downcase(val_str)) in ["true", "1", "yes"]
+
+      :map ->
+        case Jason.decode(val_str) do
+          {:ok, map} when is_map(map) -> map
+          _ -> %{}
+        end
+
+      _ ->
+        val_str
+    end
+  end
+
+  defp cast_param_value(val, _type), do: val
 
   # ---- TEMPLATE RENDER ----
 
@@ -523,11 +900,34 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
             </button>
           </nav>
 
-          <!-- Right Toolbar: Cmd+K & Settings -->
+          <!-- Right Toolbar: Action Runner, Event Stream, Cmd+K & Settings -->
           <div class="flex items-center gap-2">
+            <!-- Event Stream Console Toggle -->
+            <button
+              phx-click="toggle_event_dock"
+              class={"flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors border #{if @event_dock_open, do: "bg-primary-50 text-primary-800 border-primary-200", else: "bg-gray-100 hover:bg-gray-200/80 text-gray-700 border-gray-200/60"}"}
+              title="Toggle Live Cluster Event Stream Console"
+            >
+              <span class={"w-2 h-2 rounded-full #{if @events_paused, do: "bg-amber-400", else: "bg-emerald-500 animate-pulse"}"}></span>
+              <span class="hidden sm:inline">Event Stream</span>
+              <span class="px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black">
+                <%= length(@activity_events) %>
+              </span>
+            </button>
+
+            <!-- Action Runner Modal Trigger -->
+            <button
+              phx-click="open_action_modal"
+              class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all bg-primary-600 hover:bg-primary-700 text-white shadow-sm active:scale-95"
+              title="Open Interactive Action Dispatcher Modal"
+            >
+              <span>⚡</span>
+              <span class="hidden sm:inline">Action Runner</span>
+            </button>
+
             <button
               phx-click="open_cmd_palette"
-              class="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-gray-100 hover:bg-gray-200/80 text-gray-500 rounded-xl text-xs font-semibold transition-colors border border-gray-200/60"
+              class="hidden md:flex items-center gap-2 px-3 py-1.5 bg-gray-100 hover:bg-gray-200/80 text-gray-500 rounded-xl text-xs font-semibold transition-colors border border-gray-200/60"
             >
               <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -629,7 +1029,14 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                   <h3 class="font-bold text-gray-900 text-sm">Real-Time Event Stream</h3>
                   <p class="text-xs text-gray-400 mt-0.5">Pushed directly via EventDispatcher</p>
                 </div>
-                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <button
+                  type="button"
+                  phx-click="toggle_event_dock"
+                  class="text-xs font-bold text-primary-600 hover:text-primary-700 flex items-center gap-1.5 transition-colors"
+                >
+                  <span class={"w-2 h-2 rounded-full #{if @events_paused, do: "bg-amber-400", else: "bg-emerald-500 animate-pulse"}"}></span>
+                  <span>Open Console &rarr;</span>
+                </button>
               </div>
 
               <div class="space-y-2 max-h-80 overflow-y-auto custom-scrollbar">
@@ -738,11 +1145,11 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                     <span class="text-gray-400">Dependency Order: OK</span>
                     <button
                       type="button"
-                      phx-click="quick_action"
-                      phx-value-action="ping_auth"
-                      class="text-primary-600 hover:text-primary-700 font-bold"
+                      phx-click="open_action_modal"
+                      phx-value-service={List.first(plugin.provides)}
+                      class="text-primary-600 hover:text-primary-700 font-bold flex items-center gap-1 transition-colors"
                     >
-                      Run Health Check &rarr;
+                      <span>⚡ Run Action &rarr;</span>
                     </button>
                   </div>
                 </div>
@@ -880,6 +1287,36 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
           <% end %>
         </div>
       </.modal>
+
+      <!-- Action Execution Modal (M13.3) -->
+      <.action_runner_modal
+        open={@action_modal_open}
+        catalog={@action_catalog}
+        selected_service={@selected_action_service}
+        selected_action={@selected_action_name}
+        action_params={@action_form_params}
+        caller_scopes={@caller_scopes}
+        result={@action_result}
+        latency_ms={@action_latency_ms}
+        on_close="close_action_modal"
+        on_select_service="select_action_service"
+        on_select_action="select_action_name"
+        on_change_form="change_action_form"
+        on_dispatch="dispatch_action"
+      />
+
+      <!-- Live Cluster Event Stream Dock (M13.4) -->
+      <.event_stream_dock
+        open={@event_dock_open}
+        events={@filtered_activity_events}
+        paused={@events_paused}
+        filter_topic={@event_filter_topic}
+        on_toggle="toggle_event_dock"
+        on_pause="toggle_event_pause"
+        on_clear="clear_events"
+        on_filter="filter_event_dock"
+        on_simulate="simulate_test_event"
+      />
     </div>
     """
   end

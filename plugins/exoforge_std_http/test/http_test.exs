@@ -94,6 +94,24 @@ defmodule Exoforge.HttpTest do
       assert body["service"] == "exoforge_std_http"
     end
 
+    test "GET /api/openapi.json returns valid OpenAPI 3.0 specification" do
+      conn = conn(:get, "/api/openapi.json") |> Router.call(@opts)
+      assert conn.status == 200
+      spec = Jason.decode!(conn.resp_body)
+      assert spec["openapi"] == "3.0.3"
+      assert spec["info"]["title"] =~ "Exoforge"
+      assert is_map(spec["paths"])
+      assert Map.has_key?(spec["paths"], "/health")
+      assert Map.has_key?(spec["paths"], "/api/routes")
+    end
+
+    test "GET /api/docs returns interactive Swagger UI page" do
+      conn = conn(:get, "/api/docs") |> Router.call(@opts)
+      assert conn.status == 200
+      assert conn.resp_body =~ "SwaggerUIBundle"
+      assert conn.resp_body =~ "/api/openapi.json"
+    end
+
     test "POST /api/:service/:action dispatches to contract action" do
       # Dispatch to auth.authenticate with dev token
       payload = %{"token" => "dev:tester"}

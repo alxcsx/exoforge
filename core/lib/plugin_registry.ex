@@ -319,7 +319,8 @@ defmodule Exoforge.PluginRegistry do
     end
   end
 
-  defp resolve_contract_module(contract_ref) when is_atom(contract_ref) do
+  @doc "Resolves a contract atom or shorthand to its full contract module."
+  def resolve_contract_module(contract_ref) when is_atom(contract_ref) do
     str = to_string(contract_ref)
 
     cond do
@@ -337,7 +338,7 @@ defmodule Exoforge.PluginRegistry do
     end
   end
 
-  defp resolve_contract_module(other), do: other
+  def resolve_contract_module(other), do: other
 
   def service_keys(service) when is_atom(service) do
     str = to_string(service)

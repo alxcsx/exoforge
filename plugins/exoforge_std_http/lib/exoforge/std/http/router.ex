@@ -47,6 +47,50 @@ defmodule Exoforge.Std.Http.Router do
     send_json(conn, 200, %{routes: routes})
   end
 
+  get "/api/openapi.json" do
+    spec = Exoforge.Std.Http.OpenAPI.generate()
+    send_json(conn, 200, spec)
+  end
+
+  get "/api/docs" do
+    html = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <title>Exoforge API Documentation</title>
+      <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui.css" />
+      <style>
+        body { margin: 0; background: #fafafa; }
+        .topbar { display: none; }
+      </style>
+    </head>
+    <body>
+      <div id="swagger-ui"></div>
+      <script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-bundle.js" crossorigin></script>
+      <script>
+        window.onload = () => {
+          window.ui = SwaggerUIBundle({
+            url: '/api/openapi.json',
+            dom_id: '#swagger-ui',
+            presets: [
+              SwaggerUIBundle.presets.apis
+            ],
+            layout: "BaseLayout",
+            deepLinking: true
+          });
+        };
+      </script>
+    </body>
+    </html>
+    """
+
+    conn
+    |> put_resp_content_type("text/html")
+    |> send_resp(200, html)
+  end
+
   post "/api/:service/:action" do
     auth_header = get_req_header(conn, "authorization") |> List.first()
     raw_payload =
@@ -161,6 +205,8 @@ defmodule Exoforge.Std.Http.Router do
           <h1>Exoforge REST API Gateway</h1>
           <p>Standard HTTP REST ingress for contract action dispatch, status queries, and route discovery.</p>
           <div class="info-box">
+            <div class="info-row"><span class="label">API Docs (Swagger)</span><span class="value"><a href="/api/docs" style="color: #38bdf8; text-decoration: none;">/api/docs</a></span></div>
+            <div class="info-row"><span class="label">OpenAPI 3.0 Spec</span><span class="value"><a href="/api/openapi.json" style="color: #38bdf8; text-decoration: none;">/api/openapi.json</a></span></div>
             <div class="info-row"><span class="label">Dispatch Action</span><span class="value">POST /api/:service/:action</span></div>
             <div class="info-row"><span class="label">Service Routes</span><span class="value"><a href="/api/routes" style="color: #38bdf8; text-decoration: none;">/api/routes</a></span></div>
             <div class="info-row"><span class="label">Status</span><span class="value"><a href="/api/status" style="color: #38bdf8; text-decoration: none;">/api/status</a></span></div>
@@ -168,7 +214,7 @@ defmodule Exoforge.Std.Http.Router do
           </div>
           <div class="actions">
             <a href="#{studio_url}" class="btn-primary">Open Game Studio (Port 4005) &rarr;</a>
-            <a href="http://localhost:4000" class="btn-secondary">WebSocket (Port 4000)</a>
+            <a href="/api/docs" class="btn-secondary">Interactive Swagger Docs</a>
           </div>
         </div>
       </body>
@@ -184,13 +230,15 @@ defmodule Exoforge.Std.Http.Router do
         status: "ok",
         gateway: "rest",
         endpoints: %{
+          docs: "/api/docs",
+          openapi: "/api/openapi.json",
           routes: "/api/routes",
           status: "/api/status",
           health: "/health",
           dispatch: "POST /api/:service/:action"
         },
         studio_url: get_studio_url(),
-        message: "Exoforge HTTP REST Gateway is active. Query /api/routes for available routes or visit Game Studio at port 4005."
+        message: "Exoforge HTTP REST Gateway is active. Query /api/routes for available routes, visit /api/docs for Swagger UI, or visit Game Studio at port 4005."
       })
     end
   end
