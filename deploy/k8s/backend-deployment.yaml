@@ -29,6 +29,19 @@ spec:
                 name: exoforge-config
             - secretRef:
                 name: exoforge-secrets
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: RELEASE_DISTRIBUTION
+              value: "name"
+            - name: RELEASE_NODE
+              value: "exoforge@$(POD_IP)"
+            - name: K8S_SERVICE_NAME
+              value: "exoforge-nodes.exoforge.svc.cluster.local"
+            - name: CLUSTER_STRATEGY
+              value: "kubernetes"
           ports:
             - containerPort: 4005
               name: studio
@@ -38,6 +51,9 @@ spec:
               protocol: TCP
             - containerPort: 4001
               name: rest-api
+              protocol: TCP
+            - containerPort: 4369
+              name: epmd
               protocol: TCP
           livenessProbe:
             httpGet:

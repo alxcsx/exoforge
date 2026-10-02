@@ -119,3 +119,7 @@ k8s-deploy:
 k8s-destroy:
 	kubectl delete -k deploy/k8s
 
+# Run cluster and entity runtime performance benchmark
+benchmark:
+	mix test test/cluster_benchmark_test.exs
+

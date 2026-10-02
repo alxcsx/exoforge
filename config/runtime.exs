@@ -39,4 +39,44 @@ if config_env() == :prod do
     ]
 
   config :exoforge, :module_loader, scan_path: scan_paths
+
+  # Cluster formation & discovery
+  cluster_strategy =
+    System.get_env("CLUSTER_STRATEGY") ||
+      if(System.get_env("KUBERNETES_SERVICE_HOST"), do: "kubernetes", else: "local")
+
+  case cluster_strategy do
+    "kubernetes" ->
+      k8s_service = System.get_env("K8S_SERVICE_NAME") || "exoforge-nodes.exoforge.svc.cluster.local"
+      k8s_app = System.get_env("K8S_APP_NAME") || "exoforge"
+
+      topologies = [
+        k8s_dns: [
+          strategy: Cluster.Strategy.Kubernetes.DNS,
+          config: [
+            service: k8s_service,
+            application_name: k8s_app
+          ]
+        ]
+      ]
+
+      config :libcluster, topologies: topologies
+      config :exoforge, :entity_adapter, Exoforge.Entities.Adapters.Horde
+
+    "epmd" ->
+      topologies = [
+        epmd: [
+          strategy: Cluster.Strategy.Epmd,
+          config: [
+            hosts: [:"exoforge@127.0.0.1"]
+          ]
+        ]
+      ]
+
+      config :libcluster, topologies: topologies
+      config :exoforge, :entity_adapter, Exoforge.Entities.Adapters.Horde
+
+    _ ->
+      :ok
+  end
 end
