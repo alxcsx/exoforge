@@ -519,7 +519,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
   defp fetch_players do
     case Exoforge.PluginRegistry.fetch_resource_rows(:players) do
-      rows when is_list(rows) and rows != [] ->
+      rows when is_list(rows) ->
         Enum.map(rows, fn r ->
           profile =
             case Map.get(r, "profile") || Map.get(r, :profile) do
@@ -535,64 +535,37 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
               Map.get(profile, "player_id") ||
               "p_1"
 
+          raw_attrs = Map.get(profile, "attributes") || Map.get(r, "attributes") || []
+
+          attrs =
+            if is_list(raw_attrs) and raw_attrs != [] do
+              Enum.map(raw_attrs, fn
+                %{"key" => k, "value" => v} -> %{key: to_string(k), value: to_string(v)}
+                %{key: k, value: v} -> %{key: to_string(k), value: to_string(v)}
+                {k, v} -> %{key: to_string(k), value: to_string(v)}
+                other -> %{key: "attribute", value: inspect(other)}
+              end)
+            else
+              [
+                %{key: "locale", value: Map.get(profile, "locale") || "en_US"},
+                %{key: "rank_tier", value: Map.get(profile, "rank_tier") || "Bronze I"}
+              ]
+            end
+
           %{
             id: to_string(pid),
             name: Map.get(profile, "name") || Map.get(r, "name") || Map.get(r, :name) || to_string(pid),
             email: Map.get(profile, "email") || Map.get(r, "email") || Map.get(r, :email) || "#{pid}@player.exoforge.io",
             status: Map.get(r, "state") || Map.get(r, :state) || Map.get(r, "status") || Map.get(r, :status) || "Active",
             total_spent: Map.get(profile, "total_spent") || "$0.00",
-            time_in_game: Map.get(profile, "time_in_game") || "2h 45m",
-            attributes: [
-              %{key: "locale", value: "en_US"},
-              %{key: "rank_tier", value: "Gold IV"}
-            ]
+            time_in_game: Map.get(profile, "time_in_game") || "0m",
+            attributes: attrs
           }
         end)
 
       _ ->
-        default_sample_players()
+        []
     end
-  end
-
-  defp default_sample_players do
-    [
-      %{
-        id: "p_1001",
-        name: "ValkyrieOne",
-        email: "valk@sanctumhaven.io",
-        status: "Active",
-        total_spent: "$149.50",
-        time_in_game: "48h 12m",
-        attributes: [
-          %{key: "locale", value: "en_US"},
-          %{key: "guild_id", value: "guild_alpha"},
-          %{key: "vip_status", value: "true"}
-        ]
-      },
-      %{
-        id: "p_1002",
-        name: "ShadowStrike",
-        email: "shadow@sanctumhaven.io",
-        status: "Active",
-        total_spent: "$39.00",
-        time_in_game: "14h 05m",
-        attributes: [
-          %{key: "locale", value: "en_GB"},
-          %{key: "combat_rating", value: "1850"}
-        ]
-      },
-      %{
-        id: "p_1003",
-        name: "ArchonPrime",
-        email: "archon@sanctumhaven.io",
-        status: "Suspended",
-        total_spent: "$0.00",
-        time_in_game: "1h 20m",
-        attributes: [
-          %{key: "sanction_reason", value: "speed_hack_detection"}
-        ]
-      }
-    ]
   end
 
   defp default_cmd_results(socket) do
@@ -608,7 +581,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       %{id: "toggle_event_dock", title: "Event Console: Live Cluster Event Stream", subtitle: "Real-time telemetry from :pg and EventDispatcher", type: "action"},
       %{id: "ping_auth", title: "Quick Action: Ping Auth Service", subtitle: "Verify session issuance", type: "action"},
       %{id: "simulate_combat", title: "Quick Action: Simulate Combat Attack", subtitle: "Invoke C# WASM sandbox", type: "action"},
-      %{id: "create_sample_player", title: "Quick Action: Create Sample Player", subtitle: "Persist record to database", type: "action"}
+      %{id: "create_sample_player", title: "Quick Action: Register New Player (Auth)", subtitle: "Create player account & profile via Auth", type: "action"}
     ]
 
     resource_items =
@@ -639,10 +612,10 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
       "create_sample_player" ->
         pid = "p_#{System.unique_integer([:positive])}"
-        _ = ActionDispatcher.dispatch(:player_data, :create_player, %{player_id: pid, profile: %{name: "Hero_#{pid}"}})
+        _ = ActionDispatcher.dispatch(:auth, :register, %{player_id: pid, name: "Hero_#{pid}"})
         players = fetch_players()
         spent_display = compute_total_spent(players)
-        {:noreply, assign(socket, players: players, filtered_players: players, total_spent_display: spent_display) |> put_flash(:info, "Created player #{pid}!")}
+        {:noreply, assign(socket, players: players, filtered_players: players, total_spent_display: spent_display) |> put_flash(:info, "Registered new player #{pid} via Auth service!")}
 
       _ ->
         {:noreply, socket}
@@ -1144,7 +1117,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                 %{key: :time_in_game, label: "Time in Game"}
               ]}
               row_click_event="inspect_player"
-              empty_text="No players match the current search filters."
+              empty_text="No players registered yet. Create one with '+ New Player' or via Auth registration."
             />
           </div>
         <% end %>

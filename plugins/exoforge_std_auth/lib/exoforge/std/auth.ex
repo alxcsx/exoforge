@@ -103,10 +103,87 @@ defmodule Exoforge.Std.Auth do
     end
   end
 
+  @impl true
+  defaction register(payload) do
+    do_register_player(payload)
+  end
+
+  @impl true
+  defaction create_player(payload) do
+    do_register_player(payload)
+  end
+
+  @impl true
+  defaction issue_token(payload) do
+    player_id = Map.get(payload, :player_id) || Map.get(payload, "player_id")
+    scopes = Map.get(payload, :scopes) || Map.get(payload, "scopes") || ["player"]
+    scopes = parse_scopes(scopes)
+
+    if is_nil(player_id) or player_id == "" do
+      {:error, :invalid_player}
+    else
+      case generate_and_store_token(player_id, scopes) do
+        {:ok, token} -> {:ok, %{token: token, player_id: player_id}}
+        error -> error
+      end
+    end
+  end
+
+  defp do_register_player(payload) do
+    init_schema()
+
+    raw_pid = Map.get(payload, :player_id) || Map.get(payload, "player_id")
+    player_id = if raw_pid && raw_pid != "", do: to_string(raw_pid), else: "p_#{System.unique_integer([:positive])}"
+
+    raw_name =
+      Map.get(payload, :name) || Map.get(payload, "name") ||
+        Map.get(payload, :username) || Map.get(payload, "username")
+
+    name = if raw_name && raw_name != "", do: to_string(raw_name), else: "Player_#{player_id}"
+
+    raw_email = Map.get(payload, :email) || Map.get(payload, "email")
+    email = if raw_email && raw_email != "", do: to_string(raw_email), else: "#{player_id}@player.exoforge.io"
+
+    raw_scopes = Map.get(payload, :scopes) || Map.get(payload, "scopes") || ["player"]
+    scopes = parse_scopes(raw_scopes)
+
+    case generate_and_store_token(player_id, scopes) do
+      {:ok, token} ->
+        profile = %{
+          "player_id" => player_id,
+          "name" => name,
+          "email" => email,
+          "total_spent" => "$0.00",
+          "time_in_game" => "0m",
+          "status" => "Active",
+          "attributes" => [
+            %{"key" => "locale", "value" => "en_US"},
+            %{"key" => "registered_at", "value" => Calendar.strftime(DateTime.utc_now(), "%Y-%m-%d %H:%M:%S")}
+          ]
+        }
+
+        # Hook into player_data canonical profile store
+        _ =
+          ActionDispatcher.dispatch(:player_data, :create_player, %{
+            player_id: player_id,
+            profile: profile
+          })
+
+        {:ok, %{player_id: player_id, token: token, scopes: scopes, player: profile}}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
   ## ---- DIRECT ELIXIR FACADE ----
 
   @doc "Issues and stores a new authentication token for a player."
-  def issue_token(player_id, scopes \\ ["player"]) do
+  def issue_token(player_id, scopes) when is_list(scopes) do
+    generate_and_store_token(player_id, scopes)
+  end
+
+  defp generate_and_store_token(player_id, scopes) do
     init_schema()
     token = :crypto.strong_rand_bytes(24) |> Base.url_encode64(padding: false)
     scopes_str = Enum.join(scopes, ",")

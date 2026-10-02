@@ -74,6 +74,37 @@ defmodule Exoforge.Std.Services do
       returns(authorized: :boolean)
       errors([:unauthorized])
     end
+
+    @doc "Registers a new player account and profile in both auth and player_data."
+    action :register do
+      params(
+        player_id: [type: :string, optional: true],
+        name: [type: :string, optional: true],
+        email: [type: :string, optional: true],
+        scopes: [type: :list, optional: true]
+      )
+      returns(player_id: :string, token: :string, scopes: [:string], player: :map)
+      errors([:invalid_attributes, :registration_failed])
+    end
+
+    @doc "Creates a new player account with authentication credentials."
+    action :create_player do
+      params(
+        player_id: [type: :string, optional: true],
+        name: [type: :string, optional: true],
+        email: [type: :string, optional: true],
+        scopes: [type: :list, optional: true]
+      )
+      returns(player_id: :string, token: :string, scopes: [:string], player: :map)
+      errors([:invalid_attributes, :registration_failed])
+    end
+
+    @doc "Issues an authentication token for a player."
+    action :issue_token do
+      params(player_id: :string, scopes: [type: :list, optional: true])
+      returns(token: :string, player_id: :string)
+      errors([:invalid_player])
+    end
   end
 
   defservice player_data do
@@ -87,7 +118,7 @@ defmodule Exoforge.Std.Services do
       column :level, :integer, label: "Level", sortable: true
       column :status, :string, label: "Account Status", badge: true
       drawer [:overview, :attributes, :transactions, :inventory, :sessions, :events, :moderation]
-      actions [:get_player, :update_player]
+      actions [:get_player, :create_player, :update_player, :delete_player, :list_players]
     end
 
     @doc "Retrieves player profile record."
@@ -95,6 +126,25 @@ defmodule Exoforge.Std.Services do
       params(player_id: :string)
       returns(player: :map)
       errors([:player_not_found])
+    end
+
+    @doc "Creates a player profile record."
+    action :create_player do
+      params(player_id: [type: :string, optional: true], profile: [type: :map, optional: true])
+      returns(player: :map)
+      errors([:invalid_attributes])
+    end
+
+    @doc "Deletes a player profile record."
+    action :delete_player do
+      params(player_id: :string)
+      returns(status: :string, player_id: :string)
+      errors([:player_not_found])
+    end
+
+    @doc "Lists all registered player profiles."
+    action :list_players do
+      returns(players: [:map])
     end
 
     @doc "Updates player profile record."

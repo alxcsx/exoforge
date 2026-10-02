@@ -90,6 +90,7 @@ defmodule Exoforge.Std.PlayerData do
     end
   end
 
+  @impl true
   @doc "Action to create a new player profile and emit :player_created lifecycle event."
   defaction create_player(payload) do
     player_id = extract_player_id(payload)
@@ -111,6 +112,9 @@ defmodule Exoforge.Std.PlayerData do
              arguments: [player_id, player_id, profile_json, "active"]
            }) do
         {:ok, _} ->
+          # Ensure player credentials and token are issued in auth
+          _ = ActionDispatcher.dispatch(:auth, :issue_token, %{player_id: player_id, scopes: ["player"]})
+
           # Emit player_created lifecycle event
           player_created(player_id, now)
           {:ok, %{player: profile_with_id}}
@@ -121,6 +125,27 @@ defmodule Exoforge.Std.PlayerData do
     end
   end
 
+  @impl true
+  @doc "Action to list all registered player profiles."
+  defaction list_players() do
+    init_schema()
+    query = "SELECT * FROM players"
+
+    case ActionDispatcher.dispatch(:database, :execute, %{plugin: :player_data, operation: query}) do
+      {:ok, %{rows: rows}} when is_list(rows) ->
+        normalized = normalize_player_rows(rows)
+        {:ok, %{players: normalized, rows: normalized}}
+
+      {:ok, rows} when is_list(rows) ->
+        normalized = normalize_player_rows(rows)
+        {:ok, %{players: normalized, rows: normalized}}
+
+      _ ->
+        {:ok, %{players: [], rows: []}}
+    end
+  end
+
+  @impl true
   @doc "Action to delete a player profile and emit :player_deleted lifecycle event."
   defaction delete_player(payload) do
     player_id = extract_player_id(payload)
@@ -173,5 +198,23 @@ defmodule Exoforge.Std.PlayerData do
       _ ->
         %{"player_id" => player_id}
     end
+  end
+
+  defp normalize_player_rows(rows) do
+    Enum.map(rows, fn r ->
+      profile = decode_player_row(r)
+      pid = Map.get(r, "player_id") || Map.get(r, :player_id) || Map.get(profile, "player_id")
+
+      %{
+        id: pid,
+        player_id: pid,
+        name: Map.get(profile, "name") || to_string(pid),
+        email: Map.get(profile, "email") || "#{pid}@player.exoforge.io",
+        status: Map.get(r, "state") || Map.get(r, :state) || "Active",
+        total_spent: Map.get(profile, "total_spent") || "$0.00",
+        time_in_game: Map.get(profile, "time_in_game") || "0m",
+        profile: profile
+      }
+    end)
   end
 end

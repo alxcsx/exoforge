@@ -54,6 +54,26 @@ defmodule Exoforge.DashboardLiveViewTest do
       dependencies: [Exoforge.Std.Services.Database]
     })
 
+    PluginRegistry.register(%Exoforge.Domain.Manifest{
+      id: :exoforge_std_auth,
+      name: "exoforge_std_auth",
+      version: "0.1.0",
+      entry_point: Exoforge.Std.Auth,
+      provides: [Exoforge.Std.Services.Auth],
+      dependencies: [Exoforge.Std.Services.Database]
+    })
+    Exoforge.Std.Auth.init_schema()
+
+    PluginRegistry.register(%Exoforge.Domain.Manifest{
+      id: :exoforge_std_player_data,
+      name: "exoforge_std_player_data",
+      version: "0.1.0",
+      entry_point: Exoforge.Std.PlayerData,
+      provides: [Exoforge.Std.Services.PlayerData],
+      dependencies: [Exoforge.Std.Services.Database, Exoforge.Std.Services.Auth]
+    })
+    Exoforge.Std.PlayerData.init_schema()
+
     :ok
   end
 
@@ -144,13 +164,18 @@ defmodule Exoforge.DashboardLiveViewTest do
       assert html =~ "Gateway &amp; Latency"
       assert html =~ "Live Game Features"
 
-      # Switch to Players tab
+      # Switch to Players tab - starts with 0 players
       html = render_click(view, "switch_tab", %{"tab" => "players"})
       assert html =~ "Player Directory &amp; Profile Management"
+      assert html =~ "No players registered yet"
+
+      # Register a new player via Quick Action (hooked to Auth)
+      html = render_click(view, "quick_action", %{"action" => "create_sample_player"})
+      assert html =~ "Registered new player"
 
       # Search filter players
-      html = render_change(view, "filter_players", %{"query" => "Valkyrie", "status" => "all"})
-      assert html =~ "ValkyrieOne"
+      html = render_change(view, "filter_players", %{"query" => "Hero", "status" => "all"})
+      assert html =~ "Hero_"
 
       # Open Command Palette (Cmd+K)
       html = render_click(view, "open_cmd_palette", %{})
@@ -160,9 +185,13 @@ defmodule Exoforge.DashboardLiveViewTest do
       html = render_change(view, "search_cmd_palette", %{"query" => "combat"})
       assert html =~ "Quick Action: Simulate Combat Attack"
 
-      # Open entity side-drawer for player
-      html = render_click(view, "inspect_player", %{"id" => "p_1001"})
-      assert html =~ "Player Profile: ValkyrieOne"
+      # Open entity side-drawer for created player
+      players = Exoforge.PluginRegistry.fetch_resource_rows(:players)
+      assert length(players) >= 1
+      created_id = hd(players).id
+
+      html = render_click(view, "inspect_player", %{"id" => created_id})
+      assert html =~ "Player Profile: Hero_"
       assert html =~ "Overview &amp; Stats"
 
       # Switch drawer tab to attributes

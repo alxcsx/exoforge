@@ -177,64 +177,10 @@ defmodule Exoforge.PluginRegistry do
             Map.put(row, :id, id)
           end)
 
-        if normalized != [] do
-          normalized
-        else
-          sample_rows_for(resource_name)
-        end
+        normalized
 
       _ ->
-        sample_rows_for(resource_name)
-    end
-  end
-
-  defp sample_rows_for(resource_name) do
-    case to_string(resource_name) do
-      "players" ->
-        [
-          %{
-            id: "p_1001",
-            player_id: "p_1001",
-            name: "ValkyrieOne",
-            email: "valk@sanctumhaven.io",
-            status: "Active",
-            total_spent: "$149.50",
-            time_in_game: "48h 12m",
-            attributes: [
-              %{key: "locale", value: "en_US"},
-              %{key: "guild_id", value: "guild_alpha"},
-              %{key: "vip_status", value: "true"}
-            ]
-          },
-          %{
-            id: "p_1002",
-            player_id: "p_1002",
-            name: "ShadowStrike",
-            email: "shadow@sanctumhaven.io",
-            status: "Active",
-            total_spent: "$39.00",
-            time_in_game: "14h 05m",
-            attributes: [
-              %{key: "locale", value: "en_GB"},
-              %{key: "combat_rating", value: "1850"}
-            ]
-          },
-          %{
-            id: "p_1003",
-            player_id: "p_1003",
-            name: "ArchonPrime",
-            email: "archon@sanctumhaven.io",
-            status: "Suspended",
-            total_spent: "$0.00",
-            time_in_game: "1h 20m",
-            attributes: [
-              %{key: "sanction_reason", value: "speed_hack_detection"}
-            ]
-          }
-        ]
-
-      other ->
-        [%{id: "item_1", data: "Sample record for #{other}"}]
+        []
     end
   end
 
