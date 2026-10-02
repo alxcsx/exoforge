@@ -45,6 +45,13 @@ public class CombatantEntity
     public string Status { get; set; } = "active";
 }
 
+[Entity("sample_guild", Persist = PersistenceMode.Snapshot, TimeoutMs = 60000)]
+public class SampleGuildEntity : Entity
+{
+    public string Name { get; set; } = "ExoGuild";
+    public int Level { get; set; } = 1;
+}
+
 public class PluginSdkTests
 {
     [Fact]
@@ -135,4 +142,32 @@ public class PluginSdkTests
         Assert.Null(HostBridge.GetState("state_key"));
         Assert.False(HostBridge.SetState("state_key", "val"));
     }
+
+    [Fact]
+    public void Entity_MetadataAndStateLifecycle()
+    {
+        var type = typeof(SampleGuildEntity);
+        var attr = type.GetCustomAttribute<EntityAttribute>();
+        Assert.NotNull(attr);
+        Assert.Equal("sample_guild", attr.Name);
+        Assert.Equal(PersistenceMode.Snapshot, attr.Persist);
+        Assert.Equal(60000, attr.TimeoutMs);
+
+        var context = new HostPluginContext("guilds");
+        var guild = new SampleGuildEntity
+        {
+            Id = "g_test",
+            Context = context
+        };
+
+        Assert.Equal("g_test", guild.Id);
+        Assert.NotNull(guild.Db);
+        Assert.NotNull(context.Entities);
+
+        // Safe fallback outside wasi host
+        guild.Save();
+        guild.SaveNow();
+        guild.Emit("guild_created", new { id = guild.Id });
+    }
 }
+

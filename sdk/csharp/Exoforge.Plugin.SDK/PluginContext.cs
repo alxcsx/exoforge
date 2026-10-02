@@ -18,6 +18,7 @@ public class HostPluginContext : IPluginContext
     public IDatabase Database { get; }
     public IEventDispatcher Events { get; }
     public IActionDispatcher Actions { get; }
+    public IEntityManager Entities { get; }
     public ILogger Logger { get; }
 
     public HostPluginContext(string pluginId)
@@ -26,6 +27,7 @@ public class HostPluginContext : IPluginContext
         Database = new HostDatabase(pluginId);
         Events = new HostEventDispatcher();
         Actions = new HostActionDispatcher();
+        Entities = new HostEntityManager();
         Logger = new HostLogger();
     }
 
@@ -55,6 +57,10 @@ public class HostPluginContext : IPluginContext
             else if (prop.PropertyType == typeof(IActionDispatcher))
             {
                 prop.SetValue(target, context.Actions);
+            }
+            else if (prop.PropertyType == typeof(IEntityManager))
+            {
+                prop.SetValue(target, context.Entities);
             }
             else if (prop.PropertyType == typeof(ILogger))
             {
@@ -126,6 +132,36 @@ public class HostDatabase : IDatabase
             return Task.FromResult(new List<Dictionary<string, object>>());
         }
     }
+
+    public Task<List<Dictionary<string, object>>> QueryAsync(string query, object[]? args = null)
+    {
+        return ExecuteAsync(query, args);
+    }
+
+    public async Task<Dictionary<string, object>?> QuerySingleAsync(string query, object[]? args = null)
+    {
+        var rows = await QueryAsync(query, args);
+        return rows.Count > 0 ? rows[0] : null;
+    }
+
+    public async Task<object?> ExecuteScalarAsync(string query, object[]? args = null)
+    {
+        var row = await QuerySingleAsync(query, args);
+        if (row != null && row.Count > 0)
+        {
+            using var enumerator = row.Values.GetEnumerator();
+            if (enumerator.MoveNext())
+            {
+                return enumerator.Current;
+            }
+        }
+        return null;
+    }
+
+    public async Task<TResult> TransactionAsync<TResult>(Func<IDatabase, Task<TResult>> action)
+    {
+        return await action(this);
+    }
 }
 
 public class HostEventDispatcher : IEventDispatcher
@@ -153,3 +189,25 @@ public class HostLogger : ILogger
     public void Warning(string message) => HostBridge.LogWarning(message);
     public void Error(string message) => HostBridge.LogError(message);
 }
+
+public class HostEntityManager : IEntityManager
+{
+    public Task<TResponse?> CallAsync<TResponse>(string plugin, string type, string id, object message)
+    {
+        var response = HostBridge.CallAction<TResponse>($"{plugin}:{type}:{id}", "call", message);
+        return Task.FromResult(response);
+    }
+
+    public Task CastAsync(string plugin, string type, string id, object message)
+    {
+        HostBridge.CallAction($"{plugin}:{type}:{id}", "cast", message);
+        return Task.CompletedTask;
+    }
+
+    public Task StopAsync(string plugin, string type, string id)
+    {
+        HostBridge.CallAction($"{plugin}:{type}:{id}", "stop", new { });
+        return Task.CompletedTask;
+    }
+}
+

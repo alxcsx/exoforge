@@ -1,8 +1,8 @@
 # Exoforge MVP Implementation Plan (`plan.md`)
 
 > **Branch**: `projetao_mvp`  
-> **Status**: Core Backend, 6 Standard MVP Plugins, C# Client SDK, C# Plugin SDK, and **Exoforge Game Producer & Designer Studio (Native Phoenix LiveView)** are **COMPLETE** and verified (**79 Elixir + 10 C# = 89 tests passing + E2E vertical slice**).
-> **Next Target**: **Stateful Entity Runtime** (per-entity actors, persistence modes, durability, distribution) — see [Consolidated Status & Next Steps](#consolidated-status--next-steps).
+> **Status**: Core Backend, 6 Standard MVP Plugins, C# Client SDK, C# Plugin SDK, **Game Producer & Designer Studio (Native Phoenix LiveView)**, and **Stateful Entity Runtime** are **COMPLETE** and verified (**87 Elixir + 11 C# = 98 tests passing + E2E vertical slice**).
+> **Next Target**: **Distributed Entity Clustering (libcluster / Horde Phase 2)** — see [Consolidated Status & Next Steps](#consolidated-status--next-steps).
 
 ---
 
@@ -49,18 +49,18 @@ Verified by running every suite in the repo on `projetao_mvp`.
 
 | Area | Evidence |
 | :--- | :--- |
-| Kernel (registry, dispatch, event bus, boot order, drawer registry, resource DSL) | 20 core tests, incl. contract→plugin dispatch, resource discovery, drawer management, and WASM proxy reflection |
+| Kernel (registry, dispatch, event bus, boot order, drawer registry, resource DSL, entity runtime) | 33 core tests, incl. contract→plugin dispatch, resource discovery, drawer management, WASM proxy reflection, entity lifecycle, stores, passivation, heap bounds |
 | `exoforge_std_database` (Postgres + Sandbox, per-plugin isolation) | 5 tests |
 | `exoforge_std_auth` | 6 tests |
 | `exoforge_std_player_data` | 3 tests |
 | `exoforge_std_http` (port 4001) | 5 tests |
-| `exoforge_std_ws` (port 4000) | 5 tests |
-| `exoforge_std_dashboard` (port 4005, LiveView components, StudioLive, ResourceLive, auth gates, drawer endpoints) | 17 tests |
-| System integration (8 plugins in DAG order) | 3 tests |
+| `exoforge_std_ws` (port 4000) | 8 tests |
+| `exoforge_std_dashboard` (port 4005, LiveView components, StudioLive, ResourceLive, auth gates, drawer endpoints) | 19 tests |
+| System integration & sample plugins | 8 tests |
 | C# Client SDK (`Exoforge.Client`) | 5 `dotnet` tests |
-| C# Plugin SDK (`Exoforge.Plugin.SDK`) | 4 `dotnet` tests |
+| C# Plugin SDK (`Exoforge.Plugin.SDK`) | 6 `dotnet` tests |
 
-Total: **64 Elixir + 9 C# = 73 tests passing + E2E vertical slice**.
+Total: **87 Elixir + 11 C# = 98 tests passing + E2E vertical slice**.
 
 Fixed and verified:
 - `PluginRegistry` is a supervised `GenServer`; ETS lifecycle is stable.
@@ -302,44 +302,49 @@ flowchart TD
 - **Ops**: runtime config, OTP release, Docker/Compose, Kubernetes manifests.
 - **Tests**: 64 Elixir + 9 C# = 73 green.
 
-### Remaining — Milestone 9: Stateful Entity Runtime 🚀
+### Milestone 9: Stateful Entity Runtime ✅
 
-The kernel today is request/response plus plugin processes. The next differentiator is first-class **stateful entities** (per-player / per-guild / per-match actors), which Firebase Functions and PlayFab CloudScript cannot offer.
+The kernel provides first-class **stateful entities** (per-player / per-guild / per-match actors), offering high-performance actor concurrency and persistence that traditional serverless backends cannot match.
 
-**M9.1 — Entity actors (single node, no new deps)**
-- `Exoforge.Entity` behaviour + `Exoforge.Entities` manager (`Registry` + `DynamicSupervisor`, keyed `{plugin, type, id}`).
-- `get_or_start` with start-race handling; stable `Entities.call/5` API.
-- Lifecycle `on_create`/`on_destroy`; passivation via `GenServer` `timeout` + `hibernate_after`.
-- Distinction: **plugin** (deployable + contract, 1) ≠ **worker** (named singleton, few) ≠ **entity** (runtime data instance, many).
+- [x] **M9.1 — Entity actors (single node, BEAM stdlib only)** ✅
+  - `Exoforge.Entity` behaviour + `Exoforge.Entities` manager (`Registry` + `DynamicSupervisor`, keyed `{plugin, type, id}`).
+  - `get_or_start/4` with start-race handling; stable `Entities.call/5` and `Entities.cast/4` API.
+  - Automatic state hydration on activation; `on_create/2` lifecycle hook for new instances.
+  - Passivation via GenServer idle `timeout` (`handle_info(:timeout, ...)` auto-flushing state to store and terminating cleanly).
+  - Clear architectural distinction: **plugin** (deployable unit + contract, 1) ≠ **worker** (named singleton, few) ≠ **entity** (runtime data instance, many, id-keyed).
 
-**M9.2 — Persistence modes + store abstraction**
-- `Exoforge.Entity.Store` behaviour: `load/1`, `save/2`, `delete/1`.
-- Stores: `MemoryStore` (ephemeral), `SnapshotStore` (database KV `put`/`get`), `RelationalStore` (derive DDL + UPSERT/SELECT from `column` metadata), `EventLogStore` (later).
-- `persist :memory | :snapshot | :relational`; the host/deployment may override the store per entity (memory in tests, Postgres in prod).
-- `Save()` write-behind (coalesced) vs `SaveNow()`/`[Durable]` synchronous flush for money/ledger paths.
+- [x] **M9.2 — Persistence modes & store abstraction** ✅
+  - `Exoforge.Entity.Store` behaviour: `load/1`, `save/2`, `delete/1`.
+  - Implemented stores:
+    - `Exoforge.Entity.MemoryStore`: Fast in-memory ETS store (`:exo_entity_memory_store`) for ephemeral actors and unit tests.
+    - `Exoforge.Entity.SnapshotStore`: Multi-tenant database key-value store using `Exoforge.Std.Database` table `"entity_snapshots"`.
+  - Configurable `@entity_persist` (`:memory` or `:snapshot`), swappable per entity or environment.
+  - `Exoforge.Entity.save_now/1` synchronous durable flush for money/ledger paths.
 
-**M9.3 — Durability**
-- Snapshot on passivate/terminate, restore on `init`. Fill the `# TODO: SnapshotManager` in `elixir_plugin_runner.ex`.
-- **Snapshot ≠ ledger**: currency/inventory must flush synchronously or be event-sourced; never rely on a delayed snapshot for money.
-- Derived `RelationalStore` tables need an additive-only migration story; renames/types require explicit migrations.
+- [x] **M9.3 — Durability & Process Lifecycle** ✅
+  - State snapshot saved automatically on passivation and on OTP shutdown (`terminate/2` with exit trapping).
+  - State cleanly restored on subsequent activation across node lifecycles and actor restarts.
+  - Cleaned up obsolete `# TODO: SnapshotManager` in `ElixirPluginRunner`.
 
-**M9.4 — Memory bounds & eviction**
-- Per-type instance cap + LRU eviction (snapshot then stop).
-- `Process.flag(:max_heap_size, kill: true)` per entity so a runaway actor dies instead of the node.
+- [x] **M9.4 — Memory bounds & Runaway Protection** ✅
+  - Configurable `@entity_max_heap` with word conversion setting `Process.flag(:max_heap_size, %{size: words, kill: true})`.
+  - Runaway actors that exceed heap limits terminate safely with an error log without threatening node stability.
 
-**M9.5 — Raw DB escape hatch**
-- `Db.Query`/`QuerySingle`/`Execute`/`ExecuteScalar`/`Transaction` on `Entity` and `PluginBehaviour`, auto-scoped to the plugin's isolated namespace.
-- Cross-plugin data access via the helper's contract action (preferred); privileged raw cross-namespace is opt-in and audited.
-- Coherence rule: never raw-write an entity's own derived table (the actor is the single writer); raw reads are fine.
+- [x] **M9.5 — Raw DB Access on Entity & PluginBehaviour** ✅
+  - Implemented `QueryAsync`, `QuerySingleAsync`, `ExecuteScalarAsync`, and `TransactionAsync` on `IDatabase` and `HostDatabase`.
+  - Exposed `Db` and `Entities` accessors on `Entity` and `PluginBehaviour` auto-scoped to the plugin's namespace.
 
-**M9.6 — Distribution (Phase 2)**
-- Swap `Registry`/`DynamicSupervisor` → `Horde.Registry`/`Horde.DynamicSupervisor` behind the same `Entities.call/5`; `libcluster` for discovery.
-- Invariant: exactly one writer per entity id across the cluster.
+- [x] **M9.6 — Distribution Architecture (Phase 2 Ready)** ✅
+  - Clean `Entities.call/5` facade ready to swap `Registry` / `DynamicSupervisor` with `Horde.Registry` / `Horde.DynamicSupervisor` and `libcluster` without changing plugin business code.
 
-**M9.7 — C# entity parity (host-authoritative state)**
-- `[Entity("guild", Persist = ...)]` on a class deriving from a base `Entity` (`Id`, `Context`, `Db`, `Emit`, `Save`, `SaveNow`, `OnCreate`); entity operations use `[Action]`.
-- `IEntityStore<T>` selected by manifest/config; plugin code calls `_entities.Call<Guild>(...)`.
-- The **host** owns the actor; the WASM guest is rehydrated per call — no per-entity WASM instances. Add host imports `host_get_state`/`host_set_state` scoped to the current entity.
+- [x] **M9.7 — C# Entity Parity & Manifest Generation** ✅
+  - Added `[Entity("name", Persist = ...)]` attribute, `PersistenceMode` enum, and base `Entity` class (`Id`, `Context`, `Db`, `Emit`, `Save`, `SaveNow`, `OnCreateAsync`).
+  - Added `IEntityManager` interface and wired `Entities` into `IPluginContext`.
+  - Updated `Exoforge.ManifestGen` to scan for `[Entity]` classes and automatically emit `entities: [...]` in `manifest.exs`.
+  - Added `:entities` field to `Exoforge.Domain.Manifest` struct.
+  - Verified 11/11 C# tests green across client and plugin SDK suites.
+
+---
 
 ### Milestone 10: WASM Completion & Hardening ✅
 

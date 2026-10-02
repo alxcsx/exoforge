@@ -144,8 +144,43 @@ public static class Program
             services.Add(new ServiceMeta(primaryService, actions, events, resources));
         }
 
+        // Collect Entities
+        var entities = new List<EntityMeta>();
+        foreach (var type in types)
+        {
+            var entityAttr = type.GetCustomAttribute<EntityAttribute>();
+            if (entityAttr == null) continue;
+
+            var entityActions = new List<ActionMeta>();
+            foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance))
+            {
+                var actionAttr = method.GetCustomAttribute<ExoActionAttribute>();
+                if (actionAttr == null) continue;
+
+                var parameters = method.GetParameters()
+                    .Select(p => new ParamMeta(ToSnakeCase(p.Name ?? "arg"), MapTypeToElixir(p.ParameterType)))
+                    .ToList();
+
+                entityActions.Add(new ActionMeta(
+                    actionAttr.Name,
+                    actionAttr.Mode.ToString().ToLowerInvariant(),
+                    actionAttr.Scope,
+                    parameters,
+                    MapTypeToElixir(method.ReturnType)
+                ));
+            }
+
+            entities.Add(new EntityMeta(
+                entityAttr.Name,
+                entityAttr.Persist.ToString().ToLowerInvariant(),
+                entityAttr.TimeoutMs,
+                entityAttr.MaxHeapSizeBytes,
+                entityActions
+            ));
+        }
+
         string entryPoint = $"{pluginId}.wasm";
-        string manifestContent = EmitElixirManifest(pluginId, pluginVersion, entryPoint, provides, dependencies.ToList(), services);
+        string manifestContent = EmitElixirManifest(pluginId, pluginVersion, entryPoint, provides, dependencies.ToList(), services, entities);
 
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
         File.WriteAllText(outputPath, manifestContent, new UTF8Encoding(false));
@@ -160,7 +195,8 @@ public static class Program
         string entryPoint,
         List<string> provides,
         List<string> dependencies,
-        List<ServiceMeta> services)
+        List<ServiceMeta> services,
+        List<EntityMeta> entities)
     {
         var sb = new StringBuilder();
         sb.AppendLine("%{");
@@ -229,6 +265,27 @@ public static class Program
             sb.AppendLine("      ]");
             sb.AppendLine(i < services.Count - 1 ? "    }," : "    }");
         }
+        sb.AppendLine("  ],");
+
+        // Entities Metadata
+        sb.AppendLine("  entities: [");
+        for (int i = 0; i < entities.Count; i++)
+        {
+            var e = entities[i];
+            sb.AppendLine("    %{");
+            sb.AppendLine($"      name: :{e.Name},");
+            sb.AppendLine($"      persist: :{e.Persist},");
+            sb.AppendLine($"      timeout: {e.TimeoutMs},");
+            sb.AppendLine($"      max_heap_size: {e.MaxHeapSizeBytes},");
+            sb.AppendLine("      actions: [");
+            foreach (var a in e.Actions)
+            {
+                var paramList = string.Join(", ", a.Params.Select(p => $"{p.Name}: :{p.Type}"));
+                sb.AppendLine($"        %{{name: :{a.Name}, mode: :{a.Mode}, scope: :{a.Scope}, arity: {a.Params.Count}, params: [{paramList}], returns: :{a.Returns}}},");
+            }
+            sb.AppendLine("      ]");
+            sb.AppendLine(i < entities.Count - 1 ? "    }," : "    }");
+        }
         sb.AppendLine("  ]");
         sb.AppendLine("}");
 
@@ -270,4 +327,5 @@ public static class Program
     private record EventMeta(string Name, string? Topic, string Scope);
     private record ResourceMeta(string Name, string PrimaryKey, string[] DrawerTabs, string[] Actions, List<ColumnMeta> Columns);
     private record ColumnMeta(string Name, string DataType, string Label, bool Sortable, bool Filterable, bool Badge);
+    private record EntityMeta(string Name, string Persist, int TimeoutMs, int MaxHeapSizeBytes, List<ActionMeta> Actions);
 }

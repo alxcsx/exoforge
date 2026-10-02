@@ -22,7 +22,6 @@ defmodule Exoforge.Drivers.Runtime.ElixirPluginRunner do
     children =
       [
         {Task.Supervisor, name: task_sup_name},
-        # TODO: SnapshotManager child goes here
         {DynamicSupervisor, name: worker_sup_name, strategy: :one_for_one},
         %{id: __MODULE__, start: {__MODULE__, :start_link, [{manifest, task_sup_name}]}}
       ] ++ custom_children

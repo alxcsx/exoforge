@@ -18,6 +18,7 @@ defmodule Exoforge.Domain.Manifest do
     provides: [],
     services: [],
     events: [],
+    entities: [],
     assets_path: "assets"
   ]
 end

@@ -107,3 +107,31 @@ public class InjectAttribute : Attribute
         ServiceName = serviceName;
     }
 }
+
+/// <summary>
+/// Persistence modes for stateful entity actors.
+/// </summary>
+public enum PersistenceMode
+{
+    Memory,
+    Snapshot,
+    Relational
+}
+
+/// <summary>
+/// Marks a class as a first-class stateful game entity actor.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = false)]
+public class EntityAttribute : Attribute
+{
+    public string Name { get; }
+    public PersistenceMode Persist { get; set; } = PersistenceMode.Snapshot;
+    public int TimeoutMs { get; set; } = 300_000;
+    public int MaxHeapSizeBytes { get; set; } = 50 * 1024 * 1024;
+
+    public EntityAttribute(string name)
+    {
+        Name = name ?? throw new ArgumentNullException(nameof(name));
+    }
+}
+

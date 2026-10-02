@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -23,7 +24,18 @@ public interface IPluginContext
     IDatabase Database { get; }
     IEventDispatcher Events { get; }
     IActionDispatcher Actions { get; }
+    IEntityManager Entities { get; }
     ILogger Logger { get; }
+}
+
+/// <summary>
+/// Stateful entity actor invocation interface.
+/// </summary>
+public interface IEntityManager
+{
+    Task<TResponse?> CallAsync<TResponse>(string plugin, string type, string id, object message);
+    Task CastAsync(string plugin, string type, string id, object message);
+    Task StopAsync(string plugin, string type, string id);
 }
 
 /// <summary>
@@ -35,6 +47,10 @@ public interface IDatabase
     Task<Dictionary<string, object>?> GetAsync(string table, string key);
     Task PutAsync(string table, string key, object value);
     Task DeleteAsync(string table, string key);
+    Task<List<Dictionary<string, object>>> QueryAsync(string query, object[]? args = null);
+    Task<Dictionary<string, object>?> QuerySingleAsync(string query, object[]? args = null);
+    Task<object?> ExecuteScalarAsync(string query, object[]? args = null);
+    Task<TResult> TransactionAsync<TResult>(Func<IDatabase, Task<TResult>> action);
 }
 
 /// <summary>

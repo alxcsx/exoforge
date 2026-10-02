@@ -10,6 +10,8 @@ defmodule Exoforge.Application do
       Exoforge.WorkerRegistry,
       Exoforge.PluginRegistry,
       Exoforge.DrawerRegistry,
+      Exoforge.Entities.registry_spec(),
+      Exoforge.Entities.supervisor_spec(),
       Exoforge.PluginSupervisor
     ]
 

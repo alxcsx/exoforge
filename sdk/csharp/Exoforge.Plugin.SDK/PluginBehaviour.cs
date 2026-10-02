@@ -20,9 +20,11 @@ public abstract class PluginBehaviour : IExoforgePlugin
     }
 
     protected IDatabase Database => Context.Database;
+    protected IDatabase Db => Database;
     protected ILogger Logger => Context.Logger;
     protected IActionDispatcher Actions => Context.Actions;
     protected IEventDispatcher Events => Context.Events;
+    protected IEntityManager Entities => Context.Entities;
 
     public virtual Task OnInitAsync(IPluginContext context)
     {
