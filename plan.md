@@ -1,7 +1,7 @@
 # Exoforge MVP Implementation Plan (`plan.md`)
 
 > **Branch**: `projetao_mvp`  
-> **Status**: Core Backend, 6 Standard MVP Plugins, C# Client SDK, C# Plugin SDK, **Game Producer & Designer Studio (Native Phoenix LiveView)**, **Stateful Entity Runtime**, **Distributed Entity Clustering (libcluster / Horde / :pg Phase 2)**, and **Production Kubernetes Deployment & Benchmarking** are **COMPLETE** and verified (**92 Elixir + 11 C# = 103 tests passing + E2E vertical slice**).
+> **Status**: Core Backend, 6 Standard MVP Plugins, C# Client SDK, C# Plugin SDK, **Game Producer & Designer Studio (Native Phoenix LiveView)**, **Stateful Entity Runtime**, **Distributed Entity Clustering (libcluster / Horde / :pg Phase 2)**, and **Production Kubernetes Deployment & Benchmarking** are **COMPLETE** and verified (**97 Elixir + 11 C# = 108 tests passing + E2E vertical slice**).
 
 ---
 
@@ -52,15 +52,15 @@ Verified by running every suite in the repo on `projetao_mvp`.
 | `exoforge_std_database` (Postgres + Sandbox, per-plugin isolation) | 5 tests |
 | `exoforge_std_auth` | 6 tests |
 | `exoforge_std_player_data` | 3 tests |
-| `exoforge_std_http` (port 4001) | 5 tests |
-| `exoforge_std_ws` (port 4000) | 8 tests |
+| `exoforge_std_http` (port 4001, REST ingress, routes, landing info) | 10 tests |
+| `exoforge_std_ws` (port 4000, WebSocket, framed protocol, landing info) | 11 tests |
 | `exoforge_std_dashboard` (port 4005, LiveView components, StudioLive, ResourceLive, auth gates, drawer endpoints) | 19 tests |
 | System integration & sample plugins | 8 tests |
-| Cluster Benchmark suite | 1 test (640,000 ops/sec, 1.6µs latency, 50x event fanout) |
+| Cluster Benchmark suite | 1 test (729,000 ops/sec, 1.4µs latency, 50x event fanout) |
 | C# Client SDK (`Exoforge.Client`) | 5 `dotnet` tests |
 | C# Plugin SDK (`Exoforge.Plugin.SDK`) | 6 `dotnet` tests |
 
-Total: **92 Elixir + 11 C# = 103 tests passing + E2E vertical slice**.
+Total: **97 Elixir + 11 C# = 108 tests passing + E2E vertical slice**.
 
 Fixed and verified:
 - `PluginRegistry` is a supervised `GenServer`; ETS lifecycle is stable.

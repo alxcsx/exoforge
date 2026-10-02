@@ -59,6 +59,27 @@ defmodule Exoforge.HttpTest do
   end
 
   describe "HTTP Endpoints" do
+    test "GET / returns 200 ok with gateway metadata" do
+      conn = conn(:get, "/") |> Router.call(@opts)
+      assert conn.status == 200
+      body = Jason.decode!(conn.resp_body)
+      assert body["status"] == "ok"
+      assert body["service"] == "exoforge_std_http"
+      assert body["gateway"] == "rest"
+      assert body["endpoints"]["routes"] == "/api/routes"
+    end
+
+    test "GET / with Accept: text/html returns HTML landing page" do
+      conn =
+        conn(:get, "/")
+        |> put_req_header("accept", "text/html")
+        |> Router.call(@opts)
+
+      assert conn.status == 200
+      assert conn.resp_body =~ "Exoforge REST API Gateway"
+      assert conn.resp_body =~ "/api/routes"
+    end
+
     test "GET /health returns 200 ok" do
       conn = conn(:get, "/health") |> Router.call(@opts)
       assert conn.status == 200

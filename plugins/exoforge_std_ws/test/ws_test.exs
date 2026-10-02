@@ -1,6 +1,7 @@
 defmodule Exoforge.Std.WsTest do
   use ExUnit.Case, async: false
   import Plug.Test
+  import Plug.Conn
 
   alias Exoforge.Std.Ws.Router
   alias Exoforge.Std.Ws.SocketHandler
@@ -83,6 +84,38 @@ defmodule Exoforge.Std.WsTest do
 
     assert conn.status == 200
     assert %{"status" => "ok", "plugin" => "exoforge_std_ws"} = Jason.decode!(conn.resp_body)
+  end
+
+  test "GET / returns 200 ok with gateway metadata" do
+    conn = conn(:get, "/")
+    conn = Router.call(conn, Router.init([]))
+
+    assert conn.status == 200
+    body = Jason.decode!(conn.resp_body)
+    assert body["status"] == "ok"
+    assert body["service"] == "exoforge_std_ws"
+    assert body["gateway"] == "websocket"
+    assert body["ws_endpoint"] == "/ws"
+  end
+
+  test "GET / with Accept: text/html returns HTML landing page" do
+    conn =
+      conn(:get, "/")
+      |> put_req_header("accept", "text/html")
+      |> Router.call(Router.init([]))
+
+    assert conn.status == 200
+    assert conn.resp_body =~ "Exoforge WebSocket Gateway"
+    assert conn.resp_body =~ "ws://localhost:4000/ws"
+  end
+
+  test "GET /ws without upgrade header returns 426 Upgrade Required" do
+    conn = conn(:get, "/ws")
+    conn = Router.call(conn, Router.init([]))
+
+    assert conn.status == 426
+    body = Jason.decode!(conn.resp_body)
+    assert body["error"] == "upgrade_required"
   end
 
   test "WebSocket ping returns pong" do

@@ -17,6 +17,21 @@ defmodule Exoforge.PluginBootstrapper do
 
       loaded ->
         Logger.info("[Exoforge] loaded #{length(loaded)} plugins: #{Enum.map_join(loaded, ", ", & &1.id)}")
+
+        dashboard_port =
+          Application.get_env(:exoforge_std_dashboard, Exoforge.Std.Dashboard.Endpoint, [])
+          |> Keyword.get(:http, [])
+          |> Keyword.get(:port, 4005)
+
+        ws_port = Application.get_env(:exoforge, :ws_port) || Application.get_env(:exoforge, :gateway_port, 4000)
+        http_port = Application.get_env(:exoforge, :http_port, 4001)
+
+        Logger.info("""
+        [Exoforge Endpoints]
+          • Game Producer Studio (UI): http://localhost:#{dashboard_port}
+          • REST API Gateway:          http://localhost:#{http_port}
+          • WebSocket Gateway:         ws://localhost:#{ws_port}/ws
+        """)
     end
 
     :ok
