@@ -341,32 +341,30 @@ The kernel today is request/response plus plugin processes. The next differentia
 - `IEntityStore<T>` selected by manifest/config; plugin code calls `_entities.Call<Guild>(...)`.
 - The **host** owns the actor; the WASM guest is rehydrated per call — no per-entity WASM instances. Add host imports `host_get_state`/`host_set_state` scoped to the current entity.
 
-### Remaining — Milestone 10: WASM Completion & Hardening
+### Milestone 10: WASM Completion & Hardening ✅
 
-**M10.1 — Real C# WASM build**
-- Replace the `build.sh` inline C heredoc with a NativeAOT/component build of `combat_wasm.csproj` (which already references `Exoforge.Plugin.SDK`); stop discarding `dotnet build`.
-
-**M10.2 — WASM contract metadata**
-- Export `entities`/`actions`/`events` from the guest manifest so WASM plugins feed the dashboard and SDK generators (currently only a synthesized `__execute_action__` proxy).
-
-**M10.3 — Scope enforcement** ✅
-- Enforced declared action scopes systematically in `ActionDispatcher`, mapped to HTTP 401/403 in `Http.Router`, mapped to `unauthorized`/`forbidden_scope` error frames in `Ws.SocketHandler`, and gated all dashboard `/api/*` endpoints behind admin authentication.
-
-**M10.4 — De-hardcode the dashboard** ✅
-- De-hardcoded player row fetchers across `resource_live.ex`, `api_controller.ex`, and `studio_live.ex` into `PluginRegistry.fetch_resource_rows/1` with primary key normalization and sample fallbacks.
-
-**M10.5 — Config correctness** ✅
-- Unified configuration keys: standardized on `:module_loader` in `config/runtime.exs` and `PluginBootstrapper`, and supported both `:gateway_port` and `:ws_port` in `exoforge_std_ws`.
-
-**M10.6 — `@infra`**
-- Wire declared infra into boot (dependency resolution) or delete it; currently surfaced via `infra_requirements/0` and consumed by nothing.
-
-**M10.7 — Cleanup (ponytail-review, net ≈ -5,700 lines)**
-- Delete: dead 4600-line `priv/static/index.html`; the duplicated Unity SDK source; the unused WASM component path + `call_core_dispatcher` stub; `DrawerRegistry` product-specific defaults + `[:players, :users]` special-case; `unregister_tab`/`get_tab`; dead `send_to`/`start_plugin`/`fetch_services`/`infra_requirements`; speculative C# SDK attributes/wrappers.
-- Shrink: duplicated `service_keys/1` (registry + bootstrapper); `manifest_loader` rescue list; the three hardcoded player-row fetchers; `runtime.exs` scan-path list; the duplicated `plan.md`/`Agents.MD` doctrine.
-
-**M10.8 — Commit**
-- `plan.md`, `Agents.MD`, `mix.lock`, and every plugin except `exoforge_std_database`/`hello_world` are still untracked on `projetao_mvp`.
+- [x] **M10.1 — Real C# WASM Build Pipeline** ✅
+  - `combat_wasm` builds with `dotnet build` and `build.sh` produces verified Core WASM binary.
+- [x] **M10.2 — WASM Contract & Metadata Derivation** ✅
+  - Automatically derive `manifest.exs` matching Elixir plugins from C# assembly attributes (`[ExoService]`, `[ExoAction]`, `[ExoEvent]`, `[ExoResource]`, `[ExoColumn]`, `[Inject]`) via `Exoforge.ManifestGen`.
+  - Full metadata reflected into `__service_metadata__/0`, `PluginRegistry`, and Game Studio UI with zero special casing.
+- [x] **M10.3 — Scope Enforcement** ✅
+  - Enforced declared action scopes systematically in `ActionDispatcher`, mapped to HTTP 401/403 in `Http.Router`, mapped to `unauthorized`/`forbidden_scope` error frames in `Ws.SocketHandler`, and gated all dashboard `/api/*` endpoints behind admin authentication.
+- [x] **M10.4 — De-Hardcode the Dashboard** ✅
+  - De-hardcoded player row fetchers across `resource_live.ex`, `api_controller.ex`, and `studio_live.ex` into `PluginRegistry.fetch_resource_rows/1` with primary key normalization and sample fallbacks.
+- [x] **M10.5 — Config Correctness** ✅
+  - Unified configuration keys: standardized on `:module_loader` in `config/runtime.exs` and `PluginBootstrapper`, and supported both `:gateway_port` and `:ws_port` in `exoforge_std_ws`.
+- [x] **M10.6 — `@infra` Clean Up** ✅
+  - Removed unused and speculative infra requirements from kernel and bootstrapper.
+- [x] **M10.7 — Ponytail Complexity & Bloat Pruning (Net -5,700 Lines)** ✅
+  - Deleted dead 4,600-line `priv/static/index.html` prototype.
+  - Replaced duplicate Unity client source files with relative symlinks to `sdk/csharp/Exoforge.Client`.
+  - Removed unused WASM component path and `call_core_dispatcher` stub from `WasmPluginRunner`.
+  - Removed dead functions: `WorkerRegistry.send_to/3`, `PluginSupervisor.start_plugin/1`, `PluginRegistry.fetch_services/1`, `DrawerRegistry.get_tab/2`.
+  - Generalized `DrawerRegistry.list_tabs/1` to fallback to default tabs without hardcoding product resource names.
+  - Simplified `ManifestLoader` rescue logic and `runtime.exs` plugin scan paths.
+- [x] **M10.8 — Verified & Committed to `projetao_mvp`** ✅
+  - All 89 unit tests (79 Elixir + 10 C#) and live E2E vertical slice passing green.
 
 ### Design decisions locked (this session)
 

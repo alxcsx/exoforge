@@ -33,13 +33,10 @@ if config_env() == :prod do
 
   scan_paths =
     [
-      System.get_env("PLUGINS_PATH"),
-      "/app/plugins",
-      "plugins",
+      System.get_env("PLUGINS_PATH") || "plugins",
       "_build/prod/lib",
       "plugins_csharp"
     ]
-    |> Enum.reject(&is_nil/1)
 
   config :exoforge, :module_loader, scan_path: scan_paths
 end

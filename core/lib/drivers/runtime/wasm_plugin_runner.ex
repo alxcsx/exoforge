@@ -13,8 +13,6 @@ defmodule Exoforge.Drivers.Runtime.WasmPluginRunner do
   alias Exoforge.ActionDispatcher
   alias Exoforge.PluginRegistry
 
-  @wasm_core_magic <<0, 97, 115, 109, 1, 0, 0, 0>>
-  @wasm_component_magic <<0, 97, 115, 109, 13, 0, 1, 0>>
   @default_memory_limit 64 * 1024 * 1024
 
   # -- Public PluginRunner API --
@@ -120,24 +118,18 @@ defmodule Exoforge.Drivers.Runtime.WasmPluginRunner do
     ensure_tables()
 
     case File.read(wasm_path) do
-      {:ok, bytes} ->
-        case detect_wasm_type(bytes) do
-          :component ->
-            init_component(manifest, wasm_path, bytes)
+      {:ok, <<0, 97, 115, 109, _::binary>> = bytes} ->
+        init_instance(manifest, wasm_path, bytes)
 
-          :core ->
-            init_core(manifest, wasm_path, bytes)
-
-          :unknown ->
-            {:stop, {:unrecognized_wasm_format, wasm_path}}
-        end
+      {:ok, _} ->
+        {:stop, {:unrecognized_wasm_format, wasm_path}}
 
       {:error, reason} ->
         {:stop, {:cannot_read_wasm_file, wasm_path, reason}}
     end
   end
 
-  defp init_core(manifest, wasm_path, bytes) do
+  defp init_instance(manifest, wasm_path, bytes) do
     imports = build_core_imports(manifest)
     limits = %Wasmex.StoreLimits{memory_size: @default_memory_limit}
 
@@ -171,7 +163,6 @@ defmodule Exoforge.Drivers.Runtime.WasmPluginRunner do
         state = %{
           manifest: manifest,
           wasm_path: wasm_path,
-          type: :core,
           pid: instance_pid,
           bytes: bytes
         }
@@ -179,44 +170,14 @@ defmodule Exoforge.Drivers.Runtime.WasmPluginRunner do
         {:ok, state}
 
       {:error, reason} ->
-        Logger.error("[WasmPluginRunner] Failed to start Core WASM instance: #{inspect(reason)}")
-        {:stop, reason}
-    end
-  end
-
-  defp init_component(manifest, wasm_path, bytes) do
-    case Wasmex.Components.start_link(%{
-           bytes: bytes,
-           wasi: %Wasmex.Wasi.WasiP2Options{allow_http: true}
-         }) do
-      {:ok, instance_pid} ->
-        state = %{
-          manifest: manifest,
-          wasm_path: wasm_path,
-          type: :component,
-          pid: instance_pid,
-          bytes: bytes
-        }
-
-        {:ok, state}
-
-      {:error, reason} ->
-        Logger.error("[WasmPluginRunner] Failed to start Component WASM instance: #{inspect(reason)}")
+        Logger.error("[WasmPluginRunner] Failed to start WASM instance: #{inspect(reason)}")
         {:stop, reason}
     end
   end
 
   @impl true
   def handle_call({:execute_action, action_name, payload}, _from, state) do
-    result =
-      case state.type do
-        :core ->
-          execute_core_action(state, action_name, payload)
-
-        :component ->
-          execute_component_action(state, action_name, payload)
-      end
-
+    result = execute_core_action(state, action_name, payload)
     {:reply, result, state}
   end
 
@@ -259,18 +220,10 @@ defmodule Exoforge.Drivers.Runtime.WasmPluginRunner do
   end
 
   defp do_execute_core_action(%{pid: pid} = state, action_name, payload, action_meta) do
-    cond do
-      Wasmex.function_exists(pid, action_name) ->
-        call_core_function(state, action_name, payload, action_meta)
-
-      Wasmex.function_exists(pid, "execute_action") ->
-        call_core_dispatcher(pid, "execute_action", action_name, payload)
-
-      Wasmex.function_exists(pid, "run_action") ->
-        call_core_dispatcher(pid, "run_action", action_name, payload)
-
-      true ->
-        {:error, {:action_not_exported, action_name}}
+    if Wasmex.function_exists(pid, action_name) do
+      call_core_function(state, action_name, payload, action_meta)
+    else
+      {:error, {:action_not_exported, action_name}}
     end
   end
 
@@ -393,44 +346,6 @@ defmodule Exoforge.Drivers.Runtime.WasmPluginRunner do
   end
 
   defp resolve_contract_module(other), do: other
-
-  defp call_core_dispatcher(_pid, dispatcher_fn, action_name, _payload) do
-    {:error, {:core_wasm_dispatcher_not_implemented, dispatcher_fn, action_name}}
-  end
-
-  defp execute_component_action(%{pid: pid}, action_name, payload) do
-    args =
-      case payload do
-        nil -> []
-        map when is_map(map) and map_size(map) == 0 -> []
-        list when is_list(list) -> list
-        num when is_number(num) -> [num]
-        str when is_binary(str) -> [str]
-        other -> [Jason.encode!(other)]
-      end
-
-    try do
-      case Wasmex.Components.call_function(pid, action_name, args) do
-        {:ok, result} ->
-          decoded =
-            if is_binary(result) do
-              case Jason.decode(result) do
-                {:ok, json} -> json
-                _ -> result
-              end
-            else
-              result
-            end
-
-          {:ok, decoded}
-
-        {:error, reason} ->
-          {:error, {:wasm_component_error, reason}}
-      end
-    rescue
-      e -> {:error, {:wasm_trap, Exception.message(e)}}
-    end
-  end
 
   # -- Host Capability ABI v1 Imports for Core WASM --
 
@@ -716,16 +631,6 @@ defmodule Exoforge.Drivers.Runtime.WasmPluginRunner do
   end
 
   # -- Helpers --
-
-  defp detect_wasm_type(bytes) when byte_size(bytes) >= 8 do
-    case binary_part(bytes, 0, 8) do
-      @wasm_component_magic -> :component
-      @wasm_core_magic -> :core
-      _ -> :unknown
-    end
-  end
-
-  defp detect_wasm_type(_), do: :unknown
 
   defp via_name(plugin_id) do
     Exoforge.WorkerRegistry.via_tuple(plugin_id, :wasm_runner)

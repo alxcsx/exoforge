@@ -67,16 +67,6 @@ defmodule Exoforge.DrawerRegistry do
   end
 
   @doc """
-  Retrieves a specific tab for a resource.
-  """
-  def get_tab(resource, tab_id) when is_atom(resource) and is_atom(tab_id) do
-    case :ets.lookup(:exo_drawer_tabs_mem, {resource, tab_id}) do
-      [{{^resource, ^tab_id}, spec}] -> spec
-      [] -> Map.get(@default_tab_defs, tab_id)
-    end
-  end
-
-  @doc """
   Lists all tabs for a given resource, combining registered tabs with declared resource tabs.
   Returns tabs sorted ascending by order.
   """
@@ -119,7 +109,7 @@ defmodule Exoforge.DrawerRegistry do
     all_tabs = registered_tabs ++ declared_tabs
 
     final_tabs =
-      if Enum.empty?(all_tabs) and resource_atom in [:players, :users] do
+      if Enum.empty?(all_tabs) do
         @default_tab_defs
         |> Map.values()
         |> Enum.map(&Map.put(&1, :resource, resource_atom))

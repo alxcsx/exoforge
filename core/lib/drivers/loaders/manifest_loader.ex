@@ -39,24 +39,8 @@ defmodule Exoforge.Drivers.Loaders.ManifestLoader do
 
       struct!(Manifest, final_map)
     rescue
-      e in [SyntaxError, CompileError] ->
-        Logger.error("[ManifestLoader] Failed to parse manifest file #{file_path}: #{Exception.message(e)}")
-        nil
-
-      e in RuntimeError ->
-        Logger.error("[ManifestLoader] Error in manifest file #{file_path}: #{Exception.message(e)}")
-        nil
-
-      e in ArgumentError ->
-        Logger.error("[ManifestLoader] Rejected #{file_path}: Missing or invalid fields. #{Exception.message(e)}")
-        nil
-
-      _e in Version.InvalidRequirementError ->
-        Logger.error("[ManifestLoader] Rejected #{file_path}: Invalid Semantic Version format.")
-        nil
-
       e ->
-        Logger.error("[ManifestLoader] Rejected #{file_path}: Failed to evaluate file. #{inspect(e)}")
+        Logger.error("[ManifestLoader] Failed to parse manifest file #{file_path}: #{Exception.message(e)}")
         nil
     end
   end

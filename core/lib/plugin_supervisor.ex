@@ -9,8 +9,4 @@ defmodule Exoforge.PluginSupervisor do
   def init(:ok) do
     DynamicSupervisor.init(strategy: :one_for_one)
   end
-
-  def start_plugin(plugin_child_spec) do
-    DynamicSupervisor.start_child(__MODULE__, plugin_child_spec)
-  end
 end

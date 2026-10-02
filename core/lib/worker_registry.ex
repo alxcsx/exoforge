@@ -20,12 +20,4 @@ defmodule Exoforge.WorkerRegistry do
       [] -> {:error, :not_found}
     end
   end
-
-  @doc "Sends a message directly to the worker, if it exists."
-  def send_to(plugin_id, worker_id, message) do
-    case lookup(plugin_id, worker_id) do
-      {:ok, pid} -> send(pid, message)
-      {:error, :not_found} -> {:error, :not_found}
-    end
-  end
 end

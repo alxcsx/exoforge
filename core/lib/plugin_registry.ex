@@ -65,15 +65,6 @@ defmodule Exoforge.PluginRegistry do
     end)
   end
 
-  # Fetch all services of a given type
-  def fetch_services(type) do
-    Enum.flat_map(service_keys(type), fn k ->
-      :ets.match_object(:exo_services_mem, {{k, :_}, :_})
-      |> Enum.map(fn {_key, manifest} -> manifest end)
-    end)
-    |> Enum.uniq_by(& &1.id)
-  end
-
   # Fetch manifest by ID
   def fetch_manifest(manifest_id) do
     case :ets.lookup(:exo_plugins_mem, manifest_id) do

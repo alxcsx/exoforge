@@ -55,4 +55,8 @@ public static class CombatPlugin
 
         return appliedDamage;
     }
+
+    public static void Main()
+    {
+    }
 }
