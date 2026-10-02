@@ -26,8 +26,8 @@ flowchart LR
 5. **Exoforge Kernel** broadcasts the event via [`EventDispatcher`](file:///Users/alexcs/projects/exoforge/core/lib/event_dispatcher.ex) back through `exoforge_std_ws`.
 6. **Unity Client** receives and processes the event safely on Unity's main thread via `ExoDispatcher`.
 
-> **Status & Verified Components**: the Elixir kernel, all 6 standard plugins, REST/WS ingress, multi-tenant DB, C# client SDK, and C# plugin SDK are verified green (**64 Elixir + 9 C# = 73 tests**). The metadata DSL (`resource`/`column`), entity side-drawer registry (`Exoforge.DrawerRegistry`), authenticated/scope-gated admin dispatch on port 4005, and WASM parameter extraction are complete and verified.
-> **Next Target**: the **Stateful Entity Runtime** (per-entity actors, persistence modes, durability, distribution) and the WASM/hardening items. Full detail: [`plan.md` → `## Consolidated Status & Next Steps`](file:///Users/alexcs/projects/exoforge/plan.md).
+> **Status & Verified Components**: the Elixir kernel, all 6 standard plugins, REST/WS ingress, multi-tenant DB, C# client SDK, C# plugin SDK, Native Phoenix LiveView Studio, and WASM runtime are verified green (**79 Elixir + 10 C# = 89 tests + E2E vertical slice**). Milestone 10 (WASM Hardening, Parity, & Ponytail Cleanup) is complete.
+> **Next Target**: the **Stateful Entity Runtime** (per-entity actors, persistence modes, durability, distribution). Full detail: [`plan.md` → `## Consolidated Status & Next Steps`](file:///Users/alexcs/projects/exoforge/plan.md).
 
 ---
 
