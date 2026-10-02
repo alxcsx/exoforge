@@ -21,7 +21,19 @@ defmodule Exoforge.PluginRegistryTest do
     assert :ok = PluginRegistry.register(manifest)
     assert PluginRegistry.fetch_manifest(:fixture) == manifest
     assert PluginRegistry.fetch_service(Exoforge.Fixture.Service) == manifest
+    assert PluginRegistry.fetch_service(:fixture_service) == manifest
     assert PluginRegistry.fetch_by_module(Exoforge.Fixture.Plugin) == manifest
     assert PluginRegistry.fetch_by_module(Exoforge.Fixture.Unknown) == nil
+  end
+
+  test "clean_service_name strips Elixir.Exoforge and Std.Services prefixes" do
+    assert PluginRegistry.clean_service_name(:"Elixir.Exoforge.Std.Services.Combat") == "combat"
+    assert PluginRegistry.clean_service_name("Elixir.Exoforge.Std.Services.PlayerData") == "player_data"
+    assert PluginRegistry.clean_service_name("Exoforge.Std.Services.Database") == "database"
+    assert PluginRegistry.clean_service_name("Std.Services.Economy") == "economy"
+    assert PluginRegistry.clean_service_name("Elixir.Exoforge.Services.Guilds") == "guilds"
+    assert PluginRegistry.clean_service_name("Elixir.Exoforge.Matchmaking") == "matchmaking"
+    assert PluginRegistry.clean_service_name(:combat) == "combat"
+    assert PluginRegistry.clean_service_name("lldb") == "lldb"
   end
 end

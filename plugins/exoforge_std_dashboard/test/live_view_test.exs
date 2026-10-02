@@ -139,7 +139,10 @@ defmodule Exoforge.DashboardLiveViewTest do
       assert html =~ "EXOFORGE"
       assert html =~ "Overview"
       assert html =~ "Active Players"
-      assert html =~ "Installed Extension Ecosystem"
+      assert html =~ "Economy &amp; Gross LTV"
+      assert html =~ "Active Game Services"
+      assert html =~ "Gateway &amp; Latency"
+      assert html =~ "Live Game Features"
 
       # Switch to Players tab
       html = render_click(view, "switch_tab", %{"tab" => "players"})

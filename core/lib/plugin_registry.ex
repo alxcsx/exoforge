@@ -109,7 +109,7 @@ defmodule Exoforge.PluginRegistry do
             %{
               plugin_id: manifest.id,
               plugin_name: manifest.name,
-              service: meta.name,
+              service: clean_service_name(meta.name),
               contract: contract_mod,
               resource: res
             }
@@ -243,21 +243,28 @@ defmodule Exoforge.PluginRegistry do
     all_manifests()
     |> Enum.map(fn manifest ->
       provides = Map.get(manifest, :provides, [])
+      clean_provides = Enum.map(provides, &clean_service_name/1)
+      clean_dependencies = Enum.map(Map.get(manifest, :dependencies, []), &clean_service_name/1)
 
       services =
         Enum.map(provides, fn contract_ref ->
           contract_mod = resolve_contract_module(contract_ref)
 
-          if is_atom(contract_mod) and Code.ensure_loaded?(contract_mod) and
-               function_exported?(contract_mod, :__service_metadata__, 0) do
-            contract_mod.__service_metadata__()
-            |> sanitize_for_json()
-          else
-            %{name: contract_ref, actions: [], events: [], resources: []}
-          end
+          meta =
+            if is_atom(contract_mod) and Code.ensure_loaded?(contract_mod) and
+                 function_exported?(contract_mod, :__service_metadata__, 0) do
+              contract_mod.__service_metadata__()
+            else
+              %{name: contract_ref, actions: [], events: [], resources: []}
+            end
+
+          meta
+          |> Map.put(:name, clean_service_name(Map.get(meta, :name, contract_ref)))
+          |> sanitize_for_json()
         end)
 
       category = categorize_plugin(manifest)
+
       stats =
         if Code.ensure_loaded?(Exoforge.Drivers.Runtime.WasmPluginRunner) and
              function_exported?(Exoforge.Drivers.Runtime.WasmPluginRunner, :get_stats, 1) do
@@ -273,7 +280,8 @@ defmodule Exoforge.PluginRegistry do
         type: Map.get(manifest, :type, :native),
         status: :active,
         category: category,
-        dependencies: Map.get(manifest, :dependencies, []),
+        provides: clean_provides,
+        dependencies: clean_dependencies,
         services: services,
         resources: Enum.flat_map(services, &Map.get(&1, :resources, [])),
         actions_count: Enum.sum(Enum.map(services, &Enum.count(Map.get(&1, :actions, [])))),
@@ -319,18 +327,46 @@ defmodule Exoforge.PluginRegistry do
     end
   end
 
+  @doc "Strips Elixir., Exoforge.Std.Services., and module namespaces to return a clean snake_case service identifier."
+  def clean_service_name(name) when is_atom(name), do: clean_service_name(to_string(name))
+
+  def clean_service_name(name) when is_binary(name) do
+    cleaned =
+      name
+      |> String.replace("Elixir.", "")
+      |> String.replace("Exoforge.Std.Services.", "")
+      |> String.replace("Exoforge.Services.", "")
+      |> String.replace("Exoforge.", "")
+      |> String.replace("Std.Services.", "")
+      |> String.replace("Services.", "")
+
+    cleaned
+    |> String.split(".", trim: true)
+    |> Enum.map_join("_", &Macro.underscore/1)
+  end
+
+  def clean_service_name(other), do: to_string(other)
+
   @doc "Resolves a contract atom or shorthand to its full contract module."
+  def resolve_contract_module(contract_ref) when is_binary(contract_ref) do
+    resolve_contract_module(String.to_atom(contract_ref))
+  end
+
   def resolve_contract_module(contract_ref) when is_atom(contract_ref) do
     str = to_string(contract_ref)
+    clean = clean_service_name(str)
 
     cond do
       String.starts_with?(str, "Elixir.Exoforge.Std.Services.") ->
         contract_ref
 
-      (mod = Module.concat([Exoforge, Std, Services, Macro.camelize(str)])) && Code.ensure_loaded?(mod) ->
+      (mod = Module.concat([Exoforge, Std, Services, Macro.camelize(clean)])) && Code.ensure_loaded?(mod) ->
         mod
 
       (manifest = fetch_service(contract_ref)) && is_atom(manifest.entry_point) && Code.ensure_loaded?(manifest.entry_point) ->
+        manifest.entry_point
+
+      (manifest = fetch_service(String.to_atom(clean))) && is_atom(manifest.entry_point) && Code.ensure_loaded?(manifest.entry_point) ->
         manifest.entry_point
 
       true ->
@@ -342,15 +378,15 @@ defmodule Exoforge.PluginRegistry do
 
   def service_keys(service) when is_atom(service) do
     str = to_string(service)
+    clean = clean_service_name(str)
+    clean_atom = String.to_atom(clean)
+    shorthand = Module.concat([Exoforge, Std, Services, Macro.camelize(clean)])
 
-    case String.split(str, ".") do
-      ["Elixir", "Exoforge", "Std", "Services", name] ->
-        [service, String.to_atom(Macro.underscore(name))]
+    [service, clean_atom, shorthand] |> Enum.uniq()
+  end
 
-      _ ->
-        shorthand = Module.concat([Exoforge, Std, Services, Macro.camelize(str)])
-        [service, shorthand]
-    end
+  def service_keys(service) when is_binary(service) do
+    service_keys(String.to_atom(service))
   end
 
   def service_keys(other), do: [other]
