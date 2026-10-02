@@ -1,8 +1,8 @@
 # Exoforge MVP Implementation Plan (`plan.md`)
 
 > **Branch**: `projetao_mvp`  
-> **Status**: Core Backend, 6 Standard MVP Plugins, C# Client SDK, C# Plugin SDK, **Game Producer & Designer Studio (Native Phoenix LiveView)**, and **Stateful Entity Runtime** are **COMPLETE** and verified (**87 Elixir + 11 C# = 98 tests passing + E2E vertical slice**).
-> **Next Target**: **Distributed Entity Clustering (libcluster / Horde Phase 2)** — see [Consolidated Status & Next Steps](#consolidated-status--next-steps).
+> **Status**: Core Backend, 6 Standard MVP Plugins, C# Client SDK, C# Plugin SDK, **Game Producer & Designer Studio (Native Phoenix LiveView)**, **Stateful Entity Runtime**, and **Distributed Entity Clustering (libcluster / Horde / :pg Phase 2)** are **COMPLETE** and verified (**91 Elixir + 11 C# = 102 tests passing + E2E vertical slice**).
+> **Next Target**: **Production Multi-Node Kubernetes Deployment & Cluster Benchmarking**.
 
 ---
 
@@ -49,7 +49,7 @@ Verified by running every suite in the repo on `projetao_mvp`.
 
 | Area | Evidence |
 | :--- | :--- |
-| Kernel (registry, dispatch, event bus, boot order, drawer registry, resource DSL, entity runtime) | 33 core tests, incl. contract→plugin dispatch, resource discovery, drawer management, WASM proxy reflection, entity lifecycle, stores, passivation, heap bounds |
+| Kernel (registry, dispatch, event bus, boot order, drawer registry, resource DSL, entity runtime, cluster adapters) | 37 core tests, incl. contract→plugin dispatch, resource discovery, drawer management, WASM proxy reflection, entity lifecycle, stores, passivation, heap bounds, Horde CRDT cluster adapter, :pg distributed events |
 | `exoforge_std_database` (Postgres + Sandbox, per-plugin isolation) | 5 tests |
 | `exoforge_std_auth` | 6 tests |
 | `exoforge_std_player_data` | 3 tests |
@@ -60,7 +60,7 @@ Verified by running every suite in the repo on `projetao_mvp`.
 | C# Client SDK (`Exoforge.Client`) | 5 `dotnet` tests |
 | C# Plugin SDK (`Exoforge.Plugin.SDK`) | 6 `dotnet` tests |
 
-Total: **87 Elixir + 11 C# = 98 tests passing + E2E vertical slice**.
+Total: **91 Elixir + 11 C# = 102 tests passing + E2E vertical slice**.
 
 Fixed and verified:
 - `PluginRegistry` is a supervised `GenServer`; ETS lifecycle is stable.
@@ -370,6 +370,37 @@ The kernel provides first-class **stateful entities** (per-player / per-guild / 
   - Simplified `ManifestLoader` rescue logic and `runtime.exs` plugin scan paths.
 - [x] **M10.8 — Verified & Committed to `projetao_mvp`** ✅
   - All 89 unit tests (79 Elixir + 10 C#) and live E2E vertical slice passing green.
+
+---
+
+### Milestone 11: Distributed Entity Clustering (libcluster / Horde Phase 2) ✅
+
+The kernel provides seamless distributed clustering for stateful game entities and pub/sub events across arbitrary BEAM nodes, scaling horizontally without changes to plugin code.
+
+- [x] **M11.1 — Entities Adapter Architecture** ✅
+  - Implemented `Exoforge.Entities.Adapter` behaviour defining `registry_spec/1`, `supervisor_spec/1`, `via_tuple/3`, `whereis/3`, `start_child/1`, `terminate_child/1`, and `count/0`.
+  - Implemented `Exoforge.Entities.Adapters.Local` preserving 100% zero-dependency, sub-millisecond local execution as default for tests and single-node instances.
+  - Made `Exoforge.Entities` manager dynamically resolve the configured adapter via `Application.get_env(:exoforge, :entity_adapter)`.
+
+- [x] **M11.2 — Horde Distributed Cluster Adapter** ✅
+  - Implemented `Exoforge.Entities.Adapters.Horde` utilizing `Horde.Registry` and `Horde.DynamicSupervisor` built on Delta-CRDTs.
+  - Guarantees cluster-wide invariant: exactly one active writer actor per entity ID across all cluster nodes with automatic conflict resolution.
+  - Added cluster membership helpers (`set_members/1`, `members/0`) to dynamically update Horde cluster topology on node joins and leaves.
+
+- [x] **M11.3 — Distributed Event Bus via OTP native `:pg`** ✅
+  - Upgraded `Exoforge.EventDispatcher` to mirror topic subscriptions to `:pg` (process groups), Erlang/OTP's zero-dependency distributed pub/sub layer.
+  - Broadcasts deliver messages across all connected cluster nodes to remote subscribers while maintaining local single-node efficiency.
+  - Added `:exo_cluster_pg` process group to the root application supervision tree in `lib/application.ex`.
+
+- [x] **M11.4 — Cluster Topology & Discovery (`libcluster`)** ✅
+  - Supervised `Cluster.Supervisor` conditionally in `lib/application.ex` based on configured `Application.get_env(:libcluster, :topologies)`.
+  - Supports pluggable clustering strategies: `LocalEpmd` / `Epmd` in development, `Kubernetes` and `DNSSRV` in cloud production.
+
+- [x] **M11.5 — Verification & Cluster Tests** ✅
+  - Added `core/test/entity_cluster_test.exs` with 4 comprehensive tests verifying delta-CRDT Horde execution, membership sync, transparent `Entities.call` routing, and `:pg` distributed pub/sub.
+  - Total tests verified green: **91 Elixir + 11 C# = 102 tests passing + E2E vertical slice**.
+
+---
 
 ### Design decisions locked (this session)
 

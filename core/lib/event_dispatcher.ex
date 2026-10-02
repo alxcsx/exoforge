@@ -12,12 +12,32 @@ defmodule Exoforge.EventDispatcher do
 
   def subscribe(event_key, opts \\ []) do
     topic = Keyword.get(opts, :topic, :global)
-    Registry.register(@registry, {event_key, topic}, opts)
+    res = Registry.register(@registry, {event_key, topic}, opts)
+
+    if Process.whereis(:exo_cluster_pg) do
+      try do
+        :pg.join(:exo_cluster_pg, {event_key, topic}, self())
+      catch
+        _, _ -> :ok
+      end
+    end
+
+    res
   end
 
   def unsubscribe(event_key, opts \\ []) do
     topic = Keyword.get(opts, :topic, :global)
-    Registry.unregister(@registry, {event_key, topic})
+    res = Registry.unregister(@registry, {event_key, topic})
+
+    if Process.whereis(:exo_cluster_pg) do
+      try do
+        :pg.leave(:exo_cluster_pg, {event_key, topic}, self())
+      catch
+        _, _ -> :ok
+      end
+    end
+
+    res
   end
 
   def broadcast(event_key, payload, opts \\ []) do
@@ -45,5 +65,15 @@ defmodule Exoforge.EventDispatcher do
         send(pid, {:exo_event, actual_event_key, payload, context})
       end
     end)
+
+    if Process.whereis(:exo_cluster_pg) do
+      try do
+        for pid <- :pg.get_members(:exo_cluster_pg, {reg_key, topic}), node(pid) != node() do
+          send(pid, {:exo_event, actual_event_key, payload, context})
+        end
+      catch
+        _, _ -> :ok
+      end
+    end
   end
 end

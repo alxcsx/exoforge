@@ -1,8 +1,8 @@
 # Exoforge MVP Operating Manual (`Agents.MD`)
 
 > **Branch**: `projetao_mvp`
-> **Status**: Core Backend, 6 Standard MVP Plugins, C# Client SDK, C# Plugin SDK, **Game Producer & Designer Studio (Native Phoenix LiveView)**, and **Stateful Entity Runtime** are **COMPLETE** (**87 Elixir + 11 C# = 98 tests passing + E2E vertical slice**).
-> **Next Target**: **Distributed Entity Clustering (libcluster / Horde Phase 2)** — see [`plan.md` → `## Consolidated Status & Next Steps`](file:///Users/alexcs/projects/exoforge/plan.md).
+> **Status**: Core Backend, 6 Standard MVP Plugins, C# Client SDK, C# Plugin SDK, **Game Producer & Designer Studio (Native Phoenix LiveView)**, **Stateful Entity Runtime**, and **Distributed Entity Clustering (libcluster / Horde / :pg Phase 2)** are **COMPLETE** (**91 Elixir + 11 C# = 102 tests passing + E2E vertical slice**).
+> **Next Target**: **Production Multi-Node Kubernetes Deployment & Cluster Benchmarking** — see [`plan.md` → `## Consolidated Status & Next Steps`](file:///Users/alexcs/projects/exoforge/plan.md).
 
 ---
 
@@ -26,8 +26,8 @@ flowchart LR
 5. **Exoforge Kernel** broadcasts the event via [`EventDispatcher`](file:///Users/alexcs/projects/exoforge/core/lib/event_dispatcher.ex) back through `exoforge_std_ws`.
 6. **Unity Client** receives and processes the event safely on Unity's main thread via `ExoDispatcher`.
 
-> **Status & Verified Components**: the Elixir kernel, all 6 standard plugins, REST/WS ingress, multi-tenant DB, C# client SDK, C# plugin SDK, Native Phoenix LiveView Studio, WASM runtime, and stateful entity runtime are verified green (**87 Elixir + 11 C# = 98 tests + E2E vertical slice**). Milestones 9 and 10 are complete.
-> **Next Target**: **Distributed Entity Clustering** (libcluster, Horde Phase 2). Full detail: [`plan.md` → `## Consolidated Status & Next Steps`](file:///Users/alexcs/projects/exoforge/plan.md).
+> **Status & Verified Components**: the Elixir kernel, all 6 standard plugins, REST/WS ingress, multi-tenant DB, C# client SDK, C# plugin SDK, Native Phoenix LiveView Studio, WASM runtime, stateful entity runtime, and distributed clustering (Horde + libcluster + :pg) are verified green (**91 Elixir + 11 C# = 102 tests + E2E vertical slice**). Milestones 9, 10, and 11 are complete.
+> **Next Target**: **Production Multi-Node Kubernetes Deployment & Cluster Benchmarking**. Full detail: [`plan.md` → `## Consolidated Status & Next Steps`](file:///Users/alexcs/projects/exoforge/plan.md).
 
 ---
 

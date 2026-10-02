@@ -5,15 +5,27 @@ defmodule Exoforge.Application do
 
   @impl true
   def start(_type, _args) do
-    children = [
-      Exoforge.EventDispatcher,
-      Exoforge.WorkerRegistry,
-      Exoforge.PluginRegistry,
-      Exoforge.DrawerRegistry,
-      Exoforge.Entities.registry_spec(),
-      Exoforge.Entities.supervisor_spec(),
-      Exoforge.PluginSupervisor
-    ]
+    topologies = Application.get_env(:libcluster, :topologies, [])
+
+    cluster_children =
+      if topologies != [] and Code.ensure_loaded?(Cluster.Supervisor) do
+        [{Cluster.Supervisor, [topologies, [name: Exoforge.ClusterSupervisor]]}]
+      else
+        []
+      end
+
+    children =
+      cluster_children ++
+        [
+          %{id: :exo_cluster_pg, start: {:pg, :start_link, [:exo_cluster_pg]}},
+          Exoforge.EventDispatcher,
+          Exoforge.WorkerRegistry,
+          Exoforge.PluginRegistry,
+          Exoforge.DrawerRegistry,
+          Exoforge.Entities.registry_spec(),
+          Exoforge.Entities.supervisor_spec(),
+          Exoforge.PluginSupervisor
+        ]
 
     opts = [strategy: :one_for_one, name: Exoforge.Supervisor]
 

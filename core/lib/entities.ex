@@ -8,25 +8,28 @@ defmodule Exoforge.Entities do
   - Passivation, termination, and live count metrics
   """
 
-  @registry Exoforge.EntityRegistry
-  @supervisor Exoforge.EntitySupervisor
+  @default_adapter Exoforge.Entities.Adapters.Local
 
-  def registry_name, do: @registry
-  def supervisor_name, do: @supervisor
-
-  def registry_spec do
-    {Registry, [keys: :unique, name: @registry]}
+  def adapter do
+    Application.get_env(:exoforge, :entity_adapter, @default_adapter)
   end
 
-  def supervisor_spec do
-    {DynamicSupervisor, [name: @supervisor, strategy: :one_for_one]}
+  def registry_name, do: adapter().registry_name()
+  def supervisor_name, do: adapter().supervisor_name()
+
+  def registry_spec(opts \\ []) do
+    adapter().registry_spec(opts)
+  end
+
+  def supervisor_spec(opts \\ []) do
+    adapter().supervisor_spec(opts)
   end
 
   @doc """
-  Returns a `:via` tuple for registering an entity in the Registry.
+  Returns a `:via` tuple for registering an entity in the active Registry.
   """
   def via_tuple(plugin, type, id) do
-    {:via, Registry, {@registry, {plugin, type, id}}}
+    adapter().via_tuple(plugin, type, id)
   end
 
   @doc """
@@ -70,10 +73,7 @@ defmodule Exoforge.Entities do
   Finds the PID of an active entity in memory without starting it.
   """
   def whereis(plugin, type, id) do
-    case Registry.lookup(@registry, {plugin, type, id}) do
-      [{pid, _}] -> {:ok, pid}
-      [] -> {:error, :not_found}
-    end
+    adapter().whereis(plugin, type, id)
   end
 
   @doc """
@@ -83,7 +83,7 @@ defmodule Exoforge.Entities do
     case whereis(plugin, type, id) do
       {:ok, pid} ->
         ref = Process.monitor(pid)
-        DynamicSupervisor.terminate_child(@supervisor, pid)
+        adapter().terminate_child(pid)
 
         receive do
           {:DOWN, ^ref, :process, ^pid, _} ->
@@ -116,7 +116,7 @@ defmodule Exoforge.Entities do
   Returns the count of active entities currently in memory.
   """
   def count do
-    Registry.count(@registry)
+    adapter().count()
   end
 
   @doc """
@@ -133,10 +133,10 @@ defmodule Exoforge.Entities do
             spec = %{
               id: {plugin, type, id},
               start: {mod, :start_link, [{plugin, type, id, init_opts}]},
-              restart: :transient
+              restart: :temporary
             }
 
-            case DynamicSupervisor.start_child(@supervisor, spec) do
+            case adapter().start_child(spec) do
               {:ok, pid} ->
                 {:ok, pid}
 

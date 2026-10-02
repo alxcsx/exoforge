@@ -35,6 +35,8 @@ defmodule Exoforge.Project do
       {:jason, "~> 1.4"},
       {:wasmex, "~> 0.15.1"},
       {:postgrex, ">= 0.0.0"},
+      {:horde, "~> 0.9"},
+      {:libcluster, "~> 3.4"},
       {:lazy_html, ">= 0.1.0", only: :test}
     ]
   end
