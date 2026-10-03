@@ -1,60 +1,40 @@
 # Exoforge
 
 > **The High-Performance, Modular Game Backend Platform & LiveOps Engine.**  
-> Powered by the Erlang/BEAM runtime, WebAssembly (WASI), and native Unity integration.
+> Built on Erlang/BEAM, WebAssembly (WASI), and native Unity / C# integration.
 
-[![Build Status](https://img.shields.io/badge/tests-164%20passing-brightgreen)](Justfile)
+[![Build Status](https://img.shields.io/badge/tests-181%20passing-brightgreen)](Justfile)
 [![E2E Vertical Slice](https://img.shields.io/badge/E2E%20Slice-verified%20live-blue)](sdk/csharp/Exoforge.Client.Tests/VerticalSliceIntegrationTests.cs)
 [![Actor Throughput](https://img.shields.io/badge/stateful%20actors-729k%20ops%2Fsec-purple)](test/cluster_benchmark_test.exs)
 [![Unity SDK](https://img.shields.io/badge/Unity%20SDK-UPM%20Ready-black)](sdk/unity/Exoforge.SDK)
 
 ---
 
-## Executive Summary (For Investors, CTOs & Studio Leads)
+## What is Exoforge?
 
-### The Problem
-Building and operating multiplayer game backends and LiveOps pipelines is traditionally fragmented, expensive, and slow:
-1. **Cloud Sprawl & High Operational Costs**: Studios stitch together Redis caches, message queues (RabbitMQ/Kafka), custom microservices (Node/Go/C#), and relational databases. A mid-tier game often spends tens of thousands monthly just keeping idle cloud infrastructure running.
-2. **Slow LiveOps Velocity**: Updating game logic, combat balancing, or seasonal events typically requires compiling new game client builds and waiting days for Apple/Google app store approval.
-3. **Concurrency Bottlenecks**: Traditional architectures struggle with stateful game sessions, resulting in high latency, state synchronization bugs, and costly distributed locks.
+Exoforge is an open, high-density game backend and LiveOps platform. It combines the distributed actor concurrency of the Erlang/BEAM virtual machine with sandboxed WebAssembly execution to run authoritative game logic without external cache layers or heavy microservice sprawl.
 
-### The Exoforge Solution
-Exoforge consolidates the entire game backend stack into a unified, high-density architecture built on the Erlang/BEAM virtual machine—the same runtime that powers WhatsApp, Discord, and League of Legends chat at planetary scale:
-- **729,000 stateful actor operations per second** with **1.4 µs latency** on a single commodity node.
-- **Sandboxed C# WebAssembly Game Logic**: Game programmers write authoritative logic in C#; the server runs it sandboxed in WebAssembly and can hot-reload it in milliseconds without taking servers down or forcing client updates.
-- **Turnkey LiveOps & Producer Studio**: Designers and live-ops managers inspect live players, monitor stateful virtual actors, and toggle features in real time from a web dashboard.
-- **Up to 90% Infrastructure Cost Reduction**: Eliminates external cache layers and complex microservice glue code.
+### What it is for
+
+- **Authoritative Gameplay Logic**: Run combat calculations, inventory reconciliation, loot tables, and economy logic on the server using C# compiled to WebAssembly (WASI).
+- **Zero-Downtime LiveOps**: Update drop rates, rebalance gameplay numbers, and deploy new game rules dynamically without rebuilding game clients or awaiting app store approvals.
+- **Stateful Virtual Entities**: Maintain active player sessions, matches, and world state in-memory across a cluster with automatic failover and microsecond-level access.
+- **Unified Game Services**: Provides out-of-the-box identity, isolated multi-tenant databases, real-time WebSocket pub/sub, dynamic REST APIs, and a LiveView designer studio.
 
 ---
 
-## Turnkey Integration: Existing vs. New Games
-
-### 1. For New Titles (Full Turnkey Backend)
-Get from prototype to global multiplayer production in days instead of months:
-- **Zero Plumbing**: Out-of-the-box identity, authentication, session tokens, canonical player profiles, isolated multi-tenant databases, real-time WebSocket ingress, and REST APIs.
-- **Native Unity Workflow**: Game developers install the Unity SDK via UPM (`com.exoforge.sdk`), write game logic in C#, and push directly from the Unity Editor (`Window > Exoforge > Control Center`).
-- **Autonomous Scalability**: Distributed clustering via Horde and `:pg` automatically distributes virtual actors across nodes without manual sharding.
-
-### 2. For Existing Games (LiveOps Sidecar & Microservices)
-Enhance an existing live game without rewriting your infrastructure:
-- **Authoritative Combat / Economy Sidecar**: Offload complex gameplay mechanics (combat math, loot roll tables, crafting recipes) into sandboxed WASM plugins.
-- **Live Re-Balancing Without App Store Approval**: Update drop rates, weapon statistics, or seasonal events on the fly.
-- **Drop-in Client SDK**: Connect your existing Unity or .NET client with `ExoClient` in an afternoon.
-
----
-
-## Architectural Doctrine: "The Rule, and Its One Exception"
+## System Architecture
 
 ```
 +--------------------------------------------------------------------------+
 |                  GAME PRODUCER & DESIGNER STUDIO (:4005)                 |
-|             (Real-time LiveView UI, Live Actor Inspector, Webhooks)       |
+|             (LiveView Dashboard, Actor Inspector, Plugin Manager)        |
 +--------------------------------------------------------------------------+
 |      REST INGRESS (:4001)         |        WEBSOCKET INGRESS (:4000)     |
-|   (Dynamic OpenAPI Routes)        |   (Real-time JSON Framed Protocol)   |
+|   (Dynamic OpenAPI Routes)        |   (Real-time JSON/Binary Protocol)   |
 +-----------------------------------+--------------------------------------+
 |                 SANDBOXED C# WASM PLUGINS (WASI Runtime)                  |
-|          authoritative combat • inventory • economy • matchmaking        |
+|          authoritative combat • inventory • liveops • matchmaking        |
 +--------------------------------------------------------------------------+
 |                     STANDARD EXTENSION SERVICES                          |
 |         :auth  •  :player_data  •  :database  •  :plugin_manager         |
@@ -64,73 +44,98 @@ Enhance an existing live game without rewriting your infrastructure:
 +--------------------------------------------------------------------------+
 ```
 
+### Architectural Doctrine
+
 > **The Rule**: Everything above the kernel is a plugin.  
 > **The Exception**: The kernel itself is not a plugin.
 
-All persistence adapters, network ingresses, authentication engines, and dashboards are swappable plugins. The kernel stays lean, verifiable, and strictly limited to discovery, dispatch, lifecycle supervision, and host sandboxing.
+The kernel is minimal and deterministic, containing only:
+- **`PluginRegistry`**: In-memory ETS catalog of service manifests and resources.
+- **`ActionDispatcher`**: Authorization scope checks and service action routing.
+- **`EventDispatcher`**: Real-time pub/sub bus with pattern matching and Registry fanout.
+- **`WorkerRegistry`**: Named singleton process locator.
+- **`PluginSupervisor` & `PluginBootstrapper`**: Topological DAG ordering and process lifecycle.
+- **`Entities`**: Clustered stateful virtual actors (Horde + `:pg`).
+- **Plugin Drivers**: Native Elixir (`ElixirPluginRunner`) and WASM (`WasmPluginRunner`).
 
-### The 7 Standard MVP Plugins
-1. `exoforge_std_database`: Multi-tenant schema isolation with PostgreSQL and Sandbox adapters.
-2. `exoforge_std_auth`: Session verification, bearer token issuance, and RBAC scope validation.
-3. `exoforge_std_player_data`: Canonical player profile storage, schemas, and lifecycle events.
-4. `exoforge_std_http`: REST ingress (`:4001`) with automatic OpenAPI schema reflection.
-5. `exoforge_std_ws`: Low-latency WebSocket ingress (`:4000`) with binary framing and pub/sub fanout.
-6. `exoforge_std_dashboard`: Real-time Game Producer & Designer Studio (`:4005`).
-7. `exoforge_std_plugin_manager`: Runtime plugin lifecycle, hot WASM upload, and cluster orchestration.
+All networking, storage, authentication, and game domains exist as swappable plugins.
 
 ---
 
-## Unity & C# Developer Experience
+## Standard Plugins
 
-### 1. In-Engine Unity Control Center
-Install via Unity Package Manager (`com.exoforge.sdk`). Open `Window > Exoforge > Control Center` to:
-- Scaffold new C# WASM plugins inside `/exoforge/plugins` with one click.
-- Compile and hot-deploy plugins directly to local or remote servers.
-- Synchronize server contracts and auto-generate strongly-typed C# client APIs into `Assets/Exoforge/Generated`.
-- Inspect live BEAM cluster telemetry (node uptime, memory, active virtual actors).
+| Plugin | Port / Role | Provides | Purpose |
+| :--- | :--- | :--- | :--- |
+| `exoforge_std_database` | Storage | `:database`, `:lldb` | Per-plugin schema isolation with PostgreSQL and in-memory Sandbox adapters. |
+| `exoforge_std_auth` | Identity | `:auth` | Session verification, bearer token issuance, and RBAC scope validation. |
+| `exoforge_std_player_data` | Profiles | `:player_data` | Canonical player profile persistence, schemas, and lifecycle events. |
+| `exoforge_std_http` | REST (:4001) | `:http` | Dynamic OpenAPI endpoints generated directly from service contracts. |
+| `exoforge_std_ws` | Realtime (:4000) | `:ws` | Low-latency binary and JSON WebSocket framing for actions and event pub/sub. |
+| `exoforge_std_dashboard` | Studio (:4005) | `:dashboard_view` | Game Producer & Designer Studio (LiveView UI, actor inspector, schedule calendars). |
+| `exoforge_std_plugin_manager` | Lifecycle | `:plugin_manager` | Runtime plugin lifecycle, hot WASM binary uploads, and manifest exports. |
+
+---
+
+## Unity & C# Tooling
+
+Exoforge separates game engineering from backend operations. Game developers work in standard C# without needing Erlang or Mix installed.
+
+### 1. Unity Control Center (`com.exoforge.sdk`)
+
+A dedicated Unity Editor extension (`Window > Exoforge > Control Center`) providing:
+- **One-Click Scaffolding**: Generate standard, inventory, or LiveOps C# WASM plugins directly into `/exoforge/plugins`.
+- **Compilation & Deployment**: Build `.wasm` binaries and upload them to the running server.
+- **Live Action Sandbox**: Test actions and inspect payloads with latency metrics (`µs`).
+- **Real-Time Event Stream**: Monitor backend broadcasts and filter topics inside Unity.
+- **LiveOps Schedule Timeline**: Visual timeline of active and scheduled game windows.
 
 ### 2. Standalone C# CLI (`exo`)
-For CI/CD pipelines and external developers without Elixir/Mix installed:
+
+Cross-platform command-line tool (`netstandard2.1` / `.NET 10`) for CI/CD pipelines and headless workflows:
 ```bash
 exo init                     # Initialize /exoforge workspace
-exo plugin new combat        # Scaffold new C# WASM plugin
+exo plugin new combat        # Scaffold new C# WASM plugin (templates: standard, inventory, liveops)
 exo plugin build combat      # Compile C# to .wasm assembly
 exo plugin push combat       # Hot-load plugin onto live cluster
 exo sync                     # Generate strongly-typed C# client bindings
 exo status                   # Inspect cluster health and telemetry
 ```
 
-### 3. Strongly-Typed Client Usage Example
+### 3. C# Client SDK (`ExoClient`)
+
+High-performance WebSocket client with automatic reconnection, typed action RPC, and main-thread event dispatching:
 ```csharp
 using Exoforge.Client;
 
-// Connect and authenticate on Unity main thread
-var client = new ExoClient("ws://localhost:4000/ws");
-await client.ConnectAsync();
-await client.AuthenticateAsync("player_token_xyz");
+var client = new ExoClient();
+await client.ConnectAsync(new Uri("ws://localhost:4000/ws"));
+await client.AuthenticateAsync("dev:player_42");
 
-// Subscribe to real-time events safely on Unity's main thread
+// Subscribe to backend event broadcasts
 client.Subscribe("player_damaged", (eventName, payload) => {
     Debug.Log($"Damage event received: {payload}");
 });
 
 // Invoke backend action
-var result = await client.InvokeAsync<CombatResult>("combat", "attack", new {
-    target_id = "enemy_42",
-    damage = 35
+var result = await client.SendActionAsync<CombatResult>("combat", "attack", new {
+    target_id = "enemy_99",
+    damage = 45
 });
 ```
 
 ---
 
-## Verified Performance & Production SLAs
+## Performance Benchmarks
 
-Benchmarked on Apple Silicon (M-series) / Linux x86_64 single node:
-- **Stateful Actor Calls**: **584,000+ ops / second**
-- **Average Call Latency**: **1.7 µs** (0.0017 ms)
-- **Actor Activation Time**: **0.018 ms** per virtual entity
-- **Event Fanout**: **0.09 ms** (50x concurrent broadcast)
-- **Automated Test Suite**: **164 tests passing green** (145 Elixir + 19 C#) + live end-to-end WebSocket/WASM vertical slice.
+Benchmarked on commodity single-node hardware (Apple Silicon / Linux x86_64):
+
+| Metric | Result | Description |
+| :--- | :--- | :--- |
+| **Stateful Actor Calls** | **> 420,000 ops / sec** | Clustered virtual actor RPC throughput |
+| **Actor Latency** | **2.4 µs** (0.0024 ms) | In-memory distributed actor round-trip |
+| **Actor Activation** | **0.024 ms / entity** | Instant on-demand actor state hydration |
+| **Cluster Fanout** | **0.15 ms** | 50 concurrent subscribers per broadcast |
+| **Test Suite** | **181 tests passing** | Elixir Core, Plugins, System, and C# SDKs |
 
 ---
 
@@ -141,38 +146,61 @@ Benchmarked on Apple Silicon (M-series) / Linux x86_64 single node:
 - [.NET 10.0 SDK](https://dotnet.microsoft.com)
 - [Just](https://github.com/casey/just) command runner
 
-### Development Commands
+### Development
 ```bash
-# 1. Run all test suites (Core, Plugins, System, C# SDK)
+# Run all tests (Core, Plugins, System, C# SDKs)
 just test
 
-# 2. Run the live end-to-end integration test (Client -> WS -> WASM -> Event -> Client)
+# Run live end-to-end integration test (Client -> WS -> WASM -> Event -> Client)
 just test-e2e
 
-# 3. Start the local backend development server
+# Start the local development server (WS :4000, REST :4001, Studio :4005)
 just dev
-# Access Game Producer Studio at http://localhost:4005
-# Access WebSocket Gateway at ws://localhost:4000/ws
-# Access REST Ingress at http://localhost:4001
+
+# Package Unity SDK UPM archive (dist/com.exoforge.sdk-*.tgz)
+just pack-unity
 ```
 
-### Production Deployment
+### Deployment
 ```bash
-# Option A: Full stack with PostgreSQL using Docker Compose
+# Docker Compose (PostgreSQL + Exoforge Backend)
 just compose-up
 
-# Option B: Assemble standalone OTP release
+# Standalone OTP Release
 just release
 just run-release
 
-# Option C: Deploy to Kubernetes cluster via Kustomize
+# Kubernetes (via Kustomize)
 just k8s-deploy
 ```
 
 ---
 
-## Documentation Links
+## Repository Structure
 
-- [`AGENTS.md`](AGENTS.md): Architectural doctrine, simplification guidelines, and system engineering manual.
-- [`plan.md`](plan.md): Milestone roadmap, architecture audit, and optimization ledger.
-- [`sdk/unity/Exoforge.SDK`](sdk/unity/Exoforge.SDK): Complete Unity Package Manager SDK and sample demo.
+```
+├── core/                         # Exoforge OTP Kernel
+│   ├── lib/                      # Dispatcher, Registry, Entities, Supervisors
+│   └── test/                     # Kernel unit & benchmark tests
+├── plugins/                      # Standard Elixir Plugins
+│   ├── exoforge_std_auth/        # Authentication & RBAC scopes
+│   ├── exoforge_std_database/    # PostgreSQL & Sandbox storage adapters
+│   ├── exoforge_std_player_data/ # Player profile management
+│   ├── exoforge_std_http/        # REST ingress & OpenAPI reflection
+│   ├── exoforge_std_ws/          # WebSocket binary/JSON ingress
+│   ├── exoforge_std_dashboard/   # Phoenix LiveView Producer Studio
+│   └── exoforge_std_plugin_manager/ # Runtime plugin lifecycle & upload
+├── plugins_csharp/               # Sample C# WASM Plugins
+│   └── combat_wasm/              # Authoritative combat logic compiled to WASM
+├── sdk/
+│   ├── csharp/                   # Pure C# SDKs & Tooling
+│   │   ├── Exoforge.Client/      # Runtime client library (.NET Standard 2.1)
+│   │   ├── Exoforge.Plugin.SDK/  # Attributes and interfaces for C# WASM plugins
+│   │   ├── Exoforge.Management/  # Workspace, scaffolding, and code generation engine
+│   │   └── Exoforge.CLI/         # `exo` command-line executable
+│   └── unity/
+│       └── Exoforge.SDK/         # Unity Package Manager (UPM) package
+├── deploy/                       # Kubernetes manifests & Docker configurations
+├── AGENTS.md                     # Architectural rules & manual
+└── Justfile                      # Central automation recipes
+```
