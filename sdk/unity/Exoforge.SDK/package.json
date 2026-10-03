@@ -13,5 +13,12 @@
   ],
   "author": {
     "name": "Exoforge Team"
-  }
+  },
+  "samples": [
+    {
+      "displayName": "Combat WASM Demo",
+      "description": "End-to-end example connecting to Exoforge, executing combat actions, and receiving event broadcasts.",
+      "path": "Samples~/CombatDemo"
+    }
+  ]
 }

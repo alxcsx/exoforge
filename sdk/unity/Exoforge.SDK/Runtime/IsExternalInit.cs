@@ -1,0 +1,1 @@
+../../csharp/Exoforge.Client/IsExternalInit.cs
