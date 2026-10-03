@@ -153,7 +153,15 @@ public class ExoforgeControlCenter : EditorWindow
             {
                 _isConnected = true;
                 _connectionStatus = $"Connected ({authResult.PlayerId})";
-                ShowStatus($"Connected to Exoforge server ({_lastPingMs} ms).", MessageType.Info);
+
+                if (!ExoforgeEditorConfig.ServerUrl.Contains("localhost") && !ExoforgeEditorConfig.ServerUrl.Contains("127.0.0.1") && ExoforgeEditorConfig.AdminToken.StartsWith("dev:"))
+                {
+                    ShowStatus("Security Warning: 'dev:*' token used with remote server! Dev tokens are disabled on production clusters.", MessageType.Warning);
+                }
+                else
+                {
+                    ShowStatus($"Connected to Exoforge server ({_lastPingMs} ms).", MessageType.Info);
+                }
 
                 // Auto-subscribe to all events for the live event monitor
                 await _editorClient.SubscribeAsync("*");
@@ -271,36 +279,7 @@ public class ExoforgeControlCenter : EditorWindow
 
     private void RefreshSchedules()
     {
-        // Populate sample / registered LiveOps schedule windows for designer preview
-        _liveopsWindows = new List<ExoTimeWindow>
-        {
-            new ExoTimeWindow
-            {
-                Id = "double_xp_weekend",
-                Title = "Double XP Weekend",
-                StartAtUtc = DateTime.UtcNow.AddHours(-14),
-                EndAtUtc = DateTime.UtcNow.AddHours(34),
-                Recurrence = "weekly",
-                Status = "active",
-                IsActive = true,
-                CountdownText = "1d 10h",
-                Progress = 0.29,
-                Metadata = new Dictionary<string, JsonElement>()
-            },
-            new ExoTimeWindow
-            {
-                Id = "world_boss_raid",
-                Title = "World Boss Incursion",
-                StartAtUtc = DateTime.UtcNow.AddHours(4),
-                EndAtUtc = DateTime.UtcNow.AddHours(6),
-                Recurrence = "daily",
-                Status = "upcoming",
-                IsActive = false,
-                CountdownText = "4h 00m",
-                Progress = 0.0,
-                Metadata = new Dictionary<string, JsonElement>()
-            }
-        };
+        _liveopsWindows.Clear();
     }
 
     private void RefreshLocalPlugins()
@@ -764,8 +743,8 @@ public class ExoforgeControlCenter : EditorWindow
 
             var result = await _editorClient.SendActionAsync<JsonElement>(_sandboxService, _sandboxAction, payload);
             sw.Stop();
-
-            _sandboxResultLatency = $"⚡ {sw.ElapsedMilliseconds} ms ({sw.Elapsed.TotalMicroseconds:F0} µs)";
+            double micros = (sw.ElapsedTicks / (double)System.Diagnostics.Stopwatch.Frequency) * 1_000_000.0;
+            _sandboxResultLatency = $"⚡ {sw.ElapsedMilliseconds} ms ({micros:F0} µs)";
             _sandboxResultSuccess = true;
             _sandboxResult = JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true });
         }
@@ -1011,11 +990,23 @@ public class ExoforgeControlCenter : EditorWindow
         EditorGUILayout.LabelField("LiveOps Schedules & Event Timelines", EditorStyles.boldLabel);
         EditorGUILayout.HelpBox("Exoforge provides built-in time constructs for game developers to build custom seasonal events, scheduled maintenance, and timed loot tables without opinionated boilerplate.", MessageType.Info);
 
-        EditorGUILayout.Space(6);
-
         _scheduleScroll = EditorGUILayout.BeginScrollView(_scheduleScroll);
-        foreach (var window in _liveopsWindows)
+
+        if (_liveopsWindows.Count == 0)
         {
+            EditorGUILayout.HelpBox("No active or scheduled LiveOps events currently loaded from cluster.\n\nUse the golden-path template below to scaffold a custom C# WASM LiveOps plugin with [ExoResource(..., Drawer = \"schedule\")] and full calendar support.", MessageType.Info);
+            EditorGUILayout.Space(8);
+            if (GUILayout.Button("+ Scaffold Custom LiveOps Event Plugin Template", GUILayout.Height(32)))
+            {
+                _currentTab = Tab.Plugins;
+                _newPluginName = "liveops_events";
+                _scaffoldTemplateIndex = 2; // "Custom LiveOps Event"
+            }
+        }
+        else
+        {
+            foreach (var window in _liveopsWindows)
+            {
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
 
             EditorGUILayout.BeginHorizontal();

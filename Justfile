@@ -157,13 +157,14 @@ k8s-destroy:
 pack-unity:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	echo "Packaging Exoforge Unity SDK..."
+	VERSION=$(grep '"version"' sdk/unity/Exoforge.SDK/package.json | head -1 | awk -F'"' '{print $4}')
+	echo "Packaging Exoforge Unity SDK v${VERSION}..."
 	mkdir -p dist
-	rm -rf dist/package dist/com.exoforge.sdk-0.1.0.tgz
+	rm -rf dist/package dist/com.exoforge.sdk-*.tgz
 	mkdir -p dist/package
 	cp -RL sdk/unity/Exoforge.SDK/. dist/package/
-	tar -czf dist/com.exoforge.sdk-0.1.0.tgz -C dist package
+	tar -czf "dist/com.exoforge.sdk-${VERSION}.tgz" -C dist package
 	echo "[Exoforge] Created UPM package archive:"
-	ls -lh dist/com.exoforge.sdk-0.1.0.tgz
+	ls -lh "dist/com.exoforge.sdk-${VERSION}.tgz"
 	echo "Ready to import in Unity: Window > Package Manager > [+] > Add package from tarball..."
 
