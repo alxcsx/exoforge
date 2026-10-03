@@ -11,6 +11,14 @@ defmodule Exoforge.DashboardTest do
   @opts Router.init([])
 
   setup do
+    Application.put_env(:exoforge, :allow_dev_tokens, true)
+    Application.put_env(:exoforge, :require_admin_auth, false)
+
+    on_exit(fn ->
+      Application.delete_env(:exoforge, :allow_dev_tokens)
+      Application.delete_env(:exoforge, :require_admin_auth)
+    end)
+
     PluginRegistry.initialize_ets()
     start_supervised!({DbManager, [driver: :sandbox]})
 
@@ -70,15 +78,34 @@ defmodule Exoforge.DashboardTest do
     end
 
     test "GET / renders HTML dashboard" do
-      conn = conn(:get, "/") |> Router.call(@opts)
+      conn =
+        conn(:get, "/")
+        |> Plug.Test.init_test_session(%{
+          "admin_player_id" => "admin",
+          "admin_scopes" => ["admin"]
+        })
+        |> Router.call(@opts)
+
       assert conn.status == 200
       assert String.contains?(conn.resp_body, "EXOFORGE")
       assert String.contains?(conn.resp_body, "exoforge_std_database")
     end
 
-    test "GET and POST /api/players handles player profiles" do
+    test "GET / redirects unauthenticated browsers to /login" do
+      conn = conn(:get, "/") |> Router.call(@opts)
+      assert conn.status == 302
+      assert get_resp_header(conn, "location") == ["/login"]
+    end
+
+    test "GET /login renders the sign-in form" do
+      conn = conn(:get, "/login") |> Router.call(@opts)
+      assert conn.status == 200
+      assert String.contains?(conn.resp_body, "Sign in")
+    end
+
+    test "GET and POST resource rows handles player profiles" do
       conn =
-        conn(:post, "/api/players", %{
+        conn(:post, "/api/resources/players/rows", %{
           "player_id" => "p_studio_1",
           "profile" => %{"name" => "Valiant", "level" => 5}
         })
@@ -88,12 +115,12 @@ defmodule Exoforge.DashboardTest do
       assert conn.status == 200
       body = Jason.decode!(conn.resp_body)
       assert body["status"] == "ok"
-      assert body["player"]["name"] == "Valiant"
+      assert body["data"]["player"]["name"] == "Valiant"
 
-      get_conn = conn(:get, "/api/players") |> Router.call(@opts)
+      get_conn = conn(:get, "/api/resources/players/rows") |> Router.call(@opts)
       assert get_conn.status == 200
       get_body = Jason.decode!(get_conn.resp_body)
-      assert is_list(get_body["players"])
+      assert is_list(get_body["rows"])
     end
 
     test "GET /api/overview returns system summary" do
@@ -219,6 +246,33 @@ defmodule Exoforge.DashboardTest do
                ActionDispatcher.dispatch(:dashboard_view, :get_dashboard_data, %{view_id: :main})
 
       assert data.plugins_count >= 2
+    end
+
+    test "studio session can read APIs but cannot dispatch admin actions" do
+      read =
+        conn(:get, "/api/overview")
+        |> Plug.Test.init_test_session(%{
+          "admin_player_id" => "studio",
+          "admin_scopes" => ["studio"]
+        })
+        |> Router.call(@opts)
+
+      assert read.status == 200
+
+      dispatch =
+        conn(:post, "/api/dispatch", %{
+          "service" => "lldb",
+          "action" => "health_check",
+          "payload" => %{}
+        })
+        |> Plug.Test.init_test_session(%{
+          "admin_player_id" => "studio",
+          "admin_scopes" => ["studio"]
+        })
+        |> put_req_header("content-type", "application/json")
+        |> Router.call(@opts)
+
+      assert dispatch.status == 403
     end
   end
 end

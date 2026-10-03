@@ -8,72 +8,93 @@ defmodule Exoforge.Std.Dashboard.Router do
   import Phoenix.LiveView.Router
 
   pipeline :browser do
-    plug :accepts, ["html"]
-    plug :ensure_endpoint
-    plug :ensure_session
-    plug :fetch_session
-    plug :fetch_live_flash
-    plug :put_root_layout, html: {Exoforge.Std.Dashboard.Layouts, :root}
-    plug :protect_from_forgery
-    plug :put_secure_browser_headers
+    plug(:accepts, ["html"])
+    plug(:ensure_endpoint)
+    plug(:ensure_session)
+    plug(:fetch_session)
+    plug(:fetch_live_flash)
+    plug(:put_root_layout, html: {Exoforge.Std.Dashboard.Layouts, :root})
+    plug(:protect_from_forgery)
+    plug(:put_secure_browser_headers)
   end
 
   pipeline :public_api do
-    plug :accepts, ["json"]
+    plug(:accepts, ["json"])
   end
 
   pipeline :api do
-    plug :accepts, ["json"]
-    plug Plug.Parsers,
+    plug(:accepts, ["json"])
+    plug(:ensure_session)
+    plug(:fetch_session)
+
+    plug(Plug.Parsers,
       parsers: [:json],
       pass: ["application/json"],
       json_decoder: Jason
-    plug :verify_admin_access
+    )
+
+    plug(:verify_studio_access)
   end
 
   scope "/", Exoforge.Std.Dashboard do
-    pipe_through :browser
+    pipe_through(:browser)
 
-    live "/", StudioLive, :index
-    live "/tab/:tab", StudioLive, :tab
-    live "/resources/:name", ResourceLive, :index
+    get("/login", AuthController, :login_form)
+    post("/login", AuthController, :login)
+    get("/logout", AuthController, :logout)
+  end
+
+  live_session :admin, on_mount: {Exoforge.Std.Dashboard.AuthHook, :require_admin} do
+    scope "/", Exoforge.Std.Dashboard do
+      pipe_through(:browser)
+
+      live("/", StudioLive, :index)
+      live("/tab/:tab", StudioLive, :tab)
+      live("/resources/:name", ResourceLive, :index)
+    end
   end
 
   scope "/", Exoforge.Std.Dashboard do
-    pipe_through :public_api
+    pipe_through(:public_api)
 
-    get "/health", ApiController, :health
+    get("/health", ApiController, :health)
   end
 
   scope "/", Exoforge.Std.Dashboard do
-    pipe_through :api
+    pipe_through(:api)
 
-    get "/api/overview", ApiController, :overview
-    get "/api/players", ApiController, :players
-    post "/api/players", ApiController, :create_player
-    get "/api/extensions", ApiController, :extensions
-    get "/api/resources", ApiController, :resources
-    get "/api/resources/:name", ApiController, :resource_detail
-    get "/api/resources/:name/drawers", ApiController, :drawers
-    post "/api/dispatch", ApiController, :dispatch_action
-    get "/api/events", ApiController, :events
+    get("/api/overview", ApiController, :overview)
+    get("/api/resources/:name/rows", ApiController, :resource_rows)
+    post("/api/resources/:name/rows", ApiController, :create_resource_row)
+    get("/api/extensions", ApiController, :extensions)
+    get("/api/resources", ApiController, :resources)
+    get("/api/resources/:name", ApiController, :resource_detail)
+    get("/api/resources/:name/drawers", ApiController, :drawers)
+    post("/api/dispatch", ApiController, :dispatch_action)
+    get("/api/events", ApiController, :events)
   end
 
-  defp verify_admin_access(conn, _opts) do
-    case Exoforge.Std.Dashboard.ApiController.verify_admin_auth(conn) do
+  defp verify_studio_access(conn, _opts) do
+    case Exoforge.Std.Dashboard.ApiController.verify_studio_auth(conn) do
       {:ok, auth} ->
         Plug.Conn.assign(conn, :auth, auth)
 
       {:error, :unauthenticated} ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.send_resp(401, Jason.encode!(%{status: "error", error: "Unauthorized: valid token required"}))
+        |> Plug.Conn.send_resp(
+          401,
+          Jason.encode!(%{status: "error", error: "Unauthorized: valid token required"})
+        )
         |> Plug.Conn.halt()
 
       {:error, :forbidden} ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.send_resp(403, Jason.encode!(%{status: "error", error: "Forbidden: admin scope required"}))
+        |> Plug.Conn.send_resp(
+          403,
+          Jason.encode!(%{status: "error", error: "Forbidden: admin scope required"})
+        )
         |> Plug.Conn.halt()
     end
   end
@@ -134,7 +155,7 @@ defmodule Exoforge.Std.Dashboard.Router do
 
     %{
       status: "running",
-      kernel: "BEAM (Exoforge)",
+      kernel: "Exoforge Core",
       plugins_count: length(plugins),
       plugins: plugins,
       extensions: extensions,

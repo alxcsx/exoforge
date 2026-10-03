@@ -1,7 +1,7 @@
 defmodule Exoforge.Std.Dashboard.Layouts do
   @moduledoc """
   Root and application layout components for the Exoforge Game Producer & Designer Studio.
-  Visually aligned with game_producer_studio_fixed.html design tokens.
+  Design tokens for the Exoforge Studio shell.
   """
   use Phoenix.Component
 

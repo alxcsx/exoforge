@@ -23,6 +23,7 @@ defmodule Exoforge.Std.Dashboard.MixProject do
       {:exoforge_std_database, path: "../exoforge_std_database"},
       {:exoforge_std_auth, path: "../exoforge_std_auth", only: [:dev, :test]},
       {:exoforge_std_player_data, path: "../exoforge_std_player_data", only: [:dev, :test]},
+      {:exoforge_std_plugin_manager, path: "../exoforge_std_plugin_manager", only: [:dev, :test]},
       {:phoenix, "~> 1.7"},
       {:phoenix_live_view, "~> 1.0"},
       {:phoenix_html, "~> 4.0"},

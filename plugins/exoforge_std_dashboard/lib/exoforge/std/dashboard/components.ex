@@ -1,20 +1,20 @@
 defmodule Exoforge.Std.Dashboard.Components do
   @moduledoc """
   Reusable Phoenix LiveView functional component library for Exoforge Game Producer & Designer Studio.
-  Visually and functionally aligned with game_producer_studio_fixed.html.
+  Visually and functionally aligned with the Exoforge Studio design system.
   """
   use Phoenix.Component
 
   @doc """
   Renders a top metric card with value, delta change, and iconography.
   """
-  attr :title, :string, required: true
-  attr :value, :string, required: true
-  attr :delta, :string, default: nil
-  attr :delta_positive, :boolean, default: true
-  attr :subtitle, :string, default: nil
-  attr :icon_svg, :string, default: nil
-  slot :inner_block
+  attr(:title, :string, required: true)
+  attr(:value, :string, required: true)
+  attr(:delta, :string, default: nil)
+  attr(:delta_positive, :boolean, default: true)
+  attr(:subtitle, :string, default: nil)
+  attr(:icon_svg, :string, default: nil)
+  slot(:inner_block)
 
   def metric_card(assigns) do
     ~H"""
@@ -50,9 +50,9 @@ defmodule Exoforge.Std.Dashboard.Components do
   @doc """
   Renders a status badge with matching color scheme.
   """
-  attr :status, :string, default: "active"
-  attr :label, :string, default: nil
-  attr :size, :string, default: "sm"
+  attr(:status, :string, default: "active")
+  attr(:label, :string, default: nil)
+  attr(:size, :string, default: "sm")
 
   def badge(assigns) do
     label = assigns.label || assigns.status
@@ -92,11 +92,11 @@ defmodule Exoforge.Std.Dashboard.Components do
   @doc """
   Renders a data table with search, columns, and row click actions.
   """
-  attr :id, :string, required: true
-  attr :rows, :list, required: true
-  attr :columns, :list, required: true
-  attr :row_click_event, :string, default: nil
-  attr :empty_text, :string, default: "No items match your criteria."
+  attr(:id, :string, required: true)
+  attr(:rows, :list, required: true)
+  attr(:columns, :list, required: true)
+  attr(:row_click_event, :string, default: nil)
+  attr(:empty_text, :string, default: "No items match your criteria.")
 
   def data_table(assigns) do
     ~H"""
@@ -160,16 +160,16 @@ defmodule Exoforge.Std.Dashboard.Components do
   end
 
   @doc """
-  Renders the 7-tab side inspector slide-over drawer matching game_producer_studio_fixed.html.
+  Renders the side inspector slide-over drawer with tabs from `Exoforge.DrawerRegistry`.
   """
-  attr :open, :boolean, default: false
-  attr :title, :string, default: "Entity Inspector"
-  attr :subtitle, :string, default: "Detailed account and telemetry properties"
-  attr :tabs, :list, default: []
-  attr :active_tab, :string, default: "overview"
-  attr :on_close, :string, default: "close_drawer"
-  attr :on_select_tab, :string, default: "select_drawer_tab"
-  slot :inner_block
+  attr(:open, :boolean, default: false)
+  attr(:title, :string, default: "Entity Inspector")
+  attr(:subtitle, :string, default: "Detailed account and telemetry properties")
+  attr(:tabs, :list, default: [])
+  attr(:active_tab, :string, default: "overview")
+  attr(:on_close, :string, default: "close_drawer")
+  attr(:on_select_tab, :string, default: "select_drawer_tab")
+  slot(:inner_block)
 
   def side_drawer(assigns) do
     ~H"""
@@ -230,10 +230,10 @@ defmodule Exoforge.Std.Dashboard.Components do
   @doc """
   Dynamic <Key, Value> attribute editor component.
   """
-  attr :attributes, :list, default: []
-  attr :on_add, :string, default: "add_attribute"
-  attr :on_delete, :string, default: "delete_attribute"
-  attr :on_save, :string, default: "save_attributes"
+  attr(:attributes, :list, default: [])
+  attr(:on_add, :string, default: "add_attribute")
+  attr(:on_delete, :string, default: "delete_attribute")
+  attr(:on_save, :string, default: "save_attributes")
 
   def attribute_editor(assigns) do
     ~H"""
@@ -289,13 +289,13 @@ defmodule Exoforge.Std.Dashboard.Components do
   @doc """
   Renders a modal dialog.
   """
-  attr :id, :string, required: true
-  attr :open, :boolean, default: false
-  attr :title, :string, required: true
-  attr :subtitle, :string, default: nil
-  attr :on_close, :string, default: "close_modal"
-  slot :inner_block
-  slot :footer
+  attr(:id, :string, required: true)
+  attr(:open, :boolean, default: false)
+  attr(:title, :string, required: true)
+  attr(:subtitle, :string, default: nil)
+  attr(:on_close, :string, default: "close_modal")
+  slot(:inner_block)
+  slot(:footer)
 
   def modal(assigns) do
     ~H"""
@@ -345,12 +345,12 @@ defmodule Exoforge.Std.Dashboard.Components do
   @doc """
   Command Palette (Cmd+K) modal component.
   """
-  attr :open, :boolean, default: false
-  attr :query, :string, default: ""
-  attr :results, :list, default: []
-  attr :on_close, :string, default: "close_cmd_palette"
-  attr :on_search, :string, default: "search_cmd_palette"
-  attr :on_select, :string, default: "select_cmd_item"
+  attr(:open, :boolean, default: false)
+  attr(:query, :string, default: "")
+  attr(:results, :list, default: [])
+  attr(:on_close, :string, default: "close_cmd_palette")
+  attr(:on_search, :string, default: "search_cmd_palette")
+  attr(:on_select, :string, default: "select_cmd_item")
 
   def command_palette(assigns) do
     ~H"""
@@ -417,19 +417,19 @@ defmodule Exoforge.Std.Dashboard.Components do
   Renders interactive service/action selection, dynamically generated parameter inputs,
   caller scopes configuration, and formatted execution feedback.
   """
-  attr :open, :boolean, default: false
-  attr :catalog, :list, default: []
-  attr :selected_service, :string, default: nil
-  attr :selected_action, :string, default: nil
-  attr :action_params, :map, default: %{}
-  attr :caller_scopes, :string, default: "admin, player"
-  attr :result, :any, default: nil
-  attr :latency_ms, :any, default: nil
-  attr :on_close, :string, default: "close_action_modal"
-  attr :on_select_service, :string, default: "select_action_service"
-  attr :on_select_action, :string, default: "select_action_name"
-  attr :on_change_form, :string, default: "change_action_form"
-  attr :on_dispatch, :string, default: "dispatch_action"
+  attr(:open, :boolean, default: false)
+  attr(:catalog, :list, default: [])
+  attr(:selected_service, :string, default: nil)
+  attr(:selected_action, :string, default: nil)
+  attr(:action_params, :map, default: %{})
+  attr(:caller_scopes, :string, default: "admin, player")
+  attr(:result, :any, default: nil)
+  attr(:latency_ms, :any, default: nil)
+  attr(:on_close, :string, default: "close_action_modal")
+  attr(:on_select_service, :string, default: "select_action_service")
+  attr(:on_select_action, :string, default: "select_action_name")
+  attr(:on_change_form, :string, default: "change_action_form")
+  attr(:on_dispatch, :string, default: "dispatch_action")
 
   def action_runner_modal(assigns) do
     current_svc =
@@ -467,7 +467,7 @@ defmodule Exoforge.Std.Dashboard.Components do
                 </div>
                 <div>
                   <h3 class="font-bold text-gray-900 text-base">Action Dispatcher &amp; Form Generator</h3>
-                  <p class="text-xs text-gray-500">Execute backend service actions across BEAM &amp; WASM plugins</p>
+                  <p class="text-xs text-gray-500">Execute backend service actions across installed plugins</p>
                 </div>
               </div>
               <button
@@ -540,15 +540,24 @@ defmodule Exoforge.Std.Dashboard.Components do
                   </span>
                   <div class="space-y-2">
                     <%= for param <- @current_act.params do %>
+                      <% p_type = normalize_param_type(param.type) %>
+                      <% p_optional = Map.get(param, :optional, false) || is_param_optional?(param.type) %>
                       <div>
                         <label class="flex items-center justify-between text-xs font-semibold text-gray-700 mb-1">
                           <span class="font-mono text-gray-900"><%= param.name %></span>
-                          <span class="text-[10px] text-gray-400 font-mono bg-gray-100 px-1.5 py-0.2 rounded">
-                            <%= param.type %>
-                          </span>
+                          <div class="flex items-center gap-1.5">
+                            <%= if p_optional do %>
+                              <span class="text-[9px] text-gray-400 font-bold uppercase bg-gray-100 px-1 py-0.2 rounded">optional</span>
+                            <% else %>
+                              <span class="text-[9px] text-purple-700 font-bold uppercase bg-purple-50 px-1 py-0.2 rounded">required</span>
+                            <% end %>
+                            <span class="text-[10px] text-gray-500 font-mono bg-gray-100 px-1.5 py-0.2 rounded">
+                              <%= p_type %>
+                            </span>
+                          </div>
                         </label>
 
-                        <%= case param.type do %>
+                        <%= case p_type do %>
                           <% t when t in [:integer, :float] -> %>
                             <input
                               type="number"
@@ -660,15 +669,15 @@ defmodule Exoforge.Std.Dashboard.Components do
   Renders a real-time console dock listening to :pg / EventDispatcher with
   pause/resume, topic search, payload viewer, and test simulator.
   """
-  attr :open, :boolean, default: false
-  attr :events, :list, default: []
-  attr :paused, :boolean, default: false
-  attr :filter_topic, :string, default: ""
-  attr :on_toggle, :string, default: "toggle_event_dock"
-  attr :on_pause, :string, default: "toggle_event_pause"
-  attr :on_clear, :string, default: "clear_events"
-  attr :on_filter, :string, default: "filter_event_dock"
-  attr :on_simulate, :string, default: "simulate_test_event"
+  attr(:open, :boolean, default: false)
+  attr(:events, :list, default: [])
+  attr(:paused, :boolean, default: false)
+  attr(:filter_topic, :string, default: "")
+  attr(:on_toggle, :string, default: "toggle_event_dock")
+  attr(:on_pause, :string, default: "toggle_event_pause")
+  attr(:on_clear, :string, default: "clear_events")
+  attr(:on_filter, :string, default: "filter_event_dock")
+  attr(:on_simulate, :string, default: "simulate_test_event")
 
   def event_stream_dock(assigns) do
     ~H"""
@@ -803,5 +812,15 @@ defmodule Exoforge.Std.Dashboard.Components do
       true -> data
     end
   end
+
+  defp normalize_param_type([{:type, t} | _]), do: t
+  defp normalize_param_type(t) when is_atom(t), do: t
+  defp normalize_param_type(_), do: :string
+
+  defp is_param_optional?(kw) when is_list(kw), do: Keyword.get(kw, :optional, false)
+  defp is_param_optional?(_), do: false
 end
 
+defimpl Phoenix.HTML.Safe, for: Version do
+  def to_iodata(%Version{} = version), do: Version.to_string(version)
+end

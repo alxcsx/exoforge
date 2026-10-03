@@ -17,6 +17,7 @@ defmodule Exoforge.DashboardLiveViewTest do
 
   setup do
     PluginRegistry.initialize_ets()
+
     unless Process.whereis(DbManager) do
       start_supervised!({DbManager, [driver: :sandbox]})
     end
@@ -42,7 +43,10 @@ defmodule Exoforge.DashboardLiveViewTest do
       name: "exoforge_std_database",
       version: "0.1.0",
       entry_point: Exoforge.Std.Database,
-      provides: [Exoforge.Std.Services.Database, Exoforge.Std.Services.Lldb]
+      provides: [Exoforge.Std.Services.Database, Exoforge.Std.Services.Lldb],
+      category: "Storage",
+      system: true,
+      dashboard_view: %{id: :database, title: "Database Engine", icon: "🗄️"}
     })
 
     PluginRegistry.register(%Exoforge.Domain.Manifest{
@@ -51,7 +55,9 @@ defmodule Exoforge.DashboardLiveViewTest do
       version: "0.1.0",
       entry_point: Exoforge.Std.Dashboard,
       provides: [Exoforge.Std.Services.DashboardView],
-      dependencies: [Exoforge.Std.Services.Database]
+      dependencies: [Exoforge.Std.Services.Database],
+      category: "Studio",
+      dashboard_view: %{id: :dashboard, title: "Producer Studio", icon: "📊"}
     })
 
     PluginRegistry.register(%Exoforge.Domain.Manifest{
@@ -60,8 +66,16 @@ defmodule Exoforge.DashboardLiveViewTest do
       version: "0.1.0",
       entry_point: Exoforge.Std.Auth,
       provides: [Exoforge.Std.Services.Auth],
-      dependencies: [Exoforge.Std.Services.Database]
+      dependencies: [Exoforge.Std.Services.Database],
+      category: "Identity",
+      dashboard_view: %{
+        id: :auth,
+        title: "Users & Auth",
+        icon: "🛡️",
+        module: Exoforge.Std.Dashboard.Views.AuthView
+      }
     })
+
     Exoforge.Std.Auth.init_schema()
 
     PluginRegistry.register(%Exoforge.Domain.Manifest{
@@ -70,9 +84,54 @@ defmodule Exoforge.DashboardLiveViewTest do
       version: "0.1.0",
       entry_point: Exoforge.Std.PlayerData,
       provides: [Exoforge.Std.Services.PlayerData],
-      dependencies: [Exoforge.Std.Services.Database, Exoforge.Std.Services.Auth]
+      dependencies: [Exoforge.Std.Services.Database, Exoforge.Std.Services.Auth],
+      category: "LiveOps",
+      dashboard_view: %{id: :player_data, title: "Player Data", icon: "👤"}
     })
+
     Exoforge.Std.PlayerData.init_schema()
+
+    PluginRegistry.register(%Exoforge.Domain.Manifest{
+      id: :exoforge_std_ws,
+      name: "exoforge_std_ws",
+      version: Version.parse!("0.1.0"),
+      entry_point: Exoforge.Std.Ws,
+      provides: [Exoforge.Std.Services.Ws],
+      dependencies: [Exoforge.Std.Services.Auth],
+      category: "Ingress",
+      system: true,
+      dashboard_view: %{id: :ws, title: "WebSocket Gateway", icon: "🔌"}
+    })
+
+    PluginRegistry.register(%Exoforge.Domain.Manifest{
+      id: :combat_wasm,
+      name: "combat_wasm",
+      version: Version.parse!("1.0.0"),
+      entry_point: :combat_wasm,
+      type: :wasm,
+      provides: [Exoforge.Std.Services.Combat],
+      dependencies: [],
+      category: "Gameplay",
+      dashboard_view: %{id: :combat, title: "Combat Sandbox", icon: "⚔️"}
+    })
+
+    PluginRegistry.register(%Exoforge.Domain.Manifest{
+      id: :exoforge_std_plugin_manager,
+      name: "exoforge_std_plugin_manager",
+      version: Version.parse!("0.1.0"),
+      entry_point: Exoforge.Std.PluginManager,
+      provides: [Exoforge.Std.Services.PluginManager],
+      dependencies: [],
+      category: "Management",
+      dashboard_view: %{
+        id: :plugin_manager,
+        title: "Plugin Manager",
+        icon: "📦",
+        module: Exoforge.Std.Dashboard.Views.PluginManagerView
+      }
+    })
+
+    Exoforge.Std.Dashboard.Preferences.ensure_schema()
 
     :ok
   end
@@ -132,7 +191,7 @@ defmodule Exoforge.DashboardLiveViewTest do
         """)
 
       assert html =~ "Player Details"
-      assert html =~ "Overview &amp; Stats"
+      assert html =~ "Overview"
       assert html =~ "Attributes"
       assert html =~ "Inner overview content"
     end
@@ -152,55 +211,56 @@ defmodule Exoforge.DashboardLiveViewTest do
   end
 
   describe "StudioLive Interactive LiveView" do
-    test "mounts and displays Exoforge Shell header and metric cards" do
-      conn = build_conn() |> Plug.Test.init_test_session(%{})
+    test "mounts and displays Exoforge Shell header and platform metric cards" do
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{
+          "admin_player_id" => "admin",
+          "admin_scopes" => ["admin"]
+        })
+
       {:ok, view, html} = live(conn, "/")
 
       assert html =~ "EXOFORGE"
       assert html =~ "Overview"
-      assert html =~ "Active Players"
-      assert html =~ "Economy &amp; Gross LTV"
-      assert html =~ "Active Game Services"
-      assert html =~ "Gateway &amp; Latency"
+      assert html =~ "Active Extensions"
+      assert html =~ "Declared Resources"
+      assert html =~ "Callable Actions"
+      assert html =~ "Cluster Status"
       assert html =~ "Live Game Features"
 
-      # Switch to Players tab - starts with 0 players
-      html = render_click(view, "switch_tab", %{"tab" => "players"})
-      assert html =~ "Player Directory &amp; Profile Management"
-      assert html =~ "No players registered yet"
+      # Pin extension (Users & Auth) to top bar
+      html = render_click(view, "pin_extension", %{"id" => "exoforge_std_auth"})
+      assert html =~ "Pinned exoforge_std_auth to top navigation bar"
+      assert html =~ "Users &amp; Auth" or html =~ "Users & Auth"
 
-      # Register a new player via Quick Action (hooked to Auth)
-      html = render_click(view, "quick_action", %{"action" => "create_sample_player"})
-      assert html =~ "Registered new player"
-
-      # Search filter players
-      html = render_change(view, "filter_players", %{"query" => "Hero", "status" => "all"})
-      assert html =~ "Hero_"
+      # Switch to pinned Users & Auth tab
+      html = render_click(view, "switch_tab", %{"tab" => "exoforge_std_auth"})
+      assert html =~ "Users &amp; Authentication" or html =~ "Users & Authentication"
+      assert html =~ "Registered Accounts"
+      assert html =~ "Active Tokens"
 
       # Open Command Palette (Cmd+K)
       html = render_click(view, "open_cmd_palette", %{})
       assert html =~ "Search plugins, resources, players, actions... (Cmd+K)"
 
-      # Search in Command Palette
-      html = render_change(view, "search_cmd_palette", %{"query" => "combat"})
-      assert html =~ "Quick Action: Simulate Combat Attack"
+      # Search in Command Palette for dynamic action
+      html = render_change(view, "search_cmd_palette", %{"query" => "register"})
+      assert html =~ "Action: auth.register"
 
-      # Open entity side-drawer for created player
-      players = Exoforge.PluginRegistry.fetch_resource_rows(:players)
-      assert length(players) >= 1
-      created_id = hd(players).id
-
-      html = render_click(view, "inspect_player", %{"id" => created_id})
-      assert html =~ "Player Profile: Hero_"
-      assert html =~ "Overview &amp; Stats"
-
-      # Switch drawer tab to attributes
-      html = render_click(view, "select_drawer_tab", %{"tab" => "attributes"})
-      assert html =~ "Dynamic Attributes"
+      # Test unpinning logic
+      html = render_click(view, "unpin_extension", %{"id" => "exoforge_std_auth"})
+      assert html =~ "Unpinned exoforge_std_auth from top bar"
     end
 
     test "receives real-time events pushed by EventDispatcher and updates feed" do
-      conn = build_conn() |> Plug.Test.init_test_session(%{})
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{
+          "admin_player_id" => "admin",
+          "admin_scopes" => ["admin"]
+        })
+
       {:ok, view, _html} = live(conn, "/")
 
       # Simulate kernel broadcasting an event
@@ -214,7 +274,13 @@ defmodule Exoforge.DashboardLiveViewTest do
     end
 
     test "action runner modal opens, generates form inputs, and dispatches actions" do
-      conn = build_conn() |> Plug.Test.init_test_session(%{})
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{
+          "admin_player_id" => "admin",
+          "admin_scopes" => ["admin"]
+        })
+
       {:ok, view, _html} = live(conn, "/")
 
       # 1. Open action runner modal
@@ -243,10 +309,24 @@ defmodule Exoforge.DashboardLiveViewTest do
       assert html =~ "Execution Output"
       assert html =~ "SUCCESS (200)"
       assert html =~ "healthy" or html =~ "ok" or html =~ "status"
+
+      # 5. Verify dynamic form input generation with required and optional badges
+      _html = render_change(view, "select_action_service", %{"service" => "auth"})
+      html = render_change(view, "select_action_name", %{"action" => "issue_token"})
+      assert html =~ "player_id"
+      assert html =~ "required"
+      assert html =~ "param_player_id"
+      assert html =~ "optional"
     end
 
     test "cluster event stream dock toggles, pauses, clears, and streams events" do
-      conn = build_conn() |> Plug.Test.init_test_session(%{})
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{
+          "admin_player_id" => "admin",
+          "admin_scopes" => ["admin"]
+        })
+
       {:ok, view, _html} = live(conn, "/")
 
       # 1. Open event dock
@@ -274,6 +354,258 @@ defmodule Exoforge.DashboardLiveViewTest do
       # 5. Clear events
       html = render_click(view, "clear_events", %{})
       assert html =~ "Waiting for live cluster events"
+    end
+
+    test "mounts GenericExtensionView for extensions without custom LiveComponent" do
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{
+          "admin_player_id" => "admin",
+          "admin_scopes" => ["admin"]
+        })
+
+      {:ok, view, _html} = live(conn, "/")
+
+      # Switch to player_data extension tab
+      html = render_click(view, "switch_tab", %{"tab" => "exoforge_std_player_data"})
+      assert html =~ "Interactive Action Control Panel"
+      assert html =~ "create_player" or html =~ "Run Action"
+      assert html =~ "Execute typed backend RPCs"
+    end
+
+    test "switching tab to exoforge_std_ws renders GenericExtensionView without Version struct error" do
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{
+          "admin_player_id" => "admin",
+          "admin_scopes" => ["admin"]
+        })
+
+      {:ok, view, _html} = live(conn, "/")
+
+      # Switch to exoforge_std_ws tab (which has a %Version{} struct in manifest)
+      html = render_click(view, "switch_tab", %{"tab" => "exoforge_std_ws"})
+      assert html =~ "v0.1.0"
+      assert html =~ "Provides:"
+      assert html =~ "WebSocket" or html =~ "ws" or html =~ "Ws"
+      refute html =~ "Protocol.UndefinedError"
+    end
+
+    test "extensions registry tab renders with search and category filtering" do
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{
+          "admin_player_id" => "admin",
+          "admin_scopes" => ["admin"]
+        })
+
+      {:ok, view, _html} = live(conn, "/")
+
+      # Switch to extensions tab
+      html = render_click(view, "switch_tab", %{"tab" => "apps"})
+      assert html =~ "Extensions Registry"
+      assert html =~ "combat_wasm"
+      assert html =~ "exoforge_std_ws"
+
+      # 1. Search extensions
+      html = render_change(view, "search_extensions", %{"query" => "combat"})
+      assert html =~ "Combat Sandbox"
+      refute html =~ "WebSocket Gateway"
+
+      # 2. Clear search and filter by category
+      html = render_change(view, "search_extensions", %{"query" => ""})
+      assert html =~ "WebSocket Gateway"
+
+      html = render_click(view, "filter_extension_category", %{"category" => "ingress"})
+      assert html =~ "WebSocket Gateway"
+      refute html =~ "Combat Sandbox"
+
+      # 3. Search yielding no results shows empty state with Reset Filters button
+      html = render_change(view, "search_extensions", %{"query" => "nonexistent_extension_xyz"})
+      assert html =~ "No extensions match your filter"
+      assert html =~ "Reset Filters"
+
+      # 4. Reset filters
+      _html = render_click(view, "filter_extension_category", %{"category" => "all"})
+      # Search input still holds query until cleared
+      html = render_change(view, "search_extensions", %{"query" => ""})
+      assert html =~ "Combat Sandbox"
+      assert html =~ "WebSocket Gateway"
+    end
+
+    test "toast notices auto-dismiss" do
+      session = %{"admin_player_id" => "toast_user", "admin_scopes" => ["admin"]}
+      conn = build_conn() |> Plug.Test.init_test_session(session)
+      {:ok, view, _html} = live(conn, "/")
+
+      html = render_change(view, "switch_env", %{"env" => "Dev"})
+      assert html =~ "Switched active environment to Dev"
+
+      send(view.pid, {:clear_toast, :info})
+      refute render(view) =~ "Switched active environment to Dev"
+    end
+
+    test "pinned extensions persist across remounts" do
+      session = %{"admin_player_id" => "pin_persist_user", "admin_scopes" => ["admin"]}
+
+      conn = build_conn() |> Plug.Test.init_test_session(session)
+      {:ok, view, _html} = live(conn, "/")
+      render_click(view, "pin_extension", %{"id" => "exoforge_std_ws"})
+
+      conn2 = build_conn() |> Plug.Test.init_test_session(session)
+      {:ok, _view2, html} = live(conn2, "/")
+      assert html =~ "WebSocket Gateway"
+    end
+
+    test "supports pinning extensions to the top navigation bar" do
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{
+          "admin_player_id" => "admin",
+          "admin_scopes" => ["admin"]
+        })
+
+      {:ok, view, _html} = live(conn, "/")
+
+      # Pin exoforge_std_ws and combat_wasm
+      html = render_click(view, "pin_extension", %{"id" => "exoforge_std_ws"})
+      assert html =~ "WebSocket"
+
+      html = render_click(view, "pin_extension", %{"id" => "combat_wasm"})
+      assert html =~ "Combat"
+
+      # Unpin combat_wasm
+      html = render_click(view, "unpin_extension", %{"id" => "combat_wasm"})
+      assert html =~ "Unpinned combat_wasm from top bar"
+    end
+
+    test "keyboard shortcuts: Cmd+K toggles Command Palette and Escape closes it" do
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{
+          "admin_player_id" => "admin",
+          "admin_scopes" => ["admin"]
+        })
+
+      {:ok, view, _html} = live(conn, "/")
+
+      # 1. Trigger Cmd+K keydown event
+      html = render_hook(view, "handle_key", %{"key" => "k", "metaKey" => true})
+      assert html =~ "Search plugins, resources, players, actions... (Cmd+K)"
+
+      # 2. Trigger Escape keydown event to close modal
+      html = render_hook(view, "handle_key", %{"key" => "Escape"})
+      refute html =~ "Search plugins, resources, players, actions... (Cmd+K)"
+    end
+
+    test "quick environment switcher updates environment badge and state" do
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{
+          "admin_player_id" => "admin",
+          "admin_scopes" => ["admin"]
+        })
+
+      {:ok, view, _html} = live(conn, "/")
+
+      # Switch environment to Dev
+      html = render_change(view, "switch_env", %{"env" => "Dev"})
+      assert html =~ "Switched active environment to Dev"
+      assert html =~ "DEV"
+
+      # Switch environment to Staging
+      html = render_change(view, "switch_env", %{"env" => "Staging"})
+      assert html =~ "Switched active environment to Staging"
+      assert html =~ "STAGING"
+    end
+
+    test "topbar navigation orders overview first, extensions second, and enforces pin limit" do
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{
+          "admin_player_id" => "admin",
+          "admin_scopes" => ["admin"]
+        })
+
+      {:ok, view, html} = live(conn, "/")
+
+      # Verify Overview and Extensions order in navigation
+      assert html =~ "Overview"
+      assert html =~ "Extensions"
+
+      # Overview appears before Extensions in the rendered HTML
+      {overview_pos, _} = :binary.match(html, "Overview")
+      {extensions_pos, _} = :binary.match(html, "Extensions")
+      assert overview_pos < extensions_pos
+
+      # Attempt to pin beyond the limit
+      # Max pinned is 8
+      for i <- 1..10 do
+        render_click(view, "pin_extension", %{"id" => "ext_#{i}"})
+      end
+
+      # Should hit the maximum limit
+      html = render_click(view, "pin_extension", %{"id" => "ext_overflow"})
+      assert html =~ "Maximum of 8 pinned extensions reached"
+    end
+
+    test "stateful entity runtime panel displays cluster actors and supports refresh" do
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{
+          "admin_player_id" => "admin",
+          "admin_scopes" => ["admin"]
+        })
+
+      {:ok, view, html} = live(conn, "/")
+
+      # Overview includes the new Actor panel
+      assert html =~ "Stateful Entity Actors"
+
+      # Refresh entities event
+      html = render_click(view, "refresh_entities", %{})
+      assert html =~ "Stateful Entity Actors"
+      assert html =~ "Refresh"
+    end
+
+    test "plugin manager extension view displays cluster runtime telemetry, inspector drawer, and modals" do
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{
+          "admin_player_id" => "admin",
+          "admin_scopes" => ["admin"]
+        })
+
+      {:ok, view, _html} = live(conn, "/")
+
+      # Pin and switch to Plugin Manager tab
+      render_click(view, "pin_extension", %{"id" => "exoforge_std_plugin_manager"})
+      html = render_click(view, "switch_tab", %{"tab" => "exoforge_std_plugin_manager"})
+
+      assert html =~ "Plugin Manager &amp; Cluster Runtime" or html =~ "Plugin Manager & Cluster Runtime"
+      assert html =~ "Installed Plugins"
+      assert html =~ "BEAM Memory &amp; Load" or html =~ "BEAM Memory & Load"
+      assert html =~ "Cluster Node"
+      assert html =~ "Active Entities"
+      assert html =~ "Upload WASM Plugin"
+      assert html =~ "Restart Cluster"
+
+      # Open upload modal via PluginManagerView component
+      html = view |> element("button", "Upload WASM Plugin") |> render_click()
+      assert html =~ "Upload C# WASM Plugin"
+      assert html =~ "WASM Binary (.wasm)"
+
+      # Close upload modal
+      html = view |> element("button", "Cancel") |> render_click()
+      refute html =~ "Upload C# WASM Plugin"
+
+      # Open restart cluster modal
+      html = view |> element("button", "Restart Cluster") |> render_click()
+      assert html =~ "Restart Cluster Supervision?"
+
+      # Close restart modal
+      html = view |> element("button", "Cancel") |> render_click()
+      refute html =~ "Restart Cluster Supervision?"
     end
   end
 end

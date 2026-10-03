@@ -17,33 +17,48 @@ defmodule Exoforge.Std.Dashboard.ApiController do
     json(conn, data)
   end
 
-  def players(conn, _params) do
-    players = Exoforge.PluginRegistry.fetch_resource_rows(:players)
-    json(conn, %{players: players})
+  def resource_rows(conn, %{"name" => name}) do
+    json(conn, %{rows: PluginRegistry.fetch_resource_rows(name)})
   end
 
-  def create_player(conn, params) do
-    player_id =
-      Map.get(params, "player_id") || "p_#{System.unique_integer([:positive])}"
+  def create_resource_row(conn, %{"name" => name} = params) do
+    case PluginRegistry.fetch_resource(name) do
+      {:ok, %{plugin_id: plugin_id, resource: res}} ->
+        case create_action(res) do
+          nil ->
+            conn
+            |> put_status(501)
+            |> json(%{status: "error", error: "resource_has_no_create_action"})
 
-    profile = Map.get(params, "profile") || %{}
+          action ->
+            case ActionDispatcher.dispatch(plugin_id, action, Map.drop(params, ["name"])) do
+              {:ok, result} ->
+                json(conn, %{status: "ok", data: result})
 
-    case ActionDispatcher.dispatch(:player_data, :create_player, %{
-           player_id: player_id,
-           profile: profile
-         }) do
-      {:ok, result} ->
-        json(conn, %{status: "ok", player: result.player})
+              :ok ->
+                json(conn, %{status: "ok"})
+
+              {:error, reason} ->
+                conn |> put_status(400) |> json(%{status: "error", error: inspect(reason)})
+            end
+        end
 
       _ ->
-        _ =
-          ActionDispatcher.dispatch(:database, :execute, %{
-            plugin: :player_data,
-            operation: "INSERT INTO players (id, player_id, profile, state) VALUES ($1, $2, $3, $4)",
-            arguments: [player_id, player_id, Jason.encode!(profile), "active"]
-          })
+        conn
+        |> put_status(404)
+        |> json(%{status: "error", error: "resource_not_found"})
+    end
+  end
 
-        json(conn, %{status: "ok", player: Map.put(profile, "player_id", player_id)})
+  defp create_action(res) do
+    res
+    |> Map.get(:actions, [])
+    |> List.wrap()
+    |> Enum.map(&to_string/1)
+    |> Enum.find(&String.starts_with?(&1, "create_"))
+    |> case do
+      nil -> nil
+      name -> String.to_existing_atom(name)
     end
   end
 
@@ -146,64 +161,82 @@ defmodule Exoforge.Std.Dashboard.ApiController do
     end
   end
 
-  def verify_admin_auth(conn) do
-    auth_header = Plug.Conn.get_req_header(conn, "authorization") |> List.first()
-    dev_header = Plug.Conn.get_req_header(conn, "x-admin-token") |> List.first()
-    query_token = Map.get(conn.params || %{}, "token")
+  @doc "Studio gate: an admin or studio session/token is required."
+  def verify_studio_auth(conn), do: verify_auth(conn, 2)
 
-    explicit_token =
-      cond do
-        is_binary(auth_header) and String.starts_with?(auth_header, "Bearer ") ->
-          String.replace_prefix(auth_header, "Bearer ", "")
+  @doc "Admin gate: an admin session/token is required."
+  def verify_admin_auth(conn), do: verify_auth(conn, 3)
 
-        is_binary(auth_header) and auth_header != "" ->
-          auth_header
+  defp verify_auth(conn, min_rank) do
+    case session_auth(conn) do
+      {:ok, auth} ->
+        if Exoforge.Auth.Roles.rank_of(auth.scopes) >= min_rank,
+          do: {:ok, auth},
+          else: {:error, :forbidden}
 
-        is_binary(dev_header) and dev_header != "" ->
-          dev_header
-
-        is_binary(query_token) and query_token != "" ->
-          query_token
-
-        true ->
-          nil
-      end
-
-    has_auth_plugin = PluginRegistry.fetch_service(:auth) != nil
-
-    token_to_verify =
-      cond do
-        explicit_token != nil ->
-          explicit_token
-
-        not has_auth_plugin ->
-          "dev:local"
-
-        Application.get_env(:exoforge, :require_admin_auth, false) ->
-          nil
-
-        true ->
-          "dev:admin"
-      end
-
-    if is_nil(token_to_verify) do
-      {:error, :unauthenticated}
-    else
-      if not has_auth_plugin do
-        {:ok, %{player_id: "local_dev", scopes: ["admin"]}}
-      else
-        case ActionDispatcher.dispatch(:auth, :authenticate, %{token: token_to_verify}) do
-          {:ok, %{player_id: player_id, scopes: scopes}} ->
-            if "admin" in scopes or player_id == "admin" do
-              {:ok, %{player_id: player_id, scopes: scopes}}
-            else
-              {:error, :forbidden}
-            end
-
-          _ ->
-            {:error, :unauthenticated}
-        end
-      end
+      :error ->
+        token_auth(conn, min_rank)
     end
+  end
+
+  # A browser session established by the login controller grants Studio access,
+  # so the Studio's own SSE/API calls work without a bearer token.
+  defp session_auth(conn) do
+    if Map.get(conn.private, :plug_session_fetch) == :done do
+      case get_session(conn, Exoforge.Std.Dashboard.Auth.player_id_key()) do
+        player_id when is_binary(player_id) and player_id != "" ->
+          scopes =
+            get_session(conn, Exoforge.Std.Dashboard.Auth.scopes_key()) ||
+              [Exoforge.Auth.Roles.admin()]
+
+          {:ok, %{player_id: player_id, scopes: scopes, role: Exoforge.Auth.Roles.role(scopes)}}
+
+        _ ->
+          :error
+      end
+    else
+      :error
+    end
+  end
+
+  defp token_auth(conn, min_rank) do
+    token = explicit_token(conn)
+
+    cond do
+      is_binary(token) ->
+        do_token_auth(token, min_rank)
+
+      PluginRegistry.fetch_service(:auth) == nil ->
+        {:ok, %{player_id: "local_dev", scopes: [Exoforge.Auth.Roles.admin()], role: :admin}}
+
+      Exoforge.Config.require_admin_auth?() ->
+        {:error, :unauthenticated}
+
+      Exoforge.Config.allow_dev_tokens?() ->
+        do_token_auth("dev:admin", min_rank)
+
+      true ->
+        {:error, :unauthenticated}
+    end
+  end
+
+  defp do_token_auth(token, min_rank) do
+    case ActionDispatcher.dispatch(:auth, :authenticate, %{token: token}) do
+      {:ok, %{player_id: player_id, scopes: scopes}} ->
+        if Exoforge.Auth.Roles.rank_of(scopes) >= min_rank do
+          {:ok, %{player_id: player_id, scopes: scopes, role: Exoforge.Auth.Roles.role(scopes)}}
+        else
+          {:error, :forbidden}
+        end
+
+      _ ->
+        {:error, :unauthenticated}
+    end
+  end
+
+  defp explicit_token(conn) do
+    Exoforge.Auth.Request.bearer(conn) ||
+      Exoforge.Auth.Request.header(conn, "x-admin-token") ||
+      Exoforge.Auth.Request.query(conn)
   end
 end

@@ -125,7 +125,7 @@ defmodule Exoforge.Std.Dashboard.ResourceLive do
             <code class="text-primary-600 bg-primary-50 px-2 py-0.5 rounded-lg text-sm"><%= @resource_name %></code>
           </h2>
           <p class="text-xs text-gray-500 mt-1">
-            Primary Key: <code><%= @resource[:primary_key] || "id" %></code> • Supervised by BEAM Kernel
+            Primary Key: <code><%= @resource[:primary_key] || "id" %></code> • Supervised by Exoforge Kernel
           </p>
         </div>
         <div class="flex items-center gap-2">

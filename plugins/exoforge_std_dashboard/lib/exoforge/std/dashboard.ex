@@ -7,11 +7,13 @@ defmodule Exoforge.Std.Dashboard do
   use Exoforge.Plugin, provides: [:dashboard_view]
 
   @manifest %{
-    dependencies: [Exoforge.Std.Services.Database]
+    dependencies: [Exoforge.Std.Services.Database],
+    category: "Studio",
+    dashboard_view: %{id: :dashboard, title: "Producer Studio", icon: "📊"}
   }
 
   def children do
-    port = Application.get_env(:exoforge, :dashboard_port, 4005)
+    port = Exoforge.Endpoints.dashboard_port()
 
     endpoint_config =
       Application.get_env(:exoforge_std_dashboard, Exoforge.Std.Dashboard.Endpoint, [])
@@ -27,9 +29,15 @@ defmodule Exoforge.Std.Dashboard do
     ]
   end
 
+  def on_init(_manifest) do
+    Exoforge.Std.Dashboard.Preferences.ensure_schema()
+    :ok
+  end
+
   @impl true
   defaction get_dashboard_mount(_payload) do
-    {:ok, %{mount: {:endpoint, Exoforge.Std.Dashboard.Endpoint}, router: Exoforge.Std.Dashboard.Router}}
+    {:ok,
+     %{mount: {:endpoint, Exoforge.Std.Dashboard.Endpoint}, router: Exoforge.Std.Dashboard.Router}}
   end
 
   @impl true
