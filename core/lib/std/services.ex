@@ -48,19 +48,50 @@ defmodule Exoforge.Std.Services do
     end
   end
 
-  defservice dashboard_view do
-    @moduledoc "Dashboard view and telemetry contract."
+  defservice dashboard do
+    @moduledoc "Dashboard host and studio server contract."
 
     @doc "Retrieves dashboard mount specification: {:live, Module} | {:hook, config} | {:iframe, config}"
     action :get_dashboard_mount do
-      params(view_id: :atom)
+      params(view_id: [type: :atom, optional: true])
       returns(mount: :term)
       scope(:server_only)
     end
 
     @doc "Retrieves data payload for hydrating the dashboard view."
     action :get_dashboard_data do
-      params(view_id: :atom)
+      params(view_id: [type: :atom, optional: true])
+      returns(data: :map)
+      scope(:server_only)
+    end
+  end
+
+  defservice dashboard_view do
+    @moduledoc "Dashboard view and telemetry contract."
+
+    @doc "Resolves the LiveView component module for a given service or extension id."
+    action :resolve_view do
+      params(id: :term)
+      returns(module: :term)
+      scope(:server_only)
+    end
+
+    @doc "Lists all registered custom dashboard view modules."
+    action :list_views do
+      returns(views: [:map])
+      scope(:server_only)
+    end
+
+    @doc "Retrieves dashboard mount specification: {:live, Module} | {:hook, config} | {:iframe, config}"
+    action :get_dashboard_mount do
+      params(view_id: [type: :atom, optional: true])
+      returns(mount: :term)
+      scope(:server_only)
+    end
+
+    @doc "Retrieves data payload for hydrating the dashboard view."
+    action :get_dashboard_data do
+      params(view_id: [type: :atom, optional: true])
       returns(data: :map)
       scope(:server_only)
     end

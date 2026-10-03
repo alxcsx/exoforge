@@ -24,7 +24,7 @@ test: test-core test-plugins test-system test-sdk
 test-core:
 	(cd core && mix test)
 
-# Test all 7 standard plugins
+# Test all standard plugins
 test-plugins:
 	(cd plugins/exoforge_std_database && mix test)
 	(cd plugins/exoforge_std_auth && mix test)
@@ -32,6 +32,7 @@ test-plugins:
 	(cd plugins/exoforge_std_http && mix test)
 	(cd plugins/exoforge_std_ws && mix test)
 	(cd plugins/exoforge_std_dashboard && mix test)
+	(cd plugins/exoforge_std_dashboard_views && mix test)
 	(cd plugins/exoforge_std_plugin_manager && mix test)
 
 # Test root system integration

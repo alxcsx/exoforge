@@ -14,7 +14,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
   @impl true
   def mount(_params, session, socket) do
-    player_id = Exoforge.Std.Dashboard.Auth.player_id(session)
+    player_id = session["admin_player_id"] || session[:admin_player_id] || "studio"
 
     if connected?(socket) do
       try do
@@ -904,8 +904,8 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     |> Macro.camelize()
   end
 
-  # Resolves a custom LiveView for an extension: an explicit `:module` in its
-  # dashboard_view, or the conventional `Views.<Camelized view id>` module.
+  # Resolves a custom LiveView/LiveComponent for an extension: an explicit `:module` in its
+  # dashboard_view, dynamic lookup via `:dashboard_view` service contract, or conventional module.
   defp custom_view_module(ext) do
     dv = ext.dashboard_view
 
@@ -914,13 +914,19 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         dv[:module]
 
       is_map(dv) and not is_nil(dv[:id]) ->
-        mod =
-          Module.concat([
-            Exoforge.Std.Dashboard.Views,
-            Macro.camelize(to_string(dv[:id])) <> "View"
-          ])
+        case Exoforge.ActionDispatcher.dispatch(:dashboard_view, :resolve_view, %{id: dv[:id]}) do
+          {:ok, %{module: mod}} when is_atom(mod) and not is_nil(mod) ->
+            if Code.ensure_loaded?(mod), do: mod, else: nil
 
-        if Code.ensure_loaded?(mod), do: mod, else: nil
+          _ ->
+            mod =
+              Module.concat([
+                Exoforge.Std.DashboardViews,
+                Macro.camelize(to_string(dv[:id])) <> "View"
+              ])
+
+            if Code.ensure_loaded?(mod), do: mod, else: nil
+        end
 
       true ->
         nil

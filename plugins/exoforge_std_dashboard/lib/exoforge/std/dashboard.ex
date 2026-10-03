@@ -1,13 +1,14 @@
 defmodule Exoforge.Std.Dashboard do
   @moduledoc """
-  Standard Dashboard plugin for Exoforge.
-  Provides the :dashboard_view contract.
-  Mounts Phoenix LiveView Endpoint backed by Bandit to serve the Exoforge Game Producer & Designer Studio.
+  Standard Dashboard system plugin for Exoforge.
+  Provides the :dashboard contract and mounts the Phoenix LiveView Endpoint
+  backed by Bandit to host the Exoforge Game Producer & Designer Studio.
   """
-  use Exoforge.Plugin, provides: [:dashboard_view]
+  use Exoforge.Plugin, provides: [:dashboard]
 
   @manifest %{
-    dependencies: [Exoforge.Std.Services.Database],
+    system: true,
+    dependencies: [],
     category: "Studio",
     dashboard_view: %{id: :dashboard, title: "Producer Studio", icon: "📊"}
   }

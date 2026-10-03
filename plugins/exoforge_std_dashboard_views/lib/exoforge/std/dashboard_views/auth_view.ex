@@ -1,7 +1,7 @@
-defmodule Exoforge.Std.Dashboard.Views.AuthView do
+defmodule Exoforge.Std.DashboardViews.AuthView do
   @moduledoc """
   Phoenix LiveComponent providing the dynamic Producer & Designer Studio visualization
-  for the Authentication and Identity extension (`exoforge_std_auth`).
+  for the Authentication and Identity service (:auth).
   """
   use Phoenix.LiveComponent
   alias Exoforge.ActionDispatcher
@@ -706,4 +706,13 @@ defmodule Exoforge.Std.Dashboard.Views.AuthView do
     </div>
     """
   end
+end
+
+defmodule Exoforge.Std.Dashboard.Views.AuthView do
+  @moduledoc false
+  use Phoenix.LiveComponent
+  def render(assigns), do: Exoforge.Std.DashboardViews.AuthView.render(assigns)
+  def mount(socket), do: Exoforge.Std.DashboardViews.AuthView.mount(socket)
+  def update(assigns, socket), do: Exoforge.Std.DashboardViews.AuthView.update(assigns, socket)
+  def handle_event(event, params, socket), do: Exoforge.Std.DashboardViews.AuthView.handle_event(event, params, socket)
 end

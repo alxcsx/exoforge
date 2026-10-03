@@ -34,9 +34,13 @@ defmodule Exoforge.SystemIntegrationTest do
       assert ws != nil
       assert ws.id == :exoforge_std_ws
 
-      dashboard = PluginRegistry.fetch_service(:dashboard_view)
+      dashboard = PluginRegistry.fetch_service(:dashboard)
       assert dashboard != nil
       assert dashboard.id == :exoforge_std_dashboard
+
+      dashboard_views = PluginRegistry.fetch_service(:dashboard_view)
+      assert dashboard_views != nil
+      assert dashboard_views.id == :exoforge_std_dashboard_views
 
       combat = PluginRegistry.fetch_service(:combat)
       assert combat != nil
@@ -112,10 +116,14 @@ defmodule Exoforge.SystemIntegrationTest do
 
       # 6. Verify Dashboard overview can see everything
       assert {:ok, %{data: overview}} =
-               ActionDispatcher.dispatch(:dashboard_view, :get_dashboard_data, %{view_id: :main})
+               ActionDispatcher.dispatch(:dashboard, :get_dashboard_data, %{view_id: :main})
 
       assert overview.plugins_count >= 6
       assert overview.status == "running"
+
+      # 7. Verify dynamic view resolution via dashboard_view
+      assert {:ok, %{module: _}} =
+               ActionDispatcher.dispatch(:dashboard_view, :resolve_view, %{id: :player_data})
     end
   end
 end

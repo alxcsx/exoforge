@@ -32,19 +32,9 @@ defmodule Exoforge.Std.Dashboard.Router do
       pass: ["application/json"],
       json_decoder: Jason
     )
-
-    plug(:verify_studio_access)
   end
 
-  scope "/", Exoforge.Std.Dashboard do
-    pipe_through(:browser)
-
-    get("/login", AuthController, :login_form)
-    post("/login", AuthController, :login)
-    get("/logout", AuthController, :logout)
-  end
-
-  live_session :admin, on_mount: {Exoforge.Std.Dashboard.AuthHook, :require_admin} do
+  live_session :default do
     scope "/", Exoforge.Std.Dashboard do
       pipe_through(:browser)
 
@@ -72,31 +62,6 @@ defmodule Exoforge.Std.Dashboard.Router do
     get("/api/resources/:name/drawers", ApiController, :drawers)
     post("/api/dispatch", ApiController, :dispatch_action)
     get("/api/events", ApiController, :events)
-  end
-
-  defp verify_studio_access(conn, _opts) do
-    case Exoforge.Std.Dashboard.ApiController.verify_studio_auth(conn) do
-      {:ok, auth} ->
-        Plug.Conn.assign(conn, :auth, auth)
-
-      {:error, :unauthenticated} ->
-        conn
-        |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.send_resp(
-          401,
-          Jason.encode!(%{status: "error", error: "Unauthorized: valid token required"})
-        )
-        |> Plug.Conn.halt()
-
-      {:error, :forbidden} ->
-        conn
-        |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.send_resp(
-          403,
-          Jason.encode!(%{status: "error", error: "Forbidden: admin scope required"})
-        )
-        |> Plug.Conn.halt()
-    end
   end
 
   defp ensure_endpoint(conn, _opts) do

@@ -183,10 +183,10 @@ defmodule Exoforge.Std.Dashboard.ApiController do
   # so the Studio's own SSE/API calls work without a bearer token.
   defp session_auth(conn) do
     if Map.get(conn.private, :plug_session_fetch) == :done do
-      case get_session(conn, Exoforge.Std.Dashboard.Auth.player_id_key()) do
+      case get_session(conn, "admin_player_id") do
         player_id when is_binary(player_id) and player_id != "" ->
           scopes =
-            get_session(conn, Exoforge.Std.Dashboard.Auth.scopes_key()) ||
+            get_session(conn, "admin_scopes") ||
               [Exoforge.Auth.Roles.admin()]
 
           {:ok, %{player_id: player_id, scopes: scopes, role: Exoforge.Auth.Roles.role(scopes)}}

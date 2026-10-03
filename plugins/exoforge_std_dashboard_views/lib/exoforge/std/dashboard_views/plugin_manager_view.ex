@@ -1,7 +1,7 @@
-defmodule Exoforge.Std.Dashboard.Views.PluginManagerView do
+defmodule Exoforge.Std.DashboardViews.PluginManagerView do
   @moduledoc """
   Phoenix LiveComponent providing the dynamic Producer & Designer Studio visualization
-  for the Plugin Manager & Cluster Runtime (`exoforge_std_plugin_manager`).
+  for the Plugin Manager & Cluster Runtime service (:plugin_manager).
 
   Enables game producers and backend engineers to:
   - Inspect installed standard and WASM plugins, services, and entity schemas
@@ -1126,4 +1126,13 @@ defmodule Exoforge.Std.Dashboard.Views.PluginManagerView do
     </div>
     """
   end
+end
+
+defmodule Exoforge.Std.Dashboard.Views.PluginManagerView do
+  @moduledoc false
+  use Phoenix.LiveComponent
+  def render(assigns), do: Exoforge.Std.DashboardViews.PluginManagerView.render(assigns)
+  def mount(socket), do: Exoforge.Std.DashboardViews.PluginManagerView.mount(socket)
+  def update(assigns, socket), do: Exoforge.Std.DashboardViews.PluginManagerView.update(assigns, socket)
+  def handle_event(event, params, socket), do: Exoforge.Std.DashboardViews.PluginManagerView.handle_event(event, params, socket)
 end

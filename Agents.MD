@@ -35,8 +35,8 @@ database ──▶ auth ──▶ player_data
                │
                ├──▶ http (:4001)
                ├──▶ ws   (:4000)
-               │
-database ──────┴──▶ dashboard (:4005)
+
+dashboard (:4005) ──▶ dashboard_views
 plugin_manager ───▶ (independent root)
 ```
 
@@ -47,8 +47,9 @@ plugin_manager ───▶ (independent root)
 | `exoforge_std_player_data` | Profiles | `player_data` | `database`, `auth` | Canonical player profile persistence and lifecycle events. |
 | `exoforge_std_http` | REST (:4001) | `http` | `auth` | Dynamic OpenAPI routes derived from service contracts. |
 | `exoforge_std_ws` | Realtime (:4000) | `ws` | `auth` | Low-latency binary/JSON framing for actions and event pub/sub. |
-| `exoforge_std_dashboard` | Studio (:4005) | `dashboard_view` | `database` | LiveView Producer Studio, Actor Inspector, and Plugin Manager GUI. |
-| `exoforge_std_plugin_manager`| Lifecycle | `plugin_manager` | — | Hot WASM upload, system restart/reload, and manifest export. |
+| `exoforge_std_dashboard` | Studio (:4005) | `dashboard` | — | System plugin hosting LiveView Producer Studio and Actor Inspector. |
+| `exoforge_std_dashboard_views` | Studio Views | `dashboard_view` | `dashboard` | Decoupled UI components for player data, plugin manager, auth. |
+| `exoforge_std_plugin_manager`| Lifecycle | `plugin_manager` | — | Hot WASM/Elixir plugin upload, reload, and manifest export. |
 
 ---
 

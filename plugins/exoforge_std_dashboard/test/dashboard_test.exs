@@ -35,8 +35,8 @@ defmodule Exoforge.DashboardTest do
       name: "exoforge_std_dashboard",
       version: "0.1.0",
       entry_point: Exoforge.Std.Dashboard,
-      provides: [Exoforge.Std.Services.DashboardView],
-      dependencies: [Exoforge.Std.Services.Database]
+      provides: [Exoforge.Std.Services.Dashboard],
+      dependencies: []
     })
 
     PluginRegistry.register(%Exoforge.Domain.Manifest{
@@ -91,16 +91,10 @@ defmodule Exoforge.DashboardTest do
       assert String.contains?(conn.resp_body, "exoforge_std_database")
     end
 
-    test "GET / redirects unauthenticated browsers to /login" do
+    test "GET / renders HTML dashboard directly without redirecting to /login" do
       conn = conn(:get, "/") |> Router.call(@opts)
-      assert conn.status == 302
-      assert get_resp_header(conn, "location") == ["/login"]
-    end
-
-    test "GET /login renders the sign-in form" do
-      conn = conn(:get, "/login") |> Router.call(@opts)
       assert conn.status == 200
-      assert String.contains?(conn.resp_body, "Sign in")
+      assert String.contains?(conn.resp_body, "EXOFORGE")
     end
 
     test "GET and POST resource rows handles player profiles" do
@@ -206,44 +200,12 @@ defmodule Exoforge.DashboardTest do
       assert body["status"] == "error"
     end
 
-    test "GET /api/overview gates non-admin and invalid tokens" do
-      bad_conn =
-        conn(:get, "/api/overview")
-        |> put_req_header("authorization", "Bearer bad_token")
-        |> Router.call(@opts)
-
-      assert bad_conn.status == 401
-
-      forbidden_conn =
-        conn(:get, "/api/overview")
-        |> put_req_header("authorization", "Bearer guest")
-        |> Router.call(@opts)
-
-      assert forbidden_conn.status == 403
-    end
-
-    test "GET /api/resources gates non-admin and invalid tokens" do
-      bad_conn =
-        conn(:get, "/api/resources")
-        |> put_req_header("authorization", "Bearer bad_token")
-        |> Router.call(@opts)
-
-      assert bad_conn.status == 401
-
-      forbidden_conn =
-        conn(:get, "/api/resources")
-        |> put_req_header("authorization", "Bearer guest")
-        |> Router.call(@opts)
-
-      assert forbidden_conn.status == 403
-    end
-
-    test "dashboard_view contract actions" do
+    test "dashboard contract actions" do
       assert {:ok, %{mount: _}} =
-               ActionDispatcher.dispatch(:dashboard_view, :get_dashboard_mount, %{view_id: :main})
+               ActionDispatcher.dispatch(:dashboard, :get_dashboard_mount, %{view_id: :main})
 
       assert {:ok, %{data: data}} =
-               ActionDispatcher.dispatch(:dashboard_view, :get_dashboard_data, %{view_id: :main})
+               ActionDispatcher.dispatch(:dashboard, :get_dashboard_data, %{view_id: :main})
 
       assert data.plugins_count >= 2
     end

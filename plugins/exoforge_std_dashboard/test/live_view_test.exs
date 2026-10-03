@@ -57,10 +57,21 @@ defmodule Exoforge.DashboardLiveViewTest do
       name: "exoforge_std_dashboard",
       version: "0.1.0",
       entry_point: Exoforge.Std.Dashboard,
-      provides: [Exoforge.Std.Services.DashboardView],
-      dependencies: [Exoforge.Std.Services.Database],
+      provides: [Exoforge.Std.Services.Dashboard],
+      dependencies: [],
       category: "Studio",
+      system: true,
       dashboard_view: %{id: :dashboard, title: "Producer Studio", icon: "📊"}
+    })
+
+    PluginRegistry.register(%Exoforge.Domain.Manifest{
+      id: :exoforge_std_dashboard_views,
+      name: "exoforge_std_dashboard_views",
+      version: "0.1.0",
+      entry_point: Exoforge.Std.DashboardViews,
+      provides: [Exoforge.Std.Services.DashboardView],
+      dependencies: [Exoforge.Std.Services.Dashboard],
+      category: "Studio"
     })
 
     PluginRegistry.register(%Exoforge.Domain.Manifest{
@@ -75,7 +86,7 @@ defmodule Exoforge.DashboardLiveViewTest do
         id: :auth,
         title: "Users & Auth",
         icon: "🛡️",
-        module: Exoforge.Std.Dashboard.Views.AuthView
+        module: Exoforge.Std.DashboardViews.AuthView
       }
     })
 
@@ -130,7 +141,7 @@ defmodule Exoforge.DashboardLiveViewTest do
         id: :plugin_manager,
         title: "Plugin Manager",
         icon: "📦",
-        module: Exoforge.Std.Dashboard.Views.PluginManagerView
+        module: Exoforge.Std.DashboardViews.PluginManagerView
       }
     })
 
@@ -369,11 +380,25 @@ defmodule Exoforge.DashboardLiveViewTest do
 
       {:ok, view, _html} = live(conn, "/")
 
-      # Switch to player_data extension tab
-      html = render_click(view, "switch_tab", %{"tab" => "exoforge_std_player_data"})
+      # Switch to combat_wasm extension tab (has no custom LiveView)
+      html = render_click(view, "switch_tab", %{"tab" => "combat_wasm"})
       assert html =~ "Interactive Action Control Panel"
-      assert html =~ "create_player" or html =~ "Run Action"
       assert html =~ "Execute typed backend RPCs"
+    end
+
+    test "mounts PlayerDataView from dashboard_views for exoforge_std_player_data" do
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{
+          "admin_player_id" => "admin",
+          "admin_scopes" => ["admin"]
+        })
+
+      {:ok, view, _html} = live(conn, "/")
+
+      html = render_click(view, "switch_tab", %{"tab" => "exoforge_std_player_data"})
+      assert html =~ "Registered Players"
+      assert html =~ "New Player Profile"
     end
 
     test "switching tab to exoforge_std_ws renders GenericExtensionView without Version struct error" do
