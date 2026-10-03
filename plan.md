@@ -1,6 +1,6 @@
 # Exoforge Architecture & Simplification Plan (`plan.md`)
 
-> **Status**: Monorepo Core Kernel, 7 Standard Plugins, C# Client SDK, C# Plugin SDK, C# Management Engine (`exo` CLI), Unity Engine SDK (`com.exoforge.sdk`), Game Producer Studio GUI, Distributed Clustering, and Production Kubernetes Manifests are **100% COMPLETE & VERIFIED** (**145 Elixir + 19 C# = 164 tests passing + live E2E vertical slice**).  
+> **Status**: Monorepo Core Kernel, 7 Standard Plugins, C# Client SDK, C# Plugin SDK, C# Management Engine (`exo` CLI), Unity Engine SDK (`com.exoforge.sdk`), Game Producer Studio GUI, Distributed Clustering, and Production Kubernetes Manifests are **100% COMPLETE & VERIFIED** (**145 Elixir + 24 C# = 169 unit tests passing + live E2E vertical slice**).  
 > **Verified Benchmarks**: 729,000 stateful actor calls/sec, 1.4 µs latency, 0.07 ms event fanout.
 
 ---
@@ -44,9 +44,8 @@ All 21 initial MVP milestones have been implemented, tested, and verified:
 
 Following the **Ponytail** engineering doctrine (deletion over addition, standard library over dependencies, shortest working path), the following targeted simplifications are identified for ongoing polish:
 
-### 1. Single Source of Truth for Client Code Generation
-- **Current State**: We have two code generators: `Mix.Tasks.Exo.Gen.Csharp` (Elixir) and `ExoCodeGenerator.cs` (pure C#).
-- **Simplification**: Deprecate the Elixir Mix task. The Elixir backend should only be responsible for serving raw JSON contract metadata via `plugin_manager.export_plugin_info`. `ExoCodeGenerator.cs` is the single authoritative compiler used by the `exo` CLI, Unity Editor, and CI scripts. Eliminates duplicate template maintenance across two languages.
+### 1. Single Source of Truth for Client Code Generation [COMPLETED]
+- **Status**: Completed. Deprecated and deleted `Mix.Tasks.Exo.Gen.Csharp`. Pure C# `ExoCodeGenerator.cs` in `Exoforge.Management` is the single authoritative compiler used by the `exo` CLI, Unity Editor, and automated CI workflows. Eliminates duplicate template maintenance across two languages.
 
 ### 2. Zero-Dependency WASM Host Boundary
 - **Current State**: WASM plugins communicate with the host via JSON serialization over memory buffers.
