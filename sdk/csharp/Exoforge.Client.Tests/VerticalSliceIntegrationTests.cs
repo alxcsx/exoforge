@@ -75,4 +75,51 @@ public class VerticalSliceIntegrationTests
 
         await client.DisconnectAsync();
     }
+
+    [Fact]
+    public async Task EndToEnd_Client_Wildcard_Subscription_Receives_Events()
+    {
+        var dispatcher = new ExoDispatcher(useSynchronizationContext: false);
+        using var client = new ExoClient(dispatcher);
+
+        try
+        {
+            await client.ConnectAsync(ServerUri);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[IntegrationTest] Skipping live connection test: {ex.Message}");
+            return;
+        }
+
+        await client.AuthenticateAsync("dev:wildcard_tester");
+
+        // Subscribe to wildcard
+        await client.SubscribeAsync("*");
+
+        ExoEventFrame? receivedWildcardEvent = null;
+        var signal = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        client.OnAnyEvent += evt =>
+        {
+            receivedWildcardEvent = evt;
+            signal.TrySetResult(true);
+        };
+
+        // Trigger action that emits player_damaged
+        await client.SendActionAsync<int>("combat", "attack", new[] { 10, 20, 80 });
+
+        for (int i = 0; i < 30 && !signal.Task.IsCompleted; i++)
+        {
+            dispatcher.Update();
+            await Task.Delay(100);
+        }
+        dispatcher.Update();
+
+        Assert.True(signal.Task.IsCompleted, "Timed out waiting for wildcard event broadcast.");
+        Assert.NotNull(receivedWildcardEvent);
+        Assert.Equal("player_damaged", receivedWildcardEvent.Event);
+
+        await client.DisconnectAsync();
+    }
 }

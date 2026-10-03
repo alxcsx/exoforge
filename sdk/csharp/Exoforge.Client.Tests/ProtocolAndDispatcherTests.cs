@@ -115,6 +115,15 @@ public class ProtocolAndDispatcherTests
         Assert.Contains("admin", result.Scopes!);
     }
 
+    [Fact]
+    public void CanSerializeSubscriptionRequestWithWildcardTopic()
+    {
+        var req = new ExoSubscriptionRequest("subscribe", "*");
+        string json = JsonSerializer.Serialize(req);
+        Assert.Contains("\"type\":\"subscribe\"", json);
+        Assert.Contains("\"topic\":\"*\"", json);
+    }
+
     private class DamageEventPayload
     {
         public int target_id { get; set; }

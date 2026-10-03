@@ -88,6 +88,50 @@ public class ExoTimeWindow
             return nowTod >= startTod || nowTod < endTod;
         }
 
+        if (Recurrence == "weekly")
+        {
+            if (now < StartAtUtc.Value) return false;
+            DayOfWeek startDay = StartAtUtc.Value.DayOfWeek;
+            DayOfWeek endDay = EndAtUtc.Value.DayOfWeek;
+            DayOfWeek nowDay = now.DayOfWeek;
+
+            TimeSpan startTod = StartAtUtc.Value.TimeOfDay;
+            TimeSpan endTod = EndAtUtc.Value.TimeOfDay;
+            TimeSpan nowTod = now.TimeOfDay;
+
+            if (startDay == endDay)
+            {
+                return nowDay == startDay && nowTod >= startTod && nowTod < endTod;
+            }
+
+            if (nowDay > startDay && nowDay < endDay) return true;
+            if (nowDay == startDay) return nowTod >= startTod;
+            if (nowDay == endDay) return nowTod < endTod;
+            return false;
+        }
+
+        if (Recurrence == "monthly")
+        {
+            if (now < StartAtUtc.Value) return false;
+            int startDay = StartAtUtc.Value.Day;
+            int endDay = EndAtUtc.Value.Day;
+            int nowDay = now.Day;
+
+            TimeSpan startTod = StartAtUtc.Value.TimeOfDay;
+            TimeSpan endTod = EndAtUtc.Value.TimeOfDay;
+            TimeSpan nowTod = now.TimeOfDay;
+
+            if (startDay == endDay)
+            {
+                return nowDay == startDay && nowTod >= startTod && nowTod < endTod;
+            }
+
+            if (nowDay > startDay && nowDay < endDay) return true;
+            if (nowDay == startDay) return nowTod >= startTod;
+            if (nowDay == endDay) return nowTod < endTod;
+            return false;
+        }
+
         return now >= StartAtUtc.Value && now < EndAtUtc.Value;
     }
 

@@ -36,4 +36,22 @@ public class TimeWindowTests
         Assert.Equal("0s", ExoTimeWindow.FormatCountdown(0));
         Assert.Equal("0s", ExoTimeWindow.FormatCountdown(-10));
     }
+
+    [Fact]
+    public void TimeWindow_Daily_Recurrence_Evaluates_TimeOfDay()
+    {
+        var daily = new ExoTimeWindow
+        {
+            Id = "daily_raid",
+            StartAtUtc = new DateTime(2026, 10, 1, 14, 0, 0, DateTimeKind.Utc),
+            EndAtUtc = new DateTime(2026, 10, 1, 18, 0, 0, DateTimeKind.Utc),
+            Recurrence = "daily"
+        };
+
+        var inside = new DateTime(2026, 10, 5, 15, 30, 0, DateTimeKind.Utc);
+        var outside = new DateTime(2026, 10, 5, 19, 0, 0, DateTimeKind.Utc);
+
+        Assert.True(daily.EvaluateIsActive(inside));
+        Assert.False(daily.EvaluateIsActive(outside));
+    }
 }
