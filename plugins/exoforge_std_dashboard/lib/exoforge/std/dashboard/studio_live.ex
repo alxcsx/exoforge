@@ -743,12 +743,12 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         ext = Enum.find(socket.assigns.overview.extensions, fn e -> to_string(e.id) == ext_id end)
 
         title =
-          if (ext && is_map(ext.dashboard_view)) and ext.dashboard_view[:title],
+          if ext && is_map(ext.dashboard_view) && ext.dashboard_view[:title],
             do: ext.dashboard_view[:title],
             else: if(ext, do: humanize_plugin_name(ext), else: ext_id)
 
         icon =
-          if (ext && is_map(ext.dashboard_view)) and ext.dashboard_view[:icon],
+          if ext && is_map(ext.dashboard_view) && ext.dashboard_view[:icon],
             do: ext.dashboard_view[:icon],
             else: default_extension_icon(ext || ext_id)
 

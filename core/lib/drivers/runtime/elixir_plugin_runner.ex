@@ -6,7 +6,9 @@ defmodule Exoforge.Drivers.Runtime.ElixirPluginRunner do
   # -- Public Static API
   @impl true
   def load(%Manifest{entry_point: plugin_mod} = manifest) do
-    Code.append_path(Path.join(manifest.physical_path, "ebin"))
+    if manifest.physical_path do
+      Code.append_path(Path.join(manifest.physical_path, "ebin"))
+    end
 
     plugin_sup_name = Module.concat(plugin_mod, Supervisor)
     task_sup_name = Module.concat(plugin_mod, TaskSupervisor)

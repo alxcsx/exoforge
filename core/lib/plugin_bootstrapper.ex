@@ -34,6 +34,14 @@ defmodule Exoforge.PluginBootstrapper do
 
   @doc "Unloads a plugin from registry and runners."
   def unload_plugin(plugin_id) do
+    manifest =
+      PluginRegistry.fetch_manifest(plugin_id) ||
+        (is_binary(plugin_id) && PluginRegistry.fetch_manifest(existing_atom_safe(plugin_id)))
+
+    if manifest do
+      terminate_plugin_processes(manifest)
+    end
+
     PluginRegistry.unregister(plugin_id)
   end
 
@@ -109,5 +117,47 @@ defmodule Exoforge.PluginBootstrapper do
         :error -> nil
       end
     end)
+  end
+
+  defp terminate_plugin_processes(%Manifest{type: :elixir, entry_point: plugin_mod}) when is_atom(plugin_mod) do
+    plugin_sup_name = Module.concat(plugin_mod, Supervisor)
+    stop_child_supervisor(plugin_sup_name)
+  end
+
+  defp terminate_plugin_processes(%Manifest{type: :wasm} = manifest) do
+    mod_name =
+      if is_atom(manifest.entry_point) and manifest.entry_point != nil do
+        manifest.entry_point
+      else
+        manifest.id
+        |> to_string()
+        |> Macro.camelize()
+        |> then(&Module.concat([Exoforge, Plugins, &1]))
+      end
+
+    sup_name = Module.concat([Exoforge, Plugins, mod_name, Supervisor])
+    stop_child_supervisor(sup_name)
+  end
+
+  defp terminate_plugin_processes(_), do: :ok
+
+  defp stop_child_supervisor(sup_name) do
+    case Process.whereis(sup_name) do
+      pid when is_pid(pid) ->
+        if Process.whereis(Exoforge.PluginSupervisor) != nil do
+          DynamicSupervisor.terminate_child(Exoforge.PluginSupervisor, pid)
+        else
+          Process.exit(pid, :shutdown)
+        end
+
+      _ ->
+        :ok
+    end
+  end
+
+  defp existing_atom_safe(val) do
+    String.to_existing_atom(to_string(val))
+  rescue
+    ArgumentError -> nil
   end
 end

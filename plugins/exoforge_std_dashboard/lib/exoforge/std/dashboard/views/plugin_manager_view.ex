@@ -118,7 +118,9 @@ defmodule Exoforge.Std.Dashboard.Views.PluginManagerView do
        upload_file_info: nil,
        upload_form: %{
          "name" => "",
+         "type" => "wasm",
          "wasm_binary" => "",
+         "elixir_code" => "",
          "manifest_json" => ""
        }
      )}
@@ -137,18 +139,35 @@ defmodule Exoforge.Std.Dashboard.Views.PluginManagerView do
 
   @impl true
   def handle_event("file_selected", %{"filename" => filename, "content_base64" => base64, "size" => size}, socket) do
+    ext = Path.extname(filename)
+    is_ex = ext in [".ex", ".exs"]
+
     clean_name =
       filename
-      |> Path.rootname(".wasm")
+      |> Path.rootname(ext)
       |> Macro.underscore()
       |> String.replace(~r/[^a-z0-9_]/, "")
 
     current_form = socket.assigns.upload_form
 
     updated_form =
-      current_form
-      |> Map.put("wasm_binary", base64)
-      |> Map.put("name", if(current_form["name"] == "", do: clean_name, else: current_form["name"]))
+      if is_ex do
+        decoded =
+          case Base.decode64(base64) do
+            {:ok, txt} -> txt
+            _ -> ""
+          end
+
+        current_form
+        |> Map.put("type", "elixir")
+        |> Map.put("elixir_code", decoded)
+        |> Map.put("name", if(current_form["name"] == "", do: clean_name, else: current_form["name"]))
+      else
+        current_form
+        |> Map.put("type", "wasm")
+        |> Map.put("wasm_binary", base64)
+        |> Map.put("name", if(current_form["name"] == "", do: clean_name, else: current_form["name"]))
+      end
 
     {:noreply,
      assign(socket,
@@ -161,7 +180,9 @@ defmodule Exoforge.Std.Dashboard.Views.PluginManagerView do
   @impl true
   def handle_event("submit_upload", %{"upload" => params}, socket) do
     name = String.trim(Map.get(params, "name", ""))
-    raw_wasm = String.trim(Map.get(params, "wasm_binary", ""))
+    type = Map.get(params, "type", socket.assigns.upload_form["type"] || "wasm")
+    raw_wasm = String.trim(Map.get(params, "wasm_binary", socket.assigns.upload_form["wasm_binary"] || ""))
+    elixir_code = String.trim(Map.get(params, "elixir_code", socket.assigns.upload_form["elixir_code"] || ""))
     manifest_raw = String.trim(Map.get(params, "manifest_json", ""))
 
     manifest =
@@ -174,17 +195,33 @@ defmodule Exoforge.Std.Dashboard.Views.PluginManagerView do
         nil
       end
 
-    if name == "" do
-      {:noreply, assign(socket, upload_error: "Plugin name is required.")}
-    else
-      if raw_wasm == "" do
+    cond do
+      name == "" ->
+        {:noreply, assign(socket, upload_error: "Plugin name is required.")}
+
+      type == "elixir" and elixir_code == "" ->
+        {:noreply, assign(socket, upload_error: "Elixir module code is required.")}
+
+      type == "wasm" and raw_wasm == "" ->
         {:noreply, assign(socket, upload_error: "WASM binary content or file is required.")}
-      else
-        payload = %{
-          name: name,
-          wasm_binary: raw_wasm,
-          manifest: manifest
-        }
+
+      true ->
+        payload =
+          if type == "elixir" do
+            %{
+              name: name,
+              type: "elixir",
+              elixir_code: elixir_code,
+              manifest: manifest
+            }
+          else
+            %{
+              name: name,
+              type: "wasm",
+              wasm_binary: raw_wasm,
+              manifest: manifest
+            }
+          end
 
         case ActionDispatcher.dispatch(:plugin_manager, :upload_plugin, payload) do
           {:ok, result} ->
@@ -194,7 +231,7 @@ defmodule Exoforge.Std.Dashboard.Views.PluginManagerView do
                 show_upload_modal: false,
                 upload_error: nil,
                 upload_file_info: nil,
-                upload_success: "Plugin '#{result.plugin_id}' successfully uploaded and initialized!"
+                upload_success: "Plugin '#{result.plugin_id}' (#{result[:type] || type}) successfully uploaded and initialized!"
               )
               |> load_data()
 
@@ -203,7 +240,6 @@ defmodule Exoforge.Std.Dashboard.Views.PluginManagerView do
           {:error, reason} ->
             {:noreply, assign(socket, upload_error: "Upload failed: #{inspect(reason)}")}
         end
-      end
     end
   end
 
@@ -900,8 +936,8 @@ defmodule Exoforge.Std.Dashboard.Views.PluginManagerView do
                 ⚡
               </div>
               <div>
-                <h3 class="text-lg font-bold text-gray-900">Upload C# WASM Plugin</h3>
-                <p class="text-xs text-gray-500">Deploy a compiled WebAssembly binary into the sandboxed host runtime.</p>
+                <h3 class="text-lg font-bold text-gray-900"><%= if @upload_form["type"] == "elixir", do: "Upload Elixir Plugin", else: "Upload C# WASM Plugin" %></h3>
+                <p class="text-xs text-gray-500">Deploy a compiled WebAssembly binary or live Elixir plugin into the runtime.</p>
               </div>
             </div>
 
@@ -912,61 +948,110 @@ defmodule Exoforge.Std.Dashboard.Views.PluginManagerView do
             <% end %>
 
             <form id="upload_plugin_form" phx-submit="submit_upload" phx-change="change_upload_form" phx-target={@myself} class="space-y-4">
+              <!-- Plugin Type Selector -->
+              <div>
+                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Plugin Type</label>
+                <div class="grid grid-cols-2 gap-3">
+                  <label class={"flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition-colors #{if @upload_form["type"] != "elixir", do: "border-violet-500 bg-violet-50/50 text-violet-900", else: "border-gray-200 bg-gray-50 text-gray-700"}"}>
+                    <input
+                      type="radio"
+                      name="upload[type]"
+                      value="wasm"
+                      checked={@upload_form["type"] != "elixir"}
+                      class="text-violet-600 focus:ring-violet-500"
+                    />
+                    <div>
+                      <span class="text-xs font-bold block">C# WASM</span>
+                      <span class="text-[10px] text-gray-500">Compiled .wasm binary</span>
+                    </div>
+                  </label>
+                  <label class={"flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition-colors #{if @upload_form["type"] == "elixir", do: "border-violet-500 bg-violet-50/50 text-violet-900", else: "border-gray-200 bg-gray-50 text-gray-700"}"}>
+                    <input
+                      type="radio"
+                      name="upload[type]"
+                      value="elixir"
+                      checked={@upload_form["type"] == "elixir"}
+                      class="text-violet-600 focus:ring-violet-500"
+                    />
+                    <div>
+                      <span class="text-xs font-bold block">Elixir Plugin</span>
+                      <span class="text-[10px] text-gray-500">Live source module (.ex)</span>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
               <div>
                 <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Plugin Name / Identifier</label>
                 <input
                   type="text"
                   name="upload[name]"
                   value={@upload_form["name"]}
-                  placeholder="e.g. combat_plugin"
+                  placeholder={if @upload_form["type"] == "elixir", do: "e.g. custom_quest", else: "e.g. combat_plugin"}
                   class="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:bg-white font-mono"
                 />
               </div>
 
-              <!-- File Dropzone / Selector with client-side Base64 reader -->
-              <div>
-                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">WASM Binary (.wasm)</label>
-                <div class="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:border-violet-400 transition-colors bg-gray-50/50">
-                  <input
-                    type="file"
-                    id="wasm_file_picker"
-                    accept=".wasm"
-                    onchange="
-                      const file = this.files[0];
-                      if (file) {
-                        const reader = new FileReader();
-                        reader.onload = (e) => {
-                          const base64 = e.target.result.split(',')[1];
-                          const input = document.getElementById('wasm_base64_input');
-                          if (input) {
-                            input.value = base64;
-                            input.dispatchEvent(new Event('input', {bubbles: true}));
-                          }
-                        };
-                        reader.readAsDataURL(file);
-                      }
-                    "
-                    class="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100 cursor-pointer"
-                  />
-                  <%= if @upload_file_info do %>
-                    <p class="text-xs text-emerald-600 font-bold mt-2">
-                      Selected: <%= @upload_file_info.filename %> (<%= Float.round(@upload_file_info.size_bytes / 1024, 1) %> KB)
-                    </p>
-                  <% end %>
+              <%= if @upload_form["type"] == "elixir" do %>
+                <!-- Elixir Module Code Input -->
+                <div>
+                  <div class="flex items-center justify-between mb-1">
+                    <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider">Elixir Source Code (.ex)</label>
+                    <span class="text-[11px] text-gray-400 font-mono">use Exoforge.Plugin</span>
+                  </div>
+                  <textarea
+                    name="upload[elixir_code]"
+                    rows="6"
+                    placeholder={"defmodule MyPlugin do\n  use Exoforge.Plugin, provides: [:my_service]\n\n  defaction ping(payload) do\n    {:ok, %{pong: payload}}\n  end\nend"}
+                    class="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:bg-white font-mono"
+                  ><%= @upload_form["elixir_code"] %></textarea>
                 </div>
-              </div>
+              <% else %>
+                <!-- WASM File Dropzone / Selector -->
+                <div>
+                  <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">WASM Binary (.wasm)</label>
+                  <div class="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:border-violet-400 transition-colors bg-gray-50/50">
+                    <input
+                      type="file"
+                      id="wasm_file_picker"
+                      accept=".wasm"
+                      onchange="
+                        const file = this.files[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = (e) => {
+                            const base64 = e.target.result.split(',')[1];
+                            const input = document.getElementById('wasm_base64_input');
+                            if (input) {
+                              input.value = base64;
+                              input.dispatchEvent(new Event('input', {bubbles: true}));
+                            }
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      "
+                      class="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100 cursor-pointer"
+                    />
+                    <%= if @upload_file_info do %>
+                      <p class="text-xs text-emerald-600 font-bold mt-2">
+                        Selected: <%= @upload_file_info.filename %> (<%= Float.round(@upload_file_info.size_bytes / 1024, 1) %> KB)
+                      </p>
+                    <% end %>
+                  </div>
+                </div>
 
-              <div>
-                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Or Paste Base64 WASM Data</label>
-                <textarea
-                  id="wasm_base64_input"
-                  name="upload[wasm_binary]"
-                  rows="3"
-                  placeholder="AGFzbQEAAAA... (Base64 encoded binary)"
-                  class="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:bg-white font-mono"
-                ><%= @upload_form["wasm_binary"] %></textarea>
-                <p class="text-[11px] text-gray-400 mt-0.5">Must start with WASM magic bytes (\0asm).</p>
-              </div>
+                <div>
+                  <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Or Paste Base64 WASM Data</label>
+                  <textarea
+                    id="wasm_base64_input"
+                    name="upload[wasm_binary]"
+                    rows="3"
+                    placeholder="AGFzbQEAAAA... (Base64 encoded binary)"
+                    class="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:bg-white font-mono"
+                  ><%= @upload_form["wasm_binary"] %></textarea>
+                  <p class="text-[11px] text-gray-400 mt-0.5">Must start with WASM magic bytes (\0asm).</p>
+                </div>
+              <% end %>
 
               <div>
                 <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Optional Manifest Metadata (JSON)</label>

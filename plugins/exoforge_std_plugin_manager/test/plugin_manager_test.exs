@@ -39,6 +39,7 @@ defmodule Exoforge.Std.PluginManagerTest do
       # Clean up test directories if created
       File.rm_rf("plugins_csharp/test_uploaded_wasm")
       File.rm_rf("plugins_csharp/invalid_test_wasm")
+      File.rm_rf("plugins/test_uploaded_elixir")
     end)
 
     :ok
@@ -157,6 +158,74 @@ defmodule Exoforge.Std.PluginManagerTest do
       target_dir = "plugins_csharp/test_uploaded_wasm"
       assert File.exists?(Path.join(target_dir, "test_uploaded_wasm.wasm"))
       assert File.exists?(Path.join(target_dir, "manifest.exs"))
+    end
+
+    test "upload_plugin accepts valid Elixir plugin code, persists, compiles, and registers it" do
+      elixir_code = """
+      defmodule TestUploadedElixir do
+        use Exoforge.Plugin, provides: [:test_uploaded_elixir]
+
+        defaction ping(payload) do
+          {:ok, %{pong: payload}}
+        end
+      end
+      """
+
+      manifest_content = """
+      %{
+        id: :test_uploaded_elixir,
+        name: "TestUploadedElixir",
+        version: "0.1.0",
+        type: :elixir,
+        entry_point: TestUploadedElixir,
+        provides: [:test_uploaded_elixir],
+        dependencies: []
+      }
+      """
+
+      assert {:ok, result} =
+               ActionDispatcher.dispatch(
+                 :plugin_manager,
+                 :upload_plugin,
+                 %{
+                   name: "test_uploaded_elixir",
+                   type: "elixir",
+                   elixir_code: elixir_code,
+                   manifest: manifest_content
+                 },
+                 caller_scopes: ["admin"]
+               )
+
+      assert result.plugin_id == "test_uploaded_elixir"
+      assert result.type == "elixir"
+
+      target_dir = "plugins/test_uploaded_elixir"
+      assert File.exists?(Path.join([target_dir, "lib", "test_uploaded_elixir.ex"]))
+      assert File.exists?(Path.join(target_dir, "manifest.exs"))
+
+      assert {:ok, plugin_info} =
+               ActionDispatcher.dispatch(
+                 :plugin_manager,
+                 :get_plugin,
+                 %{id: "test_uploaded_elixir"},
+                 caller_scopes: ["studio"]
+               )
+
+      assert plugin_info.plugin["type"] == "elixir"
+      assert plugin_info.plugin["size_bytes"] > 0
+
+      # Remove plugin with delete_files
+      assert {:ok, rem_res} =
+               ActionDispatcher.dispatch(
+                 :plugin_manager,
+                 :remove_plugin,
+                 %{id: "test_uploaded_elixir", delete_files: true},
+                 caller_scopes: ["admin"]
+               )
+
+      assert rem_res.status == "removed"
+      assert rem_res.type == "elixir"
+      refute File.exists?(target_dir)
     end
 
     test "remove_plugin unregisters plugin from registry" do

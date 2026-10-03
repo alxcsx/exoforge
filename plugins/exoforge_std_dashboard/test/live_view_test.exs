@@ -22,6 +22,9 @@ defmodule Exoforge.DashboardLiveViewTest do
       start_supervised!({DbManager, [driver: :sandbox]})
     end
 
+    Exoforge.Std.Dashboard.Preferences.ensure_schema()
+    Exoforge.Std.Dashboard.Preferences.put_pinned("admin", [])
+
     unless Process.whereis(EventDispatcher.registry_name()) do
       start_supervised!(EventDispatcher)
     end
