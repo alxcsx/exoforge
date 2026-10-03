@@ -8,12 +8,16 @@ defmodule Exoforge.Std.Http.Router do
 
   alias Exoforge.ActionDispatcher
 
-  plug :match
-  plug Plug.Parsers,
+  plug(:match)
+
+  plug(Plug.Parsers,
     parsers: [:json],
     pass: ["application/json"],
     json_decoder: Jason
-  plug :dispatch
+  )
+
+  plug(:authorize_ingress)
+  plug(:dispatch)
 
   get "/" do
     send_landing(conn)
@@ -92,39 +96,34 @@ defmodule Exoforge.Std.Http.Router do
   end
 
   post "/api/:service/:action" do
-    auth_header = get_req_header(conn, "authorization") |> List.first()
     raw_payload =
       case conn.body_params do
         p when is_map(p) -> Map.delete(p, "_auth") |> Map.delete(:_auth)
         other -> other
       end
 
-    # If auth header is provided, attach identity and extract scopes
-    {payload_with_auth, caller_scopes} =
-      case extract_token(auth_header) do
-        nil ->
-          {raw_payload, []}
+    public? = public_action?(service, action)
 
-        token ->
-          case ActionDispatcher.dispatch(:auth, :authenticate, %{token: token}) do
-            {:ok, %{player_id: player_id, scopes: scopes} = auth_info} ->
-              payload =
-                if is_map(raw_payload) do
-                  raw_payload
-                  |> Map.put("player_id", player_id)
-                  |> Map.put("_auth", auth_info)
-                else
-                  raw_payload
-                end
+    case authenticate_token(token_from_request(conn)) do
+      {:ok, auth_info} ->
+        dispatch_http(
+          conn,
+          service,
+          action,
+          with_identity(raw_payload, auth_info),
+          auth_info.scopes
+        )
 
-              {payload, scopes}
+      :error when public? ->
+        dispatch_http(conn, service, action, raw_payload, [])
 
-            _ ->
-              {raw_payload, []}
-          end
-      end
+      :error ->
+        unauthenticated(conn)
+    end
+  end
 
-    case ActionDispatcher.dispatch(service, action, payload_with_auth, caller_scopes: caller_scopes) do
+  defp dispatch_http(conn, service, action, payload, caller_scopes) do
+    case ActionDispatcher.dispatch(service, action, payload, caller_scopes: caller_scopes) do
       {:ok, result} ->
         send_json(conn, 200, %{status: "ok", data: result})
 
@@ -148,23 +147,91 @@ defmodule Exoforge.Std.Http.Router do
     end
   end
 
+  # Actions that mint or verify an account are reachable without a token.
+  defp public_action?(service, action) do
+    service == "auth" and action in ["login", "register", "authenticate", "create_player"]
+  end
+
+  defp authenticate_token(nil), do: :error
+
+  defp authenticate_token(token) do
+    case ActionDispatcher.dispatch(:auth, :authenticate, %{token: token}) do
+      {:ok, %{player_id: _pid, scopes: _scopes} = auth_info} -> {:ok, auth_info}
+      _ -> :error
+    end
+  end
+
+  defp with_identity(raw_payload, auth_info) when is_map(raw_payload) do
+    raw_payload
+    |> Map.put("player_id", auth_info.player_id)
+    |> Map.put("_auth", auth_info)
+  end
+
+  defp with_identity(raw_payload, _auth_info), do: raw_payload
+
   match _ do
     send_json(conn, 404, %{status: "error", error: "not_found"})
   end
 
   ## Helpers
 
+  # `/health` is public for container/orchestrator probes; action dispatch
+  # authenticates in its own handler; every informational route (docs, routes,
+  # status, landing) requires a studio or admin account.
+  defp authorize_ingress(conn, _opts) do
+    cond do
+      conn.request_path == "/health" ->
+        conn
+
+      conn.method == "POST" and String.starts_with?(conn.request_path, "/api/") ->
+        conn
+
+      true ->
+        case authenticate_request(conn) do
+          {:ok, auth} ->
+            if Exoforge.Auth.Roles.rank_of(auth.scopes) >= 2 do
+              Plug.Conn.assign(conn, :auth, auth)
+            else
+              forbidden(conn)
+            end
+
+          :error ->
+            unauthenticated(conn)
+        end
+    end
+  end
+
+  defp authenticate_request(conn) do
+    authenticate_token(token_from_request(conn))
+  end
+
+  defp token_from_request(conn), do: Exoforge.Auth.Request.token(conn)
+
+  defp unauthenticated(conn) do
+    conn
+    |> send_json(401, %{
+      status: "error",
+      error: "unauthenticated",
+      message: "A valid bearer token is required. Use POST /api/auth/login or /api/auth/register."
+    })
+    |> Plug.Conn.halt()
+  end
+
+  defp forbidden(conn) do
+    conn
+    |> send_json(403, %{
+      status: "error",
+      error: "forbidden_scope",
+      message: "A studio or admin account is required for this resource."
+    })
+    |> Plug.Conn.halt()
+  end
+
   defp send_json(conn, status, body) do
     conn
     |> put_resp_content_type("application/json")
     |> send_resp(status, Jason.encode!(body))
   end
-
-  defp extract_token(nil), do: nil
-
-  defp extract_token("Bearer " <> token), do: String.trim(token)
-  defp extract_token("bearer " <> token), do: String.trim(token)
-  defp extract_token(token) when is_binary(token), do: String.trim(token)
 
   defp send_landing(conn) do
     accept = get_req_header(conn, "accept")
@@ -213,7 +280,7 @@ defmodule Exoforge.Std.Http.Router do
             <div class="info-row"><span class="label">Health Check</span><span class="value"><a href="/health" style="color: #38bdf8; text-decoration: none;">/health</a></span></div>
           </div>
           <div class="actions">
-            <a href="#{studio_url}" class="btn-primary">Open Game Studio (Port 4005) &rarr;</a>
+            <a href="#{studio_url}" class="btn-primary">Open Game Studio (Port #{Exoforge.Endpoints.dashboard_port()}) &rarr;</a>
             <a href="/api/docs" class="btn-secondary">Interactive Swagger Docs</a>
           </div>
         </div>
@@ -238,7 +305,8 @@ defmodule Exoforge.Std.Http.Router do
           dispatch: "POST /api/:service/:action"
         },
         studio_url: get_studio_url(),
-        message: "Exoforge HTTP REST Gateway is active. Query /api/routes for available routes, visit /api/docs for Swagger UI, or visit Game Studio at port 4005."
+        message:
+          "Exoforge HTTP REST Gateway is active. Query /api/routes for available routes, visit /api/docs for Swagger UI, or visit Game Studio at port #{Exoforge.Endpoints.dashboard_port()}."
       })
     end
   end
@@ -247,7 +315,7 @@ defmodule Exoforge.Std.Http.Router do
     port =
       Application.get_env(:exoforge_std_dashboard, Exoforge.Std.Dashboard.Endpoint, [])
       |> Keyword.get(:http, [])
-      |> Keyword.get(:port, 4005)
+      |> Keyword.get(:port, Exoforge.Endpoints.dashboard_port())
 
     host =
       Application.get_env(:exoforge_std_dashboard, Exoforge.Std.Dashboard.Endpoint, [])

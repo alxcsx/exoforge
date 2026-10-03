@@ -20,8 +20,7 @@ defmodule Exoforge.Std.PlayerData.MixProject do
   defp deps do
     [
       {:exoforge_core, path: "../../core"},
-      {:exoforge_std_database, path: "../exoforge_std_database"},
-      {:exoforge_std_auth, path: "../exoforge_std_auth"},
+      {:exoforge_std_database, path: "../exoforge_std_database", only: :test},
       {:jason, "~> 1.4"}
     ]
   end

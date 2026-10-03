@@ -156,7 +156,10 @@ defmodule Exoforge.Std.Database.Manager do
             Postgres
 
           {:error, _reason} ->
-            Logger.warning("[Database] PostgreSQL not reachable at configured host. Falling back to Sandbox adapter.")
+            Logger.warning(
+              "[Database] PostgreSQL not reachable at configured host. Falling back to Sandbox adapter."
+            )
+
             Sandbox
         end
 

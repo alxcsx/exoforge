@@ -13,9 +13,9 @@ defmodule Exoforge.AuthTest do
       {:ok, %{player: payload[:profile] || payload["profile"]}}
     end
 
-    defaction update_player(_payload), do: {:ok, %{player: %{}}}
-    defaction delete_player(_payload), do: {:ok, %{status: "deleted"}}
-    defaction list_players(), do: {:ok, %{players: []}}
+    defaction(update_player(_payload), do: {:ok, %{player: %{}}})
+    defaction(delete_player(_payload), do: {:ok, %{status: "deleted"}})
+    defaction(list_players(), do: {:ok, %{players: []}})
 
     defaction get_player(payload) do
       pid = payload[:player_id] || payload["player_id"]
@@ -24,6 +24,8 @@ defmodule Exoforge.AuthTest do
   end
 
   setup do
+    Application.put_env(:exoforge, :allow_dev_tokens, true)
+    on_exit(fn -> Application.delete_env(:exoforge, :allow_dev_tokens) end)
     PluginRegistry.initialize_ets()
     start_supervised!({DbManager, [driver: :sandbox]})
 
@@ -74,6 +76,13 @@ defmodule Exoforge.AuthTest do
       assert {:ok, result} = ActionDispatcher.dispatch(:auth, :authenticate, %{token: "dev:hero_99"})
       assert result.player_id == "hero_99"
       assert "admin" in result.scopes
+    end
+
+    test "rejects dev tokens when disabled" do
+      Application.put_env(:exoforge, :allow_dev_tokens, false)
+
+      assert {:error, :invalid_token} =
+               ActionDispatcher.dispatch(:auth, :authenticate, %{token: "dev:hero_99"})
     end
 
     test "handles guest token" do
@@ -143,5 +152,116 @@ defmodule Exoforge.AuthTest do
       assert profile["name"] == "Sir Lancelot"
       assert profile["email"] == "lance@camelot.io"
     end
+
+    test "list_users action returns registered users and active token counts" do
+      # Register two users
+      {:ok, _u1} = ActionDispatcher.dispatch(:auth, :register, %{player_id: "user_alpha", scopes: ["player", "admin"]})
+      {:ok, _u2} = ActionDispatcher.dispatch(:auth, :register, %{player_id: "user_beta", scopes: ["player"]})
+
+      # Issue additional token for user_alpha
+      {:ok, _t2} = ActionDispatcher.dispatch(:auth, :issue_token, %{player_id: "user_alpha"})
+
+      assert {:ok, %{users: users, count: count}} = ActionDispatcher.dispatch(:auth, :list_users, %{})
+      assert count >= 2
+
+      alpha = Enum.find(users, &(&1["player_id"] == "user_alpha"))
+      assert alpha != nil
+      assert "admin" in alpha["scopes"]
+      assert alpha["tokens_count"] >= 2
+      assert length(alpha["active_tokens"]) >= 2
+
+      beta = Enum.find(users, &(&1["player_id"] == "user_beta"))
+      assert beta != nil
+      assert beta["tokens_count"] >= 1
+    end
+
+    test "dashboard_view returns extension visualization metadata" do
+      view_meta = Auth.dashboard_view()
+      assert view_meta.id == :auth
+      assert view_meta.title == "Users & Auth"
+      assert view_meta.icon == "🛡️"
+    end
   end
+
+  describe "Role hierarchy" do
+    test "derives role and rank from scopes" do
+      assert Auth.role(["admin"]) == :admin
+      assert Auth.role(["studio"]) == :studio
+      assert Auth.role(["player"]) == :player
+      assert Auth.role(["guest"]) == :guest
+      assert Auth.role(["player", "studio"]) == :studio
+
+      assert Auth.role_rank(["player"]) == 1
+      assert Auth.role_rank(["studio"]) == 2
+      assert Auth.role_rank(["admin"]) == 3
+      assert Auth.role_rank([]) == 0
+    end
+
+    test "verify_scope honors the hierarchy" do
+      {:ok, _} = Auth.set_player_scopes("stu_scope", ["studio"])
+
+      assert {:ok, %{authorized: true}} =
+               ActionDispatcher.dispatch(:auth, :verify_scope, %{player_id: "stu_scope", required_scope: "player"})
+
+      assert {:ok, %{authorized: true}} =
+               ActionDispatcher.dispatch(:auth, :verify_scope, %{player_id: "stu_scope", required_scope: "studio"})
+
+      assert {:ok, %{authorized: false}} =
+               ActionDispatcher.dispatch(:auth, :verify_scope, %{player_id: "stu_scope", required_scope: "admin"})
+    end
+
+    test "login returns a studio role for studio accounts" do
+      {:ok, _} = Auth.upsert_account("studio", "studio@exoforge.test", "pw", ["studio"])
+
+      assert {:ok, %{role: :studio, scopes: scopes}} =
+               ActionDispatcher.dispatch(:auth, :login, %{email: "studio@exoforge.test", password: "pw"})
+
+      assert "studio" in scopes
+    end
+  end
+
+  describe "Admin account bootstrap & login" do
+    test "ensure_admin_account creates the configured admin and login issues a token" do
+      with_admin_env("root@exoforge.test", "s3cret")
+
+      assert :ok = Auth.ensure_admin_account()
+
+      assert {:ok, %{player_id: "admin", token: token, scopes: scopes}} =
+               ActionDispatcher.dispatch(:auth, :login, %{email: "root@exoforge.test", password: "s3cret"})
+
+      assert is_binary(token)
+      assert "admin" in scopes
+
+      assert {:ok, %{player_id: "admin", scopes: authed_scopes}} =
+               ActionDispatcher.dispatch(:auth, :authenticate, %{token: token})
+
+      assert "admin" in authed_scopes
+    end
+
+    test "login rejects a wrong password or unknown account" do
+      with_admin_env("root2@exoforge.test", "right")
+
+      assert :ok = Auth.ensure_admin_account()
+
+      assert {:error, :invalid_credentials} =
+               ActionDispatcher.dispatch(:auth, :login, %{email: "root2@exoforge.test", password: "wrong"})
+
+      assert {:error, :invalid_credentials} =
+               ActionDispatcher.dispatch(:auth, :login, %{email: "nobody@exoforge.test", password: "right"})
+    end
+  end
+
+  defp with_admin_env(email, password) do
+    previous = {System.get_env("EXOFORGE_ADMIN_EMAIL"), System.get_env("EXOFORGE_ADMIN_PASSWORD")}
+    System.put_env("EXOFORGE_ADMIN_EMAIL", email)
+    System.put_env("EXOFORGE_ADMIN_PASSWORD", password)
+
+    on_exit(fn ->
+      restore_env("EXOFORGE_ADMIN_EMAIL", elem(previous, 0))
+      restore_env("EXOFORGE_ADMIN_PASSWORD", elem(previous, 1))
+    end)
+  end
+
+  defp restore_env(key, nil), do: System.delete_env(key)
+  defp restore_env(key, value), do: System.put_env(key, value)
 end

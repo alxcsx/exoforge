@@ -20,7 +20,8 @@ defmodule Exoforge.Std.Http.MixProject do
   defp deps do
     [
       {:exoforge_core, path: "../../core"},
-      {:exoforge_std_auth, path: "../exoforge_std_auth"},
+      {:exoforge_std_database, path: "../exoforge_std_database", only: :test},
+      {:exoforge_std_auth, path: "../exoforge_std_auth", only: :test},
       {:bandit, "~> 1.12"},
       {:jason, "~> 1.4"}
     ]

@@ -6,11 +6,14 @@ defmodule Exoforge.Std.Ws do
   use Exoforge.Plugin, provides: [:ws]
 
   @manifest %{
-    dependencies: [Exoforge.Std.Services.Auth]
+    dependencies: [Exoforge.Std.Services.Auth],
+    category: "Ingress",
+    system: true,
+    dashboard_view: %{id: :ws, title: "WebSocket Gateway", icon: "🔌"}
   }
 
   def children do
-    port = Application.get_env(:exoforge, :ws_port) || Application.get_env(:exoforge, :gateway_port, 4000)
+    port = Exoforge.Endpoints.ws_port()
 
     [
       {Bandit, plug: Exoforge.Std.Ws.Router, port: port, scheme: :http}

@@ -20,7 +20,7 @@ defmodule Exoforge.Std.Http.OpenAPI do
       },
       servers: [
         %{
-          url: "http://localhost:4001",
+          url: "http://localhost:#{Exoforge.Endpoints.http_port()}",
           description: "Local Exoforge REST API Gateway"
         }
       ],
@@ -167,7 +167,9 @@ defmodule Exoforge.Std.Http.OpenAPI do
         "200" => %{description: "Action executed successfully"},
         "400" => %{description: "Invalid payload or execution error"},
         "401" => %{description: "Unauthorized - missing or invalid token"},
-        "403" => %{description: "Forbidden - insufficient permissions for scope #{inspect(scope)}"},
+        "403" => %{
+          description: "Forbidden - insufficient permissions for scope #{inspect(scope)}"
+        },
         "404" => %{description: "Service or action not found"}
       }
     }

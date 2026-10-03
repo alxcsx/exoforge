@@ -12,9 +12,20 @@ defmodule Exoforge.Std.Database.Adapters.Sandbox do
 
     case :ets.whereis(table) do
       :undefined ->
-        :ets.new(table, [:set, :public, :named_table, read_concurrency: true, write_concurrency: true])
+        :ets.new(table, [
+          :set,
+          :public,
+          :named_table,
+          read_concurrency: true,
+          write_concurrency: true
+        ])
+
         # Schema metadata record
-        :ets.insert(table, {:__meta__, %{tables: MapSet.new(), created_at: System.system_time(:millisecond)}})
+        :ets.insert(
+          table,
+          {:__meta__, %{tables: MapSet.new(), created_at: System.system_time(:millisecond)}}
+        )
+
         {:ok, %{status: :created, table: table, plugin: plugin_id}}
 
       _tid ->
@@ -45,7 +56,11 @@ defmodule Exoforge.Std.Database.Adapters.Sandbox do
 
     if :ets.whereis(table) != :undefined do
       :ets.delete_all_objects(table)
-      :ets.insert(table, {:__meta__, %{tables: MapSet.new(), created_at: System.system_time(:millisecond)}})
+
+      :ets.insert(
+        table,
+        {:__meta__, %{tables: MapSet.new(), created_at: System.system_time(:millisecond)}}
+      )
     end
 
     :ok
@@ -141,18 +156,23 @@ defmodule Exoforge.Std.Database.Adapters.Sandbox do
 
     case Regex.run(regex, query) do
       [_, tbl_name, cols_str, vals_str] ->
-        cols = cols_str |> String.split(",") |> Enum.map(&String.trim/1) |> Enum.map(&strip_quotes/1)
+        cols =
+          cols_str |> String.split(",") |> Enum.map(&String.trim/1) |> Enum.map(&strip_quotes/1)
 
         values = resolve_values(vals_str, args)
 
         if length(cols) != length(values) do
-          {:error, {:column_value_mismatch, "Expected #{length(cols)} values, got #{length(values)}"}}
+          {:error,
+           {:column_value_mismatch, "Expected #{length(cols)} values, got #{length(values)}"}}
         else
           row =
             Enum.zip(cols, values)
             |> Enum.into(%{})
 
-          id = Map.get(row, "id") || Map.get(row, :id) || System.unique_integer([:positive, :monotonic]) |> to_string()
+          id =
+            Map.get(row, "id") || Map.get(row, :id) ||
+              System.unique_integer([:positive, :monotonic]) |> to_string()
+
           row = Map.put(row, "id", id)
 
           :ets.insert(table, {{tbl_name, id}, row})
@@ -257,10 +277,12 @@ defmodule Exoforge.Std.Database.Adapters.Sandbox do
     case Regex.run(~r/DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?([a-zA-Z0-9_]+)/i, query) do
       [_, tbl_name] ->
         all_rows = get_all_rows_for_table(table, tbl_name)
+
         Enum.each(all_rows, fn row ->
           id = Map.get(row, "id")
           :ets.delete(table, {tbl_name, id})
         end)
+
         untrack_table(table, tbl_name)
         {:ok, %{rows: [], num_rows: 0}}
 
@@ -286,7 +308,7 @@ defmodule Exoforge.Std.Database.Adapters.Sandbox do
         case Regex.run(~r/([a-zA-Z0-9_]+)\s*(=|!=|<>)\s*(.*)/, String.trim(cond_str)) do
           [_, col, op, val_str] ->
             target_val = resolve_single_value(val_str, args)
-            actual_val = Map.get(row, col) || Map.get(row, String.to_atom(col))
+            actual_val = fetch_value(row, col)
 
             case op do
               "=" -> to_string(actual_val) == to_string(target_val)
@@ -339,7 +361,7 @@ defmodule Exoforge.Std.Database.Adapters.Sandbox do
     Enum.map(tokens, fn token ->
       case Regex.run(~r/^\$([a-zA-Z0-9_]+)$/, token) do
         [_, key] ->
-          Map.get(args, key) || Map.get(args, String.to_atom(key))
+          fetch_value(args, key)
 
         nil ->
           strip_quotes(token)
@@ -358,7 +380,7 @@ defmodule Exoforge.Std.Database.Adapters.Sandbox do
       _ ->
         case Regex.run(~r/^\$([a-zA-Z0-9_]+)$/, trimmed) do
           [_, key] when is_map(args) ->
-            Map.get(args, key) || Map.get(args, String.to_atom(key))
+            fetch_value(args, key)
 
           _ ->
             strip_quotes(trimmed)
@@ -378,6 +400,16 @@ defmodule Exoforge.Std.Database.Adapters.Sandbox do
 
       true ->
         trimmed
+    end
+  end
+
+  defp fetch_value(map, key) do
+    case Map.fetch(map, key) do
+      {:ok, value} ->
+        value
+
+      :error ->
+        Enum.find_value(map, fn {map_key, value} -> if to_string(map_key) == key, do: value end)
     end
   end
 

@@ -4,9 +4,10 @@ defmodule Exoforge.Std.Ws.Router do
   """
   use Plug.Router
 
-  plug Plug.Logger
-  plug :match
-  plug :dispatch
+  plug(Plug.Logger)
+  plug(:authorize_ingress)
+  plug(:match)
+  plug(:dispatch)
 
   get "/" do
     send_landing(conn)
@@ -24,8 +25,10 @@ defmodule Exoforge.Std.Ws.Router do
       |> String.downcase()
 
     if upgrade == "websocket" do
+      token = Exoforge.Auth.Request.query(conn)
+
       conn
-      |> WebSockAdapter.upgrade(Exoforge.Std.Ws.SocketHandler, [], timeout: 60_000)
+      |> WebSockAdapter.upgrade(Exoforge.Std.Ws.SocketHandler, [token: token], timeout: 60_000)
       |> halt()
     else
       send_upgrade_required(conn)
@@ -75,13 +78,13 @@ defmodule Exoforge.Std.Ws.Router do
           <h1>Exoforge WebSocket Gateway</h1>
           <p>Real-time bi-directional WebSocket ingress for game clients (Unity C# SDK, WebSockets). Connect client sockets to <code>/ws</code>.</p>
           <div class="info-box">
-            <div class="info-row"><span class="label">WebSocket URL</span><span class="value">ws://localhost:4000/ws</span></div>
+            <div class="info-row"><span class="label">WebSocket URL</span><span class="value">ws://localhost:#{Exoforge.Endpoints.ws_port()}/ws</span></div>
             <div class="info-row"><span class="label">Protocol</span><span class="value">JSON Framed (Action/Event)</span></div>
             <div class="info-row"><span class="label">Health Check</span><span class="value"><a href="/health" style="color: #38bdf8; text-decoration: none;">/health</a></span></div>
           </div>
           <div class="actions">
-            <a href="#{studio_url}" class="btn-primary">Open Game Studio (Port 4005) &rarr;</a>
-            <a href="http://localhost:4001" class="btn-secondary">REST API (Port 4001)</a>
+            <a href="#{studio_url}" class="btn-primary">Open Game Studio (Port #{Exoforge.Endpoints.dashboard_port()}) &rarr;</a>
+            <a href="http://localhost:#{Exoforge.Endpoints.http_port()}" class="btn-secondary">REST API (Port 4001)</a>
           </div>
         </div>
       </body>
@@ -99,13 +102,61 @@ defmodule Exoforge.Std.Ws.Router do
         ws_endpoint: "/ws",
         health_endpoint: "/health",
         studio_url: get_studio_url(),
-        message: "Exoforge WebSocket Gateway is active. Connect game clients to /ws or visit Game Studio at port 4005."
+        message:
+          "Exoforge WebSocket Gateway is active. Connect game clients to /ws or visit Game Studio at port #{Exoforge.Endpoints.dashboard_port()}."
       }
 
       conn
       |> put_resp_content_type("application/json")
       |> send_resp(200, Jason.encode!(data))
     end
+  end
+
+  ## ---- AUTH ----
+
+  # /health is public; /ws authenticates via ?token= or an auth frame; the
+  # informational landing page requires a studio or admin account.
+  defp authorize_ingress(conn, _opts) do
+    cond do
+      conn.request_path in ["/health", "/ws"] ->
+        conn
+
+      true ->
+        case authenticate_token(Exoforge.Auth.Request.token(conn)) do
+          {:ok, auth} ->
+            if Exoforge.Auth.Roles.rank_of(auth.scopes) >= 2 do
+              Plug.Conn.assign(conn, :auth, auth)
+            else
+              forbidden(conn)
+            end
+
+          :error ->
+            unauthenticated(conn)
+        end
+    end
+  end
+
+  defp authenticate_token(nil), do: :error
+
+  defp authenticate_token(token) do
+    case Exoforge.ActionDispatcher.dispatch(:auth, :authenticate, %{token: token}) do
+      {:ok, auth} -> {:ok, auth}
+      _ -> :error
+    end
+  end
+
+  defp unauthenticated(conn) do
+    conn
+    |> put_resp_content_type("application/json")
+    |> send_resp(401, Jason.encode!(%{status: "error", error: "unauthenticated"}))
+    |> halt()
+  end
+
+  defp forbidden(conn) do
+    conn
+    |> put_resp_content_type("application/json")
+    |> send_resp(403, Jason.encode!(%{status: "error", error: "forbidden_scope"}))
+    |> halt()
   end
 
   defp send_upgrade_required(conn) do
@@ -137,9 +188,9 @@ defmodule Exoforge.Std.Ws.Router do
         <div class="card">
           <h1>WebSocket Upgrade Required (426)</h1>
           <p>The <code>/ws</code> endpoint requires an active WebSocket connection. Connect using a WebSocket client or the Exoforge C# / Unity SDK.</p>
-          <div class="code">ws://localhost:4000/ws</div>
+          <div class="code">ws://localhost:#{Exoforge.Endpoints.ws_port()}/ws</div>
           <div class="actions">
-            <a href="#{studio_url}" class="btn-primary">Open Game Studio (Port 4005) &rarr;</a>
+            <a href="#{studio_url}" class="btn-primary">Open Game Studio (Port #{Exoforge.Endpoints.dashboard_port()}) &rarr;</a>
             <a href="/" class="btn-secondary">&larr; Back to Gateway Info</a>
           </div>
         </div>
@@ -155,12 +206,16 @@ defmodule Exoforge.Std.Ws.Router do
       conn
       |> put_resp_header("upgrade", "websocket")
       |> put_resp_content_type("application/json")
-      |> send_resp(426, Jason.encode!(%{
-        error: "upgrade_required",
-        message: "This endpoint requires a WebSocket connection (ws:// or wss://). Connect using a WebSocket client or the Exoforge C# / Unity SDK.",
-        websocket_url: "ws://localhost:4000/ws",
-        studio_url: get_studio_url()
-      }))
+      |> send_resp(
+        426,
+        Jason.encode!(%{
+          error: "upgrade_required",
+          message:
+            "This endpoint requires a WebSocket connection (ws:// or wss://). Connect using a WebSocket client or the Exoforge C# / Unity SDK.",
+          websocket_url: "ws://localhost:#{Exoforge.Endpoints.ws_port()}/ws",
+          studio_url: get_studio_url()
+        })
+      )
     end
   end
 
@@ -168,7 +223,7 @@ defmodule Exoforge.Std.Ws.Router do
     port =
       Application.get_env(:exoforge_std_dashboard, Exoforge.Std.Dashboard.Endpoint, [])
       |> Keyword.get(:http, [])
-      |> Keyword.get(:port, 4005)
+      |> Keyword.get(:port, Exoforge.Endpoints.dashboard_port())
 
     host =
       Application.get_env(:exoforge_std_dashboard, Exoforge.Std.Dashboard.Endpoint, [])

@@ -44,7 +44,9 @@ defmodule Exoforge.DatabaseTest do
                )
 
       # :player_data sees ONLY Bob
-      {:ok, %{rows: player_data_users_after}} = Database.execute(:player_data, "SELECT * FROM users")
+      {:ok, %{rows: player_data_users_after}} =
+        Database.execute(:player_data, "SELECT * FROM users")
+
       assert length(player_data_users_after) == 1
       assert hd(player_data_users_after)["username"] == "bob_player"
 
@@ -67,7 +69,8 @@ defmodule Exoforge.DatabaseTest do
 
   describe "SQL Query Operations" do
     test "handles parameterized INSERT, SELECT, UPDATE, and DELETE" do
-      assert {:ok, _} = Database.execute(:combat, "CREATE TABLE weapons (id text, name text, damage text)")
+      assert {:ok, _} =
+               Database.execute(:combat, "CREATE TABLE weapons (id text, name text, damage text)")
 
       assert {:ok, _} =
                Database.execute(
@@ -108,7 +111,9 @@ defmodule Exoforge.DatabaseTest do
 
   describe "Document / Key-Value operations" do
     test "put, get, delete, all operate per-plugin" do
-      assert {:ok, _} = Database.put(:auth, "sessions", "sess_123", %{"token" => "abc", "scope" => "admin"})
+      assert {:ok, _} =
+               Database.put(:auth, "sessions", "sess_123", %{"token" => "abc", "scope" => "admin"})
+
       assert {:ok, %{"token" => "abc"}} = Database.get(:auth, "sessions", "sess_123")
 
       # Other plugin cannot see the session

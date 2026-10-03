@@ -7,20 +7,22 @@ defmodule Exoforge.Std.Http do
   use Exoforge.Plugin, provides: [:http]
 
   @manifest %{
-    dependencies: [Exoforge.Std.Services.Auth]
+    dependencies: [Exoforge.Std.Services.Auth],
+    category: "Ingress",
+    system: true,
+    dashboard_view: %{id: :http, title: "HTTP Ingress", icon: "🌐"}
   }
 
   def children do
-    port = Application.get_env(:exoforge, :http_port, 4001)
+    port = Exoforge.Endpoints.http_port()
 
-    [
-      {Bandit, plug: Exoforge.Std.Http.Router, port: port, scheme: :http}
-    ]
+    if Exoforge.Config.start_gateway?(),
+      do: [{Bandit, plug: Exoforge.Std.Http.Router, port: port, scheme: :http}],
+      else: []
   end
 
   @impl true
   defaction status() do
-    port = Application.get_env(:exoforge, :http_port, 4001)
-    {:ok, %{status: "ok", port: port}}
+    {:ok, %{status: "ok", port: Exoforge.Endpoints.http_port()}}
   end
 end

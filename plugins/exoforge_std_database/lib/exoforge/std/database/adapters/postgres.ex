@@ -25,14 +25,21 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
                 {:ok, %Postgrex.Result{num_rows: 0}} ->
                   # CREATE DATABASE cannot run in a transaction
                   Postgrex.query(conn, "CREATE DATABASE \"#{db_name}\"", [])
-                  Logger.info("[Database] Provisioned dedicated database #{db_name} for plugin #{inspect(plugin_id)}")
+
+                  Logger.info(
+                    "[Database] Provisioned dedicated database #{db_name} for plugin #{inspect(plugin_id)}"
+                  )
+
                   {:ok, %{status: :created, database: db_name, plugin: plugin_id}}
 
                 {:ok, _} ->
                   {:ok, %{status: :exists, database: db_name, plugin: plugin_id}}
 
                 {:error, reason} ->
-                  Logger.warning("[Database] Error checking/creating database #{db_name}: #{inspect(reason)}, falling back to schema")
+                  Logger.warning(
+                    "[Database] Error checking/creating database #{db_name}: #{inspect(reason)}, falling back to schema"
+                  )
+
                   ensure_schema(conn, schema_name, plugin_id)
               end
 
@@ -51,7 +58,10 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
   defp ensure_schema(conn, schema_name, plugin_id) do
     case Postgrex.query(conn, "CREATE SCHEMA IF NOT EXISTS \"#{schema_name}\"", []) do
       {:ok, _} ->
-        Logger.info("[Database] Provisioned dedicated schema #{schema_name} for plugin #{inspect(plugin_id)}")
+        Logger.info(
+          "[Database] Provisioned dedicated schema #{schema_name} for plugin #{inspect(plugin_id)}"
+        )
+
         {:ok, %{status: :ready, schema: schema_name, plugin: plugin_id}}
 
       {:error, reason} ->
@@ -253,6 +263,7 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
 
   defp connect_for_plugin(plugin_id, config) do
     isolation_mode = Map.get(config, :isolation_mode, :schema)
+
     target_db =
       if isolation_mode == :database do
         database_name(plugin_id, config)

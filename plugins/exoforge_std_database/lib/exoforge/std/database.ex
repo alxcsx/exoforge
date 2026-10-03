@@ -7,6 +7,12 @@ defmodule Exoforge.Std.Database do
   """
   use Exoforge.Plugin, provides: [:database, :lldb]
 
+  @manifest %{
+    category: "Storage",
+    system: true,
+    dashboard_view: %{id: :database, title: "Database Engine", icon: "🗄️"}
+  }
+
   alias Exoforge.Std.Database.Manager
 
   def children do
@@ -119,6 +125,7 @@ defmodule Exoforge.Std.Database do
       Map.get(map, k) || Map.get(map, to_string(k))
     end)
   end
+
   defp fetch_any(_, _, default), do: default
 
   defp extract_plugin(p), do: fetch_any(p, [:plugin, :namespace], :default)

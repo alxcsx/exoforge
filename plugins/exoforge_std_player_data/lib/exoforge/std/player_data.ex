@@ -8,7 +8,9 @@ defmodule Exoforge.Std.PlayerData do
   use Exoforge.Plugin, provides: [:player_data]
 
   @manifest %{
-    dependencies: [Exoforge.Std.Services.Database, Exoforge.Std.Services.Auth]
+    dependencies: [Exoforge.Std.Services.Database, Exoforge.Std.Services.Auth],
+    category: "LiveOps",
+    dashboard_view: %{id: :player_data, title: "Player Data", icon: "👤"}
   }
 
   alias Exoforge.ActionDispatcher
@@ -23,7 +25,8 @@ defmodule Exoforge.Std.PlayerData do
     _ =
       ActionDispatcher.dispatch(:database, :execute, %{
         plugin: :player_data,
-        operation: "CREATE TABLE IF NOT EXISTS players (id text, player_id text, profile text, state text)"
+        operation:
+          "CREATE TABLE IF NOT EXISTS players (id text, player_id text, profile text, state text)"
       })
 
     :ok
@@ -40,7 +43,11 @@ defmodule Exoforge.Std.PlayerData do
     else
       query = "SELECT * FROM players WHERE player_id = $1"
 
-      case ActionDispatcher.dispatch(:database, :execute, %{plugin: :player_data, operation: query, arguments: [player_id]}) do
+      case ActionDispatcher.dispatch(:database, :execute, %{
+             plugin: :player_data,
+             operation: query,
+             arguments: [player_id]
+           }) do
         {:ok, %{rows: [row | _]}} ->
           player = decode_player_row(row)
           {:ok, %{player: player}}
@@ -64,7 +71,11 @@ defmodule Exoforge.Std.PlayerData do
     else
       query = "SELECT * FROM players WHERE player_id = $1"
 
-      case ActionDispatcher.dispatch(:database, :execute, %{plugin: :player_data, operation: query, arguments: [player_id]}) do
+      case ActionDispatcher.dispatch(:database, :execute, %{
+             plugin: :player_data,
+             operation: query,
+             arguments: [player_id]
+           }) do
         {:ok, %{rows: [existing_row | _]}} ->
           existing = decode_player_row(existing_row)
           updated = Map.merge(existing, data)
@@ -113,7 +124,11 @@ defmodule Exoforge.Std.PlayerData do
            }) do
         {:ok, _} ->
           # Ensure player credentials and token are issued in auth
-          _ = ActionDispatcher.dispatch(:auth, :issue_token, %{player_id: player_id, scopes: ["player"]})
+          _ =
+            ActionDispatcher.dispatch(:auth, :issue_token, %{
+              player_id: player_id,
+              scopes: [Exoforge.Auth.Roles.player()]
+            })
 
           # Emit player_created lifecycle event
           player_created(player_id, now)

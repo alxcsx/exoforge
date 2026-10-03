@@ -19,6 +19,8 @@ defmodule Exoforge.HttpTest do
   end
 
   setup do
+    Application.put_env(:exoforge, :allow_dev_tokens, true)
+    on_exit(fn -> Application.delete_env(:exoforge, :allow_dev_tokens) end)
     PluginRegistry.initialize_ets()
     start_supervised!({DbManager, [driver: :sandbox]})
 
@@ -60,7 +62,7 @@ defmodule Exoforge.HttpTest do
 
   describe "HTTP Endpoints" do
     test "GET / returns 200 ok with gateway metadata" do
-      conn = conn(:get, "/") |> Router.call(@opts)
+      conn = conn(:get, "/") |> put_req_header("authorization", "Bearer dev:admin") |> Router.call(@opts)
       assert conn.status == 200
       body = Jason.decode!(conn.resp_body)
       assert body["status"] == "ok"
@@ -72,6 +74,7 @@ defmodule Exoforge.HttpTest do
     test "GET / with Accept: text/html returns HTML landing page" do
       conn =
         conn(:get, "/")
+        |> put_req_header("authorization", "Bearer dev:admin")
         |> put_req_header("accept", "text/html")
         |> Router.call(@opts)
 
@@ -87,7 +90,7 @@ defmodule Exoforge.HttpTest do
     end
 
     test "GET /api/status returns 200 with service name" do
-      conn = conn(:get, "/api/status") |> Router.call(@opts)
+      conn = conn(:get, "/api/status") |> put_req_header("authorization", "Bearer dev:admin") |> Router.call(@opts)
       assert conn.status == 200
       body = Jason.decode!(conn.resp_body)
       assert body["status"] == "ok"
@@ -95,7 +98,7 @@ defmodule Exoforge.HttpTest do
     end
 
     test "GET /api/openapi.json returns valid OpenAPI 3.0 specification" do
-      conn = conn(:get, "/api/openapi.json") |> Router.call(@opts)
+      conn = conn(:get, "/api/openapi.json") |> put_req_header("authorization", "Bearer dev:admin") |> Router.call(@opts)
       assert conn.status == 200
       spec = Jason.decode!(conn.resp_body)
       assert spec["openapi"] == "3.0.3"
@@ -106,7 +109,7 @@ defmodule Exoforge.HttpTest do
     end
 
     test "GET /api/docs returns interactive Swagger UI page" do
-      conn = conn(:get, "/api/docs") |> Router.call(@opts)
+      conn = conn(:get, "/api/docs") |> put_req_header("authorization", "Bearer dev:admin") |> Router.call(@opts)
       assert conn.status == 200
       assert conn.resp_body =~ "SwaggerUIBundle"
       assert conn.resp_body =~ "/api/openapi.json"
@@ -131,6 +134,7 @@ defmodule Exoforge.HttpTest do
       conn =
         conn(:post, "/api/non_existent/action", "{}")
         |> put_req_header("content-type", "application/json")
+        |> put_req_header("authorization", "Bearer dev:admin")
         |> Router.call(@opts)
 
       assert conn.status == 404
@@ -152,7 +156,7 @@ defmodule Exoforge.HttpTest do
       assert conn.status == 401
       body = Jason.decode!(conn.resp_body)
       assert body["status"] == "error"
-      assert body["error"] == "unauthorized"
+      assert body["error"] == "unauthenticated"
     end
 
     test "POST /api/:service/:action rejects insufficient scope with 403" do
@@ -179,6 +183,38 @@ defmodule Exoforge.HttpTest do
       body = Jason.decode!(conn.resp_body)
       assert body["status"] == "ok"
       assert body["data"]["secret"] == "classified"
+    end
+
+    test "studio token can read routes but player token is forbidden" do
+      {:ok, studio} = Exoforge.Std.Auth.issue_token("stu_http", ["studio"])
+      {:ok, player} = Exoforge.Std.Auth.issue_token("ply_http", ["player"])
+
+      studio_conn =
+        conn(:get, "/api/routes")
+        |> put_req_header("authorization", "Bearer #{studio}")
+        |> Router.call(@opts)
+
+      assert studio_conn.status == 200
+
+      player_conn =
+        conn(:get, "/api/routes")
+        |> put_req_header("authorization", "Bearer #{player}")
+        |> Router.call(@opts)
+
+      assert player_conn.status == 403
+    end
+
+    test "studio token cannot run an admin-scoped action" do
+      {:ok, studio} = Exoforge.Std.Auth.issue_token("stu_http2", ["studio"])
+
+      conn =
+        conn(:post, "/api/mock_admin/secret_op", "{}")
+        |> put_req_header("content-type", "application/json")
+        |> put_req_header("authorization", "Bearer #{studio}")
+        |> Router.call(@opts)
+
+      assert conn.status == 403
+      assert Jason.decode!(conn.resp_body)["error"] == "forbidden_scope"
     end
   end
 end

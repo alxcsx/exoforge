@@ -19,7 +19,7 @@ defmodule Exoforge.Std.WsTest do
       end
 
       action :kick_user do
-        scope :admin
+        scope(:admin)
         params(user_id: :string)
         returns(status: :string)
       end
@@ -42,6 +42,8 @@ defmodule Exoforge.Std.WsTest do
   end
 
   setup do
+    Application.put_env(:exoforge, :allow_dev_tokens, true)
+    on_exit(fn -> Application.delete_env(:exoforge, :allow_dev_tokens) end)
     start_supervised!(EventDispatcher)
     start_supervised!(PluginRegistry)
 
@@ -87,7 +89,7 @@ defmodule Exoforge.Std.WsTest do
   end
 
   test "GET / returns 200 ok with gateway metadata" do
-    conn = conn(:get, "/")
+    conn = conn(:get, "/") |> put_req_header("authorization", "Bearer dev:admin")
     conn = Router.call(conn, Router.init([]))
 
     assert conn.status == 200
@@ -101,6 +103,7 @@ defmodule Exoforge.Std.WsTest do
   test "GET / with Accept: text/html returns HTML landing page" do
     conn =
       conn(:get, "/")
+      |> put_req_header("authorization", "Bearer dev:admin")
       |> put_req_header("accept", "text/html")
       |> Router.call(Router.init([]))
 
@@ -118,6 +121,11 @@ defmodule Exoforge.Std.WsTest do
     assert body["error"] == "upgrade_required"
   end
 
+  defp authenticate(state, token) do
+    msg = Jason.encode!(%{"type" => "auth", "token" => token})
+    SocketHandler.handle_in({msg, :text}, state)
+  end
+
   test "WebSocket ping returns pong" do
     {:ok, state} = SocketHandler.init([])
 
@@ -129,6 +137,7 @@ defmodule Exoforge.Std.WsTest do
 
   test "WebSocket action call dispatches and returns action_result" do
     {:ok, state} = SocketHandler.init([])
+    {:push, {:text, _}, state} = authenticate(state, "dev:admin")
 
     action_msg =
       Jason.encode!(%{
@@ -150,6 +159,7 @@ defmodule Exoforge.Std.WsTest do
 
   test "WebSocket subscribe and broadcast pushes event frame" do
     {:ok, state} = SocketHandler.init([])
+    {:push, {:text, _}, state} = authenticate(state, "dev:admin")
 
     # 1. Subscribe to topic
     sub_msg = Jason.encode!(%{"type" => "subscribe", "topic" => "room:test"})
@@ -161,6 +171,7 @@ defmodule Exoforge.Std.WsTest do
 
     # 3. Handle info received by socket handler process
     assert_receive {:exo_event, :player_spawned, payload, context}
+
     assert {:push, {:text, event_json}, _state} =
              SocketHandler.handle_info({:exo_event, :player_spawned, payload, context}, sub_state)
 
@@ -186,7 +197,7 @@ defmodule Exoforge.Std.WsTest do
     assert resp["error"]["code"] == "invalid_json"
   end
 
-  test "WebSocket rejects unauthenticated action call to scoped action with unauthorized" do
+  test "WebSocket rejects unauthenticated action call with unauthenticated" do
     {:ok, state} = SocketHandler.init([])
 
     action_msg =
@@ -204,7 +215,7 @@ defmodule Exoforge.Std.WsTest do
     assert resp["type"] == "action_result"
     assert resp["id"] == "req-101"
     assert resp["status"] == "error"
-    assert resp["error"]["code"] == "unauthorized"
+    assert resp["error"]["code"] == "unauthenticated"
   end
 
   test "WebSocket rejects call from authenticated guest lacking scope with forbidden_scope" do
@@ -255,5 +266,35 @@ defmodule Exoforge.Std.WsTest do
     assert resp["id"] == "req-103"
     assert resp["status"] == "ok"
     assert resp["data"] == %{"status" => "kicked"}
+  end
+
+  test "studio can call a player action but not an admin action" do
+    {:ok, studio} = Exoforge.Std.Auth.issue_token("stu_ws", ["studio"])
+    {:ok, state} = SocketHandler.init([])
+    {:push, {:text, _}, state} = authenticate(state, studio)
+
+    greet =
+      Jason.encode!(%{
+        "type" => "action",
+        "id" => "g1",
+        "service" => "Exoforge.Std.WsTest.DummyService.Mock",
+        "action" => "greet",
+        "payload" => %{"name" => "Studio"}
+      })
+
+    assert {:push, {:text, resp}, state} = SocketHandler.handle_in({greet, :text}, state)
+    assert Jason.decode!(resp)["status"] == "ok"
+
+    kick =
+      Jason.encode!(%{
+        "type" => "action",
+        "id" => "k1",
+        "service" => "Exoforge.Std.WsTest.DummyService.Mock",
+        "action" => "kick_user",
+        "payload" => %{"user_id" => "x"}
+      })
+
+    assert {:push, {:text, resp2}, _} = SocketHandler.handle_in({kick, :text}, state)
+    assert Jason.decode!(resp2)["error"]["code"] == "forbidden_scope"
   end
 end
