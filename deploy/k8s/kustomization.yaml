@@ -6,7 +6,6 @@ namespace: exoforge
 resources:
   - namespace.yaml
   - configmap.yaml
-  - secret.yaml
   - postgres.yaml
   - backend-deployment.yaml
   - backend-service.yaml
