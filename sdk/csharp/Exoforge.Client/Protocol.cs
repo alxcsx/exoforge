@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -86,3 +87,33 @@ public class ExoEventFrame : ExoMessage
         return JsonSerializer.Deserialize<T>(Payload.GetRawText(), options);
     }
 }
+
+public class ExoAuthRequest : ExoMessage
+{
+    [JsonPropertyName("token")]
+    public string Token { get; set; } = string.Empty;
+
+    public ExoAuthRequest(string token)
+    {
+        Type = "auth";
+        Token = token;
+    }
+}
+
+public class ExoAuthResult : ExoMessage
+{
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = string.Empty;
+
+    [JsonPropertyName("player_id")]
+    public string? PlayerId { get; set; }
+
+    [JsonPropertyName("scopes")]
+    public List<string>? Scopes { get; set; }
+
+    [JsonPropertyName("error")]
+    public object? Error { get; set; }
+
+    public bool IsSuccess => Status == "ok";
+}
+

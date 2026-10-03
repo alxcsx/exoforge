@@ -82,6 +82,39 @@ public class ProtocolAndDispatcherTests
         Assert.Equal(10, counter);
     }
 
+    [Fact]
+    public void CanAccessGeneratedServiceClientsFromExoClient()
+    {
+        var client = new ExoClient();
+        Assert.NotNull(client.Combat());
+        Assert.NotNull(client.PlayerData());
+        Assert.NotNull(client.Auth());
+        Assert.NotNull(client.Http());
+        Assert.NotNull(client.Ws());
+        Assert.NotNull(client.Database());
+        Assert.NotNull(client.PluginManager());
+
+        // Same client yields same cached service instance
+        Assert.Same(client.Combat(), client.Combat());
+        Assert.Same(client.PlayerData(), client.PlayerData());
+        Assert.Same(client.PluginManager(), client.PluginManager());
+    }
+
+    [Fact]
+    public void CanDeserializeAuthResult()
+    {
+        string json = "{\"type\":\"auth_result\",\"status\":\"ok\",\"player_id\":\"p_123\",\"scopes\":[\"player\",\"admin\"]}";
+        var result = JsonSerializer.Deserialize<ExoAuthResult>(json);
+
+        Assert.NotNull(result);
+        Assert.Equal("auth_result", result.Type);
+        Assert.Equal("ok", result.Status);
+        Assert.True(result.IsSuccess);
+        Assert.Equal("p_123", result.PlayerId);
+        Assert.Contains("player", result.Scopes!);
+        Assert.Contains("admin", result.Scopes!);
+    }
+
     private class DamageEventPayload
     {
         public int target_id { get; set; }

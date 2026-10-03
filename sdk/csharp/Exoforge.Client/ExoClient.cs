@@ -19,8 +19,14 @@ public class ExoClient : IDisposable
     private readonly ConcurrentDictionary<string, TaskCompletionSource<ExoActionResult>> _pendingActions = new();
     private readonly ConcurrentDictionary<string, List<Action<ExoEventFrame>>> _eventHandlers = new();
     private long _requestIdCounter;
+    private TaskCompletionSource<ExoAuthResult>? _pendingAuth;
+    private bool _isAuthenticated;
+    private readonly List<string> _scopes = new();
 
     public bool IsConnected => _transport.IsConnected;
+    public bool IsAuthenticated => _isAuthenticated;
+    public string? PlayerId { get; private set; }
+    public IReadOnlyList<string> Scopes => _scopes.AsReadOnly();
     public ExoDispatcher Dispatcher => _dispatcher;
 
     public event Action? OnConnected;
@@ -44,6 +50,43 @@ public class ExoClient : IDisposable
     public Task DisconnectAsync(CancellationToken cancellationToken = default)
     {
         return _transport.DisconnectAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Authenticates the client session with a token frame.
+    /// </summary>
+    public async Task<ExoAuthResult> AuthenticateAsync(
+        string token,
+        TimeSpan? timeout = null,
+        CancellationToken cancellationToken = default)
+    {
+        var request = new ExoAuthRequest(token);
+        var tcs = new TaskCompletionSource<ExoAuthResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _pendingAuth = tcs;
+
+        string json = JsonSerializer.Serialize(request);
+        await _transport.SendAsync(json, cancellationToken).ConfigureAwait(false);
+
+        TimeSpan effectiveTimeout = timeout ?? TimeSpan.FromSeconds(5);
+        using var timeoutCts = new CancellationTokenSource(effectiveTimeout);
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+
+        linkedCts.Token.Register(() =>
+        {
+            if (_pendingAuth == tcs)
+            {
+                if (timeoutCts.IsCancellationRequested)
+                {
+                    tcs.TrySetException(new TimeoutException($"Authentication timed out after {effectiveTimeout.TotalSeconds}s."));
+                }
+                else
+                {
+                    tcs.TrySetCanceled(cancellationToken);
+                }
+            }
+        });
+
+        return await tcs.Task.ConfigureAwait(false);
     }
 
     /// <summary>
@@ -201,6 +244,10 @@ public class ExoClient : IDisposable
 
             switch (type)
             {
+                case "auth_result":
+                    HandleAuthResult(json);
+                    break;
+
                 case "action_result":
                     HandleActionResult(json);
                     break;
@@ -216,6 +263,30 @@ public class ExoClient : IDisposable
         catch (Exception ex)
         {
             Console.Error.WriteLine($"[ExoClient] Failed to parse message: {ex.Message}");
+        }
+    }
+
+    private void HandleAuthResult(string json)
+    {
+        var result = JsonSerializer.Deserialize<ExoAuthResult>(json);
+        if (result != null)
+        {
+            if (result.IsSuccess)
+            {
+                _isAuthenticated = true;
+                PlayerId = result.PlayerId;
+                _scopes.Clear();
+                if (result.Scopes != null)
+                {
+                    _scopes.AddRange(result.Scopes);
+                }
+                _pendingAuth?.TrySetResult(result);
+            }
+            else
+            {
+                string errMsg = result.Error?.ToString() ?? "Authentication failed";
+                _pendingAuth?.TrySetException(new ExoActionException("auth_failed", errMsg));
+            }
         }
     }
 
@@ -270,6 +341,12 @@ public class ExoClient : IDisposable
 
     private void HandleDisconnected(Exception? ex)
     {
+        _isAuthenticated = false;
+        PlayerId = null;
+        _scopes.Clear();
+        _pendingAuth?.TrySetException(ex ?? new InvalidOperationException("Disconnected from server."));
+        _pendingAuth = null;
+
         // Cancel all pending actions
         foreach (var kvp in _pendingActions)
         {

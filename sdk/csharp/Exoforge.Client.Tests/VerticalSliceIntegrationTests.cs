@@ -29,6 +29,12 @@ public class VerticalSliceIntegrationTests
 
         Assert.True(client.IsConnected);
 
+        // Authenticate client session before invoking actions
+        var authResult = await client.AuthenticateAsync("dev:test_e2e_player");
+        Assert.True(authResult.IsSuccess);
+        Assert.True(client.IsAuthenticated);
+        Assert.Equal("test_e2e_player", client.PlayerId);
+
         // 1. Client invokes action `combat.ping` -> WASM plugin executes and returns 42
         int pingResult = await client.SendActionAsync<int>("combat", "ping", Array.Empty<int>());
         Assert.Equal(42, pingResult);
