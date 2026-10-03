@@ -90,44 +90,82 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   @impl true
   def handle_params(params, _uri, socket) do
     tab_param = params["tab"]
-    pinned_ids = socket.assigns.pinned_extensions
+    live_action = socket.assigns[:live_action]
+    extensions = socket.assigns.overview.extensions
 
     tab =
       cond do
-        tab_param in ["overview", nil] ->
-          :overview
-
-        tab_param == "apps" ->
+        live_action == :apps or tab_param in ["apps", "extensions"] ->
           :apps
 
-        tab_param in pinned_ids ->
-          existing_atom(tab_param)
-
-        Enum.any?(socket.assigns.overview.extensions, fn e ->
-          to_string(e.id) == tab_param or
-              (is_map(e.dashboard_view) and to_string(e.dashboard_view[:id]) == tab_param)
-        end) ->
-          existing_atom(tab_param)
+        (live_action == :index or is_nil(live_action)) and tab_param in ["overview", nil, ""] ->
+          :overview
 
         true ->
-          :overview
+          resolve_tab(tab_param, extensions)
       end
 
     socket =
-      if tab == :overview do
-        assign(socket, active_entities: fetch_active_entities())
-      else
-        socket
-      end
+      socket
+      |> assign(:current_tab, tab)
+      |> maybe_refresh_tab_data(tab)
 
-    {:noreply, assign(socket, :current_tab, tab)}
+    {:noreply, socket}
+  end
+
+  defp resolve_tab(nil, _extensions), do: :overview
+  defp resolve_tab("", _extensions), do: :overview
+  defp resolve_tab("overview", _extensions), do: :overview
+  defp resolve_tab(:overview, _extensions), do: :overview
+  defp resolve_tab("apps", _extensions), do: :apps
+  defp resolve_tab(:apps, _extensions), do: :apps
+  defp resolve_tab("extensions", _extensions), do: :apps
+
+  defp resolve_tab(param, extensions) do
+    str = to_string(param)
+    clean = String.replace_prefix(str, "exoforge_std_", "")
+
+    match =
+      Enum.find(extensions, fn e ->
+        e_id_str = to_string(e.id)
+        dv_id = if is_map(e.dashboard_view), do: to_string(e.dashboard_view[:id]), else: nil
+
+        e_id_str == str or
+          e_id_str == "exoforge_std_#{clean}" or
+          dv_id == str or
+          dv_id == clean
+      end)
+
+    case match do
+      %{id: ext_id} ->
+        ext_id
+
+      nil ->
+        existing_atom(str)
+    end
+  end
+
+  defp maybe_refresh_tab_data(socket, :overview) do
+    assign(socket, active_entities: fetch_active_entities())
+  end
+
+  defp maybe_refresh_tab_data(socket, _other), do: socket
+
+  defp tab_path("overview"), do: "/"
+  defp tab_path(:overview), do: "/"
+  defp tab_path("apps"), do: "/tab/apps"
+  defp tab_path(:apps), do: "/tab/apps"
+
+  defp tab_path(tab) when is_atom(tab) or is_binary(tab) do
+    "/tab/#{tab}"
   end
 
   # ---- EVENT HANDLERS ----
 
   @impl true
   def handle_event("switch_tab", %{"tab" => tab_str}, socket) do
-    {:noreply, assign(socket, :current_tab, existing_atom(tab_str))}
+    target_tab = resolve_tab(tab_str, socket.assigns.overview.extensions)
+    {:noreply, push_patch(socket, to: tab_path(target_tab))}
   end
 
   def handle_event("switch_env", %{"env" => env}, socket) do
@@ -167,14 +205,14 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     Exoforge.Std.Dashboard.Preferences.put_pinned(socket.assigns.player_id, new_pinned)
     socket = assign(socket, pinned_extensions: new_pinned)
 
-    socket =
-      if to_string(socket.assigns.current_tab) == ext_id_str do
-        assign(socket, current_tab: :overview)
-      else
-        socket
-      end
-
-    {:noreply, show_toast(socket, :info, "Unpinned #{ext_id_str} from top bar.")}
+    if to_string(socket.assigns.current_tab) == ext_id_str do
+      {:noreply,
+       socket
+       |> show_toast(:info, "Unpinned #{ext_id_str} from top bar.")
+       |> push_patch(to: "/")}
+    else
+      {:noreply, show_toast(socket, :info, "Unpinned #{ext_id_str} from top bar.")}
+    end
   end
 
   def handle_event("dismiss_toast", %{"kind" => kind}, socket) when kind in ["info", "error"] do
@@ -284,16 +322,16 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
     case type do
       "navigation" ->
-        tab =
+        target =
           cond do
             String.starts_with?(id, "entity:") ->
               :overview
 
             true ->
-              existing_atom(id)
+              resolve_tab(id, socket.assigns.overview.extensions)
           end
 
-        {:noreply, assign(socket, :current_tab, tab)}
+        {:noreply, push_patch(socket, to: tab_path(target))}
 
       "action" ->
         case String.split(id, ":", parts: 2) do
@@ -556,7 +594,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     put_flash(socket, kind, message)
   end
 
-  defp custom_ui?(ext), do: custom_view_module(ext) != nil
+  defp custom_ui?(ext), do: ext[:custom_view_module] != nil || custom_view_module(ext) != nil
 
   # Category pills are derived from extension metadata; only the icon is presentation.
   defp extension_categories(extensions) do
@@ -712,12 +750,21 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         _ -> []
       end
 
-    extensions =
+    raw_extensions =
       try do
         PluginRegistry.dashboard_extensions()
       rescue
         _ -> []
       end
+
+    extensions =
+      Enum.map(raw_extensions, fn ext ->
+        view_mod = custom_view_module(ext)
+
+        ext
+        |> Map.put(:custom_view_module, view_mod)
+        |> Map.put(:has_custom_view, view_mod != nil)
+      end)
 
     resources =
       try do
@@ -907,29 +954,43 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   # Resolves a custom LiveView/LiveComponent for an extension: an explicit `:module` in its
   # dashboard_view, dynamic lookup via `:dashboard_view` service contract, or conventional module.
   defp custom_view_module(ext) do
-    dv = ext.dashboard_view
+    cond do
+      is_map(ext) and Map.has_key?(ext, :custom_view_module) and not is_nil(ext[:custom_view_module]) ->
+        ext[:custom_view_module]
+
+      true ->
+        do_resolve_view_module(ext)
+    end
+  end
+
+  defp do_resolve_view_module(ext) do
+    dv = (is_map(ext) && (ext[:dashboard_view] || ext["dashboard_view"])) || nil
 
     cond do
       is_map(dv) and is_atom(dv[:module]) and Code.ensure_loaded?(dv[:module]) ->
         dv[:module]
 
-      is_map(dv) and not is_nil(dv[:id]) ->
-        case Exoforge.ActionDispatcher.dispatch(:dashboard_view, :resolve_view, %{id: dv[:id]}) do
-          {:ok, %{module: mod}} when is_atom(mod) and not is_nil(mod) ->
-            if Code.ensure_loaded?(mod), do: mod, else: nil
-
-          _ ->
-            mod =
-              Module.concat([
-                Exoforge.Std.DashboardViews,
-                Macro.camelize(to_string(dv[:id])) <> "View"
-              ])
-
-            if Code.ensure_loaded?(mod), do: mod, else: nil
-        end
-
       true ->
-        nil
+        lookup_id = (is_map(dv) && (dv[:id] || dv["id"])) || (is_map(ext) && (ext[:id] || ext["id"]))
+
+        if lookup_id do
+          case Exoforge.ActionDispatcher.dispatch(:dashboard_view, :resolve_view, %{id: lookup_id}) do
+            {:ok, %{module: mod}} when is_atom(mod) and not is_nil(mod) ->
+              if Code.ensure_loaded?(mod), do: mod, else: nil
+
+            _ ->
+              clean_name =
+                lookup_id
+                |> to_string()
+                |> String.replace_prefix("exoforge_std_", "")
+                |> Macro.camelize()
+
+              mod = Module.concat([Exoforge.Std.DashboardViews, clean_name <> "View"])
+              if Code.ensure_loaded?(mod), do: mod, else: nil
+          end
+        else
+          nil
+        end
     end
   end
 
@@ -1554,9 +1615,9 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                end) %>
 
           <%= if active_ext do %>
-            <%= if custom_view_module(active_ext) do %>
+            <%= if mod = (active_ext[:custom_view_module] || custom_view_module(active_ext)) do %>
               <.live_component
-                module={custom_view_module(active_ext)}
+                module={mod}
                 id={"ext_view_#{active_ext.id}"}
                 extension={active_ext}
               />

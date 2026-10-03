@@ -39,7 +39,9 @@ defmodule Exoforge.Std.Dashboard.Router do
       pipe_through(:browser)
 
       live("/", StudioLive, :index)
+      live("/extensions", StudioLive, :apps)
       live("/tab/:tab", StudioLive, :tab)
+      live("/extensions/:tab", StudioLive, :tab)
       live("/resources/:name", ResourceLive, :index)
     end
   end

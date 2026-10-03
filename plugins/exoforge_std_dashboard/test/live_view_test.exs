@@ -635,5 +635,31 @@ defmodule Exoforge.DashboardLiveViewTest do
       html = view |> element("button", "Cancel") |> render_click()
       refute html =~ "Restart Cluster Supervision?"
     end
+
+    test "direct URL navigation and deep-linking routes correctly" do
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{
+          "admin_player_id" => "admin",
+          "admin_scopes" => ["admin"]
+        })
+
+      # Direct load of /extensions
+      {:ok, _view, html} = live(conn, "/extensions")
+      assert html =~ "Extensions Registry"
+
+      # Direct deep-link to /tab/player_data
+      {:ok, view, html} = live(conn, "/tab/player_data")
+      assert html =~ "Registered Players"
+      assert html =~ "New Player Profile"
+
+      # Switching tab patches URL
+      render_click(view, "switch_tab", %{"tab" => "exoforge_std_auth"})
+      assert_patched(view, "/tab/exoforge_std_auth")
+
+      # Switching to overview patches URL to /
+      render_click(view, "switch_tab", %{"tab" => "overview"})
+      assert_patched(view, "/")
+    end
   end
 end

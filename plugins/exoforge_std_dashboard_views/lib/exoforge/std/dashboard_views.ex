@@ -27,9 +27,25 @@ defmodule Exoforge.Std.DashboardViews do
   }
 
   @doc "Returns the registered view module for a given service or extension id."
-  def view_for(id) do
-    Map.get(@view_registry, id) || Map.get(@view_registry, to_string(id))
+  def view_for(id) when is_atom(id) or is_binary(id) do
+    str_id = to_string(id)
+    clean_id = String.replace_prefix(str_id, "exoforge_std_", "")
+
+    cond do
+      mod =
+        Map.get(@view_registry, id) ||
+          Map.get(@view_registry, str_id) ||
+          Map.get(@view_registry, clean_id) ||
+          Map.get(@view_registry, String.to_atom(clean_id)) ->
+        mod
+
+      true ->
+        mod = Module.concat([Exoforge.Std.DashboardViews, Macro.camelize(clean_id) <> "View"])
+        if Code.ensure_loaded?(mod), do: mod, else: nil
+    end
   end
+
+  def view_for(_), do: nil
 
   ## ---- SERVICE ACTIONS ----
 
@@ -39,9 +55,9 @@ defmodule Exoforge.Std.DashboardViews do
     view_mod = view_for(id)
 
     if view_mod && Code.ensure_loaded?(view_mod) do
-      {:ok, %{module: view_mod}}
+      {:ok, %{module: view_mod, found: true}}
     else
-      {:error, :not_found}
+      {:ok, %{module: nil, found: false}}
     end
   end
 

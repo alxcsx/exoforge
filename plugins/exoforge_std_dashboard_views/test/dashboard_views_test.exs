@@ -28,10 +28,13 @@ defmodule Exoforge.Std.DashboardViewsTest do
   test "view_for resolves PlayerDataView, PluginManagerView, and AuthView" do
     assert DashboardViews.view_for("player_data") == PlayerDataView
     assert DashboardViews.view_for(:player_data) == PlayerDataView
+    assert DashboardViews.view_for(:exoforge_std_player_data) == PlayerDataView
     assert DashboardViews.view_for("plugin_manager") == PluginManagerView
     assert DashboardViews.view_for(:plugin_manager) == PluginManagerView
+    assert DashboardViews.view_for(:exoforge_std_plugin_manager) == PluginManagerView
     assert DashboardViews.view_for("auth") == AuthView
     assert DashboardViews.view_for(:auth) == AuthView
+    assert DashboardViews.view_for(:exoforge_std_auth) == AuthView
   end
 
   test "resolve_view action resolves module over ActionDispatcher" do
@@ -39,14 +42,19 @@ defmodule Exoforge.Std.DashboardViewsTest do
              ActionDispatcher.dispatch(:dashboard_view, :resolve_view, %{id: "player_data"})
 
     assert result.module == PlayerDataView
+    assert result.found == true
 
     assert {:ok, pm_result} =
              ActionDispatcher.dispatch(:dashboard_view, :resolve_view, %{id: "plugin_manager"})
 
     assert pm_result.module == PluginManagerView
+    assert pm_result.found == true
 
-    assert {:error, :not_found} =
+    assert {:ok, none_result} =
              ActionDispatcher.dispatch(:dashboard_view, :resolve_view, %{id: "nonexistent_view"})
+
+    assert none_result.module == nil
+    assert none_result.found == false
   end
 
   test "list_views returns registered views" do
