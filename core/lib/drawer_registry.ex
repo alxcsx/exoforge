@@ -1,17 +1,11 @@
 defmodule Exoforge.DrawerRegistry do
   @moduledoc """
-  Registry for resource inspector side-drawers and their tabs.
+  Compatibility layer delegating resource inspector side-drawers to `Exoforge.UIHookRegistry`.
 
-  Core and extension plugins contribute tabs into any resource's inspector
-  drawer. Tab definitions come from two places, merged here:
-
-    * explicit `register_tab/3` calls (runtime overrides), and
-    * a resource's `drawer([...])` declaration in its contract metadata.
-
-  The kernel does not hardcode any product-specific tabs; a tab without an
-  explicit label gets one derived from its id.
+  Eliminates redundant ETS storage by sharing `:exo_ui_hooks_mem` with the unified UI hook engine.
   """
   use GenServer
+  alias Exoforge.UIHookRegistry
 
   def start_link(opts \\ []) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
@@ -19,39 +13,20 @@ defmodule Exoforge.DrawerRegistry do
 
   @impl true
   def init(_opts) do
-    initialize_ets()
+    UIHookRegistry.initialize_ets()
     {:ok, %{}}
   end
 
-  def initialize_ets do
-    case :ets.info(:exo_drawer_tabs_mem) do
-      :undefined ->
-        :ets.new(:exo_drawer_tabs_mem, [:set, :named_table, :public, read_concurrency: true])
-
-      _ ->
-        :ets.delete_all_objects(:exo_drawer_tabs_mem)
-    end
-
-    :ok
-  end
+  def initialize_ets, do: UIHookRegistry.initialize_ets()
 
   @doc "Registers or overrides a tab definition for a specific resource."
   def register_tab(resource, tab_id, tab_spec \\ %{}) when is_atom(resource) and is_atom(tab_id) do
-    spec =
-      tab_id
-      |> default_spec()
-      |> Map.merge(tab_spec)
-      |> Map.put(:id, tab_id)
-      |> Map.put(:resource, resource)
-
-    :ets.insert(:exo_drawer_tabs_mem, {{resource, tab_id}, spec})
-    :ok
+    UIHookRegistry.register_hook(resource, tab_id, tab_spec)
   end
 
   @doc "Unregisters a tab from a resource."
   def unregister_tab(resource, tab_id) when is_atom(resource) and is_atom(tab_id) do
-    :ets.delete(:exo_drawer_tabs_mem, {resource, tab_id})
-    :ok
+    UIHookRegistry.unregister_hook(resource, tab_id)
   end
 
   @doc """
@@ -61,23 +36,18 @@ defmodule Exoforge.DrawerRegistry do
   def list_tabs(resource) when is_atom(resource) or is_binary(resource) do
     resource_atom = if is_binary(resource), do: String.to_atom(resource), else: resource
 
-    registered_tabs =
-      case :ets.info(:exo_drawer_tabs_mem) do
-        :undefined ->
-          []
-
-        _ ->
-          :ets.match_object(:exo_drawer_tabs_mem, {{resource_atom, :_}, :_})
-          |> Enum.map(fn {_key, spec} -> spec end)
-      end
-
+    registered_tabs = UIHookRegistry.list_hooks(resource_atom)
     registered_ids = MapSet.new(registered_tabs, & &1.id)
 
     declared_tabs =
       resource_atom
       |> declared_tab_ids()
       |> Enum.reject(&MapSet.member?(registered_ids, &1))
-      |> Enum.map(fn tab_id -> Map.put(default_spec(tab_id), :resource, resource_atom) end)
+      |> Enum.map(fn tab_id ->
+        tab_id
+        |> default_spec()
+        |> Map.put(:resource, resource_atom)
+      end)
 
     (registered_tabs ++ declared_tabs)
     |> Enum.sort_by(&Map.get(&1, :order, 100))
@@ -91,9 +61,12 @@ defmodule Exoforge.DrawerRegistry do
   end
 
   defp default_spec(tab_id) do
+    title = tab_id |> to_string() |> String.replace("_", " ") |> String.capitalize()
+
     %{
       id: tab_id,
-      label: tab_id |> to_string() |> String.replace("_", " ") |> String.capitalize(),
+      title: title,
+      label: title,
       order: 100,
       view_type: :declarative
     }

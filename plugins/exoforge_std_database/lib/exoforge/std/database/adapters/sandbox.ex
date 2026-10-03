@@ -76,6 +76,9 @@ defmodule Exoforge.Std.Database.Adapters.Sandbox do
       String.match?(normalized_query, ~r/^CREATE\s+TABLE/i) ->
         handle_create_table(table, normalized_query)
 
+      String.match?(normalized_query, ~r/^CREATE\s+(?:UNIQUE\s+)?INDEX/i) ->
+        {:ok, %{rows: [], num_rows: 0}}
+
       String.match?(normalized_query, ~r/^INSERT\s+INTO/i) ->
         handle_insert(table, normalized_query, args)
 
@@ -305,15 +308,27 @@ defmodule Exoforge.Std.Database.Adapters.Sandbox do
 
     Enum.filter(rows, fn row ->
       Enum.all?(conditions, fn cond_str ->
-        case Regex.run(~r/([a-zA-Z0-9_]+)\s*(=|!=|<>)\s*(.*)/, String.trim(cond_str)) do
+        case Regex.run(~r/([a-zA-Z0-9_]+)\s*(=|!=|<>|LIKE|ILIKE)\s*(.*)/i, String.trim(cond_str)) do
           [_, col, op, val_str] ->
             target_val = resolve_single_value(val_str, args)
             actual_val = fetch_value(row, col)
 
-            case op do
+            case String.upcase(op) do
               "=" -> to_string(actual_val) == to_string(target_val)
               "!=" -> to_string(actual_val) != to_string(target_val)
               "<>" -> to_string(actual_val) != to_string(target_val)
+              op when op in ["LIKE", "ILIKE"] ->
+                pattern =
+                  target_val
+                  |> to_string()
+                  |> Regex.escape()
+                  |> String.replace("%", ".*")
+                  |> String.replace("_", ".")
+
+                opts = if op == "ILIKE", do: [:caseless], else: []
+                {:ok, regex} = Regex.compile("^#{pattern}$", opts)
+                Regex.match?(regex, to_string(actual_val))
+
               _ -> true
             end
 

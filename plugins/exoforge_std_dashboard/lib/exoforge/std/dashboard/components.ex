@@ -1073,6 +1073,417 @@ defmodule Exoforge.Std.Dashboard.Components do
     """
   end
 
+  @doc """
+  Renders the project settings modal with side navigation tabs.
+  """
+  attr(:id, :string, default: "project_settings_modal")
+  attr(:open, :boolean, default: false)
+  attr(:project_name, :string, default: "Exoforge")
+  attr(:studio_name, :string, default: "Exoforge Studio")
+  attr(:settings_tab, :string, default: "project")
+  attr(:settings_hooks, :list, default: [])
+  attr(:environments, :list, default: [])
+  attr(:current_env, :string, default: "dev")
+  attr(:overview, :map, default: %{extensions: []})
+  attr(:active_entities, :list, default: [])
+  attr(:node_name, :string, default: "")
+  attr(:on_close, :string, default: "close_settings")
+
+  def project_settings_modal(assigns) do
+    ~H"""
+    <.modal
+      id={@id}
+      open={@open}
+      max_width="max-w-4xl"
+      title="Project Settings & Topology"
+      subtitle={"#{@project_name} cluster configuration & plugin options"}
+      on_close={@on_close}
+    >
+      <div class="flex flex-col md:flex-row min-h-[380px] -mx-6 -my-4 divide-y md:divide-y-0 md:divide-x divide-gray-100 text-xs">
+        <!-- Left Sidebar Navigation -->
+        <div class="w-full md:w-56 p-3 bg-gray-50/70 flex flex-col justify-between">
+          <div class="space-y-4">
+            <!-- Cluster & Core Settings -->
+            <div>
+              <span class="px-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Cluster &amp; Core</span>
+              <div class="mt-1.5 space-y-0.5">
+                <button
+                  type="button"
+                  phx-click="set_settings_tab"
+                  phx-value-tab="project"
+                  class={"w-full text-left px-2.5 py-2 rounded-xl font-bold flex items-center gap-2 transition-all #{if @settings_tab == "project", do: "bg-white text-primary-700 shadow-sm border border-gray-200/80", else: "text-gray-600 hover:text-gray-900 hover:bg-white/60"}"}
+                >
+                  <span>⚙️</span>
+                  <span>Metadata</span>
+                </button>
+                <button
+                  type="button"
+                  phx-click="set_settings_tab"
+                  phx-value-tab="environments"
+                  class={"w-full text-left px-2.5 py-2 rounded-xl font-bold flex items-center gap-2 transition-all #{if @settings_tab == "environments", do: "bg-white text-primary-700 shadow-sm border border-gray-200/80", else: "text-gray-600 hover:text-gray-900 hover:bg-white/60"}"}
+                >
+                  <span>🌐</span>
+                  <span>Environments</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Plugin Settings Tabs -->
+            <div>
+              <div class="flex items-center justify-between px-2">
+                <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Plugin Settings</span>
+                <span class="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-gray-200/80 text-gray-600">
+                  <%= length(@settings_hooks) %>
+                </span>
+              </div>
+              <div class="mt-1.5 space-y-0.5">
+                <%= if Enum.empty?(@settings_hooks) do %>
+                  <p class="px-2 py-1 text-[11px] text-gray-400 italic">No plugin settings registered</p>
+                <% else %>
+                  <%= for hook <- @settings_hooks do %>
+                    <button
+                      type="button"
+                      phx-click="set_settings_tab"
+                      phx-value-tab={to_string(hook.id)}
+                      class={"w-full text-left px-2.5 py-2 rounded-xl font-bold flex items-center gap-2 transition-all #{if @settings_tab == to_string(hook.id), do: "bg-white text-primary-700 shadow-sm border border-gray-200/80", else: "text-gray-600 hover:text-gray-900 hover:bg-white/60"}"}
+                    >
+                      <span><%= hook.icon %></span>
+                      <span class="truncate"><%= hook.title %></span>
+                    </button>
+                  <% end %>
+                <% end %>
+              </div>
+            </div>
+          </div>
+
+          <div class="pt-3 border-t border-gray-200/60 px-2 text-[10px] text-gray-400">
+            <span>Node: </span><span class="font-mono text-gray-600"><%= @node_name %></span>
+          </div>
+        </div>
+
+        <!-- Right Content Pane -->
+        <div class="flex-1 p-6 space-y-4 overflow-y-auto">
+          <%= if @settings_tab == "project" do %>
+            <div class="space-y-4">
+              <div>
+                <h4 class="text-sm font-bold text-gray-900 flex items-center gap-2">
+                  <span>⚙️</span>
+                  <span>Project &amp; Cluster Metadata</span>
+                </h4>
+                <p class="text-xs text-gray-500 mt-0.5">Global configuration and runtime identifiers.</p>
+              </div>
+
+              <div class="space-y-3 bg-gray-50 p-4 rounded-xl border border-gray-200/80">
+                <div>
+                  <label class="block font-bold text-gray-700 mb-1">Studio Name</label>
+                  <input type="text" value={@studio_name} readonly class="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg font-mono text-xs" />
+                </div>
+                <div>
+                  <label class="block font-bold text-gray-700 mb-1">Project Title</label>
+                  <input type="text" value={@project_name} readonly class="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg font-mono text-xs" />
+                </div>
+                <div class="grid grid-cols-2 gap-3 pt-2">
+                  <div class="p-2.5 bg-white border border-gray-200 rounded-lg">
+                    <span class="text-[10px] font-bold text-gray-400 uppercase">Registered Extensions</span>
+                    <p class="text-sm font-bold text-gray-800 font-mono mt-0.5"><%= length(@overview.extensions) %></p>
+                  </div>
+                  <div class="p-2.5 bg-white border border-gray-200 rounded-lg">
+                    <span class="text-[10px] font-bold text-gray-400 uppercase">Active Virtual Actors</span>
+                    <p class="text-sm font-bold text-gray-800 font-mono mt-0.5"><%= length(@active_entities) %></p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          <% end %>
+
+          <%= if @settings_tab == "environments" do %>
+            <div class="space-y-4">
+              <div>
+                <h4 class="text-sm font-bold text-gray-900 flex items-center gap-2">
+                  <span>🌐</span>
+                  <span>Cluster Environments</span>
+                </h4>
+                <p class="text-xs text-gray-500 mt-0.5">Switch active cluster deployment environment profile.</p>
+              </div>
+
+              <div class="space-y-3 bg-gray-50 p-4 rounded-xl border border-gray-200/80">
+                <p class="text-gray-600 font-medium">Select active environment profile:</p>
+                <div class="flex flex-wrap gap-2">
+                  <%= for env <- @environments do %>
+                    <button
+                      phx-click="switch_env"
+                      phx-value-env={env}
+                      class={"px-4 py-2 rounded-xl font-bold border transition-all #{if @current_env == env, do: "bg-emerald-500 text-white border-emerald-600 shadow-sm", else: "bg-white text-gray-700 border-gray-200 hover:bg-gray-100"}"}
+                    >
+                      <%= env %>
+                    </button>
+                  <% end %>
+                </div>
+                <div class="pt-2 text-[11px] text-gray-500">
+                  Current active environment: <strong class="text-emerald-700"><%= @current_env %></strong>
+                </div>
+              </div>
+            </div>
+          <% end %>
+
+          <%= if @settings_tab == "database" do %>
+            <div class="space-y-4">
+              <div>
+                <h4 class="text-sm font-bold text-gray-900 flex items-center gap-2">
+                  <span>🗄️</span>
+                  <span>Database Engine &amp; Multi-Tenancy</span>
+                </h4>
+                <p class="text-xs text-gray-500 mt-0.5">Per-plugin schema isolation with PostgreSQL or Sandbox adapter.</p>
+              </div>
+
+              <div class="space-y-3 bg-gray-50 p-4 rounded-xl border border-gray-200/80">
+                <div class="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
+                  <div>
+                    <span class="font-bold text-gray-800">Storage Engine Mode</span>
+                    <p class="text-[11px] text-gray-500">Sandbox in-memory (Test/Dev) with automatic PostgreSQL fallback</p>
+                  </div>
+                  <span class="px-2.5 py-1 text-[10px] font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    Active
+                  </span>
+                </div>
+
+                <div class="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
+                  <div>
+                    <span class="font-bold text-gray-800">Plugin Isolation</span>
+                    <p class="text-[11px] text-gray-500">Each plugin accesses exclusively its own tenant namespace</p>
+                  </div>
+                  <span class="px-2.5 py-1 text-[10px] font-bold rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                    Isolated
+                  </span>
+                </div>
+
+                <div class="pt-2 flex gap-2">
+                  <button
+                    type="button"
+                    phx-click="open_action_modal"
+                    phx-value-service="database"
+                    class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg transition-colors flex items-center gap-1.5"
+                  >
+                    <span>⚡</span>
+                    <span>Execute Database Action</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          <% end %>
+
+          <%= if @settings_tab == "auth" do %>
+            <div class="space-y-4">
+              <div>
+                <h4 class="text-sm font-bold text-gray-900 flex items-center gap-2">
+                  <span>🔐</span>
+                  <span>Authentication &amp; Security Policies</span>
+                </h4>
+                <p class="text-xs text-gray-500 mt-0.5">Token lifecycle, authorization scopes, and session rules.</p>
+              </div>
+
+              <div class="space-y-3 bg-gray-50 p-4 rounded-xl border border-gray-200/80">
+                <div class="p-3 bg-white border border-gray-200 rounded-lg space-y-1">
+                  <span class="font-bold text-gray-800">Token Strategy</span>
+                  <p class="text-[11px] text-gray-500">Bearer Token with cross-port cookie extraction (<code class="font-mono text-purple-700">exo_auth_token</code> on ports 4005, 4001, 4000).</p>
+                </div>
+
+                <div class="p-3 bg-white border border-gray-200 rounded-lg space-y-1">
+                  <span class="font-bold text-gray-800">Role Multi-Scope Mapping</span>
+                  <div class="flex flex-wrap gap-1.5 pt-1">
+                    <span class="px-2 py-0.5 rounded bg-purple-50 text-purple-700 text-[10px] font-mono">admin &rarr; admin, studio, service, player, guest</span>
+                    <span class="px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-mono">studio &rarr; studio, service, player, guest</span>
+                    <span class="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10px] font-mono">player &rarr; player, guest</span>
+                  </div>
+                </div>
+
+                <div class="pt-2 flex gap-2">
+                  <button
+                    type="button"
+                    phx-click="switch_tab"
+                    phx-value-tab="auth"
+                    class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg transition-colors flex items-center gap-1.5"
+                  >
+                    <span>🛡️</span>
+                    <span>Open Users &amp; Auth View</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          <% end %>
+
+          <!-- Dynamic Plugin Settings Tab Fallback -->
+          <%= if @settings_tab not in ["project", "environments", "database", "auth"] do %>
+            <% active_hook = Enum.find(@settings_hooks, fn h -> to_string(h.id) == @settings_tab end) %>
+            <%= if active_hook do %>
+              <div class="space-y-4">
+                <div>
+                  <h4 class="text-sm font-bold text-gray-900 flex items-center gap-2">
+                    <span><%= active_hook.icon %></span>
+                    <span><%= active_hook.title %></span>
+                  </h4>
+                  <p class="text-xs text-gray-500 mt-0.5">Settings contributed by <%= active_hook[:plugin_id] || "plugin" %>.</p>
+                </div>
+
+                <div class="bg-gray-50 p-4 rounded-xl border border-gray-200/80 space-y-2">
+                  <div class="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
+                    <span class="font-bold text-gray-800">Hook ID</span>
+                    <span class="font-mono text-purple-700 font-bold"><%= active_hook.id %></span>
+                  </div>
+                  <div class="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
+                    <span class="font-bold text-gray-800">Origin Plugin</span>
+                    <span class="font-mono text-gray-600"><%= active_hook[:plugin_id] || "n/a" %></span>
+                  </div>
+                </div>
+              </div>
+            <% end %>
+          <% end %>
+        </div>
+      </div>
+    </.modal>
+    """
+  end
+
+  @doc """
+  Renders the modal for inspecting a plugin, including services, dependencies, and actions.
+  """
+  attr(:extension, :map, default: nil)
+  attr(:on_close, :string, default: "close_inspect_extension")
+
+  def plugin_inspector_modal(assigns) do
+    ~H"""
+    <%= if @extension do %>
+      <.modal
+        id="plugin_inspector_modal"
+        open={true}
+        max_width="max-w-2xl"
+        title={"Inspect: #{display_name(@extension)}"}
+        subtitle={"Plugin #{@extension.id} (v#{@extension.version})"}
+        on_close={@on_close}
+      >
+        <div class="space-y-4 text-xs">
+          <div class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
+            <span class="w-12 h-12 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center text-2xl">
+              <%= (is_map(@extension.dashboard_view) && @extension.dashboard_view[:icon]) || default_extension_icon(@extension) %>
+            </span>
+            <div class="flex-1">
+              <div class="flex items-center justify-between">
+                <h4 class="font-bold text-gray-900 text-sm"><%= display_name(@extension) %></h4>
+                <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">
+                  <%= @extension.status %>
+                </span>
+              </div>
+              <p class="text-[11px] text-gray-500 font-mono mt-0.5"><%= @extension.id %> &bull; <%= @extension.type %></p>
+            </div>
+          </div>
+
+          <!-- Provides & Dependencies -->
+          <div class="grid grid-cols-2 gap-3">
+            <div class="p-3 bg-gray-50 rounded-xl border border-gray-200 space-y-1">
+              <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Provides Services</span>
+              <div class="flex flex-wrap gap-1 pt-1">
+                <%= for s <- @extension.provides do %>
+                  <span class="px-2 py-0.5 rounded bg-purple-50 text-purple-700 font-mono font-bold text-[10px]">
+                    <%= s %>
+                  </span>
+                <% end %>
+              </div>
+            </div>
+            <div class="p-3 bg-gray-50 rounded-xl border border-gray-200 space-y-1">
+              <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Dependencies</span>
+              <div class="flex flex-wrap gap-1 pt-1">
+                <%= if Enum.empty?(@extension.dependencies) do %>
+                  <span class="text-gray-400 italic text-[11px]">None (Root service)</span>
+                <% else %>
+                  <%= for d <- @extension.dependencies do %>
+                    <span class="px-2 py-0.5 rounded bg-gray-200 text-gray-700 font-mono text-[10px]">
+                      <%= d %>
+                    </span>
+                  <% end %>
+                <% end %>
+              </div>
+            </div>
+          </div>
+
+          <!-- Services and Actions -->
+          <div class="space-y-2">
+            <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+              Exported Actions (<%= length(@extension.actions) %>)
+            </span>
+            <%= if Enum.empty?(@extension.actions) do %>
+              <p class="p-3 bg-gray-50 rounded-xl text-gray-400 italic">No actions exposed by this plugin.</p>
+            <% else %>
+              <div class="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                <%= for act <- @extension.actions do %>
+                  <div class="flex items-center justify-between p-2.5 bg-gray-50 border border-gray-200 rounded-lg">
+                    <div>
+                      <span class="font-mono font-bold text-gray-900"><%= act.service %>.<%= act.name %></span>
+                      <%= if act.doc do %>
+                        <p class="text-[10px] text-gray-500 mt-0.5"><%= act.doc %></p>
+                      <% end %>
+                    </div>
+                    <button
+                      type="button"
+                      phx-click="open_action_modal"
+                      phx-value-service={act.service}
+                      phx-value-action={act.name}
+                      class="px-2.5 py-1 text-[11px] font-bold text-white bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors flex items-center gap-1 shadow-xs"
+                    >
+                      <span>⚡ Run</span>
+                    </button>
+                  </div>
+                <% end %>
+              </div>
+            <% end %>
+          </div>
+        </div>
+      </.modal>
+    <% end %>
+    """
+  end
+
+  defp display_name(ext_or_id) do
+    case ext_or_id do
+      nil -> ""
+      %{dashboard_view: %{title: title}} when is_binary(title) -> title
+      %{title: title} when is_binary(title) -> title
+      %{name: name} -> derive_display_name(name)
+      %{id: id} -> derive_display_name(id)
+      other -> derive_display_name(other)
+    end
+  end
+
+  defp derive_display_name(id) do
+    clean =
+      id
+      |> to_string()
+      |> String.replace_prefix("exoforge_std_", "")
+      |> String.replace_prefix("Elixir.Exoforge.", "")
+      |> String.replace_prefix("Std.Services.", "")
+
+    case clean do
+      "ws" -> "WebSocket Gateway"
+      "http" -> "HTTP Ingress"
+      "database" -> "Database Engine"
+      "auth" -> "Users & Auth"
+      "player_data" -> "Player Data"
+      "plugin_manager" -> "Plugin Manager"
+      other ->
+        other
+        |> String.replace("_", " ")
+        |> Macro.camelize()
+    end
+  end
+
+  defp default_extension_icon(ext) do
+    cond do
+      is_nil(ext) -> "🧩"
+      is_map(ext) and is_binary(Map.get(ext, :icon)) -> ext.icon
+      is_map(ext) and is_map(Map.get(ext, :dashboard_view)) and is_binary(ext.dashboard_view[:icon]) -> ext.dashboard_view.icon
+      true -> "🧩"
+    end
+  end
+
   defp sanitize_data(data) do
     cond do
       is_map(data) -> Map.new(data, fn {k, v} -> {to_string(k), sanitize_data(v)} end)

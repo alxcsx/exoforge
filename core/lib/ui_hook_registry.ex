@@ -120,11 +120,17 @@ defmodule Exoforge.UIHookRegistry do
   defp normalize_id(id) when is_binary(id), do: String.to_atom(id)
 
   defp default_spec(spec, id) when is_map(spec) do
+    title =
+      Map.get(spec, :title) || Map.get(spec, :label) ||
+        (id |> to_string() |> String.replace("_", " ") |> String.capitalize())
+
     Map.merge(
       %{
-        title: id |> to_string() |> String.replace("_", " ") |> String.capitalize(),
+        title: title,
+        label: title,
         icon: "🔌",
-        order: 100
+        order: 100,
+        view_type: :declarative
       },
       spec
     )

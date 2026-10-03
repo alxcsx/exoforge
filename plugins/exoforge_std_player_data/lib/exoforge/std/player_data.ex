@@ -43,6 +43,13 @@ defmodule Exoforge.Std.PlayerData do
           "CREATE TABLE IF NOT EXISTS player_kv (id text, player_id text, key text, value text, updated_at integer)"
       })
 
+    _ =
+      ActionDispatcher.dispatch(:database, :execute, %{
+        plugin: :player_data,
+        operation:
+          "CREATE INDEX IF NOT EXISTS idx_player_kv_prefix ON player_kv (player_id, key)"
+      })
+
     :ok
   end
 
@@ -303,14 +310,18 @@ defmodule Exoforge.Std.PlayerData do
   ## ---- KEY-VALUE STATE ACTIONS ----
 
   @impl true
-  @doc "Retrieves a fine-grained key-value JSON state entry for a player."
+  @doc "Retrieves a fine-grained key-value JSON state entry or prefix sub-tree for a player."
   defaction get_data(payload) do
     player_id = extract_player_id(payload)
     key = Map.get(payload, :key) || Map.get(payload, "key")
+    prefix = Map.get(payload, :prefix) || Map.get(payload, "prefix")
 
     cond do
       is_nil(player_id) or player_id == "" ->
         {:error, :player_not_found}
+
+      prefix && prefix != "" ->
+        get_all_data(payload)
 
       is_nil(key) or key == "" ->
         {:error, :key_not_found}
@@ -421,20 +432,28 @@ defmodule Exoforge.Std.PlayerData do
   end
 
   @impl true
-  @doc "Retrieves all key-value state entries for a player as a map."
+  @doc "Retrieves all key-value state entries for a player as a map, optionally filtered by key prefix."
   defaction get_all_data(payload) do
     player_id = extract_player_id(payload)
+    prefix = Map.get(payload, :prefix) || Map.get(payload, "prefix")
 
     if is_nil(player_id) or player_id == "" do
       {:error, :player_not_found}
     else
       init_schema()
-      query = "SELECT * FROM player_kv WHERE player_id = $1"
+
+      {query, args} =
+        if prefix && prefix != "" do
+          {"SELECT * FROM player_kv WHERE player_id = $1 AND key LIKE $2",
+           [player_id, "#{prefix}%"]}
+        else
+          {"SELECT * FROM player_kv WHERE player_id = $1", [player_id]}
+        end
 
       case ActionDispatcher.dispatch(:database, :execute, %{
              plugin: :player_data,
              operation: query,
-             arguments: [player_id]
+             arguments: args
            }) do
         {:ok, %{rows: rows}} when is_list(rows) ->
           data =

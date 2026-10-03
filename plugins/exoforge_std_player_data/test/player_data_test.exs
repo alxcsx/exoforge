@@ -262,5 +262,68 @@ defmodule Exoforge.PlayerDataTest do
                  key: "settings"
                })
     end
+
+    test "scans keys by prefix in get_all_data and get_data" do
+      _ =
+        ActionDispatcher.dispatch(:player_data, :create_player, %{
+          player_id: "prefix_player",
+          user_id: "u_prefix",
+          profile: %{"name" => "Prefix Hero"}
+        })
+
+      # Set items under 'inv:' prefix
+      _ =
+        ActionDispatcher.dispatch(:player_data, :set_data, %{
+          player_id: "prefix_player",
+          key: "inv:weapon:sword",
+          value: %{"atk" => 50, "rarity" => "rare"}
+        })
+
+      _ =
+        ActionDispatcher.dispatch(:player_data, :set_data, %{
+          player_id: "prefix_player",
+          key: "inv:armor:shield",
+          value: %{"def" => 30, "rarity" => "common"}
+        })
+
+      # Set stats under 'stats:' prefix
+      _ =
+        ActionDispatcher.dispatch(:player_data, :set_data, %{
+          player_id: "prefix_player",
+          key: "stats:hp",
+          value: 100
+        })
+
+      # Prefix scan via get_all_data with prefix: "inv:"
+      assert {:ok, %{data: inv_items}} =
+               ActionDispatcher.dispatch(:player_data, :get_all_data, %{
+                 player_id: "prefix_player",
+                 prefix: "inv:"
+               })
+
+      assert Map.has_key?(inv_items, "inv:weapon:sword")
+      assert Map.has_key?(inv_items, "inv:armor:shield")
+      refute Map.has_key?(inv_items, "stats:hp")
+
+      # Subtree prefix scan with prefix: "inv:weapon"
+      assert {:ok, %{data: weapons}} =
+               ActionDispatcher.dispatch(:player_data, :get_all_data, %{
+                 player_id: "prefix_player",
+                 prefix: "inv:weapon"
+               })
+
+      assert map_size(weapons) == 1
+      assert Map.has_key?(weapons, "inv:weapon:sword")
+
+      # Prefix scan via get_data with prefix: "inv:"
+      assert {:ok, %{data: via_get_data}} =
+               ActionDispatcher.dispatch(:player_data, :get_data, %{
+                 player_id: "prefix_player",
+                 prefix: "inv:"
+               })
+
+      assert Map.has_key?(via_get_data, "inv:weapon:sword")
+      refute Map.has_key?(via_get_data, "stats:hp")
+    end
   end
 end

@@ -29,8 +29,10 @@ defmodule Exoforge.ResourceAndDrawerTest do
   end
 
   setup do
-    start_supervised!(PluginRegistry)
-    start_supervised!(DrawerRegistry)
+    unless Process.whereis(PluginRegistry), do: start_supervised!(PluginRegistry)
+    unless Process.whereis(DrawerRegistry), do: start_supervised!(DrawerRegistry)
+    PluginRegistry.initialize_ets()
+    DrawerRegistry.initialize_ets()
     :ok
   end
 
