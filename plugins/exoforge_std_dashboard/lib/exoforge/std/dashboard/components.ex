@@ -783,14 +783,14 @@ defmodule Exoforge.Std.Dashboard.Components do
     """
   end
 
+  defp format_action_runner_result(:ok), do: Jason.encode!(%{status: "ok"}, pretty: true)
+
   defp format_action_runner_result({:ok, val}) do
     case Jason.encode(sanitize_data(val), pretty: true) do
       {:ok, json} -> json
       _ -> inspect(val, pretty: true)
     end
   end
-
-  defp format_action_runner_result(:ok), do: Jason.encode!(%{status: "ok"}, pretty: true)
 
   defp format_action_runner_result({:error, reason}) do
     case Jason.encode(sanitize_data(reason), pretty: true) do
@@ -801,6 +801,238 @@ defmodule Exoforge.Std.Dashboard.Components do
 
   defp format_action_runner_result(other) do
     inspect(other, pretty: true)
+  end
+
+  # ---- LIVEOPS & SCHEDULE BUILDING BLOCKS ----
+
+  @doc """
+  Renders a visual LiveOps schedule & event timeline with status badges,
+  real-time countdowns, progress bars, and metadata pill tags.
+  """
+  attr(:events, :list, default: [])
+  attr(:title, :string, default: "LiveOps & Event Timeline")
+  attr(:empty_message, :string, default: "No scheduled events or live operations active.")
+
+  def schedule_timeline(assigns) do
+    ~H"""
+    <div class="space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="text-sm font-bold text-gray-900 flex items-center gap-2">
+          <span>📅</span>
+          <span><%= @title %></span>
+        </h3>
+        <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">
+          <%= length(@events) %> Scheduled
+        </span>
+      </div>
+
+      <%= if @events == [] do %>
+        <div class="p-8 text-center bg-gray-50/50 rounded-2xl border border-dashed border-gray-200">
+          <p class="text-sm text-gray-400 font-medium"><%= @empty_message %></p>
+        </div>
+      <% else %>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <%= for event <- @events do %>
+            <%
+              status = Map.get(event, :status) || Map.get(event, "status") || :upcoming
+              status_atom = if is_binary(status), do: String.to_atom(status), else: status
+              title = Map.get(event, :title) || Map.get(event, "title") || "Event"
+              id = Map.get(event, :id) || Map.get(event, "id") || "event_id"
+              countdown = Map.get(event, :countdown_text) || Map.get(event, "countdown_text") || "—"
+              progress = Map.get(event, :progress) || Map.get(event, "progress") || 0.0
+              progress_pct = round(progress * 100)
+              recurrence = Map.get(event, :recurrence) || Map.get(event, "recurrence") || :none
+              start_at = Map.get(event, :start_at) || Map.get(event, "start_at") || ""
+              end_at = Map.get(event, :end_at) || Map.get(event, "end_at") || ""
+              metadata = Map.get(event, :metadata) || Map.get(event, "metadata") || %{}
+            %>
+            <div class={"p-5 rounded-2xl border transition-all shadow-sm #{
+              case status_atom do
+                :active -> "bg-gradient-to-br from-white to-emerald-50/30 border-emerald-200/80 shadow-emerald-50"
+                :upcoming -> "bg-white border-blue-200/70"
+                _ -> "bg-gray-50/70 border-gray-200 opacity-75"
+              end
+            }"}>
+              <!-- Header Row -->
+              <div class="flex items-start justify-between gap-3 mb-2">
+                <div>
+                  <div class="flex items-center gap-2">
+                    <h4 class="text-base font-bold text-gray-900"><%= title %></h4>
+                    <%= if recurrence != :none and recurrence != "none" do %>
+                      <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 uppercase">
+                        <%= recurrence %>
+                      </span>
+                    <% end %>
+                  </div>
+                  <p class="text-xs text-gray-400 font-mono"><%= id %></p>
+                </div>
+
+                <!-- Status Badge -->
+                <%= case status_atom do %>
+                  <% :active -> %>
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 shadow-sm">
+                      <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                      ACTIVE NOW
+                    </span>
+                  <% :upcoming -> %>
+                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800">
+                      UPCOMING
+                    </span>
+                  <% _ -> %>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-200 text-gray-700">
+                      ENDED
+                    </span>
+                <% end %>
+              </div>
+
+              <!-- Countdown & Timing -->
+              <div class="my-3 p-3 rounded-xl bg-white/80 border border-gray-100 shadow-inner flex items-center justify-between">
+                <div>
+                  <span class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block">
+                    <%= if status_atom == :active, do: "Remaining Time", else: "Starts In" %>
+                  </span>
+                  <span class={"text-lg font-black tracking-tight #{if status_atom == :active, do: "text-emerald-700", else: "text-blue-700"}"}>
+                    <%= countdown %>
+                  </span>
+                </div>
+                <div class="text-right text-[11px] text-gray-500">
+                  <div class="font-mono text-gray-400"><%= String.slice(to_string(start_at), 0..15) %></div>
+                  <div class="text-gray-300">↓</div>
+                  <div class="font-mono text-gray-600 font-medium"><%= String.slice(to_string(end_at), 0..15) %></div>
+                </div>
+              </div>
+
+              <!-- Progress Bar (Active Events) -->
+              <%= if status_atom == :active do %>
+                <div class="space-y-1 mb-3">
+                  <div class="flex justify-between text-[11px] font-semibold text-gray-500">
+                    <span>Progress</span>
+                    <span><%= progress_pct %>%</span>
+                  </div>
+                  <div class="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                    <div class="bg-emerald-500 h-2 rounded-full transition-all duration-500" style={"width: #{progress_pct}%;"}></div>
+                  </div>
+                </div>
+              <% end %>
+
+              <!-- Metadata Chips -->
+              <%= if is_map(metadata) and map_size(metadata) > 0 do %>
+                <div class="flex flex-wrap gap-1.5 pt-2 border-t border-gray-100">
+                  <%= for {key, val} <- metadata do %>
+                    <span class="text-[10px] font-mono px-2 py-0.5 rounded-md bg-gray-100 text-gray-700 border border-gray-200">
+                      <%= key %>: <strong class="text-purple-700"><%= to_string(val) %></strong>
+                    </span>
+                  <% end %>
+                </div>
+              <% end %>
+            </div>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+    """
+  end
+
+  @doc """
+  Renders an interactive monthly calendar view displaying scheduled events,
+  active windows, and day markers.
+  """
+  attr(:events, :list, default: [])
+  attr(:title, :string, default: "LiveOps Schedule Calendar")
+
+  def calendar_view(assigns) do
+    now = DateTime.utc_now()
+    month_name = Calendar.strftime(now, "%B %Y")
+    days_in_month = Date.days_in_month(DateTime.to_date(now))
+    today_day = now.day
+
+    assigns =
+      assigns
+      |> assign(:month_name, month_name)
+      |> assign(:days_in_month, days_in_month)
+      |> assign(:today_day, today_day)
+
+    ~H"""
+    <div class="bg-white p-6 rounded-2xl border border-gray-200/80 shadow-sm space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-gray-100">
+        <div>
+          <h3 class="text-base font-bold text-gray-900 flex items-center gap-2">
+            <span>🗓️</span>
+            <span><%= @title %></span>
+          </h3>
+          <p class="text-xs text-gray-500 mt-0.5"><%= @month_name %> (UTC)</p>
+        </div>
+        <div class="flex items-center gap-2 text-xs font-semibold">
+          <span class="inline-flex items-center gap-1 text-emerald-700">
+            <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Active
+          </span>
+          <span class="inline-flex items-center gap-1 text-blue-700 ml-2">
+            <span class="w-2 h-2 rounded-full bg-blue-500"></span> Upcoming
+          </span>
+        </div>
+      </div>
+
+      <!-- Calendar Weekday Header -->
+      <div class="grid grid-cols-7 gap-2 text-center text-xs font-bold text-gray-400 uppercase tracking-wider py-1">
+        <div>Mon</div>
+        <div>Tue</div>
+        <div>Wed</div>
+        <div>Thu</div>
+        <div>Fri</div>
+        <div>Sat</div>
+        <div>Sun</div>
+      </div>
+
+      <!-- Calendar Days Grid -->
+      <div class="grid grid-cols-7 gap-2">
+        <%= for day <- 1..@days_in_month do %>
+          <%
+            is_today = day == @today_day
+            # Filter events matching this day of month
+            day_events = Enum.filter(@events, fn ev ->
+              case Map.get(ev, :start_at) || Map.get(ev, "start_at") do
+                %DateTime{} = dt -> dt.day <= day
+                str when is_binary(str) -> String.contains?(str, "-#{String.pad_leading(to_string(day), 2, "0")}T")
+                _ -> false
+              end
+            end)
+          %>
+          <div class={"min-h-[72px] p-2 rounded-xl border flex flex-col justify-between transition-all #{
+            cond do
+              is_today -> "bg-purple-50/60 border-purple-300 ring-2 ring-purple-400/30"
+              day_events != [] -> "bg-white border-gray-200 hover:border-purple-200"
+              true -> "bg-gray-50/40 border-gray-100 text-gray-400"
+            end
+          }"}>
+            <div class="flex items-center justify-between">
+              <span class={"text-xs font-bold #{if is_today, do: "text-purple-700 font-black", else: "text-gray-700"}"}>
+                <%= day %>
+              </span>
+              <%= if is_today do %>
+                <span class="text-[9px] font-extrabold uppercase px-1 rounded bg-purple-200 text-purple-800">Today</span>
+              <% end %>
+            </div>
+
+            <!-- Event markers -->
+            <div class="space-y-1 mt-1">
+              <%= for ev <- Enum.take(day_events, 2) do %>
+                <%
+                  ev_title = Map.get(ev, :title) || Map.get(ev, "title") || "Event"
+                  ev_status = Map.get(ev, :status) || Map.get(ev, "status") || :upcoming
+                %>
+                <div class={"text-[9px] font-semibold truncate px-1.5 py-0.5 rounded-md flex items-center gap-1 #{
+                  if ev_status in [:active, "active"], do: "bg-emerald-100 text-emerald-800", else: "bg-blue-100 text-blue-800"
+                }"} title={ev_title}>
+                  <span class={"w-1.5 h-1.5 rounded-full #{if ev_status in [:active, "active"], do: "bg-emerald-500", else: "bg-blue-500"}"}></span>
+                  <span class="truncate"><%= ev_title %></span>
+                </div>
+              <% end %>
+            </div>
+          </div>
+        <% end %>
+      </div>
+    </div>
+    """
   end
 
   defp sanitize_data(data) do

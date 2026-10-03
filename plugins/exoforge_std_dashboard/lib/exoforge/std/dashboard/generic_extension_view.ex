@@ -9,6 +9,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
   alias Exoforge.EventDispatcher
   alias Exoforge.PluginRegistry
   alias Exoforge.DrawerRegistry
+  import Exoforge.Std.Dashboard.Components
 
   @impl true
   def mount(socket) do
@@ -40,7 +41,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
     # Pick initial subtab based on what's available
     subtab =
       cond do
-        socket.assigns.subtab in ["actions", "resources", "events", "contract"] ->
+        socket.assigns.subtab in ["actions", "resources", "events", "contract", "schedule"] ->
           socket.assigns.subtab
 
         (ext[:actions] || []) != [] ->
@@ -412,6 +413,37 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
     events = ext[:events] || []
     columns = current_resource_columns(assigns)
 
+    has_schedule =
+      Enum.any?(resources, fn r ->
+        cols =
+          (r[:columns] || [])
+          |> Enum.map(fn
+            %{name: n} -> to_string(n)
+            %{"name" => n} -> to_string(n)
+            other -> to_string(other)
+          end)
+
+        Enum.any?(cols, &String.contains?(&1, ["date", "time", "start", "end", "schedule", "window"])) or
+          (r[:drawer] in [:schedule, :calendar, "schedule", "calendar"])
+      end)
+
+    schedule_events =
+      if has_schedule do
+        Enum.map(assigns[:resource_rows] || [], fn row ->
+          start_val = Map.get(row, :start_at) || Map.get(row, "start_at") || Map.get(row, :created_at) || Map.get(row, "created_at")
+          end_val = Map.get(row, :end_at) || Map.get(row, "end_at") || Map.get(row, :expires_at) || Map.get(row, "expires_at")
+          id_val = Map.get(row, :id) || Map.get(row, "id") || "event"
+          title_val = Map.get(row, :title) || Map.get(row, "title") || Map.get(row, :name) || Map.get(row, "name") || to_string(id_val)
+
+          case Exoforge.TimeWindow.new(%{id: id_val, title: title_val, start_at: start_val, end_at: end_val, metadata: row}) do
+            {:ok, tw} -> Exoforge.TimeWindow.to_map(tw)
+            _ -> %{id: id_val, title: title_val, start_at: start_val, end_at: end_val, status: :active, countdown_text: "Active", progress: 0.5, metadata: row}
+          end
+        end)
+      else
+        []
+      end
+
     assigns =
       assigns
       |> assign(:icon, icon)
@@ -419,6 +451,8 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
       |> assign(:resources, resources)
       |> assign(:events, events)
       |> assign(:columns, columns)
+      |> assign(:has_schedule, has_schedule)
+      |> assign(:schedule_events, schedule_events)
 
     ~H"""
     <div class="space-y-6" id={@id}>
@@ -485,6 +519,17 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
             </button>
           <% end %>
 
+          <%= if @has_schedule do %>
+            <button
+              phx-click="switch_subtab"
+              phx-value-tab="schedule"
+              phx-target={@myself}
+              class={"px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 #{if @subtab == "schedule", do: "bg-white text-purple-700 shadow-sm", else: "text-gray-600 hover:text-gray-900"}"}
+            >
+              <span>📅 Schedule & Calendar</span>
+            </button>
+          <% end %>
+
           <button
             phx-click="switch_subtab"
             phx-value-tab="contract"
@@ -495,6 +540,14 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
           </button>
         </div>
       </div>
+
+      <!-- SUBTAB: SCHEDULE & CALENDAR -->
+      <%= if @subtab == "schedule" do %>
+        <div class="space-y-6">
+          <.schedule_timeline events={@schedule_events} title="LiveOps Schedule Timeline" />
+          <.calendar_view events={@schedule_events} title="LiveOps Schedule Calendar" />
+        </div>
+      <% end %>
 
       <!-- SUBTAB 1: ACTIONS & VISUAL CONTROLS -->
       <%= if @subtab == "actions" do %>
