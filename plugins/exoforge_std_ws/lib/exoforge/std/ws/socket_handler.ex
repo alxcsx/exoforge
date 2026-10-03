@@ -4,6 +4,7 @@ defmodule Exoforge.Std.Ws.SocketHandler do
   Implements the WebSock behavior to process incoming framed JSON protocol messages.
   """
   @behaviour WebSock
+  require Logger
 
   alias Exoforge.ActionDispatcher
   alias Exoforge.EventDispatcher
@@ -48,11 +49,17 @@ defmodule Exoforge.Std.Ws.SocketHandler do
     case Keyword.get(opts, :token) do
       token when is_binary(token) and token != "" ->
         case ActionDispatcher.dispatch(:auth, :authenticate, %{token: token}) do
-          {:ok, auth} -> {:ok, Map.put(state, :auth, auth)}
-          _ -> {:ok, state}
+          {:ok, auth} ->
+            Logger.info("[WS] Client connected & authenticated as #{auth.player_id}")
+            {:ok, Map.put(state, :auth, auth)}
+
+          _ ->
+            Logger.info("[WS] Client connected (token invalid, awaiting auth frame)")
+            {:ok, state}
         end
 
       _ ->
+        Logger.info("[WS] Client connected (awaiting auth frame)")
         {:ok, state}
     end
   end
@@ -88,8 +95,11 @@ defmodule Exoforge.Std.Ws.SocketHandler do
         if Map.get(state, :auth) do
           EventDispatcher.subscribe(:all, topic: topic)
           new_state = %{state | subscriptions: MapSet.put(state.subscriptions, topic)}
+          player = state.auth.player_id
+          Logger.info("[WS] Player #{player} subscribed to topic: #{topic}")
           reply(%{type: @frame_subscribed, topic: topic}, new_state)
         else
+          Logger.warning("[WS] Subscribe rejected: socket unauthenticated")
           reply(
             %{
               type: @frame_error,
@@ -102,6 +112,8 @@ defmodule Exoforge.Std.Ws.SocketHandler do
       {:ok, %{@type_key => @frame_unsubscribe, @topic_key => topic}} when is_binary(topic) ->
         EventDispatcher.unsubscribe(:all, topic: topic)
         new_state = %{state | subscriptions: MapSet.delete(state.subscriptions, topic)}
+        player = if state[:auth], do: state.auth.player_id, else: "anonymous"
+        Logger.info("[WS] #{player} unsubscribed from topic: #{topic}")
         reply(%{type: @frame_unsubscribed, topic: topic}, new_state)
 
       {:ok, unhandled} ->
@@ -147,10 +159,13 @@ defmodule Exoforge.Std.Ws.SocketHandler do
   end
 
   @impl true
-  def terminate(_reason, state) do
+  def terminate(reason, state) do
     for topic <- state.subscriptions do
       EventDispatcher.unsubscribe(:all, topic: topic)
     end
+
+    client = if state[:auth], do: state.auth.player_id, else: "anonymous"
+    Logger.info("[WS] Client disconnected (#{client}): #{inspect(reason)}")
 
     :ok
   end
@@ -160,6 +175,7 @@ defmodule Exoforge.Std.Ws.SocketHandler do
   defp handle_auth(token, state) do
     case ActionDispatcher.dispatch(:auth, :authenticate, %{token: token}) do
       {:ok, %{player_id: player_id, scopes: scopes} = auth_info} ->
+        Logger.info("[WS] Authenticated player: #{player_id} (scopes: #{inspect(scopes)})")
         new_state = Map.put(state, :auth, auth_info)
 
         reply(
@@ -168,6 +184,7 @@ defmodule Exoforge.Std.Ws.SocketHandler do
         )
 
       {:error, reason} ->
+        Logger.warning("[WS] Authentication failed: #{inspect(reason)}")
         reply(%{type: @frame_auth_result, status: @status_error, error: reason}, state)
     end
   end
@@ -219,8 +236,13 @@ defmodule Exoforge.Std.Ws.SocketHandler do
     service = parse_service(service_str)
     action = parse_action(action_str)
 
-    case ActionDispatcher.dispatch(service, action, payload, caller_scopes: caller_scopes) do
+    t0 = System.monotonic_time(:microsecond)
+    res = ActionDispatcher.dispatch(service, action, payload, caller_scopes: caller_scopes)
+    latency_us = System.monotonic_time(:microsecond) - t0
+
+    case res do
       {:ok, data} ->
+        Logger.info("[WS:Action] #{service}.#{action} by #{auth.player_id} -> OK (#{latency_us}µs)")
         reply(
           %{
             type: @frame_action_result,
@@ -232,6 +254,7 @@ defmodule Exoforge.Std.Ws.SocketHandler do
         )
 
       :ok ->
+        Logger.info("[WS:Action] #{service}.#{action} by #{auth.player_id} -> OK (#{latency_us}µs)")
         reply(
           %{
             type: @frame_action_result,
@@ -243,6 +266,7 @@ defmodule Exoforge.Std.Ws.SocketHandler do
         )
 
       {:error, reason} when reason in [:unauthorized, :forbidden_scope] ->
+        Logger.warning("[WS:Action] #{service}.#{action} by #{auth.player_id} -> #{reason} (#{latency_us}µs)")
         reply(
           %{
             type: @frame_action_result,
@@ -257,6 +281,7 @@ defmodule Exoforge.Std.Ws.SocketHandler do
         )
 
       {:error, reason} ->
+        Logger.warning("[WS:Action] #{service}.#{action} by #{auth.player_id} -> error: #{inspect(reason)} (#{latency_us}µs)")
         reply(
           %{
             type: @frame_action_result,

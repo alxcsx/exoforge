@@ -5,9 +5,11 @@ defmodule Exoforge.Std.Http.Router do
   Enforces authentication scopes where required via the :auth service.
   """
   use Plug.Router
+  require Logger
 
   alias Exoforge.ActionDispatcher
 
+  plug(Plug.Logger)
   plug(:match)
 
   plug(Plug.Parsers,
@@ -123,26 +125,37 @@ defmodule Exoforge.Std.Http.Router do
   end
 
   defp dispatch_http(conn, service, action, payload, caller_scopes) do
-    case ActionDispatcher.dispatch(service, action, payload, caller_scopes: caller_scopes) do
+    t0 = System.monotonic_time(:microsecond)
+    result = ActionDispatcher.dispatch(service, action, payload, caller_scopes: caller_scopes)
+    latency_us = System.monotonic_time(:microsecond) - t0
+
+    case result do
       {:ok, result} ->
+        Logger.info("[HTTP:Action] #{service}.#{action} -> 200 OK (#{latency_us}µs)")
         send_json(conn, 200, %{status: "ok", data: result})
 
       :ok ->
+        Logger.info("[HTTP:Action] #{service}.#{action} -> 200 OK (#{latency_us}µs)")
         send_json(conn, 200, %{status: "ok"})
 
       {:error, :service_not_found} ->
+        Logger.warning("[HTTP:Action] #{service}.#{action} -> 404 service_not_found (#{latency_us}µs)")
         send_json(conn, 404, %{status: "error", error: "service_not_found"})
 
       {:error, {:action_not_found, _}} ->
+        Logger.warning("[HTTP:Action] #{service}.#{action} -> 404 action_not_found (#{latency_us}µs)")
         send_json(conn, 404, %{status: "error", error: "action_not_found"})
 
       {:error, :unauthorized} ->
+        Logger.warning("[HTTP:Action] #{service}.#{action} -> 401 unauthorized (#{latency_us}µs)")
         send_json(conn, 401, %{status: "error", error: "unauthorized"})
 
       {:error, :forbidden_scope} ->
+        Logger.warning("[HTTP:Action] #{service}.#{action} -> 403 forbidden_scope (#{latency_us}µs)")
         send_json(conn, 403, %{status: "error", error: "forbidden_scope"})
 
       {:error, reason} ->
+        Logger.warning("[HTTP:Action] #{service}.#{action} -> 400 error: #{inspect(reason)} (#{latency_us}µs)")
         send_json(conn, 400, %{status: "error", error: inspect(reason)})
     end
   end

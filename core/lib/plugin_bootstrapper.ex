@@ -5,6 +5,7 @@ defmodule Exoforge.PluginBootstrapper do
   alias Exoforge.Drivers.Runtime.ElixirPluginRunner
 
   def boot do
+    t0 = System.monotonic_time(:millisecond)
     loader_config = Application.get_env(:exoforge, :module_loader, [])
     driver = Keyword.get(loader_config, :driver, Exoforge.Drivers.Loaders.ManifestLoader)
     path = Keyword.get(loader_config, :scan_path, "plugins")
@@ -16,7 +17,8 @@ defmodule Exoforge.PluginBootstrapper do
         Logger.warning("[Exoforge] no plugins found at #{path}")
 
       loaded ->
-        Logger.info("[Exoforge] loaded #{length(loaded)} plugins: #{Enum.map_join(loaded, ", ", & &1.id)}")
+        total_ms = System.monotonic_time(:millisecond) - t0
+        print_startup_banner(loaded, total_ms)
     end
 
     :ok
@@ -47,7 +49,34 @@ defmodule Exoforge.PluginBootstrapper do
 
   def run(driver, path) do
     manifests = driver.load_plugins(path) |> sort!()
-    Enum.each(manifests, &initialize_and_register/1)
+    total = length(manifests)
+    Logger.info("[Boot] Discovered #{total} plugin manifests. Initializing dependency tree...")
+
+    Enum.with_index(manifests, 1)
+    |> Enum.each(fn {manifest, idx} ->
+      t_start = System.monotonic_time(:millisecond)
+      initialize_and_register(manifest)
+      t_elapsed = System.monotonic_time(:millisecond) - t_start
+      type_label = if manifest.type == :wasm, do: "WASM", else: "Elixir"
+      provides_str =
+        (manifest.provides || [])
+        |> Enum.map(fn p ->
+          case p do
+            mod when is_atom(mod) ->
+              str = to_string(mod)
+              if String.starts_with?(str, "Elixir.Exoforge.Std.Services.") do
+                ":#{Macro.underscore(Module.split(mod) |> List.last())}"
+              else
+                ":#{mod}"
+              end
+            other -> ":#{other}"
+          end
+        end)
+        |> Enum.join(", ")
+
+      Logger.info("[Boot] [#{idx}/#{total}] #{manifest.id} (#{type_label}) -> provides [#{provides_str}] in #{t_elapsed}ms")
+    end)
+
     manifests
   end
 
@@ -159,5 +188,61 @@ defmodule Exoforge.PluginBootstrapper do
     String.to_existing_atom(to_string(val))
   rescue
     ArgumentError -> nil
+  end
+
+  defp print_startup_banner(manifests, total_ms) do
+    env = current_env()
+
+    if env != :test do
+      dash_port = Exoforge.Endpoints.dashboard_port()
+      http_port = Exoforge.Endpoints.http_port()
+      ws_port = Exoforge.Endpoints.ws_port()
+
+      services =
+        manifests
+        |> Enum.flat_map(fn m -> m.provides || [] end)
+        |> Enum.map(fn p ->
+          case p do
+            mod when is_atom(mod) ->
+              str = to_string(mod)
+              if String.starts_with?(str, "Elixir.Exoforge.Std.Services.") do
+                ":#{Macro.underscore(Module.split(mod) |> List.last())}"
+              else
+                ":#{mod}"
+              end
+            other -> ":#{other}"
+          end
+        end)
+        |> Enum.uniq()
+        |> Enum.join(", ")
+
+      banner = """
+
+==============================================================================
+  🚀 EXOFORGE CLUSTER RUNTIME (v1.0.0 [#{env}])
+==============================================================================
+  • Producer Studio:   http://localhost:#{dash_port}
+  • REST API Gateway:  http://localhost:#{http_port} (Docs: /api/docs)
+  • WebSocket Gateway: ws://localhost:#{ws_port}/ws (Game Client SDK)
+------------------------------------------------------------------------------
+  • Active Plugins (#{length(manifests)}): #{Enum.map_join(manifests, ", ", & &1.id)}
+  • Services Exposed:  #{services}
+  • Cluster Node:      #{node()}
+  • Status:            ONLINE and responsive (ready in #{total_ms}ms)
+==============================================================================
+"""
+
+      IO.puts(banner)
+    end
+
+    Logger.info("[Exoforge] All #{length(manifests)} plugins loaded. System online in #{total_ms}ms")
+  end
+
+  defp current_env do
+    if Code.ensure_loaded?(Mix) and function_exported?(Mix, :env, 0) do
+      Mix.env()
+    else
+      Application.get_env(:exoforge, :env, :prod)
+    end
   end
 end

@@ -14,43 +14,52 @@ defmodule Exoforge.Std.Dashboard.Layouts do
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta name="csrf-token" content={Plug.CSRFProtection.get_csrf_token()} />
         <title>EXOFORGE - Game Producer & Designer Studio</title>
-        <!-- Tailwind CSS CDN -->
-        <script src="https://cdn.tailwindcss.com"></script>
+        <!-- Tailwind CSS (Vendored locally for instant load without network latency, with CDN fallback) -->
+        <script src="/vendor/tailwind.js"></script>
         <script>
-          tailwind.config = {
-            theme: {
-              extend: {
-                colors: {
-                  primary: {
-                    50: '#f5f3ff',
-                    100: '#ede9fe',
-                    200: '#ddd6fe',
-                    300: '#c4b5fd',
-                    400: '#a78bfa',
-                    500: '#8b5cf6',
-                    600: '#7c3aed',
-                    700: '#6d28d9',
-                    800: '#5b21b6',
-                    900: '#4c1d95',
+          if (typeof tailwind === 'undefined') {
+            document.write('<script src="https://cdn.tailwindcss.com"><\/script>');
+          }
+        </script>
+        <script>
+          if (typeof tailwind !== 'undefined') {
+            tailwind.config = {
+              theme: {
+                extend: {
+                  colors: {
+                    primary: {
+                      50: '#f5f3ff',
+                      100: '#ede9fe',
+                      200: '#ddd6fe',
+                      300: '#c4b5fd',
+                      400: '#a78bfa',
+                      500: '#8b5cf6',
+                      600: '#7c3aed',
+                      700: '#6d28d9',
+                      800: '#5b21b6',
+                      900: '#4c1d95',
+                    },
+                    status: {
+                      healthy: '#10b981',
+                      warning: '#f59e0b',
+                      error: '#ef4444'
+                    }
                   },
-                  status: {
-                    healthy: '#10b981',
-                    warning: '#f59e0b',
-                    error: '#ef4444'
+                  boxShadow: {
+                    'mac': '0 20px 40px -15px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.06)',
+                    'card': '0 2px 10px -2px rgba(0, 0, 0, 0.04), 0 1px 4px -1px rgba(0, 0, 0, 0.03)'
                   }
-                },
-                boxShadow: {
-                  'mac': '0 20px 40px -15px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.06)',
-                  'card': '0 2px 10px -2px rgba(0, 0, 0, 0.04), 0 1px 4px -1px rgba(0, 0, 0, 0.03)'
                 }
               }
-            }
-          };
+            };
+          }
         </script>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap">
         <style>
-          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
           body {
-            font-family: 'Inter', sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
           }
           .pulse-live {
             box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6);

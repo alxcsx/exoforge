@@ -1,5 +1,11 @@
 import Config
 
+config :logger, :default_formatter,
+  format: "$time [$level] $message\n"
+
+config :logger, :console,
+  format: "$time [$level] $message\n"
+
 config :exoforge,
   start_gateway: true,
   gateway_port: 4000,

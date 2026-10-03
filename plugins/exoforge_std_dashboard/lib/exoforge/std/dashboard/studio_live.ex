@@ -5,6 +5,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   Extensions provide capabilities and domain visualizations dynamically.
   """
   use Phoenix.LiveView
+  require Logger
   import Exoforge.Std.Dashboard.Components
   alias Exoforge.ActionDispatcher
   alias Exoforge.EventDispatcher
@@ -17,6 +18,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     player_id = session["admin_player_id"] || session[:admin_player_id] || "studio"
 
     if connected?(socket) do
+      Logger.info("[StudioLive] Connected session for #{player_id}")
       try do
         EventDispatcher.subscribe(:all)
       rescue

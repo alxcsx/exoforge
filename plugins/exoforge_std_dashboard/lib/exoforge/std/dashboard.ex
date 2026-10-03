@@ -8,7 +8,7 @@ defmodule Exoforge.Std.Dashboard do
 
   @manifest %{
     system: true,
-    dependencies: [],
+    dependencies: [Exoforge.Std.Services.Database],
     category: "Studio",
     dashboard_view: %{id: :dashboard, title: "Producer Studio", icon: "📊"}
   }
