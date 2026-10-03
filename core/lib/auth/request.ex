@@ -13,8 +13,18 @@ defmodule Exoforge.Auth.Request do
 
   def auth_header, do: @auth_header
 
-  @doc "Token from the Authorization header or the `token` query parameter."
-  def token(conn), do: bearer(conn) || query(conn)
+  @doc "Token from the Authorization header, the `token` query parameter, or cross-port `exo_auth_token` cookie."
+  def token(conn), do: bearer(conn) || query(conn) || cookie(conn)
+
+  @doc "Token from the shared cross-port auth cookie (e.g. `exo_auth_token`)."
+  def cookie(conn, name \\ "exo_auth_token") do
+    conn = Plug.Conn.fetch_cookies(conn)
+
+    case Map.get(conn.req_cookies, name) do
+      value when is_binary(value) and value != "" -> String.trim(value)
+      _ -> nil
+    end
+  end
 
   @doc "Token from the Authorization header (Bearer or bare value)."
   def bearer(conn) do

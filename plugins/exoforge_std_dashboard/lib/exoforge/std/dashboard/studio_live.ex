@@ -15,7 +15,10 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
   @impl true
   def mount(_params, session, socket) do
-    player_id = session["admin_player_id"] || session[:admin_player_id] || "studio"
+    player_id = session["admin_user_id"] || session["admin_player_id"] || session[:admin_player_id] || "studio"
+    user_name = session["user_name"] || session["admin_name"] || (if player_id == "studio", do: "Studio Producer", else: player_id)
+    user_role = session["user_role"] || session["admin_role"] || "Admin"
+    auth_token = session["auth_token"] || (if Exoforge.Config.allow_dev_tokens?(), do: "dev:admin", else: nil)
 
     if connected?(socket) do
       Logger.info("[StudioLive] Connected session for #{player_id}")
@@ -61,6 +64,10 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
        max_pinned: @max_pinned,
        overview: overview,
        player_id: player_id,
+       user_id: player_id,
+       user_name: user_name,
+       user_role: user_role,
+       auth_token: auth_token,
        pinned_extensions: Exoforge.Std.Dashboard.Preferences.pinned(player_id),
        visualizable_extensions: visualizable_extensions,
        cmd_palette_open: false,
@@ -1270,8 +1277,8 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
             <% end %>
           </nav>
 
-          <!-- Right Toolbar: Search & Settings -->
-          <div class="flex items-center gap-1.5 flex-shrink-0">
+          <!-- Right Toolbar: Search & Settings, User Info & Logout -->
+          <div class="flex items-center gap-2 flex-shrink-0">
             <button
               type="button"
               phx-click="open_cmd_palette"
@@ -1291,6 +1298,43 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
             >
               ⚙️
             </button>
+
+            <!-- Swagger OpenAPI Link -->
+            <a
+              href="http://localhost:4001/api/docs"
+              target="_blank"
+              class="hidden sm:flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors"
+              title="Open Swagger API Gateway (:4001)"
+            >
+              <span>Swagger</span>
+              <span class="text-[9px]">↗</span>
+            </a>
+
+            <!-- User Profile & Logout -->
+            <div class="flex items-center gap-2 pl-2 border-l border-gray-200">
+              <div class="flex items-center gap-2">
+                <div
+                  class="w-8 h-8 rounded-full bg-purple-100 text-purple-700 font-bold text-xs flex items-center justify-center border border-purple-200"
+                  title={"User ID: " <> to_string(@user_id)}
+                >
+                  <%= String.slice(to_string(@user_name), 0, 2) |> String.upcase() %>
+                </div>
+                <div class="hidden md:flex flex-col text-left">
+                  <span class="text-xs font-bold text-gray-800 leading-tight truncate max-w-[120px]"><%= @user_name %></span>
+                  <span class="text-[10px] text-gray-400 font-medium leading-none"><%= @user_role %></span>
+                </div>
+              </div>
+
+              <a
+                href="/logout"
+                class="w-8 h-8 rounded-xl bg-gray-100 hover:bg-red-50 hover:text-red-600 text-gray-500 flex items-center justify-center transition-colors text-xs border border-gray-200/60"
+                title="Log out of session"
+              >
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+              </a>
+            </div>
           </div>
         </div>
       </header>

@@ -77,15 +77,25 @@ defmodule Exoforge.Std.Http.Router do
       <script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-bundle.js" crossorigin></script>
       <script>
         window.onload = () => {
-          window.ui = SwaggerUIBundle({
+          const urlParams = new URLSearchParams(window.location.search);
+          const cookieMatch = document.cookie.match(/(?:^|;\s*)exo_auth_token=([^;]+)/);
+          const token = urlParams.get('token') || (cookieMatch ? decodeURIComponent(cookieMatch[1].trim()) : null);
+          const ui = SwaggerUIBundle({
             url: '/api/openapi.json',
             dom_id: '#swagger-ui',
             presets: [
               SwaggerUIBundle.presets.apis
             ],
             layout: "BaseLayout",
-            deepLinking: true
+            deepLinking: true,
+            requestInterceptor: (req) => {
+              if (token && !req.headers["authorization"] && !req.headers["Authorization"]) {
+                req.headers["Authorization"] = "Bearer " + token;
+              }
+              return req;
+            }
           });
+          window.ui = ui;
         };
       </script>
     </body>

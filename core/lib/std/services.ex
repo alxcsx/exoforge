@@ -114,45 +114,57 @@ defmodule Exoforge.Std.Services do
       errors([:invalid_credentials])
     end
 
-    @doc "Verifies whether a player has the required authorization scope."
+    @doc "Verifies whether a player or user has the required authorization scope."
     action :verify_scope do
-      params(player_id: :string, required_scope: :string)
+      params(
+        user_id: [type: :string, optional: true],
+        player_id: [type: :string, optional: true],
+        required_scope: :string
+      )
+
       returns(authorized: :boolean)
       errors([:unauthorized])
     end
 
-    @doc "Registers a new player account and profile in both auth and player_data."
+    @doc "Registers a new user account and profile in both auth and player_data."
     action :register do
       params(
+        user_id: [type: :string, optional: true],
         player_id: [type: :string, optional: true],
         name: [type: :string, optional: true],
         email: [type: :string, optional: true],
         password: [type: :string, optional: true],
-        scopes: [type: :list, optional: true]
+        scopes: [type: :term, optional: true]
       )
 
-      returns(player_id: :string, token: :string, scopes: [:string], player: :map)
+      returns(user_id: :string, player_id: :string, token: :string, scopes: [:string], player: :map)
       errors([:invalid_attributes, :registration_failed])
     end
 
-    @doc "Creates a new player account with authentication credentials."
+    @doc "Creates a new player or user account with authentication credentials."
     action :create_player do
       params(
+        user_id: [type: :string, optional: true],
         player_id: [type: :string, optional: true],
         name: [type: :string, optional: true],
         email: [type: :string, optional: true],
         password: [type: :string, optional: true],
-        scopes: [type: :list, optional: true]
+        scopes: [type: :term, optional: true]
       )
 
-      returns(player_id: :string, token: :string, scopes: [:string], player: :map)
+      returns(user_id: :string, player_id: :string, token: :string, scopes: [:string], player: :map)
       errors([:invalid_attributes, :registration_failed])
     end
 
-    @doc "Issues an authentication token for a player."
+    @doc "Issues an authentication token for a user or player."
     action :issue_token do
-      params(player_id: :string, scopes: [type: :list, optional: true])
-      returns(token: :string, player_id: :string)
+      params(
+        player_id: :string,
+        user_id: [type: :string, optional: true],
+        scopes: [type: :term, optional: true]
+      )
+
+      returns(token: :string, user_id: :string, player_id: :string)
       errors([:invalid_player])
     end
 
@@ -164,22 +176,37 @@ defmodule Exoforge.Std.Services do
 
     @doc "Resets the password for an existing account."
     action :reset_password do
-      params(player_id: :string, password: :string)
-      returns(player_id: :string, status: :string)
+      params(
+        user_id: [type: :string, optional: true],
+        player_id: [type: :string, optional: true],
+        password: :string
+      )
+
+      returns(user_id: :string, player_id: :string, status: :string)
       errors([:user_not_found, :protected_admin_account, :invalid_password])
     end
 
     @doc "Updates authorization scopes/roles for a user account."
     action :update_user_roles do
-      params(player_id: :string, scopes: :list)
-      returns(player_id: :string, scopes: [:string])
+      params(
+        user_id: [type: :string, optional: true],
+        player_id: [type: :string, optional: true],
+        scopes: [type: :term, optional: true],
+        role: [type: :string, optional: true]
+      )
+
+      returns(user_id: :string, player_id: :string, scopes: [:string])
       errors([:user_not_found, :protected_admin_account, :invalid_scopes])
     end
 
     @doc "Deletes a user account and associated auth credentials."
     action :delete_user do
-      params(player_id: :string)
-      returns(player_id: :string, status: :string)
+      params(
+        user_id: [type: :string, optional: true],
+        player_id: [type: :string, optional: true]
+      )
+
+      returns(user_id: :string, player_id: :string, status: :string)
       errors([:user_not_found, :protected_admin_account])
     end
   end
@@ -190,6 +217,7 @@ defmodule Exoforge.Std.Services do
     @doc "Player profiles and account state."
     defresource Player, name: :players, primary_key: :player_id do
       column(:player_id, :string, label: "Player ID", sortable: true)
+      column(:user_id, :string, label: "User ID", filterable: true)
       column(:name, :string, label: "Display Name", filterable: true)
       column(:level, :integer, label: "Level", sortable: true, default: 1)
       column(:status, :string, label: "Account Status", badge: true, default: "active")
@@ -201,12 +229,17 @@ defmodule Exoforge.Std.Services do
     action :get_player do
       params(player_id: :string)
       returns(player: :map)
-      errors([:player_not_found])
+      errors([:player_not_found, :player_not_accessible])
     end
 
-    @doc "Creates a player profile record."
+    @doc "Creates a player profile record, optionally linked to a user account."
     action :create_player do
-      params(player_id: [type: :string, optional: true], profile: [type: :map, optional: true])
+      params(
+        player_id: [type: :string, optional: true],
+        user_id: [type: :string, optional: true],
+        profile: [type: :map, optional: true]
+      )
+
       returns(player: :map)
       errors([:invalid_attributes])
     end
@@ -218,8 +251,16 @@ defmodule Exoforge.Std.Services do
       errors([:player_not_found])
     end
 
-    @doc "Lists all registered player profiles."
+    @doc "Unlinks user and marks player record as retained/orphaned for data retention policies."
+    action :retain_player do
+      params(player_id: :string)
+      returns(status: :string, player_id: :string)
+      errors([:player_not_found])
+    end
+
+    @doc "Lists all registered player profiles with optional filtering (all, valid, orphaned)."
     action :list_players do
+      params(filter: [type: :string, optional: true])
       returns(players: [:map])
     end
 
@@ -228,6 +269,34 @@ defmodule Exoforge.Std.Services do
       params(player_id: :string, data: :map)
       returns(player: :map)
       errors([:player_not_found, :invalid_attributes])
+    end
+
+    @doc "Retrieves a fine-grained key-value JSON state entry for a player."
+    action :get_data do
+      params(player_id: :string, key: :string)
+      returns(key: :string, value: :term)
+      errors([:player_not_found, :key_not_found])
+    end
+
+    @doc "Sets a fine-grained key-value JSON state entry for a player."
+    action :set_data do
+      params(player_id: :string, key: :string, value: :term)
+      returns(key: :string, value: :term)
+      errors([:player_not_found])
+    end
+
+    @doc "Deletes a fine-grained key-value JSON state entry for a player."
+    action :delete_data do
+      params(player_id: :string, key: :string)
+      returns(key: :string, status: :string)
+      errors([:player_not_found])
+    end
+
+    @doc "Retrieves all key-value state entries for a player as a map."
+    action :get_all_data do
+      params(player_id: :string)
+      returns(data: :map)
+      errors([:player_not_found])
     end
 
     @doc "Emitted when a new player account is created."

@@ -16,6 +16,7 @@ defmodule Exoforge.Std.Dashboard.Router do
     plug(:put_root_layout, html: {Exoforge.Std.Dashboard.Layouts, :root})
     plug(:protect_from_forgery)
     plug(:put_secure_browser_headers)
+    plug(:sync_auth_cookie)
   end
 
   pipeline :public_api do
@@ -43,6 +44,7 @@ defmodule Exoforge.Std.Dashboard.Router do
       live("/tab/:tab", StudioLive, :tab)
       live("/extensions/:tab", StudioLive, :tab)
       live("/resources/:name", ResourceLive, :index)
+      get("/logout", ApiController, :logout)
     end
   end
 
@@ -76,6 +78,23 @@ defmodule Exoforge.Std.Dashboard.Router do
       conn
     else
       Plug.Test.init_test_session(conn, %{})
+    end
+  end
+
+  # Synchronize auth token to cross-port cookie for Swagger UI (:4001) and WebSocket (:4000)
+  defp sync_auth_cookie(conn, _opts) do
+    token =
+      get_session(conn, "auth_token") ||
+        (if Exoforge.Config.allow_dev_tokens?(), do: "dev:admin", else: nil)
+
+    if token do
+      Plug.Conn.put_resp_cookie(conn, "exo_auth_token", token,
+        path: "/",
+        same_site: "Lax",
+        http_only: false
+      )
+    else
+      conn
     end
   end
 

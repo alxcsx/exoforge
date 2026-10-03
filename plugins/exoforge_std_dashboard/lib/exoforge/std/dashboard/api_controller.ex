@@ -12,6 +12,14 @@ defmodule Exoforge.Std.Dashboard.ApiController do
     json(conn, %{status: "ok"})
   end
 
+  def logout(conn, _params) do
+    conn
+    |> configure_session(drop: true)
+    |> delete_resp_cookie("exo_auth_token", path: "/")
+    |> put_flash(:info, "You have been logged out.")
+    |> redirect(to: "/")
+  end
+
   def overview(conn, _params) do
     data = Exoforge.Std.Dashboard.Router.build_overview_data()
     json(conn, data)

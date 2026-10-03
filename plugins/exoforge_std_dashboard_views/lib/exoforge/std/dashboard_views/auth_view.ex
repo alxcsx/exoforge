@@ -20,16 +20,18 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
        reset_password_user: nil,
        reset_password_error: nil,
        roles_user: nil,
-       roles_form_scopes: [],
+       selected_role: "player",
+       roles_form_scopes: ["player", "write", "read"],
        roles_error: nil,
        issued_token_info: nil,
        selected_user: nil,
        register_form: %{
+         "user_id" => "",
          "player_id" => "",
          "name" => "",
          "email" => "",
          "password" => "",
-         "scopes" => "player"
+         "role" => "player"
        },
        error_message: nil,
        action_notification: nil,
@@ -87,11 +89,12 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
        show_register_modal: true,
        error_message: nil,
        register_form: %{
+         "user_id" => default_id,
          "player_id" => default_id,
          "name" => "",
          "email" => "",
          "password" => "",
-         "scopes" => "player"
+         "role" => "player"
        }
      )}
   end
@@ -108,24 +111,21 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
 
   @impl true
   def handle_event("submit_register", %{"register" => params}, socket) do
-    player_id = String.trim(Map.get(params, "player_id", ""))
+    user_id = String.trim(Map.get(params, "user_id", Map.get(params, "player_id", "")))
     name = String.trim(Map.get(params, "name", ""))
     email = String.trim(Map.get(params, "email", ""))
     password = String.trim(Map.get(params, "password", ""))
-    raw_scopes = String.trim(Map.get(params, "scopes", "player"))
-
-    scopes =
-      raw_scopes
-      |> String.split(",")
-      |> Enum.map(&String.trim/1)
-      |> Enum.reject(&(&1 == ""))
+    role = String.trim(Map.get(params, "role", "player"))
+    scopes = Exoforge.Auth.Roles.scopes_for_role(role)
 
     payload = %{
-      player_id: if(player_id != "", do: player_id, else: nil),
+      user_id: if(user_id != "", do: user_id, else: nil),
+      player_id: if(user_id != "", do: user_id, else: nil),
       name: if(name != "", do: name, else: nil),
       email: if(email != "", do: email, else: nil),
       password: if(password != "", do: password, else: nil),
-      scopes: if(scopes != [], do: scopes, else: ["player"])
+      role: role,
+      scopes: scopes
     }
 
     case ActionDispatcher.dispatch(:auth, :register, payload) do
@@ -201,9 +201,19 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
 
   @impl true
   def handle_event("open_roles_modal", %{"player_id" => player_id}, socket) do
-    user = Enum.find(socket.assigns.users, &(&1["player_id"] == player_id))
+    user = Enum.find(socket.assigns.users, &((&1["user_id"] || &1["player_id"]) == player_id))
     scopes = if user, do: user["scopes"] || ["player"], else: ["player"]
-    {:noreply, assign(socket, show_roles_modal: true, roles_user: user, roles_form_scopes: scopes, roles_error: nil)}
+    primary_role = Exoforge.Auth.Roles.role_from_scopes(scopes)
+    expanded_scopes = Exoforge.Auth.Roles.scopes_for_role(primary_role)
+
+    {:noreply,
+     assign(socket,
+       show_roles_modal: true,
+       roles_user: user,
+       selected_role: primary_role,
+       roles_form_scopes: expanded_scopes,
+       roles_error: nil
+     )}
   end
 
   @impl true
@@ -212,25 +222,19 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
   end
 
   @impl true
-  def handle_event("toggle_role", %{"role" => role}, socket) do
-    current = socket.assigns.roles_form_scopes
-    updated =
-      if role in current do
-        if length(current) > 1, do: List.delete(current, role), else: current
-      else
-        current ++ [role]
-      end
-
-    {:noreply, assign(socket, roles_form_scopes: updated)}
+  def handle_event("select_role", %{"role" => role}, socket) do
+    expanded = Exoforge.Auth.Roles.scopes_for_role(role)
+    {:noreply, assign(socket, selected_role: role, roles_form_scopes: expanded)}
   end
 
   @impl true
-  def handle_event("submit_roles", _params, socket) do
+  def handle_event("submit_roles", params, socket) do
+    role = Map.get(params, "role", socket.assigns.selected_role)
     user = socket.assigns.roles_user
-    pid = if user, do: user["player_id"], else: nil
-    scopes = socket.assigns.roles_form_scopes
+    pid = if user, do: user["user_id"] || user["player_id"], else: nil
+    scopes = Exoforge.Auth.Roles.scopes_for_role(role)
 
-    case ActionDispatcher.dispatch(:auth, :update_user_roles, %{player_id: pid, scopes: scopes}) do
+    case ActionDispatcher.dispatch(:auth, :update_user_roles, %{user_id: pid, role: role, scopes: scopes}) do
       {:ok, _} ->
         socket =
           socket
@@ -599,7 +603,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
             <table class="w-full text-left border-collapse">
               <thead>
                 <tr class="bg-gray-50/75 border-b border-gray-200 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                  <th class="py-3 px-4">Player ID</th>
+                  <th class="py-3 px-4">User ID & Name</th>
                   <th class="py-3 px-4">Assigned Scopes</th>
                   <th class="py-3 px-4">Active Tokens</th>
                   <th class="py-3 px-4">Status</th>
@@ -611,20 +615,23 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                   <% is_protected = user["is_protected"] == true %>
                   <tr class="hover:bg-purple-50/30 transition-colors group">
                     <td class="py-3.5 px-4">
-                      <div class="flex items-center gap-2">
-                        <span class="font-mono font-bold text-gray-900"><%= user["player_id"] %></span>
-                        <%= if is_protected do %>
-                          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300" title="Created via environment variables. Cannot be modified or deleted via UI.">
-                            🔒 Env Admin
-                          </span>
-                        <% end %>
-                        <button
-                          phx-click={Phoenix.LiveView.JS.dispatch("exoforge:clip", detail: %{text: user["player_id"]})}
-                          title="Copy Player ID"
-                          class="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-purple-600 transition-opacity text-xs"
-                        >
-                          📋
-                        </button>
+                      <div class="flex flex-col">
+                        <div class="flex items-center gap-2">
+                          <span class="font-mono font-bold text-gray-900"><%= user["user_id"] || user["player_id"] %></span>
+                          <%= if is_protected do %>
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300" title="Created via environment variables. Cannot be modified or deleted via UI.">
+                              🔒 Env Admin
+                            </span>
+                          <% end %>
+                          <button
+                            phx-click={Phoenix.LiveView.JS.dispatch("exoforge:clip", detail: %{text: user["user_id"] || user["player_id"]})}
+                            title="Copy User ID"
+                            class="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-purple-600 transition-opacity text-xs"
+                          >
+                            📋
+                          </button>
+                        </div>
+                        <span class="text-xs text-gray-500 font-medium mt-0.5"><%= user["name"] || user["email"] %></span>
                       </div>
                     </td>
                     <td class="py-3.5 px-4">
@@ -750,12 +757,12 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
 
             <form phx-submit="submit_register" phx-change="change_register_form" phx-target={@myself} class="space-y-4">
               <div>
-                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Player ID</label>
+                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">User ID</label>
                 <input
                   type="text"
-                  name="register[player_id]"
-                  value={@register_form["player_id"]}
-                  placeholder="e.g. p_94812 (leave blank to auto-generate)"
+                  name="register[user_id]"
+                  value={@register_form["user_id"] || @register_form["player_id"]}
+                  placeholder="e.g. u_94812 (leave blank to auto-generate)"
                   class="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:bg-white font-mono"
                 />
               </div>
@@ -796,15 +803,18 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
               </div>
 
               <div>
-                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Authorization Scopes</label>
-                <input
-                  type="text"
-                  name="register[scopes]"
-                  value={@register_form["scopes"]}
-                  placeholder="player, admin, guest (comma separated)"
-                  class="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:bg-white font-mono"
-                />
-                <p class="text-[11px] text-gray-400 mt-1">Comma-separated list of scopes. Default is "player".</p>
+                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Account Role & Scopes</label>
+                <select
+                  name="register[role]"
+                  class="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:bg-white font-medium text-gray-900"
+                >
+                  <option value="player" selected={@register_form["role"] == "player"}>Player / Standard User (Default game access)</option>
+                  <option value="studio" selected={@register_form["role"] == "studio"}>Studio / Developer (Producer Studio & Tools)</option>
+                  <option value="service" selected={@register_form["role"] == "service"}>Service / Worker (Internal server communications)</option>
+                  <option value="admin" selected={@register_form["role"] == "admin"}>Administrator (Full access to all scopes)</option>
+                  <option value="guest" selected={@register_form["role"] == "guest"}>Guest (Limited anonymous read-only)</option>
+                </select>
+                <p class="text-[11px] text-gray-400 mt-1">Multi-scope security profile assigned to this user upon creation.</p>
               </div>
 
               <div class="pt-4 flex items-center justify-end gap-3 border-t border-gray-100">
@@ -910,7 +920,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
               <div>
                 <h3 class="text-base font-bold text-gray-900">Change Account Roles</h3>
                 <p class="text-xs text-gray-500">
-                  Account: <span class="font-mono font-bold text-gray-800"><%= @roles_user["player_id"] %></span>
+                  User ID: <span class="font-mono font-bold text-gray-800"><%= @roles_user["user_id"] || @roles_user["player_id"] %></span>
                 </p>
               </div>
             </div>
@@ -921,27 +931,31 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
               </div>
             <% end %>
 
-            <div class="space-y-4">
+            <form phx-submit="submit_roles" phx-target={@myself} class="space-y-4">
               <div>
-                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Granted Scopes</label>
-                <div class="grid grid-cols-2 gap-2">
-                  <%= for {scope, desc} <- [{"player", "Standard game access"}, {"studio", "Producer & Studio access"}, {"admin", "Full cluster admin"}, {"guest", "Anonymous guest"}] do %>
-                    <% active = scope in @roles_form_scopes %>
-                    <button
-                      type="button"
-                      phx-click="toggle_role"
-                      phx-value-role={scope}
-                      phx-target={@myself}
-                      class={"p-3 text-left rounded-xl border transition-all flex flex-col justify-between #{if active, do: "bg-purple-50 border-purple-500 text-purple-950", else: "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100"}"}
-                    >
-                      <div class="flex items-center justify-between w-full">
-                        <span class="font-bold text-xs capitalize"><%= scope %></span>
-                        <span class={"w-3.5 h-3.5 rounded-full flex items-center justify-center text-[10px] #{if active, do: "bg-purple-600 text-white font-bold", else: "border border-gray-300"}"}>
-                          <%= if active, do: "✓", else: "" %>
-                        </span>
-                      </div>
-                      <span class="text-[10px] text-gray-500 mt-1"><%= desc %></span>
-                    </button>
+                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Authorisation Role</label>
+                <select
+                  name="role"
+                  phx-change="select_role"
+                  phx-target={@myself}
+                  class="w-full px-3 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:bg-white"
+                >
+                  <option value="player" selected={@selected_role == "player"}>Player / Standard User</option>
+                  <option value="studio" selected={@selected_role == "studio"}>Studio / Developer</option>
+                  <option value="service" selected={@selected_role == "service"}>Service / Worker</option>
+                  <option value="admin" selected={@selected_role == "admin"}>Administrator (All scopes)</option>
+                  <option value="guest" selected={@selected_role == "guest"}>Guest (Limited access)</option>
+                </select>
+              </div>
+
+              <!-- Granted Multi-Scopes Pill List -->
+              <div class="p-3 bg-purple-50/70 border border-purple-200 rounded-xl space-y-1.5">
+                <p class="text-[11px] font-bold text-purple-900 uppercase tracking-wider">Multi-Scopes Granted by this Role:</p>
+                <div class="flex flex-wrap gap-1.5 pt-1">
+                  <%= for scope <- @roles_form_scopes do %>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-mono font-bold bg-white text-purple-800 border border-purple-200 shadow-2xs">
+                      <%= scope %>
+                    </span>
                   <% end %>
                 </div>
               </div>
@@ -956,15 +970,13 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                   Cancel
                 </button>
                 <button
-                  type="button"
-                  phx-click="submit_roles"
-                  phx-target={@myself}
+                  type="submit"
                   class="px-5 py-2 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-xl shadow-sm transition-colors"
                 >
                   Update Roles
                 </button>
               </div>
-            </div>
+            </form>
           </div>
         </div>
       <% end %>

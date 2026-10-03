@@ -52,4 +52,44 @@ defmodule Exoforge.Auth.Roles do
 
   @doc "True when the caller's scope list contains the given role."
   def has?(scopes, role), do: to_string(role) in Enum.map(List.wrap(scopes), &to_string/1)
+
+  @service "service"
+  def service, do: @service
+
+  @role_scopes %{
+    "admin" => ["admin", "service", "studio", "player", "write", "read"],
+    "studio" => ["studio", "write", "read"],
+    "service" => ["service", "write", "read"],
+    "player" => ["player", "read", "write"],
+    "guest" => ["read"]
+  }
+
+  @doc "Fixed authorization roles with multi-scope mappings. Admin grants all scopes."
+  def scopes_for_role(role) do
+    Map.get(@role_scopes, to_string(role), ["read"])
+  end
+
+  @doc "Identifies the highest role matching the given scopes."
+  def role_from_scopes(scopes) do
+    list = Enum.map(List.wrap(scopes), &to_string/1)
+
+    cond do
+      "admin" in list -> "admin"
+      "studio" in list -> "studio"
+      "service" in list -> "service"
+      "player" in list -> "player"
+      true -> "guest"
+    end
+  end
+
+  @doc "Predefined role options for dropdown selection."
+  def available_roles do
+    [
+      %{id: "admin", label: "Admin (Full Access - All Scopes)", scopes: scopes_for_role("admin")},
+      %{id: "studio", label: "Studio / Developer (Studio, Write, Read)", scopes: scopes_for_role("studio")},
+      %{id: "service", label: "Service / Worker (Service, Write, Read)", scopes: scopes_for_role("service")},
+      %{id: "player", label: "Player / User (Player, Read, Write)", scopes: scopes_for_role("player")},
+      %{id: "guest", label: "Guest (Read Only)", scopes: scopes_for_role("guest")}
+    ]
+  end
 end

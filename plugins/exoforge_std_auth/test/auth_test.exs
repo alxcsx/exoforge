@@ -15,7 +15,12 @@ defmodule Exoforge.AuthTest do
 
     defaction(update_player(_payload), do: {:ok, %{player: %{}}})
     defaction(delete_player(_payload), do: {:ok, %{status: "deleted"}})
-    defaction(list_players(), do: {:ok, %{players: []}})
+    defaction(retain_player(_payload), do: {:ok, %{status: "retained"}})
+    defaction(list_players(_payload), do: {:ok, %{players: []}})
+    defaction(get_data(_payload), do: {:ok, %{key: "", value: nil}})
+    defaction(set_data(_payload), do: {:ok, %{key: "", value: nil}})
+    defaction(delete_data(_payload), do: {:ok, %{status: "deleted"}})
+    defaction(get_all_data(_payload), do: {:ok, %{data: %{}}})
 
     defaction get_player(payload) do
       pid = payload[:player_id] || payload["player_id"]
