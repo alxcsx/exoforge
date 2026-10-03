@@ -1,6 +1,6 @@
 # Exoforge Architecture & Simplification Plan (`plan.md`)
 
-> **Status**: Monorepo Core Kernel, 7 Standard Plugins, C# Client SDK, C# Plugin SDK, C# Management Engine (`exo` CLI), Unity Engine SDK (`com.exoforge.sdk`), Game Producer Studio GUI, Distributed Clustering, and Production Kubernetes Manifests are **100% COMPLETE & VERIFIED** (**145 Elixir + 24 C# = 169 unit tests passing + live E2E vertical slice**).  
+> **Status**: Monorepo Core Kernel, 7 Standard Plugins, C# Client SDK, C# Plugin SDK, C# Management Engine (`exo` CLI), Unity Engine SDK (`com.exoforge.sdk`), Game Producer Studio GUI, Distributed Clustering, and Production Kubernetes Manifests are **100% COMPLETE & VERIFIED** (**153 Elixir + 26 C# = 179 unit tests passing + live E2E vertical slice**).  
 > **Verified Benchmarks**: 729,000 stateful actor calls/sec, 1.4 µs latency, 0.07 ms event fanout.
 
 ---
@@ -26,9 +26,9 @@ plugin_manager ───▶ (independent root)
 
 ---
 
-## 2. Completed Milestones Ledger (M1–M21)
+## 2. Completed Milestones Ledger (M1–M22)
 
-All 21 initial MVP milestones have been implemented, tested, and verified:
+All 22 MVP milestones have been implemented, tested, and verified:
 
 - [x] **M1–M6: Kernel Core, Contracts & Standard Plugins**: `PluginRegistry` ETS, `ActionDispatcher`, `EventDispatcher`, Bandit HTTP/WS ingress, WASM runtime (`wasmex`), Sandbox DB, Auth, PlayerData.
 - [x] **M7–M13: Studio LiveView, Distributed Actors & Clustering**: Phoenix LiveView Producer Studio (`:4005`), Horde delta-CRDT virtual actors, `:pg` cluster event fanout, 729k ops/sec cluster benchmark, Kubernetes manifests.
@@ -37,6 +37,12 @@ All 21 initial MVP milestones have been implemented, tested, and verified:
 - [x] **M19: Standard Plugin Manager (`exoforge_std_plugin_manager`)**: `:plugin_manager` service contract, hot WASM upload (`\0asm` verification), runtime restart/reload, manifest export.
 - [x] **M20: Standalone C# Management Engine (`Exoforge.Management` & `exo` CLI)**: Dual-targeted `netstandard2.1` / `net10.0` library, `exo` CLI tool (`init`, `plugin new`, `plugin build`, `plugin push`, `sync`, `status`), and dedicated Studio Plugin Manager GUI.
 - [x] **M21: Unity Engine SDK (`com.exoforge.sdk`)**: Standard UPM layout, in-engine Control Center window (`Window > Exoforge > Control Center`), persistent `EditorPrefs`, one-click client code generation, and `CombatDemo` sample.
+- [x] **M22: GameDev Control Center, LiveOps Time Primitives & Standalone Package**:
+  - Gamedev-first Unity Editor window with live cluster ping, environment switcher, real-time event streaming monitor, in-engine RPC action sandbox, C# WASM plugin manager, and LiveOps schedule viewer.
+  - Core `Exoforge.TimeWindow` construct and C# `ExoTimeWindow` with active window evaluation, daily/weekly recurrence, countdowns, and progress tracking.
+  - Reusable Studio dashboard components: `schedule_timeline/1` and `calendar_view/1` with automatic tab integration in `GenericExtensionView`.
+  - Self-contained UPM distribution packaging target (`just pack-unity`) producing standalone `com.exoforge.sdk-0.1.0.tgz`.
+  - Interactive `CombatDemoController` with on-screen runtime HUD.
 
 ---
 

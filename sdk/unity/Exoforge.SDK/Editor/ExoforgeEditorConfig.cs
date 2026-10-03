@@ -23,6 +23,22 @@ public static class ExoforgeEditorConfig
     public const string DefaultWorkspaceRelPath = "exoforge";
     public const string DefaultGeneratedScriptRelPath = "Assets/Exoforge/Generated/ExoforgeServices.g.cs";
 
+    public static readonly (string Name, string Url)[] EnvironmentPresets = new[]
+    {
+        ("Local (:4000)", "ws://127.0.0.1:4000/ws"),
+        ("Dev Server", "wss://dev.exoforge.game/ws"),
+        ("Staging", "wss://staging.exoforge.game/ws"),
+        ("Production", "wss://api.exoforge.game/ws")
+    };
+
+    public static readonly (string Label, string Token)[] TokenPresets = new[]
+    {
+        ("Admin Master", "admin"),
+        ("Developer Dev", "dev:developer"),
+        ("Player Alpha", "player_1"),
+        ("Player Beta", "player_2")
+    };
+
     private static string _fallbackServerUrl = DefaultServerUrl;
     private static string _fallbackAdminToken = DefaultAdminToken;
     private static string _fallbackWorkspacePath = DefaultWorkspaceRelPath;

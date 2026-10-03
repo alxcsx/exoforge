@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Exoforge.Client;
+using Exoforge.Client.Time;
 using Exoforge.Management;
 
 #if UNITY_EDITOR
@@ -16,53 +18,88 @@ namespace Exoforge.Unity.Editor;
 
 #if UNITY_EDITOR
 /// <summary>
-/// Unity Editor Studio Window for managing Exoforge backend plugins,
-/// scaffolding C# WASM projects, syncing client code generation, and monitoring cluster health.
+/// GameDev-first Unity Editor Studio for Exoforge.
+/// Provides one-click client code generation, live event streaming monitor,
+/// in-engine RPC action sandbox, C# WASM plugin management, and LiveOps schedule inspection.
 /// </summary>
 public class ExoforgeControlCenter : EditorWindow
 {
     private enum Tab
     {
-        Plugins = 0,
-        CodeGeneration = 1,
-        ClusterStatus = 2,
-        Settings = 3
+        Overview = 0,
+        LiveEvents = 1,
+        ActionSandbox = 2,
+        Plugins = 3,
+        Schedule = 4,
+        Settings = 5
     }
 
-    private Tab _currentTab = Tab.Plugins;
-    private readonly string[] _tabNames = { "Plugins & WASM", "Code Generation", "Cluster Status", "Settings" };
+    private Tab _currentTab = Tab.Overview;
+    private readonly string[] _tabNames =
+    {
+        "⚡ Overview",
+        "📡 Live Events",
+        "🧪 Action Sandbox",
+        "📦 Plugins & WASM",
+        "📅 LiveOps & Schedules",
+        "⚙️ Settings"
+    };
 
-    // Connection state
+    // Connection & Telemetry
     private ExoClient? _editorClient;
     private bool _isConnected = false;
     private string _connectionStatus = "Disconnected";
-
-    // Workspace & Plugins
-    private string _newPluginName = "";
-    private string _statusMessage = "";
-    private MessageType _statusMessageType = MessageType.Info;
-    private List<LocalPluginInfo> _localPlugins = new();
-    private List<JsonElement> _remotePlugins = new();
-
-    // Telemetry
+    private long _lastPingMs = -1;
     private string _nodeName = "—";
     private string _uptime = "—";
     private string _memoryMb = "—";
     private int _activeEntities = 0;
     private int _pluginsCount = 0;
 
-    // Scroll positions
+    // Status Banner
+    private string _statusMessage = "";
+    private MessageType _statusMessageType = MessageType.Info;
+
+    // Live Event Monitor
+    public record LoggedEvent(DateTime Timestamp, string Topic, string EventName, string RawJson);
+    private readonly List<LoggedEvent> _eventLog = new();
+    private bool _isEventStreamPaused = false;
+    private string _eventSearchFilter = "";
+    private Vector2 _eventScroll;
+    private LoggedEvent? _selectedEvent;
+
+    // Action Sandbox
+    private string _sandboxService = "combat_wasm";
+    private string _sandboxAction = "attack";
+    private string _sandboxPayloadJson = "{\n  \"target_player_id\": \"boss_demon_1\",\n  \"damage\": 25\n}";
+    private string _sandboxResult = "";
+    private string _sandboxResultLatency = "";
+    private bool _sandboxResultSuccess = true;
+    private Vector2 _sandboxResultScroll;
+
+    // Plugins & WASM
+    private string _newPluginName = "";
+    private int _scaffoldTemplateIndex = 0;
+    private readonly string[] _scaffoldTemplates = { "Standard Service", "Player Inventory", "Custom LiveOps Event" };
+    private List<LocalPluginInfo> _localPlugins = new();
+    private List<JsonElement> _remotePlugins = new();
     private Vector2 _pluginsScroll;
     private Vector2 _remoteScroll;
-    private Vector2 _telemetryScroll;
 
-    public record LocalPluginInfo(string Name, string DirectoryPath, bool HasWasm, string WasmPath);
+    // LiveOps Schedules
+    private List<ExoTimeWindow> _liveopsWindows = new();
+    private Vector2 _scheduleScroll;
+
+    // Scroll positions
+    private Vector2 _mainScroll;
+
+    public record LocalPluginInfo(string Name, string DirectoryPath, bool HasWasm, string WasmPath, long WasmSizeBytes);
 
     [MenuItem("Window/Exoforge/Control Center", false, 2000)]
     public static void ShowWindow()
     {
         var window = GetWindow<ExoforgeControlCenter>("Exoforge Studio");
-        window.minSize = new Vector2(560, 480);
+        window.minSize = new Vector2(620, 520);
         window.Show();
     }
 
@@ -87,7 +124,7 @@ public class ExoforgeControlCenter : EditorWindow
         }
         catch
         {
-            // Silently allow manual connect
+            // Allow manual connect
         }
     }
 
@@ -96,18 +133,30 @@ public class ExoforgeControlCenter : EditorWindow
         _connectionStatus = "Connecting...";
         Repaint();
 
+        var sw = Stopwatch.StartNew();
         try
         {
             _editorClient?.Dispose();
-            _editorClient = new ExoClient(ExoforgeEditorConfig.ServerUrl);
-            await _editorClient.ConnectAsync();
+            _editorClient = new ExoClient();
+
+            // Wire up real-time event streaming monitor
+            _editorClient.OnAnyEvent += HandleIncomingEvent;
+
+            var uri = new Uri(ExoforgeEditorConfig.ServerUrl);
+            await _editorClient.ConnectAsync(uri);
 
             var authResult = await _editorClient.AuthenticateAsync(ExoforgeEditorConfig.AdminToken);
+            sw.Stop();
+            _lastPingMs = sw.ElapsedMilliseconds;
+
             if (authResult.Success)
             {
                 _isConnected = true;
-                _connectionStatus = $"Connected (Player: {authResult.PlayerId})";
-                ShowStatus("Connected to Exoforge server successfully.", MessageType.Info);
+                _connectionStatus = $"Connected ({authResult.PlayerId})";
+                ShowStatus($"Connected to Exoforge server ({_lastPingMs} ms).", MessageType.Info);
+
+                // Auto-subscribe to all events for the live event monitor
+                await _editorClient.SubscribeAsync("*");
                 await RefreshRemoteInfoAsync();
             }
             else
@@ -119,7 +168,9 @@ public class ExoforgeControlCenter : EditorWindow
         }
         catch (Exception ex)
         {
+            sw.Stop();
             _isConnected = false;
+            _lastPingMs = -1;
             _connectionStatus = "Connection Failed";
             ShowStatus($"Connection failed: {ex.Message}", MessageType.Warning);
         }
@@ -138,6 +189,33 @@ public class ExoforgeControlCenter : EditorWindow
 
         _isConnected = false;
         _connectionStatus = "Disconnected";
+        _lastPingMs = -1;
+        Repaint();
+    }
+
+    private void HandleIncomingEvent(ExoEventFrame evt)
+    {
+        if (_isEventStreamPaused) return;
+
+        string rawJson;
+        try
+        {
+            rawJson = JsonSerializer.Serialize(evt.Payload, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch
+        {
+            rawJson = evt.Payload.ToString() ?? "{}";
+        }
+
+        var logged = new LoggedEvent(DateTime.UtcNow, evt.Topic, evt.Event, rawJson);
+        _eventLog.Insert(0, logged);
+
+        // Keep buffer bounded
+        if (_eventLog.Count > 150)
+        {
+            _eventLog.RemoveAt(_eventLog.Count - 1);
+        }
+
         Repaint();
     }
 
@@ -179,6 +257,9 @@ public class ExoforgeControlCenter : EditorWindow
                     }
                 }
             }
+
+            // Refresh LiveOps schedules
+            RefreshSchedules();
         }
         catch (Exception ex)
         {
@@ -186,6 +267,40 @@ public class ExoforgeControlCenter : EditorWindow
         }
 
         Repaint();
+    }
+
+    private void RefreshSchedules()
+    {
+        // Populate sample / registered LiveOps schedule windows for designer preview
+        _liveopsWindows = new List<ExoTimeWindow>
+        {
+            new ExoTimeWindow
+            {
+                Id = "double_xp_weekend",
+                Title = "Double XP Weekend",
+                StartAtUtc = DateTime.UtcNow.AddHours(-14),
+                EndAtUtc = DateTime.UtcNow.AddHours(34),
+                Recurrence = "weekly",
+                Status = "active",
+                IsActive = true,
+                CountdownText = "1d 10h",
+                Progress = 0.29,
+                Metadata = new Dictionary<string, JsonElement>()
+            },
+            new ExoTimeWindow
+            {
+                Id = "world_boss_raid",
+                Title = "World Boss Incursion",
+                StartAtUtc = DateTime.UtcNow.AddHours(4),
+                EndAtUtc = DateTime.UtcNow.AddHours(6),
+                Recurrence = "daily",
+                Status = "upcoming",
+                IsActive = false,
+                CountdownText = "4h 00m",
+                Progress = 0.0,
+                Metadata = new Dictionary<string, JsonElement>()
+            }
+        };
     }
 
     private void RefreshLocalPlugins()
@@ -206,6 +321,7 @@ public class ExoforgeControlCenter : EditorWindow
                 string name = Path.GetFileName(dir);
                 string wasmPath = Path.Combine(dir, $"{name}.wasm");
                 bool hasWasm = File.Exists(wasmPath);
+                long wasmSize = 0;
 
                 if (!hasWasm)
                 {
@@ -217,7 +333,12 @@ public class ExoforgeControlCenter : EditorWindow
                     }
                 }
 
-                _localPlugins.Add(new LocalPluginInfo(name, dir, hasWasm, wasmPath));
+                if (hasWasm && File.Exists(wasmPath))
+                {
+                    wasmSize = new FileInfo(wasmPath).Length;
+                }
+
+                _localPlugins.Add(new LocalPluginInfo(name, dir, hasWasm, wasmPath, wasmSize));
             }
         }
     }
@@ -230,28 +351,40 @@ public class ExoforgeControlCenter : EditorWindow
 
     private void OnGUI()
     {
-        DrawHeader();
+        DrawModernHeader();
 
-        EditorGUILayout.Space(4);
+        EditorGUILayout.Space(2);
         _currentTab = (Tab)GUILayout.Toolbar((int)_currentTab, _tabNames, GUILayout.Height(28));
         EditorGUILayout.Space(6);
 
         if (!string.IsNullOrEmpty(_statusMessage))
         {
+            EditorGUILayout.BeginHorizontal();
             EditorGUILayout.HelpBox(_statusMessage, _statusMessageType);
+            if (GUILayout.Button("✕", GUILayout.Width(24), GUILayout.Height(38)))
+            {
+                _statusMessage = "";
+            }
+            EditorGUILayout.EndHorizontal();
             EditorGUILayout.Space(4);
         }
 
         switch (_currentTab)
         {
+            case Tab.Overview:
+                DrawOverviewTab();
+                break;
+            case Tab.LiveEvents:
+                DrawLiveEventsTab();
+                break;
+            case Tab.ActionSandbox:
+                DrawActionSandboxTab();
+                break;
             case Tab.Plugins:
                 DrawPluginsTab();
                 break;
-            case Tab.CodeGeneration:
-                DrawCodeGenerationTab();
-                break;
-            case Tab.ClusterStatus:
-                DrawClusterStatusTab();
+            case Tab.Schedule:
+                DrawScheduleTab();
                 break;
             case Tab.Settings:
                 DrawSettingsTab();
@@ -259,39 +392,54 @@ public class ExoforgeControlCenter : EditorWindow
         }
     }
 
-    private void DrawHeader()
+    private void DrawModernHeader()
     {
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+
+        // Line 1: Title, Ping Badge, Connect/Disconnect Button
         EditorGUILayout.BeginHorizontal();
 
         GUIStyle titleStyle = new GUIStyle(EditorStyles.boldLabel)
         {
             fontSize = 14,
-            normal = { textColor = new Color(0.55f, 0.35f, 0.95f) }
+            normal = { textColor = new Color(0.6f, 0.4f, 0.95f) }
         };
+        GUILayout.Label("⚡ EXOFORGE CONTROL CENTER", titleStyle);
 
-        GUILayout.Label("⚡ EXOFORGE GAME STUDIO", titleStyle);
         GUILayout.FlexibleSpace();
 
-        // Status indicator dot
+        // Ping latency badge
+        if (_isConnected && _lastPingMs >= 0)
+        {
+            GUIStyle pingBadge = new GUIStyle(EditorStyles.miniLabel)
+            {
+                fontStyle = FontStyle.Bold,
+                normal = { textColor = _lastPingMs < 50 ? new Color(0.2f, 0.8f, 0.4f) : new Color(0.9f, 0.7f, 0.2f) }
+            };
+            GUILayout.Label($"⚡ {_lastPingMs} ms", pingBadge);
+            GUILayout.Space(8);
+        }
+
+        // Connection dot
         GUIStyle statusBadge = new GUIStyle(EditorStyles.miniLabel)
         {
             fontStyle = FontStyle.Bold,
-            normal = { textColor = _isConnected ? new Color(0.2f, 0.8f, 0.3f) : new Color(0.8f, 0.3f, 0.2f) }
+            normal = { textColor = _isConnected ? new Color(0.2f, 0.85f, 0.35f) : new Color(0.85f, 0.3f, 0.25f) }
         };
+        GUILayout.Label(_isConnected ? "● ONLINE" : "○ OFFLINE", statusBadge);
 
-        GUILayout.Label(_isConnected ? "● CONNECTED" : "○ DISCONNECTED", statusBadge);
+        GUILayout.Space(6);
 
         if (_isConnected)
         {
-            if (GUILayout.Button("Disconnect", EditorStyles.miniButton, GUILayout.Width(75)))
+            if (GUILayout.Button("Disconnect", EditorStyles.miniButton, GUILayout.Width(80)))
             {
                 _ = DisconnectAsync();
             }
         }
         else
         {
-            if (GUILayout.Button("Connect", EditorStyles.miniButton, GUILayout.Width(75)))
+            if (GUILayout.Button("Connect", EditorStyles.miniButton, GUILayout.Width(80)))
             {
                 _ = ConnectAsync();
             }
@@ -299,8 +447,337 @@ public class ExoforgeControlCenter : EditorWindow
 
         EditorGUILayout.EndHorizontal();
 
-        EditorGUILayout.LabelField($"Cluster: {ExoforgeEditorConfig.ServerUrl}  |  {_connectionStatus}", EditorStyles.miniLabel);
+        // Line 2: Environment Quick Switcher Pills
+        EditorGUILayout.BeginHorizontal();
+        GUILayout.Label("Env:", EditorStyles.miniLabel, GUILayout.Width(30));
+
+        foreach (var (name, url) in ExoforgeEditorConfig.EnvironmentPresets)
+        {
+            bool isCurrent = ExoforgeEditorConfig.ServerUrl == url;
+            GUIStyle btnStyle = new GUIStyle(EditorStyles.miniButton)
+            {
+                fontStyle = isCurrent ? FontStyle.Bold : FontStyle.Normal
+            };
+
+            if (GUILayout.Button(name, btnStyle))
+            {
+                ExoforgeEditorConfig.ServerUrl = url;
+                _ = ConnectAsync();
+            }
+        }
+
+        GUILayout.FlexibleSpace();
+
+        // Token quick switcher
+        GUILayout.Label("Role:", EditorStyles.miniLabel, GUILayout.Width(32));
+        foreach (var (label, token) in ExoforgeEditorConfig.TokenPresets)
+        {
+            bool isCurrent = ExoforgeEditorConfig.AdminToken == token;
+            GUIStyle btnStyle = new GUIStyle(EditorStyles.miniButton)
+            {
+                fontStyle = isCurrent ? FontStyle.Bold : FontStyle.Normal
+            };
+
+            if (GUILayout.Button(label, btnStyle))
+            {
+                ExoforgeEditorConfig.AdminToken = token;
+                if (_isConnected)
+                {
+                    _ = ConnectAsync();
+                }
+            }
+        }
+
+        EditorGUILayout.EndHorizontal();
+
+        EditorGUILayout.LabelField($"{ExoforgeEditorConfig.ServerUrl}  •  {_connectionStatus}", EditorStyles.miniLabel);
+
         EditorGUILayout.EndVertical();
+    }
+
+    private void DrawOverviewTab()
+    {
+        _mainScroll = EditorGUILayout.BeginScrollView(_mainScroll);
+
+        // Metric Cards Grid
+        EditorGUILayout.LabelField("Server Telemetry & Node Status", EditorStyles.boldLabel);
+        EditorGUILayout.BeginHorizontal();
+
+        DrawMetricCard("Cluster Node", _nodeName, "BEAM Core");
+        DrawMetricCard("Uptime", _uptime, "Supervised");
+        DrawMetricCard("Memory", _memoryMb, "BEAM Process");
+        DrawMetricCard("Virtual Entities", _activeEntities.ToString(), "Horde Clustered");
+        DrawMetricCard("Active Plugins", _pluginsCount.ToString(), "Standard & Custom");
+
+        EditorGUILayout.EndHorizontal();
+
+        EditorGUILayout.Space(12);
+
+        // Golden Path Actions
+        EditorGUILayout.LabelField("Quick Actions & Golden Path", EditorStyles.boldLabel);
+        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+
+        EditorGUILayout.BeginHorizontal();
+        GUI.enabled = _isConnected;
+        if (GUILayout.Button("⚡ Sync Contracts & Generate C# API", GUILayout.Height(36)))
+        {
+            _ = SyncAndGenerateClientAsync();
+        }
+        GUI.enabled = true;
+
+        if (GUILayout.Button("🌐 Open Producer Studio (Port 4005)", GUILayout.Height(36)))
+        {
+            Application.OpenURL("http://localhost:4005");
+        }
+        EditorGUILayout.EndHorizontal();
+
+        EditorGUILayout.Space(4);
+
+        EditorGUILayout.BeginHorizontal();
+        if (GUILayout.Button("🎮 Load CombatDemo Scene", GUILayout.Height(28)))
+        {
+            OpenSampleScene();
+        }
+
+        GUI.enabled = _isConnected;
+        if (GUILayout.Button("🔄 Hot-Restart Server Supervision", GUILayout.Height(28)))
+        {
+            _ = RestartClusterAsync();
+        }
+        GUI.enabled = true;
+        EditorGUILayout.EndHorizontal();
+
+        EditorGUILayout.EndVertical();
+
+        EditorGUILayout.Space(12);
+
+        // Getting Started Gamedev Checklist
+        EditorGUILayout.LabelField("Game Developer Golden Path Checklist", EditorStyles.boldLabel);
+        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+
+        DrawChecklistRow("1. Connect to Exoforge Cluster", _isConnected, "Connect button in top header bar.");
+        DrawChecklistRow("2. Scaffold Game Service Plugin", _localPlugins.Count > 0, "Use the 'Plugins & WASM' tab to create C# WASM logic.");
+        DrawChecklistRow("3. Generate Strongly-Typed C# API", File.Exists(ExoforgeEditorConfig.GetAbsoluteGeneratedScriptPath()), "Click 'Sync Contracts' to generate pure C# client bindings.");
+        DrawChecklistRow("4. Listen to Live Cluster Events", _eventLog.Count > 0, "Monitor real-time event broadcasts in the 'Live Events' tab.");
+
+        EditorGUILayout.EndVertical();
+
+        EditorGUILayout.EndScrollView();
+    }
+
+    private void DrawMetricCard(string title, string value, string subtitle)
+    {
+        EditorGUILayout.BeginVertical(EditorStyles.helpBox, GUILayout.Width(110), GUILayout.Height(64));
+        EditorGUILayout.LabelField(title.ToUpperInvariant(), EditorStyles.miniLabel);
+        GUIStyle valStyle = new GUIStyle(EditorStyles.boldLabel) { fontSize = 13 };
+        EditorGUILayout.LabelField(value, valStyle);
+        EditorGUILayout.LabelField(subtitle, EditorStyles.miniLabel);
+        EditorGUILayout.EndVertical();
+    }
+
+    private void DrawChecklistRow(string title, bool isDone, string hint)
+    {
+        EditorGUILayout.BeginHorizontal();
+        GUIStyle markStyle = new GUIStyle(EditorStyles.boldLabel)
+        {
+            normal = { textColor = isDone ? new Color(0.2f, 0.8f, 0.3f) : new Color(0.5f, 0.5f, 0.5f) }
+        };
+        GUILayout.Label(isDone ? "✔" : "○", markStyle, GUILayout.Width(20));
+        EditorGUILayout.LabelField(title, EditorStyles.boldLabel, GUILayout.Width(230));
+        EditorGUILayout.LabelField(hint, EditorStyles.miniLabel);
+        EditorGUILayout.EndHorizontal();
+    }
+
+    private void DrawLiveEventsTab()
+    {
+        EditorGUILayout.BeginHorizontal();
+        EditorGUILayout.LabelField($"Live Cluster Event Stream ({_eventLog.Count})", EditorStyles.boldLabel);
+
+        _eventSearchFilter = EditorGUILayout.TextField(_eventSearchFilter, EditorStyles.toolbarSearchField, GUILayout.Width(180));
+
+        if (GUILayout.Button(_isEventStreamPaused ? "▶ Resume" : "⏸ Pause", EditorStyles.miniButton, GUILayout.Width(75)))
+        {
+            _isEventStreamPaused = !_isEventStreamPaused;
+        }
+
+        if (GUILayout.Button("Clear", EditorStyles.miniButton, GUILayout.Width(55)))
+        {
+            _eventLog.Clear();
+            _selectedEvent = null;
+        }
+        EditorGUILayout.EndHorizontal();
+
+        EditorGUILayout.Space(4);
+
+        // Event List
+        _eventScroll = EditorGUILayout.BeginScrollView(_eventScroll, GUILayout.Height(200));
+        var filteredEvents = string.IsNullOrWhiteSpace(_eventSearchFilter)
+            ? _eventLog
+            : _eventLog.Where(e => e.Topic.Contains(_eventSearchFilter, StringComparison.OrdinalIgnoreCase) ||
+                                   e.EventName.Contains(_eventSearchFilter, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        if (filteredEvents.Count == 0)
+        {
+            EditorGUILayout.HelpBox(_isConnected
+                ? "Waiting for broadcast events from Exoforge backend (e.g., combat:damage_dealt, player:updated)..."
+                : "Connect to cluster to monitor live events.", MessageType.None);
+        }
+        else
+        {
+            foreach (var evt in filteredEvents)
+            {
+                bool isSelected = _selectedEvent == evt;
+                EditorGUILayout.BeginHorizontal(isSelected ? EditorStyles.selectionRect : EditorStyles.helpBox);
+
+                GUILayout.Label("📡", GUILayout.Width(20));
+                EditorGUILayout.LabelField(evt.Timestamp.ToString("HH:mm:ss.fff"), EditorStyles.miniLabel, GUILayout.Width(75));
+                EditorGUILayout.LabelField(evt.Topic, EditorStyles.boldLabel, GUILayout.Width(130));
+                EditorGUILayout.LabelField(evt.EventName, EditorStyles.label, GUILayout.Width(150));
+
+                GUILayout.FlexibleSpace();
+
+                if (GUILayout.Button("Inspect", EditorStyles.miniButton, GUILayout.Width(65)))
+                {
+                    _selectedEvent = evt;
+                }
+
+                EditorGUILayout.EndHorizontal();
+            }
+        }
+        EditorGUILayout.EndScrollView();
+
+        EditorGUILayout.Space(6);
+
+        // JSON Inspector Box
+        EditorGUILayout.LabelField("Event Payload JSON Inspector", EditorStyles.boldLabel);
+        if (_selectedEvent != null)
+        {
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField($"{_selectedEvent.Topic} -> {_selectedEvent.EventName}", EditorStyles.miniBoldLabel);
+            if (GUILayout.Button("Copy JSON", EditorStyles.miniButton, GUILayout.Width(80)))
+            {
+                GUIUtility.systemCopyBuffer = _selectedEvent.RawJson;
+                ShowStatus("Copied event JSON to clipboard!", MessageType.Info);
+            }
+            EditorGUILayout.EndHorizontal();
+
+            EditorGUILayout.TextArea(_selectedEvent.RawJson, GUILayout.Height(120));
+        }
+        else
+        {
+            EditorGUILayout.HelpBox("Select an event above to inspect its JSON payload.", MessageType.None);
+        }
+    }
+
+    private void DrawActionSandboxTab()
+    {
+        EditorGUILayout.LabelField("In-Engine RPC Action Runner", EditorStyles.boldLabel);
+        EditorGUILayout.HelpBox("Dispatch typed actions directly to the Exoforge Kernel and measure server latency in milliseconds without leaving Unity.", MessageType.Info);
+
+        EditorGUILayout.Space(6);
+
+        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+
+        EditorGUILayout.BeginHorizontal();
+        EditorGUILayout.LabelField("Service Atom:", GUILayout.Width(110));
+        _sandboxService = EditorGUILayout.TextField(_sandboxService);
+        EditorGUILayout.EndHorizontal();
+
+        EditorGUILayout.BeginHorizontal();
+        EditorGUILayout.LabelField("Action Name:", GUILayout.Width(110));
+        _sandboxAction = EditorGUILayout.TextField(_sandboxAction);
+        EditorGUILayout.EndHorizontal();
+
+        EditorGUILayout.Space(4);
+        EditorGUILayout.LabelField("JSON Payload:");
+        _sandboxPayloadJson = EditorGUILayout.TextArea(_sandboxPayloadJson, GUILayout.Height(80));
+
+        EditorGUILayout.Space(6);
+
+        // Payload Preset Templates
+        EditorGUILayout.BeginHorizontal();
+        GUILayout.Label("Presets:", EditorStyles.miniLabel, GUILayout.Width(50));
+        if (GUILayout.Button("Combat Attack", EditorStyles.miniButton))
+        {
+            _sandboxService = "combat_wasm";
+            _sandboxAction = "attack";
+            _sandboxPayloadJson = "{\n  \"target_player_id\": \"goblin_boss\",\n  \"damage\": 30\n}";
+        }
+        if (GUILayout.Button("Player Profile", EditorStyles.miniButton))
+        {
+            _sandboxService = "player_data";
+            _sandboxAction = "get_profile";
+            _sandboxPayloadJson = "{\n  \"player_id\": \"player_1\"\n}";
+        }
+        if (GUILayout.Button("DB Health", EditorStyles.miniButton))
+        {
+            _sandboxService = "lldb";
+            _sandboxAction = "health_check";
+            _sandboxPayloadJson = "{}";
+        }
+        EditorGUILayout.EndHorizontal();
+
+        EditorGUILayout.Space(8);
+
+        GUI.enabled = _isConnected;
+        if (GUILayout.Button("⚡ Dispatch Action Request", GUILayout.Height(32)))
+        {
+            _ = DispatchSandboxActionAsync();
+        }
+        GUI.enabled = true;
+
+        EditorGUILayout.EndVertical();
+
+        EditorGUILayout.Space(8);
+
+        // Action Result Box
+        if (!string.IsNullOrEmpty(_sandboxResult))
+        {
+            EditorGUILayout.BeginHorizontal();
+            GUIStyle resStyle = new GUIStyle(EditorStyles.boldLabel)
+            {
+                normal = { textColor = _sandboxResultSuccess ? new Color(0.2f, 0.8f, 0.3f) : new Color(0.8f, 0.3f, 0.2f) }
+            };
+            GUILayout.Label(_sandboxResultSuccess ? "✔ ACTION SUCCEEDED" : "✖ ACTION FAILED", resStyle);
+            GUILayout.FlexibleSpace();
+            GUILayout.Label(_sandboxResultLatency, EditorStyles.miniBoldLabel);
+            EditorGUILayout.EndHorizontal();
+
+            _sandboxResultScroll = EditorGUILayout.BeginScrollView(_sandboxResultScroll, GUILayout.Height(100));
+            EditorGUILayout.TextArea(_sandboxResult);
+            EditorGUILayout.EndScrollView();
+        }
+    }
+
+    private async Task DispatchSandboxActionAsync()
+    {
+        if (_editorClient == null || !_isConnected) return;
+
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            object? payload = null;
+            if (!string.IsNullOrWhiteSpace(_sandboxPayloadJson))
+            {
+                payload = JsonDocument.Parse(_sandboxPayloadJson).RootElement;
+            }
+
+            var result = await _editorClient.SendActionAsync<JsonElement>(_sandboxService, _sandboxAction, payload);
+            sw.Stop();
+
+            _sandboxResultLatency = $"⚡ {sw.ElapsedMilliseconds} ms ({sw.Elapsed.TotalMicroseconds:F0} µs)";
+            _sandboxResultSuccess = true;
+            _sandboxResult = JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            _sandboxResultLatency = $"⚡ {sw.ElapsedMilliseconds} ms";
+            _sandboxResultSuccess = false;
+            _sandboxResult = $"Error: {ex.Message}";
+        }
+
+        Repaint();
     }
 
     private void DrawPluginsTab()
@@ -308,7 +785,6 @@ public class ExoforgeControlCenter : EditorWindow
         string wsPath = ExoforgeEditorConfig.GetAbsoluteWorkspacePath();
         bool wsExists = ExoWorkspace.Exists(wsPath);
 
-        // Workspace banner
         if (!wsExists)
         {
             EditorGUILayout.HelpBox($"Exoforge workspace not detected at '{wsPath}'. Initialize it to scaffold C# WASM plugins.", MessageType.Warning);
@@ -322,32 +798,25 @@ public class ExoforgeControlCenter : EditorWindow
         }
 
         // Scaffold New Plugin Box
-        EditorGUILayout.LabelField("Create New C# WASM Plugin", EditorStyles.boldLabel);
-        EditorGUILayout.BeginHorizontal(EditorStyles.helpBox);
-        _newPluginName = EditorGUILayout.TextField(_newPluginName, GUILayout.Height(22));
+        EditorGUILayout.LabelField("Scaffold New C# WASM Plugin", EditorStyles.boldLabel);
+        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
 
-        if (GUILayout.Button("+ Scaffold Plugin Boilerplate", GUILayout.Width(190), GUILayout.Height(22)))
+        EditorGUILayout.BeginHorizontal();
+        EditorGUILayout.LabelField("Plugin Name:", GUILayout.Width(90));
+        _newPluginName = EditorGUILayout.TextField(_newPluginName);
+        EditorGUILayout.EndHorizontal();
+
+        EditorGUILayout.BeginHorizontal();
+        EditorGUILayout.LabelField("Template:", GUILayout.Width(90));
+        _scaffoldTemplateIndex = EditorGUILayout.Popup(_scaffoldTemplateIndex, _scaffoldTemplates);
+
+        if (GUILayout.Button("+ Scaffold Plugin", GUILayout.Width(140)))
         {
-            if (string.IsNullOrWhiteSpace(_newPluginName))
-            {
-                ShowStatus("Please enter a valid plugin name.", MessageType.Error);
-            }
-            else
-            {
-                try
-                {
-                    string pluginDir = ExoScaffolder.ScaffoldPlugin(wsPath, _newPluginName.Trim());
-                    RefreshLocalPlugins();
-                    ShowStatus($"Scaffolded plugin '{_newPluginName}' at '{pluginDir}'", MessageType.Info);
-                    _newPluginName = "";
-                }
-                catch (Exception ex)
-                {
-                    ShowStatus($"Scaffolding failed: {ex.Message}", MessageType.Error);
-                }
-            }
+            ScaffoldPluginAction(wsPath);
         }
         EditorGUILayout.EndHorizontal();
+
+        EditorGUILayout.EndVertical();
 
         EditorGUILayout.Space(8);
 
@@ -360,7 +829,7 @@ public class ExoforgeControlCenter : EditorWindow
         }
         EditorGUILayout.EndHorizontal();
 
-        _pluginsScroll = EditorGUILayout.BeginScrollView(_pluginsScroll, GUILayout.Height(150));
+        _pluginsScroll = EditorGUILayout.BeginScrollView(_pluginsScroll, GUILayout.Height(130));
         if (_localPlugins.Count == 0)
         {
             EditorGUILayout.HelpBox("No plugins found in workspace plugins/ folder. Create one above!", MessageType.None);
@@ -379,19 +848,22 @@ public class ExoforgeControlCenter : EditorWindow
                     {
                         normal = { textColor = new Color(0.2f, 0.7f, 0.3f) }
                     };
-                    GUILayout.Label("WASM Ready", wasmStyle, GUILayout.Width(80));
+                    string sizeKb = $"{plugin.WasmSizeBytes / 1024.0:F1} KB";
+                    GUILayout.Label($"WASM ({sizeKb})", wasmStyle, GUILayout.Width(90));
                 }
                 else
                 {
-                    GUILayout.Label("Not Compiled", EditorStyles.miniLabel, GUILayout.Width(80));
+                    GUILayout.Label("Not Compiled", EditorStyles.miniLabel, GUILayout.Width(90));
                 }
 
                 GUILayout.FlexibleSpace();
 
-                if (GUILayout.Button("Deploy to Server", EditorStyles.miniButton, GUILayout.Width(110)))
+                GUI.enabled = _isConnected && plugin.HasWasm;
+                if (GUILayout.Button("Push to Server", EditorStyles.miniButton, GUILayout.Width(100)))
                 {
                     _ = DeployLocalPluginAsync(plugin);
                 }
+                GUI.enabled = true;
 
                 if (GUILayout.Button("Open Folder", EditorStyles.miniButton, GUILayout.Width(80)))
                 {
@@ -407,14 +879,14 @@ public class ExoforgeControlCenter : EditorWindow
 
         // Remote Plugins List
         EditorGUILayout.BeginHorizontal();
-        EditorGUILayout.LabelField($"Installed On Remote Server ({_remotePlugins.Count})", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField($"Installed Remote Plugins ({_remotePlugins.Count})", EditorStyles.boldLabel);
         if (GUILayout.Button("Refresh Server", EditorStyles.miniButton, GUILayout.Width(90)))
         {
             _ = RefreshRemoteInfoAsync();
         }
         EditorGUILayout.EndHorizontal();
 
-        _remoteScroll = EditorGUILayout.BeginScrollView(_remoteScroll, GUILayout.Height(120));
+        _remoteScroll = EditorGUILayout.BeginScrollView(_remoteScroll, GUILayout.Height(110));
         if (!_isConnected)
         {
             EditorGUILayout.HelpBox("Connect to Exoforge server to view remote installed plugins.", MessageType.None);
@@ -449,6 +921,27 @@ public class ExoforgeControlCenter : EditorWindow
             }
         }
         EditorGUILayout.EndScrollView();
+    }
+
+    private void ScaffoldPluginAction(string wsPath)
+    {
+        if (string.IsNullOrWhiteSpace(_newPluginName))
+        {
+            ShowStatus("Please enter a valid plugin name.", MessageType.Error);
+            return;
+        }
+
+        try
+        {
+            string pluginDir = ExoScaffolder.ScaffoldPlugin(wsPath, _newPluginName.Trim());
+            RefreshLocalPlugins();
+            ShowStatus($"Scaffolded plugin '{_newPluginName}' at '{pluginDir}'", MessageType.Info);
+            _newPluginName = "";
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Scaffolding failed: {ex.Message}", MessageType.Error);
+        }
     }
 
     private async Task DeployLocalPluginAsync(LocalPluginInfo plugin)
@@ -513,30 +1006,84 @@ public class ExoforgeControlCenter : EditorWindow
         }
     }
 
-    private void DrawCodeGenerationTab()
+    private void DrawScheduleTab()
     {
-        EditorGUILayout.LabelField("Strongly-Typed Client Code Generation", EditorStyles.boldLabel);
-        EditorGUILayout.HelpBox("Fetch live service contracts and action schemas from the running cluster, and generate strongly-typed C# client classes without needing Elixir or Mix installed.", MessageType.Info);
+        EditorGUILayout.LabelField("LiveOps Schedules & Event Timelines", EditorStyles.boldLabel);
+        EditorGUILayout.HelpBox("Exoforge provides built-in time constructs for game developers to build custom seasonal events, scheduled maintenance, and timed loot tables without opinionated boilerplate.", MessageType.Info);
 
         EditorGUILayout.Space(6);
+
+        _scheduleScroll = EditorGUILayout.BeginScrollView(_scheduleScroll);
+        foreach (var window in _liveopsWindows)
+        {
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+
+            EditorGUILayout.BeginHorizontal();
+            GUIStyle titleStyle = new GUIStyle(EditorStyles.boldLabel) { fontSize = 12 };
+            GUILayout.Label(window.Title, titleStyle);
+
+            if (window.Recurrence != "none")
+            {
+                GUIStyle recStyle = new GUIStyle(EditorStyles.miniLabel)
+                {
+                    normal = { textColor = new Color(0.6f, 0.4f, 0.95f) }
+                };
+                GUILayout.Label($"[{window.Recurrence.ToUpperInvariant()}]", recStyle);
+            }
+
+            GUILayout.FlexibleSpace();
+
+            bool isActive = window.EvaluateIsActive();
+            GUIStyle statusStyle = new GUIStyle(EditorStyles.miniBoldLabel)
+            {
+                normal = { textColor = isActive ? new Color(0.2f, 0.8f, 0.3f) : new Color(0.3f, 0.6f, 0.9f) }
+            };
+            GUILayout.Label(isActive ? "● ACTIVE NOW" : "○ UPCOMING", statusStyle);
+            EditorGUILayout.EndHorizontal();
+
+            EditorGUILayout.Space(2);
+            EditorGUILayout.LabelField($"ID: {window.Id}  •  Remaining: {window.CountdownText}", EditorStyles.miniLabel);
+
+            // Progress bar
+            if (isActive && window.Progress > 0)
+            {
+                Rect r = EditorGUILayout.GetControlRect(false, 6);
+                EditorGUI.ProgressBar(r, (float)window.Progress, "");
+            }
+
+            EditorGUILayout.EndVertical();
+            EditorGUILayout.Space(4);
+        }
+        EditorGUILayout.EndScrollView();
+    }
+
+    private void DrawSettingsTab()
+    {
+        EditorGUILayout.LabelField("Studio Preferences & Paths", EditorStyles.boldLabel);
+
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-        EditorGUILayout.LabelField("Target Output Script Path (relative to project):", EditorStyles.miniBoldLabel);
+        EditorGUILayout.LabelField("WebSocket Server URL:");
+        ExoforgeEditorConfig.ServerUrl = EditorGUILayout.TextField(ExoforgeEditorConfig.ServerUrl);
+
+        EditorGUILayout.Space(4);
+        EditorGUILayout.LabelField("Admin Bearer Token / Role:");
+        ExoforgeEditorConfig.AdminToken = EditorGUILayout.TextField(ExoforgeEditorConfig.AdminToken);
+
+        EditorGUILayout.Space(4);
+        EditorGUILayout.LabelField("Workspace Folder Path:");
+        ExoforgeEditorConfig.WorkspacePath = EditorGUILayout.TextField(ExoforgeEditorConfig.WorkspacePath);
+        EditorGUILayout.LabelField($"Resolved: {ExoforgeEditorConfig.GetAbsoluteWorkspacePath()}", EditorStyles.miniLabel);
+
+        EditorGUILayout.Space(4);
+        EditorGUILayout.LabelField("Generated Client Script Path:");
         ExoforgeEditorConfig.GeneratedScriptPath = EditorGUILayout.TextField(ExoforgeEditorConfig.GeneratedScriptPath);
         EditorGUILayout.LabelField($"Resolved: {ExoforgeEditorConfig.GetAbsoluteGeneratedScriptPath()}", EditorStyles.miniLabel);
         EditorGUILayout.EndVertical();
 
         EditorGUILayout.Space(8);
-
-        GUI.enabled = _isConnected;
-        if (GUILayout.Button("⚡ Sync Contracts & Generate C# Client API", GUILayout.Height(36)))
+        if (GUILayout.Button("Reconnect with New Settings", GUILayout.Height(28)))
         {
-            _ = SyncAndGenerateClientAsync();
-        }
-        GUI.enabled = true;
-
-        if (!_isConnected)
-        {
-            EditorGUILayout.HelpBox("Connect to Exoforge cluster to fetch live contracts.", MessageType.Warning);
+            _ = ConnectAsync();
         }
     }
 
@@ -578,88 +1125,42 @@ public class ExoforgeControlCenter : EditorWindow
         Repaint();
     }
 
-    private void DrawClusterStatusTab()
-    {
-        EditorGUILayout.LabelField("BEAM Cluster Runtime & Health", EditorStyles.boldLabel);
-
-        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-        EditorGUILayout.LabelField($"Cluster Node: {_nodeName}");
-        EditorGUILayout.LabelField($"Uptime: {_uptime}");
-        EditorGUILayout.LabelField($"BEAM Memory: {_memoryMb}");
-        EditorGUILayout.LabelField($"Active Virtual Entities: {_activeEntities}");
-        EditorGUILayout.LabelField($"Total Plugins Loaded: {_pluginsCount}");
-        EditorGUILayout.EndVertical();
-
-        EditorGUILayout.Space(8);
-
-        EditorGUILayout.BeginHorizontal();
-        if (GUILayout.Button("Refresh Telemetry", GUILayout.Height(28)))
-        {
-            _ = RefreshRemoteInfoAsync();
-        }
-
-        GUI.enabled = _isConnected;
-        if (GUILayout.Button("Restart Server Runtime", GUILayout.Height(28)))
-        {
-            if (EditorUtility.DisplayDialog("Restart Cluster", "Hot-reload all plugin supervision trees on remote server?", "Restart", "Cancel"))
-            {
-                _ = RestartClusterAsync();
-            }
-        }
-        GUI.enabled = true;
-        EditorGUILayout.EndHorizontal();
-    }
-
     private async Task RestartClusterAsync()
     {
         if (_editorClient == null || !_isConnected) return;
 
-        try
+        if (EditorUtility.DisplayDialog("Restart Cluster", "Hot-reload all plugin supervision trees on remote server?", "Restart", "Cancel"))
         {
-            var resp = await _editorClient.PluginManager().RestartSystemAsync();
-            if (resp.Success)
+            try
             {
-                ShowStatus("Backend cluster runtime supervision restarted successfully.", MessageType.Info);
-                await RefreshRemoteInfoAsync();
+                var resp = await _editorClient.PluginManager().RestartSystemAsync();
+                if (resp.Success)
+                {
+                    ShowStatus("Backend cluster runtime supervision restarted successfully.", MessageType.Info);
+                    await RefreshRemoteInfoAsync();
+                }
+                else
+                {
+                    ShowStatus($"Restart failed: {resp.Error}", MessageType.Error);
+                }
             }
-            else
+            catch (Exception ex)
             {
-                ShowStatus($"Restart failed: {resp.Error}", MessageType.Error);
+                ShowStatus($"Error restarting cluster: {ex.Message}", MessageType.Error);
             }
-        }
-        catch (Exception ex)
-        {
-            ShowStatus($"Error restarting cluster: {ex.Message}", MessageType.Error);
         }
     }
 
-    private void DrawSettingsTab()
+    private void OpenSampleScene()
     {
-        EditorGUILayout.LabelField("Studio Preferences", EditorStyles.boldLabel);
-
-        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-        EditorGUILayout.LabelField("WebSocket Server URL:");
-        ExoforgeEditorConfig.ServerUrl = EditorGUILayout.TextField(ExoforgeEditorConfig.ServerUrl);
-
-        EditorGUILayout.Space(4);
-        EditorGUILayout.LabelField("Admin Bearer Token / Scope:");
-        ExoforgeEditorConfig.AdminToken = EditorGUILayout.TextField(ExoforgeEditorConfig.AdminToken);
-
-        EditorGUILayout.Space(4);
-        EditorGUILayout.LabelField("Workspace Folder Path:");
-        ExoforgeEditorConfig.WorkspacePath = EditorGUILayout.TextField(ExoforgeEditorConfig.WorkspacePath);
-        EditorGUILayout.LabelField($"Resolved: {ExoforgeEditorConfig.GetAbsoluteWorkspacePath()}", EditorStyles.miniLabel);
-
-        EditorGUILayout.Space(4);
-        EditorGUILayout.LabelField("Generated Client Script Path:");
-        ExoforgeEditorConfig.GeneratedScriptPath = EditorGUILayout.TextField(ExoforgeEditorConfig.GeneratedScriptPath);
-        EditorGUILayout.LabelField($"Resolved: {ExoforgeEditorConfig.GetAbsoluteGeneratedScriptPath()}", EditorStyles.miniLabel);
-        EditorGUILayout.EndVertical();
-
-        EditorGUILayout.Space(8);
-        if (GUILayout.Button("Reconnect with New Settings", GUILayout.Height(28)))
+        string samplePath = "Packages/com.exoforge.sdk/Samples~/CombatDemo";
+        if (Directory.Exists(samplePath))
         {
-            _ = ConnectAsync();
+            EditorUtility.RevealInFinder(samplePath);
+        }
+        else
+        {
+            ShowStatus("CombatDemo sample files located in Samples~/CombatDemo", MessageType.Info);
         }
     }
 }

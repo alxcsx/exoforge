@@ -150,3 +150,20 @@ k8s-deploy:
 # Teardown Kubernetes resources
 k8s-destroy:
 	kubectl delete -k deploy/k8s
+
+# ---- Unity SDK Distribution ----
+
+# Package Unity SDK into a self-contained UPM tarball (.tgz) for game developers
+pack-unity:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	echo "Packaging Exoforge Unity SDK..."
+	mkdir -p dist
+	rm -rf dist/package dist/com.exoforge.sdk-0.1.0.tgz
+	mkdir -p dist/package
+	cp -RL sdk/unity/Exoforge.SDK/. dist/package/
+	tar -czf dist/com.exoforge.sdk-0.1.0.tgz -C dist package
+	echo "[Exoforge] Created UPM package archive:"
+	ls -lh dist/com.exoforge.sdk-0.1.0.tgz
+	echo "Ready to import in Unity: Window > Package Manager > [+] > Add package from tarball..."
+

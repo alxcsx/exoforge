@@ -13,6 +13,7 @@ exoforge-*.tar
 # === .NET Build Artifacts ===
 bin/
 obj/
+dist/
 
 # === Development Environment & IDEs ===
 .pi/
@@ -25,6 +26,7 @@ obj/
 .zed/
 *.swp
 *~
+!**/Samples~/
 
 # === Test & Coverage Reports ===
 .htmlcov/
