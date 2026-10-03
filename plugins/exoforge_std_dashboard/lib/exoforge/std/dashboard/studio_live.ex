@@ -642,7 +642,6 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
             </div>
           </div>
           <div class="flex flex-col items-end gap-1">
-            <.badge status={to_string(@ext.type)} />
             <%= if custom_ui?(@ext) do %>
               <span
                 class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-200"
@@ -1373,7 +1372,6 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                         <span class="text-xs font-bold text-gray-800"><%= humanize_plugin_name(ext) %></span>
                         <span class="block text-[10px] text-gray-400 font-mono"><%= ext.id %></span>
                       </div>
-                      <.badge status={ext.type} />
                     </div>
                     <p class="text-[11px] text-gray-500">
                       Provides: <code class="text-primary-700 font-semibold"><%= Enum.join(ext.provides, ", ") %></code>

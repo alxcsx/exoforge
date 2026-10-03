@@ -26,6 +26,8 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
        active_drawer_tab: "overview",
        show_upload_modal: false,
        show_restart_modal: false,
+       show_dependency_graph: false,
+       graph_selected_plugin_id: nil,
        upload_form: %{
          "name" => "",
          "wasm_binary" => "",
@@ -76,6 +78,23 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
       |> apply_filters()
 
     {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("open_dependency_graph", _params, socket) do
+    {:noreply, assign(socket, show_dependency_graph: true, graph_selected_plugin_id: nil)}
+  end
+
+  @impl true
+  def handle_event("close_dependency_graph", _params, socket) do
+    {:noreply, assign(socket, show_dependency_graph: false, graph_selected_plugin_id: nil)}
+  end
+
+  @impl true
+  def handle_event("select_graph_plugin", %{"id" => id}, socket) do
+    current = socket.assigns.graph_selected_plugin_id
+    new_id = if current == id, do: nil, else: id
+    {:noreply, assign(socket, graph_selected_plugin_id: new_id)}
   end
 
   @impl true
@@ -327,7 +346,6 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
 
   defp apply_filters(socket) do
     query = String.downcase(String.trim(socket.assigns.search_query))
-    type_f = socket.assigns.type_filter
 
     filtered =
       Enum.filter(socket.assigns.plugins, fn p ->
@@ -335,27 +353,72 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
         name = String.downcase(to_string(p["name"] || ""))
         provides = Enum.map(p["provides"] || [], &String.downcase(to_string(&1)))
 
-        matches_query =
-          query == "" or
-            String.contains?(id, query) or
-            String.contains?(name, query) or
-            Enum.any?(provides, &String.contains?(&1, query))
-
-        p_type = String.downcase(to_string(p["type"] || ""))
-
-        matches_type =
-          case type_f do
-            "all" -> true
-            "wasm" -> p_type in ["wasm", "c# wasm", "wasi"]
-            "elixir" -> p_type in ["elixir", "beam", "standard", "otp"]
-            _ -> true
-          end
-
-        matches_query and matches_type
+        query == "" or
+          String.contains?(id, query) or
+          String.contains?(name, query) or
+          Enum.any?(provides, &String.contains?(&1, query))
       end)
 
     assign(socket, filtered_plugins: filtered)
   end
+
+  defp build_dependency_graph(plugins) do
+    # Map service names (string) to the plugin id providing it
+    provider_map =
+      Enum.reduce(plugins, %{}, fn p, acc ->
+        Enum.reduce(p["provides"] || [], acc, fn svc, m ->
+          clean_svc = svc |> to_string() |> String.replace_prefix(":", "") |> String.downcase()
+          Map.put(m, clean_svc, p["id"])
+        end)
+      end)
+
+    Enum.map(plugins, fn p ->
+      pid = p["id"]
+      deps = p["dependencies"] || []
+
+      resolved_deps =
+        Enum.map(deps, fn d ->
+          clean_d = d |> to_string() |> String.replace_prefix(":", "") |> String.downcase()
+          provider = Map.get(provider_map, clean_d)
+          %{service: clean_d, provider: provider}
+        end)
+
+      dependents =
+        Enum.filter(plugins, fn other ->
+          other_deps = Enum.map(other["dependencies"] || [], fn d ->
+            d |> to_string() |> String.replace_prefix(":", "") |> String.downcase()
+          end)
+          my_provides = Enum.map(p["provides"] || [], fn s ->
+            s |> to_string() |> String.replace_prefix(":", "") |> String.downcase()
+          end)
+          Enum.any?(other_deps, &(&1 in my_provides))
+        end)
+        |> Enum.map(& &1["id"])
+
+      tier =
+        cond do
+          clean_has?(p["provides"], ["database", "lldb"]) -> "Storage"
+          clean_has?(p["provides"], ["auth"]) -> "Identity"
+          clean_has?(p["provides"], ["http", "ws", "player_data", "combat"]) -> "Domain & Ingress"
+          true -> "Studio & Extensions"
+        end
+
+      %{
+        id: pid,
+        name: p["name"] || pid,
+        tier: tier,
+        provides: p["provides"] || [],
+        dependencies: resolved_deps,
+        dependents: dependents
+      }
+    end)
+  end
+
+  defp clean_has?(list, targets) when is_list(list) do
+    normalized = Enum.map(list, fn item -> item |> to_string() |> String.replace_prefix(":", "") |> String.downcase() end)
+    Enum.any?(targets, &(&1 in normalized))
+  end
+  defp clean_has?(_, _), do: false
 
   defp format_uptime(nil), do: "—"
   defp format_uptime(secs) when is_integer(secs) do
@@ -452,6 +515,18 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
           </button>
 
           <button
+            phx-click="open_dependency_graph"
+            phx-target={@myself}
+            class="px-3.5 py-2 text-sm font-semibold text-violet-700 bg-violet-50 border border-violet-200 rounded-xl hover:bg-violet-100 transition-colors shadow-sm flex items-center gap-2"
+            title="View visual dependency graph"
+          >
+            <svg class="w-4 h-4 text-violet-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+            </svg>
+            Dependency Graph
+          </button>
+
+          <button
             phx-click="open_restart_modal"
             phx-target={@myself}
             class="px-3.5 py-2 text-sm font-semibold text-red-700 bg-red-50 border border-red-200 rounded-xl hover:bg-red-100 transition-colors shadow-sm flex items-center gap-2"
@@ -508,7 +583,7 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
           <div class="flex items-baseline gap-2">
             <span class="text-2xl font-black text-gray-900"><%= @total_plugins %></span>
             <span class="text-xs font-bold px-1.5 py-0.5 rounded-md bg-violet-50 text-violet-700">
-              <%= @wasm_count %> WASM / <%= @native_count %> Native
+              Active Extensions
             </span>
           </div>
           <p class="text-[11px] text-gray-400 mt-1 font-medium">Modular service extensions</p>
@@ -560,7 +635,7 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
 
       <!-- Filters & Search Toolbar -->
       <div class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div class="flex items-center gap-3 flex-1 max-w-md">
+        <div class="flex items-center gap-3 flex-1 max-w-lg">
           <div class="relative w-full">
             <input
               type="text"
@@ -579,17 +654,16 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
         </div>
 
         <div class="flex items-center gap-2">
-          <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider mr-1">Filter Type:</span>
-          <%= for {label, key} <- [{"All Plugins", "all"}, {"C# WASM", "wasm"}, {"Native Elixir", "elixir"}] do %>
-            <button
-              phx-click="filter_type"
-              phx-value-type={key}
-              phx-target={@myself}
-              class={"px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors #{if @type_filter == key, do: "bg-violet-600 text-white shadow-sm", else: "bg-gray-100 text-gray-600 hover:bg-gray-200"}"}
-            >
-              <%= label %>
-            </button>
-          <% end %>
+          <button
+            phx-click="open_dependency_graph"
+            phx-target={@myself}
+            class="px-3 py-1.5 text-xs font-semibold text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 rounded-lg transition-colors flex items-center gap-1.5"
+          >
+            <svg class="w-3.5 h-3.5 text-violet-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+            </svg>
+            Show Dependency Graph
+          </button>
         </div>
       </div>
 
@@ -602,7 +676,7 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
             </div>
             <h3 class="text-sm font-bold text-gray-900">No plugins match your query</h3>
             <p class="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
-              Try adjusting your search terms or type filter to locate installed plugins.
+              Try adjusting your search terms to locate installed plugins.
             </p>
           </div>
         <% else %>
@@ -611,7 +685,6 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
               <thead>
                 <tr class="bg-gray-50/75 border-b border-gray-200 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
                   <th class="py-3 px-4">Plugin</th>
-                  <th class="py-3 px-4">Type</th>
                   <th class="py-3 px-4">Version</th>
                   <th class="py-3 px-4">Provided Services</th>
                   <th class="py-3 px-4">Dependencies</th>
@@ -624,8 +697,8 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
                   <tr class="hover:bg-violet-50/20 transition-colors group">
                     <td class="py-3 px-4">
                       <div class="flex items-center gap-3">
-                        <div class={"w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm shrink-0 #{if is_wasm, do: "bg-amber-100 text-amber-800", else: "bg-blue-100 text-blue-800"}"}>
-                          <%= if is_wasm, do: "⚡", else: "💎" %>
+                        <div class="w-8 h-8 rounded-lg bg-violet-100 text-violet-800 flex items-center justify-center font-bold text-sm shrink-0">
+                          📦
                         </div>
                         <div>
                           <div class="font-bold text-gray-900 flex items-center gap-1.5">
@@ -634,18 +707,6 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
                           <span class="font-mono text-[11px] text-gray-400"><%= plugin["id"] %></span>
                         </div>
                       </div>
-                    </td>
-
-                    <td class="py-3 px-4">
-                      <%= if is_wasm do %>
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                          C# WASM
-                        </span>
-                      <% else %>
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                          Native Elixir
-                        </span>
-                      <% end %>
                     </td>
 
                     <td class="py-3 px-4 font-mono text-xs text-gray-600">
@@ -669,7 +730,7 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
                       <div class="flex flex-wrap gap-1">
                         <%= for d <- plugin["dependencies"] || [] do %>
                           <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold font-mono bg-gray-100 text-gray-600">
-                            <%= d %>
+                            :<%= d %>
                           </span>
                         <% end %>
                         <%= if (plugin["dependencies"] || []) == [] do %>
@@ -724,8 +785,8 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
               <!-- Drawer Header -->
               <div class="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/70">
                 <div class="flex items-center gap-3">
-                  <div class={"w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg #{if wasm_plugin?(@selected_plugin), do: "bg-amber-100 text-amber-800", else: "bg-blue-100 text-blue-800"}"}>
-                    <%= if wasm_plugin?(@selected_plugin), do: "⚡", else: "💎" %>
+                  <div class="w-10 h-10 rounded-xl bg-violet-100 text-violet-800 flex items-center justify-center font-bold text-lg">
+                    📦
                   </div>
                   <div>
                     <h3 class="text-base font-bold text-gray-900"><%= @selected_plugin["name"] %></h3>
@@ -761,15 +822,15 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
                   <div class="space-y-4">
                     <div class="grid grid-cols-2 gap-3">
                       <div class="bg-gray-50 p-3.5 rounded-xl border border-gray-200">
-                        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Runtime Target</span>
+                        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Plugin Version</span>
                         <span class="text-sm font-bold text-gray-900 mt-1 block">
-                          <%= @selected_plugin["type"] %>
+                          v<%= @selected_plugin["version"] || "0.1.0" %>
                         </span>
                       </div>
                       <div class="bg-gray-50 p-3.5 rounded-xl border border-gray-200">
-                        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">WASM Binary Size</span>
-                        <span class="text-sm font-bold text-gray-900 mt-1 block">
-                          <%= if @selected_plugin["wasm_size_bytes"] && @selected_plugin["wasm_size_bytes"] > 0, do: "#{Float.round(@selected_plugin["wasm_size_bytes"] / 1024, 1)} KB", else: "N/A (Native OTP)" %>
+                        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Supervision Status</span>
+                        <span class="text-sm font-bold text-emerald-600 mt-1 block flex items-center gap-1.5">
+                          <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Active &amp; Supervised
                         </span>
                       </div>
                     </div>
@@ -1118,6 +1179,172 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
                 class="px-5 py-2 text-xs font-bold text-white bg-red-600 rounded-xl hover:bg-red-700 transition-colors shadow-sm"
               >
                 Yes, Restart Runtime
+              </button>
+            </div>
+          </div>
+        </div>
+      <% end %>
+
+      <!-- Plugin Dependency Graph Modal -->
+      <%= if @show_dependency_graph do %>
+        <% graph_nodes = build_dependency_graph(@plugins) %>
+        <% selected_node = Enum.find(graph_nodes, &(&1.id == @graph_selected_plugin_id)) %>
+        <div class="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div class="bg-white rounded-3xl max-w-4xl w-full p-6 shadow-2xl border border-gray-200 relative animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[90vh]">
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between pb-4 border-b border-gray-100">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-2xl bg-violet-100 text-violet-700 flex items-center justify-center text-xl shadow-inner">
+                  🕸️
+                </div>
+                <div>
+                  <h3 class="text-lg font-bold text-gray-900">Plugin Dependency Architecture</h3>
+                  <p class="text-xs text-gray-500">Visual Directed Acyclic Graph (DAG) of cluster service contracts and plugin dependencies.</p>
+                </div>
+              </div>
+              <button
+                phx-click="close_dependency_graph"
+                phx-target={@myself}
+                class="text-gray-400 hover:text-gray-600 text-xl font-bold p-1 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <!-- Graph Canvas / Architecture Tiers -->
+            <div class="overflow-y-auto py-5 space-y-6 flex-1 pr-1">
+              <!-- Tier Pipeline View -->
+              <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <%= for tier_name <- ["Storage", "Identity", "Domain & Ingress", "Studio & Extensions"] do %>
+                  <% tier_nodes = Enum.filter(graph_nodes, &(&1.tier == tier_name)) %>
+                  <div class="bg-gray-50/80 rounded-2xl p-3 border border-gray-200/80 flex flex-col">
+                    <div class="flex items-center justify-between mb-3 px-1">
+                      <span class="text-[11px] font-bold text-gray-500 uppercase tracking-wider"><%= tier_name %></span>
+                      <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-gray-200/80 text-gray-700"><%= length(tier_nodes) %></span>
+                    </div>
+
+                    <div class="space-y-2.5 flex-1">
+                      <%= for node <- tier_nodes do %>
+                        <% is_selected = @graph_selected_plugin_id == node.id %>
+                        <% is_dependent = selected_node && node.id in (selected_node.dependents || []) %>
+                        <% is_dependency = selected_node && Enum.any?(selected_node.dependencies, fn d -> d.provider == node.id end) %>
+                        <div
+                          phx-click="select_graph_plugin"
+                          phx-value-id={node.id}
+                          phx-target={@myself}
+                          class={"p-3 rounded-xl border cursor-pointer transition-all #{cond do
+                            is_selected -> "bg-violet-600 text-white border-violet-700 shadow-md ring-2 ring-violet-400"
+                            is_dependency -> "bg-amber-50 border-amber-300 shadow-sm ring-1 ring-amber-300"
+                            is_dependent -> "bg-emerald-50 border-emerald-300 shadow-sm ring-1 ring-emerald-300"
+                            true -> "bg-white border-gray-200 hover:border-violet-300 hover:shadow-xs text-gray-800"
+                          end}"}
+                        >
+                          <div class="flex items-center justify-between">
+                            <span class={"font-bold text-xs truncate max-w-[140px] #{if is_selected, do: "text-white", else: "text-gray-900"}"} title={node.name}>
+                              <%= node.name %>
+                            </span>
+                            <span class={"text-[9px] font-mono px-1.5 py-0.5 rounded #{if is_selected, do: "bg-violet-700 text-violet-100", else: "bg-gray-100 text-gray-500"}"}>
+                              <%= if node.dependencies == [], do: "Root", else: "#{length(node.dependencies)} deps" %>
+                            </span>
+                          </div>
+
+                          <div class="mt-2 space-y-1">
+                            <div class="flex flex-wrap gap-1">
+                              <%= for s <- node.provides do %>
+                                <span class={"text-[9px] font-mono font-bold px-1 rounded #{if is_selected, do: "bg-violet-500 text-white", else: "bg-violet-50 text-violet-700 border border-violet-200"}"}>
+                                  :<%= s %>
+                                </span>
+                              <% end %>
+                            </div>
+
+                            <%= if node.dependencies != [] do %>
+                              <div class="pt-1 flex items-center gap-1 text-[9px] text-gray-500">
+                                <span class={if is_selected, do: "text-violet-200", else: "text-gray-400"}>requires:</span>
+                                <div class="flex flex-wrap gap-1">
+                                  <%= for dep <- node.dependencies do %>
+                                    <span class={"font-mono font-semibold px-1 rounded #{if is_selected, do: "bg-violet-700 text-violet-100", else: "bg-gray-100 text-gray-600"}"}>
+                                      :<%= dep.service %>
+                                    </span>
+                                  <% end %>
+                                </div>
+                              </div>
+                            <% end %>
+                          </div>
+                        </div>
+                      <% end %>
+                    </div>
+                  </div>
+                <% end %>
+              </div>
+
+              <!-- Node Inspector & Dependency Ledger -->
+              <%= if selected_node do %>
+                <div class="bg-violet-50/60 border border-violet-200 rounded-2xl p-4 animate-in fade-in duration-150">
+                  <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                      <span class="text-base font-bold text-violet-950 font-mono"><%= selected_node.name %></span>
+                      <span class="text-xs text-violet-600 font-mono">(<%= selected_node.id %>)</span>
+                    </div>
+                    <button phx-click="select_graph_plugin" phx-value-id={selected_node.id} phx-target={@myself} class="text-xs font-semibold text-violet-600 hover:text-violet-800">
+                      Clear selection
+                    </button>
+                  </div>
+
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                    <div class="bg-white p-3 rounded-xl border border-violet-100">
+                      <span class="font-bold text-gray-700 block mb-1">Direct Upstream Dependencies (What this needs):</span>
+                      <%= if selected_node.dependencies == [] do %>
+                        <p class="text-gray-400 italic">None (Independent root service)</p>
+                      <% else %>
+                        <ul class="space-y-1">
+                          <%= for dep <- selected_node.dependencies do %>
+                            <li class="flex items-center justify-between text-gray-700">
+                              <span class="font-mono font-bold text-violet-700">:<%= dep.service %></span>
+                              <span class="text-gray-400">satisfied by: <span class="font-mono text-gray-700 font-semibold"><%= dep.provider || "unresolved" %></span></span>
+                            </li>
+                          <% end %>
+                        </ul>
+                      <% end %>
+                    </div>
+
+                    <div class="bg-white p-3 rounded-xl border border-violet-100">
+                      <span class="font-bold text-gray-700 block mb-1">Downstream Dependents (What depends on this):</span>
+                      <%= if selected_node.dependents == [] do %>
+                        <p class="text-gray-400 italic">No other plugins currently depend on this</p>
+                      <% else %>
+                        <ul class="space-y-1">
+                          <%= for dependent_id <- selected_node.dependents do %>
+                            <li class="flex items-center gap-1.5 text-gray-700">
+                              <span class="text-emerald-500 font-bold">▲</span>
+                              <span class="font-mono font-semibold"><%= dependent_id %></span>
+                            </li>
+                          <% end %>
+                        </ul>
+                      <% end %>
+                    </div>
+                  </div>
+                </div>
+              <% else %>
+                <div class="text-center py-2 text-xs text-gray-400">
+                  Click on any plugin above to highlight its upstream dependencies and downstream dependents.
+                </div>
+              <% end %>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="pt-4 border-t border-gray-100 flex items-center justify-between">
+              <div class="flex items-center gap-4 text-[11px] text-gray-500">
+                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-violet-600 inline-block"></span> Selected</span>
+                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block"></span> Upstream Dependency</span>
+                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block"></span> Downstream Dependent</span>
+              </div>
+              <button
+                type="button"
+                phx-click="close_dependency_graph"
+                phx-target={@myself}
+                class="px-4 py-2 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+              >
+                Close
               </button>
             </div>
           </div>

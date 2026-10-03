@@ -127,6 +127,7 @@ defmodule Exoforge.Std.Services do
         player_id: [type: :string, optional: true],
         name: [type: :string, optional: true],
         email: [type: :string, optional: true],
+        password: [type: :string, optional: true],
         scopes: [type: :list, optional: true]
       )
 
@@ -140,6 +141,7 @@ defmodule Exoforge.Std.Services do
         player_id: [type: :string, optional: true],
         name: [type: :string, optional: true],
         email: [type: :string, optional: true],
+        password: [type: :string, optional: true],
         scopes: [type: :list, optional: true]
       )
 
@@ -158,6 +160,27 @@ defmodule Exoforge.Std.Services do
     action :list_users do
       params(query: [type: :string, optional: true])
       returns(users: [:map], count: :integer)
+    end
+
+    @doc "Resets the password for an existing account."
+    action :reset_password do
+      params(player_id: :string, password: :string)
+      returns(player_id: :string, status: :string)
+      errors([:user_not_found, :protected_admin_account, :invalid_password])
+    end
+
+    @doc "Updates authorization scopes/roles for a user account."
+    action :update_user_roles do
+      params(player_id: :string, scopes: :list)
+      returns(player_id: :string, scopes: [:string])
+      errors([:user_not_found, :protected_admin_account, :invalid_scopes])
+    end
+
+    @doc "Deletes a user account and associated auth credentials."
+    action :delete_user do
+      params(player_id: :string)
+      returns(player_id: :string, status: :string)
+      errors([:user_not_found, :protected_admin_account])
     end
   end
 

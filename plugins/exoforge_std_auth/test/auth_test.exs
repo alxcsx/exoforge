@@ -251,6 +251,111 @@ defmodule Exoforge.AuthTest do
     end
   end
 
+  describe "User account management actions" do
+    test "register with password allows immediate login" do
+      payload = %{
+        player_id: "user_pw_test",
+        email: "pwuser@exoforge.test",
+        password: "secret_password_123",
+        scopes: ["player"]
+      }
+
+      assert {:ok, %{player_id: "user_pw_test"}} = ActionDispatcher.dispatch(:auth, :register, payload)
+
+      assert {:ok, %{player_id: "user_pw_test", token: token}} =
+               ActionDispatcher.dispatch(:auth, :login, %{
+                 email: "pwuser@exoforge.test",
+                 password: "secret_password_123"
+               })
+
+      assert is_binary(token)
+    end
+
+    test "reset_password updates user credentials" do
+      {:ok, _} =
+        ActionDispatcher.dispatch(:auth, :register, %{
+          player_id: "reset_me",
+          email: "resetme@exoforge.test",
+          password: "initial_pass"
+        })
+
+      assert {:ok, %{status: "password_reset"}} =
+               ActionDispatcher.dispatch(:auth, :reset_password, %{
+                 player_id: "reset_me",
+                 password: "new_secret_pass"
+               })
+
+      assert {:error, :invalid_credentials} =
+               ActionDispatcher.dispatch(:auth, :login, %{
+                 email: "resetme@exoforge.test",
+                 password: "initial_pass"
+               })
+
+      assert {:ok, %{player_id: "reset_me"}} =
+               ActionDispatcher.dispatch(:auth, :login, %{
+                 email: "resetme@exoforge.test",
+                 password: "new_secret_pass"
+               })
+    end
+
+    test "update_user_roles updates scopes for user" do
+      {:ok, _} =
+        ActionDispatcher.dispatch(:auth, :register, %{
+          player_id: "role_changer",
+          email: "roles@exoforge.test"
+        })
+
+      assert {:ok, %{scopes: ["player", "studio"]}} =
+               ActionDispatcher.dispatch(:auth, :update_user_roles, %{
+                 player_id: "role_changer",
+                 scopes: ["player", "studio"]
+               })
+
+      assert {:ok, %{authorized: true}} =
+               ActionDispatcher.dispatch(:auth, :verify_scope, %{
+                 player_id: "role_changer",
+                 required_scope: "studio"
+               })
+    end
+
+    test "delete_user removes account and tokens" do
+      {:ok, %{token: token}} =
+        ActionDispatcher.dispatch(:auth, :register, %{
+          player_id: "to_delete",
+          email: "del@exoforge.test"
+        })
+
+      assert {:ok, %{status: "deleted"}} =
+               ActionDispatcher.dispatch(:auth, :delete_user, %{player_id: "to_delete"})
+
+      assert {:error, :invalid_token} =
+               ActionDispatcher.dispatch(:auth, :authenticate, %{token: token})
+    end
+
+    test "protected env admin cannot be deleted, roles modified, or password reset via user actions" do
+      with_admin_env("envadmin@exoforge.test", "adm_pass")
+      assert :ok = Auth.ensure_admin_account()
+
+      assert {:error, :protected_admin_account} =
+               ActionDispatcher.dispatch(:auth, :delete_user, %{player_id: "admin"})
+
+      assert {:error, :protected_admin_account} =
+               ActionDispatcher.dispatch(:auth, :delete_user, %{player_id: "envadmin@exoforge.test"})
+
+      assert {:error, :protected_admin_account} =
+               ActionDispatcher.dispatch(:auth, :update_user_roles, %{
+                 player_id: "admin",
+                 scopes: ["player"]
+               })
+
+      assert {:error, :protected_admin_account} =
+               ActionDispatcher.dispatch(:auth, :reset_password, %{
+                 player_id: "admin",
+                 password: "hacked"
+               })
+    end
+  end
+
   defp with_admin_env(email, password) do
     previous = {System.get_env("EXOFORGE_ADMIN_EMAIL"), System.get_env("EXOFORGE_ADMIN_PASSWORD")}
     System.put_env("EXOFORGE_ADMIN_EMAIL", email)

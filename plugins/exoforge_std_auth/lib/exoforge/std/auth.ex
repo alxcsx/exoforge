@@ -231,6 +231,7 @@ defmodule Exoforge.Std.Auth do
 
     players_query = "SELECT * FROM #{@players_table}"
     tokens_query = "SELECT * FROM #{@tokens_table}"
+    accounts_query = "SELECT * FROM #{@accounts_table}"
 
     players_rows =
       case ActionDispatcher.dispatch(:database, :execute, %{
@@ -250,6 +251,15 @@ defmodule Exoforge.Std.Auth do
         _ -> []
       end
 
+    accounts_rows =
+      case ActionDispatcher.dispatch(:database, :execute, %{
+             plugin: :auth,
+             operation: accounts_query
+           }) do
+        {:ok, %{rows: rows}} when is_list(rows) -> rows
+        _ -> []
+      end
+
     tokens_by_player =
       Enum.group_by(tokens_rows, fn row ->
         to_string(Map.get(row, "player_id") || Map.get(row, :player_id))
@@ -261,17 +271,29 @@ defmodule Exoforge.Std.Auth do
         Map.put(acc, pid, row)
       end)
 
+    accounts_by_id =
+      Enum.reduce(accounts_rows, %{}, fn row, acc ->
+        pid = to_string(Map.get(row, "player_id") || Map.get(row, :player_id))
+        Map.put(acc, pid, row)
+      end)
+
     all_player_ids =
-      (Map.keys(players_by_id) ++ Map.keys(tokens_by_player))
+      (Map.keys(players_by_id) ++ Map.keys(tokens_by_player) ++ Map.keys(accounts_by_id))
       |> Enum.reject(&(&1 in [nil, ""]))
       |> Enum.uniq()
 
     users =
       Enum.map(all_player_ids, fn pid ->
         p_row = Map.get(players_by_id, pid, %{})
-        raw_scopes = Map.get(p_row, "scopes") || Map.get(p_row, :scopes) || Roles.player()
+        acc_row = Map.get(accounts_by_id, pid, %{})
+        raw_scopes =
+          Map.get(p_row, "scopes") || Map.get(p_row, :scopes) ||
+          Map.get(acc_row, "scopes") || Map.get(acc_row, :scopes) ||
+          Roles.player()
+
         scopes = parse_scopes(raw_scopes)
         tokens = Map.get(tokens_by_player, pid, [])
+        email = Map.get(acc_row, "email") || Map.get(acc_row, :email)
 
         token_strings =
           Enum.map(tokens, fn t ->
@@ -280,14 +302,181 @@ defmodule Exoforge.Std.Auth do
 
         %{
           "player_id" => pid,
+          "email" => email,
           "scopes" => scopes,
           "tokens_count" => length(tokens),
           "active_tokens" => token_strings,
-          "status" => "Active"
+          "status" => "Active",
+          "is_protected" => is_env_admin?(pid)
         }
       end)
 
     {:ok, %{users: users, count: length(users)}}
+  end
+
+  @impl true
+  defaction reset_password(payload) do
+    player_id = Map.get(payload, :player_id) || Map.get(payload, "player_id")
+    password = Map.get(payload, :password) || Map.get(payload, "password")
+
+    cond do
+      is_nil(player_id) or player_id == "" ->
+        {:error, :user_not_found}
+
+      is_env_admin?(player_id) ->
+        {:error, :protected_admin_account}
+
+      is_nil(password) or password == "" ->
+        {:error, :invalid_password}
+
+      true ->
+        init_schema()
+        pid = to_string(player_id)
+
+        acc_by_pid =
+          case ActionDispatcher.dispatch(:database, :execute, %{
+                 plugin: :auth,
+                 operation: "SELECT * FROM #{@accounts_table} WHERE player_id = $1",
+                 arguments: [pid]
+               }) do
+            {:ok, %{rows: [r | _]}} -> r
+            _ -> nil
+          end
+
+        acc_row =
+          acc_by_pid ||
+            case ActionDispatcher.dispatch(:database, :execute, %{
+                   plugin: :auth,
+                   operation: "SELECT * FROM #{@accounts_table} WHERE email = $1",
+                   arguments: [String.downcase(pid)]
+                 }) do
+              {:ok, %{rows: [r | _]}} -> r
+              _ -> nil
+            end
+
+        case acc_row do
+          %{} ->
+            email = Map.get(acc_row, "email") || Map.get(acc_row, :email)
+            actual_pid = Map.get(acc_row, "player_id") || Map.get(acc_row, :player_id) || pid
+            scopes = parse_scopes(Map.get(acc_row, "scopes") || Map.get(acc_row, :scopes) || Roles.player())
+            _ = upsert_account(actual_pid, email, password, scopes)
+            {:ok, %{player_id: actual_pid, status: "password_reset"}}
+
+          nil ->
+            pquery = "SELECT * FROM #{@players_table} WHERE player_id = $1"
+
+            case ActionDispatcher.dispatch(:database, :execute, %{
+                   plugin: :auth,
+                   operation: pquery,
+                   arguments: [pid]
+                 }) do
+              {:ok, %{rows: [prow | _]}} ->
+                scopes = parse_scopes(Map.get(prow, "scopes") || Map.get(prow, :scopes) || Roles.player())
+                _ = upsert_account(pid, "#{pid}@player.exoforge.io", password, scopes)
+                {:ok, %{player_id: pid, status: "password_reset"}}
+
+              _ ->
+                {:error, :user_not_found}
+            end
+        end
+    end
+  end
+
+  @impl true
+  defaction update_user_roles(payload) do
+    player_id = Map.get(payload, :player_id) || Map.get(payload, "player_id")
+    raw_scopes = Map.get(payload, :scopes) || Map.get(payload, "scopes")
+
+    cond do
+      is_nil(player_id) or player_id == "" ->
+        {:error, :user_not_found}
+
+      is_env_admin?(player_id) ->
+        {:error, :protected_admin_account}
+
+      is_nil(raw_scopes) ->
+        {:error, :invalid_scopes}
+
+      true ->
+        init_schema()
+        pid = to_string(player_id)
+        scopes = parse_scopes(raw_scopes)
+        scopes_str = Enum.join(scopes, ",")
+
+        _ = set_player_scopes(pid, scopes)
+
+        _ =
+          ActionDispatcher.dispatch(:database, :execute, %{
+            plugin: :auth,
+            operation: "UPDATE #{@accounts_table} SET scopes = $1 WHERE player_id = $2",
+            arguments: [scopes_str, pid]
+          })
+
+        _ =
+          ActionDispatcher.dispatch(:database, :execute, %{
+            plugin: :auth,
+            operation: "UPDATE #{@accounts_table} SET scopes = $1 WHERE email = $2",
+            arguments: [scopes_str, pid]
+          })
+
+        _ =
+          ActionDispatcher.dispatch(:database, :execute, %{
+            plugin: :auth,
+            operation: "UPDATE #{@tokens_table} SET scopes = $1 WHERE player_id = $2",
+            arguments: [scopes_str, pid]
+          })
+
+        {:ok, %{player_id: pid, scopes: scopes}}
+    end
+  end
+
+  @impl true
+  defaction delete_user(payload) do
+    player_id = Map.get(payload, :player_id) || Map.get(payload, "player_id")
+
+    cond do
+      is_nil(player_id) or player_id == "" ->
+        {:error, :user_not_found}
+
+      is_env_admin?(player_id) ->
+        {:error, :protected_admin_account}
+
+      true ->
+        init_schema()
+        pid = to_string(player_id)
+
+        _ =
+          ActionDispatcher.dispatch(:database, :execute, %{
+            plugin: :auth,
+            operation: "DELETE FROM #{@players_table} WHERE player_id = $1",
+            arguments: [pid]
+          })
+
+        _ =
+          ActionDispatcher.dispatch(:database, :execute, %{
+            plugin: :auth,
+            operation: "DELETE FROM #{@tokens_table} WHERE player_id = $1",
+            arguments: [pid]
+          })
+
+        _ =
+          ActionDispatcher.dispatch(:database, :execute, %{
+            plugin: :auth,
+            operation: "DELETE FROM #{@accounts_table} WHERE player_id = $1",
+            arguments: [pid]
+          })
+
+        _ =
+          ActionDispatcher.dispatch(:database, :execute, %{
+            plugin: :auth,
+            operation: "DELETE FROM #{@accounts_table} WHERE email = $1",
+            arguments: [pid]
+          })
+
+        _ = ActionDispatcher.dispatch(:player_data, :delete_player, %{player_id: pid})
+
+        {:ok, %{player_id: pid, status: "deleted"}}
+    end
   end
 
   defp do_register_player(payload) do
@@ -315,6 +504,11 @@ defmodule Exoforge.Std.Auth do
 
     raw_scopes = Map.get(payload, :scopes) || Map.get(payload, "scopes") || [Roles.player()]
     scopes = parse_scopes(raw_scopes)
+    raw_password = Map.get(payload, :password) || Map.get(payload, "password")
+
+    if raw_password && raw_password != "" do
+      _ = upsert_account(player_id, email, raw_password, scopes)
+    end
 
     case generate_and_store_token(player_id, scopes) do
       {:ok, token} ->
@@ -346,6 +540,13 @@ defmodule Exoforge.Std.Auth do
       {:error, reason} ->
         {:error, reason}
     end
+  end
+
+  @doc "Checks if a player ID belongs to the protected env-configured admin."
+  def is_env_admin?(player_id) do
+    pid = to_string(player_id)
+    {env_email, _} = credentials(:admin, "EXOFORGE_ADMIN_EMAIL", "EXOFORGE_ADMIN_PASSWORD")
+    pid == @admin_id or (is_binary(env_email) and env_email != "" and pid == env_email)
   end
 
   ## ---- ROLES (context differentiation) ----

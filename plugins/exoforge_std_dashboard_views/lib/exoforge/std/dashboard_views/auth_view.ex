@@ -15,15 +15,24 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
        search_query: "",
        scope_filter: "all",
        show_register_modal: false,
+       show_reset_password_modal: false,
+       show_roles_modal: false,
+       reset_password_user: nil,
+       reset_password_error: nil,
+       roles_user: nil,
+       roles_form_scopes: [],
+       roles_error: nil,
        issued_token_info: nil,
        selected_user: nil,
        register_form: %{
          "player_id" => "",
          "name" => "",
          "email" => "",
+         "password" => "",
          "scopes" => "player"
        },
        error_message: nil,
+       action_notification: nil,
        loaded: false
      )}
   end
@@ -81,6 +90,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
          "player_id" => default_id,
          "name" => "",
          "email" => "",
+         "password" => "",
          "scopes" => "player"
        }
      )}
@@ -101,6 +111,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
     player_id = String.trim(Map.get(params, "player_id", ""))
     name = String.trim(Map.get(params, "name", ""))
     email = String.trim(Map.get(params, "email", ""))
+    password = String.trim(Map.get(params, "password", ""))
     raw_scopes = String.trim(Map.get(params, "scopes", "player"))
 
     scopes =
@@ -113,6 +124,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
       player_id: if(player_id != "", do: player_id, else: nil),
       name: if(name != "", do: name, else: nil),
       email: if(email != "", do: email, else: nil),
+      password: if(password != "", do: password, else: nil),
       scopes: if(scopes != [], do: scopes, else: ["player"])
     }
 
@@ -123,6 +135,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
           |> assign(
             show_register_modal: false,
             error_message: nil,
+            action_notification: "User '#{result.player_id}' successfully created!",
             issued_token_info: %{
               player_id: result.player_id,
               token: result.token,
@@ -136,6 +149,133 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
       {:error, reason} ->
         {:noreply, assign(socket, error_message: "Registration failed: #{inspect(reason)}")}
     end
+  end
+
+  @impl true
+  def handle_event("open_reset_password_modal", %{"player_id" => player_id}, socket) do
+    user = Enum.find(socket.assigns.users, &(&1["player_id"] == player_id))
+    {:noreply, assign(socket, show_reset_password_modal: true, reset_password_user: user, reset_password_error: nil)}
+  end
+
+  @impl true
+  def handle_event("close_reset_password_modal", _params, socket) do
+    {:noreply, assign(socket, show_reset_password_modal: false, reset_password_user: nil, reset_password_error: nil)}
+  end
+
+  @impl true
+  def handle_event("submit_reset_password", %{"reset" => %{"password" => new_pw}}, socket) do
+    user = socket.assigns.reset_password_user
+    pid = if user, do: user["player_id"], else: nil
+    trimmed = String.trim(new_pw || "")
+
+    cond do
+      is_nil(user) ->
+        {:noreply, assign(socket, reset_password_error: "No user selected.")}
+
+      trimmed == "" ->
+        {:noreply, assign(socket, reset_password_error: "Password cannot be empty.")}
+
+      true ->
+        case ActionDispatcher.dispatch(:auth, :reset_password, %{player_id: pid, password: trimmed}) do
+          {:ok, _} ->
+            socket =
+              socket
+              |> assign(
+                show_reset_password_modal: false,
+                reset_password_user: nil,
+                reset_password_error: nil,
+                action_notification: "Password for '#{pid}' successfully updated!"
+              )
+              |> load_users()
+
+            {:noreply, socket}
+
+          {:error, :protected_admin_account} ->
+            {:noreply, assign(socket, reset_password_error: "Cannot reset password of the protected environment admin.")}
+
+          {:error, reason} ->
+            {:noreply, assign(socket, reset_password_error: "Password reset failed: #{inspect(reason)}")}
+        end
+    end
+  end
+
+  @impl true
+  def handle_event("open_roles_modal", %{"player_id" => player_id}, socket) do
+    user = Enum.find(socket.assigns.users, &(&1["player_id"] == player_id))
+    scopes = if user, do: user["scopes"] || ["player"], else: ["player"]
+    {:noreply, assign(socket, show_roles_modal: true, roles_user: user, roles_form_scopes: scopes, roles_error: nil)}
+  end
+
+  @impl true
+  def handle_event("close_roles_modal", _params, socket) do
+    {:noreply, assign(socket, show_roles_modal: false, roles_user: nil, roles_error: nil)}
+  end
+
+  @impl true
+  def handle_event("toggle_role", %{"role" => role}, socket) do
+    current = socket.assigns.roles_form_scopes
+    updated =
+      if role in current do
+        if length(current) > 1, do: List.delete(current, role), else: current
+      else
+        current ++ [role]
+      end
+
+    {:noreply, assign(socket, roles_form_scopes: updated)}
+  end
+
+  @impl true
+  def handle_event("submit_roles", _params, socket) do
+    user = socket.assigns.roles_user
+    pid = if user, do: user["player_id"], else: nil
+    scopes = socket.assigns.roles_form_scopes
+
+    case ActionDispatcher.dispatch(:auth, :update_user_roles, %{player_id: pid, scopes: scopes}) do
+      {:ok, _} ->
+        socket =
+          socket
+          |> assign(
+            show_roles_modal: false,
+            roles_user: nil,
+            action_notification: "Roles updated for '#{pid}' successfully!"
+          )
+          |> load_users()
+
+        {:noreply, socket}
+
+      {:error, :protected_admin_account} ->
+        {:noreply, assign(socket, roles_error: "Cannot alter roles of the protected environment admin.")}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, roles_error: "Failed to update roles: #{inspect(reason)}")}
+    end
+  end
+
+  @impl true
+  def handle_event("delete_user", %{"player_id" => player_id}, socket) do
+    case ActionDispatcher.dispatch(:auth, :delete_user, %{player_id: player_id}) do
+      {:ok, _} ->
+        socket =
+          socket
+          |> assign(
+            selected_user: (if socket.assigns.selected_user && socket.assigns.selected_user["player_id"] == player_id, do: nil, else: socket.assigns.selected_user),
+            action_notification: "Account '#{player_id}' has been permanently deleted."
+          )
+          |> load_users()
+
+        {:noreply, socket}
+
+      {:error, :protected_admin_account} ->
+        {:noreply, assign(socket, action_notification: "Cannot delete the hardcoded environment admin account.")}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, action_notification: "Failed to delete account: #{inspect(reason)}")}
+    end
+  end
+
+  @impl true
+  def handle_event("dismiss_notification", _params, socket) do
+    {:noreply, assign(socket, action_notification: nil)}
   end
 
   @impl true
@@ -278,6 +418,27 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
           </button>
         </div>
       </div>
+
+      <!-- Action Notification Banner -->
+      <%= if @action_notification do %>
+        <div class="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl p-4 shadow-sm flex items-center justify-between animate-in fade-in duration-150">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shrink-0">
+              ✓
+            </div>
+            <p class="text-xs font-bold text-emerald-900">
+              <%= @action_notification %>
+            </p>
+          </div>
+          <button
+            phx-click="dismiss_notification"
+            phx-target={@myself}
+            class="text-emerald-500 hover:text-emerald-800 text-sm font-bold p-1"
+          >
+            ✕
+          </button>
+        </div>
+      <% end %>
 
       <!-- Issued Token Alert Banner -->
       <%= if @issued_token_info do %>
@@ -447,10 +608,16 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
               </thead>
               <tbody class="divide-y divide-gray-100 text-sm">
                 <%= for user <- @filtered_users do %>
+                  <% is_protected = user["is_protected"] == true %>
                   <tr class="hover:bg-purple-50/30 transition-colors group">
                     <td class="py-3.5 px-4">
                       <div class="flex items-center gap-2">
                         <span class="font-mono font-bold text-gray-900"><%= user["player_id"] %></span>
+                        <%= if is_protected do %>
+                          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300" title="Created via environment variables. Cannot be modified or deleted via UI.">
+                            🔒 Env Admin
+                          </span>
+                        <% end %>
                         <button
                           phx-click={Phoenix.LiveView.JS.dispatch("exoforge:clip", detail: %{text: user["player_id"]})}
                           title="Copy Player ID"
@@ -488,22 +655,58 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                       </span>
                     </td>
                     <td class="py-3.5 px-4 text-right">
-                      <div class="flex items-center justify-end gap-2">
+                      <div class="flex items-center justify-end gap-1.5">
                         <button
                           phx-click="issue_token"
                           phx-value-player_id={user["player_id"]}
                           phx-target={@myself}
-                          title="Issue new token"
-                          class="px-2.5 py-1 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition-colors"
+                          title="Issue new bearer token"
+                          class="px-2 py-1 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition-colors"
                         >
-                          + Issue Token
+                          + Token
                         </button>
+
+                        <%= if is_protected do %>
+                          <span class="text-[11px] text-gray-400 font-medium px-2 italic" title="System admin managed exclusively via environment variables">
+                            Protected
+                          </span>
+                        <% else %>
+                          <button
+                            phx-click="open_roles_modal"
+                            phx-value-player_id={user["player_id"]}
+                            phx-target={@myself}
+                            title="Edit user scopes and roles"
+                            class="px-2 py-1 text-xs font-semibold text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors"
+                          >
+                            Roles
+                          </button>
+                          <button
+                            phx-click="open_reset_password_modal"
+                            phx-value-player_id={user["player_id"]}
+                            phx-target={@myself}
+                            title="Set or reset account password"
+                            class="px-2 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors"
+                          >
+                            Reset PW
+                          </button>
+                          <button
+                            phx-click="delete_user"
+                            phx-value-player_id={user["player_id"]}
+                            phx-target={@myself}
+                            data-confirm={"Are you sure you want to permanently delete user account '#{user["player_id"]}'?"}
+                            title="Delete user account"
+                            class="px-2 py-1 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-colors"
+                          >
+                            Delete
+                          </button>
+                        <% end %>
+
                         <button
                           phx-click="inspect_user"
                           phx-value-player_id={user["player_id"]}
                           phx-target={@myself}
                           title="View tokens & details"
-                          class="px-2.5 py-1 text-xs font-semibold text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors"
+                          class="px-2 py-1 text-xs font-semibold text-gray-600 hover:text-gray-900 border border-transparent hover:border-gray-200 rounded-lg transition-colors"
                         >
                           Inspect
                         </button>
@@ -581,6 +784,18 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
               </div>
 
               <div>
+                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Initial Password (Optional)</label>
+                <input
+                  type="password"
+                  name="register[password]"
+                  value={@register_form["password"]}
+                  placeholder="Set password for email/password login (optional)"
+                  class="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:bg-white"
+                />
+                <p class="text-[11px] text-gray-400 mt-1">If set, the user can log into Exoforge Studio or APIs using email + password.</p>
+              </div>
+
+              <div>
                 <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Authorization Scopes</label>
                 <input
                   type="text"
@@ -605,7 +820,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                   type="submit"
                   class="px-5 py-2 text-xs font-bold text-white bg-purple-600 rounded-xl hover:bg-purple-700 transition-colors shadow-sm"
                 >
-                  Create Account & Issue Token
+                  Create Account &amp; Issue Token
                 </button>
               </div>
             </form>
@@ -613,8 +828,150 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
         </div>
       <% end %>
 
+      <!-- Reset Password Modal -->
+      <%= if @show_reset_password_modal and @reset_password_user do %>
+        <div class="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-200 relative animate-in fade-in duration-150">
+            <button
+              phx-click="close_reset_password_modal"
+              phx-target={@myself}
+              class="absolute top-5 right-5 text-gray-400 hover:text-gray-600 text-lg font-bold"
+            >
+              ✕
+            </button>
+
+            <div class="flex items-center gap-3 mb-4">
+              <div class="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center text-xl">
+                🔑
+              </div>
+              <div>
+                <h3 class="text-base font-bold text-gray-900">Reset User Password</h3>
+                <p class="text-xs text-gray-500">
+                  Account: <span class="font-mono font-bold text-gray-800"><%= @reset_password_user["player_id"] %></span>
+                </p>
+              </div>
+            </div>
+
+            <%= if @reset_password_error do %>
+              <div class="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-medium">
+                <%= @reset_password_error %>
+              </div>
+            <% end %>
+
+            <form phx-submit="submit_reset_password" phx-target={@myself} class="space-y-4">
+              <div>
+                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">New Password</label>
+                <input
+                  type="password"
+                  name="reset[password]"
+                  required
+                  placeholder="Enter new password"
+                  class="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:bg-white"
+                />
+              </div>
+
+              <div class="pt-3 border-t border-gray-100 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  phx-click="close_reset_password_modal"
+                  phx-target={@myself}
+                  class="px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  class="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm transition-colors"
+                >
+                  Save New Password
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      <% end %>
+
+      <!-- Change Roles Modal -->
+      <%= if @show_roles_modal and @roles_user do %>
+        <div class="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-200 relative animate-in fade-in duration-150">
+            <button
+              phx-click="close_roles_modal"
+              phx-target={@myself}
+              class="absolute top-5 right-5 text-gray-400 hover:text-gray-600 text-lg font-bold"
+            >
+              ✕
+            </button>
+
+            <div class="flex items-center gap-3 mb-4">
+              <div class="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center text-xl">
+                🛡️
+              </div>
+              <div>
+                <h3 class="text-base font-bold text-gray-900">Change Account Roles</h3>
+                <p class="text-xs text-gray-500">
+                  Account: <span class="font-mono font-bold text-gray-800"><%= @roles_user["player_id"] %></span>
+                </p>
+              </div>
+            </div>
+
+            <%= if @roles_error do %>
+              <div class="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-medium">
+                <%= @roles_error %>
+              </div>
+            <% end %>
+
+            <div class="space-y-4">
+              <div>
+                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Granted Scopes</label>
+                <div class="grid grid-cols-2 gap-2">
+                  <%= for {scope, desc} <- [{"player", "Standard game access"}, {"studio", "Producer & Studio access"}, {"admin", "Full cluster admin"}, {"guest", "Anonymous guest"}] do %>
+                    <% active = scope in @roles_form_scopes %>
+                    <button
+                      type="button"
+                      phx-click="toggle_role"
+                      phx-value-role={scope}
+                      phx-target={@myself}
+                      class={"p-3 text-left rounded-xl border transition-all flex flex-col justify-between #{if active, do: "bg-purple-50 border-purple-500 text-purple-950", else: "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100"}"}
+                    >
+                      <div class="flex items-center justify-between w-full">
+                        <span class="font-bold text-xs capitalize"><%= scope %></span>
+                        <span class={"w-3.5 h-3.5 rounded-full flex items-center justify-center text-[10px] #{if active, do: "bg-purple-600 text-white font-bold", else: "border border-gray-300"}"}>
+                          <%= if active, do: "✓", else: "" %>
+                        </span>
+                      </div>
+                      <span class="text-[10px] text-gray-500 mt-1"><%= desc %></span>
+                    </button>
+                  <% end %>
+                </div>
+              </div>
+
+              <div class="pt-3 border-t border-gray-100 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  phx-click="close_roles_modal"
+                  phx-target={@myself}
+                  class="px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  phx-click="submit_roles"
+                  phx-target={@myself}
+                  class="px-5 py-2 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-xl shadow-sm transition-colors"
+                >
+                  Update Roles
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      <% end %>
+
       <!-- User Inspection Slide-over Drawer -->
       <%= if @selected_user do %>
+        <% sel_is_protected = @selected_user["is_protected"] == true %>
         <div class="fixed inset-0 z-50 overflow-hidden bg-black/30 backdrop-blur-xs flex justify-end">
           <div class="bg-white w-full max-w-md h-full shadow-2xl border-l border-gray-200 p-6 flex flex-col justify-between overflow-y-auto animate-in slide-in-from-right duration-200">
             <div>
@@ -625,7 +982,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                   </div>
                   <div>
                     <h3 class="text-base font-bold text-gray-900 font-mono"><%= @selected_user["player_id"] %></h3>
-                    <p class="text-xs text-gray-500">Identity details & security tokens</p>
+                    <p class="text-xs text-gray-500">Identity details &amp; security tokens</p>
                   </div>
                 </div>
                 <button
@@ -638,8 +995,36 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
               </div>
 
               <div class="mt-5 space-y-5">
+                <%= if sel_is_protected do %>
+                  <div class="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-center gap-2">
+                    <span>🔒</span>
+                    <span>This account is hardcoded via environment variables and cannot be altered or deleted.</span>
+                  </div>
+                <% end %>
+
+                <%= if @selected_user["email"] do %>
+                  <div>
+                    <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Email</h4>
+                    <p class="text-xs font-mono text-gray-800 bg-gray-50 p-2 rounded-lg border border-gray-200">
+                      <%= @selected_user["email"] %>
+                    </p>
+                  </div>
+                <% end %>
+
                 <div>
-                  <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Granted Scopes</h4>
+                  <div class="flex items-center justify-between mb-2">
+                    <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Granted Scopes</h4>
+                    <%= unless sel_is_protected do %>
+                      <button
+                        phx-click="open_roles_modal"
+                        phx-value-player_id={@selected_user["player_id"]}
+                        phx-target={@myself}
+                        class="text-xs font-semibold text-purple-600 hover:text-purple-800"
+                      >
+                        Edit Roles
+                      </button>
+                    <% end %>
+                  </div>
                   <div class="flex flex-wrap gap-1.5">
                     <%= for scope <- @selected_user["scopes"] || [] do %>
                       <span class={"inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold #{case scope do
@@ -653,6 +1038,19 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                     <% end %>
                   </div>
                 </div>
+
+                <%= unless sel_is_protected do %>
+                  <div>
+                    <button
+                      phx-click="open_reset_password_modal"
+                      phx-value-player_id={@selected_user["player_id"]}
+                      phx-target={@myself}
+                      class="w-full py-2 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl transition-colors text-center"
+                    >
+                      🔑 Reset Password
+                    </button>
+                  </div>
+                <% end %>
 
                 <div>
                   <div class="flex items-center justify-between mb-2">
@@ -691,7 +1089,18 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
               </div>
             </div>
 
-            <div class="pt-4 border-t border-gray-100">
+            <div class="pt-4 border-t border-gray-100 space-y-2">
+              <%= unless sel_is_protected do %>
+                <button
+                  phx-click="delete_user"
+                  phx-value-player_id={@selected_user["player_id"]}
+                  phx-target={@myself}
+                  data-confirm={"Are you sure you want to permanently delete account '#{@selected_user["player_id"]}'?"}
+                  class="w-full py-2 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-colors"
+                >
+                  Delete Account
+                </button>
+              <% end %>
               <button
                 phx-click="close_user_drawer"
                 phx-target={@myself}
