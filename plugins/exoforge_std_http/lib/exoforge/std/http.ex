@@ -10,7 +10,7 @@ defmodule Exoforge.Std.Http do
     dependencies: [Exoforge.Std.Services.Auth],
     category: "Ingress",
     system: true,
-    dashboard_view: %{id: :http, title: "HTTP Ingress", icon: "🌐"}
+    dashboard_view: nil
   }
 
   def children do

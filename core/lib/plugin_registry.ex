@@ -15,6 +15,7 @@ defmodule Exoforge.PluginRegistry do
   def initialize_ets do
     ensure_table(:exo_plugins_mem, :set)
     ensure_table(:exo_services_mem, :bag)
+    Exoforge.UIHookRegistry.initialize_ets()
     :ok
   end
 
@@ -47,6 +48,49 @@ defmodule Exoforge.PluginRegistry do
       end)
     end)
 
+    # Auto-register declared UI hooks & settings tabs
+    case Map.get(manifest, :settings_tab) do
+      tab when is_map(tab) ->
+        tab_id = Map.get(tab, :id, id)
+        Exoforge.UIHookRegistry.register_hook(:settings, tab_id, Map.put(tab, :plugin_id, id))
+
+      _ ->
+        :ok
+    end
+
+    case Map.get(manifest, :settings_tabs) do
+      tabs when is_list(tabs) ->
+        Enum.each(tabs, fn tab ->
+          tab_id = Map.get(tab, :id)
+          if tab_id, do: Exoforge.UIHookRegistry.register_hook(:settings, tab_id, Map.put(tab, :plugin_id, id))
+        end)
+
+      _ ->
+        :ok
+    end
+
+    case Map.get(manifest, :ui_hooks) do
+      hooks when is_map(hooks) ->
+        Enum.each(hooks, fn {hook_point, hook_list} ->
+          if is_list(hook_list) do
+            Enum.each(hook_list, fn hook_spec ->
+              hook_id = Map.get(hook_spec, :id)
+              if hook_id do
+                Exoforge.UIHookRegistry.register_hook(hook_point, hook_id, Map.put(hook_spec, :plugin_id, id))
+              end
+            end)
+          else
+            hook_id = Map.get(hook_list, :id)
+            if hook_id do
+              Exoforge.UIHookRegistry.register_hook(hook_point, hook_id, Map.put(hook_list, :plugin_id, id))
+            end
+          end
+        end)
+
+      _ ->
+        :ok
+    end
+
     :ok
   end
 
@@ -67,6 +111,8 @@ defmodule Exoforge.PluginRegistry do
         :ets.match_object(:exo_services_mem, {{:_, :_}, %{id: id_atom}})
 
     Enum.each(existing, &:ets.delete_object(:exo_services_mem, &1))
+    Exoforge.UIHookRegistry.unregister_by_plugin(manifest_id)
+    if id_atom != manifest_id, do: Exoforge.UIHookRegistry.unregister_by_plugin(id_atom)
     :ok
   end
 
@@ -289,8 +335,9 @@ defmodule Exoforge.PluginRegistry do
       all_resources = Enum.flat_map(services, fn s -> Map.get(s, :resources) || Map.get(s, "resources") || [] end)
       all_events = Enum.flat_map(services, fn s -> Map.get(s, :events) || Map.get(s, "events") || [] end)
 
+      # Plugins do not have UI by default. Only plugins declaring an explicit dashboard_view
+      # are classified as having visual controls / dashboard views.
       has_custom = not is_nil(dashboard_view)
-      has_controls = has_custom or all_actions != [] or all_resources != [] or all_events != []
 
       %{
         id: manifest.id,
@@ -313,8 +360,8 @@ defmodule Exoforge.PluginRegistry do
         last_trap: Map.get(stats, :last_trap),
         dashboard_view: dashboard_view,
         has_custom_view: has_custom,
-        has_visual_controls: has_controls,
-        has_dashboard_view: has_controls
+        has_visual_controls: has_custom,
+        has_dashboard_view: has_custom
       }
     end)
   end

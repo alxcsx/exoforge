@@ -9,7 +9,7 @@ defmodule Exoforge.Std.Ws do
     dependencies: [Exoforge.Std.Services.Auth],
     category: "Ingress",
     system: true,
-    dashboard_view: %{id: :ws, title: "WebSocket Gateway", icon: "🔌"}
+    dashboard_view: nil
   }
 
   def children do

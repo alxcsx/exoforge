@@ -22,6 +22,8 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
        selected_player_id: nil,
        selected_tab: "profile",
        player_kv_data: %{},
+       player_inspect_tab: "profile",
+       player_inspect_hooks: [],
        new_kv_key: "",
        new_kv_val: "",
        show_create_modal: false,
@@ -60,6 +62,11 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
   end
 
   @impl true
+  def handle_event("switch_player_inspect_tab", %{"tab" => tab}, socket) do
+    {:noreply, assign(socket, player_inspect_tab: tab)}
+  end
+
+  @impl true
   def handle_event("set_retention_filter", %{"filter" => filter}, socket) do
     filtered = apply_filters(socket.assigns.players, filter, socket.assigns.search_query)
     {:noreply, assign(socket, retention_filter: filter, filtered_players: filtered)}
@@ -93,10 +100,23 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
         _ -> %{}
       end
 
+    hooks = Exoforge.UIHookRegistry.list_hooks(:player_inspect)
+    hooks =
+      if Enum.empty?(hooks) do
+        [
+          %{id: :profile, title: "Profile Attributes", icon: "👤", order: 10},
+          %{id: :kv_store, title: "Key-Value Database", icon: "🔑", order: 20}
+        ]
+      else
+        hooks
+      end
+
     {:noreply,
      assign(socket,
        selected_player: player,
        selected_player_id: id,
+       player_inspect_tab: "profile",
+       player_inspect_hooks: hooks,
        player_kv_data: kv_data,
        new_kv_key: "",
        new_kv_val: "",
@@ -614,101 +634,155 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
               </div>
             <% end %>
 
-            <!-- Fine-Grained Key-Value JSON Section -->
-            <div class="border border-gray-200 rounded-xl p-4 bg-gray-50/60 space-y-3">
-              <div class="flex items-center justify-between">
-                <span class="text-xs font-bold text-gray-800 uppercase tracking-wider">Key-Value JSON State (<%= map_size(@player_kv_data) %> keys)</span>
-                <span class="text-[10px] text-gray-400 font-mono">player_kv table</span>
-              </div>
-
-              <%= if map_size(@player_kv_data) == 0 do %>
-                <p class="text-xs text-gray-400 italic">No fine-grained key-value state saved yet for this player.</p>
-              <% else %>
-                <div class="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-                  <%= for {k, v} <- @player_kv_data do %>
-                    <div class="flex items-center justify-between p-2 bg-white rounded-lg border border-gray-200 text-xs">
-                      <span class="font-mono font-bold text-purple-800"><%= k %></span>
-                      <div class="flex items-center gap-2">
-                        <span class="font-mono text-gray-600 truncate max-w-xs"><%= inspect(v) %></span>
-                        <button
-                          type="button"
-                          phx-click="delete_kv_state"
-                          phx-value-key={k}
-                          phx-target={@myself}
-                          class="text-gray-400 hover:text-red-500 font-bold text-xs"
-                          title="Delete Key"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    </div>
-                  <% end %>
-                </div>
-              <% end %>
-
-              <!-- Quick Add KV Form -->
-              <form phx-submit="set_kv_state" phx-target={@myself} class="flex items-center gap-2 pt-1">
-                <input
-                  type="text"
-                  name="key"
-                  placeholder="Key (e.g. inventory)"
-                  required
-                  class="flex-1 px-2.5 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-mono"
-                />
-                <input
-                  type="text"
-                  name="value"
-                  placeholder='JSON Value (e.g. {"gold": 100})'
-                  required
-                  class="flex-1 px-2.5 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-mono"
-                />
+            <!-- Tabbed UI Hooks Bar -->
+            <div class="flex items-center gap-1.5 border-b border-gray-200 pb-2">
+              <%= for hook <- @player_inspect_hooks do %>
                 <button
-                  type="submit"
-                  class="px-3 py-1.5 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors whitespace-nowrap"
+                  type="button"
+                  phx-click="switch_player_inspect_tab"
+                  phx-value-tab={to_string(hook.id)}
+                  phx-target={@myself}
+                  class={"px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 #{if @player_inspect_tab == to_string(hook.id), do: "bg-violet-600 text-white shadow-xs", else: "bg-gray-100 text-gray-600 hover:bg-gray-200"}"}
                 >
-                  Set KV
+                  <span><%= hook.icon %></span>
+                  <span><%= hook.title %></span>
                 </button>
-              </form>
+              <% end %>
             </div>
 
-            <!-- Profile JSON Document -->
-            <form phx-submit="save_player_profile" phx-target={@myself} class="space-y-4">
-              <div>
-                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Profile Attributes JSON</label>
-                <textarea
-                  name="profile_raw"
-                  rows="8"
-                  class="w-full p-3 text-xs bg-gray-900 text-emerald-400 font-mono rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500"
-                ><%= @edit_profile_raw %></textarea>
-              </div>
-
-              <div class="pt-3 border-t border-gray-100 flex items-center justify-between">
-                <div class="flex items-center gap-2">
-                  <%= if @selected_player[:linked] == true or @selected_player["linked"] == true do %>
-                    <button
-                      type="button"
-                      phx-click="retain_player"
-                      phx-value-id={@selected_player_id}
-                      phx-target={@myself}
-                      data-confirm={"Unlink user account and retain telemetry for '#{@selected_player_id}'?"}
-                      class="px-3 py-2 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-xl border border-amber-200 transition-colors"
-                    >
-                      Unlink &amp; Retain
-                    </button>
-                  <% end %>
-                  <button
-                    type="button"
-                    phx-click="delete_player"
-                    phx-value-id={@selected_player_id}
-                    phx-target={@myself}
-                    data-confirm={"Hard delete '#{@selected_player_id}'?"}
-                    class="px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 rounded-xl transition-colors"
-                  >
-                    Hard Delete
-                  </button>
+            <!-- Tab 1: Key-Value Database Hook -->
+            <%= if @player_inspect_tab == "kv_store" do %>
+              <div class="border border-gray-200 rounded-xl p-4 bg-gray-50/60 space-y-3">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold text-gray-800 uppercase tracking-wider">Key-Value JSON State (<%= map_size(@player_kv_data) %> keys)</span>
+                  <span class="text-[10px] text-gray-400 font-mono">player_kv table</span>
                 </div>
 
-                <div class="flex items-center gap-2">
+                <%= if map_size(@player_kv_data) == 0 do %>
+                  <p class="text-xs text-gray-400 italic">No fine-grained key-value state saved yet for this player.</p>
+                <% else %>
+                  <div class="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                    <%= for {k, v} <- @player_kv_data do %>
+                      <div class="flex items-center justify-between p-2 bg-white rounded-lg border border-gray-200 text-xs">
+                        <span class="font-mono font-bold text-purple-800"><%= k %></span>
+                        <div class="flex items-center gap-2">
+                          <span class="font-mono text-gray-600 truncate max-w-xs"><%= inspect(v) %></span>
+                          <button
+                            type="button"
+                            phx-click="delete_kv_state"
+                            phx-value-key={k}
+                            phx-target={@myself}
+                            class="text-gray-400 hover:text-red-500 font-bold text-xs"
+                            title="Delete Key"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                    <% end %>
+                  </div>
+                <% end %>
+
+                <!-- Quick Add KV Form -->
+                <form phx-submit="set_kv_state" phx-target={@myself} class="flex items-center gap-2 pt-1">
+                  <input
+                    type="text"
+                    name="key"
+                    placeholder="Key (e.g. inventory)"
+                    required
+                    class="flex-1 px-2.5 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-mono"
+                  />
+                  <input
+                    type="text"
+                    name="value"
+                    placeholder='JSON Value (e.g. {"gold": 100})'
+                    required
+                    class="flex-1 px-2.5 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-mono"
+                  />
+                  <button
+                    type="submit"
+                    class="px-3 py-1.5 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors whitespace-nowrap"
+                  >
+                    Set KV
+                  </button>
+                </form>
+              </div>
+
+              <div class="pt-3 border-t border-gray-100 flex items-center justify-end">
+                <button
+                  type="button"
+                  phx-click="close_player_drawer"
+                  phx-target={@myself}
+                  class="px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900"
+                >
+                  Close
+                </button>
+              </div>
+            <% end %>
+
+            <!-- Tab 2: Profile Attributes Document -->
+            <%= if @player_inspect_tab == "profile" do %>
+              <form phx-submit="save_player_profile" phx-target={@myself} class="space-y-4">
+                <div>
+                  <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Profile Attributes JSON</label>
+                  <textarea
+                    name="profile_raw"
+                    rows="8"
+                    class="w-full p-3 text-xs bg-gray-900 text-emerald-400 font-mono rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  ><%= @edit_profile_raw %></textarea>
+                </div>
+
+                <div class="pt-3 border-t border-gray-100 flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <%= if @selected_player[:linked] == true or @selected_player["linked"] == true do %>
+                      <button
+                        type="button"
+                        phx-click="retain_player"
+                        phx-value-id={@selected_player_id}
+                        phx-target={@myself}
+                        data-confirm={"Unlink user account and retain telemetry for '#{@selected_player_id}'?"}
+                        class="px-3 py-2 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-xl border border-amber-200 transition-colors"
+                      >
+                        Unlink &amp; Retain
+                      </button>
+                    <% end %>
+                    <button
+                      type="button"
+                      phx-click="delete_player"
+                      phx-value-id={@selected_player_id}
+                      phx-target={@myself}
+                      data-confirm={"Hard delete '#{@selected_player_id}'?"}
+                      class="px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+                    >
+                      Hard Delete
+                    </button>
+                  </div>
+
+                  <div class="flex items-center gap-2">
+                    <button
+                      type="button"
+                      phx-click="close_player_drawer"
+                      phx-target={@myself}
+                      class="px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900"
+                    >
+                      Close
+                    </button>
+                    <button
+                      type="submit"
+                      class="px-5 py-2 text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 rounded-xl shadow-sm transition-colors"
+                    >
+                      Save Changes
+                    </button>
+                  </div>
+                </div>
+              </form>
+            <% end %>
+
+            <!-- Dynamic Hook Fallback -->
+            <%= if @player_inspect_tab not in ["profile", "kv_store"] do %>
+              <div class="p-6 bg-gray-50 border border-gray-200 rounded-xl text-center space-y-2">
+                <p class="text-xs text-gray-500">Custom inspection tab for player <strong class="font-mono text-gray-700"><%= @selected_player_id %></strong>.</p>
+                <div class="pt-2">
                   <button
                     type="button"
                     phx-click="close_player_drawer"
@@ -717,15 +791,9 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
                   >
                     Close
                   </button>
-                  <button
-                    type="submit"
-                    class="px-5 py-2 text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 rounded-xl shadow-sm transition-colors"
-                  >
-                    Save Changes
-                  </button>
                 </div>
               </div>
-            </form>
+            <% end %>
           </div>
         </div>
       <% end %>

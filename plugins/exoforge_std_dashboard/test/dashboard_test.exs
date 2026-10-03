@@ -20,7 +20,9 @@ defmodule Exoforge.DashboardTest do
     end)
 
     PluginRegistry.initialize_ets()
-    start_supervised!({DbManager, [driver: :sandbox]})
+    unless Process.whereis(DbManager) do
+      start_supervised!({DbManager, [driver: :sandbox]})
+    end
 
     PluginRegistry.register(%Exoforge.Domain.Manifest{
       id: :exoforge_std_database,
@@ -65,7 +67,9 @@ defmodule Exoforge.DashboardTest do
       start_supervised!({Phoenix.PubSub, name: Exoforge.Std.Dashboard.PubSub})
     end
 
-    start_supervised!(Exoforge.Std.Dashboard.Endpoint)
+    unless Process.whereis(Exoforge.Std.Dashboard.Endpoint) do
+      start_supervised!(Exoforge.Std.Dashboard.Endpoint)
+    end
 
     :ok
   end

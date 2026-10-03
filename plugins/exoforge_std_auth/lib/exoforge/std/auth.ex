@@ -14,6 +14,12 @@ defmodule Exoforge.Std.Auth do
       id: :auth,
       title: "Users & Auth",
       icon: "🛡️"
+    },
+    settings_tab: %{
+      id: :auth,
+      title: "Auth & Security",
+      icon: "🔐",
+      order: 25
     }
   }
 

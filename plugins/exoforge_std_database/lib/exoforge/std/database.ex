@@ -10,7 +10,8 @@ defmodule Exoforge.Std.Database do
   @manifest %{
     category: "Storage",
     system: true,
-    dashboard_view: %{id: :database, title: "Database Engine", icon: "🗄️"}
+    dashboard_view: nil,
+    settings_tab: %{id: :database, title: "Database Engine", icon: "🗄️", order: 20}
   }
 
   alias Exoforge.Std.Database.Manager

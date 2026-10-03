@@ -294,6 +294,7 @@ defmodule Exoforge.Std.Dashboard.Components do
   attr(:title, :string, required: true)
   attr(:subtitle, :string, default: nil)
   attr(:on_close, :string, default: "close_modal")
+  attr(:max_width, :string, default: "max-w-lg")
   slot(:inner_block)
   slot(:footer)
 
@@ -309,7 +310,7 @@ defmodule Exoforge.Std.Dashboard.Components do
           ></div>
 
           <!-- Dialog Box -->
-          <div class="relative bg-white rounded-2xl max-w-lg w-full p-6 text-left shadow-2xl border border-gray-100 z-10 animate-fade-in">
+          <div class={"relative bg-white rounded-2xl #{@max_width} w-full p-6 text-left shadow-2xl border border-gray-100 z-10 animate-fade-in"}>
             <div class="flex items-center justify-between pb-3 border-b border-gray-100">
               <div>
                 <h3 class="font-bold text-gray-900 text-base"><%= @title %></h3>

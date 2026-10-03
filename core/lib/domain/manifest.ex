@@ -20,6 +20,9 @@ defmodule Exoforge.Domain.Manifest do
     events: [],
     entities: [],
     dashboard_view: nil,
+    settings_tab: nil,
+    settings_tabs: [],
+    ui_hooks: %{},
     category: "Extension",
     system: false,
     assets_path: "assets"

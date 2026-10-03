@@ -11,7 +11,13 @@ defmodule Exoforge.Std.PlayerData do
   @manifest %{
     dependencies: [Exoforge.Std.Services.Database, Exoforge.Std.Services.Auth],
     category: "LiveOps",
-    dashboard_view: %{id: :player_data, title: "Player Data", icon: "👤"}
+    dashboard_view: %{id: :player_data, title: "Player Data", icon: "👤"},
+    ui_hooks: %{
+      player_inspect: [
+        %{id: :profile, title: "Profile Attributes", icon: "👤", order: 10},
+        %{id: :kv_store, title: "Key-Value Database", icon: "🔑", order: 20}
+      ]
+    }
   }
 
   alias Exoforge.ActionDispatcher
