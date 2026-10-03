@@ -41,3 +41,16 @@ priv/static/components/
 .env.*.local
 .envrc
 .envrc.local
+
+# === Unity Engine Artifacts ===
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]serSettings/
+MemoryCaptures/
+Recordings/
+sdk/unity/sample_unity/
+sdk/unity/unity_sample/
