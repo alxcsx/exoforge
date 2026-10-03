@@ -31,6 +31,7 @@ public class ExoClient : IDisposable
 
     public event Action? OnConnected;
     public event Action<Exception?>? OnDisconnected;
+    public event Action<ExoEventFrame>? OnAnyEvent;
 
     public ExoClient(ExoDispatcher? dispatcher = null)
     {
@@ -332,6 +333,7 @@ public class ExoClient : IDisposable
 
         NotifyHandlers(eventKey);
         NotifyHandlers(topicKey);
+        _dispatcher.Post(() => OnAnyEvent?.Invoke(evt));
     }
 
     private void HandleConnected()
