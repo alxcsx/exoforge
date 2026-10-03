@@ -835,7 +835,16 @@ defmodule Exoforge.Std.Dashboard.Components do
           <%= for event <- @events do %>
             <%
               status = Map.get(event, :status) || Map.get(event, "status") || :upcoming
-              status_atom = if is_binary(status), do: String.to_atom(status), else: status
+              status_atom =
+                case status do
+                  :active -> :active
+                  "active" -> :active
+                  :upcoming -> :upcoming
+                  "upcoming" -> :upcoming
+                  :expired -> :expired
+                  "expired" -> :expired
+                  _ -> :upcoming
+                end
               title = Map.get(event, :title) || Map.get(event, "title") || "Event"
               id = Map.get(event, :id) || Map.get(event, "id") || "event_id"
               countdown = Map.get(event, :countdown_text) || Map.get(event, "countdown_text") || "—"
@@ -988,14 +997,42 @@ defmodule Exoforge.Std.Dashboard.Components do
         <%= for day <- 1..@days_in_month do %>
           <%
             is_today = day == @today_day
-            # Filter events matching this day of month
-            day_events = Enum.filter(@events, fn ev ->
-              case Map.get(ev, :start_at) || Map.get(ev, "start_at") do
-                %DateTime{} = dt -> dt.day <= day
-                str when is_binary(str) -> String.contains?(str, "-#{String.pad_leading(to_string(day), 2, "0")}T")
-                _ -> false
-              end
-            end)
+            target_date = Date.new!(DateTime.utc_now().year, DateTime.utc_now().month, day)
+
+            day_events =
+              Enum.filter(@events, fn ev ->
+                start_raw = Map.get(ev, :start_at) || Map.get(ev, "start_at")
+                end_raw = Map.get(ev, :end_at) || Map.get(ev, "end_at")
+
+                start_date =
+                  case start_raw do
+                    %DateTime{} = dt -> DateTime.to_date(dt)
+                    str when is_binary(str) ->
+                      case DateTime.from_iso8601(str) do
+                        {:ok, dt, _} -> DateTime.to_date(dt)
+                        _ -> nil
+                      end
+                    _ -> nil
+                  end
+
+                end_date =
+                  case end_raw do
+                    %DateTime{} = dt -> DateTime.to_date(dt)
+                    str when is_binary(str) ->
+                      case DateTime.from_iso8601(str) do
+                        {:ok, dt, _} -> DateTime.to_date(dt)
+                        _ -> nil
+                      end
+                    _ -> start_date
+                  end
+
+                if start_date do
+                  Date.compare(target_date, start_date) in [:gt, :eq] and
+                    (is_nil(end_date) or Date.compare(target_date, end_date) in [:lt, :eq])
+                else
+                  false
+                end
+              end)
           %>
           <div class={"min-h-[72px] p-2 rounded-xl border flex flex-col justify-between transition-all #{
             cond do
