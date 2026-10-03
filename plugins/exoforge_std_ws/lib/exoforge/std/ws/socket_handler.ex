@@ -135,7 +135,7 @@ defmodule Exoforge.Std.Ws.SocketHandler do
     frame = %{
       type: @frame_event,
       event: event_name,
-      topic: context.topic,
+      topic: to_string(context.topic),
       payload: payload
     }
 

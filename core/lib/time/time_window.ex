@@ -124,6 +124,31 @@ defmodule Exoforge.TimeWindow do
     end
   end
 
+  def active?(%__MODULE__{recurrence: :monthly} = w, now) do
+    if DateTime.compare(now, w.start_at) == :lt do
+      false
+    else
+      start_day = w.start_at.day
+      end_day = w.end_at.day
+      now_day = now.day
+
+      start_tod = Time.to_seconds_after_midnight(DateTime.to_time(w.start_at)) |> elem(0)
+      end_tod = Time.to_seconds_after_midnight(DateTime.to_time(w.end_at)) |> elem(0)
+      now_tod = Time.to_seconds_after_midnight(DateTime.to_time(now)) |> elem(0)
+
+      if start_day == end_day do
+        now_day == start_day and now_tod >= start_tod and now_tod < end_tod
+      else
+        cond do
+          now_day > start_day and now_day < end_day -> true
+          now_day == start_day -> now_tod >= start_tod
+          now_day == end_day -> now_tod < end_tod
+          true -> false
+        end
+      end
+    end
+  end
+
   def active?(%__MODULE__{} = w, now), do: active?(%{w | recurrence: :none}, now)
 
   @doc """
@@ -141,7 +166,7 @@ defmodule Exoforge.TimeWindow do
       DateTime.compare(now, w.start_at) == :lt ->
         :upcoming
 
-      w.recurrence in [:daily, :weekly] ->
+      w.recurrence in [:daily, :weekly, :monthly] ->
         :upcoming
 
       true ->

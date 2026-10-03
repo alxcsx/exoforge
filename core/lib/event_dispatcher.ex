@@ -11,7 +11,7 @@ defmodule Exoforge.EventDispatcher do
   end
 
   def subscribe(event_key, opts \\ []) do
-    topic = Keyword.get(opts, :topic, :global)
+    topic = normalize_topic(Keyword.get(opts, :topic, :global))
     res = Registry.register(@registry, {event_key, topic}, opts)
 
     if Process.whereis(:exo_cluster_pg) do
@@ -26,7 +26,7 @@ defmodule Exoforge.EventDispatcher do
   end
 
   def unsubscribe(event_key, opts \\ []) do
-    topic = Keyword.get(opts, :topic, :global)
+    topic = normalize_topic(Keyword.get(opts, :topic, :global))
     res = Registry.unregister(@registry, {event_key, topic})
 
     if Process.whereis(:exo_cluster_pg) do
@@ -41,11 +41,11 @@ defmodule Exoforge.EventDispatcher do
   end
 
   def broadcast(event_key, payload, opts \\ []) do
-    topic = Keyword.get(opts, :topic, :global)
+    topic = normalize_topic(Keyword.get(opts, :topic, :global))
 
     context = %{
       source: Keyword.get(opts, :source),
-      topic: topic,
+      topic: to_string(topic),
       scope: Keyword.get(opts, :scope, :server),
       event: event_key
     }
@@ -58,6 +58,9 @@ defmodule Exoforge.EventDispatcher do
       do_dispatch(:all, :global, event_key, payload, context)
     end
   end
+
+  defp normalize_topic(t) when t in [:global, "global", :*, "*", "all", :all], do: :global
+  defp normalize_topic(t), do: t
 
   defp do_dispatch(reg_key, topic, actual_event_key, payload, context) do
     Registry.dispatch(@registry, {reg_key, topic}, fn entries ->
