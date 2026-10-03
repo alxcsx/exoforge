@@ -102,32 +102,73 @@ public static class Program
 
             // Collect Resources
             var resources = new List<ResourceMeta>();
+            var actionNames = actions.Select(a => a.Name).ToArray();
+
+            // 1. Explicitly referenced resources in ExoServiceAttribute
+            foreach (var sa in serviceAttrs)
+            {
+                if (sa.Resources != null)
+                {
+                    foreach (var resType in sa.Resources)
+                    {
+                        resources.Add(ExtractResourceFromType(resType, null, actionNames));
+                    }
+                }
+            }
+
+            // 2. Resources declared on the service class via [ExoResource]
             foreach (var resAttr in type.GetCustomAttributes<ExoResourceAttribute>())
             {
-                var columns = new List<ColumnMeta>();
-                foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static))
+                if (resAttr.ResourceType != null)
                 {
-                    var colAttr = prop.GetCustomAttribute<ExoColumnAttribute>();
-                    if (colAttr != null)
+                    resources.Add(ExtractResourceFromType(resAttr.ResourceType, resAttr.Name, actionNames));
+                }
+                else
+                {
+                    // Fallback: columns defined directly on the service class
+                    var columns = new List<ColumnMeta>();
+                    foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static))
                     {
-                        columns.Add(new ColumnMeta(
-                            colAttr.Name,
-                            colAttr.DataType,
-                            colAttr.Label ?? ToTitleCase(colAttr.Name),
-                            colAttr.Sortable,
-                            colAttr.Filterable,
-                            colAttr.Badge
+                        var colAttr = prop.GetCustomAttribute<ExoColumnAttribute>();
+                        if (colAttr != null)
+                        {
+                            columns.Add(new ColumnMeta(
+                                !string.IsNullOrEmpty(colAttr.Name) ? colAttr.Name : ToSnakeCase(prop.Name),
+                                !string.IsNullOrEmpty(colAttr.DataType) ? colAttr.DataType : MapTypeToElixir(prop.PropertyType),
+                                colAttr.Label ?? ToTitleCase(!string.IsNullOrEmpty(colAttr.Name) ? colAttr.Name : prop.Name),
+                                colAttr.Sortable,
+                                colAttr.Filterable,
+                                colAttr.Badge
+                            ));
+                        }
+                    }
+
+                    if (columns.Count > 0)
+                    {
+                        resources.Add(new ResourceMeta(
+                            resAttr.Name ?? ToSnakeCase(type.Name),
+                            resAttr.PrimaryKey ?? "id",
+                            resAttr.DrawerTabs ?? new[] { "overview" },
+                            actionNames,
+                            columns
                         ));
                     }
                 }
+            }
 
-                resources.Add(new ResourceMeta(
-                    resAttr.Name,
-                    resAttr.PrimaryKey,
-                    resAttr.DrawerTabs ?? new[] { "overview" },
-                    actions.Select(a => a.Name).ToArray(),
-                    columns
-                ));
+            // 3. Standalone classes/records decorated with [ExoResource] in the assembly
+            foreach (var candidateType in types)
+            {
+                if (candidateType == type) continue;
+                var resAttr = candidateType.GetCustomAttribute<ExoResourceAttribute>();
+                if (resAttr != null && !candidateType.GetCustomAttributes<ExoServiceAttribute>().Any())
+                {
+                    var resMeta = ExtractResourceFromType(candidateType, null, actionNames);
+                    if (!resources.Any(r => r.Name == resMeta.Name))
+                    {
+                        resources.Add(resMeta);
+                    }
+                }
             }
 
             // Collect Injected Dependencies
@@ -141,7 +182,15 @@ public static class Program
                 }
             }
 
-            services.Add(new ServiceMeta(primaryService, actions, events, resources));
+            services.Add(new ServiceMeta(
+                primaryService,
+                actions,
+                events,
+                resources,
+                serviceAttrs.FirstOrDefault()?.Category,
+                serviceAttrs.FirstOrDefault()?.Title,
+                serviceAttrs.FirstOrDefault()?.Icon,
+                serviceAttrs.FirstOrDefault()?.System ?? false));
         }
 
         // Collect Entities
@@ -216,6 +265,21 @@ public static class Program
         sb.Append("  provides: [");
         sb.Append(string.Join(", ", provides.Select(p => $":{p}")));
         sb.AppendLine("],");
+
+        // Presentation metadata (category / system flag / dashboard view)
+        var primaryServiceMeta = services.FirstOrDefault();
+        if (!string.IsNullOrEmpty(primaryServiceMeta?.Category))
+        {
+            sb.AppendLine($"  category: \"{primaryServiceMeta!.Category}\",");
+        }
+        if (primaryServiceMeta?.System == true)
+        {
+            sb.AppendLine("  system: true,");
+        }
+        if (!string.IsNullOrEmpty(primaryServiceMeta?.Title))
+        {
+            sb.AppendLine($"  dashboard_view: %{{id: :{primaryServiceMeta!.Name}, title: \"{primaryServiceMeta!.Title}\", icon: \"{primaryServiceMeta!.Icon}\"}},");
+        }
 
         // Services & Resources Metadata
         sb.AppendLine("  services: [");
@@ -292,13 +356,73 @@ public static class Program
         return sb.ToString();
     }
 
+    private static ResourceMeta ExtractResourceFromType(Type resourceType, string? defaultName = null, string[]? serviceActions = null)
+    {
+        var resAttr = resourceType.GetCustomAttribute<ExoResourceAttribute>();
+        string typeName = resourceType.Name;
+        if (typeName.EndsWith("Resource", StringComparison.OrdinalIgnoreCase))
+        {
+            typeName = typeName[..^8];
+        }
+
+        string resName = !string.IsNullOrEmpty(resAttr?.Name)
+            ? resAttr.Name
+            : defaultName ?? ToSnakeCase(typeName);
+
+        var columns = new List<ColumnMeta>();
+        string? primaryKey = resAttr?.PrimaryKey;
+
+        var props = resourceType.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static);
+        foreach (var prop in props)
+        {
+            var colAttr = prop.GetCustomAttribute<ExoColumnAttribute>();
+            var pkAttr = prop.GetCustomAttribute<PrimaryKeyAttribute>();
+            bool isExplicitPk = pkAttr != null || prop.Name.Equals("Id", StringComparison.OrdinalIgnoreCase);
+
+            if (colAttr != null || pkAttr != null || (resAttr != null && prop.CanRead && prop.GetMethod?.IsPublic == true))
+            {
+                string colName = !string.IsNullOrEmpty(colAttr?.Name) ? colAttr.Name : ToSnakeCase(prop.Name);
+                string dataType = !string.IsNullOrEmpty(colAttr?.DataType) ? colAttr.DataType : MapTypeToElixir(prop.PropertyType);
+                string label = !string.IsNullOrEmpty(colAttr?.Label) ? colAttr.Label : ToTitleCase(colName);
+                bool sortable = colAttr?.Sortable ?? isExplicitPk;
+                bool filterable = colAttr?.Filterable ?? false;
+                bool badge = colAttr?.Badge ?? false;
+
+                if (pkAttr != null && string.IsNullOrEmpty(primaryKey))
+                {
+                    primaryKey = colName;
+                }
+
+                columns.Add(new ColumnMeta(colName, dataType, label, sortable, filterable, badge));
+            }
+        }
+
+        if (string.IsNullOrEmpty(primaryKey))
+        {
+            var candidatePk = columns.FirstOrDefault(c =>
+                c.Name == "id" ||
+                c.Name == $"{resName}_id" ||
+                c.Name.EndsWith("_id")
+            );
+            primaryKey = candidatePk?.Name ?? (columns.Count > 0 ? columns[0].Name : "id");
+        }
+
+        var drawerTabs = resAttr?.DrawerTabs ?? new[] { "overview", "attributes" };
+        return new ResourceMeta(resName, primaryKey, drawerTabs, serviceActions ?? Array.Empty<string>(), columns);
+    }
+
     private static string MapTypeToElixir(Type t)
     {
+        var underlying = Nullable.GetUnderlyingType(t);
+        if (underlying != null) t = underlying;
+
         if (t == typeof(void)) return "ok";
-        if (t == typeof(int) || t == typeof(long) || t == typeof(short) || t == typeof(byte)) return "integer";
-        if (t == typeof(string)) return "string";
+        if (t == typeof(int) || t == typeof(long) || t == typeof(short) || t == typeof(byte) || t == typeof(uint) || t == typeof(ulong)) return "integer";
+        if (t == typeof(string) || t == typeof(char)) return "string";
         if (t == typeof(bool)) return "boolean";
         if (t == typeof(float) || t == typeof(double) || t == typeof(decimal)) return "float";
+        if (t == typeof(DateTime) || t == typeof(DateTimeOffset)) return "datetime";
+        if (t == typeof(Guid)) return "uuid";
         if (t == typeof(byte[])) return "binary";
         return "map";
     }
@@ -321,7 +445,15 @@ public static class Program
         string.Join(" ", s.Replace('_', ' ').Split(' ').Select(w =>
             w.Length > 0 ? char.ToUpperInvariant(w[0]) + w.Substring(1).ToLowerInvariant() : ""));
 
-    private record ServiceMeta(string Name, List<ActionMeta> Actions, List<EventMeta> Events, List<ResourceMeta> Resources);
+    private record ServiceMeta(
+        string Name,
+        List<ActionMeta> Actions,
+        List<EventMeta> Events,
+        List<ResourceMeta> Resources,
+        string? Category = null,
+        string? Title = null,
+        string? Icon = null,
+        bool System = false);
     private record ActionMeta(string Name, string Mode, string Scope, List<ParamMeta> Params, string Returns);
     private record ParamMeta(string Name, string Type);
     private record EventMeta(string Name, string? Topic, string Scope);

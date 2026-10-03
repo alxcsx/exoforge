@@ -7,6 +7,8 @@
   entry_point: "combat_wasm.wasm",
   dependencies: [:database],
   provides: [:combat],
+  category: "Gameplay",
+  dashboard_view: %{id: :combat, title: "Combat Sandbox", icon: "⚔️"},
   services: [
     %{
       name: :combat,

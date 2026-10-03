@@ -52,6 +52,18 @@ public class SampleGuildEntity : Entity
     public int Level { get; set; } = 1;
 }
 
+[ExoResource("players", PrimaryKey = nameof(PlayerId), DrawerTabs = new[] { "overview", "inventory" })]
+public record PlayerRecord(
+    [property: PrimaryKey]
+    int PlayerId,
+    [property: ExoColumn(Label = "Display Name", Filterable = true)]
+    string Name,
+    [property: ExoColumn(Sortable = true)]
+    int Level = 1,
+    [property: ExoColumn(Badge = true)]
+    string Status = "active"
+);
+
 public class PluginSdkTests
 {
     [Fact]
@@ -168,6 +180,23 @@ public class PluginSdkTests
         guild.Save();
         guild.SaveNow();
         guild.Emit("guild_created", new { id = guild.Id });
+    }
+
+    [Fact]
+    public void ResourceRecord_DeclarationAndPropertyInspection()
+    {
+        var type = typeof(PlayerRecord);
+        var resAttr = type.GetCustomAttribute<ExoResourceAttribute>();
+        Assert.NotNull(resAttr);
+        Assert.Equal("players", resAttr.Name);
+        Assert.Equal(nameof(PlayerRecord.PlayerId), resAttr.PrimaryKey);
+        Assert.Equal(new[] { "overview", "inventory" }, resAttr.DrawerTabs);
+
+        var player = new PlayerRecord(101, "Hero", 5, "online");
+        Assert.Equal(101, player.PlayerId);
+        Assert.Equal("Hero", player.Name);
+        Assert.Equal(5, player.Level);
+        Assert.Equal("online", player.Status);
     }
 }
 

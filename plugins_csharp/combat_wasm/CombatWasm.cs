@@ -8,22 +8,32 @@ namespace Exoforge.Plugins.Combat;
 /// Exoforge Combat WASM Plugin.
 /// Implements sandboxed combat gameplay logic: attack calculations and ping.
 /// Emits combat events back to Exoforge Kernel via host imports.
+/// <summary>
+/// Domain resource representing an active combatant in the arena.
 /// </summary>
-[ExoService("combat", Version = "0.1.0")]
 [ExoResource("combatants", PrimaryKey = "entity_id", DrawerTabs = new[] { "overview", "attributes", "events" })]
+public record Combatant
+{
+    [ExoColumn(Label = "Entity ID", Sortable = true, Filterable = true)]
+    public int EntityId { get; init; }
+
+    [ExoColumn(Label = "Health Points", Sortable = true)]
+    public int Health { get; init; }
+
+    [ExoColumn(Label = "Combat Status", Badge = true)]
+    public string Status { get; init; } = "ready";
+}
+
+/// <summary>
+/// Exoforge Combat WASM Plugin.
+/// Implements sandboxed combat gameplay logic: attack calculations and ping.
+/// Emits combat events back to Exoforge Kernel via host imports.
+/// </summary>
+[ExoService("combat", Version = "0.1.0", Resources = new[] { typeof(Combatant) }, Category = "Gameplay", Title = "Combat Sandbox", Icon = "⚔️")]
 public static class CombatPlugin
 {
     [Inject("database")]
     public static IDatabase? Database { get; set; }
-
-    [ExoColumn("entity_id", DataType = "integer", Label = "Entity ID", Sortable = true, Filterable = true)]
-    public static int EntityId { get; set; }
-
-    [ExoColumn("health", DataType = "integer", Label = "Health Points", Sortable = true)]
-    public static int Health { get; set; }
-
-    [ExoColumn("status", DataType = "string", Label = "Combat Status", Badge = true)]
-    public static string Status { get; set; } = "ready";
 
     /// <summary>
     /// Ping action returning status 42 (pong).
