@@ -12,13 +12,13 @@ defmodule Exoforge.ResourceAndDrawerTest do
       @doc "Player inventory items"
       resource :items do
         @doc "Game items and equipment"
-        primary_key :item_id
-        column :item_id, :string, label: "Item ID", sortable: true
-        column :name, :string, label: "Item Name", filterable: true
-        column :quantity, :integer, label: "Quantity", sortable: true
-        column :rarity, :string, label: "Rarity", badge: true
-        drawer [:overview, :attributes, :transactions]
-        actions [:get_item, :equip_item]
+        primary_key(:item_id)
+        column(:item_id, :string, label: "Item ID", sortable: true)
+        column(:name, :string, label: "Item Name", filterable: true)
+        column(:quantity, :integer, label: "Quantity", sortable: true)
+        column(:rarity, :string, label: "Rarity", badge: true)
+        drawer([:overview, :attributes, :transactions])
+        actions([:get_item, :equip_item])
       end
 
       action :get_item do

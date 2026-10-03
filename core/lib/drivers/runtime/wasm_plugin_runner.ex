@@ -137,6 +137,7 @@ defmodule Exoforge.Drivers.Runtime.WasmPluginRunner do
       {:ok, instance_pid} ->
         # 1. Subscribe to handled events
         events = Map.get(manifest, :events, [])
+
         Enum.each(events, fn evt ->
           event_name =
             case evt do
@@ -144,7 +145,9 @@ defmodule Exoforge.Drivers.Runtime.WasmPluginRunner do
               n when is_atom(n) or is_binary(n) -> n
             end
 
-          event_key = if is_binary(event_name), do: safe_to_atom(event_name) || String.to_atom(event_name), else: event_name
+          event_key =
+            if is_binary(event_name), do: safe_to_atom(event_name) || String.to_atom(event_name), else: event_name
+
           EventDispatcher.subscribe(event_key)
         end)
 
@@ -278,10 +281,18 @@ defmodule Exoforge.Drivers.Runtime.WasmPluginRunner do
 
   defp extract_action_args(manifest, action_name, payload) do
     case payload do
-      nil -> []
-      map when is_map(map) and map_size(map) == 0 -> []
-      list when is_list(list) -> list
-      num when is_number(num) -> [num]
+      nil ->
+        []
+
+      map when is_map(map) and map_size(map) == 0 ->
+        []
+
+      list when is_list(list) ->
+        list
+
+      num when is_number(num) ->
+        [num]
+
       map when is_map(map) ->
         action_atom = if is_binary(action_name), do: safe_to_atom(action_name) || action_name, else: action_name
 
@@ -295,7 +306,8 @@ defmodule Exoforge.Drivers.Runtime.WasmPluginRunner do
             Map.values(map)
         end
 
-      other -> [other]
+      other ->
+        [other]
     end
   end
 
@@ -355,8 +367,7 @@ defmodule Exoforge.Drivers.Runtime.WasmPluginRunner do
     %{
       "env" => %{
         # Clock ABI: host_clock_now() -> i64
-        "host_clock_now" =>
-          {:fn, [], [:i64], fn _context -> System.system_time(:millisecond) end},
+        "host_clock_now" => {:fn, [], [:i64], fn _context -> System.system_time(:millisecond) end},
 
         # Event ABI: host_emit_event(topic_ptr, topic_len, event_ptr, event_len, payload_ptr, payload_len) -> i32
         "host_emit_event" =>
@@ -370,7 +381,10 @@ defmodule Exoforge.Drivers.Runtime.WasmPluginRunner do
 
                case safe_to_atom(event) do
                  nil ->
-                   Logger.warning("[WasmHost:#{manifest_id}] host_emit_event rejected undeclared event #{inspect(event)}")
+                   Logger.warning(
+                     "[WasmHost:#{manifest_id}] host_emit_event rejected undeclared event #{inspect(event)}"
+                   )
+
                    -1
 
                  event_atom ->
@@ -401,11 +415,15 @@ defmodule Exoforge.Drivers.Runtime.WasmPluginRunner do
                     {:ok, _} <- ActionDispatcher.dispatch(service_atom, action_atom, payload) do
                  0
                else
-                 :ok -> 0
+                 :ok ->
+                   0
+
                  false ->
                    Logger.warning("[WasmHost:#{manifest_id}] host_call_action denied: #{service} not in dependencies")
                    -1
-                 _ -> -1
+
+                 _ ->
+                   -1
                end
              rescue
                e ->
@@ -712,6 +730,7 @@ defmodule Exoforge.Drivers.Runtime.WasmPluginRunner do
 
   defp safe_to_atom(nil), do: nil
   defp safe_to_atom(val) when is_atom(val), do: val
+
   defp safe_to_atom(val) when is_binary(val) do
     try do
       String.to_existing_atom(val)
@@ -719,12 +738,14 @@ defmodule Exoforge.Drivers.Runtime.WasmPluginRunner do
       ArgumentError -> nil
     end
   end
+
   defp safe_to_atom(_), do: nil
 
   defp ensure_tables do
     case :ets.info(:exo_guest_state) do
       :undefined ->
         :ets.new(:exo_guest_state, [:set, :named_table, :public, read_concurrency: true])
+
       _ ->
         :ok
     end
@@ -732,6 +753,7 @@ defmodule Exoforge.Drivers.Runtime.WasmPluginRunner do
     case :ets.info(:exo_wasm_stats) do
       :undefined ->
         :ets.new(:exo_wasm_stats, [:set, :named_table, :public, read_concurrency: true])
+
       _ ->
         :ok
     end
@@ -766,21 +788,18 @@ defmodule Exoforge.Drivers.Runtime.WasmPluginRunner do
   end
 
   defp find_wasm_path(%Manifest{physical_path: path, entry_point: entry_point, id: id}) do
-    candidates = [
-      if(is_binary(entry_point) and String.ends_with?(entry_point, ".wasm"), do: Path.join(path, entry_point)),
-      if(is_binary(path) and String.ends_with?(path, ".wasm"), do: path),
-      Path.join(path, "#{id}.wasm"),
-      Path.join([path, "bin", "Release", "net10.0", "wasi-wasm", "#{id}.wasm"]),
-      Path.join([path, "bin", "Release", "net10.0", "wasi-wasm", "wasm", "for-publish", "#{id}.wasm"]),
-      Path.join([path, "bin", "Release", "net10.0", "wasi-wasm", "dotnet.wasm"]),
-      Path.join([path, "bin", "Debug", "net10.0", "wasi-wasm", "#{id}.wasm"]),
-      Path.join([path, "bin", "Debug", "net10.0", "wasi-wasm", "dotnet.wasm"])
-    ]
-    |> Enum.reject(&is_nil/1)
+    candidates =
+      [
+        if(is_binary(entry_point) and String.ends_with?(entry_point, ".wasm"), do: Path.join(path, entry_point)),
+        if(is_binary(path) and String.ends_with?(path, ".wasm"), do: path),
+        Path.join(path, "#{id}.wasm")
+      ]
+      |> Enum.reject(&is_nil/1)
 
     case Enum.find(candidates, fn c -> File.regular?(c) and String.ends_with?(c, ".wasm") end) do
       nil ->
         wildcard_pattern = Path.join([path, "**", "*.wasm"])
+
         case Path.wildcard(wildcard_pattern) do
           [first | _] -> {:ok, first}
           [] -> {:error, :wasm_file_not_found}

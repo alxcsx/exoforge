@@ -21,9 +21,13 @@ defmodule Exoforge.ActionDispatcherTest do
       end
 
       action :admin_reset do
-        scope :admin
+        scope(:admin)
         params(target: :string)
         returns(status: :string)
+      end
+
+      action :flag do
+        params(enabled: :boolean)
       end
 
       event :calculated do
@@ -53,6 +57,9 @@ defmodule Exoforge.ActionDispatcherTest do
     defaction admin_reset(_payload), scope: :admin do
       {:ok, %{status: "reset_ok"}}
     end
+
+    @impl true
+    defaction(flag(%{enabled: enabled}), do: {:ok, %{enabled: enabled}})
   end
 
   setup do
@@ -63,7 +70,7 @@ defmodule Exoforge.ActionDispatcherTest do
   test "metadata preserves source declaration order" do
     meta = TestService.Math.__service_metadata__()
     action_names = Enum.map(meta.actions, & &1.name)
-    assert action_names == [:add, :divide, :admin_reset]
+    assert action_names == [:add, :divide, :admin_reset, :flag]
   end
 
   test "dispatches action directly to plugin module" do
@@ -124,6 +131,23 @@ defmodule Exoforge.ActionDispatcherTest do
 
       assert {:error, :forbidden_scope} =
                ActionDispatcher.dispatch(TestPlugin, :admin_reset, payload_with_player)
+    end
+  end
+
+  describe "parameter validation" do
+    test "rejects invalid parameter types with descriptive error" do
+      assert {:error, {:invalid_param_type, field: :b, expected: :integer, received: "invalid"}} =
+               ActionDispatcher.dispatch(TestPlugin, :add, %{a: 5, b: "invalid"})
+    end
+
+    test "rejects missing required parameters when require_params is enabled" do
+      assert {:error, {:missing_param, :target}} =
+               ActionDispatcher.dispatch(TestPlugin, :admin_reset, %{}, require_params: true)
+    end
+
+    test "accepts false boolean parameters" do
+      assert {:ok, %{enabled: false}} =
+               ActionDispatcher.dispatch(TestPlugin, :flag, %{enabled: false}, require_params: true)
     end
   end
 end

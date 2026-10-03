@@ -2,7 +2,8 @@ import Config
 
 config :exoforge,
   start_gateway: true,
-  gateway_port: 4000
+  gateway_port: 4000,
+  require_admin_auth: true
 
 config :exoforge_std_dashboard, Exoforge.Std.Dashboard.Endpoint,
   adapter: Bandit.PhoenixAdapter,

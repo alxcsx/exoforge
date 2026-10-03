@@ -7,7 +7,14 @@ defmodule Exoforge.Std.Services do
 
     @doc "Executes a driver-agnostic query or data operation."
     action :execute do
-      params(operation: :string, arguments: :map)
+      scope(:server)
+
+      params(
+        operation: :string,
+        arguments: [type: :term, optional: true],
+        plugin: [type: :term, optional: true]
+      )
+
       returns(rows: [:map])
       errors([:syntax_error, :not_found, :unauthorized])
     end
@@ -18,6 +25,7 @@ defmodule Exoforge.Std.Services do
 
     @doc "Retrieves namespaced database connection details."
     action :connection_config do
+      scope(:server)
       params(namespace: [type: :string, optional: true])
 
       returns(
@@ -68,6 +76,13 @@ defmodule Exoforge.Std.Services do
       errors([:invalid_token, :expired])
     end
 
+    @doc "Authenticates an account with email and password."
+    action :login do
+      params(email: :string, password: :string)
+      returns(player_id: :string, token: :string, scopes: [:string])
+      errors([:invalid_credentials])
+    end
+
     @doc "Verifies whether a player has the required authorization scope."
     action :verify_scope do
       params(player_id: :string, required_scope: :string)
@@ -83,6 +98,7 @@ defmodule Exoforge.Std.Services do
         email: [type: :string, optional: true],
         scopes: [type: :list, optional: true]
       )
+
       returns(player_id: :string, token: :string, scopes: [:string], player: :map)
       errors([:invalid_attributes, :registration_failed])
     end
@@ -95,6 +111,7 @@ defmodule Exoforge.Std.Services do
         email: [type: :string, optional: true],
         scopes: [type: :list, optional: true]
       )
+
       returns(player_id: :string, token: :string, scopes: [:string], player: :map)
       errors([:invalid_attributes, :registration_failed])
     end
@@ -105,20 +122,25 @@ defmodule Exoforge.Std.Services do
       returns(token: :string, player_id: :string)
       errors([:invalid_player])
     end
+
+    @doc "Lists all registered user accounts and their assigned authorization scopes."
+    action :list_users do
+      params(query: [type: :string, optional: true])
+      returns(users: [:map], count: :integer)
+    end
   end
 
   defservice player_data do
     @moduledoc "Canonical player profile and state storage."
 
     @doc "Player profiles and account state."
-    resource :players do
-      primary_key :player_id
-      column :player_id, :string, label: "Player ID", sortable: true
-      column :name, :string, label: "Display Name", filterable: true
-      column :level, :integer, label: "Level", sortable: true
-      column :status, :string, label: "Account Status", badge: true
-      drawer [:overview, :attributes, :transactions, :inventory, :sessions, :events, :moderation]
-      actions [:get_player, :create_player, :update_player, :delete_player, :list_players]
+    defresource Player, name: :players, primary_key: :player_id do
+      column(:player_id, :string, label: "Player ID", sortable: true)
+      column(:name, :string, label: "Display Name", filterable: true)
+      column(:level, :integer, label: "Level", sortable: true, default: 1)
+      column(:status, :string, label: "Account Status", badge: true, default: "active")
+      drawer([:overview, :attributes, :transactions, :inventory, :sessions, :events, :moderation])
+      actions([:get_player, :create_player, :update_player, :delete_player, :list_players])
     end
 
     @doc "Retrieves player profile record."
@@ -190,12 +212,12 @@ defmodule Exoforge.Std.Services do
 
     @doc "Combatants active in arena."
     resource :combatants do
-      primary_key :entity_id
-      column :entity_id, :integer, label: "Entity ID", sortable: true
-      column :health, :integer, label: "Health", sortable: true
-      column :status, :string, label: "Status", badge: true
-      drawer [:overview, :events]
-      actions [:attack, :ping]
+      primary_key(:entity_id)
+      column(:entity_id, :integer, label: "Entity ID", sortable: true)
+      column(:health, :integer, label: "Health", sortable: true)
+      column(:status, :string, label: "Status", badge: true)
+      drawer([:overview, :events])
+      actions([:attack, :ping])
     end
   end
 
@@ -220,6 +242,64 @@ defmodule Exoforge.Std.Services do
     @doc "Returns HTTP server status and registered route summaries."
     action :status do
       returns(status: :string, port: :integer)
+    end
+  end
+
+  defservice plugin_manager do
+    @moduledoc "Lifecycle, deployment, and inspection of Exoforge plugins."
+
+    @doc "Lists all registered plugins with their metadata and contracts."
+    action :list_plugins do
+      scope("studio")
+      returns(plugins: [:map], count: :integer)
+    end
+
+    @doc "Retrieves details and contract metadata for a single plugin."
+    action :get_plugin do
+      scope("studio")
+      params(id: :string)
+      returns(plugin: :map)
+      errors([:not_found])
+    end
+
+    @doc "Retrieves runtime node health, memory, and cluster stats."
+    action :get_system_info do
+      scope("studio")
+      returns(system: :map)
+    end
+
+    @doc "Uploads and installs a new plugin (e.g. C# WASM package)."
+    action :upload_plugin do
+      scope("admin")
+
+      params(
+        name: :string,
+        wasm_binary: :term,
+        manifest: [type: :term, optional: true]
+      )
+
+      returns(plugin_id: :string, status: :string)
+      errors([:invalid_package, :write_failed])
+    end
+
+    @doc "Removes an installed plugin."
+    action :remove_plugin do
+      scope("admin")
+      params(id: :string)
+      returns(status: :string)
+      errors([:not_found])
+    end
+
+    @doc "Triggers a system re-index and reload of all plugins."
+    action :restart_system do
+      scope("admin")
+      returns(status: :string, plugins_count: :integer)
+    end
+
+    @doc "Exports the complete catalog of plugins and contracts for external tools (CLI/Unity)."
+    action :export_plugin_info do
+      scope("studio")
+      returns(export: :map)
     end
   end
 end

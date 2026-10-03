@@ -19,6 +19,9 @@ defmodule Exoforge.Domain.Manifest do
     services: [],
     events: [],
     entities: [],
+    dashboard_view: nil,
+    category: "Extension",
+    system: false,
     assets_path: "assets"
   ]
 end

@@ -11,23 +11,30 @@ defmodule Exoforge.ActionDispatcher do
 
     case check_scope(resolved_mod, action_atom, payload, opts) do
       :ok ->
-        case run_action(resolved_mod, action_atom, payload) do
-          {:error, reason} = err ->
-            case resolved_mod do
-              nil -> Logger.warning("[Action] service not found: #{inspect(service)}, action: #{action}")
-              mod -> Logger.warning("[Action] failed in #{inspect(mod)}.#{action}: #{inspect(reason)}")
+        case validate_params(resolved_mod, action_atom, payload, opts) do
+          :ok ->
+            case run_action(resolved_mod, action_atom, payload) do
+              {:error, reason} = err ->
+                case resolved_mod do
+                  nil -> Logger.warning("[Action] service not found: #{inspect(service)}, action: #{action}")
+                  mod -> Logger.warning("[Action] failed in #{inspect(mod)}.#{action}: #{inspect(reason)}")
+                end
+
+                err
+
+              {:ok, _} = ok ->
+                ok
+
+              :ok ->
+                :ok
+
+              other ->
+                {:ok, other}
             end
 
-            err
-
-          {:ok, _} = ok ->
-            ok
-
-          :ok ->
-            :ok
-
-          other ->
-            {:ok, other}
+          {:error, _} = param_err ->
+            Logger.warning("[Action] invalid parameters for #{inspect(resolved_mod)}.#{action}: #{inspect(param_err)}")
+            param_err
         end
 
       {:error, reason} = auth_err ->
@@ -64,14 +71,10 @@ defmodule Exoforge.ActionDispatcher do
   defp resolve_module(%Manifest{entry_point: mod}, ctx, depth), do: resolve_module(mod, ctx, depth)
 
   defp resolve_module(mod_str, ctx, depth) when is_binary(mod_str) do
-    mod_atom =
-      mod_str
-      |> Path.rootname()
-      |> Path.basename()
-      |> Macro.camelize()
-      |> then(&Module.concat([Exoforge, Plugins, &1]))
-
-    resolve_module(mod_atom, ctx, depth + 1)
+    case PluginRegistry.fetch_service(mod_str, ctx) || PluginRegistry.fetch_manifest(mod_str) do
+      nil -> nil
+      manifest -> resolve_module(manifest, ctx, depth + 1)
+    end
   end
 
   defp resolve_module(mod, ctx, depth) when is_atom(mod) do
@@ -84,7 +87,10 @@ defmodule Exoforge.ActionDispatcher do
 
         %Manifest{entry_point: entry_point} ->
           if depth > 10 do
-            Logger.warning("[Action] service resolution depth exceeded for #{inspect(mod)}, defaulting to #{inspect(entry_point)}")
+            Logger.warning(
+              "[Action] service resolution depth exceeded for #{inspect(mod)}, defaulting to #{inspect(entry_point)}"
+            )
+
             entry_point
           else
             resolve_module(entry_point, ctx, depth + 1)
@@ -92,7 +98,10 @@ defmodule Exoforge.ActionDispatcher do
 
         next_mod when is_atom(next_mod) ->
           if depth > 10 do
-            Logger.warning("[Action] service resolution depth exceeded for #{inspect(mod)}, defaulting to #{inspect(next_mod)}")
+            Logger.warning(
+              "[Action] service resolution depth exceeded for #{inspect(mod)}, defaulting to #{inspect(next_mod)}"
+            )
+
             resolve_module(next_mod, ctx)
           else
             resolve_module(next_mod, ctx, depth + 1)
@@ -102,7 +111,13 @@ defmodule Exoforge.ActionDispatcher do
   end
 
   defp to_atom_safe(val) when is_atom(val), do: val
-  defp to_atom_safe(val) when is_binary(val), do: String.to_atom(val)
+  # External transports may supply arbitrary names; never create atoms for them.
+  defp to_atom_safe(val) when is_binary(val) do
+    String.to_existing_atom(val)
+  rescue
+    ArgumentError -> val
+  end
+
   defp to_atom_safe(val), do: val
 
   defp check_scope(nil, _action, _payload, _opts), do: :ok
@@ -126,7 +141,7 @@ defmodule Exoforge.ActionDispatcher do
             is_list(actions) ->
               Enum.find_value(actions, fn
                 item when is_map(item) ->
-                  Map.get(item, action) || (if item[:name] == action, do: item, else: nil)
+                  Map.get(item, action) || if item[:name] == action, do: item, else: nil
 
                 _ ->
                   nil
@@ -201,25 +216,119 @@ defmodule Exoforge.ActionDispatcher do
     {:error, :forbidden_scope}
   end
 
+  # Role hierarchy: admin > studio > player > guest. A caller may run an action
+  # whose declared scope is at or below their own rank.
   defp authorize_scope(declared, caller_scopes) do
-    scopes_list =
-      cond do
-        is_list(caller_scopes) -> caller_scopes
-        is_binary(caller_scopes) or is_atom(caller_scopes) -> [caller_scopes]
-        true -> []
-      end
+    scopes_str = normalize_scopes(caller_scopes)
 
-    if scopes_list == [] do
+    if scopes_str == [] do
       {:error, :unauthorized}
     else
       declared_str = to_string(declared)
-      scopes_str = Enum.map(scopes_list, &to_string/1)
+      known? = Exoforge.Auth.Roles.rank(declared_str) > 0
 
-      if "admin" in scopes_str or declared_str in scopes_str do
-        :ok
-      else
-        {:error, :forbidden_scope}
+      cond do
+        not known? ->
+          if declared_str in scopes_str, do: :ok, else: {:error, :forbidden_scope}
+
+        Exoforge.Auth.Roles.satisfies?(scopes_str, declared_str) ->
+          :ok
+
+        true ->
+          {:error, :forbidden_scope}
       end
     end
   end
+
+  defp normalize_scopes(scopes) do
+    cond do
+      is_list(scopes) -> Enum.map(scopes, &to_string/1)
+      is_binary(scopes) or is_atom(scopes) -> [to_string(scopes)]
+      true -> []
+    end
+  end
+
+  defp validate_params(mod, action, payload, opts) do
+    if Keyword.get(opts, :validate_params, true) and is_map(payload) do
+      params_spec = fetch_action_params(mod, action)
+
+      if is_list(params_spec) and params_spec != [] do
+        require_all? = Keyword.get(opts, :require_params, false)
+
+        Enum.find_value(params_spec, :ok, fn {param_name, spec} ->
+          val = Map.get(payload, param_name, Map.get(payload, to_string(param_name)))
+
+          {type, optional?} =
+            case spec do
+              t when is_atom(t) ->
+                {t, false}
+
+              kw when is_list(kw) ->
+                t = Keyword.get(kw, :type, :term)
+                opt? = Keyword.get(kw, :optional, false)
+                {t, opt?}
+
+              _ ->
+                {:term, true}
+            end
+
+          cond do
+            is_nil(val) and require_all? and not optional? ->
+              {:error, {:missing_param, param_name}}
+
+            is_nil(val) ->
+              nil
+
+            not valid_type?(val, type) ->
+              {:error, {:invalid_param_type, field: param_name, expected: type, received: val}}
+
+            true ->
+              nil
+          end
+        end)
+      else
+        :ok
+      end
+    else
+      :ok
+    end
+  end
+
+  defp fetch_action_params(mod, action) do
+    cond do
+      function_exported?(mod, :__service_metadata__, 0) ->
+        meta = mod.__service_metadata__()
+        find_params_in_actions(Map.get(meta, :actions, []), action)
+
+      function_exported?(mod, :provides_contracts, 0) ->
+        Enum.find_value(mod.provides_contracts(), [], fn contract ->
+          if function_exported?(contract, :__service_metadata__, 0) do
+            case find_params_in_actions(contract.__service_metadata__().actions || [], action) do
+              [] -> nil
+              params -> params
+            end
+          end
+        end) || []
+
+      true ->
+        []
+    end
+  end
+
+  defp find_params_in_actions(actions, action) do
+    case Enum.find(actions, fn a -> a.name == action end) do
+      %{params: params} when is_list(params) -> params
+      _ -> []
+    end
+  end
+
+  defp valid_type?(_val, :term), do: true
+  defp valid_type?(val, :integer), do: is_integer(val)
+  defp valid_type?(val, :string), do: is_binary(val)
+  defp valid_type?(val, :boolean), do: is_boolean(val)
+  defp valid_type?(val, :float), do: is_float(val) or is_integer(val)
+  defp valid_type?(val, :map), do: is_map(val)
+  defp valid_type?(val, :list), do: is_list(val)
+  defp valid_type?(val, :atom), do: is_atom(val)
+  defp valid_type?(_val, _other), do: true
 end

@@ -29,7 +29,14 @@ defmodule Exoforge.WasmPluginRunnerTest do
           name: :combat,
           actions: [
             %{name: :ping, mode: :sync, scope: :global, arity: 0, params: [], returns: :integer},
-            %{name: :attack, mode: :sync, scope: :global, arity: 3, params: [attacker_id: :integer, target_id: :integer, damage: :integer], returns: :integer}
+            %{
+              name: :attack,
+              mode: :sync,
+              scope: :global,
+              arity: 3,
+              params: [attacker_id: :integer, target_id: :integer, damage: :integer],
+              returns: :integer
+            }
           ],
           events: [
             %{name: :player_damaged, topic: "combat:events", scope: :global}
@@ -42,7 +49,14 @@ defmodule Exoforge.WasmPluginRunnerTest do
               actions: [:ping, :attack],
               columns: [
                 %{name: :entity_id, type: :integer, label: "Entity ID", sortable: true, filterable: true, badge: false},
-                %{name: :health, type: :integer, label: "Health Points", sortable: true, filterable: false, badge: false}
+                %{
+                  name: :health,
+                  type: :integer,
+                  label: "Health Points",
+                  sortable: true,
+                  filterable: false,
+                  badge: false
+                }
               ]
             }
           ]

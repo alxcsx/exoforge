@@ -1,9 +1,7 @@
 import Config
 
 if config_env() == :prod do
-  secret_key_base =
-    System.get_env("SECRET_KEY_BASE") ||
-      "exoforge_prod_secret_key_base_default_generated_for_production_nodes_1234567890_super_secure"
+  secret_key_base = System.fetch_env!("SECRET_KEY_BASE")
 
   host = System.get_env("PHX_HOST") || "localhost"
   dashboard_port = String.to_integer(System.get_env("PORT") || System.get_env("DASHBOARD_PORT") || "4005")
@@ -14,7 +12,17 @@ if config_env() == :prod do
     start_gateway: true,
     gateway_port: gateway_port,
     ws_port: gateway_port,
-    http_port: http_port
+    http_port: http_port,
+    allow_dev_tokens: false,
+    require_admin_auth: true,
+    admin: [
+      email: System.get_env("EXOFORGE_ADMIN_EMAIL") || "admin@exoforge.local",
+      password: System.get_env("EXOFORGE_ADMIN_PASSWORD") || "exoforge"
+    ],
+    studio: [
+      email: System.get_env("EXOFORGE_STUDIO_EMAIL"),
+      password: System.get_env("EXOFORGE_STUDIO_PASSWORD")
+    ]
 
   config :exoforge_std_dashboard, Exoforge.Std.Dashboard.Endpoint,
     url: [host: host, port: dashboard_port],

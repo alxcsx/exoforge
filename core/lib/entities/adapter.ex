@@ -17,4 +17,7 @@ defmodule Exoforge.Entities.Adapter do
   @callback start_child(child_spec :: map()) :: {:ok, pid()} | {:error, term()}
   @callback terminate_child(pid :: pid()) :: :ok | {:error, term()}
   @callback count() :: non_neg_integer()
+  @callback list_active() :: [map()]
+
+  @optional_callbacks list_active: 0
 end

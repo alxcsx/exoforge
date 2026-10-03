@@ -61,17 +61,22 @@ defmodule Exoforge.Plugin do
 
       if is_first_clause? do
         existing_map = Module.get_attribute(__MODULE__, :exo_actions_map)
-        action_map = if is_map(existing_map) do
-          existing_map
-        else
-          %{}
-        end
-        action_map = Map.put(action_map, unquote(name), %{
-          name: unquote(name),
-          mode: unquote(mode),
-          scope: unquote(scope),
-          arity: unquote(arity)
-        })
+
+        action_map =
+          if is_map(existing_map) do
+            existing_map
+          else
+            %{}
+          end
+
+        action_map =
+          Map.put(action_map, unquote(name), %{
+            name: unquote(name),
+            mode: unquote(mode),
+            scope: unquote(scope),
+            arity: unquote(arity)
+          })
+
         Module.put_attribute(__MODULE__, :exo_actions_map, action_map)
         @exo_actions MapSet.new(Map.values(action_map))
 

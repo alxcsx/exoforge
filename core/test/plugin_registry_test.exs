@@ -22,6 +22,7 @@ defmodule Exoforge.PluginRegistryTest do
     assert PluginRegistry.fetch_manifest(:fixture) == manifest
     assert PluginRegistry.fetch_service(Exoforge.Fixture.Service) == manifest
     assert PluginRegistry.fetch_service(:fixture_service) == manifest
+    assert PluginRegistry.fetch_service("fixture_service") == manifest
     assert PluginRegistry.fetch_by_module(Exoforge.Fixture.Plugin) == manifest
     assert PluginRegistry.fetch_by_module(Exoforge.Fixture.Unknown) == nil
   end
@@ -35,5 +36,29 @@ defmodule Exoforge.PluginRegistryTest do
     assert PluginRegistry.clean_service_name("Elixir.Exoforge.Matchmaking") == "matchmaking"
     assert PluginRegistry.clean_service_name(:combat) == "combat"
     assert PluginRegistry.clean_service_name("lldb") == "lldb"
+  end
+
+  test "dashboard_extensions resolves dashboard_view and has_dashboard_view flag" do
+    manifest = %Manifest{
+      id: :auth_plugin,
+      name: "Auth Plugin",
+      version: "0.1.0",
+      entry_point: Exoforge.Std.Auth,
+      provides: [:auth],
+      dashboard_view: %{
+        id: :auth,
+        title: "Users & Auth",
+        icon: "🛡️",
+        module: Exoforge.Std.Auth.DashboardView
+      }
+    }
+
+    assert :ok = PluginRegistry.register(manifest)
+    summaries = PluginRegistry.dashboard_extensions()
+    auth_summary = Enum.find(summaries, &(&1.id == :auth_plugin))
+
+    assert auth_summary != nil
+    assert auth_summary.has_dashboard_view == true
+    assert auth_summary.dashboard_view.title == "Users & Auth"
   end
 end

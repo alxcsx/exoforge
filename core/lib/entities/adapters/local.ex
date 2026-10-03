@@ -50,4 +50,29 @@ defmodule Exoforge.Entities.Adapters.Local do
   def count do
     Registry.count(@registry)
   end
+
+  @impl true
+  def list_active do
+    if Process.whereis(@registry) do
+      Registry.select(@registry, [{{:"$1", :"$2", :"$3"}, [], [{{:"$1", :"$2"}}]}])
+      |> Enum.map(fn {{plugin, type, id}, pid} ->
+        info =
+          if is_pid(pid) and Process.alive?(pid), do: Process.info(pid, [:memory, :message_queue_len]) || [], else: []
+
+        mem_kb = Float.round(Keyword.get(info, :memory, 0) / 1024, 1)
+        queue = Keyword.get(info, :message_queue_len, 0)
+
+        %{
+          plugin: plugin,
+          type: type,
+          id: id,
+          pid: inspect(pid),
+          memory_kb: mem_kb,
+          queue_len: queue
+        }
+      end)
+    else
+      []
+    end
+  end
 end

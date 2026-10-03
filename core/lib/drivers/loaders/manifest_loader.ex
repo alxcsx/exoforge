@@ -15,8 +15,14 @@ defmodule Exoforge.Drivers.Loaders.ManifestLoader do
   def load_plugins(path) when is_binary(path) do
     Logger.info("[ManifestLoader] Loading modules from #{path}")
 
-    Path.join([path, "*", "manifest.exs"])
-    |> Path.wildcard()
+    files =
+      if File.exists?(Path.join(path, "manifest.exs")) do
+        [Path.join(path, "manifest.exs")]
+      else
+        Path.join([path, "*", "manifest.exs"]) |> Path.wildcard()
+      end
+
+    files
     |> Enum.map(&parse_manifest/1)
     |> Enum.reject(&is_nil/1)
   end

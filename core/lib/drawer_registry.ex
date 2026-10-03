@@ -1,19 +1,17 @@
 defmodule Exoforge.DrawerRegistry do
   @moduledoc """
   Registry for resource inspector side-drawers and their tabs.
-  Allows core and extension plugins to contribute tabs into any resource's inspector drawer.
+
+  Core and extension plugins contribute tabs into any resource's inspector
+  drawer. Tab definitions come from two places, merged here:
+
+    * explicit `register_tab/3` calls (runtime overrides), and
+    * a resource's `drawer([...])` declaration in its contract metadata.
+
+  The kernel does not hardcode any product-specific tabs; a tab without an
+  explicit label gets one derived from its id.
   """
   use GenServer
-
-  @default_tab_defs %{
-    overview: %{id: :overview, label: "Overview & Stats", order: 10, view_type: :declarative},
-    attributes: %{id: :attributes, label: "Attributes", order: 20, view_type: :declarative},
-    transactions: %{id: :transactions, label: "Transactions & Ledger", order: 30, view_type: :declarative},
-    inventory: %{id: :inventory, label: "Inventory & Items", order: 40, view_type: :declarative},
-    sessions: %{id: :sessions, label: "Logins & Sessions", order: 50, view_type: :declarative},
-    events: %{id: :events, label: "Real-Time Event Log", order: 60, view_type: :declarative},
-    moderation: %{id: :moderation, label: "Moderation & Notes", order: 70, view_type: :declarative}
-  }
 
   def start_link(opts \\ []) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
@@ -32,24 +30,16 @@ defmodule Exoforge.DrawerRegistry do
 
       _ ->
         :ets.delete_all_objects(:exo_drawer_tabs_mem)
-        :exo_drawer_tabs_mem
     end
+
     :ok
   end
 
-  @doc """
-  Registers or overrides a tab definition for a specific resource.
-  """
+  @doc "Registers or overrides a tab definition for a specific resource."
   def register_tab(resource, tab_id, tab_spec \\ %{}) when is_atom(resource) and is_atom(tab_id) do
-    default_spec = Map.get(@default_tab_defs, tab_id, %{
-      id: tab_id,
-      label: Macro.to_string(tab_id) |> String.replace("_", " ") |> String.capitalize(),
-      order: 100,
-      view_type: :declarative
-    })
-
     spec =
-      default_spec
+      tab_id
+      |> default_spec()
       |> Map.merge(tab_spec)
       |> Map.put(:id, tab_id)
       |> Map.put(:resource, resource)
@@ -58,22 +48,19 @@ defmodule Exoforge.DrawerRegistry do
     :ok
   end
 
-  @doc """
-  Unregisters a tab from a resource.
-  """
+  @doc "Unregisters a tab from a resource."
   def unregister_tab(resource, tab_id) when is_atom(resource) and is_atom(tab_id) do
     :ets.delete(:exo_drawer_tabs_mem, {resource, tab_id})
     :ok
   end
 
   @doc """
-  Lists all tabs for a given resource, combining registered tabs with declared resource tabs.
-  Returns tabs sorted ascending by order.
+  Lists all tabs for a resource, combining explicitly registered tabs with tabs
+  declared in the resource's `drawer([...])` metadata, sorted ascending by order.
   """
   def list_tabs(resource) when is_atom(resource) or is_binary(resource) do
     resource_atom = if is_binary(resource), do: String.to_atom(resource), else: resource
 
-    # 1. Fetch explicitly registered tabs from ETS
     registered_tabs =
       case :ets.info(:exo_drawer_tabs_mem) do
         :undefined ->
@@ -84,40 +71,31 @@ defmodule Exoforge.DrawerRegistry do
           |> Enum.map(fn {_key, spec} -> spec end)
       end
 
-    registered_ids = MapSet.new(Enum.map(registered_tabs, & &1.id))
-
-    # 2. Check declared drawer tabs from resource metadata in PluginRegistry
-    declared_tab_ids =
-      case Exoforge.PluginRegistry.fetch_resource(resource_atom) do
-        {:ok, %{resource: %{drawer: tabs}}} when is_list(tabs) -> tabs
-        _ -> []
-      end
+    registered_ids = MapSet.new(registered_tabs, & &1.id)
 
     declared_tabs =
-      declared_tab_ids
+      resource_atom
+      |> declared_tab_ids()
       |> Enum.reject(&MapSet.member?(registered_ids, &1))
-      |> Enum.map(fn tab_id ->
-        default_spec = Map.get(@default_tab_defs, tab_id, %{
-          id: tab_id,
-          label: Macro.to_string(tab_id) |> String.replace("_", " ") |> String.capitalize(),
-          order: 100,
-          view_type: :declarative
-        })
-        Map.put(default_spec, :resource, resource_atom)
-      end)
+      |> Enum.map(fn tab_id -> Map.put(default_spec(tab_id), :resource, resource_atom) end)
 
-    all_tabs = registered_tabs ++ declared_tabs
-
-    final_tabs =
-      if Enum.empty?(all_tabs) do
-        @default_tab_defs
-        |> Map.values()
-        |> Enum.map(&Map.put(&1, :resource, resource_atom))
-      else
-        all_tabs
-      end
-
-    final_tabs
+    (registered_tabs ++ declared_tabs)
     |> Enum.sort_by(&Map.get(&1, :order, 100))
+  end
+
+  defp declared_tab_ids(resource) do
+    case Exoforge.PluginRegistry.fetch_resource(resource) do
+      {:ok, %{resource: %{drawer: tabs}}} when is_list(tabs) -> tabs
+      _ -> []
+    end
+  end
+
+  defp default_spec(tab_id) do
+    %{
+      id: tab_id,
+      label: tab_id |> to_string() |> String.replace("_", " ") |> String.capitalize(),
+      order: 100,
+      view_type: :declarative
+    }
   end
 end

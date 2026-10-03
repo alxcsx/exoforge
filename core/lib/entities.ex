@@ -120,6 +120,17 @@ defmodule Exoforge.Entities do
   end
 
   @doc """
+  Lists all active entities currently running in memory with process and resource metadata.
+  """
+  def list_active do
+    if function_exported?(adapter(), :list_active, 0) do
+      adapter().list_active()
+    else
+      []
+    end
+  end
+
+  @doc """
   Activates or gets the PID of an entity actor with race condition handling.
   """
   def get_or_start(plugin, type, id, init_opts \\ []) do

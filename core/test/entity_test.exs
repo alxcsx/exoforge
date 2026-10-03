@@ -153,9 +153,31 @@ defmodule Exoforge.EntityTest do
       res = Entities.call(:test, RunawayEntity, "runaway_1", :consume_memory)
       assert match?({:error, {:entity_call_failed, _}}, res)
 
+      # Allow asynchronous exit signal to unregister from Registry
+      :timer.sleep(25)
+
       # Supervisor and other entities remain completely unaffected
       assert {:error, :not_found} == Entities.whereis(:test, RunawayEntity, "runaway_1")
       assert {:ok, _} = Entities.call(:guilds, TestGuild, "healthy_1", :get_guild)
+    end
+
+    test "list_active returns metadata of all running entity actors" do
+      {:ok, _} = Entities.call(:guilds, TestGuild, "guild_active_1", {:add_gold, 50})
+      {:ok, _} = Entities.call(:guilds, TestGuild, "guild_active_2", {:add_gold, 100})
+
+      active = Entities.list_active()
+      assert length(active) >= 2
+
+      item1 = Enum.find(active, &(&1.id == "guild_active_1"))
+      assert item1 != nil
+      assert item1.plugin == :guilds
+      assert item1.type == TestGuild
+      assert is_binary(item1.pid)
+      assert is_number(item1.memory_kb)
+
+      # Clean up test entities
+      Entities.stop(:guilds, TestGuild, "guild_active_1")
+      Entities.stop(:guilds, TestGuild, "guild_active_2")
     end
   end
 end

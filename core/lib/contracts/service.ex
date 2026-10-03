@@ -12,7 +12,15 @@ defmodule Exoforge.Contracts.Service do
 
       defmodule contract_module do
         @moduledoc "Contract definition for the #{unquote(name)} service."
-        import Exoforge.Contracts.Service, only: [action: 2, event: 2, resource: 2]
+        import Exoforge.Contracts.Service,
+          only: [
+            action: 2,
+            event: 2,
+            resource: 1,
+            resource: 2,
+            defresource: 2,
+            defresource: 3
+          ]
 
         Module.register_attribute(__MODULE__, :exo_actions_meta, accumulate: true)
         Module.register_attribute(__MODULE__, :exo_events_meta, accumulate: true)
@@ -95,6 +103,62 @@ defmodule Exoforge.Contracts.Service do
     end
   end
 
+  @doc """
+  Declares a typed resource struct module inside a service contract and registers it in the service metadata.
+  """
+  defmacro defresource(name_ast, opts_or_block)
+
+  defmacro defresource(name_ast, do: block) do
+    quote location: :keep do
+      Exoforge.Contracts.Service.defresource(unquote(name_ast), [], do: unquote(block))
+    end
+  end
+
+  defmacro defresource(name_ast, opts) when is_list(opts) do
+    quote location: :keep do
+      doc_tuple = Module.get_attribute(__MODULE__, :doc) || {0, nil}
+      Module.delete_attribute(__MODULE__, :doc)
+
+      sub_module = Module.concat(__MODULE__, unquote(name_ast))
+
+      defmodule sub_module do
+        use Exoforge.Resource, unquote(opts)
+      end
+
+      meta =
+        sub_module.__resource_metadata__()
+        |> Map.put(:doc, elem(doc_tuple, 1))
+
+      @exo_resources_meta meta
+    end
+  end
+
+  defmacro defresource(name_ast, opts, do: block) do
+    quote location: :keep do
+      doc_tuple = Module.get_attribute(__MODULE__, :doc) || {0, nil}
+      Module.delete_attribute(__MODULE__, :doc)
+
+      sub_module = Module.concat(__MODULE__, unquote(name_ast))
+
+      defmodule sub_module do
+        use Exoforge.Resource, unquote(opts)
+        unquote(block)
+      end
+
+      meta =
+        sub_module.__resource_metadata__()
+        |> Map.put(:doc, elem(doc_tuple, 1))
+
+      @exo_resources_meta meta
+    end
+  end
+
+  @doc """
+  Declares a resource either by referencing an existing module implementing `Exoforge.Resource`,
+  or using an inline specification block.
+  """
+  defmacro resource(target, opts_or_block \\ [])
+
   defmacro resource(name, do: block) do
     parsed = parse_resource_block(block)
 
@@ -110,6 +174,41 @@ defmodule Exoforge.Contracts.Service do
         drawer: unquote(Macro.escape(parsed[:drawer])),
         actions: unquote(Macro.escape(parsed[:actions]))
       }
+    end
+  end
+
+  defmacro resource(target, opts) when is_list(opts) do
+    quote location: :keep do
+      mod = unquote(target)
+
+      meta =
+        cond do
+          is_atom(mod) and Code.ensure_loaded?(mod) and
+              function_exported?(mod, :__resource_metadata__, 0) ->
+            res = mod.__resource_metadata__()
+            extra_actions = Keyword.get(unquote(opts), :actions, [])
+            actions = if extra_actions != [], do: extra_actions, else: res.actions
+            name = Keyword.get(unquote(opts), :name, res.name)
+            %{res | name: name, actions: actions}
+
+          true ->
+            res_name =
+              Keyword.get(
+                unquote(opts),
+                :name,
+                Exoforge.Resource.default_resource_name(mod)
+              )
+
+            %{
+              name: res_name,
+              primary_key: Keyword.get(unquote(opts), :primary_key, :id),
+              columns: [],
+              drawer: Keyword.get(unquote(opts), :drawer, [:overview, :attributes]),
+              actions: Keyword.get(unquote(opts), :actions, [])
+            }
+        end
+
+      @exo_resources_meta meta
     end
   end
 
