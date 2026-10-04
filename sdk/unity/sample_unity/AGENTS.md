@@ -46,9 +46,9 @@ sample_unity/
 │       ├── src/
 │       │   ├── snake_leaderboard.csproj
 │       │   ├── SnakeScore.cs          stored row + leaderboard entry records
-│       │   ├── PlayerProfile.cs       player_data contract DTOs (name join)
-│       │   ├── SnakeJsonContext.cs    source-generated JSON metadata (NativeAOT)
-│       │   └── SnakeLeaderboardPlugin.cs  the actions (talk to IDatabase directly)
+│       │   ├── SnakeJsonContext.cs    JSON metadata for this plugin's own records (NativeAOT)
+│       │   ├── SnakeLeaderboardPlugin.cs  the actions (talk to IDatabase directly)
+│       │   └── Generated/PluginServices.g.cs  typed player_data stubs (generated)
 │       ├── snake_leaderboard          built NativeAOT binary (generated, git-ignored)
 │       └── manifest.exs               GENERATED from the C# attributes
 └── Packages/manifest.json           references com.exoforge.sdk (file:../../Exoforge.SDK)
@@ -132,6 +132,11 @@ player reads and writes the same ranking.
 **The display name is not stored.** `get_leaderboard` joins each row with the `player_data` profile
 (`player_data.get_player`) at read time, so renaming a player updates the board immediately and no
 stale name can survive. `submit_score` therefore takes a `name` only for wire compatibility.
+
+The typed `player_data` call comes from `src/Generated/PluginServices.g.cs`, generated from the
+cluster contracts with `exo plugin stubs snake_leaderboard`. The stubs depend only on the service
+contract (`PlayerDataServiceClient`, `PlayerDataGetPlayerRequest/Response`, `PlayerDataPlayer`) —
+never on the Elixir `PlayerData` module — and call through `IActionDispatcher`.
 
 `player_id` is taken from the caller's identity, so a client can only submit its own score.
 

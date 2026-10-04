@@ -20,6 +20,17 @@ internal partial class TestJsonContext : JsonSerializerContext
 {
 }
 
+public record TypedOtherRow
+{
+    public int Value { get; init; }
+}
+
+[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
+[JsonSerializable(typeof(TypedOtherRow))]
+internal partial class OtherJsonContext : JsonSerializerContext
+{
+}
+
 public class StaticInjectedPlugin
 {
     [Inject("database")]
@@ -67,6 +78,24 @@ public class PluginJsonTests
             var json = PluginJson.Serialize(new TypedScoreRow { PlayerId = "p2", Score = 9 });
             Assert.Contains("\"player_id\":\"p2\"", json);
             Assert.Equal(9, PluginJson.Deserialize<TypedScoreRow>(json)!.Score);
+        }
+        finally
+        {
+            PluginJson.UseContext(null);
+        }
+    }
+
+    [Fact]
+    public void AddContext_CombinesMultipleContexts()
+    {
+        PluginJson.UseContext(null);
+        try
+        {
+            PluginJson.AddContext(new TestJsonContext());
+            PluginJson.AddContext(new OtherJsonContext());
+
+            Assert.Equal(9, PluginJson.Deserialize<TypedScoreRow>("{\"score\":9}")!.Score);
+            Assert.Equal(5, PluginJson.Deserialize<TypedOtherRow>("{\"value\":5}")!.Value);
         }
         finally
         {

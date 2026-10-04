@@ -140,6 +140,41 @@ public class ExoDeployer
         }
     }
 
+    /// <summary>Fetches the raw contract export (what <c>plugin_manager.export_plugin_info</c> returns).</summary>
+    public async Task<string> GetContractsExportJsonAsync(
+        string? environmentName = null,
+        ExoClient? existingClient = null,
+        CancellationToken cancellationToken = default)
+    {
+        var client = existingClient ?? await CreateConnectedClientAsync(environmentName, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var export = await client.SendActionAsync<JsonElement>(
+                "plugin_manager", "export_plugin_info", null, cancellationToken: cancellationToken).ConfigureAwait(false);
+            return export.GetRawText();
+        }
+        finally
+        {
+            if (existingClient == null)
+            {
+                client.Dispose();
+            }
+        }
+    }
+
+    /// <summary>Fetches the contracts and writes typed stubs into the plugin's <c>src/Generated</c> folder.</summary>
+    public async Task<string> GeneratePluginStubsAsync(
+        string pluginName,
+        ExoClient? existingClient = null,
+        CancellationToken cancellationToken = default)
+    {
+        string cleanName = NormalizePluginName(pluginName);
+        string output = Path.Combine(_workspace.PluginsPath, cleanName, "src", "Generated", "PluginServices.g.cs");
+        string exportJson = await GetContractsExportJsonAsync(existingClient: existingClient, cancellationToken: cancellationToken).ConfigureAwait(false);
+        ExoCodeGenerator.GeneratePluginStubsToFile(exportJson, output);
+        return output;
+    }
+
     public async Task<int> SyncContractsAsync(
         string? environmentName = null,
         string? outputPathOverride = null,

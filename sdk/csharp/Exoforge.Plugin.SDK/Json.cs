@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
@@ -33,18 +34,46 @@ public static class PluginJson
     };
 
     private static JsonSerializerOptions? _options;
+    private static readonly List<JsonSerializerContext> Contexts = new();
 
-    /// <summary>Registers the source-generated context used for typed (de)serialization.</summary>
+    /// <summary>Registers the source-generated context(s) used for typed (de)serialization. Replaces any previous registration.</summary>
     public static void UseContext(JsonSerializerContext? context)
     {
-        _options = context is null
-            ? null
-            : new JsonSerializerOptions
-            {
-                TypeInfoResolver = context,
-                PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-                PropertyNameCaseInsensitive = true
-            };
+        Contexts.Clear();
+        if (context != null) Contexts.Add(context);
+        RebuildOptions();
+    }
+
+    /// <summary>
+    /// Adds another source-generated context. Generated contract stubs register their own context via
+    /// a module initializer, so the plugin's context and the generated one coexist.
+    /// </summary>
+    public static void AddContext(JsonSerializerContext context)
+    {
+        if (context == null || Contexts.Contains(context)) return;
+
+        Contexts.Add(context);
+        RebuildOptions();
+    }
+
+    private static void RebuildOptions()
+    {
+        if (Contexts.Count == 0)
+        {
+            _options = null;
+            return;
+        }
+
+        IJsonTypeInfoResolver resolver = Contexts.Count == 1
+            ? Contexts[0]
+            : JsonTypeInfoResolver.Combine(Contexts.ToArray());
+
+        _options = new JsonSerializerOptions
+        {
+            TypeInfoResolver = resolver,
+            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+            PropertyNameCaseInsensitive = true
+        };
     }
 
     /// <summary>Serializes a value to JSON, mapping lists and arrays to JSON arrays.</summary>

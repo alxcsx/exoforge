@@ -78,7 +78,8 @@ public static class PluginHost
         where T : class, new()
         where TContext : JsonSerializerContext, new()
     {
-        PluginJson.UseContext(new TContext());
+        // Add (not replace): generated contract stubs may have already registered their own context.
+        PluginJson.AddContext(new TContext());
         RunInstance(new T());
     }
 

@@ -1330,6 +1330,14 @@ public class ExoforgeControlCenter : EditorWindow
                     }
                 }
 
+                using (new EditorGUI.DisabledScope(_isBuilding || !plugin.CanBuild || !_isConnected))
+                {
+                    if (GUILayout.Button("Stubs", EditorStyles.miniButton, GUILayout.Width(50)))
+                    {
+                        _ = GenerateStubsAsync(plugin);
+                    }
+                }
+
                 if (GUILayout.Button("Folder", EditorStyles.miniButton, GUILayout.Width(55)))
                 {
                     EditorUtility.RevealInFinder(plugin.Directory);
@@ -1448,8 +1456,23 @@ public class ExoforgeControlCenter : EditorWindow
         }
     }
 
-    private async Task DeployPluginAsync(LocalPluginInfo plugin)
+    private async Task GenerateStubsAsync(LocalPluginInfo plugin)
     {
+        try
+        {
+            var deployer = new ExoDeployer(_workspace);
+            string output = await deployer.GeneratePluginStubsAsync(plugin.Name, existingClient: _editorClient);
+            ShowStatus($"✓ Generated typed service stubs for '{plugin.Name}' → {output}", MessageType.Info);
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Stub generation failed for '{plugin.Name}': {ex.Message}", MessageType.Error);
+        }
+
+        Repaint();
+    }
+
+    private async Task DeployPluginAsync(LocalPluginInfo plugin)    {
         try
         {
             var deployer = new ExoDeployer(_workspace);

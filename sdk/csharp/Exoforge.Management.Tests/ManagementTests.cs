@@ -92,6 +92,31 @@ public class ManagementTests : IDisposable
     }
 
     [Fact]
+    public void PluginStubs_GenerateTypedClientFromContract()
+    {
+        string json = """
+        {
+          "export": { "plugins": [ { "services": [
+            {
+              "name": "player_data",
+              "actions": [ { "name": "get_player", "params": [{"name":"player_id","type":"string"}], "returns": {"player":"map"} } ],
+              "resources": [ { "name": "players", "columns": [ {"name":"player_id","type":"string"}, {"name":"name","type":"string"} ] } ]
+            }
+          ] } ] }
+        }
+        """;
+
+        string code = ExoCodeGenerator.GeneratePluginStubs(json, "Exoforge.Test.Generated");
+
+        Assert.Contains("class PlayerDataServiceClient", code);
+        Assert.Contains("Task<PlayerDataGetPlayerResponse?> GetPlayerAsync(PlayerDataGetPlayerRequest request)", code);
+        Assert.Contains("CallActionAsync<PlayerDataGetPlayerResponse>(\"player_data\", \"get_player\", request)", code);
+        Assert.Contains("public PlayerDataPlayer Player", code);
+        Assert.Contains("public string Name", code);
+        Assert.Contains("PluginJson.AddContext(GeneratedServicesJsonContext.Default)", code);
+    }
+
+    [Fact]
     public void ResolveDotnetPath_KeepsExplicitPath()
     {
         Assert.Equal("/opt/custom/dotnet", ExoDeployer.ResolveDotnetPath("/opt/custom/dotnet"));

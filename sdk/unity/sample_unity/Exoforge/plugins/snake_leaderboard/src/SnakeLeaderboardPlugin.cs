@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Exoforge.Plugin.SDK;
+using Exoforge.Plugins.Generated;
 
 namespace Exoforge.Plugins.SnakeLeaderboard;
 
@@ -93,8 +94,10 @@ public class SnakeLeaderboardPlugin
     {
         if (Actions is null) return playerId;
 
-        var response = await Actions.CallActionAsync<PlayerProfileResponse>(
-            "player_data", "get_player", new PlayerProfileRequest { PlayerId = playerId });
+        // Typed call generated from the player_data contract (`exo plugin stubs`): no dependency on the
+        // service implementation and no hand-written DTOs.
+        var response = await new PlayerDataServiceClient(Actions)
+            .GetPlayerAsync(new PlayerDataGetPlayerRequest { PlayerId = playerId });
 
         string? name = response?.Player?.Name;
         return string.IsNullOrEmpty(name) ? playerId : name!;

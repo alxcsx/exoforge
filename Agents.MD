@@ -133,6 +133,11 @@ Action declarations follow conventions, so the attribute is usually bare:
   (`ActionMode.Cast` is still explicit.)
 - **Transport** — defaults to `:auto`.
 
+Plugins call other services through **generated, region-agnostic stubs**: `exo plugin stubs <name>`
+reads the cluster contract export and writes `src/Generated/PluginServices.g.cs` (typed
+request/response records + an `IActionDispatcher`-based client per service). The stubs depend on the
+service *contract*, never on the plugin that implements it.
+
 `ActionDispatcher` stays runtime-agnostic: every non-Elixir plugin gets a generated proxy module
 (`Exoforge.Drivers.Runtime.PluginProxy`) registered as its `entry_point`.
 
@@ -187,6 +192,7 @@ Gameplay must not hold a client, an endpoint, or a token. It publishes hooks (e.
 | `just build-wasm` | Compile the **system** WASM samples (`plugins_csharp/*/build.sh`) |
 | `exo plugin build <name>` | Build a game plugin (NativeAOT binary + `manifest.exs`) |
 | `exo plugin push <name>` | Build and deploy a plugin to a running cluster |
+| `exo plugin stubs <name>` | Generate typed service-call stubs from the cluster contracts |
 | `just test-sdk` | Run C# test suite (`Exoforge.Client`, `Plugin.SDK`, `Management`) |
 | `just compose-up` | Run full production stack with PostgreSQL via Docker Compose |
 | `just compose-down` | Stop and tear down Compose stack |
