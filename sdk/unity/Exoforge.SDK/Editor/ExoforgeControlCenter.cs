@@ -158,33 +158,40 @@ public class ExoforgeControlCenter : EditorWindow
         _workspace = ExoWorkspace.Load(ExoforgeEditorConfig.GetAbsoluteWorkspacePath());
         RefreshLocalPlugins();
 
-        // Reconnect when the editor opens (not on every script-reload within the same session).
+        // Reconnect when the editor opens. `SessionState` survives script reloads, so the guard stops
+        // reconnect spam; it is cleared when Unity exits, so this still runs on every editor start.
         if (!SessionState.GetBool(AutoConnectSessionKey, false))
         {
             SessionState.SetBool(AutoConnectSessionKey, true);
-            TryAutoConnect();
+            // Defer: OnEnable can run before the editor/network stack is ready.
+            EditorApplication.delayCall += TryAutoConnect;
         }
     }
 
     private void TryAutoConnect()
     {
-        // A prior session (PlayerId) or a bearer token the user set in Settings counts as saved credentials.
-        bool hasCustomToken = !string.IsNullOrEmpty(ExoforgeEditorConfig.AdminToken)
-            && ExoforgeEditorConfig.AdminToken != ExoforgeEditorConfig.DefaultAdminToken;
+        bool hasSession = !string.IsNullOrEmpty(ExoforgeEditorConfig.PlayerId)
+            || (!string.IsNullOrEmpty(ExoforgeEditorConfig.AdminToken)
+                && ExoforgeEditorConfig.AdminToken != ExoforgeEditorConfig.DefaultAdminToken);
+        bool hasSavedLogin = !string.IsNullOrEmpty(ExoforgeEditorConfig.RememberedPassword);
 
-        if (!string.IsNullOrEmpty(ExoforgeEditorConfig.PlayerId) || hasCustomToken)
+        // Saved email/password but no session yet: sign in. Otherwise reconnect with the token.
+        if (!hasSession && hasSavedLogin)
         {
-            _ = ConnectAsync();
-        }
-        else if (!string.IsNullOrEmpty(ExoforgeEditorConfig.RememberedPassword))
-        {
+            ShowStatus("Signing in with saved credentials…", MessageType.Info);
             _ = LogInAsync();
+            return;
         }
-        else
+
+        if (string.IsNullOrWhiteSpace(ExoTokenStore.Token))
         {
             _showAuthFoldout = true;
             ShowStatus("No saved credentials — sign in below, or set a bearer token in Settings.", MessageType.Warning);
+            return;
         }
+
+        ShowStatus("Connecting to the cluster…", MessageType.Info);
+        _ = ConnectAsync();
     }
 
     private void OnDisable()
@@ -1266,7 +1273,17 @@ public class ExoforgeControlCenter : EditorWindow
                 EditorGUILayout.LabelField(plugin.Name, EditorStyles.boldLabel, GUILayout.Width(140));
                 EditorGUILayout.LabelField(plugin.PluginType.ToUpperInvariant(), EditorStyles.miniLabel, GUILayout.Width(55));
 
-                if (plugin.IsBuilt)
+                string buildError = SessionState.GetString(BuildFailureKey(plugin.Name), "");
+                bool failed = buildError.Length > 0;
+
+                if (failed)
+                {
+                    var prev = GUI.color;
+                    GUI.color = new Color(0.9f, 0.3f, 0.3f);
+                    EditorGUILayout.LabelField(new GUIContent("✗ Build failed", buildError), EditorStyles.miniBoldLabel, GUILayout.Width(105));
+                    GUI.color = prev;
+                }
+                else if (plugin.IsBuilt)
                 {
                     string sizeStr = $"{plugin.BinarySizeBytes / 1024} KB";
                     var prev = GUI.color;
@@ -1298,7 +1315,7 @@ public class ExoforgeControlCenter : EditorWindow
                     }
                 }
 
-                using (new EditorGUI.DisabledScope(_isBuilding || !plugin.IsBuilt || !_isConnected))
+                using (new EditorGUI.DisabledScope(_isBuilding || failed || !plugin.IsBuilt || !_isConnected))
                 {
                     if (GUILayout.Button("Deploy", EditorStyles.miniButton, GUILayout.Width(60)))
                     {
@@ -1370,8 +1387,9 @@ public class ExoforgeControlCenter : EditorWindow
         EditorGUILayout.EndScrollView();
     }
 
-    private async Task BuildAllAsync()
-    {
+    private static string BuildFailureKey(string pluginName) => $"Exoforge_BuildFailed_{pluginName}";
+
+    private async Task BuildAllAsync()    {
         foreach (var plugin in _localPlugins.Where(p => p.CanBuild && !p.IsBuilt).ToList())
         {
             await BuildPluginAsync(plugin, thenDeploy: false);
@@ -1394,6 +1412,7 @@ public class ExoforgeControlCenter : EditorWindow
             var build = await deployer.BuildPluginAsync(plugin.Name, rid, ExoforgeEditorConfig.DotnetPath);
 
             _buildLog = build.Output;
+            SessionState.EraseString(BuildFailureKey(plugin.Name));
             ShowStatus($"✓ Built '{plugin.Name}' ({build.PluginType}).", MessageType.Info);
             RefreshLocalPlugins();
 
@@ -1405,6 +1424,7 @@ public class ExoforgeControlCenter : EditorWindow
         catch (Exception ex)
         {
             _buildLog = ex.ToString();
+            SessionState.SetString(BuildFailureKey(plugin.Name), ex.Message);
             _showBuildLog = true;
             ShowStatus($"Build failed for '{plugin.Name}': {ex.Message}", MessageType.Error);
         }
