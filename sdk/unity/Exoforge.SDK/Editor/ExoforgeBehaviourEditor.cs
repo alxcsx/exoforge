@@ -42,11 +42,11 @@ public class ExoforgeBehaviourEditor : UnityEditor.Editor
 
         EditorGUILayout.Space(6);
 
-        // Control Center Link & Runtime Actions
+        // Exoforge Studio Link & Runtime Actions
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
         EditorGUILayout.LabelField("Quick Actions", EditorStyles.boldLabel);
 
-        if (GUILayout.Button("Open Exoforge Control Center", GUILayout.Height(26)))
+        if (GUILayout.Button("Open Exoforge Studio", GUILayout.Height(26)))
         {
             ExoforgeControlCenter.ShowWindow();
         }

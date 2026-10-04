@@ -80,9 +80,9 @@ All networking, storage, authentication, and game domains exist as swappable plu
 
 Exoforge separates game engineering from backend operations. Game developers work in standard C# without needing Erlang or Mix installed.
 
-### 1. Unity Control Center (`com.exoforge.sdk`)
+### 1. Unity Exoforge Studio (`com.exoforge.sdk`)
 
-A dedicated Unity Editor extension (`Window > Exoforge > Control Center`) providing:
+A dedicated Unity Editor extension (`Tools ▸ Exoforge ▸ Exoforge Studio`, or `Window ▸ Exoforge`) providing:
 - **One-Click Scaffolding**: Generate standard, inventory, or LiveOps native C# plugins directly into `plugins/` — each with its own solution (`.slnx`) and sources under `src/`.
 - **Compilation & Deployment**: Build the NativeAOT binary + manifest and upload them to the running server.
 - **Live Action Sandbox**: Test actions and inspect payloads with latency metrics (`µs`).

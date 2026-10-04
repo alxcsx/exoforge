@@ -15,22 +15,6 @@ public static class ExoforgeRuntimeConfigGenerator
 {
     public const string OutputPath = "Assets/Resources/" + ExoforgeRuntimeConfig.ResourcePath + ".json";
 
-    [MenuItem("Tools/Exoforge/Sync Runtime Config", false, 103)]
-    public static void SyncRuntimeConfig()
-    {
-        if (Generate())
-        {
-            EditorUtility.DisplayDialog("Runtime Config", $"Linked workspace config → {OutputPath}", "OK");
-        }
-        else
-        {
-            EditorUtility.DisplayDialog(
-                "Runtime Config",
-                "No exoforge.json workspace config found under Assets/.\n\nRun Tools ▸ Exoforge ▸ Initialize Workspace first.",
-                "OK");
-        }
-    }
-
     /// <summary>Copies the workspace config into Resources. Returns false when none exists.</summary>
     public static bool Generate()
     {

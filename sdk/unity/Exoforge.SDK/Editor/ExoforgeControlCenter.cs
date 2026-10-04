@@ -16,10 +16,8 @@ namespace Exoforge.Unity.Editor
 // with file-scoped namespaces, so the window would vanish from saved layouts (Unity issue 9734).
 
 /// <summary>
-/// Unity Editor Control Center for Exoforge.
-/// Provides cluster management, authentication and token synchronization,
-/// live event pub/sub monitoring, action sandbox with service discovery,
-/// C# WASM plugin deployment, and strongly-typed client code generation.
+/// Unity Editor Exoforge Studio — cluster management, authentication, live events, action sandbox,
+/// plugin scaffolding/build/deploy/stubs, and client/runtime-config generation.
 /// </summary>
 public class ExoforgeControlCenter : EditorWindow
 {
@@ -109,18 +107,12 @@ public class ExoforgeControlCenter : EditorWindow
         string BinaryPath,
         long BinarySizeBytes);
 
-    [MenuItem("Tools/Exoforge/Control Center", false, 100)]
-    [MenuItem("Window/Exoforge/Control Center", false, 2000)]
+    [MenuItem("Tools/Exoforge/Exoforge Studio", false, 100)]
+    [MenuItem("Window/Exoforge/Exoforge Studio", false, 2000)]
     public static void ShowWindow()
     {
-        var window = GetWindow<ExoforgeControlCenter>("Exoforge");
+        var window = GetWindow<ExoforgeControlCenter>("Exoforge Studio");
         window.minSize = new Vector2(480, 560);
-    }
-
-    public void PromptScaffoldFromHeader()
-    {
-        _showScaffoldPrompt = true;
-        Repaint();
     }
 
     private void OnEnable()
@@ -1602,6 +1594,25 @@ public class ExoforgeControlCenter : EditorWindow
             $"Resolved: {ExoDeployer.ResolveDotnetPath(ExoforgeEditorConfig.DotnetPath)}",
             EditorStyles.miniLabel);
 
+        EditorGUILayout.EndVertical();
+
+        EditorGUILayout.Space(8);
+
+        // Runtime config link (Assets/Resources/exoforge.json)
+        EditorGUILayout.LabelField("Runtime Config", EditorStyles.boldLabel);
+        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+        EditorGUILayout.LabelField($"Output: {ExoforgeRuntimeConfigGenerator.OutputPath}", EditorStyles.miniLabel);
+        if (GUILayout.Button("Generate / Relink Runtime Config"))
+        {
+            if (ExoforgeRuntimeConfigGenerator.Generate())
+            {
+                ShowStatus($"✓ Runtime config linked → {ExoforgeRuntimeConfigGenerator.OutputPath}", MessageType.Info);
+            }
+            else
+            {
+                ShowStatus("No exoforge.json workspace config found; initialize the workspace first.", MessageType.Warning);
+            }
+        }
         EditorGUILayout.EndVertical();
 
         EditorGUILayout.Space(8);

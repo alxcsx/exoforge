@@ -161,7 +161,7 @@ be checked headlessly. Override the editor with `UNITY_PATH=... just sample-chec
 Deploy the plugin and regenerate the client:
 
 ```bash
-# Option A — Unity Editor: Tools ▸ Exoforge ▸ Control Center ▸ Plugins ▸ Build & Deploy
+# Option A — Unity Editor: Tools ▸ Exoforge ▸ Exoforge Studio ▸ Plugins ▸ Build & Deploy
 
 # Option B — CLI. The `exo` CLI is not installed on PATH — run it from the repo:
 CLI="dotnet run --project <repo>/sdk/csharp/Exoforge.CLI --"
@@ -170,15 +170,16 @@ $CLI plugin push snake_leaderboard      # build (NativeAOT) + deploy to the runn
 $CLI sync                               # regenerate Assets/Exoforge/Generated/ExoforgeServices.g.cs
 ```
 
-From the Unity Editor, `Tools ▸ Exoforge ▸ …` covers the same ground: **Sync Client Bindings**,
-**Sync Plugin Stubs**, **Add Exoforge to Scene**, **Control Center** (connect, build, deploy,
-inspect). In the Control Center's **Plugins** tab, every folder in `Exoforge/plugins/` gets a
-**Build**, **Build & Deploy**, **Deploy**, and **Stubs** button (plus **Sync Stubs** to regenerate
-every plugin at once). Stub generation fetches the live contracts and writes each plugin's
-`src/Generated/PluginServices.g.cs`. Native builds run `dotnet publish` (AOT) and regenerate
-`manifest.exs`; set a **Native RID** (e.g. `linux-x64`) to build for a non-host deploy target. If
-Unity can't find `dotnet` (GUI apps often don't inherit your shell PATH), set **Dotnet Path** in the
-Settings tab.
+From the Unity Editor, everything else lives in **Exoforge Studio** (`Tools ▸ Exoforge ▸ Exoforge Studio`):
+**Overview** syncs contracts, the C# client and plugin stubs; **Plugins** scaffolds, builds and
+deploys; **Settings** holds paths and credentials. Only `Tools ▸ Exoforge ▸ Add Exoforge to Scene`
+stays a menu item, since it is a one-off scene edit. In the **Plugins** tab, every folder in
+`Exoforge/plugins/` gets a **Build**, **Build & Deploy**, **Deploy**, and **Stubs** button (plus
+**Sync Stubs** to regenerate every plugin at once). Stub generation fetches the live contracts and
+writes each plugin's `src/Generated/PluginServices.g.cs`. Native builds run `dotnet publish` (AOT)
+and regenerate `manifest.exs`; set a **Native RID** (e.g. `linux-x64`) to build for a non-host deploy
+target. If Unity can't find `dotnet` (GUI apps often don't inherit your shell PATH), set
+**Dotnet Path** in the Settings tab.
 
 Rules of thumb:
 

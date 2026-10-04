@@ -288,7 +288,7 @@ public class ManagementTests : IDisposable
         Assert.True(File.Exists(Path.Combine(editorDir, "Exoforge.SDK.Editor.asmdef")));
         Assert.True(File.Exists(Path.Combine(editorDir, "ExoforgeControlCenter.cs")));
         Assert.True(File.Exists(Path.Combine(editorDir, "ExoforgeEditorConfig.cs")));
-        Assert.True(File.Exists(Path.Combine(editorDir, "ExoforgeMenu.cs")));
+        Assert.True(File.Exists(Path.Combine(editorDir, "ExoforgeSceneSetup.cs")));
         Assert.True(File.Exists(Path.Combine(editorDir, "ExoforgeBehaviourEditor.cs")));
 
         // Validate Editor Management engine

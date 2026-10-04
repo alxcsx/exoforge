@@ -8,7 +8,7 @@ namespace Exoforge.Client.Unity
     /// Resolved Exoforge connection settings for one environment.
     ///
     /// Built at runtime from the workspace's <c>exoforge.json</c> (copied into
-    /// <c>Resources/exoforge.json</c> by <c>Tools ▸ Exoforge ▸ Sync Runtime Config</c>),
+    /// <c>Resources/exoforge.json</c> by <b>Exoforge Studio ▸ Settings ▸ Generate / Relink Runtime Config</b>),
     /// so game code never hardcodes cluster URLs or tokens.
     /// </summary>
     [Serializable]
