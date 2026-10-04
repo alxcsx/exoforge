@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -6,10 +7,9 @@ namespace SnakeGame
     /// <summary>
     /// Self-contained Snake game. Pure Unity — no backend, no networking.
     ///
-    /// Exoforge integration is intentionally absent for now. When it is added, gameplay
-    /// code should obtain a client from the Exoforge prefab
-    /// (<c>await ExoforgeBehaviour.Instance.GetClientAsync()</c>) rather than configuring
-    /// any connection settings here.
+    /// The only backend-facing surface is <see cref="RunEnded"/>: a finished run raises it with
+    /// the score and final length, and a leaderboard component subscribes. Gameplay never holds a
+    /// client or an endpoint.
     /// </summary>
     public class SnakeGameController : MonoBehaviour
     {
@@ -37,6 +37,21 @@ namespace SnakeGame
 
         private string _notification = "";
         private float _notificationTimer;
+
+        /// <summary>Raised when a run ends, with (score, snakeLength).</summary>
+        public event Action<int, int>? RunEnded;
+
+        /// <summary>Current score.</summary>
+        public int Score => _score;
+
+        /// <summary>Best score in this session.</summary>
+        public int HighScore => _highScore;
+
+        /// <summary>Current snake length, head included.</summary>
+        public int SnakeLength => _body.Count + 1;
+
+        /// <summary>True while a match is in progress.</summary>
+        public bool IsPlaying => _state == GameState.Playing;
 
         private void Start() => StartNewGame();
 
@@ -134,6 +149,7 @@ namespace SnakeGame
         {
             _state = GameState.Dead;
             Notify($"Game Over: {reason}! Final Score: {_score}");
+            RunEnded?.Invoke(_score, SnakeLength);
         }
 
         private void SpawnFood()
@@ -156,10 +172,11 @@ namespace SnakeGame
             {
                 _state = GameState.Dead;
                 Notify($"Board filled! Final Score: {_score}");
+                RunEnded?.Invoke(_score, SnakeLength);
                 return;
             }
 
-            _food = free[Random.Range(0, free.Count)];
+            _food = free[UnityEngine.Random.Range(0, free.Count)];
         }
 
         private void Notify(string message)
