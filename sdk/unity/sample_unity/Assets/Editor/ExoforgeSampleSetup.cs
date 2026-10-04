@@ -22,6 +22,15 @@ public static class ExoforgeSampleSetup
 
         var scene = EditorSceneManager.GetActiveScene();
 
+        // Remove the superseded onboarding object if an earlier setup created one.
+        foreach (var stale in Object.FindObjectsByType<GameObject>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+        {
+            if (stale.name == "PlayerOnboarding")
+            {
+                Object.DestroyImmediate(stale);
+            }
+        }
+
         // Gameplay root: starts inactive and is enabled once onboarding has a session.
         var existing = Object.FindAnyObjectByType<SnakeGameController>(FindObjectsInactive.Include);
         GameObject gameplayGo;
@@ -38,13 +47,13 @@ public static class ExoforgeSampleSetup
 
         gameplayGo.SetActive(false);
 
-        // Pre-game onboarding: resumes an existing session or asks for a display name.
-        if (Object.FindAnyObjectByType<Exoforge.Client.Unity.ExoforgeOnboarding>() == null)
+        // Player session: authenticates, registers an anonymous player, assigns the display name.
+        if (Object.FindAnyObjectByType<SnakePlayerController>(FindObjectsInactive.Include) == null)
         {
-            var onboardingGo = new GameObject("PlayerOnboarding");
-            var onboarding = onboardingGo.AddComponent<Exoforge.Client.Unity.ExoforgeOnboarding>();
+            var playerGo = new GameObject("Player");
+            var player = playerGo.AddComponent<SnakePlayerController>();
 
-            var so = new SerializedObject(onboarding);
+            var so = new SerializedObject(player);
             var targets = so.FindProperty("enableOnReady");
             targets.arraySize = 1;
             targets.GetArrayElementAtIndex(0).objectReferenceValue = gameplayGo;
