@@ -16,9 +16,9 @@
   },
   "samples": [
     {
-      "displayName": "Combat WASM Demo",
-      "description": "End-to-end example connecting to Exoforge, executing combat actions, and receiving event broadcasts.",
-      "path": "Samples~/CombatDemo"
+      "displayName": "Basic Usage",
+      "description": "Minimal integration using the standard Exoforge prefab, plus action dispatch and event reception.",
+      "path": "Samples~/BasicUsage"
     }
   ]
 }

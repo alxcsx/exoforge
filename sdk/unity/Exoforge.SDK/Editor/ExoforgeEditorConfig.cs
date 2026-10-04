@@ -6,10 +6,12 @@ using UnityEditor;
 using UnityEngine;
 #endif
 
-namespace Exoforge.Unity.Editor;
-
+namespace Exoforge.Unity.Editor
+{
 /// <summary>
-/// Manages persistent configuration and preferences for the Exoforge Unity Editor Studio.
+/// Persistent configuration and preferences for the Exoforge Unity Editor Studio.
+/// Compiles both inside Unity (EditorPrefs) and outside it (in-memory fallback), so
+/// non-Unity management tests can link this file without a Unity reference.
 /// </summary>
 public static class ExoforgeEditorConfig
 {
@@ -17,32 +19,45 @@ public static class ExoforgeEditorConfig
     private const string AdminTokenKey = "Exoforge_AdminToken";
     private const string WorkspacePathKey = "Exoforge_WorkspacePath";
     private const string GeneratedScriptPathKey = "Exoforge_GeneratedScriptPath";
+    private const string PlayerIdKey = "Exoforge_PlayerId";
+    private const string ScopesKey = "Exoforge_Scopes";
+    private const string LastSyncTimeKey = "Exoforge_LastSyncTime";
 
-    public const string DefaultServerUrl = "ws://localhost:4000/ws";
-    public const string DefaultAdminToken = "admin";
-    public const string DefaultWorkspaceRelPath = "exoforge";
+    public const string DefaultServerUrl = "ws://127.0.0.1:4000/ws";
+    public const string DefaultAdminToken = "dev:developer";
+    public const string DefaultWorkspaceRelPath = "Exoforge";
     public const string DefaultGeneratedScriptRelPath = "Assets/Exoforge/Generated/ExoforgeServices.g.cs";
 
     public static readonly (string Name, string Url)[] EnvironmentPresets = new[]
     {
-        ("Local (:4000)", "ws://127.0.0.1:4000/ws"),
-        ("Dev Server", "wss://dev.exoforge.game/ws"),
-        ("Staging", "wss://staging.exoforge.game/ws"),
-        ("Production", "wss://api.exoforge.game/ws")
+        ("local", "ws://127.0.0.1:4000/ws"),
+        ("dev", "wss://dev.exoforge.game/ws"),
+        ("staging", "wss://staging.exoforge.game/ws"),
+        ("production", "wss://api.exoforge.game/ws")
     };
 
     public static readonly (string Label, string Token)[] TokenPresets = new[]
     {
-        ("Admin Master", "admin"),
-        ("Developer Dev", "dev:developer"),
-        ("Player Alpha", "player_1"),
-        ("Player Beta", "player_2")
+        ("Dev", "dev:developer"),
+        ("Admin", "dev:admin"),
+        ("Guest", "guest")
     };
 
+    public static bool IsLocalUrl(string url)
+    {
+        if (string.IsNullOrEmpty(url)) return false;
+        return url.Contains("127.0.0.1:4000") || url.Contains("localhost:4000");
+    }
+
+#if !UNITY_EDITOR
     private static string _fallbackServerUrl = DefaultServerUrl;
     private static string _fallbackAdminToken = DefaultAdminToken;
     private static string _fallbackWorkspacePath = DefaultWorkspaceRelPath;
     private static string _fallbackGeneratedPath = DefaultGeneratedScriptRelPath;
+    private static string _fallbackPlayerId = "";
+    private static string _fallbackScopes = "";
+    private static string _fallbackLastSyncTime = "";
+#endif
 
     public static string ServerUrl
     {
@@ -57,9 +72,9 @@ public static class ExoforgeEditorConfig
         set
         {
 #if UNITY_EDITOR
-            EditorPrefs.SetString(ServerUrlKey, value);
+            EditorPrefs.SetString(ServerUrlKey, value ?? DefaultServerUrl);
 #else
-            _fallbackServerUrl = value;
+            _fallbackServerUrl = value ?? DefaultServerUrl;
 #endif
         }
     }
@@ -76,10 +91,79 @@ public static class ExoforgeEditorConfig
         }
         set
         {
+            string val = value ?? string.Empty;
 #if UNITY_EDITOR
-            EditorPrefs.SetString(AdminTokenKey, value);
+            EditorPrefs.SetString(AdminTokenKey, val);
+            PlayerPrefs.SetString("Exoforge.Token", val);
+            PlayerPrefs.Save();
 #else
-            _fallbackAdminToken = value;
+            _fallbackAdminToken = val;
+#endif
+        }
+    }
+
+    public static string PlayerId
+    {
+        get
+        {
+#if UNITY_EDITOR
+            return EditorPrefs.GetString(PlayerIdKey, string.Empty);
+#else
+            return _fallbackPlayerId;
+#endif
+        }
+        set
+        {
+            string val = value ?? string.Empty;
+#if UNITY_EDITOR
+            EditorPrefs.SetString(PlayerIdKey, val);
+            PlayerPrefs.SetString("Exoforge.PlayerId", val);
+            PlayerPrefs.Save();
+#else
+            _fallbackPlayerId = val;
+#endif
+        }
+    }
+
+    public static string Scopes
+    {
+        get
+        {
+#if UNITY_EDITOR
+            return EditorPrefs.GetString(ScopesKey, string.Empty);
+#else
+            return _fallbackScopes;
+#endif
+        }
+        set
+        {
+            string val = value ?? string.Empty;
+#if UNITY_EDITOR
+            EditorPrefs.SetString(ScopesKey, val);
+            PlayerPrefs.SetString("Exoforge.Scopes", val);
+            PlayerPrefs.Save();
+#else
+            _fallbackScopes = val;
+#endif
+        }
+    }
+
+    public static string LastSyncTime
+    {
+        get
+        {
+#if UNITY_EDITOR
+            return EditorPrefs.GetString(LastSyncTimeKey, string.Empty);
+#else
+            return _fallbackLastSyncTime;
+#endif
+        }
+        set
+        {
+#if UNITY_EDITOR
+            EditorPrefs.SetString(LastSyncTimeKey, value ?? string.Empty);
+#else
+            _fallbackLastSyncTime = value ?? string.Empty;
 #endif
         }
     }
@@ -97,9 +181,9 @@ public static class ExoforgeEditorConfig
         set
         {
 #if UNITY_EDITOR
-            EditorPrefs.SetString(WorkspacePathKey, value);
+            EditorPrefs.SetString(WorkspacePathKey, value ?? DefaultWorkspaceRelPath);
 #else
-            _fallbackWorkspacePath = value;
+            _fallbackWorkspacePath = value ?? DefaultWorkspaceRelPath;
 #endif
         }
     }
@@ -117,16 +201,34 @@ public static class ExoforgeEditorConfig
         set
         {
 #if UNITY_EDITOR
-            EditorPrefs.SetString(GeneratedScriptPathKey, value);
+            EditorPrefs.SetString(GeneratedScriptPathKey, value ?? DefaultGeneratedScriptRelPath);
 #else
-            _fallbackGeneratedPath = value;
+            _fallbackGeneratedPath = value ?? DefaultGeneratedScriptRelPath;
 #endif
         }
     }
 
-    /// <summary>
-    /// Resolves the absolute path to the `/exoforge` workspace folder.
-    /// </summary>
+    public static void SaveSession(string token, string? playerId = null, System.Collections.Generic.IEnumerable<string>? scopes = null)
+    {
+        AdminToken = token;
+        PlayerId = playerId ?? string.Empty;
+        Scopes = scopes != null ? string.Join(",", scopes) : string.Empty;
+    }
+
+    public static void ClearSession()
+    {
+        AdminToken = string.Empty;
+        PlayerId = string.Empty;
+        Scopes = string.Empty;
+#if UNITY_EDITOR
+        PlayerPrefs.DeleteKey("Exoforge.Token");
+        PlayerPrefs.DeleteKey("Exoforge.PlayerId");
+        PlayerPrefs.DeleteKey("Exoforge.Scopes");
+        PlayerPrefs.Save();
+#endif
+    }
+
+    /// <summary>Resolves the absolute path to the `/exoforge` workspace folder.</summary>
     public static string GetAbsoluteWorkspacePath()
     {
 #if UNITY_EDITOR
@@ -137,9 +239,7 @@ public static class ExoforgeEditorConfig
 #endif
     }
 
-    /// <summary>
-    /// Resolves the absolute path to the generated C# client file.
-    /// </summary>
+    /// <summary>Resolves the absolute path to the generated C# client file.</summary>
     public static string GetAbsoluteGeneratedScriptPath()
     {
 #if UNITY_EDITOR
@@ -149,4 +249,5 @@ public static class ExoforgeEditorConfig
         return Path.GetFullPath(GeneratedScriptPath);
 #endif
     }
+}
 }

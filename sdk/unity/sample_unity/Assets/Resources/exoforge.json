@@ -1,0 +1,15 @@
+{
+  "project_name": "SampleUnitySnake",
+  "default_environment": "local",
+  "environments": {
+    "local": {
+      "ws_url": "ws://127.0.0.1:4000/ws",
+      "http_url": "http://127.0.0.1:4001",
+      "token": "dev:developer"
+    }
+  },
+  "codegen": {
+    "output_path": "Assets/Exoforge/Generated/ExoforgeServices.g.cs",
+    "namespace": "Exoforge.Client"
+  }
+}

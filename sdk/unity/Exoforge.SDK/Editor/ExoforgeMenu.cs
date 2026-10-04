@@ -9,19 +9,14 @@ using UnityEditor;
 using UnityEngine;
 #endif
 
-namespace Exoforge.Unity.Editor;
-
+namespace Exoforge.Unity.Editor
+{
 #if UNITY_EDITOR
 /// <summary>
 /// Menu items and shortcuts for Exoforge operations inside Unity Editor.
 /// </summary>
 public static class ExoforgeMenu
 {
-    [MenuItem("Tools/Exoforge/Control Center", false, 100)]
-    public static void OpenControlCenter()
-    {
-        ExoforgeControlCenter.ShowWindow();
-    }
 
     [MenuItem("Tools/Exoforge/Sync Client Bindings", false, 101)]
     public static void SyncClientBindings()
@@ -43,46 +38,25 @@ public static class ExoforgeMenu
         EditorUtility.DisplayDialog("Workspace Created", $"Initialized new Exoforge workspace at:\n{wsPath}", "OK");
     }
 
+    [MenuItem("Tools/Exoforge/Scaffold New C# Plugin", false, 103)]
+    public static void ScaffoldNewPlugin()
+    {
+        var window = EditorWindow.GetWindow<ExoforgeControlCenter>("Exoforge");
+        window.minSize = new Vector2(480, 560);
+        window.PromptScaffoldFromHeader();
+    }
+
     private static async Task SyncClientBindingsAsync()
     {
-        EditorUtility.DisplayProgressBar("Exoforge Sync", "Connecting to cluster...", 0.2f);
-        ExoClient? client = null;
+        EditorUtility.DisplayProgressBar("Exoforge Sync", "Fetching contract schemas...", 0.4f);
 
         try
         {
-            client = new ExoClient(ExoforgeEditorConfig.ServerUrl);
-            await client.ConnectAsync();
+            string wsPath = ExoforgeEditorConfig.GetAbsoluteWorkspacePath();
+            var workspace = ExoWorkspace.Load(wsPath);
+            var deployer = new ExoDeployer(workspace);
 
-            var auth = await client.AuthenticateAsync(ExoforgeEditorConfig.AdminToken);
-            if (!auth.Success)
-            {
-                EditorUtility.ClearProgressBar();
-                EditorUtility.DisplayDialog("Sync Failed", $"Authentication rejected: {auth.Error}", "OK");
-                return;
-            }
-
-            EditorUtility.DisplayProgressBar("Exoforge Sync", "Fetching contract schemas...", 0.5f);
-            var deployer = new ExoDeployer(client);
-            string? exportJson = await deployer.SyncContractsAsync();
-
-            if (string.IsNullOrEmpty(exportJson))
-            {
-                EditorUtility.ClearProgressBar();
-                EditorUtility.DisplayDialog("Sync Failed", "Received empty contract export from server.", "OK");
-                return;
-            }
-
-            EditorUtility.DisplayProgressBar("Exoforge Sync", "Synthesizing C# client API...", 0.8f);
-            string code = ExoCodeGenerator.GenerateCode(exportJson, "Exoforge.Client");
-            string outPath = ExoforgeEditorConfig.GetAbsoluteGeneratedScriptPath();
-
-            string? dir = Path.GetDirectoryName(outPath);
-            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
-            {
-                Directory.CreateDirectory(dir);
-            }
-
-            await File.WriteAllTextAsync(outPath, code);
+            await deployer.SyncContractsAsync();
 
             EditorUtility.ClearProgressBar();
             AssetDatabase.Refresh();
@@ -93,14 +67,7 @@ public static class ExoforgeMenu
             EditorUtility.ClearProgressBar();
             EditorUtility.DisplayDialog("Sync Error", $"Failed to sync contracts: {ex.Message}", "OK");
         }
-        finally
-        {
-            if (client != null)
-            {
-                await client.DisconnectAsync();
-                client.Dispose();
-            }
-        }
     }
 }
 #endif
+}

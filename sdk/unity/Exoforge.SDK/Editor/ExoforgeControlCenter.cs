@@ -6,408 +6,203 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Exoforge.Client;
-using Exoforge.Client.Time;
 using Exoforge.Management;
-
-#if UNITY_EDITOR
 using UnityEditor;
 using UnityEngine;
-#endif
 
 namespace Exoforge.Unity.Editor;
 
-#if UNITY_EDITOR
 /// <summary>
-/// GameDev-first Unity Editor Studio for Exoforge.
-/// Provides one-click client code generation, live event streaming monitor,
-/// in-engine RPC action sandbox, C# WASM plugin management, and LiveOps schedule inspection.
+/// Unity Editor Control Center for Exoforge.
+/// Provides cluster management, authentication and token synchronization,
+/// live event pub/sub monitoring, action sandbox with service discovery,
+/// C# WASM plugin deployment, and strongly-typed client code generation.
 /// </summary>
 public class ExoforgeControlCenter : EditorWindow
 {
-    private enum Tab
-    {
-        Overview = 0,
-        LiveEvents = 1,
-        ActionSandbox = 2,
-        Plugins = 3,
-        Schedule = 4,
-        Settings = 5
-    }
+    private enum Tab { Overview, LiveEvents, ActionSandbox, Plugins, Settings }
 
-    private Tab _currentTab = Tab.Overview;
-    private readonly string[] _tabNames =
+    private static readonly string[] TabNames =
     {
-        "⚡ Overview",
-        "📡 Live Events",
-        "🧪 Action Sandbox",
-        "📦 Plugins & WASM",
-        "📅 LiveOps & Schedules",
-        "⚙️ Settings"
+        "Overview", "Live Events", "Action Sandbox", "Plugins & WASM", "Settings"
     };
 
-    // Connection & Telemetry
+    // Connection & Client
     private ExoClient? _editorClient;
-    private bool _isConnected = false;
+    private ExoWorkspace _workspace = null!;
+    private bool _isConnected;
+    private bool _isConnecting;
     private string _connectionStatus = "Disconnected";
-    private long _lastPingMs = -1;
-    private string _nodeName = "—";
-    private string _uptime = "—";
-    private string _memoryMb = "—";
-    private int _activeEntities = 0;
-    private int _pluginsCount = 0;
+
+    // Authentication foldout
+    private bool _showAuthFoldout = false;
+    private string _loginEmail = "dev@exoforge.game";
+    private string _loginPassword = "password";
 
     // Status Banner
     private string _statusMessage = "";
     private MessageType _statusMessageType = MessageType.Info;
 
-    // Live Event Monitor
-    public record LoggedEvent(DateTime Timestamp, string Topic, string EventName, string RawJson);
+    // Cluster Telemetry
+    private string _nodeName = "—";
+    private string _uptime = "—";
+    private string _memoryMb = "—";
+    private int _activeEntities;
+    private int _pluginsCount;
+
+    // Discovered Services & Actions catalog
+    private readonly Dictionary<string, List<string>> _serviceCatalog = new()
+    {
+        ["auth"] = new() { "login", "register", "verify" },
+        ["player_data"] = new() { "get_profile", "set_attributes", "delete_profile" },
+        ["plugin_manager"] = new() { "list_plugins", "system_info", "restart_system", "export_info" }
+    };
+    private int _selectedServiceIndex = 0;
+    private int _selectedActionIndex = 0;
+
+    // Live Events
+    private sealed record LoggedEvent(DateTime At, string Topic, string EventName, string RawJson);
     private readonly List<LoggedEvent> _eventLog = new();
-    private bool _isEventStreamPaused = false;
-    private string _eventSearchFilter = "";
+    private bool _eventPaused;
+    private bool _eventAutoScroll = true;
+    private string _eventFilter = "";
     private Vector2 _eventScroll;
     private LoggedEvent? _selectedEvent;
+    private Vector2 _eventDetailScroll;
 
     // Action Sandbox
-    private string _sandboxService = "combat_wasm";
-    private string _sandboxAction = "attack";
-    private string _sandboxPayloadJson = "{\n  \"target_player_id\": \"boss_demon_1\",\n  \"damage\": 25\n}";
+    private string _sandboxService = "player_data";
+    private string _sandboxAction = "get_profile";
+    private string _sandboxPayload = "{\n  \"player_id\": \"player_1\"\n}";
     private string _sandboxResult = "";
-    private string _sandboxResultLatency = "";
-    private bool _sandboxResultSuccess = true;
+    private string _sandboxLatency = "";
+    private bool _sandboxSuccess = true;
     private Vector2 _sandboxResultScroll;
 
     // Plugins & WASM
     private string _newPluginName = "";
-    private int _scaffoldTemplateIndex = 0;
-    private readonly string[] _scaffoldTemplates = { "Standard Service", "Player Inventory", "Custom LiveOps Event" };
+    private bool _showScaffoldPrompt = false;
     private List<LocalPluginInfo> _localPlugins = new();
     private List<JsonElement> _remotePlugins = new();
     private Vector2 _pluginsScroll;
-    private Vector2 _remoteScroll;
 
-    // LiveOps Schedules
-    private List<ExoTimeWindow> _liveopsWindows = new();
-    private Vector2 _scheduleScroll;
-
-    // Scroll positions
+    private Tab _currentTab = Tab.Overview;
     private Vector2 _mainScroll;
 
-    public record LocalPluginInfo(string Name, string DirectoryPath, bool HasWasm, string WasmPath, long WasmSizeBytes);
+    private sealed record LocalPluginInfo(string Name, string Directory, bool HasWasm, string WasmPath, long WasmSizeBytes);
 
+    [MenuItem("Tools/Exoforge/Control Center", false, 100)]
     [MenuItem("Window/Exoforge/Control Center", false, 2000)]
     public static void ShowWindow()
     {
-        var window = GetWindow<ExoforgeControlCenter>("Exoforge Studio");
-        window.minSize = new Vector2(620, 520);
-        window.Show();
+        var window = GetWindow<ExoforgeControlCenter>("Exoforge");
+        window.minSize = new Vector2(480, 560);
+    }
+
+    public void PromptScaffoldFromHeader()
+    {
+        _showScaffoldPrompt = true;
+        Repaint();
     }
 
     private void OnEnable()
     {
+        // Migrate legacy token ("admin" -> "dev:developer")
+        if (ExoforgeEditorConfig.AdminToken == "admin")
+        {
+            ExoforgeEditorConfig.AdminToken = "dev:developer";
+        }
+
+        // Bi-directional sync between EditorPrefs and PlayerPrefs
+        if (!string.IsNullOrEmpty(ExoforgeEditorConfig.AdminToken))
+        {
+            ExoTokenStore.Token = ExoforgeEditorConfig.AdminToken;
+        }
+        else if (ExoTokenStore.HasToken)
+        {
+            ExoforgeEditorConfig.AdminToken = ExoTokenStore.Token;
+        }
+        else
+        {
+            ExoforgeEditorConfig.AdminToken = ExoforgeEditorConfig.DefaultAdminToken;
+            ExoTokenStore.Token = ExoforgeEditorConfig.DefaultAdminToken;
+        }
+
+        if (ExoforgeEditorConfig.WorkspacePath == "exoforge")
+        {
+            ExoforgeEditorConfig.WorkspacePath = ExoforgeEditorConfig.DefaultWorkspaceRelPath;
+        }
+
+        _workspace = ExoWorkspace.Load(ExoforgeEditorConfig.GetAbsoluteWorkspacePath());
         RefreshLocalPlugins();
-        _ = AutoConnectAsync();
     }
 
     private void OnDisable()
     {
-        _editorClient?.Dispose();
-        _editorClient = null;
-        _isConnected = false;
-    }
-
-    private async Task AutoConnectAsync()
-    {
-        try
-        {
-            await ConnectAsync();
-        }
-        catch
-        {
-            // Allow manual connect
-        }
-    }
-
-    private async Task ConnectAsync()
-    {
-        _connectionStatus = "Connecting...";
-        Repaint();
-
-        var sw = Stopwatch.StartNew();
-        try
-        {
-            _editorClient?.Dispose();
-            _editorClient = new ExoClient();
-
-            // Wire up real-time event streaming monitor
-            _editorClient.OnAnyEvent += HandleIncomingEvent;
-
-            var uri = new Uri(ExoforgeEditorConfig.ServerUrl);
-            await _editorClient.ConnectAsync(uri);
-
-            var authResult = await _editorClient.AuthenticateAsync(ExoforgeEditorConfig.AdminToken);
-            sw.Stop();
-            _lastPingMs = sw.ElapsedMilliseconds;
-
-            if (authResult.Success)
-            {
-                _isConnected = true;
-                _connectionStatus = $"Connected ({authResult.PlayerId})";
-
-                if (!ExoforgeEditorConfig.ServerUrl.Contains("localhost") && !ExoforgeEditorConfig.ServerUrl.Contains("127.0.0.1") && ExoforgeEditorConfig.AdminToken.StartsWith("dev:"))
-                {
-                    ShowStatus("Security Warning: 'dev:*' token used with remote server! Dev tokens are disabled on production clusters.", MessageType.Warning);
-                }
-                else
-                {
-                    ShowStatus($"Connected to Exoforge server ({_lastPingMs} ms).", MessageType.Info);
-                }
-
-                // Auto-subscribe to all events for the live event monitor
-                await _editorClient.SubscribeAsync("*");
-                await RefreshRemoteInfoAsync();
-            }
-            else
-            {
-                _isConnected = false;
-                _connectionStatus = $"Auth Failed: {authResult.Error}";
-                ShowStatus($"Authentication rejected: {authResult.Error}", MessageType.Error);
-            }
-        }
-        catch (Exception ex)
-        {
-            sw.Stop();
-            _isConnected = false;
-            _lastPingMs = -1;
-            _connectionStatus = "Connection Failed";
-            ShowStatus($"Connection failed: {ex.Message}", MessageType.Warning);
-        }
-
-        Repaint();
-    }
-
-    private async Task DisconnectAsync()
-    {
-        if (_editorClient != null)
-        {
-            await _editorClient.DisconnectAsync();
-            _editorClient.Dispose();
-            _editorClient = null;
-        }
-
-        _isConnected = false;
-        _connectionStatus = "Disconnected";
-        _lastPingMs = -1;
-        Repaint();
-    }
-
-    private void HandleIncomingEvent(ExoEventFrame evt)
-    {
-        if (_isEventStreamPaused) return;
-
-        string rawJson;
-        try
-        {
-            rawJson = JsonSerializer.Serialize(evt.Payload, new JsonSerializerOptions { WriteIndented = true });
-        }
-        catch
-        {
-            rawJson = evt.Payload.ToString() ?? "{}";
-        }
-
-        var logged = new LoggedEvent(DateTime.UtcNow, evt.Topic, evt.Event, rawJson);
-        _eventLog.Insert(0, logged);
-
-        // Keep buffer bounded
-        if (_eventLog.Count > 150)
-        {
-            _eventLog.RemoveAt(_eventLog.Count - 1);
-        }
-
-        Repaint();
-    }
-
-    private async Task RefreshRemoteInfoAsync()
-    {
-        if (_editorClient == null || !_isConnected) return;
-
-        try
-        {
-            var pluginMgr = _editorClient.PluginManager();
-
-            // Fetch plugins
-            var listResp = await pluginMgr.ListPluginsAsync();
-            if (listResp.Success && listResp.Data != null)
-            {
-                var doc = JsonDocument.Parse(listResp.Data.ToString() ?? "{}");
-                if (doc.RootElement.TryGetProperty("plugins", out var pArray))
-                {
-                    _remotePlugins = pArray.EnumerateArray().ToList();
-                }
-            }
-
-            // Fetch system telemetry
-            var sysResp = await pluginMgr.GetSystemInfoAsync();
-            if (sysResp.Success && sysResp.Data != null)
-            {
-                var doc = JsonDocument.Parse(sysResp.Data.ToString() ?? "{}");
-                if (doc.RootElement.TryGetProperty("system", out var sys))
-                {
-                    _nodeName = sys.TryGetProperty("node", out var n) ? n.GetString() ?? "—" : "—";
-                    _memoryMb = sys.TryGetProperty("memory_mb", out var m) ? m.GetRawText() + " MB" : "—";
-                    _activeEntities = sys.TryGetProperty("active_entities_count", out var a) ? a.GetInt32() : 0;
-                    _pluginsCount = sys.TryGetProperty("plugins_count", out var pc) ? pc.GetInt32() : 0;
-
-                    if (sys.TryGetProperty("uptime_seconds", out var u))
-                    {
-                        int secs = u.GetInt32();
-                        _uptime = secs < 60 ? $"{secs}s" : $"{secs / 60}m {secs % 60}s";
-                    }
-                }
-            }
-
-            // Refresh LiveOps schedules
-            RefreshSchedules();
-        }
-        catch (Exception ex)
-        {
-            ShowStatus($"Failed to refresh remote cluster telemetry: {ex.Message}", MessageType.Warning);
-        }
-
-        Repaint();
-    }
-
-    private void RefreshSchedules()
-    {
-        _liveopsWindows.Clear();
-    }
-
-    private void RefreshLocalPlugins()
-    {
-        _localPlugins.Clear();
-        string wsPath = ExoforgeEditorConfig.GetAbsoluteWorkspacePath();
-        string pluginsDir = Path.Combine(wsPath, "plugins");
-
-        if (!Directory.Exists(pluginsDir))
-        {
-            pluginsDir = Path.Combine(wsPath, "plugins_csharp");
-        }
-
-        if (Directory.Exists(pluginsDir))
-        {
-            foreach (var dir in Directory.GetDirectories(pluginsDir))
-            {
-                string name = Path.GetFileName(dir);
-                string wasmPath = Path.Combine(dir, $"{name}.wasm");
-                bool hasWasm = File.Exists(wasmPath);
-                long wasmSize = 0;
-
-                if (!hasWasm)
-                {
-                    var wasmFiles = Directory.GetFiles(dir, "*.wasm");
-                    if (wasmFiles.Length > 0)
-                    {
-                        hasWasm = true;
-                        wasmPath = wasmFiles[0];
-                    }
-                }
-
-                if (hasWasm && File.Exists(wasmPath))
-                {
-                    wasmSize = new FileInfo(wasmPath).Length;
-                }
-
-                _localPlugins.Add(new LocalPluginInfo(name, dir, hasWasm, wasmPath, wasmSize));
-            }
-        }
-    }
-
-    private void ShowStatus(string message, MessageType type)
-    {
-        _statusMessage = message;
-        _statusMessageType = type;
+        _ = DisconnectAsync();
     }
 
     private void OnGUI()
     {
-        DrawModernHeader();
-
+        DrawHeader();
         EditorGUILayout.Space(2);
-        _currentTab = (Tab)GUILayout.Toolbar((int)_currentTab, _tabNames, GUILayout.Height(28));
-        EditorGUILayout.Space(6);
+
+        _currentTab = (Tab)GUILayout.Toolbar((int)_currentTab, TabNames, GUILayout.Height(24));
+        EditorGUILayout.Space(4);
 
         if (!string.IsNullOrEmpty(_statusMessage))
         {
-            EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.HelpBox(_statusMessage, _statusMessageType);
-            if (GUILayout.Button("✕", GUILayout.Width(24), GUILayout.Height(38)))
-            {
-                _statusMessage = "";
-            }
-            EditorGUILayout.EndHorizontal();
-            EditorGUILayout.Space(4);
+            DrawStatusBanner();
         }
 
         switch (_currentTab)
         {
-            case Tab.Overview:
-                DrawOverviewTab();
-                break;
-            case Tab.LiveEvents:
-                DrawLiveEventsTab();
-                break;
-            case Tab.ActionSandbox:
-                DrawActionSandboxTab();
-                break;
-            case Tab.Plugins:
-                DrawPluginsTab();
-                break;
-            case Tab.Schedule:
-                DrawScheduleTab();
-                break;
-            case Tab.Settings:
-                DrawSettingsTab();
-                break;
+            case Tab.Overview: DrawOverview(); break;
+            case Tab.LiveEvents: DrawLiveEvents(); break;
+            case Tab.ActionSandbox: DrawSandbox(); break;
+            case Tab.Plugins: DrawPlugins(); break;
+            case Tab.Settings: DrawSettings(); break;
         }
     }
 
-    private void DrawModernHeader()
+    // =========================================================================
+    // Header & Authentication
+    // =========================================================================
+
+    private void DrawHeader()
     {
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
 
-        // Line 1: Title, Ping Badge, Connect/Disconnect Button
+        // Top Row: Title, Scaffold Shortcut, Status Badge, Connect/Disconnect
         EditorGUILayout.BeginHorizontal();
+        GUILayout.Label("⚡ Exoforge Studio", EditorStyles.boldLabel);
 
-        GUIStyle titleStyle = new GUIStyle(EditorStyles.boldLabel)
+        // Shortcut to Scaffold a new C# Plugin
+        if (GUILayout.Button("+ New C# Plugin", EditorStyles.miniButton, GUILayout.Width(115)))
         {
-            fontSize = 14,
-            normal = { textColor = new Color(0.6f, 0.4f, 0.95f) }
-        };
-        GUILayout.Label("⚡ EXOFORGE CONTROL CENTER", titleStyle);
+            _showScaffoldPrompt = !_showScaffoldPrompt;
+        }
 
         GUILayout.FlexibleSpace();
 
-        // Ping latency badge
-        if (_isConnected && _lastPingMs >= 0)
+        // Status Badge Pill
+        var prevColor = GUI.color;
+        if (_isConnecting)
         {
-            GUIStyle pingBadge = new GUIStyle(EditorStyles.miniLabel)
-            {
-                fontStyle = FontStyle.Bold,
-                normal = { textColor = _lastPingMs < 50 ? new Color(0.2f, 0.8f, 0.4f) : new Color(0.9f, 0.7f, 0.2f) }
-            };
-            GUILayout.Label($"⚡ {_lastPingMs} ms", pingBadge);
-            GUILayout.Space(8);
+            GUI.color = new Color(1.0f, 0.85f, 0.3f);
+            GUILayout.Label("◌ CONNECTING", EditorStyles.miniBoldLabel);
         }
-
-        // Connection dot
-        GUIStyle statusBadge = new GUIStyle(EditorStyles.miniLabel)
+        else if (_isConnected)
         {
-            fontStyle = FontStyle.Bold,
-            normal = { textColor = _isConnected ? new Color(0.2f, 0.85f, 0.35f) : new Color(0.85f, 0.3f, 0.25f) }
-        };
-        GUILayout.Label(_isConnected ? "● ONLINE" : "○ OFFLINE", statusBadge);
-
-        GUILayout.Space(6);
+            GUI.color = new Color(0.3f, 0.9f, 0.4f);
+            GUILayout.Label($"● ONLINE ({_connectionStatus})", EditorStyles.miniBoldLabel);
+        }
+        else
+        {
+            GUI.color = new Color(0.6f, 0.6f, 0.6f);
+            GUILayout.Label("○ OFFLINE", EditorStyles.miniBoldLabel);
+        }
+        GUI.color = prevColor;
 
         if (_isConnected)
         {
@@ -418,49 +213,9 @@ public class ExoforgeControlCenter : EditorWindow
         }
         else
         {
-            if (GUILayout.Button("Connect", EditorStyles.miniButton, GUILayout.Width(80)))
+            using (new EditorGUI.DisabledScope(_isConnecting))
             {
-                _ = ConnectAsync();
-            }
-        }
-
-        EditorGUILayout.EndHorizontal();
-
-        // Line 2: Environment Quick Switcher Pills
-        EditorGUILayout.BeginHorizontal();
-        GUILayout.Label("Env:", EditorStyles.miniLabel, GUILayout.Width(30));
-
-        foreach (var (name, url) in ExoforgeEditorConfig.EnvironmentPresets)
-        {
-            bool isCurrent = ExoforgeEditorConfig.ServerUrl == url;
-            GUIStyle btnStyle = new GUIStyle(EditorStyles.miniButton)
-            {
-                fontStyle = isCurrent ? FontStyle.Bold : FontStyle.Normal
-            };
-
-            if (GUILayout.Button(name, btnStyle))
-            {
-                ExoforgeEditorConfig.ServerUrl = url;
-                _ = ConnectAsync();
-            }
-        }
-
-        GUILayout.FlexibleSpace();
-
-        // Token quick switcher
-        GUILayout.Label("Role:", EditorStyles.miniLabel, GUILayout.Width(32));
-        foreach (var (label, token) in ExoforgeEditorConfig.TokenPresets)
-        {
-            bool isCurrent = ExoforgeEditorConfig.AdminToken == token;
-            GUIStyle btnStyle = new GUIStyle(EditorStyles.miniButton)
-            {
-                fontStyle = isCurrent ? FontStyle.Bold : FontStyle.Normal
-            };
-
-            if (GUILayout.Button(label, btnStyle))
-            {
-                ExoforgeEditorConfig.AdminToken = token;
-                if (_isConnected)
+                if (GUILayout.Button("Connect", EditorStyles.miniButton, GUILayout.Width(80)))
                 {
                     _ = ConnectAsync();
                 }
@@ -469,178 +224,693 @@ public class ExoforgeControlCenter : EditorWindow
 
         EditorGUILayout.EndHorizontal();
 
-        EditorGUILayout.LabelField($"{ExoforgeEditorConfig.ServerUrl}  •  {_connectionStatus}", EditorStyles.miniLabel);
+        // Inline Scaffold Bar (when triggered by header shortcut)
+        if (_showScaffoldPrompt)
+        {
+            EditorGUILayout.Space(3);
+            EditorGUILayout.BeginVertical(GUI.skin.box);
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField("Plugin Name:", GUILayout.Width(80));
+            _newPluginName = EditorGUILayout.TextField(_newPluginName);
+            using (new EditorGUI.DisabledScope(string.IsNullOrWhiteSpace(_newPluginName)))
+            {
+                if (GUILayout.Button("Scaffold", EditorStyles.miniButton, GUILayout.Width(70)))
+                {
+                    ScaffoldNewPlugin();
+                }
+            }
+            if (GUILayout.Button("✕", EditorStyles.miniButton, GUILayout.Width(25)))
+            {
+                _showScaffoldPrompt = false;
+            }
+            EditorGUILayout.EndHorizontal();
+            EditorGUILayout.EndVertical();
+        }
+
+        EditorGUILayout.Space(2);
+
+        // Second Row: Environment Selector & Ping
+        DrawEnvironmentSelector();
+
+        // Collapsible Account / Login Section
+        _showAuthFoldout = EditorGUILayout.Foldout(_showAuthFoldout, "Account & Session Management", true);
+        if (_showAuthFoldout)
+        {
+            EditorGUILayout.BeginVertical(GUI.skin.box);
+
+            if (_isConnected && !string.IsNullOrEmpty(ExoforgeEditorConfig.PlayerId))
+            {
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField($"Signed in as: {ExoforgeEditorConfig.PlayerId}", EditorStyles.boldLabel);
+                if (!string.IsNullOrEmpty(ExoforgeEditorConfig.Scopes))
+                {
+                    EditorGUILayout.LabelField($"Scopes: [{ExoforgeEditorConfig.Scopes}]", EditorStyles.miniLabel);
+                }
+                EditorGUILayout.EndHorizontal();
+            }
+
+            _loginEmail = EditorGUILayout.TextField("Email", _loginEmail);
+            _loginPassword = EditorGUILayout.PasswordField("Password", _loginPassword);
+
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("Sign In (auth.login)", GUILayout.Height(22)))
+            {
+                _ = LogInAsync();
+            }
+
+            if (GUILayout.Button("Log Out & Clear Credentials", GUILayout.Height(22)))
+            {
+                _ = LogOutAsync();
+            }
+            EditorGUILayout.EndHorizontal();
+
+            EditorGUILayout.EndVertical();
+        }
 
         EditorGUILayout.EndVertical();
     }
 
-    private void DrawOverviewTab()
+    private void ScaffoldNewPlugin()
+    {
+        if (string.IsNullOrWhiteSpace(_newPluginName)) return;
+
+        try
+        {
+            string dir = ExoScaffolder.ScaffoldPlugin(_workspace.PluginsPath, _newPluginName);
+            RefreshLocalPlugins();
+            ShowStatus($"✓ Scaffolded C# WASM plugin '{_newPluginName}' at {dir}", MessageType.Info);
+            _newPluginName = "";
+            _showScaffoldPrompt = false;
+            _currentTab = Tab.Plugins;
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Scaffold failed: {ex.Message}", MessageType.Error);
+        }
+    }
+
+    private sealed record EnvOption(string Name, string WsUrl, string Token, string? HttpUrl = null);
+
+    private void DrawEnvironmentSelector()
+    {
+        var envList = GetConfiguredEnvironments();
+        var names = envList.Select(e => e.Name).ToArray();
+
+        int currentIndex = envList.FindIndex(e =>
+            string.Equals(e.WsUrl, ExoforgeEditorConfig.ServerUrl, StringComparison.OrdinalIgnoreCase) ||
+            (e.Name == "local" && ExoforgeEditorConfig.IsLocalUrl(ExoforgeEditorConfig.ServerUrl)));
+
+        if (currentIndex < 0)
+        {
+            var listWithCustom = names.ToList();
+            listWithCustom.Add($"(custom) {ExoforgeEditorConfig.ServerUrl}");
+            names = listWithCustom.ToArray();
+            currentIndex = names.Length - 1;
+        }
+
+        EditorGUILayout.BeginHorizontal();
+        int selected = EditorGUILayout.Popup("Environment", currentIndex, names);
+        if (selected != currentIndex && selected < envList.Count)
+        {
+            ApplyEnvironment(envList[selected]);
+        }
+
+        if (GUILayout.Button("Ping", EditorStyles.miniButton, GUILayout.Width(50)))
+        {
+            _ = PingClusterAsync();
+        }
+
+        if (GUILayout.Button("Settings ⚙", EditorStyles.miniButton, GUILayout.Width(75)))
+        {
+            _currentTab = Tab.Settings;
+        }
+        EditorGUILayout.EndHorizontal();
+    }
+
+    private List<EnvOption> GetConfiguredEnvironments()
+    {
+        var list = new List<EnvOption>();
+
+        if (_workspace?.Config?.Environments != null && _workspace.Config.Environments.Count > 0)
+        {
+            foreach (var kvp in _workspace.Config.Environments)
+            {
+                list.Add(new EnvOption(kvp.Key, kvp.Value.WsUrl, kvp.Value.Token, kvp.Value.HttpUrl));
+            }
+        }
+
+        if (!list.Any(e => e.Name == "local"))
+        {
+            list.Insert(0, new EnvOption("local", "ws://127.0.0.1:4000/ws", "dev:developer", "http://127.0.0.1:4001"));
+        }
+
+        if (!list.Any(e => e.Name == "dev"))
+            list.Add(new EnvOption("dev", "wss://dev.exoforge.game/ws", ""));
+        if (!list.Any(e => e.Name == "staging"))
+            list.Add(new EnvOption("staging", "wss://staging.exoforge.game/ws", ""));
+        if (!list.Any(e => e.Name == "production"))
+            list.Add(new EnvOption("production", "wss://api.exoforge.game/ws", ""));
+
+        return list;
+    }
+
+    private void ApplyEnvironment(EnvOption env)
+    {
+        ExoforgeEditorConfig.ServerUrl = env.WsUrl;
+        if (!string.IsNullOrEmpty(env.Token))
+        {
+            ExoforgeEditorConfig.AdminToken = env.Token;
+            ExoTokenStore.Token = env.Token;
+        }
+        ShowStatus($"Switched to environment '{env.Name}' ({env.WsUrl}).", MessageType.Info);
+        if (_isConnected)
+        {
+            _ = ConnectAsync();
+        }
+    }
+
+    private void DrawStatusBanner()
+    {
+        EditorGUILayout.BeginHorizontal(EditorStyles.helpBox);
+        EditorGUILayout.HelpBox(_statusMessage, _statusMessageType);
+        if (GUILayout.Button("✕", EditorStyles.miniButton, GUILayout.Width(22), GUILayout.Height(22)))
+        {
+            _statusMessage = "";
+        }
+        EditorGUILayout.EndHorizontal();
+    }
+
+    // =========================================================================
+    // Connection & Auth Logic
+    // =========================================================================
+
+    private async Task PingClusterAsync()
+    {
+        try
+        {
+            var sw = Stopwatch.StartNew();
+            using var testClient = new ExoClient();
+            await testClient.ConnectAsync(new Uri(ExoforgeEditorConfig.ServerUrl));
+            sw.Stop();
+            ShowStatus($"Server reachable at {ExoforgeEditorConfig.ServerUrl} in {sw.ElapsedMilliseconds} ms.", MessageType.Info);
+            await testClient.DisconnectAsync();
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Ping failed to {ExoforgeEditorConfig.ServerUrl}: {ex.Message}", MessageType.Error);
+        }
+        Repaint();
+    }
+
+    private async Task ConnectAsync()
+    {
+        _isConnecting = true;
+        _connectionStatus = "Connecting...";
+        Repaint();
+
+        if (string.IsNullOrWhiteSpace(ExoTokenStore.Token))
+        {
+            _isConnected = false;
+            _isConnecting = false;
+            _connectionStatus = "No token";
+            ShowStatus("A bearer token is required. Enter one above (e.g. 'dev:developer').", MessageType.Error);
+            Repaint();
+            return;
+        }
+
+        try
+        {
+            _editorClient?.Dispose();
+            _editorClient = new ExoClient();
+            _editorClient.OnAnyEvent += HandleIncomingEvent;
+
+            await _editorClient.ConnectAsync(new Uri(ExoforgeEditorConfig.ServerUrl));
+
+            var auth = await _editorClient.AuthenticateAsync(ExoTokenStore.Token);
+            if (auth.IsSuccess)
+            {
+                _isConnected = true;
+                _connectionStatus = auth.PlayerId ?? "authenticated";
+                ExoforgeEditorConfig.SaveSession(ExoTokenStore.Token, auth.PlayerId, auth.Scopes);
+                ExoTokenStore.SaveSession(ExoTokenStore.Token, auth.PlayerId, auth.Scopes);
+
+                ShowStatus($"Connected as {auth.PlayerId} to {ExoforgeEditorConfig.ServerUrl}.", MessageType.Info);
+
+                await _editorClient.SubscribeAsync("*");
+                await RefreshRemoteInfoAsync();
+            }
+            else
+            {
+                _isConnected = false;
+                _connectionStatus = "Auth failed";
+                ShowStatus($"Authentication failed: {auth.Error}", MessageType.Error);
+            }
+        }
+        catch (ExoActionException ex)
+        {
+            _isConnected = false;
+            _connectionStatus = "Auth rejected";
+            ShowStatus(
+                $"Auth rejected: {ex.Message}\n" +
+                "Tip: 'dev:developer' works in dev mode. For production, sign in with email/password.",
+                MessageType.Error);
+        }
+        catch (Exception ex)
+        {
+            _isConnected = false;
+            _connectionStatus = "Connection error";
+            ShowStatus($"Could not connect to {ExoforgeEditorConfig.ServerUrl}: {ex.Message}", MessageType.Error);
+        }
+        finally
+        {
+            _isConnecting = false;
+            Repaint();
+        }
+    }
+
+    private async Task DisconnectAsync()
+    {
+        if (_editorClient != null)
+        {
+            try { await _editorClient.DisconnectAsync(); } catch { }
+            _editorClient.Dispose();
+            _editorClient = null;
+        }
+
+        _isConnected = false;
+        _isConnecting = false;
+        _connectionStatus = "Disconnected";
+        Repaint();
+    }
+
+    private async Task LogInAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_loginEmail) || string.IsNullOrEmpty(_loginPassword))
+        {
+            ShowStatus("Enter an email and password to log in.", MessageType.Error);
+            Repaint();
+            return;
+        }
+
+        try
+        {
+            if (_editorClient == null || !_isConnected)
+            {
+                ExoTokenStore.Token = "guest";
+                ExoforgeEditorConfig.AdminToken = "guest";
+                await ConnectAsync();
+                if (!_isConnected) return;
+            }
+
+            var data = await _editorClient!.SendActionAsync<JsonElement>("auth", "login", new { email = _loginEmail, password = _loginPassword });
+            string token = data.TryGetProperty("token", out var tProp) ? tProp.GetString() ?? "" : "";
+            string playerId = data.TryGetProperty("player_id", out var pProp) ? pProp.GetString() ?? "" : "";
+
+            if (string.IsNullOrEmpty(token))
+            {
+                ShowStatus("Login failed: the server returned no token.", MessageType.Error);
+                Repaint();
+                return;
+            }
+
+            ExoTokenStore.SaveSession(token, playerId);
+            ExoforgeEditorConfig.SaveSession(token, playerId);
+            _loginPassword = "";
+            ShowStatus($"Successfully logged in as {playerId}.", MessageType.Info);
+
+            await ConnectAsync();
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Login failed: {ex.Message}", MessageType.Error);
+        }
+
+        Repaint();
+    }
+
+    private async Task LogOutAsync()
+    {
+        ExoTokenStore.Clear();
+        ExoforgeEditorConfig.ClearSession();
+        await DisconnectAsync();
+        ShowStatus("Logged out and cleared stored credentials from EditorPrefs and PlayerPrefs.", MessageType.Info);
+        Repaint();
+    }
+
+    private void HandleIncomingEvent(ExoEventFrame evt)
+    {
+        if (_eventPaused) return;
+
+        string raw;
+        try { raw = JsonSerializer.Serialize(evt.Payload, new JsonSerializerOptions { WriteIndented = true }); }
+        catch { raw = evt.Payload.ToString() ?? "{}"; }
+
+        _eventLog.Insert(0, new LoggedEvent(DateTime.UtcNow, evt.Topic, evt.Event, raw));
+        if (_eventLog.Count > 200) _eventLog.RemoveAt(_eventLog.Count - 1);
+
+        if (_eventAutoScroll)
+        {
+            _eventScroll.y = 0;
+        }
+
+        Repaint();
+    }
+
+    private async Task RefreshRemoteInfoAsync()
+    {
+        if (_editorClient == null || !_isConnected) return;
+
+        bool updated = false;
+
+        // 1. Remote Plugins
+        try
+        {
+            var plugins = await _editorClient.SendActionAsync<JsonElement>("plugin_manager", "list_plugins", null);
+            if (plugins.ValueKind == JsonValueKind.Object && plugins.TryGetProperty("plugins", out var arr) && arr.ValueKind == JsonValueKind.Array)
+            {
+                _remotePlugins = arr.EnumerateArray().ToList();
+                _pluginsCount = _remotePlugins.Count;
+                updated = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            UnityEngine.Debug.LogWarning($"[Exoforge] Failed to list remote plugins: {ex.Message}");
+        }
+
+        // 2. Cluster Telemetry
+        try
+        {
+            var info = await _editorClient.SendActionAsync<JsonElement>("plugin_manager", "get_system_info", null);
+            if (info.ValueKind == JsonValueKind.Object && info.TryGetProperty("system", out var sys))
+            {
+                _nodeName = sys.TryGetProperty("node", out var n) ? n.GetString() ?? "—" : "—";
+                _memoryMb = sys.TryGetProperty("memory_mb", out var m) ? $"{m.GetRawText()} MB" : "—";
+                _activeEntities = sys.TryGetProperty("active_entities_count", out var a) ? a.GetInt32() : 0;
+                if (sys.TryGetProperty("plugins_count", out var pc))
+                {
+                    _pluginsCount = pc.GetInt32();
+                }
+
+                if (sys.TryGetProperty("uptime_seconds", out var u))
+                {
+                    int s = u.GetInt32();
+                    _uptime = s < 60 ? $"{s}s" : $"{s / 60}m {s % 60}s";
+                }
+                updated = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            UnityEngine.Debug.LogWarning($"[Exoforge] Failed to get system info: {ex.Message}");
+        }
+
+        // 3. Service Catalog Export
+        try
+        {
+            var export = await _editorClient.SendActionAsync<JsonElement>("plugin_manager", "export_plugin_info", null);
+            ParseServiceCatalog(export);
+            updated = true;
+        }
+        catch { }
+
+        if (updated)
+        {
+            ShowStatus($"✓ Telemetry updated: {_pluginsCount} active plugins, cluster node: {_nodeName}.", MessageType.Info);
+        }
+
+        Repaint();
+    }
+
+    private void ParseServiceCatalog(JsonElement export)
+    {
+        if (!export.TryGetProperty("export", out var root) || !root.TryGetProperty("plugins", out var pluginsArr))
+            return;
+
+        foreach (var plugin in pluginsArr.EnumerateArray())
+        {
+            if (plugin.TryGetProperty("services", out var servicesArr))
+            {
+                foreach (var s in servicesArr.EnumerateArray())
+                {
+                    string sName = s.TryGetProperty("name", out var sn) ? sn.GetString() ?? "" : "";
+                    if (string.IsNullOrEmpty(sName)) continue;
+
+                    if (!_serviceCatalog.ContainsKey(sName))
+                        _serviceCatalog[sName] = new List<string>();
+
+                    if (s.TryGetProperty("actions", out var actionsArr))
+                    {
+                        foreach (var a in actionsArr.EnumerateArray())
+                        {
+                            string aName = a.TryGetProperty("name", out var an) ? an.GetString() ?? "" : "";
+                            if (!string.IsNullOrEmpty(aName) && !_serviceCatalog[sName].Contains(aName))
+                            {
+                                _serviceCatalog[sName].Add(aName);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private void RefreshLocalPlugins()
+    {
+        _localPlugins = new List<LocalPluginInfo>();
+        string pluginsDir = _workspace.PluginsPath;
+        if (!Directory.Exists(pluginsDir)) return;
+
+        foreach (var dir in Directory.GetDirectories(pluginsDir))
+        {
+            string name = Path.GetFileName(dir);
+            var wasmFiles = Directory.GetFiles(dir, "*.wasm", SearchOption.AllDirectories);
+            bool hasWasm = wasmFiles.Length > 0;
+            string wasmPath = hasWasm ? wasmFiles[0] : "";
+            long size = hasWasm && File.Exists(wasmPath) ? new FileInfo(wasmPath).Length : 0;
+            _localPlugins.Add(new LocalPluginInfo(name, dir, hasWasm, wasmPath, size));
+        }
+    }
+
+    private void ShowStatus(string message, MessageType type)
+    {
+        _statusMessage = message;
+        _statusMessageType = type;
+    }
+
+    // =========================================================================
+    // Tab 1: Overview
+    // =========================================================================
+
+    private void DrawOverview()
     {
         _mainScroll = EditorGUILayout.BeginScrollView(_mainScroll);
 
-        // Metric Cards Grid
-        EditorGUILayout.LabelField("Server Telemetry & Node Status", EditorStyles.boldLabel);
-        EditorGUILayout.BeginHorizontal();
-
-        DrawMetricCard("Cluster Node", _nodeName, "BEAM Core");
-        DrawMetricCard("Uptime", _uptime, "Supervised");
-        DrawMetricCard("Memory", _memoryMb, "BEAM Process");
-        DrawMetricCard("Virtual Entities", _activeEntities.ToString(), "Horde Clustered");
-        DrawMetricCard("Active Plugins", _pluginsCount.ToString(), "Standard & Custom");
-
-        EditorGUILayout.EndHorizontal();
-
-        EditorGUILayout.Space(12);
-
-        // Golden Path Actions
-        EditorGUILayout.LabelField("Quick Actions & Golden Path", EditorStyles.boldLabel);
+        // 1. Cluster Telemetry Card
+        EditorGUILayout.LabelField("Cluster Telemetry", EditorStyles.boldLabel);
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
 
         EditorGUILayout.BeginHorizontal();
-        GUI.enabled = _isConnected;
-        if (GUILayout.Button("⚡ Sync Contracts & Generate C# API", GUILayout.Height(36)))
-        {
-            _ = SyncAndGenerateClientAsync();
-        }
-        GUI.enabled = true;
-
-        if (GUILayout.Button("🌐 Open Producer Studio (Port 4005)", GUILayout.Height(36)))
-        {
-            Application.OpenURL("http://localhost:4005");
-        }
+        DrawMetricPill("Node", _nodeName);
+        DrawMetricPill("Uptime", _uptime);
+        DrawMetricPill("Memory", _memoryMb);
         EditorGUILayout.EndHorizontal();
 
-        EditorGUILayout.Space(4);
+        EditorGUILayout.Space(2);
 
         EditorGUILayout.BeginHorizontal();
-        if (GUILayout.Button("🎮 Load CombatDemo Scene", GUILayout.Height(28)))
-        {
-            OpenSampleScene();
-        }
-
-        GUI.enabled = _isConnected;
-        if (GUILayout.Button("🔄 Hot-Restart Server Supervision", GUILayout.Height(28)))
-        {
-            _ = RestartClusterAsync();
-        }
-        GUI.enabled = true;
+        DrawMetricPill("Active Entities", _activeEntities.ToString());
+        DrawMetricPill("Plugins", _pluginsCount.ToString());
+        DrawMetricPill("Status", _isConnected ? "HEALTHY" : "OFFLINE");
         EditorGUILayout.EndHorizontal();
 
         EditorGUILayout.EndVertical();
 
-        EditorGUILayout.Space(12);
+        EditorGUILayout.Space(8);
 
-        // Getting Started Gamedev Checklist
-        EditorGUILayout.LabelField("Game Developer Golden Path Checklist", EditorStyles.boldLabel);
+        // 2. Client Code Generation & Contract Sync Card
+        EditorGUILayout.LabelField("Contract Synchronization & Code Generation", EditorStyles.boldLabel);
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
 
-        DrawChecklistRow("1. Connect to Exoforge Cluster", _isConnected, "Connect button in top header bar.");
-        DrawChecklistRow("2. Scaffold Game Service Plugin", _localPlugins.Count > 0, "Use the 'Plugins & WASM' tab to create C# WASM logic.");
-        DrawChecklistRow("3. Generate Strongly-Typed C# API", File.Exists(ExoforgeEditorConfig.GetAbsoluteGeneratedScriptPath()), "Click 'Sync Contracts' to generate pure C# client bindings.");
-        DrawChecklistRow("4. Listen to Live Cluster Events", _eventLog.Count > 0, "Monitor real-time event broadcasts in the 'Live Events' tab.");
+        string lastSync = !string.IsNullOrEmpty(ExoforgeEditorConfig.LastSyncTime)
+            ? ExoforgeEditorConfig.LastSyncTime
+            : "Not yet synced";
+
+        EditorGUILayout.LabelField($"Last Synced: {lastSync}", EditorStyles.miniLabel);
+        EditorGUILayout.LabelField($"Generated Output: {ExoforgeEditorConfig.GeneratedScriptPath}", EditorStyles.miniLabel);
+
+        EditorGUILayout.Space(4);
+
+        if (GUILayout.Button("⚡ Sync Contracts & Generate C# Client", GUILayout.Height(30)))
+        {
+            _ = SyncAndGenerateClientAsync();
+        }
+
+        EditorGUILayout.BeginHorizontal();
+        if (GUILayout.Button("Reveal Generated File", EditorStyles.miniButton))
+        {
+            string absGenPath = ExoforgeEditorConfig.GetAbsoluteGeneratedScriptPath();
+            if (File.Exists(absGenPath))
+            {
+                EditorUtility.RevealInFinder(absGenPath);
+            }
+            else
+            {
+                ShowStatus($"Generated file not found at {absGenPath}. Run Sync first.", MessageType.Warning);
+            }
+        }
+
+        if (GUILayout.Button("Open Workspace Folder", EditorStyles.miniButton))
+        {
+            string absWs = ExoforgeEditorConfig.GetAbsoluteWorkspacePath();
+            if (Directory.Exists(absWs))
+            {
+                EditorUtility.RevealInFinder(absWs);
+            }
+            else
+            {
+                ShowStatus($"Workspace folder not found at {absWs}.", MessageType.Warning);
+            }
+        }
+        EditorGUILayout.EndHorizontal();
+
+        EditorGUILayout.EndVertical();
+
+        EditorGUILayout.Space(8);
+
+        // 3. Cluster Operations & Tools Card
+        EditorGUILayout.LabelField("Cluster Operations & Developer Tools", EditorStyles.boldLabel);
+        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+
+        using (new EditorGUI.DisabledScope(!_isConnected))
+        {
+            if (GUILayout.Button("🔄 Hot-Restart Cluster Supervision", GUILayout.Height(24)))
+            {
+                _ = RestartClusterAsync();
+            }
+        }
+
+        EditorGUILayout.BeginHorizontal();
+        if (GUILayout.Button("🌐 Open Web Dashboard (:4005)", GUILayout.Height(24)))
+        {
+            Application.OpenURL("http://localhost:4005");
+        }
+
+        if (GUILayout.Button("📖 Open Swagger API Docs (:4001)", GUILayout.Height(24)))
+        {
+            Application.OpenURL("http://localhost:4001/swagger");
+        }
+        EditorGUILayout.EndHorizontal();
 
         EditorGUILayout.EndVertical();
 
         EditorGUILayout.EndScrollView();
     }
 
-    private void DrawMetricCard(string title, string value, string subtitle)
+    private static void DrawMetricPill(string label, string val)
     {
-        EditorGUILayout.BeginVertical(EditorStyles.helpBox, GUILayout.Width(110), GUILayout.Height(64));
-        EditorGUILayout.LabelField(title.ToUpperInvariant(), EditorStyles.miniLabel);
-        GUIStyle valStyle = new GUIStyle(EditorStyles.boldLabel) { fontSize = 13 };
-        EditorGUILayout.LabelField(value, valStyle);
-        EditorGUILayout.LabelField(subtitle, EditorStyles.miniLabel);
+        EditorGUILayout.BeginVertical(GUI.skin.box);
+        EditorGUILayout.LabelField(label, EditorStyles.miniLabel);
+        EditorGUILayout.LabelField(val, EditorStyles.boldLabel);
         EditorGUILayout.EndVertical();
     }
 
-    private void DrawChecklistRow(string title, bool isDone, string hint)
+    // =========================================================================
+    // Tab 2: Live Events Pub/Sub
+    // =========================================================================
+
+    private void DrawLiveEvents()
     {
         EditorGUILayout.BeginHorizontal();
-        GUIStyle markStyle = new GUIStyle(EditorStyles.boldLabel)
+        EditorGUILayout.LabelField($"Live Broadcast Events ({_eventLog.Count})", EditorStyles.boldLabel);
+
+        _eventAutoScroll = GUILayout.Toggle(_eventAutoScroll, "Auto-scroll", EditorStyles.miniButton, GUILayout.Width(80));
+
+        if (GUILayout.Button(_eventPaused ? "▶ Resume" : "⏸ Pause", EditorStyles.miniButton, GUILayout.Width(70)))
         {
-            normal = { textColor = isDone ? new Color(0.2f, 0.8f, 0.3f) : new Color(0.5f, 0.5f, 0.5f) }
-        };
-        GUILayout.Label(isDone ? "✔" : "○", markStyle, GUILayout.Width(20));
-        EditorGUILayout.LabelField(title, EditorStyles.boldLabel, GUILayout.Width(230));
-        EditorGUILayout.LabelField(hint, EditorStyles.miniLabel);
-        EditorGUILayout.EndHorizontal();
-    }
-
-    private void DrawLiveEventsTab()
-    {
-        EditorGUILayout.BeginHorizontal();
-        EditorGUILayout.LabelField($"Live Cluster Event Stream ({_eventLog.Count})", EditorStyles.boldLabel);
-
-        _eventSearchFilter = EditorGUILayout.TextField(_eventSearchFilter, EditorStyles.toolbarSearchField, GUILayout.Width(180));
-
-        if (GUILayout.Button(_isEventStreamPaused ? "▶ Resume" : "⏸ Pause", EditorStyles.miniButton, GUILayout.Width(75)))
-        {
-            _isEventStreamPaused = !_isEventStreamPaused;
+            _eventPaused = !_eventPaused;
         }
 
-        if (GUILayout.Button("Clear", EditorStyles.miniButton, GUILayout.Width(55)))
+        if (GUILayout.Button("Clear", EditorStyles.miniButton, GUILayout.Width(50)))
         {
             _eventLog.Clear();
             _selectedEvent = null;
         }
         EditorGUILayout.EndHorizontal();
 
-        EditorGUILayout.Space(4);
+        // Search Filter
+        EditorGUILayout.BeginHorizontal();
+        _eventFilter = EditorGUILayout.TextField("Filter", _eventFilter);
+        if (!string.IsNullOrEmpty(_eventFilter) && GUILayout.Button("✕", EditorStyles.miniButton, GUILayout.Width(22)))
+        {
+            _eventFilter = "";
+        }
+        EditorGUILayout.EndHorizontal();
 
         // Event List
-        _eventScroll = EditorGUILayout.BeginScrollView(_eventScroll, GUILayout.Height(200));
-        var filteredEvents = string.IsNullOrWhiteSpace(_eventSearchFilter)
-            ? _eventLog
-            : _eventLog.Where(e => e.Topic.Contains(_eventSearchFilter, StringComparison.OrdinalIgnoreCase) ||
-                                   e.EventName.Contains(_eventSearchFilter, StringComparison.OrdinalIgnoreCase)).ToList();
+        _eventScroll = EditorGUILayout.BeginScrollView(_eventScroll, GUILayout.Height(210));
 
-        if (filteredEvents.Count == 0)
+        var filtered = string.IsNullOrWhiteSpace(_eventFilter)
+            ? _eventLog
+            : _eventLog.Where(e => e.Topic.Contains(_eventFilter, StringComparison.OrdinalIgnoreCase) ||
+                                   e.EventName.Contains(_eventFilter, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        if (filtered.Count == 0)
         {
-            EditorGUILayout.HelpBox(_isConnected
-                ? "Waiting for broadcast events from Exoforge backend (e.g., combat:damage_dealt, player:updated)..."
-                : "Connect to cluster to monitor live events.", MessageType.None);
+            EditorGUILayout.HelpBox(_isConnected ? "Listening for live events on topic '*'..." : "Connect to cluster to monitor live broadcast events.", MessageType.None);
         }
         else
         {
-            foreach (var evt in filteredEvents)
+            foreach (var evt in filtered)
             {
                 bool isSelected = _selectedEvent == evt;
-                EditorGUILayout.BeginHorizontal(isSelected ? EditorStyles.selectionRect : EditorStyles.helpBox);
+                var rowStyle = isSelected ? EditorStyles.selectionRect : EditorStyles.helpBox;
 
-                GUILayout.Label("📡", GUILayout.Width(20));
-                EditorGUILayout.LabelField(evt.Timestamp.ToString("HH:mm:ss.fff"), EditorStyles.miniLabel, GUILayout.Width(75));
-                EditorGUILayout.LabelField(evt.Topic, EditorStyles.boldLabel, GUILayout.Width(130));
-                EditorGUILayout.LabelField(evt.EventName, EditorStyles.label, GUILayout.Width(150));
+                EditorGUILayout.BeginHorizontal(rowStyle);
+                EditorGUILayout.LabelField(evt.At.ToString("HH:mm:ss.fff"), EditorStyles.miniLabel, GUILayout.Width(80));
+                EditorGUILayout.LabelField(evt.Topic, EditorStyles.miniBoldLabel, GUILayout.Width(130));
+                EditorGUILayout.LabelField(evt.EventName);
 
-                GUILayout.FlexibleSpace();
-
-                if (GUILayout.Button("Inspect", EditorStyles.miniButton, GUILayout.Width(65)))
+                if (GUILayout.Button(isSelected ? "Selected" : "Inspect", EditorStyles.miniButton, GUILayout.Width(60)))
                 {
                     _selectedEvent = evt;
                 }
-
                 EditorGUILayout.EndHorizontal();
             }
         }
+
         EditorGUILayout.EndScrollView();
 
-        EditorGUILayout.Space(6);
+        EditorGUILayout.Space(4);
 
-        // JSON Inspector Box
-        EditorGUILayout.LabelField("Event Payload JSON Inspector", EditorStyles.boldLabel);
+        // Event Detail Inspector
+        EditorGUILayout.BeginHorizontal();
+        EditorGUILayout.LabelField(_selectedEvent != null
+            ? $"Payload: {_selectedEvent.Topic} -> {_selectedEvent.EventName}"
+            : "Event Payload Inspector", EditorStyles.boldLabel);
+
         if (_selectedEvent != null)
         {
-            EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField($"{_selectedEvent.Topic} -> {_selectedEvent.EventName}", EditorStyles.miniBoldLabel);
             if (GUILayout.Button("Copy JSON", EditorStyles.miniButton, GUILayout.Width(80)))
             {
-                GUIUtility.systemCopyBuffer = _selectedEvent.RawJson;
-                ShowStatus("Copied event JSON to clipboard!", MessageType.Info);
+                EditorGUIUtility.systemCopyBuffer = _selectedEvent.RawJson;
+                ShowStatus("Copied event JSON to clipboard.", MessageType.Info);
             }
-            EditorGUILayout.EndHorizontal();
 
-            EditorGUILayout.TextArea(_selectedEvent.RawJson, GUILayout.Height(120));
+            if (GUILayout.Button("Send to Sandbox", EditorStyles.miniButton, GUILayout.Width(110)))
+            {
+                _sandboxPayload = _selectedEvent.RawJson;
+                _currentTab = Tab.ActionSandbox;
+                ShowStatus("Loaded event payload into Action Sandbox.", MessageType.Info);
+            }
+        }
+        EditorGUILayout.EndHorizontal();
+
+        if (_selectedEvent != null)
+        {
+            _eventDetailScroll = EditorGUILayout.BeginScrollView(_eventDetailScroll, GUILayout.Height(150));
+            EditorGUILayout.TextArea(_selectedEvent.RawJson, EditorStyles.textArea);
+            EditorGUILayout.EndScrollView();
         }
         else
         {
@@ -648,469 +918,516 @@ public class ExoforgeControlCenter : EditorWindow
         }
     }
 
-    private void DrawActionSandboxTab()
-    {
-        EditorGUILayout.LabelField("In-Engine RPC Action Runner", EditorStyles.boldLabel);
-        EditorGUILayout.HelpBox("Dispatch typed actions directly to the Exoforge Kernel and measure server latency in milliseconds without leaving Unity.", MessageType.Info);
+    // =========================================================================
+    // Tab 3: Action Sandbox
+    // =========================================================================
 
-        EditorGUILayout.Space(6);
+    private void DrawSandbox()
+    {
+        EditorGUILayout.LabelField("Action Sandbox & Service Dispatcher", EditorStyles.boldLabel);
+        EditorGUILayout.HelpBox("Test and dispatch actions directly to the cluster with typed JSON payloads.", MessageType.None);
 
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
 
-        EditorGUILayout.BeginHorizontal();
-        EditorGUILayout.LabelField("Service Atom:", GUILayout.Width(110));
-        _sandboxService = EditorGUILayout.TextField(_sandboxService);
-        EditorGUILayout.EndHorizontal();
+        // Catalog Dropdowns
+        var serviceNames = _serviceCatalog.Keys.ToList();
+        serviceNames.Add("(Custom)");
+        _selectedServiceIndex = Mathf.Clamp(_selectedServiceIndex, 0, serviceNames.Count - 1);
 
         EditorGUILayout.BeginHorizontal();
-        EditorGUILayout.LabelField("Action Name:", GUILayout.Width(110));
-        _sandboxAction = EditorGUILayout.TextField(_sandboxAction);
+        int newServiceIndex = EditorGUILayout.Popup("Quick Catalog", _selectedServiceIndex, serviceNames.ToArray());
+        if (newServiceIndex != _selectedServiceIndex)
+        {
+            _selectedServiceIndex = newServiceIndex;
+            if (_selectedServiceIndex < serviceNames.Count - 1)
+            {
+                _sandboxService = serviceNames[_selectedServiceIndex];
+                _selectedActionIndex = 0;
+                var actions = _serviceCatalog[_sandboxService];
+                if (actions.Count > 0)
+                {
+                    _sandboxAction = actions[0];
+                    LoadSamplePayload(_sandboxService, _sandboxAction);
+                }
+            }
+        }
+
+        if (_selectedServiceIndex < serviceNames.Count - 1)
+        {
+            var actions = _serviceCatalog[serviceNames[_selectedServiceIndex]];
+            actions.Add("(Custom)");
+            _selectedActionIndex = Mathf.Clamp(_selectedActionIndex, 0, actions.Count - 1);
+            int newActionIndex = EditorGUILayout.Popup(_selectedActionIndex, actions.ToArray(), GUILayout.Width(130));
+            if (newActionIndex != _selectedActionIndex)
+            {
+                _selectedActionIndex = newActionIndex;
+                if (_selectedActionIndex < actions.Count - 1)
+                {
+                    _sandboxAction = actions[_selectedActionIndex];
+                    LoadSamplePayload(_sandboxService, _sandboxAction);
+                }
+            }
+        }
         EditorGUILayout.EndHorizontal();
 
-        EditorGUILayout.Space(4);
-        EditorGUILayout.LabelField("JSON Payload:");
-        _sandboxPayloadJson = EditorGUILayout.TextArea(_sandboxPayloadJson, GUILayout.Height(80));
+        _sandboxService = EditorGUILayout.TextField("Service", _sandboxService);
+        _sandboxAction = EditorGUILayout.TextField("Action", _sandboxAction);
 
-        EditorGUILayout.Space(6);
-
-        // Payload Preset Templates
         EditorGUILayout.BeginHorizontal();
-        GUILayout.Label("Presets:", EditorStyles.miniLabel, GUILayout.Width(50));
-        if (GUILayout.Button("Combat Attack", EditorStyles.miniButton))
+        EditorGUILayout.LabelField("JSON Payload");
+        if (GUILayout.Button("Format JSON", EditorStyles.miniButton, GUILayout.Width(90)))
         {
-            _sandboxService = "combat_wasm";
-            _sandboxAction = "attack";
-            _sandboxPayloadJson = "{\n  \"target_player_id\": \"goblin_boss\",\n  \"damage\": 30\n}";
+            FormatSandboxPayload();
         }
-        if (GUILayout.Button("Player Profile", EditorStyles.miniButton))
+        if (GUILayout.Button("Load Template", EditorStyles.miniButton, GUILayout.Width(90)))
         {
-            _sandboxService = "player_data";
-            _sandboxAction = "get_profile";
-            _sandboxPayloadJson = "{\n  \"player_id\": \"player_1\"\n}";
-        }
-        if (GUILayout.Button("DB Health", EditorStyles.miniButton))
-        {
-            _sandboxService = "lldb";
-            _sandboxAction = "health_check";
-            _sandboxPayloadJson = "{}";
+            LoadSamplePayload(_sandboxService, _sandboxAction);
         }
         EditorGUILayout.EndHorizontal();
 
-        EditorGUILayout.Space(8);
+        _sandboxPayload = EditorGUILayout.TextArea(_sandboxPayload, GUILayout.Height(90));
 
-        GUI.enabled = _isConnected;
-        if (GUILayout.Button("⚡ Dispatch Action Request", GUILayout.Height(32)))
+        EditorGUILayout.Space(2);
+
+        using (new EditorGUI.DisabledScope(!_isConnected))
         {
-            _ = DispatchSandboxActionAsync();
+            if (GUILayout.Button("🚀 Dispatch Action", GUILayout.Height(28)))
+            {
+                _ = DispatchSandboxAsync();
+            }
         }
-        GUI.enabled = true;
-
         EditorGUILayout.EndVertical();
 
-        EditorGUILayout.Space(8);
-
-        // Action Result Box
+        // Response View
         if (!string.IsNullOrEmpty(_sandboxResult))
         {
+            EditorGUILayout.Space(4);
             EditorGUILayout.BeginHorizontal();
-            GUIStyle resStyle = new GUIStyle(EditorStyles.boldLabel)
+
+            var prev = GUI.color;
+            GUI.color = _sandboxSuccess ? new Color(0.3f, 0.9f, 0.4f) : new Color(0.9f, 0.3f, 0.3f);
+            string statusTag = _sandboxSuccess ? $"● SUCCESS ({_sandboxLatency})" : $"● ERROR ({_sandboxLatency})";
+            EditorGUILayout.LabelField(statusTag, EditorStyles.boldLabel);
+            GUI.color = prev;
+
+            if (GUILayout.Button("Copy Result", EditorStyles.miniButton, GUILayout.Width(80)))
             {
-                normal = { textColor = _sandboxResultSuccess ? new Color(0.2f, 0.8f, 0.3f) : new Color(0.8f, 0.3f, 0.2f) }
-            };
-            GUILayout.Label(_sandboxResultSuccess ? "✔ ACTION SUCCEEDED" : "✖ ACTION FAILED", resStyle);
-            GUILayout.FlexibleSpace();
-            GUILayout.Label(_sandboxResultLatency, EditorStyles.miniBoldLabel);
+                EditorGUIUtility.systemCopyBuffer = _sandboxResult;
+                ShowStatus("Copied action result to clipboard.", MessageType.Info);
+            }
             EditorGUILayout.EndHorizontal();
 
-            _sandboxResultScroll = EditorGUILayout.BeginScrollView(_sandboxResultScroll, GUILayout.Height(100));
-            EditorGUILayout.TextArea(_sandboxResult);
+            _sandboxResultScroll = EditorGUILayout.BeginScrollView(_sandboxResultScroll, GUILayout.Height(150));
+            EditorGUILayout.TextArea(_sandboxResult, EditorStyles.textArea);
             EditorGUILayout.EndScrollView();
         }
     }
 
-    private async Task DispatchSandboxActionAsync()
+    private void FormatSandboxPayload()
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(_sandboxPayload);
+            _sandboxPayload = JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Invalid JSON: {ex.Message}", MessageType.Error);
+        }
+    }
+
+    private void LoadSamplePayload(string service, string action)
+    {
+        switch (service)
+        {
+            case "auth":
+                _sandboxPayload = action switch
+                {
+                    "login" => "{\n  \"email\": \"dev@exoforge.game\",\n  \"password\": \"password\"\n}",
+                    "register" => "{\n  \"email\": \"new_player@exoforge.game\",\n  \"password\": \"password\"\n}",
+                    "verify" => "{\n  \"token\": \"dev:developer\"\n}",
+                    _ => "{}"
+                };
+                break;
+            case "player_data":
+                _sandboxPayload = action switch
+                {
+                    "get_profile" => "{\n  \"player_id\": \"player_1\"\n}",
+                    "set_attributes" => "{\n  \"attributes\": {\n    \"gold\": 100,\n    \"level\": 5\n  }\n}",
+                    "delete_profile" => "{\n  \"player_id\": \"player_1\"\n}",
+                    _ => "{}"
+                };
+                break;
+            case "combat" or "combat_wasm":
+                _sandboxPayload = "{\n  \"target_player_id\": \"boss_dummy_1\",\n  \"damage\": 35\n}";
+                break;
+            default:
+                _sandboxPayload = "{}";
+                break;
+        }
+    }
+
+    private async Task DispatchSandboxAsync()
     {
         if (_editorClient == null || !_isConnected) return;
 
         var sw = Stopwatch.StartNew();
         try
         {
-            object? payload = null;
-            if (!string.IsNullOrWhiteSpace(_sandboxPayloadJson))
-            {
-                payload = JsonDocument.Parse(_sandboxPayloadJson).RootElement;
-            }
+            object? payload = string.IsNullOrWhiteSpace(_sandboxPayload)
+                ? null
+                : JsonDocument.Parse(_sandboxPayload).RootElement;
 
             var result = await _editorClient.SendActionAsync<JsonElement>(_sandboxService, _sandboxAction, payload);
             sw.Stop();
-            double micros = (sw.ElapsedTicks / (double)System.Diagnostics.Stopwatch.Frequency) * 1_000_000.0;
-            _sandboxResultLatency = $"⚡ {sw.ElapsedMilliseconds} ms ({micros:F0} µs)";
-            _sandboxResultSuccess = true;
+
+            _sandboxSuccess = true;
+            _sandboxLatency = $"{sw.ElapsedMilliseconds} ms";
             _sandboxResult = JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true });
         }
         catch (Exception ex)
         {
             sw.Stop();
-            _sandboxResultLatency = $"⚡ {sw.ElapsedMilliseconds} ms";
-            _sandboxResultSuccess = false;
-            _sandboxResult = $"Error: {ex.Message}";
+            _sandboxSuccess = false;
+            _sandboxLatency = $"{sw.ElapsedMilliseconds} ms";
+            _sandboxResult = ex.Message;
         }
 
         Repaint();
     }
 
-    private void DrawPluginsTab()
-    {
-        string wsPath = ExoforgeEditorConfig.GetAbsoluteWorkspacePath();
-        bool wsExists = ExoWorkspace.Exists(wsPath);
+    // =========================================================================
+    // Tab 4: Plugins & WASM
+    // =========================================================================
 
-        if (!wsExists)
+    private void DrawPlugins()
+    {
+        _pluginsScroll = EditorGUILayout.BeginScrollView(_pluginsScroll);
+
+        bool wsExists = ExoWorkspace.Exists(_workspace.RootPath);
+
+        // Workspace
+        EditorGUILayout.LabelField("Workspace", EditorStyles.boldLabel);
+        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+        EditorGUILayout.LabelField(_workspace.RootPath, EditorStyles.miniLabel);
+
+        EditorGUILayout.BeginHorizontal();
+        if (!wsExists && GUILayout.Button("Initialize Workspace", EditorStyles.miniButton))
         {
-            EditorGUILayout.HelpBox($"Exoforge workspace not detected at '{wsPath}'. Initialize it to scaffold C# WASM plugins.", MessageType.Warning);
-            if (GUILayout.Button("Initialize /exoforge Workspace", GUILayout.Height(26)))
-            {
-                ExoWorkspace.Initialize(wsPath);
-                RefreshLocalPlugins();
-                ShowStatus($"Initialized workspace at '{wsPath}'", MessageType.Info);
-            }
-            EditorGUILayout.Space(8);
+            _workspace = ExoWorkspace.Initialize(_workspace.RootPath);
+            ShowStatus($"Initialized workspace at {_workspace.RootPath}", MessageType.Info);
         }
 
-        // Scaffold New Plugin Box
-        EditorGUILayout.LabelField("Scaffold New C# WASM Plugin", EditorStyles.boldLabel);
-        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-
-        EditorGUILayout.BeginHorizontal();
-        EditorGUILayout.LabelField("Plugin Name:", GUILayout.Width(90));
-        _newPluginName = EditorGUILayout.TextField(_newPluginName);
-        EditorGUILayout.EndHorizontal();
-
-        EditorGUILayout.BeginHorizontal();
-        EditorGUILayout.LabelField("Template:", GUILayout.Width(90));
-        _scaffoldTemplateIndex = EditorGUILayout.Popup(_scaffoldTemplateIndex, _scaffoldTemplates);
-
-        if (GUILayout.Button("+ Scaffold Plugin", GUILayout.Width(140)))
+        if (GUILayout.Button("Reveal in Finder", EditorStyles.miniButton))
         {
-            ScaffoldPluginAction(wsPath);
+            EditorUtility.RevealInFinder(_workspace.RootPath);
         }
         EditorGUILayout.EndHorizontal();
 
         EditorGUILayout.EndVertical();
 
-        EditorGUILayout.Space(8);
+        EditorGUILayout.Space(6);
 
-        // Local Plugins List
+        // Scaffolder
+        EditorGUILayout.LabelField("Scaffold New C# Plugin", EditorStyles.boldLabel);
+        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+        _newPluginName = EditorGUILayout.TextField("Plugin Name", _newPluginName);
+        if (GUILayout.Button("Scaffold C# WASM Plugin") && !string.IsNullOrWhiteSpace(_newPluginName))
+        {
+            ScaffoldNewPlugin();
+        }
+        EditorGUILayout.EndVertical();
+
+        EditorGUILayout.Space(6);
+
+        // Local Plugins
         EditorGUILayout.BeginHorizontal();
-        EditorGUILayout.LabelField($"Local Custom Plugins ({_localPlugins.Count})", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField($"Local Plugins ({_localPlugins.Count})", EditorStyles.boldLabel);
         if (GUILayout.Button("Refresh Local", EditorStyles.miniButton, GUILayout.Width(90)))
         {
             RefreshLocalPlugins();
         }
         EditorGUILayout.EndHorizontal();
 
-        _pluginsScroll = EditorGUILayout.BeginScrollView(_pluginsScroll, GUILayout.Height(130));
+        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
         if (_localPlugins.Count == 0)
         {
-            EditorGUILayout.HelpBox("No plugins found in workspace plugins/ folder. Create one above!", MessageType.None);
+            EditorGUILayout.LabelField("No local plugins found in workspace/plugins.", EditorStyles.miniLabel);
         }
         else
         {
             foreach (var plugin in _localPlugins)
             {
-                EditorGUILayout.BeginHorizontal(EditorStyles.helpBox);
-                GUILayout.Label("📦", GUILayout.Width(20));
+                EditorGUILayout.BeginHorizontal();
                 EditorGUILayout.LabelField(plugin.Name, EditorStyles.boldLabel, GUILayout.Width(140));
 
                 if (plugin.HasWasm)
                 {
-                    GUIStyle wasmStyle = new GUIStyle(EditorStyles.miniLabel)
-                    {
-                        normal = { textColor = new Color(0.2f, 0.7f, 0.3f) }
-                    };
-                    string sizeKb = $"{plugin.WasmSizeBytes / 1024.0:F1} KB";
-                    GUILayout.Label($"WASM ({sizeKb})", wasmStyle, GUILayout.Width(90));
+                    string sizeStr = $"{plugin.WasmSizeBytes / 1024} KB";
+                    var prev = GUI.color;
+                    GUI.color = new Color(0.3f, 0.9f, 0.4f);
+                    EditorGUILayout.LabelField($"✓ Ready ({sizeStr})", EditorStyles.miniBoldLabel, GUILayout.Width(90));
+                    GUI.color = prev;
                 }
                 else
                 {
-                    GUILayout.Label("Not Compiled", EditorStyles.miniLabel, GUILayout.Width(90));
+                    var prev = GUI.color;
+                    GUI.color = new Color(0.9f, 0.6f, 0.2f);
+                    EditorGUILayout.LabelField("○ Not built", EditorStyles.miniLabel, GUILayout.Width(90));
+                    GUI.color = prev;
                 }
 
-                GUILayout.FlexibleSpace();
-
-                GUI.enabled = _isConnected && plugin.HasWasm;
-                if (GUILayout.Button("Push to Server", EditorStyles.miniButton, GUILayout.Width(100)))
+                using (new EditorGUI.DisabledScope(!plugin.HasWasm || !_isConnected))
                 {
-                    _ = DeployLocalPluginAsync(plugin);
+                    if (GUILayout.Button("Deploy", EditorStyles.miniButton, GUILayout.Width(65)))
+                    {
+                        _ = DeployPluginAsync(plugin);
+                    }
                 }
-                GUI.enabled = true;
 
-                if (GUILayout.Button("Open Folder", EditorStyles.miniButton, GUILayout.Width(80)))
+                if (GUILayout.Button("Folder", EditorStyles.miniButton, GUILayout.Width(55)))
                 {
-                    EditorUtility.RevealInFinder(plugin.DirectoryPath);
+                    EditorUtility.RevealInFinder(plugin.Directory);
                 }
 
                 EditorGUILayout.EndHorizontal();
             }
         }
-        EditorGUILayout.EndScrollView();
+        EditorGUILayout.EndVertical();
 
-        EditorGUILayout.Space(8);
+        EditorGUILayout.Space(6);
 
-        // Remote Plugins List
+        // Remote Plugins
         EditorGUILayout.BeginHorizontal();
-        EditorGUILayout.LabelField($"Installed Remote Plugins ({_remotePlugins.Count})", EditorStyles.boldLabel);
-        if (GUILayout.Button("Refresh Server", EditorStyles.miniButton, GUILayout.Width(90)))
+        EditorGUILayout.LabelField($"Active Remote Plugins ({_remotePlugins.Count})", EditorStyles.boldLabel);
+        using (new EditorGUI.DisabledScope(!_isConnected))
         {
-            _ = RefreshRemoteInfoAsync();
+            if (GUILayout.Button("Refresh Remote", EditorStyles.miniButton, GUILayout.Width(100)))
+            {
+                _ = RefreshRemoteInfoAsync();
+            }
         }
         EditorGUILayout.EndHorizontal();
 
-        _remoteScroll = EditorGUILayout.BeginScrollView(_remoteScroll, GUILayout.Height(110));
-        if (!_isConnected)
+        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+        if (_remotePlugins.Count == 0)
         {
-            EditorGUILayout.HelpBox("Connect to Exoforge server to view remote installed plugins.", MessageType.None);
-        }
-        else if (_remotePlugins.Count == 0)
-        {
-            EditorGUILayout.HelpBox("No plugins reported by remote server.", MessageType.None);
+            EditorGUILayout.LabelField(_isConnected ? "No active remote plugins." : "Connect to view remote plugins.", EditorStyles.miniLabel);
         }
         else
         {
-            foreach (var rp in _remotePlugins)
+            foreach (var plugin in _remotePlugins)
             {
-                string id = rp.TryGetProperty("id", out var i) ? i.GetString() ?? "" : "";
-                string type = rp.TryGetProperty("type", out var t) ? t.GetString() ?? "" : "";
-                string ver = rp.TryGetProperty("version", out var v) ? v.GetString() ?? "" : "";
+                string id = plugin.TryGetProperty("id", out var idProp) ? idProp.ToString() : "?";
+                string version = plugin.TryGetProperty("version", out var vProp) ? vProp.ToString() : "";
 
-                EditorGUILayout.BeginHorizontal(EditorStyles.helpBox);
-                GUILayout.Label(type.Contains("wasm") ? "⚡" : "💎", GUILayout.Width(20));
-                EditorGUILayout.LabelField(id, EditorStyles.boldLabel, GUILayout.Width(180));
-                EditorGUILayout.LabelField($"v{ver}", EditorStyles.miniLabel, GUILayout.Width(50));
-                EditorGUILayout.LabelField($"[{type}]", EditorStyles.miniLabel, GUILayout.Width(70));
-                GUILayout.FlexibleSpace();
-
-                if (type.Contains("wasm"))
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField($"{id}  {version}", EditorStyles.boldLabel);
+                using (new EditorGUI.DisabledScope(!_isConnected))
                 {
-                    if (GUILayout.Button("Remove", EditorStyles.miniButton, GUILayout.Width(60)))
+                    if (GUILayout.Button("Remove", EditorStyles.miniButton, GUILayout.Width(65)))
                     {
-                        _ = RemoveRemotePluginAsync(id);
+                        _ = RemovePluginAsync(id);
                     }
                 }
                 EditorGUILayout.EndHorizontal();
             }
         }
+        EditorGUILayout.EndVertical();
+
         EditorGUILayout.EndScrollView();
     }
 
-    private void ScaffoldPluginAction(string wsPath)
+    private async Task DeployPluginAsync(LocalPluginInfo plugin)
     {
-        if (string.IsNullOrWhiteSpace(_newPluginName))
-        {
-            ShowStatus("Please enter a valid plugin name.", MessageType.Error);
-            return;
-        }
-
         try
         {
-            string pluginDir = ExoScaffolder.ScaffoldPlugin(wsPath, _newPluginName.Trim());
-            RefreshLocalPlugins();
-            ShowStatus($"Scaffolded plugin '{_newPluginName}' at '{pluginDir}'", MessageType.Info);
-            _newPluginName = "";
+            var deployer = new ExoDeployer(_workspace);
+            await deployer.UploadPluginAsync(plugin.Name, existingClient: _editorClient);
+            ShowStatus($"Successfully deployed '{plugin.Name}' to cluster.", MessageType.Info);
+            await RefreshRemoteInfoAsync();
+            await SyncAndGenerateClientAsync();
         }
         catch (Exception ex)
         {
-            ShowStatus($"Scaffolding failed: {ex.Message}", MessageType.Error);
+            ShowStatus($"Deploy failed: {ex.Message}", MessageType.Error);
         }
+
+        Repaint();
     }
 
-    private async Task DeployLocalPluginAsync(LocalPluginInfo plugin)
+    private async Task RemovePluginAsync(string pluginId)
     {
-        if (_editorClient == null || !_isConnected)
-        {
-            ShowStatus("Please connect to Exoforge server first.", MessageType.Error);
-            return;
-        }
-
-        if (!plugin.HasWasm)
-        {
-            ShowStatus($"Plugin '{plugin.Name}' has not been compiled to .wasm yet.", MessageType.Warning);
-            return;
-        }
-
         try
         {
-            byte[] wasmBytes = await File.ReadAllBytesAsync(plugin.WasmPath);
-            var deployer = new ExoDeployer(_editorClient);
-
-            bool success = await deployer.DeployWasmPluginAsync(plugin.Name, wasmBytes);
-            if (success)
-            {
-                ShowStatus($"Successfully pushed and hot-loaded '{plugin.Name}' into cluster!", MessageType.Info);
-                await RefreshRemoteInfoAsync();
-            }
-            else
-            {
-                ShowStatus($"Failed to push plugin '{plugin.Name}' to cluster.", MessageType.Error);
-            }
+            var deployer = new ExoDeployer(_workspace);
+            await deployer.RemovePluginAsync(pluginId, existingClient: _editorClient);
+            ShowStatus($"Removed remote plugin '{pluginId}'.", MessageType.Info);
+            await RefreshRemoteInfoAsync();
+            await SyncAndGenerateClientAsync();
         }
         catch (Exception ex)
         {
-            ShowStatus($"Deployment failed: {ex.Message}", MessageType.Error);
+            ShowStatus($"Remove failed: {ex.Message}", MessageType.Error);
         }
+
+        Repaint();
     }
 
-    private async Task RemoveRemotePluginAsync(string pluginId)
-    {
-        if (_editorClient == null || !_isConnected) return;
+    // =========================================================================
+    // Tab 5: Settings
+    // =========================================================================
 
-        if (EditorUtility.DisplayDialog("Confirm Remove", $"Unload plugin '{pluginId}' from remote runtime?", "Yes, Remove", "Cancel"))
+    private void DrawSettings()
+    {
+        EditorGUILayout.LabelField("Workspace & Codegen Paths", EditorStyles.boldLabel);
+        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+
+        // Workspace Path
+        EditorGUILayout.BeginHorizontal();
+        ExoforgeEditorConfig.WorkspacePath = EditorGUILayout.TextField("Workspace Path", ExoforgeEditorConfig.WorkspacePath);
+        if (GUILayout.Button("Browse...", GUILayout.Width(70)))
         {
-            try
+            string chosen = EditorUtility.OpenFolderPanel("Choose Exoforge Workspace", ExoforgeEditorConfig.GetAbsoluteWorkspacePath(), "");
+            if (!string.IsNullOrEmpty(chosen))
             {
-                var resp = await _editorClient.PluginManager().RemovePluginAsync(pluginId);
-                if (resp.Success)
+                string projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+                if (chosen.StartsWith(projectRoot))
                 {
-                    ShowStatus($"Plugin '{pluginId}' removed from server runtime.", MessageType.Info);
-                    await RefreshRemoteInfoAsync();
+                    ExoforgeEditorConfig.WorkspacePath = Path.GetRelativePath(projectRoot, chosen);
                 }
                 else
                 {
-                    ShowStatus($"Failed to remove plugin: {resp.Error}", MessageType.Error);
+                    ExoforgeEditorConfig.WorkspacePath = chosen;
                 }
             }
-            catch (Exception ex)
-            {
-                ShowStatus($"Error removing plugin: {ex.Message}", MessageType.Error);
-            }
         }
-    }
+        EditorGUILayout.EndHorizontal();
 
-    private void DrawScheduleTab()
-    {
-        EditorGUILayout.LabelField("LiveOps Schedules & Event Timelines", EditorStyles.boldLabel);
-        EditorGUILayout.HelpBox("Exoforge provides built-in time constructs for game developers to build custom seasonal events, scheduled maintenance, and timed loot tables without opinionated boilerplate.", MessageType.Info);
-
-        _scheduleScroll = EditorGUILayout.BeginScrollView(_scheduleScroll);
-
-        if (_liveopsWindows.Count == 0)
+        // Generated Script Path
+        EditorGUILayout.BeginHorizontal();
+        ExoforgeEditorConfig.GeneratedScriptPath = EditorGUILayout.TextField("Generated Client", ExoforgeEditorConfig.GeneratedScriptPath);
+        if (GUILayout.Button("Browse...", GUILayout.Width(70)))
         {
-            EditorGUILayout.HelpBox("No active or scheduled LiveOps events currently loaded from cluster.\n\nUse the golden-path template below to scaffold a custom C# WASM LiveOps plugin with [ExoResource(..., Drawer = \"schedule\")] and full calendar support.", MessageType.Info);
-            EditorGUILayout.Space(8);
-            if (GUILayout.Button("+ Scaffold Custom LiveOps Event Plugin Template", GUILayout.Height(32)))
+            string chosen = EditorUtility.SaveFilePanel("Generated Client File", Path.GetDirectoryName(ExoforgeEditorConfig.GetAbsoluteGeneratedScriptPath())!, "ExoforgeServices.g.cs", "cs");
+            if (!string.IsNullOrEmpty(chosen))
             {
-                _currentTab = Tab.Plugins;
-                _newPluginName = "liveops_events";
-                _scaffoldTemplateIndex = 2; // "Custom LiveOps Event"
-            }
-        }
-        else
-        {
-            foreach (var window in _liveopsWindows)
-            {
-            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-
-            EditorGUILayout.BeginHorizontal();
-            GUIStyle titleStyle = new GUIStyle(EditorStyles.boldLabel) { fontSize = 12 };
-            GUILayout.Label(window.Title, titleStyle);
-
-            if (window.Recurrence != "none")
-            {
-                GUIStyle recStyle = new GUIStyle(EditorStyles.miniLabel)
+                string projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+                if (chosen.StartsWith(projectRoot))
                 {
-                    normal = { textColor = new Color(0.6f, 0.4f, 0.95f) }
-                };
-                GUILayout.Label($"[{window.Recurrence.ToUpperInvariant()}]", recStyle);
+                    ExoforgeEditorConfig.GeneratedScriptPath = Path.GetRelativePath(projectRoot, chosen);
+                }
+                else
+                {
+                    ExoforgeEditorConfig.GeneratedScriptPath = chosen;
+                }
             }
-
-            GUILayout.FlexibleSpace();
-
-            bool isActive = window.EvaluateIsActive();
-            GUIStyle statusStyle = new GUIStyle(EditorStyles.miniBoldLabel)
-            {
-                normal = { textColor = isActive ? new Color(0.2f, 0.8f, 0.3f) : new Color(0.3f, 0.6f, 0.9f) }
-            };
-            GUILayout.Label(isActive ? "● ACTIVE NOW" : "○ UPCOMING", statusStyle);
-            EditorGUILayout.EndHorizontal();
-
-            EditorGUILayout.Space(2);
-            EditorGUILayout.LabelField($"ID: {window.Id}  •  Remaining: {window.CountdownText}", EditorStyles.miniLabel);
-
-            // Progress bar
-            if (isActive && window.Progress > 0)
-            {
-                Rect r = EditorGUILayout.GetControlRect(false, 6);
-                EditorGUI.ProgressBar(r, (float)window.Progress, "");
-            }
-
-            EditorGUILayout.EndVertical();
-            EditorGUILayout.Space(4);
         }
-        EditorGUILayout.EndScrollView();
-    }
+        EditorGUILayout.EndHorizontal();
 
-    private void DrawSettingsTab()
-    {
-        EditorGUILayout.LabelField("Studio Preferences & Paths", EditorStyles.boldLabel);
-
-        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-        EditorGUILayout.LabelField("WebSocket Server URL:");
-        ExoforgeEditorConfig.ServerUrl = EditorGUILayout.TextField(ExoforgeEditorConfig.ServerUrl);
-
-        EditorGUILayout.Space(4);
-        EditorGUILayout.LabelField("Admin Bearer Token / Role:");
-        ExoforgeEditorConfig.AdminToken = EditorGUILayout.TextField(ExoforgeEditorConfig.AdminToken);
-
-        EditorGUILayout.Space(4);
-        EditorGUILayout.LabelField("Workspace Folder Path:");
-        ExoforgeEditorConfig.WorkspacePath = EditorGUILayout.TextField(ExoforgeEditorConfig.WorkspacePath);
-        EditorGUILayout.LabelField($"Resolved: {ExoforgeEditorConfig.GetAbsoluteWorkspacePath()}", EditorStyles.miniLabel);
-
-        EditorGUILayout.Space(4);
-        EditorGUILayout.LabelField("Generated Client Script Path:");
-        ExoforgeEditorConfig.GeneratedScriptPath = EditorGUILayout.TextField(ExoforgeEditorConfig.GeneratedScriptPath);
-        EditorGUILayout.LabelField($"Resolved: {ExoforgeEditorConfig.GetAbsoluteGeneratedScriptPath()}", EditorStyles.miniLabel);
         EditorGUILayout.EndVertical();
 
         EditorGUILayout.Space(8);
-        if (GUILayout.Button("Reconnect with New Settings", GUILayout.Height(28)))
+
+        // Server Connection & Authentication
+        EditorGUILayout.LabelField("Server Connection & Authentication", EditorStyles.boldLabel);
+        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+        ExoforgeEditorConfig.ServerUrl = EditorGUILayout.TextField("Server URL", ExoforgeEditorConfig.ServerUrl);
+
+        EditorGUILayout.BeginHorizontal();
+        string newToken = EditorGUILayout.TextField("Bearer Token", ExoTokenStore.Token);
+        if (newToken != ExoTokenStore.Token)
         {
-            _ = ConnectAsync();
+            ExoTokenStore.Token = newToken;
+            ExoforgeEditorConfig.AdminToken = newToken;
         }
+
+        foreach (var (label, token) in ExoforgeEditorConfig.TokenPresets)
+        {
+            if (GUILayout.Button(label, EditorStyles.miniButton, GUILayout.Width(45)))
+            {
+                ExoTokenStore.Token = token;
+                ExoforgeEditorConfig.AdminToken = token;
+                ShowStatus($"Switched token to '{token}'.", MessageType.Info);
+                if (_isConnected)
+                {
+                    _ = ConnectAsync();
+                }
+            }
+        }
+        EditorGUILayout.EndHorizontal();
+        EditorGUILayout.EndVertical();
+
+        EditorGUILayout.Space(8);
+
+        // Configured Environments
+        EditorGUILayout.LabelField("Configured Environments", EditorStyles.boldLabel);
+        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+        foreach (var env in GetConfiguredEnvironments())
+        {
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField(env.Name, EditorStyles.boldLabel, GUILayout.Width(110));
+            EditorGUILayout.LabelField(env.WsUrl, EditorStyles.miniLabel);
+            if (GUILayout.Button("Select", EditorStyles.miniButton, GUILayout.Width(55)))
+            {
+                ApplyEnvironment(env);
+            }
+            EditorGUILayout.EndHorizontal();
+        }
+        EditorGUILayout.EndVertical();
+
+        EditorGUILayout.Space(8);
+
+        // Credential Management
+        EditorGUILayout.LabelField("Credential Persistence", EditorStyles.boldLabel);
+        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+        EditorGUILayout.LabelField($"Active Token: {ExoforgeEditorConfig.AdminToken}", EditorStyles.miniLabel);
+        EditorGUILayout.LabelField($"Stored Player ID: {ExoforgeEditorConfig.PlayerId}", EditorStyles.miniLabel);
+        EditorGUILayout.LabelField($"Scopes: {ExoforgeEditorConfig.Scopes}", EditorStyles.miniLabel);
+
+        EditorGUILayout.Space(4);
+        if (GUILayout.Button("Purge All Saved Credentials (EditorPrefs & PlayerPrefs)"))
+        {
+            _ = LogOutAsync();
+        }
+        EditorGUILayout.EndVertical();
     }
+
+    // =========================================================================
+    // Core Actions: Sync, Generate, Restart
+    // =========================================================================
 
     private async Task SyncAndGenerateClientAsync()
     {
-        if (_editorClient == null || !_isConnected) return;
+        ShowStatus("Syncing contracts and generating strongly-typed C# client...", MessageType.Info);
+        Repaint();
 
         try
         {
-            ShowStatus("Fetching cluster contract schemas...", MessageType.Info);
-            var deployer = new ExoDeployer(_editorClient);
+            string outputPath = ExoforgeEditorConfig.GetAbsoluteGeneratedScriptPath();
+            var deployer = new ExoDeployer(_workspace);
 
-            string? exportJson = await deployer.SyncContractsAsync();
-            if (string.IsNullOrEmpty(exportJson))
+            if (_isConnected && _editorClient != null)
             {
-                ShowStatus("Received empty contract export from server.", MessageType.Error);
-                return;
+                await deployer.SyncContractsAsync(
+                    outputPathOverride: outputPath,
+                    existingClient: _editorClient);
+            }
+            else
+            {
+                await deployer.SyncContractsAsync(
+                    environmentName: null,
+                    outputPathOverride: outputPath);
             }
 
-            string outPath = ExoforgeEditorConfig.GetAbsoluteGeneratedScriptPath();
-            string code = ExoCodeGenerator.GenerateCode(exportJson, "Exoforge.Client");
-
-            string? dir = Path.GetDirectoryName(outPath);
-            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
-            {
-                Directory.CreateDirectory(dir);
-            }
-
-            await File.WriteAllTextAsync(outPath, code);
-
+            ExoforgeRuntimeConfigGenerator.Generate();
+            ExoforgeEditorConfig.LastSyncTime = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss 'UTC'");
             AssetDatabase.Refresh();
-            ShowStatus($"Successfully generated typed client API at '{ExoforgeEditorConfig.GeneratedScriptPath}'!", MessageType.Info);
+            ShowStatus($"✓ Strongly-typed C# client generated successfully at {ExoforgeEditorConfig.GeneratedScriptPath}", MessageType.Info);
         }
         catch (Exception ex)
         {
-            ShowStatus($"Code generation failed: {ex.Message}", MessageType.Error);
+            ShowStatus($"Contract sync failed: {ex.Message}", MessageType.Error);
         }
 
         Repaint();
@@ -1120,39 +1437,17 @@ public class ExoforgeControlCenter : EditorWindow
     {
         if (_editorClient == null || !_isConnected) return;
 
-        if (EditorUtility.DisplayDialog("Restart Cluster", "Hot-reload all plugin supervision trees on remote server?", "Restart", "Cancel"))
+        try
         {
-            try
-            {
-                var resp = await _editorClient.PluginManager().RestartSystemAsync();
-                if (resp.Success)
-                {
-                    ShowStatus("Backend cluster runtime supervision restarted successfully.", MessageType.Info);
-                    await RefreshRemoteInfoAsync();
-                }
-                else
-                {
-                    ShowStatus($"Restart failed: {resp.Error}", MessageType.Error);
-                }
-            }
-            catch (Exception ex)
-            {
-                ShowStatus($"Error restarting cluster: {ex.Message}", MessageType.Error);
-            }
+            await _editorClient.SendActionAsync<JsonElement>("plugin_manager", "restart_system", null);
+            ShowStatus("Server supervision restarted successfully.", MessageType.Info);
+            await RefreshRemoteInfoAsync();
         }
-    }
+        catch (Exception ex)
+        {
+            ShowStatus($"Restart failed: {ex.Message}", MessageType.Error);
+        }
 
-    private void OpenSampleScene()
-    {
-        string samplePath = "Packages/com.exoforge.sdk/Samples~/CombatDemo";
-        if (Directory.Exists(samplePath))
-        {
-            EditorUtility.RevealInFinder(samplePath);
-        }
-        else
-        {
-            ShowStatus("CombatDemo sample files located in Samples~/CombatDemo", MessageType.Info);
-        }
+        Repaint();
     }
 }
-#endif
