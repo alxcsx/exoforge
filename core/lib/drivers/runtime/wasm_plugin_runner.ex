@@ -1,7 +1,8 @@
 defmodule Exoforge.Drivers.Runtime.WasmPluginRunner do
   @moduledoc """
   Plugin Runner responsible for loading, sandboxing, and executing WebAssembly (WASM) plugins.
-  Supports both Core WebAssembly modules and WebAssembly Components (WASI P2).
+  Supports Core WebAssembly modules with host imports for events, actions, database,
+  and entity state.
   """
 
   @behaviour Exoforge.Contracts.PluginRunner
@@ -145,10 +146,9 @@ defmodule Exoforge.Drivers.Runtime.WasmPluginRunner do
               n when is_atom(n) or is_binary(n) -> n
             end
 
-          event_key =
-            if is_binary(event_name), do: safe_to_atom(event_name) || String.to_atom(event_name), else: event_name
+          event_key = if is_binary(event_name), do: safe_to_atom(event_name), else: event_name
 
-          EventDispatcher.subscribe(event_key)
+          if event_key, do: EventDispatcher.subscribe(event_key)
         end)
 
         # 2. Call __init or init in guest if exported
@@ -258,7 +258,7 @@ defmodule Exoforge.Drivers.Runtime.WasmPluginRunner do
   defp normalize_result(result, _action_meta) when is_binary(result) do
     case Jason.decode(result) do
       {:ok, %{"error" => reason}} when is_binary(reason) ->
-        {:error, safe_to_atom(reason) || String.to_atom(reason)}
+        {:error, safe_to_atom(reason) || reason}
 
       {:ok, %{error: reason}} when is_atom(reason) ->
         {:error, reason}
@@ -666,55 +666,7 @@ defmodule Exoforge.Drivers.Runtime.WasmPluginRunner do
   end
 
   defp ensure_proxy_module(manifest) do
-    mod = wasm_module_name(manifest)
-    manifest_id = manifest.id
-    provides = Map.get(manifest, :provides, [])
-    events = Map.get(manifest, :events, [])
-    services = Map.get(manifest, :services, [])
-
-    service_metadata =
-      case services do
-        [first_svc | _] -> first_svc
-        _ -> %{name: hd(provides || [manifest_id]), actions: [], events: [], resources: []}
-      end
-
-    unless Code.ensure_loaded?(mod) do
-      contents =
-        quote do
-          defmodule unquote(mod) do
-            @moduledoc false
-            def __exoforge_plugin__?, do: true
-            def manifest, do: unquote(Macro.escape(manifest))
-            def provides_contracts, do: unquote(Macro.escape(provides))
-            def handled_events, do: unquote(Macro.escape(events))
-            def __service_metadata__, do: unquote(Macro.escape(service_metadata))
-            def __services_metadata__, do: unquote(Macro.escape(services))
-            def children, do: []
-            def init(_manifest), do: :ok
-
-            def handle_inbound_event(event_key, payload, context) do
-              Exoforge.Drivers.Runtime.WasmPluginRunner.dispatch_event(
-                unquote(manifest_id),
-                event_key,
-                payload,
-                context
-              )
-            end
-
-            def __execute_action__(action, payload) do
-              Exoforge.Drivers.Runtime.WasmPluginRunner.execute_action(
-                unquote(manifest_id),
-                action,
-                payload
-              )
-            end
-          end
-        end
-
-      Code.eval_quoted(contents)
-    end
-
-    mod
+    Exoforge.Drivers.Runtime.PluginProxy.ensure(manifest, __MODULE__, wasm_module_name(manifest))
   end
 
   defp has_capability?(%Manifest{dependencies: deps, provides: provides}, service) do

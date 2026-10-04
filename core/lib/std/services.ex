@@ -51,6 +51,15 @@ defmodule Exoforge.Std.Services do
   defservice dashboard do
     @moduledoc "Dashboard host and studio server contract."
 
+    @doc "Per-account Studio preferences (pinned extensions, etc.)."
+    defresource StudioPreference,
+      name: :studio_preference,
+      primary_key: :player_id,
+      source: {:table, "studio_preferences"} do
+      column(:player_id, :string, sortable: true)
+      column(:data, :string)
+    end
+
     @doc "Retrieves dashboard mount specification: {:live, Module} | {:hook, config} | {:iframe, config}"
     action :get_dashboard_mount do
       params(view_id: [type: :atom, optional: true])
@@ -153,6 +162,17 @@ defmodule Exoforge.Std.Services do
       )
 
       returns(user_id: :string, player_id: :string, token: :string, scopes: [:string], player: :map)
+      errors([:invalid_attributes, :registration_failed])
+    end
+
+    @doc "Creates or resumes an anonymous player session."
+    action :anonymous do
+      params(
+        player_id: [type: :string, optional: true],
+        name: [type: :string, optional: true]
+      )
+
+      returns(player_id: :string, token: :string, scopes: [:string])
       errors([:invalid_attributes, :registration_failed])
     end
 
@@ -312,38 +332,6 @@ defmodule Exoforge.Std.Services do
     end
   end
 
-  defservice combat do
-    @moduledoc "Sandboxed combat gameplay and damage calculations."
-
-    @doc "Ping action for health verification."
-    action :ping do
-      returns(pong: :integer)
-    end
-
-    @doc "Executes an attack action between two entities."
-    action :attack do
-      params(attacker_id: :integer, target_id: :integer, damage: :integer)
-      returns(damage: :integer)
-    end
-
-    @doc "Fired when a player takes damage."
-    event :player_damaged do
-      payload(attacker_id: :integer, target_id: :integer, damage: :integer)
-      scope(:global)
-      topic("combat:events")
-    end
-
-    @doc "Combatants active in arena."
-    resource :combatants do
-      primary_key(:entity_id)
-      column(:entity_id, :integer, label: "Entity ID", sortable: true)
-      column(:health, :integer, label: "Health", sortable: true)
-      column(:status, :string, label: "Status", badge: true)
-      drawer([:overview, :events])
-      actions([:attack, :ping])
-    end
-  end
-
   defservice ws do
     @moduledoc "Real-time WebSocket ingress and egress service."
 
@@ -423,6 +411,63 @@ defmodule Exoforge.Std.Services do
     action :export_plugin_info do
       scope("studio")
       returns(export: :map)
+    end
+  end
+
+  defservice resource_store do
+    @moduledoc "Schema-driven persistence for declared resources."
+
+    @doc "Creates/updates the tables backing all declared resources (additive migrations)."
+    action :migrate do
+      params(resource: [type: :string, optional: true])
+      returns(migrated: :integer)
+    end
+
+    @doc "Lists rows for a resource with filtering, sorting, and pagination."
+    action :list do
+      params(
+        resource: :string,
+        filter: [type: :map, optional: true],
+        search: [type: :string, optional: true],
+        sort: [type: :string, optional: true],
+        limit: [type: :integer, optional: true],
+        offset: [type: :integer, optional: true]
+      )
+
+      returns(rows: [:map], total: :integer)
+    end
+
+    @doc "Fetches one row by primary key."
+    action :get do
+      params(resource: :string, id: :term)
+      returns(row: :map)
+      errors([:not_found])
+    end
+
+    @doc "Creates a row."
+    action :create do
+      params(resource: :string, attributes: :map)
+      returns(row: :map)
+      errors([:invalid_attributes])
+    end
+
+    @doc "Updates a row by primary key."
+    action :update do
+      params(resource: :string, id: :term, attributes: :map)
+      returns(row: :map)
+      errors([:not_found])
+    end
+
+    @doc "Deletes a row by primary key."
+    action :delete do
+      params(resource: :string, id: :term)
+      returns(deleted: :boolean)
+    end
+
+    @doc "Inserts or updates a row on conflict."
+    action :upsert do
+      params(resource: :string, attributes: :map)
+      returns(row: :map)
     end
   end
 end

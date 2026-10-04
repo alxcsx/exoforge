@@ -15,7 +15,6 @@ defmodule Exoforge.PluginRegistry do
   def initialize_ets do
     ensure_table(:exo_plugins_mem, :set)
     ensure_table(:exo_services_mem, :bag)
-    Exoforge.UIHookRegistry.initialize_ets()
     :ok
   end
 
@@ -48,49 +47,6 @@ defmodule Exoforge.PluginRegistry do
       end)
     end)
 
-    # Auto-register declared UI hooks & settings tabs
-    case Map.get(manifest, :settings_tab) do
-      tab when is_map(tab) ->
-        tab_id = Map.get(tab, :id, id)
-        Exoforge.UIHookRegistry.register_hook(:settings, tab_id, Map.put(tab, :plugin_id, id))
-
-      _ ->
-        :ok
-    end
-
-    case Map.get(manifest, :settings_tabs) do
-      tabs when is_list(tabs) ->
-        Enum.each(tabs, fn tab ->
-          tab_id = Map.get(tab, :id)
-          if tab_id, do: Exoforge.UIHookRegistry.register_hook(:settings, tab_id, Map.put(tab, :plugin_id, id))
-        end)
-
-      _ ->
-        :ok
-    end
-
-    case Map.get(manifest, :ui_hooks) do
-      hooks when is_map(hooks) ->
-        Enum.each(hooks, fn {hook_point, hook_list} ->
-          if is_list(hook_list) do
-            Enum.each(hook_list, fn hook_spec ->
-              hook_id = Map.get(hook_spec, :id)
-              if hook_id do
-                Exoforge.UIHookRegistry.register_hook(hook_point, hook_id, Map.put(hook_spec, :plugin_id, id))
-              end
-            end)
-          else
-            hook_id = Map.get(hook_list, :id)
-            if hook_id do
-              Exoforge.UIHookRegistry.register_hook(hook_point, hook_id, Map.put(hook_list, :plugin_id, id))
-            end
-          end
-        end)
-
-      _ ->
-        :ok
-    end
-
     :ok
   end
 
@@ -111,8 +67,6 @@ defmodule Exoforge.PluginRegistry do
         :ets.match_object(:exo_services_mem, {{:_, :_}, %{id: id_atom}})
 
     Enum.each(existing, &:ets.delete_object(:exo_services_mem, &1))
-    Exoforge.UIHookRegistry.unregister_by_plugin(manifest_id)
-    if id_atom != manifest_id, do: Exoforge.UIHookRegistry.unregister_by_plugin(id_atom)
     :ok
   end
 
@@ -167,30 +121,45 @@ defmodule Exoforge.PluginRegistry do
   def all_resources do
     all_manifests()
     |> Enum.flat_map(fn manifest ->
-      provides = Map.get(manifest, :provides, [])
+      Enum.flat_map(manifest_services(manifest), fn meta ->
+        resources = Map.get(meta, :resources, []) |> sanitize_for_json()
 
-      Enum.flat_map(provides, fn contract_ref ->
-        contract_mod = resolve_contract_module(contract_ref)
-
-        if is_atom(contract_mod) and Code.ensure_loaded?(contract_mod) and
-             function_exported?(contract_mod, :__service_metadata__, 0) do
-          meta = contract_mod.__service_metadata__()
-          resources = Map.get(meta, :resources, []) |> sanitize_for_json()
-
-          Enum.map(resources, fn res ->
-            %{
-              plugin_id: manifest.id,
-              plugin_name: manifest.name,
-              service: clean_service_name(meta.name),
-              contract: contract_mod,
-              resource: res
-            }
-          end)
-        else
-          []
-        end
+        Enum.map(resources, fn res ->
+          %{
+            plugin_id: manifest.id,
+            plugin_name: manifest.name,
+            service: clean_service_name(Map.get(meta, :name, "unknown")),
+            contract: Map.get(meta, :__contract__),
+            resource: res
+          }
+        end)
       end)
     end)
+  end
+
+  @doc """
+  Returns a manifest's service metadata, regardless of source: WASM plugins
+  declare it in the manifest, Elixir plugins provide a contract module.
+  """
+  def manifest_services(manifest) do
+    case Map.get(manifest, :services, []) do
+      [] ->
+        manifest
+        |> Map.get(:provides, [])
+        |> Enum.map(fn contract_ref ->
+          contract_mod = resolve_contract_module(contract_ref)
+
+          if is_atom(contract_mod) and Code.ensure_loaded?(contract_mod) and
+               function_exported?(contract_mod, :__service_metadata__, 0) do
+            Map.put(contract_mod.__service_metadata__(), :__contract__, contract_mod)
+          else
+            %{name: contract_ref, actions: [], events: [], resources: []}
+          end
+        end)
+
+      declared ->
+        declared
+    end
   end
 
   @doc "Fetches a specific resource declaration by name."
@@ -201,12 +170,44 @@ defmodule Exoforge.PluginRegistry do
     end
   end
 
-  @doc "Dynamically retrieves data rows for any declared resource from its providing plugin or database."
-  def fetch_resource_rows(resource_name) do
+  @doc "Dynamically retrieves data rows for any declared resource via the resource store."
+  def fetch_resource_rows(resource_name, caller_scopes \\ :internal) do
+    case Exoforge.ActionDispatcher.dispatch(
+           :resource_store,
+           :list,
+           %{
+             resource: to_string(resource_name),
+             limit: 1000,
+             _auth: %{scopes: caller_scopes}
+           },
+           caller_scopes: caller_scopes
+         ) do
+      {:ok, %{rows: rows}} when is_list(rows) ->
+        normalize_resource_rows(resource_name, rows)
+
+      _ ->
+        legacy_resource_rows(resource_name)
+    end
+  end
+
+  defp normalize_resource_rows(resource_name, rows) do
+    pk_key =
+      case fetch_resource(resource_name) do
+        {:ok, %{resource: res}} -> to_string(res.primary_key || "id")
+        _ -> "id"
+      end
+
+    Enum.map(rows, fn row ->
+      id = fetch_key(row, pk_key) || fetch_key(row, "id") || "item_1"
+      Map.put(row, :id, id)
+    end)
+  end
+
+  # Fallback when the resource store plugin is not loaded.
+  defp legacy_resource_rows(resource_name) do
     case fetch_resource(resource_name) do
       {:ok, %{plugin_id: plugin_id, resource: res}} ->
         table_name = to_string(res.name)
-        pk_key = to_string(res.primary_key || "id")
 
         list_action =
           res
@@ -219,40 +220,29 @@ defmodule Exoforge.PluginRegistry do
             name -> String.to_existing_atom(name)
           end
 
-        rows =
-          case Exoforge.ActionDispatcher.dispatch(plugin_id, list_action, %{}) do
-            {:ok, %{rows: r}} when is_list(r) ->
-              r
+        case Exoforge.ActionDispatcher.dispatch(plugin_id, list_action, %{}) do
+          {:ok, %{rows: r}} when is_list(r) ->
+            r
 
-            {:ok, %{players: r}} when is_list(r) ->
-              r
+          {:ok, %{players: r}} when is_list(r) ->
+            r
 
-            {:ok, r} when is_list(r) ->
-              r
+          {:ok, r} when is_list(r) ->
+            r
 
-            _ ->
-              if valid_identifier?(table_name) do
-                case Exoforge.ActionDispatcher.dispatch(:database, :execute, %{
-                       plugin: plugin_id,
-                       operation: "SELECT * FROM #{table_name}"
-                     }) do
-                  {:ok, %{rows: r}} when is_list(r) -> r
-                  _ -> []
-                end
-              else
-                []
+          _ ->
+            if valid_identifier?(table_name) do
+              case Exoforge.ActionDispatcher.dispatch(:database, :execute, %{
+                     plugin: plugin_id,
+                     operation: "SELECT * FROM #{table_name}"
+                   }) do
+                {:ok, %{rows: r}} when is_list(r) -> r
+                _ -> []
               end
-          end
-
-        normalized =
-          Enum.map(rows, fn row ->
-            id =
-              fetch_key(row, pk_key) || fetch_key(row, "id") || "item_1"
-
-            Map.put(row, :id, id)
-          end)
-
-        normalized
+            else
+              []
+            end
+        end
 
       _ ->
         []
@@ -267,22 +257,7 @@ defmodule Exoforge.PluginRegistry do
       clean_provides = Enum.map(provides, &clean_service_name/1)
       clean_dependencies = Enum.map(Map.get(manifest, :dependencies, []), &clean_service_name/1)
 
-      services =
-        Enum.map(provides, fn contract_ref ->
-          contract_mod = resolve_contract_module(contract_ref)
-
-          meta =
-            if is_atom(contract_mod) and Code.ensure_loaded?(contract_mod) and
-                 function_exported?(contract_mod, :__service_metadata__, 0) do
-              contract_mod.__service_metadata__()
-            else
-              %{name: contract_ref, actions: [], events: [], resources: []}
-            end
-
-          meta
-          |> Map.put(:name, clean_service_name(Map.get(meta, :name, contract_ref)))
-          |> sanitize_for_json()
-        end)
+      services = Enum.map(manifest_services(manifest), &normalize_service_metadata/1)
 
       category = Map.get(manifest, :category) || "Extension"
 
@@ -359,6 +334,8 @@ defmodule Exoforge.PluginRegistry do
         traps_count: Map.get(stats, :traps_count, 0),
         last_trap: Map.get(stats, :last_trap),
         dashboard_view: dashboard_view,
+        title: Map.get(manifest, :title),
+        icon: Map.get(manifest, :icon),
         has_custom_view: has_custom,
         has_visual_controls: has_custom,
         has_dashboard_view: has_custom
@@ -394,6 +371,16 @@ defmodule Exoforge.PluginRegistry do
     end
   end
 
+  # WASM plugins carry their contract metadata in the manifest; Elixir plugins
+  # carry it in the provided contract module. Both are normalized here.
+  defp normalize_service_metadata(meta) do
+    name = Map.get(meta, :name) || Map.get(meta, "name") || "unknown"
+
+    meta
+    |> Map.put(:name, clean_service_name(name))
+    |> sanitize_for_json()
+  end
+
   @doc "Strips Elixir., Exoforge.Std.Services., and module namespaces to return a clean snake_case service identifier."
   def clean_service_name(name) when is_atom(name), do: clean_service_name(to_string(name))
 
@@ -427,6 +414,10 @@ defmodule Exoforge.PluginRegistry do
     clean = clean_service_name(str)
 
     cond do
+      Code.ensure_loaded?(contract_ref) and
+          function_exported?(contract_ref, :__service_metadata__, 0) ->
+        contract_ref
+
       String.starts_with?(str, "Elixir.Exoforge.Std.Services.") ->
         contract_ref
 
@@ -470,6 +461,17 @@ defmodule Exoforge.PluginRegistry do
     end
   end
 
+  # Keeps manifest-declared param types from growing the atom table: known types
+  # become atoms, anything else stays a string.
+  defp safe_type(str) when is_binary(str) do
+    String.to_existing_atom(str)
+  rescue
+    ArgumentError -> str
+  end
+
+  defp safe_type(atom) when is_atom(atom), do: atom
+  defp safe_type(_), do: :string
+
   @doc "Normalizes action parameter definitions into [%{name: string, type: atom, optional: boolean}]."
   def normalize_action_params(params) do
     cond do
@@ -480,7 +482,7 @@ defmodule Exoforge.PluginRegistry do
               m when is_map(m) -> Map.get(m, :type) || Map.get(m, "type") || :string
               l when is_list(l) -> Keyword.get(l, :type, :string)
               atom when is_atom(atom) -> atom
-              str when is_binary(str) -> String.to_atom(str)
+              str when is_binary(str) -> safe_type(str)
               _ -> :string
             end
 
@@ -501,7 +503,7 @@ defmodule Exoforge.PluginRegistry do
               m when is_map(m) -> Map.get(m, :type) || Map.get(m, "type") || :string
               l when is_list(l) -> Keyword.get(l, :type, :string)
               atom when is_atom(atom) -> atom
-              str when is_binary(str) -> String.to_atom(str)
+              str when is_binary(str) -> safe_type(str)
               _ -> :string
             end
 
@@ -523,7 +525,7 @@ defmodule Exoforge.PluginRegistry do
                 m when is_map(m) -> Map.get(m, :type) || Map.get(m, "type") || :string
                 l when is_list(l) -> Keyword.get(l, :type, :string)
                 atom when is_atom(atom) -> atom
-                str when is_binary(str) -> String.to_atom(str)
+                str when is_binary(str) -> safe_type(str)
                 _ -> :string
               end
 
@@ -543,7 +545,7 @@ defmodule Exoforge.PluginRegistry do
 
             %{
               name: to_string(name),
-              type: if(is_atom(type), do: type, else: String.to_atom(to_string(type))),
+              type: safe_type(type),
               optional: !!optional
             }
 

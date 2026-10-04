@@ -1,7 +1,7 @@
 defmodule Exoforge.Contracts.Service do
   @moduledoc "Provides a DSL for service specification"
 
-  @valid_keys [:params, :returns, :errors, :payload, :mode, :scope, :topic]
+  @valid_keys [:params, :returns, :errors, :payload, :mode, :scope, :topic, :transport]
 
   defmacro defservice(name_ast, do: block) do
     name = extract_name!(name_ast)
@@ -47,6 +47,7 @@ defmodule Exoforge.Contracts.Service do
 
     mode = Map.get(meta, :mode) || :sync
     scope = Map.get(meta, :scope) || :global
+    transport = Map.get(meta, :transport) || :auto
     params = Map.get(meta, :params) || []
     returns = Map.get(meta, :returns)
     errors = Map.get(meta, :errors) || []
@@ -77,6 +78,7 @@ defmodule Exoforge.Contracts.Service do
         doc: elem(doc_tuple, 1),
         mode: unquote(mode),
         scope: unquote(scope),
+        transport: unquote(transport),
         params: unquote(Macro.escape(params)),
         returns: unquote(Macro.escape(returns)),
         errors: unquote(Macro.escape(errors))
@@ -172,7 +174,8 @@ defmodule Exoforge.Contracts.Service do
         primary_key: unquote(parsed[:primary_key]),
         columns: unquote(Macro.escape(parsed[:columns])),
         drawer: unquote(Macro.escape(parsed[:drawer])),
-        actions: unquote(Macro.escape(parsed[:actions]))
+        actions: unquote(Macro.escape(parsed[:actions])),
+        source: unquote(parsed[:source])
       }
     end
   end
@@ -226,6 +229,7 @@ defmodule Exoforge.Contracts.Service do
       columns: [],
       drawer: [:overview, :attributes],
       actions: [],
+      source: nil,
       doc: nil
     }
   end
@@ -275,6 +279,9 @@ defmodule Exoforge.Contracts.Service do
 
         {:actions, _, [actions]} when is_list(actions) ->
           Map.put(acc, :actions, actions)
+
+        {:source, _, [src]} ->
+          Map.put(acc, :source, src)
 
         {:doc, _, [doc_str]} when is_binary(doc_str) ->
           Map.put(acc, :doc, doc_str)

@@ -61,4 +61,41 @@ defmodule Exoforge.PluginRegistryTest do
     assert auth_summary.has_dashboard_view == true
     assert auth_summary.dashboard_view.title == "Users & Auth"
   end
+
+  test "plugins do not have UI by default (has_dashboard_view is false when dashboard_view is nil)" do
+    headless_manifest = %Manifest{
+      id: :headless_service,
+      name: "Headless Service",
+      version: "1.0.0",
+      entry_point: HeadlessModule,
+      provides: [:headless],
+      services: [
+        %{
+          name: :headless,
+          actions: [%{name: :ping, mode: :sync}],
+          resources: [],
+          events: []
+        }
+      ],
+      dashboard_view: nil
+    }
+
+    assert :ok = PluginRegistry.register(headless_manifest)
+
+    extensions = PluginRegistry.dashboard_extensions()
+    summary = Enum.find(extensions, &(&1.id == :headless_service))
+
+    assert summary != nil
+    assert summary.has_dashboard_view == false
+    assert summary.has_visual_controls == false
+    assert summary.has_custom_view == false
+  end
+
+  test "normalize_action_params keeps unknown types as strings without creating atoms" do
+    unknown = "custom_type_#{System.unique_integer([:positive])}"
+
+    [param] = PluginRegistry.normalize_action_params(%{"thing" => unknown})
+    assert param.type == unknown
+    assert_raise ArgumentError, fn -> String.to_existing_atom(unknown) end
+  end
 end

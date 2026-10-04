@@ -58,23 +58,29 @@ defmodule Exoforge.PluginBootstrapper do
       initialize_and_register(manifest)
       t_elapsed = System.monotonic_time(:millisecond) - t_start
       type_label = if manifest.type == :wasm, do: "WASM", else: "Elixir"
+
       provides_str =
         (manifest.provides || [])
         |> Enum.map(fn p ->
           case p do
             mod when is_atom(mod) ->
               str = to_string(mod)
+
               if String.starts_with?(str, "Elixir.Exoforge.Std.Services.") do
                 ":#{Macro.underscore(Module.split(mod) |> List.last())}"
               else
                 ":#{mod}"
               end
-            other -> ":#{other}"
+
+            other ->
+              ":#{other}"
           end
         end)
         |> Enum.join(", ")
 
-      Logger.info("[Boot] [#{idx}/#{total}] #{manifest.id} (#{type_label}) -> provides [#{provides_str}] in #{t_elapsed}ms")
+      Logger.info(
+        "[Boot] [#{idx}/#{total}] #{manifest.id} (#{type_label}) -> provides [#{provides_str}] in #{t_elapsed}ms"
+      )
     end)
 
     manifests
@@ -96,6 +102,7 @@ defmodule Exoforge.PluginBootstrapper do
 
   defp runner_for(:elixir), do: ElixirPluginRunner
   defp runner_for(:wasm), do: Exoforge.Drivers.Runtime.WasmPluginRunner
+  defp runner_for(:native), do: Exoforge.Drivers.Runtime.NativePluginRunner
   defp runner_for(mod) when is_atom(mod), do: mod
 
   @spec sort!([%Manifest{}]) :: [%Manifest{}]
@@ -205,12 +212,15 @@ defmodule Exoforge.PluginBootstrapper do
           case p do
             mod when is_atom(mod) ->
               str = to_string(mod)
+
               if String.starts_with?(str, "Elixir.Exoforge.Std.Services.") do
                 ":#{Macro.underscore(Module.split(mod) |> List.last())}"
               else
                 ":#{mod}"
               end
-            other -> ":#{other}"
+
+            other ->
+              ":#{other}"
           end
         end)
         |> Enum.uniq()
@@ -218,19 +228,19 @@ defmodule Exoforge.PluginBootstrapper do
 
       banner = """
 
-==============================================================================
-  🚀 EXOFORGE CLUSTER RUNTIME (v1.0.0 [#{env}])
-==============================================================================
-  • Producer Studio:   http://localhost:#{dash_port}
-  • REST API Gateway:  http://localhost:#{http_port} (Docs: /api/docs)
-  • WebSocket Gateway: ws://localhost:#{ws_port}/ws (Game Client SDK)
-------------------------------------------------------------------------------
-  • Active Plugins (#{length(manifests)}): #{Enum.map_join(manifests, ", ", & &1.id)}
-  • Services Exposed:  #{services}
-  • Cluster Node:      #{node()}
-  • Status:            ONLINE and responsive (ready in #{total_ms}ms)
-==============================================================================
-"""
+      ==============================================================================
+        🚀 EXOFORGE CLUSTER RUNTIME (v1.0.0 [#{env}])
+      ==============================================================================
+        • Exoforge Dashboard:   http://localhost:#{dash_port}
+        • REST API Gateway:  http://localhost:#{http_port} (Docs: /api/docs)
+        • WebSocket Gateway: ws://localhost:#{ws_port}/ws (Game Client SDK)
+      ------------------------------------------------------------------------------
+        • Active Plugins (#{length(manifests)}): #{Enum.map_join(manifests, ", ", & &1.id)}
+        • Services Exposed:  #{services}
+        • Cluster Node:      #{node()}
+        • Status:            ONLINE and responsive (ready in #{total_ms}ms)
+      ==============================================================================
+      """
 
       IO.puts(banner)
     end

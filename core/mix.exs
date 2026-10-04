@@ -14,7 +14,6 @@ defmodule Exoforge.Core do
     [
       {:wasmex, "~> 0.15.1"},
       {:jason, "~> 1.4"},
-      {:plug, "~> 1.16"},
       {:horde, "~> 0.9"},
       {:libcluster, "~> 3.4", optional: true}
     ]

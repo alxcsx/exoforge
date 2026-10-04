@@ -27,13 +27,14 @@ defmodule Exoforge.Resource do
   defmacro __using__(opts) do
     quote location: :keep do
       import Exoforge.Resource,
-        only: [column: 2, column: 3, primary_key: 1, drawer: 1, doc: 1, actions: 1]
+        only: [column: 2, column: 3, primary_key: 1, drawer: 1, doc: 1, actions: 1, source: 1]
 
       Module.register_attribute(__MODULE__, :exo_columns, accumulate: true)
       @exo_primary_key Keyword.get(unquote(opts), :primary_key, :id)
       @exo_drawer Keyword.get(unquote(opts), :drawer, [:overview, :attributes])
       @exo_resource_name Keyword.get(unquote(opts), :name, nil)
       @exo_actions Keyword.get(unquote(opts), :actions, [])
+      @exo_source Keyword.get(unquote(opts), :source, nil)
 
       @before_compile Exoforge.Resource
     end
@@ -54,6 +55,12 @@ defmodule Exoforge.Resource do
   defmacro actions(acts) do
     quote do
       @exo_actions unquote(acts)
+    end
+  end
+
+  defmacro source(src) do
+    quote do
+      @exo_source unquote(src)
     end
   end
 
@@ -87,6 +94,7 @@ defmodule Exoforge.Resource do
     primary_key = Module.get_attribute(env.module, :exo_primary_key) || :id
     drawer = Module.get_attribute(env.module, :exo_drawer) || [:overview, :attributes]
     actions = Module.get_attribute(env.module, :exo_actions) || []
+    source = Module.get_attribute(env.module, :exo_source)
 
     explicit_name = Module.get_attribute(env.module, :exo_resource_name)
     resource_name = explicit_name || default_resource_name(env.module)
@@ -106,6 +114,7 @@ defmodule Exoforge.Resource do
           primary_key: unquote(primary_key),
           drawer: unquote(drawer),
           actions: unquote(actions),
+          source: unquote(Macro.escape(source)),
           columns: unquote(Macro.escape(columns))
         }
       end

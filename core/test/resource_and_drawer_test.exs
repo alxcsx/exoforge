@@ -2,7 +2,6 @@ defmodule Exoforge.ResourceAndDrawerTest do
   use ExUnit.Case, async: false
 
   alias Exoforge.PluginRegistry
-  alias Exoforge.DrawerRegistry
   alias Exoforge.Domain.Manifest
 
   defmodule ResourceTestService do
@@ -30,9 +29,7 @@ defmodule Exoforge.ResourceAndDrawerTest do
 
   setup do
     unless Process.whereis(PluginRegistry), do: start_supervised!(PluginRegistry)
-    unless Process.whereis(DrawerRegistry), do: start_supervised!(DrawerRegistry)
     PluginRegistry.initialize_ets()
-    DrawerRegistry.initialize_ets()
     :ok
   end
 
@@ -82,46 +79,11 @@ defmodule Exoforge.ResourceAndDrawerTest do
     assert {:error, :not_found} = PluginRegistry.fetch_resource(:non_existent)
   end
 
-  test "DrawerRegistry manages inspector tabs" do
-    manifest = %Manifest{
-      id: :inventory_plugin,
-      name: "inventory_plugin",
-      version: "1.0.0",
-      entry_point: nil,
-      provides: [ResourceTestService.Inventory]
-    }
-
-    assert :ok = PluginRegistry.register(manifest)
-
-    # list_tabs should include declared tabs [:overview, :attributes, :transactions]
-    tabs = DrawerRegistry.list_tabs(:items)
-    assert length(tabs) == 3
-    tab_ids = Enum.map(tabs, & &1.id)
-    assert tab_ids == [:overview, :attributes, :transactions]
-
-    # Register an extension-contributed tab: :moderation
-    DrawerRegistry.register_tab(:items, :moderation, %{label: "Item Logs", order: 50})
-
-    updated_tabs = DrawerRegistry.list_tabs(:items)
-    assert length(updated_tabs) == 4
-    assert Enum.any?(updated_tabs, fn t -> t.id == :moderation and t.label == "Item Logs" end)
-
-    # Unregister tab
-    DrawerRegistry.unregister_tab(:items, :moderation)
-    assert length(DrawerRegistry.list_tabs(:items)) == 3
-  end
-
   test "standard services contain declared resources" do
     player_data_meta = Exoforge.Std.Services.PlayerData.__service_metadata__()
     assert length(player_data_meta.resources) == 1
     [players_res] = player_data_meta.resources
     assert players_res.name == :players
     assert players_res.primary_key == :player_id
-
-    combat_meta = Exoforge.Std.Services.Combat.__service_metadata__()
-    assert length(combat_meta.resources) == 1
-    [combatants_res] = combat_meta.resources
-    assert combatants_res.name == :combatants
-    assert combatants_res.primary_key == :entity_id
   end
 end

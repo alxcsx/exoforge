@@ -42,24 +42,35 @@ defmodule Exoforge.SystemIntegrationTest do
       assert dashboard_views != nil
       assert dashboard_views.id == :exoforge_std_dashboard_views
 
-      combat = PluginRegistry.fetch_service(:combat)
-      assert combat != nil
-      assert combat.type == :wasm
-      assert combat.entry_point == Exoforge.Plugins.CombatWasm
-      assert function_exported?(combat.entry_point, :__exoforge_plugin__?, 0)
-      assert combat.entry_point.provides_contracts() == [:combat]
+      sample_wasm = PluginRegistry.fetch_service(:sample_wasm)
+      assert sample_wasm != nil
+      assert sample_wasm.type == :wasm
+      assert sample_wasm.entry_point == Exoforge.Plugins.SampleWasm
+      assert function_exported?(sample_wasm.entry_point, :__exoforge_plugin__?, 0)
+      assert sample_wasm.entry_point.provides_contracts() == [:sample_wasm]
 
-      # Verify combatants resource is discovered with columns derived from C# attributes
-      combatants = Enum.find(PluginRegistry.all_resources(), fn r -> r.resource.name == :combatants end)
-      assert combatants != nil
-      assert combatants.plugin_id == :combat_wasm
-      assert Enum.any?(combatants.resource.columns, fn c -> c.name == :entity_id end)
+      # Verify counters resource is discovered with columns derived from C# attributes
+      counters = Enum.find(PluginRegistry.all_resources(), fn r -> r.resource.name == :counters end)
+      assert counters != nil
+      assert counters.plugin_id == :sample_wasm
+      assert Enum.any?(counters.resource.columns, fn c -> c.name == :counter_id end)
     end
   end
 
   describe "End-to-End Multi-Plugin Workflow with Database Isolation" do
     test "verifies database isolation between auth and player_data" do
-      # Auth creates a record in its isolated database
+      # Auth creates a table + record in its isolated database
+      _ = ActionDispatcher.dispatch(:database, :execute, %{
+        plugin: :auth,
+        operation: "DROP TABLE IF EXISTS system_info"
+      })
+
+      {:ok, _} =
+        ActionDispatcher.dispatch(:database, :execute, %{
+          plugin: :auth,
+          operation: "CREATE TABLE system_info (id text, key text, val text)"
+        })
+
       {:ok, _} =
         ActionDispatcher.dispatch(:database, :execute, %{
           plugin: :auth,
@@ -87,9 +98,9 @@ defmodule Exoforge.SystemIntegrationTest do
       assert hd(auth_system_rows)["val"] == "super_secret_auth_token"
     end
 
-    test "complete gameplay loop: Auth -> PlayerData -> WASM Combat -> Event" do
-      # 1. Subscribe to combat event
-      EventDispatcher.subscribe(:player_damaged, topic: "combat:events")
+    test "complete workflow: Auth -> PlayerData -> WASM Sample -> Event" do
+      # 1. Subscribe to sample event
+      EventDispatcher.subscribe(:value_changed, topic: "sample:events")
 
       # 2. Authenticate
       assert {:ok, auth_result} =
@@ -107,12 +118,13 @@ defmodule Exoforge.SystemIntegrationTest do
       assert player_res.player["name"] == "King Arthur"
 
       # 4. Invoke C# WASM Plugin action
-      assert {:ok, _damage} =
-               ActionDispatcher.dispatch(:combat, :attack, [1, 101, 25])
+      assert {:ok, _result} =
+               ActionDispatcher.dispatch(:sample_wasm, :increment, [1, 25])
 
       # 5. Verify C# WASM host_emit_event reached EventDispatcher
-      assert_receive {:exo_event, :player_damaged, event_payload, _ctx}, 1000
-      assert event_payload["target_id"] == 2 or event_payload["target_id"] == 101
+      assert_receive {:exo_event, :value_changed, event_payload, _ctx}, 1000
+      assert event_payload["counter_id"] == 1
+      assert event_payload["new_value"] == 25
 
       # 6. Verify Dashboard overview can see everything
       assert {:ok, %{data: overview}} =

@@ -28,14 +28,19 @@ defmodule Exoforge.Drivers.Runtime.ElixirPluginRunner do
         %{id: __MODULE__, start: {__MODULE__, :start_link, [{manifest, task_sup_name}]}}
       ] ++ custom_children
 
-    DynamicSupervisor.start_child(
-      Exoforge.PluginSupervisor,
-      %{
-        id: plugin_sup_name,
-        start: {Supervisor, :start_link, [children, [name: plugin_sup_name, strategy: :one_for_one]]},
-        type: :supervisor
-      }
-    )
+    child_spec = %{
+      id: plugin_sup_name,
+      start: {Supervisor, :start_link, [children, [name: plugin_sup_name, strategy: :one_for_one]]},
+      type: :supervisor
+    }
+
+    # A plugin whose children fail to start must fail the boot loudly, not leave
+    # the cluster running with a silently-dead subsystem.
+    case DynamicSupervisor.start_child(Exoforge.PluginSupervisor, child_spec) do
+      {:ok, pid} -> {:ok, pid}
+      {:error, {:already_started, pid}} -> {:ok, pid}
+      {:error, reason} -> raise "[Plugin Start Failed] #{inspect(plugin_mod)}: #{inspect(reason)}"
+    end
   end
 
   def start_link({%Manifest{}, _task_sup_name} = args) do

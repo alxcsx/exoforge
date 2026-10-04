@@ -2,76 +2,17 @@ defmodule Exoforge.UIHookRegistryTest do
   use ExUnit.Case, async: false
 
   alias Exoforge.UIHookRegistry
+  alias Exoforge.DrawerRegistry
   alias Exoforge.PluginRegistry
   alias Exoforge.Domain.Manifest
 
   setup do
+    unless Process.whereis(PluginRegistry), do: start_supervised!(PluginRegistry)
     PluginRegistry.initialize_ets()
-    UIHookRegistry.initialize_ets()
     :ok
   end
 
-  test "registers, sorts, and unregisters UI hooks directly" do
-    assert :ok =
-             UIHookRegistry.register_hook(:settings, :database, %{
-               title: "Database Engine",
-               icon: "🗄️",
-               order: 20
-             })
-
-    assert :ok =
-             UIHookRegistry.register_hook(:settings, :metadata, %{
-               title: "Metadata",
-               icon: "⚙️",
-               order: 5
-             })
-
-    assert :ok =
-             UIHookRegistry.register_hook(:settings, :auth, %{
-               title: "Auth & Security",
-               icon: "🔐",
-               order: 10
-             })
-
-    hooks = UIHookRegistry.list_hooks(:settings)
-    assert length(hooks) == 3
-    assert Enum.map(hooks, & &1.id) == [:metadata, :auth, :database]
-
-    assert :ok = UIHookRegistry.unregister_hook(:settings, :auth)
-    remaining = UIHookRegistry.list_hooks(:settings)
-    assert Enum.map(remaining, & &1.id) == [:metadata, :database]
-  end
-
-  test "plugins do not have UI by default (has_dashboard_view is false when dashboard_view is nil)" do
-    headless_manifest = %Manifest{
-      id: :headless_service,
-      name: "Headless Service",
-      version: "1.0.0",
-      entry_point: HeadlessModule,
-      provides: [:headless],
-      services: [
-        %{
-          name: :headless,
-          actions: [%{name: :ping, mode: :sync}],
-          resources: [],
-          events: []
-        }
-      ],
-      dashboard_view: nil
-    }
-
-    assert :ok = PluginRegistry.register(headless_manifest)
-
-    extensions = PluginRegistry.dashboard_extensions()
-    summary = Enum.find(extensions, &(&1.id == :headless_service))
-
-    assert summary != nil
-    assert summary.has_dashboard_view == false
-    assert summary.has_visual_controls == false
-    assert summary.has_custom_view == false
-  end
-
-  test "manifest settings_tab and ui_hooks are auto-registered and cleaned up on unregister" do
+  test "manifest ui_hooks are discovered live, sorted, and cleaned up on unregister" do
     manifest = %Manifest{
       id: :my_extension,
       name: "My Extension",
@@ -79,8 +20,11 @@ defmodule Exoforge.UIHookRegistryTest do
       entry_point: MyExtModule,
       provides: [:my_service],
       dashboard_view: %{id: :my_view, title: "My View", icon: "✨"},
-      settings_tab: %{id: :my_settings, title: "My Settings", icon: "🛠️", order: 50},
       ui_hooks: %{
+        settings: [
+          %{id: :my_settings, title: "My Settings", icon: "🛠️", order: 50},
+          %{id: :early_settings, title: "Early", icon: "⏱️", order: 5}
+        ],
         player_inspect: [
           %{id: :my_player_hook, title: "Player Badge", icon: "🎖️", order: 25}
         ]
@@ -89,23 +33,50 @@ defmodule Exoforge.UIHookRegistryTest do
 
     assert :ok = PluginRegistry.register(manifest)
 
-    # Verify dashboard view is active
-    summary = Enum.find(PluginRegistry.dashboard_extensions(), &(&1.id == :my_extension))
-    assert summary.has_dashboard_view == true
+    settings = UIHookRegistry.list_hooks(:settings)
+    assert Enum.map(settings, & &1.id) == [:early_settings, :my_settings]
+    assert Enum.all?(settings, &(&1.plugin_id == :my_extension))
 
-    # Verify settings hook was registered
-    settings_hooks = UIHookRegistry.list_hooks(:settings)
-    assert Enum.any?(settings_hooks, &(&1.id == :my_settings and &1.icon == "🛠️"))
+    player = UIHookRegistry.list_hooks(:player_inspect)
+    assert Enum.any?(player, &(&1.id == :my_player_hook and &1.title == "Player Badge"))
 
-    # Verify player_inspect tab hook was registered
-    player_hooks = UIHookRegistry.list_hooks(:player_inspect)
-    assert Enum.any?(player_hooks, &(&1.id == :my_player_hook and &1.title == "Player Badge"))
-
-    # Unregister plugin
     assert :ok = PluginRegistry.unregister(:my_extension)
-
-    # Verify hooks cleaned up
     refute Enum.any?(UIHookRegistry.list_hooks(:settings), &(&1.id == :my_settings))
     refute Enum.any?(UIHookRegistry.list_hooks(:player_inspect), &(&1.id == :my_player_hook))
+  end
+
+  test "DrawerRegistry lists declared tabs and resolves binary names without creating atoms" do
+    defmodule TestInventoryService do
+      import Exoforge.Contracts.Service
+
+      defservice inventory_dash do
+        resource :dash_items do
+          primary_key(:item_id)
+          column(:item_id, :string, label: "Item ID")
+          drawer([:overview, :attributes, :transactions])
+        end
+      end
+    end
+
+    manifest = %Manifest{
+      id: :inventory_dash_plugin,
+      name: "inventory_dash_plugin",
+      version: "1.0.0",
+      entry_point: nil,
+      provides: [TestInventoryService.InventoryDash]
+    }
+
+    assert :ok = PluginRegistry.register(manifest)
+
+    tabs = DrawerRegistry.list_tabs(:dash_items)
+    assert Enum.map(tabs, & &1.id) == [:overview, :attributes, :transactions]
+
+    # A binary name resolves to the same tabs.
+    assert DrawerRegistry.list_tabs("dash_items") == tabs
+
+    # An unknown binary returns [] and does NOT create an atom.
+    unknown = "no_such_resource_#{System.unique_integer([:positive])}"
+    assert DrawerRegistry.list_tabs(unknown) == []
+    assert_raise ArgumentError, fn -> String.to_existing_atom(unknown) end
   end
 end
