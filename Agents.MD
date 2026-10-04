@@ -88,9 +88,18 @@ public static void Main() => PluginHost.Run<MyPlugin>();
 
 The host spawns the binary as an OS process (`Exoforge.Drivers.Runtime.NativePluginRunner`) and speaks
 newline-delimited JSON over stdio. Host capabilities go through `HostBridge` (`EmitEvent`, `DbPut`, `Log`, …);
-the runner answers those calls synchronously. Because NativeAOT trims reflection, emit **`JsonObject`** payloads
-and keep `PluginHost.Run<T>()`'s `[DynamicallyAccessedMembers]` annotation intact — that is what keeps the
-`[ExoAction]` methods reachable.
+the runner answers those calls synchronously.
+
+**Inbound events**: the runner subscribes to the events a plugin declares in its manifest (with their declared
+topic) and forwards them as `{"type":"event"}` frames. The plugin handles them in an optional
+`public void OnEvent(string name, JsonElement payload)` — it is called even while an action is blocked on a
+host call.
+
+**Per-OS builds**: plugins ship as native binaries, so build for the deploy target:
+`exo plugin build <name> --rid linux-x64` (defaults to the host).
+
+Because NativeAOT trims reflection, emit **`JsonObject`** payloads and keep `PluginHost.Run<T>()`'s
+`[DynamicallyAccessedMembers]` annotation intact — that is what keeps the `[ExoAction]` methods reachable.
 
 `ActionDispatcher` stays runtime-agnostic: every non-Elixir plugin gets a generated proxy module
 (`Exoforge.Drivers.Runtime.PluginProxy`) registered as its `entry_point`.
