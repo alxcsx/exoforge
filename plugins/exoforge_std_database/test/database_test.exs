@@ -5,7 +5,7 @@ defmodule Exoforge.DatabaseTest do
   alias Exoforge.Std.Database.Manager
 
   setup do
-    start_supervised!({Manager, [driver: :sandbox]})
+    start_supervised!({Manager, [driver: :sqlite]})
     Database.reset!(:auth)
     Database.reset!(:player_data)
     Database.reset!(:combat)
@@ -36,6 +36,12 @@ defmodule Exoforge.DatabaseTest do
       assert player_data_users == []
 
       # 3. Plugin :player_data creates its own users table with different data
+      assert {:ok, _} =
+               Database.execute(
+                 :player_data,
+                 "CREATE TABLE users (id text, username text, email text)"
+               )
+
       assert {:ok, _} =
                Database.execute(
                  :player_data,
@@ -93,12 +99,17 @@ defmodule Exoforge.DatabaseTest do
       assert length(selected) == 1
       assert hd(selected)["damage"] == "30"
 
-      # UPDATE with WHERE
-      {:ok, %{rows: updated}} =
-        Database.execute(:combat, "UPDATE weapons SET damage = $1 WHERE id = $2", ["20", "w1"])
+      # UPDATE with WHERE (real SQL: UPDATE returns affected count, not rows)
+      assert {:ok, %{num_rows: 1}} =
+               Database.execute(:combat, "UPDATE weapons SET damage = $1 WHERE id = $2", [
+                 "20",
+                 "w1"
+               ])
 
-      assert length(updated) == 1
-      assert hd(updated)["damage"] == "20"
+      {:ok, %{rows: [updated]}} =
+        Database.execute(:combat, "SELECT * FROM weapons WHERE id = $1", ["w1"])
+
+      assert updated["damage"] == "20"
 
       # DELETE with WHERE
       {:ok, _} = Database.execute(:combat, "DELETE FROM weapons WHERE id = $1", ["w1"])

@@ -191,9 +191,22 @@ defmodule Exoforge.Std.Ws.SocketHandler do
 
   defp handle_action(req, state) do
     case Map.get(state, :auth) do
-      nil -> unauthenticated_action(req, state)
-      auth -> do_handle_action(req, auth, state)
+      nil ->
+        if public_action?(req) do
+          do_handle_action(req, %{player_id: nil, scopes: []}, state)
+        else
+          unauthenticated_action(req, state)
+        end
+
+      auth ->
+        do_handle_action(req, auth, state)
     end
+  end
+
+  # Account-creating actions must be reachable before a session exists.
+  defp public_action?(req) do
+    Map.get(req, @service_key) == "auth" and
+      Map.get(req, @action_key) in ["login", "register", "create_player", "anonymous"]
   end
 
   defp unauthenticated_action(req, state) do
@@ -298,8 +311,14 @@ defmodule Exoforge.Std.Ws.SocketHandler do
   end
 
   defp reply(data, state) do
-    json = Jason.encode!(data)
-    {:push, {:text, json}, state}
+    case Jason.encode(data) do
+      {:ok, json} ->
+        {:push, {:text, json}, state}
+
+      {:error, _} ->
+        sanitized = Exoforge.PluginRegistry.sanitize_for_json(data)
+        {:push, {:text, Jason.encode!(sanitized)}, state}
+    end
   end
 
   defp parse_service(str) when is_binary(str) do

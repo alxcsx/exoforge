@@ -22,7 +22,9 @@ defmodule Exoforge.HttpTest do
     Application.put_env(:exoforge, :allow_dev_tokens, true)
     on_exit(fn -> Application.delete_env(:exoforge, :allow_dev_tokens) end)
     PluginRegistry.initialize_ets()
-    start_supervised!({DbManager, [driver: :sandbox]})
+    unless Process.whereis(DbManager) do
+      start_supervised!({DbManager, [driver: :sqlite]})
+    end
 
     PluginRegistry.register(%Exoforge.Domain.Manifest{
       id: :exoforge_std_database,

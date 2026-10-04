@@ -4,7 +4,8 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
   for the Plugin Manager & Cluster Runtime service (:plugin_manager).
 
   Enables game producers and backend engineers to:
-  - Inspect installed standard and WASM plugins, services, and entity schemas
+  - Inspect installed standard and WASM plugins, entity schemas, and manifests
+    (capability inspection lives in the Extensions Registry; this view owns lifecycle)
   - Monitor live BEAM node metrics, memory, process counts, and active stateful entities
   - Drag-and-drop or upload new sandboxed C# WASM plugins directly into the running cluster
   - Hot-reload and restart the cluster runtime supervision tree
@@ -157,7 +158,11 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
   end
 
   @impl true
-  def handle_event("file_selected", %{"filename" => filename, "content_base64" => base64, "size" => size}, socket) do
+  def handle_event(
+        "file_selected",
+        %{"filename" => filename, "content_base64" => base64, "size" => size},
+        socket
+      ) do
     ext = Path.extname(filename)
     is_ex = ext in [".ex", ".exs"]
 
@@ -180,12 +185,18 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
         current_form
         |> Map.put("type", "elixir")
         |> Map.put("elixir_code", decoded)
-        |> Map.put("name", if(current_form["name"] == "", do: clean_name, else: current_form["name"]))
+        |> Map.put(
+          "name",
+          if(current_form["name"] == "", do: clean_name, else: current_form["name"])
+        )
       else
         current_form
         |> Map.put("type", "wasm")
         |> Map.put("wasm_binary", base64)
-        |> Map.put("name", if(current_form["name"] == "", do: clean_name, else: current_form["name"]))
+        |> Map.put(
+          "name",
+          if(current_form["name"] == "", do: clean_name, else: current_form["name"])
+        )
       end
 
     {:noreply,
@@ -200,8 +211,13 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
   def handle_event("submit_upload", %{"upload" => params}, socket) do
     name = String.trim(Map.get(params, "name", ""))
     type = Map.get(params, "type", socket.assigns.upload_form["type"] || "wasm")
-    raw_wasm = String.trim(Map.get(params, "wasm_binary", socket.assigns.upload_form["wasm_binary"] || ""))
-    elixir_code = String.trim(Map.get(params, "elixir_code", socket.assigns.upload_form["elixir_code"] || ""))
+
+    raw_wasm =
+      String.trim(Map.get(params, "wasm_binary", socket.assigns.upload_form["wasm_binary"] || ""))
+
+    elixir_code =
+      String.trim(Map.get(params, "elixir_code", socket.assigns.upload_form["elixir_code"] || ""))
+
     manifest_raw = String.trim(Map.get(params, "manifest_json", ""))
 
     manifest =
@@ -250,7 +266,8 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
                 show_upload_modal: false,
                 upload_error: nil,
                 upload_file_info: nil,
-                upload_success: "Plugin '#{result.plugin_id}' (#{result[:type] || type}) successfully uploaded and initialized!"
+                upload_success:
+                  "Plugin '#{result.plugin_id}' (#{result[:type] || type}) successfully uploaded and initialized!"
               )
               |> load_data()
 
@@ -277,7 +294,8 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
         {:noreply, socket}
 
       {:error, reason} ->
-        {:noreply, assign(socket, action_notification: "Failed to remove plugin: #{inspect(reason)}")}
+        {:noreply,
+         assign(socket, action_notification: "Failed to remove plugin: #{inspect(reason)}")}
     end
   end
 
@@ -299,7 +317,8 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
           socket
           |> assign(
             show_restart_modal: false,
-            restart_status: "Runtime cluster restarted. #{result.plugins_count} plugins reloaded successfully."
+            restart_status:
+              "Runtime cluster restarted. #{result.plugins_count} plugins reloaded successfully."
           )
           |> load_data()
 
@@ -385,23 +404,21 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
 
       dependents =
         Enum.filter(plugins, fn other ->
-          other_deps = Enum.map(other["dependencies"] || [], fn d ->
-            d |> to_string() |> String.replace_prefix(":", "") |> String.downcase()
-          end)
-          my_provides = Enum.map(p["provides"] || [], fn s ->
-            s |> to_string() |> String.replace_prefix(":", "") |> String.downcase()
-          end)
+          other_deps =
+            Enum.map(other["dependencies"] || [], fn d ->
+              d |> to_string() |> String.replace_prefix(":", "") |> String.downcase()
+            end)
+
+          my_provides =
+            Enum.map(p["provides"] || [], fn s ->
+              s |> to_string() |> String.replace_prefix(":", "") |> String.downcase()
+            end)
+
           Enum.any?(other_deps, &(&1 in my_provides))
         end)
         |> Enum.map(& &1["id"])
 
-      tier =
-        cond do
-          clean_has?(p["provides"], ["database", "lldb"]) -> "Storage"
-          clean_has?(p["provides"], ["auth"]) -> "Identity"
-          clean_has?(p["provides"], ["http", "ws", "player_data", "combat"]) -> "Domain & Ingress"
-          true -> "Studio & Extensions"
-        end
+      tier = p["category"] || "Extension"
 
       %{
         id: pid,
@@ -414,13 +431,8 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
     end)
   end
 
-  defp clean_has?(list, targets) when is_list(list) do
-    normalized = Enum.map(list, fn item -> item |> to_string() |> String.replace_prefix(":", "") |> String.downcase() end)
-    Enum.any?(targets, &(&1 in normalized))
-  end
-  defp clean_has?(_, _), do: false
-
   defp format_uptime(nil), do: "—"
+
   defp format_uptime(secs) when is_integer(secs) do
     cond do
       secs < 60 -> "#{secs}s"
@@ -428,6 +440,7 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
       true -> "#{div(secs, 3600)}h #{div(rem(secs, 3600), 60)}m"
     end
   end
+
   defp format_uptime(_), do: "—"
 
   defp wasm_plugin?(plugin) do
@@ -440,19 +453,23 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
 
     services_code =
       Enum.map_join(provides, "\n\n", fn svc ->
-        "// Call action on '" <> svc <> "' service\n" <>
-        "var response = await client.InvokeAsync<dynamic>(\n" <>
-        "    service: \"" <> svc <> "\",\n" <>
-        "    action: \"execute\",\n" <>
-        "    parameters: new {\n" <>
-        "        // arguments here\n" <>
-        "    }\n" <>
-        ");"
+        "// Call action on '" <>
+          svc <>
+          "' service\n" <>
+          "var response = await client.InvokeAsync<dynamic>(\n" <>
+          "    service: \"" <>
+          svc <>
+          "\",\n" <>
+          "    action: \"execute\",\n" <>
+          "    parameters: new {\n" <>
+          "        // arguments here\n" <>
+          "    }\n" <>
+          ");"
       end)
 
     "// C# Unity / Client SDK snippet\n" <>
-    "using Exoforge.Client;\n\n" <>
-    services_code
+      "using Exoforge.Client;\n\n" <>
+      services_code
   end
 
   ## ---- TEMPLATE RENDERING ----
@@ -804,7 +821,7 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
 
               <!-- Drawer Tabs -->
               <div class="flex items-center gap-1 px-6 py-2 border-b border-gray-100 bg-white">
-                <%= for {tab_id, tab_label} <- [{"overview", "Overview"}, {"services", "Services & Actions"}, {"entities", "Entities"}, {"csharp", "C# / Unity SDK"}, {"manifest", "Raw Manifest"}] do %>
+                <%= for {tab_id, tab_label} <- [{"overview", "Overview"}, {"entities", "Entities"}, {"csharp", "C# / Unity SDK"}, {"manifest", "Raw Manifest"}] do %>
                   <button
                     phx-click="set_drawer_tab"
                     phx-value-tab={tab_id}
@@ -875,40 +892,6 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
                         <% end %>
                       </div>
                     </div>
-                  </div>
-                <% end %>
-
-                <%= if @active_drawer_tab == "services" do %>
-                  <div class="space-y-4">
-                    <% services = @selected_plugin["services"] || [] %>
-                    <%= if services == [] do %>
-                      <p class="text-xs text-gray-400 italic bg-gray-50 p-4 rounded-xl border border-gray-200">
-                        No service action specifications declared in this plugin manifest.
-                      </p>
-                    <% else %>
-                      <%= for svc <- services do %>
-                        <div class="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-3">
-                          <div class="flex items-center justify-between">
-                            <span class="text-sm font-bold font-mono text-violet-700">:<%= svc["name"] || svc[:name] %></span>
-                            <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Service Contract</span>
-                          </div>
-
-                          <div class="space-y-2">
-                            <%= for act <- (svc["actions"] || svc[:actions] || []) do %>
-                              <div class="bg-white p-2.5 rounded-lg border border-gray-200 flex items-center justify-between">
-                                <div class="flex items-center gap-2">
-                                  <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                  <span class="font-mono text-xs font-bold text-gray-800"><%= act["name"] || act[:name] %></span>
-                                </div>
-                                <span class="text-[10px] font-semibold text-gray-400 font-mono">
-                                  scope: <%= act["scope"] || act[:scope] || "all" %>
-                                </span>
-                              </div>
-                            <% end %>
-                          </div>
-                        </div>
-                      <% end %>
-                    <% end %>
                   </div>
                 <% end %>
 
@@ -1048,7 +1031,7 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
                   type="text"
                   name="upload[name]"
                   value={@upload_form["name"]}
-                  placeholder={if @upload_form["type"] == "elixir", do: "e.g. custom_quest", else: "e.g. combat_plugin"}
+                  placeholder={if @upload_form["type"] == "elixir", do: "e.g. custom_quest", else: "e.g. my_wasm_plugin"}
                   class="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:bg-white font-mono"
                 />
               </div>
@@ -1188,6 +1171,7 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
       <!-- Plugin Dependency Graph Modal -->
       <%= if @show_dependency_graph do %>
         <% graph_nodes = build_dependency_graph(@plugins) %>
+        <% graph_tiers = graph_nodes |> Enum.map(& &1.tier) |> Enum.uniq() |> Enum.sort() %>
         <% selected_node = Enum.find(graph_nodes, &(&1.id == @graph_selected_plugin_id)) %>
         <div class="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
           <div class="bg-white rounded-3xl max-w-4xl w-full p-6 shadow-2xl border border-gray-200 relative animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[90vh]">
@@ -1215,7 +1199,7 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
             <div class="overflow-y-auto py-5 space-y-6 flex-1 pr-1">
               <!-- Tier Pipeline View -->
               <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <%= for tier_name <- ["Storage", "Identity", "Domain & Ingress", "Studio & Extensions"] do %>
+                <%= for tier_name <- graph_tiers do %>
                   <% tier_nodes = Enum.filter(graph_nodes, &(&1.tier == tier_name)) %>
                   <div class="bg-gray-50/80 rounded-2xl p-3 border border-gray-200/80 flex flex-col">
                     <div class="flex items-center justify-between mb-3 px-1">
@@ -1353,13 +1337,4 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
     </div>
     """
   end
-end
-
-defmodule Exoforge.Std.Dashboard.Views.PluginManagerView do
-  @moduledoc false
-  use Phoenix.LiveComponent
-  def render(assigns), do: Exoforge.Std.DashboardViews.PluginManagerView.render(assigns)
-  def mount(socket), do: Exoforge.Std.DashboardViews.PluginManagerView.mount(socket)
-  def update(assigns, socket), do: Exoforge.Std.DashboardViews.PluginManagerView.update(assigns, socket)
-  def handle_event(event, params, socket), do: Exoforge.Std.DashboardViews.PluginManagerView.handle_event(event, params, socket)
 end

@@ -40,10 +40,11 @@ defmodule Exoforge.Std.PluginManager do
           "version" => to_string(m.version),
           "type" => to_string(m.type),
           "entry_point" => to_string(m.entry_point),
+          "category" => m.category || "Extension",
           "provides" => Enum.map(m.provides || [], &to_string/1),
           "dependencies" => Enum.map(m.dependencies || [], &to_string/1),
-          "services" => m.services || [],
-          "entities" => m.entities || [],
+          "services" => PluginRegistry.sanitize_for_json(m.services || []),
+          "entities" => PluginRegistry.sanitize_for_json(m.entities || []),
           "physical_path" => m.physical_path
         }
       end)
@@ -78,8 +79,8 @@ defmodule Exoforge.Std.PluginManager do
             "entry_point" => to_string(m.entry_point),
             "provides" => Enum.map(m.provides || [], &to_string/1),
             "dependencies" => Enum.map(m.dependencies || [], &to_string/1),
-            "services" => m.services || [],
-            "entities" => m.entities || [],
+            "services" => PluginRegistry.sanitize_for_json(m.services || []),
+            "entities" => PluginRegistry.sanitize_for_json(m.entities || []),
             "dashboard_view" => m.dashboard_view,
             "physical_path" => m.physical_path,
             "size_bytes" => size_bytes,
@@ -147,6 +148,9 @@ defmodule Exoforge.Std.PluginManager do
       plugin_type == :wasm ->
         handle_upload_wasm(name_str, raw_wasm, manifest_param)
 
+      plugin_type == :native ->
+        handle_upload_native(name_str, raw_wasm, manifest_param)
+
       plugin_type == :elixir ->
         handle_upload_elixir(name_str, elixir_code, files_map, manifest_param)
     end
@@ -211,7 +215,7 @@ defmodule Exoforge.Std.PluginManager do
           "type" => to_string(m.type),
           "provides" => clean_provides,
           "dependencies" => clean_deps,
-          "services" => m.services || [],
+          "services" => Enum.map(PluginRegistry.manifest_services(m), &PluginRegistry.sanitize_for_json/1),
           "entities" => m.entities || []
         }
       end)
@@ -234,11 +238,34 @@ defmodule Exoforge.Std.PluginManager do
 
     cond do
       type_str == "wasm" -> :wasm
+      type_str == "native" -> :native
       type_str == "elixir" -> :elixir
       not is_nil(raw_wasm) and raw_wasm != "" -> :wasm
       not is_nil(elixir_code) and elixir_code != "" -> :elixir
       is_map(files_map) and map_size(files_map) > 0 -> :elixir
       true -> nil
+    end
+  end
+
+  defp handle_upload_native(name_str, raw_binary, manifest_param) do
+    if is_nil(raw_binary) or raw_binary == "" do
+      {:error, :invalid_package}
+    else
+      clean_name = sanitize_name(name_str)
+      binary = decode_wasm_binary(raw_binary)
+
+      target_dir = upload_target_dir(clean_name)
+      binary_path = Path.join(target_dir, clean_name)
+      manifest_path = Path.join(target_dir, "manifest.exs")
+
+      with :ok <- File.mkdir_p(target_dir),
+           :ok <- File.write(binary_path, binary),
+           :ok <- File.chmod(binary_path, 0o755),
+           :ok <- write_manifest_file(manifest_path, clean_name, manifest_param, :native) do
+        load_and_boot_plugin(target_dir, clean_name, :native)
+      else
+        _ -> {:error, :write_failed}
+      end
     end
   end
 
@@ -251,7 +278,7 @@ defmodule Exoforge.Std.PluginManager do
 
       case wasm_bytes do
         <<0, 97, 115, 109, _rest::binary>> ->
-          target_dir = Path.join(["plugins_csharp", clean_name])
+          target_dir = upload_target_dir(clean_name)
           wasm_path = Path.join(target_dir, "#{clean_name}.wasm")
           manifest_path = Path.join(target_dir, "manifest.exs")
 
@@ -276,7 +303,7 @@ defmodule Exoforge.Std.PluginManager do
       {:error, :invalid_package}
     else
       clean_name = sanitize_name(name_str)
-      target_dir = Path.join(["plugins", clean_name])
+      target_dir = upload_target_dir(clean_name)
       lib_dir = Path.join([target_dir, "lib"])
       manifest_path = Path.join(target_dir, "manifest.exs")
 
@@ -296,7 +323,7 @@ defmodule Exoforge.Std.PluginManager do
     try do
       if is_map(files_map) do
         Enum.each(files_map, fn {rel_path, content} ->
-          dest = Path.join(target_dir, to_string(rel_path))
+          dest = safe_join(target_dir, rel_path)
           File.mkdir_p!(Path.dirname(dest))
           File.write!(dest, to_string(content))
         end)
@@ -411,14 +438,39 @@ defmodule Exoforge.Std.PluginManager do
     File.write(manifest_path, content)
   end
 
+  defp upload_target_dir(clean_name) do
+    base =
+      Application.get_env(
+        :exoforge_std_plugin_manager,
+        :upload_dir,
+        "priv/data/uploaded_plugins"
+      )
+
+    Path.join(base, clean_name)
+  end
+
   defp clean_delete_directory(dir_path) do
     norm = Path.expand(dir_path)
     root_plugins = Path.expand("plugins")
     root_csharp = Path.expand("plugins_csharp")
+    root_uploaded = Path.expand(Application.get_env(:exoforge_std_plugin_manager, :upload_dir, "priv/data/uploaded_plugins"))
 
     if (String.starts_with?(norm, root_plugins) and norm != root_plugins) or
-       (String.starts_with?(norm, root_csharp) and norm != root_csharp) do
+       (String.starts_with?(norm, root_csharp) and norm != root_csharp) or
+       (String.starts_with?(norm, root_uploaded) and norm != root_uploaded) do
       File.rm_rf(norm)
+    end
+  end
+
+  # Joins an uploaded relative path under `base`, refusing anything that escapes it.
+  defp safe_join(base, rel_path) do
+    base = Path.expand(base)
+    dest = Path.expand(Path.join(base, to_string(rel_path)))
+
+    if dest == base or String.starts_with?(dest, base <> "/") do
+      dest
+    else
+      raise ArgumentError, "path traversal in uploaded file: #{inspect(rel_path)}"
     end
   end
 

@@ -20,8 +20,9 @@ defmodule Exoforge.DashboardTest do
     end)
 
     PluginRegistry.initialize_ets()
+
     unless Process.whereis(DbManager) do
-      start_supervised!({DbManager, [driver: :sandbox]})
+      start_supervised!({DbManager, [driver: :sqlite]})
     end
 
     PluginRegistry.register(%Exoforge.Domain.Manifest{
@@ -95,8 +96,21 @@ defmodule Exoforge.DashboardTest do
       assert String.contains?(conn.resp_body, "exoforge_std_database")
     end
 
-    test "GET / renders HTML dashboard directly without redirecting to /login" do
+    test "GET / redirects unauthenticated browsers to /login" do
       conn = conn(:get, "/") |> Router.call(@opts)
+      assert conn.status == 302
+      assert get_resp_header(conn, "location") == ["/login"]
+    end
+
+    test "GET / renders the dashboard with a session" do
+      conn =
+        conn(:get, "/")
+        |> Plug.Test.init_test_session(%{
+          "admin_player_id" => "admin",
+          "admin_scopes" => ["admin"]
+        })
+        |> Router.call(@opts)
+
       assert conn.status == 200
       assert String.contains?(conn.resp_body, "EXOFORGE")
     end

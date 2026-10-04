@@ -7,21 +7,45 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   use Phoenix.LiveView
   require Logger
   import Exoforge.Std.Dashboard.Components
+  import Exoforge.Std.Dashboard.Overlays
   alias Exoforge.ActionDispatcher
   alias Exoforge.EventDispatcher
   alias Exoforge.PluginRegistry
+  alias Exoforge.Std.Dashboard.ExtensionPresenter
 
   @max_pinned 8
 
   @impl true
-  def mount(_params, session, socket) do
-    player_id = session["admin_user_id"] || session["admin_player_id"] || session[:admin_player_id] || "studio"
-    user_name = session["user_name"] || session["admin_name"] || (if player_id == "studio", do: "Studio Producer", else: player_id)
-    user_role = session["user_role"] || session["admin_role"] || "Admin"
-    auth_token = session["auth_token"] || (if Exoforge.Config.allow_dev_tokens?(), do: "dev:admin", else: nil)
+  def mount(params, session, socket) do
+    logged_out? = session["logged_out"] == true or params["logged_out"] == "true"
+
+    session_pid =
+      session["admin_user_id"] || session["admin_player_id"] || session[:admin_player_id]
+
+    session_token = session["auth_token"]
+
+    authenticated? =
+      not logged_out? and
+        ((is_binary(session_pid) and session_pid != "") or
+           (is_binary(session_token) and session_token != ""))
+
+    {player_id, user_name, user_role, auth_token} =
+      if authenticated? do
+        pid = session_pid || "studio"
+
+        uname =
+          session["user_name"] || session["admin_name"] ||
+            if pid == "studio", do: "Studio Producer", else: pid
+
+        urole = session["user_role"] || session["admin_role"] || "Admin"
+        {pid, uname, urole, session_token}
+      else
+        {"guest", "Guest", "Guest", nil}
+      end
 
     if connected?(socket) do
       Logger.info("[StudioLive] Connected session for #{player_id}")
+
       try do
         EventDispatcher.subscribe(:all)
       rescue
@@ -58,13 +82,16 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
      assign(socket,
        current_tab: :overview,
        project_name: "Exoforge Cluster",
-       studio_name: "Producer Studio",
+       studio_name: "Exoforge Dashboard",
        environments: ["Live", "Dev", "Staging"],
        current_env: "Live",
        max_pinned: @max_pinned,
        overview: overview,
        player_id: player_id,
        user_id: player_id,
+       authenticated: authenticated?,
+       login_open: not authenticated? and params["login"] == "true",
+       pinned_menu_open: false,
        user_name: user_name,
        user_role: user_role,
        auth_token: auth_token,
@@ -119,6 +146,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     socket =
       socket
       |> assign(:current_tab, tab)
+      |> assign(:pinned_menu_open, false)
       |> maybe_refresh_tab_data(tab)
 
     {:noreply, socket}
@@ -370,6 +398,18 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     end
   end
 
+  def handle_event("open_login_modal", _params, socket) do
+    {:noreply, assign(socket, login_open: true)}
+  end
+
+  def handle_event("close_login_modal", _params, socket) do
+    {:noreply, assign(socket, login_open: false)}
+  end
+
+  def handle_event("toggle_pinned_menu", _params, socket) do
+    {:noreply, assign(socket, pinned_menu_open: not socket.assigns.pinned_menu_open)}
+  end
+
   def handle_event("open_settings", _params, socket) do
     hooks = Exoforge.UIHookRegistry.list_hooks(:settings)
     {:noreply, assign(socket, settings_open: true, settings_hooks: hooks)}
@@ -384,7 +424,9 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   end
 
   def handle_event("inspect_extension", %{"id" => id}, socket) do
-    ext = Enum.find(socket.assigns.overview.extensions, fn e -> to_string(e.id) == to_string(id) end)
+    ext =
+      Enum.find(socket.assigns.overview.extensions, fn e -> to_string(e.id) == to_string(id) end)
+
     {:noreply, assign(socket, inspecting_extension: ext)}
   end
 
@@ -636,7 +678,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       "storage" -> "🗄️"
       "ingress" -> "🔌"
       "identity" -> "🔐"
-      "liveops" -> "👤"
+      "liveops" -> "🎯"
       "gameplay" -> "⚔️"
       "studio" -> "📊"
       _ -> "🧩"
@@ -960,54 +1002,16 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     end
   end
 
-  defp default_extension_icon(ext_or_id) do
-    case ext_or_id do
-      %{dashboard_view: %{icon: icon}} when is_binary(icon) -> icon
-      _ -> "🧩"
-    end
-  end
-
-  defp display_name(ext_or_id) do
-    case ext_or_id do
-      nil -> ""
-      %{dashboard_view: %{title: title}} when is_binary(title) -> title
-      %{title: title} when is_binary(title) -> title
-      %{name: name} -> derive_display_name(name)
-      %{id: id} -> derive_display_name(id)
-      other -> derive_display_name(other)
-    end
-  end
-
-  defp humanize_plugin_name(ext_or_id), do: display_name(ext_or_id)
-  defp tab_short_name(ext_or_id), do: display_name(ext_or_id)
-
-  defp derive_display_name(id) do
-    clean =
-      id
-      |> to_string()
-      |> String.replace_prefix("exoforge_std_", "")
-      |> String.replace_prefix("Elixir.Exoforge.", "")
-      |> String.replace_prefix("Std.Services.", "")
-
-    case clean do
-      "ws" -> "WebSocket Gateway"
-      "http" -> "HTTP Ingress"
-      "database" -> "Database Engine"
-      "auth" -> "Users & Auth"
-      "player_data" -> "Player Data"
-      "plugin_manager" -> "Plugin Manager"
-      other ->
-        other
-        |> String.replace("_", " ")
-        |> Macro.camelize()
-    end
-  end
+  defp default_extension_icon(ext_or_id), do: ExtensionPresenter.icon(ext_or_id)
+  defp humanize_plugin_name(ext_or_id), do: ExtensionPresenter.display_name(ext_or_id)
+  defp tab_short_name(ext_or_id), do: ExtensionPresenter.display_name(ext_or_id)
 
   # Resolves a custom LiveView/LiveComponent for an extension: an explicit `:module` in its
   # dashboard_view, dynamic lookup via `:dashboard_view` service contract, or conventional module.
   defp custom_view_module(ext) do
     cond do
-      is_map(ext) and Map.has_key?(ext, :custom_view_module) and not is_nil(ext[:custom_view_module]) ->
+      is_map(ext) and Map.has_key?(ext, :custom_view_module) and
+          not is_nil(ext[:custom_view_module]) ->
         ext[:custom_view_module]
 
       true ->
@@ -1023,7 +1027,8 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         dv[:module]
 
       true ->
-        lookup_id = (is_map(dv) && (dv[:id] || dv["id"])) || (is_map(ext) && (ext[:id] || ext["id"]))
+        lookup_id =
+          (is_map(dv) && (dv[:id] || dv["id"])) || (is_map(ext) && (ext[:id] || ext["id"]))
 
         if lookup_id do
           case Exoforge.ActionDispatcher.dispatch(:dashboard_view, :resolve_view, %{id: lookup_id}) do
@@ -1093,22 +1098,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         _ -> []
       end
 
-    from_known =
-      [
-        Exoforge.Std.Services.Combat,
-        Exoforge.Std.Services.Auth,
-        Exoforge.Std.Services.PlayerData,
-        Exoforge.Std.Services.Database,
-        Exoforge.Std.Services.Lldb,
-        Exoforge.Std.Services.Ws,
-        Exoforge.Std.Services.Http
-      ]
-      |> Enum.filter(
-        &(Code.ensure_loaded?(&1) and function_exported?(&1, :__service_metadata__, 0))
-      )
-      |> Enum.map(& &1.__service_metadata__())
-
-    (from_extensions ++ from_known)
+    from_extensions
     |> Enum.filter(fn svc ->
       actions = svc[:actions] || svc["actions"] || []
       is_list(actions) and actions != []
@@ -1208,6 +1198,61 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     end
   end
 
+  defp fetch_overview_metrics(overview, total_actions) do
+    default_metrics = [
+      %{
+        id: :active_extensions,
+        title: "Active Extensions",
+        value: "#{to_string(overview.plugins_count)} Online",
+        delta: "Active",
+        delta_positive: true,
+        subtitle: "Game Services & Integrations",
+        order: 10
+      },
+      %{
+        id: :declared_resources,
+        title: "Declared Resources",
+        value: to_string(overview.resources_count),
+        delta: "Synced",
+        delta_positive: true,
+        subtitle: "Schemas & Tables",
+        order: 20
+      },
+      %{
+        id: :callable_actions,
+        title: "Callable Actions",
+        value: to_string(total_actions),
+        delta: "Available",
+        delta_positive: true,
+        subtitle: "Game Actions & Operations",
+        order: 30
+      },
+      %{
+        id: :cluster_status,
+        title: "Cluster Status",
+        value: "Healthy",
+        delta: "Online",
+        delta_positive: true,
+        subtitle: "Sub-ms Response Time",
+        order: 40
+      }
+    ]
+
+    hook_metrics = Exoforge.UIHookRegistry.list_hooks(:overview_metric)
+
+    (default_metrics ++ hook_metrics)
+    |> Enum.sort_by(&Map.get(&1, :order, 100))
+  end
+
+  defp widget_width_class(widget) do
+    case Map.get(widget, :width) do
+      :one_third -> "lg:col-span-1"
+      :half -> "lg:col-span-2"
+      :two_thirds -> "lg:col-span-2"
+      _ -> "lg:col-span-3"
+    end
+  end
+
   # ---- TEMPLATE RENDER ----
 
   @impl true
@@ -1215,7 +1260,14 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     total_actions =
       Enum.sum(Enum.map(assigns.action_catalog, fn svc -> length(svc.actions) end))
 
-    assigns = assign(assigns, :total_actions, total_actions)
+    overview_metrics = fetch_overview_metrics(assigns.overview, total_actions)
+    overview_widgets = Exoforge.UIHookRegistry.list_hooks(:overview_widget)
+
+    assigns =
+      assigns
+      |> assign(:total_actions, total_actions)
+      |> assign(:overview_metrics, overview_metrics)
+      |> assign(:overview_widgets, overview_widgets)
 
     ~H"""
     <div class="min-h-screen flex flex-col" phx-window-keydown="handle_key">
@@ -1291,14 +1343,47 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
               <div class="h-4 w-px bg-gray-300 mx-0.5 flex-shrink-0"></div>
             <% end %>
 
-            <!-- 3. Pinned Extension Tabs (can wrap to second line, up to limit) -->
+            <!-- 3a. Pinned dropdown (small screens) -->
+            <%= if length(@pinned_extensions) > 0 do %>
+              <div class="relative md:hidden flex-shrink-0">
+                <button
+                  type="button"
+                  phx-click="toggle_pinned_menu"
+                  class="px-2.5 py-1.5 text-xs rounded-lg font-bold flex items-center gap-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-200/50"
+                >
+                  <span>Pinned</span>
+                  <span class="text-[10px] px-1.5 rounded-full bg-gray-200 text-gray-700"><%= length(@pinned_extensions) %></span>
+                  <span class="text-[9px]">▾</span>
+                </button>
+                <%= if @pinned_menu_open do %>
+                  <div class="absolute left-0 top-full mt-1 z-50 min-w-[11rem] bg-white border border-gray-200 rounded-xl shadow-lg p-1 space-y-0.5">
+                    <%= for ext_id <- Enum.take(@pinned_extensions, @max_pinned) do %>
+                      <% pext = Enum.find(@overview.extensions, fn e -> to_string(e.id) == ext_id end) %>
+                      <%= if pext do %>
+                        <button
+                          type="button"
+                          phx-click="switch_tab"
+                          phx-value-tab={ext_id}
+                          class={"w-full text-left px-2.5 py-2 rounded-lg text-xs font-bold flex items-center gap-2 #{if to_string(@current_tab) == ext_id, do: "bg-primary-50 text-primary-700", else: "text-gray-700 hover:bg-gray-100"}"}
+                        >
+                          <span><%= if is_map(pext.dashboard_view) and pext.dashboard_view[:icon], do: pext.dashboard_view[:icon], else: default_extension_icon(pext) %></span>
+                          <span class="truncate"><%= tab_short_name(pext) %></span>
+                        </button>
+                      <% end %>
+                    <% end %>
+                  </div>
+                <% end %>
+              </div>
+            <% end %>
+
+            <!-- 3b. Pinned Extension Tabs (md+; can wrap to second line, up to limit) -->
             <%= for ext_id <- Enum.take(@pinned_extensions, @max_pinned) do %>
               <% ext = Enum.find(@overview.extensions, fn e -> to_string(e.id) == ext_id end) %>
               <%= if ext do %>
                 <% title = tab_short_name(ext) %>
                 <% icon = if is_map(ext.dashboard_view) and ext.dashboard_view[:icon], do: ext.dashboard_view[:icon], else: default_extension_icon(ext) %>
                 <% is_active = to_string(@current_tab) == ext_id %>
-                <div class={"group relative flex items-center rounded-lg transition-all text-xs font-bold whitespace-nowrap flex-shrink-0 #{if is_active, do: "bg-white text-primary-700 shadow-sm", else: "text-gray-600 hover:text-gray-900 hover:bg-gray-200/50"}"}>
+                <div class={"group relative hidden md:flex items-center rounded-lg transition-all text-xs font-bold whitespace-nowrap flex-shrink-0 #{if is_active, do: "bg-white text-primary-700 shadow-sm", else: "text-gray-600 hover:text-gray-900 hover:bg-gray-200/50"}"}>
                   <button
                     phx-click="switch_tab"
                     phx-value-tab={ext_id}
@@ -1343,42 +1428,42 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
               ⚙️
             </button>
 
-            <!-- Swagger OpenAPI Link -->
-            <a
-              href="http://localhost:4001/api/docs"
-              target="_blank"
-              class="hidden sm:flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors"
-              title="Open Swagger API Gateway (:4001)"
-            >
-              <span>Swagger</span>
-              <span class="text-[9px]">↗</span>
-            </a>
+            <!-- User Profile & Logout / Login -->
+            <%= if @authenticated do %>
+              <div class="flex items-center gap-2 pl-2 border-l border-gray-200">
+                <div class="flex items-center gap-2">
+                  <div
+                    class="w-8 h-8 rounded-full bg-purple-100 text-purple-700 font-bold text-xs flex items-center justify-center border border-purple-200"
+                    title={"User ID: " <> to_string(@user_id)}
+                  >
+                    <%= String.slice(to_string(@user_name), 0, 2) |> String.upcase() %>
+                  </div>
+                  <div class="hidden md:flex flex-col text-left">
+                    <span class="text-xs font-bold text-gray-800 leading-tight truncate max-w-[120px]"><%= @user_name %></span>
+                    <span class="text-[10px] text-gray-400 font-medium leading-none"><%= @user_role %></span>
+                  </div>
+                </div>
 
-            <!-- User Profile & Logout -->
-            <div class="flex items-center gap-2 pl-2 border-l border-gray-200">
-              <div class="flex items-center gap-2">
-                <div
-                  class="w-8 h-8 rounded-full bg-purple-100 text-purple-700 font-bold text-xs flex items-center justify-center border border-purple-200"
-                  title={"User ID: " <> to_string(@user_id)}
+                <a
+                  href="/logout"
+                  data-phx-link-state="replace"
+                  class="w-8 h-8 rounded-xl bg-gray-100 hover:bg-red-50 hover:text-red-600 text-gray-500 flex items-center justify-center transition-colors text-xs border border-gray-200/60"
+                  title="Log out of session"
                 >
-                  <%= String.slice(to_string(@user_name), 0, 2) |> String.upcase() %>
-                </div>
-                <div class="hidden md:flex flex-col text-left">
-                  <span class="text-xs font-bold text-gray-800 leading-tight truncate max-w-[120px]"><%= @user_name %></span>
-                  <span class="text-[10px] text-gray-400 font-medium leading-none"><%= @user_role %></span>
-                </div>
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                </a>
               </div>
-
-              <a
-                href="/logout"
-                class="w-8 h-8 rounded-xl bg-gray-100 hover:bg-red-50 hover:text-red-600 text-gray-500 flex items-center justify-center transition-colors text-xs border border-gray-200/60"
-                title="Log out of session"
+            <% else %>
+              <button
+                type="button"
+                phx-click="open_login_modal"
+                class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white font-bold text-xs rounded-xl transition-colors shadow-xs"
               >
-                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
-              </a>
-            </div>
+                Sign in
+              </button>
+            <% end %>
           </div>
         </div>
       </header>
@@ -1406,34 +1491,15 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         <%= if @current_tab == :overview do %>
           <!-- METRIC CARDS ROW -->
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <.metric_card
-              title="Active Extensions"
-              value={"#{to_string(@overview.plugins_count)} Online"}
-              delta="Active"
-              delta_positive={true}
-              subtitle="Game Services & Integrations"
-            />
-            <.metric_card
-              title="Declared Resources"
-              value={to_string(@overview.resources_count)}
-              delta="Synced"
-              delta_positive={true}
-              subtitle="Schemas & Tables"
-            />
-            <.metric_card
-              title="Callable Actions"
-              value={to_string(@total_actions)}
-              delta="Available"
-              delta_positive={true}
-              subtitle="Game Actions & Operations"
-            />
-            <.metric_card
-              title="Cluster Status"
-              value="Healthy"
-              delta="Online"
-              delta_positive={true}
-              subtitle="Sub-ms Response Time"
-            />
+            <%= for metric <- @overview_metrics do %>
+              <.metric_card
+                title={metric.title}
+                value={metric.value}
+                delta={Map.get(metric, :delta, "Active")}
+                delta_positive={Map.get(metric, :delta_positive, true)}
+                subtitle={Map.get(metric, :subtitle, "")}
+              />
+            <% end %>
           </div>
 
           <!-- EXTENSIONS & RECENT TELEMETRY ROW -->
@@ -1581,6 +1647,38 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
               </div>
             <% end %>
           </div>
+
+          <!-- DYNAMIC OVERVIEW WIDGET HOOKS (Contributed by Plugins) -->
+          <%= if @overview_widgets != [] do %>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <%= for widget <- @overview_widgets do %>
+                <div class={"bg-white p-6 rounded-2xl border border-gray-200 shadow-card space-y-4 #{widget_width_class(widget)}"}>
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <h3 class="font-bold text-gray-900 text-sm flex items-center gap-2">
+                        <%= if Map.get(widget, :icon) do %>
+                          <span><%= widget.icon %></span>
+                        <% end %>
+                        <span><%= widget.title %></span>
+                      </h3>
+                      <%= if Map.get(widget, :subtitle) do %>
+                        <p class="text-xs text-gray-400 mt-0.5"><%= widget.subtitle %></p>
+                      <% end %>
+                    </div>
+                    <span class="text-[10px] font-mono text-gray-400"><%= Map.get(widget, :plugin_id, "") %></span>
+                  </div>
+
+                  <%= if widget[:component] && Code.ensure_loaded?(widget[:component]) do %>
+                    <.live_component module={widget[:component]} id={to_string(widget.id)} />
+                  <% else %>
+                    <div class="p-4 bg-gray-50 rounded-xl border border-gray-100 text-xs text-gray-600">
+                      <p><%= Map.get(widget, :description) || "Dynamic overview widget contributed by #{widget[:plugin_id]}" %></p>
+                    </div>
+                  <% end %>
+                </div>
+              <% end %>
+            </div>
+          <% end %>
         <% end %>
 
         <!-- EXTENSIONS REGISTRY TAB -->
@@ -1680,24 +1778,61 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                 <% end %>
               </div>
 
-              <!-- SECTION 2: INSPECTABLE SERVICES & HEADLESS PLUGINS -->
+              <!-- SECTION 2: SYSTEM PLUGINS (headless) -->
               <div class="space-y-3 pt-4 border-t border-gray-200/80">
                 <div class="flex items-center gap-2">
-                  <span class="text-base">⚙️</span>
-                  <h4 class="text-base font-bold text-gray-900">Inspectable Services &amp; Headless Plugins</h4>
+                  <h4 class="text-base font-bold text-gray-900">System Plugins</h4>
                   <span class="text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 border border-gray-200">
                     <%= length(headless_exts) %>
                   </span>
-                  <span class="hidden sm:inline text-xs text-gray-400">— background infrastructure and services without dedicated UI</span>
                 </div>
 
                 <%= if Enum.empty?(headless_exts) do %>
-                  <p class="p-6 bg-white border border-gray-200 rounded-2xl text-xs text-gray-400 italic">No headless services found matching filter.</p>
+                  <p class="p-6 bg-white border border-gray-200 rounded-2xl text-xs text-gray-400 italic">No system plugins found matching filter.</p>
                 <% else %>
-                  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                    <%= for ext <- headless_exts do %>
-                      <.extension_card ext={ext} pinned={to_string(ext.id) in @pinned_extensions} />
-                    <% end %>
+                  <div class="bg-white border border-gray-200/90 rounded-2xl shadow-sm overflow-x-auto">
+                    <table class="w-full text-xs text-left">
+                      <thead class="bg-gray-50 text-[10px] uppercase tracking-wider text-gray-400">
+                        <tr>
+                          <th class="px-4 py-2.5 font-bold">Plugin</th>
+                          <th class="px-4 py-2.5 font-bold hidden md:table-cell">Provides</th>
+                          <th class="px-4 py-2.5 font-bold hidden lg:table-cell">Version</th>
+                          <th class="px-4 py-2.5 font-bold">Status</th>
+                          <th class="px-4 py-2.5 font-bold text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody class="divide-y divide-gray-100">
+                        <%= for ext <- headless_exts do %>
+                          <tr class="hover:bg-gray-50/60">
+                            <td class="px-4 py-3">
+                              <div class="font-bold text-gray-900"><%= humanize_plugin_name(ext) %></div>
+                              <div class="font-mono text-[10px] text-gray-400"><%= ext.id %></div>
+                            </td>
+                            <td class="px-4 py-3 hidden md:table-cell">
+                              <div class="flex flex-wrap gap-1">
+                                <%= for s <- ext.provides do %>
+                                  <span class="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 font-mono text-[10px]"><%= s %></span>
+                                <% end %>
+                              </div>
+                            </td>
+                            <td class="px-4 py-3 hidden lg:table-cell font-mono text-gray-500">v<%= ext.version %></td>
+                            <td class="px-4 py-3">
+                              <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold"><%= ext.status %></span>
+                            </td>
+                            <td class="px-4 py-3 text-right">
+                              <button
+                                type="button"
+                                phx-click="inspect_extension"
+                                phx-value-id={ext.id}
+                                class="px-2.5 py-1 text-[11px] font-bold text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-200 rounded-lg transition-colors"
+                              >
+                                Inspect
+                              </button>
+                            </td>
+                          </tr>
+                        <% end %>
+                      </tbody>
+                    </table>
                   </div>
                 <% end %>
               </div>
@@ -1777,7 +1912,15 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       <!-- Headless Service & Plugin Inspector Modal -->
       <.plugin_inspector_modal
         extension={@inspecting_extension}
+        auth_token={@auth_token}
         on_close="close_inspect_extension"
+      />
+
+      <!-- Login Modal -->
+      <.login_modal
+        open={@login_open}
+        error={Phoenix.Flash.get(@flash, :error)}
+        on_close="close_login_modal"
       />
 
       <!-- Action Execution Modal -->

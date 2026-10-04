@@ -19,18 +19,13 @@ defmodule Exoforge.DashboardLiveViewTest do
     PluginRegistry.initialize_ets()
 
     unless Process.whereis(DbManager) do
-      start_supervised!({DbManager, [driver: :sandbox]})
+      start_supervised!({DbManager, [driver: :sqlite]})
     end
 
-    Exoforge.Std.Dashboard.Preferences.ensure_schema()
     Exoforge.Std.Dashboard.Preferences.put_pinned("admin", [])
 
     unless Process.whereis(EventDispatcher.registry_name()) do
       start_supervised!(EventDispatcher)
-    end
-
-    unless Process.whereis(Exoforge.DrawerRegistry) do
-      start_supervised!(Exoforge.DrawerRegistry)
     end
 
     unless Process.whereis(Exoforge.Std.Dashboard.PubSub) do
@@ -53,6 +48,14 @@ defmodule Exoforge.DashboardLiveViewTest do
     })
 
     PluginRegistry.register(%Exoforge.Domain.Manifest{
+      id: :exoforge_std_resources,
+      name: "exoforge_std_resources",
+      version: "0.1.0",
+      entry_point: Exoforge.Std.Resources,
+      provides: [Exoforge.Std.Services.ResourceStore]
+    })
+
+    PluginRegistry.register(%Exoforge.Domain.Manifest{
       id: :exoforge_std_dashboard,
       name: "exoforge_std_dashboard",
       version: "0.1.0",
@@ -61,7 +64,7 @@ defmodule Exoforge.DashboardLiveViewTest do
       dependencies: [],
       category: "Studio",
       system: true,
-      dashboard_view: %{id: :dashboard, title: "Producer Studio", icon: "📊"}
+      dashboard_view: %{id: :dashboard, title: "Exoforge Dashboard", icon: "📊"}
     })
 
     PluginRegistry.register(%Exoforge.Domain.Manifest{
@@ -145,7 +148,7 @@ defmodule Exoforge.DashboardLiveViewTest do
       }
     })
 
-    Exoforge.Std.Dashboard.Preferences.ensure_schema()
+    Exoforge.Std.Resources.run_migrations()
 
     :ok
   end
@@ -610,7 +613,9 @@ defmodule Exoforge.DashboardLiveViewTest do
       render_click(view, "pin_extension", %{"id" => "exoforge_std_plugin_manager"})
       html = render_click(view, "switch_tab", %{"tab" => "exoforge_std_plugin_manager"})
 
-      assert html =~ "Plugin Manager &amp; Cluster Runtime" or html =~ "Plugin Manager & Cluster Runtime"
+      assert html =~ "Plugin Manager &amp; Cluster Runtime" or
+               html =~ "Plugin Manager & Cluster Runtime"
+
       assert html =~ "Installed Plugins"
       assert html =~ "BEAM Memory &amp; Load" or html =~ "BEAM Memory & Load"
       assert html =~ "Cluster Node"

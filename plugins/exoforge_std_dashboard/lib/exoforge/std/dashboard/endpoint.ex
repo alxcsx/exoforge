@@ -17,6 +17,25 @@ defmodule Exoforge.Std.Dashboard.Endpoint do
 
   socket("/live", Phoenix.LiveView.Socket, websocket: [connect_info: [session: @session_options]])
 
+  # Marks the auth cookie `Secure` only when the request actually arrived over
+  # HTTPS (directly or via a TLS-terminating proxy), so plain-HTTP local runs
+  # still work while real deployments never leak the cookie over HTTP.
+  defp session(conn, _opts) do
+    opts = Keyword.put(@session_options, :secure, secure_request?(conn))
+    Plug.Session.call(conn, Plug.Session.init(opts))
+  end
+
+  defp secure_request?(conn) do
+    conn.scheme == :https or forwarded_proto(conn) == "https"
+  end
+
+  defp forwarded_proto(conn) do
+    case Plug.Conn.get_req_header(conn, "x-forwarded-proto") do
+      [proto | _] -> proto |> String.split(",") |> List.first() |> String.trim() |> String.downcase()
+      [] -> nil
+    end
+  end
+
   plug(Plug.Static,
     at: "/",
     from: :exoforge_std_dashboard,
@@ -35,6 +54,6 @@ defmodule Exoforge.Std.Dashboard.Endpoint do
 
   plug(Plug.MethodOverride)
   plug(Plug.Head)
-  plug(Plug.Session, @session_options)
+  plug(:session)
   plug(Exoforge.Std.Dashboard.Router)
 end

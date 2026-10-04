@@ -33,9 +33,19 @@ defmodule Exoforge.Std.Dashboard.Router do
       pass: ["application/json"],
       json_decoder: Jason
     )
+
+    plug(:verify_studio_access)
   end
 
-  live_session :default do
+  scope "/", Exoforge.Std.Dashboard do
+    pipe_through(:browser)
+
+    get("/login", LoginController, :show)
+    post("/login", ApiController, :login)
+    get("/logout", ApiController, :logout)
+  end
+
+  live_session :studio, on_mount: {Exoforge.Std.Dashboard.AuthHook, :require_studio} do
     scope "/", Exoforge.Std.Dashboard do
       pipe_through(:browser)
 
@@ -44,7 +54,6 @@ defmodule Exoforge.Std.Dashboard.Router do
       live("/tab/:tab", StudioLive, :tab)
       live("/extensions/:tab", StudioLive, :tab)
       live("/resources/:name", ResourceLive, :index)
-      get("/logout", ApiController, :logout)
     end
   end
 
@@ -72,6 +81,26 @@ defmodule Exoforge.Std.Dashboard.Router do
     Plug.Conn.put_private(conn, :phoenix_endpoint, Exoforge.Std.Dashboard.Endpoint)
   end
 
+  # Gate every Studio API endpoint behind a studio/admin session or token.
+  defp verify_studio_access(conn, _opts) do
+    case Exoforge.Std.Dashboard.ApiController.verify_studio_auth(conn) do
+      {:ok, auth} ->
+        Plug.Conn.assign(conn, :auth_ctx, auth)
+
+      {:error, :forbidden} ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(403, Jason.encode!(%{status: "error", error: "forbidden_scope"}))
+        |> Plug.Conn.halt()
+
+      {:error, _} ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(401, Jason.encode!(%{status: "error", error: "unauthenticated"}))
+        |> Plug.Conn.halt()
+    end
+  end
+
   # Transparently initialize test session for direct Plug.Test invocations
   defp ensure_session(conn, _opts) do
     if Map.has_key?(conn.private, :plug_session) do
@@ -83,9 +112,15 @@ defmodule Exoforge.Std.Dashboard.Router do
 
   # Synchronize auth token to cross-port cookie for Swagger UI (:4001) and WebSocket (:4000)
   defp sync_auth_cookie(conn, _opts) do
+    conn = Plug.Conn.fetch_query_params(conn)
+
+    logged_out? =
+      get_session(conn, "logged_out") == true or conn.query_params["logged_out"] == "true"
+
     token =
-      get_session(conn, "auth_token") ||
-        (if Exoforge.Config.allow_dev_tokens?(), do: "dev:admin", else: nil)
+      unless logged_out? do
+        get_session(conn, "auth_token")
+      end
 
     if token do
       Plug.Conn.put_resp_cookie(conn, "exo_auth_token", token,

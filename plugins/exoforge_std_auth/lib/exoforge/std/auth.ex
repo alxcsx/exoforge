@@ -8,18 +8,22 @@ defmodule Exoforge.Std.Auth do
 
   @manifest %{
     system: true,
-    dependencies: [Exoforge.Std.Services.Database],
+    dependencies: [Exoforge.Std.Services.Database, Exoforge.Std.Services.PlayerData],
     category: "Identity",
     dashboard_view: %{
       id: :auth,
       title: "Users & Auth",
       icon: "🛡️"
     },
-    settings_tab: %{
-      id: :auth,
-      title: "Auth & Security",
-      icon: "🔐",
-      order: 25
+    ui_hooks: %{
+      settings: [
+        %{
+          id: :auth,
+          title: "Auth & Security",
+          icon: "🔐",
+          order: 25
+        }
+      ]
     }
   }
 
@@ -88,7 +92,9 @@ defmodule Exoforge.Std.Auth do
 
       token == Roles.guest() ->
         scopes = [Roles.guest()]
-        {:ok, %{user_id: "guest_anon", player_id: "guest_anon", scopes: scopes, role: role(scopes)}}
+
+        {:ok,
+         %{user_id: "guest_anon", player_id: "guest_anon", scopes: scopes, role: role(scopes)}}
 
       true ->
         query = "SELECT * FROM #{@tokens_table} WHERE token = $1"
@@ -99,7 +105,10 @@ defmodule Exoforge.Std.Auth do
                arguments: [token]
              }) do
           {:ok, %{rows: [row | _]}} ->
-            uid = Map.get(row, "user_id") || Map.get(row, :user_id) || Map.get(row, "player_id") || Map.get(row, :player_id)
+            uid =
+              Map.get(row, "user_id") || Map.get(row, :user_id) || Map.get(row, "player_id") ||
+                Map.get(row, :player_id)
+
             raw_scopes = Map.get(row, "scopes") || Map.get(row, :scopes) || Roles.player()
             scopes = parse_scopes(raw_scopes)
             {:ok, %{user_id: uid, player_id: uid, scopes: scopes, role: role(scopes)}}
@@ -201,6 +210,39 @@ defmodule Exoforge.Std.Auth do
     do_register_player(payload)
   end
 
+  @doc """
+  Creates or resumes an anonymous player session.
+
+  Supply `player_id` to reissue a token for an existing player (a returning device);
+  otherwise a new player is registered using the optional display `name`.
+  """
+  @impl true
+  defaction anonymous(payload) do
+    player_id = Map.get(payload, :player_id) || Map.get(payload, "player_id")
+    name = Map.get(payload, :name) || Map.get(payload, "name")
+
+    cond do
+      # Returning anonymous player picking a display name: update the profile.
+      is_binary(player_id) and player_id != "" and is_binary(name) and name != "" ->
+        do_register_player(%{player_id: player_id, name: name})
+
+      # Returning device, no name supplied: just reissue a token.
+      is_binary(player_id) and player_id != "" ->
+        scopes = [Roles.player()]
+
+        case generate_and_store_token(player_id, scopes) do
+          {:ok, token} ->
+            {:ok, %{player_id: player_id, token: token, scopes: scopes, role: role(scopes)}}
+
+          _ ->
+            do_register_player(%{name: name})
+        end
+
+      true ->
+        do_register_player(%{name: name})
+    end
+  end
+
   @impl true
   defaction issue_token(payload) do
     user_id =
@@ -299,10 +341,11 @@ defmodule Exoforge.Std.Auth do
       Enum.map(all_player_ids, fn pid ->
         p_row = Map.get(players_by_id, pid, %{})
         acc_row = Map.get(accounts_by_id, pid, %{})
+
         raw_scopes =
           Map.get(p_row, "scopes") || Map.get(p_row, :scopes) ||
-          Map.get(acc_row, "scopes") || Map.get(acc_row, :scopes) ||
-          Roles.player()
+            Map.get(acc_row, "scopes") || Map.get(acc_row, :scopes) ||
+            Roles.player()
 
         scopes = parse_scopes(raw_scopes)
         tokens = Map.get(tokens_by_player, pid, [])
@@ -376,7 +419,12 @@ defmodule Exoforge.Std.Auth do
           %{} ->
             email = Map.get(acc_row, "email") || Map.get(acc_row, :email)
             actual_pid = Map.get(acc_row, "player_id") || Map.get(acc_row, :player_id) || pid
-            scopes = parse_scopes(Map.get(acc_row, "scopes") || Map.get(acc_row, :scopes) || Roles.player())
+
+            scopes =
+              parse_scopes(
+                Map.get(acc_row, "scopes") || Map.get(acc_row, :scopes) || Roles.player()
+              )
+
             _ = upsert_account(actual_pid, email, password, scopes)
             {:ok, %{user_id: actual_pid, player_id: actual_pid, status: "password_reset"}}
 
@@ -389,7 +437,11 @@ defmodule Exoforge.Std.Auth do
                    arguments: [pid]
                  }) do
               {:ok, %{rows: [prow | _]}} ->
-                scopes = parse_scopes(Map.get(prow, "scopes") || Map.get(prow, :scopes) || Roles.player())
+                scopes =
+                  parse_scopes(
+                    Map.get(prow, "scopes") || Map.get(prow, :scopes) || Roles.player()
+                  )
+
                 _ = upsert_account(pid, "#{pid}@player.exoforge.io", password, scopes)
                 {:ok, %{user_id: pid, player_id: pid, status: "password_reset"}}
 
@@ -571,7 +623,8 @@ defmodule Exoforge.Std.Auth do
             profile: profile
           })
 
-        {:ok, %{user_id: user_id, player_id: user_id, token: token, scopes: scopes, player: profile}}
+        {:ok,
+         %{user_id: user_id, player_id: user_id, token: token, scopes: scopes, player: profile}}
 
       {:error, reason} ->
         {:error, reason}

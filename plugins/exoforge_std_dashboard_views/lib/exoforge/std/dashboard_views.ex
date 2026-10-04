@@ -7,42 +7,26 @@ defmodule Exoforge.Std.DashboardViews do
   """
   use Exoforge.Plugin, provides: [:dashboard_view]
 
-  alias Exoforge.Std.DashboardViews.PlayerDataView
-  alias Exoforge.Std.DashboardViews.PluginManagerView
-  alias Exoforge.Std.DashboardViews.AuthView
-
   @manifest %{
     dependencies: [Exoforge.Std.Services.Dashboard],
+    title: "Studio Views",
+    icon: "🎨",
     category: "Studio",
     dashboard_view: nil
   }
 
-  @view_registry %{
-    "player_data" => PlayerDataView,
-    :player_data => PlayerDataView,
-    "plugin_manager" => PluginManagerView,
-    :plugin_manager => PluginManagerView,
-    "auth" => AuthView,
-    :auth => AuthView
-  }
+  # Custom views are resolved by convention: <ServiceId>View in this namespace.
+  @view_ids [:player_data, :plugin_manager, :auth]
 
   @doc "Returns the registered view module for a given service or extension id."
   def view_for(id) when is_atom(id) or is_binary(id) do
-    str_id = to_string(id)
-    clean_id = String.replace_prefix(str_id, "exoforge_std_", "")
+    clean_id =
+      id
+      |> to_string()
+      |> String.replace_prefix("exoforge_std_", "")
 
-    cond do
-      mod =
-        Map.get(@view_registry, id) ||
-          Map.get(@view_registry, str_id) ||
-          Map.get(@view_registry, clean_id) ||
-          Map.get(@view_registry, String.to_atom(clean_id)) ->
-        mod
-
-      true ->
-        mod = Module.concat([Exoforge.Std.DashboardViews, Macro.camelize(clean_id) <> "View"])
-        if Code.ensure_loaded?(mod), do: mod, else: nil
-    end
+    mod = Module.concat([Exoforge.Std.DashboardViews, Macro.camelize(clean_id) <> "View"])
+    if Code.ensure_loaded?(mod), do: mod, else: nil
   end
 
   def view_for(_), do: nil
@@ -64,24 +48,20 @@ defmodule Exoforge.Std.DashboardViews do
   @impl true
   defaction list_views do
     views =
-      Enum.map(@view_registry, fn {key, mod} ->
-        %{
-          "id" => to_string(key),
-          "module" => inspect(mod)
-        }
+      Enum.map(@view_ids, fn id ->
+        %{"id" => to_string(id), "module" => inspect(view_for(id))}
       end)
-      |> Enum.uniq_by(& &1["id"])
 
     {:ok, %{views: views, count: length(views)}}
   end
 
   @impl true
   defaction get_dashboard_mount(_payload) do
-    {:ok, %{views: @view_registry}}
+    {:ok, %{views: Map.new(@view_ids, fn id -> {id, view_for(id)} end)}}
   end
 
   @impl true
   defaction get_dashboard_data(_payload) do
-    {:ok, %{status: "ok", views_count: map_size(@view_registry)}}
+    {:ok, %{status: "ok", views_count: length(@view_ids)}}
   end
 end

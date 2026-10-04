@@ -40,6 +40,8 @@ defmodule Exoforge.Std.PluginManagerTest do
       File.rm_rf("plugins_csharp/test_uploaded_wasm")
       File.rm_rf("plugins_csharp/invalid_test_wasm")
       File.rm_rf("plugins/test_uploaded_elixir")
+      File.rm_rf("priv/data/uploaded_plugins/test_uploaded_wasm")
+      File.rm_rf("priv/data/uploaded_plugins/test_uploaded_elixir")
     end)
 
     :ok
@@ -155,7 +157,7 @@ defmodule Exoforge.Std.PluginManagerTest do
       assert result.status in ["installed", "saved_pending_restart"]
 
       # Verify files were persisted to disk
-      target_dir = "plugins_csharp/test_uploaded_wasm"
+      target_dir = "priv/data/uploaded_plugins/test_uploaded_wasm"
       assert File.exists?(Path.join(target_dir, "test_uploaded_wasm.wasm"))
       assert File.exists?(Path.join(target_dir, "manifest.exs"))
     end
@@ -199,7 +201,7 @@ defmodule Exoforge.Std.PluginManagerTest do
       assert result.plugin_id == "test_uploaded_elixir"
       assert result.type == "elixir"
 
-      target_dir = "plugins/test_uploaded_elixir"
+      target_dir = "priv/data/uploaded_plugins/test_uploaded_elixir"
       assert File.exists?(Path.join([target_dir, "lib", "test_uploaded_elixir.ex"]))
       assert File.exists?(Path.join(target_dir, "manifest.exs"))
 

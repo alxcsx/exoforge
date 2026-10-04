@@ -1,14 +1,14 @@
 defmodule Exoforge.Std.Database.Manager do
   @moduledoc """
   Core mediator and lifecycle manager for Exoforge multi-tenant database access.
-  Acts as the middleground between database backends (PostgreSQL, Sandbox) and all plugins.
+  Acts as the middleground between database backends (PostgreSQL, SQLite) and all plugins.
   Guarantees that each plugin operates exclusively within its own isolated database/schema.
   """
   use GenServer
   require Logger
 
   alias Exoforge.Std.Database.Adapters.Postgres
-  alias Exoforge.Std.Database.Adapters.Sandbox
+  alias Exoforge.Std.Database.Adapters.Sqlite
 
   @name __MODULE__
 
@@ -134,6 +134,17 @@ defmodule Exoforge.Std.Database.Manager do
     Enum.into(opts, %{})
     |> Map.merge(Enum.into(app_config, %{}))
     |> Map.merge(parsed_url)
+    |> Map.put_new_lazy(:data_dir, &default_data_dir/0)
+  end
+
+  # Tests get a fresh SQLite database per Manager instance so cases stay isolated;
+  # everything else persists under priv/data/sqlite.
+  defp default_data_dir do
+    if function_exported?(Mix, :env, 0) and Mix.env() == :test do
+      Path.join(System.tmp_dir!(), "exoforge_test_#{System.unique_integer([:positive])}")
+    else
+      Path.join([File.cwd!(), "priv", "data", "sqlite"])
+    end
   end
 
   defp detect_adapter(config) do
@@ -143,11 +154,11 @@ defmodule Exoforge.Std.Database.Manager do
       force_driver == :postgres ->
         Postgres
 
-      force_driver == :sandbox ->
-        Sandbox
+      force_driver == :sqlite ->
+        Sqlite
 
       function_exported?(Mix, :env, 0) and Mix.env() == :test ->
-        Sandbox
+        Sqlite
 
       Map.has_key?(config, :host) or System.get_env("DATABASE_URL") != nil ->
         # Verify if Postgres is reachable
@@ -157,15 +168,43 @@ defmodule Exoforge.Std.Database.Manager do
 
           {:error, _reason} ->
             Logger.warning(
-              "[Database] PostgreSQL not reachable at configured host. Falling back to Sandbox adapter."
+              "[Database] PostgreSQL not reachable at configured host. Using the local SQLite adapter."
             )
 
-            Sandbox
+            Sqlite
         end
 
       true ->
-        Sandbox
+        if sqlite_fallback_allowed?(config) do
+          Logger.warning(
+            "[Database] No DATABASE_URL configured. Using the local SQLite adapter " <>
+              "(data persists under priv/data/sqlite). Set DATABASE_URL for a production database."
+          )
+
+          Sqlite
+        else
+          raise """
+          No DATABASE_URL configured and the SQLite fallback is not permitted in production.
+
+          Set DATABASE_URL (or :database, :driver) to point at a real database, or set
+          EXOFORGE_ALLOW_SQLITE_FALLBACK=true to explicitly opt in to a local SQLite file.
+          """
+        end
     end
+  end
+
+  # SQLite is the dev/test default. In production — including any release build,
+  # where Mix is unavailable — it must be an explicit choice, never a silent fallback.
+  defp sqlite_fallback_allowed?(config) do
+    case Map.get(config, :fallback_to_sqlite) do
+      true -> true
+      false -> false
+      nil -> not prod_build?() or System.get_env("EXOFORGE_ALLOW_SQLITE_FALLBACK") in ["1", "true", "yes"]
+    end
+  end
+
+  defp prod_build? do
+    if function_exported?(Mix, :env, 0), do: Mix.env() == :prod, else: true
   end
 
   defp parse_database_url(url) when is_binary(url) do
@@ -193,6 +232,5 @@ defmodule Exoforge.Std.Database.Manager do
     |> to_string()
     |> String.replace(~r/[^a-zA-Z0-9_]/, "_")
     |> String.downcase()
-    |> String.to_atom()
   end
 end

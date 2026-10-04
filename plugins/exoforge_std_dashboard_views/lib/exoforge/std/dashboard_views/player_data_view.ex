@@ -20,9 +20,9 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
        retention_filter: "all",
        selected_player: nil,
        selected_player_id: nil,
-       selected_tab: "profile",
+       selected_tab: "kv_store",
        player_kv_data: %{},
-       player_inspect_tab: "profile",
+       player_inspect_tab: "kv_store",
        player_inspect_hooks: [],
        new_kv_key: "",
        new_kv_val: "",
@@ -31,7 +31,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
        create_form: %{
          "player_id" => "",
          "user_id" => "",
-         "profile_json" => "{\n  \"level\": 1,\n  \"coins\": 100,\n  \"tier\": \"rookie\"\n}"
+         "profile_json" => "{}"
        },
        edit_profile_raw: "",
        edit_error: nil,
@@ -101,11 +101,12 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
       end
 
     hooks = Exoforge.UIHookRegistry.list_hooks(:player_inspect)
+
     hooks =
       if Enum.empty?(hooks) do
         [
-          %{id: :profile, title: "Profile Attributes", icon: "👤", order: 10},
-          %{id: :kv_store, title: "Key-Value Database", icon: "🔑", order: 20}
+          %{id: :kv_store, title: "Key-Value Database", icon: "🔑", order: 10},
+          %{id: :profile, title: "Profile (Raw JSON)", icon: "👤", order: 20}
         ]
       else
         hooks
@@ -115,7 +116,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
      assign(socket,
        selected_player: player,
        selected_player_id: id,
-       player_inspect_tab: "profile",
+       player_inspect_tab: "kv_store",
        player_inspect_hooks: hooks,
        player_kv_data: kv_data,
        new_kv_key: "",
@@ -148,7 +149,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
        create_form: %{
          "player_id" => "player_#{rnd}",
          "user_id" => "u_#{rnd}",
-         "profile_json" => "{\n  \"level\": 1,\n  \"coins\": 250,\n  \"tier\": \"explorer\"\n}"
+         "profile_json" => "{}"
        }
      )}
   end
@@ -288,7 +289,12 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
           _ -> raw_val
         end
 
-      _ = ActionDispatcher.dispatch(:player_data, :set_data, %{player_id: player_id, key: key, value: val})
+      _ =
+        ActionDispatcher.dispatch(:player_data, :set_data, %{
+          player_id: player_id,
+          key: key,
+          value: val
+        })
 
       kv_data =
         case ActionDispatcher.dispatch(:player_data, :get_all_data, %{player_id: player_id}) do
@@ -296,7 +302,13 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
           _ -> %{}
         end
 
-      {:noreply, assign(socket, player_kv_data: kv_data, new_kv_key: "", new_kv_val: "", action_notification: "Key '#{key}' updated!")}
+      {:noreply,
+       assign(socket,
+         player_kv_data: kv_data,
+         new_kv_key: "",
+         new_kv_val: "",
+         action_notification: "Key '#{key}' updated!"
+       )}
     else
       {:noreply, socket}
     end
@@ -313,7 +325,8 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
         _ -> %{}
       end
 
-    {:noreply, assign(socket, player_kv_data: kv_data, action_notification: "Key '#{key}' removed.")}
+    {:noreply,
+     assign(socket, player_kv_data: kv_data, action_notification: "Key '#{key}' removed.")}
   end
 
   @impl true
@@ -331,11 +344,25 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
         _ -> []
       end
 
-    filtered = apply_filters(players, socket.assigns.retention_filter, socket.assigns.search_query)
+    filtered =
+      apply_filters(players, socket.assigns.retention_filter, socket.assigns.search_query)
+
+    user_names =
+      case ActionDispatcher.dispatch(:auth, :list_users, %{}) do
+        {:ok, %{users: users}} ->
+          Map.new(users, fn u ->
+            id = to_string(u["user_id"] || u["player_id"])
+            {id, u["name"] || id}
+          end)
+
+        _ ->
+          %{}
+      end
 
     assign(socket,
       players: players,
       filtered_players: filtered,
+      user_names: user_names,
       loading: false
     )
   end
@@ -344,9 +371,14 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
     # 1. Filter by retention status
     step1 =
       case retention_filter do
-        "valid" -> Enum.filter(players, fn p -> p[:linked] == true or p["linked"] == true end)
-        "retained" -> Enum.filter(players, fn p -> p[:linked] == false or p["linked"] == false end)
-        _ -> players
+        "valid" ->
+          Enum.filter(players, fn p -> p[:linked] == true or p["linked"] == true end)
+
+        "retained" ->
+          Enum.filter(players, fn p -> p[:linked] == false or p["linked"] == false end)
+
+        _ ->
+          players
       end
 
     # 2. Filter by search query
@@ -359,6 +391,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
         id = to_string(p[:player_id] || p["player_id"] || "")
         uid = to_string(p[:user_id] || p["user_id"] || "")
         name = to_string(p[:name] || p["name"] || "")
+
         String.contains?(String.downcase(id), q) or
           String.contains?(String.downcase(uid), q) or
           String.contains?(String.downcase(name), q)
@@ -370,8 +403,11 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
 
   @impl true
   def render(assigns) do
-    valid_count = Enum.count(assigns.players, fn p -> p[:linked] == true or p["linked"] == true end)
-    retained_count = Enum.count(assigns.players, fn p -> p[:linked] == false or p["linked"] == false end)
+    valid_count =
+      Enum.count(assigns.players, fn p -> p[:linked] == true or p["linked"] == true end)
+
+    retained_count =
+      Enum.count(assigns.players, fn p -> p[:linked] == false or p["linked"] == false end)
 
     assigns =
       assign(assigns,
@@ -540,10 +576,10 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
                   </div>
                   <div>
                     <div class="flex items-center gap-2">
-                      <span class="text-xs font-bold text-gray-900 font-mono"><%= pid %></span>
+                      <span class="text-xs font-bold text-gray-900"><%= player[:name] || player["name"] || pid %></span>
                       <%= if is_linked and uid do %>
                         <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                          User: <%= uid %>
+                          User: <%= Map.get(@user_names, to_string(uid), player[:name] || player["name"] || uid) %>
                         </span>
                       <% else %>
                         <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300">
@@ -553,7 +589,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
                     </div>
                     <div class="text-[11px] text-gray-500 flex items-center gap-2 mt-0.5">
                       <span class={"inline-block w-1.5 h-1.5 rounded-full #{if is_linked, do: "bg-emerald-500", else: "bg-amber-500"}"}></span>
-                      <span><%= player[:name] || player["name"] || pid %></span>
+                      <span class="font-mono"><%= pid %></span>
                       <span class="text-gray-300">•</span>
                       <span><%= if is_linked, do: "Active Access", else: "Inaccessible (Retention)" %></span>
                     </div>
@@ -602,25 +638,27 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
 
       <!-- Player Profile & Key-Value Drawer -->
       <%= if @selected_player do %>
+        <% p_name = @selected_player[:name] || @selected_player["name"] || @selected_player_id %>
+        <% p_uid = @selected_player[:user_id] || @selected_player["user_id"] %>
         <div class="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-gray-200 relative animate-in fade-in duration-150 space-y-5">
+          <div class="bg-white rounded-2xl max-w-3xl w-full shadow-2xl border border-gray-200 relative animate-in fade-in duration-150 overflow-hidden">
             <button
               phx-click="close_player_drawer"
               phx-target={@myself}
-              class="absolute top-5 right-5 text-gray-400 hover:text-gray-600 text-lg font-bold"
+              class="absolute top-4 right-5 text-gray-400 hover:text-gray-600 text-lg font-bold"
             >
               ✕
             </button>
 
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-3 px-6 py-4 border-b border-gray-100">
               <div class="w-10 h-10 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center text-xl">
                 👤
               </div>
               <div>
-                <h3 class="text-base font-bold text-gray-900 font-mono"><%= @selected_player_id %></h3>
+                <h3 class="text-base font-bold text-gray-900"><%= p_name %></h3>
                 <p class="text-xs text-gray-500">
-                  <%= if @selected_player[:user_id] || @selected_player["user_id"] do %>
-                    Linked to User: <span class="font-mono font-bold text-blue-700"><%= @selected_player[:user_id] || @selected_player["user_id"] %></span>
+                  <%= if p_uid && p_uid != "" do %>
+                    Linked user: <span class="font-bold text-blue-700"><%= Map.get(@user_names, to_string(p_uid), p_name) %></span>
                   <% else %>
                     <span class="text-amber-700 font-bold">Unlinked / Retained Account (Inaccessible from regular ingress)</span>
                   <% end %>
@@ -629,26 +667,29 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
             </div>
 
             <%= if @edit_error do %>
-              <div class="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-medium">
+              <div class="mx-6 mt-4 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-medium">
                 <%= @edit_error %>
               </div>
             <% end %>
 
-            <!-- Tabbed UI Hooks Bar -->
-            <div class="flex items-center gap-1.5 border-b border-gray-200 pb-2">
-              <%= for hook <- @player_inspect_hooks do %>
-                <button
-                  type="button"
-                  phx-click="switch_player_inspect_tab"
-                  phx-value-tab={to_string(hook.id)}
-                  phx-target={@myself}
-                  class={"px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 #{if @player_inspect_tab == to_string(hook.id), do: "bg-violet-600 text-white shadow-xs", else: "bg-gray-100 text-gray-600 hover:bg-gray-200"}"}
-                >
-                  <span><%= hook.icon %></span>
-                  <span><%= hook.title %></span>
-                </button>
-              <% end %>
-            </div>
+            <div class="flex flex-col md:flex-row min-h-[360px] divide-y md:divide-y-0 md:divide-x divide-gray-100">
+              <!-- Side tabs (UI hooks) -->
+              <div class="w-full md:w-52 p-3 bg-gray-50/70 space-y-0.5 shrink-0">
+                <%= for hook <- @player_inspect_hooks do %>
+                  <button
+                    type="button"
+                    phx-click="switch_player_inspect_tab"
+                    phx-value-tab={to_string(hook.id)}
+                    phx-target={@myself}
+                    class={"w-full text-left px-2.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all #{if @player_inspect_tab == to_string(hook.id), do: "bg-white text-violet-700 shadow-sm border border-gray-200/80", else: "text-gray-600 hover:text-gray-900 hover:bg-white/60"}"}
+                  >
+                    <span><%= hook.icon %></span>
+                    <span class="truncate"><%= hook.title %></span>
+                  </button>
+                <% end %>
+              </div>
+
+              <div class="flex-1 p-5 space-y-4 min-w-0">
 
             <!-- Tab 1: Key-Value Database Hook -->
             <%= if @player_inspect_tab == "kv_store" do %>
@@ -708,16 +749,6 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
                 </form>
               </div>
 
-              <div class="pt-3 border-t border-gray-100 flex items-center justify-end">
-                <button
-                  type="button"
-                  phx-click="close_player_drawer"
-                  phx-target={@myself}
-                  class="px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900"
-                >
-                  Close
-                </button>
-              </div>
             <% end %>
 
             <!-- Tab 2: Profile Attributes Document -->
@@ -778,22 +809,35 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
               </form>
             <% end %>
 
-            <!-- Dynamic Hook Fallback -->
+            <!-- Dynamic Hook Panel -->
             <%= if @player_inspect_tab not in ["profile", "kv_store"] do %>
-              <div class="p-6 bg-gray-50 border border-gray-200 rounded-xl text-center space-y-2">
-                <p class="text-xs text-gray-500">Custom inspection tab for player <strong class="font-mono text-gray-700"><%= @selected_player_id %></strong>.</p>
-                <div class="pt-2">
-                  <button
-                    type="button"
-                    phx-click="close_player_drawer"
-                    phx-target={@myself}
-                    class="px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900"
-                  >
-                    Close
-                  </button>
+              <% active_hook = Enum.find(@player_inspect_hooks, fn h -> to_string(h.id) == @player_inspect_tab end) %>
+              <%= if active_hook && active_hook[:component] && Code.ensure_loaded?(active_hook[:component]) do %>
+                <.live_component
+                  module={active_hook[:component]}
+                  id={"hook_#{active_hook.id}_#{@selected_player_id}"}
+                  player_id={@selected_player_id}
+                  player={@selected_player}
+                />
+              <% else %>
+                <div class="p-6 bg-gray-50 border border-gray-200 rounded-xl text-center space-y-2">
+                  <p class="text-xs text-gray-500">Custom inspection tab for player <strong class="font-mono text-gray-700"><%= @selected_player_id %></strong>.</p>
+                  <p class="text-[11px] text-gray-400">Contributed by <span class="font-mono"><%= (active_hook && active_hook[:plugin_id]) || "extension" %></span></p>
+                  <div class="pt-2">
+                    <button
+                      type="button"
+                      phx-click="close_player_drawer"
+                      phx-target={@myself}
+                      class="px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900"
+                    >
+                      Close
+                    </button>
+                  </div>
                 </div>
-              </div>
+              <% end %>
             <% end %>
+              </div>
+            </div>
           </div>
         </div>
       <% end %>

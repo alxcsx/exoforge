@@ -25,7 +25,7 @@ defmodule Exoforge.Std.Ws.Router do
       |> String.downcase()
 
     if upgrade == "websocket" do
-      token = Exoforge.Auth.Request.query(conn)
+      token = query_token(conn)
 
       conn
       |> WebSockAdapter.upgrade(Exoforge.Std.Ws.SocketHandler, [token: token], timeout: 60_000)
@@ -122,7 +122,7 @@ defmodule Exoforge.Std.Ws.Router do
         conn
 
       true ->
-        case authenticate_token(Exoforge.Auth.Request.token(conn)) do
+        case authenticate_token(token_from_request(conn)) do
           {:ok, auth} ->
             if Exoforge.Auth.Roles.rank_of(auth.scopes) >= 2 do
               Plug.Conn.assign(conn, :auth, auth)
@@ -231,5 +231,36 @@ defmodule Exoforge.Std.Ws.Router do
       |> Keyword.get(:host, "localhost")
 
     "http://#{host}:#{port}"
+  end
+
+  defp token_from_request(conn) do
+    bearer_token(conn) || query_token(conn) || cookie_token(conn)
+  end
+
+  defp bearer_token(conn) do
+    case Plug.Conn.get_req_header(conn, "authorization") do
+      ["Bearer " <> token | _] -> String.trim(token)
+      ["bearer " <> token | _] -> String.trim(token)
+      [token | _] when token != "" -> String.trim(token)
+      _ -> nil
+    end
+  end
+
+  defp query_token(conn) do
+    conn = Plug.Conn.fetch_query_params(conn)
+
+    case conn.query_params["token"] do
+      token when is_binary(token) and token != "" -> String.trim(token)
+      _ -> nil
+    end
+  end
+
+  defp cookie_token(conn) do
+    conn = Plug.Conn.fetch_cookies(conn)
+
+    case Map.get(conn.req_cookies, "exo_auth_token") || Map.get(conn.req_cookies, "exoforge_auth_token") do
+      token when is_binary(token) and token != "" -> String.trim(token)
+      _ -> nil
+    end
   end
 end

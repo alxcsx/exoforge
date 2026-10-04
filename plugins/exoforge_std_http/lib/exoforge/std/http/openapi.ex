@@ -153,7 +153,7 @@ defmodule Exoforge.Std.Http.OpenAPI do
 
     security =
       if scope && scope != :global do
-        [%{"bearerAuth" => [to_string(scope)]}]
+        [%{"bearerAuth" => []}]
       else
         []
       end

@@ -80,14 +80,20 @@ defmodule Exoforge.Std.Http.Router do
           const urlParams = new URLSearchParams(window.location.search);
           const cookieMatch = document.cookie.match(/(?:^|;\s*)exo_auth_token=([^;]+)/);
           const token = urlParams.get('token') || (cookieMatch ? decodeURIComponent(cookieMatch[1].trim()) : null);
+          const specUrl = token ? ('/api/openapi.json?token=' + encodeURIComponent(token)) : '/api/openapi.json';
           const ui = SwaggerUIBundle({
-            url: '/api/openapi.json',
+            url: specUrl,
             dom_id: '#swagger-ui',
             presets: [
               SwaggerUIBundle.presets.apis
             ],
             layout: "BaseLayout",
             deepLinking: true,
+            onComplete: () => {
+              if (token) {
+                ui.preauthorizeApiKey("bearerAuth", token);
+              }
+            },
             requestInterceptor: (req) => {
               if (token && !req.headers["authorization"] && !req.headers["Authorization"]) {
                 req.headers["Authorization"] = "Bearer " + token;
@@ -172,7 +178,7 @@ defmodule Exoforge.Std.Http.Router do
 
   # Actions that mint or verify an account are reachable without a token.
   defp public_action?(service, action) do
-    service == "auth" and action in ["login", "register", "authenticate", "create_player"]
+    service == "auth" and action in ["login", "register", "authenticate", "create_player", "anonymous"]
   end
 
   defp authenticate_token(nil), do: :error
@@ -228,7 +234,36 @@ defmodule Exoforge.Std.Http.Router do
     authenticate_token(token_from_request(conn))
   end
 
-  defp token_from_request(conn), do: Exoforge.Auth.Request.token(conn)
+  defp token_from_request(conn) do
+    bearer_token(conn) || query_token(conn) || cookie_token(conn)
+  end
+
+  defp bearer_token(conn) do
+    case Plug.Conn.get_req_header(conn, "authorization") do
+      ["Bearer " <> token | _] -> String.trim(token)
+      ["bearer " <> token | _] -> String.trim(token)
+      [token | _] when token != "" -> String.trim(token)
+      _ -> nil
+    end
+  end
+
+  defp query_token(conn) do
+    conn = Plug.Conn.fetch_query_params(conn)
+
+    case conn.query_params["token"] do
+      token when is_binary(token) and token != "" -> String.trim(token)
+      _ -> nil
+    end
+  end
+
+  defp cookie_token(conn) do
+    conn = Plug.Conn.fetch_cookies(conn)
+
+    case Map.get(conn.req_cookies, "exo_auth_token") || Map.get(conn.req_cookies, "exoforge_auth_token") do
+      token when is_binary(token) and token != "" -> String.trim(token)
+      _ -> nil
+    end
+  end
 
   defp unauthenticated(conn) do
     conn

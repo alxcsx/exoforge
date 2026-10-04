@@ -135,8 +135,9 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
           |> assign(
             show_register_modal: false,
             error_message: nil,
-            action_notification: "User '#{result.player_id}' successfully created!",
+            action_notification: "User '#{if name != "", do: name, else: result.player_id}' successfully created!",
             issued_token_info: %{
+              name: if(name != "", do: name, else: result.player_id),
               player_id: result.player_id,
               token: result.token,
               scopes: result.scopes
@@ -154,12 +155,23 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
   @impl true
   def handle_event("open_reset_password_modal", %{"player_id" => player_id}, socket) do
     user = Enum.find(socket.assigns.users, &(&1["player_id"] == player_id))
-    {:noreply, assign(socket, show_reset_password_modal: true, reset_password_user: user, reset_password_error: nil)}
+
+    {:noreply,
+     assign(socket,
+       show_reset_password_modal: true,
+       reset_password_user: user,
+       reset_password_error: nil
+     )}
   end
 
   @impl true
   def handle_event("close_reset_password_modal", _params, socket) do
-    {:noreply, assign(socket, show_reset_password_modal: false, reset_password_user: nil, reset_password_error: nil)}
+    {:noreply,
+     assign(socket,
+       show_reset_password_modal: false,
+       reset_password_user: nil,
+       reset_password_error: nil
+     )}
   end
 
   @impl true
@@ -176,7 +188,10 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
         {:noreply, assign(socket, reset_password_error: "Password cannot be empty.")}
 
       true ->
-        case ActionDispatcher.dispatch(:auth, :reset_password, %{player_id: pid, password: trimmed}) do
+        case ActionDispatcher.dispatch(:auth, :reset_password, %{
+               player_id: pid,
+               password: trimmed
+             }) do
           {:ok, _} ->
             socket =
               socket
@@ -191,10 +206,14 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
             {:noreply, socket}
 
           {:error, :protected_admin_account} ->
-            {:noreply, assign(socket, reset_password_error: "Cannot reset password of the protected environment admin.")}
+            {:noreply,
+             assign(socket,
+               reset_password_error: "Cannot reset password of the protected environment admin."
+             )}
 
           {:error, reason} ->
-            {:noreply, assign(socket, reset_password_error: "Password reset failed: #{inspect(reason)}")}
+            {:noreply,
+             assign(socket, reset_password_error: "Password reset failed: #{inspect(reason)}")}
         end
     end
   end
@@ -234,7 +253,11 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
     pid = if user, do: user["user_id"] || user["player_id"], else: nil
     scopes = Exoforge.Auth.Roles.scopes_for_role(role)
 
-    case ActionDispatcher.dispatch(:auth, :update_user_roles, %{user_id: pid, role: role, scopes: scopes}) do
+    case ActionDispatcher.dispatch(:auth, :update_user_roles, %{
+           user_id: pid,
+           role: role,
+           scopes: scopes
+         }) do
       {:ok, _} ->
         socket =
           socket
@@ -248,7 +271,8 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
         {:noreply, socket}
 
       {:error, :protected_admin_account} ->
-        {:noreply, assign(socket, roles_error: "Cannot alter roles of the protected environment admin.")}
+        {:noreply,
+         assign(socket, roles_error: "Cannot alter roles of the protected environment admin.")}
 
       {:error, reason} ->
         {:noreply, assign(socket, roles_error: "Failed to update roles: #{inspect(reason)}")}
@@ -262,18 +286,29 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
         socket =
           socket
           |> assign(
-            selected_user: (if socket.assigns.selected_user && socket.assigns.selected_user["player_id"] == player_id, do: nil, else: socket.assigns.selected_user),
-            action_notification: "Account '#{player_id}' has been permanently deleted."
+            selected_user:
+              if(
+                socket.assigns.selected_user &&
+                  socket.assigns.selected_user["player_id"] == player_id,
+                do: nil,
+                else: socket.assigns.selected_user
+              ),
+            action_notification:
+              "Account '#{(Enum.find(socket.assigns.users, &(&1["player_id"] == player_id)) || %{})["name"] || player_id}' has been permanently deleted."
           )
           |> load_users()
 
         {:noreply, socket}
 
       {:error, :protected_admin_account} ->
-        {:noreply, assign(socket, action_notification: "Cannot delete the hardcoded environment admin account.")}
+        {:noreply,
+         assign(socket,
+           action_notification: "Cannot delete the hardcoded environment admin account."
+         )}
 
       {:error, reason} ->
-        {:noreply, assign(socket, action_notification: "Failed to delete account: #{inspect(reason)}")}
+        {:noreply,
+         assign(socket, action_notification: "Failed to delete account: #{inspect(reason)}")}
     end
   end
 
@@ -293,6 +328,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
           socket
           |> assign(
             issued_token_info: %{
+              name: (user && user["name"]) || result.player_id,
               player_id: result.player_id,
               token: result.token,
               scopes: scopes
@@ -454,7 +490,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
               </div>
               <div class="space-y-1">
                 <h4 class="text-sm font-bold text-purple-950">
-                  New Bearer Token Generated for <span class="font-mono text-purple-700"><%= @issued_token_info.player_id %></span>
+                  New Bearer Token Generated for <span class="font-bold text-purple-700"><%= @issued_token_info[:name] || @issued_token_info.player_id %></span>
                 </h4>
                 <p class="text-xs text-purple-700">
                   Save this token securely. It grants client authentication with scopes:
@@ -617,7 +653,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                     <td class="py-3.5 px-4">
                       <div class="flex flex-col">
                         <div class="flex items-center gap-2">
-                          <span class="font-mono font-bold text-gray-900"><%= user["user_id"] || user["player_id"] %></span>
+                          <span class="font-bold text-gray-900"><%= user["name"] || user["email"] || user["user_id"] || user["player_id"] %></span>
                           <%= if is_protected do %>
                             <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300" title="Created via environment variables. Cannot be modified or deleted via UI.">
                               🔒 Env Admin
@@ -631,7 +667,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                             📋
                           </button>
                         </div>
-                        <span class="text-xs text-gray-500 font-medium mt-0.5"><%= user["name"] || user["email"] %></span>
+                        <span class="text-xs text-gray-500 font-medium mt-0.5"><%= user["email"] || user["user_id"] || user["player_id"] %></span>
                       </div>
                     </td>
                     <td class="py-3.5 px-4">
@@ -700,7 +736,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                             phx-click="delete_user"
                             phx-value-player_id={user["player_id"]}
                             phx-target={@myself}
-                            data-confirm={"Are you sure you want to permanently delete user account '#{user["player_id"]}'?"}
+                            data-confirm={"Are you sure you want to permanently delete user account '#{user["name"] || user["player_id"]}'?"}
                             title="Delete user account"
                             class="px-2 py-1 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-colors"
                           >
@@ -857,7 +893,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
               <div>
                 <h3 class="text-base font-bold text-gray-900">Reset User Password</h3>
                 <p class="text-xs text-gray-500">
-                  Account: <span class="font-mono font-bold text-gray-800"><%= @reset_password_user["player_id"] %></span>
+                  Account: <span class="font-bold text-gray-800"><%= @reset_password_user["name"] || @reset_password_user["player_id"] %></span>
                 </p>
               </div>
             </div>
@@ -920,7 +956,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
               <div>
                 <h3 class="text-base font-bold text-gray-900">Change Account Roles</h3>
                 <p class="text-xs text-gray-500">
-                  User ID: <span class="font-mono font-bold text-gray-800"><%= @roles_user["user_id"] || @roles_user["player_id"] %></span>
+                  User: <span class="font-bold text-gray-800"><%= @roles_user["name"] || @roles_user["user_id"] || @roles_user["player_id"] %></span>
                 </p>
               </div>
             </div>
@@ -993,7 +1029,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                     👤
                   </div>
                   <div>
-                    <h3 class="text-base font-bold text-gray-900 font-mono"><%= @selected_user["player_id"] %></h3>
+                    <h3 class="text-base font-bold text-gray-900"><%= @selected_user["name"] || @selected_user["player_id"] %></h3>
                     <p class="text-xs text-gray-500">Identity details &amp; security tokens</p>
                   </div>
                 </div>
@@ -1107,7 +1143,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                   phx-click="delete_user"
                   phx-value-player_id={@selected_user["player_id"]}
                   phx-target={@myself}
-                  data-confirm={"Are you sure you want to permanently delete account '#{@selected_user["player_id"]}'?"}
+                  data-confirm={"Are you sure you want to permanently delete account '#{@selected_user["name"] || @selected_user["player_id"]}'?"}
                   class="w-full py-2 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-colors"
                 >
                   Delete Account
@@ -1127,13 +1163,4 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
     </div>
     """
   end
-end
-
-defmodule Exoforge.Std.Dashboard.Views.AuthView do
-  @moduledoc false
-  use Phoenix.LiveComponent
-  def render(assigns), do: Exoforge.Std.DashboardViews.AuthView.render(assigns)
-  def mount(socket), do: Exoforge.Std.DashboardViews.AuthView.mount(socket)
-  def update(assigns, socket), do: Exoforge.Std.DashboardViews.AuthView.update(assigns, socket)
-  def handle_event(event, params, socket), do: Exoforge.Std.DashboardViews.AuthView.handle_event(event, params, socket)
 end

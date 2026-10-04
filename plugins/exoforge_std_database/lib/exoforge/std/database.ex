@@ -11,7 +11,11 @@ defmodule Exoforge.Std.Database do
     category: "Storage",
     system: true,
     dashboard_view: nil,
-    settings_tab: %{id: :database, title: "Database Engine", icon: "🗄️", order: 20}
+    ui_hooks: %{
+      settings: [
+        %{id: :database, title: "Database Engine", icon: "🗄️", order: 20}
+      ]
+    }
   }
 
   alias Exoforge.Std.Database.Manager

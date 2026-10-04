@@ -43,12 +43,13 @@ defmodule Exoforge.Std.WsTest do
 
   setup do
     Application.put_env(:exoforge, :allow_dev_tokens, true)
-    on_exit(fn -> Application.delete_env(:exoforge, :allow_dev_tokens) end)
-    start_supervised!(EventDispatcher)
-    start_supervised!(PluginRegistry)
+    unless Process.whereis(EventDispatcher.registry_name()) do
+      start_supervised!(EventDispatcher)
+    end
+    PluginRegistry.initialize_ets()
 
     unless Process.whereis(Exoforge.Std.Database.Manager) do
-      start_supervised!({Exoforge.Std.Database.Manager, [driver: :sandbox]})
+      start_supervised!({Exoforge.Std.Database.Manager, [driver: :sqlite]})
     end
 
     PluginRegistry.register(%Manifest{
@@ -109,7 +110,7 @@ defmodule Exoforge.Std.WsTest do
 
     assert conn.status == 200
     assert conn.resp_body =~ "Exoforge WebSocket Gateway"
-    assert conn.resp_body =~ "ws://localhost:4000/ws"
+    assert conn.resp_body =~ "ws://localhost:#{Exoforge.Endpoints.ws_port()}/ws"
   end
 
   test "GET /ws without upgrade header returns 426 Upgrade Required" do

@@ -7,6 +7,8 @@ defmodule Exoforge.Std.Ws do
 
   @manifest %{
     dependencies: [Exoforge.Std.Services.Auth],
+    title: "WebSocket Gateway",
+    icon: "🔌",
     category: "Ingress",
     system: true,
     dashboard_view: nil

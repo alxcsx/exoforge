@@ -8,6 +8,8 @@ defmodule Exoforge.Std.Http do
 
   @manifest %{
     dependencies: [Exoforge.Std.Services.Auth],
+    title: "HTTP Ingress",
+    icon: "🌐",
     category: "Ingress",
     system: true,
     dashboard_view: nil

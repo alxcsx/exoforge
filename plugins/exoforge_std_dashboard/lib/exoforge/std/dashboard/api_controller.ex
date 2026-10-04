@@ -12,12 +12,66 @@ defmodule Exoforge.Std.Dashboard.ApiController do
     json(conn, %{status: "ok"})
   end
 
+  def login(conn, params) do
+    dev_admin? = params["dev_admin"] == "true" or params[:dev_admin] == true
+
+    cond do
+      dev_admin? and Exoforge.Config.allow_dev_tokens?() ->
+        conn
+        |> clear_session()
+        |> put_session("admin_user_id", "studio")
+        |> put_session("admin_player_id", "studio")
+        |> put_session("user_name", "Studio Producer")
+        |> put_session("user_role", "Admin")
+        |> put_session("auth_token", "dev:admin")
+        |> put_resp_cookie("exo_auth_token", "dev:admin",
+          path: "/",
+          same_site: "Lax",
+          http_only: false
+        )
+        |> put_flash(:info, "Signed in as Studio Producer")
+        |> redirect(to: "/")
+
+      true ->
+        email = params["email"] || params[:email]
+        password = params["password"] || params[:password]
+
+        case ActionDispatcher.dispatch(:auth, :login, %{email: email, password: password}) do
+          {:ok, result} ->
+            player_id = result.player_id
+            token = result.token
+            role = result[:role] || "Admin"
+
+            conn
+            |> clear_session()
+            |> put_session("admin_user_id", player_id)
+            |> put_session("admin_player_id", player_id)
+            |> put_session("user_name", player_id)
+            |> put_session("user_role", role)
+            |> put_session("auth_token", token)
+            |> put_resp_cookie("exo_auth_token", token,
+              path: "/",
+              same_site: "Lax",
+              http_only: false
+            )
+            |> put_flash(:info, "Signed in successfully as #{player_id}")
+            |> redirect(to: "/")
+
+          {:error, _reason} ->
+            conn
+            |> put_flash(:error, "Invalid email or password.")
+            |> redirect(to: "/login?error=Invalid+email+or+password")
+        end
+    end
+  end
+
   def logout(conn, _params) do
     conn
-    |> configure_session(drop: true)
+    |> clear_session()
+    |> put_session("logged_out", true)
     |> delete_resp_cookie("exo_auth_token", path: "/")
     |> put_flash(:info, "You have been logged out.")
-    |> redirect(to: "/")
+    |> redirect(to: "/login")
   end
 
   def overview(conn, _params) do
@@ -26,7 +80,7 @@ defmodule Exoforge.Std.Dashboard.ApiController do
   end
 
   def resource_rows(conn, %{"name" => name}) do
-    json(conn, %{rows: PluginRegistry.fetch_resource_rows(name)})
+    json(conn, %{rows: PluginRegistry.fetch_resource_rows(name, caller_scopes(conn))})
   end
 
   def create_resource_row(conn, %{"name" => name} = params) do
@@ -39,7 +93,9 @@ defmodule Exoforge.Std.Dashboard.ApiController do
             |> json(%{status: "error", error: "resource_has_no_create_action"})
 
           action ->
-            case ActionDispatcher.dispatch(plugin_id, action, Map.drop(params, ["name"])) do
+            case ActionDispatcher.dispatch(plugin_id, action, Map.drop(params, ["name"]),
+                   caller_scopes: caller_scopes(conn)
+                 ) do
               {:ok, result} ->
                 json(conn, %{status: "ok", data: result})
 
@@ -113,7 +169,7 @@ defmodule Exoforge.Std.Dashboard.ApiController do
         |> put_status(400)
         |> json(%{status: "error", error: "service and action are required"})
       else
-        case ActionDispatcher.dispatch(service, action, payload) do
+        case ActionDispatcher.dispatch(service, action, payload, caller_scopes: auth_ctx.scopes) do
           {:ok, result} ->
             json(conn, %{status: "ok", data: result, caller: auth_ctx.player_id})
 
@@ -242,9 +298,41 @@ defmodule Exoforge.Std.Dashboard.ApiController do
     end
   end
 
+  # Scopes for the authenticated studio/admin session, used to authorize
+  # downstream action dispatches instead of silently running them as internal.
+  defp caller_scopes(conn) do
+    case conn.assigns[:auth_ctx] do
+      %{scopes: scopes} when is_list(scopes) -> scopes
+      _ -> []
+    end
+  end
+
   defp explicit_token(conn) do
-    Exoforge.Auth.Request.bearer(conn) ||
-      Exoforge.Auth.Request.header(conn, "x-admin-token") ||
-      Exoforge.Auth.Request.query(conn)
+    bearer_token(conn) || header_token(conn, "x-admin-token") || query_token(conn)
+  end
+
+  defp bearer_token(conn) do
+    case Plug.Conn.get_req_header(conn, "authorization") do
+      ["Bearer " <> token | _] -> String.trim(token)
+      ["bearer " <> token | _] -> String.trim(token)
+      [token | _] when token != "" -> String.trim(token)
+      _ -> nil
+    end
+  end
+
+  defp header_token(conn, header_name) do
+    case Plug.Conn.get_req_header(conn, header_name) do
+      [val | _] when is_binary(val) and val != "" -> String.trim(val)
+      _ -> nil
+    end
+  end
+
+  defp query_token(conn) do
+    conn = Plug.Conn.fetch_query_params(conn)
+
+    case conn.query_params["token"] do
+      token when is_binary(token) and token != "" -> String.trim(token)
+      _ -> nil
+    end
   end
 end

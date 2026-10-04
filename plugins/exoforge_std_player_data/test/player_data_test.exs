@@ -11,7 +11,7 @@ defmodule Exoforge.PlayerDataTest do
     PluginRegistry.initialize_ets()
 
     unless Process.whereis(DbManager) do
-      start_supervised!({DbManager, [driver: :sandbox]})
+      start_supervised!({DbManager, [driver: :sqlite]})
     end
 
     unless Process.whereis(Exoforge.EventDispatcher.registry_name()) do

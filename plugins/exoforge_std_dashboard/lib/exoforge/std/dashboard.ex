@@ -8,9 +8,10 @@ defmodule Exoforge.Std.Dashboard do
 
   @manifest %{
     system: true,
-    dependencies: [Exoforge.Std.Services.Database],
-    category: "Studio",
-    dashboard_view: %{id: :dashboard, title: "Producer Studio", icon: "📊"}
+    dependencies: [Exoforge.Std.Services.Database, Exoforge.Std.Services.ResourceStore],
+    title: "Exoforge Dashboard",
+    icon: "🎛️",
+    category: "Studio"
   }
 
   def children do
@@ -31,7 +32,11 @@ defmodule Exoforge.Std.Dashboard do
   end
 
   def on_init(_manifest) do
-    Exoforge.Std.Dashboard.Preferences.ensure_schema()
+    _ =
+      Exoforge.ActionDispatcher.dispatch(:resource_store, :migrate, %{
+        resource: "studio_preference"
+      })
+
     :ok
   end
 

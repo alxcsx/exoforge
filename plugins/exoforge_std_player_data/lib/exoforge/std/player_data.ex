@@ -9,13 +9,13 @@ defmodule Exoforge.Std.PlayerData do
   use Exoforge.Plugin, provides: [:player_data]
 
   @manifest %{
-    dependencies: [Exoforge.Std.Services.Database, Exoforge.Std.Services.Auth],
-    category: "LiveOps",
-    dashboard_view: %{id: :player_data, title: "Player Data", icon: "👤"},
+    dependencies: [Exoforge.Std.Services.Database],
+    category: "Data",
+    dashboard_view: %{id: :player_data, title: "Players", icon: "👤"},
     ui_hooks: %{
       player_inspect: [
-        %{id: :profile, title: "Profile Attributes", icon: "👤", order: 10},
-        %{id: :kv_store, title: "Key-Value Database", icon: "🔑", order: 20}
+        %{id: :kv_store, title: "Key-Value Database", icon: "🔑", order: 10},
+        %{id: :profile, title: "Profile (Raw JSON)", icon: "👤", order: 20}
       ]
     }
   }
@@ -46,8 +46,7 @@ defmodule Exoforge.Std.PlayerData do
     _ =
       ActionDispatcher.dispatch(:database, :execute, %{
         plugin: :player_data,
-        operation:
-          "CREATE INDEX IF NOT EXISTS idx_player_kv_prefix ON player_kv (player_id, key)"
+        operation: "CREATE INDEX IF NOT EXISTS idx_player_kv_prefix ON player_kv (player_id, key)"
       })
 
     :ok
@@ -58,6 +57,7 @@ defmodule Exoforge.Std.PlayerData do
   @impl true
   defaction get_player(payload) do
     player_id = extract_player_id(payload)
+
     allow_retained =
       Map.get(payload, :allow_retained, false) ||
         Map.get(payload, "allow_retained", false) ||
@@ -76,7 +76,10 @@ defmodule Exoforge.Std.PlayerData do
            }) do
         {:ok, %{rows: [row | _]}} ->
           player = decode_player_row(row)
-          user_id = Map.get(row, "user_id") || Map.get(row, :user_id) || Map.get(player, "user_id")
+
+          user_id =
+            Map.get(row, "user_id") || Map.get(row, :user_id) || Map.get(player, "user_id")
+
           state = Map.get(row, "state") || Map.get(row, :state) || "active"
           is_retained = is_nil(user_id) or user_id == "" or state == "retained"
 
@@ -183,16 +186,6 @@ defmodule Exoforge.Std.PlayerData do
              arguments: [player_id, player_id, user_id, profile_json, state]
            }) do
         {:ok, _} ->
-          # Only issue token if linked to a valid user
-          if user_id != "" do
-            _ =
-              ActionDispatcher.dispatch(:auth, :issue_token, %{
-                user_id: user_id,
-                player_id: player_id,
-                scopes: [Exoforge.Auth.Roles.player()]
-              })
-          end
-
           # Emit player_created lifecycle event
           player_created(player_id, now)
           {:ok, %{player: profile_with_id}}

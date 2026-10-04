@@ -1,9 +1,9 @@
-defmodule Exoforge.Std.Database.MixProject do
+defmodule Exoforge.Std.Resources.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :exoforge_std_database,
+      app: :exoforge_std_resources,
       version: "0.1.0",
       elixir: "~> 1.20",
       deps: deps(),
@@ -20,8 +20,8 @@ defmodule Exoforge.Std.Database.MixProject do
   defp deps do
     [
       {:exoforge_core, path: "../../core"},
-      {:postgrex, ">= 0.0.0"},
-      {:exqlite, "~> 0.42"}
+      {:exoforge_std_database, path: "../exoforge_std_database", only: :test},
+      {:jason, "~> 1.4"}
     ]
   end
 end
