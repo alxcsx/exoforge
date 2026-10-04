@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Exoforge.Plugin.SDK;
 
@@ -8,11 +9,16 @@ namespace Exoforge.Plugins.SnakeLeaderboard;
 /// <summary>
 /// Snake leaderboard service. Stores one score row per player in the plugin's isolated database and
 /// serves a shared top-N ranking. Player names are resolved from <c>player_data</c> at read time.
+///
+/// Deliberately thin: the point of this sample is to show the base system, so the actions talk to
+/// <see cref="IDatabase"/> directly instead of hiding it behind a repository.
 /// </summary>
 [ExoService("snake_leaderboard", Version = "1.0.0", Resources = new[] { typeof(SnakeScoreRecord) },
     Category = "Game", Title = "Snake Leaderboard", Icon = "🏆")]
 public class SnakeLeaderboardPlugin
 {
+    private const string Table = "snake_scores";
+
     [Inject("database")]
     public static IDatabase? Database { get; set; }
 
@@ -22,8 +28,6 @@ public class SnakeLeaderboardPlugin
 
     [Inject]
     public static ILogger? Logger { get; set; }
-
-    private static SnakeScoreStore Store => new(Database!);
 
     /// <summary>
     /// Records a finished run for a player, keeping their best score, and returns that best.
@@ -35,14 +39,13 @@ public class SnakeLeaderboardPlugin
         // player_data, so a rename can never leave a stale name behind.
         _ = name;
 
-        var store = Store;
-        var existing = store.Get(playerId);
+        var existing = Database!.Get<SnakeScoreRecord>(Table, playerId);
         bool improved = existing is null || existing.Score < score;
 
         int bestScore = improved ? score : existing!.Score;
         int bestLength = improved ? snakeLength : existing!.SnakeLength;
 
-        store.Put(new SnakeScoreRecord
+        Database.Put(Table, playerId, new SnakeScoreRecord
         {
             PlayerId = playerId,
             Score = bestScore,
@@ -63,9 +66,14 @@ public class SnakeLeaderboardPlugin
     public async Task<List<SnakeLeaderboardEntry>> GetLeaderboard(int limit)
     {
         int take = limit > 0 ? limit : 10;
+
+        var top = Database!.All<SnakeScoreRecord>(Table)
+            .OrderByDescending(score => score.Score)
+            .Take(take);
+
         var entries = new List<SnakeLeaderboardEntry>();
 
-        foreach (var score in Store.Top(take))
+        foreach (var score in top)
         {
             entries.Add(new SnakeLeaderboardEntry
             {

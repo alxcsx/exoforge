@@ -44,9 +44,8 @@ sample_unity/
 │   └── plugins/snake_leaderboard/   the server plugin (a dotnet project)
 │       ├── SnakeScore.cs              stored row + leaderboard entry records
 │       ├── PlayerProfile.cs           player_data contract DTOs (name join)
-│       ├── SnakeScoreStore.cs         database access (IDatabase)
 │       ├── SnakeJsonContext.cs        source-generated JSON metadata (NativeAOT)
-│       ├── SnakeLeaderboardPlugin.cs  the actions
+│       ├── SnakeLeaderboardPlugin.cs  the actions (talk to IDatabase directly)
 │       ├── snake_leaderboard          built NativeAOT binary (generated, git-ignored)
 │       └── manifest.exs               GENERATED from the C# attributes
 └── Packages/manifest.json           references com.exoforge.sdk (file:../../Exoforge.SDK)
