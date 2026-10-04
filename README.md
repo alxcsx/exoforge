@@ -83,8 +83,8 @@ Exoforge separates game engineering from backend operations. Game developers wor
 ### 1. Unity Control Center (`com.exoforge.sdk`)
 
 A dedicated Unity Editor extension (`Window > Exoforge > Control Center`) providing:
-- **One-Click Scaffolding**: Generate standard, inventory, or LiveOps C# WASM plugins directly into `/exoforge/plugins`.
-- **Compilation & Deployment**: Build `.wasm` binaries and upload them to the running server.
+- **One-Click Scaffolding**: Generate standard, inventory, or LiveOps native C# plugins directly into `plugins/` — each with its own solution (`.slnx`) and sources under `src/`.
+- **Compilation & Deployment**: Build the NativeAOT binary + manifest and upload them to the running server.
 - **Live Action Sandbox**: Test actions and inspect payloads with latency metrics (`µs`).
 - **Real-Time Event Stream**: Monitor backend broadcasts and filter topics inside Unity.
 - **LiveOps Schedule Timeline**: Visual timeline of active and scheduled game windows.
@@ -94,8 +94,8 @@ A dedicated Unity Editor extension (`Window > Exoforge > Control Center`) provid
 Cross-platform command-line tool (`netstandard2.1` / `.NET 10`) for CI/CD pipelines and headless workflows:
 ```bash
 exo init                     # Initialize /exoforge workspace
-exo plugin new combat        # Scaffold new C# WASM plugin (templates: standard, inventory, liveops)
-exo plugin build combat      # Compile C# to .wasm assembly
+exo plugin new combat        # Scaffold a native C# plugin (--template standard|inventory|liveops)
+exo plugin build combat      # Build the NativeAOT binary + manifest.exs
 exo plugin push combat       # Hot-load plugin onto live cluster
 exo sync                     # Generate strongly-typed C# client bindings
 exo status                   # Inspect cluster health and telemetry

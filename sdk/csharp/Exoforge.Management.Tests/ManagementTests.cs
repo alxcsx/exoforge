@@ -57,19 +57,29 @@ public class ManagementTests : IDisposable
 
         Assert.True(Directory.Exists(createdDir));
 
-        string csprojFile = Path.Combine(createdDir, "guild_system.csproj");
-        Assert.True(File.Exists(csprojFile));
-        string csprojText = File.ReadAllText(csprojFile);
-        Assert.Contains("Exoforge.Plugin.SDK", csprojText);
+        // Per-plugin solution + src/ layout.
+        string slnFile = Path.Combine(createdDir, "guild_system.slnx");
+        Assert.True(File.Exists(slnFile));
+        Assert.Contains("src/guild_system.csproj", File.ReadAllText(slnFile));
 
-        string serviceFile = Path.Combine(createdDir, "GuildSystemPlugin.cs");
+        string csprojFile = Path.Combine(createdDir, "src", "guild_system.csproj");
+        Assert.True(File.Exists(csprojFile));
+        Assert.Contains("Exoforge.Plugin.SDK", File.ReadAllText(csprojFile));
+
+        string serviceFile = Path.Combine(createdDir, "src", "GuildSystemPlugin.cs");
         Assert.True(File.Exists(serviceFile));
         string serviceText = File.ReadAllText(serviceFile);
         Assert.Contains("[ExoService(\"guild_system\"", serviceText);
-        Assert.Contains("public class GuildSystemPlugin : PluginBehaviour", serviceText);
-        Assert.Contains("[ExoAction(\"ping\"", serviceText);
-        Assert.Contains("[ExoAction(\"execute\"", serviceText);
+        Assert.Contains("public class GuildSystemPlugin", serviceText);
+        Assert.Contains("[ExoAction]", serviceText);
+        Assert.Contains("PluginHost.Run<GuildSystemPlugin, GuildSystemJsonContext>()", serviceText);
         Assert.Contains("[ExoResource(\"guild_system_items\"", serviceText);
+
+        string contextFile = Path.Combine(createdDir, "src", "GuildSystemJsonContext.cs");
+        Assert.True(File.Exists(contextFile));
+        Assert.Contains("[JsonSerializable(typeof(GuildSystemItem))]", File.ReadAllText(contextFile));
+
+        Assert.True(File.Exists(Path.Combine(createdDir, ".gitignore")));
     }
 
     [Fact]

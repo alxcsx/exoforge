@@ -65,7 +65,7 @@ Usage: exo <command> [options]
 
 Commands:
   init                     Initializes /exoforge workspace and exoforge.json
-  plugin new <name>        Scaffolds a new C# plugin project
+  plugin new <name>        Scaffolds a new C# plugin project (--template standard|inventory|liveops)
   plugin build <name>      Builds a plugin (native AOT, or WASM when build.sh exists)
   plugin push <name>       Builds and deploys plugin to live Exoforge cluster
   plugin list              Lists all installed plugins from live cluster
@@ -121,9 +121,10 @@ Options:
                     return 1;
                 }
                 string name = args[2];
-                string created = ExoScaffolder.ScaffoldPlugin(ws.PluginsPath, name);
+                string template = GetOption(args, "--template") ?? "standard";
+                string created = ExoScaffolder.ScaffoldPlugin(ws.PluginsPath, name, template: template);
                 Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine($"[Exoforge] Scaffolded C# plugin '{name}' at:");
+                Console.WriteLine($"[Exoforge] Scaffolded C# plugin '{name}' ({template}) at:");
                 Console.WriteLine($"  {created}");
                 Console.ResetColor();
                 return 0;

@@ -42,10 +42,13 @@ sample_unity/
 ├── Exoforge/                        the Exoforge workspace (OUTSIDE Assets/)
 │   ├── exoforge.json                environments + codegen paths
 │   └── plugins/snake_leaderboard/   the server plugin (a dotnet project)
-│       ├── SnakeScore.cs              stored row + leaderboard entry records
-│       ├── PlayerProfile.cs           player_data contract DTOs (name join)
-│       ├── SnakeJsonContext.cs        source-generated JSON metadata (NativeAOT)
-│       ├── SnakeLeaderboardPlugin.cs  the actions (talk to IDatabase directly)
+│       ├── snake_leaderboard.slnx     the plugin's own solution
+│       ├── src/
+│       │   ├── snake_leaderboard.csproj
+│       │   ├── SnakeScore.cs          stored row + leaderboard entry records
+│       │   ├── PlayerProfile.cs       player_data contract DTOs (name join)
+│       │   ├── SnakeJsonContext.cs    source-generated JSON metadata (NativeAOT)
+│       │   └── SnakeLeaderboardPlugin.cs  the actions (talk to IDatabase directly)
 │       ├── snake_leaderboard          built NativeAOT binary (generated, git-ignored)
 │       └── manifest.exs               GENERATED from the C# attributes
 └── Packages/manifest.json           references com.exoforge.sdk (file:../../Exoforge.SDK)

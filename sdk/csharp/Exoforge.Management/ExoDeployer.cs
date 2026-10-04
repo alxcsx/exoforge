@@ -61,7 +61,10 @@ public class ExoDeployer
         }
         else
         {
-            var matches = Directory.GetFiles(pluginDir, "*.wasm", SearchOption.AllDirectories);
+            var matches = Directory.GetFiles(pluginDir, "*.wasm", SearchOption.AllDirectories)
+                .Where(path => !IsBuildPath(path))
+                .ToArray();
+
             if (matches.Length > 0)
             {
                 wasmPath = matches[0];
@@ -206,14 +209,14 @@ public class ExoDeployer
             log?.Invoke(line);
         }
 
-        string csproj = Path.Combine(pluginDir, cleanName + ".csproj");
+        string? csproj = FindPluginCsproj(pluginDir, cleanName);
         string dotnet = ResolveDotnetPath(dotnetPath);
         if (dotnet != dotnetPath)
         {
             Emit($"[build] dotnet -> {dotnet}");
         }
 
-        if (File.Exists(csproj))
+        if (csproj != null)
         {
             Emit($"[build] dotnet build {Path.GetFileName(csproj)}");
             RunProcess(dotnet, $"build \"{csproj}\" -c Release", pluginDir, Emit);
@@ -234,7 +237,7 @@ public class ExoDeployer
         else
         {
             pluginType = "native";
-            binaryPath = PublishNative(pluginDir, cleanName, rid, dotnet, Emit);
+            binaryPath = PublishNative(csproj ?? throw new FileNotFoundException($"No .csproj found for '{cleanName}'."), pluginDir, cleanName, rid, dotnet, Emit);
         }
 
         string manifestPath = Path.Combine(pluginDir, "manifest.exs");
@@ -251,16 +254,19 @@ public class ExoDeployer
         return Task.Run(() => BuildPlugin(pluginName, rid, dotnetPath), cancellationToken);
     }
 
-    private string PublishNative(string pluginDir, string cleanName, string? rid, string dotnetPath, Action<string> emit)
+    private string PublishNative(string csproj, string pluginDir, string cleanName, string? rid, string dotnetPath, Action<string> emit)
     {
         string targetRid = string.IsNullOrWhiteSpace(rid) ? HostRuntimeIdentifier() : rid!;
         emit($"[build] dotnet publish -c Release -r {targetRid}");
-        RunProcess(dotnetPath, $"publish \"{Path.Combine(pluginDir, cleanName + ".csproj")}\" -c Release -r {targetRid}", pluginDir, emit);
+        RunProcess(dotnetPath, $"publish \"{csproj}\" -c Release -r {targetRid}", pluginDir, emit);
 
-        string binRelease = Path.Combine(pluginDir, "bin", "Release");
-        if (!Directory.Exists(binRelease))
+        // The project may sit at the plugin root or under src/; find its bin/Release output.
+        string? binRelease = Directory.GetDirectories(pluginDir, "Release", SearchOption.AllDirectories)
+            .FirstOrDefault(dir => string.Equals(Path.GetFileName(Path.GetDirectoryName(dir) ?? ""), "bin", StringComparison.OrdinalIgnoreCase));
+
+        if (binRelease == null)
         {
-            throw new DirectoryNotFoundException($"Build output not found: {binRelease}");
+            throw new DirectoryNotFoundException($"Build output (bin/Release) not found under {pluginDir}.");
         }
 
         // Stage the published native binary where the runner and deployer expect it.
@@ -295,6 +301,27 @@ public class ExoDeployer
 
         string file = Path.GetFileName(path);
         return file == cleanName || file == cleanName + ".exe";
+    }
+
+    /// <summary>
+    /// Finds a plugin's project file. Newer plugins keep it under <c>src/</c>; older ones at the plugin root.
+    /// </summary>
+    private static string? FindPluginCsproj(string pluginDir, string cleanName)
+    {
+        string inSrc = Path.Combine(pluginDir, "src", cleanName + ".csproj");
+        if (File.Exists(inSrc)) return inSrc;
+
+        string atRoot = Path.Combine(pluginDir, cleanName + ".csproj");
+        if (File.Exists(atRoot)) return atRoot;
+
+        return Directory.EnumerateFiles(pluginDir, "*.csproj", SearchOption.AllDirectories)
+            .FirstOrDefault(path => !IsBuildPath(path));
+    }
+
+    private static bool IsBuildPath(string path)
+    {
+        string normalized = path.Replace('\\', '/');
+        return normalized.Contains("/bin/") || normalized.Contains("/obj/");
     }
 
     private static string? FindFile(string root, string fileName)

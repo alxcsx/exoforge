@@ -762,7 +762,14 @@ public class ExoforgeControlCenter : EditorWindow
         foreach (var dir in Directory.GetDirectories(pluginsDir))
         {
             string name = Path.GetFileName(dir);
-            string csproj = Path.Combine(dir, name + ".csproj");
+            string csproj = Path.Combine(dir, "src", name + ".csproj");
+            if (!File.Exists(csproj)) csproj = Path.Combine(dir, name + ".csproj");
+            if (!File.Exists(csproj))
+            {
+                csproj = Directory.GetFiles(dir, "*.csproj", SearchOption.AllDirectories)
+                    .FirstOrDefault(path => !IsBuildPath(path)) ?? "";
+            }
+
             string buildSh = Path.Combine(dir, "build.sh");
             bool canBuild = File.Exists(csproj) || File.Exists(buildSh);
 
@@ -1388,6 +1395,12 @@ public class ExoforgeControlCenter : EditorWindow
     }
 
     private static string BuildFailureKey(string pluginName) => $"Exoforge_BuildFailed_{pluginName}";
+
+    private static bool IsBuildPath(string path)
+    {
+        string normalized = path.Replace('\\', '/');
+        return normalized.Contains("/bin/") || normalized.Contains("/obj/");
+    }
 
     private async Task BuildAllAsync()    {
         foreach (var plugin in _localPlugins.Where(p => p.CanBuild && !p.IsBuilt).ToList())

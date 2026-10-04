@@ -81,8 +81,9 @@ public class CliIntegrationTests : IDisposable
 
         string pluginDir = Path.Combine(_tempDir, "plugins", "inventory_system");
         Assert.True(Directory.Exists(pluginDir));
-        Assert.True(File.Exists(Path.Combine(pluginDir, "inventory_system.csproj")));
-        Assert.True(File.Exists(Path.Combine(pluginDir, "InventorySystemPlugin.cs")));
+        Assert.True(File.Exists(Path.Combine(pluginDir, "inventory_system.slnx")));
+        Assert.True(File.Exists(Path.Combine(pluginDir, "src", "inventory_system.csproj")));
+        Assert.True(File.Exists(Path.Combine(pluginDir, "src", "InventorySystemPlugin.cs")));
     }
 
     [Fact]

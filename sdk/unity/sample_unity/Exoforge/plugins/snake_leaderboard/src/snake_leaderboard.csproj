@@ -10,6 +10,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../../../../csharp/Exoforge.Plugin.SDK/Exoforge.Plugin.SDK.csproj" />
+    <ProjectReference Include="../../../../../../csharp/Exoforge.Plugin.SDK/Exoforge.Plugin.SDK.csproj" />
   </ItemGroup>
 </Project>

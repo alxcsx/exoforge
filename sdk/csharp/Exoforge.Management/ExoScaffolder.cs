@@ -3,63 +3,75 @@ using System.IO;
 
 namespace Exoforge.Management;
 
+/// <summary>
+/// Generates a plugin project skeleton:
+/// <code>
+/// plugins/&lt;name&gt;/
+///   &lt;name&gt;.slnx          solution for the plugin
+///   .gitignore           ignores the staged native binary
+///   src/&lt;name&gt;.csproj
+///   src/&lt;Name&gt;Plugin.cs  the actions
+///   src/&lt;Name&gt;JsonContext.cs  source-generated JSON metadata
+/// </code>
+/// The built binary and <c>manifest.exs</c> stay at the plugin root, where the deployer expects them.
+/// </summary>
 public static class ExoScaffolder
 {
     public static string ScaffoldPlugin(string pluginsDirectory, string rawName, string? sdkProjectPath = null, string template = "standard")
     {
-        string cleanName = rawName.Trim().ToLowerInvariant().Replace("-", "_").Replace(" ", "_");
+        string cleanName = NormalizeName(rawName);
         string className = ToPascalCase(cleanName);
         string targetDir = Path.Combine(pluginsDirectory, cleanName);
+        string srcDir = Path.Combine(targetDir, "src");
 
-        Directory.CreateDirectory(targetDir);
+        Directory.CreateDirectory(srcDir);
 
-        if (string.IsNullOrEmpty(sdkProjectPath))
-        {
-            string? dir = pluginsDirectory;
-            for (int i = 0; i < 8 && dir != null; i++)
-            {
-                string candidate = Path.Combine(dir, "sdk", "csharp", "Exoforge.Plugin.SDK", "Exoforge.Plugin.SDK.csproj");
-                if (File.Exists(candidate))
-                {
-                    sdkProjectPath = Path.GetRelativePath(targetDir, candidate);
-                    break;
-                }
-                candidate = Path.Combine(dir, "csharp", "Exoforge.Plugin.SDK", "Exoforge.Plugin.SDK.csproj");
-                if (File.Exists(candidate))
-                {
-                    sdkProjectPath = Path.GetRelativePath(targetDir, candidate);
-                    break;
-                }
-                var parent = Directory.GetParent(dir);
-                dir = parent?.FullName;
-            }
-        }
+        sdkProjectPath ??= FindSdkProjectPath(srcDir);
 
-        // 1. .csproj
-        string csprojContent = GenerateCsproj(sdkProjectPath, targetDir);
-        File.WriteAllText(Path.Combine(targetDir, $"{cleanName}.csproj"), csprojContent);
+        File.WriteAllText(Path.Combine(srcDir, $"{cleanName}.csproj"), GenerateCsproj(sdkProjectPath, srcDir));
+        File.WriteAllText(Path.Combine(srcDir, $"{className}Plugin.cs"), GeneratePluginCode(cleanName, className, template));
+        File.WriteAllText(Path.Combine(srcDir, $"{className}JsonContext.cs"), GenerateJsonContextCode(className, template));
+        File.WriteAllText(Path.Combine(targetDir, $"{cleanName}.slnx"), GenerateSolution(cleanName));
 
-        // 2. Main Service Class
-        string serviceContent = GenerateServiceCode(cleanName, className, template);
-        File.WriteAllText(Path.Combine(targetDir, $"{className}Plugin.cs"), serviceContent);
-
-        // 3. Ignore the staged native binary (rebuilt by `exo plugin build`).
+        // The staged native binary is a build artifact (rebuilt by `exo plugin build`).
         File.WriteAllText(Path.Combine(targetDir, ".gitignore"), $"/{cleanName}\n");
 
         return targetDir;
     }
 
-    private static string GenerateCsproj(string? sdkProjectPath, string targetDir)
+    private static string NormalizeName(string rawName) =>
+        rawName.Trim().ToLowerInvariant().Replace("-", "_").Replace(" ", "_");
+
+    private static string? FindSdkProjectPath(string fromDir)
     {
-        string refSection;
-        if (!string.IsNullOrEmpty(sdkProjectPath) && (File.Exists(sdkProjectPath) || File.Exists(Path.Combine(targetDir, sdkProjectPath))))
+        string? dir = fromDir;
+
+        for (int i = 0; i < 10 && dir != null; i++)
         {
-            refSection = $"    <ProjectReference Include=\"{sdkProjectPath}\" />";
+            foreach (string relative in new[]
+            {
+                Path.Combine("sdk", "csharp", "Exoforge.Plugin.SDK", "Exoforge.Plugin.SDK.csproj"),
+                Path.Combine("csharp", "Exoforge.Plugin.SDK", "Exoforge.Plugin.SDK.csproj")
+            })
+            {
+                string candidate = Path.Combine(dir, relative);
+                if (File.Exists(candidate)) return Path.GetRelativePath(fromDir, candidate);
+            }
+
+            dir = Directory.GetParent(dir)?.FullName;
         }
-        else
-        {
-            refSection = "    <PackageReference Include=\"Exoforge.Plugin.SDK\" Version=\"0.1.0\" />";
-        }
+
+        return null;
+    }
+
+    private static string GenerateCsproj(string? sdkProjectPath, string srcDir)
+    {
+        bool referencesSdk = sdkProjectPath != null &&
+            File.Exists(Path.GetFullPath(Path.Combine(srcDir, sdkProjectPath)));
+
+        string reference = referencesSdk
+            ? $"    <ProjectReference Include=\"{sdkProjectPath}\" />"
+            : "    <PackageReference Include=\"Exoforge.Plugin.SDK\" Version=\"0.1.0\" />";
 
         return $"""
 <Project Sdk="Microsoft.NET.Sdk">
@@ -74,180 +86,251 @@ public static class ExoScaffolder
   </PropertyGroup>
 
   <ItemGroup>
-{refSection}
+{reference}
   </ItemGroup>
 </Project>
 """;
     }
 
-    private static string GenerateServiceCode(string serviceName, string className, string template = "standard")
-    {
-        if (template.ToLowerInvariant().Contains("liveops") || template.ToLowerInvariant().Contains("schedule"))
-        {
-            return $$"""
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using Exoforge.Plugin.SDK;
-
-namespace Exoforge.Plugins;
-
-/// <summary>
-/// Custom LiveOps and seasonal event scheduling plugin.
-/// </summary>
-[ExoService("{{serviceName}}", Description = "{{className}} LiveOps event scheduling.")]
-public class {{className}}Plugin : PluginBehaviour
-{
-    [ExoAction("list_events", Description = "Lists all active and scheduled game events.")]
-    public object ListEvents()
-    {
-        return new[]
-        {
-            new
-            {
-                id = "{{serviceName}}_double_xp",
-                title = "Double XP Weekend",
-                start_at = DateTime.UtcNow.ToString("O"),
-                end_at = DateTime.UtcNow.AddDays(2).ToString("O"),
-                recurrence = "weekly",
-                status = "active",
-                metadata = new { xp_multiplier = 2.0 }
-            }
-        };
-    }
-
-    [ExoAction("broadcast_banner", Description = "Broadcasts a live banner message to all players.")]
-    public void BroadcastBanner(string message, int durationSeconds = 30)
-    {
-        Events.Emit("{{serviceName}}:events", "liveops_banner", new
-        {
-            message,
-            duration = durationSeconds,
-            timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
-        });
-    }
-}
-
-/// <summary>
-/// LiveOps schedule resource rendered by Producer Studio calendar and timeline.
-/// </summary>
-[ExoResource("{{serviceName}}_schedules", Description = "Scheduled events managed by {{className}}.", Drawer = "schedule")]
-public record {{className}}Schedule(
-    [property: PrimaryKey] string Id,
-    string Title,
-    string StartAt,
-    string EndAt,
-    string Recurrence,
-    string Status
-);
+    private static string GenerateSolution(string cleanName) => $"""
+<Solution>
+  <Project Path="src/{cleanName}.csproj" />
+</Solution>
 """;
+
+    private static string GeneratePluginCode(string serviceName, string className, string template)
+    {
+        string kind = template.ToLowerInvariant();
+
+        if (kind.Contains("inventory")) return InventoryTemplate(serviceName, className);
+        if (kind.Contains("liveops") || kind.Contains("schedule")) return LiveOpsTemplate(serviceName, className);
+        return StandardTemplate(serviceName, className);
+    }
+
+    private static string GenerateJsonContextCode(string className, string template)
+    {
+        string kind = template.ToLowerInvariant();
+
+        string attributes;
+        if (kind.Contains("inventory"))
+        {
+            attributes =
+                $"[JsonSerializable(typeof({className}Item))]\n" +
+                "[JsonSerializable(typeof(ItemGrantedEvent))]";
         }
-
-        if (template.ToLowerInvariant().Contains("inventory"))
+        else if (kind.Contains("liveops") || kind.Contains("schedule"))
         {
-            return $$"""
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using Exoforge.Plugin.SDK;
-
-namespace Exoforge.Plugins;
-
-/// <summary>
-/// Custom player inventory game service.
-/// </summary>
-[ExoService("{{serviceName}}", Description = "{{className}} player inventory.")]
-public class {{className}}Plugin : PluginBehaviour
-{
-    [ExoAction("get_inventory", Description = "Fetches inventory for player.")]
-    public object GetInventory(string playerId)
-    {
-        return new[]
+            attributes =
+                $"[JsonSerializable(typeof({className}Schedule))]\n" +
+                "[JsonSerializable(typeof(LiveOpsBannerEvent))]";
+        }
+        else
         {
-            new { item_id = "starter_sword", quantity = 1, equipped = true },
-            new { item_id = "health_potion", quantity = 5, equipped = false }
-        };
-    }
-
-    [ExoAction("grant_item", Description = "Grants item to player inventory.")]
-    public bool GrantItem(string playerId, string itemId, int quantity = 1)
-    {
-        Events.Emit("{{serviceName}}:events", "item_granted", new
-        {
-            player_id = playerId,
-            item_id = itemId,
-            quantity = quantity,
-            timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
-        });
-
-        return true;
-    }
-}
-
-[ExoResource("{{serviceName}}_items", Description = "Items managed by {{className}}.", Drawer = "table")]
-public record {{className}}Item(
-    [property: PrimaryKey] string Id,
-    string OwnerId,
-    int Quantity,
-    string Status
-);
-""";
+            attributes = $"[JsonSerializable(typeof({className}Item))]";
         }
 
         return $$"""
-using System;
+using System.Text.Json.Serialization;
+
+namespace Exoforge.Plugins;
+
+/// <summary>
+/// Source-generated JSON metadata for the records crossing this plugin's boundary. NativeAOT has no
+/// reflection, so System.Text.Json needs this context; the generator fills the body from the
+/// [JsonSerializable] attributes. Add a type here whenever a new record crosses an action, event,
+/// or the database.
+/// </summary>
+[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
+{{attributes}}
+internal partial class {{className}}JsonContext : JsonSerializerContext
+{
+}
+""";
+    }
+
+    private static string StandardTemplate(string serviceName, string className) => $$"""
+using Exoforge.Plugin.SDK;
+
+namespace Exoforge.Plugins;
+
+/// <summary>{{className}} service.</summary>
+[ExoService("{{serviceName}}", Version = "0.1.0", Resources = new[] { typeof({{className}}Item) },
+    Category = "Game", Title = "{{className}}")]
+public class {{className}}Plugin
+{
+    [Inject("database")]
+    public static IDatabase? Database { get; set; }
+
+    [Inject]
+    public static ILogger? Logger { get; set; }
+
+    [ExoAction]
+    public int Ping()
+    {
+        Logger?.Info("[{{serviceName}}] ping");
+        return 42;
+    }
+
+    [ExoAction]
+    public int Echo(int value) => value;
+
+    public static void Main() => PluginHost.Run<{{className}}Plugin, {{className}}JsonContext>();
+}
+
+/// <summary>Row stored in the plugin's isolated database.</summary>
+[ExoResource("{{serviceName}}_items", PrimaryKey = "id", DrawerTabs = new[] { "overview", "attributes" })]
+public record {{className}}Item
+{
+    [ExoColumn(Label = "Id", Sortable = true, Filterable = true)]
+    public string Id { get; init; } = "";
+
+    [ExoColumn(Label = "Owner", Sortable = true, Filterable = true)]
+    public string OwnerId { get; init; } = "";
+
+    [ExoColumn(Label = "Quantity", Sortable = true)]
+    public int Quantity { get; init; }
+
+    [ExoColumn(Label = "Status", Badge = true)]
+    public string Status { get; init; } = "active";
+}
+""";
+
+    private static string InventoryTemplate(string serviceName, string className) => $$"""
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Exoforge.Plugin.SDK;
 
 namespace Exoforge.Plugins;
 
-/// <summary>
-/// Custom game service plugin for Exoforge.
-/// </summary>
-[ExoService("{{serviceName}}", Description = "{{className}} game service.")]
-public class {{className}}Plugin : PluginBehaviour
+/// <summary>Player inventory service.</summary>
+[ExoService("{{serviceName}}", Version = "0.1.0", Resources = new[] { typeof({{className}}Item) },
+    Category = "Game", Title = "{{className}}")]
+public class {{className}}Plugin
 {
-    [ExoAction("ping", Description = "Health verification ping.")]
-    public int Ping()
+    [Inject("database")]
+    public static IDatabase? Database { get; set; }
+
+    [Inject]
+    public static IEventDispatcher? Events { get; set; }
+
+    [ExoAction]
+    public List<{{className}}Item> GetInventory(string playerId) =>
+        new(Database!.All<{{className}}Item>("{{serviceName}}_items"));
+
+    [ExoAction]
+    [ExoEvent("item_granted", Topic = "{{serviceName}}:events", PayloadType = typeof(ItemGrantedEvent))]
+    public async Task<int> GrantItem(string playerId, string itemId, int quantity = 1)
     {
-        Logger.Info("[{{className}}] Ping received!");
-        return 42;
+        await Events!.EmitAsync(
+            "item_granted",
+            new ItemGrantedEvent { PlayerId = playerId, ItemId = itemId, Quantity = quantity },
+            "{{serviceName}}:events");
+
+        return quantity;
     }
 
-    [ExoAction("execute", Description = "Sample game action.")]
-    public async Task<int> Execute(int playerId, int amount)
-    {
-        Logger.Info($"[{{className}}] Executing for player {playerId} with amount {amount}");
-
-        // Broadcast event to connected clients across the cluster
-        Events.Emit("{{serviceName}}:events", "{{serviceName}}_updated", new
-        {
-            player_id = playerId,
-            amount = amount,
-            timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
-        });
-
-        return amount;
-    }
+    public static void Main() => PluginHost.Run<{{className}}Plugin, {{className}}JsonContext>();
 }
 
-/// <summary>
-/// Declared resource model.
-/// Automatically inferred by ManifestGen for persistence and Studio visualization.
-/// </summary>
-[ExoResource("{{serviceName}}_items", Description = "Items managed by {{className}}.", Drawer = "table")]
-public record {{className}}Item(
-    [property: PrimaryKey] string Id,
-    string OwnerId,
-    int Quantity,
-    string Status
-);
+public record ItemGrantedEvent
+{
+    public string PlayerId { get; init; } = "";
+    public string ItemId { get; init; } = "";
+    public int Quantity { get; init; }
+}
+
+[ExoResource("{{serviceName}}_items", PrimaryKey = "id", DrawerTabs = new[] { "overview", "attributes" })]
+public record {{className}}Item
+{
+    [ExoColumn(Label = "Id", Sortable = true, Filterable = true)]
+    public string Id { get; init; } = "";
+
+    [ExoColumn(Label = "Owner", Sortable = true, Filterable = true)]
+    public string OwnerId { get; init; } = "";
+
+    [ExoColumn(Label = "Quantity", Sortable = true)]
+    public int Quantity { get; init; }
+
+    [ExoColumn(Label = "Status", Badge = true)]
+    public string Status { get; init; } = "active";
+}
 """;
+
+    private static string LiveOpsTemplate(string serviceName, string className) => $$"""
+using System;
+using System.Collections.Generic;
+using Exoforge.Plugin.SDK;
+
+namespace Exoforge.Plugins;
+
+/// <summary>Seasonal events / LiveOps service.</summary>
+[ExoService("{{serviceName}}", Version = "0.1.0", Resources = new[] { typeof({{className}}Schedule) },
+    Category = "Game", Title = "{{className}}")]
+public class {{className}}Plugin
+{
+    [Inject]
+    public static IEventDispatcher? Events { get; set; }
+
+    [ExoAction]
+    public List<{{className}}Schedule> ListEvents() => new()
+    {
+        new {{className}}Schedule
+        {
+            Id = "{{serviceName}}_double_xp",
+            Title = "Double XP Weekend",
+            StartAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+            EndAt = DateTimeOffset.UtcNow.AddDays(2).ToUnixTimeSeconds(),
+            Recurrence = "weekly",
+            Status = "active"
+        }
+    };
+
+    [ExoAction]
+    [ExoEvent("liveops_banner", Topic = "{{serviceName}}:events", PayloadType = typeof(LiveOpsBannerEvent))]
+    public void BroadcastBanner(string message, int durationSeconds = 30)
+    {
+        Events?.EmitAsync(
+            "liveops_banner",
+            new LiveOpsBannerEvent { Message = message, DurationSeconds = durationSeconds },
+            "{{serviceName}}:events");
     }
+
+    public static void Main() => PluginHost.Run<{{className}}Plugin, {{className}}JsonContext>();
+}
+
+public record LiveOpsBannerEvent
+{
+    public string Message { get; init; } = "";
+    public int DurationSeconds { get; init; }
+}
+
+[ExoResource("{{serviceName}}_schedules", PrimaryKey = "id", DrawerTabs = new[] { "overview", "schedule" })]
+public record {{className}}Schedule
+{
+    [ExoColumn(Label = "Id", Sortable = true, Filterable = true)]
+    public string Id { get; init; } = "";
+
+    [ExoColumn(Label = "Title", Sortable = true)]
+    public string Title { get; init; } = "";
+
+    [ExoColumn(Label = "Starts", Sortable = true)]
+    public long StartAt { get; init; }
+
+    [ExoColumn(Label = "Ends", Sortable = true)]
+    public long EndAt { get; init; }
+
+    [ExoColumn(Label = "Recurrence", Badge = true)]
+    public string Recurrence { get; init; } = "once";
+
+    [ExoColumn(Label = "Status", Badge = true)]
+    public string Status { get; init; } = "scheduled";
+}
+""";
 
     private static string ToPascalCase(string text)
     {
         if (string.IsNullOrEmpty(text)) return text;
+
         string[] parts = text.Split(new[] { '_', '-' }, StringSplitOptions.RemoveEmptyEntries);
         for (int i = 0; i < parts.Length; i++)
         {
@@ -256,6 +339,7 @@ public record {{className}}Item(
                 parts[i] = char.ToUpperInvariant(parts[i][0]) + parts[i].Substring(1);
             }
         }
+
         return string.Join("", parts);
     }
 }
