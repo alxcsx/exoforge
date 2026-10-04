@@ -392,17 +392,18 @@ public class ExoDeployer
         string? path = Environment.GetEnvironmentVariable("PATH");
         if (string.IsNullOrEmpty(path)) return null;
 
-        foreach (string dir in path.Split(Path.PathSeparator))
-        {
-            if (string.IsNullOrWhiteSpace(dir)) continue;
+        bool windows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
 
-            string full = Path.Combine(dir.Trim(), command);
+        foreach (string raw in path.Split(Path.PathSeparator))
+        {
+            // Windows PATH entries are sometimes quoted.
+            string dir = raw.Trim().Trim('"');
+            if (dir.Length == 0) continue;
+
+            string full = Path.Combine(dir, command);
             if (File.Exists(full)) return full;
 
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && File.Exists(full + ".exe"))
-            {
-                return full + ".exe";
-            }
+            if (windows && File.Exists(full + ".exe")) return full + ".exe";
         }
 
         return null;
@@ -410,6 +411,7 @@ public class ExoDeployer
 
     private static string? FindViaLoginShell()
     {
+        // Windows has no POSIX login shell; PATH + Program Files cover it.
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return null;
 
         try
@@ -419,16 +421,32 @@ public class ExoDeployer
             {
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
+                RedirectStandardInput = true,
                 UseShellExecute = false
             };
 
             using var proc = Process.Start(psi);
             if (proc == null) return null;
 
-            string resolved = proc.StandardOutput.ReadToEnd().Trim();
-            proc.WaitForExit(5000);
+            proc.StandardInput.Close();
 
-            return proc.ExitCode == 0 && File.Exists(resolved) ? resolved : null;
+            var read = proc.StandardOutput.ReadToEndAsync();
+            if (!proc.WaitForExit(5000))
+            {
+                try { proc.Kill(); } catch { /* best effort */ }
+                return null;
+            }
+
+            string output = read.GetAwaiter().GetResult();
+            if (proc.ExitCode != 0) return null;
+
+            // Login profiles can print banners; the resolved path is the last non-empty line.
+            string? resolved = output
+                .Split('\n')
+                .Select(line => line.Trim())
+                .LastOrDefault(line => line.Length > 0);
+
+            return resolved != null && File.Exists(resolved) ? resolved : null;
         }
         catch
         {
@@ -438,31 +456,40 @@ public class ExoDeployer
 
     private static string? FindInCommonLocations()
     {
+        bool windows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+        string exe = windows ? "dotnet.exe" : "dotnet";
         string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
-        string[] candidates =
+        var candidates = new List<string>();
+
+        string? dotnetRoot = Environment.GetEnvironmentVariable("DOTNET_ROOT");
+        if (!string.IsNullOrWhiteSpace(dotnetRoot)) candidates.Add(Path.Combine(dotnetRoot, exe));
+
+        if (windows)
         {
-            Environment.GetEnvironmentVariable("DOTNET_ROOT") is { Length: > 0 } root ? Path.Combine(root, "dotnet") : "",
-            "/usr/share/dotnet/dotnet",
-            "/usr/local/share/dotnet/dotnet",
-            "/usr/lib/dotnet/dotnet",
-            "/opt/dotnet/dotnet",
-            "/snap/bin/dotnet",
-            "/opt/homebrew/bin/dotnet",
-            "/usr/local/bin/dotnet",
-            Path.Combine(home, ".dotnet", "dotnet"),
-            Path.Combine(home, ".local", "share", "mise", "shims", "dotnet"),
-            Path.Combine(home, ".asdf", "shims", "dotnet"),
-            Path.Combine(home, "Library", "Application Support", "mise", "shims", "dotnet"),
-            Path.Combine(home, "AppData", "Local", "Microsoft", "dotnet", "dotnet.exe")
-        };
+            candidates.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "dotnet", exe));
+            candidates.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "dotnet", exe));
+            candidates.Add(Path.Combine(home, "AppData", "Local", "Microsoft", "dotnet", exe));
+            candidates.Add(Path.Combine(home, ".dotnet", exe));
+        }
+        else
+        {
+            // macOS official installer, then Homebrew (Apple Silicon / Intel), then Linux distros.
+            candidates.Add("/usr/local/share/dotnet/dotnet");
+            candidates.Add("/usr/share/dotnet/dotnet");
+            candidates.Add("/usr/lib/dotnet/dotnet");
+            candidates.Add("/opt/dotnet/dotnet");
+            candidates.Add("/snap/bin/dotnet");
+            candidates.Add("/opt/homebrew/bin/dotnet");
+            candidates.Add("/usr/local/bin/dotnet");
+            candidates.Add(Path.Combine(home, ".dotnet", "dotnet"));
+            candidates.Add(Path.Combine(home, ".local", "share", "mise", "shims", "dotnet"));
+            candidates.Add(Path.Combine(home, ".asdf", "shims", "dotnet"));
+        }
 
         foreach (string candidate in candidates)
         {
-            if (!string.IsNullOrWhiteSpace(candidate) && File.Exists(candidate))
-            {
-                return candidate;
-            }
+            if (!string.IsNullOrWhiteSpace(candidate) && File.Exists(candidate)) return candidate;
         }
 
         return null;
