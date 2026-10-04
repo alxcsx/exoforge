@@ -30,6 +30,11 @@ public class SnakeLeaderboardPlugin
     [Inject]
     public static ILogger? Logger { get; set; }
 
+    private static ExoforgePluginServices? _services;
+
+    /// <summary>Typed access to other service contracts, generated from the cluster contracts.</summary>
+    private static ExoforgePluginServices Services => _services ??= new ExoforgePluginServices(Actions!);
+
     /// <summary>
     /// Records a finished run for a player, keeping their best score, and returns that best.
     /// </summary>
@@ -96,7 +101,7 @@ public class SnakeLeaderboardPlugin
 
         // Typed call generated from the player_data contract (`exo plugin stubs`): no dependency on the
         // service implementation and no hand-written DTOs.
-        var response = await new PlayerDataServiceClient(Actions)
+        var response = await Services.PlayerData
             .GetPlayerAsync(new PlayerDataGetPlayerRequest { PlayerId = playerId });
 
         string? name = response?.Player?.Name;

@@ -134,9 +134,11 @@ player reads and writes the same ranking.
 stale name can survive. `submit_score` therefore takes a `name` only for wire compatibility.
 
 The typed `player_data` call comes from `src/Generated/PluginServices.g.cs`, generated from the
-cluster contracts with `exo plugin stubs snake_leaderboard`. The stubs depend only on the service
-contract (`PlayerDataServiceClient`, `PlayerDataGetPlayerRequest/Response`, `PlayerDataPlayer`) —
-never on the Elixir `PlayerData` module — and call through `IActionDispatcher`.
+cluster contracts with `exo plugin stubs snake_leaderboard`. Only the services listed in the plugin's
+`manifest.exs` dependencies are generated (override with `--services a,b`), so the file stays small.
+The stubs depend only on the service contract (`PlayerDataServiceClient`,
+`PlayerDataGetPlayerRequest/Response`, `PlayerDataPlayer`) — never on the Elixir `PlayerData` module —
+and call through `IActionDispatcher`.
 
 `player_id` is taken from the caller's identity, so a client can only submit its own score.
 

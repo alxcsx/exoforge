@@ -295,15 +295,37 @@ public static class ExoCodeGenerator
     /// client per service that calls through <see cref="Exoforge.Plugin.SDK.IActionDispatcher"/>. The
     /// stubs depend only on the service contract, never on the plugin that implements it.
     /// </summary>
-    public static string GeneratePluginStubs(string json, string targetNamespace = "Exoforge.Plugins.Generated")
+    /// <summary>
+    /// Generates typed plugin service stubs. Pass <paramref name="services"/> to include only the
+    /// contracts the plugin depends on; this keeps the generated file (and the NativeAOT build) small.
+    /// </summary>
+    public static string GeneratePluginStubs(
+        string json,
+        string targetNamespace = "Exoforge.Plugins.Generated",
+        IEnumerable<string>? services = null)
     {
         using var doc = JsonDocument.Parse(json);
-        return GeneratePluginStubs(ParseServices(doc.RootElement), targetNamespace);
+        var parsed = ParseServices(doc.RootElement);
+
+        if (services != null)
+        {
+            var wanted = new HashSet<string>(
+                services.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()),
+                StringComparer.OrdinalIgnoreCase);
+
+            parsed = parsed.Where(s => wanted.Contains(s.Name)).ToList();
+        }
+
+        return GeneratePluginStubs(parsed, targetNamespace);
     }
 
-    public static void GeneratePluginStubsToFile(string json, string outputPath, string targetNamespace = "Exoforge.Plugins.Generated")
+    public static void GeneratePluginStubsToFile(
+        string json,
+        string outputPath,
+        string targetNamespace = "Exoforge.Plugins.Generated",
+        IEnumerable<string>? services = null)
     {
-        string code = GeneratePluginStubs(json, targetNamespace);
+        string code = GeneratePluginStubs(json, targetNamespace, services);
         string? dir = Path.GetDirectoryName(outputPath);
         if (!string.IsNullOrEmpty(dir))
         {

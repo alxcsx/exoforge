@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Diagnostics;
 using System.IO;
@@ -68,7 +69,7 @@ Commands:
   plugin new <name>        Scaffolds a new C# plugin project (--template standard|inventory|liveops)
   plugin build <name>      Builds a plugin (native AOT, or WASM when build.sh exists)
   plugin push <name>       Builds and deploys plugin to live Exoforge cluster
-  plugin stubs <name>      Generates typed service stubs from the cluster contracts
+  plugin stubs <name>      Generates typed service stubs from the cluster contracts (--services a,b to scope)
   plugin list              Lists all installed plugins from live cluster
   plugin remove <id>       Removes a plugin from the live cluster
   sync (or gen)            Downloads live contracts & generates typed C# client
@@ -169,10 +170,17 @@ Options:
                     ? File.ReadAllText(contractsFile)
                     : await deployer.GetContractsExportJsonAsync(env).ConfigureAwait(false);
 
+                string pluginDir = Path.Combine(ws.PluginsPath, stubsName);
                 string stubsOut = GetOption(args, "--out") ??
-                    Path.Combine(ws.PluginsPath, stubsName, "src", "Generated", "PluginServices.g.cs");
+                    Path.Combine(pluginDir, "src", "Generated", "PluginServices.g.cs");
 
-                ExoCodeGenerator.GeneratePluginStubsToFile(exportJson, stubsOut);
+                // Only the contracts this plugin depends on, unless overridden with --services a,b.
+                string? servicesOption = GetOption(args, "--services");
+                IEnumerable<string>? services = servicesOption != null
+                    ? servicesOption.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    : ExoDeployer.ReadManifestDependencies(pluginDir);
+
+                ExoCodeGenerator.GeneratePluginStubsToFile(exportJson, stubsOut, services: services);
                 Console.ForegroundColor = ConsoleColor.Green;
                 Console.WriteLine("[Exoforge] Generated typed plugin service stubs:");
                 Console.WriteLine($"  {stubsOut}");

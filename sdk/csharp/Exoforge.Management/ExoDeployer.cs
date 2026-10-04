@@ -169,10 +169,34 @@ public class ExoDeployer
         CancellationToken cancellationToken = default)
     {
         string cleanName = NormalizePluginName(pluginName);
-        string output = Path.Combine(_workspace.PluginsPath, cleanName, "src", "Generated", "PluginServices.g.cs");
+        string pluginDir = Path.Combine(_workspace.PluginsPath, cleanName);
+        string output = Path.Combine(pluginDir, "src", "Generated", "PluginServices.g.cs");
         string exportJson = await GetContractsExportJsonAsync(existingClient: existingClient, cancellationToken: cancellationToken).ConfigureAwait(false);
-        ExoCodeGenerator.GeneratePluginStubsToFile(exportJson, output);
+        ExoCodeGenerator.GeneratePluginStubsToFile(exportJson, output, services: ReadManifestDependencies(pluginDir));
         return output;
+    }
+
+    /// <summary>
+    /// Reads service dependencies from a plugin's generated <c>manifest.exs</c>, so stubs are only
+    /// generated for the contracts it actually calls. Returns null when there is no manifest yet.
+    /// </summary>
+    public static IReadOnlyList<string>? ReadManifestDependencies(string pluginDir)
+    {
+        string manifestPath = Path.Combine(pluginDir, "manifest.exs");
+        if (!File.Exists(manifestPath)) return null;
+
+        var match = System.Text.RegularExpressions.Regex.Match(
+            File.ReadAllText(manifestPath), @"dependencies:\s*\[([^\]]*)\]");
+
+        if (!match.Success) return null;
+
+        var dependencies = match.Groups[1].Value
+            .Split(',')
+            .Select(dep => dep.Trim().TrimStart(':'))
+            .Where(dep => dep.Length > 0)
+            .ToList();
+
+        return dependencies.Count > 0 ? dependencies : null;
     }
 
     /// <summary>Generates typed stubs for every plugin in the workspace that has a project.</summary>
@@ -195,7 +219,7 @@ public class ExoDeployer
             if (FindPluginCsproj(dir, name) == null) continue;
 
             string output = Path.Combine(dir, "src", "Generated", "PluginServices.g.cs");
-            ExoCodeGenerator.GeneratePluginStubsToFile(exportJson, output);
+            ExoCodeGenerator.GeneratePluginStubsToFile(exportJson, output, services: ReadManifestDependencies(dir));
             outputs.Add(output);
         }
 

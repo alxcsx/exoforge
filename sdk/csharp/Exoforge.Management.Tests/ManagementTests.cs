@@ -117,6 +117,37 @@ public class ManagementTests : IDisposable
     }
 
     [Fact]
+    public void PluginStubs_FiltersToRequestedServices()
+    {
+        string json = """
+        {
+          "export": { "plugins": [ { "services": [
+            { "name": "player_data", "actions": [ { "name": "get_player", "params": [{"name":"player_id","type":"string"}], "returns": {} } ] },
+            { "name": "auth", "actions": [ { "name": "login", "params": [{"name":"email","type":"string"}], "returns": {} } ] }
+          ] } ] }
+        }
+        """;
+
+        string scoped = ExoCodeGenerator.GeneratePluginStubs(json, "Exoforge.Test.Generated", new[] { "player_data" });
+
+        Assert.Contains("PlayerDataServiceClient", scoped);
+        Assert.DoesNotContain("AuthServiceClient", scoped);
+    }
+
+    [Fact]
+    public void ReadManifestDependencies_ParsesAndFallsBack()
+    {
+        string pluginDir = Path.Combine(_tempDir, "plugin");
+        Directory.CreateDirectory(pluginDir);
+        File.WriteAllText(Path.Combine(pluginDir, "manifest.exs"), "%{\n  dependencies: [:database, :player_data],\n}");
+
+        var deps = ExoDeployer.ReadManifestDependencies(pluginDir);
+        Assert.NotNull(deps);
+        Assert.Equal(new[] { "database", "player_data" }, deps!);
+        Assert.Null(ExoDeployer.ReadManifestDependencies(_tempDir));
+    }
+
+    [Fact]
     public void ResolveDotnetPath_KeepsExplicitPath()
     {
         Assert.Equal("/opt/custom/dotnet", ExoDeployer.ResolveDotnetPath("/opt/custom/dotnet"));
