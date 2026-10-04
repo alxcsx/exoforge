@@ -1,7 +1,7 @@
 # Exoforge Operating Manual (`AGENTS.md`)
 
 > **Branch**: `projetao_mvp`  
-> **Status**: Monorepo Core, 7 Standard Plugins, C# Client & Plugin SDKs, C# Management Engine (`exo` CLI), Unity SDK (`com.exoforge.sdk`), LiveView Producer Studio, and Stateful Distributed Entity Runtime are **COMPLETE** (**164 tests passing + live E2E slice**).  
+> **Status**: Monorepo Core, 7 Standard Plugins, C# Client & Plugin SDKs, C# Management Engine (`exo` CLI), Unity SDK (`com.exoforge.sdk`), LiveView Producer Studio, and Stateful Distributed Entity Runtime are **COMPLETE** (**165 tests passing + live E2E slice**).  
 > **Verified SLAs**: 729k stateful actor ops/sec, 1.4 µs latency, 0.07 ms 50x event fanout.
 
 ---
@@ -51,6 +51,50 @@ plugin_manager ───▶ (independent root)
 | `exoforge_std_dashboard_views` | Studio Views | `dashboard_view` | `dashboard` | Decoupled UI components for player data, plugin manager, auth. |
 | `exoforge_std_plugin_manager`| Lifecycle | `plugin_manager` | — | Hot WASM/Elixir plugin upload, reload, and manifest export. |
 
+### Plugin Placement Rules
+
+**System-level plugins** (generic, reusable, demonstrates SDK features):
+- Elixir plugins: `plugins/exoforge_std_*/`
+- C# WASM sample plugins: `plugins_csharp/` (e.g., `sample_wasm`)
+
+**Game-specific plugins** (belong to the game project, NOT the system):
+- Unity game projects: `<game>/Exoforge/plugins/`
+- Example: `sdk/unity/sample_unity/Exoforge/plugins/snake_game/`
+- The workspace (`exoforge.json` + `plugins/`) lives **outside** `Assets/`, so dotnet/WASM plugin
+  projects can target modern .NET/C# versions without Unity importing or compiling them.
+  `ExoWorkspace.PluginsDir` = `plugins`, resolved against the workspace root.
+- Only Unity-consumed artifacts stay inside `Assets/`: the generated client
+  (`Assets/Exoforge/Generated/`) and the runtime config (`Assets/Resources/exoforge.json`).
+  `ExoWorkspace` resolves any `Assets/...` config path against the project root automatically.
+- **Caveat**: the workspace is invisible to Unity's AssetDatabase, so editor tooling must reach it
+  through `System.IO` (`ExoWorkspace.PluginsPath`, `ExoDeployer`), never `AssetDatabase`/`Resources`.
+
+> **Rule**: Game-specific plugins must NOT touch `core/`, `plugins/`, or `plugins_csharp/`. They live exclusively inside the game project and are built/deployed independently. The system `just build-wasm` only builds `plugins_csharp/`; game plugins are built within their own project (e.g., Unity Editor menu or the game's own build scripts).
+
+### Plugin Runtimes
+
+| Runtime | Manifest `type` | Written in | Built by | Use for |
+| :--- | :--- | :--- | :--- | :--- |
+| **Native (AOT process)** | `:native` | C# | `exo plugin build` → `dotnet publish -p:PublishAot=true` | First-party game servers. **Default.** |
+| WASM reactor | `:wasm` | C# contract + C guest | `build.sh` (needs wasi-sdk) | Sandboxed / third-party guests |
+| Elixir | `:elixir` | Elixir | `mix` | System plugins |
+
+Native plugins are plain C# — **no C, no WASI toolchain**. `exo plugin build` compiles the plugin to a
+self-contained ~2 MB binary and generates `manifest.exs` from the C# attributes. The plugin's entry point is:
+
+```csharp
+public static void Main() => PluginHost.Run<MyPlugin>();
+```
+
+The host spawns the binary as an OS process (`Exoforge.Drivers.Runtime.NativePluginRunner`) and speaks
+newline-delimited JSON over stdio. Host capabilities go through `HostBridge` (`EmitEvent`, `DbPut`, `Log`, …);
+the runner answers those calls synchronously. Because NativeAOT trims reflection, emit **`JsonObject`** payloads
+and keep `PluginHost.Run<T>()`'s `[DynamicallyAccessedMembers]` annotation intact — that is what keeps the
+`[ExoAction]` methods reachable.
+
+`ActionDispatcher` stays runtime-agnostic: every non-Elixir plugin gets a generated proxy module
+(`Exoforge.Drivers.Runtime.PluginProxy`) registered as its `entry_point`.
+
 ---
 
 ## 3. Ponytail Engineering Principles (Points to Simplify & Polish)
@@ -58,7 +102,7 @@ plugin_manager ───▶ (independent root)
 1. **Stdlib & OTP First**: Reach for Erlang/Elixir built-ins (`:ets`, `:pg`, `Registry`, `DynamicSupervisor`) before adding third-party dependencies.
 2. **Zero Module Coupling**: Plugins depend on **service atoms** (`:database`, `:auth`, `:player_data`), NEVER on another plugin's Elixir module name. Use `ActionDispatcher.dispatch(service, action, payload)`.
 3. **Pure C# Outside Mix**: External game developers and Unity designers do not have Elixir or Mix installed. All client tooling, scaffolding (`ExoScaffolder`), and code generation (`ExoCodeGenerator`) must remain pure C# (`netstandard2.1`).
-4. **Minimal WASM Boundary**: Keep the WASM host boundary strictly to JSON payloads and a single `emit_event` host bridge. Avoid complex multi-function FFI layers.
+4. **C# for Game Code**: First-party game plugins are written in C# and compiled to a NativeAOT binary — never hand-written C, and never a WASI toolchain. Keep the host boundary to newline-delimited JSON. Reserve the WASM reactor runtime for sandboxed or third-party guests.
 5. **Virtual Actors over Distributed Locks**: Use Horde process registries and `:pg` groups. Do not introduce external distributed lock managers (no Redis locks, no ZooKeeper).
 6. **Deletion Over Addition**: The best code is code you never had to write. Remove dead code, redundant wrappers, and unneeded abstractions ruthlessly.
 
@@ -71,7 +115,9 @@ plugin_manager ───▶ (independent root)
 | `just test` | Run entire test suite (Core, Plugins, System, C# SDKs — 164 tests) |
 | `just test-e2e` | Run live end-to-end vertical slice (WebSocket + WASM + Event loop) |
 | `just dev` | Start backend development server (ports 4000, 4001, 4005) |
-| `just build-wasm` | Compile C# WASM plugins in `plugins_csharp/` |
+| `just build-wasm` | Compile the **system** WASM samples (`plugins_csharp/*/build.sh`) |
+| `exo plugin build <name>` | Build a game plugin (NativeAOT binary + `manifest.exs`) |
+| `exo plugin push <name>` | Build and deploy a plugin to a running cluster |
 | `just test-sdk` | Run C# test suite (`Exoforge.Client`, `Plugin.SDK`, `Management`) |
 | `just compose-up` | Run full production stack with PostgreSQL via Docker Compose |
 | `just compose-down` | Stop and tear down Compose stack |

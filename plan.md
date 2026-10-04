@@ -30,7 +30,7 @@ plugin_manager ───▶ (independent root)
 
 All 22 MVP milestones have been implemented, tested, and verified:
 
-- [x] **M1–M6: Kernel Core, Contracts & Standard Plugins**: `PluginRegistry` ETS, `ActionDispatcher`, `EventDispatcher`, Bandit HTTP/WS ingress, WASM runtime (`wasmex`), Sandbox DB, Auth, PlayerData.
+- [x] **M1–M6: Kernel Core, Contracts & Standard Plugins**: `PluginRegistry` ETS, `ActionDispatcher`, `EventDispatcher`, Bandit HTTP/WS ingress, WASM runtime (`wasmex`), SQLite DB, Auth, PlayerData.
 - [x] **M7–M13: Studio LiveView, Distributed Actors & Clustering**: Phoenix LiveView Producer Studio (`:4005`), Horde delta-CRDT virtual actors, `:pg` cluster event fanout, 729k ops/sec cluster benchmark, Kubernetes manifests.
 - [x] **M14–M17: DevEx, Typed Resources & Multi-Plugin WASM**: Global `Cmd+K` palette, live actor passivation, typed resource structs (`[ExoResource]`), dynamic action parameter forms, C# client generation.
 - [x] **M18: Hardening, Zero Warnings & E2E Slice**: Cleaned all compiler warnings, integrated WebSocket `AuthenticateAsync`, restored green E2E test in 292 ms.
@@ -61,7 +61,7 @@ Following the **Ponytail** engineering doctrine (deletion over addition, standar
   Avoid adding specialized C/FFI bindings per plugin. Uniform JSON/msgpack over raw memory pointers ensures any language that compiles to WASI (C#, Rust, Zig, C++) works immediately with zero host changes.
 
 ### 3. Native OTP Persistence Over Heavy ORMs
-- **Current State**: `exoforge_std_database` supports PostgreSQL and an in-memory Sandbox adapter.
+- **Current State**: `exoforge_std_database` supports PostgreSQL and a SQLite adapter.
 - **Simplification**: In production, prefer raw SQL or light `:postgrex` query execution over heavy Ecto schemas inside standard plugins. Keep entity actor state boring: state is a serialized blob or JSON map persisted on passivation or periodic snapshot. Avoid complex relational object mappers for virtual actors.
 
 ### 4. Zero-Friction Container & Kubernetes Workflows

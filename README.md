@@ -66,7 +66,7 @@ All networking, storage, authentication, and game domains exist as swappable plu
 
 | Plugin | Port / Role | Provides | Purpose |
 | :--- | :--- | :--- | :--- |
-| `exoforge_std_database` | Storage | `:database`, `:lldb` | Per-plugin schema isolation with PostgreSQL and in-memory Sandbox adapters. |
+| `exoforge_std_database` | Storage | `:database`, `:lldb` | Per-plugin schema isolation with PostgreSQL and SQLite adapters. |
 | `exoforge_std_auth` | Identity | `:auth` | Session verification, bearer token issuance, and RBAC scope validation. |
 | `exoforge_std_player_data` | Profiles | `:player_data` | Canonical player profile persistence, schemas, and lifecycle events. |
 | `exoforge_std_http` | REST (:4001) | `:http` | Dynamic OpenAPI endpoints generated directly from service contracts. |
@@ -184,7 +184,7 @@ just k8s-deploy
 │   └── test/                     # Kernel unit & benchmark tests
 ├── plugins/                      # Standard Elixir Plugins
 │   ├── exoforge_std_auth/        # Authentication & RBAC scopes
-│   ├── exoforge_std_database/    # PostgreSQL & Sandbox storage adapters
+│   ├── exoforge_std_database/    # PostgreSQL & SQLite storage adapters
 │   ├── exoforge_std_player_data/ # Player profile management
 │   ├── exoforge_std_http/        # REST ingress & OpenAPI reflection
 │   ├── exoforge_std_ws/          # WebSocket binary/JSON ingress
