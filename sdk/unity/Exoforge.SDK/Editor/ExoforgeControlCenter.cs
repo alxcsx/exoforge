@@ -851,6 +851,11 @@ public class ExoforgeControlCenter : EditorWindow
             _ = SyncAndGenerateClientAsync();
         }
 
+        if (GUILayout.Button("⬇ Generate Plugin Type Stubs (all plugins)", GUILayout.Height(24)))
+        {
+            _ = GenerateAllStubsAsync();
+        }
+
         EditorGUILayout.BeginHorizontal();
         if (GUILayout.Button("Reveal Generated File", EditorStyles.miniButton))
         {
@@ -1252,6 +1257,13 @@ public class ExoforgeControlCenter : EditorWindow
         {
             RefreshLocalPlugins();
         }
+        using (new EditorGUI.DisabledScope(_isBuilding))
+        {
+            if (GUILayout.Button("Sync Stubs", EditorStyles.miniButton, GUILayout.Width(80)))
+            {
+                _ = GenerateAllStubsAsync();
+            }
+        }
         EditorGUILayout.EndHorizontal();
 
         EditorGUILayout.BeginHorizontal();
@@ -1461,12 +1473,28 @@ public class ExoforgeControlCenter : EditorWindow
         try
         {
             var deployer = new ExoDeployer(_workspace);
-            string output = await deployer.GeneratePluginStubsAsync(plugin.Name, existingClient: _editorClient);
+            string output = await deployer.GeneratePluginStubsAsync(plugin.Name, existingClient: _isConnected ? _editorClient : null);
             ShowStatus($"✓ Generated typed service stubs for '{plugin.Name}' → {output}", MessageType.Info);
         }
         catch (Exception ex)
         {
             ShowStatus($"Stub generation failed for '{plugin.Name}': {ex.Message}", MessageType.Error);
+        }
+
+        Repaint();
+    }
+
+    private async Task GenerateAllStubsAsync()
+    {
+        try
+        {
+            var deployer = new ExoDeployer(_workspace);
+            var outputs = await deployer.GenerateAllPluginStubsAsync(existingClient: _isConnected ? _editorClient : null);
+            ShowStatus($"✓ Generated typed service stubs for {outputs.Count} plugin(s).", MessageType.Info);
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Stub generation failed: {ex.Message}", MessageType.Error);
         }
 
         Repaint();

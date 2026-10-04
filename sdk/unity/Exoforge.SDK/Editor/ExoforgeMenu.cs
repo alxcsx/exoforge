@@ -46,6 +46,36 @@ public static class ExoforgeMenu
         window.PromptScaffoldFromHeader();
     }
 
+    [MenuItem("Tools/Exoforge/Sync Plugin Stubs", false, 104)]
+    public static void SyncPluginStubs()
+    {
+        _ = SyncPluginStubsAsync();
+    }
+
+    private static async Task SyncPluginStubsAsync()
+    {
+        EditorUtility.DisplayProgressBar("Exoforge", "Generating typed plugin stubs...", 0.5f);
+
+        try
+        {
+            var workspace = ExoWorkspace.Load(ExoforgeEditorConfig.GetAbsoluteWorkspacePath());
+            var deployer = new ExoDeployer(workspace);
+            var outputs = await deployer.GenerateAllPluginStubsAsync();
+
+            EditorUtility.ClearProgressBar();
+            AssetDatabase.Refresh();
+
+            EditorUtility.DisplayDialog("Plugin Stubs", outputs.Count == 0
+                ? "No plugins with a project were found in the workspace."
+                : $"Generated typed service stubs for {outputs.Count} plugin(s).", "OK");
+        }
+        catch (Exception ex)
+        {
+            EditorUtility.ClearProgressBar();
+            EditorUtility.DisplayDialog("Plugin Stub Error", $"Failed to generate plugin stubs: {ex.Message}", "OK");
+        }
+    }
+
     private static async Task SyncClientBindingsAsync()
     {
         EditorUtility.DisplayProgressBar("Exoforge Sync", "Fetching contract schemas...", 0.4f);

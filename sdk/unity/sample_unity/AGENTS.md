@@ -171,11 +171,14 @@ $CLI sync                               # regenerate Assets/Exoforge/Generated/E
 ```
 
 From the Unity Editor, `Tools ▸ Exoforge ▸ …` covers the same ground: **Sync Client Bindings**,
-**Add Exoforge to Scene**, **Control Center** (connect, build, deploy, inspect). In the Control
-Center's **Plugins** tab, every folder in `Exoforge/plugins/` gets a **Build**, **Build & Deploy**,
-and **Deploy** button. Native builds run `dotnet publish` (AOT) and regenerate `manifest.exs`; set a
-**Native RID** (e.g. `linux-x64`) to build for a non-host deploy target. If Unity can't find `dotnet`
-(GUI apps often don't inherit your shell PATH), set **Dotnet Path** in the Settings tab.
+**Sync Plugin Stubs**, **Add Exoforge to Scene**, **Control Center** (connect, build, deploy,
+inspect). In the Control Center's **Plugins** tab, every folder in `Exoforge/plugins/` gets a
+**Build**, **Build & Deploy**, **Deploy**, and **Stubs** button (plus **Sync Stubs** to regenerate
+every plugin at once). Stub generation fetches the live contracts and writes each plugin's
+`src/Generated/PluginServices.g.cs`. Native builds run `dotnet publish` (AOT) and regenerate
+`manifest.exs`; set a **Native RID** (e.g. `linux-x64`) to build for a non-host deploy target. If
+Unity can't find `dotnet` (GUI apps often don't inherit your shell PATH), set **Dotnet Path** in the
+Settings tab.
 
 Rules of thumb:
 

@@ -175,6 +175,33 @@ public class ExoDeployer
         return output;
     }
 
+    /// <summary>Generates typed stubs for every plugin in the workspace that has a project.</summary>
+    public async Task<List<string>> GenerateAllPluginStubsAsync(
+        string? environmentName = null,
+        ExoClient? existingClient = null,
+        CancellationToken cancellationToken = default)
+    {
+        var outputs = new List<string>();
+        string pluginsDir = _workspace.PluginsPath;
+
+        if (!Directory.Exists(pluginsDir)) return outputs;
+
+        // One export for all plugins.
+        string exportJson = await GetContractsExportJsonAsync(environmentName, existingClient, cancellationToken).ConfigureAwait(false);
+
+        foreach (string dir in Directory.GetDirectories(pluginsDir))
+        {
+            string name = Path.GetFileName(dir);
+            if (FindPluginCsproj(dir, name) == null) continue;
+
+            string output = Path.Combine(dir, "src", "Generated", "PluginServices.g.cs");
+            ExoCodeGenerator.GeneratePluginStubsToFile(exportJson, output);
+            outputs.Add(output);
+        }
+
+        return outputs;
+    }
+
     public async Task<int> SyncContractsAsync(
         string? environmentName = null,
         string? outputPathOverride = null,
