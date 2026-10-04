@@ -6,14 +6,54 @@ defmodule Exoforge.AuthTest do
   alias Exoforge.PluginRegistry
   alias Exoforge.ActionDispatcher
 
+  # Minimal in-memory player store, so auth's create / look-up / rename paths behave like the
+  # real plugin_data (a fixed stub cannot tell a new player from an existing one).
   defmodule StubPlayerData do
     use Exoforge.Plugin, provides: [Exoforge.Std.Services.PlayerData]
 
-    defaction create_player(payload) do
-      {:ok, %{player: payload[:profile] || payload["profile"]}}
+    @table :stub_player_data
+
+    defp table do
+      case :ets.info(@table) do
+        :undefined -> :ets.new(@table, [:set, :public, :named_table])
+        _ -> @table
+      end
     end
 
-    defaction(update_player(_payload), do: {:ok, %{player: %{}}})
+    defp id(payload), do: payload[:player_id] || payload["player_id"]
+
+    defaction create_player(payload) do
+      profile = payload[:profile] || payload["profile"] || %{}
+      pid = to_string(profile["player_id"] || id(payload))
+      profile = Map.put(profile, "player_id", pid)
+      :ets.insert(table(), {pid, profile})
+      {:ok, %{player: profile}}
+    end
+
+    defaction get_player(payload) do
+      pid = id(payload)
+
+      case :ets.lookup(table(), pid) do
+        [{^pid, profile}] -> {:ok, %{player: profile}}
+        _ -> {:error, :player_not_found}
+      end
+    end
+
+    defaction update_player(payload) do
+      pid = id(payload)
+      data = payload[:data] || payload["data"] || %{}
+
+      case :ets.lookup(table(), pid) do
+        [{^pid, profile}] ->
+          updated = Map.merge(profile, data)
+          :ets.insert(table(), {pid, updated})
+          {:ok, %{player: updated}}
+
+        _ ->
+          {:error, :player_not_found}
+      end
+    end
+
     defaction(delete_player(_payload), do: {:ok, %{status: "deleted"}})
     defaction(retain_player(_payload), do: {:ok, %{status: "retained"}})
     defaction(list_players(_payload), do: {:ok, %{players: []}})
@@ -21,17 +61,16 @@ defmodule Exoforge.AuthTest do
     defaction(set_data(_payload), do: {:ok, %{key: "", value: nil}})
     defaction(delete_data(_payload), do: {:ok, %{status: "deleted"}})
     defaction(get_all_data(_payload), do: {:ok, %{data: %{}}})
-
-    defaction get_player(payload) do
-      pid = payload[:player_id] || payload["player_id"]
-      {:ok, %{player: %{"player_id" => pid, "name" => "Sir Lancelot", "email" => "lance@camelot.io"}}}
-    end
   end
 
   setup do
     Application.put_env(:exoforge, :allow_dev_tokens, true)
     on_exit(fn -> Application.delete_env(:exoforge, :allow_dev_tokens) end)
     PluginRegistry.initialize_ets()
+
+    if :ets.info(:stub_player_data) != :undefined do
+      :ets.delete_all_objects(:stub_player_data)
+    end
     unless Process.whereis(DbManager) do
       start_supervised!({DbManager, [driver: :sqlite]})
     end
@@ -360,6 +399,47 @@ defmodule Exoforge.AuthTest do
                  player_id: "admin",
                  password: "hacked"
                })
+    end
+  end
+
+  describe "Anonymous sessions (two stage)" do
+    test "enters an unnamed account for a device, then names it" do
+      device = "dev_test_#{System.unique_integer([:positive])}"
+
+      # Stage 1: first sight of the device registers the account, with no display name.
+      assert {:ok, first} = ActionDispatcher.dispatch(:auth, :anonymous, %{player_id: device})
+      assert first.player_id == device
+      assert first.name == ""
+      assert is_binary(first.token)
+
+      # Re-entering the same device resolves to the same player, still unnamed.
+      assert {:ok, second} = ActionDispatcher.dispatch(:auth, :anonymous, %{player_id: device})
+      assert second.player_id == device
+      assert second.name == ""
+
+      # Stage 2: the signed-in player names themselves.
+      assert {:ok, %{name: "Viper"}} =
+               ActionDispatcher.dispatch(:auth, :set_display_name, %{
+                 player_id: device,
+                 name: "  Viper  "
+               })
+
+      # The name now comes back with the session.
+      assert {:ok, third} = ActionDispatcher.dispatch(:auth, :anonymous, %{player_id: device})
+      assert third.name == "Viper"
+    end
+
+    test "rejects an empty display name" do
+      device = "dev_test_#{System.unique_integer([:positive])}"
+      assert {:ok, _} = ActionDispatcher.dispatch(:auth, :anonymous, %{player_id: device})
+
+      assert {:error, :invalid_attributes} =
+               ActionDispatcher.dispatch(:auth, :set_display_name, %{player_id: device, name: "   "})
+    end
+
+    test "set_display_name requires an identity" do
+      assert {:error, :unauthorized} =
+               ActionDispatcher.dispatch(:auth, :set_display_name, %{name: "Viper"})
     end
   end
 

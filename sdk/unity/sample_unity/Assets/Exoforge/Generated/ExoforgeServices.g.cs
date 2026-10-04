@@ -152,6 +152,24 @@ public class AuthAnonymousResponse
     public JsonElement Scopes { get; set; } = default!;
 }
 
+/// <summary>Request payload for auth.set_display_name action.</summary>
+public class AuthSetDisplayNameRequest
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = default!;
+    [JsonPropertyName("player_id")]
+    public JsonElement PlayerId { get; set; } = default!;
+}
+
+/// <summary>Response model for auth.set_display_name action.</summary>
+public class AuthSetDisplayNameResponse
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = default!;
+    [JsonPropertyName("player_id")]
+    public string PlayerId { get; set; } = default!;
+}
+
 /// <summary>Request payload for auth.issue_token action.</summary>
 public class AuthIssueTokenRequest
 {
@@ -1083,6 +1101,29 @@ public class AuthServiceClient
     public Task<JsonElement> AnonymousAsync(object? payload = null, CancellationToken cancellationToken = default)
     {
         return _client.SendActionAsync<JsonElement>("auth", "anonymous", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Sets the signed-in player's display name.</summary>
+    public Task<AuthSetDisplayNameResponse> SetDisplayNameAsync(string name, JsonElement playerId, CancellationToken cancellationToken = default)
+    {
+        var req = new AuthSetDisplayNameRequest
+        {
+            Name = name,
+            PlayerId = playerId,
+        };
+        return SetDisplayNameAsync(req, cancellationToken);
+    }
+
+    /// <summary>Sets the signed-in player's display name.</summary>
+    public Task<AuthSetDisplayNameResponse> SetDisplayNameAsync(AuthSetDisplayNameRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<AuthSetDisplayNameResponse>("auth", "set_display_name", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Sets the signed-in player's display name.</summary>
+    public Task<JsonElement> SetDisplayNameAsync(object? payload = null, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<JsonElement>("auth", "set_display_name", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
     /// <summary>Issues an authentication token for a user or player.</summary>

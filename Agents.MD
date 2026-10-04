@@ -109,15 +109,19 @@ Because NativeAOT trims reflection, emit **`JsonObject`** payloads and keep `Plu
 Game code talks to exactly one entry point:
 
 ```csharp
-var session = await ExoforgeSDK.Auth.LoginAnonymously("Viper");   // creates or re-uses the account
+var session = await ExoforgeSDK.Auth.LoginAnonymously();          // stage 1: enter/register the account
+if (!session.HasDisplayName) session = await ExoforgeSDK.Auth.SetDisplayName("Viper");   // stage 2
 var board   = await ExoforgeSDK.Client.SnakeLeaderboard().GetLeaderboardAsync(10);
 ```
 
-- `ExoforgeSDK.Auth.LoginAnonymously(displayName)` — signs in, **keyed by the device** (the
-  PlayFab `CustomId` pattern): `ExoDeviceId` derives a stable, hashed id from
+- `ExoforgeSDK.Auth.LoginAnonymously()` — **stage 1**. Signs in, keyed by the device (the PlayFab
+  `CustomId` pattern): `ExoDeviceId` derives a stable, hashed id from
   `SystemInfo.deviceUniqueIdentifier` and caches it, and that id is the account key — so the same
-  machine always resolves to the same player even if the stored credential is lost. The display
-  name only labels the player. `LogoutAndForgetDevice()` claims a fresh account.
+  machine always resolves to the same player even if the stored credential is lost. It does **not**
+  assign a display name; a new account comes back with `ExoSession.HasDisplayName == false`.
+  `LogoutAndForgetDevice()` claims a fresh account.
+- `ExoforgeSDK.Auth.SetDisplayName(name)` — **stage 2**. Names the signed-in player (the server takes
+  the player from the caller's identity, so a player can only name themselves).
 - `ExoTokenStore` is public but **low-level** — use `ExoforgeSDK.Auth`. Exposed only for custom
   credential storage and tooling.
 - `ExoforgeSDK.Client` — the connected `ExoClient`; use the **generated** service extensions

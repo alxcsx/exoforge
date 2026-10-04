@@ -11,5 +11,9 @@ namespace Exoforge.Client.Unity
         string DisplayName,
         string Token,
         IReadOnlyList<string> Scopes,
-        bool IsNew);
+        bool IsNew)
+    {
+        /// <summary>False for a freshly registered account — prompt for a name before playing.</summary>
+        public bool HasDisplayName => !string.IsNullOrEmpty(DisplayName);
+    }
 }

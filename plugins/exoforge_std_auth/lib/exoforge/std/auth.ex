@@ -219,23 +219,51 @@ defmodule Exoforge.Std.Auth do
   @impl true
   defaction anonymous(payload) do
     player_id = Map.get(payload, :player_id) || Map.get(payload, "player_id")
-    name = Map.get(payload, :name) || Map.get(payload, "name")
 
     cond do
-      # Returning anonymous player picking a display name: rename the existing profile.
-      # (create_player only inserts, so re-registering an existing player would collide.)
-      is_binary(player_id) and player_id != "" and is_binary(name) and name != "" ->
-        case rename_player(player_id, name) do
-          :ok -> anonymous_token(player_id)
-          :error -> do_register_player(%{player_id: player_id, name: name})
+      # Entering (or claiming) an account for a known device identity.
+      is_binary(player_id) and player_id != "" ->
+        case player_name(player_id) do
+          nil ->
+            # First sight of this device: register the account, unnamed.
+            register_unnamed(%{player_id: player_id})
+
+          name ->
+            case anonymous_token(player_id) do
+              {:ok, result} -> {:ok, Map.put(result, :name, name)}
+              error -> error
+            end
         end
 
-      # Returning device, no name supplied: just reissue a token.
-      is_binary(player_id) and player_id != "" ->
-        anonymous_token(player_id)
+      # No device identity supplied: register a fresh unnamed account.
+      true ->
+        register_unnamed(%{})
+    end
+  end
+
+  @doc """
+  Sets the signed-in player's display name. The player is taken from the caller's identity,
+  so a player can only name themselves.
+  """
+  @impl true
+  defaction set_display_name(payload) do
+    player_id = Map.get(payload, :player_id) || Map.get(payload, "player_id")
+    name = Map.get(payload, :name) || Map.get(payload, "name")
+
+    trimmed = if is_binary(name), do: String.trim(name), else: ""
+
+    cond do
+      is_nil(player_id) or player_id == "" ->
+        {:error, :unauthorized}
+
+      trimmed == "" ->
+        {:error, :invalid_attributes}
 
       true ->
-        do_register_player(%{name: name})
+        case rename_player(player_id, trimmed) do
+          :ok -> {:ok, %{player_id: player_id, name: trimmed}}
+          :error -> {:error, :player_not_found}
+        end
     end
   end
 
@@ -581,7 +609,25 @@ defmodule Exoforge.Std.Auth do
     end
   end
 
-  defp do_register_player(payload) do
+  # Anonymous accounts start unnamed; the client prompts for a display name afterwards.
+  defp register_unnamed(payload) do
+    case do_register_player(payload, allow_empty_name: true) do
+      {:ok, %{player: profile} = result} ->
+        {:ok, Map.put(result, :name, Map.get(profile, "name") || "")}
+
+      error ->
+        error
+    end
+  end
+
+  defp player_name(player_id) do
+    case ActionDispatcher.dispatch(:player_data, :get_player, %{player_id: player_id}) do
+      {:ok, %{player: profile}} -> Map.get(profile, "name") || Map.get(profile, :name)
+      _ -> nil
+    end
+  end
+
+  defp do_register_player(payload, opts \\ []) do
     init_schema()
 
     raw_uid =
@@ -597,7 +643,12 @@ defmodule Exoforge.Std.Auth do
       Map.get(payload, :name) || Map.get(payload, "name") ||
         Map.get(payload, :username) || Map.get(payload, "username")
 
-    name = if raw_name && raw_name != "", do: to_string(raw_name), else: "User_#{user_id}"
+    name =
+      cond do
+        is_binary(raw_name) and raw_name != "" -> raw_name
+        Keyword.get(opts, :allow_empty_name, false) -> ""
+        true -> "User_#{user_id}"
+      end
 
     raw_email = Map.get(payload, :email) || Map.get(payload, "email")
 

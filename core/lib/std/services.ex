@@ -176,6 +176,13 @@ defmodule Exoforge.Std.Services do
       errors([:invalid_attributes, :registration_failed])
     end
 
+    @doc "Sets the signed-in player's display name."
+    action :set_display_name do
+      params(player_id: [type: :string, optional: true], name: :string)
+      returns(player_id: :string, name: :string)
+      errors([:unauthorized, :invalid_attributes, :player_not_found])
+    end
+
     @doc "Issues an authentication token for a user or player."
     action :issue_token do
       params(

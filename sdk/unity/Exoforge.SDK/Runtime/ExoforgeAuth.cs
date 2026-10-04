@@ -16,13 +16,13 @@ namespace Exoforge.Client.Unity
         public ExoSession? Current { get; private set; }
 
         /// <summary>
-        /// Signs in anonymously, keyed by this device rather than by name.
+        /// Stage 1 — enters the account for this device, registering it on first sight.
         ///
-        /// The account is claimed for <see cref="ExoDeviceId"/>: the same machine always resolves
-        /// to the same player, even if the stored credential is lost. <paramref name="displayName"/>
-        /// only labels the player.
+        /// No display name is assigned: a new account comes back with
+        /// <see cref="ExoSession.HasDisplayName"/> false, and the game prompts for one, then calls
+        /// <see cref="SetDisplayName"/>.
         /// </summary>
-        public async Task<ExoSession> LoginAnonymously(string? displayName = null)
+        public async Task<ExoSession> LoginAnonymously()
         {
             var client = await ExoforgeSDK.ConnectAsync();
 
@@ -47,16 +47,11 @@ namespace Exoforge.Client.Unity
                 ExoTokenStore.Clear();
             }
 
-            string chosen = string.IsNullOrWhiteSpace(displayName)
-                ? $"Player{UnityEngine.Random.Range(1000, 9999)}"
-                : displayName.Trim();
-
             // `player_id` is the account key, so this creates the player on first sight of the
-            // device and re-claims it (updating the display name) on a fresh install.
+            // device and re-enters it on a fresh install.
             var result = await client.SendActionAsync<JsonElement>("auth", "anonymous", new
             {
-                player_id = ExoDeviceId.Get(),
-                name = chosen
+                player_id = ExoDeviceId.Get()
             });
 
             string token = result.ValueKind == JsonValueKind.Object && result.TryGetProperty("token", out var tokenProp)
@@ -76,9 +71,43 @@ namespace Exoforge.Client.Unity
             }
 
             string playerId = auth.PlayerId ?? "";
-            ExoTokenStore.SaveSession(token, playerId, auth.Scopes, chosen);
+            string name = result.ValueKind == JsonValueKind.Object && result.TryGetProperty("name", out var nameProp)
+                ? nameProp.GetString() ?? ""
+                : "";
 
-            Current = new ExoSession(playerId, chosen, token, auth.Scopes ?? new List<string>(), true);
+            ExoTokenStore.SaveSession(token, playerId, auth.Scopes, name);
+
+            Current = new ExoSession(playerId, name, token, auth.Scopes ?? new List<string>(), true);
+            return Current;
+        }
+
+        /// <summary>
+        /// Stage 2 — assigns the player's display name. Only the signed-in player can name
+        /// themselves, so no id is sent.
+        /// </summary>
+        public async Task<ExoSession> SetDisplayName(string displayName)
+        {
+            if (Current == null)
+            {
+                throw new InvalidOperationException("Call LoginAnonymously() before setting a display name.");
+            }
+
+            if (string.IsNullOrWhiteSpace(displayName))
+            {
+                throw new ArgumentException("Display name cannot be empty.", nameof(displayName));
+            }
+
+            string trimmed = displayName.Trim();
+            var client = await ExoforgeSDK.ConnectAsync();
+            var result = await client.SendActionAsync<JsonElement>("auth", "set_display_name", new { name = trimmed });
+
+            string applied = result.ValueKind == JsonValueKind.Object && result.TryGetProperty("name", out var nameProp)
+                ? nameProp.GetString() ?? trimmed
+                : trimmed;
+
+            ExoTokenStore.SaveSession(Current.Token, Current.PlayerId, Current.Scopes, applied);
+            Current = Current with { DisplayName = applied };
+
             return Current;
         }
 
