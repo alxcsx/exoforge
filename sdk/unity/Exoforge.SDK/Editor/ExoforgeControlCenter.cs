@@ -1514,6 +1514,9 @@ public class ExoforgeControlCenter : EditorWindow
             }
         }
         EditorGUILayout.EndHorizontal();
+        EditorGUILayout.LabelField(
+            $"Resolved: {ExoDeployer.ResolveDotnetPath(ExoforgeEditorConfig.DotnetPath)}",
+            EditorStyles.miniLabel);
 
         EditorGUILayout.EndVertical();
 

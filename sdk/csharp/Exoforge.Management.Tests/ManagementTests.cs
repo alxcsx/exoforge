@@ -82,6 +82,20 @@ public class ManagementTests : IDisposable
     }
 
     [Fact]
+    public void ResolveDotnetPath_KeepsExplicitPath()
+    {
+        Assert.Equal("/opt/custom/dotnet", ExoDeployer.ResolveDotnetPath("/opt/custom/dotnet"));
+    }
+
+    [Fact]
+    public void ResolveDotnetPath_ResolvesBareCommandToExistingFile()
+    {
+        // The test host runs under dotnet, so the resolver must find it even without assuming PATH.
+        string resolved = ExoDeployer.ResolveDotnetPath("dotnet");
+        Assert.True(File.Exists(resolved), $"Expected an existing dotnet path, got '{resolved}'.");
+    }
+
+    [Fact]
     public void CodeGenerator_Generates_Valid_CSharp_Client_From_Export_Json()
     {
         string exportJson = """

@@ -207,10 +207,16 @@ public class ExoDeployer
         }
 
         string csproj = Path.Combine(pluginDir, cleanName + ".csproj");
+        string dotnet = ResolveDotnetPath(dotnetPath);
+        if (dotnet != dotnetPath)
+        {
+            Emit($"[build] dotnet -> {dotnet}");
+        }
+
         if (File.Exists(csproj))
         {
             Emit($"[build] dotnet build {Path.GetFileName(csproj)}");
-            RunProcess(dotnetPath, $"build \"{csproj}\" -c Release", pluginDir, Emit);
+            RunProcess(dotnet, $"build \"{csproj}\" -c Release", pluginDir, Emit);
         }
 
         string buildSh = Path.Combine(pluginDir, "build.sh");
@@ -228,7 +234,7 @@ public class ExoDeployer
         else
         {
             pluginType = "native";
-            binaryPath = PublishNative(pluginDir, cleanName, rid, dotnetPath, Emit);
+            binaryPath = PublishNative(pluginDir, cleanName, rid, dotnet, Emit);
         }
 
         string manifestPath = Path.Combine(pluginDir, "manifest.exs");
@@ -338,15 +344,128 @@ public class ExoDeployer
             emit(line);
         }
 
-        proc.Start();
+        try
+        {
+            proc.Start();
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException(
+                $"Could not start '{fileName}'. If the .NET SDK is installed, set the dotnet path in " +
+                $"Exoforge Settings so it can be found outside your shell.\n{ex.Message}", ex);
+        }
+
         proc.BeginOutputReadLine();
         proc.BeginErrorReadLine();
         proc.WaitForExit();
-
         if (proc.ExitCode != 0)
         {
             throw new InvalidOperationException($"{fileName} exited with code {proc.ExitCode}.\n{output}");
         }
+    }
+
+    /// <summary>
+    /// Resolves the dotnet CLI. Unity (a GUI app) usually launches without the user's shell PATH, so
+    /// a bare <c>dotnet</c> fails even when the SDK is installed. An explicit override wins; otherwise
+    /// probe PATH, the login shell, and the usual install locations.
+    /// </summary>
+    public static string ResolveDotnetPath(string? configured)
+    {
+        string candidate = string.IsNullOrWhiteSpace(configured) ? "dotnet" : configured.Trim();
+
+        if (!IsBareCommand(candidate))
+        {
+            return candidate;
+        }
+
+        return FindOnPath(candidate)
+            ?? FindViaLoginShell()
+            ?? FindInCommonLocations()
+            ?? candidate;
+    }
+
+    private static bool IsBareCommand(string value) =>
+        !Path.IsPathRooted(value) && !value.Contains('/') && !value.Contains('\\');
+
+    private static string? FindOnPath(string command)
+    {
+        string? path = Environment.GetEnvironmentVariable("PATH");
+        if (string.IsNullOrEmpty(path)) return null;
+
+        foreach (string dir in path.Split(Path.PathSeparator))
+        {
+            if (string.IsNullOrWhiteSpace(dir)) continue;
+
+            string full = Path.Combine(dir.Trim(), command);
+            if (File.Exists(full)) return full;
+
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && File.Exists(full + ".exe"))
+            {
+                return full + ".exe";
+            }
+        }
+
+        return null;
+    }
+
+    private static string? FindViaLoginShell()
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return null;
+
+        try
+        {
+            string shell = Environment.GetEnvironmentVariable("SHELL") ?? "/bin/sh";
+            var psi = new ProcessStartInfo(shell, "-lc \"command -v dotnet\"")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false
+            };
+
+            using var proc = Process.Start(psi);
+            if (proc == null) return null;
+
+            string resolved = proc.StandardOutput.ReadToEnd().Trim();
+            proc.WaitForExit(5000);
+
+            return proc.ExitCode == 0 && File.Exists(resolved) ? resolved : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string? FindInCommonLocations()
+    {
+        string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+        string[] candidates =
+        {
+            Environment.GetEnvironmentVariable("DOTNET_ROOT") is { Length: > 0 } root ? Path.Combine(root, "dotnet") : "",
+            "/usr/share/dotnet/dotnet",
+            "/usr/local/share/dotnet/dotnet",
+            "/usr/lib/dotnet/dotnet",
+            "/opt/dotnet/dotnet",
+            "/snap/bin/dotnet",
+            "/opt/homebrew/bin/dotnet",
+            "/usr/local/bin/dotnet",
+            Path.Combine(home, ".dotnet", "dotnet"),
+            Path.Combine(home, ".local", "share", "mise", "shims", "dotnet"),
+            Path.Combine(home, ".asdf", "shims", "dotnet"),
+            Path.Combine(home, "Library", "Application Support", "mise", "shims", "dotnet"),
+            Path.Combine(home, "AppData", "Local", "Microsoft", "dotnet", "dotnet.exe")
+        };
+
+        foreach (string candidate in candidates)
+        {
+            if (!string.IsNullOrWhiteSpace(candidate) && File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
     }
 
     private static string HostRuntimeIdentifier()
