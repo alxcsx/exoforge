@@ -15,16 +15,24 @@ namespace Exoforge.Unity.Editor
 /// </summary>
 public static class ExoforgeEditorConfig
 {
-    private const string ServerUrlKey = "Exoforge_ServerUrl";
-    private const string AdminTokenKey = "Exoforge_AdminToken";
-    private const string WorkspacePathKey = "Exoforge_WorkspacePath";
-    private const string GeneratedScriptPathKey = "Exoforge_GeneratedScriptPath";
-    private const string PlayerIdKey = "Exoforge_PlayerId";
-    private const string ScopesKey = "Exoforge_Scopes";
-    private const string LastSyncTimeKey = "Exoforge_LastSyncTime";
+    private const string DotnetPathKey = "Exoforge_DotnetPath"; // machine-global, not per-project
+
+    // Per-project keys: suffixed with the project name so separate projects don't share
+    // session/credentials. Keyed by product name (not folder path) so duplicated copies of the
+    // same project share one login.
+    private static string ServerUrlKey => Scoped("Exoforge_ServerUrl");
+    private static string AdminTokenKey => Scoped("Exoforge_AdminToken");
+    private static string WorkspacePathKey => Scoped("Exoforge_WorkspacePath");
+    private static string GeneratedScriptPathKey => Scoped("Exoforge_GeneratedScriptPath");
+    private static string PlayerIdKey => Scoped("Exoforge_PlayerId");
+    private static string ScopesKey => Scoped("Exoforge_Scopes");
+    private static string LastSyncTimeKey => Scoped("Exoforge_LastSyncTime");
+    private static string LoginEmailKey => Scoped("Exoforge_LoginEmail");
+    private static string LoginPasswordKey => Scoped("Exoforge_LoginPassword");
 
     public const string DefaultServerUrl = "ws://127.0.0.1:4000/ws";
     public const string DefaultAdminToken = "dev:developer";
+    public const string DefaultLoginEmail = "dev@exoforge.game";
     public const string DefaultWorkspaceRelPath = "Exoforge";
     public const string DefaultGeneratedScriptRelPath = "Assets/Exoforge/Generated/ExoforgeServices.g.cs";
 
@@ -57,6 +65,44 @@ public static class ExoforgeEditorConfig
     private static string _fallbackPlayerId = "";
     private static string _fallbackScopes = "";
     private static string _fallbackLastSyncTime = "";
+    private static string _fallbackDotnetPath = "dotnet";
+    private static string _fallbackLoginEmail = DefaultLoginEmail;
+    private static string _fallbackLoginPassword = "";
+
+    private static string Scoped(string key) => key;
+#else
+    private static string? _projectScope;
+
+    /// <summary>
+    /// One login per project name. Multiple copies of the same project (same product name) share it;
+    /// different projects don't bleed credentials into each other.
+    /// </summary>
+    private static string ProjectScope
+    {
+        get
+        {
+            if (_projectScope == null)
+            {
+                string name = Application.productName;
+                if (string.IsNullOrWhiteSpace(name))
+                {
+                    name = Path.GetFileName(Path.GetFullPath(Path.Combine(Application.dataPath, "..")));
+                }
+
+                char[] chars = name.ToCharArray();
+                for (int i = 0; i < chars.Length; i++)
+                {
+                    if (!char.IsLetterOrDigit(chars[i])) chars[i] = '_';
+                }
+
+                _projectScope = new string(chars);
+            }
+
+            return _projectScope;
+        }
+    }
+
+    private static string Scoped(string key) => $"{key}_{ProjectScope}";
 #endif
 
     public static string ServerUrl
@@ -168,6 +214,75 @@ public static class ExoforgeEditorConfig
         }
     }
 
+    /// <summary>Path to the dotnet CLI used for native plugin builds. May be absolute if it is not on PATH.</summary>
+    public static string DotnetPath
+    {
+        get
+        {
+#if UNITY_EDITOR
+            return EditorPrefs.GetString(DotnetPathKey, "dotnet");
+#else
+            return _fallbackDotnetPath;
+#endif
+        }
+        set
+        {
+#if UNITY_EDITOR
+            EditorPrefs.SetString(DotnetPathKey, string.IsNullOrWhiteSpace(value) ? "dotnet" : value);
+#else
+            _fallbackDotnetPath = string.IsNullOrWhiteSpace(value) ? "dotnet" : value;
+#endif
+        }
+    }
+
+    /// <summary>
+    /// Last email used in the Control Center's <c>auth.login</c> form, persisted in per-user
+    /// EditorPrefs so the form does not reset (and is never committed to the project).
+    /// </summary>
+    public static string LastLoginEmail
+    {
+        get
+        {
+#if UNITY_EDITOR
+            return EditorPrefs.GetString(LoginEmailKey, DefaultLoginEmail);
+#else
+            return _fallbackLoginEmail;
+#endif
+        }
+        set
+        {
+#if UNITY_EDITOR
+            EditorPrefs.SetString(LoginEmailKey, value ?? DefaultLoginEmail);
+#else
+            _fallbackLoginEmail = value ?? DefaultLoginEmail;
+#endif
+        }
+    }
+
+    /// <summary>
+    /// Dev login password, kept in per-user EditorPrefs (plaintext, outside the repo) so the
+    /// Control Center can reconnect without retyping. Cleared on log out.
+    /// </summary>
+    public static string RememberedPassword
+    {
+        get
+        {
+#if UNITY_EDITOR
+            return EditorPrefs.GetString(LoginPasswordKey, string.Empty);
+#else
+            return _fallbackLoginPassword;
+#endif
+        }
+        set
+        {
+#if UNITY_EDITOR
+            EditorPrefs.SetString(LoginPasswordKey, value ?? string.Empty);
+#else
+            _fallbackLoginPassword = value ?? string.Empty;
+#endif
+        }
+    }
+
     public static string WorkspacePath
     {
         get
@@ -220,6 +335,7 @@ public static class ExoforgeEditorConfig
         AdminToken = string.Empty;
         PlayerId = string.Empty;
         Scopes = string.Empty;
+        RememberedPassword = string.Empty;
 #if UNITY_EDITOR
         PlayerPrefs.DeleteKey("Exoforge.Token");
         PlayerPrefs.DeleteKey("Exoforge.PlayerId");

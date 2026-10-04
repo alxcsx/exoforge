@@ -38,7 +38,7 @@ public abstract class PluginBehaviour : IExoforgePlugin
         return Task.CompletedTask;
     }
 
-    protected Task EmitEventAsync(string eventName, object payload, string? topic = null)
+    protected Task EmitEventAsync<T>(string eventName, T payload, string? topic = null)
     {
         return Events.EmitAsync(eventName, payload, topic);
     }

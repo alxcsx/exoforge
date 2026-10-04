@@ -42,8 +42,12 @@ sample_unity/
 ├── Exoforge/                        the Exoforge workspace (OUTSIDE Assets/)
 │   ├── exoforge.json                environments + codegen paths
 │   └── plugins/snake_leaderboard/   the server plugin (a dotnet project)
-│       ├── SnakeLeaderboardPlugin.cs  the whole plugin, in C#
-│       ├── snake_leaderboard          the built NativeAOT binary
+│       ├── SnakeScore.cs              stored row + leaderboard entry records
+│       ├── PlayerProfile.cs           player_data contract DTOs (name join)
+│       ├── SnakeScoreStore.cs         database access (IDatabase)
+│       ├── SnakeJsonContext.cs        source-generated JSON metadata (NativeAOT)
+│       ├── SnakeLeaderboardPlugin.cs  the actions
+│       ├── snake_leaderboard          built NativeAOT binary (generated, git-ignored)
 │       └── manifest.exs               GENERATED from the C# attributes
 └── Packages/manifest.json           references com.exoforge.sdk (file:../../Exoforge.SDK)
 ```
@@ -116,12 +120,16 @@ Input uses the **Input System package** (`Keyboard.current`) — this project is
 
 | Action | Params | Behaviour |
 | :--- | :--- | :--- |
-| `submit_score` | `player_id, name, score, snake_length` | stores the run, keeps the player's **best** score, returns it |
-| `get_leaderboard` | `limit` | returns the top-`limit` rows, highest score first |
+| `submit_score` | `player_id, name, score, snake_length` | stores the run, keeps the player's **best** score, returns it. `name` is accepted for wire compatibility but ignored |
+| `get_leaderboard` | `limit` | returns the top-`limit` rows, highest score first, with each player's **current** display name |
 
-Rows live in the plugin's isolated database (through the host KV bridge) under the `snake_scores`
+Rows live in the plugin's isolated database (through the injected `IDatabase`) under the `snake_scores`
 resource, so the Studio also shows a table. The leaderboard is therefore **shared state**: every
 player reads and writes the same ranking.
+
+**The display name is not stored.** `get_leaderboard` joins each row with the `player_data` profile
+(`player_data.get_player`) at read time, so renaming a player updates the board immediately and no
+stale name can survive. `submit_score` therefore takes a `name` only for wire compatibility.
 
 `player_id` is taken from the caller's identity, so a client can only submit its own score.
 
@@ -146,7 +154,9 @@ be checked headlessly. Override the editor with `UNITY_PATH=... just sample-chec
 Deploy the plugin and regenerate the client:
 
 ```bash
-# The `exo` CLI is not installed on PATH — run it from the repo:
+# Option A — Unity Editor: Tools ▸ Exoforge ▸ Control Center ▸ Plugins ▸ Build & Deploy
+
+# Option B — CLI. The `exo` CLI is not installed on PATH — run it from the repo:
 CLI="dotnet run --project <repo>/sdk/csharp/Exoforge.CLI --"
 
 $CLI plugin push snake_leaderboard      # build (NativeAOT) + deploy to the running cluster
@@ -154,7 +164,11 @@ $CLI sync                               # regenerate Assets/Exoforge/Generated/E
 ```
 
 From the Unity Editor, `Tools ▸ Exoforge ▸ …` covers the same ground: **Sync Client Bindings**,
-**Add Exoforge to Scene**, **Control Center** (connect, deploy, inspect).
+**Add Exoforge to Scene**, **Control Center** (connect, build, deploy, inspect). In the Control
+Center's **Plugins** tab, every folder in `Exoforge/plugins/` gets a **Build**, **Build & Deploy**,
+and **Deploy** button. Native builds run `dotnet publish` (AOT) and regenerate `manifest.exs`; set a
+**Native RID** (e.g. `linux-x64`) to build for a non-host deploy target. If Unity can't find `dotnet`
+(GUI apps often don't inherit your shell PATH), set **Dotnet Path** in the Settings tab.
 
 Rules of thumb:
 
@@ -165,6 +179,9 @@ Rules of thumb:
   (`SnakeGameController.RunEnded`) and let `SnakeLeaderboard` bridge it to `ExoforgeSDK.Client`.
 - Call the server through the **generated** clients:
   `ExoforgeSDK.Client.SnakeLeaderboard().SubmitScoreAsync(...)`.
-- Plugin payloads are `JsonObject` — NativeAOT trims reflection-based JSON.
+- Plugin payloads are **records**, not raw JSON: `SnakeScoreRecord` flows through the injected
+  `IDatabase`, and `get_leaderboard` returns `List<SnakeScoreRecord>`. Register those types on the
+  plugin's `SnakeJsonContext` (`[JsonSerializable]`) and start it with
+  `PluginHost.Run<SnakeLeaderboardPlugin, SnakeJsonContext>()` — NativeAOT trims reflection-based JSON.
 - Plugins build per OS: `$CLI plugin build snake_leaderboard --rid linux-x64` for a Linux deploy.
 - Uploaded plugins **do not survive a server restart** — re-`push` after restarting the backend.

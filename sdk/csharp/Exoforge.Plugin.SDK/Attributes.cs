@@ -29,7 +29,13 @@ public enum ActionMode
 {
     Sync,
     Async,
-    Cast
+    Cast,
+
+    /// <summary>
+    /// Resolved at manifest time from the method's return type: a <see cref="System.Threading.Tasks.Task"/>
+    /// return means <see cref="Async"/>, anything else means <see cref="Sync"/>. This is the default.
+    /// </summary>
+    Auto
 }
 
 /// <summary>
@@ -48,14 +54,18 @@ public enum ActionTransport
 [AttributeUsage(AttributeTargets.Method, Inherited = false, AllowMultiple = false)]
 public class ExoActionAttribute : Attribute
 {
-    public string Name { get; }
-    public ActionMode Mode { get; set; } = ActionMode.Sync;
+    /// <summary>Action name on the wire. When omitted, the method name is used in snake_case.</summary>
+    public string? Name { get; }
+
+    /// <summary>Defaults to <see cref="ActionMode.Auto"/> (inferred from the return type).</summary>
+    public ActionMode Mode { get; set; } = ActionMode.Auto;
+
     public string Scope { get; set; } = "global";
     public ActionTransport Transport { get; set; } = ActionTransport.Auto;
 
-    public ExoActionAttribute(string name)
+    public ExoActionAttribute(string? name = null)
     {
-        Name = name ?? throw new ArgumentNullException(nameof(name));
+        Name = name;
     }
 }
 

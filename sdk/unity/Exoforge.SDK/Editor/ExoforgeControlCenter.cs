@@ -10,7 +10,10 @@ using Exoforge.Management;
 using UnityEditor;
 using UnityEngine;
 
-namespace Exoforge.Unity.Editor;
+namespace Exoforge.Unity.Editor
+{
+// NOTE: keep this a block-scoped namespace. Unity's layout serializer drops windows declared
+// with file-scoped namespaces, so the window would vanish from saved layouts (Unity issue 9734).
 
 /// <summary>
 /// Unity Editor Control Center for Exoforge.
@@ -22,9 +25,12 @@ public class ExoforgeControlCenter : EditorWindow
 {
     private enum Tab { Overview, LiveEvents, ActionSandbox, Plugins, Settings }
 
+    // Per-editor-session flag: auto-connect on editor start, but not on every script reload.
+    private const string AutoConnectSessionKey = "Exoforge_AutoConnected";
+
     private static readonly string[] TabNames =
     {
-        "Overview", "Live Events", "Action Sandbox", "Plugins & WASM", "Settings"
+        "Overview", "Live Events", "Action Sandbox", "Plugins", "Settings"
     };
 
     // Connection & Client
@@ -36,8 +42,8 @@ public class ExoforgeControlCenter : EditorWindow
 
     // Authentication foldout
     private bool _showAuthFoldout = false;
-    private string _loginEmail = "dev@exoforge.game";
-    private string _loginPassword = "password";
+    private string _loginEmail = ExoforgeEditorConfig.DefaultLoginEmail;
+    private string _loginPassword = "";
 
     // Status Banner
     private string _statusMessage = "";
@@ -79,17 +85,29 @@ public class ExoforgeControlCenter : EditorWindow
     private bool _sandboxSuccess = true;
     private Vector2 _sandboxResultScroll;
 
-    // Plugins & WASM
+    // Plugins
     private string _newPluginName = "";
     private bool _showScaffoldPrompt = false;
     private List<LocalPluginInfo> _localPlugins = new();
     private List<JsonElement> _remotePlugins = new();
     private Vector2 _pluginsScroll;
+    private string _buildRid = "";
+    private bool _isBuilding;
+    private string _buildLog = "";
+    private bool _showBuildLog;
+    private Vector2 _buildLogScroll;
 
     private Tab _currentTab = Tab.Overview;
     private Vector2 _mainScroll;
 
-    private sealed record LocalPluginInfo(string Name, string Directory, bool HasWasm, string WasmPath, long WasmSizeBytes);
+    private sealed record LocalPluginInfo(
+        string Name,
+        string Directory,
+        string PluginType,
+        bool IsBuilt,
+        bool CanBuild,
+        string BinaryPath,
+        long BinarySizeBytes);
 
     [MenuItem("Tools/Exoforge/Control Center", false, 100)]
     [MenuItem("Window/Exoforge/Control Center", false, 2000)]
@@ -133,8 +151,40 @@ public class ExoforgeControlCenter : EditorWindow
             ExoforgeEditorConfig.WorkspacePath = ExoforgeEditorConfig.DefaultWorkspaceRelPath;
         }
 
+        // Restore the last login so the auth form doesn't reset on every editor start.
+        _loginEmail = ExoforgeEditorConfig.LastLoginEmail;
+        _loginPassword = ExoforgeEditorConfig.RememberedPassword;
+
         _workspace = ExoWorkspace.Load(ExoforgeEditorConfig.GetAbsoluteWorkspacePath());
         RefreshLocalPlugins();
+
+        // Reconnect when the editor opens (not on every script-reload within the same session).
+        if (!SessionState.GetBool(AutoConnectSessionKey, false))
+        {
+            SessionState.SetBool(AutoConnectSessionKey, true);
+            TryAutoConnect();
+        }
+    }
+
+    private void TryAutoConnect()
+    {
+        // A prior session (PlayerId) or a bearer token the user set in Settings counts as saved credentials.
+        bool hasCustomToken = !string.IsNullOrEmpty(ExoforgeEditorConfig.AdminToken)
+            && ExoforgeEditorConfig.AdminToken != ExoforgeEditorConfig.DefaultAdminToken;
+
+        if (!string.IsNullOrEmpty(ExoforgeEditorConfig.PlayerId) || hasCustomToken)
+        {
+            _ = ConnectAsync();
+        }
+        else if (!string.IsNullOrEmpty(ExoforgeEditorConfig.RememberedPassword))
+        {
+            _ = LogInAsync();
+        }
+        else
+        {
+            _showAuthFoldout = true;
+            ShowStatus("No saved credentials — sign in below, or set a bearer token in Settings.", MessageType.Warning);
+        }
     }
 
     private void OnDisable()
@@ -258,10 +308,13 @@ public class ExoforgeControlCenter : EditorWindow
         {
             EditorGUILayout.BeginVertical(GUI.skin.box);
 
-            if (_isConnected && !string.IsNullOrEmpty(ExoforgeEditorConfig.PlayerId))
+            if (!string.IsNullOrEmpty(ExoforgeEditorConfig.PlayerId))
             {
                 EditorGUILayout.BeginHorizontal();
-                EditorGUILayout.LabelField($"Signed in as: {ExoforgeEditorConfig.PlayerId}", EditorStyles.boldLabel);
+                string sessionLabel = _isConnected
+                    ? $"Signed in as: {ExoforgeEditorConfig.PlayerId}"
+                    : $"Stored session: {ExoforgeEditorConfig.PlayerId} (disconnected)";
+                EditorGUILayout.LabelField(sessionLabel, EditorStyles.boldLabel);
                 if (!string.IsNullOrEmpty(ExoforgeEditorConfig.Scopes))
                 {
                     EditorGUILayout.LabelField($"Scopes: [{ExoforgeEditorConfig.Scopes}]", EditorStyles.miniLabel);
@@ -269,8 +322,23 @@ public class ExoforgeControlCenter : EditorWindow
                 EditorGUILayout.EndHorizontal();
             }
 
-            _loginEmail = EditorGUILayout.TextField("Email", _loginEmail);
-            _loginPassword = EditorGUILayout.PasswordField("Password", _loginPassword);
+            string typedEmail = EditorGUILayout.TextField("Email", _loginEmail);
+            if (typedEmail != _loginEmail)
+            {
+                _loginEmail = typedEmail;
+                ExoforgeEditorConfig.LastLoginEmail = typedEmail;
+            }
+
+            string typedPassword = EditorGUILayout.PasswordField("Password", _loginPassword);
+            if (typedPassword != _loginPassword)
+            {
+                _loginPassword = typedPassword;
+                ExoforgeEditorConfig.RememberedPassword = typedPassword;
+            }
+
+            EditorGUILayout.LabelField(
+                "Saved in per-user EditorPrefs — never committed to the project.",
+                EditorStyles.miniLabel);
 
             EditorGUILayout.BeginHorizontal();
             if (GUILayout.Button("Sign In (auth.login)", GUILayout.Height(22)))
@@ -298,7 +366,7 @@ public class ExoforgeControlCenter : EditorWindow
         {
             string dir = ExoScaffolder.ScaffoldPlugin(_workspace.PluginsPath, _newPluginName);
             RefreshLocalPlugins();
-            ShowStatus($"✓ Scaffolded C# WASM plugin '{_newPluginName}' at {dir}", MessageType.Info);
+            ShowStatus($"✓ Scaffolded C# plugin '{_newPluginName}' at {dir}", MessageType.Info);
             _newPluginName = "";
             _showScaffoldPrompt = false;
             _currentTab = Tab.Plugins;
@@ -535,7 +603,10 @@ public class ExoforgeControlCenter : EditorWindow
 
             ExoTokenStore.SaveSession(token, playerId);
             ExoforgeEditorConfig.SaveSession(token, playerId);
-            _loginPassword = "";
+
+            // Keep the dev login for the next editor start.
+            ExoforgeEditorConfig.LastLoginEmail = _loginEmail;
+            ExoforgeEditorConfig.RememberedPassword = _loginPassword;
             ShowStatus($"Successfully logged in as {playerId}.", MessageType.Info);
 
             await ConnectAsync();
@@ -684,11 +755,31 @@ public class ExoforgeControlCenter : EditorWindow
         foreach (var dir in Directory.GetDirectories(pluginsDir))
         {
             string name = Path.GetFileName(dir);
+            string csproj = Path.Combine(dir, name + ".csproj");
+            string buildSh = Path.Combine(dir, "build.sh");
+            bool canBuild = File.Exists(csproj) || File.Exists(buildSh);
+
+            string pluginType = "native";
+            string binaryPath = "";
+
             var wasmFiles = Directory.GetFiles(dir, "*.wasm", SearchOption.AllDirectories);
-            bool hasWasm = wasmFiles.Length > 0;
-            string wasmPath = hasWasm ? wasmFiles[0] : "";
-            long size = hasWasm && File.Exists(wasmPath) ? new FileInfo(wasmPath).Length : 0;
-            _localPlugins.Add(new LocalPluginInfo(name, dir, hasWasm, wasmPath, size));
+            if (wasmFiles.Length > 0)
+            {
+                pluginType = "wasm";
+                binaryPath = wasmFiles[0];
+            }
+            else
+            {
+                string nativeBinary = Path.Combine(dir, name);
+                string nativeExe = nativeBinary + ".exe";
+
+                if (File.Exists(nativeBinary)) binaryPath = nativeBinary;
+                else if (File.Exists(nativeExe)) binaryPath = nativeExe;
+            }
+
+            bool isBuilt = binaryPath != "" && File.Exists(binaryPath);
+            long size = isBuilt ? new FileInfo(binaryPath).Length : 0;
+            _localPlugins.Add(new LocalPluginInfo(name, dir, pluginType, isBuilt, canBuild, binaryPath, size));
         }
     }
 
@@ -1132,7 +1223,7 @@ public class ExoforgeControlCenter : EditorWindow
         EditorGUILayout.LabelField("Scaffold New C# Plugin", EditorStyles.boldLabel);
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
         _newPluginName = EditorGUILayout.TextField("Plugin Name", _newPluginName);
-        if (GUILayout.Button("Scaffold C# WASM Plugin") && !string.IsNullOrWhiteSpace(_newPluginName))
+        if (GUILayout.Button("Scaffold C# Plugin") && !string.IsNullOrWhiteSpace(_newPluginName))
         {
             ScaffoldNewPlugin();
         }
@@ -1149,6 +1240,19 @@ public class ExoforgeControlCenter : EditorWindow
         }
         EditorGUILayout.EndHorizontal();
 
+        EditorGUILayout.BeginHorizontal();
+        EditorGUILayout.LabelField("Native RID", GUILayout.Width(70));
+        _buildRid = EditorGUILayout.TextField(_buildRid);
+        EditorGUILayout.LabelField("(blank = host)", EditorStyles.miniLabel, GUILayout.Width(90));
+        using (new EditorGUI.DisabledScope(_isBuilding))
+        {
+            if (GUILayout.Button("Build All", EditorStyles.miniButton, GUILayout.Width(70)))
+            {
+                _ = BuildAllAsync();
+            }
+        }
+        EditorGUILayout.EndHorizontal();
+
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
         if (_localPlugins.Count == 0)
         {
@@ -1160,26 +1264,43 @@ public class ExoforgeControlCenter : EditorWindow
             {
                 EditorGUILayout.BeginHorizontal();
                 EditorGUILayout.LabelField(plugin.Name, EditorStyles.boldLabel, GUILayout.Width(140));
+                EditorGUILayout.LabelField(plugin.PluginType.ToUpperInvariant(), EditorStyles.miniLabel, GUILayout.Width(55));
 
-                if (plugin.HasWasm)
+                if (plugin.IsBuilt)
                 {
-                    string sizeStr = $"{plugin.WasmSizeBytes / 1024} KB";
+                    string sizeStr = $"{plugin.BinarySizeBytes / 1024} KB";
                     var prev = GUI.color;
                     GUI.color = new Color(0.3f, 0.9f, 0.4f);
-                    EditorGUILayout.LabelField($"✓ Ready ({sizeStr})", EditorStyles.miniBoldLabel, GUILayout.Width(90));
+                    EditorGUILayout.LabelField($"✓ Ready ({sizeStr})", EditorStyles.miniBoldLabel, GUILayout.Width(105));
                     GUI.color = prev;
                 }
                 else
                 {
                     var prev = GUI.color;
                     GUI.color = new Color(0.9f, 0.6f, 0.2f);
-                    EditorGUILayout.LabelField("○ Not built", EditorStyles.miniLabel, GUILayout.Width(90));
+                    EditorGUILayout.LabelField("○ Not built", EditorStyles.miniLabel, GUILayout.Width(105));
                     GUI.color = prev;
                 }
 
-                using (new EditorGUI.DisabledScope(!plugin.HasWasm || !_isConnected))
+                using (new EditorGUI.DisabledScope(_isBuilding || !plugin.CanBuild))
                 {
-                    if (GUILayout.Button("Deploy", EditorStyles.miniButton, GUILayout.Width(65)))
+                    if (GUILayout.Button("Build", EditorStyles.miniButton, GUILayout.Width(55)))
+                    {
+                        _ = BuildPluginAsync(plugin, thenDeploy: false);
+                    }
+                }
+
+                using (new EditorGUI.DisabledScope(_isBuilding || !plugin.CanBuild || !_isConnected))
+                {
+                    if (GUILayout.Button("Build & Deploy", EditorStyles.miniButton, GUILayout.Width(105)))
+                    {
+                        _ = BuildPluginAsync(plugin, thenDeploy: true);
+                    }
+                }
+
+                using (new EditorGUI.DisabledScope(_isBuilding || !plugin.IsBuilt || !_isConnected))
+                {
+                    if (GUILayout.Button("Deploy", EditorStyles.miniButton, GUILayout.Width(60)))
                     {
                         _ = DeployPluginAsync(plugin);
                     }
@@ -1194,6 +1315,17 @@ public class ExoforgeControlCenter : EditorWindow
             }
         }
         EditorGUILayout.EndVertical();
+
+        if (!string.IsNullOrEmpty(_buildLog))
+        {
+            _showBuildLog = EditorGUILayout.Foldout(_showBuildLog, "Build Log", true);
+            if (_showBuildLog)
+            {
+                _buildLogScroll = EditorGUILayout.BeginScrollView(_buildLogScroll, GUILayout.Height(120));
+                EditorGUILayout.TextArea(_buildLog, EditorStyles.textArea);
+                EditorGUILayout.EndScrollView();
+            }
+        }
 
         EditorGUILayout.Space(6);
 
@@ -1236,6 +1368,51 @@ public class ExoforgeControlCenter : EditorWindow
         EditorGUILayout.EndVertical();
 
         EditorGUILayout.EndScrollView();
+    }
+
+    private async Task BuildAllAsync()
+    {
+        foreach (var plugin in _localPlugins.Where(p => p.CanBuild && !p.IsBuilt).ToList())
+        {
+            await BuildPluginAsync(plugin, thenDeploy: false);
+        }
+    }
+
+    private async Task BuildPluginAsync(LocalPluginInfo plugin, bool thenDeploy)
+    {
+        if (_isBuilding) return;
+
+        _isBuilding = true;
+        _buildLog = $"Building {plugin.Name} ({plugin.PluginType})...";
+        ShowStatus($"Building '{plugin.Name}'...", MessageType.Info);
+        Repaint();
+
+        try
+        {
+            var deployer = new ExoDeployer(_workspace);
+            string? rid = string.IsNullOrWhiteSpace(_buildRid) ? null : _buildRid.Trim();
+            var build = await deployer.BuildPluginAsync(plugin.Name, rid, ExoforgeEditorConfig.DotnetPath);
+
+            _buildLog = build.Output;
+            ShowStatus($"✓ Built '{plugin.Name}' ({build.PluginType}).", MessageType.Info);
+            RefreshLocalPlugins();
+
+            if (thenDeploy)
+            {
+                await DeployPluginAsync(plugin);
+            }
+        }
+        catch (Exception ex)
+        {
+            _buildLog = ex.ToString();
+            _showBuildLog = true;
+            ShowStatus($"Build failed for '{plugin.Name}': {ex.Message}", MessageType.Error);
+        }
+        finally
+        {
+            _isBuilding = false;
+            Repaint();
+        }
     }
 
     private async Task DeployPluginAsync(LocalPluginInfo plugin)
@@ -1321,6 +1498,19 @@ public class ExoforgeControlCenter : EditorWindow
                 {
                     ExoforgeEditorConfig.GeneratedScriptPath = chosen;
                 }
+            }
+        }
+        EditorGUILayout.EndHorizontal();
+
+        // Dotnet CLI path (native builds). GUI editors may not inherit the shell PATH.
+        EditorGUILayout.BeginHorizontal();
+        ExoforgeEditorConfig.DotnetPath = EditorGUILayout.TextField("Dotnet Path", ExoforgeEditorConfig.DotnetPath);
+        if (GUILayout.Button("Browse...", GUILayout.Width(70)))
+        {
+            string chosen = EditorUtility.OpenFilePanel("Select dotnet executable", "", "");
+            if (!string.IsNullOrEmpty(chosen))
+            {
+                ExoforgeEditorConfig.DotnetPath = chosen;
             }
         }
         EditorGUILayout.EndHorizontal();
@@ -1450,4 +1640,5 @@ public class ExoforgeControlCenter : EditorWindow
 
         Repaint();
     }
+}
 }

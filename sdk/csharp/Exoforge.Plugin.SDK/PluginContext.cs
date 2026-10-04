@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 
 namespace Exoforge.Plugin.SDK;
@@ -33,43 +34,34 @@ public class HostPluginContext : IPluginContext
 
     /// <summary>
     /// Inspects plugin object properties and injects services decorated with [Inject].
+    /// Handles both instance and static members, so plain (non-<see cref="PluginBehaviour"/>) plugins
+    /// used with <see cref="PluginHost"/> get their dependencies too.
     /// </summary>
     public static void Wire(object target, IPluginContext context)
     {
         if (target == null || context == null) return;
 
         var type = target.GetType();
-        var props = type.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+        var props = type.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
 
         foreach (var prop in props)
         {
             var inject = prop.GetCustomAttribute<InjectAttribute>();
             if (inject == null || !prop.CanWrite) continue;
 
-            if (prop.PropertyType == typeof(IDatabase))
-            {
-                prop.SetValue(target, context.Database);
-            }
-            else if (prop.PropertyType == typeof(IEventDispatcher))
-            {
-                prop.SetValue(target, context.Events);
-            }
-            else if (prop.PropertyType == typeof(IActionDispatcher))
-            {
-                prop.SetValue(target, context.Actions);
-            }
-            else if (prop.PropertyType == typeof(IEntityManager))
-            {
-                prop.SetValue(target, context.Entities);
-            }
-            else if (prop.PropertyType == typeof(ILogger))
-            {
-                prop.SetValue(target, context.Logger);
-            }
-            else if (prop.PropertyType == typeof(IPluginContext))
-            {
-                prop.SetValue(target, context);
-            }
+            object? value =
+                prop.PropertyType == typeof(IDatabase) ? context.Database :
+                prop.PropertyType == typeof(IEventDispatcher) ? context.Events :
+                prop.PropertyType == typeof(IActionDispatcher) ? context.Actions :
+                prop.PropertyType == typeof(IEntityManager) ? context.Entities :
+                prop.PropertyType == typeof(ILogger) ? context.Logger :
+                prop.PropertyType == typeof(IPluginContext) ? context :
+                null;
+
+            if (value == null) continue;
+
+            if (prop.GetMethod?.IsStatic == true) prop.SetValue(null, value);
+            else prop.SetValue(target, value);
         }
     }
 }
@@ -83,92 +75,120 @@ public class HostDatabase : IDatabase
         PluginId = pluginId;
     }
 
-    public Task<Dictionary<string, object>?> GetAsync(string table, string key)
+    public T? Get<T>(string table, string key)
     {
         string? json = HostBridge.DbGet(table, key);
-        if (string.IsNullOrEmpty(json))
-        {
-            return Task.FromResult<Dictionary<string, object>?>(null);
-        }
-
-        try
-        {
-            var result = JsonSerializer.Deserialize<Dictionary<string, object>>(json);
-            return Task.FromResult<Dictionary<string, object>?>(result);
-        }
-        catch
-        {
-            return Task.FromResult<Dictionary<string, object>?>(null);
-        }
+        return string.IsNullOrEmpty(json) ? default : PluginJson.Deserialize<T>(json);
     }
 
-    public Task PutAsync(string table, string key, object value)
+    public IReadOnlyList<T> All<T>(string table)
     {
-        HostBridge.DbPut(table, key, value);
-        return Task.CompletedTask;
-    }
+        string? json = HostBridge.DbAll(table);
+        if (string.IsNullOrEmpty(json)) return Array.Empty<T>();
 
-    public Task DeleteAsync(string table, string key)
-    {
-        HostBridge.DbDelete(table, key);
-        return Task.CompletedTask;
-    }
+        var rows = new List<T>();
 
-    public Task<List<Dictionary<string, object>>> ExecuteAsync(string operation, object[]? args = null)
-    {
-        string? json = HostBridge.DbExecute(operation, args);
-        if (string.IsNullOrEmpty(json))
+        using var doc = JsonDocument.Parse(json);
+        if (doc.RootElement.ValueKind == JsonValueKind.Array)
         {
-            return Task.FromResult(new List<Dictionary<string, object>>());
-        }
-
-        try
-        {
-            var result = JsonSerializer.Deserialize<List<Dictionary<string, object>>>(json);
-            return Task.FromResult(result ?? new List<Dictionary<string, object>>());
-        }
-        catch
-        {
-            return Task.FromResult(new List<Dictionary<string, object>>());
-        }
-    }
-
-    public Task<List<Dictionary<string, object>>> QueryAsync(string query, object[]? args = null)
-    {
-        return ExecuteAsync(query, args);
-    }
-
-    public async Task<Dictionary<string, object>?> QuerySingleAsync(string query, object[]? args = null)
-    {
-        var rows = await QueryAsync(query, args);
-        return rows.Count > 0 ? rows[0] : null;
-    }
-
-    public async Task<object?> ExecuteScalarAsync(string query, object[]? args = null)
-    {
-        var row = await QuerySingleAsync(query, args);
-        if (row != null && row.Count > 0)
-        {
-            using var enumerator = row.Values.GetEnumerator();
-            if (enumerator.MoveNext())
+            foreach (var row in doc.RootElement.EnumerateArray())
             {
-                return enumerator.Current;
+                if (PluginJson.Deserialize(row.GetRawText(), typeof(T)) is T value)
+                {
+                    rows.Add(value);
+                }
             }
         }
-        return null;
+
+        return rows;
     }
 
-    public async Task<TResult> TransactionAsync<TResult>(Func<IDatabase, Task<TResult>> action)
+    public void Put<T>(string table, string key, T value)
     {
-        return await action(this);
+        HostBridge.DbPut(table, key, PluginJson.Serialize(value));
+    }
+
+    public void Delete(string table, string key)
+    {
+        HostBridge.DbDelete(table, key);
+    }
+
+    public IReadOnlyList<T> Query<T>(string sql, params object?[] args)
+    {
+        var rows = RunSql(sql, args, out _);
+        if (rows is null) return Array.Empty<T>();
+
+        var list = new List<T>();
+        foreach (var row in rows.Value.EnumerateArray())
+        {
+            if (PluginJson.Deserialize(row.GetRawText(), typeof(T)) is T value)
+            {
+                list.Add(value);
+            }
+        }
+
+        return list;
+    }
+
+    public T? QuerySingle<T>(string sql, params object?[] args)
+    {
+        var rows = Query<T>(sql, args);
+        return rows.Count > 0 ? rows[0] : default;
+    }
+
+    public int Execute(string sql, params object?[] args)
+    {
+        RunSql(sql, args, out int affected);
+        return affected;
+    }
+
+    /// <summary>Runs SQL through the <c>:database</c> service and returns its rows array.</summary>
+    private JsonElement? RunSql(string sql, object?[] args, out int affected)
+    {
+        affected = 0;
+
+        var payload = new JsonObject
+        {
+            ["plugin"] = PluginId,
+            ["query"] = sql,
+            ["args"] = JsonNode.Parse(PluginJson.Serialize(args ?? Array.Empty<object?>()))
+        };
+
+        string? raw = HostBridge.CallActionRaw("database", "execute", payload);
+        if (raw is null)
+        {
+            throw new InvalidOperationException("SQL call failed: the :database service is unavailable.");
+        }
+
+        using var doc = JsonDocument.Parse(raw);
+        var root = doc.RootElement;
+
+        if (root.ValueKind == JsonValueKind.Object)
+        {
+            if (root.TryGetProperty("error", out var error))
+            {
+                throw new InvalidOperationException($"SQL failed: {error}");
+            }
+
+            if (root.TryGetProperty("num_rows", out var num) && num.ValueKind == JsonValueKind.Number)
+            {
+                affected = num.GetInt32();
+            }
+
+            return root.TryGetProperty("rows", out var rows) && rows.ValueKind == JsonValueKind.Array
+                ? rows.Clone()
+                : null;
+        }
+
+        return root.ValueKind == JsonValueKind.Array ? root.Clone() : null;
     }
 }
 
 public class HostEventDispatcher : IEventDispatcher
 {
-    public Task EmitAsync(string eventName, object payload, string? topic = null)
+    public Task EmitAsync<T>(string eventName, T payload, string? topic = null)
     {
-        HostBridge.EmitEvent(topic ?? "", eventName, payload);
+        HostBridge.EmitEvent(topic ?? "", eventName, payload!);
         return Task.CompletedTask;
     }
 }
@@ -179,6 +199,11 @@ public class HostActionDispatcher : IActionDispatcher
     {
         var response = HostBridge.CallAction<TResponse>(service, action, payload);
         return Task.FromResult(response);
+    }
+
+    public TResponse? CallAction<TResponse>(string service, string action, object payload)
+    {
+        return HostBridge.CallAction<TResponse>(service, action, payload);
     }
 }
 

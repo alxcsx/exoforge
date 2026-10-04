@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Threading.Tasks;
 using Exoforge.Plugin.SDK;
 
 namespace Exoforge.ManifestGen;
@@ -85,8 +86,8 @@ public static class Program
                     .ToList();
 
                 actions.Add(new ActionMeta(
-                    actionAttr.Name,
-                    actionAttr.Mode.ToString().ToLowerInvariant(),
+                    ActionName(actionAttr, method),
+                    ResolveActionMode(actionAttr.Mode, method.ReturnType),
                     actionAttr.Scope,
                     parameters,
                     MapTypeToElixir(method.ReturnType),
@@ -182,13 +183,13 @@ public static class Program
                 }
             }
 
-            // Collect Injected Dependencies
+            // Collect Injected Dependencies. Only an explicit service atom is a dependency;
+            // unnamed [Inject] members are context capabilities (ILogger, IDatabase, ...).
             foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static))
             {
                 var inject = prop.GetCustomAttribute<InjectAttribute>();
-                if (inject != null)
+                if (inject?.ServiceName is { Length: > 0 } dep)
                 {
-                    string dep = inject.ServiceName ?? prop.PropertyType.Name.TrimStart('I').ToLowerInvariant();
                     dependencies.Add(dep);
                 }
             }
@@ -222,8 +223,8 @@ public static class Program
                     .ToList();
 
                 entityActions.Add(new ActionMeta(
-                    actionAttr.Name,
-                    actionAttr.Mode.ToString().ToLowerInvariant(),
+                    ActionName(actionAttr, method),
+                    ResolveActionMode(actionAttr.Mode, method.ReturnType),
                     actionAttr.Scope,
                     parameters,
                     MapTypeToElixir(method.ReturnType)
@@ -428,6 +429,10 @@ public static class Program
 
     private static string MapTypeToElixir(Type t)
     {
+        if (t == typeof(Task)) return "ok";
+        if (t.IsGenericType && t.GetGenericTypeDefinition() == typeof(Task<>))
+            return MapTypeToElixir(t.GetGenericArguments()[0]);
+
         var underlying = Nullable.GetUnderlyingType(t);
         if (underlying != null) t = underlying;
 
@@ -442,19 +447,17 @@ public static class Program
         return "map";
     }
 
-    private static string ToSnakeCase(string s)
-    {
-        var sb = new StringBuilder();
-        for (int i = 0; i < s.Length; i++)
-        {
-            if (char.IsUpper(s[i]) && i > 0)
-            {
-                sb.Append('_');
-            }
-            sb.Append(char.ToLowerInvariant(s[i]));
-        }
-        return sb.ToString();
-    }
+    private static string ToSnakeCase(string s) => ExoNaming.ToSnakeCase(s);
+
+    /// <summary>Wire action name: an explicit name wins, otherwise the method name in snake_case.</summary>
+    private static string ActionName(ExoActionAttribute attr, MethodInfo method) =>
+        string.IsNullOrEmpty(attr.Name) ? ExoNaming.ToSnakeCase(method.Name) : attr.Name!;
+
+    /// <summary>Resolves an <see cref="ActionMode.Auto"/> to sync/async from the return type.</summary>
+    private static string ResolveActionMode(ActionMode mode, Type returnType) =>
+        mode != ActionMode.Auto
+            ? mode.ToString().ToLowerInvariant()
+            : typeof(Task).IsAssignableFrom(returnType) ? "async" : "sync";
 
     private static EventMeta CreateEventMeta(ExoEventAttribute attr)
     {

@@ -80,26 +80,58 @@ plugin_manager ───▶ (independent root)
 | Elixir | `:elixir` | Elixir | `mix` | System plugins |
 
 Native plugins are plain C# — **no C, no WASI toolchain**. `exo plugin build` compiles the plugin to a
-self-contained ~2 MB binary and generates `manifest.exs` from the C# attributes. The plugin's entry point is:
+self-contained ~2 MB binary and generates `manifest.exs` from the C# attributes. The Unity
+**Control Center ▸ Plugins** tab runs the same build (`dotnet publish -p:PublishAot=true` + ManifestGen)
+and deploys the result, so game teams never need the CLI. The plugin's entry point is:
 
 ```csharp
 public static void Main() => PluginHost.Run<MyPlugin>();
 ```
 
 The host spawns the binary as an OS process (`Exoforge.Drivers.Runtime.NativePluginRunner`) and speaks
-newline-delimited JSON over stdio. Host capabilities go through `HostBridge` (`EmitEvent`, `DbPut`, `Log`, …);
-the runner answers those calls synchronously.
+newline-delimited JSON over stdio. Host capabilities are injected into the plugin (`IDatabase`, `ILogger`,
+`IEventDispatcher`, …) and answered by the runner synchronously; `HostBridge` is the low-level layer
+underneath them.
 
 **Inbound events**: the runner subscribes to the events a plugin declares in its manifest (with their declared
 topic) and forwards them as `{"type":"event"}` frames. The plugin handles them in an optional
-`public void OnEvent(string name, JsonElement payload)` — it is called even while an action is blocked on a
-host call.
+`public void OnEvent(string name, TPayload payload)` — it is called even while an action is blocked on a
+host call. The payload is deserialized to `TPayload`; register it on the plugin's JSON context (below).
 
 **Per-OS builds**: plugins ship as native binaries, so build for the deploy target:
 `exo plugin build <name> --rid linux-x64` (defaults to the host).
 
-Because NativeAOT trims reflection, emit **`JsonObject`** payloads and keep `PluginHost.Run<T>()`'s
-`[DynamicallyAccessedMembers]` annotation intact — that is what keeps the `[ExoAction]` methods reachable.
+Because NativeAOT trims reflection, plugin payloads are **records**, not raw `JsonObject`/`JsonElement`. The
+SDK owns the JSON: action arguments and results, stored records, and event payloads are typed, and
+`IDatabase` (injected as `[Inject]`) is a typed key/value store with a typed SQL runner. Register the
+record types on a source-generated `JsonSerializerContext` and start the plugin with the context-aware
+runner:
+
+```csharp
+[JsonSerializable(typeof(SnakeScoreRecord))]
+internal partial class SnakeJsonContext : JsonSerializerContext { }
+
+public static void Main() => PluginHost.Run<SnakeLeaderboardPlugin, SnakeJsonContext>();
+
+// Key/value
+var best = Database!.Get<SnakeScoreRecord>("snake_scores", playerId);
+Database.Put("snake_scores", playerId, record);
+
+// Typed SQL: rows map onto records, args are positional ($1, $2, ...)
+var top = Database.Query<SnakeScoreRecord>("SELECT * FROM snake_scores ORDER BY score DESC LIMIT $1", 10);
+Database.Execute("DELETE FROM snake_scores WHERE score < $1", 0);
+```
+
+Keep `PluginHost.Run<...>()`'s `[DynamicallyAccessedMembers]` annotation intact — that is what keeps the
+`[ExoAction]` methods and injected properties reachable. `JsonObject`/`JsonElement` remain available on
+`HostBridge` for exotic cases, but plugin code should not need them.
+
+Action declarations follow conventions, so the attribute is usually bare:
+
+- **Name** — `[ExoAction]` uses the method name in snake_case (`SubmitScore` → `submit_score`).
+- **Mode** — inferred from the return type: `Task`/`Task<T>` → `:async`, anything concrete → `:sync`.
+  (`ActionMode.Cast` is still explicit.)
+- **Transport** — defaults to `:auto`.
 
 `ActionDispatcher` stays runtime-agnostic: every non-Elixir plugin gets a generated proxy module
 (`Exoforge.Drivers.Runtime.PluginProxy`) registered as its `entry_point`.

@@ -65,8 +65,8 @@ Usage: exo <command> [options]
 
 Commands:
   init                     Initializes /exoforge workspace and exoforge.json
-  plugin new <name>        Scaffolds a new C# WASM plugin project
-  plugin build <name>      Builds plugin .csproj and compiles WASM
+  plugin new <name>        Scaffolds a new C# plugin project
+  plugin build <name>      Builds a plugin (native AOT, or WASM when build.sh exists)
   plugin push <name>       Builds and deploys plugin to live Exoforge cluster
   plugin list              Lists all installed plugins from live cluster
   plugin remove <id>       Removes a plugin from the live cluster
@@ -123,7 +123,7 @@ Options:
                 string name = args[2];
                 string created = ExoScaffolder.ScaffoldPlugin(ws.PluginsPath, name);
                 Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine($"[Exoforge] Scaffolded C# WASM plugin '{name}' at:");
+                Console.WriteLine($"[Exoforge] Scaffolded C# plugin '{name}' at:");
                 Console.WriteLine($"  {created}");
                 Console.ResetColor();
                 return 0;
@@ -181,181 +181,22 @@ Options:
 
     private static int BuildPlugin(ExoWorkspace ws, string rawName, string? ridOverride = null)
     {
-        string cleanName = rawName.Trim().ToLowerInvariant().Replace("-", "_");
-        string pluginDir = Path.Combine(ws.PluginsPath, cleanName);
-
-        if (!Directory.Exists(pluginDir))
+        try
+        {
+            var build = new ExoDeployer(ws).BuildPlugin(rawName, ridOverride);
+            Console.WriteLine(build.Output);
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine($"[Exoforge] Build complete for plugin '{build.Name}' ({build.PluginType}).");
+            Console.ResetColor();
+            return 0;
+        }
+        catch (Exception ex)
         {
             Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($"Plugin directory not found: {pluginDir}");
+            Console.WriteLine($"[Exoforge] Build failed: {ex.Message}");
             Console.ResetColor();
             return 1;
         }
-
-        string csproj = Path.Combine(pluginDir, $"{cleanName}.csproj");
-        if (File.Exists(csproj))
-        {
-            Console.WriteLine($"[Exoforge] Compiling {csproj}...");
-            var psi = new ProcessStartInfo("dotnet", $"build \"{csproj}\" -c Release")
-            {
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false
-            };
-
-            using var proc = Process.Start(psi);
-            if (proc != null)
-            {
-                proc.WaitForExit();
-                if (proc.ExitCode != 0)
-                {
-                    Console.WriteLine(proc.StandardError.ReadToEnd());
-                    Console.WriteLine(proc.StandardOutput.ReadToEnd());
-                    return proc.ExitCode;
-                }
-            }
-        }
-
-        // A plugin with build.sh defines its own build (e.g. a WASM reactor guest).
-        string buildSh = Path.Combine(pluginDir, "build.sh");
-        if (File.Exists(buildSh))
-        {
-            Console.WriteLine($"[Exoforge] Executing build.sh...");
-            var psi = new ProcessStartInfo("bash", $"\"{buildSh}\"")
-            {
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                WorkingDirectory = pluginDir
-            };
-
-            using var proc = Process.Start(psi);
-            if (proc != null)
-            {
-                proc.WaitForExit();
-                if (proc.ExitCode != 0)
-                {
-                    Console.WriteLine(proc.StandardError.ReadToEnd());
-                    return proc.ExitCode;
-                }
-            }
-        }
-        else
-        {
-            // Default: compile the plugin to a self-contained native binary (AOT) and
-            // generate its manifest from the C# attributes.
-            int nativeResult = PublishNative(ws, pluginDir, cleanName, ridOverride);
-            if (nativeResult != 0)
-            {
-                return nativeResult;
-            }
-        }
-
-        Console.ForegroundColor = ConsoleColor.Green;
-        Console.WriteLine($"[Exoforge] Build complete for plugin '{cleanName}'.");
-        Console.ResetColor();
-        return 0;
-    }
-
-    private static void MakeExecutable(string path)
-    {
-        if (OperatingSystem.IsWindows()) return;
-
-        try
-        {
-            var mode = File.GetUnixFileMode(path);
-            File.SetUnixFileMode(path, mode | UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute);
-        }
-        catch
-        {
-            // best effort
-        }
-    }
-
-    private static int PublishNative(ExoWorkspace ws, string pluginDir, string cleanName, string? ridOverride)
-    {
-        // Defaults to the host, but a plugin ships per-OS: build linux-x64 on CI for prod.
-        string rid = string.IsNullOrWhiteSpace(ridOverride) ? RuntimeInformation.RuntimeIdentifier : ridOverride!;
-        Console.WriteLine($"[Exoforge] Publishing native plugin for {rid}...");
-
-        var publish = new ProcessStartInfo(
-            "dotnet",
-            $"publish \"{Path.Combine(pluginDir, cleanName + ".csproj")}\" -c Release -r {rid}")
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false
-        };
-
-        using (var proc = Process.Start(publish))
-        {
-            if (proc != null)
-            {
-                proc.WaitForExit();
-                if (proc.ExitCode != 0)
-                {
-                    Console.WriteLine(proc.StandardError.ReadToEnd());
-                    Console.WriteLine(proc.StandardOutput.ReadToEnd());
-                    return proc.ExitCode;
-                }
-            }
-        }
-
-        // Locate the repo (contains the ManifestGen project) by walking up from the workspace.
-        string? root = ws.PluginsPath;
-        for (int i = 0; i < 10 && root != null; i++)
-        {
-            if (Directory.Exists(Path.Combine(root, "sdk", "csharp", "Exoforge.ManifestGen")))
-            {
-                break;
-            }
-
-            root = Directory.GetParent(root)?.FullName;
-        }
-
-        if (root == null)
-        {
-            Console.Error.WriteLine("[Exoforge] Could not locate the Exoforge repo for ManifestGen.");
-            return 1;
-        }
-
-        // Stage the native binary next to the manifest (what the runner and deployer expect).
-        string publishedBinary = Path.Combine(pluginDir, "bin", "Release", "net10.0", rid, "publish", cleanName);
-        if (!File.Exists(publishedBinary))
-        {
-            Console.Error.WriteLine($"[Exoforge] Native binary not found at {publishedBinary}");
-            return 1;
-        }
-
-        string stagedBinary = Path.Combine(pluginDir, cleanName);
-        File.Copy(publishedBinary, stagedBinary, overwrite: true);
-        MakeExecutable(stagedBinary);
-
-        string dll = Path.Combine(pluginDir, "bin", "Release", "net10.0", rid, cleanName + ".dll");
-        string manifest = Path.Combine(pluginDir, "manifest.exs");
-
-        Console.WriteLine("[Exoforge] Generating plugin manifest from C# attributes...");
-        var gen = new ProcessStartInfo(
-            "dotnet",
-            $"run --project \"{Path.Combine(root, "sdk", "csharp", "Exoforge.ManifestGen")}\" -- \"{dll}\" \"{manifest}\" --type native")
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false
-        };
-
-        using var genProc = Process.Start(gen);
-        if (genProc != null)
-        {
-            genProc.WaitForExit();
-            if (genProc.ExitCode != 0)
-            {
-                Console.WriteLine(genProc.StandardError.ReadToEnd());
-                return genProc.ExitCode;
-            }
-        }
-
-        return 0;
     }
 
     private static async Task<int> HandleSyncAsync(string[] args)

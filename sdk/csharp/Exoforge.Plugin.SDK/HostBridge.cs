@@ -17,12 +17,13 @@ public static class HostBridge
     // PluginHost.Run<T>() installs one for native plugins.
     private static IPluginTransport? _transport;
 
-    /// <summary>Routes host calls through a process transport (native plugins).</summary>
-    public static void UseTransport(IPluginTransport transport) => _transport = transport;
+    /// <summary>Routes host calls through a process transport (native plugins). Pass <c>null</c> to reset.</summary>
+    public static void UseTransport(IPluginTransport? transport) => _transport = transport;
 
     /// <summary>
     /// Serializes a host-call payload without reflection where possible, so it stays NativeAOT-safe.
-    /// Prefer <see cref="System.Text.Json.Nodes.JsonObject"/>, <c>JsonElement</c>, or a raw JSON string.
+    /// A <c>string</c> is treated as already-encoded JSON; everything else is serialized through
+    /// <see cref="PluginJson"/> (which uses the registered source-generated context under AOT).
     /// </summary>
     private static string ToJson(object? payload) => payload switch
     {
@@ -30,7 +31,7 @@ public static class HostBridge
         string s => s,
         System.Text.Json.Nodes.JsonNode node => node.ToJsonString(),
         JsonElement element => element.GetRawText(),
-        _ => JsonSerializer.Serialize(payload)
+        _ => PluginJson.Serialize(payload)
     };
 
     [DllImport("env", EntryPoint = "host_clock_now")]
@@ -139,8 +140,7 @@ public static class HostBridge
         {
             byte[] svcBytes = Encoding.UTF8.GetBytes(service ?? "");
             byte[] actBytes = Encoding.UTF8.GetBytes(action ?? "");
-            string json = payload is string str ? str : JsonSerializer.Serialize(payload);
-            byte[] payloadBytes = Encoding.UTF8.GetBytes(json);
+            byte[] payloadBytes = Encoding.UTF8.GetBytes(ToJson(payload));
 
             return NativeHostCallAction(
                 svcBytes, svcBytes.Length,
@@ -154,28 +154,19 @@ public static class HostBridge
     }
 
     /// <summary>
-    /// Calls another service's action and deserializes the JSON response.
+    /// Calls another service's action and returns the raw JSON response, or <c>null</c> when the
+    /// call could not be made. Works over the native transport and the WASM `host_call_action_json`
+    /// import alike.
     /// </summary>
-    public static TResponse? CallAction<TResponse>(string service, string action, object payload)
+    public static string? CallActionRaw(string service, string action, object payload)
     {
-        if (_transport != null)
-        {
-            // Native transport returns raw JSON; reflection-free conversion only.
-            string? raw = _transport.CallAction(service ?? "", action ?? "", ToJson(payload));
-
-            if (raw == null) return default;
-            if (typeof(TResponse) == typeof(string)) return (TResponse)(object)raw;
-            if (typeof(TResponse) == typeof(JsonElement)) return (TResponse)(object)JsonDocument.Parse(raw).RootElement.Clone();
-
-            return default;
-        }
+        if (_transport != null) return _transport.CallAction(service ?? "", action ?? "", ToJson(payload));
 
         try
         {
             byte[] svcBytes = Encoding.UTF8.GetBytes(service ?? "");
             byte[] actBytes = Encoding.UTF8.GetBytes(action ?? "");
-            string json = payload is string str ? str : JsonSerializer.Serialize(payload);
-            byte[] payloadBytes = Encoding.UTF8.GetBytes(json);
+            byte[] payloadBytes = Encoding.UTF8.GetBytes(ToJson(payload));
             byte[] outBuf = new byte[BufferSize];
 
             int bytesRead = NativeHostCallActionJson(
@@ -184,15 +175,28 @@ public static class HostBridge
                 payloadBytes, payloadBytes.Length,
                 outBuf, outBuf.Length);
 
-            if (bytesRead <= 0) return default;
+            if (bytesRead <= 0) return null;
 
-            string resJson = Encoding.UTF8.GetString(outBuf, 0, bytesRead);
-            return JsonSerializer.Deserialize<TResponse>(resJson);
+            return Encoding.UTF8.GetString(outBuf, 0, bytesRead);
         }
         catch
         {
-            return default;
+            return null;
         }
+    }
+
+    /// <summary>
+    /// Calls another service's action and deserializes the JSON response.
+    /// </summary>
+    public static TResponse? CallAction<TResponse>(string service, string action, object payload)
+    {
+        string? raw = CallActionRaw(service, action, payload);
+        if (raw == null) return default;
+
+        if (typeof(TResponse) == typeof(string)) return (TResponse)(object)raw;
+        if (typeof(TResponse) == typeof(JsonElement)) return (TResponse)(object)JsonDocument.Parse(raw).RootElement.Clone();
+
+        return PluginJson.Deserialize<TResponse>(raw);
     }
 
     /// <summary>
@@ -260,8 +264,7 @@ public static class HostBridge
         {
             byte[] tblBytes = Encoding.UTF8.GetBytes(table ?? "");
             byte[] keyBytes = Encoding.UTF8.GetBytes(key ?? "");
-            string json = value is string str ? str : JsonSerializer.Serialize(value);
-            byte[] valBytes = Encoding.UTF8.GetBytes(json);
+            byte[] valBytes = Encoding.UTF8.GetBytes(ToJson(value));
 
             return NativeHostDbPut(tblBytes, tblBytes.Length, keyBytes, keyBytes.Length, valBytes, valBytes.Length) == 0;
         }
@@ -295,11 +298,6 @@ public static class HostBridge
         {
             return false;
         }
-    }
-
-    public static string? DbExecute(string operation, object[]? args = null)
-    {
-        return DbGet("default", operation);
     }
 
     /// <summary>
@@ -338,8 +336,7 @@ public static class HostBridge
         try
         {
             byte[] keyBytes = Encoding.UTF8.GetBytes(key ?? "");
-            string json = value is string str ? str : JsonSerializer.Serialize(value);
-            byte[] valBytes = Encoding.UTF8.GetBytes(json);
+            byte[] valBytes = Encoding.UTF8.GetBytes(ToJson(value));
 
             return NativeHostSetState(keyBytes, keyBytes.Length, valBytes, valBytes.Length) == 0;
         }

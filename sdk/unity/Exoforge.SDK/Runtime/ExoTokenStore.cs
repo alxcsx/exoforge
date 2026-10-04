@@ -29,9 +29,6 @@ namespace Exoforge.Client
             {
                 PlayerPrefs.SetString(TokenKey, value ?? string.Empty);
                 PlayerPrefs.Save();
-    #if UNITY_EDITOR
-                UnityEditor.EditorPrefs.SetString("Exoforge_AdminToken", value ?? string.Empty);
-    #endif
             }
         }
 
@@ -42,9 +39,6 @@ namespace Exoforge.Client
             {
                 PlayerPrefs.SetString(PlayerIdKey, value ?? string.Empty);
                 PlayerPrefs.Save();
-    #if UNITY_EDITOR
-                UnityEditor.EditorPrefs.SetString("Exoforge_PlayerId", value ?? string.Empty);
-    #endif
             }
         }
 
@@ -55,9 +49,6 @@ namespace Exoforge.Client
             {
                 PlayerPrefs.SetString(ScopesKey, value ?? string.Empty);
                 PlayerPrefs.Save();
-    #if UNITY_EDITOR
-                UnityEditor.EditorPrefs.SetString("Exoforge_Scopes", value ?? string.Empty);
-    #endif
             }
         }
 
@@ -96,11 +87,6 @@ namespace Exoforge.Client
             PlayerPrefs.DeleteKey(ScopesKey);
             PlayerPrefs.DeleteKey(NameKey);
             PlayerPrefs.Save();
-    #if UNITY_EDITOR
-            UnityEditor.EditorPrefs.DeleteKey("Exoforge_AdminToken");
-            UnityEditor.EditorPrefs.DeleteKey("Exoforge_PlayerId");
-            UnityEditor.EditorPrefs.DeleteKey("Exoforge_Scopes");
-    #endif
         }
     }
 }

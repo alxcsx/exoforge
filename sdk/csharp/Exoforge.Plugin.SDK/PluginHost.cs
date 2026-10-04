@@ -5,6 +5,8 @@ using System.IO;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Threading.Tasks;
 
 namespace Exoforge.Plugin.SDK;
 
@@ -43,7 +45,6 @@ public interface IPluginTransport
 public static class PluginHost
 {
     private static readonly object WriteLock = new();
-    private static readonly Dictionary<long, string> PendingHostCalls = new();
     private static Stream? _stdout;
     private static long _nextHostCallId;
     private static object? _instance;
@@ -58,8 +59,28 @@ public static class PluginHost
     public static void Run<[DynamicallyAccessedMembers(
         DynamicallyAccessedMemberTypes.PublicMethods |
         DynamicallyAccessedMemberTypes.NonPublicMethods |
+        DynamicallyAccessedMemberTypes.PublicProperties |
+        DynamicallyAccessedMemberTypes.NonPublicProperties |
         DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] T>()
         where T : class, new() => RunInstance(new T());
+
+    /// <summary>
+    /// Runs <typeparamref name="T"/> with a source-generated <see cref="JsonSerializerContext"/>.
+    /// This is the NativeAOT-safe overload: reflection-based JSON is disabled in AOT, so typed
+    /// action arguments, results, event payloads and stored records need a context.
+    /// </summary>
+    public static void Run<[DynamicallyAccessedMembers(
+        DynamicallyAccessedMemberTypes.PublicMethods |
+        DynamicallyAccessedMemberTypes.NonPublicMethods |
+        DynamicallyAccessedMemberTypes.PublicProperties |
+        DynamicallyAccessedMemberTypes.NonPublicProperties |
+        DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] T, TContext>()
+        where T : class, new()
+        where TContext : JsonSerializerContext, new()
+    {
+        PluginJson.UseContext(new TContext());
+        RunInstance(new T());
+    }
 
     /// <summary>Runs a plugin instance until stdin closes.</summary>
     public static int RunInstance(object instance)
@@ -69,6 +90,11 @@ public static class PluginHost
 
         _instance = instance;
         var pluginType = instance.GetType();
+
+        // Native plugins do not go through PluginBehaviour.OnInitAsync, so wire [Inject]
+        // dependencies here as well — including static properties on plain plugin classes.
+        HostPluginContext.Wire(instance, new HostPluginContext(ResolvePluginId(pluginType)));
+
         var actions = BuildActionTable(pluginType);
         _eventHandler = FindEventHandler(pluginType);
 
@@ -95,16 +121,32 @@ public static class PluginHost
     }
 
     /// <summary>
-    /// Resolves the plugin's inbound event handler: <c>OnEvent(string, JsonElement)</c> or
-    /// <c>OnEvent(string)</c>. Optional — plugins that ignore events need not define it.
+    /// Resolves the plugin's inbound event handler: <c>OnEvent(string, TPayload)</c> for any
+    /// payload type, or <c>OnEvent(string)</c>. Optional — plugins that ignore events need not
+    /// define it.
     /// </summary>
     private static MethodInfo? FindEventHandler(Type pluginType)
     {
         const BindingFlags flags =
             BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
 
-        return pluginType.GetMethod("OnEvent", flags, null, new[] { typeof(string), typeof(JsonElement) }, null)
-            ?? pluginType.GetMethod("OnEvent", flags, null, new[] { typeof(string) }, null);
+        foreach (var method in pluginType.GetMethods(flags))
+        {
+            if (method.Name != "OnEvent") continue;
+
+            var parameters = method.GetParameters();
+            if (parameters.Length == 1 && parameters[0].ParameterType == typeof(string)) return method;
+            if (parameters.Length == 2 && parameters[0].ParameterType == typeof(string)) return method;
+        }
+
+        return null;
+    }
+
+    private static string ResolvePluginId(Type pluginType)
+    {
+        // ManifestGen derives the manifest id from the assembly name; the host keys the plugin's
+        // isolated database (KV and SQL) by that id, so use the same source.
+        return pluginType.Assembly.GetName().Name?.ToLowerInvariant() ?? pluginType.Name.ToLowerInvariant();
     }
 
     private static bool IsEventFrame(string line)
@@ -136,9 +178,24 @@ public static class PluginHost
             string name = root.TryGetProperty("event", out var eventProp) ? eventProp.GetString() ?? "" : "";
             JsonElement payload = root.TryGetProperty("payload", out var payloadProp) ? payloadProp : default;
 
-            object?[] args = _eventHandler.GetParameters().Length == 2
-                ? new object?[] { name, payload }
-                : new object?[] { name };
+            var parameters = _eventHandler.GetParameters();
+            object?[] args;
+
+            if (parameters.Length == 2)
+            {
+                var payloadType = parameters[1].ParameterType;
+                object? value = payloadType == typeof(JsonElement)
+                    ? payload.Clone()
+                    : payload.ValueKind == JsonValueKind.Undefined
+                        ? null
+                        : PluginJson.Deserialize(payload.GetRawText(), payloadType);
+
+                args = new object?[] { name, value };
+            }
+            else
+            {
+                args = new object?[] { name };
+            }
 
             _eventHandler.Invoke(_instance, args);
         }
@@ -158,7 +215,8 @@ public static class PluginHost
 
             if (attr != null)
             {
-                table[attr.Name] = (method, method.GetParameters());
+                string name = string.IsNullOrEmpty(attr.Name) ? ExoNaming.ToSnakeCase(method.Name) : attr.Name!;
+                table[name] = (method, method.GetParameters());
             }
         }
 
@@ -186,7 +244,7 @@ public static class PluginHost
 
             var payload = root.TryGetProperty("payload", out var payloadProp) ? payloadProp : default;
             object?[] args = BindArguments(entry.Params, payload);
-            object? result = entry.Method.Invoke(instance, args);
+            object? result = AwaitResult(entry.Method.Invoke(instance, args));
 
             Write($"{{\"type\":\"action_result\",\"id\":{id},\"status\":\"ok\",\"data\":{ToJson(result)}}}");
         }
@@ -252,12 +310,53 @@ public static class PluginHost
         if (target == typeof(string)) return element.GetString();
         if (target == typeof(JsonElement)) return element.Clone();
 
+        // Records / command objects: let the SDK's JSON layer do the conversion so plugin
+        // code never sees raw JSON.
+        if (element.ValueKind == JsonValueKind.Object || element.ValueKind == JsonValueKind.Array)
+        {
+            return PluginJson.Deserialize(element.GetRawText(), target);
+        }
+
         return DefaultOf(target);
     }
 
     private static object? DefaultOf(Type type) => type.IsValueType ? Activator.CreateInstance(type) : null;
 
-    /// <summary>Serializes a plugin return value without reflection-based JSON (NativeAOT-safe).</summary>
+    /// <summary>
+    /// Unwraps a <see cref="Task"/> returned by an async action. The native transport is synchronous,
+    /// so the task is awaited to completion on the dispatch thread.
+    /// </summary>
+    private static object? AwaitResult(object? result)
+    {
+        if (result is not Task task)
+        {
+            return result;
+        }
+
+        task.GetAwaiter().GetResult();
+
+        Type taskType = task.GetType();
+        if (!taskType.IsGenericType)
+        {
+            return null;
+        }
+
+        // GenericTaskType roots Task<T>.Result for the trimmer (see below).
+        _ = GenericTaskType;
+
+#pragma warning disable IL2075 // Task<> metadata is rooted via GenericTaskType
+        return taskType.GetProperty("Result")?.GetValue(task);
+#pragma warning restore IL2075
+    }
+
+    /// <summary>
+    /// Roots <c>Task&lt;T&gt;.Result</c> for reflection; NativeAOT trims the metadata otherwise and
+    /// async action results would silently come back as <c>null</c>.
+    /// </summary>
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)]
+    private static readonly Type GenericTaskType = typeof(Task<>);
+
+    /// <summary>Serializes a plugin return value, routing collections and records through <see cref="PluginJson"/>.</summary>
     private static string ToJson(object? value) => value switch
     {
         null => "null",
@@ -270,33 +369,11 @@ public static class PluginHost
         float f => f.ToString(System.Globalization.CultureInfo.InvariantCulture),
         string str => JsonEncode(str),
         JsonElement el => el.GetRawText(),
-        _ => JsonEncode(value.ToString() ?? "")
+        System.Text.Json.Nodes.JsonNode node => node.ToJsonString(),
+        _ => PluginJson.Serialize(value)
     };
 
-    private static string JsonEncode(string value)
-    {
-        var sb = new StringBuilder(value.Length + 2);
-        sb.Append('"');
-
-        foreach (char c in value)
-        {
-            switch (c)
-            {
-                case '"': sb.Append("\\\""); break;
-                case '\\': sb.Append("\\\\"); break;
-                case '\n': sb.Append("\\n"); break;
-                case '\r': sb.Append("\\r"); break;
-                case '\t': sb.Append("\\t"); break;
-                default:
-                    if (c < 0x20) sb.Append("\\u").Append(((int)c).ToString("x4"));
-                    else sb.Append(c);
-                    break;
-            }
-        }
-
-        sb.Append('"');
-        return sb.ToString();
-    }
+    private static string JsonEncode(string value) => PluginJson.EncodeString(value);
 
     private static void Write(string json)
     {

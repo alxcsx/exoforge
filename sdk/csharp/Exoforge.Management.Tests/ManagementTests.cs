@@ -73,6 +73,15 @@ public class ManagementTests : IDisposable
     }
 
     [Fact]
+    public void BuildPlugin_Throws_When_Plugin_Directory_Missing()
+    {
+        var ws = ExoWorkspace.Initialize(_tempDir, "TestGameProject");
+        var deployer = new ExoDeployer(ws);
+
+        Assert.Throws<DirectoryNotFoundException>(() => deployer.BuildPlugin("does_not_exist"));
+    }
+
+    [Fact]
     public void CodeGenerator_Generates_Valid_CSharp_Client_From_Export_Json()
     {
         string exportJson = """

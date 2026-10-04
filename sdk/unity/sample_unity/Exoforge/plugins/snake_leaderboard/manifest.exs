@@ -5,7 +5,7 @@
   version: "1.0.0",
   context: :global,
   entry_point: "snake_leaderboard",
-  dependencies: [:database],
+  dependencies: [:database, :player_data],
   provides: [:snake_leaderboard],
   category: "Game",
   dashboard_view: %{id: :snake_leaderboard, title: "Snake Leaderboard", icon: "🏆"},
@@ -14,7 +14,7 @@
       name: :snake_leaderboard,
       actions: [
         %{name: :submit_score, mode: :sync, scope: :global, transport: :auto, arity: 4, params: [player_id: :string, name: :string, score: :integer, snake_length: :integer], returns: :integer},
-        %{name: :get_leaderboard, mode: :sync, scope: :global, transport: :auto, arity: 1, params: [limit: :integer], returns: :map},
+        %{name: :get_leaderboard, mode: :async, scope: :global, transport: :auto, arity: 1, params: [limit: :integer], returns: :map},
       ],
       events: [
       ],
@@ -26,7 +26,6 @@
           actions: [:submit_score, :get_leaderboard],
           columns: [
             %{name: :player_id, type: :string, label: "Player ID", sortable: true, filterable: true, badge: false},
-            %{name: :name, type: :string, label: "Player", sortable: true, filterable: true, badge: false},
             %{name: :score, type: :integer, label: "High Score", sortable: true, filterable: false, badge: false},
             %{name: :snake_length, type: :integer, label: "Max Length", sortable: true, filterable: false, badge: false},
             %{name: :updated_at, type: :integer, label: "Updated", sortable: true, filterable: false, badge: false},

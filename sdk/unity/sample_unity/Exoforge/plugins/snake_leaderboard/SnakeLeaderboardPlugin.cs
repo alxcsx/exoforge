@@ -1,122 +1,96 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text.Json;
-using System.Text.Json.Nodes;
+using System.Threading.Tasks;
 using Exoforge.Plugin.SDK;
 
 namespace Exoforge.Plugins.SnakeLeaderboard;
 
 /// <summary>
-/// Persisted Snake leaderboard row.
-/// </summary>
-[ExoResource("snake_scores", PrimaryKey = "player_id", DrawerTabs = new[] { "overview", "attributes" })]
-public record SnakeScoreRecord
-{
-    [ExoColumn(Label = "Player ID", Sortable = true, Filterable = true)]
-    public string PlayerId { get; init; } = "";
-
-    [ExoColumn(Label = "Player", Sortable = true, Filterable = true)]
-    public string Name { get; init; } = "";
-
-    [ExoColumn(Label = "High Score", Sortable = true)]
-    public int Score { get; init; }
-
-    [ExoColumn(Label = "Max Length", Sortable = true)]
-    public int SnakeLength { get; init; }
-
-    [ExoColumn(Label = "Updated", Sortable = true)]
-    public long UpdatedAt { get; init; }
-}
-
-/// <summary>
-/// Snake leaderboard. Stores one row per player in the plugin's isolated database (through the
-/// host KV bridge) and serves the top-N ranking.
-///
-/// The row is keyed by <c>player_id</c> and only ever improves: submitting a lower score keeps
-/// the stored best.
+/// Snake leaderboard service. Stores one score row per player in the plugin's isolated database and
+/// serves a shared top-N ranking. Player names are resolved from <c>player_data</c> at read time.
 /// </summary>
 [ExoService("snake_leaderboard", Version = "1.0.0", Resources = new[] { typeof(SnakeScoreRecord) },
     Category = "Game", Title = "Snake Leaderboard", Icon = "🏆")]
 public class SnakeLeaderboardPlugin
 {
-    private const string Table = "snake_scores";
-
     [Inject("database")]
     public static IDatabase? Database { get; set; }
+
+    // Declares the :player_data dependency (load order) and injects the dispatcher used to resolve names.
+    [Inject("player_data")]
+    public static IActionDispatcher? Actions { get; set; }
+
+    [Inject]
+    public static ILogger? Logger { get; set; }
+
+    private static SnakeScoreStore Store => new(Database!);
 
     /// <summary>
     /// Records a finished run for a player, keeping their best score, and returns that best.
     /// </summary>
-    [ExoAction("submit_score", Mode = ActionMode.Sync, Transport = ActionTransport.Auto)]
+    [ExoAction]
     public int SubmitScore(string playerId, string name, int score, int snakeLength)
     {
-        int bestScore = score;
-        int bestLength = snakeLength;
+        // `name` is kept for wire compatibility but not stored: the board renders the live name from
+        // player_data, so a rename can never leave a stale name behind.
+        _ = name;
 
-        string? existing = HostBridge.DbGet(Table, playerId);
+        var store = Store;
+        var existing = store.Get(playerId);
+        bool improved = existing is null || existing.Score < score;
 
-        if (!string.IsNullOrEmpty(existing))
+        int bestScore = improved ? score : existing!.Score;
+        int bestLength = improved ? snakeLength : existing!.SnakeLength;
+
+        store.Put(new SnakeScoreRecord
         {
-            try
-            {
-                using var doc = JsonDocument.Parse(existing);
-                var row = doc.RootElement;
-
-                if (row.ValueKind == JsonValueKind.Object &&
-                    row.TryGetProperty("score", out var storedScore) &&
-                    storedScore.GetInt32() >= score)
-                {
-                    bestScore = storedScore.GetInt32();
-                    bestLength = row.TryGetProperty("snake_length", out var storedLength)
-                        ? storedLength.GetInt32()
-                        : snakeLength;
-                }
-            }
-            catch (JsonException)
-            {
-                // Corrupt row: overwrite it with the fresh run.
-            }
-        }
-
-        HostBridge.DbPut(Table, playerId, new JsonObject
-        {
-            ["player_id"] = playerId,
-            ["name"] = name,
-            ["score"] = bestScore,
-            ["snake_length"] = bestLength,
-            ["updated_at"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+            PlayerId = playerId,
+            Score = bestScore,
+            SnakeLength = bestLength,
+            UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
         });
 
-        HostBridge.LogInfo($"[snake_leaderboard] {name} ({playerId}) best {bestScore}");
+        Logger?.Info($"[snake_leaderboard] {playerId} best {bestScore}");
         return bestScore;
     }
 
     /// <summary>
-    /// Returns the top <paramref name="limit"/> rows as a JSON array, highest score first.
+    /// Returns the top <paramref name="limit"/> rows, highest score first, with each player's current
+    /// display name joined from <c>player_data</c>. Returning a <see cref="Task{TResult}"/> makes the
+    /// manifest infer <c>mode: :async</c>.
     /// </summary>
-    [ExoAction("get_leaderboard", Mode = ActionMode.Sync, Transport = ActionTransport.Auto)]
-    public JsonElement GetLeaderboard(int limit)
+    [ExoAction]
+    public async Task<List<SnakeLeaderboardEntry>> GetLeaderboard(int limit)
     {
         int take = limit > 0 ? limit : 10;
-        string raw = HostBridge.DbAll(Table) ?? "[]";
+        var entries = new List<SnakeLeaderboardEntry>();
 
-        using var doc = JsonDocument.Parse(raw);
-        var rows = new List<JsonNode>();
-
-        if (doc.RootElement.ValueKind == JsonValueKind.Array)
+        foreach (var score in Store.Top(take))
         {
-            foreach (var row in doc.RootElement
-                         .EnumerateArray()
-                         .OrderByDescending(r => r.TryGetProperty("score", out var s) ? s.GetInt32() : 0)
-                         .Take(take))
+            entries.Add(new SnakeLeaderboardEntry
             {
-                rows.Add(JsonNode.Parse(row.GetRawText())!);
-            }
+                PlayerId = score.PlayerId,
+                Name = await DisplayNameAsync(score.PlayerId),
+                Score = score.Score,
+                SnakeLength = score.SnakeLength,
+                UpdatedAt = score.UpdatedAt
+            });
         }
 
-        return JsonDocument.Parse(new JsonArray(rows.ToArray()).ToJsonString()).RootElement.Clone();
+        return entries;
     }
 
-    public static void Main() => PluginHost.Run<SnakeLeaderboardPlugin>();
+    /// <summary>Current display name from player_data; falls back to the raw id when unavailable.</summary>
+    private static async Task<string> DisplayNameAsync(string playerId)
+    {
+        if (Actions is null) return playerId;
+
+        var response = await Actions.CallActionAsync<PlayerProfileResponse>(
+            "player_data", "get_player", new PlayerProfileRequest { PlayerId = playerId });
+
+        string? name = response?.Player?.Name;
+        return string.IsNullOrEmpty(name) ? playerId : name!;
+    }
+
+    public static void Main() => PluginHost.Run<SnakeLeaderboardPlugin, SnakeJsonContext>();
 }

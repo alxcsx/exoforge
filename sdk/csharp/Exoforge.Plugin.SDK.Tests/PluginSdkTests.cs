@@ -1,3 +1,4 @@
+using System;
 using System.Reflection;
 using System.Threading.Tasks;
 using Exoforge.Plugin.SDK;
@@ -196,6 +197,115 @@ public class PluginSdkTests
         Assert.Equal("Hero", player.Name);
         Assert.Equal(5, player.Level);
         Assert.Equal("online", player.Status);
+    }
+
+    [Fact]
+    public void Database_Query_MapsRowsToTypedRecords()
+    {
+        var transport = new FakeTransport
+        {
+            Response = "{\"rows\":[{\"player_id\":\"p1\",\"score\":9},{\"player_id\":\"p2\",\"score\":4}],\"num_rows\":2}"
+        };
+
+        HostBridge.UseTransport(transport);
+        try
+        {
+            var db = new HostDatabase("snake_leaderboard");
+            var rows = db.Query<TypedScoreRow>(
+                "SELECT player_id, score FROM snake_scores ORDER BY score DESC LIMIT $1", 10);
+
+            Assert.Equal("database", transport.Service);
+            Assert.Equal("execute", transport.Action);
+            Assert.Contains("\"plugin\":\"snake_leaderboard\"", transport.Payload);
+            Assert.Contains("\"args\":[10]", transport.Payload);
+            Assert.Contains("SELECT player_id", transport.Payload);
+
+            Assert.Equal(2, rows.Count);
+            Assert.Equal("p1", rows[0].PlayerId);
+            Assert.Equal(9, rows[0].Score);
+        }
+        finally
+        {
+            HostBridge.UseTransport(null);
+        }
+    }
+
+    [Fact]
+    public void Database_Execute_ReturnsAffectedRows()
+    {
+        var transport = new FakeTransport { Response = "{\"rows\":[],\"num_rows\":3}" };
+
+        HostBridge.UseTransport(transport);
+        try
+        {
+            Assert.Equal(3, new HostDatabase("p").Execute("UPDATE t SET x = $1 WHERE y = $2", 1, "a"));
+        }
+        finally
+        {
+            HostBridge.UseTransport(null);
+        }
+    }
+
+    [Fact]
+    public void Database_Query_ThrowsOnServiceError()
+    {
+        var transport = new FakeTransport { Response = "{\"error\":\"postgres_error: relation does not exist\"}" };
+
+        HostBridge.UseTransport(transport);
+        try
+        {
+            var error = Assert.Throws<InvalidOperationException>(() => new HostDatabase("p").Query<TypedScoreRow>("SELECT 1"));
+            Assert.Contains("postgres_error", error.Message);
+        }
+        finally
+        {
+            HostBridge.UseTransport(null);
+        }
+    }
+
+    [Fact]
+    public void ExoAction_DefaultsToInferredNameModeAndTransport()
+    {
+        var attr = new ExoActionAttribute();
+        Assert.Null(attr.Name);
+        Assert.Equal(ActionMode.Auto, attr.Mode);
+        Assert.Equal(ActionTransport.Auto, attr.Transport);
+    }
+
+    [Fact]
+    public void ExoNaming_UsesSnakeCase()
+    {
+        Assert.Equal("submit_score", ExoNaming.ToSnakeCase("SubmitScore"));
+        Assert.Equal("get_leaderboard", ExoNaming.ToSnakeCase("GetLeaderboard"));
+        Assert.Equal("snake_length", ExoNaming.ToSnakeCase("snakeLength"));
+    }
+
+    /// <summary>Captures the action call and returns a canned reply, so the SQL runner is testable off-host.</summary>
+    private sealed class FakeTransport : IPluginTransport
+    {
+        public string? Service { get; private set; }
+        public string? Action { get; private set; }
+        public string? Payload { get; private set; }
+        public string Response { get; set; } = "null";
+
+        public bool EmitEvent(string topic, string evt, string payloadJson) => false;
+
+        public string? CallAction(string service, string action, string payloadJson)
+        {
+            Service = service;
+            Action = action;
+            Payload = payloadJson;
+            return Response;
+        }
+
+        public void Log(int level, string message) { }
+        public string? DbGet(string table, string key) => null;
+        public string? DbAll(string table) => null;
+        public bool DbPut(string table, string key, string valueJson) => false;
+        public bool DbDelete(string table, string key) => false;
+        public string? GetState(string key) => null;
+        public bool SetState(string key, string valueJson) => false;
+        public long ClockNow() => 0;
     }
 }
 

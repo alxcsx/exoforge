@@ -43,6 +43,9 @@ public static class ExoScaffolder
         string serviceContent = GenerateServiceCode(cleanName, className, template);
         File.WriteAllText(Path.Combine(targetDir, $"{className}Plugin.cs"), serviceContent);
 
+        // 3. Ignore the staged native binary (rebuilt by `exo plugin build`).
+        File.WriteAllText(Path.Combine(targetDir, ".gitignore"), $"/{cleanName}\n");
+
         return targetDir;
     }
 

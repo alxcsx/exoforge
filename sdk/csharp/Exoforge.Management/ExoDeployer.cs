@@ -1,5 +1,10 @@
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -65,6 +70,12 @@ public class ExoDeployer
 
         string pluginType = wasmPath != null ? "wasm" : "native";
         string binaryPath = wasmPath ?? Path.Combine(pluginDir, cleanName);
+
+        // Windows builds append .exe; native deploys are usually cross-built for a Linux RID.
+        if (wasmPath == null && !File.Exists(binaryPath) && File.Exists(binaryPath + ".exe"))
+        {
+            binaryPath += ".exe";
+        }
 
         if (!File.Exists(binaryPath))
         {
@@ -167,4 +178,234 @@ public class ExoDeployer
         using var client = await CreateConnectedClientAsync(environmentName, cancellationToken).ConfigureAwait(false);
         return await client.SendActionAsync<JsonElement>("plugin_manager", "list_plugins", null, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
+
+    // -- Build --
+
+    /// <summary>
+    /// Builds a local plugin in the workspace:
+    /// <list type="bullet">
+    /// <item><c>build.sh</c> present → run it (WASM reactor guest).</item>
+    /// <item>otherwise → <c>dotnet publish</c> a NativeAOT binary and regenerate <c>manifest.exs</c>.</item>
+    /// </list>
+    /// The result is staged next to <c>manifest.exs</c>, ready for <see cref="UploadPluginAsync"/>.
+    /// </summary>
+    public ExoPluginBuild BuildPlugin(string pluginName, string? rid = null, string dotnetPath = "dotnet", Action<string>? log = null)
+    {
+        string cleanName = NormalizePluginName(pluginName);
+        string pluginDir = Path.Combine(_workspace.PluginsPath, cleanName);
+
+        if (!Directory.Exists(pluginDir))
+        {
+            throw new DirectoryNotFoundException($"Plugin directory not found: {pluginDir}");
+        }
+
+        var output = new StringBuilder();
+        void Emit(string line)
+        {
+            output.AppendLine(line);
+            log?.Invoke(line);
+        }
+
+        string csproj = Path.Combine(pluginDir, cleanName + ".csproj");
+        if (File.Exists(csproj))
+        {
+            Emit($"[build] dotnet build {Path.GetFileName(csproj)}");
+            RunProcess(dotnetPath, $"build \"{csproj}\" -c Release", pluginDir, Emit);
+        }
+
+        string buildSh = Path.Combine(pluginDir, "build.sh");
+        string pluginType;
+        string binaryPath;
+
+        if (File.Exists(buildSh))
+        {
+            pluginType = "wasm";
+            Emit("[build] bash build.sh");
+            RunProcess("bash", $"\"{buildSh}\"", pluginDir, Emit);
+            binaryPath = FindFile(pluginDir, cleanName + ".wasm")
+                ?? throw new FileNotFoundException($"build.sh did not produce a .wasm for '{cleanName}'.");
+        }
+        else
+        {
+            pluginType = "native";
+            binaryPath = PublishNative(pluginDir, cleanName, rid, dotnetPath, Emit);
+        }
+
+        string manifestPath = Path.Combine(pluginDir, "manifest.exs");
+        return new ExoPluginBuild(cleanName, pluginType, binaryPath, manifestPath, output.ToString());
+    }
+
+    /// <summary>Runs <see cref="BuildPlugin"/> off the calling thread.</summary>
+    public Task<ExoPluginBuild> BuildPluginAsync(
+        string pluginName,
+        string? rid = null,
+        string dotnetPath = "dotnet",
+        CancellationToken cancellationToken = default)
+    {
+        return Task.Run(() => BuildPlugin(pluginName, rid, dotnetPath), cancellationToken);
+    }
+
+    private string PublishNative(string pluginDir, string cleanName, string? rid, string dotnetPath, Action<string> emit)
+    {
+        string targetRid = string.IsNullOrWhiteSpace(rid) ? HostRuntimeIdentifier() : rid!;
+        emit($"[build] dotnet publish -c Release -r {targetRid}");
+        RunProcess(dotnetPath, $"publish \"{Path.Combine(pluginDir, cleanName + ".csproj")}\" -c Release -r {targetRid}", pluginDir, emit);
+
+        string binRelease = Path.Combine(pluginDir, "bin", "Release");
+        if (!Directory.Exists(binRelease))
+        {
+            throw new DirectoryNotFoundException($"Build output not found: {binRelease}");
+        }
+
+        // Stage the published native binary where the runner and deployer expect it.
+        string published = Directory.GetFiles(binRelease, cleanName + "*", SearchOption.AllDirectories)
+            .FirstOrDefault(path => IsPublishedBinary(path, cleanName))
+            ?? throw new FileNotFoundException($"Published native binary not found for '{cleanName}' under {binRelease}.");
+
+        string staged = Path.Combine(pluginDir, cleanName);
+        File.Copy(published, staged, overwrite: true);
+        MakeExecutable(staged);
+        emit($"[build] staged native binary -> {staged}");
+
+        string dll = Directory.GetFiles(binRelease, cleanName + ".dll", SearchOption.AllDirectories).FirstOrDefault()
+            ?? throw new FileNotFoundException($"Compiled assembly not found for '{cleanName}' under {binRelease}.");
+
+        string manifestGen = FindManifestGen(pluginDir);
+        string manifest = Path.Combine(pluginDir, "manifest.exs");
+        emit($"[build] manifest -> {manifest}");
+        RunProcess(
+            dotnetPath,
+            $"run --project \"{manifestGen}\" -- \"{dll}\" \"{manifest}\" --type native",
+            pluginDir,
+            emit);
+
+        return staged;
+    }
+
+    private static bool IsPublishedBinary(string path, string cleanName)
+    {
+        string normalized = path.Replace('\\', '/');
+        if (!normalized.Contains("/publish/")) return false;
+
+        string file = Path.GetFileName(path);
+        return file == cleanName || file == cleanName + ".exe";
+    }
+
+    private static string? FindFile(string root, string fileName)
+    {
+        return Directory.GetFiles(root, fileName, SearchOption.AllDirectories).FirstOrDefault();
+    }
+
+    private static string FindManifestGen(string startDir)
+    {
+        string? dir = startDir;
+        for (int i = 0; i < 12 && dir != null; i++)
+        {
+            string candidate = Path.Combine(dir, "sdk", "csharp", "Exoforge.ManifestGen");
+            if (Directory.Exists(candidate)) return candidate;
+
+            candidate = Path.Combine(dir, "csharp", "Exoforge.ManifestGen");
+            if (Directory.Exists(candidate)) return candidate;
+
+            dir = Directory.GetParent(dir)?.FullName;
+        }
+
+        throw new DirectoryNotFoundException(
+            "Could not locate the Exoforge repo (sdk/csharp/Exoforge.ManifestGen) above the workspace. " +
+            "Native builds need it to generate manifest.exs.");
+    }
+
+    private static void RunProcess(string fileName, string arguments, string workingDirectory, Action<string> emit)
+    {
+        var psi = new ProcessStartInfo(fileName, arguments)
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            WorkingDirectory = workingDirectory
+        };
+
+        using var proc = new Process { StartInfo = psi };
+        var output = new StringBuilder();
+
+        proc.OutputDataReceived += (_, e) => Append(e.Data);
+        proc.ErrorDataReceived += (_, e) => Append(e.Data);
+
+        void Append(string? line)
+        {
+            if (line == null) return;
+            output.AppendLine(line);
+            emit(line);
+        }
+
+        proc.Start();
+        proc.BeginOutputReadLine();
+        proc.BeginErrorReadLine();
+        proc.WaitForExit();
+
+        if (proc.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"{fileName} exited with code {proc.ExitCode}.\n{output}");
+        }
+    }
+
+    private static string HostRuntimeIdentifier()
+    {
+        string os = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "win"
+            : RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "osx"
+            : "linux";
+
+        string arch = RuntimeInformation.ProcessArchitecture switch
+        {
+            Architecture.X64 => "x64",
+            Architecture.X86 => "x86",
+            Architecture.Arm64 => "arm64",
+            Architecture.Arm => "arm",
+            _ => "x64"
+        };
+
+        return os + "-" + arch;
+    }
+
+    private static string NormalizePluginName(string pluginName)
+    {
+        return pluginName.Trim().ToLowerInvariant().Replace("-", "_").Replace(" ", "_");
+    }
+
+    [DllImport("libc", SetLastError = true)]
+    private static extern int chmod(string pathname, uint mode);
+
+    private static void MakeExecutable(string path)
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return;
+
+        try
+        {
+            // 0755
+            _ = chmod(path, Convert.ToUInt32("755", 8));
+        }
+        catch
+        {
+            // best effort
+        }
+    }
+}
+
+/// <summary>Result of <see cref="ExoDeployer.BuildPlugin"/>.</summary>
+public class ExoPluginBuild
+{
+    public ExoPluginBuild(string name, string pluginType, string binaryPath, string manifestPath, string output)
+    {
+        Name = name;
+        PluginType = pluginType;
+        BinaryPath = binaryPath;
+        ManifestPath = manifestPath;
+        Output = output;
+    }
+
+    public string Name { get; }
+    public string PluginType { get; }
+    public string BinaryPath { get; }
+    public string ManifestPath { get; }
+    public string Output { get; }
 }
