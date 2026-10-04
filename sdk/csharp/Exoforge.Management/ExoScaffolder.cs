@@ -134,12 +134,7 @@ using System.Text.Json.Serialization;
 
 namespace Exoforge.Plugins;
 
-/// <summary>
-/// Source-generated JSON metadata for the records crossing this plugin's boundary. NativeAOT has no
-/// reflection, so System.Text.Json needs this context; the generator fills the body from the
-/// [JsonSerializable] attributes. Add a type here whenever a new record crosses an action, event,
-/// or the database.
-/// </summary>
+// Source-generated JSON for this plugin's records — NativeAOT has no reflection.
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
 {{attributes}}
 internal partial class {{className}}JsonContext : JsonSerializerContext
@@ -153,7 +148,8 @@ using Exoforge.Plugin.SDK;
 
 namespace Exoforge.Plugins;
 
-/// <summary>{{className}} service.</summary>
+// Native Exoforge plugin: attributes declare the contract, the host injects capabilities,
+// and `exo plugin build` produces the NativeAOT binary.
 [ExoService("{{serviceName}}", Version = "0.1.0", Resources = new[] { typeof({{className}}Item) },
     Category = "Game", Title = "{{className}}")]
 public class {{className}}Plugin
@@ -177,7 +173,7 @@ public class {{className}}Plugin
     public static void Main() => PluginHost.Run<{{className}}Plugin, {{className}}JsonContext>();
 }
 
-/// <summary>Row stored in the plugin's isolated database.</summary>
+// Row stored in the plugin's isolated database.
 [ExoResource("{{serviceName}}_items", PrimaryKey = "id", DrawerTabs = new[] { "overview", "attributes" })]
 public record {{className}}Item
 {
@@ -202,7 +198,8 @@ using Exoforge.Plugin.SDK;
 
 namespace Exoforge.Plugins;
 
-/// <summary>Player inventory service.</summary>
+// Native Exoforge plugin: attributes declare the contract, the host injects capabilities,
+// and `exo plugin build` produces the NativeAOT binary.
 [ExoService("{{serviceName}}", Version = "0.1.0", Resources = new[] { typeof({{className}}Item) },
     Category = "Game", Title = "{{className}}")]
 public class {{className}}Plugin
@@ -263,7 +260,8 @@ using Exoforge.Plugin.SDK;
 
 namespace Exoforge.Plugins;
 
-/// <summary>Seasonal events / LiveOps service.</summary>
+// Native Exoforge plugin: attributes declare the contract, the host injects capabilities,
+// and `exo plugin build` produces the NativeAOT binary.
 [ExoService("{{serviceName}}", Version = "0.1.0", Resources = new[] { typeof({{className}}Schedule) },
     Category = "Game", Title = "{{className}}")]
 public class {{className}}Plugin

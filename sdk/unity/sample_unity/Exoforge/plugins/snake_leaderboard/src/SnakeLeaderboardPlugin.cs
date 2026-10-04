@@ -7,74 +7,54 @@ using Exoforge.Plugins.Generated;
 
 namespace Exoforge.Plugins.SnakeLeaderboard;
 
-/// <summary>
-/// Snake leaderboard service. Stores one score row per player in the plugin's isolated database and
-/// serves a shared top-N ranking. Player names are resolved from <c>player_data</c> at read time.
-///
-/// Deliberately thin: the point of this sample is to show the base system, so the actions talk to
-/// <see cref="IDatabase"/> directly instead of hiding it behind a repository.
-/// </summary>
+// A native Exoforge plugin is plain C#. Attributes declare the contract; the host injects
+// capabilities; `exo plugin build` produces a self-contained NativeAOT binary.
 [ExoService("snake_leaderboard", Version = "1.0.0", Resources = new[] { typeof(SnakeScoreRecord) },
     Category = "Game", Title = "Snake Leaderboard", Icon = "🏆")]
 public class SnakeLeaderboardPlugin
 {
     private const string Table = "snake_scores";
 
+    // The plugin's own isolated database.
     [Inject("database")]
     public static IDatabase? Database { get; set; }
 
-    // Declares the :player_data dependency (load order) and injects the generated typed client.
+    // Typed client generated from the player_data contract — no dependency on its implementation.
     [Inject("player_data")]
     public static PlayerDataServiceClient? PlayerData { get; set; }
 
     [Inject]
     public static ILogger? Logger { get; set; }
 
-    /// <summary>
-    /// Records a finished run for a player, keeping their best score, and returns that best.
-    /// </summary>
     [ExoAction]
     public int SubmitScore(string playerId, string name, int score, int snakeLength)
     {
-        // `name` is kept for wire compatibility but not stored: the board renders the live name from
-        // player_data, so a rename can never leave a stale name behind.
-        _ = name;
+        _ = name; // accepted for wire compatibility; the live name is joined on read
 
         var existing = Database!.Get<SnakeScoreRecord>(Table, playerId);
         bool improved = existing is null || existing.Score < score;
 
-        int bestScore = improved ? score : existing!.Score;
-        int bestLength = improved ? snakeLength : existing!.SnakeLength;
-
-        Database.Put(Table, playerId, new SnakeScoreRecord
+        var best = new SnakeScoreRecord
         {
             PlayerId = playerId,
-            Score = bestScore,
-            SnakeLength = bestLength,
+            Score = improved ? score : existing!.Score,
+            SnakeLength = improved ? snakeLength : existing!.SnakeLength,
             UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
-        });
+        };
 
-        Logger?.Info($"[snake_leaderboard] {playerId} best {bestScore}");
-        return bestScore;
+        Database.Put(Table, playerId, best);
+        Logger?.Info($"[snake_leaderboard] {playerId} best {best.Score}");
+        return best.Score;
     }
 
-    /// <summary>
-    /// Returns the top <paramref name="limit"/> rows, highest score first, with each player's current
-    /// display name joined from <c>player_data</c>. Returning a <see cref="Task{TResult}"/> makes the
-    /// manifest infer <c>mode: :async</c>.
-    /// </summary>
     [ExoAction]
     public async Task<List<SnakeLeaderboardEntry>> GetLeaderboard(int limit)
     {
-        int take = limit > 0 ? limit : 10;
-
-        var top = Database!.All<SnakeScoreRecord>(Table)
-            .OrderByDescending(score => score.Score)
-            .Take(take);
-
         var entries = new List<SnakeLeaderboardEntry>();
 
-        foreach (var score in top)
+        foreach (var score in Database!.All<SnakeScoreRecord>(Table)
+                     .OrderByDescending(row => row.Score)
+                     .Take(limit > 0 ? limit : 10))
         {
             entries.Add(new SnakeLeaderboardEntry
             {
@@ -89,17 +69,13 @@ public class SnakeLeaderboardPlugin
         return entries;
     }
 
-    /// <summary>Current display name from player_data; falls back to the raw id when unavailable.</summary>
+    // Names are resolved at read time, so a rename never leaves a stale name on the board.
     private static async Task<string> DisplayNameAsync(string playerId)
     {
         if (PlayerData is null) return playerId;
 
-        // Generated typed client, injected by the host: no dependency on the service implementation,
-        // no hand-written DTOs, and no IActionDispatcher in plugin code.
         var response = await PlayerData.GetPlayerAsync(new PlayerDataGetPlayerRequest { PlayerId = playerId });
-
-        string? name = response?.Player?.Name;
-        return string.IsNullOrEmpty(name) ? playerId : name!;
+        return string.IsNullOrEmpty(response?.Player?.Name) ? playerId : response!.Player!.Name!;
     }
 
     public static void Main() => PluginHost.Run<SnakeLeaderboardPlugin, SnakeJsonContext>();

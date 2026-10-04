@@ -12,7 +12,6 @@ using Exoforge.Plugin.SDK;
 
 namespace Exoforge.Plugins.Generated
 {
-    /// <summary>player_data.players resource.</summary>
     public class PlayerDataPlayer
     {
         [JsonPropertyName("player_id")]
@@ -27,28 +26,24 @@ namespace Exoforge.Plugins.Generated
         public string Status { get; set; } = default!;
     }
 
-    /// <summary>Request payload for player_data.get_player.</summary>
     public class PlayerDataGetPlayerRequest
     {
         [JsonPropertyName("player_id")]
         public string PlayerId { get; set; } = default!;
     }
 
-    /// <summary>Response payload for player_data.get_player.</summary>
     public class PlayerDataGetPlayerResponse
     {
         [JsonPropertyName("player")]
         public PlayerDataPlayer Player { get; set; } = default!;
     }
 
-    /// <summary>Request payload for player_data.delete_player.</summary>
     public class PlayerDataDeletePlayerRequest
     {
         [JsonPropertyName("player_id")]
         public string PlayerId { get; set; } = default!;
     }
 
-    /// <summary>Response payload for player_data.delete_player.</summary>
     public class PlayerDataDeletePlayerResponse
     {
         [JsonPropertyName("status")]
@@ -57,24 +52,20 @@ namespace Exoforge.Plugins.Generated
         public string PlayerId { get; set; } = default!;
     }
 
-    /// <summary>Typed client for the player_data service contract.</summary>
     public sealed class PlayerDataServiceClient
     {
         private readonly IActionDispatcher _dispatcher;
 
         public PlayerDataServiceClient(IActionDispatcher dispatcher) => _dispatcher = dispatcher;
 
-        /// <summary>Calls player_data.get_player.</summary>
         public Task<PlayerDataGetPlayerResponse?> GetPlayerAsync(PlayerDataGetPlayerRequest request)
             => _dispatcher.CallActionAsync<PlayerDataGetPlayerResponse>("player_data", "get_player", request);
 
-        /// <summary>Calls player_data.delete_player.</summary>
         public Task<PlayerDataDeletePlayerResponse?> DeletePlayerAsync(PlayerDataDeletePlayerRequest request)
             => _dispatcher.CallActionAsync<PlayerDataDeletePlayerResponse>("player_data", "delete_player", request);
 
     }
 
-    /// <summary>Typed access to every service contract over one IActionDispatcher.</summary>
     public sealed class ExoforgePluginServices
     {
         private readonly IActionDispatcher _dispatcher;
@@ -85,7 +76,6 @@ namespace Exoforge.Plugins.Generated
         public PlayerDataServiceClient PlayerData => _player_data ??= new PlayerDataServiceClient(_dispatcher);
     }
 
-    /// <summary>Source-generated JSON metadata for the contract stubs.</summary>
     [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
     [JsonSerializable(typeof(PlayerDataPlayer))]
     [JsonSerializable(typeof(PlayerDataGetPlayerRequest))]

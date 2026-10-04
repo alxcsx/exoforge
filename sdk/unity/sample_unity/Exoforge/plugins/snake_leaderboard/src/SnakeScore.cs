@@ -2,13 +2,8 @@ using Exoforge.Plugin.SDK;
 
 namespace Exoforge.Plugins.SnakeLeaderboard;
 
-/// <summary>
-/// Stored leaderboard row, keyed by <c>player_id</c>.
-///
-/// The player's display name is deliberately **not** stored here. It is joined from the
-/// <c>player_data</c> profile when the leaderboard is read, so renaming a player never leaves a
-/// stale name on the board.
-/// </summary>
+// [ExoResource]/[ExoColumn] describe the row: the Studio renders it and other plugins can
+// consume it. Records are the only data type you write — the SDK owns the JSON.
 [ExoResource("snake_scores", PrimaryKey = "player_id", DrawerTabs = new[] { "overview", "attributes" })]
 public record SnakeScoreRecord
 {
@@ -25,10 +20,7 @@ public record SnakeScoreRecord
     public long UpdatedAt { get; init; }
 }
 
-/// <summary>
-/// One leaderboard row as returned to clients: the stored score plus the player's **current**
-/// display name, resolved at read time.
-/// </summary>
+// Wire shape returned by get_leaderboard; the display name is resolved live.
 public record SnakeLeaderboardEntry
 {
     public string PlayerId { get; init; } = "";

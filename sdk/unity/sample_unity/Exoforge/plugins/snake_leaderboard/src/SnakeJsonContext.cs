@@ -2,10 +2,8 @@ using System.Text.Json.Serialization;
 
 namespace Exoforge.Plugins.SnakeLeaderboard;
 
-/// <summary>
-/// Compile-time JSON metadata for this plugin's own records. Generated contract stubs register their
-/// own context (see the generated module initializer), and <c>PluginJson</c> combines them.
-/// </summary>
+// Source-generated JSON for this plugin's records — NativeAOT has no reflection. Generated
+// service clients register their own context and the SDK combines them.
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
 [JsonSerializable(typeof(SnakeScoreRecord))]
 [JsonSerializable(typeof(SnakeLeaderboardEntry))]

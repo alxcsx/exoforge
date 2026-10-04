@@ -366,7 +366,6 @@ public static class ExoCodeGenerator
                 string typeName = $"{svcPascal}{ResourceTypeName(res)}";
                 serializable.Add(typeName);
 
-                sb.AppendLine($"    /// <summary>{svc.Name}.{res.Name} resource.</summary>");
                 sb.AppendLine($"    public class {typeName}");
                 sb.AppendLine("    {");
                 foreach (var col in res.Columns)
@@ -384,7 +383,6 @@ public static class ExoCodeGenerator
                 string reqName = $"{svcPascal}{actPascal}Request";
                 serializable.Add(reqName);
 
-                sb.AppendLine($"    /// <summary>Request payload for {svc.Name}.{act.Name}.</summary>");
                 sb.AppendLine($"    public class {reqName}");
                 sb.AppendLine("    {");
                 foreach (var p in act.Params)
@@ -400,7 +398,6 @@ public static class ExoCodeGenerator
                     string respName = $"{svcPascal}{actPascal}Response";
                     serializable.Add(respName);
 
-                    sb.AppendLine($"    /// <summary>Response payload for {svc.Name}.{act.Name}.</summary>");
                     sb.AppendLine($"    public class {respName}");
                     sb.AppendLine("    {");
                     foreach (var f in act.ReturnFields)
@@ -418,7 +415,6 @@ public static class ExoCodeGenerator
                 string evtName = $"{svcPascal}{ToPascalCase(evt.Name)}Event";
                 serializable.Add(evtName);
 
-                sb.AppendLine($"    /// <summary>Event payload for {evt.Name}.</summary>");
                 sb.AppendLine($"    public class {evtName}");
                 sb.AppendLine("    {");
                 foreach (var f in evt.PayloadFields)
@@ -436,7 +432,6 @@ public static class ExoCodeGenerator
         {
             string svcPascal = ToPascalCase(svc.Name);
 
-            sb.AppendLine($"    /// <summary>Typed client for the {svc.Name} service contract.</summary>");
             sb.AppendLine($"    public sealed class {svcPascal}ServiceClient");
             sb.AppendLine("    {");
             sb.AppendLine("        private readonly IActionDispatcher _dispatcher;");
@@ -451,14 +446,12 @@ public static class ExoCodeGenerator
                 string respType = act.ReturnFields.Count > 0 ? $"{svcPascal}{actPascal}Response" : "JsonElement";
                 string declaration = respType == "JsonElement" ? "JsonElement" : respType + "?";
 
-                sb.AppendLine($"        /// <summary>{act.Doc ?? $"Calls {svc.Name}.{act.Name}."}</summary>");
                 sb.AppendLine($"        public Task<{declaration}> {actPascal}Async({reqName} request)");
                 sb.AppendLine($"            => _dispatcher.CallActionAsync<{respType}>(\"{svc.Name}\", \"{act.Name}\", request);");
                 sb.AppendLine();
 
                 if (act.Params.Count == 0)
                 {
-                    sb.AppendLine($"        /// <summary>{act.Doc ?? $"Calls {svc.Name}.{act.Name}."}</summary>");
                     sb.AppendLine($"        public Task<{declaration}> {actPascal}Async()");
                     sb.AppendLine($"            => {actPascal}Async(new {reqName}());");
                     sb.AppendLine();
@@ -470,7 +463,6 @@ public static class ExoCodeGenerator
         }
 
         // Hub
-        sb.AppendLine("    /// <summary>Typed access to every service contract over one IActionDispatcher.</summary>");
         sb.AppendLine("    public sealed class ExoforgePluginServices");
         sb.AppendLine("    {");
         sb.AppendLine("        private readonly IActionDispatcher _dispatcher;");
@@ -490,7 +482,6 @@ public static class ExoCodeGenerator
         // Context + self-registration
         if (serializable.Count > 0)
         {
-            sb.AppendLine("    /// <summary>Source-generated JSON metadata for the contract stubs.</summary>");
             sb.AppendLine("    [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]");
             foreach (var type in serializable.Distinct())
             {

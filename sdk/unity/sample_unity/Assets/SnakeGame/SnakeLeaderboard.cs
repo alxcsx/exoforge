@@ -8,7 +8,6 @@ using UnityEngine;
 
 namespace SnakeGame
 {
-    /// <summary>One row of the shared leaderboard.</summary>
     public readonly struct SnakeScoreRow
     {
         public SnakeScoreRow(string name, long score, long length)
@@ -23,15 +22,8 @@ namespace SnakeGame
         public long Length { get; }
     }
 
-    /// <summary>
-    /// The bridge between the game and the server. This is the only place in the sample that talks
-    /// to Exoforge: it listens for <see cref="SnakeGameController.RunEnded"/> and forwards the score
-    /// to the <c>snake_leaderboard</c> plugin.
-    ///
-    /// Gameplay itself knows nothing about the backend — swap this component out and Snake still runs.
-    ///
-    /// Lives on an always-active object so the subscription is in place before the first run ends.
-    /// </summary>
+    // The only file in the sample that talks to Exoforge. Gameplay publishes RunEnded; this
+    // component bridges it to the generated client. Delete it and Snake still runs.
     [DefaultExecutionOrder(-750)]
     public class SnakeLeaderboard : MonoBehaviour
     {
@@ -41,15 +33,9 @@ namespace SnakeGame
 
         private readonly List<SnakeScoreRow> _rows = new();
 
-        /// <summary>The current ranking, highest first.</summary>
         public IReadOnlyList<SnakeScoreRow> Rows => _rows;
-
-        /// <summary>Last thing that happened, for the HUD.</summary>
         public string Status { get; private set; } = "not loaded";
-
         public bool IsBusy { get; private set; }
-
-        /// <summary>This player's best score, as last reported by the server.</summary>
         public long PersonalBest { get; private set; }
 
         private void Awake()
@@ -60,23 +46,16 @@ namespace SnakeGame
 
         private void OnEnable()
         {
-            if (game != null)
-            {
-                game.RunEnded += OnRunEnded;
-            }
+            if (game != null) game.RunEnded += OnRunEnded;
         }
 
         private void OnDisable()
         {
-            if (game != null)
-            {
-                game.RunEnded -= OnRunEnded;
-            }
+            if (game != null) game.RunEnded -= OnRunEnded;
         }
 
         private void OnRunEnded(int score, int length) => _ = SubmitRunAsync(score, length);
 
-        /// <summary>Records a finished run on the server, then refreshes the ranking.</summary>
         public async Task SubmitRunAsync(int score, int length)
         {
             var session = player?.Session;
@@ -114,7 +93,6 @@ namespace SnakeGame
             }
         }
 
-        /// <summary>Reloads the ranking from the server.</summary>
         public async Task RefreshAsync()
         {
             try
@@ -134,18 +112,12 @@ namespace SnakeGame
             }
         }
 
-        /// <summary>
-        /// Reads the rows the plugin returns. Tolerant on purpose: a row with a missing or
-        /// oddly-typed field still shows up, just with a placeholder value.
-        /// </summary>
+        // Tolerant on purpose: a row with a missing or oddly-typed field still shows up.
         public static IReadOnlyList<SnakeScoreRow> ParseRows(JsonElement leaderboard)
         {
             var rows = new List<SnakeScoreRow>();
 
-            if (leaderboard.ValueKind != JsonValueKind.Array)
-            {
-                return rows;
-            }
+            if (leaderboard.ValueKind != JsonValueKind.Array) return rows;
 
             foreach (var row in leaderboard.EnumerateArray())
             {
