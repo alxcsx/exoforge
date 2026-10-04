@@ -222,24 +222,42 @@ defmodule Exoforge.Std.Auth do
     name = Map.get(payload, :name) || Map.get(payload, "name")
 
     cond do
-      # Returning anonymous player picking a display name: update the profile.
+      # Returning anonymous player picking a display name: rename the existing profile.
+      # (create_player only inserts, so re-registering an existing player would collide.)
       is_binary(player_id) and player_id != "" and is_binary(name) and name != "" ->
-        do_register_player(%{player_id: player_id, name: name})
+        case rename_player(player_id, name) do
+          :ok -> anonymous_token(player_id)
+          :error -> do_register_player(%{player_id: player_id, name: name})
+        end
 
       # Returning device, no name supplied: just reissue a token.
       is_binary(player_id) and player_id != "" ->
-        scopes = [Roles.player()]
-
-        case generate_and_store_token(player_id, scopes) do
-          {:ok, token} ->
-            {:ok, %{player_id: player_id, token: token, scopes: scopes, role: role(scopes)}}
-
-          _ ->
-            do_register_player(%{name: name})
-        end
+        anonymous_token(player_id)
 
       true ->
         do_register_player(%{name: name})
+    end
+  end
+
+  defp rename_player(player_id, name) do
+    case ActionDispatcher.dispatch(:player_data, :update_player, %{
+           player_id: player_id,
+           data: %{"name" => name}
+         }) do
+      {:ok, _} -> :ok
+      _ -> :error
+    end
+  end
+
+  defp anonymous_token(player_id) do
+    scopes = [Roles.player()]
+
+    case generate_and_store_token(player_id, scopes) do
+      {:ok, token} ->
+        {:ok, %{player_id: player_id, token: token, scopes: scopes, role: role(scopes)}}
+
+      error ->
+        error
     end
   end
 
