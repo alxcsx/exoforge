@@ -22,8 +22,6 @@ defmodule Exoforge.DashboardLiveViewTest do
       start_supervised!({DbManager, [driver: :sqlite]})
     end
 
-    Exoforge.Std.Dashboard.Preferences.put_pinned("admin", [])
-
     unless Process.whereis(EventDispatcher.registry_name()) do
       start_supervised!(EventDispatcher)
     end
@@ -150,6 +148,10 @@ defmodule Exoforge.DashboardLiveViewTest do
 
     Exoforge.Std.Resources.run_migrations()
 
+    # Clear pinned state only once :resource_store is registered — otherwise this no-ops and
+    # pins leak between tests.
+    Exoforge.Std.Dashboard.Preferences.put_pinned("admin", [])
+
     :ok
   end
 
@@ -245,6 +247,11 @@ defmodule Exoforge.DashboardLiveViewTest do
       assert html =~ "Callable Actions"
       assert html =~ "Cluster Status"
       assert html =~ "Live Game Features"
+
+      # Start from a clean pinned list (other tests may have pinned up to @max_pinned).
+      for id <- Exoforge.Std.Dashboard.Preferences.pinned("admin") do
+        _ = render_click(view, "unpin_extension", %{"id" => id})
+      end
 
       # Pin extension (Users & Auth) to top bar
       html = render_click(view, "pin_extension", %{"id" => "exoforge_std_auth"})
@@ -479,9 +486,13 @@ defmodule Exoforge.DashboardLiveViewTest do
     test "pinned extensions persist across remounts" do
       session = %{"admin_player_id" => "pin_persist_user", "admin_scopes" => ["admin"]}
 
+      Exoforge.Std.Dashboard.Preferences.put_pinned("pin_persist_user", [])
+
       conn = build_conn() |> Plug.Test.init_test_session(session)
       {:ok, view, _html} = live(conn, "/")
       render_click(view, "pin_extension", %{"id" => "exoforge_std_ws"})
+
+      assert Exoforge.Std.Dashboard.Preferences.pinned("pin_persist_user") == ["exoforge_std_ws"]
 
       conn2 = build_conn() |> Plug.Test.init_test_session(session)
       {:ok, _view2, html} = live(conn2, "/")
@@ -498,16 +509,23 @@ defmodule Exoforge.DashboardLiveViewTest do
 
       {:ok, view, _html} = live(conn, "/")
 
-      # Pin exoforge_std_ws and combat_wasm
+      # Start from a clean pinned list (other tests may have pinned up to @max_pinned).
+      for id <- Exoforge.Std.Dashboard.Preferences.pinned("admin") do
+        _ = render_click(view, "unpin_extension", %{"id" => id})
+      end
+
+      # Pin exoforge_std_ws and exoforge_std_auth
       html = render_click(view, "pin_extension", %{"id" => "exoforge_std_ws"})
       assert html =~ "WebSocket"
 
-      html = render_click(view, "pin_extension", %{"id" => "combat_wasm"})
-      assert html =~ "Combat"
+      html = render_click(view, "pin_extension", %{"id" => "exoforge_std_auth"})
+      assert html =~ "Users &amp; Auth" or html =~ "Users & Auth"
 
-      # Unpin combat_wasm
-      html = render_click(view, "unpin_extension", %{"id" => "combat_wasm"})
-      assert html =~ "Unpinned combat_wasm from top bar"
+      # Unpin both so the pinned list does not leak into other tests
+      html = render_click(view, "unpin_extension", %{"id" => "exoforge_std_auth"})
+      assert html =~ "Unpinned exoforge_std_auth from top bar"
+
+      _ = render_click(view, "unpin_extension", %{"id" => "exoforge_std_ws"})
     end
 
     test "keyboard shortcuts: Cmd+K toggles Command Palette and Escape closes it" do

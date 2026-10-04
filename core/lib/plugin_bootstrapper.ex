@@ -38,7 +38,7 @@ defmodule Exoforge.PluginBootstrapper do
   def unload_plugin(plugin_id) do
     manifest =
       PluginRegistry.fetch_manifest(plugin_id) ||
-        (is_binary(plugin_id) && PluginRegistry.fetch_manifest(existing_atom_safe(plugin_id)))
+        (is_binary(plugin_id) && PluginRegistry.fetch_manifest(Exoforge.Atoms.existing(plugin_id)))
 
     if manifest do
       terminate_plugin_processes(manifest)
@@ -191,11 +191,6 @@ defmodule Exoforge.PluginBootstrapper do
     end
   end
 
-  defp existing_atom_safe(val) do
-    String.to_existing_atom(to_string(val))
-  rescue
-    ArgumentError -> nil
-  end
 
   defp print_startup_banner(manifests, total_ms) do
     env = current_env()

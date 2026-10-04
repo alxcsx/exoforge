@@ -144,7 +144,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
             Map.get(act_form, p[:name] || p["name"], default_value_for(p[:type] || p["type"]))
 
           casted = cast_value(val_str, p[:type] || p["type"])
-          Map.put(acc, existing_atom(p[:name] || p["name"]), casted)
+          Map.put(acc, Exoforge.Atoms.existing(p[:name] || p["name"]), casted)
         end)
       else
         %{}
@@ -300,13 +300,6 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
     end
   end
 
-  defp existing_atom(value) when is_atom(value), do: value
-
-  defp existing_atom(value) do
-    String.to_existing_atom(to_string(value))
-  rescue
-    ArgumentError -> value
-  end
 
   defp apply_resource_search(socket) do
     q = String.downcase(String.trim(socket.assigns.resource_search))

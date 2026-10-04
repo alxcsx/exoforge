@@ -127,7 +127,7 @@ defmodule Exoforge.Std.Dashboard.ApiController do
   end
 
   def extensions(conn, _params) do
-    exts = PluginRegistry.dashboard_extensions()
+    exts = Exoforge.Std.Dashboard.Extensions.dashboard_extensions()
     json(conn, %{extensions: exts, count: length(exts)})
   end
 

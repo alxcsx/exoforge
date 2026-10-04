@@ -322,22 +322,17 @@ defmodule Exoforge.Std.Ws.SocketHandler do
   end
 
   defp parse_service(str) when is_binary(str) do
-    existing_atom(str)
+    Exoforge.Atoms.existing(str, str)
   end
 
   defp parse_service(other), do: other
 
   defp parse_action(str) when is_binary(str) do
-    existing_atom(str)
+    Exoforge.Atoms.existing(str, str)
   end
 
   defp parse_action(other), do: other
 
-  defp existing_atom(value) do
-    String.to_existing_atom(value)
-  rescue
-    ArgumentError -> value
-  end
 
   defp format_event_name(key) when is_atom(key) do
     str = Atom.to_string(key)

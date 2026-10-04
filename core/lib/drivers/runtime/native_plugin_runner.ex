@@ -217,7 +217,7 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
     action = Map.get(args, "action", "")
     payload = Map.get(args, "payload")
 
-    case ActionDispatcher.dispatch(to_existing_atom(service), to_existing_atom(action), payload) do
+    case ActionDispatcher.dispatch(Exoforge.Atoms.existing(service, service), Exoforge.Atoms.existing(action, action), payload) do
       {:ok, result} -> result
       :ok -> true
       {:error, reason} -> %{error: inspect(reason)}
@@ -271,13 +271,6 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
   defp normalize_error(error) when is_binary(error), do: error
   defp normalize_error(error), do: inspect(error)
 
-  defp to_existing_atom(value) when is_atom(value), do: value
-
-  defp to_existing_atom(value) when is_binary(value) do
-    String.to_existing_atom(value)
-  rescue
-    ArgumentError -> value
-  end
 
   defp split_lines(buffer) do
     parts = String.split(buffer, "\n")

@@ -62,7 +62,7 @@ defmodule Exoforge.Std.PluginManager do
     else
       manifest =
         PluginRegistry.fetch_manifest(id_str) ||
-          PluginRegistry.fetch_manifest(existing_atom(id_str))
+          PluginRegistry.fetch_manifest(Exoforge.Atoms.existing(id_str, id_str))
 
       case manifest do
         nil ->
@@ -164,7 +164,7 @@ defmodule Exoforge.Std.PluginManager do
     if is_nil(id_str) or id_str == "" do
       {:error, :not_found}
     else
-      atom_id = existing_atom(id_str)
+      atom_id = Exoforge.Atoms.existing(id_str, id_str)
 
       manifest =
         PluginRegistry.fetch_manifest(id_str) ||
@@ -481,11 +481,4 @@ defmodule Exoforge.Std.PluginManager do
     |> String.replace(~r/[^a-z0-9_]/, "")
   end
 
-  defp existing_atom(val) when is_atom(val), do: val
-
-  defp existing_atom(val) do
-    String.to_existing_atom(to_string(val))
-  rescue
-    ArgumentError -> val
-  end
 end

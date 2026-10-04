@@ -169,7 +169,7 @@ defmodule Exoforge.Std.Dashboard.Router do
 
     extensions =
       try do
-        Exoforge.PluginRegistry.dashboard_extensions()
+        Exoforge.Std.Dashboard.Extensions.dashboard_extensions()
       rescue
         _ -> []
       end
