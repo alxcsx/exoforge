@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Text.Json;
 
@@ -20,7 +21,9 @@ public class ActionContractModel
     public string Name { get; set; } = string.Empty;
     public string? Doc { get; set; }
     public string Scope { get; set; } = "global";
+    public string Transport { get; set; } = "auto";
     public List<ParamModel> Params { get; set; } = new();
+    public List<ParamModel> ReturnFields { get; set; } = new();
     public string? ReturnType { get; set; }
 }
 
@@ -35,6 +38,8 @@ public class EventContractModel
 {
     public string Name { get; set; } = string.Empty;
     public string? Topic { get; set; }
+    public string? Doc { get; set; }
+    public List<ParamModel> PayloadFields { get; set; } = new();
 }
 
 public class ResourceContractModel
@@ -136,6 +141,7 @@ public static class ExoCodeGenerator
             Doc = svc.TryGetProperty("doc", out var d) ? d.GetString() : null
         };
 
+        // Actions
         if (svc.TryGetProperty("actions", out var actions) && actions.ValueKind == JsonValueKind.Array)
         {
             foreach (var act in actions.EnumerateArray())
@@ -144,23 +150,113 @@ public static class ExoCodeGenerator
                 {
                     Name = act.TryGetProperty("name", out var an) ? an.GetString() ?? "" : "",
                     Doc = act.TryGetProperty("doc", out var ad) ? ad.GetString() : null,
-                    Scope = act.TryGetProperty("scope", out var sc) ? sc.GetString() ?? "global" : "global"
+                    Scope = act.TryGetProperty("scope", out var sc) ? sc.GetString() ?? "global" : "global",
+                    Transport = act.TryGetProperty("transport", out var tr) ? tr.GetString() ?? "auto" : "auto"
                 };
 
-                if (act.TryGetProperty("params", out var pArray) && pArray.ValueKind == JsonValueKind.Array)
+                // Parameters
+                if (act.TryGetProperty("params", out var pArray))
                 {
-                    foreach (var p in pArray.EnumerateArray())
+                    if (pArray.ValueKind == JsonValueKind.Array)
                     {
-                        aModel.Params.Add(new ParamModel
+                        foreach (var p in pArray.EnumerateArray())
                         {
-                            Name = p.TryGetProperty("name", out var pn) ? pn.GetString() ?? "" : "",
-                            Type = p.TryGetProperty("type", out var pt) ? pt.GetString() ?? "term" : "term",
-                            Optional = p.TryGetProperty("optional", out var po) && po.GetBoolean()
-                        });
+                            if (p.ValueKind == JsonValueKind.Object)
+                            {
+                                aModel.Params.Add(new ParamModel
+                                {
+                                    Name = p.TryGetProperty("name", out var pn) ? pn.GetString() ?? "" : "",
+                                    Type = p.TryGetProperty("type", out var pt) ? pt.GetString() ?? "term" : "term",
+                                    Optional = p.TryGetProperty("optional", out var po) && po.GetBoolean()
+                                });
+                            }
+                        }
+                    }
+                    else if (pArray.ValueKind == JsonValueKind.Object)
+                    {
+                        foreach (var prop in pArray.EnumerateObject())
+                        {
+                            string pType = prop.Value.ValueKind == JsonValueKind.String ? prop.Value.GetString() ?? "term" : "term";
+                            aModel.Params.Add(new ParamModel { Name = prop.Name, Type = pType });
+                        }
+                    }
+                }
+
+                // Return fields
+                if (act.TryGetProperty("returns", out var retElem))
+                {
+                    if (retElem.ValueKind == JsonValueKind.Object)
+                    {
+                        foreach (var prop in retElem.EnumerateObject())
+                        {
+                            string fType = prop.Value.ValueKind == JsonValueKind.String ? prop.Value.GetString() ?? "term" : "term";
+                            aModel.ReturnFields.Add(new ParamModel { Name = prop.Name, Type = fType });
+                        }
+                    }
+                    else if (retElem.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var r in retElem.EnumerateArray())
+                        {
+                            if (r.ValueKind == JsonValueKind.Object)
+                            {
+                                string rName = r.TryGetProperty("name", out var rn) ? rn.GetString() ?? "" : "";
+                                string rType = r.TryGetProperty("type", out var rt) ? rt.GetString() ?? "term" : "term";
+                                if (!string.IsNullOrEmpty(rName))
+                                {
+                                    aModel.ReturnFields.Add(new ParamModel { Name = rName, Type = rType });
+                                }
+                            }
+                        }
+                    }
+                    else if (retElem.ValueKind == JsonValueKind.String)
+                    {
+                        aModel.ReturnType = retElem.GetString();
                     }
                 }
 
                 model.Actions.Add(aModel);
+            }
+        }
+
+        // Events
+        if (svc.TryGetProperty("events", out var events) && events.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var evt in events.EnumerateArray())
+            {
+                var eModel = new EventContractModel
+                {
+                    Name = evt.TryGetProperty("name", out var en) ? en.GetString() ?? "" : "",
+                    Topic = evt.TryGetProperty("topic", out var et) ? et.GetString() : null,
+                    Doc = evt.TryGetProperty("doc", out var ed) ? ed.GetString() : null
+                };
+
+                if (evt.TryGetProperty("payload", out var payloadObj))
+                {
+                    if (payloadObj.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var p in payloadObj.EnumerateArray())
+                        {
+                            if (p.ValueKind == JsonValueKind.Object)
+                            {
+                                eModel.PayloadFields.Add(new ParamModel
+                                {
+                                    Name = p.TryGetProperty("name", out var pn) ? pn.GetString() ?? "" : "",
+                                    Type = p.TryGetProperty("type", out var pt) ? pt.GetString() ?? "term" : "term"
+                                });
+                            }
+                        }
+                    }
+                    else if (payloadObj.ValueKind == JsonValueKind.Object)
+                    {
+                        foreach (var prop in payloadObj.EnumerateObject())
+                        {
+                            string pType = prop.Value.ValueKind == JsonValueKind.String ? prop.Value.GetString() ?? "term" : "term";
+                            eModel.PayloadFields.Add(new ParamModel { Name = prop.Name, Type = pType });
+                        }
+                    }
+                }
+
+                model.Events.Add(eModel);
             }
         }
 
@@ -182,13 +278,83 @@ public static class ExoCodeGenerator
         sb.AppendLine("using System.Collections.Generic;");
         sb.AppendLine("using System.Runtime.CompilerServices;");
         sb.AppendLine("using System.Text.Json;");
+        sb.AppendLine("using System.Text.Json.Serialization;");
         sb.AppendLine("using System.Threading;");
         sb.AppendLine("using System.Threading.Tasks;");
-        sb.AppendLine();
-        sb.AppendLine($"namespace {targetNamespace};");
-        sb.AppendLine();
+        sb.AppendLine($"namespace {targetNamespace}");
+        sb.AppendLine("{");
 
-        // 1. Extensions
+        // 1. Strongly-typed Models (Requests, Responses, Events)
+        foreach (var svc in services)
+        {
+            string svcPascal = ToPascalCase(svc.Name);
+
+            // Action Request & Response Models
+            foreach (var act in svc.Actions)
+            {
+                string actPascal = ToPascalCase(act.Name);
+
+                if (act.Params.Count > 0)
+                {
+                    sb.AppendLine($"/// <summary>Request payload for {svc.Name}.{act.Name} action.</summary>");
+                    sb.AppendLine($"public class {svcPascal}{actPascal}Request");
+                    sb.AppendLine("{");
+                    foreach (var p in act.Params)
+                    {
+                        string propName = ToPascalCase(p.Name);
+                        string csType = MapTypeToCSharp(p.Type);
+                        sb.AppendLine($"    [JsonPropertyName(\"{p.Name}\")]");
+                        sb.AppendLine($"    public {csType} {propName} {{ get; set; }} = default!;");
+                    }
+                    sb.AppendLine("}");
+                    sb.AppendLine();
+                }
+
+                if (act.ReturnFields.Count > 0)
+                {
+                    sb.AppendLine($"/// <summary>Response model for {svc.Name}.{act.Name} action.</summary>");
+                    sb.AppendLine($"public class {svcPascal}{actPascal}Response");
+                    sb.AppendLine("{");
+                    foreach (var r in act.ReturnFields)
+                    {
+                        string propName = ToPascalCase(r.Name);
+                        string csType = MapTypeToCSharp(r.Type);
+                        sb.AppendLine($"    [JsonPropertyName(\"{r.Name}\")]");
+                        sb.AppendLine($"    public {csType} {propName} {{ get; set; }} = default!;");
+                    }
+                    sb.AppendLine("}");
+                    sb.AppendLine();
+                }
+            }
+
+            // Event Models
+            foreach (var evt in svc.Events)
+            {
+                string evtPascal = ToPascalCase(evt.Name);
+                sb.AppendLine($"/// <summary>Event payload for {evt.Topic ?? svc.Name} -> {evt.Name}.</summary>");
+                sb.AppendLine($"public class {svcPascal}{evtPascal}Event");
+                sb.AppendLine("{");
+                if (evt.PayloadFields.Count > 0)
+                {
+                    foreach (var f in evt.PayloadFields)
+                    {
+                        string propName = ToPascalCase(f.Name);
+                        string csType = MapTypeToCSharp(f.Type);
+                        sb.AppendLine($"    [JsonPropertyName(\"{f.Name}\")]");
+                        sb.AppendLine($"    public {csType} {propName} {{ get; set; }} = default!;");
+                    }
+                }
+                else
+                {
+                    sb.AppendLine("    [JsonExtensionData]");
+                    sb.AppendLine("    public Dictionary<string, JsonElement>? ExtraData { get; set; }");
+                }
+                sb.AppendLine("}");
+                sb.AppendLine();
+            }
+        }
+
+        // 2. Extensions on ExoClient
         sb.AppendLine("/// <summary>");
         sb.AppendLine("/// Extension methods providing strongly-typed access to Exoforge services from ExoClient.");
         sb.AppendLine("/// </summary>");
@@ -211,7 +377,7 @@ public static class ExoCodeGenerator
         sb.AppendLine("}");
         sb.AppendLine();
 
-        // 2. Hub
+        // 3. Central Hub
         sb.AppendLine("/// <summary>");
         sb.AppendLine("/// Central hub managing service client instances per ExoClient.");
         sb.AppendLine("/// </summary>");
@@ -236,28 +402,126 @@ public static class ExoCodeGenerator
         sb.AppendLine("}");
         sb.AppendLine();
 
-        // 3. Service Clients
+        // 4. Service Clients
         foreach (var svc in services)
         {
-            string pascalName = ToPascalCase(svc.Name);
+            string svcPascal = ToPascalCase(svc.Name);
             sb.AppendLine($"/// <summary>Client interface for the {svc.Name} service.</summary>");
-            sb.AppendLine($"public class {pascalName}ServiceClient");
+            sb.AppendLine($"public class {svcPascal}ServiceClient");
             sb.AppendLine("{");
             sb.AppendLine("    private readonly ExoClient _client;");
             sb.AppendLine();
-            sb.AppendLine($"    public {pascalName}ServiceClient(ExoClient client)");
+
+            // Event delegates
+            foreach (var evt in svc.Events)
+            {
+                string evtPascal = ToPascalCase(evt.Name);
+                sb.AppendLine($"    /// <summary>Fired when server emits {evt.Name} event.</summary>");
+                sb.AppendLine($"    public event Action<{svcPascal}{evtPascal}Event>? On{evtPascal};");
+            }
+            if (svc.Events.Count > 0) sb.AppendLine();
+
+            sb.AppendLine($"    public {svcPascal}ServiceClient(ExoClient client)");
             sb.AppendLine("    {");
             sb.AppendLine("        _client = client ?? throw new ArgumentNullException(nameof(client));");
+
+            if (svc.Events.Count > 0)
+            {
+                sb.AppendLine("        _client.OnAnyEvent += HandleIncomingEvent;");
+            }
+
             sb.AppendLine("    }");
             sb.AppendLine();
 
+            if (svc.Events.Count > 0)
+            {
+                sb.AppendLine("    private void HandleIncomingEvent(ExoEventFrame evt)");
+                sb.AppendLine("    {");
+                foreach (var evt in svc.Events)
+                {
+                    string evtPascal = ToPascalCase(evt.Name);
+                    sb.AppendLine($"        if (evt.Event == \"{evt.Name}\" && On{evtPascal} != null)");
+                    sb.AppendLine("        {");
+                    sb.AppendLine($"            var parsed = evt.DeserializePayload<{svcPascal}{evtPascal}Event>();");
+                    sb.AppendLine($"            if (parsed != null) On{evtPascal}.Invoke(parsed);");
+                    sb.AppendLine("        }");
+                }
+                sb.AppendLine("    }");
+                sb.AppendLine();
+
+                string defaultTopic = svc.Events.FirstOrDefault(e => !string.IsNullOrEmpty(e.Topic))?.Topic ?? $"{svc.Name}:*";
+                sb.AppendLine($"    /// <summary>Subscribes to all events for {svc.Name} on topic '{defaultTopic}'.</summary>");
+                sb.AppendLine($"    public Task SubscribeAsync(string topic = \"{defaultTopic}\", CancellationToken cancellationToken = default) =>");
+                sb.AppendLine("        _client.SubscribeAsync(topic, cancellationToken);");
+                sb.AppendLine();
+            }
+
+            // Action Methods
             foreach (var act in svc.Actions)
             {
                 string actPascal = ToPascalCase(act.Name);
+                string transportPref = act.Transport.ToLowerInvariant() switch
+                {
+                    "http" => "ExoTransportPreference.Http",
+                    "ws" or "websocket" => "ExoTransportPreference.WebSocket",
+                    _ => "ExoTransportPreference.Auto"
+                };
+
+                bool hasParams = act.Params.Count > 0;
+                bool hasReturnFields = act.ReturnFields.Count > 0;
+                string returnType = hasReturnFields ? $"{svcPascal}{actPascal}Response" : "JsonElement";
+
+                // Overload 1: Strongly-typed parameter arguments
+                if (hasParams)
+                {
+                    var paramDefs = act.Params.Select(p =>
+                    {
+                        string csType = MapTypeToCSharp(p.Type);
+                        string paramName = EscapeIdentifier(ToCamelCase(p.Name));
+                        return $"{csType} {paramName}";
+                    });
+                    string paramSignature = string.Join(", ", paramDefs);
+
+                    sb.AppendLine($"    /// <summary>{act.Doc ?? $"Executes {act.Name} action with typed arguments."}</summary>");
+                    sb.AppendLine($"    public Task<{returnType}> {actPascal}Async({paramSignature}, CancellationToken cancellationToken = default)");
+                    sb.AppendLine("    {");
+                    sb.AppendLine($"        var req = new {svcPascal}{actPascal}Request");
+                    sb.AppendLine("        {");
+                    foreach (var p in act.Params)
+                    {
+                        string propName = ToPascalCase(p.Name);
+                        string paramName = EscapeIdentifier(ToCamelCase(p.Name));
+                        sb.AppendLine($"            {propName} = {paramName},");
+                    }
+                    sb.AppendLine("        };");
+                    sb.AppendLine($"        return {actPascal}Async(req, cancellationToken);");
+                    sb.AppendLine("    }");
+                    sb.AppendLine();
+
+                    // Overload 2: Strongly-typed Request DTO
+                    sb.AppendLine($"    /// <summary>{act.Doc ?? $"Executes {act.Name} action with a typed request DTO."}</summary>");
+                    sb.AppendLine($"    public Task<{returnType}> {actPascal}Async({svcPascal}{actPascal}Request request, CancellationToken cancellationToken = default)");
+                    sb.AppendLine("    {");
+                    sb.AppendLine($"        return _client.SendActionAsync<{returnType}>(\"{svc.Name}\", \"{act.Name}\", request, {transportPref}, cancellationToken: cancellationToken);");
+                    sb.AppendLine("    }");
+                    sb.AppendLine();
+                }
+
+                if (!hasParams)
+                {
+                    sb.AppendLine($"    /// <summary>{act.Doc ?? $"Executes {act.Name} action."}</summary>");
+                    sb.AppendLine($"    public Task<JsonElement> {actPascal}Async(CancellationToken cancellationToken = default)");
+                    sb.AppendLine("    {");
+                    sb.AppendLine($"        return _client.SendActionAsync<JsonElement>(\"{svc.Name}\", \"{act.Name}\", null, {transportPref}, cancellationToken: cancellationToken);");
+                    sb.AppendLine("    }");
+                    sb.AppendLine();
+                }
+
+                // Overload 3: Untyped object payload (always available for fallback)
                 sb.AppendLine($"    /// <summary>{act.Doc ?? $"Executes {act.Name} action."}</summary>");
                 sb.AppendLine($"    public Task<JsonElement> {actPascal}Async(object? payload = null, CancellationToken cancellationToken = default)");
                 sb.AppendLine("    {");
-                sb.AppendLine($"        return _client.SendActionAsync<JsonElement>(\"{svc.Name}\", \"{act.Name}\", payload, cancellationToken: cancellationToken);");
+                sb.AppendLine($"        return _client.SendActionAsync<JsonElement>(\"{svc.Name}\", \"{act.Name}\", payload, {transportPref}, cancellationToken: cancellationToken);");
                 sb.AppendLine("    }");
                 sb.AppendLine();
             }
@@ -266,7 +530,28 @@ public static class ExoCodeGenerator
             sb.AppendLine();
         }
 
+        sb.AppendLine("}");
+
         return sb.ToString();
+    }
+
+    private static string MapTypeToCSharp(string type)
+    {
+        string lower = type.ToLowerInvariant().Trim();
+        return lower switch
+        {
+            "string" or "binary" or "text" => "string",
+            "integer" or "int" => "long",
+            "int32" => "int",
+            "int64" => "long",
+            "float" or "double" or "number" => "double",
+            "boolean" or "bool" => "bool",
+            "map" or "object" or "term" => "JsonElement",
+            "list_string" or "[:string]" => "List<string>",
+            "list_int" or "[:integer]" => "List<long>",
+            "list_map" or "[:map]" => "List<JsonElement>",
+            _ => "JsonElement"
+        };
     }
 
     private static string ToPascalCase(string text)
@@ -281,5 +566,17 @@ public static class ExoCodeGenerator
             }
         }
         return string.Join("", parts);
+    }
+
+    private static string ToCamelCase(string text)
+    {
+        string pascal = ToPascalCase(text);
+        if (string.IsNullOrEmpty(pascal)) return pascal;
+        return char.ToLowerInvariant(pascal[0]) + pascal.Substring(1);
+    }
+
+    private static string EscapeIdentifier(string name)
+    {
+        return CsharpKeywords.Contains(name) ? $"@{name}" : name;
     }
 }

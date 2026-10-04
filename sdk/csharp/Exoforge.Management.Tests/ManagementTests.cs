@@ -82,13 +82,13 @@ public class ManagementTests : IDisposable
                 "plugins_count": 2,
                 "plugins": [
                     {
-                        "id": "combat_wasm",
-                        "name": "CombatWasm",
-                        "provides": ["combat"],
+                        "id": "sample_wasm",
+                        "name": "SampleWasm",
+                        "provides": ["sample_wasm"],
                         "services": [
                             {
-                                "name": "combat",
-                                "doc": "Sandboxed combat calculations.",
+                                "name": "sample_wasm",
+                                "doc": "Sample calculations.",
                                 "actions": [
                                     {
                                         "name": "ping",
@@ -97,12 +97,12 @@ public class ManagementTests : IDisposable
                                         "params": []
                                     },
                                     {
-                                        "name": "attack",
-                                        "doc": "Attack action.",
+                                        "name": "increment",
+                                        "doc": "Increment action.",
                                         "scope": "global",
                                         "params": [
-                                            { "name": "attacker_id", "type": "integer" },
-                                            { "name": "damage", "type": "integer" }
+                                            { "name": "counter_id", "type": "integer" },
+                                            { "name": "amount", "type": "integer" }
                                         ]
                                     }
                                 ]
@@ -116,13 +116,83 @@ public class ManagementTests : IDisposable
 
         string code = ExoCodeGenerator.GenerateFromExportJson(exportJson, "MyGame.Client");
 
-        Assert.Contains("namespace MyGame.Client;", code);
+        Assert.Contains("namespace MyGame.Client", code);
         Assert.Contains("public static class ExoClientGeneratedExtensions", code);
-        Assert.Contains("public static CombatServiceClient Combat(this ExoClient client)", code);
+        Assert.Contains("public static SampleWasmServiceClient SampleWasm(this ExoClient client)", code);
         Assert.Contains("public class ExoforgeServicesHub", code);
-        Assert.Contains("public class CombatServiceClient", code);
+        Assert.Contains("public class SampleWasmServiceClient", code);
+        Assert.Contains("public class SampleWasmIncrementRequest", code);
+        Assert.Contains("public long CounterId { get; set; }", code);
+        Assert.Contains("public long Amount { get; set; }", code);
+        Assert.Contains("public Task<JsonElement> IncrementAsync(long counterId, long amount, CancellationToken cancellationToken = default)", code);
+        Assert.Contains("public Task<JsonElement> IncrementAsync(SampleWasmIncrementRequest request, CancellationToken cancellationToken = default)", code);
+        Assert.Contains("public Task<JsonElement> IncrementAsync(object? payload = null, CancellationToken cancellationToken = default)", code);
         Assert.Contains("public Task<JsonElement> PingAsync(", code);
-        Assert.Contains("public Task<JsonElement> AttackAsync(", code);
+    }
+
+    [Fact]
+    public void CodeGenerator_Generates_Strongly_Typed_Events_Responses_And_Http_Transport()
+    {
+        string exportJson = """
+        {
+            "export": {
+                "plugins": [
+                    {
+                        "id": "snake_game",
+                        "services": [
+                            {
+                                "name": "snake_game",
+                                "actions": [
+                                    {
+                                        "name": "submit_score",
+                                        "transport": "http",
+                                        "params": [
+                                            { "name": "score", "type": "integer" },
+                                            { "name": "snake_length", "type": "integer" }
+                                        ],
+                                        "returns": [
+                                            { "name": "rank", "type": "integer" },
+                                            { "name": "new_high_score", "type": "boolean" }
+                                        ]
+                                    }
+                                ],
+                                "events": [
+                                    {
+                                        "name": "food_spawned",
+                                        "topic": "snake:events",
+                                        "payload": [
+                                            { "name": "x", "type": "integer" },
+                                            { "name": "y", "type": "integer" },
+                                            { "name": "points", "type": "integer" }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+        """;
+
+        string code = ExoCodeGenerator.GenerateFromExportJson(exportJson, "Snake.Client");
+
+        // Request & Response models
+        Assert.Contains("public class SnakeGameSubmitScoreRequest", code);
+        Assert.Contains("public class SnakeGameSubmitScoreResponse", code);
+        Assert.Contains("public long Rank { get; set; }", code);
+        Assert.Contains("public bool NewHighScore { get; set; }", code);
+
+        // Event model and event subscription
+        Assert.Contains("public class SnakeGameFoodSpawnedEvent", code);
+        Assert.Contains("public long X { get; set; }", code);
+        Assert.Contains("public long Y { get; set; }", code);
+        Assert.Contains("public long Points { get; set; }", code);
+        Assert.Contains("public event Action<SnakeGameFoodSpawnedEvent>? OnFoodSpawned;", code);
+
+        // HTTP transport preference and typed return type
+        Assert.Contains("public Task<SnakeGameSubmitScoreResponse> SubmitScoreAsync(long score, long snakeLength, CancellationToken cancellationToken = default)", code);
+        Assert.Contains("ExoTransportPreference.Http", code);
     }
 
     [Fact]
@@ -161,6 +231,7 @@ public class ManagementTests : IDisposable
         Assert.True(File.Exists(Path.Combine(editorDir, "ExoforgeControlCenter.cs")));
         Assert.True(File.Exists(Path.Combine(editorDir, "ExoforgeEditorConfig.cs")));
         Assert.True(File.Exists(Path.Combine(editorDir, "ExoforgeMenu.cs")));
+        Assert.True(File.Exists(Path.Combine(editorDir, "ExoforgeBehaviourEditor.cs")));
 
         // Validate Editor Management engine
         string mgmtDir = Path.Combine(editorDir, "Management");
@@ -186,10 +257,27 @@ public class ManagementTests : IDisposable
     [Fact]
     public void EditorConfig_Returns_Sensible_Defaults()
     {
-        Assert.Equal("ws://localhost:4000/ws", Exoforge.Unity.Editor.ExoforgeEditorConfig.DefaultServerUrl);
-        Assert.Equal("admin", Exoforge.Unity.Editor.ExoforgeEditorConfig.DefaultAdminToken);
-        Assert.Equal("exoforge", Exoforge.Unity.Editor.ExoforgeEditorConfig.DefaultWorkspaceRelPath);
+        Assert.Equal("ws://127.0.0.1:4000/ws", Exoforge.Unity.Editor.ExoforgeEditorConfig.DefaultServerUrl);
+        Assert.Equal("dev:developer", Exoforge.Unity.Editor.ExoforgeEditorConfig.DefaultAdminToken);
+        Assert.Equal("Exoforge", Exoforge.Unity.Editor.ExoforgeEditorConfig.DefaultWorkspaceRelPath);
         Assert.Equal("Assets/Exoforge/Generated/ExoforgeServices.g.cs", Exoforge.Unity.Editor.ExoforgeEditorConfig.DefaultGeneratedScriptRelPath);
+    }
+
+    [Fact]
+    public void EditorConfig_Session_Management_Works()
+    {
+        Exoforge.Unity.Editor.ExoforgeEditorConfig.SaveSession("custom_token_123", "player_456", new[] { "admin", "player" });
+        Assert.Equal("custom_token_123", Exoforge.Unity.Editor.ExoforgeEditorConfig.AdminToken);
+        Assert.Equal("player_456", Exoforge.Unity.Editor.ExoforgeEditorConfig.PlayerId);
+        Assert.Equal("admin,player", Exoforge.Unity.Editor.ExoforgeEditorConfig.Scopes);
+
+        Exoforge.Unity.Editor.ExoforgeEditorConfig.LastSyncTime = "2026-10-03 18:00:00";
+        Assert.Equal("2026-10-03 18:00:00", Exoforge.Unity.Editor.ExoforgeEditorConfig.LastSyncTime);
+
+        Exoforge.Unity.Editor.ExoforgeEditorConfig.ClearSession();
+        Assert.Empty(Exoforge.Unity.Editor.ExoforgeEditorConfig.AdminToken);
+        Assert.Empty(Exoforge.Unity.Editor.ExoforgeEditorConfig.PlayerId);
+        Assert.Empty(Exoforge.Unity.Editor.ExoforgeEditorConfig.Scopes);
     }
 
     private static string FindRepoRoot()

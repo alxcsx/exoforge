@@ -13,8 +13,30 @@ public static class ExoScaffolder
 
         Directory.CreateDirectory(targetDir);
 
+        if (string.IsNullOrEmpty(sdkProjectPath))
+        {
+            string? dir = pluginsDirectory;
+            for (int i = 0; i < 8 && dir != null; i++)
+            {
+                string candidate = Path.Combine(dir, "sdk", "csharp", "Exoforge.Plugin.SDK", "Exoforge.Plugin.SDK.csproj");
+                if (File.Exists(candidate))
+                {
+                    sdkProjectPath = Path.GetRelativePath(targetDir, candidate);
+                    break;
+                }
+                candidate = Path.Combine(dir, "csharp", "Exoforge.Plugin.SDK", "Exoforge.Plugin.SDK.csproj");
+                if (File.Exists(candidate))
+                {
+                    sdkProjectPath = Path.GetRelativePath(targetDir, candidate);
+                    break;
+                }
+                var parent = Directory.GetParent(dir);
+                dir = parent?.FullName;
+            }
+        }
+
         // 1. .csproj
-        string csprojContent = GenerateCsproj(sdkProjectPath);
+        string csprojContent = GenerateCsproj(sdkProjectPath, targetDir);
         File.WriteAllText(Path.Combine(targetDir, $"{cleanName}.csproj"), csprojContent);
 
         // 2. Main Service Class
@@ -24,10 +46,10 @@ public static class ExoScaffolder
         return targetDir;
     }
 
-    private static string GenerateCsproj(string? sdkProjectPath)
+    private static string GenerateCsproj(string? sdkProjectPath, string targetDir)
     {
         string refSection;
-        if (!string.IsNullOrEmpty(sdkProjectPath) && File.Exists(sdkProjectPath))
+        if (!string.IsNullOrEmpty(sdkProjectPath) && (File.Exists(sdkProjectPath) || File.Exists(Path.Combine(targetDir, sdkProjectPath))))
         {
             refSection = $"    <ProjectReference Include=\"{sdkProjectPath}\" />";
         }
@@ -44,6 +66,8 @@ public static class ExoScaffolder
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <OutputType>Exe</OutputType>
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 
   <ItemGroup>

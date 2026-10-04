@@ -5,11 +5,11 @@ using Xunit;
 
 namespace Exoforge.Plugin.SDK.Tests;
 
-[ExoService("combat", Version = "1.0.0")]
-[ExoResource("combatants", PrimaryKey = "entity_id", DrawerTabs = new[] { "overview", "attributes", "events" })]
-public class SampleCombatPlugin : PluginBehaviour
+[ExoService("sample_wasm", Version = "1.0.0")]
+[ExoResource("counters", PrimaryKey = "counter_id", DrawerTabs = new[] { "overview", "attributes", "events" })]
+public class SampleWasmPlugin : PluginBehaviour
 {
-    public override string Id => "sample_combat";
+    public override string Id => "sample_wasm";
     public override string Version => "1.0.0";
 
     [Inject("database")]
@@ -18,28 +18,27 @@ public class SampleCombatPlugin : PluginBehaviour
     [ExoAction("ping", Mode = ActionMode.Sync)]
     public int Ping() => 42;
 
-    [ExoAction("attack", Mode = ActionMode.Sync, Scope = "global")]
-    [ExoEvent("player_damaged", Topic = "combat:events")]
-    public int Attack(int attackerId, int targetId, int damage)
+    [ExoAction("increment", Mode = ActionMode.Sync, Scope = "global")]
+    [ExoEvent("value_changed", Topic = "sample:events")]
+    public int Increment(int counterId, int amount)
     {
-        int applied = damage > 0 ? damage : 1;
-        HostBridge.EmitEvent("combat:events", "player_damaged", new
+        int newValue = amount > 0 ? amount : 1;
+        HostBridge.EmitEvent("sample:events", "value_changed", new
         {
-            attacker_id = attackerId,
-            target_id = targetId,
-            damage = applied
+            counter_id = counterId,
+            new_value = newValue
         });
-        return applied;
+        return newValue;
     }
 }
 
-public class CombatantEntity
+public class CounterEntity
 {
-    [ExoColumn("entity_id", DataType = "integer", Sortable = true)]
-    public int EntityId { get; set; }
+    [ExoColumn("counter_id", DataType = "integer", Sortable = true)]
+    public int CounterId { get; set; }
 
-    [ExoColumn("health", DataType = "integer", Sortable = true)]
-    public int Health { get; set; }
+    [ExoColumn("value", DataType = "integer", Sortable = true)]
+    public int Value { get; set; }
 
     [ExoColumn("status", DataType = "string", Badge = true)]
     public string Status { get; set; } = "active";
@@ -69,47 +68,47 @@ public class PluginSdkTests
     [Fact]
     public void PluginAttributes_ExposeCorrectMetadata()
     {
-        var type = typeof(SampleCombatPlugin);
+        var type = typeof(SampleWasmPlugin);
 
         var serviceAttr = type.GetCustomAttribute<ExoServiceAttribute>();
         Assert.NotNull(serviceAttr);
-        Assert.Equal("combat", serviceAttr.Name);
+        Assert.Equal("sample_wasm", serviceAttr.Name);
         Assert.Equal("1.0.0", serviceAttr.Version);
 
         var resourceAttr = type.GetCustomAttribute<ExoResourceAttribute>();
         Assert.NotNull(resourceAttr);
-        Assert.Equal("combatants", resourceAttr.Name);
-        Assert.Equal("entity_id", resourceAttr.PrimaryKey);
+        Assert.Equal("counters", resourceAttr.Name);
+        Assert.Equal("counter_id", resourceAttr.PrimaryKey);
         Assert.Contains("overview", resourceAttr.DrawerTabs!);
 
-        var pingMethod = type.GetMethod(nameof(SampleCombatPlugin.Ping));
+        var pingMethod = type.GetMethod(nameof(SampleWasmPlugin.Ping));
         Assert.NotNull(pingMethod);
         var pingAction = pingMethod.GetCustomAttribute<ExoActionAttribute>();
         Assert.NotNull(pingAction);
         Assert.Equal("ping", pingAction.Name);
         Assert.Equal(ActionMode.Sync, pingAction.Mode);
 
-        var attackMethod = type.GetMethod(nameof(SampleCombatPlugin.Attack));
-        Assert.NotNull(attackMethod);
-        var attackAction = attackMethod.GetCustomAttribute<ExoActionAttribute>();
-        Assert.NotNull(attackAction);
-        Assert.Equal("attack", attackAction.Name);
+        var incrementMethod = type.GetMethod(nameof(SampleWasmPlugin.Increment));
+        Assert.NotNull(incrementMethod);
+        var incrementAction = incrementMethod.GetCustomAttribute<ExoActionAttribute>();
+        Assert.NotNull(incrementAction);
+        Assert.Equal("increment", incrementAction.Name);
 
-        var eventAttr = attackMethod.GetCustomAttribute<ExoEventAttribute>();
+        var eventAttr = incrementMethod.GetCustomAttribute<ExoEventAttribute>();
         Assert.NotNull(eventAttr);
-        Assert.Equal("player_damaged", eventAttr.Name);
-        Assert.Equal("combat:events", eventAttr.Topic);
+        Assert.Equal("value_changed", eventAttr.Name);
+        Assert.Equal("sample:events", eventAttr.Topic);
     }
 
     [Fact]
     public void ColumnAttributes_ExposeColumnMetadata()
     {
-        var prop = typeof(CombatantEntity).GetProperty(nameof(CombatantEntity.EntityId));
+        var prop = typeof(CounterEntity).GetProperty(nameof(CounterEntity.CounterId));
         Assert.NotNull(prop);
 
         var col = prop.GetCustomAttribute<ExoColumnAttribute>();
         Assert.NotNull(col);
-        Assert.Equal("entity_id", col.Name);
+        Assert.Equal("counter_id", col.Name);
         Assert.Equal("integer", col.DataType);
         Assert.True(col.Sortable);
     }
@@ -117,17 +116,17 @@ public class PluginSdkTests
     [Fact]
     public void PluginBehaviour_DefaultsAndExecution()
     {
-        var plugin = new SampleCombatPlugin();
-        Assert.Equal("sample_combat", plugin.Id);
+        var plugin = new SampleWasmPlugin();
+        Assert.Equal("sample_wasm", plugin.Id);
         Assert.Equal("1.0.0", plugin.Version);
         Assert.Equal(42, plugin.Ping());
-        Assert.Equal(25, plugin.Attack(1, 2, 25));
+        Assert.Equal(25, plugin.Increment(1, 25));
     }
 
     [Fact]
     public async Task PluginBehaviour_DependencyInjectionWiring()
     {
-        var plugin = new SampleCombatPlugin();
+        var plugin = new SampleWasmPlugin();
         Assert.Null(plugin.CustomDb);
 
         var context = new HostPluginContext("test_plugin");

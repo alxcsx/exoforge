@@ -14,8 +14,18 @@ public static class Program
     {
         if (args.Length == 0)
         {
-            Console.WriteLine("Usage: Exoforge.ManifestGen <assembly-path> [output-manifest-path]");
+            Console.WriteLine("Usage: Exoforge.ManifestGen <assembly-path> [output-manifest-path] [--type wasm|native]");
             return 1;
+        }
+
+        // Plugin runtime: `wasm` (reactor guest) or `native` (AOT process).
+        string pluginType = "wasm";
+        for (int i = 0; i < args.Length - 1; i++)
+        {
+            if (args[i] == "--type")
+            {
+                pluginType = args[i + 1].ToLowerInvariant();
+            }
         }
 
         string assemblyPath = Path.GetFullPath(args[0]);
@@ -79,7 +89,8 @@ public static class Program
                     actionAttr.Mode.ToString().ToLowerInvariant(),
                     actionAttr.Scope,
                     parameters,
-                    MapTypeToElixir(method.ReturnType)
+                    MapTypeToElixir(method.ReturnType),
+                    actionAttr.Transport.ToString().ToLowerInvariant()
                 ));
             }
 
@@ -87,7 +98,7 @@ public static class Program
             var events = new List<EventMeta>();
             foreach (var evtAttr in type.GetCustomAttributes<ExoEventAttribute>())
             {
-                events.Add(new EventMeta(evtAttr.Name, evtAttr.Topic, evtAttr.Scope));
+                events.Add(CreateEventMeta(evtAttr));
             }
             foreach (var method in type.GetMethods())
             {
@@ -95,7 +106,7 @@ public static class Program
                 {
                     if (!events.Any(e => e.Name == evtAttr.Name))
                     {
-                        events.Add(new EventMeta(evtAttr.Name, evtAttr.Topic, evtAttr.Scope));
+                        events.Add(CreateEventMeta(evtAttr));
                     }
                 }
             }
@@ -228,8 +239,8 @@ public static class Program
             ));
         }
 
-        string entryPoint = $"{pluginId}.wasm";
-        string manifestContent = EmitElixirManifest(pluginId, pluginVersion, entryPoint, provides, dependencies.ToList(), services, entities);
+        string entryPoint = pluginType == "native" ? pluginId : $"{pluginId}.wasm";
+        string manifestContent = EmitElixirManifest(pluginId, pluginVersion, pluginType, entryPoint, provides, dependencies.ToList(), services, entities);
 
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
         File.WriteAllText(outputPath, manifestContent, new UTF8Encoding(false));
@@ -241,6 +252,7 @@ public static class Program
     private static string EmitElixirManifest(
         string id,
         string version,
+        string pluginType,
         string entryPoint,
         List<string> provides,
         List<string> dependencies,
@@ -251,7 +263,7 @@ public static class Program
         sb.AppendLine("%{");
         sb.AppendLine($"  id: :{id},");
         sb.AppendLine($"  name: \"{id}\",");
-        sb.AppendLine("  type: :wasm,");
+        sb.AppendLine($"  type: :{pluginType},");
         sb.AppendLine($"  version: \"{version}\",");
         sb.AppendLine("  context: :global,");
         sb.AppendLine($"  entry_point: \"{entryPoint}\",");
@@ -294,7 +306,7 @@ public static class Program
             foreach (var a in s.Actions)
             {
                 var paramList = string.Join(", ", a.Params.Select(p => $"{p.Name}: :{p.Type}"));
-                sb.AppendLine($"        %{{name: :{a.Name}, mode: :{a.Mode}, scope: :{a.Scope}, arity: {a.Params.Count}, params: [{paramList}], returns: :{a.Returns}}},");
+                sb.AppendLine($"        %{{name: :{a.Name}, mode: :{a.Mode}, scope: :{a.Scope}, transport: :{a.Transport}, arity: {a.Params.Count}, params: [{paramList}], returns: :{a.Returns}}},");
             }
             sb.AppendLine("      ],");
 
@@ -303,7 +315,10 @@ public static class Program
             foreach (var e in s.Events)
             {
                 string topicPart = e.Topic != null ? $", topic: \"{e.Topic}\"" : "";
-                sb.AppendLine($"        %{{name: :{e.Name}{topicPart}, scope: :{e.Scope}}},");
+                string payloadPart = e.Payload != null && e.Payload.Count > 0
+                    ? $", payload: [{string.Join(", ", e.Payload.Select(p => $"{p.Name}: :{p.Type}"))}]"
+                    : "";
+                sb.AppendLine($"        %{{name: :{e.Name}{topicPart}, scope: :{e.Scope}{payloadPart}}},");
             }
             sb.AppendLine("      ],");
 
@@ -441,6 +456,19 @@ public static class Program
         return sb.ToString();
     }
 
+    private static EventMeta CreateEventMeta(ExoEventAttribute attr)
+    {
+        var payloadFields = new List<ParamMeta>();
+        if (attr.PayloadType != null)
+        {
+            foreach (var prop in attr.PayloadType.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            {
+                payloadFields.Add(new ParamMeta(ToSnakeCase(prop.Name), MapTypeToElixir(prop.PropertyType)));
+            }
+        }
+        return new EventMeta(attr.Name, attr.Topic, attr.Scope, payloadFields);
+    }
+
     private static string ToTitleCase(string s) =>
         string.Join(" ", s.Replace('_', ' ').Split(' ').Select(w =>
             w.Length > 0 ? char.ToUpperInvariant(w[0]) + w.Substring(1).ToLowerInvariant() : ""));
@@ -454,9 +482,9 @@ public static class Program
         string? Title = null,
         string? Icon = null,
         bool System = false);
-    private record ActionMeta(string Name, string Mode, string Scope, List<ParamMeta> Params, string Returns);
+    private record ActionMeta(string Name, string Mode, string Scope, List<ParamMeta> Params, string Returns, string Transport = "auto");
     private record ParamMeta(string Name, string Type);
-    private record EventMeta(string Name, string? Topic, string Scope);
+    private record EventMeta(string Name, string? Topic, string Scope, List<ParamMeta>? Payload = null);
     private record ResourceMeta(string Name, string PrimaryKey, string[] DrawerTabs, string[] Actions, List<ColumnMeta> Columns);
     private record ColumnMeta(string Name, string DataType, string Label, bool Sortable, bool Filterable, bool Badge);
     private record EntityMeta(string Name, string Persist, int TimeoutMs, int MaxHeapSizeBytes, List<ActionMeta> Actions);

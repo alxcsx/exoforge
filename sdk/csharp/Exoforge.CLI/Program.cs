@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.InteropServices;
 using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
@@ -212,7 +213,7 @@ Options:
             }
         }
 
-        // Check if build.sh exists
+        // A plugin with build.sh defines its own build (e.g. a WASM reactor guest).
         string buildSh = Path.Combine(pluginDir, "build.sh");
         if (File.Exists(buildSh))
         {
@@ -236,6 +237,16 @@ Options:
                 }
             }
         }
+        else
+        {
+            // Default: compile the plugin to a self-contained native binary (AOT) and
+            // generate its manifest from the C# attributes.
+            int nativeResult = PublishNative(ws, pluginDir, cleanName);
+            if (nativeResult != 0)
+            {
+                return nativeResult;
+            }
+        }
 
         Console.ForegroundColor = ConsoleColor.Green;
         Console.WriteLine($"[Exoforge] Build complete for plugin '{cleanName}'.");
@@ -243,19 +254,135 @@ Options:
         return 0;
     }
 
+    private static void MakeExecutable(string path)
+    {
+        if (OperatingSystem.IsWindows()) return;
+
+        try
+        {
+            var mode = File.GetUnixFileMode(path);
+            File.SetUnixFileMode(path, mode | UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute);
+        }
+        catch
+        {
+            // best effort
+        }
+    }
+
+    private static int PublishNative(ExoWorkspace ws, string pluginDir, string cleanName)
+    {
+        string rid = RuntimeInformation.RuntimeIdentifier;
+        Console.WriteLine($"[Exoforge] Publishing native plugin for {rid}...");
+
+        var publish = new ProcessStartInfo(
+            "dotnet",
+            $"publish \"{Path.Combine(pluginDir, cleanName + ".csproj")}\" -c Release -r {rid}")
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+
+        using (var proc = Process.Start(publish))
+        {
+            if (proc != null)
+            {
+                proc.WaitForExit();
+                if (proc.ExitCode != 0)
+                {
+                    Console.WriteLine(proc.StandardError.ReadToEnd());
+                    Console.WriteLine(proc.StandardOutput.ReadToEnd());
+                    return proc.ExitCode;
+                }
+            }
+        }
+
+        // Locate the repo (contains the ManifestGen project) by walking up from the workspace.
+        string? root = ws.PluginsPath;
+        for (int i = 0; i < 10 && root != null; i++)
+        {
+            if (Directory.Exists(Path.Combine(root, "sdk", "csharp", "Exoforge.ManifestGen")))
+            {
+                break;
+            }
+
+            root = Directory.GetParent(root)?.FullName;
+        }
+
+        if (root == null)
+        {
+            Console.Error.WriteLine("[Exoforge] Could not locate the Exoforge repo for ManifestGen.");
+            return 1;
+        }
+
+        // Stage the native binary next to the manifest (what the runner and deployer expect).
+        string publishedBinary = Path.Combine(pluginDir, "bin", "Release", "net10.0", rid, "publish", cleanName);
+        if (!File.Exists(publishedBinary))
+        {
+            Console.Error.WriteLine($"[Exoforge] Native binary not found at {publishedBinary}");
+            return 1;
+        }
+
+        string stagedBinary = Path.Combine(pluginDir, cleanName);
+        File.Copy(publishedBinary, stagedBinary, overwrite: true);
+        MakeExecutable(stagedBinary);
+
+        string dll = Path.Combine(pluginDir, "bin", "Release", "net10.0", rid, cleanName + ".dll");
+        string manifest = Path.Combine(pluginDir, "manifest.exs");
+
+        Console.WriteLine("[Exoforge] Generating plugin manifest from C# attributes...");
+        var gen = new ProcessStartInfo(
+            "dotnet",
+            $"run --project \"{Path.Combine(root, "sdk", "csharp", "Exoforge.ManifestGen")}\" -- \"{dll}\" \"{manifest}\" --type native")
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+
+        using var genProc = Process.Start(gen);
+        if (genProc != null)
+        {
+            genProc.WaitForExit();
+            if (genProc.ExitCode != 0)
+            {
+                Console.WriteLine(genProc.StandardError.ReadToEnd());
+                return genProc.ExitCode;
+            }
+        }
+
+        return 0;
+    }
+
     private static async Task<int> HandleSyncAsync(string[] args)
     {
         string dir = GetOption(args, "--dir") ?? Directory.GetCurrentDirectory();
+        string? fileInput = GetOption(args, "--file") ?? GetOption(args, "-f");
+        string? outPath = GetOption(args, "--out") ?? GetOption(args, "-o");
+
+        if (!string.IsNullOrEmpty(fileInput) && File.Exists(fileInput))
+        {
+            Console.WriteLine($"[Exoforge] Generating strongly-typed C# client bindings from '{fileInput}'...");
+            string targetPath = outPath ?? Path.Combine(dir, "Generated", "ExoforgeServices.g.cs");
+            string rawJson = File.ReadAllText(fileInput);
+            ExoCodeGenerator.GenerateToFile(rawJson, targetPath);
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine($"[Exoforge] Generated strongly-typed C# client bindings at:");
+            Console.WriteLine($"  {targetPath}");
+            Console.ResetColor();
+            return 0;
+        }
+
         var ws = ExoWorkspace.Load(dir);
         var deployer = new ExoDeployer(ws);
         string? env = GetOption(args, "--env");
 
         Console.WriteLine($"[Exoforge] Synchronizing backend contracts from cluster...");
-        await deployer.SyncContractsAsync(env).ConfigureAwait(false);
+        await deployer.SyncContractsAsync(env, outPath).ConfigureAwait(false);
 
         Console.ForegroundColor = ConsoleColor.Green;
         Console.WriteLine($"[Exoforge] Generated strongly-typed C# client bindings at:");
-        Console.WriteLine($"  {ws.GeneratedPath}");
+        Console.WriteLine($"  {outPath ?? ws.GeneratedPath}");
         Console.ResetColor();
         return 0;
     }

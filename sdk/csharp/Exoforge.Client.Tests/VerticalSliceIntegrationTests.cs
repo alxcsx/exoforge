@@ -35,26 +35,26 @@ public class VerticalSliceIntegrationTests
         Assert.True(client.IsAuthenticated);
         Assert.Equal("test_e2e_player", client.PlayerId);
 
-        // 1. Client invokes action `combat.ping` -> WASM plugin executes and returns 42
-        int pingResult = await client.SendActionAsync<int>("combat", "ping", Array.Empty<int>());
+        // 1. Client invokes action `sample_wasm.ping` -> WASM plugin executes and returns 42
+        int pingResult = await client.SendActionAsync<int>("sample_wasm", "ping", Array.Empty<int>());
         Assert.Equal(42, pingResult);
 
-        // 2. Client subscribes to topic `combat:events`
-        await client.SubscribeAsync("combat:events");
+        // 2. Client subscribes to topic `sample:events`
+        await client.SubscribeAsync("sample:events");
 
         // Prepare event capture
         ExoEventFrame? receivedEvent = null;
         var eventReceivedSignal = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        client.OnEvent("combat:events", "player_damaged", evt =>
+        client.OnEvent("sample:events", "value_changed", evt =>
         {
             receivedEvent = evt;
             eventReceivedSignal.TrySetResult(true);
         });
 
-        // 3. Client invokes action `combat.attack` with attacker_id=1, target_id=2, damage=65
-        int attackResult = await client.SendActionAsync<int>("combat", "attack", new[] { 1, 2, 65 });
-        Assert.Equal(65, attackResult);
+        // 3. Client invokes action `sample_wasm.increment` with counter_id=7, amount=65
+        int incrementResult = await client.SendActionAsync<int>("sample_wasm", "increment", new[] { 7, 65 });
+        Assert.Equal(65, incrementResult);
 
         // 4. Pump dispatcher while waiting for event broadcast from server
         for (int i = 0; i < 30 && !eventReceivedSignal.Task.IsCompleted; i++)
@@ -64,14 +64,14 @@ public class VerticalSliceIntegrationTests
         }
         dispatcher.Update();
 
-        Assert.True(eventReceivedSignal.Task.IsCompleted, "Timed out waiting for player_damaged event broadcast.");
+        Assert.True(eventReceivedSignal.Task.IsCompleted, "Timed out waiting for value_changed event broadcast.");
         Assert.NotNull(receivedEvent);
-        Assert.Equal("player_damaged", receivedEvent.Event);
-        Assert.Equal("combat:events", receivedEvent.Topic);
+        Assert.Equal("value_changed", receivedEvent.Event);
+        Assert.Equal("sample:events", receivedEvent.Topic);
 
         using var doc = JsonDocument.Parse(receivedEvent.Payload.GetRawText());
-        Assert.Equal(65, doc.RootElement.GetProperty("damage").GetInt32());
-        Assert.Equal(2, doc.RootElement.GetProperty("target_id").GetInt32());
+        Assert.Equal(65, doc.RootElement.GetProperty("new_value").GetInt32());
+        Assert.Equal(7, doc.RootElement.GetProperty("counter_id").GetInt32());
 
         await client.DisconnectAsync();
     }
@@ -106,8 +106,8 @@ public class VerticalSliceIntegrationTests
             signal.TrySetResult(true);
         };
 
-        // Trigger action that emits player_damaged
-        await client.SendActionAsync<int>("combat", "attack", new[] { 10, 20, 80 });
+        // Trigger action that emits value_changed
+        await client.SendActionAsync<int>("sample_wasm", "increment", new[] { 10, 80 });
 
         for (int i = 0; i < 30 && !signal.Task.IsCompleted; i++)
         {
@@ -118,7 +118,107 @@ public class VerticalSliceIntegrationTests
 
         Assert.True(signal.Task.IsCompleted, "Timed out waiting for wildcard event broadcast.");
         Assert.NotNull(receivedWildcardEvent);
-        Assert.Equal("player_damaged", receivedWildcardEvent.Event);
+        Assert.Equal("value_changed", receivedWildcardEvent.Event);
+
+        await client.DisconnectAsync();
+    }
+
+    [Fact]
+    public async Task Guest_Can_Login_And_Reauthenticate_With_Issued_Token()
+    {
+        var dispatcher = new ExoDispatcher(useSynchronizationContext: false);
+        using var client = new ExoClient(dispatcher);
+
+        try
+        {
+            await client.ConnectAsync(ServerUri);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[IntegrationTest] Skipping live login test (server not running on 4000): {ex.Message}");
+            return;
+        }
+
+        // Bootstrap as guest: `auth.login` requires an authenticated socket.
+        var guest = await client.AuthenticateAsync("guest");
+        Assert.True(guest.IsSuccess);
+
+        string email = Environment.GetEnvironmentVariable("EXOFORGE_ADMIN_EMAIL") ?? "admin@exoforge.local";
+        string password = Environment.GetEnvironmentVariable("EXOFORGE_ADMIN_PASSWORD") ?? "exoforge";
+
+        var login = await client.Auth().LoginAsync(email, password);
+        Assert.False(string.IsNullOrEmpty(login.Token), "login response has no token");
+        string token = login.Token;
+
+        // The issued token must authenticate on its own.
+        var reauth = await client.AuthenticateAsync(token);
+        Assert.True(reauth.IsSuccess);
+
+        await client.DisconnectAsync();
+    }
+
+    [Fact]
+    public async Task PluginManager_ListPlugins_And_SystemInfo()
+    {
+        var dispatcher = new ExoDispatcher(useSynchronizationContext: false);
+        using var client = new ExoClient(dispatcher);
+
+        try
+        {
+            await client.ConnectAsync(ServerUri);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[IntegrationTest] Skipping live plugin-manager test (server not running on 4000): {ex.Message}");
+            return;
+        }
+
+        var auth = await client.AuthenticateAsync("dev:developer");
+        Assert.True(auth.IsSuccess);
+
+        int ping = await client.SendActionAsync<int>("sample_wasm", "ping", Array.Empty<int>());
+        Assert.Equal(42, ping);
+
+        var plugins = await client.SendActionAsync<JsonElement>("plugin_manager", "list_plugins", null);
+        Assert.Equal(JsonValueKind.Object, plugins.ValueKind);
+        Assert.True(plugins.TryGetProperty("plugins", out var arr));
+        Assert.Equal(JsonValueKind.Array, arr.ValueKind);
+
+        var sysInfo = await client.SendActionAsync<JsonElement>("plugin_manager", "get_system_info", null);
+        Assert.Equal(JsonValueKind.Object, sysInfo.ValueKind);
+        Assert.True(sysInfo.TryGetProperty("system", out var sys));
+
+        await client.DisconnectAsync();
+    }
+
+    [Fact]
+    public async Task Anonymous_Auth_Creates_Player_Before_Any_Session()
+    {
+        var dispatcher = new ExoDispatcher(useSynchronizationContext: false);
+        using var client = new ExoClient(dispatcher);
+
+        try
+        {
+            await client.ConnectAsync(ServerUri);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[IntegrationTest] Skipping live anonymous test (server not running): {ex.Message}");
+            return;
+        }
+
+        // No prior auth: `auth.anonymous` must be reachable on an unauthenticated socket.
+        var result = await client.SendActionAsync<JsonElement>(
+            "auth", "anonymous", new { name = "AnonTester" });
+
+        Assert.True(result.TryGetProperty("token", out var tokenProp), "anonymous returned no token");
+        string token = tokenProp.GetString() ?? "";
+        Assert.False(string.IsNullOrEmpty(token));
+
+        // The issued token authenticates on its own.
+        var reauth = await client.AuthenticateAsync(token);
+        Assert.True(reauth.IsSuccess);
+        Assert.False(string.IsNullOrEmpty(reauth.PlayerId));
 
         await client.DisconnectAsync();
     }

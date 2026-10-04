@@ -58,7 +58,7 @@ public class CliIntegrationTests : IDisposable
         Assert.Equal(0, code);
         Assert.True(ExoWorkspace.Exists(_tempDir));
         Assert.True(File.Exists(Path.Combine(_tempDir, "exoforge.json")));
-        Assert.True(Directory.Exists(Path.Combine(_tempDir, "exoforge", "plugins")));
+        Assert.True(Directory.Exists(Path.Combine(_tempDir, "plugins")));
 
         string configJson = File.ReadAllText(Path.Combine(_tempDir, "exoforge.json"));
         Assert.Contains("MyAwesomeGame", configJson);
@@ -79,7 +79,7 @@ public class CliIntegrationTests : IDisposable
 
         Assert.Equal(0, code);
 
-        string pluginDir = Path.Combine(_tempDir, "exoforge", "plugins", "inventory_system");
+        string pluginDir = Path.Combine(_tempDir, "plugins", "inventory_system");
         Assert.True(Directory.Exists(pluginDir));
         Assert.True(File.Exists(Path.Combine(pluginDir, "inventory_system.csproj")));
         Assert.True(File.Exists(Path.Combine(pluginDir, "InventorySystemPlugin.cs")));

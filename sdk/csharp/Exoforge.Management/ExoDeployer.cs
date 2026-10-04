@@ -40,29 +40,40 @@ public class ExoDeployer
     public async Task<string> UploadPluginAsync(
         string pluginName,
         string? environmentName = null,
+        ExoClient? existingClient = null,
         CancellationToken cancellationToken = default)
     {
         string cleanName = pluginName.Trim().ToLowerInvariant().Replace("-", "_");
         string pluginDir = Path.Combine(_workspace.PluginsPath, cleanName);
 
-        // Find .wasm file
-        string wasmPath = Path.Combine(pluginDir, $"{cleanName}.wasm");
-        if (!File.Exists(wasmPath))
+        // A plugin is either a WASM reactor (.wasm) or a native AOT binary (no extension).
+        string? wasmPath = null;
+        string wasmCandidate = Path.Combine(pluginDir, $"{cleanName}.wasm");
+
+        if (File.Exists(wasmCandidate))
         {
-            // Search in bin/ or subdirectories
+            wasmPath = wasmCandidate;
+        }
+        else
+        {
             var matches = Directory.GetFiles(pluginDir, "*.wasm", SearchOption.AllDirectories);
             if (matches.Length > 0)
             {
                 wasmPath = matches[0];
             }
-            else
-            {
-                throw new FileNotFoundException($"No .wasm binary found for plugin '{cleanName}'. Build it first.");
-            }
         }
 
-        byte[] wasmBytes = await File.ReadAllBytesAsync(wasmPath, cancellationToken).ConfigureAwait(false);
-        string wasmBase64 = Convert.ToBase64String(wasmBytes);
+        string pluginType = wasmPath != null ? "wasm" : "native";
+        string binaryPath = wasmPath ?? Path.Combine(pluginDir, cleanName);
+
+        if (!File.Exists(binaryPath))
+        {
+            throw new FileNotFoundException(
+                $"No plugin binary found for '{cleanName}' (expected {cleanName}.wasm or {cleanName}). Build it first.");
+        }
+
+        byte[] binaryBytes = await File.ReadAllBytesAsync(binaryPath, cancellationToken).ConfigureAwait(false);
+        string binaryBase64 = Convert.ToBase64String(binaryBytes);
 
         string? manifestContent = null;
         string manifestPath = Path.Combine(pluginDir, "manifest.exs");
@@ -71,40 +82,74 @@ public class ExoDeployer
             manifestContent = await File.ReadAllTextAsync(manifestPath, cancellationToken).ConfigureAwait(false);
         }
 
-        using var client = await CreateConnectedClientAsync(environmentName, cancellationToken).ConfigureAwait(false);
-
-        var payload = new
+        var client = existingClient ?? await CreateConnectedClientAsync(environmentName, cancellationToken).ConfigureAwait(false);
+        try
         {
-            name = cleanName,
-            wasm_binary = wasmBase64,
-            manifest = manifestContent
-        };
+            var payload = new
+            {
+                name = cleanName,
+                type = pluginType,
+                wasm_binary = binaryBase64,
+                manifest = manifestContent
+            };
 
-        var result = await client.PluginManager().UploadPluginAsync(cleanName, wasmBase64, manifestContent ?? "", cancellationToken).ConfigureAwait(false);
-        return result.ToString();
+            var result = await client.SendActionAsync<JsonElement>("plugin_manager", "upload_plugin", payload, cancellationToken: cancellationToken).ConfigureAwait(false);
+            return result.ToString();
+        }
+        finally
+        {
+            if (existingClient == null)
+            {
+                client.Dispose();
+            }
+        }
     }
 
     public async Task<string> RemovePluginAsync(
         string pluginId,
         string? environmentName = null,
+        ExoClient? existingClient = null,
         CancellationToken cancellationToken = default)
     {
-        using var client = await CreateConnectedClientAsync(environmentName, cancellationToken).ConfigureAwait(false);
-        var result = await client.PluginManager().RemovePluginAsync(pluginId, cancellationToken).ConfigureAwait(false);
-        return result.ToString();
+        var client = existingClient ?? await CreateConnectedClientAsync(environmentName, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var result = await client.SendActionAsync<JsonElement>("plugin_manager", "remove_plugin", new { id = pluginId }, cancellationToken: cancellationToken).ConfigureAwait(false);
+            return result.ToString();
+        }
+        finally
+        {
+            if (existingClient == null)
+            {
+                client.Dispose();
+            }
+        }
     }
 
     public async Task<int> SyncContractsAsync(
         string? environmentName = null,
+        string? outputPathOverride = null,
+        ExoClient? existingClient = null,
         CancellationToken cancellationToken = default)
     {
-        using var client = await CreateConnectedClientAsync(environmentName, cancellationToken).ConfigureAwait(false);
-        var exportResult = await client.PluginManager().ExportPluginInfoAsync(cancellationToken).ConfigureAwait(false);
+        var client = existingClient ?? await CreateConnectedClientAsync(environmentName, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var exportResult = await client.SendActionAsync<JsonElement>("plugin_manager", "export_plugin_info", null, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        string rawJson = exportResult.GetRawText();
-        ExoCodeGenerator.GenerateToFile(rawJson, _workspace.GeneratedPath, _workspace.Config.Codegen.Namespace);
+            string rawJson = exportResult.GetRawText();
+            string targetPath = outputPathOverride ?? _workspace.GeneratedPath;
+            ExoCodeGenerator.GenerateToFile(rawJson, targetPath, _workspace.Config.Codegen.Namespace);
 
-        return 1;
+            return 1;
+        }
+        finally
+        {
+            if (existingClient == null)
+            {
+                client.Dispose();
+            }
+        }
     }
 
     public async Task<JsonElement> GetSystemStatusAsync(
@@ -112,7 +157,7 @@ public class ExoDeployer
         CancellationToken cancellationToken = default)
     {
         using var client = await CreateConnectedClientAsync(environmentName, cancellationToken).ConfigureAwait(false);
-        return await client.PluginManager().GetSystemInfoAsync(cancellationToken).ConfigureAwait(false);
+        return await client.SendActionAsync<JsonElement>("plugin_manager", "get_system_info", null, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<JsonElement> ListPluginsAsync(
@@ -120,6 +165,6 @@ public class ExoDeployer
         CancellationToken cancellationToken = default)
     {
         using var client = await CreateConnectedClientAsync(environmentName, cancellationToken).ConfigureAwait(false);
-        return await client.PluginManager().ListPluginsAsync(cancellationToken).ConfigureAwait(false);
+        return await client.SendActionAsync<JsonElement>("plugin_manager", "list_plugins", null, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 }

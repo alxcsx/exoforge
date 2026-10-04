@@ -13,6 +13,26 @@ public static class HostBridge
 {
     private const int BufferSize = 65536;
 
+    // When set, host calls go through a process transport instead of the WASM `env` imports.
+    // PluginHost.Run<T>() installs one for native plugins.
+    private static IPluginTransport? _transport;
+
+    /// <summary>Routes host calls through a process transport (native plugins).</summary>
+    public static void UseTransport(IPluginTransport transport) => _transport = transport;
+
+    /// <summary>
+    /// Serializes a host-call payload without reflection where possible, so it stays NativeAOT-safe.
+    /// Prefer <see cref="System.Text.Json.Nodes.JsonObject"/>, <c>JsonElement</c>, or a raw JSON string.
+    /// </summary>
+    private static string ToJson(object? payload) => payload switch
+    {
+        null => "null",
+        string s => s,
+        System.Text.Json.Nodes.JsonNode node => node.ToJsonString(),
+        JsonElement element => element.GetRawText(),
+        _ => JsonSerializer.Serialize(payload)
+    };
+
     [DllImport("env", EntryPoint = "host_clock_now")]
     private static extern long NativeHostClockNow();
 
@@ -70,6 +90,8 @@ public static class HostBridge
     /// </summary>
     public static long ClockNow()
     {
+        if (_transport != null) return _transport.ClockNow();
+
         try
         {
             return NativeHostClockNow();
@@ -85,11 +107,14 @@ public static class HostBridge
     /// </summary>
     public static bool EmitEvent(string topic, string eventName, object payload)
     {
+        string json = ToJson(payload);
+
+        if (_transport != null) return _transport.EmitEvent(topic ?? "", eventName ?? "", json);
+
         try
         {
             byte[] topicBytes = Encoding.UTF8.GetBytes(topic ?? "");
             byte[] evtBytes = Encoding.UTF8.GetBytes(eventName ?? "");
-            string json = payload is string str ? str : JsonSerializer.Serialize(payload);
             byte[] payloadBytes = Encoding.UTF8.GetBytes(json);
 
             return NativeHostEmitEvent(
@@ -108,6 +133,8 @@ public static class HostBridge
     /// </summary>
     public static bool CallAction(string service, string action, object payload)
     {
+        if (_transport != null) return _transport.CallAction(service ?? "", action ?? "", ToJson(payload)) != null;
+
         try
         {
             byte[] svcBytes = Encoding.UTF8.GetBytes(service ?? "");
@@ -131,6 +158,18 @@ public static class HostBridge
     /// </summary>
     public static TResponse? CallAction<TResponse>(string service, string action, object payload)
     {
+        if (_transport != null)
+        {
+            // Native transport returns raw JSON; reflection-free conversion only.
+            string? raw = _transport.CallAction(service ?? "", action ?? "", ToJson(payload));
+
+            if (raw == null) return default;
+            if (typeof(TResponse) == typeof(string)) return (TResponse)(object)raw;
+            if (typeof(TResponse) == typeof(JsonElement)) return (TResponse)(object)JsonDocument.Parse(raw).RootElement.Clone();
+
+            return default;
+        }
+
         try
         {
             byte[] svcBytes = Encoding.UTF8.GetBytes(service ?? "");
@@ -162,6 +201,12 @@ public static class HostBridge
     /// </summary>
     public static void Log(int level, string message)
     {
+        if (_transport != null)
+        {
+            _transport.Log(level, message ?? "");
+            return;
+        }
+
         try
         {
             byte[] msgBytes = Encoding.UTF8.GetBytes(message ?? "");
@@ -182,6 +227,8 @@ public static class HostBridge
     /// </summary>
     public static string? DbGet(string table, string key)
     {
+        if (_transport != null) return _transport.DbGet(table ?? "", key ?? "");
+
         try
         {
             byte[] tblBytes = Encoding.UTF8.GetBytes(table ?? "");
@@ -204,6 +251,11 @@ public static class HostBridge
     /// </summary>
     public static bool DbPut(string table, string key, object value)
     {
+        if (_transport != null)
+        {
+            return _transport.DbPut(table ?? "", key ?? "", ToJson(value));
+        }
+
         try
         {
             byte[] tblBytes = Encoding.UTF8.GetBytes(table ?? "");
@@ -224,6 +276,8 @@ public static class HostBridge
     /// </summary>
     public static bool DbDelete(string table, string key)
     {
+        if (_transport != null) return _transport.DbDelete(table ?? "", key ?? "");
+
         try
         {
             byte[] tblBytes = Encoding.UTF8.GetBytes(table ?? "");
@@ -247,6 +301,8 @@ public static class HostBridge
     /// </summary>
     public static string? GetState(string key)
     {
+        if (_transport != null) return _transport.GetState(key ?? "");
+
         try
         {
             byte[] keyBytes = Encoding.UTF8.GetBytes(key ?? "");
@@ -268,6 +324,11 @@ public static class HostBridge
     /// </summary>
     public static bool SetState(string key, object value)
     {
+        if (_transport != null)
+        {
+            return _transport.SetState(key ?? "", value is string str0 ? str0 : ToJson(value));
+        }
+
         try
         {
             byte[] keyBytes = Encoding.UTF8.GetBytes(key ?? "");

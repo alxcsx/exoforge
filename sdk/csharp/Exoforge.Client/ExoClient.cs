@@ -1,11 +1,25 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace Exoforge.Client;
+
+/// <summary>
+/// Preferred transport mechanism for dispatching an Exoforge action.
+/// </summary>
+public enum ExoTransportPreference
+{
+    /// <summary>Uses WebSocket if connected; otherwise falls back to HTTP REST if HttpBaseUri is available.</summary>
+    Auto,
+    /// <summary>Forces dispatching via the persistent WebSocket session.</summary>
+    WebSocket,
+    /// <summary>Forces dispatching via HTTP REST (POST /api/{service}/{action}).</summary>
+    Http
+}
 
 /// <summary>
 /// High-level client for Exoforge game backend platform.
@@ -14,8 +28,14 @@ namespace Exoforge.Client;
 /// </summary>
 public class ExoClient : IDisposable
 {
+    private static readonly JsonSerializerOptions DefaultJsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
     private readonly ExoTransport _transport;
     private readonly ExoDispatcher _dispatcher;
+    private readonly HttpClient _httpClient;
     private readonly ConcurrentDictionary<string, TaskCompletionSource<ExoActionResult>> _pendingActions = new();
     private readonly ConcurrentDictionary<string, List<Action<ExoEventFrame>>> _eventHandlers = new();
     private long _requestIdCounter;
@@ -28,15 +48,20 @@ public class ExoClient : IDisposable
     public string? PlayerId { get; private set; }
     public IReadOnlyList<string> Scopes => _scopes.AsReadOnly();
     public ExoDispatcher Dispatcher => _dispatcher;
+    public Uri? HttpBaseUri { get; set; }
+    public string? AuthToken { get; set; }
+    public HttpClient HttpClient => _httpClient;
 
     public event Action? OnConnected;
     public event Action<Exception?>? OnDisconnected;
     public event Action<ExoEventFrame>? OnAnyEvent;
 
-    public ExoClient(ExoDispatcher? dispatcher = null)
+    public ExoClient(ExoDispatcher? dispatcher = null, Uri? httpBaseUri = null, HttpClient? httpClient = null)
     {
         _dispatcher = dispatcher ?? new ExoDispatcher();
         _transport = new ExoTransport();
+        _httpClient = httpClient ?? new HttpClient();
+        HttpBaseUri = httpBaseUri;
 
         _transport.OnConnected += HandleConnected;
         _transport.OnDisconnected += HandleDisconnected;
@@ -45,6 +70,19 @@ public class ExoClient : IDisposable
 
     public Task ConnectAsync(Uri uri, CancellationToken cancellationToken = default)
     {
+        if (uri == null) throw new ArgumentNullException(nameof(uri));
+
+        if (HttpBaseUri == null)
+        {
+            try
+            {
+                string scheme = uri.Scheme.Equals("wss", StringComparison.OrdinalIgnoreCase) ? "https" : "http";
+                int port = uri.Port == 4000 ? 4001 : uri.Port;
+                HttpBaseUri = new Uri($"{scheme}://{uri.Host}:{port}");
+            }
+            catch { }
+        }
+
         return _transport.ConnectAsync(uri, cancellationToken);
     }
 
@@ -61,6 +99,7 @@ public class ExoClient : IDisposable
         TimeSpan? timeout = null,
         CancellationToken cancellationToken = default)
     {
+        AuthToken = token;
         var request = new ExoAuthRequest(token);
         var tcs = new TaskCompletionSource<ExoAuthResult>(TaskCreationOptions.RunContinuationsAsynchronously);
         _pendingAuth = tcs;
@@ -91,15 +130,37 @@ public class ExoClient : IDisposable
     }
 
     /// <summary>
-    /// Sends an action request to the Exoforge Kernel and awaits the typed response.
+    /// Sends an action request to the Exoforge Kernel using automatic transport selection.
     /// </summary>
-    public async Task<TResult> SendActionAsync<TResult>(
+    public Task<TResult> SendActionAsync<TResult>(
         string service,
         string action,
         object? payload = null,
         TimeSpan? timeout = null,
         CancellationToken cancellationToken = default)
     {
+        return SendActionAsync<TResult>(service, action, payload, ExoTransportPreference.Auto, timeout, cancellationToken);
+    }
+
+    /// <summary>
+    /// Sends an action request to the Exoforge Kernel with explicit transport preference.
+    /// </summary>
+    public async Task<TResult> SendActionAsync<TResult>(
+        string service,
+        string action,
+        object? payload,
+        ExoTransportPreference transportPreference,
+        TimeSpan? timeout = null,
+        CancellationToken cancellationToken = default)
+    {
+        bool useHttp = transportPreference == ExoTransportPreference.Http ||
+                       (transportPreference == ExoTransportPreference.Auto && !IsConnected && HttpBaseUri != null);
+
+        if (useHttp)
+        {
+            return await SendActionHttpAsync<TResult>(service, action, payload, timeout, cancellationToken).ConfigureAwait(false);
+        }
+
         string reqId = $"req_{Interlocked.Increment(ref _requestIdCounter)}";
 
         var request = new ExoActionRequest
@@ -144,32 +205,107 @@ public class ExoClient : IDisposable
             throw new ExoActionException(errCode, errMsg);
         }
 
+        return DeserializeResult<TResult>(result.Data);
+    }
+
+    private async Task<TResult> SendActionHttpAsync<TResult>(
+        string service,
+        string action,
+        object? payload,
+        TimeSpan? timeout,
+        CancellationToken cancellationToken)
+    {
+        if (HttpBaseUri == null)
+        {
+            throw new InvalidOperationException("HttpBaseUri is not set on ExoClient. Configure HttpBaseUri or connect via WebSocket first.");
+        }
+
+        var endpoint = new Uri(HttpBaseUri, $"/api/{service}/{action}");
+        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint);
+
+        if (!string.IsNullOrEmpty(AuthToken))
+        {
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", AuthToken);
+        }
+
+        string jsonPayload = payload != null ? JsonSerializer.Serialize(payload) : "{}";
+        request.Content = new StringContent(jsonPayload, System.Text.Encoding.UTF8, "application/json");
+
+        TimeSpan effectiveTimeout = timeout ?? TimeSpan.FromSeconds(10);
+        using var timeoutCts = new CancellationTokenSource(effectiveTimeout);
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await _httpClient.SendAsync(request, linkedCts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+        {
+            throw new TimeoutException($"HTTP Action '{service}.{action}' timed out after {effectiveTimeout.TotalSeconds}s.");
+        }
+
+        string responseContent = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var doc = JsonDocument.Parse(responseContent);
+        var root = doc.RootElement;
+
+        string status = root.TryGetProperty("status", out var sProp) ? sProp.GetString() ?? "" : "";
+        if (status != "ok" && !response.IsSuccessStatusCode)
+        {
+            string errCode = "http_error";
+            string errMsg = $"HTTP {(int)response.StatusCode}";
+            if (root.TryGetProperty("error", out var errProp))
+            {
+                if (errProp.ValueKind == JsonValueKind.String)
+                {
+                    errMsg = errProp.GetString() ?? errMsg;
+                }
+                else if (errProp.ValueKind == JsonValueKind.Object)
+                {
+                    if (errProp.TryGetProperty("code", out var cProp)) errCode = cProp.GetString() ?? errCode;
+                    if (errProp.TryGetProperty("message", out var mProp)) errMsg = mProp.GetString() ?? errMsg;
+                }
+            }
+            throw new ExoActionException(errCode, errMsg);
+        }
+
+        JsonElement dataElement = root.TryGetProperty("data", out var dProp) ? dProp.Clone() : root.Clone();
+        return DeserializeResult<TResult>(dataElement);
+    }
+
+    private static TResult DeserializeResult<TResult>(JsonElement data)
+    {
         if (typeof(TResult) == typeof(JsonElement))
         {
-            return (TResult)(object)result.Data;
+            return (TResult)(object)data;
         }
 
-        if (typeof(TResult) == typeof(int) && result.Data.ValueKind == JsonValueKind.Number)
+        if (typeof(TResult) == typeof(int) && data.ValueKind == JsonValueKind.Number)
         {
-            return (TResult)(object)result.Data.GetInt32();
+            return (TResult)(object)data.GetInt32();
         }
 
-        if (typeof(TResult) == typeof(long) && result.Data.ValueKind == JsonValueKind.Number)
+        if (typeof(TResult) == typeof(long) && data.ValueKind == JsonValueKind.Number)
         {
-            return (TResult)(object)result.Data.GetInt64();
+            return (TResult)(object)data.GetInt64();
         }
 
-        if (typeof(TResult) == typeof(double) && result.Data.ValueKind == JsonValueKind.Number)
+        if (typeof(TResult) == typeof(double) && data.ValueKind == JsonValueKind.Number)
         {
-            return (TResult)(object)result.Data.GetDouble();
+            return (TResult)(object)data.GetDouble();
         }
 
-        if (typeof(TResult) == typeof(string) && result.Data.ValueKind == JsonValueKind.String)
+        if (typeof(TResult) == typeof(string) && data.ValueKind == JsonValueKind.String)
         {
-            return (TResult)(object)result.Data.GetString()!;
+            return (TResult)(object)data.GetString()!;
         }
 
-        return JsonSerializer.Deserialize<TResult>(result.Data.GetRawText())!;
+        if (typeof(TResult) == typeof(bool) && (data.ValueKind == JsonValueKind.True || data.ValueKind == JsonValueKind.False))
+        {
+            return (TResult)(object)data.GetBoolean();
+        }
+
+        return JsonSerializer.Deserialize<TResult>(data.GetRawText(), DefaultJsonOptions)!;
     }
 
     /// <summary>

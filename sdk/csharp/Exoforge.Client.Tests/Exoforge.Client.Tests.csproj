@@ -17,5 +17,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Exoforge.Client\Exoforge.Client.csproj" />
+    <ProjectReference Include="..\Exoforge.Management\Exoforge.Management.csproj" />
   </ItemGroup>
 </Project>

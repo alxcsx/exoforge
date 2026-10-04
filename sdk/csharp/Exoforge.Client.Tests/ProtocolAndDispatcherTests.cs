@@ -14,18 +14,18 @@ public class ProtocolAndDispatcherTests
         var request = new ExoActionRequest
         {
             Id = "req_1",
-            Service = "combat",
-            Action = "attack",
-            Payload = new { attacker_id = 1, target_id = 2, damage = 25 }
+            Service = "sample_wasm",
+            Action = "increment",
+            Payload = new { counter_id = 1, amount = 25 }
         };
 
         string json = JsonSerializer.Serialize(request);
 
         Assert.Contains("\"type\":\"action\"", json);
         Assert.Contains("\"id\":\"req_1\"", json);
-        Assert.Contains("\"service\":\"combat\"", json);
-        Assert.Contains("\"action\":\"attack\"", json);
-        Assert.Contains("\"damage\":25", json);
+        Assert.Contains("\"service\":\"sample_wasm\"", json);
+        Assert.Contains("\"action\":\"increment\"", json);
+        Assert.Contains("\"amount\":25", json);
     }
 
     [Fact]
@@ -45,18 +45,18 @@ public class ProtocolAndDispatcherTests
     [Fact]
     public void CanDeserializeEventFrame()
     {
-        string json = "{\"type\":\"event\",\"event\":\"player_damaged\",\"topic\":\"combat:events\",\"payload\":{\"target_id\":2,\"damage\":25}}";
+        string json = "{\"type\":\"event\",\"event\":\"value_changed\",\"topic\":\"sample:events\",\"payload\":{\"counter_id\":2,\"new_value\":25}}";
         var frame = JsonSerializer.Deserialize<ExoEventFrame>(json);
 
         Assert.NotNull(frame);
         Assert.Equal("event", frame.Type);
-        Assert.Equal("player_damaged", frame.Event);
-        Assert.Equal("combat:events", frame.Topic);
+        Assert.Equal("value_changed", frame.Event);
+        Assert.Equal("sample:events", frame.Topic);
 
-        var payload = frame.DeserializePayload<DamageEventPayload>();
+        var payload = frame.DeserializePayload<CounterEventPayload>();
         Assert.NotNull(payload);
-        Assert.Equal(2, payload.target_id);
-        Assert.Equal(25, payload.damage);
+        Assert.Equal(2, payload.counter_id);
+        Assert.Equal(25, payload.new_value);
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public class ProtocolAndDispatcherTests
     public void CanAccessGeneratedServiceClientsFromExoClient()
     {
         var client = new ExoClient();
-        Assert.NotNull(client.Combat());
+        Assert.NotNull(client.SampleWasm());
         Assert.NotNull(client.PlayerData());
         Assert.NotNull(client.Auth());
         Assert.NotNull(client.Http());
@@ -95,7 +95,7 @@ public class ProtocolAndDispatcherTests
         Assert.NotNull(client.PluginManager());
 
         // Same client yields same cached service instance
-        Assert.Same(client.Combat(), client.Combat());
+        Assert.Same(client.SampleWasm(), client.SampleWasm());
         Assert.Same(client.PlayerData(), client.PlayerData());
         Assert.Same(client.PluginManager(), client.PluginManager());
     }
@@ -124,9 +124,9 @@ public class ProtocolAndDispatcherTests
         Assert.Contains("\"topic\":\"*\"", json);
     }
 
-    private class DamageEventPayload
+    private class CounterEventPayload
     {
-        public int target_id { get; set; }
-        public int damage { get; set; }
+        public int counter_id { get; set; }
+        public int new_value { get; set; }
     }
 }

@@ -33,6 +33,16 @@ public enum ActionMode
 }
 
 /// <summary>
+/// Preferred transport mechanism for dispatching an Exoforge action.
+/// </summary>
+public enum ActionTransport
+{
+    Auto,
+    WebSocket,
+    Http
+}
+
+/// <summary>
 /// Marks a method as an invokable Exoforge Action.
 /// </summary>
 [AttributeUsage(AttributeTargets.Method, Inherited = false, AllowMultiple = false)]
@@ -41,6 +51,7 @@ public class ExoActionAttribute : Attribute
     public string Name { get; }
     public ActionMode Mode { get; set; } = ActionMode.Sync;
     public string Scope { get; set; } = "global";
+    public ActionTransport Transport { get; set; } = ActionTransport.Auto;
 
     public ExoActionAttribute(string name)
     {
@@ -51,16 +62,18 @@ public class ExoActionAttribute : Attribute
 /// <summary>
 /// Marks an event emitted or handled by the plugin.
 /// </summary>
-[AttributeUsage(AttributeTargets.Class | AttributeTargets.Method | AttributeTargets.Event, Inherited = false, AllowMultiple = true)]
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Method | AttributeTargets.Event | AttributeTargets.Struct, Inherited = false, AllowMultiple = true)]
 public class ExoEventAttribute : Attribute
 {
     public string Name { get; }
     public string? Topic { get; set; }
     public string Scope { get; set; } = "global";
+    public Type? PayloadType { get; set; }
 
-    public ExoEventAttribute(string name)
+    public ExoEventAttribute(string name, Type? payloadType = null)
     {
         Name = name ?? throw new ArgumentNullException(nameof(name));
+        PayloadType = payloadType;
     }
 }
 
