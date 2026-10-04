@@ -113,8 +113,13 @@ var session = await ExoforgeSDK.Auth.LoginAnonymously("Viper");   // creates or 
 var board   = await ExoforgeSDK.Client.SnakeLeaderboard().GetLeaderboardAsync(10);
 ```
 
-- `ExoforgeSDK.Auth.LoginAnonymously(name)` — signs in, re-using the account this machine already
-  registered. `ExoTokenStore` is **internal**: never a game-facing API.
+- `ExoforgeSDK.Auth.LoginAnonymously(displayName)` — signs in, **keyed by the device** (the
+  PlayFab `CustomId` pattern): `ExoDeviceId` derives a stable, hashed id from
+  `SystemInfo.deviceUniqueIdentifier` and caches it, and that id is the account key — so the same
+  machine always resolves to the same player even if the stored credential is lost. The display
+  name only labels the player. `LogoutAndForgetDevice()` claims a fresh account.
+- `ExoTokenStore` is public but **low-level** — use `ExoforgeSDK.Auth`. Exposed only for custom
+  credential storage and tooling.
 - `ExoforgeSDK.Client` — the connected `ExoClient`; use the **generated** service extensions
   (`Client.PlayerData()`, `Client.SnakeLeaderboard()`, …) rather than hand-written calls.
 - `ExoforgeSDK.ConnectAsync()` — idempotent connect. `ExoforgeBehaviour` is created on demand if no

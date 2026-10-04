@@ -8,13 +8,14 @@ namespace Exoforge.Client
     /// Persists the bearer token, player id, name, and scopes in Unity's PlayerPrefs so a client
     /// can reuse them across sessions, scenes, and builds.
     ///
-    /// Internal on purpose: game code goes through <see cref="ExoforgeAuth"/>, never this.
+    /// Low-level: game code should use <see cref="ExoforgeSDK.Auth"/> instead. Exposed for
+    /// advanced cases (custom credential storage, tooling).
     /// </summary>
     /// <remarks>
     /// PlayerPrefs is plaintext (registry / plist). Use it for convenience during development,
     /// not as secure storage in untrusted production environments.
     /// </remarks>
-    internal static class ExoTokenStore
+    public static class ExoTokenStore
     {
         private const string TokenKey = "Exoforge.Token";
         private const string PlayerIdKey = "Exoforge.PlayerId";

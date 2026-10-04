@@ -16,14 +16,17 @@ namespace Exoforge.Client.Unity
         public ExoSession? Current { get; private set; }
 
         /// <summary>
-        /// Signs in anonymously: re-uses the account this machine already registered, or creates
-        /// one (naming it <paramref name="name"/>, or a generated name).
+        /// Signs in anonymously, keyed by this device rather than by name.
+        ///
+        /// The account is claimed for <see cref="ExoDeviceId"/>: the same machine always resolves
+        /// to the same player, even if the stored credential is lost. <paramref name="displayName"/>
+        /// only labels the player.
         /// </summary>
-        public async Task<ExoSession> LoginAnonymously(string? name = null)
+        public async Task<ExoSession> LoginAnonymously(string? displayName = null)
         {
             var client = await ExoforgeSDK.ConnectAsync();
 
-            // Re-use the account this machine already registered.
+            // Fast path: the credential this machine already holds.
             if (ExoTokenStore.HasToken)
             {
                 var existing = await client.AuthenticateAsync(ExoTokenStore.Token);
@@ -44,11 +47,17 @@ namespace Exoforge.Client.Unity
                 ExoTokenStore.Clear();
             }
 
-            string chosen = string.IsNullOrWhiteSpace(name)
+            string chosen = string.IsNullOrWhiteSpace(displayName)
                 ? $"Player{UnityEngine.Random.Range(1000, 9999)}"
-                : name.Trim();
+                : displayName.Trim();
 
-            var result = await client.SendActionAsync<JsonElement>("auth", "anonymous", new { name = chosen });
+            // `player_id` is the account key, so this creates the player on first sight of the
+            // device and re-claims it (updating the display name) on a fresh install.
+            var result = await client.SendActionAsync<JsonElement>("auth", "anonymous", new
+            {
+                player_id = ExoDeviceId.Get(),
+                name = chosen
+            });
 
             string token = result.ValueKind == JsonValueKind.Object && result.TryGetProperty("token", out var tokenProp)
                 ? tokenProp.GetString() ?? ""
@@ -73,11 +82,21 @@ namespace Exoforge.Client.Unity
             return Current;
         }
 
-        /// <summary>Forgets the stored session.</summary>
+        /// <summary>
+        /// Forgets the stored session. The device identity is kept, so signing in again resolves
+        /// to the same player.
+        /// </summary>
         public void Logout()
         {
             ExoTokenStore.Clear();
             Current = null;
+        }
+
+        /// <summary>Forgets the stored session <em>and</em> the device identity (claims a new player).</summary>
+        public void LogoutAndForgetDevice()
+        {
+            Logout();
+            ExoDeviceId.Reset();
         }
     }
 }
