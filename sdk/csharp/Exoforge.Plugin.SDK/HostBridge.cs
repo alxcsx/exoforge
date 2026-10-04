@@ -272,6 +272,12 @@ public static class HostBridge
     }
 
     /// <summary>
+    /// Reads every record in a table from the plugin's isolated multi-tenant database,
+    /// as a JSON array. Native plugins only.
+    /// </summary>
+    public static string? DbAll(string table) => _transport?.DbAll(table ?? "");
+
+    /// <summary>
     /// Deletes a record from the plugin's isolated multi-tenant database.
     /// </summary>
     public static bool DbDelete(string table, string key)

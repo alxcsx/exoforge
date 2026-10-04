@@ -17,6 +17,7 @@ public interface IPluginTransport
     string? CallAction(string service, string action, string payloadJson);
     void Log(int level, string message);
     string? DbGet(string table, string key);
+    string? DbAll(string table);
     bool DbPut(string table, string key, string valueJson);
     bool DbDelete(string table, string key);
     string? GetState(string key);
@@ -339,7 +340,12 @@ public static class PluginHost
                     root.TryGetProperty("id", out var idProp) &&
                     idProp.GetInt64() == id)
                 {
-                    return root.TryGetProperty("result", out var resultProp) ? resultProp.GetRawText() : null;
+                    if (!root.TryGetProperty("result", out var resultProp) || resultProp.ValueKind == JsonValueKind.Null)
+                    {
+                        return null;
+                    }
+
+                    return resultProp.GetRawText();
                 }
             }
             catch (JsonException)
@@ -364,6 +370,9 @@ public static class PluginHost
 
         public string? DbGet(string table, string key) =>
             HostCall("db_get", $"{{\"table\":{JsonEncode(table)},\"key\":{JsonEncode(key)}}}");
+
+        public string? DbAll(string table) =>
+            HostCall("db_all", $"{{\"table\":{JsonEncode(table)}}}");
 
         public bool DbPut(string table, string key, string valueJson) =>
             HostCall("db_put", $"{{\"table\":{JsonEncode(table)},\"key\":{JsonEncode(key)},\"value\":{valueJson}}}") != "false";

@@ -257,6 +257,13 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
     end
   end
 
+  defp run_host_call("db_all", args, manifest) do
+    case db_all(manifest, Map.get(args, "table")) do
+      {:ok, rows} when is_list(rows) -> rows
+      _ -> []
+    end
+  end
+
   defp run_host_call("db_delete", args, manifest) do
     db_delete(manifest, Map.get(args, "table"), Map.get(args, "key"))
   end
@@ -302,6 +309,8 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
   end
 
   defp db_get(manifest, table, key), do: db_call(:get, [manifest.id, table, key])
+
+  defp db_all(manifest, table), do: db_call(:all, [manifest.id, table])
 
   defp db_delete(manifest, table, key) do
     db_call(:delete, [manifest.id, table, key])
