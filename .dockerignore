@@ -1,0 +1,43 @@
+# Version control / editor
+.git
+.gitignore
+.pi
+.elixir_ls
+.lexical
+.vscode
+.idea
+
+# Elixir build artifacts (rebuilt inside the image)
+_build
+_deps
+**/_build
+**/_deps
+deps
+**/deps
+cover
+doc
+*.ez
+erl_crash.dump
+
+# .NET build artifacts
+**/bin
+**/obj
+**/*.user
+
+# Unity projects & caches (huge, never needed by the server image)
+sdk/unity/*/Library
+sdk/unity/*/Temp
+sdk/unity/*/Logs
+sdk/unity/*/Obj
+sdk/unity/*/Build
+sdk/unity/*/Builds
+sdk/unity/*/UserSettings
+sdk/unity/*/MemoryCaptures
+sdk/unity/sample_unity
+sdk/unity/unity_sample
+
+# Packaging output & local data
+dist
+priv/data
+.env
+.env.*

@@ -49,13 +49,15 @@ test-sdk:
 test-e2e: build-wasm
 	#!/usr/bin/env bash
 	set -euo pipefail
+	pkill -f beam.smp 2>/dev/null || true
+	sleep 0.5
 	echo "Starting Exoforge backend..."
 	mix run --no-halt &
 	SERVER_PID=$!
-	trap "kill $SERVER_PID 2>/dev/null || true" EXIT
-	echo "Waiting for port 4000..."
+	trap "pkill -P $SERVER_PID 2>/dev/null || true; kill $SERVER_PID 2>/dev/null || true; pkill -f beam.smp 2>/dev/null || true" EXIT
+	echo "Waiting for ports 4000 and 4001..."
 	for i in $(seq 1 40); do
-		if nc -z 127.0.0.1 4000 2>/dev/null; then break; fi
+		if nc -z 127.0.0.1 4000 2>/dev/null && nc -z 127.0.0.1 4001 2>/dev/null; then break; fi
 		sleep 0.2
 	done
 	echo "Running C# client E2E test against live backend..."
@@ -68,12 +70,12 @@ benchmark:
 
 # ---- Build & Release ----
 
-# Build C# WASM plugins (e.g. just build-wasm, or just build-wasm combat_wasm)
+# Build C# WASM plugins (e.g. just build-wasm, or just build-wasm sample_wasm)
 build-wasm plugin="":
 	#!/usr/bin/env bash
 	set -euo pipefail
 	if [ -n "{{plugin}}" ]; then
-		./plugins_csharp/{{plugin}}/build.sh
+		[ -f "./plugins_csharp/{{plugin}}/build.sh" ] && ./plugins_csharp/{{plugin}}/build.sh
 	else
 		for script in plugins_csharp/*/build.sh; do
 			[ -f "$script" ] && "$script"
@@ -82,7 +84,8 @@ build-wasm plugin="":
 
 # Run backend in production mode (foreground)
 prod: build-wasm
-	SECRET_KEY_BASE="${SECRET_KEY_BASE:-$(mix phx.gen.secret)}" MIX_ENV=prod mix run --no-halt
+	# Local prod-mode run: opt in to SQLite explicitly (real deploys must set DATABASE_URL).
+	SECRET_KEY_BASE="${SECRET_KEY_BASE:-$(mix phx.gen.secret)}" EXOFORGE_ALLOW_SQLITE_FALLBACK=true MIX_ENV=prod mix run --no-halt
 
 # Assemble standalone OTP production release
 release: build-wasm

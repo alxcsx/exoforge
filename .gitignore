@@ -34,6 +34,7 @@ log/*.log
 
 # === ExoForge Engine Specifics ===
 priv/static/components/
+priv/data/
 
 # === Environment & Secrets ===
 .env
@@ -52,5 +53,5 @@ priv/static/components/
 [Uu]serSettings/
 MemoryCaptures/
 Recordings/
-sdk/unity/sample_unity/
+# sdk/unity/sample_unity/ is tracked
 sdk/unity/unity_sample/
