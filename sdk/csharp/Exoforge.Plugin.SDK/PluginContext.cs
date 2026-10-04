@@ -58,6 +58,13 @@ public class HostPluginContext : IPluginContext
                 prop.PropertyType == typeof(IPluginContext) ? context :
                 null;
 
+            // Generated service clients are registered by their module initializer; inject them too,
+            // so plugin code only ever deals with services.
+            if (value == null)
+            {
+                PluginServiceRegistry.TryCreate(prop.PropertyType, context.Actions, out value);
+            }
+
             if (value == null) continue;
 
             if (prop.GetMethod?.IsStatic == true) prop.SetValue(null, value);

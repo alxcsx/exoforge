@@ -23,17 +23,12 @@ public class SnakeLeaderboardPlugin
     [Inject("database")]
     public static IDatabase? Database { get; set; }
 
-    // Declares the :player_data dependency (load order) and injects the dispatcher used to resolve names.
+    // Declares the :player_data dependency (load order) and injects the generated typed client.
     [Inject("player_data")]
-    public static IActionDispatcher? Actions { get; set; }
+    public static PlayerDataServiceClient? PlayerData { get; set; }
 
     [Inject]
     public static ILogger? Logger { get; set; }
-
-    private static ExoforgePluginServices? _services;
-
-    /// <summary>Typed access to other service contracts, generated from the cluster contracts.</summary>
-    private static ExoforgePluginServices Services => _services ??= new ExoforgePluginServices(Actions!);
 
     /// <summary>
     /// Records a finished run for a player, keeping their best score, and returns that best.
@@ -97,12 +92,11 @@ public class SnakeLeaderboardPlugin
     /// <summary>Current display name from player_data; falls back to the raw id when unavailable.</summary>
     private static async Task<string> DisplayNameAsync(string playerId)
     {
-        if (Actions is null) return playerId;
+        if (PlayerData is null) return playerId;
 
-        // Typed call generated from the player_data contract (`exo plugin stubs`): no dependency on the
-        // service implementation and no hand-written DTOs.
-        var response = await Services.PlayerData
-            .GetPlayerAsync(new PlayerDataGetPlayerRequest { PlayerId = playerId });
+        // Generated typed client, injected by the host: no dependency on the service implementation,
+        // no hand-written DTOs, and no IActionDispatcher in plugin code.
+        var response = await PlayerData.GetPlayerAsync(new PlayerDataGetPlayerRequest { PlayerId = playerId });
 
         string? name = response?.Player?.Name;
         return string.IsNullOrEmpty(name) ? playerId : name!;

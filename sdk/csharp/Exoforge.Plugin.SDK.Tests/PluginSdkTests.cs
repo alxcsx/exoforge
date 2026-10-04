@@ -64,6 +64,20 @@ public record PlayerRecord(
     string Status = "active"
 );
 
+public class ServiceClientConsumer
+{
+    [Inject]
+    public static InjectedServiceClient? Client { get; set; }
+}
+
+/// <summary>Stand-in for a generated service client (same (IActionDispatcher) constructor shape).</summary>
+public class InjectedServiceClient
+{
+    public InjectedServiceClient(IActionDispatcher dispatcher) => Dispatcher = dispatcher;
+
+    public IActionDispatcher Dispatcher { get; }
+}
+
 public class PluginSdkTests
 {
     [Fact]
@@ -278,6 +292,20 @@ public class PluginSdkTests
         Assert.Equal("submit_score", ExoNaming.ToSnakeCase("SubmitScore"));
         Assert.Equal("get_leaderboard", ExoNaming.ToSnakeCase("GetLeaderboard"));
         Assert.Equal("snake_length", ExoNaming.ToSnakeCase("snakeLength"));
+    }
+
+    [Fact]
+    public void Wire_InjectsRegisteredServiceClients()
+    {
+        PluginServiceRegistry.Register(d => new InjectedServiceClient(d));
+
+        var context = new HostPluginContext("svc_plugin");
+        ServiceClientConsumer.Client = null;
+
+        HostPluginContext.Wire(new ServiceClientConsumer(), context);
+
+        Assert.NotNull(ServiceClientConsumer.Client);
+        Assert.Same(context.Actions, ServiceClientConsumer.Client!.Dispatcher);
     }
 
     /// <summary>Captures the action call and returns a canned reply, so the SQL runner is testable off-host.</summary>

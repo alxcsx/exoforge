@@ -137,8 +137,9 @@ The typed `player_data` call comes from `src/Generated/PluginServices.g.cs`, gen
 cluster contracts with `exo plugin stubs snake_leaderboard`. Only the services listed in the plugin's
 `manifest.exs` dependencies are generated (override with `--services a,b`), so the file stays small.
 The stubs depend only on the service contract (`PlayerDataServiceClient`,
-`PlayerDataGetPlayerRequest/Response`, `PlayerDataPlayer`) — never on the Elixir `PlayerData` module —
-and call through `IActionDispatcher`.
+`PlayerDataGetPlayerRequest/Response`, `PlayerDataPlayer`) — never on the Elixir `PlayerData` module.
+The host injects the client directly (`[Inject("player_data")] PlayerDataServiceClient PlayerData`),
+so plugin code never touches `IActionDispatcher`.
 
 `player_id` is taken from the caller's identity, so a client can only submit its own score.
 

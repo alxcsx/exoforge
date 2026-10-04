@@ -99,6 +99,11 @@ namespace Exoforge.Plugins.Generated
     internal static class GeneratedServicesBootstrap
     {
         [System.Runtime.CompilerServices.ModuleInitializer]
-        internal static void Init() => PluginJson.AddContext(GeneratedServicesJsonContext.Default);
+        internal static void Init()
+        {
+            PluginJson.AddContext(GeneratedServicesJsonContext.Default);
+            PluginServiceRegistry.Register(d => new ExoforgePluginServices(d));
+            PluginServiceRegistry.Register(d => new PlayerDataServiceClient(d));
+        }
     }
 }

@@ -135,10 +135,11 @@ Action declarations follow conventions, so the attribute is usually bare:
 
 Plugins call other services through **generated, region-agnostic stubs**: `exo plugin stubs <name>`
 reads the cluster contract export and writes `src/Generated/PluginServices.g.cs` (typed
-request/response records + an `IActionDispatcher`-based client per service). Only the services in the
-plugin's `manifest.exs` dependencies are generated (`--services a,b` overrides), so the file — and the
-NativeAOT build — stay small. The stubs depend on the service *contract*, never on the plugin that
-implements it.
+request/response records + a typed client per service). Only the services in the plugin's
+`manifest.exs` dependencies are generated (`--services a,b` overrides), so the file — and the NativeAOT
+build — stay small. The host injects those clients (`[Inject("player_data")]
+PlayerDataServiceClient PlayerData`), so plugin code only deals with services and never touches
+`IActionDispatcher`. The stubs depend on the service *contract*, never on the plugin that implements it.
 
 `ActionDispatcher` stays runtime-agnostic: every non-Elixir plugin gets a generated proxy module
 (`Exoforge.Drivers.Runtime.PluginProxy`) registered as its `entry_point`.

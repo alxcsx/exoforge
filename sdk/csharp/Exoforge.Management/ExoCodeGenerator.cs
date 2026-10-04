@@ -503,7 +503,15 @@ public static class ExoCodeGenerator
             sb.AppendLine("    internal static class GeneratedServicesBootstrap");
             sb.AppendLine("    {");
             sb.AppendLine("        [System.Runtime.CompilerServices.ModuleInitializer]");
-            sb.AppendLine("        internal static void Init() => PluginJson.AddContext(GeneratedServicesJsonContext.Default);");
+            sb.AppendLine("        internal static void Init()");
+            sb.AppendLine("        {");
+            sb.AppendLine("            PluginJson.AddContext(GeneratedServicesJsonContext.Default);");
+            sb.AppendLine("            PluginServiceRegistry.Register(d => new ExoforgePluginServices(d));");
+            foreach (var svc in serviceList)
+            {
+                sb.AppendLine($"            PluginServiceRegistry.Register(d => new {ToPascalCase(svc.Name)}ServiceClient(d));");
+            }
+            sb.AppendLine("        }");
             sb.AppendLine("    }");
         }
 
