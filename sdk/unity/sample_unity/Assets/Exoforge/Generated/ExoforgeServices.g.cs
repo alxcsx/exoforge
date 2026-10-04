@@ -92,12 +92,12 @@ public class AuthRegisterResponse
     public string Token { get; set; } = default!;
     [JsonPropertyName("user_id")]
     public string UserId { get; set; } = default!;
+    [JsonPropertyName("player")]
+    public JsonElement Player { get; set; } = default!;
     [JsonPropertyName("player_id")]
     public string PlayerId { get; set; } = default!;
     [JsonPropertyName("scopes")]
     public JsonElement Scopes { get; set; } = default!;
-    [JsonPropertyName("player")]
-    public JsonElement Player { get; set; } = default!;
 }
 
 /// <summary>Request payload for auth.create_player action.</summary>
@@ -124,12 +124,12 @@ public class AuthCreatePlayerResponse
     public string Token { get; set; } = default!;
     [JsonPropertyName("user_id")]
     public string UserId { get; set; } = default!;
+    [JsonPropertyName("player")]
+    public JsonElement Player { get; set; } = default!;
     [JsonPropertyName("player_id")]
     public string PlayerId { get; set; } = default!;
     [JsonPropertyName("scopes")]
     public JsonElement Scopes { get; set; } = default!;
-    [JsonPropertyName("player")]
-    public JsonElement Player { get; set; } = default!;
 }
 
 /// <summary>Request payload for auth.anonymous action.</summary>
@@ -459,12 +459,12 @@ public class PlayerDataPlayerDeletedEvent
 /// <summary>Request payload for ws.broadcast action.</summary>
 public class WsBroadcastRequest
 {
+    [JsonPropertyName("topic")]
+    public string Topic { get; set; } = default!;
     [JsonPropertyName("event")]
     public string Event { get; set; } = default!;
     [JsonPropertyName("payload")]
     public JsonElement Payload { get; set; } = default!;
-    [JsonPropertyName("topic")]
-    public string Topic { get; set; } = default!;
 }
 
 /// <summary>Response model for ws.broadcast action.</summary>
@@ -479,6 +479,26 @@ public class WsConnectionCountResponse
 {
     [JsonPropertyName("count")]
     public long Count { get; set; } = default!;
+}
+
+/// <summary>Request payload for snake_leaderboard.submit_score action.</summary>
+public class SnakeLeaderboardSubmitScoreRequest
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = default!;
+    [JsonPropertyName("player_id")]
+    public string PlayerId { get; set; } = default!;
+    [JsonPropertyName("score")]
+    public long Score { get; set; } = default!;
+    [JsonPropertyName("snake_length")]
+    public long SnakeLength { get; set; } = default!;
+}
+
+/// <summary>Request payload for snake_leaderboard.get_leaderboard action.</summary>
+public class SnakeLeaderboardGetLeaderboardRequest
+{
+    [JsonPropertyName("limit")]
+    public long Limit { get; set; } = default!;
 }
 
 /// <summary>Request payload for resource_store.migrate action.</summary>
@@ -606,10 +626,10 @@ public class ResourceStoreUpsertResponse
 /// <summary>Request payload for sample_wasm.increment action.</summary>
 public class SampleWasmIncrementRequest
 {
-    [JsonPropertyName("amount")]
-    public long Amount { get; set; } = default!;
     [JsonPropertyName("counter_id")]
     public long CounterId { get; set; } = default!;
+    [JsonPropertyName("amount")]
+    public long Amount { get; set; } = default!;
 }
 
 /// <summary>Request payload for sample_wasm.echo action.</summary>
@@ -866,6 +886,10 @@ public static class ExoClientGeneratedExtensions
     public static WsServiceClient Ws(this ExoClient client) =>
         client.Services().Ws;
 
+    /// <summary>Access the SnakeLeaderboard service contract.</summary>
+    public static SnakeLeaderboardServiceClient SnakeLeaderboard(this ExoClient client) =>
+        client.Services().SnakeLeaderboard;
+
     /// <summary>Access the ResourceStore service contract.</summary>
     public static ResourceStoreServiceClient ResourceStore(this ExoClient client) =>
         client.Services().ResourceStore;
@@ -920,6 +944,9 @@ public class ExoforgeServicesHub
 
     private WsServiceClient? _ws;
     public WsServiceClient Ws => _ws ??= new WsServiceClient(_client);
+
+    private SnakeLeaderboardServiceClient? _snake_leaderboard;
+    public SnakeLeaderboardServiceClient SnakeLeaderboard => _snake_leaderboard ??= new SnakeLeaderboardServiceClient(_client);
 
     private ResourceStoreServiceClient? _resource_store;
     public ResourceStoreServiceClient ResourceStore => _resource_store ??= new ResourceStoreServiceClient(_client);
@@ -1520,13 +1547,13 @@ public class WsServiceClient
     }
 
     /// <summary>Broadcasts a frame to an active WebSocket topic.</summary>
-    public Task<WsBroadcastResponse> BroadcastAsync(string @event, JsonElement payload, string topic, CancellationToken cancellationToken = default)
+    public Task<WsBroadcastResponse> BroadcastAsync(string topic, string @event, JsonElement payload, CancellationToken cancellationToken = default)
     {
         var req = new WsBroadcastRequest
         {
+            Topic = topic,
             Event = @event,
             Payload = payload,
-            Topic = topic,
         };
         return BroadcastAsync(req, cancellationToken);
     }
@@ -1553,6 +1580,65 @@ public class WsServiceClient
     public Task<JsonElement> ConnectionCountAsync(object? payload = null, CancellationToken cancellationToken = default)
     {
         return _client.SendActionAsync<JsonElement>("ws", "connection_count", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+}
+
+/// <summary>Client interface for the snake_leaderboard service.</summary>
+public class SnakeLeaderboardServiceClient
+{
+    private readonly ExoClient _client;
+
+    public SnakeLeaderboardServiceClient(ExoClient client)
+    {
+        _client = client ?? throw new ArgumentNullException(nameof(client));
+    }
+
+    /// <summary>Executes submit_score action with typed arguments.</summary>
+    public Task<JsonElement> SubmitScoreAsync(string name, string playerId, long score, long snakeLength, CancellationToken cancellationToken = default)
+    {
+        var req = new SnakeLeaderboardSubmitScoreRequest
+        {
+            Name = name,
+            PlayerId = playerId,
+            Score = score,
+            SnakeLength = snakeLength,
+        };
+        return SubmitScoreAsync(req, cancellationToken);
+    }
+
+    /// <summary>Executes submit_score action with a typed request DTO.</summary>
+    public Task<JsonElement> SubmitScoreAsync(SnakeLeaderboardSubmitScoreRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<JsonElement>("snake_leaderboard", "submit_score", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Executes submit_score action.</summary>
+    public Task<JsonElement> SubmitScoreAsync(object? payload = null, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<JsonElement>("snake_leaderboard", "submit_score", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Executes get_leaderboard action with typed arguments.</summary>
+    public Task<JsonElement> GetLeaderboardAsync(long limit, CancellationToken cancellationToken = default)
+    {
+        var req = new SnakeLeaderboardGetLeaderboardRequest
+        {
+            Limit = limit,
+        };
+        return GetLeaderboardAsync(req, cancellationToken);
+    }
+
+    /// <summary>Executes get_leaderboard action with a typed request DTO.</summary>
+    public Task<JsonElement> GetLeaderboardAsync(SnakeLeaderboardGetLeaderboardRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<JsonElement>("snake_leaderboard", "get_leaderboard", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Executes get_leaderboard action.</summary>
+    public Task<JsonElement> GetLeaderboardAsync(object? payload = null, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<JsonElement>("snake_leaderboard", "get_leaderboard", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
 }
@@ -1774,12 +1860,12 @@ public class SampleWasmServiceClient
     }
 
     /// <summary>Executes increment action with typed arguments.</summary>
-    public Task<JsonElement> IncrementAsync(long amount, long counterId, CancellationToken cancellationToken = default)
+    public Task<JsonElement> IncrementAsync(long counterId, long amount, CancellationToken cancellationToken = default)
     {
         var req = new SampleWasmIncrementRequest
         {
-            Amount = amount,
             CounterId = counterId,
+            Amount = amount,
         };
         return IncrementAsync(req, cancellationToken);
     }

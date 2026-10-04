@@ -1,3 +1,4 @@
+using Exoforge.Client.Unity;
 using Exoforge.Unity.Editor;
 using SnakeGame;
 using UnityEditor;
@@ -5,9 +6,22 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 
 /// <summary>
-/// One-shot sample bootstrap: generates the runtime config from exoforge.json, adds the
-/// standard Exoforge prefab, and drops the SnakeGameController into the sample scene.
-/// Run via Unity CLI: -executeMethod ExoforgeSampleSetup.SetUp
+/// Builds the sample scene from code, so the scene is a build artifact rather than hand-edited YAML.
+///
+/// Idempotent: run it as often as you like. It is meant to be driven from the Unity CLI —
+///
+/// <code>
+/// Unity -batchmode -quit -projectPath sdk/unity/sample_unity \
+///       -executeMethod ExoforgeSampleSetup.SetUp
+/// </code>
+///
+/// Produces:
+/// <list type="bullet">
+/// <item><c>Exoforge</c> — the SDK prefab (exactly one), carrying the runtime host.</item>
+/// <item><c>Player</c> — <see cref="SnakePlayerController"/>: sign in, prompt for a name, then enable gameplay.</item>
+/// <item><c>Gameplay</c> — <see cref="SnakeGameController"/>: the game. Starts inactive.</item>
+/// <item><c>Hud</c> — <see cref="SnakeGameView"/> + <see cref="SnakeLeaderboard"/>: board, prompt, ranking.</item>
+/// </list>
 /// </summary>
 public static class ExoforgeSampleSetup
 {
@@ -18,50 +32,143 @@ public static class ExoforgeSampleSetup
         EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
 
         ExoforgeRuntimeConfigGenerator.Generate();
-        ExoforgeSceneSetup.AddToScene();
+
+        // The runtime host: one prefab instance, never two. (Re-running an earlier setup used to
+        // stack them, because the guard only checked a scene that was still loading.)
+        var host = EnsureSingleHost();
+
+        // Gameplay: the game itself, switched on once the player is signed in and named.
+        var gameplayGo = EnsureObject<SnakeGameController>("Gameplay");
+        var game = gameplayGo.GetComponent<SnakeGameController>();
+        gameplayGo.SetActive(false);
+
+        // Player: session owner. Enables Gameplay when ready.
+        var playerGo = EnsureObject<SnakePlayerController>("Player");
+        var player = playerGo.GetComponent<SnakePlayerController>();
+        WireArray(player, "enableOnReady", new Object[] { gameplayGo });
+
+        // Hud: everything on screen. Stays active so the name prompt works before gameplay starts.
+        var hudGo = EnsureObject<SnakeGameView>("Hud");
+        var view = hudGo.GetComponent<SnakeGameView>();
+        var board = hudGo.GetComponent<SnakeLeaderboard>() ?? hudGo.AddComponent<SnakeLeaderboard>();
+
+        Wire(view, "game", game);
+        Wire(view, "player", player);
+        Wire(view, "leaderboard", board);
+
+        Wire(board, "game", game);
+        Wire(board, "player", player);
+
+        RemoveStaleObjects();
+        FrameCamera();
 
         var scene = EditorSceneManager.GetActiveScene();
+        EditorSceneManager.MarkSceneDirty(scene);
+        EditorSceneManager.SaveScene(scene);
 
-        // Remove the superseded onboarding object if an earlier setup created one.
+        Debug.Log($"[ExoforgeSample] Scene built: host={host.name}, gameplay={gameplayGo.name} (inactive), " +
+                  $"player={playerGo.name}, hud={hudGo.name}.");
+    }
+
+    /// <summary>Ensures exactly one Exoforge host, keeping whichever instance already exists.</summary>
+    private static GameObject EnsureSingleHost()
+    {
+        var hosts = Object.FindObjectsByType<ExoforgeBehaviour>(FindObjectsInactive.Include);
+        GameObject? keeper = null;
+
+        foreach (var candidate in hosts)
+        {
+            if (keeper == null)
+            {
+                keeper = candidate.gameObject;
+                continue;
+            }
+
+            Debug.LogWarning($"[ExoforgeSample] Removing duplicate Exoforge host '{candidate.gameObject.name}'.");
+            Object.DestroyImmediate(candidate.gameObject);
+        }
+
+        if (keeper != null)
+        {
+            return keeper;
+        }
+
+        ExoforgeSceneSetup.AddToScene();
+
+        var added = Object.FindAnyObjectByType<ExoforgeBehaviour>(FindObjectsInactive.Include);
+        return added != null ? added.gameObject : new GameObject("Exoforge");
+    }
+
+    /// <summary>Finds an existing object carrying <typeparamref name="T"/> (active or not), else creates one.</summary>
+    private static GameObject EnsureObject<T>(string name) where T : Component
+    {
+        var existing = Object.FindAnyObjectByType<T>(FindObjectsInactive.Include);
+        if (existing != null)
+        {
+            existing.gameObject.name = name;
+            return existing.gameObject;
+        }
+
+        var created = new GameObject(name);
+        created.AddComponent<T>();
+        return created;
+    }
+
+    private static void RemoveStaleObjects()
+    {
         foreach (var stale in Object.FindObjectsByType<GameObject>(FindObjectsInactive.Include))
         {
-            if (stale.name == "PlayerOnboarding")
+            if (stale.name is "PlayerOnboarding" or "Onboarding")
             {
                 Object.DestroyImmediate(stale);
             }
         }
+    }
 
-        // Gameplay root: starts inactive and is enabled once onboarding has a session.
-        var existing = Object.FindAnyObjectByType<SnakeGameController>(FindObjectsInactive.Include);
-        GameObject gameplayGo;
-        if (existing != null)
+    private static void FrameCamera()
+    {
+        var camera = Camera.main;
+        if (camera == null) return;
+
+        // The board is drawn in screen space, so the camera only has to look tidy behind it.
+        camera.orthographic = true;
+        camera.clearFlags = CameraClearFlags.SolidColor;
+        camera.backgroundColor = new Color(0.04f, 0.05f, 0.08f);
+    }
+
+    private static void Wire(Component target, string field, Object? value)
+    {
+        var so = new SerializedObject(target);
+        var property = so.FindProperty(field);
+
+        if (property == null)
         {
-            gameplayGo = existing.gameObject;
-            gameplayGo.name = "Gameplay";
-        }
-        else
-        {
-            gameplayGo = new GameObject("Gameplay");
-            gameplayGo.AddComponent<SnakeGameController>();
-        }
-
-        gameplayGo.SetActive(false);
-
-        // Player session: authenticates, registers an anonymous player, assigns the display name.
-        if (Object.FindAnyObjectByType<SnakePlayerController>(FindObjectsInactive.Include) == null)
-        {
-            var playerGo = new GameObject("Player");
-            var player = playerGo.AddComponent<SnakePlayerController>();
-
-            var so = new SerializedObject(player);
-            var targets = so.FindProperty("enableOnReady");
-            targets.arraySize = 1;
-            targets.GetArrayElementAtIndex(0).objectReferenceValue = gameplayGo;
-            so.ApplyModifiedProperties();
+            Debug.LogError($"[ExoforgeSample] {target.GetType().Name} has no field '{field}'.");
+            return;
         }
 
-        EditorSceneManager.MarkSceneDirty(scene);
-        EditorSceneManager.SaveScene(scene);
-        Debug.Log("[ExoforgeSample] Setup complete.");
+        property.objectReferenceValue = value;
+        so.ApplyModifiedPropertiesWithoutUndo();
+    }
+
+    private static void WireArray(Component target, string field, Object[] values)
+    {
+        var so = new SerializedObject(target);
+        var property = so.FindProperty(field);
+
+        if (property == null)
+        {
+            Debug.LogError($"[ExoforgeSample] {target.GetType().Name} has no field '{field}'.");
+            return;
+        }
+
+        property.arraySize = values.Length;
+
+        for (int i = 0; i < values.Length; i++)
+        {
+            property.GetArrayElementAtIndex(i).objectReferenceValue = values[i];
+        }
+
+        so.ApplyModifiedPropertiesWithoutUndo();
     }
 }

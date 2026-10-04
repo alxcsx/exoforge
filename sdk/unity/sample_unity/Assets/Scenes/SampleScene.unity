@@ -119,6 +119,76 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!1 &98851262
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 98851265}
+  - component: {fileID: 98851264}
+  - component: {fileID: 98851263}
+  m_Layer: 0
+  m_Name: Hud
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &98851263
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 98851262}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6673fde8906f146d8ab322092ad74e82, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SnakeGame.SnakeLeaderboard
+  game: {fileID: 1085939889}
+  player: {fileID: 851092000}
+  topN: 10
+--- !u!114 &98851264
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 98851262}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2f0b0788e26f14fbea18866016cdc63a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SnakeGame.SnakeGameView
+  game: {fileID: 1085939889}
+  player: {fileID: 851092000}
+  leaderboard: {fileID: 98851263}
+  squareA: {r: 0.1, g: 0.12, b: 0.17, a: 1}
+  squareB: {r: 0.13, g: 0.16, b: 0.22, a: 1}
+  bodyColor: {r: 0.24, g: 0.82, b: 0.34, a: 1}
+  headColor: {r: 0.62, g: 1, b: 0.68, a: 1}
+  foodColor: {r: 1, g: 0.32, b: 0.36, a: 1}
+  boardPixels: 380
+  panelWidth: 320
+--- !u!4 &98851265
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 98851262}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &519420028
 GameObject:
   m_ObjectHideFlags: 0
@@ -200,7 +270,7 @@ Camera:
   m_Enabled: 1
   serializedVersion: 2
   m_ClearFlags: 2
-  m_BackGroundColor: {r: 0.19215687, g: 0.3019608, b: 0.4745098, a: 0}
+  m_BackGroundColor: {r: 0.04, g: 0.05, b: 0.08, a: 1}
   m_projectionMatrixMode: 1
   m_GateFitMode: 2
   m_FOVAxisMode: 0
@@ -389,7 +459,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 393f2591021964ba5bbaff04a0672d15, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SnakeGame.SnakePlayerController
-  playerName: 
   enableOnReady:
   - {fileID: 1085939888}
 --- !u!4 &851092001
@@ -511,63 +580,6 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 7e3a91c4d5b24f0a9c1e6b8d2f4a7c30, type: 3}
---- !u!1001 &2023473360
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 0}
-    m_Modifications:
-    - target: {fileID: 7612840000000000000, guid: 7e3a91c4d5b24f0a9c1e6b8d2f4a7c30, type: 3}
-      propertyPath: m_Name
-      value: Exoforge
-      objectReference: {fileID: 0}
-    - target: {fileID: 7612840000000000001, guid: 7e3a91c4d5b24f0a9c1e6b8d2f4a7c30, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7612840000000000001, guid: 7e3a91c4d5b24f0a9c1e6b8d2f4a7c30, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7612840000000000001, guid: 7e3a91c4d5b24f0a9c1e6b8d2f4a7c30, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7612840000000000001, guid: 7e3a91c4d5b24f0a9c1e6b8d2f4a7c30, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 7612840000000000001, guid: 7e3a91c4d5b24f0a9c1e6b8d2f4a7c30, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7612840000000000001, guid: 7e3a91c4d5b24f0a9c1e6b8d2f4a7c30, type: 3}
-      propertyPath: m_LocalRotation.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7612840000000000001, guid: 7e3a91c4d5b24f0a9c1e6b8d2f4a7c30, type: 3}
-      propertyPath: m_LocalRotation.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7612840000000000001, guid: 7e3a91c4d5b24f0a9c1e6b8d2f4a7c30, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7612840000000000001, guid: 7e3a91c4d5b24f0a9c1e6b8d2f4a7c30, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7612840000000000001, guid: 7e3a91c4d5b24f0a9c1e6b8d2f4a7c30, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.z
-      value: 0
-      objectReference: {fileID: 0}
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents: []
-  m_SourcePrefab: {fileID: 100100000, guid: 7e3a91c4d5b24f0a9c1e6b8d2f4a7c30, type: 3}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -576,5 +588,5 @@ SceneRoots:
   - {fileID: 619394802}
   - {fileID: 1645570299}
   - {fileID: 1085939890}
-  - {fileID: 2023473360}
   - {fileID: 851092001}
+  - {fileID: 98851265}

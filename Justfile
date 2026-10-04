@@ -155,6 +155,23 @@ k8s-deploy:
 k8s-destroy:
 	kubectl delete -k deploy/k8s
 
+# ---- Unity Sample (CLI-driven) ----
+# The sample scene is built from code, not hand-edited YAML. Everything runs headless.
+UNITY := env_var_or_default("UNITY_PATH", "/Applications/Unity/Hub/Editor/6000.6.3f1/Unity.app/Contents/MacOS/Unity")
+SAMPLE := "sdk/unity/sample_unity"
+
+# Rebuild the sample scene (idempotent)
+sample-setup:
+	-@pkill -f "Unity.app/Contents/MacOS/Unity" 2>/dev/null
+	@rm -f {{SAMPLE}}/Temp/UnityLockfile
+	@{{UNITY}} -batchmode -quit -nographics -projectPath "$(pwd)/{{SAMPLE}}" -executeMethod ExoforgeSampleSetup.SetUp -logFile /tmp/exoforge-sample-setup.log; status=$?; grep -E "ExoforgeSample\]" /tmp/exoforge-sample-setup.log || true; exit $status
+
+# Headless self-check for the sample (board pixel maths + leaderboard parsing)
+sample-check:
+	-@pkill -f "Unity.app/Contents/MacOS/Unity" 2>/dev/null
+	@rm -f {{SAMPLE}}/Temp/UnityLockfile
+	@{{UNITY}} -batchmode -nographics -projectPath "$(pwd)/{{SAMPLE}}" -executeMethod ExoforgeSampleCheck.Run -logFile /tmp/exoforge-sample-check.log; status=$?; grep -E "ExoforgeSampleCheck\]" /tmp/exoforge-sample-check.log || true; exit $status
+
 # ---- Unity SDK Distribution ----
 
 # Package Unity SDK into a self-contained UPM tarball (.tgz) for game developers

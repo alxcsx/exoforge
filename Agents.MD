@@ -160,6 +160,8 @@ Gameplay must not hold a client, an endpoint, or a token. It publishes hooks (e.
 | `just compose-down` | Stop and tear down Compose stack |
 | `just k8s-deploy` | Deploy cluster to Kubernetes via Kustomize (with sensible defaults) |
 | `just benchmark` | Run stateful entity cluster performance benchmark |
+| `just sample-setup` | Rebuild the Unity Snake sample scene via the Unity CLI (idempotent) |
+| `just sample-check` | Headless self-check for the Unity Snake sample (exit 0 = pass) |
 
 ---
 

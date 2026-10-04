@@ -26,22 +26,26 @@ So: the *name* and the *high score* live on the server; the *game loop* lives in
 sample_unity/
 ├── Assets/
 │   ├── SnakeGame/
-│   │   ├── SnakePlayerController.cs   stage 1+2 sign-in, gates gameplay until named
-│   │   └── SnakeGameController.cs     the game loop + RunEnded(score, length) hook
+│   │   ├── SnakeGameController.cs   the game loop; raises RunEnded(score, length). No rendering.
+│   │   ├── SnakeGameView.cs         board + HUD + name prompt + leaderboard panel (IMGUI)
+│   │   ├── SnakeLeaderboard.cs      the ONLY file that talks to Exoforge
+│   │   └── SnakePlayerController.cs stage 1+2 sign-in, gates gameplay until named
 │   ├── Exoforge/Generated/
-│   │   └── ExoforgeServices.g.cs      GENERATED — do not hand-edit
-│   ├── Resources/exoforge.json        workspace config linked for runtime (generated)
-│   ├── Scenes/SampleScene.unity       Player + Gameplay + camera/light
-│   ├── Editor/ExoforgeSampleSetup.cs  one-shot scene wiring (see §5)
-│   └── csc.rsp                        -nullable:enable for Assembly-CSharp
+│   │   └── ExoforgeServices.g.cs    GENERATED — do not hand-edit
+│   ├── Resources/exoforge.json      workspace config linked for runtime (generated)
+│   ├── Scenes/SampleScene.unity     built from code, not hand-edited
+│   ├── Editor/
+│   │   ├── ExoforgeSampleSetup.cs   builds the scene (idempotent, CLI-driven)
+│   │   └── ExoforgeSampleCheck.cs   headless self-check
+│   └── csc.rsp                      -nullable:enable for Assembly-CSharp
 │
-├── Exoforge/                          the Exoforge workspace (OUTSIDE Assets/)
-│   ├── exoforge.json                  environments + codegen paths
-│   └── plugins/snake_leaderboard/     the server plugin (a dotnet project)
+├── Exoforge/                        the Exoforge workspace (OUTSIDE Assets/)
+│   ├── exoforge.json                environments + codegen paths
+│   └── plugins/snake_leaderboard/   the server plugin (a dotnet project)
 │       ├── SnakeLeaderboardPlugin.cs  the whole plugin, in C#
 │       ├── snake_leaderboard          the built NativeAOT binary
 │       └── manifest.exs               GENERATED from the C# attributes
-└── Packages/manifest.json             references com.exoforge.sdk (file:../../Exoforge.SDK)
+└── Packages/manifest.json           references com.exoforge.sdk (file:../../Exoforge.SDK)
 ```
 
 **Why the workspace is outside `Assets/`:** plugin sources are ordinary `dotnet` projects
@@ -51,14 +55,17 @@ adds `.meta` files to them, and they can use any .NET/C# version. Only two thing
 
 ### Scene
 
-| Object | Component | Role |
-| :--- | :--- | :--- |
-| `Player` | `SnakePlayerController` | signs in, prompts for the name, activates `Gameplay` |
-| `Gameplay` | `SnakeGameController` | the game; starts **inactive** until the player is named |
-| `Main Camera`, `Global Light 2D` | — | 2D scene furniture |
+Built by `ExoforgeSampleSetup.SetUp`, never by hand.
 
-There is **no Exoforge prefab in the scene** — `ExoforgeSDK` creates the runtime host on demand.
-Adding one is optional and only needed to override connection settings per scene.
+| Object | Component(s) | Role |
+| :--- | :--- | :--- |
+| `Exoforge` | `ExoforgeBehaviour` (prefab) | the runtime host. **Exactly one** — the setup deletes duplicates. |
+| `Player` | `SnakePlayerController` | signs in, prompts for the name, activates `Gameplay` |
+| `Gameplay` | `SnakeGameController` | the game. Starts **inactive**. |
+| `Hud` | `SnakeGameView` + `SnakeLeaderboard` | everything on screen. Stays active. |
+| `Main Camera`, `Global Light 2D` | — | furniture; the board is drawn in screen space |
+
+`Hud` has to be active before gameplay is: the name prompt appears *before* the player is ready.
 
 ---
 
@@ -84,7 +91,26 @@ if (!session.HasDisplayName)
 
 ---
 
-## 4. The server side
+## 4. The screen
+
+No art, no prefabs, no Canvas — deliberately primitive, so the sample stays about the Exoforge
+integration:
+
+- **The board is a `gridWidth × gridHeight` `Texture2D`**, `FilterMode.Point`, where **one pixel is
+  one coloured square**. `SnakeGameView.BuildPixels()` paints it from the controller's state: a
+  checkerboard background, then body / head / food. Empty cells alternate so the grid reads as a
+  grid even when it is empty.
+- **The panels are IMGUI** (`OnGUI`): score, state, the name prompt, the ranking. IMGUI needs no
+  scene wiring and gives text fields and buttons for free.
+- Cell `y` grows **upward**, matching the texture's bottom-left origin. (The old IMGUI board used a
+  downward `y`; that flip is the easiest thing to get wrong here, hence the check below.)
+
+Input uses the **Input System package** (`Keyboard.current`) — this project is set to
+`activeInputHandler: 1`, so the legacy `UnityEngine.Input` class throws at runtime.
+
+---
+
+## 5. The server side
 
 `snake_leaderboard` is a **native C# plugin** (no WASM, no C). It is the only server code:
 
@@ -99,44 +125,46 @@ player reads and writes the same ranking.
 
 `player_id` is taken from the caller's identity, so a client can only submit its own score.
 
+`SnakeLeaderboard` is the bridge: it listens for `SnakeGameController.RunEnded`, submits the score,
+and refreshes the ranking. Gameplay never holds a client or a token — delete that one component and
+Snake still runs.
+
 ---
 
-## 5. Working on it
+## 6. Working on it
 
 ```bash
-just dev                      # backend on :4000 (ws) / :4001 (http) / :4005 (studio)
+just dev                # backend on :4000 (ws) / :4001 (http) / :4005 (studio)
+just sample-setup       # rebuild the scene via the Unity CLI (idempotent)
+just sample-check       # headless self-check; exit 0 = pass
+```
 
+`just sample-check` runs `ExoforgeSampleCheck.Run`, which covers the two fiddly bits — the board's
+pixel index maths and the leaderboard JSON parsing. Both are pure functions on purpose so they can
+be checked headlessly. Override the editor with `UNITY_PATH=... just sample-check`.
+
+Deploy the plugin and regenerate the client:
+
+```bash
 # The `exo` CLI is not installed on PATH — run it from the repo:
 CLI="dotnet run --project <repo>/sdk/csharp/Exoforge.CLI --"
 
-$CLI plugin build snake_leaderboard    # NativeAOT binary + manifest.exs from the C# attributes
-$CLI plugin push  snake_leaderboard    # build + deploy to the running cluster
-$CLI sync                              # regenerate Assets/Exoforge/Generated/ExoforgeServices.g.cs
+$CLI plugin push snake_leaderboard      # build (NativeAOT) + deploy to the running cluster
+$CLI sync                               # regenerate Assets/Exoforge/Generated/ExoforgeServices.g.cs
 ```
 
-From the Unity Editor, `Tools ▸ Exoforge ▸ …` covers the same ground: **Sync Client Bindings**
-(regenerate), **Add Exoforge to Scene** (add the optional prefab), **Control Center** (connect,
-deploy, inspect).
-
-`ExoforgeSampleSetup` has no menu item — it is a one-shot batch entry point, only needed to rebuild
-the scene from scratch:
-
-```bash
-Unity -batchmode -quit -projectPath <this project> -executeMethod ExoforgeSampleSetup.SetUp
-```
-
-The committed scene is already wired, so a normal session never runs it.
+From the Unity Editor, `Tools ▸ Exoforge ▸ …` covers the same ground: **Sync Client Bindings**,
+**Add Exoforge to Scene**, **Control Center** (connect, deploy, inspect).
 
 Rules of thumb:
 
-- **Never hand-edit** `Assets/Exoforge/Generated/ExoforgeServices.g.cs` or
-  `Exoforge/plugins/*/manifest.exs` — regenerate them (`$CLI sync`, `$CLI plugin build`).
+- **Never hand-edit** `Assets/Exoforge/Generated/ExoforgeServices.g.cs`, `Exoforge/plugins/*/manifest.exs`,
+  or `Assets/Scenes/SampleScene.unity` — regenerate them (`$CLI sync`, `$CLI plugin build`,
+  `just sample-setup`).
 - **Gameplay must not hold a client, an endpoint, or a token.** Publish a hook
-  (`SnakeGameController.RunEnded`) and let a controller bridge it to `ExoforgeSDK.Client`.
+  (`SnakeGameController.RunEnded`) and let `SnakeLeaderboard` bridge it to `ExoforgeSDK.Client`.
 - Call the server through the **generated** clients:
   `ExoforgeSDK.Client.SnakeLeaderboard().SubmitScoreAsync(...)`.
 - Plugin payloads are `JsonObject` — NativeAOT trims reflection-based JSON.
 - Plugins build per OS: `$CLI plugin build snake_leaderboard --rid linux-x64` for a Linux deploy.
-
-> Not wired yet: `SnakeGameController.RunEnded` → `snake_leaderboard.submit_score`, and the
-> leaderboard UI. The hook, the plugin, and the SDK call all exist; the bridge between them does not.
+- Uploaded plugins **do not survive a server restart** — re-`push` after restarting the backend.
