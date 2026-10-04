@@ -8,8 +8,8 @@ namespace SnakeGame
     /// Self-contained Snake game. Pure Unity — no backend, no networking.
     ///
     /// The only backend-facing surface is <see cref="RunEnded"/>: a finished run raises it with
-    /// the score and final length, and a leaderboard component subscribes. Gameplay never holds a
-    /// client or an endpoint.
+    /// the score and final length, and a leaderboard component subscribes (through
+    /// <c>ExoforgeSDK.Client</c>). Gameplay never holds a client or an endpoint.
     /// </summary>
     public class SnakeGameController : MonoBehaviour
     {

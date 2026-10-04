@@ -104,6 +104,25 @@ Because NativeAOT trims reflection, emit **`JsonObject`** payloads and keep `Plu
 `ActionDispatcher` stays runtime-agnostic: every non-Elixir plugin gets a generated proxy module
 (`Exoforge.Drivers.Runtime.PluginProxy`) registered as its `entry_point`.
 
+### Unity SDK Surface (game-facing)
+
+Game code talks to exactly one entry point:
+
+```csharp
+var session = await ExoforgeSDK.Auth.LoginAnonymously("Viper");   // creates or re-uses the account
+var board   = await ExoforgeSDK.Client.SnakeLeaderboard().GetLeaderboardAsync(10);
+```
+
+- `ExoforgeSDK.Auth.LoginAnonymously(name)` — signs in, re-using the account this machine already
+  registered. `ExoTokenStore` is **internal**: never a game-facing API.
+- `ExoforgeSDK.Client` — the connected `ExoClient`; use the **generated** service extensions
+  (`Client.PlayerData()`, `Client.SnakeLeaderboard()`, …) rather than hand-written calls.
+- `ExoforgeSDK.ConnectAsync()` — idempotent connect. `ExoforgeBehaviour` is created on demand if no
+  Exoforge prefab is in the scene, so a game needs no scene wiring to use the SDK.
+
+Gameplay must not hold a client, an endpoint, or a token. It publishes hooks (e.g.
+`SnakeGameController.RunEnded`) and a game-side controller bridges them to `ExoforgeSDK.Client`.
+
 ---
 
 ## 3. Ponytail Engineering Principles (Points to Simplify & Polish)

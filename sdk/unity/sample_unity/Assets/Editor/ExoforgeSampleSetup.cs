@@ -23,7 +23,7 @@ public static class ExoforgeSampleSetup
         var scene = EditorSceneManager.GetActiveScene();
 
         // Remove the superseded onboarding object if an earlier setup created one.
-        foreach (var stale in Object.FindObjectsByType<GameObject>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+        foreach (var stale in Object.FindObjectsByType<GameObject>(FindObjectsInactive.Include))
         {
             if (stale.name == "PlayerOnboarding")
             {

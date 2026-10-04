@@ -1,5 +1,4 @@
 using System;
-using System.Text.Json;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -40,9 +39,6 @@ namespace Exoforge.Client.Unity
 
         [Tooltip("Connect as soon as the scene loads.")]
         [SerializeField] private bool connectOnAwake = true;
-
-        [Tooltip("When no session is stored, request an anonymous session on connect.")]
-        [SerializeField] private bool anonymousOnConnect = true;
 
         private Task? _pendingConnect;
         private ExoforgeRuntimeConfig? _resolvedConfig;
@@ -153,12 +149,6 @@ namespace Exoforge.Client.Unity
 
                 await Client.ConnectAsync(new Uri(targetUrl));
 
-                // No stored or configured credential: mint an anonymous session so the client is usable.
-                if (string.IsNullOrEmpty(targetToken) && anonymousOnConnect)
-                {
-                    targetToken = await RequestAnonymousSessionAsync();
-                }
-
                 if (!string.IsNullOrEmpty(targetToken))
                 {
                     var auth = await Client.AuthenticateAsync(targetToken);
@@ -184,29 +174,6 @@ namespace Exoforge.Client.Unity
                 Debug.LogError($"[Exoforge] Connection error: {ex.Message}");
                 return false;
             }
-        }
-
-        /// <summary>
-        /// Requests an anonymous player session (reachable before authenticating) and returns its token.
-        /// </summary>
-        private async Task<string?> RequestAnonymousSessionAsync()
-        {
-            try
-            {
-                var result = await Client!.SendActionAsync<JsonElement>("auth", "anonymous", new { });
-
-                if (result.ValueKind == JsonValueKind.Object && result.TryGetProperty("token", out var tokenProp))
-                {
-                    string token = tokenProp.GetString() ?? "";
-                    return string.IsNullOrEmpty(token) ? null : token;
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.LogWarning($"[Exoforge] Anonymous session request failed: {ex.Message}");
-            }
-
-            return null;
         }
 
         private void Update()
