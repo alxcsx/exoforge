@@ -100,6 +100,9 @@ Options:
         if (args.Length < 2)
         {
             Console.WriteLine("Usage: exo plugin <new|build|push|list|remove> [name] [options]");
+            Console.WriteLine("       --dir <path>   workspace directory");
+            Console.WriteLine("       --env <name>   target environment");
+            Console.WriteLine("       --rid <rid>    native target runtime, e.g. linux-x64 (default: host)");
             return 1;
         }
 
@@ -131,7 +134,7 @@ Options:
                     Console.WriteLine("Error: Missing plugin name. Usage: exo plugin build <name>");
                     return 1;
                 }
-                return BuildPlugin(ws, args[2]);
+                return BuildPlugin(ws, args[2], GetOption(args, "--rid"));
 
             case "push":
                 if (args.Length < 3)
@@ -141,7 +144,7 @@ Options:
                 }
                 string pushName = args[2];
                 // Build if not present or requested
-                _ = BuildPlugin(ws, pushName);
+                _ = BuildPlugin(ws, pushName, GetOption(args, "--rid"));
 
                 Console.WriteLine($"[Exoforge] Uploading plugin '{pushName}' to live cluster...");
                 string pushResult = await deployer.UploadPluginAsync(pushName, env).ConfigureAwait(false);
@@ -176,7 +179,7 @@ Options:
         }
     }
 
-    private static int BuildPlugin(ExoWorkspace ws, string rawName)
+    private static int BuildPlugin(ExoWorkspace ws, string rawName, string? ridOverride = null)
     {
         string cleanName = rawName.Trim().ToLowerInvariant().Replace("-", "_");
         string pluginDir = Path.Combine(ws.PluginsPath, cleanName);
@@ -241,7 +244,7 @@ Options:
         {
             // Default: compile the plugin to a self-contained native binary (AOT) and
             // generate its manifest from the C# attributes.
-            int nativeResult = PublishNative(ws, pluginDir, cleanName);
+            int nativeResult = PublishNative(ws, pluginDir, cleanName, ridOverride);
             if (nativeResult != 0)
             {
                 return nativeResult;
@@ -269,9 +272,10 @@ Options:
         }
     }
 
-    private static int PublishNative(ExoWorkspace ws, string pluginDir, string cleanName)
+    private static int PublishNative(ExoWorkspace ws, string pluginDir, string cleanName, string? ridOverride)
     {
-        string rid = RuntimeInformation.RuntimeIdentifier;
+        // Defaults to the host, but a plugin ships per-OS: build linux-x64 on CI for prod.
+        string rid = string.IsNullOrWhiteSpace(ridOverride) ? RuntimeInformation.RuntimeIdentifier : ridOverride!;
         Console.WriteLine($"[Exoforge] Publishing native plugin for {rid}...");
 
         var publish = new ProcessStartInfo(

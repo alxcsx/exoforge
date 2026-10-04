@@ -45,6 +45,8 @@ public static class PluginHost
     private static readonly Dictionary<long, string> PendingHostCalls = new();
     private static Stream? _stdout;
     private static long _nextHostCallId;
+    private static object? _instance;
+    private static MethodInfo? _eventHandler;
 
     /// <summary>Runs <typeparamref name="T"/> until stdin closes.</summary>
     /// <remarks>
@@ -64,20 +66,85 @@ public static class PluginHost
         _stdout = Console.OpenStandardOutput();
         HostBridge.UseTransport(new NativeTransport());
 
+        _instance = instance;
         var pluginType = instance.GetType();
         var actions = BuildActionTable(pluginType);
+        _eventHandler = FindEventHandler(pluginType);
 
         using var reader = new StreamReader(Console.OpenStandardInput(), Encoding.UTF8);
 
         while (reader.ReadLine() is { } line)
         {
-            if (!string.IsNullOrWhiteSpace(line))
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
+            if (IsEventFrame(line))
+            {
+                DispatchEvent(line);
+            }
+            else
             {
                 Dispatch(line, instance, actions);
             }
         }
 
         return 0;
+    }
+
+    /// <summary>
+    /// Resolves the plugin's inbound event handler: <c>OnEvent(string, JsonElement)</c> or
+    /// <c>OnEvent(string)</c>. Optional — plugins that ignore events need not define it.
+    /// </summary>
+    private static MethodInfo? FindEventHandler(Type pluginType)
+    {
+        const BindingFlags flags =
+            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
+
+        return pluginType.GetMethod("OnEvent", flags, null, new[] { typeof(string), typeof(JsonElement) }, null)
+            ?? pluginType.GetMethod("OnEvent", flags, null, new[] { typeof(string) }, null);
+    }
+
+    private static bool IsEventFrame(string line)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(line);
+            return doc.RootElement.TryGetProperty("type", out var type) && type.GetString() == "event";
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Dispatches an inbound host event to the plugin's <c>OnEvent</c> handler.</summary>
+    private static void DispatchEvent(string line)
+    {
+        if (_eventHandler == null)
+        {
+            return;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(line);
+            var root = doc.RootElement;
+
+            string name = root.TryGetProperty("event", out var eventProp) ? eventProp.GetString() ?? "" : "";
+            JsonElement payload = root.TryGetProperty("payload", out var payloadProp) ? payloadProp : default;
+
+            object?[] args = _eventHandler.GetParameters().Length == 2
+                ? new object?[] { name, payload }
+                : new object?[] { name };
+
+            _eventHandler.Invoke(_instance, args);
+        }
+        catch (Exception ex)
+        {
+            Write($"{{\"type\":\"host_log\",\"level\":3,\"message\":{JsonEncode((ex as TargetInvocationException)?.InnerException?.Message ?? ex.Message)}}}");
+        }
     }
 
     private static Dictionary<string, (MethodInfo Method, ParameterInfo[] Params)> BuildActionTable(Type pluginType)
@@ -258,6 +325,14 @@ public static class PluginHost
             {
                 using var doc = JsonDocument.Parse(line);
                 var root = doc.RootElement;
+
+                // Events may arrive while an action is blocked on a host call; handle them here
+                // too so they are not dropped.
+                if (root.TryGetProperty("type", out var frameType) && frameType.GetString() == "event")
+                {
+                    DispatchEvent(line);
+                    continue;
+                }
 
                 if (root.TryGetProperty("type", out var typeProp) &&
                     typeProp.GetString() == "host_call_result" &&

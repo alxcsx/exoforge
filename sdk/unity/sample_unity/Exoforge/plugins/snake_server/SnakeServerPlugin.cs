@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Exoforge.Plugin.SDK;
 
@@ -152,6 +153,15 @@ public class SnakeServerPlugin
     {
         _foodX = (_foodX + 7) % _width;
         _foodY = (_foodY + 11) % _height;
+    }
+
+    /// <summary>
+    /// Inbound cluster events this plugin declared interest in. Called by the SDK host loop;
+    /// never invoked directly by game code.
+    /// </summary>
+    public void OnEvent(string eventName, JsonElement payload)
+    {
+        HostBridge.LogInfo($"[snake_server] inbound event: {eventName}");
     }
 
     public static void Main() => PluginHost.Run<SnakeServerPlugin>();

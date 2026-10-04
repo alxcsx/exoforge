@@ -72,8 +72,17 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
     GenServer.start_link(__MODULE__, {manifest, binary_path}, name: name)
   end
 
-  @doc "Native plugins are request/response only; inbound BEAM events are not delivered yet."
-  def dispatch_event(_plugin_id, _event_key, _payload, _context), do: :ignored
+  @doc "Forwards an inbound BEAM event to the plugin process as an `event` frame."
+  def dispatch_event(plugin_id, event_key, payload, _context) do
+    case WorkerRegistry.lookup(plugin_id, @runner_key) do
+      {:ok, pid} ->
+        send(pid, {:forward_event, event_key, payload})
+        :ok
+
+      _ ->
+        :ignored
+    end
+  end
 
   @doc "Executes an action on a running native plugin."
   def execute_action(plugin_id, action, payload, timeout \\ 5000) do
@@ -104,6 +113,13 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
         :hide
       ])
 
+    # Subscribe to the events this plugin declared so the host can forward them. The declared
+    # topic matters: EventDispatcher keys subscriptions by {event, topic}.
+    Enum.each(declared_events(manifest), fn
+      {event, topic} when is_binary(topic) and topic != "" -> EventDispatcher.subscribe(event, topic: topic)
+      {event, _topic} -> EventDispatcher.subscribe(event)
+    end)
+
     {:ok, %{manifest: manifest, port: port, buffer: "", pending: %{}, seq: 0}}
   end
 
@@ -124,6 +140,16 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
     {:noreply, state}
   end
 
+  def handle_info({:forward_event, event_key, payload}, state) do
+    send_event(state, event_key, payload)
+    {:noreply, state}
+  end
+
+  def handle_info({:exo_event, event_key, payload, _context}, state) do
+    send_event(state, event_key, payload)
+    {:noreply, state}
+  end
+
   def handle_info({port, {:exit_status, status}}, %{port: port} = state) do
     Logger.warning("[NativePluginRunner] Plugin #{state.manifest.id} exited with status #{status}")
 
@@ -135,6 +161,26 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
   end
 
   def handle_info(_msg, state), do: {:noreply, state}
+
+  defp send_event(state, event_key, payload) do
+    frame = Jason.encode!(%{type: "event", event: to_string(event_key), payload: sanitize(payload)})
+    Port.command(state.port, frame <> "\n")
+  rescue
+    _ -> :ok
+  end
+
+  defp declared_events(manifest) do
+    manifest
+    |> Exoforge.PluginRegistry.manifest_services()
+    |> Enum.flat_map(fn svc -> Map.get(svc, :events) || Map.get(svc, "events") || [] end)
+    |> Enum.map(fn
+      %{name: name, topic: topic} -> {name, topic}
+      %{"name" => name, "topic" => topic} -> {name, topic}
+      %{name: name} -> {name, nil}
+      %{"name" => name} -> {name, nil}
+      other -> {other, nil}
+    end)
+  end
 
   # -- Wire protocol --
 
@@ -192,8 +238,11 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
     event = Map.get(args, "event", "")
     payload = Map.get(args, "payload")
 
+    # Subscriptions are keyed by atom (see declared_events/1), so normalise here.
+    event_key = Exoforge.Atoms.existing(event, event)
+
     opts = if topic == "", do: [], else: [topic: topic]
-    EventDispatcher.broadcast(event, payload, opts)
+    EventDispatcher.broadcast(event_key, payload, opts)
     true
   end
 
