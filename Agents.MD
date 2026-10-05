@@ -192,6 +192,7 @@ Gameplay must not hold a client, an endpoint, or a token. It publishes hooks (e.
 | `just test` | Run entire test suite (Core, Plugins, System, C# SDKs — 164 tests) |
 | `just test-e2e` | Run live end-to-end vertical slice (WebSocket + WASM + Event loop) |
 | `just dev` | Start backend development server (ports 4000, 4001, 4005) |
+| `just dev-reset` | Stop the dev server and wipe all dev data (SQLite databases + uploaded plugins) |
 | `just build-wasm` | Compile the **system** WASM samples (`plugins_csharp/*/build.sh`) |
 | `exo plugin build <name>` | Build a game plugin (NativeAOT binary + `manifest.exs`) |
 | `exo plugin push <name>` | Build and deploy a plugin to a running cluster |

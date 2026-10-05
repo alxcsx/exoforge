@@ -202,3 +202,5 @@ Rules of thumb:
   `PluginHost.Run<SnakeLeaderboardPlugin, SnakeJsonContext>()` — NativeAOT trims reflection-based JSON.
 - Plugins build per OS: `$CLI plugin build snake_leaderboard --rid linux-x64` for a Linux deploy.
 - Uploaded plugins **do not survive a server restart** — re-`push` after restarting the backend.
+- `just dev-reset` stops the dev server and wipes every `priv/data` (SQLite databases and
+  uploaded plugins). Use it for a clean slate — the server recreates its databases on boot.

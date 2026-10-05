@@ -11,6 +11,12 @@ compose_cmd := `command -v docker-compose >/dev/null 2>&1 && echo "docker-compos
 dev:
 	mix run --no-halt
 
+# Stop the dev server and wipe all dev data (SQLite databases + uploaded plugins)
+dev-reset:
+	-@pkill -f "mix run" 2>/dev/null
+	@find . -type d -path "*/priv/data" -not -path "*/_build/*" -prune -exec rm -rf {} +
+	@echo "Development data cleared — SQLite databases and uploaded plugins are gone."
+
 # Format all Elixir code
 format:
 	mix format

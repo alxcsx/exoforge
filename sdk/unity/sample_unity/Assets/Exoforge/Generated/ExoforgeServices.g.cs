@@ -522,10 +522,10 @@ public class ResourceStoreListRequest
     public JsonElement Offset { get; set; } = default!;
     [JsonPropertyName("sort")]
     public JsonElement Sort { get; set; } = default!;
-    [JsonPropertyName("filter")]
-    public JsonElement Filter { get; set; } = default!;
     [JsonPropertyName("search")]
     public JsonElement Search { get; set; } = default!;
+    [JsonPropertyName("filter")]
+    public JsonElement Filter { get; set; } = default!;
     [JsonPropertyName("limit")]
     public JsonElement Limit { get; set; } = default!;
     [JsonPropertyName("resource")]
@@ -1676,14 +1676,14 @@ public class ResourceStoreServiceClient
     }
 
     /// <summary>Lists rows for a resource with filtering, sorting, and pagination.</summary>
-    public Task<ResourceStoreListResponse> ListAsync(JsonElement offset, JsonElement sort, JsonElement filter, JsonElement search, JsonElement limit, string resource, CancellationToken cancellationToken = default)
+    public Task<ResourceStoreListResponse> ListAsync(JsonElement offset, JsonElement sort, JsonElement search, JsonElement filter, JsonElement limit, string resource, CancellationToken cancellationToken = default)
     {
         var req = new ResourceStoreListRequest
         {
             Offset = offset,
             Sort = sort,
-            Filter = filter,
             Search = search,
+            Filter = filter,
             Limit = limit,
             Resource = resource,
         };

@@ -255,13 +255,6 @@
         "com.unity.graph-authoring": "1.0.0"
       }
     },
-    "com.unity.sysroot.base": {
-      "version": "1.1.0",
-      "depth": 1,
-      "source": "registry",
-      "dependencies": {},
-      "url": "https://packages.unity.com"
-    },
     "com.unity.test-framework": {
       "version": "1.8.0",
       "depth": 0,
