@@ -55,3 +55,7 @@ MemoryCaptures/
 Recordings/
 # sdk/unity/sample_unity/ is tracked
 sdk/unity/unity_sample/
+
+# === Unity-generated IDE project files (regenerated on import) ===
+sdk/unity/sample_unity/*.csproj
+sdk/unity/sample_unity/*.slnx
