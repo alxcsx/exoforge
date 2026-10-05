@@ -10,5 +10,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Exoforge.Management\Exoforge.Management.csproj" />
+    <!-- Referenced directly: ExoDeployer's API exposes ExoClient (e.g. VerifyPluginAsync's
+         optional parameter), so compiling a call to it needs the assembly. Warm builds hid
+         this; a cold clone failed with CS0012. -->
+    <ProjectReference Include="..\Exoforge.Client\Exoforge.Client.csproj" />
   </ItemGroup>
 </Project>
