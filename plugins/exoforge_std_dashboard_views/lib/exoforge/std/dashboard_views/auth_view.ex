@@ -5,6 +5,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
   """
   use Phoenix.LiveComponent
   alias Exoforge.ActionDispatcher
+  alias Exoforge.Std.DashboardViews.UserForms
 
   @impl true
   def mount(socket) do
@@ -111,22 +112,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
 
   @impl true
   def handle_event("submit_register", %{"register" => params}, socket) do
-    user_id = String.trim(Map.get(params, "user_id", Map.get(params, "player_id", "")))
-    name = String.trim(Map.get(params, "name", ""))
-    email = String.trim(Map.get(params, "email", ""))
-    password = String.trim(Map.get(params, "password", ""))
-    role = String.trim(Map.get(params, "role", "player"))
-    scopes = Exoforge.Auth.Roles.scopes_for_role(role)
-
-    payload = %{
-      user_id: if(user_id != "", do: user_id, else: nil),
-      player_id: if(user_id != "", do: user_id, else: nil),
-      name: if(name != "", do: name, else: nil),
-      email: if(email != "", do: email, else: nil),
-      password: if(password != "", do: password, else: nil),
-      role: role,
-      scopes: scopes
-    }
+    payload = UserForms.registration_payload(params)
 
     case ActionDispatcher.dispatch(:auth, :register, payload) do
       {:ok, result} ->
@@ -135,9 +121,10 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
           |> assign(
             show_register_modal: false,
             error_message: nil,
-            action_notification: "User '#{if name != "", do: name, else: result.player_id}' successfully created!",
+            action_notification:
+              "User '#{UserForms.display_name(payload.name, result.player_id)}' successfully created!",
             issued_token_info: %{
-              name: if(name != "", do: name, else: result.player_id),
+              name: UserForms.display_name(payload.name, result.player_id),
               player_id: result.player_id,
               token: result.token,
               scopes: result.scopes
@@ -176,22 +163,12 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
 
   @impl true
   def handle_event("submit_reset_password", %{"reset" => %{"password" => new_pw}}, socket) do
-    user = socket.assigns.reset_password_user
-    pid = if user, do: user["player_id"], else: nil
-    trimmed = String.trim(new_pw || "")
+    case UserForms.reset_password_for(socket.assigns.reset_password_user, new_pw) do
+      {:error, message} ->
+        {:noreply, assign(socket, reset_password_error: message)}
 
-    cond do
-      is_nil(user) ->
-        {:noreply, assign(socket, reset_password_error: "No user selected.")}
-
-      trimmed == "" ->
-        {:noreply, assign(socket, reset_password_error: "Password cannot be empty.")}
-
-      true ->
-        case ActionDispatcher.dispatch(:auth, :reset_password, %{
-               player_id: pid,
-               password: trimmed
-             }) do
+      {:ok, payload} ->
+        case ActionDispatcher.dispatch(:auth, :reset_password, payload) do
           {:ok, _} ->
             socket =
               socket
@@ -199,21 +176,18 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                 show_reset_password_modal: false,
                 reset_password_user: nil,
                 reset_password_error: nil,
-                action_notification: "Password for '#{pid}' successfully updated!"
+                action_notification: "Password for '#{payload.player_id}' successfully updated!"
               )
               |> load_users()
 
             {:noreply, socket}
 
-          {:error, :protected_admin_account} ->
-            {:noreply,
-             assign(socket,
-               reset_password_error: "Cannot reset password of the protected environment admin."
-             )}
-
           {:error, reason} ->
             {:noreply,
-             assign(socket, reset_password_error: "Password reset failed: #{inspect(reason)}")}
+             assign(socket,
+               reset_password_error:
+                 "Password reset failed: #{UserForms.failure_message(reason)}"
+             )}
         end
     end
   end

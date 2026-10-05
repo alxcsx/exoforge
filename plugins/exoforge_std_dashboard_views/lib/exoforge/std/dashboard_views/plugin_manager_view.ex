@@ -12,7 +12,9 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
   - Remove dynamically installed plugins safely
   """
   use Phoenix.LiveComponent
+
   alias Exoforge.ActionDispatcher
+  alias Exoforge.Std.DashboardViews.PluginUpload
 
   @impl true
   def mount(socket) do
@@ -163,45 +165,9 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
         %{"filename" => filename, "content_base64" => base64, "size" => size},
         socket
       ) do
-    ext = Path.extname(filename)
-    is_ex = ext in [".ex", ".exs"]
-
-    clean_name =
-      filename
-      |> Path.rootname(ext)
-      |> Macro.underscore()
-      |> String.replace(~r/[^a-z0-9_]/, "")
-
-    current_form = socket.assigns.upload_form
-
-    updated_form =
-      if is_ex do
-        decoded =
-          case Base.decode64(base64) do
-            {:ok, txt} -> txt
-            _ -> ""
-          end
-
-        current_form
-        |> Map.put("type", "elixir")
-        |> Map.put("elixir_code", decoded)
-        |> Map.put(
-          "name",
-          if(current_form["name"] == "", do: clean_name, else: current_form["name"])
-        )
-      else
-        current_form
-        |> Map.put("type", "wasm")
-        |> Map.put("binary", base64)
-        |> Map.put(
-          "name",
-          if(current_form["name"] == "", do: clean_name, else: current_form["name"])
-        )
-      end
-
     {:noreply,
      assign(socket,
-       upload_form: updated_form,
+       upload_form: PluginUpload.form_with_file(socket.assigns.upload_form, filename, base64),
        upload_file_info: %{filename: filename, size_bytes: size},
        upload_error: nil
      )}
@@ -209,55 +175,11 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
 
   @impl true
   def handle_event("submit_upload", %{"upload" => params}, socket) do
-    name = String.trim(Map.get(params, "name", ""))
-    type = Map.get(params, "type", socket.assigns.upload_form["type"] || "wasm")
+    case PluginUpload.payload(params, socket.assigns.upload_form) do
+      {:error, message} ->
+        {:noreply, assign(socket, upload_error: message)}
 
-    raw_binary =
-      String.trim(Map.get(params, "binary", socket.assigns.upload_form["binary"] || ""))
-
-    elixir_code =
-      String.trim(Map.get(params, "elixir_code", socket.assigns.upload_form["elixir_code"] || ""))
-
-    manifest_raw = String.trim(Map.get(params, "manifest_json", ""))
-
-    manifest =
-      if manifest_raw != "" do
-        case Jason.decode(manifest_raw) do
-          {:ok, parsed} -> parsed
-          _ -> nil
-        end
-      else
-        nil
-      end
-
-    cond do
-      name == "" ->
-        {:noreply, assign(socket, upload_error: "Plugin name is required.")}
-
-      type == "elixir" and elixir_code == "" ->
-        {:noreply, assign(socket, upload_error: "Elixir module code is required.")}
-
-      type == "wasm" and raw_binary == "" ->
-        {:noreply, assign(socket, upload_error: "WASM binary content or file is required.")}
-
-      true ->
-        payload =
-          if type == "elixir" do
-            %{
-              name: name,
-              type: "elixir",
-              elixir_code: elixir_code,
-              manifest: manifest
-            }
-          else
-            %{
-              name: name,
-              type: "wasm",
-              binary: raw_binary,
-              manifest: manifest
-            }
-          end
-
+      {:ok, payload} ->
         case ActionDispatcher.dispatch(:plugin_manager, :upload_plugin, payload) do
           {:ok, result} ->
             socket =
@@ -267,7 +189,7 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
                 upload_error: nil,
                 upload_file_info: nil,
                 upload_success:
-                  "Plugin '#{result.plugin_id}' (#{result[:type] || type}) successfully uploaded and initialized!"
+                  "Plugin '#{result.plugin_id}' (#{result[:type] || payload.type}) successfully uploaded and initialized!"
               )
               |> load_data()
 
