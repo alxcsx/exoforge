@@ -216,8 +216,7 @@ Options:
     {
         try
         {
-            var build = new ExoDeployer(ws).BuildPlugin(rawName, ridOverride);
-            Console.WriteLine(build.Output);
+            var build = new ExoDeployer(ws).BuildPlugin(rawName, ridOverride, log: line => Console.WriteLine(line));
             Console.ForegroundColor = ConsoleColor.Green;
             Console.WriteLine($"[Exoforge] Build complete for plugin '{build.Name}' ({build.PluginType}).");
             Console.ResetColor();

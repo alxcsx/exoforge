@@ -1,0 +1,7 @@
+<Project>
+  <PropertyGroup>
+    <!-- Skip the NuGet vulnerability audit: it fetches nuget.org on every restore and stalls
+         offline/air-gapped builds (and Unity's spawned dotnet builds) with no timeout in sight. -->
+    <NuGetAudit>false</NuGetAudit>
+  </PropertyGroup>
+</Project>

@@ -105,7 +105,8 @@ public class ExoforgeControlCenter : EditorWindow
         bool IsBuilt,
         bool CanBuild,
         string BinaryPath,
-        long BinarySizeBytes);
+        long BinarySizeBytes,
+        bool Modified);
 
     [MenuItem("Tools/Exoforge/Exoforge Studio", false, 100)]
     [MenuItem("Window/Exoforge/Exoforge Studio", false, 2000)]
@@ -150,6 +151,8 @@ public class ExoforgeControlCenter : EditorWindow
         _workspace = ExoWorkspace.Load(ExoforgeEditorConfig.GetAbsoluteWorkspacePath());
         RefreshLocalPlugins();
 
+        EditorApplication.update += OnEditorUpdate;
+
         // Reconnect when the editor opens. `SessionState` survives script reloads, so the guard stops
         // reconnect spam; it is cleared when Unity exits, so this still runs on every editor start.
         if (!SessionState.GetBool(AutoConnectSessionKey, false))
@@ -188,7 +191,19 @@ public class ExoforgeControlCenter : EditorWindow
 
     private void OnDisable()
     {
+        EditorApplication.update -= OnEditorUpdate;
         _ = DisconnectAsync();
+    }
+
+    // Keeps the window repainting while a build runs, so the streamed build log updates live.
+    private void OnEditorUpdate()
+    {
+        if (_isBuilding) Repaint();
+    }
+
+    private void AppendBuildLog(string line)
+    {
+        _buildLog += line + "\n";
     }
 
     private void OnGUI()
@@ -785,7 +800,18 @@ public class ExoforgeControlCenter : EditorWindow
 
             bool isBuilt = binaryPath != "" && File.Exists(binaryPath);
             long size = isBuilt ? new FileInfo(binaryPath).Length : 0;
-            _localPlugins.Add(new LocalPluginInfo(name, dir, pluginType, isBuilt, canBuild, binaryPath, size));
+
+            // The manifest version carries the build fingerprint (1.0.0+<hash>); if the current
+            // sources hash differently, the plugin changed since it was last built.
+            bool modified = false;
+            if (isBuilt)
+            {
+                string? version = ExoDeployer.ReadManifestVersion(dir);
+                string fingerprint = ExoDeployer.ComputeSourceFingerprint(dir);
+                modified = version == null || !version.EndsWith("+" + fingerprint, StringComparison.Ordinal);
+            }
+
+            _localPlugins.Add(new LocalPluginInfo(name, dir, pluginType, isBuilt, canBuild, binaryPath, size, modified));
         }
     }
 
@@ -1294,6 +1320,13 @@ public class ExoforgeControlCenter : EditorWindow
                     EditorGUILayout.LabelField(new GUIContent("✗ Build failed", buildError), EditorStyles.miniBoldLabel, GUILayout.Width(105));
                     GUI.color = prev;
                 }
+                else if (plugin.IsBuilt && plugin.Modified)
+                {
+                    var prev = GUI.color;
+                    GUI.color = new Color(0.95f, 0.7f, 0.2f);
+                    EditorGUILayout.LabelField(new GUIContent("● Modified", "Sources changed since the last build"), EditorStyles.miniBoldLabel, GUILayout.Width(105));
+                    GUI.color = prev;
+                }
                 else if (plugin.IsBuilt)
                 {
                     string sizeStr = $"{plugin.BinarySizeBytes / 1024} KB";
@@ -1426,15 +1459,17 @@ public class ExoforgeControlCenter : EditorWindow
         if (_isBuilding) return;
 
         _isBuilding = true;
-        _buildLog = $"Building {plugin.Name} ({plugin.PluginType})...";
-        ShowStatus($"Building '{plugin.Name}'...", MessageType.Info);
+        _showBuildLog = true;
+        _buildLog = $"Building {plugin.Name} ({plugin.PluginType})...\n";
+        ShowStatus($"Building '{plugin.Name}'… (see Build Log)", MessageType.Info);
         Repaint();
 
         try
         {
             var deployer = new ExoDeployer(_workspace);
             string? rid = string.IsNullOrWhiteSpace(_buildRid) ? null : _buildRid.Trim();
-            var build = await deployer.BuildPluginAsync(plugin.Name, rid, ExoforgeEditorConfig.DotnetPath);
+            var build = await deployer.BuildPluginAsync(
+                plugin.Name, rid, ExoforgeEditorConfig.DotnetPath, AppendBuildLog);
 
             _buildLog = build.Output;
             SessionState.EraseString(BuildFailureKey(plugin.Name));

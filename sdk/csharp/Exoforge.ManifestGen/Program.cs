@@ -21,11 +21,16 @@ public static class Program
 
         // Plugin runtime: `wasm` (reactor guest) or `native` (AOT process).
         string pluginType = "wasm";
+        string? buildHash = null;
         for (int i = 0; i < args.Length - 1; i++)
         {
             if (args[i] == "--type")
             {
                 pluginType = args[i + 1].ToLowerInvariant();
+            }
+            else if (args[i] == "--build")
+            {
+                buildHash = args[i + 1];
             }
         }
 
@@ -205,8 +210,10 @@ public static class Program
                 serviceAttrs.FirstOrDefault()?.System ?? false));
         }
 
+        // SemVer build metadata: `1.0.0+<source fingerprint>` so a deploy is traceable to its sources.
+        string version = string.IsNullOrEmpty(buildHash) ? pluginVersion : $"{pluginVersion}+{buildHash}";
         string entryPoint = pluginType == "native" ? pluginId : $"{pluginId}.wasm";
-        string manifestContent = EmitElixirManifest(pluginId, pluginVersion, pluginType, entryPoint, provides, dependencies.ToList(), services);
+        string manifestContent = EmitElixirManifest(pluginId, version, pluginType, entryPoint, provides, dependencies.ToList(), services);
 
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
         File.WriteAllText(outputPath, manifestContent, new UTF8Encoding(false));

@@ -302,11 +302,8 @@ public class ExoDeployer
             Emit($"[build] dotnet -> {dotnet}");
         }
 
-        if (csproj != null)
-        {
-            Emit($"[build] dotnet build {Path.GetFileName(csproj)}");
-            RunProcess(dotnet, $"build \"{csproj}\" -c Release", pluginDir, Emit);
-        }
+        string fingerprint = ComputeSourceFingerprint(pluginDir);
+        Emit($"[build] source {fingerprint}");
 
         string buildSh = Path.Combine(pluginDir, "build.sh");
         string pluginType;
@@ -323,7 +320,7 @@ public class ExoDeployer
         else
         {
             pluginType = "native";
-            binaryPath = PublishNative(csproj ?? throw new FileNotFoundException($"No .csproj found for '{cleanName}'."), pluginDir, cleanName, rid, dotnet, Emit);
+            binaryPath = PublishNative(csproj ?? throw new FileNotFoundException($"No .csproj found for '{cleanName}'."), pluginDir, cleanName, rid, dotnet, fingerprint, Emit);
         }
 
         string manifestPath = Path.Combine(pluginDir, "manifest.exs");
@@ -335,12 +332,13 @@ public class ExoDeployer
         string pluginName,
         string? rid = null,
         string dotnetPath = "dotnet",
+        Action<string>? log = null,
         CancellationToken cancellationToken = default)
     {
-        return Task.Run(() => BuildPlugin(pluginName, rid, dotnetPath), cancellationToken);
+        return Task.Run(() => BuildPlugin(pluginName, rid, dotnetPath, log), cancellationToken);
     }
 
-    private string PublishNative(string csproj, string pluginDir, string cleanName, string? rid, string dotnetPath, Action<string> emit)
+    private string PublishNative(string csproj, string pluginDir, string cleanName, string? rid, string dotnetPath, string fingerprint, Action<string> emit)
     {
         string targetRid = string.IsNullOrWhiteSpace(rid) ? HostRuntimeIdentifier() : rid!;
         emit($"[build] dotnet publish -c Release -r {targetRid}");
@@ -373,7 +371,7 @@ public class ExoDeployer
         emit($"[build] manifest -> {manifest}");
         RunProcess(
             dotnetPath,
-            $"run --project \"{manifestGen}\" -- \"{dll}\" \"{manifest}\" --type native",
+            $"run --project \"{manifestGen}\" -- \"{dll}\" \"{manifest}\" --type native --build {fingerprint}",
             pluginDir,
             emit);
 
@@ -408,6 +406,42 @@ public class ExoDeployer
     {
         string normalized = path.Replace('\\', '/');
         return normalized.Contains("/bin/") || normalized.Contains("/obj/");
+    }
+
+    /// <summary>
+    /// Short content hash of a plugin's sources (<c>.cs</c>/<c>.csproj</c>). Used as SemVer build
+    /// metadata (<c>1.0.0+ab12cd34</c>) and to tell whether a local plugin changed since its last build.
+    /// </summary>
+    public static string ComputeSourceFingerprint(string pluginDir)
+    {
+        var files = Directory.EnumerateFiles(pluginDir, "*.cs", SearchOption.AllDirectories)
+            .Concat(Directory.EnumerateFiles(pluginDir, "*.csproj", SearchOption.AllDirectories))
+            .Where(path => !IsBuildPath(path))
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToList();
+
+        var content = new StringBuilder();
+        foreach (string file in files)
+        {
+            content.Append(Path.GetRelativePath(pluginDir, file)).Append('\n');
+            content.Append(File.ReadAllText(file)).Append('\n');
+        }
+
+        using var sha = System.Security.Cryptography.SHA256.Create();
+        byte[] hash = sha.ComputeHash(Encoding.UTF8.GetBytes(content.ToString()));
+        return BitConverter.ToString(hash).Replace("-", "").Substring(0, 8).ToLowerInvariant();
+    }
+
+    /// <summary>Reads the <c>version</c> field from a plugin's generated <c>manifest.exs</c>.</summary>
+    public static string? ReadManifestVersion(string pluginDir)
+    {
+        string manifestPath = Path.Combine(pluginDir, "manifest.exs");
+        if (!File.Exists(manifestPath)) return null;
+
+        var match = System.Text.RegularExpressions.Regex.Match(
+            File.ReadAllText(manifestPath), """version:\s*([^\s,]+)""");
+
+        return match.Success ? match.Groups[1].Value.Trim('"') : null;
     }
 
     private static string? FindFile(string root, string fileName)
@@ -482,8 +516,17 @@ public class ExoDeployer
     /// a bare <c>dotnet</c> fails even when the SDK is installed. An explicit override wins; otherwise
     /// probe PATH, the login shell, and the usual install locations.
     /// </summary>
+    private static readonly Dictionary<string, string> DotnetPathCache = new();
+
     public static string ResolveDotnetPath(string? configured)
     {
+        string key = configured ?? "";
+
+        lock (DotnetPathCache)
+        {
+            if (DotnetPathCache.TryGetValue(key, out var cached)) return cached;
+        }
+
         string candidate = string.IsNullOrWhiteSpace(configured) ? "dotnet" : configured.Trim();
 
         if (!IsBareCommand(candidate))
@@ -491,10 +534,18 @@ public class ExoDeployer
             return candidate;
         }
 
-        return FindOnPath(candidate)
+        // The login-shell probe spawns a shell; cache the result so repeated builds are fast.
+        string resolved = FindOnPath(candidate)
             ?? FindViaLoginShell()
             ?? FindInCommonLocations()
             ?? candidate;
+
+        lock (DotnetPathCache)
+        {
+            DotnetPathCache[key] = resolved;
+        }
+
+        return resolved;
     }
 
     private static bool IsBareCommand(string value) =>

@@ -148,6 +148,32 @@ public class ManagementTests : IDisposable
     }
 
     [Fact]
+    public void SourceFingerprint_ChangesWithContent()
+    {
+        string dir = Path.Combine(_tempDir, "fp");
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "a.cs"), "class A {}");
+
+        string first = ExoDeployer.ComputeSourceFingerprint(dir);
+        File.WriteAllText(Path.Combine(dir, "a.cs"), "class A { int X; }");
+        string second = ExoDeployer.ComputeSourceFingerprint(dir);
+
+        Assert.Equal(8, first.Length);
+        Assert.NotEqual(first, second);
+    }
+
+    [Fact]
+    public void ReadManifestVersion_ReturnsBuildMetadata()
+    {
+        string dir = Path.Combine(_tempDir, "mv");
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "manifest.exs"), "%{\n  version: \"1.0.0+abc12345\",\n}");
+
+        Assert.Equal("1.0.0+abc12345", ExoDeployer.ReadManifestVersion(dir));
+        Assert.Null(ExoDeployer.ReadManifestVersion(_tempDir));
+    }
+
+    [Fact]
     public void ResolveDotnetPath_KeepsExplicitPath()
     {
         Assert.Equal("/opt/custom/dotnet", ExoDeployer.ResolveDotnetPath("/opt/custom/dotnet"));
