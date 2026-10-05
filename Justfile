@@ -23,6 +23,25 @@ format:
 
 # ---- Testing ----
 
+# Incremental builds hide a whole class of bug: missing project references, files that are
+# gitignored but needed, package contents. Four tooling bugs in a row were this shape and every one
+# of them built fine locally.
+# Build the SDK and a plugin from a pristine export of HEAD
+clean-build:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	work=$(mktemp -d)
+	trap 'rm -rf "$work"' EXIT
+	echo "[clean-build] exporting HEAD"
+	git archive HEAD | tar -x -C "$work"
+	echo "[clean-build] building the SDK from a cold tree"
+	MSBUILDDISABLENODEREUSE=1 dotnet build "$work/sdk/csharp/Exoforge.CLI" --nologo -v q
+	echo "[clean-build] building a plugin"
+	MSBUILDDISABLENODEREUSE=1 dotnet run --project "$work/sdk/csharp/Exoforge.CLI" -- plugin build snake_leaderboard --dir "$work/sdk/unity/sample_unity/Exoforge"
+	test -f "$work/sdk/unity/sample_unity/Exoforge/plugins/snake_leaderboard/manifest.exs"
+	echo "[clean-build] OK: the tree builds from a clean checkout"
+
+
 # Run all test suites across Core, Plugins, System, and C# SDK
 test: test-core test-plugins test-system test-sdk
 
