@@ -11,6 +11,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   alias Exoforge.ActionDispatcher
   alias Exoforge.EventDispatcher
   alias Exoforge.PluginRegistry
+  alias Exoforge.Std.Dashboard.ActionForms
   alias Exoforge.Std.Dashboard.ExtensionPresenter
 
   @max_pinned 8
@@ -54,7 +55,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     end
 
     overview = fetch_overview()
-    action_catalog = fetch_action_catalog()
+    action_catalog = ActionForms.catalog()
 
     # Discover extensions that declare a dashboard visualization or visual controls
     visualizable_extensions =
@@ -76,7 +77,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     default_service_name = if default_service, do: default_service.name, else: nil
     default_action = if default_service, do: List.first(default_service.actions), else: nil
     default_action_name = if default_action, do: default_action.name, else: nil
-    default_params = default_params_for(default_action)
+    default_params = ActionForms.default_params(default_action)
 
     {:ok,
      assign(socket,
@@ -439,23 +440,12 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     svc_name = Map.get(params, "service") || socket.assigns.selected_action_service
     act_name = Map.get(params, "action")
 
-    svc =
-      Enum.find(socket.assigns.action_catalog, &(&1.name == svc_name)) ||
-        List.first(socket.assigns.action_catalog)
+    svc = ActionForms.service(socket.assigns.action_catalog, svc_name)
+    act = ActionForms.action(svc, act_name)
 
     selected_svc_name = if svc, do: svc.name, else: nil
-
-    act =
-      if svc do
-        if act_name do
-          Enum.find(svc.actions, &(&1.name == act_name)) || List.first(svc.actions)
-        else
-          List.first(svc.actions)
-        end
-      end
-
     selected_act_name = if act, do: act.name, else: nil
-    initial_params = default_params_for(act)
+    initial_params = ActionForms.default_params(act)
 
     {:noreply,
      assign(socket,
@@ -473,10 +463,10 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   end
 
   def handle_event("select_action_service", %{"service" => svc_name}, socket) do
-    svc = Enum.find(socket.assigns.action_catalog, &(&1.name == svc_name))
-    first_act = if svc, do: List.first(svc.actions)
+    svc = ActionForms.service(socket.assigns.action_catalog, svc_name)
+    first_act = ActionForms.action(svc, nil)
     first_act_name = if first_act, do: first_act.name, else: nil
-    initial_params = default_params_for(first_act)
+    initial_params = ActionForms.default_params(first_act)
 
     {:noreply,
      assign(socket,
@@ -489,14 +479,9 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   end
 
   def handle_event("select_action_name", %{"action" => act_name}, socket) do
-    svc =
-      Enum.find(
-        socket.assigns.action_catalog,
-        &(&1.name == socket.assigns.selected_action_service)
-      )
-
-    act = if svc, do: Enum.find(svc.actions, &(&1.name == act_name))
-    initial_params = default_params_for(act)
+    svc = ActionForms.service(socket.assigns.action_catalog, socket.assigns.selected_action_service)
+    act = ActionForms.action(svc, act_name)
+    initial_params = ActionForms.default_params(act)
 
     {:noreply,
      assign(socket,
@@ -528,29 +513,12 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         _other, acc -> acc
       end)
 
-    svc =
-      Enum.find(
-        socket.assigns.action_catalog,
-        &(&1.name == socket.assigns.selected_action_service)
-      )
-
-    act = if svc, do: Enum.find(svc.actions, &(&1.name == socket.assigns.selected_action_name))
+    svc = ActionForms.service(socket.assigns.action_catalog, socket.assigns.selected_action_service)
+    act = ActionForms.action(svc, socket.assigns.selected_action_name)
 
     if svc && act do
-      payload =
-        Enum.reduce(act.params, %{}, fn p, acc ->
-          val_str = Map.get(updated_params, p.name, "")
-          casted = cast_param_value(val_str, p.type)
-          Map.put(acc, Exoforge.Atoms.existing(p.name), casted)
-        end)
-
-      scopes =
-        caller_scopes_str
-        |> String.split(",")
-        |> Enum.map(&String.trim/1)
-        |> Enum.reject(&(&1 == ""))
-
-      scopes = if scopes == [], do: [Exoforge.Auth.Roles.admin()], else: scopes
+      payload = ActionForms.build_payload(act, updated_params)
+      scopes = ActionForms.parse_scopes(caller_scopes_str)
 
       start_time = System.monotonic_time(:microsecond)
 
@@ -856,95 +824,6 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       end)
     end
   end
-
-  defp fetch_action_catalog do
-    from_extensions =
-      try do
-        Exoforge.Std.Dashboard.Extensions.dashboard_extensions()
-        |> Enum.flat_map(fn ext -> Map.get(ext, :services, []) end)
-      rescue
-        _ -> []
-      end
-
-    from_extensions
-    |> Enum.filter(fn svc ->
-      actions = svc[:actions] || svc["actions"] || []
-      is_list(actions) and actions != []
-    end)
-    |> Enum.map(fn svc ->
-      name = PluginRegistry.clean_service_name(svc[:name] || svc["name"])
-      actions = svc[:actions] || svc["actions"] || []
-
-      %{
-        name: name,
-        actions:
-          Enum.map(actions, fn act ->
-            act_name = to_string(act[:name] || act["name"])
-            doc = act[:doc] || act["doc"] || "No description provided."
-            mode = to_string(act[:mode] || act["mode"] || "sync")
-            raw_params = act[:params] || act["params"] || []
-            params = Exoforge.Std.Dashboard.Extensions.normalize_action_params(raw_params)
-
-            %{
-              name: act_name,
-              doc: doc,
-              mode: mode,
-              params: params
-            }
-          end)
-      }
-    end)
-    |> Enum.uniq_by(& &1.name)
-    |> Enum.sort_by(& &1.name)
-  end
-
-  defp default_params_for(nil), do: %{}
-
-  defp default_params_for(%{params: params}) do
-    Enum.reduce(params, %{}, fn p, acc ->
-      default_val =
-        case p.type do
-          :integer -> "1"
-          :float -> "1.0"
-          :boolean -> "true"
-          :map -> "{}"
-          _ -> ""
-        end
-
-      Map.put(acc, p.name, default_val)
-    end)
-  end
-
-  defp cast_param_value(val_str, param_type) when is_binary(val_str) do
-    case param_type do
-      :integer ->
-        case Integer.parse(String.trim(val_str)) do
-          {int, _} -> int
-          :error -> 0
-        end
-
-      :float ->
-        case Float.parse(String.trim(val_str)) do
-          {flt, _} -> flt
-          :error -> 0.0
-        end
-
-      :boolean ->
-        String.trim(String.downcase(val_str)) in ["true", "1", "yes"]
-
-      :map ->
-        case Jason.decode(val_str) do
-          {:ok, map} when is_map(map) -> map
-          _ -> %{}
-        end
-
-      _ ->
-        val_str
-    end
-  end
-
-  defp cast_param_value(val, _type), do: val
-
 
   defp fetch_active_entities do
     if Code.ensure_loaded?(Exoforge.Entities) and
