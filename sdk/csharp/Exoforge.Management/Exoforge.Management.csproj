@@ -7,6 +7,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Tools~ holds the manifest generator: a self-contained project that ships beside this one.
+         It is not part of this assembly, and must not be swept into its compile globs. -->
+    <Compile Remove="Tools~/**" />
+    <None Remove="Tools~/**" />
+    <EmbeddedResource Remove="Tools~/**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Exoforge.Client\Exoforge.Client.csproj" />
     <ProjectReference Include="..\Exoforge.Plugin.SDK\Exoforge.Plugin.SDK.csproj" />
   </ItemGroup>

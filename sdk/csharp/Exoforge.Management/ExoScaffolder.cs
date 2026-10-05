@@ -101,10 +101,11 @@ public static class ExoScaffolder
             !File.Exists(Path.GetFullPath(Path.Combine(srcDir, sdkProjectPath))))
         {
             throw new InvalidOperationException(
-                "Could not find Exoforge.Plugin.SDK. Scaffolding a plugin needs the Exoforge repo " +
-                "checkout above the workspace. Looked for sdk/csharp/Exoforge.Plugin.SDK/" +
-                $"Exoforge.Plugin.SDK.csproj in the workspace's parent directories. " +
-                $"Set {SdkPathEnvVar}=/path/to/Exoforge.Plugin.SDK.csproj to point at it directly.");
+                "Could not find Exoforge.Plugin.SDK. Looked for " +
+                "sdk/csharp/Exoforge.Plugin.SDK/Exoforge.Plugin.SDK.csproj in the workspace's parent " +
+                $"directories. Either check out the Exoforge repo above the workspace, set " +
+                $"{SdkPathEnvVar}=/path/to/Exoforge.Plugin.SDK.csproj, or add a PackageReference to " +
+                "Exoforge.Plugin.SDK from a feed (`dotnet pack sdk/csharp/Exoforge.Plugin.SDK`).");
         }
 
         string reference = $"    <ProjectReference Include=\"{sdkProjectPath}\" />";

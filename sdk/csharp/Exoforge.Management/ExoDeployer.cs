@@ -620,23 +620,62 @@ public class ExoDeployer
         return Directory.GetFiles(root, fileName, SearchOption.AllDirectories).FirstOrDefault();
     }
 
+    /// <summary>Environment variable pointing at the manifest generator, for unusual layouts.</summary>
+    public const string ManifestGenEnvVar = "EXOFORGE_MANIFESTGEN";
+
+    /// <summary>
+    /// Locates the manifest generator, which ships inside the SDK under
+    /// <c>Editor/Management/Tools~/ManifestGen</c>.
+    ///
+    /// Searched in order: an explicit override, then up the tree from the plugin (covers a repo
+    /// checkout), then the two places Unity puts an installed package. The generator has no
+    /// project or package references, so finding it is enough — there is nothing to restore.
+    /// </summary>
     private static string FindManifestGen(string startDir)
     {
+        if (Environment.GetEnvironmentVariable(ManifestGenEnvVar) is { Length: > 0 } configured &&
+            Directory.Exists(configured))
+        {
+            return configured;
+        }
+
+        const string relative = "Tools~/ManifestGen";
+
         string? dir = startDir;
+
         for (int i = 0; i < 12 && dir != null; i++)
         {
-            string candidate = Path.Combine(dir, "sdk", "csharp", "Exoforge.ManifestGen");
-            if (Directory.Exists(candidate)) return candidate;
+            foreach (string candidate in new[]
+            {
+                Path.Combine(dir, "Editor", "Management", relative),   // SDK package layout
+                Path.Combine(dir, relative),
+                Path.Combine(dir, "sdk", "csharp", "Exoforge.Management", relative)
+            })
+            {
+                if (Directory.Exists(candidate)) return candidate;
+            }
 
-            candidate = Path.Combine(dir, "csharp", "Exoforge.ManifestGen");
-            if (Directory.Exists(candidate)) return candidate;
+            // A Unity project: the SDK is either a local package or in the package cache.
+            string packages = Path.Combine(dir, "Packages", "com.exoforge.sdk", "Editor", "Management", relative);
+            if (Directory.Exists(packages)) return packages;
+
+            string cache = Path.Combine(dir, "Library", "PackageCache");
+            if (Directory.Exists(cache))
+            {
+                foreach (string package in Directory.GetDirectories(cache, "com.exoforge.sdk*"))
+                {
+                    string candidate = Path.Combine(package, "Editor", "Management", relative);
+                    if (Directory.Exists(candidate)) return candidate;
+                }
+            }
 
             dir = Directory.GetParent(dir)?.FullName;
         }
 
         throw new DirectoryNotFoundException(
-            "Could not locate the Exoforge repo (sdk/csharp/Exoforge.ManifestGen) above the workspace. " +
-            "Native builds need it to generate manifest.exs.");
+            "Could not locate the Exoforge manifest generator (Editor/Management/Tools~/ManifestGen). " +
+            "It ships with the SDK; if this workspace is unusual, set " +
+            $"{ManifestGenEnvVar}=/path/to/ManifestGen to point at it.");
     }
 
     /// <summary>How long a single build step may run before it is killed.</summary>

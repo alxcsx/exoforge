@@ -14,6 +14,16 @@
       plugin author's build log, where they drown out warnings about their own code.
     -->
     <NoWarn>$(NoWarn);1591;IL2026;IL3050;IL2067</NoWarn>
+
+    <!--
+      Packable so a game developer outside this repo can reference the SDK from a feed instead of a
+      ProjectReference: `dotnet pack sdk/csharp/Exoforge.Plugin.SDK`.
+    -->
+    <IsPackable>true</IsPackable>
+    <PackageId>Exoforge.Plugin.SDK</PackageId>
+    <Version>0.1.0</Version>
+    <Description>Author Exoforge game-backend plugins in C#. Attributes declare the contract; PluginHost runs them as a NativeAOT process.</Description>
+    <PackageTags>exoforge;game-backend;plugins;nativeaot</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

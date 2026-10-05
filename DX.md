@@ -77,19 +77,36 @@ This is the largest *capability* gap. Everything else here is friction by compar
 
 ### 4. Native builds require the Exoforge repo checkout
 
-`ExoDeployer.FindManifestGen` walks up looking for `sdk/csharp/Exoforge.ManifestGen` and throws
-otherwise, so a game developer who installed the SDK as a UPM tarball **cannot build a native
-plugin at all**. The scaffolder makes it worse by falling back to an unpublished package:
+`ExoDeployer.FindManifestGen` walked up looking for `sdk/csharp/Exoforge.ManifestGen` and threw
+otherwise, so a game developer who installed the SDK as a UPM tarball **could not build a native
+plugin at all**. The scaffolder made it worse by falling back to an unpublished package:
 
 ```csharp
 : "    <PackageReference Include=\"Exoforge.Plugin.SDK\" Version=\"0.1.0\" />";
 ```
 
-That package is not on NuGet. Outside the repo you get a project that cannot restore, with no hint
-why.
+That package was not on NuGet. Outside the repo you got a project that could not restore, with no
+hint why.
 
-**Fix:** ship ManifestGen with the SDK, and make the scaffolder fail loudly with the real reason
-instead of emitting an unresolvable reference.
+**Fixed** — the generator now ships inside the SDK:
+
+- `Exoforge.ManifestGen` was **deleted** and replaced by
+  `Exoforge.Management/Tools~/ManifestGen`, which travels with the UPM package automatically
+  (the `~` keeps Unity from compiling it).
+- The new generator has **no project or package references**: it reads the Exoforge attributes as
+  `CustomAttributeData`, matched by type name, so it can be `dotnet run` from anywhere with
+  nothing to restore — and works for a plugin cross-built for any RID. Output is byte-identical to
+  the tool it replaces.
+- `FindManifestGen` searches: `EXOFORGE_MANIFESTGEN` → up the tree from the plugin (repo checkout)
+  → `Packages/com.exoforge.sdk/…` → `Library/PackageCache/com.exoforge.sdk*`.
+- `Exoforge.Plugin.SDK` is now **packable** (`dotnet pack sdk/csharp/Exoforge.Plugin.SDK`), and the
+  scaffolder's failure names all three ways to provide it.
+
+Verified end to end from a workspace with no repo above it: the build succeeded and the manifest
+was produced by the generator found in `Packages/com.exoforge.sdk/`.
+
+**Still open:** publishing `Exoforge.Plugin.SDK` to a feed is a release step, not a code change.
+Until then a developer outside the repo needs `--sdk` / `EXOFORGE_PLUGIN_SDK`.
 
 ---
 
@@ -211,9 +228,8 @@ Better than most plugin tooling; these are why the SDK feels good when it works:
 - [x] 1. `push` aborts when the build fails
 - [x] 2. Sandbox catalog comes from the live export; default action exists
 - [x] 3. Plugin logs: server action + Control Center pane + `exo plugin logs`
-- [ ] 4. Native build works outside the repo — *partly*: the scaffolder now fails loudly and
-      `--sdk` / `EXOFORGE_PLUGIN_SDK` can point at the SDK, but `Exoforge.ManifestGen` still has to
-      be shipped with the SDK package before a UPM-only install can build a native plugin.
+- [x] 4. Native build works outside the repo — the generator now ships inside the SDK and is
+      dependency-free. Publishing `Exoforge.Plugin.SDK` to a feed remains a release step.
 - [x] 5. Template picker in the Unity Plugins tab
 - [x] 6. Scaffolding tells you what to do next (and opens the file)
 - [x] 7. `liveops` template + stale help removed
