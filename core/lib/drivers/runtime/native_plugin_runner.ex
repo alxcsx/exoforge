@@ -23,7 +23,6 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
   alias Exoforge.WorkerRegistry
 
   @runner_key :native_runner
-  @state_table :exo_native_plugin_state
 
   @doc "Prepares the manifest by ensuring the proxy module is created and set as entry_point."
   def prepare_manifest(%Manifest{} = manifest) do
@@ -103,7 +102,6 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
   @impl true
   def init({manifest, binary_path}) do
     Logger.info("[NativePluginRunner] Starting native plugin #{manifest.id} from #{binary_path}")
-    ensure_table()
 
     port =
       Port.open({:spawn_executable, binary_path}, [
@@ -287,18 +285,6 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
 
   defp run_host_call("clock_now", _args, _manifest), do: System.system_time(:millisecond)
 
-  defp run_host_call("set_state", args, _manifest) do
-    :ets.insert(@state_table, {Map.get(args, "key"), Map.get(args, "value")})
-    true
-  end
-
-  defp run_host_call("get_state", args, _manifest) do
-    case :ets.lookup(@state_table, Map.get(args, "key")) do
-      [{_key, value}] -> value
-      _ -> nil
-    end
-  end
-
   defp run_host_call(_op, _args, _manifest), do: false
 
   # Key-value helpers exposed by the :database plugin (same shape the WASM host bridge uses).
@@ -333,13 +319,6 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
   defp split_lines(buffer) do
     parts = String.split(buffer, "\n")
     {Enum.drop(parts, -1), List.last(parts) || ""}
-  end
-
-  defp ensure_table do
-    case :ets.info(@state_table) do
-      :undefined -> :ets.new(@state_table, [:set, :named_table, :public, read_concurrency: true])
-      _ -> @state_table
-    end
   end
 
   defp find_binary_path(manifest) do

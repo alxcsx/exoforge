@@ -1,19 +1,7 @@
-using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace Exoforge.Plugin.SDK;
-
-/// <summary>
-/// Lifecycle interface for Exoforge plugins.
-/// </summary>
-public interface IExoforgePlugin
-{
-    string Id { get; }
-    string Version { get; }
-    Task OnInitAsync(IPluginContext context);
-    Task OnShutdownAsync();
-}
 
 /// <summary>
 /// Ambient execution context provided to an active plugin.
@@ -24,18 +12,7 @@ public interface IPluginContext
     IDatabase Database { get; }
     IEventDispatcher Events { get; }
     IActionDispatcher Actions { get; }
-    IEntityManager Entities { get; }
     ILogger Logger { get; }
-}
-
-/// <summary>
-/// Stateful entity actor invocation interface.
-/// </summary>
-public interface IEntityManager
-{
-    Task<TResponse?> CallAsync<TResponse>(string plugin, string type, string id, object message);
-    Task CastAsync(string plugin, string type, string id, object message);
-    Task StopAsync(string plugin, string type, string id);
 }
 
 /// <summary>

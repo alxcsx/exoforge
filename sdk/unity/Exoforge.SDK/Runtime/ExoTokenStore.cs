@@ -65,9 +65,6 @@ namespace Exoforge.Client
 
         public static bool HasToken => !string.IsNullOrEmpty(Token);
 
-        /// <summary>True once a session exists and the player has picked a display name.</summary>
-        public static bool IsRegistered => HasToken && !string.IsNullOrEmpty(PlayerName);
-
         public static void SaveSession(string token, string? playerId = null, IEnumerable<string>? scopes = null, string? name = null)
         {
             Token = token;

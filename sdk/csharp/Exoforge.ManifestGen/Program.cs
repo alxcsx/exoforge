@@ -54,7 +54,7 @@ public static class Program
         foreach (var type in types)
         {
             var serviceAttrs = type.GetCustomAttributes<ExoServiceAttribute>().ToList();
-            if (serviceAttrs.Count == 0 && !typeof(IExoforgePlugin).IsAssignableFrom(type))
+            if (serviceAttrs.Count == 0)
             {
                 continue;
             }
@@ -205,43 +205,8 @@ public static class Program
                 serviceAttrs.FirstOrDefault()?.System ?? false));
         }
 
-        // Collect Entities
-        var entities = new List<EntityMeta>();
-        foreach (var type in types)
-        {
-            var entityAttr = type.GetCustomAttribute<EntityAttribute>();
-            if (entityAttr == null) continue;
-
-            var entityActions = new List<ActionMeta>();
-            foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance))
-            {
-                var actionAttr = method.GetCustomAttribute<ExoActionAttribute>();
-                if (actionAttr == null) continue;
-
-                var parameters = method.GetParameters()
-                    .Select(p => new ParamMeta(ToSnakeCase(p.Name ?? "arg"), MapTypeToElixir(p.ParameterType)))
-                    .ToList();
-
-                entityActions.Add(new ActionMeta(
-                    ActionName(actionAttr, method),
-                    ResolveActionMode(actionAttr.Mode, method.ReturnType),
-                    actionAttr.Scope,
-                    parameters,
-                    MapTypeToElixir(method.ReturnType)
-                ));
-            }
-
-            entities.Add(new EntityMeta(
-                entityAttr.Name,
-                entityAttr.Persist.ToString().ToLowerInvariant(),
-                entityAttr.TimeoutMs,
-                entityAttr.MaxHeapSizeBytes,
-                entityActions
-            ));
-        }
-
         string entryPoint = pluginType == "native" ? pluginId : $"{pluginId}.wasm";
-        string manifestContent = EmitElixirManifest(pluginId, pluginVersion, pluginType, entryPoint, provides, dependencies.ToList(), services, entities);
+        string manifestContent = EmitElixirManifest(pluginId, pluginVersion, pluginType, entryPoint, provides, dependencies.ToList(), services);
 
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
         File.WriteAllText(outputPath, manifestContent, new UTF8Encoding(false));
@@ -257,8 +222,7 @@ public static class Program
         string entryPoint,
         List<string> provides,
         List<string> dependencies,
-        List<ServiceMeta> services,
-        List<EntityMeta> entities)
+        List<ServiceMeta> services)
     {
         var sb = new StringBuilder();
         sb.AppendLine("%{");
@@ -347,26 +311,8 @@ public static class Program
         }
         sb.AppendLine("  ],");
 
-        // Entities Metadata
-        sb.AppendLine("  entities: [");
-        for (int i = 0; i < entities.Count; i++)
-        {
-            var e = entities[i];
-            sb.AppendLine("    %{");
-            sb.AppendLine($"      name: :{e.Name},");
-            sb.AppendLine($"      persist: :{e.Persist},");
-            sb.AppendLine($"      timeout: {e.TimeoutMs},");
-            sb.AppendLine($"      max_heap_size: {e.MaxHeapSizeBytes},");
-            sb.AppendLine("      actions: [");
-            foreach (var a in e.Actions)
-            {
-                var paramList = string.Join(", ", a.Params.Select(p => $"{p.Name}: :{p.Type}"));
-                sb.AppendLine($"        %{{name: :{a.Name}, mode: :{a.Mode}, scope: :{a.Scope}, arity: {a.Params.Count}, params: [{paramList}], returns: :{a.Returns}}},");
-            }
-            sb.AppendLine("      ]");
-            sb.AppendLine(i < entities.Count - 1 ? "    }," : "    }");
-        }
-        sb.AppendLine("  ]");
+        // Entities Metadata (C# plugins declare no stateful entities)
+        sb.AppendLine("  entities: []");
         sb.AppendLine("}");
 
         return sb.ToString();
@@ -490,5 +436,4 @@ public static class Program
     private record EventMeta(string Name, string? Topic, string Scope, List<ParamMeta>? Payload = null);
     private record ResourceMeta(string Name, string PrimaryKey, string[] DrawerTabs, string[] Actions, List<ColumnMeta> Columns);
     private record ColumnMeta(string Name, string DataType, string Label, bool Sortable, bool Filterable, bool Badge);
-    private record EntityMeta(string Name, string Persist, int TimeoutMs, int MaxHeapSizeBytes, List<ActionMeta> Actions);
 }

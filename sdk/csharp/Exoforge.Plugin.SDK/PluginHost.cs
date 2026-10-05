@@ -22,8 +22,6 @@ public interface IPluginTransport
     string? DbAll(string table);
     bool DbPut(string table, string key, string valueJson);
     bool DbDelete(string table, string key);
-    string? GetState(string key);
-    bool SetState(string key, string valueJson);
     long ClockNow();
 }
 
@@ -92,8 +90,7 @@ public static class PluginHost
         _instance = instance;
         var pluginType = instance.GetType();
 
-        // Native plugins do not go through PluginBehaviour.OnInitAsync, so wire [Inject]
-        // dependencies here as well — including static properties on plain plugin classes.
+        // Wire [Inject] dependencies (including static properties on plain plugin classes).
         HostPluginContext.Wire(instance, new HostPluginContext(ResolvePluginId(pluginType)));
 
         var actions = BuildActionTable(pluginType);
@@ -457,11 +454,6 @@ public static class PluginHost
 
         public bool DbDelete(string table, string key) =>
             HostCall("db_delete", $"{{\"table\":{JsonEncode(table)},\"key\":{JsonEncode(key)}}}") != "false";
-
-        public string? GetState(string key) => HostCall("get_state", $"{{\"key\":{JsonEncode(key)}}}");
-
-        public bool SetState(string key, string valueJson) =>
-            HostCall("set_state", $"{{\"key\":{JsonEncode(key)},\"value\":{valueJson}}}") != "false";
 
         public long ClockNow()
         {

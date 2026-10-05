@@ -76,16 +76,6 @@ public static class HostBridge
         byte[] table, int tableLen,
         byte[] key, int keyLen);
 
-    [DllImport("env", EntryPoint = "host_get_state")]
-    private static extern int NativeHostGetState(
-        byte[] key, int keyLen,
-        byte[] outBuf, int outMaxLen);
-
-    [DllImport("env", EntryPoint = "host_set_state")]
-    private static extern int NativeHostSetState(
-        byte[] key, int keyLen,
-        byte[] val, int valLen);
-
     /// <summary>
     /// Returns the current BEAM cluster time in milliseconds.
     /// </summary>
@@ -293,52 +283,6 @@ public static class HostBridge
             byte[] keyBytes = Encoding.UTF8.GetBytes(key ?? "");
 
             return NativeHostDbDelete(tblBytes, tblBytes.Length, keyBytes, keyBytes.Length) == 0;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Reads host-authoritative actor state for this plugin.
-    /// </summary>
-    public static string? GetState(string key)
-    {
-        if (_transport != null) return _transport.GetState(key ?? "");
-
-        try
-        {
-            byte[] keyBytes = Encoding.UTF8.GetBytes(key ?? "");
-            byte[] outBuf = new byte[BufferSize];
-
-            int bytesRead = NativeHostGetState(keyBytes, keyBytes.Length, outBuf, outBuf.Length);
-            if (bytesRead <= 0) return null;
-
-            return Encoding.UTF8.GetString(outBuf, 0, bytesRead);
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// Writes host-authoritative actor state for this plugin.
-    /// </summary>
-    public static bool SetState(string key, object value)
-    {
-        if (_transport != null)
-        {
-            return _transport.SetState(key ?? "", value is string str0 ? str0 : ToJson(value));
-        }
-
-        try
-        {
-            byte[] keyBytes = Encoding.UTF8.GetBytes(key ?? "");
-            byte[] valBytes = Encoding.UTF8.GetBytes(ToJson(value));
-
-            return NativeHostSetState(keyBytes, keyBytes.Length, valBytes, valBytes.Length) == 0;
         }
         catch
         {

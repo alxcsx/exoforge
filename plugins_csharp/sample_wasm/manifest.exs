@@ -35,6 +35,5 @@
       ]
     }
   ],
-  entities: [
-  ]
+  entities: []
 }

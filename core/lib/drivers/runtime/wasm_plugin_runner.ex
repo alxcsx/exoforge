@@ -574,48 +574,6 @@ defmodule Exoforge.Drivers.Runtime.WasmPluginRunner do
                  record_trap(manifest_id, Exception.message(e))
                  -1
              end
-           end},
-
-        # State ABI: host_get_state(key_ptr, key_len, out_ptr, out_max_len) -> i32
-        "host_get_state" =>
-          {:fn, [:i32, :i32, :i32, :i32], [:i32],
-           fn context, key_ptr, key_len, out_ptr, out_max_len ->
-             try do
-               key = read_string(context, key_ptr, key_len)
-               ensure_tables()
-
-               case :ets.lookup(:exo_guest_state, {manifest_id, key}) do
-                 [{{^manifest_id, ^key}, val}] ->
-                   json = if is_binary(val), do: val, else: Jason.encode!(val)
-                   write_to_guest_memory(context, json, out_ptr, out_max_len)
-
-                 [] ->
-                   0
-               end
-             rescue
-               e ->
-                 record_trap(manifest_id, Exception.message(e))
-                 -1
-             end
-           end},
-
-        # State ABI: host_set_state(key_ptr, key_len, val_ptr, val_len) -> i32
-        "host_set_state" =>
-          {:fn, [:i32, :i32, :i32, :i32], [:i32],
-           fn context, key_ptr, key_len, val_ptr, val_len ->
-             try do
-               key = read_string(context, key_ptr, key_len)
-               val_str = read_string(context, val_ptr, val_len)
-               val = decode_payload(val_str)
-               ensure_tables()
-
-               :ets.insert(:exo_guest_state, {{manifest_id, key}, val})
-               0
-             rescue
-               e ->
-                 record_trap(manifest_id, Exception.message(e))
-                 -1
-             end
            end}
       }
     }
@@ -694,14 +652,6 @@ defmodule Exoforge.Drivers.Runtime.WasmPluginRunner do
   defp safe_to_atom(_), do: nil
 
   defp ensure_tables do
-    case :ets.info(:exo_guest_state) do
-      :undefined ->
-        :ets.new(:exo_guest_state, [:set, :named_table, :public, read_concurrency: true])
-
-      _ ->
-        :ok
-    end
-
     case :ets.info(:exo_wasm_stats) do
       :undefined ->
         :ets.new(:exo_wasm_stats, [:set, :named_table, :public, read_concurrency: true])

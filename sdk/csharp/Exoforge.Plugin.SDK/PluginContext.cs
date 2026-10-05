@@ -19,7 +19,6 @@ public class HostPluginContext : IPluginContext
     public IDatabase Database { get; }
     public IEventDispatcher Events { get; }
     public IActionDispatcher Actions { get; }
-    public IEntityManager Entities { get; }
     public ILogger Logger { get; }
 
     public HostPluginContext(string pluginId)
@@ -28,14 +27,12 @@ public class HostPluginContext : IPluginContext
         Database = new HostDatabase(pluginId);
         Events = new HostEventDispatcher();
         Actions = new HostActionDispatcher();
-        Entities = new HostEntityManager();
         Logger = new HostLogger();
     }
 
     /// <summary>
     /// Inspects plugin object properties and injects services decorated with [Inject].
-    /// Handles both instance and static members, so plain (non-<see cref="PluginBehaviour"/>) plugins
-    /// used with <see cref="PluginHost"/> get their dependencies too.
+    /// Handles both instance and static members, so plain plugin classes get their dependencies too.
     /// </summary>
     public static void Wire(object target, IPluginContext context)
     {
@@ -53,7 +50,6 @@ public class HostPluginContext : IPluginContext
                 prop.PropertyType == typeof(IDatabase) ? context.Database :
                 prop.PropertyType == typeof(IEventDispatcher) ? context.Events :
                 prop.PropertyType == typeof(IActionDispatcher) ? context.Actions :
-                prop.PropertyType == typeof(IEntityManager) ? context.Entities :
                 prop.PropertyType == typeof(ILogger) ? context.Logger :
                 prop.PropertyType == typeof(IPluginContext) ? context :
                 null;
@@ -220,26 +216,5 @@ public class HostLogger : ILogger
     public void Info(string message) => HostBridge.LogInfo(message);
     public void Warning(string message) => HostBridge.LogWarning(message);
     public void Error(string message) => HostBridge.LogError(message);
-}
-
-public class HostEntityManager : IEntityManager
-{
-    public Task<TResponse?> CallAsync<TResponse>(string plugin, string type, string id, object message)
-    {
-        var response = HostBridge.CallAction<TResponse>($"{plugin}:{type}:{id}", "call", message);
-        return Task.FromResult(response);
-    }
-
-    public Task CastAsync(string plugin, string type, string id, object message)
-    {
-        HostBridge.CallAction($"{plugin}:{type}:{id}", "cast", message);
-        return Task.CompletedTask;
-    }
-
-    public Task StopAsync(string plugin, string type, string id)
-    {
-        HostBridge.CallAction($"{plugin}:{type}:{id}", "stop", new { });
-        return Task.CompletedTask;
-    }
 }
 

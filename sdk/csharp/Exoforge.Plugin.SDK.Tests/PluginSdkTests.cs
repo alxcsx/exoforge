@@ -8,11 +8,8 @@ namespace Exoforge.Plugin.SDK.Tests;
 
 [ExoService("sample_wasm", Version = "1.0.0")]
 [ExoResource("counters", PrimaryKey = "counter_id", DrawerTabs = new[] { "overview", "attributes", "events" })]
-public class SampleWasmPlugin : PluginBehaviour
+public class SampleWasmPlugin
 {
-    public override string Id => "sample_wasm";
-    public override string Version => "1.0.0";
-
     [Inject("database")]
     public IDatabase? CustomDb { get; set; }
 
@@ -43,13 +40,6 @@ public class CounterEntity
 
     [ExoColumn("status", DataType = "string", Badge = true)]
     public string Status { get; set; } = "active";
-}
-
-[Entity("sample_guild", Persist = PersistenceMode.Snapshot, TimeoutMs = 60000)]
-public class SampleGuildEntity : Entity
-{
-    public string Name { get; set; } = "ExoGuild";
-    public int Level { get; set; } = 1;
 }
 
 [ExoResource("players", PrimaryKey = nameof(PlayerId), DrawerTabs = new[] { "overview", "inventory" })]
@@ -129,29 +119,6 @@ public class PluginSdkTests
     }
 
     [Fact]
-    public void PluginBehaviour_DefaultsAndExecution()
-    {
-        var plugin = new SampleWasmPlugin();
-        Assert.Equal("sample_wasm", plugin.Id);
-        Assert.Equal("1.0.0", plugin.Version);
-        Assert.Equal(42, plugin.Ping());
-        Assert.Equal(25, plugin.Increment(1, 25));
-    }
-
-    [Fact]
-    public async Task PluginBehaviour_DependencyInjectionWiring()
-    {
-        var plugin = new SampleWasmPlugin();
-        Assert.Null(plugin.CustomDb);
-
-        var context = new HostPluginContext("test_plugin");
-        await plugin.OnInitAsync(context);
-
-        Assert.NotNull(plugin.CustomDb);
-        Assert.Same(context.Database, plugin.CustomDb);
-    }
-
-    [Fact]
     public void HostBridge_SafeExecutionOutsideWasi()
     {
         // When executed in native test runner without wasi host, catches and handles gracefully
@@ -165,35 +132,6 @@ public class PluginSdkTests
         Assert.Null(HostBridge.DbGet("test", "key"));
         Assert.False(HostBridge.DbPut("test", "key", new { val = 1 }));
         Assert.False(HostBridge.DbDelete("test", "key"));
-        Assert.Null(HostBridge.GetState("state_key"));
-        Assert.False(HostBridge.SetState("state_key", "val"));
-    }
-
-    [Fact]
-    public void Entity_MetadataAndStateLifecycle()
-    {
-        var type = typeof(SampleGuildEntity);
-        var attr = type.GetCustomAttribute<EntityAttribute>();
-        Assert.NotNull(attr);
-        Assert.Equal("sample_guild", attr.Name);
-        Assert.Equal(PersistenceMode.Snapshot, attr.Persist);
-        Assert.Equal(60000, attr.TimeoutMs);
-
-        var context = new HostPluginContext("guilds");
-        var guild = new SampleGuildEntity
-        {
-            Id = "g_test",
-            Context = context
-        };
-
-        Assert.Equal("g_test", guild.Id);
-        Assert.NotNull(guild.Db);
-        Assert.NotNull(context.Entities);
-
-        // Safe fallback outside wasi host
-        guild.Save();
-        guild.SaveNow();
-        guild.Emit("guild_created", new { id = guild.Id });
     }
 
     [Fact]
@@ -331,8 +269,6 @@ public class PluginSdkTests
         public string? DbAll(string table) => null;
         public bool DbPut(string table, string key, string valueJson) => false;
         public bool DbDelete(string table, string key) => false;
-        public string? GetState(string key) => null;
-        public bool SetState(string key, string valueJson) => false;
         public long ClockNow() => 0;
     }
 }

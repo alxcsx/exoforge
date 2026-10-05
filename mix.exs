@@ -30,14 +30,10 @@ defmodule Exoforge.Project do
   defp base_deps do
     [
       {:exoforge_core, path: "core"},
-      {:bandit, "~> 1.12"},
-      {:websock_adapter, "~> 0.6.0"},
       {:jason, "~> 1.4"},
       {:wasmex, "~> 0.15.1"},
-      {:postgrex, ">= 0.0.0"},
       {:horde, "~> 0.9"},
-      {:libcluster, "~> 3.4"},
-      {:lazy_html, ">= 0.1.0", only: :test}
+      {:libcluster, "~> 3.4"}
     ]
   end
 
