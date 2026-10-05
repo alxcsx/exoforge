@@ -247,6 +247,8 @@ Better than most plugin tooling; these are why the SDK feels good when it works:
 - [x] 19. `--json` on `plugin list` / `logs` / `status`
 - [x] 20. Flag parsing independent of argument position
 - [x] 21. `exo plugin reload`
+- [ ] 22. A resource table missing its primary key self-heals, and a failed preference write is not
+      silent (see "Bugs found while fixing" above)
 
 ---
 
@@ -265,6 +267,48 @@ Better than most plugin tooling; these are why the SDK feels good when it works:
 | **Protocol** | `wasm_binary` → `binary`; the code generator now sanitises multi-line contract docs (a multi-line `@doc` previously emitted invalid C#). |
 
 ### Bugs found while fixing
+
+#### A resource table can exist without its primary key, and nothing notices
+
+Found while chasing the known-flaky `pinned extensions persist across remounts` test. Not test
+noise — a real, silent failure:
+
+```
+[warning] [Action] failed in Exoforge.Std.Resources.upsert:
+  "ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint"
+```
+
+Instrumenting the failure shows the table it is writing to:
+
+```
+CREATE TABLE studio_preferences (player_id text, data text)      <- no PRIMARY KEY
+```
+
+while a table created by the current code has one:
+
+```
+CREATE TABLE studio_preferences (player_id text PRIMARY KEY, data text)
+```
+
+`Resources.column_defs/1` — the only thing that creates a resource table — *always* emits
+`PRIMARY KEY`, and it is the only caller of that SQL. So a table in the first shape can only come
+from an older schema that `CREATE TABLE IF NOT EXISTS` then never repairs. Once a table is in that
+state, **every `upsert` against it fails forever**, and `ON CONFLICT` is the only thing that would
+have caught it.
+
+Two things make it invisible:
+
+- `Studio.Preferences.put_pinned/2` discards the result (`_ = store(:upsert, ...)`) and always
+  returns `:ok`, so a failed write looks like a successful one.
+- Nothing verifies a table's shape after migration — `ensure_migrated/1` trusts an ETS cache keyed
+  `{plugin_id, table}`, and `migrate_resource/1` uses `IF NOT EXISTS`.
+
+**Fix (not yet applied):** have `migrate_resource/1` check `sqlite_master` for the declared primary
+key and rebuild the table when it is missing, so a stale schema self-heals instead of failing every
+write. Separately, a fire-and-forget caller like `put_pinned/2` should at least log the failure.
+
+**Repro:** run the dashboard suite; the `ON CONFLICT` warning appears even in a passing run, and the
+`pinned extensions persist across remounts` test fails when the write lands on the broken table.
 
 - `PluginLogs.count/1` used a 2-tuple match against 4-tuple ETS objects, so it always returned 0 —
   which also silently disabled the per-plugin cap.
