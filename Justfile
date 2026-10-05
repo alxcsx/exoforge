@@ -190,6 +190,8 @@ pack-unity:
 	rm -rf dist/package dist/com.exoforge.sdk-*.tgz
 	mkdir -p dist/package
 	cp -RL sdk/unity/Exoforge.SDK/. dist/package/
+	# The manifest generator ships as source; its build output should not.
+	find dist/package -type d \( -name bin -o -name obj \) -prune -exec rm -rf {} +
 	tar -czf "dist/com.exoforge.sdk-${VERSION}.tgz" -C dist package
 	echo "[Exoforge] Created UPM package archive:"
 	ls -lh "dist/com.exoforge.sdk-${VERSION}.tgz"

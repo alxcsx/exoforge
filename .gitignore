@@ -26,7 +26,10 @@ dist/
 .zed/
 *.swp
 *~
+# `*~` also matches the SDK's Unity-ignored Tools~ and Samples~ directories; keep those tracked.
 !**/Samples~/
+!**/Tools~/
+!**/Tools~
 
 # === Test & Coverage Reports ===
 .htmlcov/
