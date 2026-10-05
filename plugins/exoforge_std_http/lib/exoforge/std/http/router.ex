@@ -78,7 +78,7 @@ defmodule Exoforge.Std.Http.Router do
       <script>
         window.onload = () => {
           const urlParams = new URLSearchParams(window.location.search);
-          const cookieMatch = document.cookie.match(/(?:^|;\s*)exo_auth_token=([^;]+)/);
+          const cookieMatch = document.cookie.match(/(?:^|;\s*)#{hd(Exoforge.Auth.Request.cookie_names())}=([^;]+)/);
           const token = urlParams.get('token') || (cookieMatch ? decodeURIComponent(cookieMatch[1].trim()) : null);
           const specUrl = token ? ('/api/openapi.json?token=' + encodeURIComponent(token)) : '/api/openapi.json';
           const ui = SwaggerUIBundle({
@@ -234,35 +234,10 @@ defmodule Exoforge.Std.Http.Router do
     authenticate_token(token_from_request(conn))
   end
 
+  # Transports receive the request in their own shape; the token rules themselves are shared.
   defp token_from_request(conn) do
-    bearer_token(conn) || query_token(conn) || cookie_token(conn)
-  end
-
-  defp bearer_token(conn) do
-    case Plug.Conn.get_req_header(conn, "authorization") do
-      ["Bearer " <> token | _] -> String.trim(token)
-      ["bearer " <> token | _] -> String.trim(token)
-      [token | _] when token != "" -> String.trim(token)
-      _ -> nil
-    end
-  end
-
-  defp query_token(conn) do
-    conn = Plug.Conn.fetch_query_params(conn)
-
-    case conn.query_params["token"] do
-      token when is_binary(token) and token != "" -> String.trim(token)
-      _ -> nil
-    end
-  end
-
-  defp cookie_token(conn) do
-    conn = Plug.Conn.fetch_cookies(conn)
-
-    case Map.get(conn.req_cookies, "exo_auth_token") || Map.get(conn.req_cookies, "exoforge_auth_token") do
-      token when is_binary(token) and token != "" -> String.trim(token)
-      _ -> nil
-    end
+    conn = Plug.Conn.fetch_cookies(Plug.Conn.fetch_query_params(conn))
+    Exoforge.Auth.Request.token(conn.req_headers, conn.query_params, conn.req_cookies)
   end
 
   defp unauthenticated(conn) do
@@ -296,7 +271,7 @@ defmodule Exoforge.Std.Http.Router do
     is_html = Enum.any?(accept, &String.contains?(&1, "text/html"))
 
     if is_html do
-      studio_url = get_studio_url()
+      studio_url = Exoforge.Endpoints.studio_url()
 
       html = """
       <!DOCTYPE html>
@@ -362,24 +337,12 @@ defmodule Exoforge.Std.Http.Router do
           health: "/health",
           dispatch: "POST /api/:service/:action"
         },
-        studio_url: get_studio_url(),
+        studio_url: Exoforge.Endpoints.studio_url(),
         message:
           "Exoforge HTTP REST Gateway is active. Query /api/routes for available routes, visit /api/docs for Swagger UI, or visit Game Studio at port #{Exoforge.Endpoints.dashboard_port()}."
       })
     end
   end
 
-  defp get_studio_url do
-    port =
-      Application.get_env(:exoforge_std_dashboard, Exoforge.Std.Dashboard.Endpoint, [])
-      |> Keyword.get(:http, [])
-      |> Keyword.get(:port, Exoforge.Endpoints.dashboard_port())
 
-    host =
-      Application.get_env(:exoforge_std_dashboard, Exoforge.Std.Dashboard.Endpoint, [])
-      |> Keyword.get(:url, [])
-      |> Keyword.get(:host, "localhost")
-
-    "http://#{host}:#{port}"
-  end
 end

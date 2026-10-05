@@ -7,6 +7,7 @@ defmodule Exoforge.Std.Database.Manager do
   use GenServer
   require Logger
 
+  alias Exoforge.Std.Database
   alias Exoforge.Std.Database.Adapters.Postgres
   alias Exoforge.Std.Database.Adapters.Sqlite
 
@@ -72,7 +73,7 @@ defmodule Exoforge.Std.Database.Manager do
 
   @impl true
   def handle_call({:ensure_database, plugin_id}, _from, state) do
-    clean = clean_id(plugin_id)
+    clean = Database.clean_id(plugin_id)
 
     case state.adapter.ensure_database(clean, state.config) do
       {:ok, result} ->
@@ -86,7 +87,7 @@ defmodule Exoforge.Std.Database.Manager do
 
   @impl true
   def handle_call({:execute, plugin_id, query, args}, _from, state) do
-    clean = clean_id(plugin_id)
+    clean = Database.clean_id(plugin_id)
     # Automatically ensure database exists on first query
     _ = state.adapter.ensure_database(clean, state.config)
     result = state.adapter.execute(clean, query, args, state.config)
@@ -95,7 +96,7 @@ defmodule Exoforge.Std.Database.Manager do
 
   @impl true
   def handle_call({:connection_config, plugin_id}, _from, state) do
-    clean = clean_id(plugin_id)
+    clean = Database.clean_id(plugin_id)
     result = state.adapter.connection_config(clean, state.config)
     {:reply, result, state}
   end
@@ -108,7 +109,7 @@ defmodule Exoforge.Std.Database.Manager do
 
   @impl true
   def handle_call({:reset, plugin_id}, _from, state) do
-    clean = clean_id(plugin_id)
+    clean = Database.clean_id(plugin_id)
     result = state.adapter.reset(clean, state.config)
     {:reply, result, state}
   end
@@ -227,10 +228,4 @@ defmodule Exoforge.Std.Database.Manager do
 
   defp parse_database_url(_), do: %{}
 
-  defp clean_id(plugin_id) do
-    plugin_id
-    |> to_string()
-    |> String.replace(~r/[^a-zA-Z0-9_]/, "_")
-    |> String.downcase()
-  end
 end

@@ -44,7 +44,7 @@ defmodule Exoforge.Std.Services do
     @doc "Fired when the underlying database pool drops connection."
     event :connection_lost do
       payload(reason: :string, timestamp: :integer)
-      scope(:server_only)
+      scope(:server)
     end
   end
 
@@ -64,14 +64,14 @@ defmodule Exoforge.Std.Services do
     action :get_dashboard_mount do
       params(view_id: [type: :atom, optional: true])
       returns(mount: :term)
-      scope(:server_only)
+      scope(:server)
     end
 
     @doc "Retrieves data payload for hydrating the dashboard view."
     action :get_dashboard_data do
       params(view_id: [type: :atom, optional: true])
       returns(data: :map)
-      scope(:server_only)
+      scope(:server)
     end
   end
 
@@ -82,27 +82,27 @@ defmodule Exoforge.Std.Services do
     action :resolve_view do
       params(id: :term)
       returns(module: :term)
-      scope(:server_only)
+      scope(:server)
     end
 
     @doc "Lists all registered custom dashboard view modules."
     action :list_views do
       returns(views: [:map])
-      scope(:server_only)
+      scope(:server)
     end
 
     @doc "Retrieves dashboard mount specification: {:live, Module} | {:hook, config} | {:iframe, config}"
     action :get_dashboard_mount do
       params(view_id: [type: :atom, optional: true])
       returns(mount: :term)
-      scope(:server_only)
+      scope(:server)
     end
 
     @doc "Retrieves data payload for hydrating the dashboard view."
     action :get_dashboard_data do
       params(view_id: [type: :atom, optional: true])
       returns(data: :map)
-      scope(:server_only)
+      scope(:server)
     end
   end
 
@@ -329,13 +329,13 @@ defmodule Exoforge.Std.Services do
     @doc "Emitted when a new player account is created."
     event :player_created do
       payload(player_id: :string, timestamp: :integer)
-      scope(:server_only)
+      scope(:server)
     end
 
     @doc "Emitted when a player account is deleted."
     event :player_deleted do
       payload(player_id: :string, timestamp: :integer)
-      scope(:server_only)
+      scope(:server)
     end
   end
 

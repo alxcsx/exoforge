@@ -8,6 +8,16 @@ defmodule Exoforge.Drivers.Runtime.PluginProxy do
   """
   alias Exoforge.Domain.Manifest
 
+  @doc """
+  Returns the manifest with `entry_point` replaced by the generated proxy module.
+
+  Runners call this instead of doing it themselves, so "register the proxy as the entry point"
+  has exactly one implementation.
+  """
+  def prepare(%Manifest{} = manifest, runner, module_name) do
+    %{manifest | entry_point: ensure(manifest, runner, module_name)}
+  end
+
   @doc "Ensures the proxy module exists and returns it."
   def ensure(%Manifest{} = manifest, runner, module_name) do
     manifest_id = manifest.id

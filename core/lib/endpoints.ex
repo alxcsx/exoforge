@@ -15,4 +15,15 @@ defmodule Exoforge.Endpoints do
 
   def http_port, do: Application.get_env(:exoforge, :http_port, @http_default)
   def dashboard_port, do: Application.get_env(:exoforge, :dashboard_port, @dashboard_default)
+
+  @doc """
+  Base URL of the Studio.
+
+  Used by the ingress plugins when they tell a caller where to sign in. Kept here so the
+  transports do not each re-derive it from the dashboard endpoint's config.
+  """
+  def studio_url do
+    host = Application.get_env(:exoforge, :studio_host, "localhost")
+    "http://#{host}:#{dashboard_port()}"
+  end
 end

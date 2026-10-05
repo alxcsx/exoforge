@@ -1,4 +1,7 @@
 defmodule Exoforge.Std.Database.Adapters.Postgres do
+  # Postgrex connect timeout, in milliseconds.
+  @connect_timeout 3000
+
   @moduledoc """
   PostgreSQL database adapter providing strict per-plugin multi-tenant isolation.
   Acts as the middleground between PostgreSQL and all Exoforge plugins.
@@ -255,7 +258,7 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
       password: Map.get(config, :password, ""),
       database: Map.get(config, :database, "postgres"),
       pool_size: 1,
-      timeout: 3000
+      timeout: @connect_timeout
     ]
 
     Postgrex.start_link(opts)
@@ -278,7 +281,7 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
       password: Map.get(config, :password, ""),
       database: target_db,
       pool_size: 1,
-      timeout: 3000
+      timeout: @connect_timeout
     ]
 
     Postgrex.start_link(opts)
@@ -290,18 +293,12 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
 
   defp database_name(plugin_id, config) do
     prefix = Map.get(config, :db_prefix, "exoforge_")
-    "#{prefix}#{clean_id(plugin_id)}"
+    "#{prefix}#{Exoforge.Std.Database.clean_id(plugin_id)}"
   end
 
   defp schema_name(plugin_id, config) do
     prefix = Map.get(config, :schema_prefix, "plugin_")
-    "#{prefix}#{clean_id(plugin_id)}"
+    "#{prefix}#{Exoforge.Std.Database.clean_id(plugin_id)}"
   end
 
-  defp clean_id(plugin_id) do
-    plugin_id
-    |> to_string()
-    |> String.replace(~r/[^a-zA-Z0-9_]/, "_")
-    |> String.downcase()
-  end
 end

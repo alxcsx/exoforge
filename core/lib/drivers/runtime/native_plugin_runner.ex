@@ -26,16 +26,14 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
 
   @doc "Prepares the manifest by ensuring the proxy module is created and set as entry_point."
   def prepare_manifest(%Manifest{} = manifest) do
-    proxy_mod = ensure_proxy_module(manifest)
-    %{manifest | entry_point: proxy_mod}
+    Exoforge.Drivers.Runtime.PluginProxy.prepare(manifest, __MODULE__, native_module_name(manifest))
   end
 
   @impl true
   def load(%Manifest{} = manifest) do
     case find_binary_path(manifest) do
       {:ok, binary_path} ->
-        proxy_mod = ensure_proxy_module(manifest)
-        updated_manifest = %{manifest | entry_point: proxy_mod}
+        updated_manifest = prepare_manifest(manifest)
         Exoforge.PluginRegistry.register(updated_manifest)
 
         runner_name = via_name(manifest.id)
@@ -337,10 +335,6 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
       nil -> {:error, {:binary_not_found, candidates}}
       path -> {:ok, path}
     end
-  end
-
-  defp ensure_proxy_module(manifest) do
-    Exoforge.Drivers.Runtime.PluginProxy.ensure(manifest, __MODULE__, native_module_name(manifest))
   end
 
   defp native_module_name(manifest), do: Module.concat([Exoforge, Plugins, manifest.id, Native])

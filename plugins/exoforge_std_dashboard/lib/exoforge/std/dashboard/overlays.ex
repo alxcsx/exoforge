@@ -679,7 +679,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               <div class="space-y-3 bg-gray-50 p-4 rounded-xl border border-gray-200/80">
                 <div class="p-3 bg-white border border-gray-200 rounded-lg space-y-1">
                   <span class="font-bold text-gray-800">Token Strategy</span>
-                  <p class="text-[11px] text-gray-500">Bearer Token with cross-port cookie extraction (<code class="font-mono text-purple-700">exo_auth_token</code> on ports 4005, 4001, 4000).</p>
+                  <p class="text-[11px] text-gray-500">Bearer Token with cross-port cookie extraction (<code class="font-mono text-purple-700">{hd(Exoforge.Auth.Request.cookie_names())}</code> on ports {Exoforge.Endpoints.dashboard_port()}, {Exoforge.Endpoints.http_port()}, {Exoforge.Endpoints.ws_port()}).</p>
                 </div>
 
                 <div class="p-3 bg-white border border-gray-200 rounded-lg space-y-1">
@@ -763,7 +763,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
         <div class="space-y-4 text-xs">
           <div class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
             <span class="w-12 h-12 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center text-2xl">
-              <%= (is_map(@extension.dashboard_view) && @extension.dashboard_view[:icon]) || default_extension_icon(@extension) %>
+              <%= (is_map(@extension.dashboard_view) && @extension.dashboard_view[:icon]) || ExtensionPresenter.icon(@extension) %>
             </span>
             <div class="flex-1">
               <div class="flex items-center justify-between">
@@ -947,7 +947,6 @@ defmodule Exoforge.Std.Dashboard.Overlays do
   end
 
   defp display_name(ext_or_id), do: ExtensionPresenter.display_name(ext_or_id)
-  defp default_extension_icon(ext), do: ExtensionPresenter.icon(ext)
 
   defp provides_service?(extension, service) do
     target = to_string(service)

@@ -42,7 +42,10 @@ defmodule Exoforge.Plugin do
     arity = length(args)
     line = Keyword.get(meta, :line, __CALLER__.line)
     mode = Keyword.get(opts, :mode, :sync)
-    scope = Keyword.get(opts, :scope, :global)
+    scope =
+      opts
+      |> Keyword.get(:scope, :global)
+      |> Exoforge.Auth.Roles.validate_action_scope!("defaction #{name}")
 
     # ignore payload case no argument was passed to the defaction
     inner_args = if arity == 1, do: args, else: [quote(do: _payload)]

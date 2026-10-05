@@ -20,6 +20,19 @@ defmodule Exoforge.Std.Database do
 
   alias Exoforge.Std.Database.Manager
 
+  @doc """
+  Filesystem- and SQL-safe identifier for a plugin, used for database, schema and file names.
+
+  Shared by the manager and both adapters, so a plugin's storage cannot land in a differently
+  named database depending on which backend is active.
+  """
+  def clean_id(plugin_id) do
+    plugin_id
+    |> to_string()
+    |> String.replace(~r/[^a-zA-Z0-9_]/, "_")
+    |> String.downcase()
+  end
+
   def children do
     [
       Manager

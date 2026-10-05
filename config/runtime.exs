@@ -13,6 +13,10 @@ if config_env() == :prod do
     gateway_port: gateway_port,
     ws_port: gateway_port,
     http_port: http_port,
+    # The dashboard endpoint below reads PORT directly, so mirror it here: everything that asks
+    # Exoforge.Endpoints.dashboard_port/0 must agree with the port the Studio actually listens on.
+    dashboard_port: dashboard_port,
+    studio_host: host,
     allow_dev_tokens: false,
     require_admin_auth: true,
     admin: [

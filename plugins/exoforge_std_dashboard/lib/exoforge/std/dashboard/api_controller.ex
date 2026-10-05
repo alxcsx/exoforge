@@ -122,7 +122,7 @@ defmodule Exoforge.Std.Dashboard.ApiController do
     |> Enum.find(&String.starts_with?(&1, "create_"))
     |> case do
       nil -> nil
-      name -> String.to_existing_atom(name)
+      name -> Exoforge.Atoms.existing(name)
     end
   end
 
@@ -308,31 +308,10 @@ defmodule Exoforge.Std.Dashboard.ApiController do
   end
 
   defp explicit_token(conn) do
-    bearer_token(conn) || header_token(conn, "x-admin-token") || query_token(conn)
-  end
-
-  defp bearer_token(conn) do
-    case Plug.Conn.get_req_header(conn, "authorization") do
-      ["Bearer " <> token | _] -> String.trim(token)
-      ["bearer " <> token | _] -> String.trim(token)
-      [token | _] when token != "" -> String.trim(token)
-      _ -> nil
-    end
-  end
-
-  defp header_token(conn, header_name) do
-    case Plug.Conn.get_req_header(conn, header_name) do
-      [val | _] when is_binary(val) and val != "" -> String.trim(val)
-      _ -> nil
-    end
-  end
-
-  defp query_token(conn) do
     conn = Plug.Conn.fetch_query_params(conn)
 
-    case conn.query_params["token"] do
-      token when is_binary(token) and token != "" -> String.trim(token)
-      _ -> nil
-    end
+    Exoforge.Auth.Request.bearer(conn.req_headers) ||
+      Exoforge.Auth.Request.header(conn.req_headers, "x-admin-token") ||
+      Exoforge.Auth.Request.query(conn.query_params)
   end
 end

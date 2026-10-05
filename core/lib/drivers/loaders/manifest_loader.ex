@@ -1,9 +1,7 @@
 defmodule Exoforge.Drivers.Loaders.ManifestLoader do
-  @behaviour Exoforge.Contracts.PluginLoader
   alias Exoforge.Domain.Manifest
   require Logger
 
-  @impl true
   def load_plugins(nil), do: raise("Modules dir not found. Please set :scan_path in your config")
 
   def load_plugins(paths) when is_list(paths) do

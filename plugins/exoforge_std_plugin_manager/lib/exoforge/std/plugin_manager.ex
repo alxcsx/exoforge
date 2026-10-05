@@ -29,7 +29,7 @@ defmodule Exoforge.Std.PluginManager do
   ## ---- SERVICE ACTIONS ----
 
   @impl true
-  defaction list_plugins, scope: "studio" do
+  defaction list_plugins, scope: Exoforge.Auth.Roles.studio() do
     manifests = PluginRegistry.all_manifests()
 
     plugins =
@@ -54,7 +54,7 @@ defmodule Exoforge.Std.PluginManager do
   end
 
   @impl true
-  defaction get_plugin(payload), scope: "studio" do
+  defaction get_plugin(payload), scope: Exoforge.Auth.Roles.studio() do
     id_str = Map.get(payload, :id) || Map.get(payload, "id")
 
     if is_nil(id_str) or id_str == "" do
@@ -93,7 +93,7 @@ defmodule Exoforge.Std.PluginManager do
   end
 
   @impl true
-  defaction get_system_info, scope: "studio" do
+  defaction get_system_info, scope: Exoforge.Auth.Roles.studio() do
     active_ents =
       if Code.ensure_loaded?(Exoforge.Entities) and
            function_exported?(Exoforge.Entities, :list_active, 0) do
@@ -124,7 +124,7 @@ defmodule Exoforge.Std.PluginManager do
   end
 
   @impl true
-  defaction upload_plugin(payload), scope: "admin" do
+  defaction upload_plugin(payload), scope: Exoforge.Auth.Roles.admin() do
     name_str = Map.get(payload, :name) || Map.get(payload, "name")
     raw_wasm = Map.get(payload, :wasm_binary) || Map.get(payload, "wasm_binary")
 
@@ -159,7 +159,7 @@ defmodule Exoforge.Std.PluginManager do
   end
 
   @impl true
-  defaction remove_plugin(payload), scope: "admin" do
+  defaction remove_plugin(payload), scope: Exoforge.Auth.Roles.admin() do
     id_str = Map.get(payload, :id) || Map.get(payload, "id")
     delete_files = Map.get(payload, :delete_files) || Map.get(payload, "delete_files") || false
 
@@ -195,14 +195,14 @@ defmodule Exoforge.Std.PluginManager do
   end
 
   @impl true
-  defaction restart_system, scope: "admin" do
+  defaction restart_system, scope: Exoforge.Auth.Roles.admin() do
     PluginBootstrapper.reload_all()
     count = length(PluginRegistry.all_manifests())
     {:ok, %{status: "restarted", plugins_count: count}}
   end
 
   @impl true
-  defaction export_plugin_info, scope: "studio" do
+  defaction export_plugin_info, scope: Exoforge.Auth.Roles.studio() do
     manifests = PluginRegistry.all_manifests()
 
     exported =

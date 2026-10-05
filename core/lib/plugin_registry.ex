@@ -52,12 +52,7 @@ defmodule Exoforge.PluginRegistry do
 
   # Unregister a plugin manifest and its services
   def unregister(manifest_id) do
-    id_atom =
-      try do
-        if is_atom(manifest_id), do: manifest_id, else: String.to_existing_atom(to_string(manifest_id))
-      rescue
-        _ -> manifest_id
-      end
+    id_atom = Exoforge.Atoms.existing(manifest_id, manifest_id)
 
     :ets.delete(:exo_plugins_mem, manifest_id)
     if id_atom != manifest_id, do: :ets.delete(:exo_plugins_mem, id_atom)
@@ -217,7 +212,7 @@ defmodule Exoforge.PluginRegistry do
           |> Enum.find(&String.starts_with?(&1, "list_"))
           |> case do
             nil -> :all
-            name -> String.to_existing_atom(name)
+            name -> Exoforge.Atoms.existing(name, :all)
           end
 
         case Exoforge.ActionDispatcher.dispatch(plugin_id, list_action, %{}) do

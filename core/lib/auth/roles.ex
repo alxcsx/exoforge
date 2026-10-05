@@ -56,6 +56,37 @@ defmodule Exoforge.Auth.Roles do
   @service "service"
   def service, do: @service
 
+  @doc """
+  Every scope an action may declare.
+
+  `:server` means "never reachable from a transport" — the dispatcher rejects it for any external
+  caller and only kernel-internal calls (which pass `caller_scopes: :internal`) get through.
+  """
+  @action_scopes [@admin, @studio, @player, @guest, @service, "server", "global"]
+
+  def action_scopes, do: @action_scopes
+
+  @doc "True when `scope` is a scope an action may declare."
+  def action_scope?(scope), do: to_string(scope) in @action_scopes
+
+  @doc """
+  Compile-time guard for the action DSLs.
+
+  A mistyped scope is otherwise silent: the dispatcher ranks unknown scopes at 0, so
+  `scope: "stduio"` would quietly mean "guest" instead of "studio". Expressions (the
+  `Exoforge.Auth.Roles.studio()` form) are left to the compiler to resolve.
+  """
+  def validate_action_scope!(scope, context) do
+    if (is_binary(scope) or is_atom(scope)) and not action_scope?(scope) do
+      raise CompileError,
+        description:
+          "Unknown scope #{inspect(scope)} for #{context}. " <>
+            "Known scopes: #{inspect(@action_scopes)}"
+    end
+
+    scope
+  end
+
   @role_scopes %{
     "admin" => ["admin", "service", "studio", "player", "write", "read"],
     "studio" => ["studio", "write", "read"],

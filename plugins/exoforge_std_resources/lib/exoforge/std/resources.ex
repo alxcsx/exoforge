@@ -139,13 +139,13 @@ defmodule Exoforge.Std.Resources do
   ## ---- ACTIONS ----
 
   @impl true
-  defaction migrate(payload), scope: "studio" do
+  defaction migrate(payload), scope: Exoforge.Auth.Roles.studio() do
     target = param(payload, :resource)
     {:ok, %{migrated: run_migrations(target)}}
   end
 
   @impl true
-  defaction list(payload), scope: "studio" do
+  defaction list(payload), scope: Exoforge.Auth.Roles.studio() do
     name = resource_name(payload)
 
     with {:ok, info} <- resource_info(name) do
@@ -161,7 +161,7 @@ defmodule Exoforge.Std.Resources do
   end
 
   @impl true
-  defaction get(payload), scope: "studio" do
+  defaction get(payload), scope: Exoforge.Auth.Roles.studio() do
     name = resource_name(payload)
     id = param(payload, :id)
 
@@ -182,7 +182,7 @@ defmodule Exoforge.Std.Resources do
   ## ---- WRITES ----
 
   @impl true
-  defaction create(payload), scope: "studio" do
+  defaction create(payload), scope: Exoforge.Auth.Roles.studio() do
     name = resource_name(payload)
     attrs = param(payload, :attributes) || %{}
 
@@ -205,7 +205,7 @@ defmodule Exoforge.Std.Resources do
   end
 
   @impl true
-  defaction update(payload), scope: "studio" do
+  defaction update(payload), scope: Exoforge.Auth.Roles.studio() do
     name = resource_name(payload)
     id = param(payload, :id)
     attrs = param(payload, :attributes) || %{}
@@ -233,7 +233,7 @@ defmodule Exoforge.Std.Resources do
   end
 
   @impl true
-  defaction delete(payload), scope: "studio" do
+  defaction delete(payload), scope: Exoforge.Auth.Roles.studio() do
     name = resource_name(payload)
     id = param(payload, :id)
 
@@ -251,7 +251,7 @@ defmodule Exoforge.Std.Resources do
   end
 
   @impl true
-  defaction upsert(payload), scope: "studio" do
+  defaction upsert(payload), scope: Exoforge.Auth.Roles.studio() do
     name = resource_name(payload)
     attrs = param(payload, :attributes) || %{}
 
@@ -299,7 +299,7 @@ defmodule Exoforge.Std.Resources do
     |> Enum.find(&String.starts_with?(&1, "list_"))
     |> case do
       nil -> nil
-      name -> String.to_existing_atom(name)
+      name -> Exoforge.Atoms.existing(name)
     end
   end
 
@@ -473,12 +473,7 @@ defmodule Exoforge.Std.Resources do
   end
 
   defp to_atom(a) when is_atom(a), do: a
-
-  defp to_atom(a) when is_binary(a) do
-    String.to_existing_atom(a)
-  rescue
-    ArgumentError -> a
-  end
+  defp to_atom(a) when is_binary(a), do: Exoforge.Atoms.existing(a, a)
 
   defp ensure_migrated(info) do
     key = {info.plugin_id, table_for(info.resource)}

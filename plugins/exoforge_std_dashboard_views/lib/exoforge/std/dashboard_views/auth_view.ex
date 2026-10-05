@@ -21,7 +21,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
        reset_password_error: nil,
        roles_user: nil,
        selected_role: "player",
-       roles_form_scopes: ["player", "write", "read"],
+       roles_form_scopes: Exoforge.Auth.Roles.scopes_for_role("player"),
        roles_error: nil,
        issued_token_info: nil,
        selected_user: nil,

@@ -112,11 +112,7 @@ defmodule Exoforge.Std.Dashboard.Extensions do
     |> PluginRegistry.sanitize_for_json()
   end
 
-  defp safe_type(str) when is_binary(str) do
-    String.to_existing_atom(str)
-  rescue
-    ArgumentError -> str
-  end
+  defp safe_type(str) when is_binary(str), do: Exoforge.Atoms.existing(str, str)
 
   defp safe_type(atom) when is_atom(atom), do: atom
   defp safe_type(_), do: :string

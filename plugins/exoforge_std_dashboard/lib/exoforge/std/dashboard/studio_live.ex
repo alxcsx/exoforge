@@ -255,7 +255,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   end
 
   def handle_event("dismiss_toast", %{"kind" => kind}, socket) when kind in ["info", "error"] do
-    {:noreply, clear_flash(socket, String.to_existing_atom(kind))}
+    {:noreply, clear_flash(socket, Exoforge.Atoms.existing(kind))}
   end
 
   def handle_event("search_extensions", %{"query" => query}, socket) do
@@ -303,12 +303,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         if to_string(entity.plugin) == plugin, do: entity.plugin
       end)
 
-    type_term =
-      try do
-        String.to_existing_atom(type)
-      rescue
-        _ -> type
-      end
+    type_term = Exoforge.Atoms.existing(type, type)
 
     if (plugin_atom && Code.ensure_loaded?(Exoforge.Entities)) and
          function_exported?(Exoforge.Entities, :stop, 3) do
@@ -722,7 +717,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         icon =
           if ext && is_map(ext.dashboard_view) && ext.dashboard_view[:icon],
             do: ext.dashboard_view[:icon],
-            else: default_extension_icon(ext || ext_id)
+            else: ExtensionPresenter.icon(ext || ext_id)
 
         %{
           id: ext_id,
@@ -760,7 +755,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         icon =
           if is_map(ext.dashboard_view) and ext.dashboard_view[:icon],
             do: ext.dashboard_view[:icon],
-            else: default_extension_icon(ext)
+            else: ExtensionPresenter.icon(ext)
 
         %{
           id: to_string(ext.id),
@@ -843,7 +838,6 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     end
   end
 
-  defp default_extension_icon(ext_or_id), do: ExtensionPresenter.icon(ext_or_id)
   defp humanize_plugin_name(ext_or_id), do: ExtensionPresenter.display_name(ext_or_id)
   defp tab_short_name(ext_or_id), do: ExtensionPresenter.display_name(ext_or_id)
 
@@ -1133,7 +1127,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                           phx-value-tab={ext_id}
                           class={"w-full text-left px-2.5 py-2 rounded-lg text-xs font-bold flex items-center gap-2 #{if to_string(@current_tab) == ext_id, do: "bg-primary-50 text-primary-700", else: "text-gray-700 hover:bg-gray-100"}"}
                         >
-                          <span><%= if is_map(pext.dashboard_view) and pext.dashboard_view[:icon], do: pext.dashboard_view[:icon], else: default_extension_icon(pext) %></span>
+                          <span><%= if is_map(pext.dashboard_view) and pext.dashboard_view[:icon], do: pext.dashboard_view[:icon], else: ExtensionPresenter.icon(pext) %></span>
                           <span class="truncate"><%= tab_short_name(pext) %></span>
                         </button>
                       <% end %>
@@ -1148,7 +1142,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
               <% ext = Enum.find(@overview.extensions, fn e -> to_string(e.id) == ext_id end) %>
               <%= if ext do %>
                 <% title = tab_short_name(ext) %>
-                <% icon = if is_map(ext.dashboard_view) and ext.dashboard_view[:icon], do: ext.dashboard_view[:icon], else: default_extension_icon(ext) %>
+                <% icon = if is_map(ext.dashboard_view) and ext.dashboard_view[:icon], do: ext.dashboard_view[:icon], else: ExtensionPresenter.icon(ext) %>
                 <% is_active = to_string(@current_tab) == ext_id %>
                 <div class={"group relative hidden md:flex items-center rounded-lg transition-all text-xs font-bold whitespace-nowrap flex-shrink-0 #{if is_active, do: "bg-white text-primary-700 shadow-sm", else: "text-gray-600 hover:text-gray-900 hover:bg-gray-200/50"}"}>
                   <button

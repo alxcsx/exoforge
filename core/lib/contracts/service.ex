@@ -46,7 +46,10 @@ defmodule Exoforge.Contracts.Service do
     meta = parse_block(block)
 
     mode = Map.get(meta, :mode) || :sync
-    scope = Map.get(meta, :scope) || :global
+    scope =
+      meta
+      |> Map.get(:scope, :global)
+      |> Exoforge.Auth.Roles.validate_action_scope!("action #{name}")
     transport = Map.get(meta, :transport) || :auto
     params = Map.get(meta, :params) || []
     returns = Map.get(meta, :returns)

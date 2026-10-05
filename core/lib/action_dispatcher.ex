@@ -110,13 +110,8 @@ defmodule Exoforge.ActionDispatcher do
     end
   end
 
-  defp to_atom_safe(val) when is_atom(val), do: val
   # External transports may supply arbitrary names; never create atoms for them.
-  defp to_atom_safe(val) when is_binary(val) do
-    String.to_existing_atom(val)
-  rescue
-    ArgumentError -> val
-  end
+  defp to_atom_safe(val) when is_binary(val), do: Exoforge.Atoms.existing(val, val)
 
   defp to_atom_safe(val), do: val
 

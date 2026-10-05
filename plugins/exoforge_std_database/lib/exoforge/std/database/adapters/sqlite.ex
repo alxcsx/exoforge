@@ -29,7 +29,7 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
      %{
        url: "sqlite://#{db_path(plugin_id, config)}",
        database: database_name(plugin_id),
-       schema: "plugin_#{clean_id(plugin_id)}",
+       schema: "plugin_#{Exoforge.Std.Database.clean_id(plugin_id)}",
        driver: :sqlite,
        pool_size: 1
      }}
@@ -213,12 +213,6 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
       Path.join([File.cwd!(), "priv", "data", "sqlite"])
   end
 
-  defp database_name(plugin_id), do: "exoforge_#{clean_id(plugin_id)}"
+  defp database_name(plugin_id), do: "exoforge_#{Exoforge.Std.Database.clean_id(plugin_id)}"
 
-  defp clean_id(plugin_id) do
-    plugin_id
-    |> to_string()
-    |> String.replace(~r/[^a-zA-Z0-9_]/, "_")
-    |> String.downcase()
-  end
 end

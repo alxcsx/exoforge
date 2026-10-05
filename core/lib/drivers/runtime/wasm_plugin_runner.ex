@@ -22,17 +22,14 @@ defmodule Exoforge.Drivers.Runtime.WasmPluginRunner do
   Prepares the manifest by ensuring the proxy module is created and set as entry_point.
   """
   def prepare_manifest(%Manifest{} = manifest) do
-    proxy_mod = ensure_proxy_module(manifest)
-    %{manifest | entry_point: proxy_mod}
+    Exoforge.Drivers.Runtime.PluginProxy.prepare(manifest, __MODULE__, wasm_module_name(manifest))
   end
 
   @impl true
   def load(%Manifest{} = manifest) do
     case find_wasm_path(manifest) do
       {:ok, wasm_path} ->
-        proxy_mod = ensure_proxy_module(manifest)
-        # Register manifest with proxy module as entry point so nothing special-cases :wasm
-        updated_manifest = %{manifest | entry_point: proxy_mod}
+        updated_manifest = prepare_manifest(manifest)
         PluginRegistry.register(updated_manifest)
 
         sup_name = Module.concat([Exoforge, Plugins, wasm_module_name(manifest), Supervisor])
@@ -641,15 +638,7 @@ defmodule Exoforge.Drivers.Runtime.WasmPluginRunner do
   defp safe_to_atom(nil), do: nil
   defp safe_to_atom(val) when is_atom(val), do: val
 
-  defp safe_to_atom(val) when is_binary(val) do
-    try do
-      String.to_existing_atom(val)
-    rescue
-      ArgumentError -> nil
-    end
-  end
-
-  defp safe_to_atom(_), do: nil
+  defp safe_to_atom(val), do: Exoforge.Atoms.existing(val)
 
   defp ensure_tables do
     case :ets.info(:exo_wasm_stats) do
