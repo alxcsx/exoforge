@@ -106,7 +106,8 @@ public class ExoforgeControlCenter : EditorWindow
         bool CanBuild,
         string BinaryPath,
         long BinarySizeBytes,
-        bool Modified);
+        bool Modified,
+        string? Version);
 
     [MenuItem("Tools/Exoforge/Exoforge Studio", false, 100)]
     [MenuItem("Window/Exoforge/Exoforge Studio", false, 2000)]
@@ -801,17 +802,18 @@ public class ExoforgeControlCenter : EditorWindow
             bool isBuilt = binaryPath != "" && File.Exists(binaryPath);
             long size = isBuilt ? new FileInfo(binaryPath).Length : 0;
 
-            // The manifest version carries the build fingerprint (1.0.0+<hash>); if the current
+            // The manifest version carries the build stamp (1.0.0+<build>.<hash>); if the current
             // sources hash differently, the plugin changed since it was last built.
             bool modified = false;
+            string? version = null;
             if (isBuilt)
             {
-                string? version = ExoDeployer.ReadManifestVersion(dir);
+                version = ExoDeployer.ReadManifestVersion(dir);
                 string fingerprint = ExoDeployer.ComputeSourceFingerprint(dir);
-                modified = version == null || !version.EndsWith("+" + fingerprint, StringComparison.Ordinal);
+                modified = version == null || !version.EndsWith("." + fingerprint, StringComparison.Ordinal);
             }
 
-            _localPlugins.Add(new LocalPluginInfo(name, dir, pluginType, isBuilt, canBuild, binaryPath, size, modified));
+            _localPlugins.Add(new LocalPluginInfo(name, dir, pluginType, isBuilt, canBuild, binaryPath, size, modified, version));
         }
     }
 
@@ -1312,34 +1314,45 @@ public class ExoforgeControlCenter : EditorWindow
 
                 string buildError = SessionState.GetString(BuildFailureKey(plugin.Name), "");
                 bool failed = buildError.Length > 0;
+                string tag = BuildTag(plugin.Version);
+                string? deployedVersion = RemotePluginVersion(plugin.Name);
+                bool notDeployed = _isConnected && plugin.IsBuilt && !plugin.Modified && deployedVersion != plugin.Version;
 
                 if (failed)
                 {
                     var prev = GUI.color;
                     GUI.color = new Color(0.9f, 0.3f, 0.3f);
-                    EditorGUILayout.LabelField(new GUIContent("✗ Build failed", buildError), EditorStyles.miniBoldLabel, GUILayout.Width(105));
+                    EditorGUILayout.LabelField(new GUIContent("✗ Build failed", buildError), EditorStyles.miniBoldLabel, GUILayout.Width(120));
                     GUI.color = prev;
                 }
-                else if (plugin.IsBuilt && plugin.Modified)
+                else if (!plugin.IsBuilt)
+                {
+                    var prev = GUI.color;
+                    GUI.color = new Color(0.9f, 0.6f, 0.2f);
+                    EditorGUILayout.LabelField("○ Not built", EditorStyles.miniLabel, GUILayout.Width(120));
+                    GUI.color = prev;
+                }
+                else if (plugin.Modified)
                 {
                     var prev = GUI.color;
                     GUI.color = new Color(0.95f, 0.7f, 0.2f);
-                    EditorGUILayout.LabelField(new GUIContent("● Modified", "Sources changed since the last build"), EditorStyles.miniBoldLabel, GUILayout.Width(105));
+                    EditorGUILayout.LabelField(new GUIContent($"● Modified {tag}", $"Sources changed since build {plugin.Version}"), EditorStyles.miniBoldLabel, GUILayout.Width(120));
                     GUI.color = prev;
                 }
-                else if (plugin.IsBuilt)
+                else if (notDeployed)
                 {
-                    string sizeStr = $"{plugin.BinarySizeBytes / 1024} KB";
+                    string deployedLabel = deployedVersion ?? "(none)";
                     var prev = GUI.color;
-                    GUI.color = new Color(0.3f, 0.9f, 0.4f);
-                    EditorGUILayout.LabelField($"✓ Ready ({sizeStr})", EditorStyles.miniBoldLabel, GUILayout.Width(105));
+                    GUI.color = new Color(0.95f, 0.7f, 0.2f);
+                    EditorGUILayout.LabelField(new GUIContent($"● Not deployed {tag}", $"Local {plugin.Version} differs from deployed {deployedLabel}"), EditorStyles.miniBoldLabel, GUILayout.Width(120));
                     GUI.color = prev;
                 }
                 else
                 {
+                    string sizeStr = $"{plugin.BinarySizeBytes / 1024} KB";
                     var prev = GUI.color;
-                    GUI.color = new Color(0.9f, 0.6f, 0.2f);
-                    EditorGUILayout.LabelField("○ Not built", EditorStyles.miniLabel, GUILayout.Width(105));
+                    GUI.color = new Color(0.3f, 0.9f, 0.4f);
+                    EditorGUILayout.LabelField(new GUIContent($"✓ Ready {tag} ({sizeStr})", plugin.Version), EditorStyles.miniBoldLabel, GUILayout.Width(120));
                     GUI.color = prev;
                 }
 
@@ -1440,6 +1453,36 @@ public class ExoforgeControlCenter : EditorWindow
     }
 
     private static string BuildFailureKey(string pluginName) => $"Exoforge_BuildFailed_{pluginName}";
+
+    /// <summary>Compact build tag from a version's SemVer build metadata (1.0.0+42.ab12cd34 → #42).</summary>
+    private static string BuildTag(string? version)
+    {
+        if (string.IsNullOrEmpty(version)) return "";
+
+        int plus = version.IndexOf('+');
+        if (plus < 0 || plus + 1 >= version.Length) return "";
+
+        string metadata = version[(plus + 1)..];
+        int dot = metadata.IndexOf('.');
+        return "#" + (dot > 0 ? metadata[..dot] : metadata);
+    }
+
+    /// <summary>The version the cluster currently has for a plugin, or null when it is not deployed.</summary>
+    private string? RemotePluginVersion(string pluginId)
+    {
+        foreach (var plugin in _remotePlugins)
+        {
+            if (plugin.ValueKind == JsonValueKind.Object &&
+                plugin.TryGetProperty("id", out var id) &&
+                string.Equals(id.ToString(), pluginId, StringComparison.OrdinalIgnoreCase) &&
+                plugin.TryGetProperty("version", out var version))
+            {
+                return version.ToString();
+            }
+        }
+
+        return null;
+    }
 
     private static bool IsBuildPath(string path)
     {

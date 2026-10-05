@@ -303,7 +303,9 @@ public class ExoDeployer
         }
 
         string fingerprint = ComputeSourceFingerprint(pluginDir);
-        Emit($"[build] source {fingerprint}");
+        int buildNumber = NextBuildNumber(pluginDir);
+        string buildStamp = $"{buildNumber}.{fingerprint}";
+        Emit($"[build] build {buildStamp}");
 
         string buildSh = Path.Combine(pluginDir, "build.sh");
         string pluginType;
@@ -320,7 +322,7 @@ public class ExoDeployer
         else
         {
             pluginType = "native";
-            binaryPath = PublishNative(csproj ?? throw new FileNotFoundException($"No .csproj found for '{cleanName}'."), pluginDir, cleanName, rid, dotnet, fingerprint, Emit);
+            binaryPath = PublishNative(csproj ?? throw new FileNotFoundException($"No .csproj found for '{cleanName}'."), pluginDir, cleanName, rid, dotnet, buildStamp, Emit);
         }
 
         string manifestPath = Path.Combine(pluginDir, "manifest.exs");
@@ -338,7 +340,7 @@ public class ExoDeployer
         return Task.Run(() => BuildPlugin(pluginName, rid, dotnetPath, log), cancellationToken);
     }
 
-    private string PublishNative(string csproj, string pluginDir, string cleanName, string? rid, string dotnetPath, string fingerprint, Action<string> emit)
+    private string PublishNative(string csproj, string pluginDir, string cleanName, string? rid, string dotnetPath, string buildStamp, Action<string> emit)
     {
         string targetRid = string.IsNullOrWhiteSpace(rid) ? HostRuntimeIdentifier() : rid!;
         emit($"[build] dotnet publish -c Release -r {targetRid}");
@@ -371,7 +373,7 @@ public class ExoDeployer
         emit($"[build] manifest -> {manifest}");
         RunProcess(
             dotnetPath,
-            $"run --project \"{manifestGen}\" -- \"{dll}\" \"{manifest}\" --type native --build {fingerprint}",
+            $"run --project \"{manifestGen}\" -- \"{dll}\" \"{manifest}\" --type native --build {buildStamp}",
             pluginDir,
             emit);
 
@@ -430,6 +432,25 @@ public class ExoDeployer
         using var sha = System.Security.Cryptography.SHA256.Create();
         byte[] hash = sha.ComputeHash(Encoding.UTF8.GetBytes(content.ToString()));
         return BitConverter.ToString(hash).Replace("-", "").Substring(0, 8).ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// Local per-plugin build counter, stored in <c>.buildcount</c> and incremented on every build.
+    /// With the fingerprint it makes each build identifiable: <c>1.0.0+42.f9ac5087</c>.
+    /// </summary>
+    private static int NextBuildNumber(string pluginDir)
+    {
+        string path = Path.Combine(pluginDir, ".buildcount");
+        int current = 0;
+
+        if (File.Exists(path) && int.TryParse(File.ReadAllText(path).Trim(), out int parsed))
+        {
+            current = parsed;
+        }
+
+        int next = current + 1;
+        File.WriteAllText(path, next.ToString());
+        return next;
     }
 
     /// <summary>Reads the <c>version</c> field from a plugin's generated <c>manifest.exs</c>.</summary>

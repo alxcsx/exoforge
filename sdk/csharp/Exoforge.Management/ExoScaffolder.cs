@@ -33,8 +33,8 @@ public static class ExoScaffolder
         File.WriteAllText(Path.Combine(srcDir, $"{className}JsonContext.cs"), GenerateJsonContextCode(className, template));
         File.WriteAllText(Path.Combine(targetDir, $"{cleanName}.slnx"), GenerateSolution(cleanName));
 
-        // The staged native binary is a build artifact (rebuilt by `exo plugin build`).
-        File.WriteAllText(Path.Combine(targetDir, ".gitignore"), $"/{cleanName}\n");
+        // The staged native binary and the local build counter are build artifacts.
+        File.WriteAllText(Path.Combine(targetDir, ".gitignore"), $"/{cleanName}\n/.buildcount\n");
 
         return targetDir;
     }

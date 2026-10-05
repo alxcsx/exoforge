@@ -145,14 +145,16 @@ defmodule Exoforge.Std.PluginManager do
       is_nil(plugin_type) ->
         {:error, :invalid_package}
 
-      plugin_type == :wasm ->
-        handle_upload_wasm(name_str, raw_wasm, manifest_param)
+      true ->
+        # Re-deploying a running plugin: stop the old instance first, otherwise its binary is busy
+        # (ETXTBSY on Linux) and booting again would start a duplicate runner.
+        _ = PluginBootstrapper.unload_plugin(name_str)
 
-      plugin_type == :native ->
-        handle_upload_native(name_str, raw_wasm, manifest_param)
-
-      plugin_type == :elixir ->
-        handle_upload_elixir(name_str, elixir_code, files_map, manifest_param)
+        case plugin_type do
+          :wasm -> handle_upload_wasm(name_str, raw_wasm, manifest_param)
+          :native -> handle_upload_native(name_str, raw_wasm, manifest_param)
+          :elixir -> handle_upload_elixir(name_str, elixir_code, files_map, manifest_param)
+        end
     end
   end
 
@@ -256,11 +258,15 @@ defmodule Exoforge.Std.PluginManager do
 
       target_dir = upload_target_dir(clean_name)
       binary_path = Path.join(target_dir, clean_name)
+      staged_path = binary_path <> ".new"
       manifest_path = Path.join(target_dir, "manifest.exs")
 
+      # Stage then atomically rename: rename(2) replaces the inode, so an old binary that is still
+      # executing can be replaced even if the process has not fully exited yet.
       with :ok <- File.mkdir_p(target_dir),
-           :ok <- File.write(binary_path, binary),
-           :ok <- File.chmod(binary_path, 0o755),
+           :ok <- File.write(staged_path, binary),
+           :ok <- File.chmod(staged_path, 0o755),
+           :ok <- File.rename(staged_path, binary_path),
            :ok <- write_manifest_file(manifest_path, clean_name, manifest_param, :native) do
         load_and_boot_plugin(target_dir, clean_name, :native)
       else

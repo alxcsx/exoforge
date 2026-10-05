@@ -183,8 +183,9 @@ writes each plugin's `src/Generated/PluginServices.g.cs`. Native builds run `dot
 and regenerate `manifest.exs`; set a **Native RID** (e.g. `linux-x64`) to build for a non-host deploy
 target. If Unity can't find `dotnet` (GUI apps often don't inherit your shell PATH), set
 **Dotnet Path** in the Settings tab. The build streams its log into the window, and every build stamps
-the manifest version with a source fingerprint (`1.0.0+<hash>`), so a deploy is traceable and the tab
-marks a plugin **● Modified** when its sources changed since the last build.
+the manifest version with a build counter and source fingerprint (`1.0.0+42.<hash>`), so a deploy is
+traceable. The tab marks a plugin **● Modified** when its sources changed since the last build, and
+**● Not deployed** when the local build differs from the one on the cluster.
 
 Rules of thumb:
 

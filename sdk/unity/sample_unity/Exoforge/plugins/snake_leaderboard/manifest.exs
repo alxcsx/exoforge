@@ -2,7 +2,7 @@
   id: :snake_leaderboard,
   name: "snake_leaderboard",
   type: :native,
-  version: "1.0.0+f9ac5087",
+  version: "1.0.0+2.f9ac5087",
   context: :global,
   entry_point: "snake_leaderboard",
   dependencies: [:database, :player_data],
