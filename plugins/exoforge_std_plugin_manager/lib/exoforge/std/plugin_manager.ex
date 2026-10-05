@@ -61,8 +61,7 @@ defmodule Exoforge.Std.PluginManager do
       {:error, :not_found}
     else
       manifest =
-        PluginRegistry.fetch_manifest(id_str) ||
-          PluginRegistry.fetch_manifest(Exoforge.Atoms.existing(id_str, id_str))
+        find_manifest(id_str)
 
       case manifest do
         nil ->
@@ -126,7 +125,7 @@ defmodule Exoforge.Std.PluginManager do
   @impl true
   defaction upload_plugin(payload), scope: Exoforge.Auth.Roles.admin() do
     name_str = Map.get(payload, :name) || Map.get(payload, "name")
-    raw_wasm = Map.get(payload, :wasm_binary) || Map.get(payload, "wasm_binary")
+    raw_binary = Map.get(payload, :binary) || Map.get(payload, "binary")
 
     elixir_code =
       Map.get(payload, :elixir_code) || Map.get(payload, "elixir_code") ||
@@ -136,7 +135,7 @@ defmodule Exoforge.Std.PluginManager do
     manifest_param = Map.get(payload, :manifest) || Map.get(payload, "manifest")
     type_param = Map.get(payload, :type) || Map.get(payload, "type")
 
-    plugin_type = detect_plugin_type(type_param, raw_wasm, elixir_code, files_map)
+    plugin_type = detect_plugin_type(type_param, raw_binary, elixir_code, files_map)
 
     cond do
       is_nil(name_str) or name_str == "" ->
@@ -151,8 +150,8 @@ defmodule Exoforge.Std.PluginManager do
         _ = PluginBootstrapper.unload_plugin(name_str)
 
         case plugin_type do
-          :wasm -> handle_upload_wasm(name_str, raw_wasm, manifest_param)
-          :native -> handle_upload_native(name_str, raw_wasm, manifest_param)
+          :wasm -> handle_upload_wasm(name_str, raw_binary, manifest_param)
+          :native -> handle_upload_native(name_str, raw_binary, manifest_param)
           :elixir -> handle_upload_elixir(name_str, elixir_code, files_map, manifest_param)
         end
     end
@@ -185,6 +184,8 @@ defmodule Exoforge.Std.PluginManager do
             :code.delete(m.entry_point)
           end
 
+          Exoforge.PluginLogs.clear(m.id)
+
           if delete_files and m.physical_path && File.dir?(m.physical_path) do
             clean_delete_directory(m.physical_path)
           end
@@ -199,6 +200,38 @@ defmodule Exoforge.Std.PluginManager do
     PluginBootstrapper.reload_all()
     count = length(PluginRegistry.all_manifests())
     {:ok, %{status: "restarted", plugins_count: count}}
+  end
+
+  @impl true
+  defaction logs(payload), scope: Exoforge.Auth.Roles.studio() do
+    id_str = Map.get(payload, :id) || Map.get(payload, "id")
+    limit = Map.get(payload, :limit) || Map.get(payload, "limit") || 100
+
+    case find_manifest(id_str) do
+      nil ->
+        {:error, :not_found}
+
+      m ->
+        lines = Exoforge.PluginLogs.list(m.id, limit)
+        {:ok, %{plugin_id: to_string(m.id), lines: lines, count: length(lines)}}
+    end
+  end
+
+  @impl true
+  defaction reload_plugin(payload), scope: Exoforge.Auth.Roles.admin() do
+    id_str = Map.get(payload, :id) || Map.get(payload, "id")
+
+    case find_manifest(id_str) do
+      nil ->
+        {:error, :not_found}
+
+      m ->
+        # Re-boot from the files already staged on disk — no re-upload, no rebuild.
+        PluginBootstrapper.unload_plugin(m.id)
+
+        {:ok, %{status: status}} = load_and_boot_plugin(m.physical_path, to_string(m.id), m.type)
+        {:ok, %{plugin_id: to_string(m.id), status: status}}
+    end
   end
 
   @impl true
@@ -235,6 +268,14 @@ defmodule Exoforge.Std.PluginManager do
 
   ## ---- PRIVATE HELPERS ----
 
+  # Resolves a plugin by id, accepting either the string or the existing atom form.
+  defp find_manifest(id_str) when is_binary(id_str) do
+    PluginRegistry.fetch_manifest(id_str) ||
+      PluginRegistry.fetch_manifest(Exoforge.Atoms.existing(id_str, id_str))
+  end
+
+  defp find_manifest(_), do: nil
+
   defp detect_plugin_type(type, raw_wasm, elixir_code, files_map) do
     type_str = to_string(type || "") |> String.downcase()
 
@@ -254,7 +295,7 @@ defmodule Exoforge.Std.PluginManager do
       {:error, :invalid_package}
     else
       clean_name = sanitize_name(name_str)
-      binary = decode_wasm_binary(raw_binary)
+      binary = decode_binary(raw_binary)
 
       target_dir = upload_target_dir(clean_name)
       binary_path = Path.join(target_dir, clean_name)
@@ -280,7 +321,7 @@ defmodule Exoforge.Std.PluginManager do
       {:error, :invalid_package}
     else
       clean_name = sanitize_name(name_str)
-      wasm_bytes = decode_wasm_binary(raw_wasm)
+      wasm_bytes = decode_binary(raw_wasm)
 
       case wasm_bytes do
         <<0, 97, 115, 109, _rest::binary>> ->
@@ -405,7 +446,7 @@ defmodule Exoforge.Std.PluginManager do
     end
   end
 
-  defp decode_wasm_binary(bin) when is_binary(bin) do
+  defp decode_binary(bin) when is_binary(bin) do
     if String.starts_with?(bin, @wasm_magic) do
       bin
     else
@@ -416,7 +457,7 @@ defmodule Exoforge.Std.PluginManager do
     end
   end
 
-  defp decode_wasm_binary(_), do: nil
+  defp decode_binary(_), do: nil
 
   defp write_manifest_file(manifest_path, name, manifest_param, default_type) do
     content =

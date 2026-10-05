@@ -277,7 +277,19 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
   end
 
   defp run_host_call("log", args, manifest) do
-    Logger.info("[#{manifest.id}] #{Map.get(args, "message", "")}")
+    level = Map.get(args, "level", 1)
+    message = Map.get(args, "message", "")
+
+    # Also keep it where the developer can see it: the server log alone is invisible from Unity.
+    Exoforge.PluginLogs.append(manifest.id, level, message)
+
+    case level do
+      0 -> Logger.debug("[#{manifest.id}] #{message}")
+      2 -> Logger.warning("[#{manifest.id}] #{message}")
+      3 -> Logger.error("[#{manifest.id}] #{message}")
+      _ -> Logger.info("[#{manifest.id}] #{message}")
+    end
+
     true
   end
 

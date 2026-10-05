@@ -103,7 +103,9 @@ public class ExoDeployer
             {
                 name = cleanName,
                 type = pluginType,
-                wasm_binary = binaryBase64,
+                // Named 'binary', not 'wasm_binary': the same field carries the NativeAOT
+                // executable for native plugins, which confused anyone reading the protocol.
+                binary = binaryBase64,
                 manifest = manifestContent
             };
 
@@ -119,16 +121,158 @@ public class ExoDeployer
         }
     }
 
+    /// <summary>
+    /// Confirms the cluster really has the plugin, and reports the version it is running.
+    ///
+    /// <c>upload_plugin</c> returning <c>installed</c> only means the files landed. A plugin that
+    /// fails to boot afterwards is otherwise invisible until you try to call one of its actions —
+    /// which is exactly the wrong moment to find out.
+    /// </summary>
+    public async Task<PluginDeploymentStatus> VerifyPluginAsync(
+        string pluginName,
+        string? expectedVersion = null,
+        string? environmentName = null,
+        ExoClient? existingClient = null,
+        CancellationToken cancellationToken = default)
+    {
+        string cleanName = NormalizePluginName(pluginName);
+        var client = existingClient ?? await CreateConnectedClientAsync(environmentName, cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            JsonElement result;
+            try
+            {
+                result = await client.SendActionAsync<JsonElement>(
+                    "plugin_manager", "get_plugin", new { id = cleanName }, cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                return new PluginDeploymentStatus(false, null, null, $"cluster does not have '{cleanName}': {ex.Message}");
+            }
+
+            string? version = ReadString(result, "plugin", "version");
+            string? type = ReadString(result, "plugin", "type");
+
+            if (version == null)
+            {
+                return new PluginDeploymentStatus(false, null, null, $"cluster does not have '{cleanName}'");
+            }
+
+            if (expectedVersion != null && !string.Equals(version, expectedVersion, StringComparison.Ordinal))
+            {
+                return new PluginDeploymentStatus(
+                    true, version, type,
+                    $"cluster is running {version}, but {expectedVersion} was just deployed");
+            }
+
+            return new PluginDeploymentStatus(true, version, type, "loaded");
+        }
+        finally
+        {
+            if (existingClient == null)
+            {
+                client.Dispose();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Re-boots an installed plugin from the files already on the cluster. No rebuild, no re-upload.
+    /// </summary>
+    public async Task<JsonElement> ReloadPluginAsync(
+        string pluginName,
+        string? environmentName = null,
+        ExoClient? existingClient = null,
+        CancellationToken cancellationToken = default)
+    {
+        string cleanName = NormalizePluginName(pluginName);
+        var client = existingClient ?? await CreateConnectedClientAsync(environmentName, cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            return await client.SendActionAsync<JsonElement>(
+                "plugin_manager", "reload_plugin", new { id = cleanName }, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            if (existingClient == null)
+            {
+                client.Dispose();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Recent log lines the plugin emitted. Without this a plugin author has no way to see their own
+    /// plugin running — the output only reaches the server's log.
+    /// </summary>
+    public async Task<List<PluginLogLine>> GetPluginLogsAsync(
+        string pluginName,
+        int limit = 100,
+        string? environmentName = null,
+        ExoClient? existingClient = null,
+        CancellationToken cancellationToken = default)
+    {
+        string cleanName = NormalizePluginName(pluginName);
+        var client = existingClient ?? await CreateConnectedClientAsync(environmentName, cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            var result = await client.SendActionAsync<JsonElement>(
+                "plugin_manager",
+                "logs",
+                new { id = cleanName, limit },
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            var lines = new List<PluginLogLine>();
+
+            if (result.ValueKind == JsonValueKind.Object &&
+                result.TryGetProperty("lines", out var array) &&
+                array.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var entry in array.EnumerateArray())
+                {
+                    lines.Add(new PluginLogLine(
+                        entry.TryGetProperty("at", out var at) && at.TryGetInt64(out long millis) ? millis : 0,
+                        entry.TryGetProperty("level_name", out var name) ? name.GetString() ?? "info" : "info",
+                        entry.TryGetProperty("message", out var message) ? message.GetString() ?? "" : ""));
+                }
+            }
+
+            return lines;
+        }
+        finally
+        {
+            if (existingClient == null)
+            {
+                client.Dispose();
+            }
+        }
+    }
+
+    private static string? ReadString(JsonElement root, string outer, string inner)
+    {
+        if (root.ValueKind != JsonValueKind.Object) return null;
+        if (!root.TryGetProperty(outer, out var obj) || obj.ValueKind != JsonValueKind.Object) return null;
+        return obj.TryGetProperty(inner, out var value) ? value.ToString() : null;
+    }
+
     public async Task<string> RemovePluginAsync(
         string pluginId,
         string? environmentName = null,
         ExoClient? existingClient = null,
+        bool deleteFiles = false,
         CancellationToken cancellationToken = default)
     {
         var client = existingClient ?? await CreateConnectedClientAsync(environmentName, cancellationToken).ConfigureAwait(false);
         try
         {
-            var result = await client.SendActionAsync<JsonElement>("plugin_manager", "remove_plugin", new { id = pluginId }, cancellationToken: cancellationToken).ConfigureAwait(false);
+            var result = await client.SendActionAsync<JsonElement>(
+                "plugin_manager",
+                "remove_plugin",
+                new { id = pluginId, delete_files = deleteFiles },
+                cancellationToken: cancellationToken).ConfigureAwait(false);
             return result.ToString();
         }
         finally
@@ -303,7 +447,9 @@ public class ExoDeployer
         }
 
         string fingerprint = ComputeSourceFingerprint(pluginDir);
-        int buildNumber = NextBuildNumber(pluginDir);
+        // Peek, don't commit: a failed build must not burn a build number, or the numbers you see
+        // in a manifest cannot be correlated with the builds that produced them.
+        int buildNumber = PeekBuildNumber(pluginDir);
         string buildStamp = $"{buildNumber}.{fingerprint}";
         Emit($"[build] build {buildStamp}");
 
@@ -324,6 +470,8 @@ public class ExoDeployer
             pluginType = "native";
             binaryPath = PublishNative(csproj ?? throw new FileNotFoundException($"No .csproj found for '{cleanName}'."), pluginDir, cleanName, rid, dotnet, buildStamp, Emit);
         }
+
+        CommitBuildNumber(pluginDir, buildNumber);
 
         string manifestPath = Path.Combine(pluginDir, "manifest.exs");
         return new ExoPluginBuild(cleanName, pluginType, binaryPath, manifestPath, output.ToString());
@@ -438,19 +586,21 @@ public class ExoDeployer
     /// Local per-plugin build counter, stored in <c>.buildcount</c> and incremented on every build.
     /// With the fingerprint it makes each build identifiable: <c>1.0.0+42.f9ac5087</c>.
     /// </summary>
-    private static int NextBuildNumber(string pluginDir)
+    private static int PeekBuildNumber(string pluginDir)
     {
         string path = Path.Combine(pluginDir, ".buildcount");
-        int current = 0;
 
-        if (File.Exists(path) && int.TryParse(File.ReadAllText(path).Trim(), out int parsed))
+        if (File.Exists(path) && int.TryParse(File.ReadAllText(path).Trim(), out int current))
         {
-            current = parsed;
+            return current + 1;
         }
 
-        int next = current + 1;
-        File.WriteAllText(path, next.ToString());
-        return next;
+        return 1;
+    }
+
+    private static void CommitBuildNumber(string pluginDir, int buildNumber)
+    {
+        File.WriteAllText(Path.Combine(pluginDir, ".buildcount"), buildNumber.ToString());
     }
 
     /// <summary>Reads the <c>version</c> field from a plugin's generated <c>manifest.exs</c>.</summary>
@@ -489,6 +639,9 @@ public class ExoDeployer
             "Native builds need it to generate manifest.exs.");
     }
 
+    /// <summary>How long a single build step may run before it is killed.</summary>
+    private static readonly TimeSpan ProcessTimeout = TimeSpan.FromMinutes(10);
+
     private static void RunProcess(string fileName, string arguments, string workingDirectory, Action<string> emit)
     {
         var psi = new ProcessStartInfo(fileName, arguments)
@@ -525,7 +678,20 @@ public class ExoDeployer
 
         proc.BeginOutputReadLine();
         proc.BeginErrorReadLine();
+
+        // A hung `dotnet publish` would otherwise hang the CLI or the Unity editor with no way out.
+        if (!proc.WaitForExit((int)ProcessTimeout.TotalMilliseconds))
+        {
+            // netstandard2.1 has no Kill(entireProcessTree: true); the direct child is what matters.
+            try { proc.Kill(); } catch { /* best effort */ }
+
+            throw new InvalidOperationException(
+                $"{fileName} did not finish within {ProcessTimeout.TotalMinutes:0} minutes and was stopped.\n{output}");
+        }
+
+        // Parameterless WaitForExit drains the async readers; without it the tail of the output is lost.
         proc.WaitForExit();
+
         if (proc.ExitCode != 0)
         {
             throw new InvalidOperationException($"{fileName} exited with code {proc.ExitCode}.\n{output}");
@@ -698,7 +864,8 @@ public class ExoDeployer
         return os + "-" + arch;
     }
 
-    private static string NormalizePluginName(string pluginName)
+    /// <summary>Turns any user-supplied name into the lower_snake_case id Exoforge uses.</summary>
+    public static string NormalizePluginName(string pluginName)
     {
         return pluginName.Trim().ToLowerInvariant().Replace("-", "_").Replace(" ", "_");
     }
@@ -720,6 +887,55 @@ public class ExoDeployer
             // best effort
         }
     }
+}
+
+/// <summary>One log line a plugin emitted, as served by <c>plugin_manager.logs</c>.</summary>
+public sealed class PluginLogLine
+{
+    public PluginLogLine(long at, string levelName, string message)
+    {
+        At = at;
+        LevelName = levelName;
+        Message = message;
+    }
+
+    /// <summary>Unix milliseconds, as recorded by the cluster.</summary>
+    public long At { get; }
+
+    /// <summary>debug | info | warning | error.</summary>
+    public string LevelName { get; }
+
+    public string Message { get; }
+
+    /// <summary>Local time for display.</summary>
+    public DateTime LocalTime => DateTimeOffset.FromUnixTimeMilliseconds(At).LocalDateTime;
+}
+
+/// <summary>
+/// Whether the cluster actually has a plugin after a deploy, and at which version.
+///
+/// A plain class rather than a record: this library targets netstandard2.1 so Unity can consume it,
+/// and a record would need an IsExternalInit polyfill that clashes with the one Unity provides.
+/// </summary>
+public sealed class PluginDeploymentStatus
+{
+    public PluginDeploymentStatus(bool isDeployed, string? version, string? type, string detail)
+    {
+        IsDeployed = isDeployed;
+        Version = version;
+        Type = type;
+        Detail = detail;
+    }
+
+    public bool IsDeployed { get; }
+    public string? Version { get; }
+    public string? Type { get; }
+
+    /// <summary>Human-readable outcome, e.g. <c>loaded</c> or why it is not.</summary>
+    public string Detail { get; }
+
+    /// <summary>True when the plugin is loaded and at the expected version.</summary>
+    public bool IsHealthy => IsDeployed && Detail == "loaded";
 }
 
 /// <summary>Result of <see cref="ExoDeployer.BuildPlugin"/>.</summary>

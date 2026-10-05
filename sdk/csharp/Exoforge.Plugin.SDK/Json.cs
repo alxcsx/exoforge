@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
@@ -77,6 +78,8 @@ public static class PluginJson
     }
 
     /// <summary>Serializes a value to JSON, mapping lists and arrays to JSON arrays.</summary>
+    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "Reflection JSON is the non-AOT fallback; a source-generated context is used when present, and the catch turns a failure into an actionable message.")]
+    [UnconditionalSuppressMessage("AOT", "IL3050", Justification = "Reflection JSON is the non-AOT fallback; a source-generated context is used when present, and the catch turns a failure into an actionable message.")]
     public static string Serialize(object? value)
     {
         if (value is null) return "null";
@@ -112,7 +115,6 @@ public static class PluginJson
             return JsonSerializer.Serialize(value, info);
         }
 
-#pragma warning disable IL2026, IL3050 // reflection path is a dev/test convenience, never the AOT path
         try
         {
             return JsonSerializer.Serialize(value, value.GetType(), ReflectionOptions);
@@ -121,10 +123,11 @@ public static class PluginJson
         {
             throw new InvalidOperationException(AotHint(value.GetType()), ex);
         }
-#pragma warning restore IL2026, IL3050
     }
 
     /// <summary>Deserializes JSON into <paramref name="type"/>.</summary>
+    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "Reflection JSON is the non-AOT fallback; a source-generated context is used when present, and the catch turns a failure into an actionable message.")]
+    [UnconditionalSuppressMessage("AOT", "IL3050", Justification = "Reflection JSON is the non-AOT fallback; a source-generated context is used when present, and the catch turns a failure into an actionable message.")]
     public static object? Deserialize(string json, Type type)
     {
         if (TryGetTypeInfo(type, out var info))
@@ -132,7 +135,6 @@ public static class PluginJson
             return JsonSerializer.Deserialize(json, info);
         }
 
-#pragma warning disable IL2026, IL3050 // reflection path is a dev/test convenience, never the AOT path
         try
         {
             return JsonSerializer.Deserialize(json, type, ReflectionOptions);
@@ -141,7 +143,6 @@ public static class PluginJson
         {
             throw new InvalidOperationException(AotHint(type), ex);
         }
-#pragma warning restore IL2026, IL3050
     }
 
     /// <summary>Deserializes JSON into <typeparamref name="T"/>.</summary>

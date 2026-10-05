@@ -132,6 +132,44 @@ public class AuthCreatePlayerResponse
     public JsonElement Scopes { get; set; } = default!;
 }
 
+/// <summary>Request payload for auth.anonymous action.</summary>
+public class AuthAnonymousRequest
+{
+    [JsonPropertyName("name")]
+    public JsonElement Name { get; set; } = default!;
+    [JsonPropertyName("player_id")]
+    public JsonElement PlayerId { get; set; } = default!;
+}
+
+/// <summary>Response model for auth.anonymous action.</summary>
+public class AuthAnonymousResponse
+{
+    [JsonPropertyName("token")]
+    public string Token { get; set; } = default!;
+    [JsonPropertyName("player_id")]
+    public string PlayerId { get; set; } = default!;
+    [JsonPropertyName("scopes")]
+    public JsonElement Scopes { get; set; } = default!;
+}
+
+/// <summary>Request payload for auth.set_display_name action.</summary>
+public class AuthSetDisplayNameRequest
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = default!;
+    [JsonPropertyName("player_id")]
+    public JsonElement PlayerId { get; set; } = default!;
+}
+
+/// <summary>Response model for auth.set_display_name action.</summary>
+public class AuthSetDisplayNameResponse
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = default!;
+    [JsonPropertyName("player_id")]
+    public string PlayerId { get; set; } = default!;
+}
+
 /// <summary>Request payload for auth.issue_token action.</summary>
 public class AuthIssueTokenRequest
 {
@@ -443,6 +481,26 @@ public class WsConnectionCountResponse
     public long Count { get; set; } = default!;
 }
 
+/// <summary>Request payload for snake_leaderboard.submit_score action.</summary>
+public class SnakeLeaderboardSubmitScoreRequest
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = default!;
+    [JsonPropertyName("player_id")]
+    public string PlayerId { get; set; } = default!;
+    [JsonPropertyName("score")]
+    public long Score { get; set; } = default!;
+    [JsonPropertyName("snake_length")]
+    public long SnakeLength { get; set; } = default!;
+}
+
+/// <summary>Request payload for snake_leaderboard.get_leaderboard action.</summary>
+public class SnakeLeaderboardGetLeaderboardRequest
+{
+    [JsonPropertyName("limit")]
+    public long Limit { get; set; } = default!;
+}
+
 /// <summary>Request payload for resource_store.migrate action.</summary>
 public class ResourceStoreMigrateRequest
 {
@@ -679,12 +737,12 @@ public class PluginManagerGetSystemInfoResponse
 /// <summary>Request payload for plugin_manager.upload_plugin action.</summary>
 public class PluginManagerUploadPluginRequest
 {
+    [JsonPropertyName("binary")]
+    public JsonElement Binary { get; set; } = default!;
     [JsonPropertyName("name")]
     public string Name { get; set; } = default!;
     [JsonPropertyName("manifest")]
     public JsonElement Manifest { get; set; } = default!;
-    [JsonPropertyName("wasm_binary")]
-    public JsonElement WasmBinary { get; set; } = default!;
 }
 
 /// <summary>Response model for plugin_manager.upload_plugin action.</summary>
@@ -717,6 +775,42 @@ public class PluginManagerRestartSystemResponse
     public string Status { get; set; } = default!;
     [JsonPropertyName("plugins_count")]
     public long PluginsCount { get; set; } = default!;
+}
+
+/// <summary>Request payload for plugin_manager.logs action.</summary>
+public class PluginManagerLogsRequest
+{
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = default!;
+    [JsonPropertyName("limit")]
+    public JsonElement Limit { get; set; } = default!;
+}
+
+/// <summary>Response model for plugin_manager.logs action.</summary>
+public class PluginManagerLogsResponse
+{
+    [JsonPropertyName("count")]
+    public long Count { get; set; } = default!;
+    [JsonPropertyName("lines")]
+    public JsonElement Lines { get; set; } = default!;
+    [JsonPropertyName("plugin_id")]
+    public string PluginId { get; set; } = default!;
+}
+
+/// <summary>Request payload for plugin_manager.reload_plugin action.</summary>
+public class PluginManagerReloadPluginRequest
+{
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = default!;
+}
+
+/// <summary>Response model for plugin_manager.reload_plugin action.</summary>
+public class PluginManagerReloadPluginResponse
+{
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = default!;
+    [JsonPropertyName("plugin_id")]
+    public string PluginId { get; set; } = default!;
 }
 
 /// <summary>Response model for plugin_manager.export_plugin_info action.</summary>
@@ -828,6 +922,10 @@ public static class ExoClientGeneratedExtensions
     public static WsServiceClient Ws(this ExoClient client) =>
         client.Services().Ws;
 
+    /// <summary>Access the SnakeLeaderboard service contract.</summary>
+    public static SnakeLeaderboardServiceClient SnakeLeaderboard(this ExoClient client) =>
+        client.Services().SnakeLeaderboard;
+
     /// <summary>Access the ResourceStore service contract.</summary>
     public static ResourceStoreServiceClient ResourceStore(this ExoClient client) =>
         client.Services().ResourceStore;
@@ -882,6 +980,9 @@ public class ExoforgeServicesHub
 
     private WsServiceClient? _ws;
     public WsServiceClient Ws => _ws ??= new WsServiceClient(_client);
+
+    private SnakeLeaderboardServiceClient? _snake_leaderboard;
+    public SnakeLeaderboardServiceClient SnakeLeaderboard => _snake_leaderboard ??= new SnakeLeaderboardServiceClient(_client);
 
     private ResourceStoreServiceClient? _resource_store;
     public ResourceStoreServiceClient ResourceStore => _resource_store ??= new ResourceStoreServiceClient(_client);
@@ -1040,6 +1141,52 @@ public class AuthServiceClient
     public Task<JsonElement> CreatePlayerAsync(object? payload = null, CancellationToken cancellationToken = default)
     {
         return _client.SendActionAsync<JsonElement>("auth", "create_player", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Creates or resumes an anonymous player session.</summary>
+    public Task<AuthAnonymousResponse> AnonymousAsync(JsonElement name, JsonElement playerId, CancellationToken cancellationToken = default)
+    {
+        var req = new AuthAnonymousRequest
+        {
+            Name = name,
+            PlayerId = playerId,
+        };
+        return AnonymousAsync(req, cancellationToken);
+    }
+
+    /// <summary>Creates or resumes an anonymous player session.</summary>
+    public Task<AuthAnonymousResponse> AnonymousAsync(AuthAnonymousRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<AuthAnonymousResponse>("auth", "anonymous", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Creates or resumes an anonymous player session.</summary>
+    public Task<JsonElement> AnonymousAsync(object? payload = null, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<JsonElement>("auth", "anonymous", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Sets the signed-in player's display name.</summary>
+    public Task<AuthSetDisplayNameResponse> SetDisplayNameAsync(string name, JsonElement playerId, CancellationToken cancellationToken = default)
+    {
+        var req = new AuthSetDisplayNameRequest
+        {
+            Name = name,
+            PlayerId = playerId,
+        };
+        return SetDisplayNameAsync(req, cancellationToken);
+    }
+
+    /// <summary>Sets the signed-in player's display name.</summary>
+    public Task<AuthSetDisplayNameResponse> SetDisplayNameAsync(AuthSetDisplayNameRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<AuthSetDisplayNameResponse>("auth", "set_display_name", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Sets the signed-in player's display name.</summary>
+    public Task<JsonElement> SetDisplayNameAsync(object? payload = null, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<JsonElement>("auth", "set_display_name", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
     /// <summary>Issues an authentication token for a user or player.</summary>
@@ -1469,6 +1616,65 @@ public class WsServiceClient
     public Task<JsonElement> ConnectionCountAsync(object? payload = null, CancellationToken cancellationToken = default)
     {
         return _client.SendActionAsync<JsonElement>("ws", "connection_count", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+}
+
+/// <summary>Client interface for the snake_leaderboard service.</summary>
+public class SnakeLeaderboardServiceClient
+{
+    private readonly ExoClient _client;
+
+    public SnakeLeaderboardServiceClient(ExoClient client)
+    {
+        _client = client ?? throw new ArgumentNullException(nameof(client));
+    }
+
+    /// <summary>Executes submit_score action with typed arguments.</summary>
+    public Task<JsonElement> SubmitScoreAsync(string name, string playerId, long score, long snakeLength, CancellationToken cancellationToken = default)
+    {
+        var req = new SnakeLeaderboardSubmitScoreRequest
+        {
+            Name = name,
+            PlayerId = playerId,
+            Score = score,
+            SnakeLength = snakeLength,
+        };
+        return SubmitScoreAsync(req, cancellationToken);
+    }
+
+    /// <summary>Executes submit_score action with a typed request DTO.</summary>
+    public Task<JsonElement> SubmitScoreAsync(SnakeLeaderboardSubmitScoreRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<JsonElement>("snake_leaderboard", "submit_score", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Executes submit_score action.</summary>
+    public Task<JsonElement> SubmitScoreAsync(object? payload = null, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<JsonElement>("snake_leaderboard", "submit_score", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Executes get_leaderboard action with typed arguments.</summary>
+    public Task<JsonElement> GetLeaderboardAsync(long limit, CancellationToken cancellationToken = default)
+    {
+        var req = new SnakeLeaderboardGetLeaderboardRequest
+        {
+            Limit = limit,
+        };
+        return GetLeaderboardAsync(req, cancellationToken);
+    }
+
+    /// <summary>Executes get_leaderboard action with a typed request DTO.</summary>
+    public Task<JsonElement> GetLeaderboardAsync(SnakeLeaderboardGetLeaderboardRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<JsonElement>("snake_leaderboard", "get_leaderboard", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Executes get_leaderboard action.</summary>
+    public Task<JsonElement> GetLeaderboardAsync(object? payload = null, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<JsonElement>("snake_leaderboard", "get_leaderboard", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
 }
@@ -1907,13 +2113,13 @@ public class PluginManagerServiceClient
     }
 
     /// <summary>Uploads and installs a new plugin (e.g. C# WASM package).</summary>
-    public Task<PluginManagerUploadPluginResponse> UploadPluginAsync(string name, JsonElement manifest, JsonElement wasmBinary, CancellationToken cancellationToken = default)
+    public Task<PluginManagerUploadPluginResponse> UploadPluginAsync(JsonElement binary, string name, JsonElement manifest, CancellationToken cancellationToken = default)
     {
         var req = new PluginManagerUploadPluginRequest
         {
+            Binary = binary,
             Name = name,
             Manifest = manifest,
-            WasmBinary = wasmBinary,
         };
         return UploadPluginAsync(req, cancellationToken);
     }
@@ -1962,6 +2168,51 @@ public class PluginManagerServiceClient
     public Task<JsonElement> RestartSystemAsync(object? payload = null, CancellationToken cancellationToken = default)
     {
         return _client.SendActionAsync<JsonElement>("plugin_manager", "restart_system", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Returns the most recent log lines a plugin emitted. Plugin output otherwise only reaches the server's Logger, which a developer working in Unity cannot see. Lines are held in memory and capped, so this is "what did my plugin just do?".</summary>
+    public Task<PluginManagerLogsResponse> LogsAsync(string id, JsonElement limit, CancellationToken cancellationToken = default)
+    {
+        var req = new PluginManagerLogsRequest
+        {
+            Id = id,
+            Limit = limit,
+        };
+        return LogsAsync(req, cancellationToken);
+    }
+
+    /// <summary>Returns the most recent log lines a plugin emitted. Plugin output otherwise only reaches the server's Logger, which a developer working in Unity cannot see. Lines are held in memory and capped, so this is "what did my plugin just do?".</summary>
+    public Task<PluginManagerLogsResponse> LogsAsync(PluginManagerLogsRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<PluginManagerLogsResponse>("plugin_manager", "logs", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Returns the most recent log lines a plugin emitted. Plugin output otherwise only reaches the server's Logger, which a developer working in Unity cannot see. Lines are held in memory and capped, so this is "what did my plugin just do?".</summary>
+    public Task<JsonElement> LogsAsync(object? payload = null, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<JsonElement>("plugin_manager", "logs", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Re-boots an installed plugin from its staged files, without re-uploading it.</summary>
+    public Task<PluginManagerReloadPluginResponse> ReloadPluginAsync(string id, CancellationToken cancellationToken = default)
+    {
+        var req = new PluginManagerReloadPluginRequest
+        {
+            Id = id,
+        };
+        return ReloadPluginAsync(req, cancellationToken);
+    }
+
+    /// <summary>Re-boots an installed plugin from its staged files, without re-uploading it.</summary>
+    public Task<PluginManagerReloadPluginResponse> ReloadPluginAsync(PluginManagerReloadPluginRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<PluginManagerReloadPluginResponse>("plugin_manager", "reload_plugin", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Re-boots an installed plugin from its staged files, without re-uploading it.</summary>
+    public Task<JsonElement> ReloadPluginAsync(object? payload = null, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<JsonElement>("plugin_manager", "reload_plugin", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
     /// <summary>Exports the complete catalog of plugins and contracts for external tools (CLI/Unity).</summary>

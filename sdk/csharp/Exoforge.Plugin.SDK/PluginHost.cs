@@ -123,6 +123,7 @@ public static class PluginHost
     /// payload type, or <c>OnEvent(string)</c>. Optional — plugins that ignore events need not
     /// define it.
     /// </summary>
+    [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = "Run<T> roots PublicMethods/NonPublicMethods on the plugin type.")]
     private static MethodInfo? FindEventHandler(Type pluginType)
     {
         const BindingFlags flags =
@@ -203,6 +204,7 @@ public static class PluginHost
         }
     }
 
+    [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = "Run<T> roots PublicMethods/NonPublicMethods on the plugin type.")]
     private static Dictionary<string, (MethodInfo Method, ParameterInfo[] Params)> BuildActionTable(Type pluginType)
     {
         var table = new Dictionary<string, (MethodInfo, ParameterInfo[])>(StringComparer.OrdinalIgnoreCase);
@@ -318,12 +320,14 @@ public static class PluginHost
         return DefaultOf(target);
     }
 
+    [UnconditionalSuppressMessage("Trimming", "IL2067", Justification = "Only reached for value types, which always have a parameterless constructor.")]
     private static object? DefaultOf(Type type) => type.IsValueType ? Activator.CreateInstance(type) : null;
 
     /// <summary>
     /// Unwraps a <see cref="Task"/> returned by an async action. The native transport is synchronous,
     /// so the task is awaited to completion on the dispatch thread.
     /// </summary>
+    [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Task<T> metadata is rooted explicitly via GenericTaskType.")]
     private static object? AwaitResult(object? result)
     {
         if (result is not Task task)
@@ -342,9 +346,7 @@ public static class PluginHost
         // GenericTaskType roots Task<T>.Result for the trimmer (see below).
         _ = GenericTaskType;
 
-#pragma warning disable IL2075 // Task<> metadata is rooted via GenericTaskType
         return taskType.GetProperty("Result")?.GetValue(task);
-#pragma warning restore IL2075
     }
 
     /// <summary>

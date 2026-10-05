@@ -476,6 +476,9 @@ defmodule Exoforge.Drivers.Runtime.WasmPluginRunner do
              try do
                msg = read_string(context, msg_ptr, msg_len)
 
+               # Also keep it where the developer can see it (see Exoforge.PluginLogs).
+               Exoforge.PluginLogs.append(manifest_id, level, msg)
+
                case level do
                  0 -> Logger.debug("[WASM:#{manifest_id}] #{msg}")
                  1 -> Logger.info("[WASM:#{manifest_id}] #{msg}")

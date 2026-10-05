@@ -6,7 +6,14 @@
     <RootNamespace>Exoforge.Plugin.SDK</RootNamespace>
     <AssemblyName>Exoforge.Plugin.SDK</AssemblyName>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <NoWarn>$(NoWarn);1591</NoWarn>
+    <!--
+      1591: missing XML comment.
+      IL2026/IL3050/IL2067: the reflection-based JSON and Activator fallbacks in Json.cs /
+      PluginHost.cs. They are deliberate — source-generated contexts are the AOT path, these are
+      the fallback for callers that do not supply one. The warnings belong here, not in every
+      plugin author's build log, where they drown out warnings about their own code.
+    -->
+    <NoWarn>$(NoWarn);1591;IL2026;IL3050;IL2067</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

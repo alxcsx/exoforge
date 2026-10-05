@@ -6,6 +6,26 @@
 
 ---
 
+## 0. Current Task: Plugin Tooling DX
+
+**See [`DX.md`](DX.md).** A DevEx review of the Unity + C# SDK covering plugin **creation, upload and
+management**, with a prioritised, checklisted list of fixes.
+
+The audience is a game developer in Unity who has never seen Elixir: they should be able to
+scaffold a plugin, build it, deploy it and see it working — without reading the server source and
+without opening a terminal.
+
+Two P0 items break the core loop and are being fixed first:
+
+1. `exo plugin push` **uploads the previous binary and reports success when the build fails**
+   (verified against a live cluster).
+2. The Action Sandbox **opens on an action that does not exist** — six of nine seeded names are
+   wrong, and the default is one of them.
+
+Work the checklist in `DX.md` top-down and tick items off as they land.
+
+---
+
 ## 1. Architectural Doctrine: The Rule, and Its One Exception
 
 > **The Rule**: Everything above the kernel is a plugin.  

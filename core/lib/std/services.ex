@@ -392,7 +392,7 @@ defmodule Exoforge.Std.Services do
 
       params(
         name: :string,
-        wasm_binary: :term,
+        binary: :term,
         manifest: [type: :term, optional: true]
       )
 
@@ -412,6 +412,27 @@ defmodule Exoforge.Std.Services do
     action :restart_system do
       scope("admin")
       returns(status: :string, plugins_count: :integer)
+    end
+
+    @doc """
+    Returns the most recent log lines a plugin emitted.
+
+    Plugin output otherwise only reaches the server's Logger, which a developer working in Unity
+    cannot see. Lines are held in memory and capped, so this is "what did my plugin just do?".
+    """
+    action :logs do
+      scope("studio")
+      params(id: :string, limit: [type: :integer, optional: true])
+      returns(plugin_id: :string, lines: [:map], count: :integer)
+      errors([:not_found])
+    end
+
+    @doc "Re-boots an installed plugin from its staged files, without re-uploading it."
+    action :reload_plugin do
+      scope("admin")
+      params(id: :string)
+      returns(plugin_id: :string, status: :string)
+      errors([:not_found])
     end
 
     @doc "Exports the complete catalog of plugins and contracts for external tools (CLI/Unity)."

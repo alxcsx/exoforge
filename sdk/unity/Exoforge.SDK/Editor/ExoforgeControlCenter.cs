@@ -54,13 +54,17 @@ public class ExoforgeControlCenter : EditorWindow
     private int _activeEntities;
     private int _pluginsCount;
 
-    // Discovered Services & Actions catalog
-    private readonly Dictionary<string, List<string>> _serviceCatalog = new()
-    {
-        ["auth"] = new() { "login", "register", "verify" },
-        ["player_data"] = new() { "get_profile", "set_attributes", "delete_profile" },
-        ["plugin_manager"] = new() { "list_plugins", "system_info", "restart_system", "export_info" }
-    };
+    /// <summary>One action from the live contract export, with the params needed to build a payload.</summary>
+    private sealed record ActionSpec(string Name, Dictionary<string, JsonElement> Params);
+
+    /// <summary>
+    /// Discovered services and actions, filled from the live export. Deliberately starts empty:
+    /// a seeded list drifts out of date and the Sandbox then opens on an action that 404s.
+    /// </summary>
+    private readonly Dictionary<string, List<ActionSpec>> _serviceCatalog = new();
+
+    /// <summary>Plugin id → the service names it provides, for the per-plugin "Test" shortcut.</summary>
+    private readonly Dictionary<string, List<string>> _pluginServices = new();
     private int _selectedServiceIndex = 0;
     private int _selectedActionIndex = 0;
 
@@ -75,9 +79,9 @@ public class ExoforgeControlCenter : EditorWindow
     private Vector2 _eventDetailScroll;
 
     // Action Sandbox
-    private string _sandboxService = "player_data";
-    private string _sandboxAction = "get_profile";
-    private string _sandboxPayload = "{\n  \"player_id\": \"player_1\"\n}";
+    private string _sandboxService = "";
+    private string _sandboxAction = "";
+    private string _sandboxPayload = "{}";
     private string _sandboxResult = "";
     private string _sandboxLatency = "";
     private bool _sandboxSuccess = true;
@@ -85,6 +89,11 @@ public class ExoforgeControlCenter : EditorWindow
 
     // Plugins
     private string _newPluginName = "";
+    private int _newPluginTemplateIndex;
+    private string _pluginLogs = "";
+    private string _pluginLogsFor = "";
+    private bool _showPluginLogs;
+    private Vector2 _pluginLogsScroll;
     private bool _showScaffoldPrompt = false;
     private List<LocalPluginInfo> _localPlugins = new();
     private List<JsonElement> _remotePlugins = new();
@@ -379,9 +388,22 @@ public class ExoforgeControlCenter : EditorWindow
 
         try
         {
-            string dir = ExoScaffolder.ScaffoldPlugin(_workspace.PluginsPath, _newPluginName);
+            string template = ExoScaffolder.Templates[Mathf.Clamp(_newPluginTemplateIndex, 0, ExoScaffolder.Templates.Length - 1)];
+            string dir = ExoScaffolder.ScaffoldPlugin(_workspace.PluginsPath, _newPluginName, template: template);
+            string pluginFile = Path.Combine(dir, "src", ExoScaffolder.ClassNameFor(_newPluginName) + "Plugin.cs");
+
             RefreshLocalPlugins();
-            ShowStatus($"✓ Scaffolded C# plugin '{_newPluginName}' at {dir}", MessageType.Info);
+            ShowStatus($"✓ Scaffolded '{ExoScaffolder.NormalizePluginName(_newPluginName)}' — edit {pluginFile}, then Build & Deploy.", MessageType.Info);
+
+            // Land the developer on the file they need to edit rather than just telling them it exists.
+            if (File.Exists(pluginFile))
+            {
+                var asset = UnityEditor.AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(
+                    "Assets" + pluginFile.Replace(Application.dataPath, ""));
+
+                if (asset != null) UnityEditor.AssetDatabase.OpenAsset(asset);
+            }
+
             _newPluginName = "";
             _showScaffoldPrompt = false;
             _currentTab = Tab.Plugins;
@@ -733,32 +755,80 @@ public class ExoforgeControlCenter : EditorWindow
         if (!export.TryGetProperty("export", out var root) || !root.TryGetProperty("plugins", out var pluginsArr))
             return;
 
+        // Replace, don't merge: the export is the whole truth, so a plugin that was removed must
+        // disappear from the catalog too.
+        _serviceCatalog.Clear();
+        _pluginServices.Clear();
+
         foreach (var plugin in pluginsArr.EnumerateArray())
         {
-            if (plugin.TryGetProperty("services", out var servicesArr))
+            if (!plugin.TryGetProperty("services", out var servicesArr)) continue;
+
+            foreach (var s in servicesArr.EnumerateArray())
             {
-                foreach (var s in servicesArr.EnumerateArray())
+                string sName = s.TryGetProperty("name", out var sn) ? sn.GetString() ?? "" : "";
+                if (string.IsNullOrEmpty(sName)) continue;
+
+                if (!_serviceCatalog.ContainsKey(sName))
+                    _serviceCatalog[sName] = new List<ActionSpec>();
+
+                string pluginId = plugin.TryGetProperty("id", out var pid) ? pid.GetString() ?? "" : "";
+
+                if (pluginId.Length > 0)
                 {
-                    string sName = s.TryGetProperty("name", out var sn) ? sn.GetString() ?? "" : "";
-                    if (string.IsNullOrEmpty(sName)) continue;
-
-                    if (!_serviceCatalog.ContainsKey(sName))
-                        _serviceCatalog[sName] = new List<string>();
-
-                    if (s.TryGetProperty("actions", out var actionsArr))
+                    if (!_pluginServices.TryGetValue(pluginId, out var provided))
                     {
-                        foreach (var a in actionsArr.EnumerateArray())
+                        provided = new List<string>();
+                        _pluginServices[pluginId] = provided;
+                    }
+
+                    if (!provided.Contains(sName)) provided.Add(sName);
+                }
+
+                if (!s.TryGetProperty("actions", out var actionsArr)) continue;
+
+                foreach (var a in actionsArr.EnumerateArray())
+                {
+                    string aName = a.TryGetProperty("name", out var an) ? an.GetString() ?? "" : "";
+                    if (string.IsNullOrEmpty(aName)) continue;
+                    if (_serviceCatalog[sName].Any(existing => existing.Name == aName)) continue;
+
+                    var parameters = new Dictionary<string, JsonElement>();
+
+                    if (a.TryGetProperty("params", out var paramsObj) && paramsObj.ValueKind == JsonValueKind.Object)
+                    {
+                        foreach (var property in paramsObj.EnumerateObject())
                         {
-                            string aName = a.TryGetProperty("name", out var an) ? an.GetString() ?? "" : "";
-                            if (!string.IsNullOrEmpty(aName) && !_serviceCatalog[sName].Contains(aName))
-                            {
-                                _serviceCatalog[sName].Add(aName);
-                            }
+                            parameters[property.Name] = property.Value.Clone();
                         }
                     }
+
+                    _serviceCatalog[sName].Add(new ActionSpec(aName, parameters));
                 }
             }
         }
+
+        SelectDefaultSandboxAction();
+    }
+
+    /// <summary>
+    /// Picks the first real action so the Sandbox is usable on open. Previously it defaulted to a
+    /// hardcoded action name that no longer existed, so the first dispatch always failed.
+    /// </summary>
+    private void SelectDefaultSandboxAction()
+    {
+        if (_serviceCatalog.Count == 0) return;
+
+        bool stillValid = _serviceCatalog.TryGetValue(_sandboxService, out var current) &&
+                          current.Any(a => a.Name == _sandboxAction);
+
+        if (stillValid) return;
+
+        _sandboxService = _serviceCatalog.Keys.First();
+        _sandboxAction = _serviceCatalog[_sandboxService][0].Name;
+        _selectedServiceIndex = _serviceCatalog.Keys.ToList().IndexOf(_sandboxService);
+        _selectedActionIndex = 0;
+        LoadSamplePayload(_sandboxService, _sandboxAction);
     }
 
     private void RefreshLocalPlugins()
@@ -1073,10 +1143,11 @@ public class ExoforgeControlCenter : EditorWindow
             {
                 _sandboxService = serviceNames[_selectedServiceIndex];
                 _selectedActionIndex = 0;
-                var actions = _serviceCatalog[_sandboxService];
-                if (actions.Count > 0)
+
+                var specs = _serviceCatalog[_sandboxService];
+                if (specs.Count > 0)
                 {
-                    _sandboxAction = actions[0];
+                    _sandboxAction = specs[0].Name;
                     LoadSamplePayload(_sandboxService, _sandboxAction);
                 }
             }
@@ -1084,16 +1155,18 @@ public class ExoforgeControlCenter : EditorWindow
 
         if (_selectedServiceIndex < serviceNames.Count - 1)
         {
-            var actions = _serviceCatalog[serviceNames[_selectedServiceIndex]];
-            actions.Add("(Custom)");
-            _selectedActionIndex = Mathf.Clamp(_selectedActionIndex, 0, actions.Count - 1);
-            int newActionIndex = EditorGUILayout.Popup(_selectedActionIndex, actions.ToArray(), GUILayout.Width(130));
+            var specs = _serviceCatalog[serviceNames[_selectedServiceIndex]];
+            var actionNames = specs.Select(a => a.Name).ToList();
+            actionNames.Add("(Custom)");
+
+            _selectedActionIndex = Mathf.Clamp(_selectedActionIndex, 0, actionNames.Count - 1);
+            int newActionIndex = EditorGUILayout.Popup(_selectedActionIndex, actionNames.ToArray(), GUILayout.Width(130));
             if (newActionIndex != _selectedActionIndex)
             {
                 _selectedActionIndex = newActionIndex;
-                if (_selectedActionIndex < actions.Count - 1)
+                if (_selectedActionIndex < actionNames.Count - 1)
                 {
-                    _sandboxAction = actions[_selectedActionIndex];
+                    _sandboxAction = actionNames[_selectedActionIndex];
                     LoadSamplePayload(_sandboxService, _sandboxAction);
                 }
             }
@@ -1166,36 +1239,61 @@ public class ExoforgeControlCenter : EditorWindow
         }
     }
 
+    /// <summary>
+    /// Builds a payload skeleton from the action's declared params, so the Sandbox produces
+    /// something the action will accept for any service — including plugins you just wrote.
+    /// </summary>
     private void LoadSamplePayload(string service, string action)
     {
-        switch (service)
+        if (!_serviceCatalog.TryGetValue(service, out var specs))
         {
-            case "auth":
-                _sandboxPayload = action switch
-                {
-                    "login" => "{\n  \"email\": \"dev@exoforge.game\",\n  \"password\": \"password\"\n}",
-                    "register" => "{\n  \"email\": \"new_player@exoforge.game\",\n  \"password\": \"password\"\n}",
-                    "verify" => "{\n  \"token\": \"dev:developer\"\n}",
-                    _ => "{}"
-                };
-                break;
-            case "player_data":
-                _sandboxPayload = action switch
-                {
-                    "get_profile" => "{\n  \"player_id\": \"player_1\"\n}",
-                    "set_attributes" => "{\n  \"attributes\": {\n    \"gold\": 100,\n    \"level\": 5\n  }\n}",
-                    "delete_profile" => "{\n  \"player_id\": \"player_1\"\n}",
-                    _ => "{}"
-                };
-                break;
-            case "combat" or "combat_wasm":
-                _sandboxPayload = "{\n  \"target_player_id\": \"boss_dummy_1\",\n  \"damage\": 35\n}";
-                break;
-            default:
-                _sandboxPayload = "{}";
-                break;
+            _sandboxPayload = "{}";
+            return;
         }
+
+        var spec = specs.FirstOrDefault(a => a.Name == action);
+        if (spec == null || spec.Params.Count == 0)
+        {
+            _sandboxPayload = "{}";
+            return;
+        }
+
+        var payload = new Dictionary<string, object?>();
+
+        foreach (var (name, declared) in spec.Params)
+        {
+            // Optional params are omitted: sending a wrong-shaped value is worse than omitting it.
+            if (IsOptional(declared)) continue;
+
+            payload[name] = PlaceholderFor(declared);
+        }
+
+        _sandboxPayload = JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
     }
+
+    private static bool IsOptional(JsonElement declared) =>
+        declared.ValueKind == JsonValueKind.Object &&
+        declared.TryGetProperty("optional", out var optional) &&
+        optional.ValueKind == JsonValueKind.True;
+
+    private static string ParamType(JsonElement declared) =>
+        declared.ValueKind switch
+        {
+            JsonValueKind.String => declared.GetString() ?? "string",
+            JsonValueKind.Object when declared.TryGetProperty("type", out var type) => type.GetString() ?? "string",
+            _ => "string"
+        };
+
+    private static object? PlaceholderFor(JsonElement declared) => ParamType(declared) switch
+    {
+        "integer" or "int" => 0,
+        "float" or "number" => 0.0,
+        "boolean" or "bool" => false,
+        "list" or "array" => new List<object>(),
+        "map" or "object" => new Dictionary<string, object?>(),
+        "term" => null,
+        _ => ""
+    };
 
     private async Task DispatchSandboxAsync()
     {
@@ -1262,10 +1360,22 @@ public class ExoforgeControlCenter : EditorWindow
         EditorGUILayout.LabelField("Scaffold New C# Plugin", EditorStyles.boldLabel);
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
         _newPluginName = EditorGUILayout.TextField("Plugin Name", _newPluginName);
-        if (GUILayout.Button("Scaffold C# Plugin") && !string.IsNullOrWhiteSpace(_newPluginName))
+        _newPluginTemplateIndex = EditorGUILayout.Popup("Template", _newPluginTemplateIndex, ExoScaffolder.Templates);
+
+        using (new EditorGUI.DisabledScope(string.IsNullOrWhiteSpace(_newPluginName)))
         {
-            ScaffoldNewPlugin();
+            if (GUILayout.Button("Scaffold C# Plugin"))
+            {
+                ScaffoldNewPlugin();
+            }
         }
+
+        EditorGUILayout.LabelField(
+            string.IsNullOrWhiteSpace(_newPluginName)
+                ? "Names are lower_snake_case, e.g. guild_system."
+                : $"Will be created as '{ExoScaffolder.NormalizePluginName(_newPluginName)}'.",
+            EditorStyles.miniLabel);
+
         EditorGUILayout.EndVertical();
 
         EditorGUILayout.Space(6);
@@ -1388,6 +1498,24 @@ public class ExoforgeControlCenter : EditorWindow
                     }
                 }
 
+                using (new EditorGUI.DisabledScope(!_isConnected || FirstActionFor(plugin.Name) == null))
+                {
+                    if (GUILayout.Button(
+                            new GUIContent("Test", "Open this plugin's first action in the Action Sandbox"),
+                            EditorStyles.miniButton, GUILayout.Width(45)))
+                    {
+                        OpenInSandbox(plugin.Name);
+                    }
+                }
+
+                using (new EditorGUI.DisabledScope(!_isConnected))
+                {
+                    if (GUILayout.Button("Logs", EditorStyles.miniButton, GUILayout.Width(45)))
+                    {
+                        _ = ShowPluginLogsAsync(plugin.Name);
+                    }
+                }
+
                 if (GUILayout.Button("Folder", EditorStyles.miniButton, GUILayout.Width(55)))
                 {
                     EditorUtility.RevealInFinder(plugin.Directory);
@@ -1397,6 +1525,28 @@ public class ExoforgeControlCenter : EditorWindow
             }
         }
         EditorGUILayout.EndVertical();
+
+        if (_showPluginLogs)
+        {
+            _showPluginLogs = EditorGUILayout.Foldout(_showPluginLogs, $"Logs — {_pluginLogsFor}", true);
+
+            if (_showPluginLogs)
+            {
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField(
+                    "Recent lines the plugin emitted. Held in memory on the cluster and capped.",
+                    EditorStyles.miniLabel);
+                if (GUILayout.Button("Refresh", EditorStyles.miniButton, GUILayout.Width(60)))
+                {
+                    _ = ShowPluginLogsAsync(_pluginLogsFor);
+                }
+                EditorGUILayout.EndHorizontal();
+
+                _pluginLogsScroll = EditorGUILayout.BeginScrollView(_pluginLogsScroll, GUILayout.Height(120));
+                EditorGUILayout.TextArea(_pluginLogs, EditorStyles.textArea);
+                EditorGUILayout.EndScrollView();
+            }
+        }
 
         if (!string.IsNullOrEmpty(_buildLog))
         {
@@ -1441,7 +1591,15 @@ public class ExoforgeControlCenter : EditorWindow
                 {
                     if (GUILayout.Button("Remove", EditorStyles.miniButton, GUILayout.Width(65)))
                     {
-                        _ = RemovePluginAsync(id);
+                        bool confirmed = EditorUtility.DisplayDialog(
+                            "Remove plugin",
+                            $"Remove '{id}' from the cluster?\n\nIts files stay on the server; the plugin stops running.",
+                            "Remove", "Cancel");
+
+                        if (confirmed)
+                        {
+                            _ = RemovePluginAsync(id);
+                        }
                     }
                 }
                 EditorGUILayout.EndHorizontal();
@@ -1490,8 +1648,19 @@ public class ExoforgeControlCenter : EditorWindow
         return normalized.Contains("/bin/") || normalized.Contains("/obj/");
     }
 
-    private async Task BuildAllAsync()    {
-        foreach (var plugin in _localPlugins.Where(p => p.CanBuild && !p.IsBuilt).ToList())
+    private async Task BuildAllAsync()
+    {
+        // Everything that is not already up to date — not just the never-built ones, or clicking
+        // "Build All" after an edit would silently do nothing.
+        var stale = _localPlugins.Where(p => p.CanBuild && (!p.IsBuilt || p.Modified)).ToList();
+
+        if (stale.Count == 0)
+        {
+            ShowStatus("All plugins are already up to date.", MessageType.Info);
+            return;
+        }
+
+        foreach (var plugin in stale)
         {
             await BuildPluginAsync(plugin, thenDeploy: false);
         }
@@ -1584,6 +1753,60 @@ public class ExoforgeControlCenter : EditorWindow
             ShowStatus($"Deploy failed: {ex.Message}", MessageType.Error);
         }
 
+        Repaint();
+    }
+
+    /// <summary>The first action of a plugin's first service, or null when it exposes none.</summary>
+    private ActionSpec? FirstActionFor(string pluginId)
+    {
+        string clean = ExoScaffolder.NormalizePluginName(pluginId);
+
+        if (!_pluginServices.TryGetValue(clean, out var services) || services.Count == 0) return null;
+
+        return _serviceCatalog.TryGetValue(services[0], out var specs) && specs.Count > 0 ? specs[0] : null;
+    }
+
+    /// <summary>Jumps to the Sandbox with one of this plugin's actions selected.</summary>
+    private void OpenInSandbox(string pluginId)
+    {
+        if (!_pluginServices.TryGetValue(ExoScaffolder.NormalizePluginName(pluginId), out var services) ||
+            services.Count == 0)
+        {
+            ShowStatus($"No actions found for '{pluginId}'. Deploy it, then refresh.", MessageType.Error);
+            return;
+        }
+
+        _sandboxService = services[0];
+        _selectedServiceIndex = Mathf.Max(_serviceCatalog.Keys.ToList().IndexOf(_sandboxService), 0);
+
+        var specs = _serviceCatalog[_sandboxService];
+        _sandboxAction = specs[0].Name;
+        _selectedActionIndex = 0;
+
+        LoadSamplePayload(_sandboxService, _sandboxAction);
+        _currentTab = Tab.ActionSandbox;
+    }
+
+    private async Task ShowPluginLogsAsync(string pluginId)
+    {
+        string clean = ExoScaffolder.NormalizePluginName(pluginId);
+
+        try
+        {
+            var deployer = new ExoDeployer(_workspace);
+            var lines = await deployer.GetPluginLogsAsync(clean, 100, existingClient: _isConnected ? _editorClient : null);
+
+            _pluginLogs = lines.Count == 0
+                ? "(no log lines recorded — the plugin may not have run yet)"
+                : string.Join("\n", lines.Select(l => $"{l.LocalTime:HH:mm:ss}  {l.LevelName,-7} {l.Message}"));
+        }
+        catch (Exception ex)
+        {
+            _pluginLogs = $"Could not load logs: {ex.Message}";
+        }
+
+        _pluginLogsFor = clean;
+        _showPluginLogs = true;
         Repaint();
     }
 

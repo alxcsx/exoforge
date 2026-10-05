@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -34,6 +35,7 @@ public class HostPluginContext : IPluginContext
     /// Inspects plugin object properties and injects services decorated with [Inject].
     /// Handles both instance and static members, so plain plugin classes get their dependencies too.
     /// </summary>
+    [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Run<T> roots PublicProperties/NonPublicProperties on the plugin type.")]
     public static void Wire(object target, IPluginContext context)
     {
         if (target == null || context == null) return;

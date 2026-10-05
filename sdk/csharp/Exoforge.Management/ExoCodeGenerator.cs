@@ -57,6 +57,28 @@ public class ResourceColumnModel
 
 public static class ExoCodeGenerator
 {
+    /// <summary>
+    /// Makes a contract doc string safe to drop inside a C# XML doc comment.
+    ///
+    /// Contract docs are free-form (they can be multi-line `@doc` heredocs and contain quotes and
+    /// apostrophes). Emitted raw, a newline ends the comment and the rest of the doc becomes
+    /// invalid C# — which is exactly how a multi-line action doc broke every generated client.
+    /// </summary>
+    private static string XmlDoc(string? text, string fallback)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return fallback;
+
+        string collapsed = string.Join(" ", text
+            .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => line.Trim())
+            .Where(line => line.Length > 0));
+
+        return collapsed
+            .Replace("&", "&amp;")
+            .Replace("<", "&lt;")
+            .Replace(">", "&gt;");
+    }
+
     private static readonly HashSet<string> CsharpKeywords = new(StringComparer.OrdinalIgnoreCase)
     {
         "abstract", "as", "base", "bool", "break", "byte", "case", "catch", "char",
@@ -754,7 +776,7 @@ public static class ExoCodeGenerator
                     });
                     string paramSignature = string.Join(", ", paramDefs);
 
-                    sb.AppendLine($"    /// <summary>{act.Doc ?? $"Executes {act.Name} action with typed arguments."}</summary>");
+                    sb.AppendLine($"    /// <summary>{XmlDoc(act.Doc, $"Executes {act.Name} action with typed arguments.")}</summary>");
                     sb.AppendLine($"    public Task<{returnType}> {actPascal}Async({paramSignature}, CancellationToken cancellationToken = default)");
                     sb.AppendLine("    {");
                     sb.AppendLine($"        var req = new {svcPascal}{actPascal}Request");
@@ -771,7 +793,7 @@ public static class ExoCodeGenerator
                     sb.AppendLine();
 
                     // Overload 2: Strongly-typed Request DTO
-                    sb.AppendLine($"    /// <summary>{act.Doc ?? $"Executes {act.Name} action with a typed request DTO."}</summary>");
+                    sb.AppendLine($"    /// <summary>{XmlDoc(act.Doc, $"Executes {act.Name} action with a typed request DTO.")}</summary>");
                     sb.AppendLine($"    public Task<{returnType}> {actPascal}Async({svcPascal}{actPascal}Request request, CancellationToken cancellationToken = default)");
                     sb.AppendLine("    {");
                     sb.AppendLine($"        return _client.SendActionAsync<{returnType}>(\"{svc.Name}\", \"{act.Name}\", request, {transportPref}, cancellationToken: cancellationToken);");
@@ -781,7 +803,7 @@ public static class ExoCodeGenerator
 
                 if (!hasParams)
                 {
-                    sb.AppendLine($"    /// <summary>{act.Doc ?? $"Executes {act.Name} action."}</summary>");
+                    sb.AppendLine($"    /// <summary>{XmlDoc(act.Doc, $"Executes {act.Name} action.")}</summary>");
                     sb.AppendLine($"    public Task<JsonElement> {actPascal}Async(CancellationToken cancellationToken = default)");
                     sb.AppendLine("    {");
                     sb.AppendLine($"        return _client.SendActionAsync<JsonElement>(\"{svc.Name}\", \"{act.Name}\", null, {transportPref}, cancellationToken: cancellationToken);");
@@ -790,7 +812,7 @@ public static class ExoCodeGenerator
                 }
 
                 // Overload 3: Untyped object payload (always available for fallback)
-                sb.AppendLine($"    /// <summary>{act.Doc ?? $"Executes {act.Name} action."}</summary>");
+                sb.AppendLine($"    /// <summary>{XmlDoc(act.Doc, $"Executes {act.Name} action.")}</summary>");
                 sb.AppendLine($"    public Task<JsonElement> {actPascal}Async(object? payload = null, CancellationToken cancellationToken = default)");
                 sb.AppendLine("    {");
                 sb.AppendLine($"        return _client.SendActionAsync<JsonElement>(\"{svc.Name}\", \"{act.Name}\", payload, {transportPref}, cancellationToken: cancellationToken);");

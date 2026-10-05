@@ -17,6 +17,9 @@ namespace Exoforge.Management;
 /// </summary>
 public static class ExoScaffolder
 {
+    /// <summary>Templates a caller may ask for. Keep in step with <see cref="GeneratePluginCode"/>.</summary>
+    public static readonly string[] Templates = { "standard", "inventory" };
+
     public static string ScaffoldPlugin(string pluginsDirectory, string rawName, string? sdkProjectPath = null, string template = "standard")
     {
         string cleanName = NormalizeName(rawName);
@@ -32,6 +35,7 @@ public static class ExoScaffolder
         File.WriteAllText(Path.Combine(srcDir, $"{className}Plugin.cs"), GeneratePluginCode(cleanName, className, template));
         File.WriteAllText(Path.Combine(srcDir, $"{className}JsonContext.cs"), GenerateJsonContextCode(className, template));
         File.WriteAllText(Path.Combine(targetDir, $"{cleanName}.slnx"), GenerateSolution(cleanName));
+        File.WriteAllText(Path.Combine(targetDir, "README.md"), GenerateReadme(cleanName, className));
 
         // The staged native binary and the local build counter are build artifacts.
         File.WriteAllText(Path.Combine(targetDir, ".gitignore"), $"/{cleanName}\n/.buildcount\n");
@@ -39,11 +43,35 @@ public static class ExoScaffolder
         return targetDir;
     }
 
-    private static string NormalizeName(string rawName) =>
+    /// <summary>The plugin id a raw name will become. Shared with the CLI so it can say so up front.</summary>
+    public static string NormalizePluginName(string rawName) =>
         rawName.Trim().ToLowerInvariant().Replace("-", "_").Replace(" ", "_");
+
+    /// <summary>The C# class name for a plugin id, e.g. <c>snake_leaderboard</c> → <c>SnakeLeaderboard</c>.</summary>
+    public static string ClassNameFor(string pluginId) => ToPascalCase(NormalizePluginName(pluginId));
+
+    private static string NormalizeName(string rawName) => NormalizePluginName(rawName);
+
+    /// <summary>
+    /// Environment variable pointing at Exoforge.Plugin.SDK, either the .csproj or its directory.
+    /// Lets a workspace that lives outside the repo (or a CI checkout) scaffold without guessing.
+    /// </summary>
+    public const string SdkPathEnvVar = "EXOFORGE_PLUGIN_SDK";
 
     private static string? FindSdkProjectPath(string fromDir)
     {
+        if (Environment.GetEnvironmentVariable(SdkPathEnvVar) is { Length: > 0 } configured)
+        {
+            string candidate = configured.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)
+                ? configured
+                : Path.Combine(configured, "Exoforge.Plugin.SDK.csproj");
+
+            if (File.Exists(candidate))
+            {
+                return Path.GetRelativePath(fromDir, candidate);
+            }
+        }
+
         string? dir = fromDir;
 
         for (int i = 0; i < 10 && dir != null; i++)
@@ -66,12 +94,20 @@ public static class ExoScaffolder
 
     private static string GenerateCsproj(string? sdkProjectPath, string srcDir)
     {
-        bool referencesSdk = sdkProjectPath != null &&
-            File.Exists(Path.GetFullPath(Path.Combine(srcDir, sdkProjectPath)));
+        // No silent PackageReference fallback: Exoforge.Plugin.SDK is not published to NuGet, so a
+        // project scaffolded outside the repo would fail to restore with no explanation. Better to
+        // refuse now, with the reason.
+        if (sdkProjectPath == null ||
+            !File.Exists(Path.GetFullPath(Path.Combine(srcDir, sdkProjectPath))))
+        {
+            throw new InvalidOperationException(
+                "Could not find Exoforge.Plugin.SDK. Scaffolding a plugin needs the Exoforge repo " +
+                "checkout above the workspace. Looked for sdk/csharp/Exoforge.Plugin.SDK/" +
+                $"Exoforge.Plugin.SDK.csproj in the workspace's parent directories. " +
+                $"Set {SdkPathEnvVar}=/path/to/Exoforge.Plugin.SDK.csproj to point at it directly.");
+        }
 
-        string reference = referencesSdk
-            ? $"    <ProjectReference Include=\"{sdkProjectPath}\" />"
-            : "    <PackageReference Include=\"Exoforge.Plugin.SDK\" Version=\"0.1.0\" />";
+        string reference = $"    <ProjectReference Include=\"{sdkProjectPath}\" />";
 
         return $"""
 <Project Sdk="Microsoft.NET.Sdk">
@@ -92,6 +128,33 @@ public static class ExoScaffolder
 """;
     }
 
+    private static string GenerateReadme(string cleanName, string className) => $"""
+    # {cleanName}
+
+    An Exoforge plugin. Actions are declared with attributes and discovered at build time.
+
+    ## Layout
+
+    | Path | What it is |
+    | :--- | :--- |
+    | `src/{className}Plugin.cs` | the plugin: `[ExoAction]` methods are what callers invoke |
+    | `src/{className}JsonContext.cs` | source-generated JSON — NativeAOT has no reflection |
+    | `src/Generated/` | typed service stubs (`exo plugin stubs {cleanName}`) |
+    | `manifest.exs` | generated from the attributes; do not edit |
+    | `{cleanName}` | the staged native binary; generated |
+
+    ## Working on it
+
+    ```bash
+    exo plugin build {cleanName}     # compile
+    exo plugin push  {cleanName}     # build, deploy, verify
+    exo plugin dev   {cleanName}     # redeploy on every save
+    exo plugin logs  {cleanName}     # what the plugin just did
+    ```
+
+    In Unity: **Tools ▸ Exoforge ▸ Exoforge Studio**, then the Plugins tab.
+    """;
+
     private static string GenerateSolution(string cleanName) => $"""
 <Solution>
   <Project Path="src/{cleanName}.csproj" />
@@ -103,7 +166,13 @@ public static class ExoScaffolder
         string kind = template.ToLowerInvariant();
 
         if (kind.Contains("inventory")) return InventoryTemplate(serviceName, className);
-        if (kind.Contains("liveops") || kind.Contains("schedule")) return LiveOpsTemplate(serviceName, className);
+
+        if (kind is not ("standard" or ""))
+        {
+            throw new ArgumentException(
+                $"Unknown template '{template}'. Available templates: standard, inventory.", nameof(template));
+        }
+
         return StandardTemplate(serviceName, className);
     }
 
@@ -250,78 +319,6 @@ public record {{className}}Item
 
     [ExoColumn(Label = "Status", Badge = true)]
     public string Status { get; init; } = "active";
-}
-""";
-
-    private static string LiveOpsTemplate(string serviceName, string className) => $$"""
-using System;
-using System.Collections.Generic;
-using Exoforge.Plugin.SDK;
-
-namespace Exoforge.Plugins;
-
-// Native Exoforge plugin: attributes declare the contract, the host injects capabilities,
-// and `exo plugin build` produces the NativeAOT binary.
-[ExoService("{{serviceName}}", Version = "0.1.0", Resources = new[] { typeof({{className}}Schedule) },
-    Category = "Game", Title = "{{className}}")]
-public class {{className}}Plugin
-{
-    [Inject]
-    public static IEventDispatcher? Events { get; set; }
-
-    [ExoAction]
-    public List<{{className}}Schedule> ListEvents() => new()
-    {
-        new {{className}}Schedule
-        {
-            Id = "{{serviceName}}_double_xp",
-            Title = "Double XP Weekend",
-            StartAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-            EndAt = DateTimeOffset.UtcNow.AddDays(2).ToUnixTimeSeconds(),
-            Recurrence = "weekly",
-            Status = "active"
-        }
-    };
-
-    [ExoAction]
-    [ExoEvent("liveops_banner", Topic = "{{serviceName}}:events", PayloadType = typeof(LiveOpsBannerEvent))]
-    public void BroadcastBanner(string message, int durationSeconds = 30)
-    {
-        Events?.EmitAsync(
-            "liveops_banner",
-            new LiveOpsBannerEvent { Message = message, DurationSeconds = durationSeconds },
-            "{{serviceName}}:events");
-    }
-
-    public static void Main() => PluginHost.Run<{{className}}Plugin, {{className}}JsonContext>();
-}
-
-public record LiveOpsBannerEvent
-{
-    public string Message { get; init; } = "";
-    public int DurationSeconds { get; init; }
-}
-
-[ExoResource("{{serviceName}}_schedules", PrimaryKey = "id", DrawerTabs = new[] { "overview", "schedule" })]
-public record {{className}}Schedule
-{
-    [ExoColumn(Label = "Id", Sortable = true, Filterable = true)]
-    public string Id { get; init; } = "";
-
-    [ExoColumn(Label = "Title", Sortable = true)]
-    public string Title { get; init; } = "";
-
-    [ExoColumn(Label = "Starts", Sortable = true)]
-    public long StartAt { get; init; }
-
-    [ExoColumn(Label = "Ends", Sortable = true)]
-    public long EndAt { get; init; }
-
-    [ExoColumn(Label = "Recurrence", Badge = true)]
-    public string Recurrence { get; init; } = "once";
-
-    [ExoColumn(Label = "Status", Badge = true)]
-    public string Status { get; init; } = "scheduled";
 }
 """;
 

@@ -53,7 +53,10 @@ public class ManagementTests : IDisposable
     public void Scaffolder_Creates_Complete_Plugin_Boilerplate()
     {
         var ws = ExoWorkspace.Initialize(_tempDir, "TestGameProject");
-        string createdDir = ExoScaffolder.ScaffoldPlugin(ws.PluginsPath, "guild_system");
+
+        // The temp workspace has no repo above it, so point the scaffolder at the real SDK.
+        string createdDir = ExoScaffolder.ScaffoldPlugin(
+            ws.PluginsPath, "guild_system", sdkProjectPath: TestPaths.PluginSdkProject);
 
         Assert.True(Directory.Exists(createdDir));
 

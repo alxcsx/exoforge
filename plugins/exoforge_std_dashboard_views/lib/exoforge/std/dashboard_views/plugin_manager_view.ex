@@ -31,7 +31,7 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
        graph_selected_plugin_id: nil,
        upload_form: %{
          "name" => "",
-         "wasm_binary" => "",
+         "binary" => "",
          "manifest_json" => ""
        },
        upload_file_info: nil,
@@ -139,7 +139,7 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
        upload_form: %{
          "name" => "",
          "type" => "wasm",
-         "wasm_binary" => "",
+         "binary" => "",
          "elixir_code" => "",
          "manifest_json" => ""
        }
@@ -192,7 +192,7 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
       else
         current_form
         |> Map.put("type", "wasm")
-        |> Map.put("wasm_binary", base64)
+        |> Map.put("binary", base64)
         |> Map.put(
           "name",
           if(current_form["name"] == "", do: clean_name, else: current_form["name"])
@@ -212,8 +212,8 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
     name = String.trim(Map.get(params, "name", ""))
     type = Map.get(params, "type", socket.assigns.upload_form["type"] || "wasm")
 
-    raw_wasm =
-      String.trim(Map.get(params, "wasm_binary", socket.assigns.upload_form["wasm_binary"] || ""))
+    raw_binary =
+      String.trim(Map.get(params, "binary", socket.assigns.upload_form["binary"] || ""))
 
     elixir_code =
       String.trim(Map.get(params, "elixir_code", socket.assigns.upload_form["elixir_code"] || ""))
@@ -237,7 +237,7 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
       type == "elixir" and elixir_code == "" ->
         {:noreply, assign(socket, upload_error: "Elixir module code is required.")}
 
-      type == "wasm" and raw_wasm == "" ->
+      type == "wasm" and raw_binary == "" ->
         {:noreply, assign(socket, upload_error: "WASM binary content or file is required.")}
 
       true ->
@@ -253,7 +253,7 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
             %{
               name: name,
               type: "wasm",
-              wasm_binary: raw_wasm,
+              binary: raw_binary,
               manifest: manifest
             }
           end
@@ -1038,11 +1038,11 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
                   <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Or Paste Base64 WASM Data</label>
                   <textarea
                     id="wasm_base64_input"
-                    name="upload[wasm_binary]"
+                    name="upload[binary]"
                     rows="3"
                     placeholder="AGFzbQEAAAA... (Base64 encoded binary)"
                     class="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:bg-white font-mono"
-                  ><%= @upload_form["wasm_binary"] %></textarea>
+                  ><%= @upload_form["binary"] %></textarea>
                   <p class="text-[11px] text-gray-400 mt-0.5">Must start with WASM magic bytes (\0asm).</p>
                 </div>
               <% end %>

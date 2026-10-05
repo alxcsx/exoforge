@@ -70,12 +70,24 @@ public class CliIntegrationTests : IDisposable
         // First init workspace
         await Exoforge.CLI.Program.Main(new[] { "init", "--dir", _tempDir, "--name", "Game" });
 
-        // Now scaffold new plugin
-        int code = await Exoforge.CLI.Program.Main(new[]
+        // Now scaffold new plugin. The temp workspace has no repo above it, so tell the scaffolder
+        // where the SDK lives.
+        string? previousSdk = Environment.GetEnvironmentVariable(ExoScaffolder.SdkPathEnvVar);
+        Environment.SetEnvironmentVariable(ExoScaffolder.SdkPathEnvVar, TestPaths.PluginSdkProject);
+
+        int code;
+        try
         {
-            "plugin", "new", "inventory_system",
-            "--dir", _tempDir
-        });
+            code = await Exoforge.CLI.Program.Main(new[]
+            {
+                "plugin", "new", "inventory_system",
+                "--dir", _tempDir
+            });
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(ExoScaffolder.SdkPathEnvVar, previousSdk);
+        }
 
         Assert.Equal(0, code);
 

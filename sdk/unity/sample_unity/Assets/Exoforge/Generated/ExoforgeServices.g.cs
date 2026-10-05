@@ -522,10 +522,10 @@ public class ResourceStoreListRequest
     public JsonElement Offset { get; set; } = default!;
     [JsonPropertyName("sort")]
     public JsonElement Sort { get; set; } = default!;
-    [JsonPropertyName("search")]
-    public JsonElement Search { get; set; } = default!;
     [JsonPropertyName("filter")]
     public JsonElement Filter { get; set; } = default!;
+    [JsonPropertyName("search")]
+    public JsonElement Search { get; set; } = default!;
     [JsonPropertyName("limit")]
     public JsonElement Limit { get; set; } = default!;
     [JsonPropertyName("resource")]
@@ -737,12 +737,12 @@ public class PluginManagerGetSystemInfoResponse
 /// <summary>Request payload for plugin_manager.upload_plugin action.</summary>
 public class PluginManagerUploadPluginRequest
 {
+    [JsonPropertyName("binary")]
+    public JsonElement Binary { get; set; } = default!;
     [JsonPropertyName("name")]
     public string Name { get; set; } = default!;
     [JsonPropertyName("manifest")]
     public JsonElement Manifest { get; set; } = default!;
-    [JsonPropertyName("wasm_binary")]
-    public JsonElement WasmBinary { get; set; } = default!;
 }
 
 /// <summary>Response model for plugin_manager.upload_plugin action.</summary>
@@ -775,6 +775,42 @@ public class PluginManagerRestartSystemResponse
     public string Status { get; set; } = default!;
     [JsonPropertyName("plugins_count")]
     public long PluginsCount { get; set; } = default!;
+}
+
+/// <summary>Request payload for plugin_manager.logs action.</summary>
+public class PluginManagerLogsRequest
+{
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = default!;
+    [JsonPropertyName("limit")]
+    public JsonElement Limit { get; set; } = default!;
+}
+
+/// <summary>Response model for plugin_manager.logs action.</summary>
+public class PluginManagerLogsResponse
+{
+    [JsonPropertyName("count")]
+    public long Count { get; set; } = default!;
+    [JsonPropertyName("lines")]
+    public JsonElement Lines { get; set; } = default!;
+    [JsonPropertyName("plugin_id")]
+    public string PluginId { get; set; } = default!;
+}
+
+/// <summary>Request payload for plugin_manager.reload_plugin action.</summary>
+public class PluginManagerReloadPluginRequest
+{
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = default!;
+}
+
+/// <summary>Response model for plugin_manager.reload_plugin action.</summary>
+public class PluginManagerReloadPluginResponse
+{
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = default!;
+    [JsonPropertyName("plugin_id")]
+    public string PluginId { get; set; } = default!;
 }
 
 /// <summary>Response model for plugin_manager.export_plugin_info action.</summary>
@@ -1676,14 +1712,14 @@ public class ResourceStoreServiceClient
     }
 
     /// <summary>Lists rows for a resource with filtering, sorting, and pagination.</summary>
-    public Task<ResourceStoreListResponse> ListAsync(JsonElement offset, JsonElement sort, JsonElement search, JsonElement filter, JsonElement limit, string resource, CancellationToken cancellationToken = default)
+    public Task<ResourceStoreListResponse> ListAsync(JsonElement offset, JsonElement sort, JsonElement filter, JsonElement search, JsonElement limit, string resource, CancellationToken cancellationToken = default)
     {
         var req = new ResourceStoreListRequest
         {
             Offset = offset,
             Sort = sort,
-            Search = search,
             Filter = filter,
+            Search = search,
             Limit = limit,
             Resource = resource,
         };
@@ -2077,13 +2113,13 @@ public class PluginManagerServiceClient
     }
 
     /// <summary>Uploads and installs a new plugin (e.g. C# WASM package).</summary>
-    public Task<PluginManagerUploadPluginResponse> UploadPluginAsync(string name, JsonElement manifest, JsonElement wasmBinary, CancellationToken cancellationToken = default)
+    public Task<PluginManagerUploadPluginResponse> UploadPluginAsync(JsonElement binary, string name, JsonElement manifest, CancellationToken cancellationToken = default)
     {
         var req = new PluginManagerUploadPluginRequest
         {
+            Binary = binary,
             Name = name,
             Manifest = manifest,
-            WasmBinary = wasmBinary,
         };
         return UploadPluginAsync(req, cancellationToken);
     }
@@ -2132,6 +2168,51 @@ public class PluginManagerServiceClient
     public Task<JsonElement> RestartSystemAsync(object? payload = null, CancellationToken cancellationToken = default)
     {
         return _client.SendActionAsync<JsonElement>("plugin_manager", "restart_system", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Returns the most recent log lines a plugin emitted. Plugin output otherwise only reaches the server's Logger, which a developer working in Unity cannot see. Lines are held in memory and capped, so this is "what did my plugin just do?".</summary>
+    public Task<PluginManagerLogsResponse> LogsAsync(string id, JsonElement limit, CancellationToken cancellationToken = default)
+    {
+        var req = new PluginManagerLogsRequest
+        {
+            Id = id,
+            Limit = limit,
+        };
+        return LogsAsync(req, cancellationToken);
+    }
+
+    /// <summary>Returns the most recent log lines a plugin emitted. Plugin output otherwise only reaches the server's Logger, which a developer working in Unity cannot see. Lines are held in memory and capped, so this is "what did my plugin just do?".</summary>
+    public Task<PluginManagerLogsResponse> LogsAsync(PluginManagerLogsRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<PluginManagerLogsResponse>("plugin_manager", "logs", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Returns the most recent log lines a plugin emitted. Plugin output otherwise only reaches the server's Logger, which a developer working in Unity cannot see. Lines are held in memory and capped, so this is "what did my plugin just do?".</summary>
+    public Task<JsonElement> LogsAsync(object? payload = null, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<JsonElement>("plugin_manager", "logs", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Re-boots an installed plugin from its staged files, without re-uploading it.</summary>
+    public Task<PluginManagerReloadPluginResponse> ReloadPluginAsync(string id, CancellationToken cancellationToken = default)
+    {
+        var req = new PluginManagerReloadPluginRequest
+        {
+            Id = id,
+        };
+        return ReloadPluginAsync(req, cancellationToken);
+    }
+
+    /// <summary>Re-boots an installed plugin from its staged files, without re-uploading it.</summary>
+    public Task<PluginManagerReloadPluginResponse> ReloadPluginAsync(PluginManagerReloadPluginRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<PluginManagerReloadPluginResponse>("plugin_manager", "reload_plugin", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Re-boots an installed plugin from its staged files, without re-uploading it.</summary>
+    public Task<JsonElement> ReloadPluginAsync(object? payload = null, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<JsonElement>("plugin_manager", "reload_plugin", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
     /// <summary>Exports the complete catalog of plugins and contracts for external tools (CLI/Unity).</summary>

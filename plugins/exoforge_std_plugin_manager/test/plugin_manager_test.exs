@@ -124,7 +124,7 @@ defmodule Exoforge.Std.PluginManagerTest do
                ActionDispatcher.dispatch(
                  :plugin_manager,
                  :upload_plugin,
-                 %{name: "invalid_test_wasm", wasm_binary: bad_binary},
+                 %{name: "invalid_test_wasm", binary: bad_binary},
                  caller_scopes: ["admin"]
                )
     end
@@ -139,7 +139,7 @@ defmodule Exoforge.Std.PluginManagerTest do
                  :upload_plugin,
                  %{
                    name: "test_uploaded_wasm",
-                   wasm_binary: valid_wasm,
+                   binary: valid_wasm,
                    manifest: %{
                      id: :test_uploaded_wasm,
                      name: "TestUploadedWasm",
@@ -267,7 +267,7 @@ defmodule Exoforge.Std.PluginManagerTest do
                ActionDispatcher.dispatch(
                  :plugin_manager,
                  :upload_plugin,
-                 %{name: "foo", wasm_binary: "bar"},
+                 %{name: "foo", binary: "bar"},
                  caller_scopes: ["player"]
                )
     end
