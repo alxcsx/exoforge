@@ -137,6 +137,60 @@ public class TransportTests
         Assert.False(client.IsConnected);
     }
 
+    [Fact]
+    public async Task Connecting_does_not_invent_an_http_base()
+    {
+        await using var server = StubWebSocketServer.Start();
+        using var client = NewClient();
+
+        await client.ConnectAsync(server.Uri);
+
+        // The HTTP base is configuration. It used to be derived from the WebSocket port, which is
+        // wrong for any non-default gateway — and it failed silently.
+        Assert.Null(client.HttpBaseUri);
+    }
+
+    [Fact]
+    public async Task An_http_base_that_was_configured_is_kept()
+    {
+        await using var server = StubWebSocketServer.Start();
+        using var client = NewClient();
+
+        client.HttpBaseUri = new Uri("http://example.test:9999");
+        await client.ConnectAsync(server.Uri);
+
+        Assert.Equal(new Uri("http://example.test:9999"), client.HttpBaseUri);
+    }
+
+    [Fact]
+    public async Task The_default_timeout_is_configurable()
+    {
+        await using var server = StubWebSocketServer.Start();
+        using var client = NewClient();
+
+        await client.ConnectAsync(server.Uri);
+
+        TimeSpan original = ExoClient.DefaultTimeout;
+
+        try
+        {
+            ExoClient.DefaultTimeout = TimeSpan.FromMilliseconds(200);
+
+            // The server never replies, so the call must give up on the configured default.
+            var call = client.SendActionAsync<JsonElement>("demo", "slow", new { });
+            await server.NextReceivedAsync(TimeSpan.FromSeconds(2));
+
+            var failure = await Assert.ThrowsAsync<TimeoutException>(
+                () => PumpAsync(call, client, TimeSpan.FromSeconds(5)));
+
+            Assert.Contains("demo.slow", failure.Message);
+        }
+        finally
+        {
+            ExoClient.DefaultTimeout = original;
+        }
+    }
+
     // ---- helpers -----------------------------------------------------------------------
 
     private static ExoClient NewClient() => new(new ExoDispatcher(useSynchronizationContext: false));

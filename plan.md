@@ -136,17 +136,19 @@ it), then 2.4, then 2.3 — which gates reconnect.
 
 ### DX
 
-- [ ] **3.1 The HTTP port is invented, not configured.** `uri.Port == 4000 ? 4001 : uri.Port` is wrong
-      for any non-default gateway, and when it fails a `catch { }` leaves `HttpBaseUri` null so HTTP
-      transport is silently unavailable. `exoforge.json` already carries `http_url`.
-      *Proves it:* `Exoforge.Client.Tests`.
-- [ ] **3.2 Stop swallowing connect errors.** Three `catch { }` on the connect path (`ExoClient`,
-      `ExoTransport`, `ExoforgeBehaviourEditor`) — a mistyped URL fails with no explanation anywhere.
-- [ ] **3.3 Make timeouts configurable.** `FromSeconds(5)`/`(5)`/`(10)` are magic numbers with no
-      client-wide default, so a cold first call fails with a bare `TimeoutException`.
-      *Found while testing 2.3:* `DisconnectAsync` awaits `CloseAsync`, which waits for the peer to
-      complete the close handshake — with no timeout, so a peer that never replies hangs the caller.
-      It hung the test suite until the stub was made to reply. Same class as the magic numbers.
+- [x] **3.1 The HTTP port is invented, not configured.** The derivation is gone; `HttpBaseUri` comes
+      from the workspace environment (`ExoDeployer` sets it) or from whoever constructs the client.
+      *Proven by:* two `TransportTests` — a connect leaves it null, and a configured one is kept.
+- [x] **3.2 Stop swallowing errors.** The `catch { }` around the HTTP-base derivation went with 3.1.
+      In the Control Center, a failed disconnect during teardown now logs, and a failed telemetry
+      fetch reports in the status bar — it used to leave the window showing stale telemetry and a
+      stale service catalog with nothing to say why. (My review had listed a third site in
+      `ExoforgeBehaviourEditor`; there is none.)
+- [x] **3.3 Make timeouts configurable.** `ExoClient.DefaultTimeout` replaces the three magic
+      numbers, overridable per call; `ExoTransport.CloseTimeout` bounds the close handshake, which
+      had none — `DisconnectAsync` awaited `CloseAsync` forever if the peer never replied, which is
+      what hung the test suite until the stub was made to reply.
+      *Proven by:* `TransportTests.The_default_timeout_is_configurable`.
 - [ ] **3.4 Reconnect with backoff.** `Update()` keeps pumping a dead dispatcher; nothing reconnects
       and nothing tells the game. **Depends on 2.3.** Two notes from building the tests:
       `OnDisconnected` is delivered *through the dispatcher*, so once `Update()` stops being called

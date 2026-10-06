@@ -52,6 +52,14 @@ public class ExoClient : IDisposable
     public string? AuthToken { get; set; }
     public HttpClient HttpClient => _httpClient;
 
+    /// <summary>
+    /// Default per-call timeout. Overridable on any individual call.
+    ///
+    /// Was three separate magic numbers (5s, 5s, 10s) with no way to raise them, so a cold first
+    /// call failed with a bare TimeoutException and nothing to point at.
+    /// </summary>
+    public static TimeSpan DefaultTimeout { get; set; } = TimeSpan.FromSeconds(10);
+
     public event Action? OnConnected;
     public event Action<Exception?>? OnDisconnected;
     public event Action<ExoEventFrame>? OnAnyEvent;
@@ -72,17 +80,10 @@ public class ExoClient : IDisposable
     {
         if (uri == null) throw new ArgumentNullException(nameof(uri));
 
-        if (HttpBaseUri == null)
-        {
-            try
-            {
-                string scheme = uri.Scheme.Equals("wss", StringComparison.OrdinalIgnoreCase) ? "https" : "http";
-                int port = uri.Port == 4000 ? 4001 : uri.Port;
-                HttpBaseUri = new Uri($"{scheme}://{uri.Host}:{port}");
-            }
-            catch { }
-        }
-
+        // The HTTP base is configuration, not arithmetic. It used to be derived as
+        // `uri.Port == 4000 ? 4001 : uri.Port`, which is wrong for any non-default gateway and failed
+        // silently — a bad Uri left HttpBaseUri null, so HTTP transport was quietly unavailable
+        // rather than reporting anything. Callers set it from the workspace config.
         return _transport.ConnectAsync(uri, cancellationToken);
     }
 
@@ -107,7 +108,7 @@ public class ExoClient : IDisposable
         string json = JsonSerializer.Serialize(request);
         await _transport.SendAsync(json, cancellationToken).ConfigureAwait(false);
 
-        TimeSpan effectiveTimeout = timeout ?? TimeSpan.FromSeconds(5);
+        TimeSpan effectiveTimeout = timeout ?? DefaultTimeout;
         using var timeoutCts = new CancellationTokenSource(effectiveTimeout);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
 
@@ -177,7 +178,7 @@ public class ExoClient : IDisposable
         string json = JsonSerializer.Serialize(request);
         await _transport.SendAsync(json, cancellationToken).ConfigureAwait(false);
 
-        TimeSpan effectiveTimeout = timeout ?? TimeSpan.FromSeconds(5);
+        TimeSpan effectiveTimeout = timeout ?? DefaultTimeout;
         using var timeoutCts = new CancellationTokenSource(effectiveTimeout);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
 
@@ -231,7 +232,7 @@ public class ExoClient : IDisposable
         string jsonPayload = payload != null ? JsonSerializer.Serialize(payload) : "{}";
         request.Content = new StringContent(jsonPayload, System.Text.Encoding.UTF8, "application/json");
 
-        TimeSpan effectiveTimeout = timeout ?? TimeSpan.FromSeconds(10);
+        TimeSpan effectiveTimeout = timeout ?? DefaultTimeout;
         using var timeoutCts = new CancellationTokenSource(effectiveTimeout);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
 

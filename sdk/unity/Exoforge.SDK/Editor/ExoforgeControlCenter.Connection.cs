@@ -110,7 +110,15 @@ public partial class ExoforgeControlCenter : EditorWindow
     {
         if (_editorClient != null)
         {
-            try { await _editorClient.DisconnectAsync(); } catch { }
+            try
+            {
+                await _editorClient.DisconnectAsync();
+            }
+            catch (Exception ex)
+            {
+                // Teardown: worth a line in the console, not worth failing the disconnect over.
+                Debug.LogWarning($"[Exoforge] Disconnect while closing the editor client failed: {ex.Message}");
+            }
             _editorClient.Dispose();
             _editorClient = null;
         }
@@ -253,7 +261,12 @@ public partial class ExoforgeControlCenter : EditorWindow
             ParseServiceCatalog(export);
             updated = true;
         }
-        catch { }
+        catch (Exception ex)
+        {
+            // Previously silent: the window kept showing stale telemetry and a stale service
+            // catalog, with nothing to say why.
+            ShowStatus($"Could not read cluster telemetry: {ex.Message}", MessageType.Error);
+        }
 
         if (updated)
         {

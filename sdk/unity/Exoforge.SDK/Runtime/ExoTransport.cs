@@ -22,6 +22,9 @@ public class ExoTransport : IDisposable
     private int _disconnectNotified;
     private readonly SemaphoreSlim _sendLock = new(1, 1);
 
+    /// <summary>How long to wait for the peer to complete a close handshake before giving up.</summary>
+    public static TimeSpan CloseTimeout { get; set; } = TimeSpan.FromSeconds(5);
+
     public bool IsConnected => _webSocket is { State: WebSocketState.Open };
 
     public event Action<string>? OnMessageReceived;
@@ -109,14 +112,19 @@ public class ExoTransport : IDisposable
 
         if (socket is { State: WebSocketState.Open })
         {
+            // Bounded: CloseAsync waits for the peer to complete the handshake, and a peer that
+            // never replies used to hang the caller forever.
+            using var closeCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            closeCts.CancelAfter(CloseTimeout);
+
             try
             {
-                await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Client disconnecting", cancellationToken)
+                await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Client disconnecting", closeCts.Token)
                     .ConfigureAwait(false);
             }
             catch
             {
-                // A close that fails is not interesting: the socket is going away either way.
+                // A close that fails or times out is not interesting: the socket is going away either way.
             }
         }
 

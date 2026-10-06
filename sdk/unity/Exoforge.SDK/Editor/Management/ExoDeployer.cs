@@ -28,6 +28,13 @@ public class ExoDeployer
         var env = _workspace.GetActiveEnvironment(environmentName);
         var client = new ExoClient();
 
+        // The HTTP base is configuration. ExoClient no longer derives it from the WebSocket port,
+        // which was wrong for any non-default gateway.
+        if (!string.IsNullOrEmpty(env.HttpUrl))
+        {
+            client.HttpBaseUri = new Uri(env.HttpUrl);
+        }
+
         await client.ConnectAsync(new Uri(env.WsUrl), cancellationToken).ConfigureAwait(false);
 
         if (!string.IsNullOrEmpty(env.Token))
