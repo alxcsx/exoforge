@@ -3,6 +3,18 @@ defmodule Exoforge.ActionDispatcher do
   alias Exoforge.PluginRegistry
   alias Exoforge.Domain.Manifest
 
+  @doc """
+  Runs an action, authorizing the caller first.
+
+  ## Caller scopes
+
+  Authorization is driven by `:caller_scopes` / `:scopes` in `opts`, or by `_auth` in the payload.
+  **When neither is supplied the caller is treated as `:internal`, which is authorized for every
+  scope**, including `:server` and `:admin`. That is deliberate - the plugin runtimes and other
+  in-process callers are the server and dispatch without a caller - but it means a new transport
+  that forgets to pass scopes silently gets full trust rather than being denied. Pass scopes
+  explicitly on anything reachable from outside the node.
+  """
   def dispatch(service, action, payload, opts \\ []) do
     context = Keyword.get(opts, :context, :global)
     service_atom = to_atom_safe(service)
