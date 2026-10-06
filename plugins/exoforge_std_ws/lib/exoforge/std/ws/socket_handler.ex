@@ -154,6 +154,16 @@ defmodule Exoforge.Std.Ws.SocketHandler do
     {:push, {:text, Jason.encode!(frame)}, state}
   end
 
+  # WebSockAdapter's idle timeout, from the `timeout:` option on the upgrade. Returning {:ok, state}
+  # here - which is what the catch-all below did - just resets the timer, so an abandoned client held
+  # a process until TCP noticed, which can be hours. A client that connects at login and never uses
+  # the socket is the common case, so this is the one that matters.
+  @impl true
+  def handle_info(:timeout, state) do
+    Logger.info("[WS] Closing idle connection")
+    {:stop, :normal, {1000, "idle timeout"}, state}
+  end
+
   def handle_info(_other, state) do
     {:ok, state}
   end

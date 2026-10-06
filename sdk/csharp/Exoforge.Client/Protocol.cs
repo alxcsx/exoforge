@@ -88,6 +88,19 @@ public class ExoEventFrame : ExoMessage
     }
 }
 
+/// <summary>
+/// Keepalive. The server answers <c>pong</c>, and the traffic is what tells a live idle client
+/// apart from one whose peer went away without closing - which is what the server's idle timeout
+/// reaps on.
+/// </summary>
+public class ExoPingFrame : ExoMessage
+{
+    public ExoPingFrame()
+    {
+        Type = "ping";
+    }
+}
+
 public class ExoAuthRequest : ExoMessage
 {
     [JsonPropertyName("token")]

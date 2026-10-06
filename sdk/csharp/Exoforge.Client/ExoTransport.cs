@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Net.WebSockets;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -19,11 +20,18 @@ public class ExoTransport : IDisposable
     private ClientWebSocket? _webSocket;
     private CancellationTokenSource? _cts;
     private Task? _receiveTask;
+    private Task? _keepAliveTask;
     private int _disconnectNotified;
     private readonly SemaphoreSlim _sendLock = new(1, 1);
 
     /// <summary>How long to wait for the peer to complete a close handshake before giving up.</summary>
     public static TimeSpan CloseTimeout { get; set; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// How often to ping while idle. Must stay below the server's WebSocket idle timeout: the server
+    /// closes a connection it has not heard from, so a live but idle client has to speak up.
+    /// </summary>
+    public static TimeSpan KeepAliveInterval { get; set; } = TimeSpan.FromSeconds(30);
 
     public bool IsConnected => _webSocket is { State: WebSocketState.Open };
 
@@ -70,6 +78,44 @@ public class ExoTransport : IDisposable
         // The socket and token are captured: the loop never reads them from a field that a later
         // connect could swap underneath it.
         _receiveTask = Task.Run(() => ReceiveLoopAsync(socket, cts.Token), CancellationToken.None);
+        _keepAliveTask = Task.Run(() => KeepAliveLoopAsync(socket, cts.Token), CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Pings on an interval so the server can tell a live idle connection from an abandoned one.
+    /// Without this a client that connects at login and then does nothing is silent in both
+    /// directions, and the server reaps it - which is the right call, but it should not reap players
+    /// who are simply waiting.
+    /// </summary>
+    private async Task KeepAliveLoopAsync(WebSocket socket, CancellationToken cancellationToken)
+    {
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                await Task.Delay(KeepAliveInterval, cancellationToken).ConfigureAwait(false);
+
+                if (socket.State != WebSocketState.Open)
+                {
+                    return;
+                }
+
+                try
+                {
+                    await SendAsync(JsonSerializer.Serialize(new ExoPingFrame()), cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                catch (Exception)
+                {
+                    // The receive loop owns reporting a dropped connection; this one just stops.
+                    return;
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Disposing.
+        }
     }
 
     public async Task SendAsync(string text, CancellationToken cancellationToken = default)

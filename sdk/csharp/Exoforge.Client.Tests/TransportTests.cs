@@ -232,4 +232,29 @@ public class TransportTests
 
         client.Dispatcher.Update();
     }
+
+    [Fact]
+    public async Task An_idle_connection_pings_so_the_server_can_tell_it_is_alive()
+    {
+        // The server closes a connection it has not heard from. A client that connects at login and
+        // then does nothing is silent in both directions, so it has to say something.
+        TimeSpan original = ExoTransport.KeepAliveInterval;
+        ExoTransport.KeepAliveInterval = TimeSpan.FromMilliseconds(150);
+
+        try
+        {
+            await using var server = StubWebSocketServer.Start();
+            using var transport = new ExoTransport();
+
+            await transport.ConnectAsync(server.Uri);
+
+            string frame = await server.NextReceivedAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Contains("\"ping\"", frame);
+        }
+        finally
+        {
+            ExoTransport.KeepAliveInterval = original;
+        }
+    }
 }

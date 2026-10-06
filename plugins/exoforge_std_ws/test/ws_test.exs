@@ -298,4 +298,23 @@ defmodule Exoforge.Std.WsTest do
     assert {:push, {:text, resp2}, _} = SocketHandler.handle_in({kick, :text}, state)
     assert Jason.decode!(resp2)["error"]["code"] == "forbidden_scope"
   end
+
+  describe "idle connections" do
+    test "an idle connection is closed rather than held open" do
+      # WebSockAdapter's `timeout:` lands here. The catch-all used to answer {:ok, state}, which
+      # resets the timer rather than closing, so an abandoned client held a process until TCP
+      # noticed - which can be hours. A client that connects at login and never uses the socket is
+      # the common case, so this is the one that matters.
+      state = %{subscriptions: MapSet.new()}
+
+      assert {:stop, :normal, {1000, _reason}, ^state} =
+               Exoforge.Std.Ws.SocketHandler.handle_info(:timeout, state)
+    end
+
+    test "anything else is still ignored" do
+      state = %{subscriptions: MapSet.new()}
+
+      assert {:ok, ^state} = Exoforge.Std.Ws.SocketHandler.handle_info(:some_other_message, state)
+    end
+  end
 end
