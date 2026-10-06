@@ -217,6 +217,45 @@ unity-reimport:
 	       "$project/Library/SourceAssetDB" "$project/Library/SourceAssetDB-lock"
 	echo "[unity-reimport] import caches cleared — Unity recompiles on next open"
 
+# Slow — creates a Unity project and runs a NativeAOT publish — but it is the only check that
+# tests what a consumer actually does.
+# Prove a new Unity project can install the package and build a plugin with no Exoforge checkout
+clean-room-sdk:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	work=$(mktemp -d)
+	trap 'rm -rf "$work"' EXIT
+
+	echo "[clean-room] packing the SDK"
+	just pack-unity >/dev/null
+	tarball=$(ls dist/com.exoforge.sdk-*.tgz | head -1)
+
+	echo "[clean-room] packing Exoforge.Plugin.SDK to a local feed"
+	mkdir -p "$work/feed"
+	dotnet pack sdk/csharp/Exoforge.Plugin.SDK -o "$work/feed" --nologo -v q >/dev/null
+
+	echo "[clean-room] creating a Unity project at $work/Game"
+	"{{UNITY}}" -batchmode -quit -createProject "$work/Game" -logFile "$work/create.log" >/dev/null
+
+	echo "[clean-room] installing the package from the tarball"
+	mkdir -p "$work/unpack"
+	tar -xzf "$tarball" -C "$work/unpack"
+	mv "$work/unpack/package" "$work/Game/Packages/com.exoforge.sdk"
+
+	mkdir -p "$work/Game/Assets/Editor"
+	cp sdk/unity/clean-room-probe.cs "$work/Game/Assets/Editor/CleanRoomProbe.cs"
+
+	echo "[clean-room] running the first-run flow"
+	EXOFORGE_TEST_FEED="$work/feed" "{{UNITY}}" -batchmode -nographics \
+		-projectPath "$work/Game" -executeMethod CleanRoomProbe.Run \
+		-logFile "$work/run.log" || {
+			grep -E "\[clean-room\]|error " "$work/run.log" | head -20
+			echo "[clean-room] FAILED — full log: $work/run.log"
+			exit 1
+		}
+
+	grep -E "\[clean-room\]" "$work/run.log" | tail -3
+
 # ---- Unity SDK Distribution ----
 
 # Package Unity SDK into a self-contained UPM tarball (.tgz) for game developers

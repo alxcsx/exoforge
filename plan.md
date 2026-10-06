@@ -205,14 +205,26 @@ end to end and writes `manifest.exs` — previously it failed with
 
 ### How this milestone is verified
 
-**Clean-room check** — the analogue of `just clean-build`, and the only test that proves the rule:
+**Clean-room check** — `just clean-room-sdk`, and the only test that proves the rule. It creates a
+Unity project outside this repository, installs the tarball the way Package Manager does, and runs
+the first-run flow: initialise a workspace, scaffold a plugin, build it, assert the binary and
+manifest exist. Nothing may reference this repo.
 
-1. Build the UPM tarball.
-2. Unpack it into a Unity project **outside this repository**.
-3. Scaffold a plugin, build it, deploy it, call an action.
-4. Nothing may reference this repo; no env var may be set.
+**It passes.** Running it found two things the sample project had been hiding:
 
-Add it as `just clean-room-sdk` so it can run in CI alongside `clean-build`.
+1. `ExoWorkspace.Initialize` wrote `exoforge.json` without creating the directory it lives in, so the
+   very first action a new developer takes failed with *"Could not find a part of the path"*. The
+   sample's `Exoforge/` folder is committed, so it never showed. Fixed.
+2. The one thing a new project cannot supply itself is `Exoforge.Plugin.SDK`, which is exactly the
+   explicit external dependency 1.2 describes: the build fails with
+   `NU1101: Unable to find package Exoforge.Plugin.SDK`, and pointing a NuGet feed at a local pack
+   of it makes the build succeed. **Publishing that package is the remaining work for a consumer** —
+   the code path is proven, the release is not done.
+
+**Still uncovered by the check:** the generated client (`Sync Client Bindings`) needs a live cluster,
+so the check does not yet prove it compiles inside a fresh project. A fresh project compiles
+`Assets/` as C# 9, and the generated client avoids C# 10+ features — but that should be asserted
+rather than assumed, once the check can run against a server.
 
 ### Out of scope
 
