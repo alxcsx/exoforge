@@ -1,5 +1,7 @@
 using System;
+using System.IO;
 using System.Linq;
+using Exoforge.Unity.Editor;
 using System.Text.Json;
 using SnakeGame;
 using UnityEditor;
@@ -28,6 +30,7 @@ public static class ExoforgeSampleCheck
 
         CheckBoardPixels();
         CheckLeaderboardParsing();
+        CheckPluginToolchain();
 
         if (_failures == 0)
         {
@@ -45,6 +48,31 @@ public static class ExoforgeSampleCheck
     /// A cell's colour has to land on that cell's pixel. This is what catches a transposed
     /// <c>x</c>/<c>y</c> or an off-by-one row stride — invisible until you look at the board.
     /// </summary>
+    /// <summary>
+    /// The Control Center builds plugins out of process, so the generator has to travel with the
+    /// package. This resolved to null after M29 moved the generator into the dotnet project and
+    /// nothing noticed, because nothing exercised the editor's resolution: the CLI finds it beside
+    /// its own assembly and clean-build goes through the CLI, so both kept passing while Build &amp;
+    /// Deploy failed with "the SDK's manifest generator is missing".
+    /// </summary>
+    private static void CheckPluginToolchain()
+    {
+        string? generator = ExoforgeEditorConfig.ManifestGenPath;
+
+        Expect(generator != null,
+            "the package does not carry the manifest generator - run 'just build-unity-sdk'");
+
+        if (generator == null)
+        {
+            return;
+        }
+
+        Expect(File.Exists(Path.Combine(generator, "ManifestGen.csproj")),
+            "the shipped manifest generator has no project file");
+        Expect(File.Exists(Path.Combine(generator, "Program.cs")),
+            "the shipped manifest generator has no source");
+    }
+
     /// <summary>
     /// A cell's colour has to depend on what is in it, and the board has to sit centred on the
     /// origin. This is what catches a transposed x/y or an off-by-one row — invisible until you look

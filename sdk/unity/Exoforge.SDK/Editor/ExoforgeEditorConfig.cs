@@ -332,7 +332,9 @@ public static class ExoforgeEditorConfig
                 return null;
             }
 
-            string candidate = Path.Combine(root!, "Editor", "Management", "Tools~", "ManifestGen");
+            // Tools~ because Unity ignores a folder ending in ~: the generator is a net10.0 program
+            // and would not compile as part of the editor assembly.
+            string candidate = Path.Combine(root!, "Editor", "Plugins", "Tools~", "ManifestGen");
             return File.Exists(Path.Combine(candidate, "ManifestGen.csproj")) ? candidate : null;
         }
     }

@@ -232,7 +232,9 @@ sample-live-tests:
 
 	mix run --no-halt > /tmp/exoforge-live-tests-server.log 2>&1 &
 	server=$!
-	trap 'kill $server 2>/dev/null || true; pkill -f "mix run" 2>/dev/null || true' EXIT
+	# Kill the BEAM too, not just the wrapper: `kill` on `mix run` can leave it holding port 4000,
+	# and then the offline play-mode tests run against a half-dead server instead of skipping.
+	trap 'kill $server 2>/dev/null || true; pkill -f "mix run" 2>/dev/null || true; pkill -f beam.smp 2>/dev/null || true' EXIT
 
 	for _ in $(seq 1 60); do
 		nc -z 127.0.0.1 4000 2>/dev/null && break
@@ -272,6 +274,16 @@ build-unity-sdk root=".":
 		cp "$out/$project/bin/Release/netstandard2.1/$project.dll" "$pkg/$dest/Plugins/"
 		cp "$out/$project/bin/Release/netstandard2.1/$project.pdb" "$pkg/$dest/Plugins/" 2>/dev/null || true
 	done
+
+	# The manifest generator is a runnable tool, not a library: it loads the plugin assembly, which
+	# Unity's runtime cannot, so it has to run out of process. It ships as source under a `~` folder,
+	# which Unity ignores - otherwise the editor compiles it as part of its own assembly and it fails
+	# on its net10.0 imports.
+	generator="$pkg/Editor/Plugins/Tools~/ManifestGen"
+	rm -rf "$generator"
+	mkdir -p "$generator"
+	cp "$out/Exoforge.Management/Tools~/ManifestGen/ManifestGen.csproj" "$generator/"
+	cp "$out/Exoforge.Management/Tools~/ManifestGen/Program.cs" "$generator/"
 
 	echo "[build-unity-sdk] Runtime/Plugins + Editor/Plugins populated"
 
