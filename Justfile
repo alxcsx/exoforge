@@ -222,6 +222,29 @@ sample-check: _unity-reset
 
 # ---- Unity SDK Package ----
 
+# Starts the backend, deploys the sample plugin, runs the tests, stops the server again.
+# Play-mode tests against a live cluster: the engine-side path, end to end
+sample-live-tests:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	pkill -f "mix run" 2>/dev/null || true
+	sleep 1
+
+	mix run --no-halt > /tmp/exoforge-live-tests-server.log 2>&1 &
+	server=$!
+	trap 'kill $server 2>/dev/null || true; pkill -f "mix run" 2>/dev/null || true' EXIT
+
+	for _ in $(seq 1 60); do
+		nc -z 127.0.0.1 4000 2>/dev/null && break
+		sleep 0.5
+	done
+
+	echo "[sample-live-tests] deploying the sample plugin"
+	(cd {{SAMPLE}} && dotnet run --project ../../../sdk/csharp/Exoforge.CLI -- plugin push snake_leaderboard >/dev/null)
+
+	just sample-play-tests
+
+
 # Build the engine-agnostic C# libraries into the Unity package as binaries.
 #
 # The client and the tooling are not Unity-specific, so they are not Unity's to own. Each engine SDK

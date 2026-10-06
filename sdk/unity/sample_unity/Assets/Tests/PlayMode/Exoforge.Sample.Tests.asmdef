@@ -3,6 +3,7 @@
     "rootNamespace": "",
     "references": [
         "Exoforge.SDK",
+        "Exoforge.Generated",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

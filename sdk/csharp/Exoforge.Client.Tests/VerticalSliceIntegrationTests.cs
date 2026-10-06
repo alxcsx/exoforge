@@ -192,6 +192,45 @@ public class VerticalSliceIntegrationTests
     }
 
     [Fact]
+    public async Task Two_Stage_Sign_In_Names_A_Fresh_Account()
+    {
+        var dispatcher = new ExoDispatcher(useSynchronizationContext: false);
+        using var client = new ExoClient(dispatcher);
+
+        try
+        {
+            await client.ConnectAsync(ServerUri);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[IntegrationTest] Skipping live two-stage test (server not running): {ex.Message}");
+            return;
+        }
+
+        string device = "dev_two_stage_" + Guid.NewGuid().ToString("N")[..8];
+
+        // Stage 1 - enter or register the account, no name.
+        var anonymous = await client.SendActionAsync<JsonElement>("auth", "anonymous", new { player_id = device });
+        Assert.Equal(device, anonymous.GetProperty("player_id").GetString());
+        Assert.Equal("", anonymous.GetProperty("name").GetString());
+
+        string token = anonymous.GetProperty("token").GetString()!;
+        var auth = await client.AuthenticateAsync(token);
+        Assert.True(auth.IsSuccess, $"the issued token did not authenticate: {auth.Error}");
+        Assert.Equal(device, auth.PlayerId);
+
+        // Stage 2 - name the signed-in player. The server takes the player from the caller.
+        var named = await client.SendActionAsync<JsonElement>("auth", "set_display_name", new { name = "TwoStage" });
+        Assert.Equal("TwoStage", named.GetProperty("name").GetString());
+
+        // Re-entering the device now returns the name.
+        var again = await client.SendActionAsync<JsonElement>("auth", "anonymous", new { player_id = device });
+        Assert.Equal("TwoStage", again.GetProperty("name").GetString());
+
+        await client.DisconnectAsync();
+    }
+
+    [Fact]
     public async Task Anonymous_Auth_Creates_Player_Before_Any_Session()
     {
         var dispatcher = new ExoDispatcher(useSynchronizationContext: false);
