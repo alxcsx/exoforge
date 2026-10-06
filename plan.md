@@ -71,6 +71,57 @@ shortest working path.
 
 ---
 
+## 4. Next — The Event Path, and the Four Capabilities
+
+Written after auditing what the sample actually exercises. The finding is that it exercises less than
+it looks like it does.
+
+### What is verified today
+
+| Capability | State | Evidence |
+| :--- | :--- | :--- |
+| **Run** | ✅ | `SceneTests` drives a run into a wall; `Advance` makes it deterministic |
+| **Connect** | ✅ | Lazy (login opens no socket), reconnect with backoff, `DisconnectAsync` |
+| **Send HTTP** | ✅ | Live cluster log: `POST /api/auth/anonymous` → 200, `POST /api/auth/authenticate` → 200 |
+| **Receive events** | ❌ **not implemented at all** | see below |
+
+### The event path: infrastructure complete, unused
+
+Every piece exists and has never been used end to end:
+
+- `[ExoEvent]` on the plugin, and the runner subscribes to what a plugin declares
+  (`NativePluginRunner.declared_events/1`).
+- `HostBridge.EmitEvent` → the runner's `emit_event` → `EventDispatcher.broadcast`.
+- The WS handler's `subscribe` frame and its `exo_event` delivery.
+- `ExoClient.SubscribeAsync` (which now connects on demand), `OnAnyEvent`, `ExoDispatcher`.
+
+**What is missing is that nobody uses it.** `SnakeLeaderboardPlugin` declares no `[ExoEvent]` and
+emits nothing, and nothing under `Assets/SnakeGame/` calls `SubscribeAsync`.
+
+This matters more than it looks: because subscriptions are what open the socket now, a sample with
+no subscription **never opens one**, and the realtime half of the platform is invisible to anyone
+reading the sample. The sample currently teaches "submit a score, read the board" over HTTP — which
+is correct, and is half the story.
+
+### Plan
+
+1. **The plugin emits.** `[ExoEvent("score_submitted", Topic = "snake:leaderboard")]` on
+   `SubmitScore`, emitted on a new personal best with `{player_id, name, score}`. Needs the record on
+   the plugin's `JsonSerializerContext` (AOT).
+2. **The sample subscribes.** `SnakeLeaderboard` calls `SubscribeAsync("snake:leaderboard")` on
+   enable and updates `Rows` when a frame arrives. This is what opens the socket, and it is the
+   demonstration that the lazy connection is real: HTTP for request/response, a socket only for the
+   live board.
+3. **A test that an event arrives.** In the live suite: two sessions, one subscribes, the other
+   submits, assert the subscriber's `OnAnyEvent` fired with the right payload. This is the only
+   capability of the four with no test at all.
+4. **Then the contract declares its transport**, per action, where it matters — the leaderboard's
+   two actions are request/response and should say so.
+
+**Order**: 1 → 2 → 3 (a test needs something to emit), then 4.
+
+---
+
 ## 4. Out of Scope for the MVP
 
 Not planned. Recorded so they stop reappearing as "next":
