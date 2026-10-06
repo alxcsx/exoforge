@@ -112,13 +112,17 @@ namespace Exoforge.Client.Unity
         /// </summary>
         public async Task<ExoClient> GetClientAsync()
         {
-            if (Client is { IsConnected: true })
-            {
-                return Client;
-            }
-
+            // Await any connect already in flight before handing out a client. Short-circuiting on
+            // IsConnected alone returned a client that was connected but still authenticating, so a
+            // second caller authenticated on the same socket and one of them lost it with
+            // "Disconnected from server".
             if (_pendingConnect == null)
             {
+                if (Client is { IsConnected: true })
+                {
+                    return Client;
+                }
+
                 _pendingConnect = ConnectAsync();
             }
 
@@ -252,9 +256,17 @@ namespace Exoforge.Client.Unity
                         return;
                     }
 
-                    // ConnectAsync reports its own failure and returns false; the loop backs off and
-                    // tries again until it succeeds or the behaviour goes away.
-                    await ConnectAsync().ConfigureAwait(false);
+                    // GetClientAsync, not ConnectAsync: it shares the single in-flight connect with
+                    // every other caller. Calling ConnectAsync directly here disposed and replaced
+                    // the client underneath a game-side call doing the same thing.
+                    try
+                    {
+                        await GetClientAsync().ConfigureAwait(false);
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // ConnectAsync already logged why. Back off and try again.
+                    }
                 }
             }
             catch (OperationCanceledException)

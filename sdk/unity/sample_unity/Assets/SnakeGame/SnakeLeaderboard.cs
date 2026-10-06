@@ -71,7 +71,10 @@ namespace SnakeGame
 
             try
             {
-                var client = await ExoforgeSDK.ConnectAsync();
+                // The session comes from sign-in and ExoforgeSDK reconnects on its own, so the bridge
+                // only asks for the client. Connecting here was redundant in the happy path and
+                // raced with the SDK's own reconnect loop when the link had dropped.
+                var client = ExoforgeSDK.Client;
 
                 var best = await client.SnakeLeaderboard().SubmitScoreAsync(
                     session.DisplayName, session.PlayerId, score, length);
@@ -97,7 +100,7 @@ namespace SnakeGame
         {
             try
             {
-                var client = await ExoforgeSDK.ConnectAsync();
+                var client = ExoforgeSDK.Client;
                 var result = await client.SnakeLeaderboard().GetLeaderboardAsync(topN);
 
                 _rows.Clear();
