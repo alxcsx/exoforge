@@ -171,9 +171,12 @@ it), then 2.4, then 2.3 — which gates reconnect.
 
 ### API shape
 
-- [ ] **4.1 One way to get a client.** `ExoforgeBehaviour.Client` (public, nullable) and
-      `ExoforgeSDK.Client` (throws) have different failure modes; the nullable one is more
-      discoverable and the docs only ask nicely.
+- [x] **4.1 One way to get a client.** *(Partly a correction: `ExoforgeBehaviour.Client` has
+      legitimate users — the editor window and the play-mode tests — so making it internal would
+      break them for little gain.)* The real defect was the inconsistency: `ExoforgeSDK.Client`
+      returned a client whenever one had been *constructed*, and a failed connect constructs one
+      before failing, so it handed back a dead client and the caller failed later somewhere
+      confusing. It now requires `IsConnected`, and says so.
 - [x] **4.2 Encapsulate transport state.** `AuthToken` is `private set` — it was public and only ever
       written inside `ExoClient`. *(The other two were already fine: `HttpClient` is get-only, and
       `HttpBaseUri` is legitimately settable because it is configuration — which 3.1 made explicit.)*
