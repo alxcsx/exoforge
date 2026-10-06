@@ -3,11 +3,18 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Locate the Exoforge repo (the directory containing the ManifestGen project).
+# Locate the Exoforge repo. The marker is the manifest generator itself, so finding it means the
+# tool this script runs exists: it moved to Exoforge.Management/Tools~ in M29, and the old path here
+# left ROOT empty and tried to source "/sdk/build/wasi-sdk.sh".
 ROOT="$SCRIPT_DIR"
-while [ "$ROOT" != "/" ] && [ ! -d "$ROOT/sdk/csharp/Exoforge.ManifestGen" ]; do
+while [ "$ROOT" != "/" ] && [ ! -d "$ROOT/sdk/csharp/Exoforge.Management/Tools~/ManifestGen" ]; do
   ROOT="$(dirname "$ROOT")"
 done
+
+if [ ! -d "$ROOT/sdk/csharp/Exoforge.Management/Tools~/ManifestGen" ]; then
+  echo "error: could not find the Exoforge repo above $SCRIPT_DIR" >&2
+  exit 1
+fi
 
 # shellcheck source=/dev/null
 source "$ROOT/sdk/build/wasi-sdk.sh"
@@ -17,7 +24,7 @@ echo "Building C# contract assembly..."
 dotnet build "$SCRIPT_DIR/sample_wasm.csproj" -c Release
 
 echo "Generating plugin manifest from C# attributes..."
-dotnet run --project "$ROOT/sdk/csharp/Exoforge.ManifestGen" -- \
+dotnet run --project "$ROOT/sdk/csharp/Exoforge.Management/Tools~/ManifestGen" -- \
   "$SCRIPT_DIR/bin/Release/net10.0/sample_wasm.dll" \
   "$SCRIPT_DIR/manifest.exs"
 
