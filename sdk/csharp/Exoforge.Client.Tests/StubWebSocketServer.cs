@@ -146,7 +146,21 @@ internal sealed class StubWebSocketServer : IAsyncDisposable
             {
                 var result = await socket.ReceiveAsync(buffer, cancellationToken);
 
-                if (result.MessageType == WebSocketMessageType.Close) return;
+                if (result.MessageType == WebSocketMessageType.Close)
+                {
+                    // Complete the handshake. Returning without replying leaves the client's
+                    // CloseAsync waiting forever, which looks exactly like a client-side hang.
+                    try
+                    {
+                        await socket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None);
+                    }
+                    catch
+                    {
+                        // The client may already be gone.
+                    }
+
+                    return;
+                }
                 if (result.Count == 0) continue;
 
                 _received.Enqueue(Encoding.UTF8.GetString(buffer, 0, result.Count));

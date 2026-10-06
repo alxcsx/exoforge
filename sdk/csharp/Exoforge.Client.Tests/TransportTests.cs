@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -78,6 +80,61 @@ public class TransportTests
         Assert.True(disconnected,
             $"the client never noticed the drop: IsConnected={client.IsConnected}, " +
             $"pendingCallbacks={client.Dispatcher.PendingCount}, serverConnections={server.ConnectionCount}");
+    }
+
+    [Fact]
+    public async Task Reconnecting_leaves_exactly_one_receive_loop()
+    {
+        await using var server = StubWebSocketServer.Start();
+        using var client = NewClient();
+
+        int disconnects = 0;
+        client.OnDisconnected += _ => Interlocked.Increment(ref disconnects);
+
+        await client.ConnectAsync(server.Uri);
+        server.DropConnection();
+        await PumpUntil(() => !client.IsConnected, client, TimeSpan.FromSeconds(5));
+
+        await client.ConnectAsync(server.Uri);
+        Assert.Equal(2, server.ConnectionCount);
+
+        var seen = new List<string>();
+        client.OnEvent("ping", frame => seen.Add(frame.Event));
+
+        // Every frame must arrive, exactly once. A leftover receive loop reading the same socket
+        // would split them between two readers, so some would never surface.
+        for (int i = 0; i < 5; i++)
+        {
+            await server.SendAsync("{\"type\":\"event\",\"event\":\"ping\",\"topic\":\"t\",\"payload\":{}}");
+        }
+
+        await PumpUntil(() => seen.Count == 5, client, TimeSpan.FromSeconds(5));
+        Assert.Equal(5, seen.Count);
+
+        // One drop, one notification. A duplicate is indistinguishable from the new connection
+        // failing, which is what a reconnect handler must not be told.
+        Assert.Equal(1, disconnects);
+    }
+
+    [Fact]
+    public async Task A_clean_disconnect_notifies_exactly_once()
+    {
+        await using var server = StubWebSocketServer.Start();
+        using var client = NewClient();
+
+        int disconnects = 0;
+        client.OnDisconnected += _ => Interlocked.Increment(ref disconnects);
+
+        await client.ConnectAsync(server.Uri);
+        await client.DisconnectAsync();
+
+        await PumpUntil(() => disconnects > 0, client, TimeSpan.FromSeconds(5));
+        await Task.Delay(100); // give a second notification time to arrive
+
+        // Both the receive loop and the teardown path can reach the notification. A duplicate is
+        // indistinguishable from the next connection failing, which a reconnect handler must not see.
+        Assert.Equal(1, disconnects);
+        Assert.False(client.IsConnected);
     }
 
     // ---- helpers -----------------------------------------------------------------------

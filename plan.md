@@ -118,11 +118,18 @@ it), then 2.4, then 2.3 — which gates reconnect.
 - [x] **2.2 `_instance` is never cleared on destroy.** `OnDestroy` only disconnected, so
       `Current`/`Instance` returned a destroyed object. Cleared first, before the teardown awaits.
       *Proven by:* `SessionLifecycleTests.Instance_is_cleared_when_the_behaviour_is_destroyed`.
-- [ ] **2.3 Reconnect race in `ExoTransport.ConnectAsync`.** It cancels `_cts` and immediately
-      replaces `_webSocket` without awaiting the old receive loop, which reads `_webSocket` through
-      the field — so it can issue a second `ReceiveAsync` on the *new* socket, or fire a late
-      `OnDisconnected`. *Done when:* connecting twice leaves one receive loop.
-      *Proves it:* `Exoforge.Client.Tests`.
+- [x] **2.3 Reconnect in `ExoTransport.ConnectAsync`.** *(The original description overstated this:
+      the receive loop checks its cancellation token first, so a cancelled token already blocked
+      re-entry and a second `ReceiveAsync` on the new socket was not reachable.)* What was real:
+      `_webSocket?.Dispose()` disposed the old socket while its loop could still be inside
+      `ReceiveAsync`, whose `ObjectDisposedException` surfaced as a **spurious `OnDisconnected` after a
+      successful reconnect**; and both the loop and the teardown path could notify, so one connection
+      could report two disconnects. Fixed by draining the previous connection before swapping, passing
+      the socket and token to the loop so it never reads a field a later connect can replace, and
+      reporting at most one disconnect per connection.
+      *Guarded by:* `TransportTests` — reconnect then assert every frame arrives and one disconnect is
+      reported. These are guards, not proofs: the window is too narrow to reproduce deterministically
+      from outside, so the guarantee is structural (the loop no longer reads the field).
 - [x] **2.4 A stale display name survives reconnecting to another account.** `SaveSession` now clears
       the name when the player id changes — a reconnect as the same player keeps it, a different
       account cannot inherit it. *Proven by:* two `SessionLifecycleTests` cases.
@@ -137,6 +144,9 @@ it), then 2.4, then 2.3 — which gates reconnect.
       `ExoTransport`, `ExoforgeBehaviourEditor`) — a mistyped URL fails with no explanation anywhere.
 - [ ] **3.3 Make timeouts configurable.** `FromSeconds(5)`/`(5)`/`(10)` are magic numbers with no
       client-wide default, so a cold first call fails with a bare `TimeoutException`.
+      *Found while testing 2.3:* `DisconnectAsync` awaits `CloseAsync`, which waits for the peer to
+      complete the close handshake — with no timeout, so a peer that never replies hangs the caller.
+      It hung the test suite until the stub was made to reply. Same class as the magic numbers.
 - [ ] **3.4 Reconnect with backoff.** `Update()` keeps pumping a dead dispatcher; nothing reconnects
       and nothing tells the game. **Depends on 2.3.** Two notes from building the tests:
       `OnDisconnected` is delivered *through the dispatcher*, so once `Update()` stops being called

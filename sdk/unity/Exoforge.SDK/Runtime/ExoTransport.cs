@@ -8,17 +8,21 @@ using System.Threading.Tasks;
 namespace Exoforge.Client;
 
 /// <summary>
-/// Transport layer handling raw WebSocket framing over ClientWebSocket.
-/// Thread-safe send and resilient background receive loop.
+/// Transport layer handling raw WebSocket framing over <see cref="ClientWebSocket"/>.
+///
+/// Thread-safe send and a background receive loop. Each connection owns its own socket, token and
+/// receive loop, and a new connection drains the previous one first — a loop must never outlive the
+/// socket it is reading.
 /// </summary>
 public class ExoTransport : IDisposable
 {
     private ClientWebSocket? _webSocket;
     private CancellationTokenSource? _cts;
-    private readonly SemaphoreSlim _sendLock = new(1, 1);
     private Task? _receiveTask;
+    private int _disconnectNotified;
+    private readonly SemaphoreSlim _sendLock = new(1, 1);
 
-    public bool IsConnected => _webSocket != null && _webSocket.State == WebSocketState.Open;
+    public bool IsConnected => _webSocket is { State: WebSocketState.Open };
 
     public event Action<string>? OnMessageReceived;
     public event Action? OnConnected;
@@ -31,23 +35,45 @@ public class ExoTransport : IDisposable
             return;
         }
 
-        _cts?.Cancel();
-        _cts = new CancellationTokenSource();
+        // Drain the previous connection before replacing it. Skipping this left the old receive loop
+        // inside ReceiveAsync; because it read the socket through the field, it then issued a second
+        // receive on the *new* socket, splitting frames between two readers and firing a late
+        // OnDisconnected that a reconnect handler would misread as the new connection failing.
+        await TeardownAsync(notify: false, CancellationToken.None).ConfigureAwait(false);
 
-        _webSocket?.Dispose();
-        _webSocket = new ClientWebSocket();
+        var cts = new CancellationTokenSource();
+        var socket = new ClientWebSocket();
 
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _cts.Token);
-        await _webSocket.ConnectAsync(serverUri, linkedCts.Token).ConfigureAwait(false);
+        _cts = cts;
+        _webSocket = socket;
+        Interlocked.Exchange(ref _disconnectNotified, 0);
+
+        try
+        {
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token);
+            await socket.ConnectAsync(serverUri, linkedCts.Token).ConfigureAwait(false);
+        }
+        catch
+        {
+            _webSocket = null;
+            _cts = null;
+            socket.Dispose();
+            cts.Dispose();
+            throw;
+        }
 
         OnConnected?.Invoke();
 
-        _receiveTask = Task.Run(() => ReceiveLoopAsync(_cts.Token));
+        // The socket and token are captured: the loop never reads them from a field that a later
+        // connect could swap underneath it.
+        _receiveTask = Task.Run(() => ReceiveLoopAsync(socket, cts.Token), CancellationToken.None);
     }
 
     public async Task SendAsync(string text, CancellationToken cancellationToken = default)
     {
-        if (!IsConnected || _webSocket == null)
+        var socket = _webSocket;
+
+        if (socket is not { State: WebSocketState.Open })
         {
             throw new InvalidOperationException("WebSocket is not connected.");
         }
@@ -58,7 +84,7 @@ public class ExoTransport : IDisposable
         await _sendLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await _webSocket.SendAsync(buffer, WebSocketMessageType.Text, true, cancellationToken).ConfigureAwait(false);
+            await socket.SendAsync(buffer, WebSocketMessageType.Text, true, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -66,84 +92,127 @@ public class ExoTransport : IDisposable
         }
     }
 
-    public async Task DisconnectAsync(CancellationToken cancellationToken = default)
+    public Task DisconnectAsync(CancellationToken cancellationToken = default) =>
+        TeardownAsync(notify: true, cancellationToken);
+
+    private async Task TeardownAsync(bool notify, CancellationToken cancellationToken)
     {
-        if (_webSocket == null)
-        {
-            return;
-        }
+        var socket = _webSocket;
+        var cts = _cts;
+        var loop = _receiveTask;
 
-        _cts?.Cancel();
+        _webSocket = null;
+        _cts = null;
+        _receiveTask = null;
 
-        try
+        cts?.Cancel();
+
+        if (socket is { State: WebSocketState.Open })
         {
-            if (_webSocket.State == WebSocketState.Open)
+            try
             {
-                await _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Client disconnecting", cancellationToken)
+                await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Client disconnecting", cancellationToken)
                     .ConfigureAwait(false);
             }
+            catch
+            {
+                // A close that fails is not interesting: the socket is going away either way.
+            }
         }
-        catch
+
+        if (loop != null)
         {
-            // Ignore socket closure errors
+            try
+            {
+                await loop.ConfigureAwait(false);
+            }
+            catch
+            {
+                // The loop reports its own failures through OnDisconnected.
+            }
         }
-        finally
+
+        socket?.Dispose();
+        cts?.Dispose();
+
+        if (notify)
         {
-            _webSocket.Dispose();
-            _webSocket = null;
-            OnDisconnected?.Invoke(null);
+            NotifyDisconnected(null);
         }
     }
 
-    private async Task ReceiveLoopAsync(CancellationToken cancellationToken)
+    private async Task ReceiveLoopAsync(WebSocket socket, CancellationToken cancellationToken)
     {
         var buffer = new byte[8192];
-        var memoryStream = new MemoryStream();
+        var message = new MemoryStream();
 
         try
         {
-            while (!cancellationToken.IsCancellationRequested && _webSocket != null && _webSocket.State == WebSocketState.Open)
+            while (!cancellationToken.IsCancellationRequested && socket.State == WebSocketState.Open)
             {
-                memoryStream.SetLength(0);
+                message.SetLength(0);
                 WebSocketReceiveResult result;
 
                 do
                 {
-                    result = await _webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken).ConfigureAwait(false);
+                    result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken)
+                        .ConfigureAwait(false);
 
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
-                        await _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing", CancellationToken.None).ConfigureAwait(false);
-                        OnDisconnected?.Invoke(null);
                         return;
                     }
 
-                    memoryStream.Write(buffer, 0, result.Count);
+                    message.Write(buffer, 0, result.Count);
                 }
                 while (!result.EndOfMessage);
 
                 if (result.MessageType == WebSocketMessageType.Text)
                 {
-                    string message = Encoding.UTF8.GetString(memoryStream.ToArray());
-                    OnMessageReceived?.Invoke(message);
+                    OnMessageReceived?.Invoke(Encoding.UTF8.GetString(message.ToArray()));
                 }
             }
         }
         catch (OperationCanceledException)
         {
-            // Normal cancellation
+            // Normal cancellation: the connection is being torn down.
         }
         catch (Exception ex)
         {
-            OnDisconnected?.Invoke(ex);
+            NotifyDisconnected(ex);
+            return;
         }
+
+        NotifyDisconnected(null);
+    }
+
+    /// <summary>
+    /// Reports a dropped connection exactly once per connection.
+    ///
+    /// Both the receive loop and <see cref="DisconnectAsync"/> can reach this, and a duplicate
+    /// notification is indistinguishable from the new connection failing — which is precisely what a
+    /// reconnect handler must not be told.
+    /// </summary>
+    private void NotifyDisconnected(Exception? error)
+    {
+        if (Interlocked.Exchange(ref _disconnectNotified, 1) != 0)
+        {
+            return;
+        }
+
+        OnDisconnected?.Invoke(error);
     }
 
     public void Dispose()
     {
         _cts?.Cancel();
-        _cts?.Dispose();
+
         _webSocket?.Dispose();
+        _webSocket = null;
+
+        _cts?.Dispose();
+        _cts = null;
+
         _sendLock.Dispose();
     }
 }
