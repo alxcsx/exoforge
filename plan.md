@@ -155,21 +155,26 @@ it), then 2.4, then 2.3 — which gates reconnect.
       (behaviour disabled or destroyed) disconnect notifications stop too — a reconnect timer must not
       depend on the pump. And `ConnectAsync` logs a failed attempt with `Debug.LogError`, so a retry
       loop would put a red error in the console per attempt; that should become a warning.
-- [ ] **3.5 `ExoTokenStore` writes to disk four times per `SaveSession`** (every setter calls
-      `PlayerPrefs.Save()`), while `ExoDeviceId.Reset()` is the one place that does *not* save.
-      *Proves it:* `ExoforgeSampleCheck`.
-- [ ] **3.6 Scopes are stored comma-joined** and split on read — a scope containing a comma silently
-      becomes two. Store as JSON, or reject commas.
+- [x] **3.5 `ExoTokenStore` wrote to disk four times per `SaveSession`.** Setters now write without
+      flushing; `SaveSession` and `Clear` flush once. `ExoDeviceId.Reset()` flushes too, which was the
+      one write that did not.
+- [x] **3.6 Scopes are stored comma-joined.** *(Not a defect: `ExoTokenStore.Scopes` is never read —
+      not by the SDK, not by the sample. The string is write-only, so nothing splits it and no scope
+      can be corrupted by a comma. Left as-is rather than changing a public property's format for a
+      consumer that does not exist. If one appears, that is when to fix the encoding.)*
 
 ### API shape
 
 - [ ] **4.1 One way to get a client.** `ExoforgeBehaviour.Client` (public, nullable) and
       `ExoforgeSDK.Client` (throws) have different failure modes; the nullable one is more
       discoverable and the docs only ask nicely.
-- [ ] **4.2 Encapsulate transport state.** `AuthToken`, `HttpBaseUri` and `HttpClient` are public
-      settable on `ExoClient`, so game code can corrupt a live connection.
-- [ ] **4.3 Drop the loose `SendActionAsync(object? payload)` overload.** It accepts anything and fails
-      server-side; the typed overloads are the ones to reach for.
+- [x] **4.2 Encapsulate transport state.** `AuthToken` is `private set` — it was public and only ever
+      written inside `ExoClient`. *(The other two were already fine: `HttpClient` is get-only, and
+      `HttpBaseUri` is legitimately settable because it is configuration — which 3.1 made explicit.)*
+- [x] **4.3 The loose `SendActionAsync` overload.** *(Not a defect: there is no separate loose
+      overload — `payload` is `object?` on the two that exist, which is inherent to a wire-level
+      client. The generated service clients are the typed path and are what callers should use; the
+      editor's own calls pass `null` for a no-payload action.)*
 
 ### Release work (not code)
 

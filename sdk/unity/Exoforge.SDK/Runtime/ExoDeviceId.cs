@@ -46,7 +46,11 @@ namespace Exoforge.Client.Unity
         }
 
         /// <summary>Clears the cached id — the next sign-in claims a fresh account.</summary>
-        public static void Reset() => PlayerPrefs.DeleteKey(Key);
+        public static void Reset()
+        {
+            PlayerPrefs.DeleteKey(Key);
+            PlayerPrefs.Save();
+        }
 
         private static string Derive(string seed)
         {

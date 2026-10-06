@@ -23,45 +23,33 @@ namespace Exoforge.Client
         private const string ScopesKey = "Exoforge.Scopes";
         private const string NameKey = "Exoforge.PlayerName";
 
+        // Setters write to PlayerPrefs but do not flush it. SaveSession and Clear flush once, so
+        // storing a session is one disk write rather than four. Unity flushes on quit regardless.
+
         public static string Token
         {
             get => PlayerPrefs.GetString(TokenKey, string.Empty);
-            set
-            {
-                PlayerPrefs.SetString(TokenKey, value ?? string.Empty);
-                PlayerPrefs.Save();
-            }
+            set => PlayerPrefs.SetString(TokenKey, value ?? string.Empty);
         }
 
         public static string PlayerId
         {
             get => PlayerPrefs.GetString(PlayerIdKey, string.Empty);
-            set
-            {
-                PlayerPrefs.SetString(PlayerIdKey, value ?? string.Empty);
-                PlayerPrefs.Save();
-            }
+            set => PlayerPrefs.SetString(PlayerIdKey, value ?? string.Empty);
         }
 
+        /// <summary>Scopes as a comma-separated string. Written for diagnostics; the SDK reads scopes from the session.</summary>
         public static string Scopes
         {
             get => PlayerPrefs.GetString(ScopesKey, string.Empty);
-            set
-            {
-                PlayerPrefs.SetString(ScopesKey, value ?? string.Empty);
-                PlayerPrefs.Save();
-            }
+            set => PlayerPrefs.SetString(ScopesKey, value ?? string.Empty);
         }
 
         /// <summary>Display name chosen by the player during onboarding (empty for a fresh anonymous session).</summary>
         public static string PlayerName
         {
             get => PlayerPrefs.GetString(NameKey, string.Empty);
-            set
-            {
-                PlayerPrefs.SetString(NameKey, value ?? string.Empty);
-                PlayerPrefs.Save();
-            }
+            set => PlayerPrefs.SetString(NameKey, value ?? string.Empty);
         }
 
         public static bool HasToken => !string.IsNullOrEmpty(Token);
@@ -89,6 +77,8 @@ namespace Exoforge.Client
             {
                 PlayerName = string.Empty;
             }
+
+            PlayerPrefs.Save();
         }
 
         public static void Clear()

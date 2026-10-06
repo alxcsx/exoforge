@@ -49,7 +49,8 @@ public class ExoClient : IDisposable
     public IReadOnlyList<string> Scopes => _scopes.AsReadOnly();
     public ExoDispatcher Dispatcher => _dispatcher;
     public Uri? HttpBaseUri { get; set; }
-    public string? AuthToken { get; set; }
+    /// <summary>The token last used to authenticate. Set by <see cref="AuthenticateAsync"/>.</summary>
+    public string? AuthToken { get; private set; }
     public HttpClient HttpClient => _httpClient;
 
     /// <summary>
