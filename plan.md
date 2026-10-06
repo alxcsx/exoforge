@@ -176,10 +176,9 @@ it), then 2.4, then 2.3 — which gates reconnect.
 
 **Two gaps this milestone depends on:**
 
-1. **`ExoClient` / `ExoTransport` have no unit coverage** — only `VerticalSliceIntegrationTests`,
-   which needs a live cluster. They are Unity-free, so reconnect, timeout and error-surfacing belong
-   in `Exoforge.Client.Tests` behind a small local WebSocket stub. **Write the stub first** — 2.3 and
-   3.1–3.4 are otherwise unverifiable.
+1. ~~**`ExoClient` / `ExoTransport` have no unit coverage.**~~ **Done** — `StubWebSocketServer` plus
+   `TransportTests` (connect, action round trip, server error, dropped connection). They are
+   Unity-free, so this is where reconnect, timeout and error-surfacing get pinned.
 2. **`ExoforgeBehaviour` is Unity-only**, so `ExoforgeSampleCheck` covers it (2.1, 2.2, 2.4, 3.5)
    rather than a new test framework.
 
