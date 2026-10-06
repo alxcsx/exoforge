@@ -27,7 +27,10 @@ namespace Exoforge.Client.Unity
         /// (<c>Client.PlayerData()</c>, <c>Client.SnakeLeaderboard()</c>, …).
         /// </summary>
         public static ExoClient Client =>
-            Behaviour.Client ?? throw new InvalidOperationException("Call ExoforgeSDK.ConnectAsync() first.");
+            Behaviour.Client is { IsConnected: true } client
+                ? client
+                : throw new InvalidOperationException(
+                    "Not connected. Call ExoforgeSDK.ConnectAsync() and check it succeeded.");
 
         /// <summary>Connects to the cluster (idempotent) and returns the client.</summary>
         public static Task<ExoClient> ConnectAsync() => Behaviour.GetClientAsync();

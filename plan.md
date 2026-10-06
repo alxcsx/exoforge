@@ -149,8 +149,14 @@ it), then 2.4, then 2.3 — which gates reconnect.
       had none — `DisconnectAsync` awaited `CloseAsync` forever if the peer never replied, which is
       what hung the test suite until the stub was made to reply.
       *Proven by:* `TransportTests.The_default_timeout_is_configurable`.
-- [ ] **3.4 Reconnect with backoff.** `Update()` keeps pumping a dead dispatcher; nothing reconnects
-      and nothing tells the game. **Depends on 2.3.** Two notes from building the tests:
+- [x] **3.4 Reconnect with backoff.** `ExoforgeBehaviour` retries with exponential backoff
+      (`ExoBackoff`, capped at 30s by default), starting from a **failed first connect** as well as
+      from a drop — a backend that is not up yet is the common case at boot, and was the motivating
+      one. A background task, not something driven from `Update()`, because disconnect notifications
+      go through the dispatcher and a behaviour that stops pumping would never reconnect.
+      *Proven by:* `BackoffTests` (the doubling and the cap, Unity-free) and a play-mode test that a
+      failed connect announces its first retry — a log line only the retry loop emits.
+      Two notes from building the tests:
       `OnDisconnected` is delivered *through the dispatcher*, so once `Update()` stops being called
       (behaviour disabled or destroyed) disconnect notifications stop too — a reconnect timer must not
       depend on the pump. And `ConnectAsync` logs a failed attempt with `Debug.LogError`, so a retry

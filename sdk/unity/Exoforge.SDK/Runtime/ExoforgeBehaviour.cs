@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -40,8 +41,20 @@ namespace Exoforge.Client.Unity
         [Tooltip("Connect as soon as the scene loads.")]
         [SerializeField] private bool connectOnAwake = true;
 
+        [Header("Reconnect")]
+        [Tooltip("Reconnect automatically when the connection drops.")]
+        [SerializeField] private bool autoReconnect = true;
+
+        [Tooltip("First retry delay; doubles each attempt up to the maximum.")]
+        [SerializeField] private float reconnectBaseDelay = 1f;
+
+        [Tooltip("Longest delay between reconnect attempts.")]
+        [SerializeField] private float reconnectMaxDelay = 30f;
+
         private Task? _pendingConnect;
         private ExoforgeRuntimeConfig? _resolvedConfig;
+        private CancellationTokenSource? _reconnectCts;
+        private int _reconnectAttempt;
 
         /// <summary>The live client, or null before the first connection attempt.</summary>
         public ExoClient? Client { get; private set; }
@@ -152,6 +165,7 @@ namespace Exoforge.Client.Unity
             {
                 Client?.Dispose();
                 Client = new ExoClient();
+                Client.OnDisconnected += OnClientDisconnected;
 
                 if (!string.IsNullOrEmpty(cfg?.HttpUrl))
                 {
@@ -178,11 +192,17 @@ namespace Exoforge.Client.Unity
                     Debug.Log($"[Exoforge] Connected to {targetUrl} (unauthenticated)");
                 }
 
+                _reconnectAttempt = 0;
                 return true;
             }
             catch (Exception ex)
             {
                 Debug.LogError($"[Exoforge] Connection error: {ex.Message}");
+
+                // A backend that is not up yet is the common case at boot, so retry from a failed
+                // first attempt too, not only from a dropped connection.
+                StartReconnecting();
+
                 return false;
             }
         }
@@ -190,6 +210,61 @@ namespace Exoforge.Client.Unity
         private void Update()
         {
             Client?.Dispatcher.Update();
+        }
+
+        /// <summary>
+        /// Starts the retry loop when the connection drops.
+        ///
+        /// Deliberately a background task rather than something driven from <see cref="Update"/>:
+        /// disconnect notifications are themselves delivered through the dispatcher, so a behaviour
+        /// that stops pumping — disabled, or destroyed mid-teardown — would never reconnect.
+        /// </summary>
+        private void OnClientDisconnected(Exception? error) => StartReconnecting();
+
+        private void StartReconnecting()
+        {
+            if (!autoReconnect || _reconnectCts != null)
+            {
+                return;
+            }
+
+            var cts = new CancellationTokenSource();
+            _reconnectCts = cts;
+            _ = Task.Run(() => ReconnectLoopAsync(cts.Token), CancellationToken.None);
+        }
+
+        private async Task ReconnectLoopAsync(CancellationToken cancellationToken)
+        {
+            try
+            {
+                while (!cancellationToken.IsCancellationRequested && !IsReady)
+                {
+                    TimeSpan delay = ExoBackoff.Delay(_reconnectAttempt, reconnectBaseDelay, reconnectMaxDelay);
+
+                    _reconnectAttempt++;
+
+                    Debug.LogWarning($"[Exoforge] Not connected. Retrying in {delay.TotalSeconds:0.#}s (attempt {_reconnectAttempt}).");
+
+                    await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        return;
+                    }
+
+                    // ConnectAsync reports its own failure and returns false; the loop backs off and
+                    // tries again until it succeeds or the behaviour goes away.
+                    await ConnectAsync().ConfigureAwait(false);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // The behaviour is going away.
+            }
+            finally
+            {
+                _reconnectCts = null;
+            }
         }
 
         private async void OnDestroy()
@@ -201,6 +276,9 @@ namespace Exoforge.Client.Unity
             {
                 _instance = null;
             }
+
+            _reconnectCts?.Cancel();
+            _reconnectCts = null;
 
             if (Client == null)
             {

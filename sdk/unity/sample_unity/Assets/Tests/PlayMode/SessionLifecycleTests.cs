@@ -84,6 +84,35 @@ public class SessionLifecycleTests
             "the second attempt reused the failed client — it did not retry");
     }
 
+    // ---- 3.4 ---------------------------------------------------------------------------
+
+    [UnityTest]
+    public IEnumerator A_failed_connect_starts_retrying_with_backoff()
+    {
+        var behaviour = NewBehaviour("ws://127.0.0.1:1/ws");
+        yield return null;
+
+        // The connect failure is reported, and the retry loop announces its first attempt.
+        LogAssert.Expect(LogType.Error, new Regex(@"\[Exoforge\] Connection error: .*"));
+        LogAssert.Expect(LogType.Warning, new Regex(@"\[Exoforge\] Not connected\. Retrying in .*"));
+
+        var call = behaviour.GetClientAsync();
+        yield return WaitForCompletion(call);
+
+        Assert.IsTrue(call.IsFaulted);
+
+        // Let the loop announce itself, then stop expecting the failures it keeps producing —
+        // retrying is the point, and each attempt logs.
+        yield return WaitForSeconds(0.5f);
+        LogAssert.ignoreFailingMessages = true;
+
+        UnityEngine.Object.Destroy(_host);
+        _host = null;
+        yield return null;
+
+        LogAssert.ignoreFailingMessages = false;
+    }
+
     // ---- 2.2 ---------------------------------------------------------------------------
 
     [UnityTest]
@@ -144,6 +173,16 @@ public class SessionLifecycleTests
     }
 
     // ---- helpers -----------------------------------------------------------------------
+
+    private static IEnumerator WaitForSeconds(float seconds)
+    {
+        float deadline = Time.realtimeSinceStartup + seconds;
+
+        while (Time.realtimeSinceStartup < deadline)
+        {
+            yield return null;
+        }
+    }
 
     private static IEnumerator WaitForCompletion<T>(System.Threading.Tasks.Task<T> task)
     {

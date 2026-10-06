@@ -117,7 +117,7 @@ public partial class ExoforgeControlCenter : EditorWindow
             catch (Exception ex)
             {
                 // Teardown: worth a line in the console, not worth failing the disconnect over.
-                Debug.LogWarning($"[Exoforge] Disconnect while closing the editor client failed: {ex.Message}");
+                UnityEngine.Debug.LogWarning($"[Exoforge] Disconnect while closing the editor client failed: {ex.Message}");
             }
             _editorClient.Dispose();
             _editorClient = null;

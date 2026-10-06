@@ -17,6 +17,7 @@
     <Compile Include="..\..\unity\Exoforge.SDK\Runtime\ExoDispatcher.cs" Link="Runtime\ExoDispatcher.cs" />
     <Compile Include="..\..\unity\Exoforge.SDK\Runtime\Protocol.cs" Link="Runtime\Protocol.cs" />
     <Compile Include="..\..\unity\Exoforge.SDK\Runtime\IsExternalInit.cs" Link="Runtime\IsExternalInit.cs" />
+    <Compile Include="..\..\unity\Exoforge.SDK\Runtime\ExoBackoff.cs" Link="Runtime\ExoBackoff.cs" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
