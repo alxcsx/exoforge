@@ -26,28 +26,47 @@ plugin_manager ───▶ (independent root)
 
 ---
 
-## 2. Completed Milestones Ledger (M1–M23)
+## 2. Completed Milestones Ledger
 
-All 23 MVP milestones have been implemented, tested, and verified:
+Delivered, tested and verified. Numbers are historical identifiers, not a sequence to keep in step —
+they are referenced from `Agents.MD`, `DX.md` and commit messages.
 
 - [x] **M1–M6: Kernel Core, Contracts & Standard Plugins**: `PluginRegistry` ETS, `ActionDispatcher`, `EventDispatcher`, Bandit HTTP/WS ingress, WASM runtime (`wasmex`), SQLite DB, Auth, PlayerData.
 - [x] **M7–M13: Studio LiveView, Distributed Actors & Clustering**: Phoenix LiveView Producer Studio (`:4005`), Horde delta-CRDT virtual actors, `:pg` cluster event fanout, 729k ops/sec cluster benchmark, Kubernetes manifests.
 - [x] **M14–M17: DevEx, Typed Resources & Multi-Plugin WASM**: Global `Cmd+K` palette, live actor passivation, typed resource structs (`[ExoResource]`), dynamic action parameter forms, C# client generation.
 - [x] **M18: Hardening, Zero Warnings & E2E Slice**: Cleaned all compiler warnings, integrated WebSocket `AuthenticateAsync`, restored green E2E test in 292 ms.
 - [x] **M19: Standard Plugin Manager (`exoforge_std_plugin_manager`)**: `:plugin_manager` service contract, hot WASM upload (`\0asm` verification), runtime restart/reload, manifest export.
-- [x] **M20: Standalone C# Management Engine (`Exoforge.Management` & `exo` CLI)**: Dual-targeted `netstandard2.1` / `net10.0` library, `exo` CLI tool (`init`, `plugin new`, `plugin build`, `plugin push`, `sync`, `status`), and dedicated Studio Plugin Manager GUI.
-- [x] **M21: Unity Engine SDK (`com.exoforge.sdk`)**: Standard UPM layout, in-engine Control Center window (`Window > Exoforge > Control Center`), persistent `EditorPrefs`, one-click client code generation, and a shipped sample.
-- [x] **M22: GameDev Control Center & Standalone Package**:
-  - Gamedev-first Unity Editor window with live cluster ping, environment switcher, real-time event streaming monitor, in-engine RPC action sandbox, plugin manager, and typed client codegen. Now split across `ExoforgeControlCenter*.cs` partials.
-  - Self-contained UPM distribution packaging target (`just pack-unity`) producing standalone `com.exoforge.sdk-0.1.0.tgz`.
-  - Interactive `Samples~/BasicUsage` sample.
+- [x] **M20: Standalone C# Management Engine (`Exoforge.Management` & `exo` CLI)**: dual-targeted
+  `netstandard2.1` / `net10.0` library and the `exo` CLI (`init`, `plugin new|build|push|dev|reload|
+  logs|stubs|list|remove`, `sync`, `status`). `push` builds, deploys and then **verifies the version
+  the cluster is actually running**; `dev` watches sources and redeploys; `logs` reads back what the
+  plugin emitted. The library compiles its sources from the Unity package (see M27) rather than
+  keeping a copy, and `Exoforge.Plugin.SDK` is packable.
+- [x] **M21: Unity Engine SDK (`com.exoforge.sdk`)**: UPM package, **self-contained** — its files
+  are the source of truth, with no symlinks and no assumption about this repository's layout (M27).
+  One game-facing entry point (`ExoforgeSDK.Auth` / `.Client` / `.ConnectAsync`), a device-keyed
+  two-stage anonymous sign-in, a standard prefab created on demand when absent, and
+  `Samples~/BasicUsage`.
+- [x] **M22: Producer Studio Surface (Unity Editor)**: the Control Center window — live cluster ping,
+  environment switcher, event stream monitor, action sandbox, plugin scaffold/build/deploy/logs, and
+  typed client codegen. Split across `ExoforgeControlCenter*.cs` partials so the tab you work on is
+  the file you open. `just pack-unity` produces the standalone tarball.
 
   > The LiveOps time primitives this milestone originally delivered (`Exoforge.TimeWindow`,
   > `schedule_timeline/1`, `calendar_view/1`, the schedule subtab, and `CombatDemoController`) were
-  > **removed** in the simplification pass — see M25 below. The scaffolded `liveops` plugin template
-  > that outlived them was removed with the DX pass (see `DX.md`).
+  > **removed** in the simplification pass — see M25. The scaffolded `liveops` plugin template that
+  > outlived them was removed with the DX pass (see `DX.md`).
 
----
+- [x] **M23: SQLite Local Mode**: delivered as `Exoforge.Std.Database.Adapters.Sqlite` plus the
+  `:sqlite` driver, so an offline or single-node game needs no PostgreSQL daemon. Listed for a long
+  time as a future plugin; it belongs in the standard database plugin instead.
+- [x] **M24: Plugin Tooling DX** ([`DX.md`](DX.md)): a DevEx pass over plugin creation, upload and
+  management — `push` no longer uploads the previous binary after a failed build, the Action Sandbox
+  reads its catalog from the live export instead of a stale hardcoded one, plugin logs became
+  reachable, and the CLI gained per-subcommand help, `--json` and actionable errors.
+- [x] **M25: LiveOps Visual Flow & Rules Engine** *(withdrawn)*: the LiveOps surface (time windows,
+  schedule timeline, calendar view) was **removed** in the simplification pass — it was speculative
+  for a platform whose game rules belong in the game. Recorded as a decision, not as work to do.
 
 ## 3. Ponytail Architectural Simplification & Polish Opportunities
 
@@ -73,25 +92,17 @@ Following the **Ponytail** engineering doctrine (deletion over addition, standar
 
 ---
 
-## 4. Post-MVP Growth Opportunities (Studio & Engine Expansion)
+## 4. Future Work (not yet numbered)
 
-Future modular extensions to be built as plugins on top of the completed MVP kernel:
+Listed by name. Numbering speculative work is what produced the duplicate and mis-stated entries this
+ledger used to carry; number it when it starts.
 
-- [x] **M23: SQLite Local Mode** *(shipped)*
-  - Delivered as `Exoforge.Std.Database.Adapters.Sqlite` plus the `:sqlite` driver, so an offline or
-    single-node game needs no PostgreSQL daemon. This was listed as a future plugin; it is part of
-    the standard database plugin instead.
-- [ ] **M24: Unreal Engine SDK (`ExoforgeUE`)**
-  - Native C++ client plugin for Unreal Engine 5 utilizing the same framed WebSocket protocol and code generation pipeline.
-- [x] **M25: LiveOps Visual Flow & Rules Engine** *(withdrawn)*
-  - The LiveOps surface (time windows, schedule timeline, calendar view) was **removed** in the
-    simplification pass: it was speculative for a plugin platform whose game rules belong in the
-    game, not in the backend. Kept here as a record of the decision, not as work to do. A game that
-    wants scheduled content can express it as a plugin.
-- [ ] **M26: Clustered Matchmaking & Lobby Plugin**
-  - Authoritative matchmaking service plugin using Horde distributed state to group players into game sessions based on MMR and latency.
-
----
+- [ ] **Unreal Engine SDK (`ExoforgeUE`)**
+  - Native C++ client plugin for Unreal Engine 5 using the same framed WebSocket protocol and code
+    generation pipeline.
+- [ ] **Clustered Matchmaking & Lobby Plugin**
+  - Authoritative matchmaking service plugin using Horde distributed state to group players into game
+    sessions based on MMR and latency.
 
 ## 5. Current Milestone: M27 — Self-Contained Unity SDK & Runtime Hardening
 
