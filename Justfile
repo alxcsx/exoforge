@@ -41,6 +41,12 @@ clean-build:
 	MSBUILDDISABLENODEREUSE=1 dotnet build "$work/sdk/csharp/Exoforge.CLI" --nologo -v q
 	echo "[clean-build] building a plugin"
 	MSBUILDDISABLENODEREUSE=1 dotnet run --project "$work/sdk/csharp/Exoforge.CLI" -- plugin build snake_leaderboard --dir "$work/sdk/unity/sample_unity/Exoforge"
+	# Every runtime the kernel can host, not just the one. This path was only reachable through
+	# recipes needing Docker or a live server, so it rotted: the sample's build.sh still looked for
+	# the manifest generator where it lived before M29, and took build-wasm down with it.
+	echo "[clean-build] building a WASM plugin"
+	"$work/plugins_csharp/sample_wasm/build.sh"
+	test -f "$work/plugins_csharp/sample_wasm/sample_wasm.wasm"
 	test -f "$work/sdk/unity/sample_unity/Exoforge/plugins/snake_leaderboard/manifest.exs"
 	echo "[clean-build] OK: the tree builds from a clean checkout"
 
