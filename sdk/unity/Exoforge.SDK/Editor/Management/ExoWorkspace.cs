@@ -157,9 +157,13 @@ public class ExoWorkspace
         };
 
         var ws = new ExoWorkspace(fullRoot, config);
+
+        // Create the workspace root before writing into it. On a new project nothing exists yet, and
+        // Save would fail with "Could not find a part of the path .../exoforge.json" — the sample
+        // project hid this because its Exoforge/ folder is committed.
+        Directory.CreateDirectory(fullRoot);
         ws.Save();
 
-        // Ensure folders exist
         Directory.CreateDirectory(ws.PluginsPath);
         string genDir = Path.GetDirectoryName(ws.GeneratedPath)!;
         if (!string.IsNullOrEmpty(genDir))
