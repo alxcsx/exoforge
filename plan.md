@@ -19,6 +19,9 @@
   codegen and deploy are pure C# (`netstandard2.1`).
 - **The Unity package is the unit of distribution.** It ships into projects with no Exoforge checkout
   anywhere near them, so it must work exactly as it is shipped. See M27.
+- **No engine SDK owns engine-agnostic code.** The C# client and the plugin tooling belong to the
+  dotnet side; each engine ships them as a compiled assembly. Adding an engine adds a bucket that
+  ships those libraries, not one that reimplements them. See M29 and §9.
 
 ```
 database ──▶ auth ──▶ player_data
@@ -101,7 +104,7 @@ Running `just clean-room-sdk` for the first time found and fixed `ExoWorkspace.I
 
 ---
 
-## 6. M28 — SDK Runtime Hardening
+## 6. M28 — SDK Runtime Hardening ✅
 
 > Registered in [`Agents.MD`](Agents.MD) §0 as the current task. Each item says what proves it
 > finished.
@@ -187,9 +190,7 @@ it), then 2.4, then 2.3 — which gates reconnect.
 
 ### Release work (not code)
 
-- [ ] **Publish `Exoforge.Plugin.SDK`.** A scaffolded plugin references it and the build fails with
-      `NU1101`. The code path is proven — a local feed makes `just clean-room-sdk` pass — but nothing
-      is published, so a consumer can scaffold but not build. `dotnet pack sdk/csharp/Exoforge.Plugin.SDK`.
+Moved to §8: it is the only thing left, and it is a release step rather than code.
 
 ### How this is verified
 
@@ -222,3 +223,56 @@ generated client avoids C# 10+ features — assert it rather than assume it.
 
 - The resource-table primary-key bug ([`DX.md`](DX.md) item 22) is a kernel/database issue.
 - No new runtime dependency, and no test framework beyond the two above.
+## 7. M29 — Engine-Agnostic C# Core ✅
+
+**Done.** The rule it establishes: **the C# client and the plugin tooling are engine-agnostic, so no
+engine SDK owns them.** Each engine ships them as a compiled assembly.
+
+| Bucket | Holds | Where |
+| :--- | :--- | :--- |
+| **Exo** | deploy + manage, language-agnostic | `sdk/csharp/Exoforge.CLI` — thin, no build logic of its own |
+| **dotnetSDK** | plugin authoring, manifest gen, build, codegen, the C# client | `Exoforge.Plugin.SDK`, `Exoforge.Client`, `Exoforge.Management` (+ `Tools~/ManifestGen`) |
+| **unitySDK** | Unity runtime wrappers + editor | `com.exoforge.sdk` — `Runtime/`, `Editor/`, and `*/Plugins/*.dll` built by `just build-unity-sdk` |
+
+The Unity package now contains **only Unity-specific code**. `Runtime/Plugins/Exoforge.Client.dll` and
+`Editor/Plugins/Exoforge.Management.dll` are `netstandard2.1` assemblies built from the dotnet
+projects; `pack-unity` and `clean-build` build them. Binaries rather than committed copies, because a
+checked-in DLL goes stale the same way a synced source file does.
+
+**Why this shape:** the next engine (Unreal, Godot) needs the client and the tooling, not a second
+implementation of them. Stub generation appears in both buckets deliberately — one generator, two
+front ends — and must stay conservative so its output compiles on Unity's C# version.
+
+**Found while doing it:** the repo's generated client was being compiled into `Exoforge.Client`, so
+shipping that library made every consumer's own generated client ambiguous. It is a consumer artifact
+and now lives with the tests.
+
+---
+
+---
+
+## 8. Next: Publish `Exoforge.Plugin.SDK`
+
+The only open item in the SDK work, and it is release work, not code.
+
+A scaffolded plugin references `Exoforge.Plugin.SDK` and the build fails with
+`NU1101: Unable to find package Exoforge.Plugin.SDK`. The code path is proven — a local NuGet feed
+makes `just clean-room-sdk` pass end to end — but nothing is on a feed, so a consumer can scaffold a
+plugin and cannot build it.
+
+`dotnet pack sdk/csharp/Exoforge.Plugin.SDK` already produces the package.
+
+---
+
+## 9. Naming
+
+Three buckets, one rule: **no engine SDK owns engine-agnostic code.**
+
+| Bucket | Is | Holds |
+| :--- | :--- | :--- |
+| **Exo** | language-agnostic deploy & management | the CLI. Deploys C#, Elixir and WASM alike; carries no build logic of its own |
+| **dotnetSDK** | C#-specific | plugin authoring (`Exoforge.Plugin.SDK`), manifest gen, build and codegen tooling, the C# client |
+| **unitySDK** | Unity-specific | the UPM package: Unity runtime wrappers, editor tooling, and the dotnetSDK assemblies as binaries |
+
+Adding an engine means adding a fourth bucket that ships the same two libraries — not a fourth
+implementation of them.

@@ -6,39 +6,28 @@
 
 ---
 
-## 0. Current Milestone: M28 — SDK Runtime Hardening
+## 0. Current Task: Publish `Exoforge.Plugin.SDK`
 
-**See [`plan.md`](plan.md) §6.** The Unity + C# SDK worked, but four correctness bugs and six DX
-problems made it behave badly the moment anything went wrong.
+**See [`plan.md`](plan.md) §8.** The SDK work is done; this is the one open item and it is release
+work, not code.
 
-**Every code item is done**, each with a test that fails when the fix is reverted:
+A scaffolded plugin references `Exoforge.Plugin.SDK` and the build fails with
+`NU1101: Unable to find package Exoforge.Plugin.SDK`. The code path is proven — a local NuGet feed
+makes `just clean-room-sdk` pass end to end — but nothing is on a feed, so a consumer can scaffold a
+plugin and cannot build it. `dotnet pack sdk/csharp/Exoforge.Plugin.SDK` produces it.
 
-| | |
-| :--- | :--- |
-| 2.1 | a failed connection was permanent — `_pendingConnect` was never cleared |
-| 2.2 | a destroyed behaviour stayed reachable as `Instance` |
-| 2.3 | reconnecting could leave two readers on one socket and report two disconnects |
-| 2.4 | a display name survived reconnecting to a different account |
-| 3.1–3.3 | the HTTP port is configured, silent failures surface, timeouts are settable |
-| 3.4 | reconnect with exponential backoff, from a failed first connect too |
-| 3.5, 4.1, 4.2 | one disk write per session; `AuthToken` is not publicly settable; `ExoforgeSDK.Client` no longer hands back a dead client |
+**Recently completed:**
 
-Three items turned out to be **review corrections** rather than defects (3.6, 4.1 partly, 4.3) —
-recorded in `plan.md` rather than acted on. `ExoTokenStore.Scopes` is never read; there is no extra
-`SendActionAsync` overload; and `ExoforgeBehaviour.Client` has legitimate users.
+- **M29 — Engine-Agnostic C# Core** (`plan.md` §7): the C# client and the plugin tooling moved out of
+  the Unity package. Engine SDKs ship them as binaries, so the package contains only Unity-specific
+  code and the next engine reuses the libraries instead of reimplementing them.
+- **M28 — SDK Runtime Hardening** (`plan.md` §6): four correctness bugs and six DX problems, each with
+  a test that fails when the fix is reverted. Three turned out to be review corrections rather than
+  defects, recorded rather than acted on.
 
-**One item remains, and it is release work, not code:** publish `Exoforge.Plugin.SDK`. A scaffolded
-plugin references it and the build fails with `NU1101`. The code path is proven — a local feed makes
-`just clean-room-sdk` pass — but nothing is on a feed, so a consumer can scaffold but not build.
-
-**Test infrastructure built during this milestone:**
-
-- `Exoforge.Client.Tests` — `StubWebSocketServer` + `TransportTests` + `BackoffTests`. The client and
-  transport are Unity-free, so they are pinned here.
-- `Assets/Tests/PlayMode` — `just sample-play-tests`. `ExoforgeBehaviour` is Unity-only and `Awake`
-  does not run in the editor, so its lifecycle is only observable in play mode.
-
----
+**Naming** (`plan.md` §9): **Exo** is the language-agnostic deploy/manage CLI; **dotnetSDK** is the
+C# plugin authoring, build and codegen side; **unitySDK** is the Unity package. The rule between them:
+no engine SDK owns engine-agnostic code.
 
 ## 1. Architectural Doctrine: The Rule, and Its One Exception
 
