@@ -279,6 +279,11 @@ Two tests now hold the line: the package must not contain engine-agnostic source
 - `_unity-reset` holds the stop-Unity-and-clear-the-lockfile dance that four recipes copied.
 - `build-unity-sdk` takes a root, so `clean-build` reuses it instead of re-implementing its commands.
 - `pack-unity` computes its self-containment offenders once.
+- `clean-build` builds a plugin for **every** runtime, not just native. `build-wasm` was only
+  reachable through recipes needing Docker or a live server, so it rotted: `sample_wasm/build.sh`
+  kept looking for the manifest generator where it lived before M29, and took `test-e2e`, `prod`,
+  `release`, `docker-build` and `compose-up` down with it. The check that exists to catch exactly
+  this covered one runtime out of three. Elixir is covered by `just test`.
 
 ### Considered and deliberately not done
 
