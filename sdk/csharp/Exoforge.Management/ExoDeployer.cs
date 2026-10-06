@@ -461,7 +461,7 @@ public class ExoDeployer
         {
             pluginType = "wasm";
             Emit("[build] bash build.sh");
-            RunProcess("bash", $"\"{buildSh}\"", pluginDir, Emit);
+            RunProcess("bash", $"\"{RelativeTo(pluginDir, buildSh)}\"", pluginDir, Emit);
             binaryPath = FindFile(pluginDir, cleanName + ".wasm")
                 ?? throw new FileNotFoundException($"build.sh did not produce a .wasm for '{cleanName}'.");
         }
@@ -492,7 +492,7 @@ public class ExoDeployer
     {
         string targetRid = string.IsNullOrWhiteSpace(rid) ? HostRuntimeIdentifier() : rid!;
         emit($"[build] dotnet publish -c Release -r {targetRid}");
-        RunProcess(dotnetPath, $"publish \"{csproj}\" -c Release -r {targetRid}", pluginDir, emit);
+        RunProcess(dotnetPath, $"publish \"{RelativeTo(pluginDir, csproj)}\" -c Release -r {targetRid}", pluginDir, emit);
 
         // The project may sit at the plugin root or under src/; find its bin/Release output.
         string? binRelease = Directory.GetDirectories(pluginDir, "Release", SearchOption.AllDirectories)
@@ -518,10 +518,18 @@ public class ExoDeployer
 
         string manifestGen = FindManifestGen(pluginDir);
         string manifest = Path.Combine(pluginDir, "manifest.exs");
+
+        // The child process runs with pluginDir as its working directory, so every path it is given
+        // must be expressed relative to pluginDir. Unity reports paths that look absolute but are
+        // not (its Mono treats a bare relative path as rooted, so Path.GetFullPath is a no-op), and
+        // a path relative to any other base then resolves against the wrong directory in the child
+        // and fails with "The provided file path does not exist".
         emit($"[build] manifest -> {manifest}");
         RunProcess(
             dotnetPath,
-            $"run --project \"{manifestGen}\" -- \"{dll}\" \"{manifest}\" --type native --build {buildStamp}",
+            $"run --project \"{RelativeTo(pluginDir, manifestGen)}\" -- " +
+            $"\"{RelativeTo(pluginDir, dll)}\" \"{RelativeTo(pluginDir, manifest)}\" " +
+            $"--type native --build {buildStamp}",
             pluginDir,
             emit);
 
@@ -634,48 +642,77 @@ public class ExoDeployer
     private static string FindManifestGen(string startDir)
     {
         if (Environment.GetEnvironmentVariable(ManifestGenEnvVar) is { Length: > 0 } configured &&
-            Directory.Exists(configured))
+            IsManifestGen(configured))
         {
             return configured;
         }
 
         const string relative = "Tools~/ManifestGen";
-
+        var tried = new List<string>();
         string? dir = startDir;
 
         for (int i = 0; i < 12 && dir != null; i++)
         {
-            foreach (string candidate in new[]
+            var candidates = new List<string>
             {
-                Path.Combine(dir, "Editor", "Management", relative),   // SDK package layout
+                Path.Combine(dir, "Editor", "Management", relative),              // SDK package layout
                 Path.Combine(dir, relative),
-                Path.Combine(dir, "sdk", "csharp", "Exoforge.Management", relative)
-            })
-            {
-                if (Directory.Exists(candidate)) return candidate;
-            }
+                Path.Combine(dir, "sdk", "csharp", "Exoforge.Management", relative),
+                Path.Combine(dir, "Packages", "com.exoforge.sdk", "Editor", "Management", relative)
+            };
 
-            // A Unity project: the SDK is either a local package or in the package cache.
-            string packages = Path.Combine(dir, "Packages", "com.exoforge.sdk", "Editor", "Management", relative);
-            if (Directory.Exists(packages)) return packages;
-
+            // A Unity project may keep the SDK in the package cache instead of Packages/.
             string cache = Path.Combine(dir, "Library", "PackageCache");
+
             if (Directory.Exists(cache))
             {
                 foreach (string package in Directory.GetDirectories(cache, "com.exoforge.sdk*"))
                 {
-                    string candidate = Path.Combine(package, "Editor", "Management", relative);
-                    if (Directory.Exists(candidate)) return candidate;
+                    candidates.Add(Path.Combine(package, "Editor", "Management", relative));
                 }
+            }
+
+            foreach (string candidate in candidates)
+            {
+                if (IsManifestGen(candidate)) return candidate;
+                tried.Add(candidate);
             }
 
             dir = Directory.GetParent(dir)?.FullName;
         }
 
         throw new DirectoryNotFoundException(
-            "Could not locate the Exoforge manifest generator (Editor/Management/Tools~/ManifestGen). " +
-            "It ships with the SDK; if this workspace is unusual, set " +
-            $"{ManifestGenEnvVar}=/path/to/ManifestGen to point at it.");
+            "Could not locate the Exoforge manifest generator. It ships with the SDK at " +
+            $"Editor/Management/{relative}, and native builds need it to produce manifest.exs. " +
+            $"Set {ManifestGenEnvVar}=/path/to/ManifestGen to point at it directly.\n" +
+            "Looked in:\n  " + string.Join("\n  ", tried));
+    }
+
+    /// <summary>
+    /// True when <paramref name="dir"/> really is the generator. Checks for its project file rather
+    /// than the directory: Unity can briefly expose package paths that do not resolve, and a
+    /// directory check accepts those, which then fails later inside `dotnet` with a message that
+    /// says nothing about why.
+    /// </summary>
+    private static bool IsManifestGen(string dir) =>
+        !string.IsNullOrEmpty(dir) && File.Exists(Path.Combine(dir, "ManifestGen.csproj"));
+
+    /// <summary>
+    /// Re-expresses <paramref name="path"/> relative to <paramref name="baseDir"/>.
+    ///
+    /// Purely lexical on purpose: when Unity hands us paths that are relative to the same base
+    /// rather than absolute, their relationship is still correct, and this preserves it.
+    /// </summary>
+    private static string RelativeTo(string baseDir, string path)
+    {
+        try
+        {
+            return Path.GetRelativePath(baseDir, path);
+        }
+        catch (ArgumentException)
+        {
+            return path;
+        }
     }
 
     /// <summary>How long a single build step may run before it is killed.</summary>

@@ -344,26 +344,60 @@ public static class ExoforgeEditorConfig
 #endif
     }
 
-    /// <summary>Resolves the absolute path to the `/exoforge` workspace folder.</summary>
-    public static string GetAbsoluteWorkspacePath()
+    /// <summary>
+    /// The Unity project root, always absolute.
+    ///
+    /// `Application.dataPath` is documented as absolute but is relative in some batchmode
+    /// launches, and when it is, `Path.GetFullPath` keeps it relative (it resolves against the
+    /// current directory, which is relative too). Every path derived from it then depends on the
+    /// process's working directory: `Directory.Exists` checks pass against one base and the
+    /// `dotnet` subprocess resolves against another, so a plugin build fails with
+    /// "The provided file path does not exist".
+    ///
+    /// This assembly's own location is always absolute, so it is the reliable anchor.
+    /// </summary>
+    private static string ProjectRoot
     {
+        get
+        {
 #if UNITY_EDITOR
-        string projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
-        return Path.GetFullPath(Path.Combine(projectRoot, WorkspacePath));
+            // Candidate project roots, best first. <project>/Library/ScriptAssemblies/<assembly>.dll
+            // and Application.dataPath are both "<project>/...", so their parents are the root.
+            string assemblyDir = Path.GetDirectoryName(typeof(ExoforgeEditorConfig).Assembly.Location) ?? "";
+
+            var candidates = new[]
+            {
+                Path.Combine(assemblyDir, "..", ".."),
+                Path.Combine(Application.dataPath, ".."),
+            };
+
+            // Validate by existence rather than by Path.IsPathRooted: Unity's Mono reports a bare
+            // relative path as rooted, so rootedness says nothing, and Path.GetFullPath then returns
+            // the path unchanged. Whichever candidate actually contains this project's Assets folder
+            // is the one whose paths will resolve consistently.
+            foreach (string candidate in candidates)
+            {
+                string root = Path.GetFullPath(candidate);
+
+                if (Directory.Exists(Path.Combine(root, "Assets")))
+                {
+                    return root;
+                }
+            }
+
+            return Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
 #else
-        return Path.GetFullPath(WorkspacePath);
+            return Path.GetFullPath(".");
 #endif
+        }
     }
 
+    /// <summary>Resolves the absolute path to the `/exoforge` workspace folder.</summary>
+    public static string GetAbsoluteWorkspacePath() =>
+        Path.GetFullPath(Path.Combine(ProjectRoot, WorkspacePath));
+
     /// <summary>Resolves the absolute path to the generated C# client file.</summary>
-    public static string GetAbsoluteGeneratedScriptPath()
-    {
-#if UNITY_EDITOR
-        string projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
-        return Path.GetFullPath(Path.Combine(projectRoot, GeneratedScriptPath));
-#else
-        return Path.GetFullPath(GeneratedScriptPath);
-#endif
-    }
+    public static string GetAbsoluteGeneratedScriptPath() =>
+        Path.GetFullPath(Path.Combine(ProjectRoot, GeneratedScriptPath));
 }
 }
