@@ -70,3 +70,6 @@ sdk/unity/unity_sample/
 # === Unity-generated IDE project files (regenerated on import) ===
 sdk/unity/sample_unity/*.csproj
 sdk/unity/sample_unity/*.slnx
+
+# Unity/Mono crash dumps.
+sdk/unity/sample_unity/mono_crash.*.json

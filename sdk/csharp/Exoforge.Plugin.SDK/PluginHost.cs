@@ -44,6 +44,7 @@ public static class PluginHost
 {
     private static readonly object WriteLock = new();
     private static Stream? _stdout;
+    private static TextReader? _stdin;
     private static long _nextHostCallId;
     private static object? _instance;
     private static MethodInfo? _eventHandler;
@@ -85,6 +86,18 @@ public static class PluginHost
     public static int RunInstance(object instance)
     {
         _stdout = Console.OpenStandardOutput();
+        RunInstance(instance, new StreamReader(Console.OpenStandardInput(), Encoding.UTF8));
+        return 0;
+    }
+
+    /// <summary>
+    /// The frame loop, reading from <paramref name="reader"/>. One reader serves the whole process:
+    /// host calls read through the same one, because two readers over one stdin each buffer ahead
+    /// and lose whatever the other buffered.
+    /// </summary>
+    internal static void RunInstance(object instance, TextReader reader)
+    {
+        _stdin = reader;
         HostBridge.UseTransport(new NativeTransport());
 
         _instance = instance;
@@ -93,10 +106,8 @@ public static class PluginHost
         // Wire [Inject] dependencies (including static properties on plain plugin classes).
         HostPluginContext.Wire(instance, new HostPluginContext(ResolvePluginId(pluginType)));
 
-        var actions = BuildActionTable(pluginType);
         _eventHandler = FindEventHandler(pluginType);
-
-        using var reader = new StreamReader(Console.OpenStandardInput(), Encoding.UTF8);
+        var actions = BuildActionTable(pluginType);
 
         while (reader.ReadLine() is { } line)
         {
@@ -114,8 +125,6 @@ public static class PluginHost
                 Dispatch(line, instance, actions);
             }
         }
-
-        return 0;
     }
 
     /// <summary>
@@ -393,7 +402,8 @@ public static class PluginHost
         long id = ++_nextHostCallId;
         Write($"{{\"type\":\"host_call\",\"id\":{id},\"op\":{JsonEncode(op)},\"args\":{argsJson}}}");
 
-        using var reader = new StreamReader(Console.OpenStandardInput(), Encoding.UTF8);
+        TextReader? reader = _stdin;
+        if (reader == null) return null;
 
         while (reader.ReadLine() is { } line)
         {
