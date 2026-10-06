@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="8" result="Passed" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-06 19:53:13Z" end-time="2026-10-06 19:53:14Z" duration="0.8228779">
+  <test-suite type="TestSuite" id="1016" name="sample_unity" fullname="sample_unity" runstate="Runnable" testcasecount="8" result="Passed" start-time="2026-10-06 19:53:13Z" end-time="2026-10-06 19:53:14Z" duration="0.822878" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="PlayMode" />
+    </properties>
+    <test-suite type="Assembly" id="1028" name="Exoforge.Sample.Tests.dll" fullname="/Users/alexcs/projects/exoforge/sdk/unity/sample_unity/Library/ScriptAssemblies/Exoforge.Sample.Tests.dll" runstate="Runnable" testcasecount="8" result="Passed" start-time="2026-10-06 19:53:13Z" end-time="2026-10-06 19:53:14Z" duration="0.818932" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="3488" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="PlayMode" />
+        <property name="EditorOnly" value="False" />
+      </properties>
+      <test-suite type="TestFixture" id="1017" name="LiveClusterTests" fullname="LiveClusterTests" classname="LiveClusterTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-10-06 19:53:13Z" end-time="2026-10-06 19:53:13Z" duration="0.278191" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="1018" name="A_player_signs_in_and_uses_the_shared_leaderboard" fullname="LiveClusterTests.A_player_signs_in_and_uses_the_shared_leaderboard" methodname="A_player_signs_in_and_uses_the_shared_leaderboard" classname="LiveClusterTests" runstate="Runnable" seed="742667477" result="Passed" start-time="2026-10-06 19:53:13Z" end-time="2026-10-06 19:53:13Z" duration="0.192861" asserts="0">
+          <properties>
+            <property name="_JOINTYPE" value="UnityCombinatorial" />
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[[Exoforge] Connected and authenticated as developer (local)
+[Exoforge] Connected and authenticated as developer (local)
+]]></output>
+        </test-case>
+        <test-case id="1019" name="A_run_that_ends_reaches_the_board_through_the_bridge" fullname="LiveClusterTests.A_run_that_ends_reaches_the_board_through_the_bridge" methodname="A_run_that_ends_reaches_the_board_through_the_bridge" classname="LiveClusterTests" runstate="Runnable" seed="638850175" result="Passed" start-time="2026-10-06 19:53:13Z" end-time="2026-10-06 19:53:13Z" duration="0.078987" asserts="0">
+          <properties>
+            <property name="_JOINTYPE" value="UnityCombinatorial" />
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[
+IgnoreFailingMessages:true
+
+IgnoreFailingMessages:true
+[Exoforge] Connected and authenticated as developer (local)
+[Exoforge] Connected and authenticated as developer (local)
+[Snake] signed in as dev_2eb293c7c2e6d0a1beb51100694b9cf2
+[Snake] signed in as dev_2eb293c7c2e6d0a1beb51100694b9cf2
+[Snake] player ready: BridgeTester (dev_2eb293c7c2e6d0a1beb51100694b9cf2)
+[Snake] player ready: BridgeTester (dev_2eb293c7c2e6d0a1beb51100694b9cf2)
+[Snake] Match started! Eat apples and avoid walls.
+[Snake] Match started! Eat apples and avoid walls.
+[Snake] Match started! Eat apples and avoid walls.
+[Snake] Match started! Eat apples and avoid walls.
+[Snake] Game Over: Wall Collision! Final Score: 0
+[Snake] Game Over: Wall Collision! Final Score: 0
+
+IgnoreFailingMessages:false
+
+IgnoreFailingMessages:false
+]]></output>
+        </test-case>
+      </test-suite>
+      <test-suite type="TestFixture" id="1020" name="SceneTests" fullname="SceneTests" classname="SceneTests" runstate="Runnable" testcasecount="1" result="Passed" start-time="2026-10-06 19:53:13Z" end-time="2026-10-06 19:53:13Z" duration="0.018011" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="1021" name="The_scene_plays_and_ends_a_run" fullname="SceneTests.The_scene_plays_and_ends_a_run" methodname="The_scene_plays_and_ends_a_run" classname="SceneTests" runstate="Runnable" seed="33307" result="Passed" start-time="2026-10-06 19:53:13Z" end-time="2026-10-06 19:53:13Z" duration="0.012987" asserts="0">
+          <properties>
+            <property name="_JOINTYPE" value="UnityCombinatorial" />
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[
+IgnoreFailingMessages:true
+
+IgnoreFailingMessages:true
+[Snake] Match started! Eat apples and avoid walls.
+[Snake] Match started! Eat apples and avoid walls.
+[Snake] Match started! Eat apples and avoid walls.
+[Snake] Match started! Eat apples and avoid walls.
+[Snake] signed in as dev_2eb293c7c2e6d0a1beb51100694b9cf2
+[Snake] signed in as dev_2eb293c7c2e6d0a1beb51100694b9cf2
+[Snake] player ready: BridgeTester (dev_2eb293c7c2e6d0a1beb51100694b9cf2)
+[Snake] player ready: BridgeTester (dev_2eb293c7c2e6d0a1beb51100694b9cf2)
+[Snake] Game Over: Wall Collision! Final Score: 0
+[Snake] Game Over: Wall Collision! Final Score: 0
+[Exoforge] Connection error: WebSocket is not connected.
+[Exoforge] Connection error: WebSocket is not connected.
+
+IgnoreFailingMessages:false
+
+IgnoreFailingMessages:false
+]]></output>
+        </test-case>
+      </test-suite>
+      <test-suite type="TestFixture" id="1022" name="SessionLifecycleTests" fullname="SessionLifecycleTests" classname="SessionLifecycleTests" runstate="Runnable" testcasecount="5" result="Passed" start-time="2026-10-06 19:53:13Z" end-time="2026-10-06 19:53:14Z" duration="0.521846" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <output><![CDATA[[Snake] leaderboard unavailable: Disconnected from server.
+[Snake] leaderboard unavailable: Disconnected from server.
+]]></output>
+        <test-case id="1024" name="A_failed_connect_starts_retrying_with_backoff" fullname="SessionLifecycleTests.A_failed_connect_starts_retrying_with_backoff" methodname="A_failed_connect_starts_retrying_with_backoff" classname="SessionLifecycleTests" runstate="Runnable" seed="808923716" result="Passed" start-time="2026-10-06 19:53:13Z" end-time="2026-10-06 19:53:14Z" duration="0.506320" asserts="0">
+          <properties>
+            <property name="_JOINTYPE" value="UnityCombinatorial" />
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[[Exoforge] Connection error: Unable to connect to the remote server
+[Exoforge] Connection error: Unable to connect to the remote server
+
+IgnoreFailingMessages:true
+
+IgnoreFailingMessages:true
+
+IgnoreFailingMessages:false
+
+IgnoreFailingMessages:false
+]]></output>
+        </test-case>
+        <test-case id="1023" name="A_failed_connection_can_be_retried" fullname="SessionLifecycleTests.A_failed_connection_can_be_retried" methodname="A_failed_connection_can_be_retried" classname="SessionLifecycleTests" runstate="Runnable" seed="42836299" result="Passed" start-time="2026-10-06 19:53:14Z" end-time="2026-10-06 19:53:14Z" duration="0.003104" asserts="0">
+          <properties>
+            <property name="_JOINTYPE" value="UnityCombinatorial" />
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[[Exoforge] Connection error: Unable to connect to the remote server
+[Exoforge] Connection error: Unable to connect to the remote server
+[Exoforge] Connection error: Unable to connect to the remote server
+[Exoforge] Connection error: Unable to connect to the remote server
+]]></output>
+        </test-case>
+        <test-case id="1026" name="A_name_does_not_survive_a_different_account" fullname="SessionLifecycleTests.A_name_does_not_survive_a_different_account" methodname="A_name_does_not_survive_a_different_account" classname="SessionLifecycleTests" runstate="Runnable" seed="1566431739" result="Passed" start-time="2026-10-06 19:53:14Z" end-time="2026-10-06 19:53:14Z" duration="0.003063" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1025" name="Instance_is_cleared_when_the_behaviour_is_destroyed" fullname="SessionLifecycleTests.Instance_is_cleared_when_the_behaviour_is_destroyed" methodname="Instance_is_cleared_when_the_behaviour_is_destroyed" classname="SessionLifecycleTests" runstate="Runnable" seed="438754981" result="Passed" start-time="2026-10-06 19:53:14Z" end-time="2026-10-06 19:53:14Z" duration="0.005088" asserts="0">
+          <properties>
+            <property name="_JOINTYPE" value="UnityCombinatorial" />
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[
+IgnoreFailingMessages:true
+
+IgnoreFailingMessages:true
+
+IgnoreFailingMessages:false
+
+IgnoreFailingMessages:false
+]]></output>
+        </test-case>
+        <test-case id="1027" name="Reconnecting_as_the_same_player_keeps_the_name" fullname="SessionLifecycleTests.Reconnecting_as_the_same_player_keeps_the_name" methodname="Reconnecting_as_the_same_player_keeps_the_name" classname="SessionLifecycleTests" runstate="Runnable" seed="83361800" result="Passed" start-time="2026-10-06 19:53:14Z" end-time="2026-10-06 19:53:14Z" duration="0.002563" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: /Users/alexcs/Library/Application Support/DefaultCompany/sample_unity/TestResults.xml
+Saving results to: /Users/alexcs/Library/Application Support/DefaultCompany/sample_unity/TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

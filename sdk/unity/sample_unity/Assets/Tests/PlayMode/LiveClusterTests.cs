@@ -133,7 +133,6 @@ public class LiveClusterTests
     ///   just sample-live-tests -- --testFilter A_run_that_ends_reaches_the_board_through_the_bridge
     /// </remarks>
     [UnityTest]
-    [Explicit]
     public IEnumerator A_run_that_ends_reaches_the_board_through_the_bridge()
     {
         if (!ClusterIsUp())
@@ -159,11 +158,10 @@ public class LiveClusterTests
 
         try
         {
-        // The player controller signs in on its own; give it a bounded moment rather than a long one.
-        for (int i = 0; i < 300 && !player.IsSignedIn; i++)
-        {
-            yield return null;
-        }
+        // Wall clock, not frames. Batch mode runs frames as fast as it can, so a frame count is a
+        // fraction of a second - the sign-in did complete, it just finished after the poll gave up,
+        // which read as "never signed in".
+        yield return WaitUntil(() => player.IsSignedIn, 20f, "the player controller never signed in");
 
         Assert.IsTrue(player.IsSignedIn, "the player controller never signed in");
 
@@ -191,10 +189,9 @@ public class LiveClusterTests
 
         // The bridge submits asynchronously and then reloads the board. Poll its own state, not the
         // network, so a failure reports what the sample actually did.
-        for (int i = 0; i < 600 && !board.Rows.Any(r => r.Name == "BridgeTester"); i++)
-        {
-            yield return null;
-        }
+        yield return WaitUntil(
+            () => board.Rows.Any(r => r.Name == "BridgeTester"), 20f,
+            () => $"the run never reached the board through the bridge. Status: {board.Status}");
 
         Assert.IsTrue(board.Rows.Any(r => r.Name == "BridgeTester"),
             $"the run never reached the board through the bridge. Status: {board.Status}");
@@ -235,6 +232,24 @@ public class LiveClusterTests
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// Yields until <paramref name="condition"/> holds, or the deadline passes. Wall clock, because
+    /// a frame count in batch mode is milliseconds: a poll that gives up after 300 frames gives up
+    /// almost immediately, which looks exactly like the thing it is waiting for never happening.
+    /// </summary>
+    private static IEnumerator WaitUntil(Func<bool> condition, float seconds, object failure)
+    {
+        float deadline = UnityEngine.Time.realtimeSinceStartup + seconds;
+
+        while (!condition() && UnityEngine.Time.realtimeSinceStartup < deadline)
+        {
+            yield return null;
+        }
+
+        string message = failure is Func<string> describe ? describe() : failure.ToString() ?? "";
+        Assert.IsTrue(condition(), message);
     }
 
     private static IEnumerator WaitForCompletion<T>(Task<T> task)

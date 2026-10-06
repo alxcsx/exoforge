@@ -210,6 +210,7 @@ sample-setup: _unity-reset
 sample-play-tests: _unity-reset
 	#!/usr/bin/env bash
 	set -euo pipefail
+	rm -f /tmp/exoforge-play-tests.xml
 	"{{UNITY}}" -batchmode -nographics -projectPath "$(pwd)/{{SAMPLE}}" \
 		-runTests -testPlatform PlayMode \
 		-testResults /tmp/exoforge-play-tests.xml \
