@@ -255,7 +255,43 @@ and now lives with the tests.
 
 ---
 
-## 8. Next: Publish `Exoforge.Plugin.SDK`
+## 8. M30 — Duplication and Build-Step Cleanup ✅
+
+An architecture and build-step review, with everything grep-verified before it was touched.
+
+### Architecture
+
+| Was | Is |
+| :--- | :--- |
+| three libraries multi-targeting `netstandard2.1;net10.0` — 6 compile passes where 3 ship | `netstandard2.1` only; netstandard2.1 is consumable from net10.0, so the second target bought nothing |
+| `Exoforge.Management` → `Exoforge.Plugin.SDK` | removed; every occurrence was a string in generated code |
+| `Exoforge.Client.Tests` → `Exoforge.Management` | removed; never used |
+| `Exoforge.Client` → `System.Threading.Channels` | deleted; zero uses |
+| three places configuring the connection — `exoforge.json`, `ExoforgeEditorConfig`, `ExoTokenStore` | one: the editor resolves the active environment from the workspace |
+| `ExoforgeEditorConfig` duplicating five session members of `ExoTokenStore` | one store |
+| `GetConfiguredEnvironments` inventing local/dev/staging/production with hardcoded URLs, twice | only what the workspace declares |
+
+Two tests now hold the line: the package must not contain engine-agnostic sources (M29), and
+`ExoforgeEditorConfig` must not shadow the workspace or the token store (M30).
+
+### Build steps
+
+- `_unity-reset` holds the stop-Unity-and-clear-the-lockfile dance that four recipes copied.
+- `build-unity-sdk` takes a root, so `clean-build` reuses it instead of re-implementing its commands.
+- `pack-unity` computes its self-containment offenders once.
+
+### Considered and deliberately not done
+
+- **The `IsExternalInit` polyfill stays in three places.** Each assembly needs its own — Unity
+  compiles only the `.cs` files physically inside an asmdef's folder, so a link is not available —
+  and it is six lines. Unifying it would mean the dotnet project reading from the package directory,
+  which is the inversion M29 removed.
+- **`test-sdk` stays three `dotnet test` calls.** A solution file would make it one, and save a
+  second of startup.
+
+---
+
+## 9. Next: Publish `Exoforge.Plugin.SDK`
 
 The only open item in the SDK work, and it is release work, not code.
 
@@ -268,7 +304,7 @@ plugin and cannot build it.
 
 ---
 
-## 9. Naming
+## 10. Naming
 
 Three buckets, one rule: **no engine SDK owns engine-agnostic code.**
 
