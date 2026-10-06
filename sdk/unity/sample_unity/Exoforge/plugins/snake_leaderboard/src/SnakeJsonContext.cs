@@ -7,6 +7,7 @@ namespace Exoforge.Plugins.SnakeLeaderboard;
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
 [JsonSerializable(typeof(SnakeScoreRecord))]
 [JsonSerializable(typeof(SnakeLeaderboardEntry))]
+[JsonSerializable(typeof(SnakeScoreSubmitted))]
 internal partial class SnakeJsonContext : JsonSerializerContext
 {
 }

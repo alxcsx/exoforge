@@ -507,27 +507,38 @@ public class ExoDeployer
         emit($"[build] dotnet publish -c Release -r {targetRid}");
         RunProcess(dotnetPath, $"publish \"{RelativeTo(pluginDir, csproj)}\" -c Release -r {targetRid}", pluginDir, emit);
 
-        // The project may sit at the plugin root or under src/; find its bin/Release output.
-        string? binRelease = Directory.GetDirectories(pluginDir, "Release", SearchOption.AllDirectories)
-            .FirstOrDefault(dir => string.Equals(Path.GetFileName(Path.GetDirectoryName(dir) ?? ""), "bin", StringComparison.OrdinalIgnoreCase));
+        // The project may sit at the plugin root or under src/, and a plugin that has moved between
+        // the two leaves both trees behind. Search every Release tree and take the newest match:
+        // picking a tree first and searching inside it means one stale directory wins for all of its
+        // contents, and the manifest is then generated from code that is no longer there - silently,
+        // because a manifest is still produced and still looks right.
+        string[] releaseTrees = Directory.GetDirectories(pluginDir, "Release", SearchOption.AllDirectories)
+            .Where(dir => string.Equals(Path.GetFileName(Path.GetDirectoryName(dir) ?? ""), "bin", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
 
-        if (binRelease == null)
+        if (releaseTrees.Length == 0)
         {
             throw new DirectoryNotFoundException($"Build output (bin/Release) not found under {pluginDir}.");
         }
 
         // Stage the published native binary where the runner and deployer expect it.
-        string published = Directory.GetFiles(binRelease, cleanName + "*", SearchOption.AllDirectories)
-            .FirstOrDefault(path => IsPublishedBinary(path, cleanName))
-            ?? throw new FileNotFoundException($"Published native binary not found for '{cleanName}' under {binRelease}.");
+        string published = releaseTrees
+            .SelectMany(tree => Directory.GetFiles(tree, cleanName + "*", SearchOption.AllDirectories))
+            .Where(path => IsPublishedBinary(path, cleanName))
+            .OrderByDescending(File.GetLastWriteTimeUtc)
+            .FirstOrDefault()
+            ?? throw new FileNotFoundException($"Published native binary not found for '{cleanName}' under {pluginDir}.");
 
         string staged = Path.Combine(pluginDir, cleanName);
         File.Copy(published, staged, overwrite: true);
         MakeExecutable(staged);
         emit($"[build] staged native binary -> {staged}");
 
-        string dll = Directory.GetFiles(binRelease, cleanName + ".dll", SearchOption.AllDirectories).FirstOrDefault()
-            ?? throw new FileNotFoundException($"Compiled assembly not found for '{cleanName}' under {binRelease}.");
+        string dll = releaseTrees
+            .SelectMany(tree => Directory.GetFiles(tree, cleanName + ".dll", SearchOption.AllDirectories))
+            .OrderByDescending(File.GetLastWriteTimeUtc)
+            .FirstOrDefault()
+            ?? throw new FileNotFoundException($"Compiled assembly not found for '{cleanName}' under {pluginDir}.");
 
         string manifestGen = FindManifestGen(manifestGenPath);
         string manifest = Path.Combine(pluginDir, "manifest.exs");

@@ -29,3 +29,13 @@ public record SnakeLeaderboardEntry
     public int SnakeLength { get; init; }
     public long UpdatedAt { get; init; }
 }
+
+// Emitted when a submission actually changes the board. Carries the name so a subscriber can show
+// it immediately; the board's own read still resolves names live, so a rename is not left stale.
+public record SnakeScoreSubmitted
+{
+    public string PlayerId { get; init; } = "";
+    public string Name { get; init; } = "";
+    public int Score { get; init; }
+    public int SnakeLength { get; init; }
+}

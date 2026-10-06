@@ -27,10 +27,9 @@ public class SnakeLeaderboardPlugin
     public static ILogger? Logger { get; set; }
 
     [ExoAction]
+    [ExoEvent("score_submitted", typeof(SnakeScoreSubmitted), Topic = "snake:leaderboard")]
     public int SubmitScore(string playerId, string name, int score, int snakeLength)
     {
-        _ = name; // accepted for wire compatibility; the live name is joined on read
-
         var existing = Database!.Get<SnakeScoreRecord>(Table, playerId);
         bool improved = existing is null || existing.Score < score;
 
@@ -44,6 +43,20 @@ public class SnakeLeaderboardPlugin
 
         Database.Put(Table, playerId, best);
         Logger?.Info($"[snake_leaderboard] {playerId} best {best.Score}");
+
+        // Only when the board actually changed. A worse run is not a leaderboard update, and
+        // broadcasting it would make every subscriber re-read for nothing.
+        if (improved)
+        {
+            HostBridge.EmitEvent("snake:leaderboard", "score_submitted", new SnakeScoreSubmitted
+            {
+                PlayerId = playerId,
+                Name = string.IsNullOrEmpty(name) ? playerId : name,
+                Score = best.Score,
+                SnakeLength = best.SnakeLength
+            });
+        }
+
         return best.Score;
     }
 
