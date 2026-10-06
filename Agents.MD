@@ -6,23 +6,28 @@
 
 ---
 
-## 0. Current Task: Plugin Tooling DX
+## 0. Current Milestone: M27 — Self-Contained Unity SDK & Runtime Hardening
 
-**See [`DX.md`](DX.md).** A DevEx review of the Unity + C# SDK covering plugin **creation, upload and
-management**, with a prioritised, checklisted list of fixes.
+**See [`plan.md`](plan.md) §5.** Four phases, checklisted: make the package self-contained, fix the
+runtime correctness bugs, then DX and API shape.
 
-The audience is a game developer in Unity who has never seen Elixir: they should be able to
-scaffold a plugin, build it, deploy it and see it working — without reading the server source and
-without opening a terminal.
+**The rule this milestone establishes:** the Unity SDK ships as a UPM tarball into projects that have
+no Exoforge checkout anywhere near them. So **no symlink may point outside the package, no path may
+be resolved by walking up out of it, and no repo layout (`sdk/csharp/...`) may appear in package
+code.** Symlinks stay a single-source-of-truth convenience *inside this repo* — `pack-unity` already
+materialises them — but must never be load-bearing.
 
-Two P0 items break the core loop and are being fixed first:
+Two things break the rule today and are fixed first:
 
-1. `exo plugin push` **uploads the previous binary and reports success when the build fails**
-   (verified against a live cluster).
-2. The Action Sandbox **opens on an action that does not exist** — six of nine seeded names are
-   wrong, and the default is one of them.
+1. **`Exoforge.Plugin.SDK` is not in the package**, so a package-only developer cannot build a
+   plugin at all; `ExoScaffolder` and `ExoDeployer` walk up out of the package looking for this
+   repo's `sdk/csharp/...` layout to find it.
+2. **A failed connection is permanent** — `ExoforgeBehaviour` never clears `_pendingConnect`, so
+   the backend being down when the game boots means the game never connects and cannot retry.
 
-Work the checklist in `DX.md` top-down and tick items off as they land.
+Work the checklist in `plan.md` §5 top-down and tick items off as they land.
+
+> Previous milestone: [`DX.md`](DX.md) — plugin creation/upload/management DX. Items 1–21 are done.
 
 ---
 

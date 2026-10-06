@@ -90,3 +90,112 @@ Future modular extensions to be built as plugins on top of the completed MVP ker
     wants scheduled content can express it as a plugin.
 - [ ] **M26: Clustered Matchmaking & Lobby Plugin**
   - Authoritative matchmaking service plugin using Horde distributed state to group players into game sessions based on MMR and latency.
+
+---
+
+## 5. Current Milestone: M27 — Self-Contained Unity SDK & Runtime Hardening
+
+> Registered in [`Agents.MD`](Agents.MD) §0 as the current task.
+> Supersedes the packaging leftovers from [`DX.md`](DX.md) item 4.
+
+### The rule this milestone establishes
+
+**The Unity SDK package must be self-contained.** It ships as a UPM tarball into Unity projects that
+have no Exoforge checkout anywhere near them. Everything the package needs at build time must live
+inside the package, and nothing may assume this repository's layout.
+
+- **No symlink may point outside the package.** The package is the unit of distribution; a link into
+  `sdk/csharp/` is meaningless to a consumer.
+- **No path may be resolved by walking up out of the package.** Reaching for `sdk/csharp/...` or a
+  repo checkout is the same bug as a symlink, one directory removed.
+- **No repo layout may appear in package code.** If a file is needed to build a plugin, it belongs
+  inside the package.
+
+Symlinks are acceptable *inside this repository* as a single-source-of-truth convenience for the
+in-repo sample — `pack-unity` already materialises them into real files (`cp -RL`), verified. They
+must never be load-bearing.
+
+### Why now
+
+The sample project is embedded in the source tree, so every path happens to resolve here and the
+assumptions stay invisible. Two of them are already load-bearing:
+
+| Where | Assumes |
+| :--- | :--- |
+| `ExoScaffolder.FindSdkProjectPath` | walks up for `sdk/csharp/Exoforge.Plugin.SDK/Exoforge.Plugin.SDK.csproj` or `csharp/Exoforge.Plugin.SDK/…` |
+| `ExoDeployer.FindManifestGen` | walks up for `sdk/csharp/Exoforge.Management/Tools~/ManifestGen` |
+| `pack-unity` output | carries **no** `Exoforge.Plugin.SDK` — a package-only user cannot build a plugin at all |
+
+### Phase 1 — Make the package self-contained
+
+- [ ] **1.1 Ship `Exoforge.Plugin.SDK` inside the package.** It is the one thing a plugin author
+      cannot do without, and the only part of the toolchain that does not travel. Options, best
+      first: pack it into the UPM tarball under `Tools~/` and reference it by path; or publish it to
+      a feed and have the scaffolder emit a `PackageReference` (the package is already packable).
+- [ ] **1.2 Remove every repo-layout walk.** `FindSdkProjectPath` and `FindManifestGen` resolve
+      relative to the SDK package (and the env-var overrides), never by walking up looking for
+      `sdk/csharp`.
+- [ ] **1.3 Make the failure honest.** If a needed file is genuinely absent, say which file and
+      which package version — never fall through to a path that cannot exist.
+- [ ] **1.4 Add a packaging check.** `pack-unity` fails if the staged package references anything
+      outside itself, or is missing a file the build path needs.
+
+### Phase 2 — Runtime correctness
+
+- [ ] **2.1 A failed connection is permanent.** `ExoforgeBehaviour` sets `_pendingConnect` once and
+      never clears it; `ConnectAsync` catches and returns `false`, so the task completes
+      *successfully* and every later `GetClientAsync()` re-throws. Backend down at boot = the game
+      never connects, with no retry. Clear the field in a `finally`.
+- [ ] **2.2 `_instance` is never cleared on destroy.** `OnDestroy` only disconnects, so
+      `Current`/`Instance` return a destroyed object and game code gets a `MissingReferenceException`
+      instead of the intended "no ExoforgeBehaviour in the scene".
+- [ ] **2.3 Reconnect race in `ExoTransport.ConnectAsync`.** It cancels `_cts` and immediately
+      replaces `_webSocket`, without awaiting the old receive loop. The old loop reads `_webSocket`
+      through the field, so it can issue a second `ReceiveAsync` on the *new* socket, or fire a late
+      `OnDisconnected`. Await the previous loop before swapping.
+- [ ] **2.4 A stale display name survives reconnecting to another account.** `SaveSession` only
+      writes the name when non-null, and `ExoforgeBehaviour.ConnectAsync` passes none — so a name
+      from a previous account persists and `ExoSession.DisplayName` reports the wrong player.
+
+### Phase 3 — DX
+
+- [ ] **3.1 The HTTP port is invented, not configured.** `ExoClient.ConnectAsync` does
+      `uri.Port == 4000 ? 4001 : uri.Port`. Wrong for any non-default gateway; when it fails the
+      `catch { }` leaves `HttpBaseUri` null so HTTP transport is silently unavailable. Take it from
+      `exoforge.json`, which already carries `http_url`.
+- [ ] **3.2 Stop swallowing connect errors.** Three `catch { }` blocks on the connect path
+      (`ExoClient`, `ExoTransport`, `ExoforgeBehaviourEditor`).
+- [ ] **3.3 Make timeouts configurable.** `FromSeconds(5)` / `(5)` / `(10)` are magic numbers with no
+      client-wide default, so a cold first call fails with a bare `TimeoutException`.
+- [ ] **3.4 Reconnect with backoff.** `Update()` keeps pumping a dead dispatcher; nothing reconnects
+      and nothing tells the game. Depends on 2.3.
+- [ ] **3.5 `ExoTokenStore` writes to disk four times per `SaveSession`** (every setter calls
+      `PlayerPrefs.Save()`), while `ExoDeviceId.Reset()` is the one place that does not save.
+- [ ] **3.6 Scopes are stored comma-joined** and split on read — a scope containing a comma silently
+      becomes two.
+
+### Phase 4 — API shape
+
+- [ ] **4.1 One way to get a client.** `ExoforgeBehaviour.Client` (public, nullable) and
+      `ExoforgeSDK.Client` (throws) have different failure modes; the nullable one is more
+      discoverable and the docs only ask nicely.
+- [ ] **4.2 Encapsulate transport state.** `AuthToken`, `HttpBaseUri` and `HttpClient` are public
+      settable on `ExoClient`, so game code can corrupt a live connection.
+- [ ] **4.3 Drop the loose `SendActionAsync(object? payload)` overload.** It accepts anything and
+      fails server-side; the typed overloads are the ones to reach for.
+
+### How this milestone is verified
+
+**Clean-room check** — the analogue of `just clean-build`, and the only test that proves the rule:
+
+1. Build the UPM tarball.
+2. Unpack it into a Unity project **outside this repository**.
+3. Scaffold a plugin, build it, deploy it, call an action.
+4. Nothing may reference this repo; no env var may be set.
+
+Add it as `just clean-room-sdk` so it can run in CI alongside `clean-build`.
+
+### Out of scope
+
+Everything in `DX.md` items 1–21 is done. The resource-table primary-key bug (`DX.md` item 22) is a
+kernel/database issue, not SDK packaging, and stays where it is.
