@@ -6,20 +6,6 @@
     <RootNamespace>Exoforge.Client</RootNamespace>
   </PropertyGroup>
 
-  <ItemGroup>
-    <!--
-      The client's source lives in the Unity package, which is the unit of distribution and has to
-      work as-is for a consumer. This project compiles those same files rather than a synced copy,
-      so there is nothing to keep in step and nothing that can drift.
-    -->
-    <Compile Include="..\..\unity\Exoforge.SDK\Runtime\ExoClient.cs" Link="Runtime\ExoClient.cs" />
-    <Compile Include="..\..\unity\Exoforge.SDK\Runtime\ExoTransport.cs" Link="Runtime\ExoTransport.cs" />
-    <Compile Include="..\..\unity\Exoforge.SDK\Runtime\ExoDispatcher.cs" Link="Runtime\ExoDispatcher.cs" />
-    <Compile Include="..\..\unity\Exoforge.SDK\Runtime\Protocol.cs" Link="Runtime\Protocol.cs" />
-    <Compile Include="..\..\unity\Exoforge.SDK\Runtime\IsExternalInit.cs" Link="Runtime\IsExternalInit.cs" />
-    <Compile Include="..\..\unity\Exoforge.SDK\Runtime\ExoBackoff.cs" Link="Runtime\ExoBackoff.cs" />
-  </ItemGroup>
-
   <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
     <PackageReference Include="System.Text.Json" Version="8.0.5" />
     <PackageReference Include="System.Threading.Channels" Version="8.0.0" />

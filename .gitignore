@@ -26,6 +26,11 @@ dist/
 .zed/
 *.swp
 *~
+# The Unity package ships the engine-agnostic C# libraries as binaries, built by
+# `just build-unity-sdk`. Build output: a committed DLL is a copy that can silently go stale, which
+# is the same failure a synced source file has.
+sdk/unity/Exoforge.SDK/*/Plugins/
+
 # `*~` also matches the SDK's Unity-ignored Tools~ and Samples~ directories; keep those tracked.
 !**/Samples~/
 !**/Tools~/

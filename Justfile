@@ -34,6 +34,13 @@ clean-build:
 	trap 'rm -rf "$work"' EXIT
 	echo "[clean-build] exporting HEAD"
 	git archive HEAD | tar -x -C "$work"
+	echo "[clean-build] building the engine-agnostic libraries into the package"
+	dotnet build "$work/sdk/csharp/Exoforge.Client" -c Release -f netstandard2.1 --nologo -v q
+	dotnet build "$work/sdk/csharp/Exoforge.Management" -c Release -f netstandard2.1 --nologo -v q
+	mkdir -p "$work/sdk/unity/Exoforge.SDK/Runtime/Plugins" "$work/sdk/unity/Exoforge.SDK/Editor/Plugins"
+	cp "$work/sdk/csharp/Exoforge.Client/bin/Release/netstandard2.1/Exoforge.Client.dll" "$work/sdk/unity/Exoforge.SDK/Runtime/Plugins/"
+	cp "$work/sdk/csharp/Exoforge.Management/bin/Release/netstandard2.1/Exoforge.Management.dll" "$work/sdk/unity/Exoforge.SDK/Editor/Plugins/"
+
 	echo "[clean-build] building the SDK from a cold tree"
 	MSBUILDDISABLENODEREUSE=1 dotnet build "$work/sdk/csharp/Exoforge.CLI" --nologo -v q
 	echo "[clean-build] building a plugin"
@@ -213,6 +220,32 @@ sample-check:
 
 # ---- Unity SDK Package ----
 
+# Build the engine-agnostic C# libraries into the Unity package as binaries.
+#
+# The client and the tooling are not Unity-specific, so they are not Unity's to own. Each engine SDK
+# ships them as a compiled assembly, which keeps the package purely engine-specific and means the
+# next engine (Unreal, Godot) reuses the same libraries rather than reimplementing them.
+#
+# A build step rather than committed binaries: a checked-in DLL is a copy that can silently go stale,
+# which is the same failure a synced source file has.
+build-unity-sdk:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	pkg=sdk/unity/Exoforge.SDK
+
+	dotnet build sdk/csharp/Exoforge.Client -c Release -f netstandard2.1 --nologo -v q
+	dotnet build sdk/csharp/Exoforge.Management -c Release -f netstandard2.1 --nologo -v q
+
+	mkdir -p "$pkg/Runtime/Plugins" "$pkg/Editor/Plugins"
+	cp sdk/csharp/Exoforge.Client/bin/Release/netstandard2.1/Exoforge.Client.dll "$pkg/Runtime/Plugins/"
+	cp sdk/csharp/Exoforge.Client/bin/Release/netstandard2.1/Exoforge.Client.pdb "$pkg/Runtime/Plugins/" 2>/dev/null || true
+	cp sdk/csharp/Exoforge.Management/bin/Release/netstandard2.1/Exoforge.Management.dll "$pkg/Editor/Plugins/"
+	cp sdk/csharp/Exoforge.Management/bin/Release/netstandard2.1/Exoforge.Management.pdb "$pkg/Editor/Plugins/" 2>/dev/null || true
+
+	echo "[build-unity-sdk] Runtime/Plugins + Editor/Plugins populated"
+
+
+
 # The Unity package is the real thing: its files are the source, not a copy kept in step with
 # something else. `sdk/csharp/Exoforge.Client` and `Exoforge.Management` compile these same files,
 # so there is nothing to sync and nothing that can drift. This project is only here to develop and
@@ -278,6 +311,7 @@ pack-unity:
 	set -euo pipefail
 	VERSION=$(grep '"version"' sdk/unity/Exoforge.SDK/package.json | head -1 | awk -F'"' '{print $4}')
 	echo "Packaging Exoforge Unity SDK v${VERSION}..."
+	just build-unity-sdk
 	mkdir -p dist
 	rm -rf dist/package dist/com.exoforge.sdk-*.tgz
 	mkdir -p dist/package
