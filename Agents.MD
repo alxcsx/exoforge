@@ -1,38 +1,33 @@
 # Exoforge Operating Manual (`AGENTS.md`)
 
 > **Branch**: `projetao_mvp`  
-> **Status**: Monorepo Core, 7 Standard Plugins, C# Client & Plugin SDKs, C# Management Engine (`exo` CLI), Unity SDK (`com.exoforge.sdk`), LiveView Producer Studio, and Stateful Distributed Entity Runtime are **COMPLETE** (**165 tests passing + live E2E slice**).  
+> **Status**: Kernel, 7 standard plugins, C# Client & Plugin SDKs, C# Management Engine (`exo` CLI), Unity SDK (`com.exoforge.sdk`), Producer Studio and the stateful entity runtime are **complete** — **230 Elixir + 47 C# = 277 tests passing**, plus a live E2E vertical slice.  
 > **Verified SLAs**: 729k stateful actor ops/sec, 1.4 µs latency, 0.07 ms 50x event fanout.
 
 ---
 
-## 0. Current Milestone: M27 — Self-Contained Unity SDK & Runtime Hardening
+## 0. Current Milestone: M28 — SDK Runtime Hardening
 
-**See [`plan.md`](plan.md) §5.** Four phases, checklisted: make the package self-contained, fix the
-runtime correctness bugs, then DX and API shape.
+**See [`plan.md`](plan.md) §6.** The Unity + C# SDK works, but four correctness bugs and six DX
+problems make it behave badly the moment anything goes wrong.
 
-**The rule this milestone establishes:** the Unity SDK ships as a UPM tarball into projects that have
-no Exoforge checkout anywhere near them. So **no symlink may point outside the package, no path may
-be resolved by walking up out of it, and no repo layout (`sdk/csharp/...`) may appear in package
-code.** The package's files *are* the source: `Exoforge.Client` and `Exoforge.Management` compile
-them directly, so there is nothing to sync and nothing that can drift. `just unity-reimport` clears
-Unity's import caches when you need the editor to re-read them.
+Order matters, and two items are first because they are one-liners that decide whether the SDK works
+the first time someone tries it:
 
-**Phase 1 is done** — no symlink leaves the package, no path is resolved by walking out of it, and
-the Plugin SDK is an explicit external dependency (a scaffolded plugin references the published
-package, with `EXOFORGE_PLUGIN_SDK` opting into a local checkout). Verified: the Control Center
-builds `snake_leaderboard` end to end.
-
-**Next is Phase 2**, starting with the two that break the core loop:
-
-1. **A failed connection is permanent** — `ExoforgeBehaviour` never clears `_pendingConnect`, so
-   the backend being down when the game boots means the game never connects and cannot retry.
+1. **A failed connection is permanent** — `ExoforgeBehaviour` never clears `_pendingConnect`, so the
+   backend being down when the game boots means the game never connects and cannot retry.
 2. **`_instance` is never cleared on destroy**, so game code gets a `MissingReferenceException`
    instead of the intended "no ExoforgeBehaviour in the scene".
 
-Work the checklist in `plan.md` §5 top-down and tick items off as they land.
+Then 2.4 (a stale display name from a previous account), then 2.3 — which gates reconnect.
 
-> Previous milestone: [`DX.md`](DX.md) — plugin creation/upload/management DX. Items 1–21 are done.
+**Before the transport work:** `ExoClient` and `ExoTransport` have no unit coverage. They are
+Unity-free, so reconnect, timeout and error-surfacing belong in `Exoforge.Client.Tests` behind a small
+local WebSocket stub. Write the stub first — 2.3 and 3.1–3.4 are otherwise unverifiable.
+
+Work the checklist in `plan.md` §6 top-down and tick items off as they land.
+
+> Previous: **M27** — self-contained Unity package. Done and verified (see `plan.md` §5).
 
 ---
 
