@@ -374,8 +374,20 @@ public partial class ExoforgeControlCenter : EditorWindow
         {
             var deployer = new ExoDeployer(_workspace);
             string? rid = string.IsNullOrWhiteSpace(_buildRid) ? null : _buildRid.Trim();
+            // The generator ships inside the SDK; resolve it through the package rather than
+            // letting the deployer guess at a layout.
+            string? manifestGen = ExoforgeEditorConfig.ManifestGenPath;
+
+            if (manifestGen == null)
+            {
+                ShowStatus(
+                    "The SDK's manifest generator is missing from this package — reinstall com.exoforge.sdk.",
+                    MessageType.Error);
+                return;
+            }
+
             var build = await deployer.BuildPluginAsync(
-                plugin.Name, rid, ExoforgeEditorConfig.DotnetPath, AppendBuildLog);
+                plugin.Name, rid, ExoforgeEditorConfig.DotnetPath, AppendBuildLog, manifestGen);
 
             _buildLog = build.Output;
             SessionState.EraseString(BuildFailureKey(plugin.Name));

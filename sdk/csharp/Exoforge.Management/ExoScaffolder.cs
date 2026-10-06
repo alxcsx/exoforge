@@ -58,57 +58,54 @@ public static class ExoScaffolder
     /// </summary>
     public const string SdkPathEnvVar = "EXOFORGE_PLUGIN_SDK";
 
+    /// <summary>The published package a scaffolded plugin references when no local checkout is given.</summary>
+    public const string SdkPackageId = "Exoforge.Plugin.SDK";
+
+    /// <summary>Version of <see cref="SdkPackageId"/> a scaffolded plugin references.</summary>
+    public const string SdkPackageVersion = "0.1.0";
+
+    /// <summary>
+    /// The SDK a scaffolded plugin compiles against, when it is not the published package.
+    ///
+    /// Resolved explicitly: an environment override, or nothing — in which case the project
+    /// references the published `Exoforge.Plugin.SDK` package. The SDK does not search the
+    /// filesystem, because a consumer installed from a tarball has no `sdk/csharp` to find, and
+    /// guessing produces a project that cannot restore with no explanation of why.
+    /// </summary>
     private static string? FindSdkProjectPath(string fromDir)
     {
-        if (Environment.GetEnvironmentVariable(SdkPathEnvVar) is { Length: > 0 } configured)
-        {
-            string candidate = configured.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)
-                ? configured
-                : Path.Combine(configured, "Exoforge.Plugin.SDK.csproj");
+        string? configured = Environment.GetEnvironmentVariable(SdkPathEnvVar);
 
-            if (File.Exists(candidate))
-            {
-                return Path.GetRelativePath(fromDir, candidate);
-            }
+        if (string.IsNullOrEmpty(configured))
+        {
+            return null;
         }
 
-        string? dir = fromDir;
+        string candidate = configured!.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)
+            ? configured
+            : Path.Combine(configured, "Exoforge.Plugin.SDK.csproj");
 
-        for (int i = 0; i < 10 && dir != null; i++)
+        if (!File.Exists(candidate))
         {
-            foreach (string relative in new[]
-            {
-                Path.Combine("sdk", "csharp", "Exoforge.Plugin.SDK", "Exoforge.Plugin.SDK.csproj"),
-                Path.Combine("csharp", "Exoforge.Plugin.SDK", "Exoforge.Plugin.SDK.csproj")
-            })
-            {
-                string candidate = Path.Combine(dir, relative);
-                if (File.Exists(candidate)) return Path.GetRelativePath(fromDir, candidate);
-            }
-
-            dir = Directory.GetParent(dir)?.FullName;
+            throw new InvalidOperationException(
+                $"{SdkPathEnvVar} is set to '{configured}', but no Exoforge.Plugin.SDK.csproj was " +
+                "found there. Point it at the .csproj or its directory, or unset it to reference " +
+                "the published package.");
         }
 
-        return null;
+        return Path.GetFullPath(candidate);
     }
 
     private static string GenerateCsproj(string? sdkProjectPath, string srcDir)
     {
-        // No silent PackageReference fallback: Exoforge.Plugin.SDK is not published to NuGet, so a
-        // project scaffolded outside the repo would fail to restore with no explanation. Better to
-        // refuse now, with the reason.
-        if (sdkProjectPath == null ||
-            !File.Exists(Path.GetFullPath(Path.Combine(srcDir, sdkProjectPath))))
-        {
-            throw new InvalidOperationException(
-                "Could not find Exoforge.Plugin.SDK. Looked for " +
-                "sdk/csharp/Exoforge.Plugin.SDK/Exoforge.Plugin.SDK.csproj in the workspace's parent " +
-                $"directories. Either check out the Exoforge repo above the workspace, set " +
-                $"{SdkPathEnvVar}=/path/to/Exoforge.Plugin.SDK.csproj, or add a PackageReference to " +
-                "Exoforge.Plugin.SDK from a feed (`dotnet pack sdk/csharp/Exoforge.Plugin.SDK`).");
-        }
-
-        string reference = $"    <ProjectReference Include=\"{sdkProjectPath}\" />";
+        // Two ways to get the SDK, both explicit:
+        //   - a ProjectReference, when a local checkout was pointed at with EXOFORGE_PLUGIN_SDK;
+        //   - the published package, which is the path a consumer without a checkout takes.
+        string reference = sdkProjectPath != null && File.Exists(sdkProjectPath)
+            ? $"    <!-- Local Exoforge.Plugin.SDK checkout, via {SdkPathEnvVar}. -->\n" +
+              $"    <ProjectReference Include=\"{ReferencePath(srcDir, sdkProjectPath)}\" />"
+            : $"    <!-- Published package. Point {SdkPathEnvVar} at a local checkout to build against that instead. -->\n" +
+              $"    <PackageReference Include=\"{SdkPackageId}\" Version=\"{SdkPackageVersion}\" />";
 
         return $"""
 <Project Sdk="Microsoft.NET.Sdk">
@@ -155,6 +152,23 @@ public static class ExoScaffolder
 
     In Unity: **Tools ▸ Exoforge ▸ Exoforge Studio**, then the Plugins tab.
     """;
+
+    /// <summary>
+    /// How to write the SDK's location into the generated csproj.
+    ///
+    /// Relative while the SDK lives inside the workspace — a committed plugin then builds on
+    /// another machine. Absolute once it does not, because the alternative is a long `../../../..`
+    /// climb out of the tree that means nothing to a reader.
+    /// </summary>
+    private static string ReferencePath(string srcDir, string sdkProjectPath)
+    {
+        string workspaceRoot = Path.GetFullPath(Path.Combine(srcDir, "..", "..", ".."));
+        string full = Path.GetFullPath(sdkProjectPath);
+
+        bool insideWorkspace = full.StartsWith(workspaceRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal);
+
+        return insideWorkspace ? Path.GetRelativePath(srcDir, full) : full;
+    }
 
     private static string GenerateSolution(string cleanName) => $"""
 <Solution>

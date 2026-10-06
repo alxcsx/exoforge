@@ -32,6 +32,9 @@ clean-build:
 	set -euo pipefail
 	work=$(mktemp -d)
 	trap 'rm -rf "$work"' EXIT
+	echo "[clean-build] checking the Unity package is in step with the C# sources"
+	just check-unity-sdk
+
 	echo "[clean-build] exporting HEAD"
 	git archive HEAD | tar -x -C "$work"
 	echo "[clean-build] building the SDK from a cold tree"
@@ -197,6 +200,68 @@ sample-check:
 	@rm -f {{SAMPLE}}/Temp/UnityLockfile
 	@{{UNITY}} -batchmode -nographics -projectPath "$(pwd)/{{SAMPLE}}" -executeMethod ExoforgeSampleCheck.Run -logFile /tmp/exoforge-sample-check.log; status=$?; grep -E "ExoforgeSampleCheck\]" /tmp/exoforge-sample-check.log || true; exit $status
 
+# ---- Unity SDK Package Contents ----
+
+# The Unity package shares sources with the C# libraries and must be self-contained on disk: a
+# symlink out of the package is meaningless to a consumer who installed the tarball, and Unity
+# cannot reliably tell when the *target* of a link changed. These are real files in the package,
+# kept in step from the canonical sources.
+unity_shared := "Runtime/ExoClient.cs:Exoforge.Client/ExoClient.cs Runtime/ExoDispatcher.cs:Exoforge.Client/ExoDispatcher.cs Runtime/ExoTransport.cs:Exoforge.Client/ExoTransport.cs Runtime/Protocol.cs:Exoforge.Client/Protocol.cs Runtime/IsExternalInit.cs:Exoforge.Client/IsExternalInit.cs Editor/Management/ExoDeployer.cs:Exoforge.Management/ExoDeployer.cs Editor/Management/ExoWorkspace.cs:Exoforge.Management/ExoWorkspace.cs Editor/Management/ExoScaffolder.cs:Exoforge.Management/ExoScaffolder.cs Editor/Management/ExoCodeGenerator.cs:Exoforge.Management/ExoCodeGenerator.cs"
+
+# Copy the C# sources the Unity package shares, so the package stands alone
+sync-unity-sdk:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	pkg=sdk/unity/Exoforge.SDK
+	mgmt=sdk/csharp/Exoforge.Management
+
+	for pair in {{unity_shared}}
+	do
+		dest="$pkg/${pair%%:*}"
+		src="sdk/csharp/${pair#*:}"
+		# Remove first: cp would otherwise write *through* an existing symlink into the source.
+		rm -f "$dest"
+		cp -L "$src" "$dest"
+		echo "  ${pair%%:*} <- ${pair#*:}"
+	done
+
+	rm -rf "$pkg/Editor/Management/Tools~"
+	cp -RL "$mgmt/Tools~" "$pkg/Editor/Management/Tools~"
+	find "$pkg/Editor/Management/Tools~" -type d \( -name bin -o -name obj \) -prune -exec rm -rf {} +
+	echo "  Editor/Management/Tools~ <- Exoforge.Management/Tools~"
+
+	echo "[sync-unity-sdk] the package is self-contained"
+
+# Fail when the Unity package has drifted from the C# sources it shares
+check-unity-sdk:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	pkg=sdk/unity/Exoforge.SDK
+	drift=0
+
+	for pair in {{unity_shared}}
+	do
+		dest="$pkg/${pair%%:*}"
+		src="sdk/csharp/${pair#*:}"
+		if ! cmp -s "$dest" "$src"; then
+			echo "  drifted: ${pair%%:*}"
+			drift=1
+		fi
+	done
+
+	if ! diff -r -q --exclude=bin --exclude=obj "$pkg/Editor/Management/Tools~" sdk/csharp/Exoforge.Management/Tools~ >/dev/null; then
+		echo "  drifted: Editor/Management/Tools~"
+		drift=1
+	fi
+
+	if [ "$drift" -ne 0 ]; then
+		echo "[check-unity-sdk] FAILED: the Unity package drifted from the C# sources."
+		echo "Run 'just sync-unity-sdk' and commit the result."
+		exit 1
+	fi
+
+	echo "[check-unity-sdk] OK"
+
 # ---- Unity SDK Distribution ----
 
 # Package Unity SDK into a self-contained UPM tarball (.tgz) for game developers
@@ -214,5 +279,15 @@ pack-unity:
 	tar -czf "dist/com.exoforge.sdk-${VERSION}.tgz" -C dist package
 	echo "[Exoforge] Created UPM package archive:"
 	ls -lh "dist/com.exoforge.sdk-${VERSION}.tgz"
+	# The package must stand alone: a consumer has no Exoforge checkout for a path to point at.
+	# Match the code shapes that resolve into this repository, not prose that mentions it: a doc
+	# comment explaining the rule is not a violation of it.
+	if grep -rIn --exclude-dir=bin --exclude-dir=obj -e '"sdk", *"csharp"' -e '"csharp", *"Exoforge' -e '"Exoforge\.Management", *"Tools~"' dist/package >/dev/null 2>&1; then
+		echo "[Exoforge] FAILED: the package resolves paths into this repository's layout:"
+		grep -rIn --exclude-dir=bin --exclude-dir=obj -e '"sdk", *"csharp"' -e '"csharp", *"Exoforge' -e '"Exoforge\.Management", *"Tools~"' dist/package
+		exit 1
+	fi
+	echo "[Exoforge] Package is self-contained."
+
 	echo "Ready to import in Unity: Window > Package Manager > [+] > Add package from tarball..."
 

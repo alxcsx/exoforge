@@ -422,7 +422,12 @@ public class ExoDeployer
     /// </list>
     /// The result is staged next to <c>manifest.exs</c>, ready for <see cref="UploadPluginAsync"/>.
     /// </summary>
-    public ExoPluginBuild BuildPlugin(string pluginName, string? rid = null, string dotnetPath = "dotnet", Action<string>? log = null)
+    public ExoPluginBuild BuildPlugin(
+        string pluginName,
+        string? rid = null,
+        string dotnetPath = "dotnet",
+        Action<string>? log = null,
+        string? manifestGenPath = null)
     {
         string cleanName = NormalizePluginName(pluginName);
         string pluginDir = Path.Combine(_workspace.PluginsPath, cleanName);
@@ -468,7 +473,7 @@ public class ExoDeployer
         else
         {
             pluginType = "native";
-            binaryPath = PublishNative(csproj ?? throw new FileNotFoundException($"No .csproj found for '{cleanName}'."), pluginDir, cleanName, rid, dotnet, buildStamp, Emit);
+            binaryPath = PublishNative(csproj ?? throw new FileNotFoundException($"No .csproj found for '{cleanName}'."), pluginDir, cleanName, rid, dotnet, buildStamp, manifestGenPath, Emit);
         }
 
         CommitBuildNumber(pluginDir, buildNumber);
@@ -483,12 +488,13 @@ public class ExoDeployer
         string? rid = null,
         string dotnetPath = "dotnet",
         Action<string>? log = null,
+        string? manifestGenPath = null,
         CancellationToken cancellationToken = default)
     {
-        return Task.Run(() => BuildPlugin(pluginName, rid, dotnetPath, log), cancellationToken);
+        return Task.Run(() => BuildPlugin(pluginName, rid, dotnetPath, log, manifestGenPath), cancellationToken);
     }
 
-    private string PublishNative(string csproj, string pluginDir, string cleanName, string? rid, string dotnetPath, string buildStamp, Action<string> emit)
+    private string PublishNative(string csproj, string pluginDir, string cleanName, string? rid, string dotnetPath, string buildStamp, string? manifestGenPath, Action<string> emit)
     {
         string targetRid = string.IsNullOrWhiteSpace(rid) ? HostRuntimeIdentifier() : rid!;
         emit($"[build] dotnet publish -c Release -r {targetRid}");
@@ -516,7 +522,7 @@ public class ExoDeployer
         string dll = Directory.GetFiles(binRelease, cleanName + ".dll", SearchOption.AllDirectories).FirstOrDefault()
             ?? throw new FileNotFoundException($"Compiled assembly not found for '{cleanName}' under {binRelease}.");
 
-        string manifestGen = FindManifestGen(pluginDir);
+        string manifestGen = FindManifestGen(manifestGenPath);
         string manifest = Path.Combine(pluginDir, "manifest.exs");
 
         // The child process runs with pluginDir as its working directory, so every path it is given
@@ -632,70 +638,50 @@ public class ExoDeployer
     public const string ManifestGenEnvVar = "EXOFORGE_MANIFESTGEN";
 
     /// <summary>
-    /// Locates the manifest generator, which ships inside the SDK under
-    /// <c>Editor/Management/Tools~/ManifestGen</c>.
+    /// Locates the manifest generator.
     ///
-    /// Searched in order: an explicit override, then up the tree from the plugin (covers a repo
-    /// checkout), then the two places Unity puts an installed package. The generator has no
-    /// project or package references, so finding it is enough — there is nothing to restore.
+    /// The SDK never guesses at a directory layout: a consumer's project structure is unknown, and
+    /// a package installed from a tarball has no Exoforge checkout anywhere near it. So an explicit
+    /// path wins, then the environment, then the copy that ships beside this assembly. Nothing walks
+    /// up the tree.
     /// </summary>
-    private static string FindManifestGen(string startDir)
+    private static string FindManifestGen(string? explicitPath)
     {
+        if (IsManifestGen(explicitPath))
+        {
+            return explicitPath!;
+        }
+
         if (Environment.GetEnvironmentVariable(ManifestGenEnvVar) is { Length: > 0 } configured &&
             IsManifestGen(configured))
         {
             return configured;
         }
 
-        const string relative = "Tools~/ManifestGen";
-        var tried = new List<string>();
-        string? dir = startDir;
+        string assemblyDir = Path.GetDirectoryName(typeof(ExoDeployer).Assembly.Location) ?? "";
 
-        for (int i = 0; i < 12 && dir != null; i++)
+        foreach (string candidate in new[]
         {
-            var candidates = new List<string>
-            {
-                Path.Combine(dir, "Editor", "Management", relative),              // SDK package layout
-                Path.Combine(dir, relative),
-                Path.Combine(dir, "sdk", "csharp", "Exoforge.Management", relative),
-                Path.Combine(dir, "Packages", "com.exoforge.sdk", "Editor", "Management", relative)
-            };
-
-            // A Unity project may keep the SDK in the package cache instead of Packages/.
-            string cache = Path.Combine(dir, "Library", "PackageCache");
-
-            if (Directory.Exists(cache))
-            {
-                foreach (string package in Directory.GetDirectories(cache, "com.exoforge.sdk*"))
-                {
-                    candidates.Add(Path.Combine(package, "Editor", "Management", relative));
-                }
-            }
-
-            foreach (string candidate in candidates)
-            {
-                if (IsManifestGen(candidate)) return candidate;
-                tried.Add(candidate);
-            }
-
-            dir = Directory.GetParent(dir)?.FullName;
+            Path.Combine(assemblyDir, "Tools~", "ManifestGen"),
+            Path.Combine(assemblyDir, "Management", "Tools~", "ManifestGen"),
+        })
+        {
+            if (IsManifestGen(candidate)) return candidate;
         }
 
         throw new DirectoryNotFoundException(
-            "Could not locate the Exoforge manifest generator. It ships with the SDK at " +
-            $"Editor/Management/{relative}, and native builds need it to produce manifest.exs. " +
-            $"Set {ManifestGenEnvVar}=/path/to/ManifestGen to point at it directly.\n" +
-            "Looked in:\n  " + string.Join("\n  ", tried));
+            "Could not locate the Exoforge manifest generator, which a native plugin build needs. " +
+            "It ships with the SDK at Editor/Management/Tools~/ManifestGen — pass that path to " +
+            $"BuildPlugin, or set {ManifestGenEnvVar}=/path/to/ManifestGen.");
     }
 
     /// <summary>
     /// True when <paramref name="dir"/> really is the generator. Checks for its project file rather
-    /// than the directory: Unity can briefly expose package paths that do not resolve, and a
-    /// directory check accepts those, which then fails later inside `dotnet` with a message that
-    /// says nothing about why.
+    /// than the directory: a directory check accepts paths that do not resolve, which then fail
+    /// later inside `dotnet` with a message that says nothing about why.
     /// </summary>
-    private static bool IsManifestGen(string dir) =>
-        !string.IsNullOrEmpty(dir) && File.Exists(Path.Combine(dir, "ManifestGen.csproj"));
+    private static bool IsManifestGen(string? dir) =>
+        !string.IsNullOrEmpty(dir) && File.Exists(Path.Combine(dir!, "ManifestGen.csproj"));
 
     /// <summary>
     /// Re-expresses <paramref name="path"/> relative to <paramref name="baseDir"/>.

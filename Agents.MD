@@ -14,16 +14,20 @@ runtime correctness bugs, then DX and API shape.
 **The rule this milestone establishes:** the Unity SDK ships as a UPM tarball into projects that have
 no Exoforge checkout anywhere near them. So **no symlink may point outside the package, no path may
 be resolved by walking up out of it, and no repo layout (`sdk/csharp/...`) may appear in package
-code.** Symlinks stay a single-source-of-truth convenience *inside this repo* — `pack-unity` already
-materialises them — but must never be load-bearing.
+code.** The shared sources are real files in the package, kept in step from `sdk/csharp/` by
+`just sync-unity-sdk` and checked by `just check-unity-sdk` (part of `clean-build`).
 
-Two things break the rule today and are fixed first:
+**Phase 1 is done** — no symlink leaves the package, no path is resolved by walking out of it, and
+the Plugin SDK is an explicit external dependency (a scaffolded plugin references the published
+package, with `EXOFORGE_PLUGIN_SDK` opting into a local checkout). Verified: the Control Center
+builds `snake_leaderboard` end to end.
 
-1. **`Exoforge.Plugin.SDK` is not in the package**, so a package-only developer cannot build a
-   plugin at all; `ExoScaffolder` and `ExoDeployer` walk up out of the package looking for this
-   repo's `sdk/csharp/...` layout to find it.
-2. **A failed connection is permanent** — `ExoforgeBehaviour` never clears `_pendingConnect`, so
+**Next is Phase 2**, starting with the two that break the core loop:
+
+1. **A failed connection is permanent** — `ExoforgeBehaviour` never clears `_pendingConnect`, so
    the backend being down when the game boots means the game never connects and cannot retry.
+2. **`_instance` is never cleared on destroy**, so game code gets a `MissingReferenceException`
+   instead of the intended "no ExoforgeBehaviour in the scene".
 
 Work the checklist in `plan.md` §5 top-down and tick items off as they land.
 

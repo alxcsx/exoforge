@@ -126,19 +126,34 @@ assumptions stay invisible. Two of them are already load-bearing:
 | `ExoDeployer.FindManifestGen` | walks up for `sdk/csharp/Exoforge.Management/Tools~/ManifestGen` |
 | `pack-unity` output | carries **no** `Exoforge.Plugin.SDK` — a package-only user cannot build a plugin at all |
 
-### Phase 1 — Make the package self-contained
+### Phase 1 — Make the package self-contained ✅
 
-- [ ] **1.1 Ship `Exoforge.Plugin.SDK` inside the package.** It is the one thing a plugin author
-      cannot do without, and the only part of the toolchain that does not travel. Options, best
-      first: pack it into the UPM tarball under `Tools~/` and reference it by path; or publish it to
-      a feed and have the scaffolder emit a `PackageReference` (the package is already packable).
-- [ ] **1.2 Remove every repo-layout walk.** `FindSdkProjectPath` and `FindManifestGen` resolve
-      relative to the SDK package (and the env-var overrides), never by walking up looking for
-      `sdk/csharp`.
-- [ ] **1.3 Make the failure honest.** If a needed file is genuinely absent, say which file and
-      which package version — never fall through to a path that cannot exist.
-- [ ] **1.4 Add a packaging check.** `pack-unity` fails if the staged package references anything
-      outside itself, or is missing a file the build path needs.
+- [x] **1.1 No symlink leaves the package.** `Runtime/*.cs` and `Editor/Management/*.cs` were
+      symlinks into `sdk/csharp/`. They are real files now: a symlink out of a UPM package is
+      meaningless to a consumer who installed the tarball, and Unity cannot reliably tell when the
+      *target* of a link changed. `just sync-unity-sdk` keeps them in step from the canonical
+      sources; `just check-unity-sdk` fails on drift and runs as part of `clean-build`. Verified:
+      the package directory copied alone has zero symlinks and every source file.
+- [x] **1.2 The Plugin SDK is an explicit external dependency.** It is *not* bundled — it is the
+      thing that must stay multiplatform, and a UPM tarball is the wrong channel for a `dotnet`
+      package. A scaffolded plugin references the published `Exoforge.Plugin.SDK` and the generated
+      csproj says so in a comment; pointing `EXOFORGE_PLUGIN_SDK` at a local checkout switches it
+      to a `ProjectReference` and the comment changes to match. A bad override fails with the path
+      it was given rather than a project that cannot restore.
+- [x] **1.3 No path is resolved by walking out of the package.** `ExoDeployer.FindManifestGen` and
+      `ExoScaffolder.FindSdkProjectPath` no longer climb the tree looking for `sdk/csharp`. The
+      generator is found beside the assembly (the CLI copies it into its own output) or through an
+      explicit path — the Unity editor resolves the package root with
+      `PackageInfo.FindForAssembly` and passes it in.
+- [x] **1.4 Failures name the file and the fix.** Missing toolchain says which path is absent, which
+      env var overrides it, and where it ships.
+- [x] **1.5 A packaging check.** `pack-unity` fails if the staged package resolves a path into this
+      repository's layout (matching code shapes, not prose that mentions them). Verified it fires on
+      an injected walk and passes on a clean package.
+
+**Verified:** building `snake_leaderboard` through the Control Center's own code path now succeeds
+end to end and writes `manifest.exs` — previously it failed with
+`The provided file path does not exist: .../Packages/com.exoforge.sdk/Editor/Management/Tools~/ManifestGen`.
 
 ### Phase 2 — Runtime correctness
 

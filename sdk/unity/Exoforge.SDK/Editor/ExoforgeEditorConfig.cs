@@ -392,6 +392,49 @@ public static class ExoforgeEditorConfig
         }
     }
 
+    /// <summary>
+    /// The directory this SDK was installed into — a UPM package, a local `file:` package, or a
+    /// package-cache entry.
+    ///
+    /// Asked of Unity rather than searched for, so it is correct for every installation: a package
+    /// installed from a tarball has no Exoforge checkout near it, and the editor assembly itself
+    /// lives in <c>Library/ScriptAssemblies</c>, not in the package.
+    /// </summary>
+    public static string? PackageRoot
+    {
+        get
+        {
+#if UNITY_EDITOR
+            var info = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(ExoforgeEditorConfig).Assembly);
+            return info?.resolvedPath;
+#else
+            return null;
+#endif
+        }
+    }
+
+    /// <summary>
+    /// The manifest generator shipped inside this SDK, or null when it is missing.
+    ///
+    /// A native plugin build needs it; when it is null the build says so rather than failing inside
+    /// `dotnet` with a path that does not exist.
+    /// </summary>
+    public static string? ManifestGenPath
+    {
+        get
+        {
+            string? root = PackageRoot;
+
+            if (string.IsNullOrEmpty(root))
+            {
+                return null;
+            }
+
+            string candidate = Path.Combine(root!, "Editor", "Management", "Tools~", "ManifestGen");
+            return File.Exists(Path.Combine(candidate, "ManifestGen.csproj")) ? candidate : null;
+        }
+    }
+
     /// <summary>Resolves the absolute path to the `/exoforge` workspace folder.</summary>
     public static string GetAbsoluteWorkspacePath() =>
         Path.GetFullPath(Path.Combine(ProjectRoot, WorkspacePath));
