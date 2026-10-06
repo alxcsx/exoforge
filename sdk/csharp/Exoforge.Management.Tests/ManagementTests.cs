@@ -331,18 +331,16 @@ public class ManagementTests : IDisposable
         Assert.True(doc.RootElement.TryGetProperty("version", out _));
         Assert.True(doc.RootElement.TryGetProperty("displayName", out _));
 
-        // Validate Runtime assembly and core scripts
+        // Runtime holds the Unity wrappers, and nothing engine-agnostic.
         string runtimeDir = Path.Combine(unityPkgDir, "Runtime");
         Assert.True(Directory.Exists(runtimeDir));
         Assert.True(File.Exists(Path.Combine(runtimeDir, "Exoforge.SDK.asmdef")));
         Assert.True(File.Exists(Path.Combine(runtimeDir, "ExoforgeBehaviour.cs")));
-        Assert.True(File.Exists(Path.Combine(runtimeDir, "ExoClient.cs")));
-        Assert.True(File.Exists(Path.Combine(runtimeDir, "ExoDispatcher.cs")));
-        Assert.True(File.Exists(Path.Combine(runtimeDir, "ExoTransport.cs")));
-        Assert.True(File.Exists(Path.Combine(runtimeDir, "Protocol.cs")));
-        Assert.True(File.Exists(Path.Combine(runtimeDir, "IsExternalInit.cs")));
+        Assert.True(File.Exists(Path.Combine(runtimeDir, "ExoforgeSDK.cs")));
+        Assert.True(File.Exists(Path.Combine(runtimeDir, "ExoforgeAuth.cs")));
+        Assert.True(File.Exists(Path.Combine(runtimeDir, "ExoTokenStore.cs")));
 
-        // Validate Editor assembly and management studio scripts
+        // Editor holds the Control Center and the editor tooling.
         string editorDir = Path.Combine(unityPkgDir, "Editor");
         Assert.True(Directory.Exists(editorDir));
         Assert.True(File.Exists(Path.Combine(editorDir, "Exoforge.SDK.Editor.asmdef")));
@@ -351,13 +349,29 @@ public class ManagementTests : IDisposable
         Assert.True(File.Exists(Path.Combine(editorDir, "ExoforgeSceneSetup.cs")));
         Assert.True(File.Exists(Path.Combine(editorDir, "ExoforgeBehaviourEditor.cs")));
 
-        // Validate Editor Management engine
-        string mgmtDir = Path.Combine(editorDir, "Management");
-        Assert.True(Directory.Exists(mgmtDir));
-        Assert.True(File.Exists(Path.Combine(mgmtDir, "ExoWorkspace.cs")));
-        Assert.True(File.Exists(Path.Combine(mgmtDir, "ExoScaffolder.cs")));
-        Assert.True(File.Exists(Path.Combine(mgmtDir, "ExoCodeGenerator.cs")));
-        Assert.True(File.Exists(Path.Combine(mgmtDir, "ExoDeployer.cs")));
+        // The engine-agnostic libraries arrive as assemblies, not as source (M29). If any of these
+        // reappears as .cs in the package, the package has started owning code that is not Unity's
+        // and the next engine can no longer reuse it.
+        Assert.True(File.Exists(Path.Combine(runtimeDir, "Plugins", "Exoforge.Client.dll")),
+            "Runtime/Plugins/Exoforge.Client.dll is missing - run 'just build-unity-sdk'");
+        Assert.True(File.Exists(Path.Combine(editorDir, "Plugins", "Exoforge.Management.dll")),
+            "Editor/Plugins/Exoforge.Management.dll is missing - run 'just build-unity-sdk'");
+
+        string[] engineAgnostic =
+        {
+            "ExoClient", "ExoTransport", "ExoDispatcher", "Protocol", "ExoBackoff",
+            "ExoDeployer", "ExoWorkspace", "ExoScaffolder", "ExoCodeGenerator",
+        };
+
+        foreach (string name in engineAgnostic)
+        {
+            Assert.False(
+                File.Exists(Path.Combine(runtimeDir, name + ".cs")) ||
+                File.Exists(Path.Combine(editorDir, name + ".cs")) ||
+                File.Exists(Path.Combine(editorDir, "Management", name + ".cs")),
+                name + ".cs is engine-agnostic and must not live in the Unity package");
+        }
+
 
         // Validate Editor asmdef references Runtime
         string editorAsmdefPath = Path.Combine(editorDir, "Exoforge.SDK.Editor.asmdef");
