@@ -125,6 +125,10 @@ public class LiveClusterTests
     /// cleared once the task completes, so a caller arriving after that can start a fresh connect
     /// and dispose the client the previous caller was handed.
     ///
+    /// Making the connection lazy - login no longer opens a socket - did not fix it. The failure
+    /// moved from the socket to the sign-in itself, and the player controller still never gets a
+    /// session.
+    ///
     /// Run it by name once that is fixed:
     ///   just sample-live-tests -- --testFilter A_run_that_ends_reaches_the_board_through_the_bridge
     /// </remarks>

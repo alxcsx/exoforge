@@ -51,6 +51,43 @@ public class ExoClient : IDisposable
     public Uri? HttpBaseUri { get; set; }
     /// <summary>The token last used to authenticate. Set by <see cref="AuthenticateAsync"/>.</summary>
     public string? AuthToken { get; private set; }
+
+    /// <summary>
+    /// Opens the socket if this operation needs one and it is not already open. A no-op for the
+    /// HTTP path, which is the point: a game that never subscribes never opens a socket.
+    /// </summary>
+    private async Task ConnectIfNeededAsync()
+    {
+        if (IsConnected || EnsureConnected == null)
+        {
+            return;
+        }
+
+        await EnsureConnected().ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Opens a socket when an operation needs one. Set by the engine SDK, which owns the endpoint
+    /// and the reconnect policy; null means nothing can connect this client on demand.
+    /// </summary>
+    public Func<Task>? EnsureConnected { get; set; }
+
+    /// <summary>
+    /// True when this client can send an action at all - over the socket, or over HTTP without one.
+    /// A request/response action needs no connection, which is what lets a game skip opening a socket
+    /// until it subscribes to something.
+    /// </summary>
+    public bool CanSendActions => IsConnected || HttpBaseUri != null;
+
+    /// <summary>
+    /// Records the token an HTTP-only session sends on every request. The socket path sets this by
+    /// authenticating; a session that never opens a socket still needs it.
+    /// </summary>
+    public void UseToken(string token)
+    {
+        AuthToken = token;
+        _isAuthenticated = true;
+    }
     public HttpClient HttpClient => _httpClient;
 
     /// <summary>
@@ -162,6 +199,10 @@ public class ExoClient : IDisposable
         {
             return await SendActionHttpAsync<TResult>(service, action, payload, timeout, cancellationToken).ConfigureAwait(false);
         }
+
+        // Not HTTP, so this one wants the socket - including when the contract asked for it
+        // explicitly. Auto only reaches here with no HTTP endpoint to fall back to.
+        await ConnectIfNeededAsync().ConfigureAwait(false);
 
         string reqId = $"req_{Interlocked.Increment(ref _requestIdCounter)}";
 
@@ -315,6 +356,8 @@ public class ExoClient : IDisposable
     /// </summary>
     public async Task SubscribeAsync(string topic, CancellationToken cancellationToken = default)
     {
+        await ConnectIfNeededAsync().ConfigureAwait(false);
+
         var request = new ExoSubscriptionRequest("subscribe", topic);
         string json = JsonSerializer.Serialize(request);
         await _transport.SendAsync(json, cancellationToken).ConfigureAwait(false);
@@ -325,6 +368,8 @@ public class ExoClient : IDisposable
     /// </summary>
     public async Task UnsubscribeAsync(string topic, CancellationToken cancellationToken = default)
     {
+        await ConnectIfNeededAsync().ConfigureAwait(false);
+
         var request = new ExoSubscriptionRequest("unsubscribe", topic);
         string json = JsonSerializer.Serialize(request);
         await _transport.SendAsync(json, cancellationToken).ConfigureAwait(false);

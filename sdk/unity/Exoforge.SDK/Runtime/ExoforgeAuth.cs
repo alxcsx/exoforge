@@ -24,20 +24,25 @@ namespace Exoforge.Client.Unity
         /// </summary>
         public async Task<ExoSession> LoginAnonymously()
         {
-            var client = await ExoforgeSDK.ConnectAsync();
+            // No socket. Signing in is a request/response call, and a game that never subscribes
+            // should never open one - so this goes over HTTP and the socket stays shut until
+            // something actually needs it.
+            var client = ExoforgeSDK.Client;
 
             // Fast path: the credential this machine already holds.
             if (ExoTokenStore.HasToken)
             {
-                var existing = await client.AuthenticateAsync(ExoTokenStore.Token);
+                var existing = await AuthenticateAsync(client, ExoTokenStore.Token);
 
-                if (existing.IsSuccess)
+                if (existing != null)
                 {
+                    client.UseToken(ExoTokenStore.Token);
+
                     Current = new ExoSession(
-                        existing.PlayerId ?? ExoTokenStore.PlayerId,
+                        existing.Value.PlayerId,
                         ExoTokenStore.PlayerName,
                         ExoTokenStore.Token,
-                        existing.Scopes ?? new List<string>(),
+                        existing.Value.Scopes,
                         false);
 
                     return Current;
@@ -63,22 +68,60 @@ namespace Exoforge.Client.Unity
                 throw new InvalidOperationException("auth.anonymous did not return a token.");
             }
 
-            var auth = await client.AuthenticateAsync(token);
+            client.UseToken(token);
 
-            if (!auth.IsSuccess)
-            {
-                throw new InvalidOperationException($"Could not authenticate the new session: {auth.Error}");
-            }
+            var auth = await AuthenticateAsync(client, token)
+                ?? throw new InvalidOperationException("Could not authenticate the new session.");
 
-            string playerId = auth.PlayerId ?? "";
             string name = result.ValueKind == JsonValueKind.Object && result.TryGetProperty("name", out var nameProp)
                 ? nameProp.GetString() ?? ""
                 : "";
 
-            ExoTokenStore.SaveSession(token, playerId, auth.Scopes, name);
+            ExoTokenStore.SaveSession(token, auth.PlayerId, auth.Scopes, name);
 
-            Current = new ExoSession(playerId, name, token, auth.Scopes ?? new List<string>(), true);
+            Current = new ExoSession(auth.PlayerId, name, token, auth.Scopes, true);
             return Current;
+        }
+
+        /// <summary>
+        /// Resolves a token to a player over HTTP, returning null when it is not valid.
+        ///
+        /// This is the <c>auth.authenticate</c> action rather than <see cref="ExoClient.AuthenticateAsync"/>,
+        /// which is the socket's own auth frame and needs a connection this deliberately avoids.
+        /// </summary>
+        private static async Task<(string PlayerId, List<string> Scopes)?> AuthenticateAsync(
+            ExoClient client, string token)
+        {
+            try
+            {
+                var result = await client.SendActionAsync<JsonElement>("auth", "authenticate", new { token });
+
+                if (result.ValueKind != JsonValueKind.Object)
+                {
+                    return null;
+                }
+
+                string playerId = result.TryGetProperty("player_id", out var idProp)
+                    ? idProp.GetString() ?? ""
+                    : "";
+
+                var scopes = new List<string>();
+
+                if (result.TryGetProperty("scopes", out var scopesProp) && scopesProp.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var scope in scopesProp.EnumerateArray())
+                    {
+                        scopes.Add(scope.GetString() ?? "");
+                    }
+                }
+
+                return string.IsNullOrEmpty(playerId) ? null : (playerId, scopes);
+            }
+            catch (Exception)
+            {
+                // A stale or rejected credential falls through to a fresh account.
+                return null;
+            }
         }
 
         /// <summary>
@@ -98,7 +141,7 @@ namespace Exoforge.Client.Unity
             }
 
             string trimmed = displayName.Trim();
-            var client = await ExoforgeSDK.ConnectAsync();
+            var client = ExoforgeSDK.Client;
             var result = await client.SendActionAsync<JsonElement>("auth", "set_display_name", new { name = trimmed });
 
             string applied = result.ValueKind == JsonValueKind.Object && result.TryGetProperty("name", out var nameProp)

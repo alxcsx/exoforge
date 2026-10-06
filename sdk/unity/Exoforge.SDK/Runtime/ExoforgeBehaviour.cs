@@ -52,12 +52,30 @@ namespace Exoforge.Client.Unity
         [SerializeField] private float reconnectMaxDelay = 30f;
 
         private Task? _pendingConnect;
+        private ExoClient? _client;
         private ExoforgeRuntimeConfig? _resolvedConfig;
         private CancellationTokenSource? _reconnectCts;
         private int _reconnectAttempt;
 
-        /// <summary>The live client, or null before the first connection attempt.</summary>
-        public ExoClient? Client { get; private set; }
+        /// <summary>
+        /// The client, built on demand from the workspace config.
+        ///
+        /// Built without connecting, because a request/response action over HTTP needs no socket and
+        /// most of a game's calls are exactly that. The socket is opened by <see cref="GetClientAsync"/>
+        /// when something actually needs one.
+        /// </summary>
+        public ExoClient? Client
+        {
+            get
+            {
+                if (_client == null && Config != null)
+                {
+                    _client = CreateClient();
+                }
+
+                return _client;
+            }
+        }
 
         /// <summary>True once the transport is connected.</summary>
         public bool IsConnected => Client?.IsConnected ?? false;
@@ -144,6 +162,28 @@ namespace Exoforge.Client.Unity
                 : throw new InvalidOperationException("Exoforge is not connected. See the console for details.");
         }
 
+        /// <summary>
+        /// Builds a client pointed at the workspace's HTTP endpoint. Kept separate from connecting so
+        /// HTTP actions work with no socket open.
+        /// </summary>
+        private ExoClient CreateClient()
+        {
+            var cfg = Config;
+            var client = new ExoClient();
+
+            if (!string.IsNullOrEmpty(cfg?.HttpUrl))
+            {
+                client.HttpBaseUri = new Uri(cfg!.HttpUrl);
+            }
+
+            client.OnDisconnected += OnClientDisconnected;
+
+            // What makes the connection lazy: the client asks for a socket only when an operation
+            // needs one - a subscription, or an action the contract declared as WebSocket.
+            client.EnsureConnected = async () => { await GetClientAsync().ConfigureAwait(false); };
+            return client;
+        }
+
         /// <summary>Connects to the cluster and authenticates with the stored or configured token.</summary>
         public async Task<bool> ConnectAsync(string? url = null, string? token = null)
         {
@@ -167,16 +207,16 @@ namespace Exoforge.Client.Unity
 
             try
             {
-                Client?.Dispose();
-                Client = new ExoClient();
-                Client.OnDisconnected += OnClientDisconnected;
-
-                if (!string.IsNullOrEmpty(cfg?.HttpUrl))
+                // Reuse the client when the endpoint has not changed. Recreating it would invalidate
+                // the reference game code is holding from ExoforgeSDK.Client, which is now handed out
+                // before anything connects.
+                if (_client == null || url != null || token != null)
                 {
-                    Client.HttpBaseUri = new Uri(cfg!.HttpUrl);
+                    _client?.Dispose();
+                    _client = CreateClient();
                 }
 
-                await Client.ConnectAsync(new Uri(targetUrl));
+                await Client!.ConnectAsync(new Uri(targetUrl));
 
                 if (!string.IsNullOrEmpty(targetToken))
                 {
@@ -223,6 +263,35 @@ namespace Exoforge.Client.Unity
         /// disconnect notifications are themselves delivered through the dispatcher, so a behaviour
         /// that stops pumping — disabled, or destroyed mid-teardown — would never reconnect.
         /// </summary>
+        /// <summary>
+        /// Closes the socket and stops reconnecting, leaving the client usable over HTTP. The socket
+        /// is opened again on demand by <see cref="GetClientAsync"/>.
+        ///
+        /// For a scene that does not use realtime - a long match, with the events living in the menus -
+        /// this releases the connection instead of holding an idle socket for its whole duration.
+        /// </summary>
+        public async Task DisconnectAsync()
+        {
+            // Stop the reconnect loop first: leaving it running would immediately undo this.
+            _reconnectCts?.Cancel();
+            _reconnectCts = null;
+            _reconnectAttempt = 0;
+
+            if (_client == null)
+            {
+                return;
+            }
+
+            try
+            {
+                await _client.DisconnectAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[Exoforge] Disconnect failed: {ex.Message}");
+            }
+        }
+
         private void OnClientDisconnected(Exception? error) => StartReconnecting();
 
         private void StartReconnecting()

@@ -80,8 +80,13 @@ public class SessionLifecycleTests
         yield return WaitForCompletion(second);
 
         Assert.IsTrue(second.IsFaulted);
-        Assert.AreNotSame(clientAfterFailure, behaviour.Client,
-            "the second attempt reused the failed client — it did not retry");
+
+        // The Expect above is what proves the retry: without a fresh attempt there would be no second
+        // "Connection error" to match. The client itself is deliberately kept, because
+        // ExoforgeSDK.Client hands it out before anything connects, so replacing it would invalidate
+        // the reference game code is holding.
+        Assert.AreSame(clientAfterFailure, behaviour.Client,
+            "a failed connection should not swap the client out from under its holders");
     }
 
     // ---- 3.4 ---------------------------------------------------------------------------
