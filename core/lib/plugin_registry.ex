@@ -58,22 +58,37 @@ defmodule Exoforge.PluginRegistry do
     if id_atom != manifest_id, do: :ets.delete(:exo_plugins_mem, id_atom)
 
     existing =
-      :ets.match_object(:exo_services_mem, {{:_, :_}, %{id: manifest_id}}) ++
-        :ets.match_object(:exo_services_mem, {{:_, :_}, %{id: id_atom}})
+      match_services({{:_, :_}, %{id: manifest_id}}) ++
+        match_services({{:_, :_}, %{id: id_atom}})
 
     Enum.each(existing, &:ets.delete_object(:exo_services_mem, &1))
     :ok
   end
 
+  defp lookup_plugin(id), do: safe(:lookup, [:exo_plugins_mem, id])
+  defp match_plugins(pattern), do: safe(:match_object, [:exo_plugins_mem, pattern])
+  defp match_services(pattern), do: safe(:match_object, [:exo_services_mem, pattern])
+  defp all_plugins, do: safe(:tab2list, [:exo_plugins_mem])
+
+  # The registry may not be running - a manifest can be inspected before boot, and a runner can
+  # be started in a test without it. "No registry" means "no services", not a crash.
+  defp safe(fun, args) do
+    apply(:ets, fun, args)
+  rescue
+    ArgumentError -> []
+  end
+
+  defp lookup(key), do: safe(:lookup, [:exo_services_mem, key])
+
   # Fetch service by type and context
   def fetch_service(type, context \\ :global) do
     Enum.find_value(service_keys(type), fn k ->
-      case :ets.lookup(:exo_services_mem, {k, context}) do
+      case lookup({k, context}) do
         [{{^k, ^context}, manifest} | _] ->
           manifest
 
         [] when context != :global ->
-          case :ets.lookup(:exo_services_mem, {k, :global}) do
+          case lookup({k, :global}) do
             [{{^k, :global}, manifest} | _] -> manifest
             [] -> nil
           end
@@ -86,7 +101,7 @@ defmodule Exoforge.PluginRegistry do
 
   # Fetch manifest by ID
   def fetch_manifest(manifest_id) do
-    case :ets.lookup(:exo_plugins_mem, manifest_id) do
+    case lookup_plugin(manifest_id) do
       [{^manifest_id, manifest}] -> manifest
       [] -> nil
     end
@@ -94,7 +109,7 @@ defmodule Exoforge.PluginRegistry do
 
   # Fetch manifest by entry point module
   def fetch_by_module(module) do
-    case :ets.match_object(:exo_plugins_mem, {:_, %{entry_point: module}}) do
+    case match_plugins({:_, %{entry_point: module}}) do
       [{_, manifest} | _] -> manifest
       [] -> nil
     end
@@ -107,7 +122,7 @@ defmodule Exoforge.PluginRegistry do
         []
 
       _ ->
-        :ets.tab2list(:exo_plugins_mem)
+        all_plugins()
         |> Enum.map(fn {_id, manifest} -> manifest end)
     end
   end

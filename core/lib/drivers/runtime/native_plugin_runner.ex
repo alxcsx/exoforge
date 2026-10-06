@@ -264,15 +264,32 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
     db_delete(manifest, Map.get(args, "table"), Map.get(args, "key"))
   end
 
-  defp run_host_call("call_action", args, _manifest) do
+  defp run_host_call("call_action", args, manifest) do
     service = Map.get(args, "service", "")
     action = Map.get(args, "action", "")
     payload = Map.get(args, "payload")
 
-    case ActionDispatcher.dispatch(Exoforge.Atoms.existing(service, service), Exoforge.Atoms.existing(action, action), payload) do
-      {:ok, result} -> result
-      :ok -> true
-      {:error, reason} -> %{error: inspect(reason)}
+    cond do
+      not Manifest.allows_service?(manifest, service) ->
+        # Same rule as the WASM runner: a plugin calls what it declared, nothing else.
+        Logger.warning("[NativePluginRunner] #{manifest.id} called undeclared service #{service}")
+        %{error: "service_not_declared"}
+
+      self_call?(manifest, service) ->
+        # Dispatching here would GenServer.call this very process, which is busy answering this
+        # host call, so the plugin would block until the timeout and take the runner with it.
+        %{error: "cannot_call_own_service"}
+
+      true ->
+        case ActionDispatcher.dispatch(
+               Exoforge.Atoms.existing(service, service),
+               Exoforge.Atoms.existing(action, action),
+               payload
+             ) do
+          {:ok, result} -> result
+          :ok -> true
+          {:error, reason} -> %{error: inspect(reason)}
+        end
     end
   end
 
@@ -297,11 +314,19 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
 
   defp run_host_call(_op, _args, _manifest), do: false
 
+  defp self_call?(manifest, service) do
+    svc = to_string(service)
+    owned = (manifest.provides || []) ++ (manifest.services || [])
+    Enum.any?(owned, &(to_string(&1) == svc))
+  end
+
   # Key-value helpers exposed by the :database plugin (same shape the WASM host bridge uses).
   # Resolved dynamically so the kernel never links against a plugin module.
   defp db_put(manifest, table, key, value) do
-    db_call(:put, [manifest.id, table, key, value])
-    true
+    case db_call(:put, [manifest.id, table, key, value]) do
+      {:ok, _} -> true
+      _ -> false
+    end
   end
 
   defp db_get(manifest, table, key), do: db_call(:get, [manifest.id, table, key])
@@ -309,8 +334,10 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
   defp db_all(manifest, table), do: db_call(:all, [manifest.id, table])
 
   defp db_delete(manifest, table, key) do
-    db_call(:delete, [manifest.id, table, key])
-    true
+    case db_call(:delete, [manifest.id, table, key]) do
+      {:ok, _} -> true
+      _ -> false
+    end
   end
 
   defp db_call(fun, args) do

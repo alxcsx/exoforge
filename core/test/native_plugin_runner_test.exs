@@ -19,6 +19,18 @@ defmodule Exoforge.NativePluginRunnerTest do
         printf '{"type":"action_result","id":%s,"status":"ok","data":1}\\n' "$id" ;;
       *'"action":"boom"'*)
         printf '{"type":"action_result","id":%s,"status":"error","error":"exploded"}\\n' "$id" ;;
+      *'"action":"call_declared"'*)
+        printf '{"type":"host_call","id":1,"op":"call_action","args":{"service":"database","action":"ping","payload":{}}}\\n'
+        IFS= read -r reply
+        printf '{"type":"action_result","id":%s,"status":"ok","data":%s}\\n' "$id" "$reply" ;;
+      *'"action":"call_undeclared"'*)
+        printf '{"type":"host_call","id":1,"op":"call_action","args":{"service":"auth","action":"ping","payload":{}}}\\n'
+        IFS= read -r reply
+        printf '{"type":"action_result","id":%s,"status":"ok","data":%s}\\n' "$id" "$reply" ;;
+      *'"action":"call_self"'*)
+        printf '{"type":"host_call","id":1,"op":"call_action","args":{"service":"stub_plugin","action":"ping","payload":{}}}\\n'
+        IFS= read -r reply
+        printf '{"type":"action_result","id":%s,"status":"ok","data":%s}\\n' "$id" "$reply" ;;
     esac
   done
   """
@@ -42,7 +54,9 @@ defmodule Exoforge.NativePluginRunnerTest do
       version: "1.0.0",
       entry_point: :stub_plugin,
       physical_path: dir,
-      type: :native
+      type: :native,
+      dependencies: [:database],
+      provides: [:stub_plugin]
     }
 
     {:ok, binary: binary, manifest: manifest}
@@ -74,6 +88,41 @@ defmodule Exoforge.NativePluginRunnerTest do
     # The plugin blocks on host_call until the runner replies; if that handshake is wrong the
     # action never returns.
     assert {:ok, 1} = GenServer.call(pid, {:execute_action, "emit", %{}}, 5_000)
+    GenServer.stop(pid)
+  end
+
+  test "a plugin may call a service it declared", %{manifest: manifest, binary: binary} do
+    pid = start_runner(manifest, binary)
+
+    # No database is running in this test, so the dispatch itself fails. The point is that it got
+    # that far: a declared service passes the gate, an undeclared one never reaches the dispatcher.
+    assert {:ok, %{"result" => %{"error" => error}}} =
+             GenServer.call(pid, {:execute_action, "call_declared", %{}}, 5_000)
+
+    refute error == "service_not_declared", "a declared service was refused"
+
+    GenServer.stop(pid)
+  end
+
+  test "a plugin may not call a service it never declared", %{manifest: manifest, binary: binary} do
+    pid = start_runner(manifest, binary)
+
+    # The WASM runner always enforced this; the native runner dispatched anything, so a native
+    # plugin could reach every service in the cluster while claiming none of them.
+    assert {:ok, %{"result" => %{"error" => "service_not_declared"}}} =
+             GenServer.call(pid, {:execute_action, "call_undeclared", %{}}, 5_000)
+
+    GenServer.stop(pid)
+  end
+
+  test "calling its own service fails fast instead of deadlocking", %{manifest: manifest, binary: binary} do
+    pid = start_runner(manifest, binary)
+
+    # Dispatching to itself would GenServer.call the runner that is busy answering the host call,
+    # so without the guard this blocks the runner for the full action timeout.
+    assert {:ok, %{"result" => %{"error" => "cannot_call_own_service"}}} =
+             GenServer.call(pid, {:execute_action, "call_self", %{}}, 5_000)
+
     GenServer.stop(pid)
   end
 

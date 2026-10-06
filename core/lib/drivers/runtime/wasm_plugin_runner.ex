@@ -627,16 +627,7 @@ defmodule Exoforge.Drivers.Runtime.WasmPluginRunner do
     Exoforge.Drivers.Runtime.PluginProxy.ensure(manifest, __MODULE__, wasm_module_name(manifest))
   end
 
-  defp has_capability?(%Manifest{dependencies: deps, provides: provides}, service) do
-    svc_str = to_string(service)
-    allowed = (deps || []) ++ (provides || [])
-
-    Enum.any?(allowed, fn item ->
-      to_string(item) == svc_str or
-        to_string(item) == Macro.underscore(svc_str) or
-        Macro.underscore(to_string(item)) == svc_str
-    end)
-  end
+  defp has_capability?(manifest, service), do: Manifest.allows_service?(manifest, service)
 
   defp safe_to_atom(nil), do: nil
   defp safe_to_atom(val) when is_atom(val), do: val

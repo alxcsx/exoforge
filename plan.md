@@ -71,14 +71,17 @@ shortest working path.
 
 ---
 
-## 4. Future Work (not yet numbered)
+## 4. Out of Scope for the MVP
 
-Listed by name — numbering speculative work is what produced the duplicate and mis-stated entries this
-ledger used to carry. Number it when it starts.
+Not planned. Recorded so they stop reappearing as "next":
 
-- [ ] **Unreal Engine SDK (`ExoforgeUE`)** — native C++ client on the same framed WebSocket protocol
-      and code generation pipeline.
-- [ ] **Clustered Matchmaking & Lobby Plugin** — Horde-backed matchmaking by MMR and latency.
+- **Unreal Engine SDK (`ExoforgeUE`)** — a second engine client. M29/M30 already did the work that
+  would make this cheap (engine SDKs ship the dotnetSDK binaries), but nothing needs it yet.
+- **Clustered matchmaking / lobby** — Horde-backed matchmaking by MMR and latency.
+- **Non-standard plugin runtimes** — anything beyond native (AOT), WASM reactor and Elixir. The
+  three runtimes cover first-party, sandboxed third-party and system plugins.
+
+**MVP scope is the game, the plugin, and the kernel.** Work is measured against those three.
 
 ---
 
