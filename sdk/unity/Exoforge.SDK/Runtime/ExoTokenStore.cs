@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -67,13 +68,26 @@ namespace Exoforge.Client
 
         public static void SaveSession(string token, string? playerId = null, IEnumerable<string>? scopes = null, string? name = null)
         {
+            string resolvedPlayerId = playerId ?? string.Empty;
+
+            // A different account cannot inherit the previous one's name. Callers that reconnect
+            // with a stored token pass no name, so without this the name stuck around and
+            // ExoSession.DisplayName reported the wrong player — which is how someone else's name
+            // ends up on a shared leaderboard.
+            bool samePlayer = !string.IsNullOrEmpty(resolvedPlayerId) &&
+                              string.Equals(PlayerId, resolvedPlayerId, StringComparison.Ordinal);
+
             Token = token;
-            PlayerId = playerId ?? string.Empty;
+            PlayerId = resolvedPlayerId;
             Scopes = scopes != null ? string.Join(",", scopes) : string.Empty;
 
             if (name != null)
             {
                 PlayerName = name;
+            }
+            else if (!samePlayer)
+            {
+                PlayerName = string.Empty;
             }
         }
 

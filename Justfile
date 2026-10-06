@@ -191,6 +191,20 @@ sample-setup:
 	@rm -f {{SAMPLE}}/Temp/UnityLockfile
 	@{{UNITY}} -batchmode -quit -nographics -projectPath "$(pwd)/{{SAMPLE}}" -executeMethod ExoforgeSampleSetup.SetUp -logFile /tmp/exoforge-sample-setup.log; status=$?; grep -E "ExoforgeSample\]" /tmp/exoforge-sample-setup.log || true; exit $status
 
+# Play mode, because Awake does not run in the editor — the session lifecycle is inert there.
+# Run the sample's play-mode tests (session lifecycle)
+sample-play-tests:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	pkill -f "Unity.app/Contents/MacOS/Unity" 2>/dev/null || true
+	sleep 1
+	rm -f {{SAMPLE}}/Temp/UnityLockfile
+	"{{UNITY}}" -batchmode -nographics -projectPath "$(pwd)/{{SAMPLE}}" \
+		-runTests -testPlatform PlayMode \
+		-testResults /tmp/exoforge-play-tests.xml \
+		-logFile /tmp/exoforge-play-tests.log
+	python3 -c "import xml.etree.ElementTree as E; r=E.parse('/tmp/exoforge-play-tests.xml').getroot(); print('  tests=%s passed=%s failed=%s' % (r.get('testcasecount'), r.get('passed'), r.get('failed')))"
+
 # Headless self-check for the sample (board pixel maths + leaderboard parsing)
 sample-check:
 	-@pkill -f "Unity.app/Contents/MacOS/Unity" 2>/dev/null

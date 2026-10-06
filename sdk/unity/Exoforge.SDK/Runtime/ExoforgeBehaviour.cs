@@ -99,9 +99,9 @@ namespace Exoforge.Client.Unity
         /// </summary>
         public async Task<ExoClient> GetClientAsync()
         {
-            if (IsReady)
+            if (Client is { IsConnected: true })
             {
-                return Client!;
+                return Client;
             }
 
             if (_pendingConnect == null)
@@ -109,9 +109,20 @@ namespace Exoforge.Client.Unity
                 _pendingConnect = ConnectAsync();
             }
 
-            await _pendingConnect;
+            try
+            {
+                await _pendingConnect;
+            }
+            finally
+            {
+                // Cleared either way. On success the guard above short-circuits the next call; on
+                // failure the next call has to be allowed to try again. Leaving this set made a
+                // failed connection permanent — the backend being down at boot meant the game could
+                // never connect, and every later call awaited the same finished task.
+                _pendingConnect = null;
+            }
 
-            return Client != null && Client.IsConnected
+            return Client is { IsConnected: true }
                 ? Client
                 : throw new InvalidOperationException("Exoforge is not connected. See the console for details.");
         }
@@ -183,9 +194,29 @@ namespace Exoforge.Client.Unity
 
         private async void OnDestroy()
         {
-            if (Client != null)
+            // Before anything can await: leaving this set meant Current/Instance kept returning a
+            // destroyed object, so game code got a MissingReferenceException instead of the
+            // "no ExoforgeBehaviour in the scene" message this class is careful to give.
+            if (_instance == this)
+            {
+                _instance = null;
+            }
+
+            if (Client == null)
+            {
+                return;
+            }
+
+            try
             {
                 await Client.DisconnectAsync();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[Exoforge] Disconnect during teardown failed: {ex.Message}");
+            }
+            finally
+            {
                 Client.Dispose();
             }
         }

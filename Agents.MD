@@ -11,19 +11,18 @@
 **See [`plan.md`](plan.md) §6.** The Unity + C# SDK works, but four correctness bugs and six DX
 problems make it behave badly the moment anything goes wrong.
 
-Order matters, and two items are first because they are one-liners that decide whether the SDK works
-the first time someone tries it:
+**Done:** 2.1 (a failed connection is permanent), 2.2 (`_instance` never cleared on destroy) and 2.4
+(a stale display name from a previous account) — each with a test that fails when the fix is reverted.
 
-1. **A failed connection is permanent** — `ExoforgeBehaviour` never clears `_pendingConnect`, so the
-   backend being down when the game boots means the game never connects and cannot retry.
-2. **`_instance` is never cleared on destroy**, so game code gets a `MissingReferenceException`
-   instead of the intended "no ExoforgeBehaviour in the scene".
+**Next is 2.3**, the reconnect race in `ExoTransport.ConnectAsync` — it gates 3.4, and the remaining
+DX items (3.1–3.4) are transport behaviour that belongs beside it.
 
-Then 2.4 (a stale display name from a previous account), then 2.3 — which gates reconnect.
+**Test infrastructure now in place:**
 
-**Before the transport work:** `ExoClient` and `ExoTransport` have no unit coverage. They are
-Unity-free, so reconnect, timeout and error-surfacing belong in `Exoforge.Client.Tests` behind a small
-local WebSocket stub. Write the stub first — 2.3 and 3.1–3.4 are otherwise unverifiable.
+- `Exoforge.Client.Tests` — `StubWebSocketServer` + `TransportTests`. `ExoClient`/`ExoTransport` are
+  Unity-free, so reconnect, timeout and error-surfacing get pinned there.
+- `Assets/Tests/PlayMode` — `just sample-play-tests`. `ExoforgeBehaviour` is Unity-only, and `Awake`
+  does not run in the editor, so its lifecycle is only observable in play mode.
 
 Work the checklist in `plan.md` §6 top-down and tick items off as they land.
 

@@ -111,23 +111,21 @@ it), then 2.4, then 2.3 — which gates reconnect.
 
 ### Correctness
 
-- [ ] **2.1 A failed connection is permanent.** `ExoforgeBehaviour` sets `_pendingConnect` once and
-      never clears it; `ConnectAsync` catches and returns `false`, so the task completes *successfully*
-      and every later `GetClientAsync()` re-throws "not connected". Backend down at boot = no retry,
-      ever. *Done when:* a second `GetClientAsync()` after a failed connect retries.
-      *Proves it:* `ExoforgeSampleCheck` against a dead port.
-- [ ] **2.2 `_instance` is never cleared on destroy.** `OnDestroy` only disconnects, so
-      `Current`/`Instance` return a destroyed object and game code gets a `MissingReferenceException`
-      instead of "no ExoforgeBehaviour in the scene". *Proves it:* `ExoforgeSampleCheck`.
+- [x] **2.1 A failed connection is permanent.** `_pendingConnect` was set once and never cleared, so
+      every later `GetClientAsync()` awaited the same finished task. Cleared in a `finally`.
+      *Proven by:* `SessionLifecycleTests.A_failed_connection_can_be_retried` — and it fails when that
+      line is reverted, because the second call then never attempts a connection.
+- [x] **2.2 `_instance` is never cleared on destroy.** `OnDestroy` only disconnected, so
+      `Current`/`Instance` returned a destroyed object. Cleared first, before the teardown awaits.
+      *Proven by:* `SessionLifecycleTests.Instance_is_cleared_when_the_behaviour_is_destroyed`.
 - [ ] **2.3 Reconnect race in `ExoTransport.ConnectAsync`.** It cancels `_cts` and immediately
       replaces `_webSocket` without awaiting the old receive loop, which reads `_webSocket` through
       the field — so it can issue a second `ReceiveAsync` on the *new* socket, or fire a late
       `OnDisconnected`. *Done when:* connecting twice leaves one receive loop.
       *Proves it:* `Exoforge.Client.Tests`.
-- [ ] **2.4 A stale display name survives reconnecting to another account.** `SaveSession` only writes
-      the name when non-null and `ExoforgeBehaviour.ConnectAsync` passes none, so a previous account's
-      name persists and `ExoSession.DisplayName` reports the wrong player. *Done when:* a session with
-      no name clears the stored one. *Proves it:* `Exoforge.Client.Tests` or `ExoforgeSampleCheck`.
+- [x] **2.4 A stale display name survives reconnecting to another account.** `SaveSession` now clears
+      the name when the player id changes — a reconnect as the same player keeps it, a different
+      account cannot inherit it. *Proven by:* two `SessionLifecycleTests` cases.
 
 ### DX
 
@@ -140,7 +138,11 @@ it), then 2.4, then 2.3 — which gates reconnect.
 - [ ] **3.3 Make timeouts configurable.** `FromSeconds(5)`/`(5)`/`(10)` are magic numbers with no
       client-wide default, so a cold first call fails with a bare `TimeoutException`.
 - [ ] **3.4 Reconnect with backoff.** `Update()` keeps pumping a dead dispatcher; nothing reconnects
-      and nothing tells the game. **Depends on 2.3.**
+      and nothing tells the game. **Depends on 2.3.** Two notes from building the tests:
+      `OnDisconnected` is delivered *through the dispatcher*, so once `Update()` stops being called
+      (behaviour disabled or destroyed) disconnect notifications stop too — a reconnect timer must not
+      depend on the pump. And `ConnectAsync` logs a failed attempt with `Debug.LogError`, so a retry
+      loop would put a red error in the console per attempt; that should become a warning.
 - [ ] **3.5 `ExoTokenStore` writes to disk four times per `SaveSession`** (every setter calls
       `PlayerPrefs.Save()`), while `ExoDeviceId.Reset()` is the one place that does *not* save.
       *Proves it:* `ExoforgeSampleCheck`.
@@ -172,6 +174,7 @@ it), then 2.4, then 2.3 — which gates reconnect.
 | `just pack-unity` | the package resolves nothing into this repo | fast |
 | `just clean-room-sdk` | a new Unity project installs the tarball and builds a plugin | slow |
 | `just sample-check` | sample scene, board maths, leaderboard parsing | fast |
+| `just sample-play-tests` | `ExoforgeBehaviour` lifecycle, token store | medium |
 | `Exoforge.Client.Tests` | transport and client behaviour | fast |
 
 **Two gaps this milestone depends on:**
@@ -179,8 +182,11 @@ it), then 2.4, then 2.3 — which gates reconnect.
 1. ~~**`ExoClient` / `ExoTransport` have no unit coverage.**~~ **Done** — `StubWebSocketServer` plus
    `TransportTests` (connect, action round trip, server error, dropped connection). They are
    Unity-free, so this is where reconnect, timeout and error-surfacing get pinned.
-2. **`ExoforgeBehaviour` is Unity-only**, so `ExoforgeSampleCheck` covers it (2.1, 2.2, 2.4, 3.5)
-   rather than a new test framework.
+2. ~~**`ExoforgeBehaviour` is Unity-only.**~~ **Done** — `Assets/Tests/PlayMode` on the Unity test
+   framework (`just sample-play-tests`). Play mode, not edit: `Awake` does not run in the editor, so
+   the behaviour is inert there and none of its lifecycle is observable. `ExoforgeSampleCheck` stays
+   for the headless parts. Note for 3.5: the framework fails a test on an unexpected
+   `Debug.LogError`, so a test expecting a failed connect must declare it.
 
 **Not covered at all:** `Sync Client Bindings` needs a live cluster, so nothing proves the generated
 client compiles inside a fresh project. A fresh project compiles `Assets/` as **C# 9** and the
