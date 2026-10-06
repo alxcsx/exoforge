@@ -35,11 +35,7 @@ clean-build:
 	echo "[clean-build] exporting HEAD"
 	git archive HEAD | tar -x -C "$work"
 	echo "[clean-build] building the engine-agnostic libraries into the package"
-	dotnet build "$work/sdk/csharp/Exoforge.Client" -c Release -f netstandard2.1 --nologo -v q
-	dotnet build "$work/sdk/csharp/Exoforge.Management" -c Release -f netstandard2.1 --nologo -v q
-	mkdir -p "$work/sdk/unity/Exoforge.SDK/Runtime/Plugins" "$work/sdk/unity/Exoforge.SDK/Editor/Plugins"
-	cp "$work/sdk/csharp/Exoforge.Client/bin/Release/netstandard2.1/Exoforge.Client.dll" "$work/sdk/unity/Exoforge.SDK/Runtime/Plugins/"
-	cp "$work/sdk/csharp/Exoforge.Management/bin/Release/netstandard2.1/Exoforge.Management.dll" "$work/sdk/unity/Exoforge.SDK/Editor/Plugins/"
+	just build-unity-sdk "$work"
 
 	echo "[clean-build] building the SDK from a cold tree"
 	MSBUILDDISABLENODEREUSE=1 dotnet build "$work/sdk/csharp/Exoforge.CLI" --nologo -v q
@@ -192,20 +188,22 @@ k8s-destroy:
 UNITY := env_var_or_default("UNITY_PATH", "/Applications/Unity/Hub/Editor/6000.6.3f1/Unity.app/Contents/MacOS/Unity")
 SAMPLE := "sdk/unity/sample_unity"
 
+# Private: stop Unity and clear its lockfile, so a batch run starts from a known state.
+_unity-reset:
+	#!/usr/bin/env bash
+	pkill -f "Unity.app/Contents/MacOS/Unity" 2>/dev/null || true
+	sleep 1
+	rm -f {{SAMPLE}}/Temp/UnityLockfile
+
 # Rebuild the sample scene (idempotent)
-sample-setup:
-	-@pkill -f "Unity.app/Contents/MacOS/Unity" 2>/dev/null
-	@rm -f {{SAMPLE}}/Temp/UnityLockfile
+sample-setup: _unity-reset
 	@{{UNITY}} -batchmode -quit -nographics -projectPath "$(pwd)/{{SAMPLE}}" -executeMethod ExoforgeSampleSetup.SetUp -logFile /tmp/exoforge-sample-setup.log; status=$?; grep -E "ExoforgeSample\]" /tmp/exoforge-sample-setup.log || true; exit $status
 
 # Play mode, because Awake does not run in the editor — the session lifecycle is inert there.
 # Run the sample's play-mode tests (session lifecycle)
-sample-play-tests:
+sample-play-tests: _unity-reset
 	#!/usr/bin/env bash
 	set -euo pipefail
-	pkill -f "Unity.app/Contents/MacOS/Unity" 2>/dev/null || true
-	sleep 1
-	rm -f {{SAMPLE}}/Temp/UnityLockfile
 	"{{UNITY}}" -batchmode -nographics -projectPath "$(pwd)/{{SAMPLE}}" \
 		-runTests -testPlatform PlayMode \
 		-testResults /tmp/exoforge-play-tests.xml \
@@ -213,9 +211,7 @@ sample-play-tests:
 	python3 -c "import xml.etree.ElementTree as E; r=E.parse('/tmp/exoforge-play-tests.xml').getroot(); print('  tests=%s passed=%s failed=%s' % (r.get('testcasecount'), r.get('passed'), r.get('failed')))"
 
 # Headless self-check for the sample (board pixel maths + leaderboard parsing)
-sample-check:
-	-@pkill -f "Unity.app/Contents/MacOS/Unity" 2>/dev/null
-	@rm -f {{SAMPLE}}/Temp/UnityLockfile
+sample-check: _unity-reset
 	@{{UNITY}} -batchmode -nographics -projectPath "$(pwd)/{{SAMPLE}}" -executeMethod ExoforgeSampleCheck.Run -logFile /tmp/exoforge-sample-check.log; status=$?; grep -E "ExoforgeSampleCheck\]" /tmp/exoforge-sample-check.log || true; exit $status
 
 # ---- Unity SDK Package ----
@@ -228,19 +224,25 @@ sample-check:
 #
 # A build step rather than committed binaries: a checked-in DLL is a copy that can silently go stale,
 # which is the same failure a synced source file has.
-build-unity-sdk:
+# Build the engine-agnostic C# libraries into the Unity package
+build-unity-sdk root=".":
 	#!/usr/bin/env bash
 	set -euo pipefail
-	pkg=sdk/unity/Exoforge.SDK
+	root="${1:-.}"
+	pkg="$root/sdk/unity/Exoforge.SDK"
+	out="$root/sdk/csharp"
 
-	dotnet build sdk/csharp/Exoforge.Client -c Release -f netstandard2.1 --nologo -v q
-	dotnet build sdk/csharp/Exoforge.Management -c Release -f netstandard2.1 --nologo -v q
+	dotnet build "$out/Exoforge.Client" -c Release --nologo -v q
+	dotnet build "$out/Exoforge.Management" -c Release --nologo -v q
 
 	mkdir -p "$pkg/Runtime/Plugins" "$pkg/Editor/Plugins"
-	cp sdk/csharp/Exoforge.Client/bin/Release/netstandard2.1/Exoforge.Client.dll "$pkg/Runtime/Plugins/"
-	cp sdk/csharp/Exoforge.Client/bin/Release/netstandard2.1/Exoforge.Client.pdb "$pkg/Runtime/Plugins/" 2>/dev/null || true
-	cp sdk/csharp/Exoforge.Management/bin/Release/netstandard2.1/Exoforge.Management.dll "$pkg/Editor/Plugins/"
-	cp sdk/csharp/Exoforge.Management/bin/Release/netstandard2.1/Exoforge.Management.pdb "$pkg/Editor/Plugins/" 2>/dev/null || true
+	for pair in "Exoforge.Client:Runtime" "Exoforge.Management:Editor"
+	do
+		project="${pair%%:*}"
+		dest="${pair#*:}"
+		cp "$out/$project/bin/Release/netstandard2.1/$project.dll" "$pkg/$dest/Plugins/"
+		cp "$out/$project/bin/Release/netstandard2.1/$project.pdb" "$pkg/$dest/Plugins/" 2>/dev/null || true
+	done
 
 	echo "[build-unity-sdk] Runtime/Plugins + Editor/Plugins populated"
 
@@ -252,13 +254,10 @@ build-unity-sdk:
 # verify that package, which is why it needs no generation step either.
 
 # Force Unity to re-read the package (clears the import caches the editor builds up)
-unity-reimport:
+unity-reimport: _unity-reset
 	#!/usr/bin/env bash
 	set -euo pipefail
 	project=sdk/unity/sample_unity
-	pkill -f "Unity.app/Contents/MacOS/Unity" 2>/dev/null || true
-	sleep 1
-	rm -f "$project/Temp/UnityLockfile"
 	rm -rf "$project/Library/ScriptAssemblies" "$project/Library/Bee" \
 	       "$project/Library/ArtifactDB" "$project/Library/ArtifactDB-lock" \
 	       "$project/Library/SourceAssetDB" "$project/Library/SourceAssetDB-lock"
@@ -324,9 +323,13 @@ pack-unity:
 	# The package must stand alone: a consumer has no Exoforge checkout for a path to point at.
 	# Match the code shapes that resolve into this repository, not prose that mentions it: a doc
 	# comment explaining the rule is not a violation of it.
-	if grep -rIn --exclude-dir=bin --exclude-dir=obj -e '"sdk", *"csharp"' -e '"csharp", *"Exoforge' -e '"Exoforge\.Management", *"Tools~"' dist/package >/dev/null 2>&1; then
+	offenders=$(grep -rIn --exclude-dir=bin --exclude-dir=obj \
+		-e '"sdk", *"csharp"' -e '"csharp", *"Exoforge' -e '"Exoforge\.Management", *"Tools~"' \
+		dist/package || true)
+
+	if [ -n "$offenders" ]; then
 		echo "[Exoforge] FAILED: the package resolves paths into this repository's layout:"
-		grep -rIn --exclude-dir=bin --exclude-dir=obj -e '"sdk", *"csharp"' -e '"csharp", *"Exoforge' -e '"Exoforge\.Management", *"Tools~"' dist/package
+		echo "$offenders"
 		exit 1
 	fi
 	echo "[Exoforge] Package is self-contained."

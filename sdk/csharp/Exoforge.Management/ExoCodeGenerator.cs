@@ -314,7 +314,7 @@ public static class ExoCodeGenerator
 
     /// <summary>
     /// Generates typed plugin service stubs from the contract export: request/response records plus a
-    /// client per service that calls through <see cref="Exoforge.Plugin.SDK.IActionDispatcher"/>. The
+    /// client per service that calls through the plugin SDK's IActionDispatcher. The
     /// stubs depend only on the service contract, never on the plugin that implements it.
     /// </summary>
     /// <summary>
