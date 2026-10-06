@@ -13,10 +13,10 @@
       The manifest generator ships beside the CLI, so a native plugin build finds it without
       knowing anything about the layout it was installed into.
     -->
-    <None Include="..\Exoforge.Management\Tools~\ManifestGen\Program.cs"
+    <None Include="..\..\unity\Exoforge.SDK\Editor\Management\Tools~\ManifestGen\Program.cs"
           Link="Tools~\ManifestGen\Program.cs"
           CopyToOutputDirectory="PreserveNewest" />
-    <None Include="..\Exoforge.Management\Tools~\ManifestGen\ManifestGen.csproj"
+    <None Include="..\..\unity\Exoforge.SDK\Editor\Management\Tools~\ManifestGen\ManifestGen.csproj"
           Link="Tools~\ManifestGen\ManifestGen.csproj"
           CopyToOutputDirectory="PreserveNewest" />
 

@@ -14,8 +14,9 @@ runtime correctness bugs, then DX and API shape.
 **The rule this milestone establishes:** the Unity SDK ships as a UPM tarball into projects that have
 no Exoforge checkout anywhere near them. So **no symlink may point outside the package, no path may
 be resolved by walking up out of it, and no repo layout (`sdk/csharp/...`) may appear in package
-code.** The shared sources are real files in the package, kept in step from `sdk/csharp/` by
-`just sync-unity-sdk` and checked by `just check-unity-sdk` (part of `clean-build`).
+code.** The package's files *are* the source: `Exoforge.Client` and `Exoforge.Management` compile
+them directly, so there is nothing to sync and nothing that can drift. `just unity-reimport` clears
+Unity's import caches when you need the editor to re-read them.
 
 **Phase 1 is done** — no symlink leaves the package, no path is resolved by walking out of it, and
 the Plugin SDK is an explicit external dependency (a scaffolded plugin references the published

@@ -128,12 +128,14 @@ assumptions stay invisible. Two of them are already load-bearing:
 
 ### Phase 1 — Make the package self-contained ✅
 
-- [x] **1.1 No symlink leaves the package.** `Runtime/*.cs` and `Editor/Management/*.cs` were
-      symlinks into `sdk/csharp/`. They are real files now: a symlink out of a UPM package is
-      meaningless to a consumer who installed the tarball, and Unity cannot reliably tell when the
-      *target* of a link changed. `just sync-unity-sdk` keeps them in step from the canonical
-      sources; `just check-unity-sdk` fails on drift and runs as part of `clean-build`. Verified:
-      the package directory copied alone has zero symlinks and every source file.
+- [x] **1.1 The package is the source, not a copy of it.** `Runtime/*.cs` and
+      `Editor/Management/*.cs` were symlinks into `sdk/csharp/` — meaningless to a consumer, and
+      Unity could not reliably tell when the *target* of a link changed. They are now the real
+      files, and they are canonical: `Exoforge.Client` and `Exoforge.Management` compile them
+      directly rather than keeping a copy in step, so there is nothing to sync and nothing that can
+      drift. A sync step would have meant the package was not what a client game actually gets.
+      Verified: the package directory copied alone has zero symlinks and every source file, and
+      `just clean-build` builds a plugin from a pristine export.
 - [x] **1.2 The Plugin SDK is an explicit external dependency.** It is *not* bundled — it is the
       thing that must stay multiplatform, and a UPM tarball is the wrong channel for a `dotnet`
       package. A scaffolded plugin references the published `Exoforge.Plugin.SDK` and the generated
@@ -150,6 +152,8 @@ assumptions stay invisible. Two of them are already load-bearing:
 - [x] **1.5 A packaging check.** `pack-unity` fails if the staged package resolves a path into this
       repository's layout (matching code shapes, not prose that mentions them). Verified it fires on
       an injected walk and passes on a clean package.
+- [x] **1.6 `just unity-reimport`.** The only development convenience the package needs: clearing
+      Unity's import caches so it re-reads the package. No generation step.
 
 **Verified:** building `snake_leaderboard` through the Control Center's own code path now succeeds
 end to end and writes `manifest.exs` — previously it failed with

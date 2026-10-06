@@ -7,11 +7,15 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Tools~ holds the manifest generator: a self-contained project that ships beside this one.
-         It is not part of this assembly, and must not be swept into its compile globs. -->
-    <Compile Remove="Tools~/**" />
-    <None Remove="Tools~/**" />
-    <EmbeddedResource Remove="Tools~/**" />
+    <!--
+      The management source lives in the Unity package, which is the unit of distribution and has
+      to work as-is for a consumer. This project compiles those same files rather than a synced
+      copy, so there is nothing to keep in step and nothing that can drift.
+    -->
+    <Compile Include="..\..\unity\Exoforge.SDK\Editor\Management\ExoDeployer.cs" Link="Management\ExoDeployer.cs" />
+    <Compile Include="..\..\unity\Exoforge.SDK\Editor\Management\ExoWorkspace.cs" Link="Management\ExoWorkspace.cs" />
+    <Compile Include="..\..\unity\Exoforge.SDK\Editor\Management\ExoScaffolder.cs" Link="Management\ExoScaffolder.cs" />
+    <Compile Include="..\..\unity\Exoforge.SDK\Editor\Management\ExoCodeGenerator.cs" Link="Management\ExoCodeGenerator.cs" />
   </ItemGroup>
 
   <ItemGroup>

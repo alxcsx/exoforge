@@ -684,22 +684,45 @@ public class ExoDeployer
         !string.IsNullOrEmpty(dir) && File.Exists(Path.Combine(dir!, "ManifestGen.csproj"));
 
     /// <summary>
-    /// Re-expresses <paramref name="path"/> relative to <paramref name="baseDir"/>.
+    /// Re-expresses <paramref name="path"/> relative to <paramref name="baseDir"/>, when that is
+    /// meaningful.
     ///
-    /// Purely lexical on purpose: when Unity hands us paths that are relative to the same base
-    /// rather than absolute, their relationship is still correct, and this preserves it.
+    /// Both must be written the same way: mixing an absolute path with a relative base produces a
+    /// climb out of the tree that resolves against the wrong directory in the child process. In that
+    /// case the absolute path is kept, which is always correct.
+    ///
+    /// The test is deliberately "does the string start with a separator" rather than
+    /// <see cref="Path.IsPathRooted"/> — Unity's Mono reports a bare relative path as rooted, so
+    /// that check says nothing.
     /// </summary>
     private static string RelativeTo(string baseDir, string path)
     {
+        if (LooksAbsolute(baseDir) != LooksAbsolute(path))
+        {
+            return path;
+        }
+
         try
         {
-            return Path.GetRelativePath(baseDir, path);
+            string relative = Path.GetRelativePath(baseDir, path);
+
+            // Across trees the relative form has to climb to the root first, so it is longer than
+            // the absolute path — which is exactly the signal to keep the absolute one. This is not
+            // hypothetical: macOS reports /tmp and /private/tmp for the same directory, so the two
+            // paths share no common prefix even though they are the same place.
+            return relative.Length <= path.Length ? relative : path;
         }
         catch (ArgumentException)
         {
             return path;
         }
     }
+
+    private static bool LooksAbsolute(string path) =>
+        path.Length > 0 &&
+        (path[0] == Path.DirectorySeparatorChar ||
+         path[0] == Path.AltDirectorySeparatorChar ||
+         (path.Length > 1 && path[1] == Path.VolumeSeparatorChar));
 
     /// <summary>How long a single build step may run before it is killed.</summary>
     private static readonly TimeSpan ProcessTimeout = TimeSpan.FromMinutes(10);
