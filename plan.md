@@ -102,6 +102,10 @@ ledger used to carry. Number it when it starts.
 Running `just clean-room-sdk` for the first time found and fixed `ExoWorkspace.Initialize` writing
 `exoforge.json` into a directory it never created — the first action a new developer takes.
 
+> **Superseded in part by M29.** The engine-agnostic files this milestone made canonical inside the
+> package moved back out: the package now ships them as compiled assemblies instead, so it contains
+> only Unity-specific code. The packaging rule below still holds; who owns those files changed.
+
 ---
 
 ## 6. M28 — SDK Runtime Hardening ✅

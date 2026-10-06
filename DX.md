@@ -75,6 +75,10 @@ This is the largest *capability* gap. Everything else here is friction by compar
 
 **Fix:** a `plugin_manager` log action, a Logs pane in the Control Center, and `exo plugin logs`.
 
+> **Note:** the packaging described in this item was reworked in M27 and again in M29 — the manifest
+> generator now lives in `sdk/csharp/Exoforge.Management/Tools~/ManifestGen` and reaches the Unity
+> package as a build step. See `plan.md` §5 and §7.
+
 ### 4. Native builds require the Exoforge repo checkout
 
 `ExoDeployer.FindManifestGen` walked up looking for `sdk/csharp/Exoforge.ManifestGen` and threw
