@@ -16,26 +16,14 @@ namespace SnakeGame
     [DefaultExecutionOrder(-700)]
     public class SnakeGameView : MonoBehaviour
     {
+        [Header("Layout")]
+        [SerializeField] private float panelWidth = 320f;
+
         [Header("Scene")]
         [SerializeField] private SnakeGameController? game;
         [SerializeField] private SnakePlayerController? player;
         [SerializeField] private SnakeLeaderboard? leaderboard;
 
-        [Header("Board colours")]
-        [SerializeField] private Color squareA = new(0.10f, 0.12f, 0.17f);
-        [SerializeField] private Color squareB = new(0.13f, 0.16f, 0.22f);
-        [SerializeField] private Color bodyColor = new(0.24f, 0.82f, 0.34f);
-        [SerializeField] private Color headColor = new(0.62f, 1.00f, 0.68f);
-        [SerializeField] private Color foodColor = new(1.00f, 0.32f, 0.36f);
-
-        [Header("Layout")]
-        [SerializeField] private float boardPixels = 380f;
-        [SerializeField] private float panelWidth = 320f;
-
-        private Texture2D? _board;
-        private Color32[] _pixels = Array.Empty<Color32>();
-        private int _pixelWidth;
-        private int _pixelHeight;
 
         private string _nameInput = "";
         private bool _submittingName;
@@ -65,14 +53,6 @@ namespace SnakeGame
             }
         }
 
-        private void OnDestroy()
-        {
-            if (_board != null)
-            {
-                Destroy(_board);
-            }
-        }
-
         private void OnDisplayNameRequired()
         {
             _nameInput = "";
@@ -84,101 +64,21 @@ namespace SnakeGame
 
         // ---- board -------------------------------------------------------------------------
 
-        private void EnsureBuffers(int width, int height)
-        {
-            if (_pixelWidth == width && _pixelHeight == height && _board != null)
-            {
-                return;
-            }
-
-            _pixelWidth = width;
-            _pixelHeight = height;
-            _pixels = new Color32[width * height];
-
-            if (_board != null)
-            {
-                Destroy(_board);
-            }
-
-            _board = new Texture2D(width, height, TextureFormat.RGBA32, false)
-            {
-                name = "SnakeBoard",
-                filterMode = FilterMode.Point,   // one pixel, one crisp square
-                wrapMode = TextureWrapMode.Clamp,
-                hideFlags = HideFlags.HideAndDontSave
-            };
-        }
-
-        /// <summary>
-        /// Paints every cell into the pixel buffer, row-major from the bottom-left, and returns it.
-        ///
-        /// Pure index maths over <see cref="SnakeGameController"/>'s state — no rendering — so the
-        /// board can be checked headlessly (<c>ExoforgeSampleCheck.Run</c>).
-        /// </summary>
-        public Color32[] BuildPixels()
-        {
-            if (game == null) return Array.Empty<Color32>();
-
-            int w = game.GridWidth;
-            int h = game.GridHeight;
-            EnsureBuffers(w, h);
-
-            var a = (Color32)squareA;
-            var b = (Color32)squareB;
-
-            // Checkerboard, so the grid reads as a grid of squares even when it is empty.
-            for (int y = 0; y < h; y++)
-            {
-                for (int x = 0; x < w; x++)
-                {
-                    _pixels[y * w + x] = (x + y) % 2 == 0 ? a : b;
-                }
-            }
-
-            foreach (var segment in game.Body)
-            {
-                _pixels[segment.y * w + segment.x] = bodyColor;
-            }
-
-            var head = game.Head;
-            _pixels[head.y * w + head.x] = headColor;
-
-            var food = game.Food;
-            _pixels[food.y * w + food.x] = foodColor;
-
-            return _pixels;
-        }
-
-        private void PaintBoard()
-        {
-            if (game == null || _board == null) return;
-
-            _board.SetPixels32(BuildPixels());
-            _board.Apply(false);
-        }
-
         // ---- hud ---------------------------------------------------------------------------
 
         private void OnGUI()
         {
             if (game == null) return;
 
-            PaintBoard();
-
-            float cell = boardPixels / game.GridWidth;
-            float boardSize = cell * game.GridWidth;
-            var boardRect = new Rect(24f, 64f, boardSize, boardSize);
-
-            GUI.Box(boardRect, "");
-            GUI.DrawTexture(boardRect, _board!, ScaleMode.StretchToFill, false);
-
-            DrawScorePanel(new Rect(boardRect.xMax + 20f, boardRect.y, panelWidth, boardSize));
+            // The board is drawn with sprites (SnakeBoardView); this is the panel beside it.
+            DrawScorePanel(new Rect(20f, 20f, panelWidth, Mathf.Min(Screen.height - 40f, 560f)));
 
             if (player != null && player.NeedsDisplayName)
             {
                 DrawNamePrompt();
             }
         }
+
 
         private void DrawScorePanel(Rect panel)
         {

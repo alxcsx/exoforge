@@ -81,11 +81,24 @@ namespace SnakeGame
             if (State != SnakeGameState.Playing) return;
 
             HandleInput();
+            Advance(Time.deltaTime);
+        }
 
-            _stepTimer += Time.deltaTime;
-            if (_stepTimer >= stepInterval)
+        /// <summary>
+        /// Runs the loop for <paramref name="deltaTime"/> seconds.
+        ///
+        /// Separate from <see cref="Update"/> so a test can drive the game a step at a time instead of
+        /// waiting on real frames, and so the timing is the caller's business rather than Unity's.
+        /// </summary>
+        public void Advance(float deltaTime)
+        {
+            if (State != SnakeGameState.Playing) return;
+
+            _stepTimer += deltaTime;
+
+            while (_stepTimer >= stepInterval && State == SnakeGameState.Playing)
             {
-                _stepTimer = 0f;
+                _stepTimer -= stepInterval;
                 _direction = _pendingDirection;
                 Step();
             }

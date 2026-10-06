@@ -2,6 +2,7 @@
     "name": "Exoforge.Sample.Tests",
     "rootNamespace": "",
     "references": [
+        "SnakeGame",
         "Exoforge.SDK",
         "Exoforge.Generated",
         "UnityEngine.TestRunner",

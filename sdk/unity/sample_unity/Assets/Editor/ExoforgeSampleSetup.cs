@@ -40,6 +40,11 @@ public static class ExoforgeSampleSetup
         // Gameplay: the game itself, switched on once the player is signed in and named.
         var gameplayGo = EnsureObject<SnakeGameController>("Gameplay");
         var game = gameplayGo.GetComponent<SnakeGameController>();
+
+        // The board is drawn with sprites, so it lives with the game rather than with the HUD.
+        var board = gameplayGo.GetComponent<SnakeBoardView>() ?? gameplayGo.AddComponent<SnakeBoardView>();
+        Wire(board, "game", game);
+
         gameplayGo.SetActive(false);
 
         // Player: session owner. Enables Gameplay when ready.
@@ -50,14 +55,14 @@ public static class ExoforgeSampleSetup
         // Hud: everything on screen. Stays active so the name prompt works before gameplay starts.
         var hudGo = EnsureObject<SnakeGameView>("Hud");
         var view = hudGo.GetComponent<SnakeGameView>();
-        var board = hudGo.GetComponent<SnakeLeaderboard>() ?? hudGo.AddComponent<SnakeLeaderboard>();
+        var ranking = hudGo.GetComponent<SnakeLeaderboard>() ?? hudGo.AddComponent<SnakeLeaderboard>();
 
         Wire(view, "game", game);
         Wire(view, "player", player);
-        Wire(view, "leaderboard", board);
+        Wire(view, "leaderboard", ranking);
 
-        Wire(board, "game", game);
-        Wire(board, "player", player);
+        Wire(ranking, "game", game);
+        Wire(ranking, "player", player);
 
         RemoveStaleObjects();
         FrameCamera();
@@ -125,15 +130,27 @@ public static class ExoforgeSampleSetup
         }
     }
 
+    /// <summary>
+    /// Frames the board. One world unit per cell, centred on the origin, so the orthographic size
+    /// that fits the grid is half its height.
+    /// </summary>
     private static void FrameCamera()
     {
         var camera = Camera.main;
         if (camera == null) return;
 
-        // The board is drawn in screen space, so the camera only has to look tidy behind it.
+        var game = Object.FindAnyObjectByType<SnakeGameController>(FindObjectsInactive.Include);
+        if (game == null) return;
+
         camera.orthographic = true;
         camera.clearFlags = CameraClearFlags.SolidColor;
         camera.backgroundColor = new Color(0.04f, 0.05f, 0.08f);
+        camera.transform.position = new Vector3(0f, 0f, -10f);
+
+        float halfHeight = game.GridHeight / 2f + 1f;
+        float halfWidth = (game.GridWidth / 2f + 1f) * ((float)Screen.width / Mathf.Max(Screen.height, 1));
+
+        camera.orthographicSize = Mathf.Max(halfHeight, halfWidth);
     }
 
     private static void Wire(Component target, string field, Object? value)

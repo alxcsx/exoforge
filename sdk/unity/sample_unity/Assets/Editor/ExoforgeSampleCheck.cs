@@ -45,46 +45,54 @@ public static class ExoforgeSampleCheck
     /// A cell's colour has to land on that cell's pixel. This is what catches a transposed
     /// <c>x</c>/<c>y</c> or an off-by-one row stride — invisible until you look at the board.
     /// </summary>
+    /// <summary>
+    /// A cell's colour has to depend on what is in it, and the board has to sit centred on the
+    /// origin. This is what catches a transposed x/y or an off-by-one row — invisible until you look
+    /// at the board, and the reason the checkerboard is asserted to alternate.
+    ///
+    /// The sprites themselves need a frame to exist, so they are checked in the play-mode scene test.
+    /// </summary>
     private static void CheckBoardPixels()
     {
         var gameGo = new GameObject("CheckGameplay");
-        var viewGo = new GameObject("CheckHud");
+        var viewGo = new GameObject("CheckBoard");
 
         try
         {
             var game = gameGo.AddComponent<SnakeGameController>();
-            var view = viewGo.AddComponent<SnakeGameView>();
+            var view = viewGo.AddComponent<SnakeBoardView>();
 
             game.StartNewGame();
             Wire(view, "game", game);
 
             var palette = ReadPalette(view);
-            var pixels = view.BuildPixels();
-
-            int w = game.GridWidth;
-            int h = game.GridHeight;
-
-            Expect(pixels.Length == w * h, $"pixel buffer is {pixels.Length}, expected {w * h}");
 
             var head = game.Head;
-            Expect(pixels[head.y * w + head.x].Equals(palette.Head), $"head cell {head} is not the head colour");
+            Expect(view.CellColour(head).Equals(palette.Head), $"head cell {head} is not the head colour");
 
             var food = game.Food;
-            Expect(pixels[food.y * w + food.x].Equals(palette.Food), $"food cell {food} is not the food colour");
+            Expect(view.CellColour(food).Equals(palette.Food), $"food cell {food} is not the food colour");
 
             foreach (var segment in game.Body)
             {
-                Expect(pixels[segment.y * w + segment.x].Equals(palette.Body), $"body cell {segment} is not the body colour");
+                Expect(view.CellColour(segment).Equals(palette.Body), $"body cell {segment} is not the body colour");
             }
 
-            // An untouched cell keeps the checkerboard, and the checkerboard actually alternates.
             var empty = FirstEmptyCell(game, out _);
-            var emptyColor = pixels[empty.y * w + empty.x];
-            Expect(emptyColor.Equals(palette.SquareA) || emptyColor.Equals(palette.SquareB),
+            var emptyColour = view.CellColour(empty);
+            Expect(emptyColour.Equals(palette.SquareA) || emptyColour.Equals(palette.SquareB),
                 $"empty cell {empty} is not a board colour");
 
-            Expect(!pixels[0].Equals(pixels[1]), "the checkerboard does not alternate along x");
-            Expect(!pixels[0].Equals(pixels[w]), "the checkerboard does not alternate along y");
+            // The checkerboard has to alternate, or the grid is invisible when the board is empty.
+            Expect(!view.CellColour(new Vector2Int(0, 0)).Equals(view.CellColour(new Vector2Int(1, 0))),
+                "the checkerboard does not alternate along x");
+            Expect(!view.CellColour(new Vector2Int(0, 0)).Equals(view.CellColour(new Vector2Int(0, 1))),
+                "the checkerboard does not alternate along y");
+
+            // Centred on the origin: the corners are equal and opposite.
+            Expect(Vector3.Distance(view.CellToWorld(new Vector2Int(0, 0)),
+                       -view.CellToWorld(new Vector2Int(game.GridWidth - 1, game.GridHeight - 1))) < 0.001f,
+                "the board is not centred on the origin");
         }
         finally
         {
@@ -92,6 +100,7 @@ public static class ExoforgeSampleCheck
             UnityEngine.Object.DestroyImmediate(gameGo);
         }
     }
+
 
     private static void CheckLeaderboardParsing()
     {
@@ -149,7 +158,7 @@ public static class ExoforgeSampleCheck
         public Color32 Food { get; }
     }
 
-    private static Palette ReadPalette(SnakeGameView view)
+    private static Palette ReadPalette(SnakeBoardView view)
     {
         var so = new SerializedObject(view);
 
