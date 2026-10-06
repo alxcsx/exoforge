@@ -128,26 +128,14 @@ public partial class ExoforgeControlCenter : EditorWindow
 
     private void OnEnable()
     {
-        // Migrate legacy token ("admin" -> "dev:developer")
-        if (ExoforgeEditorConfig.AdminToken == "admin")
-        {
-            ExoforgeEditorConfig.AdminToken = "dev:developer";
-        }
-
-        // Bi-directional sync between EditorPrefs and PlayerPrefs
-        if (!string.IsNullOrEmpty(ExoforgeEditorConfig.AdminToken))
-        {
-            ExoTokenStore.Token = ExoforgeEditorConfig.AdminToken;
-        }
-        else if (ExoTokenStore.HasToken)
-        {
-            ExoforgeEditorConfig.AdminToken = ExoTokenStore.Token;
-        }
-        else
-        {
-            ExoforgeEditorConfig.AdminToken = ExoforgeEditorConfig.DefaultAdminToken;
-            ExoTokenStore.Token = ExoforgeEditorConfig.DefaultAdminToken;
-        }
+            // The editor authenticates with the runtime session token. Seed it from the active
+            // environment, so exoforge.json decides what a fresh editor signs in as rather than a
+            // hardcoded default. A legacy "admin" migration used to live here; that is the
+            // workspace's business now.
+            if (!ExoTokenStore.HasToken && !string.IsNullOrEmpty(ActiveToken))
+            {
+                ExoTokenStore.Token = ActiveToken;
+            }
 
         if (ExoforgeEditorConfig.WorkspacePath == "exoforge")
         {
@@ -175,9 +163,9 @@ public partial class ExoforgeControlCenter : EditorWindow
 
     private void TryAutoConnect()
     {
-        bool hasSession = !string.IsNullOrEmpty(ExoforgeEditorConfig.PlayerId)
-            || (!string.IsNullOrEmpty(ExoforgeEditorConfig.AdminToken)
-                && ExoforgeEditorConfig.AdminToken != ExoforgeEditorConfig.DefaultAdminToken);
+        bool hasSession = !string.IsNullOrEmpty(ExoTokenStore.PlayerId)
+            || (!string.IsNullOrEmpty(ActiveToken)
+                && ActiveToken != "dev:developer");
         bool hasSavedLogin = !string.IsNullOrEmpty(ExoforgeEditorConfig.RememberedPassword);
 
         // Saved email/password but no session yet: sign in. Otherwise reconnect with the token.
@@ -332,16 +320,16 @@ public partial class ExoforgeControlCenter : EditorWindow
         {
             EditorGUILayout.BeginVertical(GUI.skin.box);
 
-            if (!string.IsNullOrEmpty(ExoforgeEditorConfig.PlayerId))
+            if (!string.IsNullOrEmpty(ExoTokenStore.PlayerId))
             {
                 EditorGUILayout.BeginHorizontal();
                 string sessionLabel = _isConnected
-                    ? $"Signed in as: {ExoforgeEditorConfig.PlayerId}"
-                    : $"Stored session: {ExoforgeEditorConfig.PlayerId} (disconnected)";
+                    ? $"Signed in as: {ExoTokenStore.PlayerId}"
+                    : $"Stored session: {ExoTokenStore.PlayerId} (disconnected)";
                 EditorGUILayout.LabelField(sessionLabel, EditorStyles.boldLabel);
-                if (!string.IsNullOrEmpty(ExoforgeEditorConfig.Scopes))
+                if (!string.IsNullOrEmpty(ExoTokenStore.Scopes))
                 {
-                    EditorGUILayout.LabelField($"Scopes: [{ExoforgeEditorConfig.Scopes}]", EditorStyles.miniLabel);
+                    EditorGUILayout.LabelField($"Scopes: [{ExoTokenStore.Scopes}]", EditorStyles.miniLabel);
                 }
                 EditorGUILayout.EndHorizontal();
             }
@@ -422,13 +410,13 @@ public partial class ExoforgeControlCenter : EditorWindow
         var names = envList.Select(e => e.Name).ToArray();
 
         int currentIndex = envList.FindIndex(e =>
-            string.Equals(e.WsUrl, ExoforgeEditorConfig.ServerUrl, StringComparison.OrdinalIgnoreCase) ||
-            (e.Name == "local" && ExoforgeEditorConfig.IsLocalUrl(ExoforgeEditorConfig.ServerUrl)));
+            string.Equals(e.WsUrl, ActiveWsUrl, StringComparison.OrdinalIgnoreCase) ||
+            (e.Name == "local" && ExoforgeEditorConfig.IsLocalUrl(ActiveWsUrl)));
 
         if (currentIndex < 0)
         {
             var listWithCustom = names.ToList();
-            listWithCustom.Add($"(custom) {ExoforgeEditorConfig.ServerUrl}");
+            listWithCustom.Add($"(custom) {ActiveWsUrl}");
             names = listWithCustom.ToArray();
             currentIndex = names.Length - 1;
         }
@@ -452,11 +440,18 @@ public partial class ExoforgeControlCenter : EditorWindow
         EditorGUILayout.EndHorizontal();
     }
 
+    /// <summary>
+    /// The environments the workspace declares, in exoforge.json order.
+    ///
+    /// Only what the workspace defines. This used to invent local/dev/staging/production with
+    /// hardcoded URLs whenever the config lacked one, so the editor could be pointed at an endpoint
+    /// nobody configured - and a second copy of the same URLs lived in ExoforgeEditorConfig.
+    /// </summary>
     private List<EnvOption> GetConfiguredEnvironments()
     {
         var list = new List<EnvOption>();
 
-        if (_workspace?.Config?.Environments != null && _workspace.Config.Environments.Count > 0)
+        if (_workspace?.Config?.Environments != null)
         {
             foreach (var kvp in _workspace.Config.Environments)
             {
@@ -464,35 +459,43 @@ public partial class ExoforgeControlCenter : EditorWindow
             }
         }
 
-        if (!list.Any(e => e.Name == "local"))
-        {
-            list.Insert(0, new EnvOption("local", "ws://127.0.0.1:4000/ws", "dev:developer", "http://127.0.0.1:4001"));
-        }
-
-        if (!list.Any(e => e.Name == "dev"))
-            list.Add(new EnvOption("dev", "wss://dev.exoforge.game/ws", ""));
-        if (!list.Any(e => e.Name == "staging"))
-            list.Add(new EnvOption("staging", "wss://staging.exoforge.game/ws", ""));
-        if (!list.Any(e => e.Name == "production"))
-            list.Add(new EnvOption("production", "wss://api.exoforge.game/ws", ""));
-
         return list;
     }
 
+    /// <summary>
+    /// The environment the editor is pointed at, or null when the workspace declares none.
+    ///
+    /// exoforge.json is the source of truth for where a cluster is and how to authenticate to it.
+    /// These used to be copied into EditorPrefs and into the token store on every switch: three
+    /// places to configure one thing, and three ways for them to disagree.
+    /// </summary>
+    private EnvOption? ActiveEnvironment
+    {
+        get
+        {
+            var environments = GetConfiguredEnvironments();
+            if (environments.Count == 0) return null;
+
+            string selected = ExoforgeEditorConfig.SelectedEnvironment;
+            return environments.FirstOrDefault(e => e.Name == selected) ?? environments[0];
+        }
+    }
+
+    private string ActiveWsUrl => ActiveEnvironment?.WsUrl ?? "";
+
+    private string ActiveToken => ActiveEnvironment?.Token ?? "";
+
     private void ApplyEnvironment(EnvOption env)
     {
-        ExoforgeEditorConfig.ServerUrl = env.WsUrl;
-        if (!string.IsNullOrEmpty(env.Token))
-        {
-            ExoforgeEditorConfig.AdminToken = env.Token;
-            ExoTokenStore.Token = env.Token;
-        }
+        ExoforgeEditorConfig.SelectedEnvironment = env.Name;
         ShowStatus($"Switched to environment '{env.Name}' ({env.WsUrl}).", MessageType.Info);
+
         if (_isConnected)
         {
             _ = ConnectAsync();
         }
     }
+
 
     private void DrawStatusBanner()
     {

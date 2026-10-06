@@ -111,14 +111,16 @@ public partial class ExoforgeControlCenter : EditorWindow
         // Server Connection & Authentication
         EditorGUILayout.LabelField("Server Connection & Authentication", EditorStyles.boldLabel);
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-        ExoforgeEditorConfig.ServerUrl = EditorGUILayout.TextField("Server URL", ExoforgeEditorConfig.ServerUrl);
+        // Read-only: the endpoint comes from the active environment in exoforge.json.
+        EditorGUILayout.LabelField("Server URL",
+            string.IsNullOrEmpty(ActiveWsUrl) ? "(no environment configured)" : ActiveWsUrl);
+        EditorGUILayout.LabelField("Add or change environments in Exoforge/exoforge.json.", EditorStyles.miniLabel);
 
         EditorGUILayout.BeginHorizontal();
         string newToken = EditorGUILayout.TextField("Bearer Token", ExoTokenStore.Token);
         if (newToken != ExoTokenStore.Token)
         {
             ExoTokenStore.Token = newToken;
-            ExoforgeEditorConfig.AdminToken = newToken;
         }
 
         foreach (var (label, token) in ExoforgeEditorConfig.TokenPresets)
@@ -126,7 +128,6 @@ public partial class ExoforgeControlCenter : EditorWindow
             if (GUILayout.Button(label, EditorStyles.miniButton, GUILayout.Width(45)))
             {
                 ExoTokenStore.Token = token;
-                ExoforgeEditorConfig.AdminToken = token;
                 ShowStatus($"Switched token to '{token}'.", MessageType.Info);
                 if (_isConnected)
                 {
@@ -160,9 +161,9 @@ public partial class ExoforgeControlCenter : EditorWindow
         // Credential Management
         EditorGUILayout.LabelField("Credential Persistence", EditorStyles.boldLabel);
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-        EditorGUILayout.LabelField($"Active Token: {ExoforgeEditorConfig.AdminToken}", EditorStyles.miniLabel);
-        EditorGUILayout.LabelField($"Stored Player ID: {ExoforgeEditorConfig.PlayerId}", EditorStyles.miniLabel);
-        EditorGUILayout.LabelField($"Scopes: {ExoforgeEditorConfig.Scopes}", EditorStyles.miniLabel);
+        EditorGUILayout.LabelField($"Active Token: {ActiveToken}", EditorStyles.miniLabel);
+        EditorGUILayout.LabelField($"Stored Player ID: {ExoTokenStore.PlayerId}", EditorStyles.miniLabel);
+        EditorGUILayout.LabelField($"Scopes: {ExoTokenStore.Scopes}", EditorStyles.miniLabel);
 
         EditorGUILayout.Space(4);
         if (GUILayout.Button("Purge All Saved Credentials (EditorPrefs & PlayerPrefs)"))

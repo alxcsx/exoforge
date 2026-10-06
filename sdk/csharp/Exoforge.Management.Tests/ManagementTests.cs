@@ -387,29 +387,41 @@ public class ManagementTests : IDisposable
     }
 
     [Fact]
-    public void EditorConfig_Returns_Sensible_Defaults()
+    public void EditorConfig_Holds_Only_Editor_Local_State()
     {
-        Assert.Equal("ws://127.0.0.1:4000/ws", Exoforge.Unity.Editor.ExoforgeEditorConfig.DefaultServerUrl);
-        Assert.Equal("dev:developer", Exoforge.Unity.Editor.ExoforgeEditorConfig.DefaultAdminToken);
+        // The connection and the session live in exoforge.json and the token store. What is left here
+        // is genuinely per-editor: where the workspace is, which environment is selected, local paths.
         Assert.Equal("Exoforge", Exoforge.Unity.Editor.ExoforgeEditorConfig.DefaultWorkspaceRelPath);
         Assert.Equal("Assets/Exoforge/Generated/ExoforgeServices.g.cs", Exoforge.Unity.Editor.ExoforgeEditorConfig.DefaultGeneratedScriptRelPath);
-    }
 
-    [Fact]
-    public void EditorConfig_Session_Management_Works()
-    {
-        Exoforge.Unity.Editor.ExoforgeEditorConfig.SaveSession("custom_token_123", "player_456", new[] { "admin", "player" });
-        Assert.Equal("custom_token_123", Exoforge.Unity.Editor.ExoforgeEditorConfig.AdminToken);
-        Assert.Equal("player_456", Exoforge.Unity.Editor.ExoforgeEditorConfig.PlayerId);
-        Assert.Equal("admin,player", Exoforge.Unity.Editor.ExoforgeEditorConfig.Scopes);
+        Exoforge.Unity.Editor.ExoforgeEditorConfig.SelectedEnvironment = "staging";
+        Assert.Equal("staging", Exoforge.Unity.Editor.ExoforgeEditorConfig.SelectedEnvironment);
 
         Exoforge.Unity.Editor.ExoforgeEditorConfig.LastSyncTime = "2026-10-03 18:00:00";
         Assert.Equal("2026-10-03 18:00:00", Exoforge.Unity.Editor.ExoforgeEditorConfig.LastSyncTime);
+    }
 
-        Exoforge.Unity.Editor.ExoforgeEditorConfig.ClearSession();
-        Assert.Empty(Exoforge.Unity.Editor.ExoforgeEditorConfig.AdminToken);
-        Assert.Empty(Exoforge.Unity.Editor.ExoforgeEditorConfig.PlayerId);
-        Assert.Empty(Exoforge.Unity.Editor.ExoforgeEditorConfig.Scopes);
+    [Fact]
+    public void EditorConfig_Does_Not_Shadow_The_Workspace_Or_The_Token_Store()
+    {
+        // These were duplicated here, so the editor had three places to configure one thing. If any
+        // of them comes back, it has started mirroring the workspace again.
+        var type = typeof(Exoforge.Unity.Editor.ExoforgeEditorConfig);
+
+        var members = type.GetProperties().Select(p => p.Name)
+            .Concat(type.GetMethods().Select(m => m.Name))
+            .ToList();
+
+        string[] shadowed =
+        {
+            "ServerUrl", "AdminToken", "PlayerId", "Scopes",
+            "SaveSession", "ClearSession", "EnvironmentPresets",
+        };
+
+        foreach (string name in shadowed)
+        {
+            Assert.DoesNotContain(name, members);
+        }
     }
 
     private static string FindRepoRoot()

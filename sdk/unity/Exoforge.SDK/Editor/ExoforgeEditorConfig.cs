@@ -20,29 +20,43 @@ public static class ExoforgeEditorConfig
     // Per-project keys: suffixed with the project name so separate projects don't share
     // session/credentials. Keyed by product name (not folder path) so duplicated copies of the
     // same project share one login.
-    private static string ServerUrlKey => Scoped("Exoforge_ServerUrl");
-    private static string AdminTokenKey => Scoped("Exoforge_AdminToken");
+    private static string SelectedEnvironmentKey => Scoped("Exoforge_Environment");
+    /// <summary>
+    /// Which environment in exoforge.json the editor is pointed at.
+    ///
+    /// Only the *selection* is editor-local. The URLs and the token live in the workspace config,
+    /// which is the source of truth — they used to be mirrored into EditorPrefs and into the token
+    /// store, which is three places to configure one thing and three ways for them to disagree.
+    /// </summary>
+    public static string SelectedEnvironment
+    {
+        get
+        {
+#if UNITY_EDITOR
+            return EditorPrefs.GetString(SelectedEnvironmentKey, "local");
+#else
+            return _fallbackSelectedEnvironment;
+#endif
+        }
+        set
+        {
+#if UNITY_EDITOR
+            EditorPrefs.SetString(SelectedEnvironmentKey, value ?? "local");
+#else
+            _fallbackSelectedEnvironment = value ?? "local";
+#endif
+        }
+    }
+
     private static string WorkspacePathKey => Scoped("Exoforge_WorkspacePath");
     private static string GeneratedScriptPathKey => Scoped("Exoforge_GeneratedScriptPath");
-    private static string PlayerIdKey => Scoped("Exoforge_PlayerId");
-    private static string ScopesKey => Scoped("Exoforge_Scopes");
     private static string LastSyncTimeKey => Scoped("Exoforge_LastSyncTime");
     private static string LoginEmailKey => Scoped("Exoforge_LoginEmail");
     private static string LoginPasswordKey => Scoped("Exoforge_LoginPassword");
 
-    public const string DefaultServerUrl = "ws://127.0.0.1:4000/ws";
-    public const string DefaultAdminToken = "dev:developer";
     public const string DefaultLoginEmail = "dev@exoforge.game";
     public const string DefaultWorkspaceRelPath = "Exoforge";
     public const string DefaultGeneratedScriptRelPath = "Assets/Exoforge/Generated/ExoforgeServices.g.cs";
-
-    public static readonly (string Name, string Url)[] EnvironmentPresets = new[]
-    {
-        ("local", "ws://127.0.0.1:4000/ws"),
-        ("dev", "wss://dev.exoforge.game/ws"),
-        ("staging", "wss://staging.exoforge.game/ws"),
-        ("production", "wss://api.exoforge.game/ws")
-    };
 
     public static readonly (string Label, string Token)[] TokenPresets = new[]
     {
@@ -51,19 +65,16 @@ public static class ExoforgeEditorConfig
         ("Guest", "guest")
     };
 
+    /// <summary>True when the endpoint is on this machine. Uses the URI rather than a port literal.</summary>
     public static bool IsLocalUrl(string url)
     {
-        if (string.IsNullOrEmpty(url)) return false;
-        return url.Contains("127.0.0.1:4000") || url.Contains("localhost:4000");
+        return Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.IsLoopback;
     }
 
 #if !UNITY_EDITOR
-    private static string _fallbackServerUrl = DefaultServerUrl;
-    private static string _fallbackAdminToken = DefaultAdminToken;
+    private static string _fallbackSelectedEnvironment = "local";
     private static string _fallbackWorkspacePath = DefaultWorkspaceRelPath;
     private static string _fallbackGeneratedPath = DefaultGeneratedScriptRelPath;
-    private static string _fallbackPlayerId = "";
-    private static string _fallbackScopes = "";
     private static string _fallbackLastSyncTime = "";
     private static string _fallbackDotnetPath = "dotnet";
     private static string _fallbackLoginEmail = DefaultLoginEmail;
@@ -104,95 +115,6 @@ public static class ExoforgeEditorConfig
 
     private static string Scoped(string key) => $"{key}_{ProjectScope}";
 #endif
-
-    public static string ServerUrl
-    {
-        get
-        {
-#if UNITY_EDITOR
-            return EditorPrefs.GetString(ServerUrlKey, DefaultServerUrl);
-#else
-            return _fallbackServerUrl;
-#endif
-        }
-        set
-        {
-#if UNITY_EDITOR
-            EditorPrefs.SetString(ServerUrlKey, value ?? DefaultServerUrl);
-#else
-            _fallbackServerUrl = value ?? DefaultServerUrl;
-#endif
-        }
-    }
-
-    public static string AdminToken
-    {
-        get
-        {
-#if UNITY_EDITOR
-            return EditorPrefs.GetString(AdminTokenKey, DefaultAdminToken);
-#else
-            return _fallbackAdminToken;
-#endif
-        }
-        set
-        {
-            string val = value ?? string.Empty;
-#if UNITY_EDITOR
-            EditorPrefs.SetString(AdminTokenKey, val);
-            PlayerPrefs.SetString("Exoforge.Token", val);
-            PlayerPrefs.Save();
-#else
-            _fallbackAdminToken = val;
-#endif
-        }
-    }
-
-    public static string PlayerId
-    {
-        get
-        {
-#if UNITY_EDITOR
-            return EditorPrefs.GetString(PlayerIdKey, string.Empty);
-#else
-            return _fallbackPlayerId;
-#endif
-        }
-        set
-        {
-            string val = value ?? string.Empty;
-#if UNITY_EDITOR
-            EditorPrefs.SetString(PlayerIdKey, val);
-            PlayerPrefs.SetString("Exoforge.PlayerId", val);
-            PlayerPrefs.Save();
-#else
-            _fallbackPlayerId = val;
-#endif
-        }
-    }
-
-    public static string Scopes
-    {
-        get
-        {
-#if UNITY_EDITOR
-            return EditorPrefs.GetString(ScopesKey, string.Empty);
-#else
-            return _fallbackScopes;
-#endif
-        }
-        set
-        {
-            string val = value ?? string.Empty;
-#if UNITY_EDITOR
-            EditorPrefs.SetString(ScopesKey, val);
-            PlayerPrefs.SetString("Exoforge.Scopes", val);
-            PlayerPrefs.Save();
-#else
-            _fallbackScopes = val;
-#endif
-        }
-    }
 
     public static string LastSyncTime
     {
@@ -323,26 +245,6 @@ public static class ExoforgeEditorConfig
         }
     }
 
-    public static void SaveSession(string token, string? playerId = null, System.Collections.Generic.IEnumerable<string>? scopes = null)
-    {
-        AdminToken = token;
-        PlayerId = playerId ?? string.Empty;
-        Scopes = scopes != null ? string.Join(",", scopes) : string.Empty;
-    }
-
-    public static void ClearSession()
-    {
-        AdminToken = string.Empty;
-        PlayerId = string.Empty;
-        Scopes = string.Empty;
-        RememberedPassword = string.Empty;
-#if UNITY_EDITOR
-        PlayerPrefs.DeleteKey("Exoforge.Token");
-        PlayerPrefs.DeleteKey("Exoforge.PlayerId");
-        PlayerPrefs.DeleteKey("Exoforge.Scopes");
-        PlayerPrefs.Save();
-#endif
-    }
 
     /// <summary>
     /// The Unity project root, always absolute.

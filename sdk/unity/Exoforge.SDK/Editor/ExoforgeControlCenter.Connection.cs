@@ -28,14 +28,14 @@ public partial class ExoforgeControlCenter : EditorWindow
         {
             var sw = Stopwatch.StartNew();
             using var testClient = new ExoClient();
-            await testClient.ConnectAsync(new Uri(ExoforgeEditorConfig.ServerUrl));
+            await testClient.ConnectAsync(new Uri(ActiveWsUrl));
             sw.Stop();
-            ShowStatus($"Server reachable at {ExoforgeEditorConfig.ServerUrl} in {sw.ElapsedMilliseconds} ms.", MessageType.Info);
+            ShowStatus($"Server reachable at {ActiveWsUrl} in {sw.ElapsedMilliseconds} ms.", MessageType.Info);
             await testClient.DisconnectAsync();
         }
         catch (Exception ex)
         {
-            ShowStatus($"Ping failed to {ExoforgeEditorConfig.ServerUrl}: {ex.Message}", MessageType.Error);
+            ShowStatus($"Ping failed to {ActiveWsUrl}: {ex.Message}", MessageType.Error);
         }
         Repaint();
     }
@@ -62,17 +62,16 @@ public partial class ExoforgeControlCenter : EditorWindow
             _editorClient = new ExoClient();
             _editorClient.OnAnyEvent += HandleIncomingEvent;
 
-            await _editorClient.ConnectAsync(new Uri(ExoforgeEditorConfig.ServerUrl));
+            await _editorClient.ConnectAsync(new Uri(ActiveWsUrl));
 
             var auth = await _editorClient.AuthenticateAsync(ExoTokenStore.Token);
             if (auth.IsSuccess)
             {
                 _isConnected = true;
                 _connectionStatus = auth.PlayerId ?? "authenticated";
-                ExoforgeEditorConfig.SaveSession(ExoTokenStore.Token, auth.PlayerId, auth.Scopes);
                 ExoTokenStore.SaveSession(ExoTokenStore.Token, auth.PlayerId, auth.Scopes);
 
-                ShowStatus($"Connected as {auth.PlayerId} to {ExoforgeEditorConfig.ServerUrl}.", MessageType.Info);
+                ShowStatus($"Connected as {auth.PlayerId} to {ActiveWsUrl}.", MessageType.Info);
 
                 await _editorClient.SubscribeAsync("*");
                 await RefreshRemoteInfoAsync();
@@ -97,7 +96,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         {
             _isConnected = false;
             _connectionStatus = "Connection error";
-            ShowStatus($"Could not connect to {ExoforgeEditorConfig.ServerUrl}: {ex.Message}", MessageType.Error);
+            ShowStatus($"Could not connect to {ActiveWsUrl}: {ex.Message}", MessageType.Error);
         }
         finally
         {
@@ -143,7 +142,6 @@ public partial class ExoforgeControlCenter : EditorWindow
             if (_editorClient == null || !_isConnected)
             {
                 ExoTokenStore.Token = "guest";
-                ExoforgeEditorConfig.AdminToken = "guest";
                 await ConnectAsync();
                 if (!_isConnected) return;
             }
@@ -160,7 +158,7 @@ public partial class ExoforgeControlCenter : EditorWindow
             }
 
             ExoTokenStore.SaveSession(token, playerId);
-            ExoforgeEditorConfig.SaveSession(token, playerId);
+            ExoTokenStore.SaveSession(token, playerId);
 
             // Keep the dev login for the next editor start.
             ExoforgeEditorConfig.LastLoginEmail = _loginEmail;
@@ -180,7 +178,7 @@ public partial class ExoforgeControlCenter : EditorWindow
     private async Task LogOutAsync()
     {
         ExoTokenStore.Clear();
-        ExoforgeEditorConfig.ClearSession();
+        ExoTokenStore.Clear();
         await DisconnectAsync();
         ShowStatus("Logged out and cleared stored credentials from EditorPrefs and PlayerPrefs.", MessageType.Info);
         Repaint();
