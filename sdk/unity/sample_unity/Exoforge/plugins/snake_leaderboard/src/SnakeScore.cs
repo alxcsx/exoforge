@@ -38,4 +38,8 @@ public record SnakeScoreSubmitted
     public string Name { get; init; } = "";
     public int Score { get; init; }
     public int SnakeLength { get; init; }
+
+    // Whether this run changed the board. Every submission is announced - a subscriber wants to know
+    // a run was recorded, not only when it beats something - but a game can celebrate a best on this.
+    public bool Improved { get; init; }
 }

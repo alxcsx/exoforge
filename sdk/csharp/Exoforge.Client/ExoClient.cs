@@ -368,7 +368,13 @@ public class ExoClient : IDisposable
     /// </summary>
     public async Task UnsubscribeAsync(string topic, CancellationToken cancellationToken = default)
     {
-        await ConnectIfNeededAsync().ConfigureAwait(false);
+        // Deliberately not ConnectIfNeededAsync: unsubscribing is only meaningful on an open socket,
+        // and the server drops the subscription with the connection anyway. Connecting here meant
+        // tearing a scene down opened a socket, and a failure to do so logged an error on the way out.
+        if (!IsConnected)
+        {
+            return;
+        }
 
         var request = new ExoSubscriptionRequest("unsubscribe", topic);
         string json = JsonSerializer.Serialize(request);

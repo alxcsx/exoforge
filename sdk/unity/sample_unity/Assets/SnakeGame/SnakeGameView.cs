@@ -152,7 +152,7 @@ namespace SnakeGame
                 for (int i = 0; i < leaderboard.Rows.Count; i++)
                 {
                     var row = leaderboard.Rows[i];
-                    string me = player != null && player.DisplayName == row.Name ? " <color=#00FF88>◀ you</color>" : "";
+                    string me = player != null && player.PlayerId == row.PlayerId ? " <color=#00FF88>◀ you</color>" : "";
                     GUILayout.Label($"{i + 1,2}. <b>{row.Score,5}</b>  {row.Name}{me}");
                 }
             }

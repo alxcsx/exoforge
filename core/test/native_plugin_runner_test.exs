@@ -126,6 +126,36 @@ defmodule Exoforge.NativePluginRunnerTest do
     GenServer.stop(pid)
   end
 
+  test "a shaped manifest does not crash the capability checks", %{binary: binary} do
+    # PluginRegistry shapes `provides` from [:name] into the service metadata maps before anything
+    # dispatches, so this is what a running plugin actually carries. The checks used to_string/1 on
+    # those entries, which raises Protocol.UndefinedError on a map - every native plugin that called
+    # another service crashed. The earlier tests passed because they used an unshaped atom list.
+    shaped = %Manifest{
+      id: :stub_plugin,
+      name: "stub_plugin",
+      version: "1.0.0",
+      entry_point: :stub_plugin,
+      physical_path: Path.dirname(binary),
+      type: :native,
+      dependencies: [%{name: :database, actions: [], events: [], resources: []}],
+      provides: [%{name: :stub_plugin, actions: [], events: [], resources: []}]
+    }
+
+    pid = start_runner(shaped, binary)
+
+    assert {:ok, %{"result" => %{"error" => "cannot_call_own_service"}}} =
+             GenServer.call(pid, {:execute_action, "call_self", %{}}, 5_000)
+
+    # And a declared dependency is still allowed through to the dispatcher.
+    assert {:ok, %{"result" => %{"error" => error}}} =
+             GenServer.call(pid, {:execute_action, "call_declared", %{}}, 5_000)
+
+    refute error == "service_not_declared", "a declared dependency was refused"
+
+    GenServer.stop(pid)
+  end
+
   test "fails loudly when the binary is missing", %{manifest: manifest} do
     missing = %{manifest | physical_path: Path.join(System.tmp_dir!(), "exo_native_missing")}
     assert {:error, {:binary_not_found, _}} = NativePluginRunner.load(missing)

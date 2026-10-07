@@ -44,18 +44,18 @@ public class SnakeLeaderboardPlugin
         Database.Put(Table, playerId, best);
         Logger?.Info($"[snake_leaderboard] {playerId} best {best.Score}");
 
-        // Only when the board actually changed. A worse run is not a leaderboard update, and
-        // broadcasting it would make every subscriber re-read for nothing.
-        if (improved)
+        // Every submission is announced, with `improved` saying whether the board changed. Announcing
+        // only improvements looks right and is not: the board keeps its best across runs, so a run
+        // that ties the stored score emits nothing, and a subscriber cannot tell that from a broken
+        // subscription.
+        HostBridge.EmitEvent("snake:leaderboard", "score_submitted", new SnakeScoreSubmitted
         {
-            HostBridge.EmitEvent("snake:leaderboard", "score_submitted", new SnakeScoreSubmitted
-            {
-                PlayerId = playerId,
-                Name = string.IsNullOrEmpty(name) ? playerId : name,
-                Score = best.Score,
-                SnakeLength = best.SnakeLength
-            });
-        }
+            PlayerId = playerId,
+            Name = string.IsNullOrEmpty(name) ? playerId : name,
+            Score = score,
+            SnakeLength = snakeLength,
+            Improved = improved
+        });
 
         return best.Score;
     }

@@ -317,7 +317,7 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
   defp self_call?(manifest, service) do
     svc = to_string(service)
     owned = (manifest.provides || []) ++ (manifest.services || [])
-    Enum.any?(owned, &(to_string(&1) == svc))
+    Enum.any?(owned, &(Manifest.service_name(&1) == svc))
   end
 
   # Key-value helpers exposed by the :database plugin (same shape the WASM host bridge uses).
