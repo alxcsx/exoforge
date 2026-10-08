@@ -14,8 +14,9 @@ using UnityEngine;
 /// <c>just clean-room-sdk</c>; not part of the shipped package.
 ///
 /// The one thing the project cannot supply itself is <c>Exoforge.Plugin.SDK</c>, which is an
-/// explicit external dependency: the check points a NuGet feed at a local pack of it, which is the
-/// same shape as consuming it from nuget.org.
+/// explicit external dependency. <c>just clean-room-sdk</c> hands over a local pack of it through
+/// <c>EXOFORGE_FEED</c>, and nothing else in the flow knows the difference between that and
+/// nuget.org.
 /// </summary>
 public static class CleanRoomProbe
 {

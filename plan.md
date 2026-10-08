@@ -1,9 +1,14 @@
 # Exoforge Architecture & Plan (`plan.md`)
 
-> **Status**: Kernel, 7 standard plugins, C# Client SDK, C# Plugin SDK, C# Management Engine (`exo` CLI),
-> Unity SDK (`com.exoforge.sdk`), Producer Studio, clustering and Kubernetes manifests are **complete**
-> — **230 Elixir + 47 C# = 277 tests passing**, plus a live E2E vertical slice.
+> **Status**: Kernel, 9 standard plugins, C# Client SDK, C# Plugin SDK, C# Management Engine (`exo`
+> CLI), Unity SDK (`com.exoforge.sdk`), Producer Studio, clustering and Kubernetes manifests are
+> **complete** — **240 Elixir + 71 C# = 311 tests passing**, plus a live E2E vertical slice.
 > **Benchmarks**: 729k stateful actor ops/sec, 1.4 µs latency, 0.07 ms 50x event fanout.
+
+Completed work is not kept here. It is in `git log`, which is the record that does not drift; this
+file is the invariants and what is next. Milestone identifiers (**M1**…**M30**) are historical and are
+referenced from `Agents.MD`, `DX.md` and commit messages, so they stay in the table below and nowhere
+else.
 
 ---
 
@@ -18,10 +23,12 @@
 - **Pure C# outside Mix.** Game developers have no Elixir toolchain. Workspace init, scaffolding,
   codegen and deploy are pure C# (`netstandard2.1`).
 - **The Unity package is the unit of distribution.** It ships into projects with no Exoforge checkout
-  anywhere near them, so it must work exactly as it is shipped. See M27.
+  anywhere near them, so it must work exactly as it is shipped.
 - **No engine SDK owns engine-agnostic code.** The C# client and the plugin tooling belong to the
   dotnet side; each engine ships them as a compiled assembly. Adding an engine adds a bucket that
-  ships those libraries, not one that reimplements them. See M29 and §9.
+  ships those libraries, not one that reimplements them.
+- **A project names no other project's path.** Where a build input comes from is a property of the
+  environment, decided by the hooks in `Directory.Build.targets`, not by a reference in a `.csproj`.
 
 ```
 database ──▶ auth ──▶ player_data
@@ -35,9 +42,6 @@ plugin_manager ───▶ (independent root)
 ---
 
 ## 2. Completed Milestones
-
-Numbers are historical identifiers, not a sequence to maintain — they are referenced from
-`Agents.MD`, `DX.md` and commit messages.
 
 | M | Delivered |
 | :--- | :--- |
@@ -53,6 +57,11 @@ Numbers are historical identifiers, not a sequence to maintain — they are refe
 | **M24** | Plugin Tooling DX ([`DX.md`](DX.md)) — 21 fixes across plugin creation, upload and management |
 | **M25** | LiveOps *(withdrawn)* — time windows, schedule timeline and calendar view removed; game rules belong in the game, not the platform |
 | **M26** | `Exoforge.Plugin.Generator` — a Roslyn source generator replaces the out-of-process `ManifestGen` tool. The manifest, the entry point, the action/event dispatch table and the contract interfaces come from the plugin's own compile, so native and WASM builds share one pipeline, the host no longer reflects over a generated plugin's methods, and a C# plugin declares services on a class or on a contract interface in its own assembly |
+| **M27** | Self-Contained Unity Package — no symlink leaves the package, no path is resolved by walking out of it, and nothing in package code names this repository's layout |
+| **M28** | SDK Runtime Hardening — four correctness bugs and six DX problems on the game-facing path, each with a test that fails when the fix is reverted |
+| **M29** | Engine-Agnostic C# Core — the C# client and plugin tooling moved out of the Unity package, which now contains only Unity-specific code and ships the libraries as binaries |
+| **M30** | Duplication and Build-Step Cleanup — one code generator, one manifest path, no second implementation of anything |
+| **M31** | Dev Hooks and the Plugin Feed — `Directory.Build.targets` supplies a plugin's SDK, generator and manifest plumbing from a single opt-in, the Unity package stages its own libraries by building, and `Exoforge.Plugin.SDK` packs into a feed a plugin outside this repository builds against |
 
 ---
 
@@ -72,58 +81,24 @@ shortest working path.
 
 ---
 
-## 4. Next — The Event Path, and the Four Capabilities
+## 4. Next: Put the SDK on a Real Feed
 
-Written after auditing what the sample actually exercises. The finding is that it exercises less than
-it looks like it does.
+The only open item, and it is release work, not code.
 
-### What is verified today
+`just pack-sdk` fills `dist/nuget` and a plugin outside this repository builds against it — the local
+development path is closed, and `just clean-room-sdk` proves it from a pristine export. What is
+missing is a feed that exists for people who are not on this machine: a scaffolded plugin published
+for a game developer still resolves `Exoforge.Plugin.SDK` from their own sources, and a consumer with
+no checkout has nothing to restore from.
 
-| Capability | State | Evidence |
-| :--- | :--- | :--- |
-| **Run** | ✅ | `SceneTests` drives a run into a wall; `Advance` makes it deterministic |
-| **Connect** | ✅ | Lazy (login opens no socket), reconnect with backoff, `DisconnectAsync` |
-| **Send HTTP** | ✅ | Live cluster log: `POST /api/auth/anonymous` → 200, `POST /api/auth/authenticate` → 200 |
-| **Receive events** | ❌ **not implemented at all** | see below |
-
-### The event path: infrastructure complete, unused
-
-Every piece exists and has never been used end to end:
-
-- `[ExoEvent]` on the plugin, and the runner subscribes to what a plugin declares
-  (`NativePluginRunner.declared_events/1`).
-- `HostBridge.EmitEvent` → the runner's `emit_event` → `EventDispatcher.broadcast`.
-- The WS handler's `subscribe` frame and its `exo_event` delivery.
-- `ExoClient.SubscribeAsync` (which now connects on demand), `OnAnyEvent`, `ExoDispatcher`.
-
-**What is missing is that nobody uses it.** `SnakeLeaderboardPlugin` declares no `[ExoEvent]` and
-emits nothing, and nothing under `Assets/SnakeGame/` calls `SubscribeAsync`.
-
-This matters more than it looks: because subscriptions are what open the socket now, a sample with
-no subscription **never opens one**, and the realtime half of the platform is invisible to anyone
-reading the sample. The sample currently teaches "submit a score, read the board" over HTTP — which
-is correct, and is half the story.
-
-### Plan
-
-1. **The plugin emits.** `[ExoEvent("score_submitted", Topic = "snake:leaderboard")]` on
-   `SubmitScore`, emitted on a new personal best with `{player_id, name, score}`. Needs the record on
-   the plugin's `JsonSerializerContext` (AOT).
-2. **The sample subscribes.** `SnakeLeaderboard` calls `SubscribeAsync("snake:leaderboard")` on
-   enable and updates `Rows` when a frame arrives. This is what opens the socket, and it is the
-   demonstration that the lazy connection is real: HTTP for request/response, a socket only for the
-   live board.
-3. **A test that an event arrives.** In the live suite: two sessions, one subscribes, the other
-   submits, assert the subscriber's `OnAnyEvent` fired with the right payload. This is the only
-   capability of the four with no test at all.
-4. **Then the contract declares its transport**, per action, where it matters — the leaderboard's
-   two actions are request/response and should say so.
-
-**Order**: 1 → 2 → 3 (a test needs something to emit), then 4.
+What that amounts to: publish `Exoforge.Plugin.SDK` (which already carries the generator in its
+analyzers folder and the manifest plumbing in its `build/` folder, so one `PackageReference` is the
+whole contract), and then the scaffolder's `SdkPackageVersion` becomes the thing to bump rather than
+the thing to remember.
 
 ---
 
-## 4. Out of Scope for the MVP
+## 5. Out of Scope for the MVP
 
 Not planned. Recorded so they stop reappearing as "next":
 
@@ -133,238 +108,9 @@ Not planned. Recorded so they stop reappearing as "next":
 - **Non-standard plugin runtimes** — anything beyond native (AOT), WASM reactor and Elixir. The
   three runtimes cover first-party, sandboxed third-party and system plugins.
 
-**MVP scope is the game, the plugin, and the kernel.** Work is measured against those three.
-
 ---
 
-## 5. M27 — Self-Contained Unity Package ✅
-
-**Done and verified.** The invariant it establishes:
-
-1. **No symlink leaves the package.** Its files are the source; nothing to sync, nothing to drift.
-2. **No path is resolved by walking out of the package.**
-3. **Nothing in package code names this repository's layout.**
-4. **`Exoforge.Plugin.SDK` is an explicit external dependency**, not something the package carries.
-
-| Was | Is |
-| :--- | :--- |
-| `Runtime/*.cs`, `Editor/Management/*.cs` symlinked into `sdk/csharp/` | real files in the package, and canonical |
-| `Exoforge.Client` / `Exoforge.Management` held the sources | they compile the package's files |
-| `FindManifestGen` / `FindSdkProjectPath` walked up for `sdk/csharp` | the generator is a compile-time analyzer; there is nothing to locate at build time |
-| scaffolder emitted a `ProjectReference` to a repo path | the published `PackageReference`, or a local one via `EXOFORGE_PLUGIN_SDK` |
-| the manifest generator lived in `sdk/csharp` and was copied | `Exoforge.Plugin.Generator`, referenced by the plugin project |
-
-Running `just clean-room-sdk` for the first time found and fixed `ExoWorkspace.Initialize` writing
-`exoforge.json` into a directory it never created — the first action a new developer takes.
-
-> **Superseded in part by M29.** The engine-agnostic files this milestone made canonical inside the
-> package moved back out: the package now ships them as compiled assemblies instead, so it contains
-> only Unity-specific code. The packaging rule below still holds; who owns those files changed.
-
----
-
-## 6. M28 — SDK Runtime Hardening ✅
-
-> Registered in [`Agents.MD`](Agents.MD) §0 as the current task. Each item says what proves it
-> finished.
-
-**Order matters.** Do 2.1–2.2 first (one-liners that make the SDK work the first time someone tries
-it), then 2.4, then 2.3 — which gates reconnect.
-
-### Correctness
-
-- [x] **2.1 A failed connection is permanent.** `_pendingConnect` was set once and never cleared, so
-      every later `GetClientAsync()` awaited the same finished task. Cleared in a `finally`.
-      *Proven by:* `SessionLifecycleTests.A_failed_connection_can_be_retried` — and it fails when that
-      line is reverted, because the second call then never attempts a connection.
-- [x] **2.2 `_instance` is never cleared on destroy.** `OnDestroy` only disconnected, so
-      `Current`/`Instance` returned a destroyed object. Cleared first, before the teardown awaits.
-      *Proven by:* `SessionLifecycleTests.Instance_is_cleared_when_the_behaviour_is_destroyed`.
-- [x] **2.3 Reconnect in `ExoTransport.ConnectAsync`.** *(The original description overstated this:
-      the receive loop checks its cancellation token first, so a cancelled token already blocked
-      re-entry and a second `ReceiveAsync` on the new socket was not reachable.)* What was real:
-      `_webSocket?.Dispose()` disposed the old socket while its loop could still be inside
-      `ReceiveAsync`, whose `ObjectDisposedException` surfaced as a **spurious `OnDisconnected` after a
-      successful reconnect**; and both the loop and the teardown path could notify, so one connection
-      could report two disconnects. Fixed by draining the previous connection before swapping, passing
-      the socket and token to the loop so it never reads a field a later connect can replace, and
-      reporting at most one disconnect per connection.
-      *Guarded by:* `TransportTests` — reconnect then assert every frame arrives and one disconnect is
-      reported. These are guards, not proofs: the window is too narrow to reproduce deterministically
-      from outside, so the guarantee is structural (the loop no longer reads the field).
-- [x] **2.4 A stale display name survives reconnecting to another account.** `SaveSession` now clears
-      the name when the player id changes — a reconnect as the same player keeps it, a different
-      account cannot inherit it. *Proven by:* two `SessionLifecycleTests` cases.
-
-### DX
-
-- [x] **3.1 The HTTP port is invented, not configured.** The derivation is gone; `HttpBaseUri` comes
-      from the workspace environment (`ExoDeployer` sets it) or from whoever constructs the client.
-      *Proven by:* two `TransportTests` — a connect leaves it null, and a configured one is kept.
-- [x] **3.2 Stop swallowing errors.** The `catch { }` around the HTTP-base derivation went with 3.1.
-      In the Control Center, a failed disconnect during teardown now logs, and a failed telemetry
-      fetch reports in the status bar — it used to leave the window showing stale telemetry and a
-      stale service catalog with nothing to say why. (My review had listed a third site in
-      `ExoforgeManagerEditor`; there is none.)
-- [x] **3.3 Make timeouts configurable.** `ExoClient.DefaultTimeout` replaces the three magic
-      numbers, overridable per call; `ExoTransport.CloseTimeout` bounds the close handshake, which
-      had none — `DisconnectAsync` awaited `CloseAsync` forever if the peer never replied, which is
-      what hung the test suite until the stub was made to reply.
-      *Proven by:* `TransportTests.The_default_timeout_is_configurable`.
-- [x] **3.4 Reconnect with backoff.** `ExoforgeManager` retries with exponential backoff
-      (`ExoBackoff`, capped at 30s by default), starting from a **failed first connect** as well as
-      from a drop — a backend that is not up yet is the common case at boot, and was the motivating
-      one. A background task, not something driven from `Update()`, because disconnect notifications
-      go through the dispatcher and a behaviour that stops pumping would never reconnect.
-      *Proven by:* `BackoffTests` (the doubling and the cap, Unity-free) and a play-mode test that a
-      failed connect announces its first retry — a log line only the retry loop emits.
-      Two notes from building the tests:
-      `OnDisconnected` is delivered *through the dispatcher*, so once `Update()` stops being called
-      (behaviour disabled or destroyed) disconnect notifications stop too — a reconnect timer must not
-      depend on the pump. And `ConnectAsync` logs a failed attempt with `Debug.LogError`, so a retry
-      loop would put a red error in the console per attempt; that should become a warning.
-- [x] **3.5 `ExoTokenStore` wrote to disk four times per `SaveSession`.** Setters now write without
-      flushing; `SaveSession` and `Clear` flush once. `ExoDeviceId.Reset()` flushes too, which was the
-      one write that did not.
-- [x] **3.6 Scopes are stored comma-joined.** *(Not a defect: `ExoTokenStore.Scopes` is never read —
-      not by the SDK, not by the sample. The string is write-only, so nothing splits it and no scope
-      can be corrupted by a comma. Left as-is rather than changing a public property's format for a
-      consumer that does not exist. If one appears, that is when to fix the encoding.)*
-
-### API shape
-
-- [x] **4.1 One way to get a client.** *(Partly a correction: `ExoforgeManager.Client` has
-      legitimate users — the editor window and the play-mode tests — so making it internal would
-      break them for little gain.)* The real defect was the inconsistency: `ExoforgeSDK.Client`
-      returned a client whenever one had been *constructed*, and a failed connect constructs one
-      before failing, so it handed back a dead client and the caller failed later somewhere
-      confusing. It now requires `IsConnected`, and says so.
-- [x] **4.2 Encapsulate transport state.** `AuthToken` is `private set` — it was public and only ever
-      written inside `ExoClient`. *(The other two were already fine: `HttpClient` is get-only, and
-      `HttpBaseUri` is legitimately settable because it is configuration — which 3.1 made explicit.)*
-- [x] **4.3 The loose `SendActionAsync` overload.** *(Not a defect: there is no separate loose
-      overload — `payload` is `object?` on the two that exist, which is inherent to a wire-level
-      client. The generated service clients are the typed path and are what callers should use; the
-      editor's own calls pass `null` for a no-payload action.)*
-
-### Release work (not code)
-
-Moved to §8: it is the only thing left, and it is a release step rather than code.
-
-### How this is verified
-
-| Check | Covers | Speed |
-| :--- | :--- | :--- |
-| `just test` | kernel, plugins, SDK libraries | fast |
-| `just clean-build` | a pristine export of HEAD builds a plugin | slow |
-| `just pack-unity` | the package resolves nothing into this repo | fast |
-| `just clean-room-sdk` | a new Unity project installs the tarball and builds a plugin | slow |
-| `just sample-check` | sample scene, board maths, leaderboard parsing | fast |
-| `just sample-play-tests` | `ExoforgeManager` lifecycle, token store | medium |
-| `Exoforge.Client.Tests` | transport and client behaviour | fast |
-
-**Two gaps this milestone depends on:**
-
-1. ~~**`ExoClient` / `ExoTransport` have no unit coverage.**~~ **Done** — `StubWebSocketServer` plus
-   `TransportTests` (connect, action round trip, server error, dropped connection). They are
-   Unity-free, so this is where reconnect, timeout and error-surfacing get pinned.
-2. ~~**`ExoforgeManager` is Unity-only.**~~ **Done** — `Assets/Tests/PlayMode` on the Unity test
-   framework (`just sample-play-tests`). Play mode, not edit: `Awake` does not run in the editor, so
-   the behaviour is inert there and none of its lifecycle is observable. `ExoforgeSampleCheck` stays
-   for the headless parts. Note for 3.5: the framework fails a test on an unexpected
-   `Debug.LogError`, so a test expecting a failed connect must declare it.
-
-**Not covered at all:** `Sync Client Bindings` needs a live cluster, so nothing proves the generated
-client compiles inside a fresh project. A fresh project compiles `Assets/` as **C# 9** and the
-generated client avoids C# 10+ features — assert it rather than assume it.
-
-### Non-goals
-
-- The resource-table primary-key bug ([`DX.md`](DX.md) item 22) is a kernel/database issue.
-- No new runtime dependency, and no test framework beyond the two above.
-## 7. M29 — Engine-Agnostic C# Core ✅
-
-**Done.** The rule it establishes: **the C# client and the plugin tooling are engine-agnostic, so no
-engine SDK owns them.** Each engine ships them as a compiled assembly.
-
-| Bucket | Holds | Where |
-| :--- | :--- | :--- |
-| **Exo** | deploy + manage, language-agnostic | `sdk/csharp/Exoforge.CLI` — thin, no build logic of its own |
-| **dotnetSDK** | plugin authoring, manifest gen, build, codegen, the C# client | `Exoforge.Plugin.SDK`, `Exoforge.Plugin.Generator`, `Exoforge.Client`, `Exoforge.Management` |
-| **unitySDK** | Unity runtime wrappers + editor | `com.exoforge.sdk` — `Runtime/`, `Editor/`, and `*/Plugins/*.dll` built by `just build-unity-sdk` |
-
-The Unity package now contains **only Unity-specific code**. `Runtime/Plugins/Exoforge.Client.dll` and
-`Editor/Plugins/Exoforge.Management.dll` are `netstandard2.1` assemblies built from the dotnet
-projects; `pack-unity` and `clean-build` build them. Binaries rather than committed copies, because a
-checked-in DLL goes stale the same way a synced source file does.
-
-**Why this shape:** the next engine (Unreal, Godot) needs the client and the tooling, not a second
-implementation of them. Stub generation appears in both buckets deliberately — one generator, two
-front ends — and must stay conservative so its output compiles on Unity's C# version.
-
-**Found while doing it:** the repo's generated client was being compiled into `Exoforge.Client`, so
-shipping that library made every consumer's own generated client ambiguous. It is a consumer artifact
-and now lives with the tests.
-
----
-
----
-
-## 8. M30 — Duplication and Build-Step Cleanup ✅
-
-An architecture and build-step review, with everything grep-verified before it was touched.
-
-### Architecture
-
-| Was | Is |
-| :--- | :--- |
-| three libraries multi-targeting `netstandard2.1;net10.0` — 6 compile passes where 3 ship | `netstandard2.1` only; netstandard2.1 is consumable from net10.0, so the second target bought nothing |
-| `Exoforge.Management` → `Exoforge.Plugin.SDK` | removed; every occurrence was a string in generated code |
-| `Exoforge.Client.Tests` → `Exoforge.Management` | removed; never used |
-| `Exoforge.Client` → `System.Threading.Channels` | deleted; zero uses |
-| three places configuring the connection — `exoforge.json`, `ExoforgeEditorConfig`, `ExoTokenStore` | one: the editor resolves the active environment from the workspace |
-| `ExoforgeEditorConfig` duplicating five session members of `ExoTokenStore` | one store |
-| `GetConfiguredEnvironments` inventing local/dev/staging/production with hardcoded URLs, twice | only what the workspace declares |
-
-Two tests now hold the line: the package must not contain engine-agnostic sources (M29), and
-`ExoforgeEditorConfig` must not shadow the workspace or the token store (M30).
-
-### Build steps
-
-- `_unity-reset` holds the stop-Unity-and-clear-the-lockfile dance that four recipes copied.
-- `build-unity-sdk` takes a root, so `clean-build` reuses it instead of re-implementing its commands.
-- `pack-unity` computes its self-containment offenders once.
-- `clean-build` builds a plugin for **every** runtime, not just native. `build-wasm` was only
-  reachable through recipes needing Docker or a live server, so it rotted: `sample_wasm/build.sh`
-  kept looking for the manifest generator where it lived before M29, and took `test-e2e`, `prod`,
-  `release`, `docker-build` and `compose-up` down with it. The check that exists to catch exactly
-  this covered one runtime out of three. Elixir is covered by `just test`.
-
-### Considered and deliberately not done
-
-- **The `IsExternalInit` polyfill stays in three places.** Each assembly needs its own — Unity
-  compiles only the `.cs` files physically inside an asmdef's folder, so a link is not available —
-  and it is six lines. Unifying it would mean the dotnet project reading from the package directory,
-  which is the inversion M29 removed.
-- **`test-sdk` stays three `dotnet test` calls.** A solution file would make it one, and save a
-  second of startup.
-
----
-
-## 9. Next: Publish `Exoforge.Plugin.SDK`
-
-The only open item in the SDK work, and it is release work, not code.
-
-A scaffolded plugin references `Exoforge.Plugin.SDK` and the build fails with
-`NU1101: Unable to find package Exoforge.Plugin.SDK`. The code path is proven — a local NuGet feed
-makes `just clean-room-sdk` pass end to end — but nothing is on a feed, so a consumer can scaffold a
-plugin and cannot build it.
-
-`dotnet pack sdk/csharp/Exoforge.Plugin.SDK` already produces the package.
-
----
-
-## 10. Naming
+## 6. Naming
 
 Three buckets, one rule: **no engine SDK owns engine-agnostic code.**
 

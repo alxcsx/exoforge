@@ -1,33 +1,32 @@
 # Exoforge Operating Manual (`AGENTS.md`)
 
 > **Branch**: `projetao_mvp`  
-> **Status**: Kernel, 7 standard plugins, C# Client & Plugin SDKs, C# Management Engine (`exo` CLI), Unity SDK (`com.exoforge.sdk`), Producer Studio and the stateful entity runtime are **complete** — **230 Elixir + 47 C# = 277 tests passing**, plus a live E2E vertical slice.  
+> **Status**: Kernel, 9 standard plugins, C# Client & Plugin SDKs, C# Management Engine (`exo` CLI), Unity SDK (`com.exoforge.sdk`), Producer Studio and the stateful entity runtime are **complete** — **240 Elixir + 71 C# = 311 tests passing**, plus a live E2E vertical slice.  
 > **Verified SLAs**: 729k stateful actor ops/sec, 1.4 µs latency, 0.07 ms 50x event fanout.
 
 ---
 
-## 0. Current Task: Publish `Exoforge.Plugin.SDK`
+## 0. Current Task: Put the SDK on a Real Feed
 
-**See [`plan.md`](plan.md) §8.** The SDK work is done; this is the one open item and it is release
-work, not code.
+**See [`plan.md`](plan.md) §4.** The only open item, and it is release work, not code.
 
-A scaffolded plugin references `Exoforge.Plugin.SDK` and the build fails with
-`NU1101: Unable to find package Exoforge.Plugin.SDK`. The code path is proven — a local NuGet feed
-makes `just clean-room-sdk` pass end to end — but nothing is on a feed, so a consumer can scaffold a
-plugin and cannot build it. `dotnet pack sdk/csharp/Exoforge.Plugin.SDK` produces it.
+`just pack-sdk` fills `dist/nuget` with `Exoforge.Plugin.SDK`, and a plugin scaffolded outside this
+repository builds against it — one `PackageReference`, no paths, the generator arriving in the same
+package's analyzers folder. `just clean-room-sdk` proves that from a pristine export of `HEAD`. What
+is missing is a feed for people who are not on this machine.
+
+**How a build input is found**, which is the rule the tooling now follows: a project names no other
+project's path. `Directory.Build.targets` at the repository root supplies a plugin's SDK, generator
+and manifest plumbing from the single declaration `<ExoforgePlugin>true</ExoforgePlugin>` — from
+source when the SDK is beside it, from the package when it is not — and stages the compiled
+libraries into the Unity package as a side effect of building them. `NuGet.config` adds the local
+feed for anything under this repository; `EXOFORGE_FEED` points a workspace outside it at one.
 
 **Recently completed:**
 
-- **M29 — Engine-Agnostic C# Core** (`plan.md` §7): the C# client and the plugin tooling moved out of
-  the Unity package. Engine SDKs ship them as binaries, so the package contains only Unity-specific
-  code and the next engine reuses the libraries instead of reimplementing them.
-- **M28 — SDK Runtime Hardening** (`plan.md` §6): four correctness bugs and six DX problems, each with
-  a test that fails when the fix is reverted. Three turned out to be review corrections rather than
-  defects, recorded rather than acted on.
-
-**Naming** (`plan.md` §9): **Exo** is the language-agnostic deploy/manage CLI; **dotnetSDK** is the
-C# plugin authoring, build and codegen side; **unitySDK** is the Unity package. The rule between them:
-no engine SDK owns engine-agnostic code.
+- **M31 — Dev Hooks and the Plugin Feed**: the hooks above, `just pack-sdk`, the declarative plugin
+  project, and the WASM fix in the generator (a WASM plugin's assembly is a contract, not a host
+  process, so it gets no dispatch table and no entry point of its own).
 
 ## 1. Architectural Doctrine: The Rule, and Its One Exception
 
@@ -105,7 +104,7 @@ plugin_manager ───▶ (independent root)
 Native plugins are plain C# — **no C, no WASI toolchain**. `exo plugin build` compiles the plugin to a
 self-contained ~2 MB binary. `manifest.exs` and the entry point are written by the
 `Exoforge.Plugin.Generator` source generator during that same compile — there is no separate manifest
-tool. The Unity **Control Center ▸ Plugins** tab runs the same build
+tool. The Unity **Exoforge Studio ▸ Plugins** tab runs the same build
 (`dotnet publish -p:PublishAot=true`) and deploys the result, so game teams never need the CLI. The
 entry point and the action/event dispatch table are generated for you, so the host never reflects
 over the plugin's methods:
@@ -219,7 +218,7 @@ var board   = await ExoforgeSDK.Client.SnakeLeaderboard().GetLeaderboardAsync(10
   credential storage and tooling.
 - `ExoforgeSDK.Client` — the connected `ExoClient`; use the **generated** service extensions
   (`Client.PlayerData()`, `Client.SnakeLeaderboard()`, …) rather than hand-written calls.
-- `ExoforgeSDK.ConnectAsync()` — idempotent connect. `ExoforgeBehaviour` is created on demand if no
+- `ExoforgeSDK.ConnectAsync()` — idempotent connect. `ExoforgeManager` is created on demand if no
   Exoforge prefab is in the scene, so a game needs no scene wiring to use the SDK.
 
 Gameplay must not hold a client, an endpoint, or a token. It publishes hooks (e.g.
