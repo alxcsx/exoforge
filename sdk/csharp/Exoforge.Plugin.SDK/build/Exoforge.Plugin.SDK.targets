@@ -1,0 +1,29 @@
+<Project>
+
+  <!--
+    Imported by NuGet into every project that references Exoforge.Plugin.SDK, and by this repository
+    for its own plugins. It carries what a plugin has to have but should not have to say: where the
+    manifest is written, and the properties the generator reads out of the build.
+  -->
+
+  <PropertyGroup>
+    <!--
+      The scaffolded layout: <plugin>/src/<name>.csproj with the manifest one level up. A plugin
+      laid out differently sets this itself before the import, and the condition leaves it alone.
+    -->
+    <ExoforgeManifestPath Condition="'$(ExoforgeManifestPath)' == ''">$(MSBuildProjectDirectory)/../manifest.exs</ExoforgeManifestPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The manifest is written by the generator during the compile, so a missing one has to re-run
+         the compile rather than be treated as up to date. -->
+    <UpToDateCheckOutput Include="$(ExoforgeManifestPath)" />
+    <FileWrites Include="$(ExoforgeManifestPath)" />
+
+    <CompilerVisibleProperty Include="ExoforgePluginType" />
+    <CompilerVisibleProperty Include="ExoforgeBuildStamp" />
+    <CompilerVisibleProperty Include="ExoforgeManifestPath" />
+    <CompilerVisibleProperty Include="DesignTimeBuild" />
+  </ItemGroup>
+
+</Project>

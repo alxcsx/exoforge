@@ -79,6 +79,9 @@ test-sdk:
 	dotnet test sdk/csharp/Exoforge.Plugin.SDK.Tests
 	dotnet test sdk/csharp/Exoforge.Plugin.Generator.Tests
 	dotnet test sdk/csharp/Exoforge.Management.Tests
+	# A WASM plugin's assembly is a contract, not a host process: it has no dispatch table and no
+	# entry point of its own, so compiling one is the check that the generator still agrees.
+	dotnet build plugins_csharp/sample_wasm/sample_wasm.csproj -v q --nologo
 
 # Run live end-to-end integration test (Client -> WS :4000 -> WASM -> Event -> Client)
 test-e2e: build-wasm
@@ -262,39 +265,38 @@ build-unity-sdk root=".":
 	#!/usr/bin/env bash
 	set -euo pipefail
 	root="${1:-.}"
-	pkg="$root/sdk/unity/Exoforge.SDK"
 	out="$root/sdk/csharp"
 
+	# Where each library lands is decided by the staging hook in Directory.Build.targets, by project
+	# name, so this is only a build and the copies happen on the way past. Release, because the
+	# package ships what a game runs.
 	dotnet build "$out/Exoforge.Client" -c Release --nologo -v q
 	dotnet build "$out/Exoforge.Management" -c Release --nologo -v q
 
-	mkdir -p "$pkg/Runtime/Plugins" "$pkg/Editor/Plugins"
-	for pair in "Exoforge.Client:Runtime" "Exoforge.Management:Editor"
-	do
-		project="${pair%%:*}"
-		dest="${pair#*:}"
-		cp "$out/$project/bin/Release/netstandard2.1/$project.dll" "$pkg/$dest/Plugins/"
-		cp "$out/$project/bin/Release/netstandard2.1/$project.pdb" "$pkg/$dest/Plugins/" 2>/dev/null || true
-	done
-
-	# The manifest generator is a Roslyn source generator now: the plugin's own compile runs it, so
-	# there is no out-of-process tool to ship. It still has to live under a `~` folder - Unity would
-	# otherwise load the analyzer as one of its own assemblies, and it references Roslyn.
+	# The generator ships inside the package too, under Editor/Plugins/Tools~. It has to live under a
+	# `~` folder: Unity would otherwise load it as one of its own assemblies, and it references
+	# Roslyn.
 	dotnet build "$out/Exoforge.Plugin.Generator" -c Release --nologo -v q
 
-	generator="$pkg/Editor/Plugins/Tools~/Exoforge.Plugin.Generator"
-	rm -rf "$generator" "$pkg/Editor/Plugins/Tools~/ManifestGen"
-	mkdir -p "$generator"
-	cp "$out/Exoforge.Plugin.Generator/bin/Release/netstandard2.0/Exoforge.Plugin.Generator.dll" "$generator/"
-
-	echo "[build-unity-sdk] Runtime/Plugins + Editor/Plugins populated"
+	echo "[build-unity-sdk] sdk/unity/Exoforge.SDK Runtime/Plugins + Editor/Plugins staged"
 
 
+# Pack the plugin SDK into the local feed. The package carries the attributes a plugin compiles
+# against and the generator that writes its manifest, so a plugin outside this repository needs one
+# PackageReference and no paths - see NuGet.config for how the feed is found.
+pack-sdk:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	rm -rf dist/nuget
+	mkdir -p dist/nuget
+	dotnet pack sdk/csharp/Exoforge.Plugin.SDK -c Release -o dist/nuget --nologo -v q
+	echo "[pack-sdk] local feed:"
+	ls -1 dist/nuget
 
-# The Unity package is the real thing: its files are the source, not a copy kept in step with
-# something else. `sdk/csharp/Exoforge.Client` and `Exoforge.Management` compile these same files,
-# so there is nothing to sync and nothing that can drift. This project is only here to develop and
-# verify that package, which is why it needs no generation step either.
+
+# The Unity package's own sources (Runtime/*.cs, Editor/*.cs) are the real thing - nothing outside
+# the package compiles them, so there is no second copy to keep in step. What it does not own is the
+# compiled libraries it ships, which is what build-unity-sdk stages into it.
 
 # Force Unity to re-read the package (clears the import caches the editor builds up)
 unity-reimport: build-unity-sdk _unity-reset
@@ -319,9 +321,8 @@ clean-room-sdk:
 	just pack-unity >/dev/null
 	tarball=$(ls dist/com.exoforge.sdk-*.tgz | head -1)
 
-	echo "[clean-room] packing Exoforge.Plugin.SDK to a local feed"
-	mkdir -p "$work/feed"
-	dotnet pack sdk/csharp/Exoforge.Plugin.SDK -o "$work/feed" --nologo -v q >/dev/null
+	echo "[clean-room] packing Exoforge.Plugin.SDK to the local feed"
+	just pack-sdk >/dev/null
 
 	echo "[clean-room] creating a Unity project at $work/Game"
 	"{{UNITY}}" -batchmode -quit -createProject "$work/Game" -logFile "$work/create.log" >/dev/null
@@ -335,7 +336,7 @@ clean-room-sdk:
 	cp sdk/unity/clean-room-probe.cs "$work/Game/Assets/Editor/CleanRoomProbe.cs"
 
 	echo "[clean-room] running the first-run flow"
-	EXOFORGE_TEST_FEED="$work/feed" "{{UNITY}}" -batchmode -nographics \
+	EXOFORGE_FEED="$PWD/dist/nuget" "{{UNITY}}" -batchmode -nographics \
 		-projectPath "$work/Game" -executeMethod CleanRoomProbe.Run \
 		-logFile "$work/run.log" || {
 			grep -E "\[clean-room\]|error " "$work/run.log" | head -20

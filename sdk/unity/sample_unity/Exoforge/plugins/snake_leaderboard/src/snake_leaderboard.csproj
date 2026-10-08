@@ -1,4 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
@@ -9,28 +10,16 @@
     <InvariantGlobalization>true</InvariantGlobalization>
 
     <!--
-      Consumed by Exoforge.Plugin.Generator: it writes manifest.exs next to the plugin and stamps
-      the build metadata into the version. ExoDeployer overrides ExoforgeBuildStamp per build.
+      An Exoforge plugin, and that is the whole declaration. The repository's
+      Directory.Build.targets supplies the SDK, the generator and the manifest plumbing, so nothing
+      here names a path to another project - and the same file builds outside the repository, where
+      the published package supplies the same three things.
     -->
+    <ExoforgePlugin>true</ExoforgePlugin>
+
+    <!-- A native plugin is a process. ExoDeployer overrides the build stamp per build. The manifest
+         path is not set here: this is the scaffolded layout, so the default applies. -->
     <ExoforgePluginType>native</ExoforgePluginType>
-    <ExoforgeManifestPath Condition="'$(ExoforgeManifestPath)' == ''">$(MSBuildProjectDirectory)/../manifest.exs</ExoforgeManifestPath>
   </PropertyGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="../../../../../../csharp/Exoforge.Plugin.SDK/Exoforge.Plugin.SDK.csproj" />
-    <ProjectReference Include="../../../../../../csharp/Exoforge.Plugin.Generator/Exoforge.Plugin.Generator.csproj"
-                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <!-- The manifest is a build output the generator writes, so a missing one has to re-run the
-         compile rather than being treated as up to date. -->
-    <UpToDateCheckOutput Include="$(ExoforgeManifestPath)" />
-    <FileWrites Include="$(ExoforgeManifestPath)" />
-
-    <CompilerVisibleProperty Include="ExoforgePluginType" />
-    <CompilerVisibleProperty Include="ExoforgeBuildStamp" />
-    <CompilerVisibleProperty Include="ExoforgeManifestPath" />
-    <CompilerVisibleProperty Include="DesignTimeBuild" />
-  </ItemGroup>
 </Project>

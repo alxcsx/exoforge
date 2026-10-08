@@ -21,7 +21,7 @@ public static class ExoScaffolder
     /// <summary>Templates a caller may ask for. Keep in step with <see cref="GeneratePluginCode"/>.</summary>
     public static readonly string[] Templates = { "standard", "inventory" };
 
-    public static string ScaffoldPlugin(string pluginsDirectory, string rawName, string? sdkProjectPath = null, string template = "standard")
+    public static string ScaffoldPlugin(string pluginsDirectory, string rawName, string template = "standard")
     {
         string cleanName = NormalizeName(rawName);
         string className = ToPascalCase(cleanName);
@@ -30,15 +30,15 @@ public static class ExoScaffolder
 
         Directory.CreateDirectory(srcDir);
 
-        sdkProjectPath ??= FindSdkProjectPath(srcDir);
-
-        File.WriteAllText(Path.Combine(srcDir, $"{cleanName}.csproj"), GenerateCsproj(sdkProjectPath, srcDir));
+        File.WriteAllText(Path.Combine(srcDir, $"{cleanName}.csproj"), GenerateCsproj());
         File.WriteAllText(Path.Combine(srcDir, $"{className}Plugin.cs"), GeneratePluginCode(cleanName, className, template));
         File.WriteAllText(Path.Combine(targetDir, $"{cleanName}.slnx"), GenerateSolution(cleanName));
         File.WriteAllText(Path.Combine(targetDir, "README.md"), GenerateReadme(cleanName, className));
 
         // The staged native binary and the local build counter are build artifacts.
         File.WriteAllText(Path.Combine(targetDir, ".gitignore"), "/.exoforge/\n/.buildcount\n/manifest.exs\n");
+
+        RegisterLocalFeed(pluginsDirectory);
 
         return targetDir;
     }
@@ -53,68 +53,47 @@ public static class ExoScaffolder
     private static string NormalizeName(string rawName) => NormalizePluginName(rawName);
 
     /// <summary>
-    /// Environment variable pointing at Exoforge.Plugin.SDK, either the .csproj or its directory.
-    /// Lets a workspace that lives outside the repo (or a CI checkout) scaffold without guessing.
+    /// Environment variable naming a directory of packed Exoforge packages, for a plugin built
+    /// outside a checkout. A published feed needs nothing: nuget.org is already a source.
     /// </summary>
-    public const string SdkPathEnvVar = "EXOFORGE_PLUGIN_SDK";
+    public const string FeedEnvVar = "EXOFORGE_FEED";
 
-    /// <summary>The published package a scaffolded plugin references when no local checkout is given.</summary>
+    /// <summary>
+    /// Points the workspace at a local feed, once, when one is configured.
+    ///
+    /// The project a plugin gets still names only the package. Where that package comes from is a
+    /// property of the workspace, not of the plugin, which is why the reference in the project file
+    /// reads the same whether the feed is a directory on this machine or a real one.
+    /// </summary>
+    private static void RegisterLocalFeed(string pluginsDirectory)
+    {
+        string? feed = Environment.GetEnvironmentVariable(FeedEnvVar);
+
+        if (string.IsNullOrEmpty(feed) || !Directory.Exists(feed)) return;
+
+        string? workspace = Path.GetDirectoryName(Path.GetFullPath(pluginsDirectory));
+        if (workspace is null) return;
+
+        string config =
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" +
+            "<configuration>\n" +
+            "  <!-- Written by `exo plugin new` from " + FeedEnvVar + ". Local packages, so a plugin -->\n" +
+            "  <!-- builds without one being published anywhere. -->\n" +
+            "  <packageSources>\n" +
+            "    <add key=\"exoforge\" value=\"" + feed + "\" />\n" +
+            "  </packageSources>\n" +
+            "</configuration>\n";
+
+        File.WriteAllText(Path.Combine(workspace, "nuget.config"), config);
+    }
+
+    /// <summary>The published package a scaffolded plugin references, and gets everything from.</summary>
     public const string SdkPackageId = "Exoforge.Plugin.SDK";
 
     /// <summary>Version of <see cref="SdkPackageId"/> a scaffolded plugin references.</summary>
     public const string SdkPackageVersion = "0.1.0";
 
-    /// <summary>
-    /// The SDK a scaffolded plugin compiles against, when it is not the published package.
-    ///
-    /// Resolved explicitly: an environment override, or nothing — in which case the project
-    /// references the published `Exoforge.Plugin.SDK` package. The SDK does not search the
-    /// filesystem, because a consumer installed from a tarball has no `sdk/csharp` to find, and
-    /// guessing produces a project that cannot restore with no explanation of why.
-    /// </summary>
-    private static string? FindSdkProjectPath(string fromDir)
-    {
-        string? configured = Environment.GetEnvironmentVariable(SdkPathEnvVar);
-
-        if (string.IsNullOrEmpty(configured))
-        {
-            return null;
-        }
-
-        string candidate = configured!.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)
-            ? configured
-            : Path.Combine(configured, "Exoforge.Plugin.SDK.csproj");
-
-        if (!File.Exists(candidate))
-        {
-            throw new InvalidOperationException(
-                $"{SdkPathEnvVar} is set to '{configured}', but no Exoforge.Plugin.SDK.csproj was " +
-                "found there. Point it at the .csproj or its directory, or unset it to reference " +
-                "the published package.");
-        }
-
-        return Path.GetFullPath(candidate);
-    }
-
-    private static string GenerateCsproj(string? sdkProjectPath, string srcDir)
-    {
-        // Two ways to get the SDK, both explicit:
-        //   - a ProjectReference, when a local checkout was pointed at with EXOFORGE_PLUGIN_SDK;
-        //   - the published package, which is the path a consumer without a checkout takes.
-        string reference = sdkProjectPath != null && File.Exists(sdkProjectPath)
-            ? $"    <!-- Local Exoforge.Plugin.SDK checkout, via {SdkPathEnvVar}. -->\n" +
-              $"    <ProjectReference Include=\"{ReferencePath(srcDir, sdkProjectPath)}\" />"
-            : $"    <!-- Published package. Point {SdkPathEnvVar} at a local checkout to build against that instead. -->\n" +
-              $"    <PackageReference Include=\"{SdkPackageId}\" Version=\"{SdkPackageVersion}\" />";
-
-        string? generatorProject = GeneratorProjectPath(sdkProjectPath);
-
-        string generator = generatorProject != null
-            ? "    <!-- Writes manifest.exs and the entry point from the attributes. -->\n" +
-              $"    <ProjectReference Include=\"{ReferencePath(srcDir, generatorProject)}\" OutputItemType=\"Analyzer\" ReferenceOutputAssembly=\"false\" />"
-            : "    <!-- The published package ships the Exoforge generator as an analyzer. -->";
-
-        return $@"
+    private static string GenerateCsproj() => $@"
 <Project Sdk=""Microsoft.NET.Sdk"">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -125,45 +104,22 @@ public static class ExoScaffolder
     <PublishAot>true</PublishAot>
     <InvariantGlobalization>true</InvariantGlobalization>
 
-    <!-- Consumed by the Exoforge generator. ExoDeployer overrides the build stamp per build. -->
+    <!--
+      An Exoforge plugin. The package below brings the SDK, the generator and the manifest plumbing
+      together, which is why nothing else is here: no path into a checkout, and nothing to adjust
+      for where the plugin happens to be built.
+    -->
+    <ExoforgePlugin>true</ExoforgePlugin>
+
+    <!-- A native plugin is a process. Building it through the CLI overrides the build stamp. -->
     <ExoforgePluginType>native</ExoforgePluginType>
-    <ExoforgeManifestPath Condition=""'$(ExoforgeManifestPath)' == ''"">$(MSBuildProjectDirectory)/../manifest.exs</ExoforgeManifestPath>
   </PropertyGroup>
 
   <ItemGroup>
-{reference}
-{generator}
-  </ItemGroup>
-
-  <ItemGroup>
-    <!-- The manifest is a build output the generator writes, so a missing one has to re-run the
-         compile rather than being treated as up to date. -->
-    <UpToDateCheckOutput Include=""$(ExoforgeManifestPath)"" />
-    <FileWrites Include=""$(ExoforgeManifestPath)"" />
-
-    <CompilerVisibleProperty Include=""ExoforgePluginType"" />
-    <CompilerVisibleProperty Include=""ExoforgeBuildStamp"" />
-    <CompilerVisibleProperty Include=""ExoforgeManifestPath"" />
-    <CompilerVisibleProperty Include=""DesignTimeBuild"" />
+    <PackageReference Include=""{SdkPackageId}"" Version=""{SdkPackageVersion}"" />
   </ItemGroup>
 </Project>
 ";
-    }
-
-    /// <summary>
-    /// The generator project that ships beside the SDK. A local checkout builds against it directly;
-    /// the published package carries it as an analyzer.
-    /// </summary>
-    private static string? GeneratorProjectPath(string? sdkProjectPath)
-    {
-        if (sdkProjectPath is null) return null;
-
-        string? dir = Path.GetDirectoryName(sdkProjectPath);
-        if (string.IsNullOrEmpty(dir)) return null;
-
-        string candidate = Path.GetFullPath(Path.Combine(dir!, "..", "Exoforge.Plugin.Generator", "Exoforge.Plugin.Generator.csproj"));
-        return File.Exists(candidate) ? candidate : null;
-    }
 
     private static string GenerateReadme(string cleanName, string className) => $"""
     # {cleanName}
@@ -190,23 +146,6 @@ public static class ExoScaffolder
 
     In Unity: **Tools ▸ Exoforge ▸ Exoforge Studio**, then the Plugins tab.
     """;
-
-    /// <summary>
-    /// How to write the SDK's location into the generated csproj.
-    ///
-    /// Relative while the SDK lives inside the workspace — a committed plugin then builds on
-    /// another machine. Absolute once it does not, because the alternative is a long `../../../..`
-    /// climb out of the tree that means nothing to a reader.
-    /// </summary>
-    private static string ReferencePath(string srcDir, string sdkProjectPath)
-    {
-        string workspaceRoot = Path.GetFullPath(Path.Combine(srcDir, "..", "..", ".."));
-        string full = Path.GetFullPath(sdkProjectPath);
-
-        bool insideWorkspace = full.StartsWith(workspaceRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal);
-
-        return insideWorkspace ? Path.GetRelativePath(srcDir, full) : full;
-    }
 
     private static string GenerateSolution(string cleanName) => $"""
 <Solution>

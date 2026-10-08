@@ -55,8 +55,7 @@ public class ManagementTests : IDisposable
         var ws = ExoWorkspace.Initialize(_tempDir, "TestGameProject");
 
         // The temp workspace has no repo above it, so point the scaffolder at the real SDK.
-        string createdDir = ExoScaffolder.ScaffoldPlugin(
-            ws.PluginsPath, "guild_system", sdkProjectPath: TestPaths.PluginSdkProject);
+        string createdDir = ExoScaffolder.ScaffoldPlugin(ws.PluginsPath, "guild_system");
 
         Assert.True(Directory.Exists(createdDir));
 
@@ -68,12 +67,12 @@ public class ManagementTests : IDisposable
         string csprojFile = Path.Combine(createdDir, "src", "guild_system.csproj");
         Assert.True(File.Exists(csprojFile));
 
-        // The project references the SDK and the generator, and tells the generator where to write.
         string csprojText = File.ReadAllText(csprojFile);
-        Assert.Contains("Exoforge.Plugin.SDK", csprojText);
-        Assert.Contains("Exoforge.Plugin.Generator", csprojText);
-        Assert.Contains("OutputItemType=\"Analyzer\"", csprojText);
-        Assert.Contains("ExoforgeManifestPath", csprojText);
+        // The whole point: a plugin project names the package and no path, so it builds from a feed
+        // wherever it is put. The generator and the manifest plumbing arrive with the package.
+        Assert.Contains("<PackageReference Include=\"Exoforge.Plugin.SDK\"", csprojText);
+        Assert.DoesNotContain("ProjectReference", csprojText);
+        Assert.DoesNotContain("sdk/csharp", csprojText);
 
         string serviceFile = Path.Combine(createdDir, "src", "GuildSystemPlugin.cs");
         Assert.True(File.Exists(serviceFile));

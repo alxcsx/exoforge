@@ -1,7 +1,22 @@
 <Project>
+
   <PropertyGroup>
+    <!--
+      Paths the hooks in Directory.Build.targets resolve from. They are properties rather than
+      references because a project that names another project's path has to be edited whenever the
+      other one moves, and because a plugin should not have to know where the SDK lives at all.
+    -->
+    <ExoforgeRoot Condition="'$(ExoforgeRoot)' == ''">$(MSBuildThisFileDirectory)</ExoforgeRoot>
+    <ExoforgeCSharpSdk>$(ExoforgeRoot)sdk/csharp</ExoforgeCSharpSdk>
+    <ExoforgeUnityPackage>$(ExoforgeRoot)sdk/unity/Exoforge.SDK</ExoforgeUnityPackage>
+
+    <!-- The feed `just pack-sdk` fills, and the version it fills it with. -->
+    <ExoforgeLocalFeed>$(ExoforgeRoot)dist/nuget</ExoforgeLocalFeed>
+    <ExoforgePluginSdkVersion>0.1.0</ExoforgePluginSdkVersion>
+
     <!-- Skip the NuGet vulnerability audit: it fetches nuget.org on every restore and stalls
          offline/air-gapped builds (and Unity's spawned dotnet builds) with no timeout in sight. -->
     <NuGetAudit>false</NuGetAudit>
   </PropertyGroup>
+
 </Project>

@@ -68,6 +68,12 @@ manifest.exs
 MemoryCaptures/
 Recordings/
 
+# ...except a NuGet package's build/ folder, which is content rather than output: it is the file
+# NuGet imports into every project that references the package. `[Bb]uild/` above would otherwise
+# ignore it silently, and the package would be published without it.
+!sdk/csharp/Exoforge.Plugin.SDK/build/
+!sdk/csharp/Exoforge.Plugin.SDK/build/**
+
 # === Unity-generated IDE project files (regenerated on import) ===
 sdk/unity/sample_unity/*.csproj
 sdk/unity/sample_unity/*.slnx

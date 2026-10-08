@@ -52,22 +52,8 @@ public static class CleanRoomProbe
         Check(File.ReadAllText(csproj).Contains("Exoforge.Plugin.SDK"),
             "the scaffolded project does not reference the SDK");
 
-        // 4. It builds — given the SDK package on a feed, which is the external dependency.
-        string? feed = Environment.GetEnvironmentVariable("EXOFORGE_TEST_FEED");
-
-        if (!string.IsNullOrEmpty(feed))
-        {
-            string config =
-                "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" +
-                "<configuration>\n" +
-                "  <packageSources>\n" +
-                "    <add key=\"exoforge\" value=\"" + feed + "\" />\n" +
-                "  </packageSources>\n" +
-                "</configuration>\n";
-
-            File.WriteAllText(Path.Combine(ws.RootPath, "nuget.config"), config);
-        }
-
+        // 4. It builds. The feed the SDK package comes from is registered by the scaffolder, from
+        //    the environment - the same hook any workspace outside a checkout uses.
         var build = new ExoDeployer(ws).BuildPlugin(
             PluginName, null, ExoforgeEditorConfig.DotnetPath,
             line => Debug.Log("[clean-room-build] " + line));

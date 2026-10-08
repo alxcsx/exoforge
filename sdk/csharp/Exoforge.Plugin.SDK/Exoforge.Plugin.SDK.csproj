@@ -17,12 +17,12 @@
     <NoWarn>$(NoWarn);1591;IL2026;IL3050;IL2067</NoWarn>
 
     <!--
-      Packable so a game developer outside this repo can reference the SDK from a feed instead of a
-      ProjectReference: `dotnet pack sdk/csharp/Exoforge.Plugin.SDK`.
+      Packable so a game developer outside this repository references the SDK from a feed instead of
+      a path into someone else's checkout: `just pack-sdk`, or `dotnet pack` on this project.
     -->
     <IsPackable>true</IsPackable>
     <PackageId>Exoforge.Plugin.SDK</PackageId>
-    <Version>0.1.0</Version>
+    <Version>$(ExoforgePluginSdkVersion)</Version>
     <Description>Author Exoforge game-backend plugins in C#. Attributes declare the contract; PluginHost runs them as a NativeAOT process.</Description>
     <PackageTags>exoforge;game-backend;plugins;nativeaot</PackageTags>
   </PropertyGroup>
@@ -35,5 +35,29 @@
     <InternalsVisibleTo Include="Exoforge.Plugin.SDK.Tests" />
     <InternalsVisibleTo Include="Exoforge.Plugin.Generator.Tests" />
   </ItemGroup>
+
+  <!--
+    One package, not two. A plugin needs the attributes to compile against and the generator to
+    write its manifest; shipping them together is what lets a plugin's project file be a single
+    PackageReference with nothing else in it.
+  -->
+  <ItemGroup>
+    <None Include="build/Exoforge.Plugin.SDK.targets" Pack="true" PackagePath="build" Visible="false" />
+  </ItemGroup>
+
+  <Target Name="ExoforgePackGenerator"
+          BeforeTargets="_GetPackageFiles"
+          DependsOnTargets="ResolveProjectReferences">
+    <MSBuild Projects="$(ExoforgeCSharpSdk)/Exoforge.Plugin.Generator/Exoforge.Plugin.Generator.csproj"
+             Targets="Build"
+             Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="ExoforgeGeneratorOutput" />
+    </MSBuild>
+
+    <!-- NuGet picks up analyzers/dotnet/cs without being told, which is why the location matters. -->
+    <ItemGroup>
+      <None Include="@(ExoforgeGeneratorOutput)" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    </ItemGroup>
+  </Target>
 
 </Project>

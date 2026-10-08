@@ -70,24 +70,13 @@ public class CliIntegrationTests : IDisposable
         // First init workspace
         await Exoforge.CLI.Program.Main(new[] { "init", "--dir", _tempDir, "--name", "Game" });
 
-        // Now scaffold new plugin. The temp workspace has no repo above it, so tell the scaffolder
-        // where the SDK lives.
-        string? previousSdk = Environment.GetEnvironmentVariable(ExoScaffolder.SdkPathEnvVar);
-        Environment.SetEnvironmentVariable(ExoScaffolder.SdkPathEnvVar, TestPaths.PluginSdkProject);
-
-        int code;
-        try
+        // The temp workspace has no repository above it, which is exactly the case a scaffolded
+        // plugin has to work in: the project it writes references the package, not a checkout.
+        int code = await Exoforge.CLI.Program.Main(new[]
         {
-            code = await Exoforge.CLI.Program.Main(new[]
-            {
-                "plugin", "new", "inventory_system",
-                "--dir", _tempDir
-            });
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable(ExoScaffolder.SdkPathEnvVar, previousSdk);
-        }
+            "plugin", "new", "inventory_system",
+            "--dir", _tempDir
+        });
 
         Assert.Equal(0, code);
 

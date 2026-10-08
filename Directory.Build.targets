@@ -1,0 +1,86 @@
+<Project>
+
+  <!--
+    Exoforge dev hooks.
+
+    Nothing here is referenced by the projects it serves: no project names another project's path,
+    and no solution has to list a build order. A plugin declares what it is and these targets supply
+    the rest. Building is what moves artifacts into place, so there is no sync step to forget.
+  -->
+
+  <!-- ===== A plugin: the SDK, the generator, and the manifest plumbing ===== -->
+
+  <!--
+    Inside this repository the SDK and the generator come from source, so an edit to either lands in
+    the next plugin build with nothing to keep in sync. Outside it there is no source to point at,
+    and the published Exoforge.Plugin.SDK package carries both.
+  -->
+  <PropertyGroup>
+    <ExoforgeInRepo Condition="Exists('$(ExoforgeCSharpSdk)/Exoforge.Plugin.SDK/Exoforge.Plugin.SDK.csproj')">true</ExoforgeInRepo>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(ExoforgePlugin)' == 'true' and '$(ExoforgeInRepo)' == 'true'">
+    <!-- Source wins over the feed: a plugin in this repository builds against what is here, not
+         against the last thing that was packed. Removing rather than conditioning means the plugin's
+         project file reads the same inside the repository and out. -->
+    <PackageReference Remove="Exoforge.Plugin.SDK" />
+
+    <ProjectReference Include="$(ExoforgeCSharpSdk)/Exoforge.Plugin.SDK/Exoforge.Plugin.SDK.csproj" />
+    <ProjectReference Include="$(ExoforgeCSharpSdk)/Exoforge.Plugin.Generator/Exoforge.Plugin.Generator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(ExoforgePlugin)' == 'true' and '$(ExoforgeInRepo)' != 'true'">
+    <!-- One reference: the package carries the generator too, in its analyzers folder. -->
+    <PackageReference Include="Exoforge.Plugin.SDK" Version="$(ExoforgePluginSdkVersion)" />
+  </ItemGroup>
+
+  <!--
+    The manifest plumbing is identical in here and out there, so it lives in one file: the package's
+    own targets, which NuGet imports for a consumer and this imports for a plugin built in the
+    repository. Two copies is two things to keep in step.
+  -->
+  <Import Project="$(ExoforgeCSharpSdk)/Exoforge.Plugin.SDK/build/Exoforge.Plugin.SDK.targets"
+          Condition="'$(ExoforgePlugin)' == 'true' and '$(ExoforgeInRepo)' == 'true'" />
+
+  <!-- ===== Staging for the Unity package ===== -->
+
+  <!--
+    The Unity package ships compiled libraries: Unity cannot build these projects, it consumes their
+    output. Which project lands where is decided here, by name. The alternative - a property in each
+    project naming its destination - is three references to keep in step with one folder layout.
+  -->
+  <PropertyGroup>
+    <ExoforgeStageDir Condition="'$(MSBuildProjectName)' == 'Exoforge.Client'">$(ExoforgeUnityPackage)/Runtime/Plugins</ExoforgeStageDir>
+    <ExoforgeStageDir Condition="'$(MSBuildProjectName)' == 'Exoforge.Management'">$(ExoforgeUnityPackage)/Editor/Plugins</ExoforgeStageDir>
+    <ExoforgeStageDir Condition="'$(MSBuildProjectName)' == 'Exoforge.Plugin.Generator'">$(ExoforgeUnityPackage)/Editor/Plugins/Tools~/Exoforge.Plugin.Generator</ExoforgeStageDir>
+  </PropertyGroup>
+
+  <!--
+    Release only: the package carries what a game runs, and a debug build is for debugging. An
+    exported package has no repository around it, so `Exists` also keeps this from firing there, and
+    a plain checkout of the C# projects stays unaffected.
+  -->
+  <Target Name="ExoforgeStageForUnity"
+          AfterTargets="Build"
+          Condition="'$(ExoforgeStageDir)' != '' and Exists('$(ExoforgeUnityPackage)') and '$(Configuration)' == 'Release'">
+    <!-- The generator was once an out-of-process tool called ManifestGen. Unity would load a stale
+         folder from that build as one of its own analyzer assemblies. -->
+    <RemoveDir Condition="'$(MSBuildProjectName)' == 'Exoforge.Plugin.Generator'"
+               Directories="$(ExoforgeUnityPackage)/Editor/Plugins/Tools~" />
+
+    <MakeDir Directories="$(ExoforgeStageDir)" />
+
+    <ItemGroup>
+      <ExoforgeStagedFile Include="$(TargetPath)" />
+      <ExoforgeStagedFile Include="$(TargetDir)$(TargetName).pdb"
+                          Condition="Exists('$(TargetDir)$(TargetName).pdb')" />
+    </ItemGroup>
+
+    <Copy SourceFiles="@(ExoforgeStagedFile)"
+          DestinationFolder="$(ExoforgeStageDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

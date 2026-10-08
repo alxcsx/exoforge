@@ -264,12 +264,13 @@ public static class Program
         if (cli.WantsHelp)
         {
             Console.WriteLine("""
-            Usage: exo plugin new <name> [--template standard|inventory] [--dir <path>] [--sdk <path>]
+            Usage: exo plugin new <name> [--template standard|inventory] [--dir <path>]
 
-            Scaffolds plugins/<name>/ with a src/ project, a solution, and a .gitignore.
+            Scaffolds plugins/<name>/ with a src/ project, a solution, and a .gitignore. The project
+            references the Exoforge.Plugin.SDK package, so it builds wherever it is put; run
+            `just pack-sdk` to fill the local feed from a checkout.
 
               --template <t>   standard (default) or inventory
-              --sdk <path>     Exoforge.Plugin.SDK.csproj, when the repo is not above the workspace
             """);
             return 0;
         }
@@ -293,8 +294,7 @@ public static class Program
             Console.WriteLine($"[Exoforge] '{raw}' will be created as '{id}' (plugin ids are lower_snake_case).");
         }
 
-        string created = ExoScaffolder.ScaffoldPlugin(
-            ws.PluginsPath, raw, sdkProjectPath: cli.Value("sdk"), template: template);
+        string created = ExoScaffolder.ScaffoldPlugin(ws.PluginsPath, raw, template: template);
 
         Success($"[Exoforge] Scaffolded C# plugin '{id}' ({template}) at:\n  {created}");
         Console.WriteLine();
