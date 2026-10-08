@@ -121,6 +121,9 @@ build-plugins:
 	set -euo pipefail
 	plugin=plugins_csharp/sample_plugin
 	rid=$(dotnet --info | awk '/RID:/ {print $2; exit}')
+	# Two passes, because of the JSON context: the generator writes it during the first compile, and
+	# only the compile after that one can use it. `exo plugin build` does the same.
+	dotnet build "$plugin/sample_plugin.csproj" -c Release -v q --nologo
 	dotnet publish "$plugin/sample_plugin.csproj" -c Release -r "$rid" -v q --nologo
 	# Replaced, not overwritten: a server running the plugin holds the binary open, and writing over a
 	# busy file fails with "Text file busy".
