@@ -456,6 +456,20 @@ defmodule Exoforge.Std.Resources do
     e -> {:error, e}
   end
 
+  # Only when the resource calls its key something else. A resource whose primary key *is* `id` has
+  # no duplicate to drop: the bridge's key and the resource's column are the same field.
+  defp drop_stored_key(row, "id"), do: row
+
+  defp drop_stored_key(row, pk) when is_map(row) do
+    id = Map.get(row, "id")
+    value = Map.get(row, pk)
+
+    # Compared as strings: the key is always text, and the resource's own column may not be.
+    if is_binary(id) and id == to_string(value), do: Map.delete(row, "id"), else: row
+  end
+
+  defp drop_stored_key(row, _pk), do: row
+
   defp kv_list(%{plugin_id: pid, resource: res}, payload) do
     limit = to_int(param(payload, :limit), 50)
     offset = to_int(param(payload, :offset), 0)
@@ -463,6 +477,13 @@ defmodule Exoforge.Std.Resources do
 
     case apply(db, :all, [pid, to_string(res.name)]) do
       {:ok, rows} when is_list(rows) ->
+        # The bridge stores the row under a key and injects it as `id`, so every row carried the
+        # primary key twice - once as the resource declares it and once as the store's own string.
+        # Dropped here rather than in the adapter: the key is how the row is stored, and the resource
+        # is what decides whether it is a field.
+        pk = to_string(res.primary_key || :id)
+        rows = Enum.map(rows, &drop_stored_key(&1, pk))
+
         {:ok, %{rows: Enum.slice(rows, offset, limit), total: length(rows)}}
 
       _ ->

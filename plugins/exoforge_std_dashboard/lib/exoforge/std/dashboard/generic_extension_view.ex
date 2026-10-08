@@ -957,17 +957,62 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
           target={@myself}
           width="max-w-2xl"
         >
-          <div class="space-y-3">
-            <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Record Fields</h4>
-            <div class="space-y-2">
-              <%= for {k, v} <- @inspected_row do %>
-                <div class="p-2.5 bg-gray-50 rounded-xl border border-gray-100 flex flex-col text-xs font-mono">
-                  <span class="text-gray-400 text-[10px] uppercase font-bold"><%= k %></span>
-                  <span class="text-gray-900 break-all"><%= inspect(v) %></span>
+          <%= if @inspected_drawer_tab == "attributes" do %>
+            <!--
+              The row exactly as the store returned it. Keys as stored, values as stored, and
+              including anything the schema does not describe - which is what you want when a column
+              is not what the schema says it should be.
+            -->
+            <div class="space-y-3">
+              <p class="text-xs text-gray-500">
+                As stored. Unlabelled, and including anything the schema does not describe.
+              </p>
+
+              <div class="space-y-2">
+                <%= for {k, v} <- @inspected_row do %>
+                  <div class="p-2.5 bg-gray-50 rounded-xl border border-gray-100 flex flex-col text-xs font-mono">
+                    <span class="text-gray-400 text-[10px] uppercase font-bold"><%= k %></span>
+                    <span class="text-gray-900 break-all"><%= inspect(v) %></span>
+                  </div>
+                <% end %>
+              </div>
+            </div>
+          <% else %>
+            <!--
+              The schema's view: the columns the plugin declared, in the order it declared them, with
+              their labels and types. A column the row has no value for says so rather than being
+              omitted - an absent field and an empty one are different questions.
+            -->
+            <div class="space-y-3">
+              <%= for column <- current_resource_columns(assigns) do %>
+                <% key = to_string(column.key) %>
+                <% value = Map.get(@inspected_row, key) || Map.get(@inspected_row, column.key) %>
+
+                <div class="p-2.5 bg-gray-50 rounded-xl border border-gray-100 flex items-start justify-between gap-3">
+                  <div class="flex flex-col min-w-0">
+                    <span class="text-[10px] text-gray-400 uppercase font-bold">
+                      <%= column.label %><%= if column.primary_key, do: " · key" %>
+                    </span>
+                    <span class="text-xs text-gray-900 break-all font-mono">
+                      <%= if is_nil(value) or value == "" do %>
+                        <span class="text-gray-300 italic">no value</span>
+                      <% else %>
+                        <%= value %>
+                      <% end %>
+                    </span>
+                  </div>
+
+                  <%= if column.badge and value not in [nil, ""] do %>
+                    <span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-violet-100 text-violet-800 shrink-0">
+                      <%= value %>
+                    </span>
+                  <% else %>
+                    <span class="text-[10px] font-mono text-gray-400 shrink-0"><%= column.type %></span>
+                  <% end %>
                 </div>
               <% end %>
             </div>
-          </div>
+          <% end %>
 
           <div class="pt-4 border-t border-gray-100 flex items-center gap-2">
             <button

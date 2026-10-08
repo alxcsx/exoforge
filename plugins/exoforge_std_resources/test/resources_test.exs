@@ -172,6 +172,12 @@ defmodule Exoforge.Std.ResourcesTest do
 
     assert {:ok, %{rows: rows, total: 1}} = dispatch(:list, %{resource: "snake_score"})
     assert [%{"score" => 42, "name" => "Viper"}] = rows
+
+    # The bridge stores the row under a key and injects it as `id`. Here the resource's key is
+    # `player_id`, so that `id` is the same value a second time, as a string - it is not a field of
+    # this resource and should not be shown as one.
+    assert [row] = rows
+    refute Map.has_key?(row, "id")
   end
 
   test "upsert inserts then updates on conflict" do

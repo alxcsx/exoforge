@@ -499,6 +499,21 @@ defmodule Exoforge.DashboardLiveViewTest do
 
       # And it can be edited, which is the other half of what the tab was missing.
       html = view |> element("button[phx-click=open_focus]") |> render_click()
+
+      # The drawer opens on the schema's view: the columns as declared, labelled, with their types.
+      assert html =~ "Id · key"
+      assert html =~ "Player id"
+      refute html =~ "As stored."
+
+      # And the other declared tab is the raw row, which is a different question - keys as stored,
+      # values as stored, including anything the schema does not describe.
+      html =
+        view
+        |> element(~s{button[phx-click=select_drawer_tab][phx-value-tab="attributes"]})
+        |> render_click()
+
+      assert html =~ "As stored."
+
       html = view |> element("button[phx-click=edit_resource]") |> render_click()
       assert html =~ "Edit"
 
