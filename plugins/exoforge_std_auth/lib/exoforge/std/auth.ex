@@ -303,29 +303,6 @@ defmodule Exoforge.Std.Auth do
     end
   end
 
-  defp rename_player(player_id, name) do
-    case ActionDispatcher.dispatch(:player_data, :update_player, %{
-           player_id: player_id,
-           data: %{"name" => name}
-         }) do
-      {:ok, _} -> :ok
-      {:error, reason} -> {:error, reason}
-      _ -> :error
-    end
-  end
-
-  defp anonymous_token(player_id) do
-    scopes = [Roles.player()]
-
-    case generate_and_store_token(player_id, scopes) do
-      {:ok, token} ->
-        {:ok, %{player_id: player_id, token: token, scopes: scopes, role: role(scopes)}}
-
-      error ->
-        error
-    end
-  end
-
   @impl true
   defaction issue_token(payload) do
     user_id =
@@ -624,23 +601,6 @@ defmodule Exoforge.Std.Auth do
     end
   end
 
-  defp remove_disposable(ids) do
-    Enum.each(ids, fn player_id ->
-      Enum.each([@tokens_table, @accounts_table, @players_table], fn table ->
-        _ =
-          ActionDispatcher.dispatch(:database, :execute, %{
-            plugin: :auth,
-            operation: "DELETE FROM #{table} WHERE player_id = $1",
-            arguments: [player_id]
-          })
-      end)
-
-      # The rest of a player's data belongs to other plugins; asked to clean up after itself, a
-      # disposable player should not leave a profile and a leaderboard row behind.
-      _ = ActionDispatcher.dispatch(:player_data, :delete_player, %{player_id: player_id})
-    end)
-  end
-
   @impl true
   defaction delete_user(payload) do
     user_id =
@@ -694,6 +654,44 @@ defmodule Exoforge.Std.Auth do
   end
 
   # Anonymous accounts start unnamed; the client prompts for a display name afterwards.
+  defp rename_player(player_id, name) do
+    case ActionDispatcher.dispatch(:player_data, :update_player, %{
+           player_id: player_id,
+           data: %{"name" => name}
+         }) do
+      {:ok, _} -> :ok
+      {:error, reason} -> {:error, reason}
+      _ -> :error
+    end
+  end
+  defp anonymous_token(player_id) do
+    scopes = [Roles.player()]
+
+    case generate_and_store_token(player_id, scopes) do
+      {:ok, token} ->
+        {:ok, %{player_id: player_id, token: token, scopes: scopes, role: role(scopes)}}
+
+      error ->
+        error
+    end
+  end
+  defp remove_disposable(ids) do
+    Enum.each(ids, fn player_id ->
+      Enum.each([@tokens_table, @accounts_table, @players_table], fn table ->
+        _ =
+          ActionDispatcher.dispatch(:database, :execute, %{
+            plugin: :auth,
+            operation: "DELETE FROM #{table} WHERE player_id = $1",
+            arguments: [player_id]
+          })
+      end)
+
+      # The rest of a player's data belongs to other plugins; asked to clean up after itself, a
+      # disposable player should not leave a profile and a leaderboard row behind.
+      _ = ActionDispatcher.dispatch(:player_data, :delete_player, %{player_id: player_id})
+    end)
+  end
+
   defp register_unnamed(payload) do
     case do_register_player(payload, allow_empty_name: true) do
       {:ok, %{player: profile} = result} ->

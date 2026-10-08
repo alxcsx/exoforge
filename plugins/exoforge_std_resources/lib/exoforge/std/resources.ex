@@ -302,27 +302,6 @@ defmodule Exoforge.Std.Resources do
   end
 
   # Native plugins keep rows in the host KV store, so clearing means dropping each key.
-  defp kv_clear(%{plugin_id: pid, resource: res}) do
-    db = Module.concat([Exoforge, Std, Database])
-    table = to_string(res.name)
-    pk = to_string(res.primary_key || :id)
-
-    case apply(db, :all, [pid, table]) do
-      {:ok, rows} when is_list(rows) ->
-        Enum.each(rows, fn row ->
-          id = row["id"] || row[pk]
-          if id, do: apply(db, :delete, [pid, table, to_string(id)])
-        end)
-
-        {:ok, %{rows: []}}
-
-      other ->
-        other
-    end
-  rescue
-    _ -> {:ok, %{rows: []}}
-  end
-
   @impl true
   defaction upsert(payload), scope: Exoforge.Auth.Roles.studio() do
     name = resource_name(payload)
@@ -356,6 +335,27 @@ defmodule Exoforge.Std.Resources do
   end
 
   ## ---- QUERY BUILDING ----
+
+  defp kv_clear(%{plugin_id: pid, resource: res}) do
+    db = Module.concat([Exoforge, Std, Database])
+    table = to_string(res.name)
+    pk = to_string(res.primary_key || :id)
+
+    case apply(db, :all, [pid, table]) do
+      {:ok, rows} when is_list(rows) ->
+        Enum.each(rows, fn row ->
+          id = row["id"] || row[pk]
+          if id, do: apply(db, :delete, [pid, table, to_string(id)])
+        end)
+
+        {:ok, %{rows: []}}
+
+      other ->
+        other
+    end
+  rescue
+    _ -> {:ok, %{rows: []}}
+  end
 
   defp list_without_source(info, payload) do
     case list_action(info.resource) do

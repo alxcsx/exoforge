@@ -509,5 +509,13 @@ defmodule Exoforge.Std.Services do
       params(resource: :string, attributes: :map)
       returns(row: :map)
     end
+
+@doc "Removes every row of a resource, table-backed or KV-backed, without dropping the table."
+    action :clear do
+      params(resource: [type: :string, optional: true])
+      returns(cleared: :integer)
+    end
+
+    @doc "Deletes a user account and associated auth credentials."
   end
 end

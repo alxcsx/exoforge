@@ -3,7 +3,7 @@ defmodule Exoforge.Std.Dashboard.Extensions do
   Dashboard-facing shaping of plugin manifests.
 
   Turns registry manifests into the extension summaries the Studio renders (actions,
-  resources, events, dashboard view, trap stats). This lives here rather than in the kernel
+  resources, events, dashboard view). This lives here rather than in the kernel
   so the kernel stays free of dashboard concerns — a different dashboard implementation can
   shape manifests its own way.
   """
@@ -21,14 +21,6 @@ defmodule Exoforge.Std.Dashboard.Extensions do
       services = Enum.map(PluginRegistry.manifest_services(manifest), &normalize_service_metadata/1)
 
       category = Map.get(manifest, :category) || "Extension"
-
-      stats =
-        if Code.ensure_loaded?(Exoforge.Drivers.Runtime.WasmPluginRunner) and
-             function_exported?(Exoforge.Drivers.Runtime.WasmPluginRunner, :get_stats, 1) do
-          Exoforge.Drivers.Runtime.WasmPluginRunner.get_stats(manifest.id)
-        else
-          %{traps_count: 0, last_trap: nil}
-        end
 
       dashboard_view =
         cond do
@@ -92,8 +84,6 @@ defmodule Exoforge.Std.Dashboard.Extensions do
         actions_count: length(all_actions),
         events_count: length(all_events),
         resources_count: length(all_resources),
-        traps_count: Map.get(stats, :traps_count, 0),
-        last_trap: Map.get(stats, :last_trap),
         dashboard_view: dashboard_view,
         title: Map.get(manifest, :title),
         icon: Map.get(manifest, :icon),
