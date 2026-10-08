@@ -51,7 +51,11 @@ resolve_wasi_clang() {
     return 1
   fi
 
-  local url="https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_SDK_VERSION}/wasi-sdk-${WASI_SDK_VERSION}-${host}.tar.gz"
+  # The release tag is the major version and the asset carries the minor: the tag is `wasi-sdk-25`
+  # while the asset is `wasi-sdk-25.0-x86_64-linux.tar.gz`. Using the version for both, which is what
+  # this did, asks for a tag that does not exist and reports it as a download failure.
+  local tag="wasi-sdk-${WASI_SDK_VERSION%%.*}"
+  local url="https://github.com/WebAssembly/wasi-sdk/releases/download/${tag}/wasi-sdk-${WASI_SDK_VERSION}-${host}.tar.gz"
 
   echo "wasi-sdk: downloading ${WASI_SDK_VERSION} (${host})..." >&2
   mkdir -p "$cache"

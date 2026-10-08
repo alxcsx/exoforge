@@ -87,7 +87,7 @@ sdk/unity/sample_unity/*.csproj
 sdk/unity/sample_unity/*.slnx
 
 # Unity/Mono crash dumps.
-sdk/unity/sample_unity/mono_crash.*.json
+sdk/unity/sample_unity/mono_crash.*
 
 # Whatever `-runTests` was last told to write. The Justfile points it at /tmp; an editor run does
 # not, and drops the file next to the project.
