@@ -170,6 +170,12 @@ exists. It watches the package and the C# libraries it ships, rebuilds, and re-p
 reimports on its own when the files change. Every `sample-*` recipe runs `unity-sync` first, so they
 never run against yesterday's package.
 
+`just sample-live-tests` and `just test-e2e` start the backend on a **throwaway database** and delete
+it afterwards, so an integration run leaves nothing in `priv/data/sqlite`. Running the play-mode tests
+from the Editor instead points them at whatever server is up — they sign in with
+`LoginAnonymously(disposable: true)`, and `auth.purge_disposable` (studio-scoped, callable from the
+Studio's Action Sandbox) removes those accounts and nothing else.
+
 `just sample-check` runs `ExoforgeSampleCheck.Run`, which covers the two fiddly bits — the board's
 pixel index maths and the leaderboard JSON parsing. Both are pure functions on purpose so they can
 be checked headlessly. Override the editor with `UNITY_PATH=... just sample-check`.

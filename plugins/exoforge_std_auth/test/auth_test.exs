@@ -443,6 +443,67 @@ defmodule Exoforge.AuthTest do
     end
   end
 
+  # An integration run creates accounts by the dozen and they were indistinguishable from a player who
+  # signed up, so cleaning up after one meant wiping the database. A disposable account says so at
+  # registration, and a purge removes only those.
+  test "a disposable account is marked, survives a role change, and is purged" do
+    assert {:ok, _} =
+             ActionDispatcher.dispatch(:auth, :anonymous, %{
+               player_id: "dev_disposable",
+               disposable: true
+             })
+
+    # Registered beside it and not disposable: a purge has to leave it alone.
+    assert {:ok, _} = ActionDispatcher.dispatch(:auth, :anonymous, %{player_id: "dev_kept"})
+
+    # Changing roles must not quietly make a disposable account permanent.
+    assert {:ok, _} =
+             ActionDispatcher.dispatch(:auth, :update_user_roles, %{
+               player_id: "dev_disposable",
+               scopes: ["player"]
+             })
+
+    assert {:ok, %{purged: 1, dry_run: true}} =
+             ActionDispatcher.dispatch(:auth, :purge_disposable, %{dry_run: true},
+               caller_scopes: ["studio"]
+             )
+
+    # A dry run reports without removing.
+    assert player_row("dev_disposable")
+
+    assert {:ok, %{purged: 1}} =
+             ActionDispatcher.dispatch(:auth, :purge_disposable, %{}, caller_scopes: ["studio"])
+
+    refute player_row("dev_disposable")
+    assert player_row("dev_kept")
+
+    # The tokens went with it, and the other account kept its own.
+    assert token_count("dev_disposable") == 0
+    assert token_count("dev_kept") == 1
+  end
+
+  defp player_row(player_id) do
+    case ActionDispatcher.dispatch(:database, :execute, %{
+           plugin: :auth,
+           operation: "SELECT player_id FROM players WHERE player_id = $1",
+           arguments: [player_id]
+         }) do
+      {:ok, %{rows: [row | _]}} -> row["player_id"] || row[:player_id]
+      _ -> nil
+    end
+  end
+
+  defp token_count(player_id) do
+    case ActionDispatcher.dispatch(:database, :execute, %{
+           plugin: :auth,
+           operation: "SELECT count(*) as n FROM tokens WHERE player_id = $1",
+           arguments: [player_id]
+         }) do
+      {:ok, %{rows: [row | _]}} -> row["n"] || row[:n]
+      _ -> 0
+    end
+  end
+
   defp with_admin_env(email, password) do
     previous = {System.get_env("EXOFORGE_ADMIN_EMAIL"), System.get_env("EXOFORGE_ADMIN_PASSWORD")}
     System.put_env("EXOFORGE_ADMIN_EMAIL", email)

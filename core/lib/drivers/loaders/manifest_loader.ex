@@ -40,10 +40,6 @@ defmodule Exoforge.Drivers.Loaders.ManifestLoader do
       raise "this looks like a contract export, not a manifest. Rebuild the plugin to write manifest.json."
     end
 
-    if not is_map(manifest_map) do
-      raise "Invalid manifest file: #{file_path}. Expected an object, got: #{inspect(manifest_map)}"
-    end
-
     manifest_version = Version.parse!(manifest_map.version)
 
     final_map =

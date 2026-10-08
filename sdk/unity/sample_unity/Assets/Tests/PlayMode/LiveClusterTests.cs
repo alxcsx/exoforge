@@ -65,7 +65,9 @@ public class LiveClusterTests
     private static async Task<long> RunAsync()
     {
         // Stage 1 — enter or register the account, keyed by the device.
-        ExoSession session = await ExoforgeSDK.Auth.LoginAnonymously();
+        // Disposable, so running these from the Editor against a developer's own server leaves no
+        // accounts behind: `auth.purge_disposable` removes them and nothing else.
+        ExoSession session = await ExoforgeSDK.Auth.LoginAnonymously(disposable: true);
 
         Assert.IsNotEmpty(session.PlayerId, "the session has no player id");
         Assert.IsNotEmpty(session.Token, "the session has no token");

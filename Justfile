@@ -93,10 +93,14 @@ test-e2e: build-wasm
 	set -euo pipefail
 	pkill -f beam.smp 2>/dev/null || true
 	sleep 0.5
-	echo "Starting Exoforge backend..."
-	mix run --no-halt &
+	# A throwaway database. Without it this ran against priv/data/sqlite and left every account,
+	# token and score it created in the developer's own data, where nothing distinguishes them from
+	# real ones.
+	data_dir=$(mktemp -d)
+	echo "Starting Exoforge backend on a disposable database..."
+	EXOFORGE_DATA_DIR="$data_dir" mix run --no-halt &
 	SERVER_PID=$!
-	trap "pkill -P $SERVER_PID 2>/dev/null || true; kill $SERVER_PID 2>/dev/null || true; pkill -f beam.smp 2>/dev/null || true" EXIT
+	trap "pkill -P $SERVER_PID 2>/dev/null || true; kill $SERVER_PID 2>/dev/null || true; pkill -f beam.smp 2>/dev/null || true; rm -rf $data_dir" EXIT
 	echo "Waiting for ports 4000 and 4001..."
 	for i in $(seq 1 40); do
 		if nc -z 127.0.0.1 4000 2>/dev/null && nc -z 127.0.0.1 4001 2>/dev/null; then break; fi
@@ -289,11 +293,14 @@ sample-live-tests: unity-sync
 	pkill -f "mix run" 2>/dev/null || true
 	sleep 1
 
-	mix run --no-halt > /tmp/exoforge-live-tests-server.log 2>&1 &
+	# A throwaway database, so the accounts, scores and players these tests create are not left in the
+	# developer's own - which is what happened, 83 players and 186 tokens deep.
+	data_dir=$(mktemp -d)
+	EXOFORGE_DATA_DIR="$data_dir" mix run --no-halt > /tmp/exoforge-live-tests-server.log 2>&1 &
 	server=$!
 	# Kill the BEAM too, not just the wrapper: `kill` on `mix run` can leave it holding port 4000,
 	# and then the offline play-mode tests run against a half-dead server instead of skipping.
-	trap 'kill $server 2>/dev/null || true; pkill -f "mix run" 2>/dev/null || true; pkill -f beam.smp 2>/dev/null || true' EXIT
+	trap 'kill $server 2>/dev/null || true; pkill -f "mix run" 2>/dev/null || true; pkill -f beam.smp 2>/dev/null || true; rm -rf $data_dir' EXIT
 
 	for _ in $(seq 1 60); do
 		nc -z 127.0.0.1 4000 2>/dev/null && break

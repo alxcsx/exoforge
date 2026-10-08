@@ -1,7 +1,7 @@
 # Exoforge Operating Manual (`AGENTS.md`)
 
 > **Branch**: `projetao_mvp`  
-> **Status**: Kernel, 9 standard plugins, C# Client & Plugin SDKs, C# Management Engine (`exo` CLI), Unity SDK (`com.exoforge.sdk`), Producer Studio and the stateful entity runtime are **complete** — **250 Elixir + 72 C# = 322 tests passing**, plus a live E2E vertical slice.  
+> **Status**: Kernel, 9 standard plugins, C# Client & Plugin SDKs, C# Management Engine (`exo` CLI), Unity SDK (`com.exoforge.sdk`), Producer Studio and the stateful entity runtime are **complete** — **251 Elixir + 72 C# = 323 tests passing**, plus a live E2E vertical slice.  
 > **Verified SLAs**: 729k stateful actor ops/sec, 1.4 µs latency, 0.07 ms 50x event fanout.
 
 ---
@@ -16,6 +16,12 @@ tooling alike. It was an Elixir map literal that the server evaluated, which is 
 not read the only copy of a plugin's contracts. Stub generation lays each built plugin's manifest
 over the cluster export, so a plugin that is built but not deployed still has stubs. See
 [`plan.md`](plan.md) §4.
+
+**Test data does not outlive the test.** An integration run creates accounts, and they used to land in
+the developer's own database, indistinguishable from a player who signed up. Two things stop that: the
+live-test recipes run the backend with `EXOFORGE_DATA_DIR` pointing at a temporary directory, and an
+account a test or a demo makes says so — `auth.anonymous`/`auth.register` with `disposable: true` —
+so `auth.purge_disposable` can remove exactly those.
 
 **How a build input is found**, which is the rule the tooling follows: a project names no other
 project's path. `Directory.Build.targets` at the repository root supplies a plugin's SDK, generator

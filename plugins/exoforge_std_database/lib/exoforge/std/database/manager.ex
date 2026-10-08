@@ -138,13 +138,22 @@ defmodule Exoforge.Std.Database.Manager do
     |> Map.put_new_lazy(:data_dir, &default_data_dir/0)
   end
 
-  # Tests get a fresh SQLite database per Manager instance so cases stay isolated;
-  # everything else persists under priv/data/sqlite.
+  # Tests get a fresh SQLite database per Manager instance so cases stay isolated; everything else
+  # persists under priv/data/sqlite, unless EXOFORGE_DATA_DIR says otherwise.
+  #
+  # That override is what lets a server run against a throwaway database: the integration tests start
+  # one, and without it they wrote every account, token and score they made into the developer's own
+  # database - 83 players and 186 tokens after a few runs, indistinguishable from real ones.
   defp default_data_dir do
-    if function_exported?(Mix, :env, 0) and Mix.env() == :test do
-      Path.join(System.tmp_dir!(), "exoforge_test_#{System.unique_integer([:positive])}")
-    else
-      Path.join([File.cwd!(), "priv", "data", "sqlite"])
+    cond do
+      dir = System.get_env("EXOFORGE_DATA_DIR") ->
+        dir
+
+      function_exported?(Mix, :env, 0) and Mix.env() == :test ->
+        Path.join(System.tmp_dir!(), "exoforge_test_#{System.unique_integer([:positive])}")
+
+      true ->
+        Path.join([File.cwd!(), "priv", "data", "sqlite"])
     end
   end
 

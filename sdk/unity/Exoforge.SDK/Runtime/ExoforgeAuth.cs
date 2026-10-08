@@ -22,7 +22,11 @@ namespace Exoforge.Client.Unity
         /// <see cref="ExoSession.HasDisplayName"/> false, and the game prompts for one, then calls
         /// <see cref="SetDisplayName"/>.
         /// </summary>
-        public async Task<ExoSession> LoginAnonymously()
+        /// <param name="disposable">
+        /// Marks the account as one a test, a demo or a load run made, so `auth.purge_disposable` can
+        /// remove it and nothing else. A game leaves this alone: its players are the point.
+        /// </param>
+        public async Task<ExoSession> LoginAnonymously(bool disposable = false)
         {
             // No socket. Signing in is a request/response call, and a game that never subscribes
             // should never open one - so this goes over HTTP and the socket stays shut until
@@ -56,7 +60,8 @@ namespace Exoforge.Client.Unity
             // device and re-enters it on a fresh install.
             var result = await client.SendActionAsync<JsonElement>("auth", "anonymous", new
             {
-                player_id = ExoDeviceId.Get()
+                player_id = ExoDeviceId.Get(),
+                disposable
             });
 
             string token = result.ValueKind == JsonValueKind.Object && result.TryGetProperty("token", out var tokenProp)

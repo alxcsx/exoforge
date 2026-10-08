@@ -236,6 +236,18 @@ defmodule Exoforge.Std.Services do
       returns(user_id: :string, player_id: :string, status: :string)
       errors([:user_not_found, :protected_admin_account])
     end
+
+    @doc """
+    Removes every account that was created disposable, and nothing else.
+
+    A player is disposable because the caller said so when it registered — a test, a demo, a load
+    run. Nothing is inferred, so this is safe to call on a live cluster: it removes the guests and
+    leaves the players who signed up.
+    """
+    action :purge_disposable do
+      params(dry_run: [type: :boolean, optional: true])
+      returns(purged: :integer, dry_run: :boolean)
+    end
   end
 
   defservice player_data do

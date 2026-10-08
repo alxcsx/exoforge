@@ -81,7 +81,30 @@ defmodule Exoforge.Std.Auth do
           "CREATE TABLE IF NOT EXISTS #{@accounts_table} (id text, player_id text, email text, password_hash text, scopes text)"
       })
 
+    # `CREATE TABLE IF NOT EXISTS` does not add a column to a table that already exists, so databases
+    # that predate this one are brought forward here rather than by a schema reset.
+    unless column_exists?(@players_table, "disposable") do
+      _ =
+        ActionDispatcher.dispatch(:database, :execute, %{
+          plugin: :auth,
+          operation: "ALTER TABLE #{@players_table} ADD COLUMN disposable integer DEFAULT 0"
+        })
+    end
+
     :ok
+  end
+
+  defp column_exists?(table, column) do
+    case ActionDispatcher.dispatch(:database, :execute, %{
+           plugin: :auth,
+           operation: "PRAGMA table_info(#{table})"
+         }) do
+      {:ok, %{rows: rows}} ->
+        Enum.any?(rows, fn row -> (row["name"] || row[:name]) == column end)
+
+      _ ->
+        false
+    end
   end
 
   ## ---- SERVICE ACTIONS ----
@@ -235,8 +258,10 @@ defmodule Exoforge.Std.Auth do
       is_binary(player_id) and player_id != "" ->
         case player_name(player_id) do
           nil ->
-            # First sight of this device: register the account, unnamed.
-            register_unnamed(%{player_id: player_id})
+            # First sight of this device: register the account, unnamed. The whole payload goes
+            # through: rebuilding it here silently dropped every other field a caller sent, scopes
+            # and the disposable marker among them.
+            register_unnamed(Map.put(payload, :player_id, player_id))
 
           name ->
             case anonymous_token(player_id) do
@@ -247,7 +272,7 @@ defmodule Exoforge.Std.Auth do
 
       # No device identity supplied: register a fresh unnamed account.
       true ->
-        register_unnamed(%{})
+        register_unnamed(payload)
     end
   end
 
@@ -569,6 +594,53 @@ defmodule Exoforge.Std.Auth do
     end
   end
 
+  @doc """
+  Removes every account a test or a demo created.
+
+  A player is disposable because it said so: `auth.anonymous` or `auth.register` with
+  `disposable: true`. Nothing is inferred from a name or a scope, so a purge on a live cluster
+  removes the guests a test made and leaves the players who signed up.
+  """
+  @impl true
+  defaction purge_disposable(payload), scope: Exoforge.Auth.Roles.studio() do
+    init_schema()
+
+    dry_run = Map.get(payload, :dry_run) || Map.get(payload, "dry_run") || false
+
+    ids =
+      case ActionDispatcher.dispatch(:database, :execute, %{
+             plugin: :auth,
+             operation: "SELECT player_id FROM #{@players_table} WHERE disposable = 1"
+           }) do
+        {:ok, %{rows: rows}} -> Enum.map(rows, &(&1["player_id"] || &1[:player_id]))
+        _ -> []
+      end
+
+    if as_flag(dry_run) == 1 do
+      {:ok, %{purged: length(ids), dry_run: true}}
+    else
+      remove_disposable(ids)
+      {:ok, %{purged: length(ids), dry_run: false}}
+    end
+  end
+
+  defp remove_disposable(ids) do
+    Enum.each(ids, fn player_id ->
+      Enum.each([@tokens_table, @accounts_table, @players_table], fn table ->
+        _ =
+          ActionDispatcher.dispatch(:database, :execute, %{
+            plugin: :auth,
+            operation: "DELETE FROM #{table} WHERE player_id = $1",
+            arguments: [player_id]
+          })
+      end)
+
+      # The rest of a player's data belongs to other plugins; asked to clean up after itself, a
+      # disposable player should not leave a profile and a leaderboard row behind.
+      _ = ActionDispatcher.dispatch(:player_data, :delete_player, %{player_id: player_id})
+    end)
+  end
+
   @impl true
   defaction delete_user(payload) do
     user_id =
@@ -673,11 +745,16 @@ defmodule Exoforge.Std.Auth do
     scopes = parse_scopes(raw_scopes)
     raw_password = Map.get(payload, :password) || Map.get(payload, "password")
 
+    # A caller that says the account is disposable gets one that a purge may remove. Nothing is
+    # inferred from the name or the scopes: a guess about which accounts are junk is a guess that
+    # eventually deletes someone's.
+    disposable = Map.get(payload, :disposable) || Map.get(payload, "disposable")
+
     if raw_password && raw_password != "" do
       _ = upsert_account(user_id, email, raw_password, scopes)
     end
 
-    case generate_and_store_token(user_id, scopes) do
+    case generate_and_store_token(user_id, scopes, disposable) do
       {:ok, token} ->
         profile = %{
           "user_id" => user_id,
@@ -835,7 +912,7 @@ defmodule Exoforge.Std.Auth do
     generate_and_store_token(player_id, scopes)
   end
 
-  defp generate_and_store_token(player_id, scopes) do
+  defp generate_and_store_token(player_id, scopes, disposable \\ nil) do
     init_schema()
     token = :crypto.strong_rand_bytes(24) |> Base.url_encode64(padding: false)
     scopes_str = Enum.join(scopes, ",")
@@ -849,8 +926,8 @@ defmodule Exoforge.Std.Auth do
            arguments: [token, token, player_id, scopes_str]
          }) do
       {:ok, _} ->
-        # Also record/update the player's primary scopes
-        _ = set_player_scopes(player_id, scopes)
+        # Also record/update the player's primary scopes, and whether it is disposable.
+        _ = set_player_scopes(player_id, scopes, disposable)
         {:ok, token}
 
       error ->
@@ -858,10 +935,17 @@ defmodule Exoforge.Std.Auth do
     end
   end
 
-  @doc "Registers or updates scopes for a player."
-  def set_player_scopes(player_id, scopes) do
+  @doc """
+  Registers or updates scopes for a player.
+
+  `disposable` marks the account as one a test or a demo made. `nil` keeps whatever the row already
+  had, so changing a player's roles does not quietly make a disposable account permanent — or the
+  other way round.
+  """
+  def set_player_scopes(player_id, scopes, disposable \\ nil) do
     init_schema()
     scopes_str = Enum.join(scopes, ",")
+    marked = if is_nil(disposable), do: stored_disposable(player_id), else: as_flag(disposable)
 
     # Delete previous entry if exists
     _ =
@@ -871,14 +955,28 @@ defmodule Exoforge.Std.Auth do
         arguments: [player_id]
       })
 
-    insert_query = "INSERT INTO #{@players_table} (id, player_id, scopes) VALUES ($1, $2, $3)"
+    insert_query =
+      "INSERT INTO #{@players_table} (id, player_id, scopes, disposable) VALUES ($1, $2, $3, $4)"
 
     ActionDispatcher.dispatch(:database, :execute, %{
       plugin: :auth,
       operation: insert_query,
-      arguments: [player_id, player_id, scopes_str]
+      arguments: [player_id, player_id, scopes_str, marked]
     })
   end
+
+  defp stored_disposable(player_id) do
+    case ActionDispatcher.dispatch(:database, :execute, %{
+           plugin: :auth,
+           operation: "SELECT disposable FROM #{@players_table} WHERE player_id = $1",
+           arguments: [player_id]
+         }) do
+      {:ok, %{rows: [row | _]}} -> row["disposable"] || row[:disposable] || 0
+      _ -> 0
+    end
+  end
+
+  defp as_flag(value), do: if(value in [true, "true", "1", 1], do: 1, else: 0)
 
   ## ---- PRIVATE HELPERS ----
 
