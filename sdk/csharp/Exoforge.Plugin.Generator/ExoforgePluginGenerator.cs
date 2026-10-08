@@ -611,11 +611,21 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
                 MultipleRoots, Location.None, root, string.Join(", ", roots.Skip(1))));
         }
 
-        var cases = new StringBuilder();
-        foreach (var emit in owned) cases.Append(emit.DispatchCases);
+        // A WASM plugin's assembly is a contract, not a host process: the guest is compiled
+        // separately and the host calls its exports, so a dispatch table here would be code nobody
+        // runs - and worse, it does not compile, because those exports are UnmanagedCallersOnly and
+        // cannot be called from C#.
+        bool isWasm = string.Equals(settings.PluginType, "wasm", StringComparison.OrdinalIgnoreCase);
 
-        spc.AddSource("ExoforgeDispatch.g.cs", SourceText.From(
-            DispatchEmitter.Class(root, cases.ToString(), primary.EventHandler), Encoding.UTF8));
+        var cases = new StringBuilder();
+
+        if (!isWasm)
+        {
+            foreach (var emit in owned) cases.Append(emit.DispatchCases);
+
+            spc.AddSource("ExoforgeDispatch.g.cs", SourceText.From(
+                DispatchEmitter.Class(root, cases.ToString(), primary.EventHandler), Encoding.UTF8));
+        }
 
         var contracts = new StringBuilder();
         var bindings = new StringBuilder();
@@ -636,7 +646,7 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
             spc.AddSource("ExoforgeContractBindings.g.cs", SourceText.From(bindings.ToString(), Encoding.UTF8));
         }
 
-        if (!primary.HasEntryPoint)
+        if (!isWasm && !primary.HasEntryPoint)
         {
             spc.AddSource("ExoforgeEntryPoint.g.cs", SourceText.From(
                 EntryPoint(primary, primary.JsonContextDisplayName ?? ""), Encoding.UTF8));
