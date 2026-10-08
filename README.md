@@ -95,7 +95,7 @@ Cross-platform command-line tool (`netstandard2.1` / `.NET 10`) for CI/CD pipeli
 ```bash
 exo init                     # Initialize /exoforge workspace
 exo plugin new combat        # Scaffold a native C# plugin (--template standard|inventory|liveops)
-exo plugin build combat      # Build the NativeAOT binary + manifest.exs
+exo plugin build combat      # Build the NativeAOT binary + manifest.json
 exo plugin stubs combat      # Generate typed service stubs from the cluster contracts
 exo plugin push combat       # Hot-load plugin onto live cluster
 exo sync                     # Generate strongly-typed C# client bindings

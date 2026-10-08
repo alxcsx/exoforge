@@ -2,4 +2,4 @@
 # The manifest carries the build counter, so tracking it means a diff on every build.
 /.exoforge/
 /.buildcount
-/manifest.exs
+/manifest.json

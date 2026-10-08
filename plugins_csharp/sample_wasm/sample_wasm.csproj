@@ -16,7 +16,7 @@
 
     <!-- The guest is WASM, so the manifest points at the .wasm entry point beside it. -->
     <ExoforgePluginType>wasm</ExoforgePluginType>
-    <ExoforgeManifestPath Condition="'$(ExoforgeManifestPath)' == ''">$(MSBuildProjectDirectory)/manifest.exs</ExoforgeManifestPath>
+    <ExoforgeManifestPath Condition="'$(ExoforgeManifestPath)' == ''">$(MSBuildProjectDirectory)/manifest.json</ExoforgeManifestPath>
   </PropertyGroup>
 
 </Project>

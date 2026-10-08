@@ -14,7 +14,7 @@ using Microsoft.CodeAnalysis.Text;
 namespace Exoforge.Plugin.Generator;
 
 /// <summary>
-/// Generates a plugin's <c>manifest.exs</c> and entry point from its own compilation.
+/// Generates a plugin's <c>manifest.json</c> and entry point from its own compilation.
 ///
 /// This replaces the out-of-process ManifestGen tool: the generator already has the full semantic
 /// model, so there is no separate <c>dotnet run</c> step, no second project, and none of the
@@ -86,7 +86,7 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
     /// The manifest's full path. A relative one is resolved against the project, not the process.
     ///
     /// The compiler does not run from the project directory - it runs from the .NET SDK's Roslyn
-    /// folder - so a bare <c>manifest.exs</c> was written there instead. It succeeded, silently, in
+    /// folder - so a bare <c>manifest.json</c> was written there instead. It succeeded, silently, in
     /// a directory nobody looks in, and the build then failed claiming the generator was missing.
     /// </summary>
     private static string? ResolveManifestPath(AnalyzerConfigOptionsProvider provider)
@@ -111,7 +111,6 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
         string Version,
         string Provides,
         string Dependencies,
-        string ServiceExs,
         string ServiceName,
         string? Category,
         string? Title,
@@ -302,9 +301,6 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
 
         string rootFq = root.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
-        var fragments = new StringBuilder();
-        foreach (var model in services) fragments.Append(ManifestEmitter.Service(model));
-
         // A class is its own contract, so one is generated for it. A declared interface already is
         // the contract and is left alone.
         string contract = "";
@@ -342,7 +338,6 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
             pluginVersion,
             string.Join(",", provides),
             string.Join(",", dependencies),
-            fragments.ToString(),
             primary.Name,
             primary.Category,
             primary.Title,
@@ -683,33 +678,15 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
             foreach (var name in emit.Dependencies.Split(',')) if (name.Length > 0 && !dependencies.Contains(name)) dependencies.Add(name);
         }
 
-        var body = new StringBuilder();
-        foreach (var emit in ordered) body.Append(emit.ServiceExs);
-
-        // The last service entry carries no trailing comma, matching ManifestGen's output exactly so
-        // the switch is invisible to anything diffing manifests.
-        var services = body.ToString();
-        int lastEntry = services.LastIndexOf("    },\n", StringComparison.Ordinal);
-        if (lastEntry >= 0) services = services.Remove(lastEntry + 5, 1);
-
-        var manifest = new StringBuilder();
-        manifest.Append(ManifestEmitter.Header(primary.Id, provides, dependencies, new ServiceModel(
-            primary.ServiceName, new List<ActionModel>(), new List<EventModel>(), new List<ResourceModel>(),
-            primary.Category, primary.Title, primary.Icon, primary.System)));
-
-        manifest.Append(services);
-        manifest.Append(ManifestEmitter.Footer());
+        // Every emit's services, not just the primary one's: a plugin whose services are declared on
+        // several roots would otherwise ship a manifest that mentions only the first.
+        var models = new List<ServiceModel>();
+        foreach (var emit in ordered) models.AddRange(emit.Models);
 
         string final = ManifestEmitter.Finalize(
-            manifest.ToString(), primary.Id, primary.Version, settings.PluginType, settings.BuildStamp);
-
-        // The manifest is Elixir source. The tooling that generates client stubs is pure C# - a game
-        // developer has no Elixir toolchain - so the same contracts go out again as JSON, in the shape
-        // `plugin_manager.export_plugin_info` returns. A plugin that is built but not deployed then
-        // still has a contract to generate against.
-        string contractsPath = Path.ChangeExtension(settings.ManifestPath, ".json");
-        string contractsJson = ManifestEmitter.Finalize(
-            ManifestEmitter.Contracts(primary.Id, provides, dependencies, primary.Models),
+            ManifestEmitter.Manifest(
+                primary.Id, provides, dependencies, models,
+                primary.Category, primary.Title, primary.Icon, primary.System),
             primary.Id, primary.Version, settings.PluginType, settings.BuildStamp);
 
         try
@@ -720,7 +697,12 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
             if (File.Exists(settings.ManifestPath) && File.ReadAllText(settings.ManifestPath) == final) return;
 
             File.WriteAllText(settings.ManifestPath, final, new UTF8Encoding(false));
-            File.WriteAllText(contractsPath, contractsJson, new UTF8Encoding(false));
+
+            // The Elixir manifest this replaced is now a stale copy of a different format. Left behind,
+            // the server would find and evaluate it in preference to nothing, and the plugin would
+            // deploy at whatever version it described.
+            string previous = Path.ChangeExtension(settings.ManifestPath, ".exs");
+            if (File.Exists(previous)) File.Delete(previous);
         }
         catch (Exception ex)
         {

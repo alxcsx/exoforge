@@ -49,7 +49,7 @@ sample_unity/
 │       │   ├── SnakeLeaderboardPlugin.cs  the actions (talk to IDatabase directly)
 │       │   └── Generated/PluginServices.g.cs  typed player_data stubs (generated)
 │       ├── snake_leaderboard          built NativeAOT binary (generated, git-ignored)
-│       └── manifest.exs               GENERATED from the C# attributes
+│       └── manifest.json               GENERATED from the C# attributes
 ├── Packages/
 │   ├── manifest.json                registry packages only — no path leaves this project
 │   └── com.exoforge.sdk/            the SDK, PLACED here by `just unity-sync` (git-ignored)
@@ -141,7 +141,7 @@ stale name can survive. `submit_score` therefore takes a `name` only for wire co
 
 The typed `player_data` call comes from `src/Generated/PluginServices.g.cs`, generated from the
 cluster contracts with `exo plugin stubs snake_leaderboard`. Only the services listed in the plugin's
-`manifest.exs` dependencies are generated (override with `--services a,b`), so the file stays small.
+`manifest.json` dependencies are generated (override with `--services a,b`), so the file stays small.
 The stubs depend only on the service contract (`PlayerDataServiceClient`,
 `PlayerDataGetPlayerRequest/Response`, `PlayerDataPlayer`) — never on the Elixir `PlayerData` module.
 The host injects the client directly (`[Inject("player_data")] PlayerDataServiceClient PlayerData`),
@@ -207,7 +207,7 @@ stays a menu item, since it is a one-off scene edit. In the **Plugins** tab, eve
 `Exoforge/plugins/` gets a **Build**, **Build & Deploy**, **Deploy**, and **Stubs** button (plus
 **Sync Stubs** to regenerate every plugin at once). Stub generation fetches the live contracts and
 writes each plugin's `src/Generated/PluginServices.g.cs`. Native builds run `dotnet publish` (AOT)
-and regenerate `manifest.exs`; set a **Native RID** (e.g. `linux-x64`) to build for a non-host deploy
+and regenerate `manifest.json`; set a **Native RID** (e.g. `linux-x64`) to build for a non-host deploy
 target. If Unity can't find `dotnet` (GUI apps often don't inherit your shell PATH), set
 **Dotnet Path** in the Settings tab. The build streams its log into the window, and every build stamps
 the manifest version with a build counter and source fingerprint (`1.0.0+42.<hash>`), so a deploy is
@@ -216,7 +216,7 @@ traceable. The tab marks a plugin **● Modified** when its sources changed sinc
 
 Rules of thumb:
 
-- **Never hand-edit** `Assets/Exoforge/Generated/ExoforgeServices.g.cs`, `Exoforge/plugins/*/manifest.exs`,
+- **Never hand-edit** `Assets/Exoforge/Generated/ExoforgeServices.g.cs`, `Exoforge/plugins/*/manifest.json`,
   or `Assets/Scenes/SampleScene.unity` — regenerate them (`$CLI sync`, `$CLI plugin build`,
   `just sample-setup`).
 - **Gameplay must not hold a client, an endpoint, or a token.** Publish a hook

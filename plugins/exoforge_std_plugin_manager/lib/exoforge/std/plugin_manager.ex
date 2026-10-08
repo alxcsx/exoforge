@@ -301,7 +301,7 @@ defmodule Exoforge.Std.PluginManager do
       target_dir = upload_target_dir(clean_name)
       binary_path = Path.join(target_dir, clean_name)
       staged_path = binary_path <> ".new"
-      manifest_path = Path.join(target_dir, "manifest.exs")
+      manifest_path = Path.join(target_dir, "manifest.json")
 
       # Stage then atomically rename: rename(2) replaces the inode, so an old binary that is still
       # executing can be replaced even if the process has not fully exited yet.
@@ -328,7 +328,7 @@ defmodule Exoforge.Std.PluginManager do
         <<0, 97, 115, 109, _rest::binary>> ->
           target_dir = upload_target_dir(clean_name)
           wasm_path = Path.join(target_dir, "#{clean_name}.wasm")
-          manifest_path = Path.join(target_dir, "manifest.exs")
+          manifest_path = Path.join(target_dir, "manifest.json")
 
           with :ok <- File.mkdir_p(target_dir),
                :ok <- File.write(wasm_path, wasm_bytes),
@@ -353,7 +353,7 @@ defmodule Exoforge.Std.PluginManager do
       clean_name = sanitize_name(name_str)
       target_dir = upload_target_dir(clean_name)
       lib_dir = Path.join([target_dir, "lib"])
-      manifest_path = Path.join(target_dir, "manifest.exs")
+      manifest_path = Path.join(target_dir, "manifest.json")
 
       with :ok <- File.mkdir_p(lib_dir),
            :ok <- write_elixir_files(target_dir, clean_name, elixir_code, files_map),
@@ -460,30 +460,37 @@ defmodule Exoforge.Std.PluginManager do
 
   defp decode_binary(_), do: nil
 
+  # JSON, like every other manifest. A caller that sends one is taken at its word; a caller that
+  # sends a map gets it encoded; and a caller that sends nothing gets a manifest for an Elixir plugin
+  # named after the upload.
+  #
+  # The format used to be detected by looking for `%{` in the payload, which is a thing a format
+  # should not need. Now it is JSON or it is a map, and both end up as JSON.
   defp write_manifest_file(manifest_path, name, manifest_param, default_type) do
     content =
       cond do
-        is_binary(manifest_param) and String.contains?(manifest_param, "%{") ->
+        is_binary(manifest_param) ->
           manifest_param
 
         is_map(manifest_param) ->
-          inspect(manifest_param, pretty: true)
+          manifest_param |> Exoforge.PluginRegistry.sanitize_for_json() |> Jason.encode!(pretty: true)
 
         true ->
-          """
           %{
-            id: :#{name},
-            name: "#{Macro.camelize(name)}",
-            version: "0.1.0",
-            type: :#{default_type},
-            entry_point: #{Macro.camelize(name)},
-            provides: [:#{name}],
-            dependencies: []
+            "id" => name,
+            "version" => "0.1.0",
+            "type" => to_string(default_type),
+            # The `Elixir.` prefix is not decoration: as source, `TestPlugin` is the alias for
+            # `Elixir.TestPlugin`, and without it the loader builds a different atom than the module
+            # it is meant to boot.
+            "entry_point" => "Elixir." <> Macro.camelize(name),
+            "provides" => [name],
+            "dependencies" => []
           }
-          """
+          |> Jason.encode!(pretty: true)
       end
 
-    File.write(manifest_path, content)
+    File.write(manifest_path, content <> "\n")
   end
 
   defp upload_target_dir(clean_name) do

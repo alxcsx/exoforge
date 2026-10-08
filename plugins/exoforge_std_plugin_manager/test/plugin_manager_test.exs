@@ -159,7 +159,7 @@ defmodule Exoforge.Std.PluginManagerTest do
       # Verify files were persisted to disk
       target_dir = "priv/data/uploaded_plugins/test_uploaded_wasm"
       assert File.exists?(Path.join(target_dir, "test_uploaded_wasm.wasm"))
-      assert File.exists?(Path.join(target_dir, "manifest.exs"))
+      assert File.exists?(Path.join(target_dir, "manifest.json"))
     end
 
     test "upload_plugin accepts valid Elixir plugin code, persists, compiles, and registers it" do
@@ -173,15 +173,16 @@ defmodule Exoforge.Std.PluginManagerTest do
       end
       """
 
+      # A manifest is JSON now, and the id is what names it: there is no separate `name` to keep in
+      # step with it.
       manifest_content = """
-      %{
-        id: :test_uploaded_elixir,
-        name: "TestUploadedElixir",
-        version: "0.1.0",
-        type: :elixir,
-        entry_point: TestUploadedElixir,
-        provides: [:test_uploaded_elixir],
-        dependencies: []
+      {
+        "id": "test_uploaded_elixir",
+        "version": "0.1.0",
+        "type": "elixir",
+        "entry_point": "Elixir.TestUploadedElixir",
+        "provides": ["test_uploaded_elixir"],
+        "dependencies": []
       }
       """
 
@@ -203,7 +204,7 @@ defmodule Exoforge.Std.PluginManagerTest do
 
       target_dir = "priv/data/uploaded_plugins/test_uploaded_elixir"
       assert File.exists?(Path.join([target_dir, "lib", "test_uploaded_elixir.ex"]))
-      assert File.exists?(Path.join(target_dir, "manifest.exs"))
+      assert File.exists?(Path.join(target_dir, "manifest.json"))
 
       assert {:ok, plugin_info} =
                ActionDispatcher.dispatch(

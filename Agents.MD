@@ -10,9 +10,12 @@
 
 No open task. The two that were outstanding are settled: `Exoforge.Plugin.SDK` is not being
 published (the local feed covers development, and `just clean-room-sdk` proves the consumer path),
-and client stubs no longer need a cluster — each plugin's generator writes its contracts as JSON
-beside the manifest, and stub generation lays those over the cluster export, so a plugin that is
-built but not deployed still has stubs. See [`plan.md`](plan.md) §4.
+and client stubs no longer need a cluster. **A plugin manifest is JSON** — `manifest.json`, written by
+the plugin's own generator or by the Elixir manifest compiler, read by the server and by the C#
+tooling alike. It was an Elixir map literal that the server evaluated, which is why the C# side could
+not read the only copy of a plugin's contracts. Stub generation lays each built plugin's manifest
+over the cluster export, so a plugin that is built but not deployed still has stubs. See
+[`plan.md`](plan.md) §4.
 
 **How a build input is found**, which is the rule the tooling follows: a project names no other
 project's path. `Directory.Build.targets` at the repository root supplies a plugin's SDK, generator

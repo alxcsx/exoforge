@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Exoforge.Generated;
 using Exoforge.Plugin.Generator.Tests.Contracts;
@@ -164,21 +166,22 @@ public class DispatchTests
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
         {
-            string candidate = Path.Combine(dir.FullName, "obj", "Exoforge", "manifest.exs");
+            string candidate = Path.Combine(dir.FullName, "obj", "Exoforge", "manifest.json");
             if (File.Exists(candidate)) return candidate;
         }
 
         throw new FileNotFoundException("the generated manifest was not found above " + AppContext.BaseDirectory);
     }
 
-    private static string ServiceBlock(string manifest, string name)
-    {
-        int start = manifest.IndexOf($"      name: :{name},", StringComparison.Ordinal);
-        Assert.True(start >= 0, $"service '{name}' is missing from the manifest");
+    /// <summary>The generated manifest, parsed.</summary>
+    private static JsonNode Manifest() => JsonNode.Parse(File.ReadAllText(ManifestPath()))!;
 
-        int end = manifest.IndexOf("      name: :", start + 1, StringComparison.Ordinal);
-        return end < 0 ? manifest.Substring(start) : manifest.Substring(start, end - start);
-    }
+    /// <summary>One service by name.</summary>
+    private static JsonNode Service(JsonNode manifest, string name) =>
+        manifest["services"]!.AsArray().First(s => s!["name"]!.GetValue<string>() == name)!;
+
+    private static string[] ActionNames(JsonNode service) =>
+        service["actions"]!.AsArray().Select(a => a!["name"]!.GetValue<string>()).ToArray();
 
     /// <summary>
     /// A plugin may provide more than one service, the way an Elixir plugin does with
@@ -187,16 +190,16 @@ public class DispatchTests
     [Fact]
     public void A_plugin_can_provide_more_than_one_service()
     {
-        string manifest = File.ReadAllText(ManifestPath());
+        JsonNode manifest = Manifest();
 
-        string leaderboard = ServiceBlock(manifest, "dispatch_sample");
-        string admin = ServiceBlock(manifest, "dispatch_admin");
+        string[] leaderboard = ActionNames(Service(manifest, "dispatch_sample"));
+        string[] admin = ActionNames(Service(manifest, "dispatch_admin"));
 
-        Assert.Contains("name: :add,", leaderboard);
-        Assert.DoesNotContain("name: :wipe,", leaderboard);
+        Assert.Contains("add", leaderboard);
+        Assert.DoesNotContain("wipe", leaderboard);
 
-        Assert.Contains("name: :wipe,", admin);
-        Assert.DoesNotContain("name: :add,", admin);
+        Assert.Contains("wipe", admin);
+        Assert.DoesNotContain("add", admin);
     }
 
     /// <summary>
@@ -206,11 +209,10 @@ public class DispatchTests
     [Fact]
     public void A_declared_contract_interface_contributes_a_service()
     {
-        string manifest = File.ReadAllText(ManifestPath());
+        JsonNode ping = Service(Manifest(), "contract_ping");
 
-        string ping = ServiceBlock(manifest, "contract_ping");
-        Assert.Contains("name: :ping,", ping);
-        Assert.Contains("message: :string", ping);
+        Assert.Contains("ping", ActionNames(ping));
+        Assert.Equal("string", ping["actions"]!.AsArray()[0]!["params"]!["message"]!.GetValue<string>());
     }
 
     [Fact]
@@ -250,11 +252,10 @@ public class DispatchTests
     [Fact]
     public void A_contract_from_a_referenced_assembly_contributes_a_service()
     {
-        string manifest = File.ReadAllText(ManifestPath());
+        JsonNode shared = Service(Manifest(), "shared_contract");
 
-        string shared = ServiceBlock(manifest, "shared_contract");
-        Assert.Contains("name: :greet,", shared);
-        Assert.Contains("name: :string", shared);
+        Assert.Contains("greet", ActionNames(shared));
+        Assert.Equal("string", shared["actions"]!.AsArray()[0]!["params"]!["name"]!.GetValue<string>());
     }
 
     [Fact]
@@ -281,14 +282,23 @@ public class DispatchTests
     [Fact]
     public void A_record_return_carries_its_fields_and_type_name()
     {
-        string manifest = File.ReadAllText(ManifestPath());
+        JsonNode manifest = Manifest();
+
+        var actions = manifest["services"]!.AsArray()
+            .SelectMany(s => s!["actions"]!.AsArray())
+            .ToList();
+
+        JsonNode listed = actions.First(a => a!["returns_list"]!.GetValue<bool>());
 
         // The type name is fully qualified so the generated JSON context can resolve it.
-        Assert.Contains("returns_list: true, returns_type: \"global::", manifest);
-        Assert.Contains("ScoreRow\"", manifest);
-        Assert.Contains("returns: %{player_id: :string, score: :integer}", manifest);
+        Assert.StartsWith("global::", listed["returns_type"]!.GetValue<string>());
+        Assert.EndsWith("ScoreRow", listed["returns_type"]!.GetValue<string>());
+
+        // A record is described by its fields, not collapsed to a single type.
+        Assert.Equal("string", listed["returns"]!["player_id"]!.GetValue<string>());
+        Assert.Equal("integer", listed["returns"]!["score"]!.GetValue<string>());
 
         // A scalar stays a scalar.
-        Assert.Contains("returns: :string", manifest);
+        Assert.Contains(actions, a => a!["returns"]!.GetValue<string>() == "string");
     }
 }

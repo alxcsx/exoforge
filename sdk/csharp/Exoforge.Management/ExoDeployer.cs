@@ -92,7 +92,7 @@ public class ExoDeployer
         string binaryBase64 = Convert.ToBase64String(binaryBytes);
 
         string? manifestContent = null;
-        string manifestPath = Path.Combine(pluginDir, "manifest.exs");
+        string manifestPath = Path.Combine(pluginDir, "manifest.json");
         if (File.Exists(manifestPath))
         {
             manifestContent = await File.ReadAllTextAsync(manifestPath, cancellationToken).ConfigureAwait(false);
@@ -448,7 +448,7 @@ public class ExoDeployer
 
             try
             {
-                if (JsonNode.Parse(File.ReadAllText(path))?["export"]?["plugins"] is not JsonArray localPlugins) continue;
+                if (JsonNode.Parse(ToExport(File.ReadAllText(path)))?["export"]?["plugins"] is not JsonArray localPlugins) continue;
 
                 foreach (JsonNode? plugin in localPlugins)
                 {
@@ -464,6 +464,70 @@ public class ExoDeployer
 
         foreach (var entry in found) yield return entry;
     }
+
+    /// <summary>
+    /// A plugin's manifest as the contract export the client generator reads.
+    ///
+    /// The manifest is the file a plugin has; the export is the shape the generator wants, and the
+    /// shape the cluster answers with. Converting on read rather than writing a second file is the
+    /// point of the manifest being JSON: one artifact per plugin, not two that mean the same thing.
+    /// </summary>
+    public static string ToExport(string manifestJson)
+    {
+        JsonNode? parsed;
+
+        try
+        {
+            parsed = JsonNode.Parse(manifestJson);
+        }
+        catch (JsonException)
+        {
+            return EmptyExport;
+        }
+
+        if (parsed is not JsonObject manifest) return EmptyExport;
+
+        var plugin = new JsonObject
+        {
+            ["id"] = manifest["id"]?.DeepClone(),
+            // The export carries a name beside the id; the manifest has only the id, deliberately.
+            ["name"] = manifest["id"]?.DeepClone(),
+            ["version"] = manifest["version"]?.DeepClone(),
+            ["type"] = manifest["type"]?.DeepClone(),
+            ["entry_point"] = manifest["entry_point"]?.DeepClone(),
+            ["provides"] = manifest["provides"]?.DeepClone(),
+            ["dependencies"] = manifest["dependencies"]?.DeepClone(),
+            ["services"] = manifest["services"]?.DeepClone()
+        };
+
+        // A resource's C# record is `record` in the manifest, because `type` is an atom everywhere
+        // else in it and one field meaning something else would have cost a path-aware reader. The
+        // export has no such constraint and calls it `type`.
+        if (plugin["services"] is JsonArray services)
+        {
+            foreach (JsonNode? service in services)
+            {
+                if (service?["resources"] is not JsonArray resources) continue;
+
+                foreach (JsonNode? resource in resources)
+                {
+                    if (resource is not JsonObject entry || entry["record"] is not { } record) continue;
+
+                    entry.Remove("record");
+                    entry["type"] = record.DeepClone();
+                }
+            }
+        }
+
+        var export = new JsonObject
+        {
+            ["export"] = new JsonObject { ["plugins"] = new JsonArray(plugin) }
+        };
+
+        return export.ToJsonString();
+    }
+
+    private const string EmptyExport = "{\"export\":{\"plugins\":[]}}";
 
     private static string? PluginId(JsonNode plugin)
     {
@@ -490,20 +554,15 @@ public class ExoDeployer
 
         try
         {
-            if (JsonNode.Parse(File.ReadAllText(path))?["export"]?["plugins"] is not JsonArray plugins) return null;
+            if (JsonNode.Parse(File.ReadAllText(path))?["dependencies"] is not JsonArray declared) return null;
 
             var dependencies = new List<string>();
 
-            foreach (JsonNode? plugin in plugins)
+            foreach (JsonNode? dependency in declared)
             {
-                if (plugin?["dependencies"] is not JsonArray declared) continue;
-
-                foreach (JsonNode? dependency in declared)
+                if (dependency?.GetValue<string>() is { Length: > 0 } name && !dependencies.Contains(name))
                 {
-                    if (dependency?.GetValue<string>() is { Length: > 0 } name && !dependencies.Contains(name))
-                    {
-                        dependencies.Add(name);
-                    }
+                    dependencies.Add(name);
                 }
             }
 
@@ -590,9 +649,9 @@ public class ExoDeployer
     /// Builds a local plugin in the workspace:
     /// <list type="bullet">
     /// <item><c>build.sh</c> present → run it (WASM reactor guest).</item>
-    /// <item>otherwise → <c>dotnet publish</c> a NativeAOT binary and regenerate <c>manifest.exs</c>.</item>
+    /// <item>otherwise → <c>dotnet publish</c> a NativeAOT binary and regenerate <c>manifest.json</c>.</item>
     /// </list>
-    /// The result is staged next to <c>manifest.exs</c>, ready for <see cref="UploadPluginAsync"/>.
+    /// The result is staged next to <c>manifest.json</c>, ready for <see cref="UploadPluginAsync"/>.
     /// </summary>
     public ExoPluginBuild BuildPlugin(
         string pluginName,
@@ -649,7 +708,7 @@ public class ExoDeployer
 
         CommitBuildNumber(pluginDir, buildNumber);
 
-        string manifestPath = Path.Combine(pluginDir, "manifest.exs");
+        string manifestPath = Path.Combine(pluginDir, "manifest.json");
         return new ExoPluginBuild(cleanName, pluginType, binaryPath, manifestPath, output.ToString());
     }
 
@@ -667,7 +726,7 @@ public class ExoDeployer
     private string PublishNative(string csproj, string pluginDir, string cleanName, string? rid, string dotnetPath, string buildStamp, Action<string> emit)
     {
         string targetRid = string.IsNullOrWhiteSpace(rid) ? HostRuntimeIdentifier() : rid!;
-        string manifest = Path.Combine(pluginDir, "manifest.exs");
+        string manifest = Path.Combine(pluginDir, "manifest.json");
 
         // The manifest is written by Exoforge.Plugin.Generator during this same compile, so the
         // version stamped into it always describes the binary just produced. There is no second pass
@@ -822,16 +881,20 @@ public class ExoDeployer
         File.WriteAllText(Path.Combine(pluginDir, ".buildcount"), buildNumber.ToString());
     }
 
-    /// <summary>Reads the <c>version</c> field from a plugin's generated <c>manifest.exs</c>.</summary>
+    /// <summary>Reads the <c>version</c> field from a plugin's generated <c>manifest.json</c>.</summary>
     public static string? ReadManifestVersion(string pluginDir)
     {
-        string manifestPath = Path.Combine(pluginDir, "manifest.exs");
+        string manifestPath = Path.Combine(pluginDir, "manifest.json");
         if (!File.Exists(manifestPath)) return null;
 
-        var match = System.Text.RegularExpressions.Regex.Match(
-            File.ReadAllText(manifestPath), """version:\s*([^\s,]+)""");
-
-        return match.Success ? match.Groups[1].Value.Trim('"') : null;
+        try
+        {
+            return JsonNode.Parse(File.ReadAllText(manifestPath))?["version"]?.GetValue<string>();
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
+        {
+            return null;
+        }
     }
 
     private static string? FindFile(string root, string fileName)

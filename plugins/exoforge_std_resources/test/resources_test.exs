@@ -69,6 +69,11 @@ defmodule Exoforge.Std.ResourcesTest do
     })
 
     Resources.run_migrations()
+
+    # One SQLite file for the whole suite, so a row written by one test is visible to the next: the
+    # test that asserts `total: 3` saw four whenever the upsert test ran first, which is a coin flip
+    # on the seed. Each test starts from an empty table instead.
+    dispatch(:clear, %{resource: "widget"})
     :ok
   end
 

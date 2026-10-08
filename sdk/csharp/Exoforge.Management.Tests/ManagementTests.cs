@@ -57,18 +57,18 @@ public class ManagementTests : IDisposable
     /// this is the only place that decision is made.
     /// </summary>
     [Fact]
-    public void Local_Contracts_Override_And_Extend_The_Cluster_Export()
+    public void Local_Manifests_Override_And_Extend_The_Cluster_Export()
     {
         var ws = ExoWorkspace.Initialize(_tempDir, "TestGameProject");
         var deployer = new ExoDeployer(ws);
 
-        WriteContracts(ws.PluginsPath, "leaderboard", """
-        {"export":{"plugins":[{"id":"leaderboard","version":"2.0.0-local","services":[{"name":"leaderboard"}]}]}}
+        WriteManifest(ws.PluginsPath, "leaderboard", """
+        {"id":"leaderboard","version":"2.0.0-local","type":"native","services":[{"name":"leaderboard"}]}
         """);
 
         // Built, never deployed: the cluster has never heard of it.
-        WriteContracts(ws.PluginsPath, "guilds", """
-        {"export":{"plugins":[{"id":"guilds","version":"1.0.0-local","services":[{"name":"guilds"}]}]}}
+        WriteManifest(ws.PluginsPath, "guilds", """
+        {"id":"guilds","version":"1.0.0-local","type":"native","services":[{"name":"guilds"}]}
         """);
 
         string cluster = """
@@ -93,7 +93,7 @@ public class ManagementTests : IDisposable
         Assert.Equal("local@host", export.GetProperty("cluster").GetString());
     }
 
-    private static void WriteContracts(string pluginsPath, string name, string json)
+    private static void WriteManifest(string pluginsPath, string name, string json)
     {
         string dir = Path.Combine(pluginsPath, name);
         Directory.CreateDirectory(dir);
@@ -201,7 +201,7 @@ public class ManagementTests : IDisposable
         string pluginDir = Path.Combine(_tempDir, "plugin");
         Directory.CreateDirectory(pluginDir);
         File.WriteAllText(Path.Combine(pluginDir, "manifest.json"), """
-        {"export":{"plugins":[{"id":"plugin","dependencies":["database","player_data","database"]}]}}
+        {"id":"plugin","dependencies":["database","player_data","database"]}
         """);
 
         var deps = ExoDeployer.ReadManifestDependencies(pluginDir);
@@ -233,7 +233,7 @@ public class ManagementTests : IDisposable
     {
         string dir = Path.Combine(_tempDir, "mv");
         Directory.CreateDirectory(dir);
-        File.WriteAllText(Path.Combine(dir, "manifest.exs"), "%{\n  version: \"1.0.0+abc12345\",\n}");
+        File.WriteAllText(Path.Combine(dir, "manifest.json"), """{"id":"x","version":"1.0.0+abc12345"}""");
 
         Assert.Equal("1.0.0+abc12345", ExoDeployer.ReadManifestVersion(dir));
         Assert.Null(ExoDeployer.ReadManifestVersion(_tempDir));

@@ -13,7 +13,7 @@ namespace Exoforge.Management;
 ///   src/&lt;Name&gt;Plugin.cs  the actions
 ///   src/Generated/       typed service stubs and the JSON context, from `exo plugin stubs`
 /// </code>
-/// The built binary is staged under <c>.exoforge/</c> and <c>manifest.exs</c> is written at the plugin
+/// The built binary is staged under <c>.exoforge/</c> and <c>manifest.json</c> is written at the plugin
 /// root; both are build outputs.
 /// </summary>
 public static class ExoScaffolder
@@ -36,7 +36,7 @@ public static class ExoScaffolder
         File.WriteAllText(Path.Combine(targetDir, "README.md"), GenerateReadme(cleanName, className));
 
         // The staged native binary and the local build counter are build artifacts.
-        File.WriteAllText(Path.Combine(targetDir, ".gitignore"), "/.exoforge/\n/.buildcount\n/manifest.exs\n/manifest.json\n");
+        File.WriteAllText(Path.Combine(targetDir, ".gitignore"), "/.exoforge/\n/.buildcount\n/manifest.json\n");
 
         RegisterLocalFeed(pluginsDirectory);
 
@@ -132,7 +132,7 @@ public static class ExoScaffolder
     | :--- | :--- |
     | `src/{className}Plugin.cs` | the plugin: `[ExoAction]` methods are what callers invoke |
     | `src/Generated/` | typed service stubs and the JSON context (`exo plugin stubs {cleanName}`) |
-    | `manifest.exs` | generated from the attributes; do not edit |
+    | `manifest.json` | generated from the attributes; do not edit |
     | `{cleanName}` | the staged native binary; generated |
 
     ## Working on it

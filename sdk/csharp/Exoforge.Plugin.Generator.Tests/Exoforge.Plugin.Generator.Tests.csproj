@@ -16,7 +16,7 @@
       that can silently write somewhere else. `ManifestPath()` in the tests looks for exactly this
       file, which makes every test in the suite a check on it.
     -->
-    <ExoforgeManifestPath>obj/Exoforge/manifest.exs</ExoforgeManifestPath>
+    <ExoforgeManifestPath>obj/Exoforge/manifest.json</ExoforgeManifestPath>
   </PropertyGroup>
 
   <ItemGroup>

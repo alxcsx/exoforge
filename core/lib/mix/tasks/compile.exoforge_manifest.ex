@@ -43,20 +43,30 @@ defmodule Mix.Tasks.Compile.ExoforgeManifest do
     manifest = struct!(Manifest, merged_attrs)
     manifest_map = Map.from_struct(manifest)
 
-    exs_content =
+    # JSON, not an Elixir map literal. The server used to evaluate this file, which meant the only
+    # copy of a plugin's contracts could be read by exactly one language - and the C# tooling, which
+    # generates client stubs from them, has no Elixir.
+    #
+    # `sanitize_for_json` turns the atoms into strings; the loader turns the ones it needs back, by
+    # key. The name is left out because it is the id, and `physical_path` because the loader sets it
+    # from where the file was found.
+    json_content =
       manifest_map
-      |> Map.delete(:physical_path)
-      |> inspect(pretty: true, limit: :infinity)
-      |> Code.format_string!()
-      |> IO.iodata_to_binary()
+      |> Map.drop([:physical_path, :name])
+      |> Exoforge.PluginRegistry.sanitize_for_json()
+      |> Jason.encode!(pretty: true)
 
     out_dir = Mix.Project.app_path()
-    out_path = Path.join(out_dir, "manifest.exs")
+    out_path = Path.join(out_dir, "manifest.json")
 
     File.mkdir_p!(out_dir)
-    File.write!(out_path, exs_content)
+    File.write!(out_path, json_content <> "\n")
 
-    Mix.shell().info("#{IO.ANSI.green()}[ExoForge Manifest]#{IO.ANSI.reset()} Generated manifest.exs for :#{app}")
+    # The Elixir map literal this replaced is a stale copy in a format nothing reads any more. Left
+    # there, it is a second manifest to be confused by.
+    File.rm(Path.join(out_dir, "manifest.exs"))
+
+    Mix.shell().info("#{IO.ANSI.green()}[ExoForge Manifest]#{IO.ANSI.reset()} Generated manifest.json for :#{app}")
 
     :ok
   end

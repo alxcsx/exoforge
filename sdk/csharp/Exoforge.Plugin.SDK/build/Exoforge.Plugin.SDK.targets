@@ -11,7 +11,7 @@
       The scaffolded layout: <plugin>/src/<name>.csproj with the manifest one level up. A plugin
       laid out differently sets this itself before the import, and the condition leaves it alone.
     -->
-    <ExoforgeManifestPath Condition="'$(ExoforgeManifestPath)' == ''">$(MSBuildProjectDirectory)/../manifest.exs</ExoforgeManifestPath>
+    <ExoforgeManifestPath Condition="'$(ExoforgeManifestPath)' == ''">$(MSBuildProjectDirectory)/../manifest.json</ExoforgeManifestPath>
   </PropertyGroup>
 
   <ItemGroup>

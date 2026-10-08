@@ -64,7 +64,7 @@ public static class CleanRoomProbe
 
         if (File.Exists(build.ManifestPath))
         {
-            Check(File.ReadAllText(build.ManifestPath).Contains("id: :" + PluginName),
+            Check(File.ReadAllText(build.ManifestPath).Contains("\"id\": \"" + PluginName + "\""),
                 "the manifest does not describe the plugin");
         }
 

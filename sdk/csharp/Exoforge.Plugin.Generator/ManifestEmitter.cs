@@ -25,16 +25,7 @@ internal sealed record ActionModel(
     string? ReturnsScalar,
     List<ParamModel> ReturnFields,
     bool ReturnsList,
-    string? ReturnsType)
-{
-    /// <summary>
-    /// The return type as Elixir: an atom for a scalar, a map literal for a record. Rendered here
-    /// rather than carried around pre-rendered, because the JSON twin needs the same data.
-    /// </summary>
-    public string ReturnsExs => ReturnFields.Count > 0
-        ? "%{" + string.Join(", ", ReturnFields.Select(f => f.Name + ": :" + f.Type)) + "}"
-        : ":" + (ReturnsScalar ?? "term");
-}
+    string? ReturnsType);
 
 internal sealed record EventModel(
     string Name,
@@ -62,11 +53,21 @@ internal sealed record ServiceModel(
     bool System);
 
 /// <summary>
-/// Emits the Elixir manifest. The output is byte-for-byte what ManifestGen produced, so a plugin
-/// built before and after the switch to the generator deploys identically.
+/// Emits the plugin manifest as JSON.
 ///
-/// <c>type</c>, <c>version</c> and <c>entry_point</c> are placeholders: they depend on build
-/// settings (native vs wasm, the build stamp) that the generator's per-file transform cannot see.
+/// It used to be an Elixir map literal, which the server evaluated. That made the file readable by
+/// exactly one language, so the C# tooling — which has to read a plugin's contracts to generate its
+/// client stubs, and has no Elixir — could not read the only file the contracts were in. JSON is
+/// readable by both, is not evaluated by either, and carries no atom syntax that has to be recreated
+/// on the way in.
+///
+/// Which values are atoms in the server's terms is decided by the key, not by position, so the loader
+/// needs no schema of its own. That is why the resource's C# record is called <c>record</c> rather
+/// than <c>type</c>: <c>type</c> is an atom everywhere else, and one field that meant something else
+/// would have cost a path-aware reader.
+///
+/// <c>type</c>, <c>version</c> and <c>entry_point</c> are placeholders: they depend on build settings
+/// (native vs wasm, the build stamp) that the generator's per-file transform cannot see.
 /// <see cref="Finalize"/> fills them in at output time.
 /// </summary>
 internal static class ManifestEmitter
@@ -75,100 +76,119 @@ internal static class ManifestEmitter
     public const string VersionPlaceholder = "__EXO_VERSION__";
     public const string EntryPlaceholder = "__EXO_ENTRY__";
 
-    /// <summary>One service's <c>%{...},</c> entry inside <c>services: [...]</c>.</summary>
-    public static string Service(ServiceModel service)
-    {
-        var sb = new StringBuilder();
-        sb.AppendLine("    %{");
-        sb.AppendLine($"      name: :{service.Name},");
-
-        sb.AppendLine("      actions: [");
-        foreach (var action in service.Actions)
-        {
-            string paramList = string.Join(", ", action.Params.Select(p => $"{p.Name}: :{p.Type}"));
-            string returnsList = action.ReturnsList ? ", returns_list: true" : "";
-            string returnsType = action.ReturnsType is null ? "" : $", returns_type: \"{action.ReturnsType}\"";
-            sb.AppendLine($"        %{{name: :{action.Name}, mode: :{action.Mode}, scope: :{action.Scope}, transport: :{action.Transport}, arity: {action.Params.Count}, params: [{paramList}], returns: {action.ReturnsExs}{returnsList}{returnsType}}},");
-        }
-
-        sb.AppendLine("      ],");
-
-        sb.AppendLine("      events: [");
-        foreach (var evt in service.Events)
-        {
-            string topic = evt.Topic is null ? "" : $", topic: \"{evt.Topic}\"";
-            string payload = evt.Payload.Count > 0
-                ? $", payload: [{string.Join(", ", evt.Payload.Select(p => $"{p.Name}: :{p.Type}"))}]"
-                : "";
-            string payloadType = evt.PayloadTypeName is null ? "" : $", payload_type: \"{evt.PayloadTypeName}\"";
-            sb.AppendLine($"        %{{name: :{evt.Name}{topic}, scope: :{evt.Scope}{payload}{payloadType}}},");
-        }
-
-        sb.AppendLine("      ],");
-
-        sb.AppendLine("      resources: [");
-        foreach (var resource in service.Resources)
-        {
-            sb.AppendLine("        %{");
-            sb.AppendLine($"          name: :{resource.Name},");
-            sb.AppendLine($"          primary_key: :{resource.PrimaryKey},");
-
-            // The C# record behind the resource, when there is one: the client's stub generator names
-            // its model after it and registers it for source-generated JSON.
-            if (resource.TypeName is not null) sb.AppendLine($"          type: \"{resource.TypeName}\",");
-            sb.AppendLine($"          drawer: [{string.Join(", ", resource.Drawer.Select(d => $":{d}"))}],");
-            sb.AppendLine($"          actions: [{string.Join(", ", resource.Actions.Select(a => $":{a}"))}],");
-            sb.AppendLine("          columns: [");
-            foreach (var column in resource.Columns)
-            {
-                string role = column.Role is null ? "" : $", role: \"{column.Role}\"";
-                sb.AppendLine($"            %{{name: :{column.Name}, type: :{column.Type}, label: \"{column.Label}\", sortable: {Lower(column.Sortable)}, filterable: {Lower(column.Filterable)}, badge: {Lower(column.Badge)}{role}}},");
-            }
-
-            sb.AppendLine("          ]");
-            sb.AppendLine("        },");
-        }
-
-        sb.AppendLine("      ]");
-        sb.AppendLine("    },");
-        return sb.ToString();
-    }
-
-    /// <summary>The manifest header, up to and including <c>services: [</c>.</summary>
-    public static string Header(
+    /// <summary>The whole manifest. The top-level name is absent: it is the id, and two fields for one value is one to disagree with.</summary>
+    public static string Manifest(
         string id,
         IEnumerable<string> provides,
         IEnumerable<string> dependencies,
-        ServiceModel? primary)
+        IEnumerable<ServiceModel> services,
+        string? category,
+        string? title,
+        string? icon,
+        bool system)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("%{");
-        sb.AppendLine($"  id: :{id},");
-        sb.AppendLine($"  name: \"{id}\",");
-        sb.AppendLine($"  type: :{TypePlaceholder},");
-        sb.AppendLine($"  version: \"{VersionPlaceholder}\",");
-        sb.AppendLine("  context: :global,");
-        sb.AppendLine($"  entry_point: \"{EntryPlaceholder}\",");
-        sb.AppendLine($"  dependencies: [{string.Join(", ", dependencies.Select(d => $":{d}"))}],");
-        sb.AppendLine($"  provides: [{string.Join(", ", provides.Select(p => $":{p}"))}],");
+        sb.Append("{\n");
+        sb.Append($"  \"id\": {Str(id)},\n");
+        sb.Append($"  \"type\": {Str(TypePlaceholder)},\n");
+        sb.Append($"  \"version\": {Str(VersionPlaceholder)},\n");
+        sb.Append("  \"context\": \"global\",\n");
+        sb.Append($"  \"entry_point\": {Str(EntryPlaceholder)},\n");
+        sb.Append($"  \"dependencies\": {Atoms(dependencies)},\n");
+        sb.Append($"  \"provides\": {Atoms(provides)},\n");
 
-        if (!string.IsNullOrEmpty(primary?.Category)) sb.AppendLine($"  category: \"{primary!.Category}\",");
+        if (!string.IsNullOrEmpty(category)) sb.Append($"  \"category\": {Str(category!)},\n");
+        if (system) sb.Append("  \"system\": true,\n");
 
-        if (primary?.System == true) sb.AppendLine("  system: true,");
-
-        if (!string.IsNullOrEmpty(primary?.Title))
+        if (!string.IsNullOrEmpty(title))
         {
-            sb.AppendLine($"  dashboard_view: %{{id: :{primary!.Name}, title: \"{primary!.Title}\", icon: \"{primary!.Icon}\"}},");
+            sb.Append($"  \"dashboard_view\": {{\"id\": {Str(id)}, \"title\": {Str(title!)}, \"icon\": {Str(icon ?? "")}}},\n");
         }
 
-        sb.AppendLine("  services: [");
-        return sb.ToString();
-    }
+        sb.Append("  \"services\": [\n");
 
-    /// <summary>The manifest tail after the service entries.</summary>
-    public static string Footer()
-    {
-        return "  ],\n  entities: []\n}\n";
+        bool firstService = true;
+
+        foreach (var service in services)
+        {
+            if (!firstService) sb.Append(",\n");
+            firstService = false;
+
+            sb.Append("    {\n");
+            sb.Append($"      \"name\": {Str(service.Name)},\n");
+            sb.Append("      \"actions\": [\n");
+
+            for (int i = 0; i < service.Actions.Count; i++)
+            {
+                var action = service.Actions[i];
+                string comma = i == service.Actions.Count - 1 ? "" : ",";
+                string returnsType = action.ReturnsType is null ? "" : $", \"returns_type\": {Str(action.ReturnsType)}";
+
+                sb.Append("        {");
+                sb.Append($"\"name\": {Str(action.Name)}, ");
+                sb.Append($"\"mode\": {Str(action.Mode)}, ");
+                sb.Append($"\"scope\": {Str(action.Scope)}, ");
+                sb.Append($"\"transport\": {Str(action.Transport)}, ");
+                sb.Append($"\"arity\": {action.Params.Count}, ");
+                sb.Append($"\"params\": {AtomMap(action.Params)}, ");
+                sb.Append($"\"returns\": {Returns(action)}, ");
+                sb.Append($"\"returns_list\": {Lower(action.ReturnsList)}{returnsType}}}");
+                sb.Append(comma).Append('\n');
+            }
+
+            sb.Append("      ],\n");
+            sb.Append("      \"events\": [\n");
+
+            for (int i = 0; i < service.Events.Count; i++)
+            {
+                var evt = service.Events[i];
+                string comma = i == service.Events.Count - 1 ? "" : ",";
+                string topic = evt.Topic is null ? "" : $", \"topic\": {Str(evt.Topic)}";
+                string payload = evt.Payload.Count == 0 ? "" : $", \"payload\": {AtomMap(evt.Payload)}";
+                string payloadType = evt.PayloadTypeName is null ? "" : $", \"payload_type\": {Str(evt.PayloadTypeName)}";
+
+                sb.Append($"        {{\"name\": {Str(evt.Name)}{topic}, \"scope\": {Str(evt.Scope)}{payload}{payloadType}}}");
+                sb.Append(comma).Append('\n');
+            }
+
+            sb.Append("      ],\n");
+            sb.Append("      \"resources\": [\n");
+
+            for (int i = 0; i < service.Resources.Count; i++)
+            {
+                var resource = service.Resources[i];
+                string comma = i == service.Resources.Count - 1 ? "" : ",";
+                string record = resource.TypeName is null ? "" : $", \"record\": {Str(resource.TypeName)}";
+
+                sb.Append("        {");
+                sb.Append($"\"name\": {Str(resource.Name)}, ");
+                sb.Append($"\"primary_key\": {Str(resource.PrimaryKey)}{record}, ");
+                sb.Append($"\"drawer\": {Atoms(resource.Drawer)}, ");
+                sb.Append($"\"actions\": {Atoms(resource.Actions)}, ");
+                sb.Append("\"columns\": [");
+
+                for (int c = 0; c < resource.Columns.Count; c++)
+                {
+                    var column = resource.Columns[c];
+                    string columnComma = c == resource.Columns.Count - 1 ? "" : ", ";
+                    string role = column.Role is null ? "" : $", \"role\": {Str(column.Role)}";
+
+                    sb.Append($"{{{Column(column)}{role}}}");
+                    sb.Append(columnComma);
+                }
+
+                sb.Append("]}");
+                sb.Append(comma).Append('\n');
+            }
+
+            sb.Append("      ]\n");
+            sb.Append("    }");
+        }
+
+        sb.Append("\n  ],\n");
+        sb.Append("  \"entities\": []\n");
+        sb.Append("}\n");
+        return sb.ToString();
     }
 
     /// <summary>Fills in the build-dependent fields.</summary>
@@ -183,128 +203,19 @@ internal static class ManifestEmitter
             .Replace(EntryPlaceholder, entry);
     }
 
-    /// <summary>
-    /// The same contracts as JSON, in the shape <c>plugin_manager.export_plugin_info</c> returns.
-    ///
-    /// The manifest is Elixir source and the tooling that generates client stubs is pure C# — a game
-    /// developer has no Elixir toolchain — so it cannot read one. This is the same information in a
-    /// form it can, written beside the manifest: a plugin that is built but not deployed then still
-    /// has a contract to generate against.
-    ///
-    /// Written by hand rather than with a serializer because this is a Roslyn component on
-    /// netstandard2.0 with one dependency, and the shape is fixed.
-    /// </summary>
-    public static string Contracts(
-        string id,
-        IEnumerable<string> provides,
-        IEnumerable<string> dependencies,
-        IEnumerable<ServiceModel> services)
-    {
-        var sb = new StringBuilder();
-        sb.Append("{\n  \"export\": {\n    \"plugins\": [\n      {\n");
-        sb.Append($"        \"id\": {Str(id)},\n");
-        sb.Append($"        \"name\": {Str(id)},\n");
-        sb.Append($"        \"version\": {Str(VersionPlaceholder)},\n");
-        sb.Append($"        \"type\": {Str(TypePlaceholder)},\n");
-        sb.Append($"        \"entry_point\": {Str(EntryPlaceholder)},\n");
-        sb.Append($"        \"provides\": [{string.Join(", ", provides.Select(Str))}],\n");
-        sb.Append($"        \"dependencies\": [{string.Join(", ", dependencies.Select(Str))}],\n");
-        sb.Append("        \"services\": [\n");
+    private static string Column(ColumnModel column) =>
+        $"\"name\": {Str(column.Name)}, \"type\": {Str(column.Type)}, \"label\": {Str(column.Label)}, " +
+        $"\"sortable\": {Lower(column.Sortable)}, \"filterable\": {Lower(column.Filterable)}, \"badge\": {Lower(column.Badge)}";
 
-        bool firstService = true;
+    /// <summary>A scalar atom, or a record's fields as a map of name to atom.</summary>
+    private static string Returns(ActionModel action) =>
+        action.ReturnFields.Count > 0 ? AtomMap(action.ReturnFields) : Str(action.ReturnsScalar ?? "term");
 
-        foreach (var service in services)
-        {
-            if (!firstService) sb.Append(",\n");
-            firstService = false;
-
-            sb.Append("          {\n");
-            sb.Append($"            \"name\": {Str(service.Name)},\n");
-
-            sb.Append("            \"actions\": [\n");
-            for (int i = 0; i < service.Actions.Count; i++)
-            {
-                var action = service.Actions[i];
-                string comma = i == service.Actions.Count - 1 ? "" : ",";
-                string returnsType = action.ReturnsType is null ? "" : ", \"returns_type\": " + Str(action.ReturnsType);
-                string returns = action.ReturnFields.Count > 0
-                    ? ParamMap(action.ReturnFields)
-                    : Str(action.ReturnsScalar ?? "term");
-
-                sb.Append("              {\n");
-                sb.Append($"                \"name\": {Str(action.Name)},\n");
-                sb.Append($"                \"mode\": {Str(action.Mode)},\n");
-                sb.Append($"                \"scope\": {Str(action.Scope)},\n");
-                sb.Append($"                \"transport\": {Str(action.Transport)},\n");
-                sb.Append($"                \"arity\": {action.Params.Count},\n");
-                sb.Append($"                \"params\": {ParamMap(action.Params)},\n");
-                sb.Append($"                \"returns\": {returns},\n");
-                sb.Append($"                \"returns_list\": {Lower(action.ReturnsList)}{returnsType}\n");
-                sb.Append($"              }}{comma}\n");
-            }
-
-            sb.Append("            ],\n");
-
-            sb.Append("            \"events\": [\n");
-            for (int i = 0; i < service.Events.Count; i++)
-            {
-                var evt = service.Events[i];
-                string comma = i == service.Events.Count - 1 ? "" : ",";
-                string topic = evt.Topic is null ? "" : ", \"topic\": " + Str(evt.Topic);
-                string payload = evt.Payload.Count == 0 ? "" : ", \"payload\": " + ParamMap(evt.Payload);
-                string payloadType = evt.PayloadTypeName is null ? "" : ", \"payload_type\": " + Str(evt.PayloadTypeName);
-
-                sb.Append($"              {{\"name\": {Str(evt.Name)}{topic}, \"scope\": {Str(evt.Scope)}{payload}{payloadType}}}{comma}\n");
-            }
-
-            sb.Append("            ],\n");
-
-            sb.Append("            \"resources\": [\n");
-            for (int i = 0; i < service.Resources.Count; i++)
-            {
-                var resource = service.Resources[i];
-                string comma = i == service.Resources.Count - 1 ? "" : ",";
-                string type = resource.TypeName is null ? "" : "\"type\": " + Str(resource.TypeName) + ",\n                ";
-
-                sb.Append("              {\n");
-                sb.Append($"                \"name\": {Str(resource.Name)},\n");
-                sb.Append($"                \"primary_key\": {Str(resource.PrimaryKey)},\n");
-                sb.Append("                ");
-                sb.Append(type);
-                sb.Append($"\"drawer\": [{string.Join(", ", resource.Drawer.Select(Str))}],\n");
-                sb.Append($"                \"actions\": [{string.Join(", ", resource.Actions.Select(Str))}],\n");
-                sb.Append("                \"columns\": [\n");
-
-                for (int c = 0; c < resource.Columns.Count; c++)
-                {
-                    var column = resource.Columns[c];
-                    string columnComma = c == resource.Columns.Count - 1 ? "" : ",";
-                    string role = column.Role is null ? "" : ", \"role\": " + Str(column.Role);
-
-                    sb.Append($"                  {{\"name\": {Str(column.Name)}, \"type\": {Str(column.Type)}, \"label\": {Str(column.Label)}, \"sortable\": {Lower(column.Sortable)}, \"filterable\": {Lower(column.Filterable)}, \"badge\": {Lower(column.Badge)}{role}}}{columnComma}\n");
-                }
-
-                sb.Append("                ]\n");
-                sb.Append($"              }}{comma}\n");
-            }
-
-            sb.Append("            ]\n");
-            sb.Append("          }");
-        }
-
-        sb.Append("\n        ],\n");
-        sb.Append("        \"entities\": []\n");
-        sb.Append("      }\n    ]\n  }\n}\n");
-        return sb.ToString();
-    }
-
-    /// <summary>
-    /// A <c>{"name": "type"}</c> object. A keyword list in the manifest is what a map becomes once
-    /// it has been through <c>PluginRegistry.sanitize_for_json/1</c>, which is the shape the client
-    /// generator reads.
-    /// </summary>
-    private static string ParamMap(IEnumerable<ParamModel> parameters) =>
+    private static string AtomMap(IEnumerable<ParamModel> parameters) =>
         "{" + string.Join(", ", parameters.Select(p => Str(p.Name) + ": " + Str(p.Type))) + "}";
+
+    private static string Atoms(IEnumerable<string> values) =>
+        "[" + string.Join(", ", values.Select(Str)) + "]";
 
     /// <summary>A JSON string literal. The only values here that are not identifiers are labels and topics.</summary>
     private static string Str(string value)

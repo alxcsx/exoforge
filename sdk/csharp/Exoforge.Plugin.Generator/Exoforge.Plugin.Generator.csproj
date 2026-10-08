@@ -15,7 +15,7 @@
     <NuGetAudit>false</NuGetAudit>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <!--
-      RS1035: the manifest is written to disk. That is the point - the host reads manifest.exs at
+      RS1035: the manifest is written to disk. That is the point - the host reads manifest.json at
       deploy time and a generator is the only step that already has the full semantic model.
       Guarded against design-time builds and no-op when the content is unchanged.
     -->

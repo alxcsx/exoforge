@@ -8,7 +8,7 @@ An Exoforge plugin. Actions are declared with attributes and discovered at build
 | :--- | :--- |
 | `src/BackgroundChangePlugin.cs` | the plugin: `[ExoAction]` methods are what callers invoke |
 | `src/Generated/` | typed service stubs and the JSON context (`exo plugin stubs background_change`) |
-| `manifest.exs` | generated from the attributes; do not edit |
+| `manifest.json` | generated from the attributes; do not edit |
 | `background_change` | the staged native binary; generated |
 
 ## Working on it

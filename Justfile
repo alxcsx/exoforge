@@ -49,7 +49,7 @@ clean-build:
 	echo "[clean-build] building a WASM plugin"
 	"$work/plugins_csharp/sample_wasm/build.sh"
 	test -f "$work/plugins_csharp/sample_wasm/sample_wasm.wasm"
-	test -f "$work/sdk/unity/sample_unity/Exoforge/plugins/snake_leaderboard/manifest.exs"
+	test -f "$work/sdk/unity/sample_unity/Exoforge/plugins/snake_leaderboard/manifest.json"
 	echo "[clean-build] OK: the tree builds from a clean checkout"
 
 
@@ -345,6 +345,15 @@ pack-sdk:
 	rm -rf dist/nuget
 	mkdir -p dist/nuget
 	dotnet pack sdk/csharp/Exoforge.Plugin.SDK -c Release -o dist/nuget --nologo -v q
+
+	# NuGet caches a package by id and version, so a rebuilt 0.1.0 is served from the cache and the new
+	# one is never seen. That is what happened while migrating the manifest format: the clean room built
+	# a plugin with the previous generator and the manifest came out in the old format, with nothing
+	# saying why. The version does not change between development builds, so the cache has to - and it
+	# is asked for rather than assumed, because a dotnet installed by a version manager keeps it
+	# somewhere else than $HOME/.nuget.
+	packages=$(dotnet nuget locals global-packages --list | sed 's/.*: //')
+	rm -rf "${packages%/}/exoforge.plugin.sdk"
 	echo "[pack-sdk] local feed:"
 	ls -1 dist/nuget
 

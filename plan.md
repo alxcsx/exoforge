@@ -91,10 +91,13 @@ Two things were on this list and are settled:
   local feed, a plugin built outside this repository resolves from it, and `just clean-room-sdk`
   proves the consumer path from a pristine export of `HEAD`. A published feed buys nothing until
   someone without a checkout needs one.
-- **Generating client stubs without a cluster** — done. Each plugin's generator writes its contracts
-  as JSON beside the manifest, in the shape the cluster export uses, and stub generation lays those
-  over the export. A plugin that is built but not deployed therefore has stubs, and a plugin being
-  edited generates stubs for what it is now rather than for what was last deployed.
+- **Generating client stubs without a cluster** — done, and it took the manifest format with it. The
+  manifest is JSON now, written by the plugin's own generator and by the Elixir compiler, and read by
+  both the server and the C# tooling. It used to be an Elixir map literal that the server evaluated,
+  which meant the only copy of a plugin's contracts could be read by one language — and the tooling
+  that generates client stubs from them has no Elixir. Stub generation lays each built plugin's
+  manifest over the cluster export, so a plugin that is built but not deployed has stubs, and one
+  being edited generates stubs for what it is now rather than for what was last deployed.
 
 What that leaves: a service that is neither built locally nor deployed has no contract, so stubs for
 it cannot be generated. The command says which services are missing and writes nothing, rather than

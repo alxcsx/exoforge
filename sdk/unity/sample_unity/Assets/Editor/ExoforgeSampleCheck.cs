@@ -48,7 +48,7 @@ public static class ExoforgeSampleCheck
     /// </summary>
     /// <summary>
     /// The Control Center builds plugins out of process, so the source generator has to travel with
-    /// the package - the plugin's own compile is what writes manifest.exs. This resolved to null
+    /// the package - the plugin's own compile is what writes manifest.json. This resolved to null
     /// once before and nothing noticed, because nothing exercised the editor's resolution.
     /// </summary>
     private static void CheckPluginToolchain()
