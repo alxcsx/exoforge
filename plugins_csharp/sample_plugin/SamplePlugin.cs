@@ -2,6 +2,18 @@ using Exoforge.Plugin.SDK;
 
 namespace Exoforge.Plugins.SamplePlugin;
 
+/// <summary>
+/// What a counter can be. Declaring this is the whole declaration of the column's choices - the
+/// generator reads the names, and the schema, the form and the database's own constraint all follow
+/// from it.
+/// </summary>
+public enum CounterStatus
+{
+    Active,
+    Retired,
+    Archived
+}
+
 /// <summary>A stored counter, as the dashboard shows it.</summary>
 [ExoResource("counters", PrimaryKey = "counter_id", DrawerTabs = new[] { "overview", "attributes" })]
 public record Counter
@@ -13,7 +25,7 @@ public record Counter
     public int Value { get; init; }
 
     [ExoColumn(Label = "Status", Badge = true)]
-    public string Status { get; init; } = "active";
+    public CounterStatus Status { get; init; } = CounterStatus.Active;
 }
 
 /// <summary>

@@ -21,6 +21,22 @@ defmodule Exoforge.Std.ResourcesTest do
         column(:id, :string, sortable: true)
         column(:name, :string, filterable: true, sortable: true)
         column(:score, :integer, filterable: true, sortable: true)
+        column(:tier, :string, choices: ~w(bronze silver))
+      end
+    end
+  end
+
+  # A resource nothing else touches, so the SQL assertion below cannot depend on which test ran first.
+  defmodule TiersContract do
+    import Exoforge.Contracts.Service
+
+    defservice tiers do
+      resource :tier do
+        source({:table, "tiers"})
+        primary_key(:id)
+
+        column(:id, :string)
+        column(:level, :string, choices: ~w(bronze silver))
       end
     end
   end
@@ -58,6 +74,14 @@ defmodule Exoforge.Std.ResourcesTest do
       version: "0.1.0",
       entry_point: Resources,
       provides: [:resource_store]
+    })
+
+    PluginRegistry.register(%Exoforge.Domain.Manifest{
+      id: :tiers_plugin,
+      name: "tiers_plugin",
+      version: "0.1.0",
+      entry_point: Resources,
+      provides: [TiersContract.Tiers]
     })
 
     PluginRegistry.register(%Exoforge.Domain.Manifest{
@@ -208,6 +232,33 @@ defmodule Exoforge.Std.ResourcesTest do
     assert again["score"] == 2
     assert {:ok, %{rows: rows}} = dispatch(:list, %{resource: "widget"})
     assert length(rows) == 1
+  end
+
+  # The same closed set a C# enum produces. Both spell it as a list of values in the manifest, so one
+  # check covers both - and the database gets the same constraint.
+  test "rejects a value outside a column's choices" do
+    assert {:error, {:not_a_choice, "tier", "gold"}} =
+             dispatch(:create, %{
+               resource: "widget",
+               attributes: %{"id" => "w1", "name" => "Gear", "score" => 1, "tier" => "gold"}
+             })
+
+    assert {:ok, _} =
+             dispatch(:create, %{
+               resource: "widget",
+               attributes: %{"id" => "w1", "name" => "Gear", "score" => 1, "tier" => "bronze"}
+             })
+  end
+
+  test "the choices are a database constraint too" do
+    {:ok, %{rows: rows}} =
+      ActionDispatcher.dispatch(:database, :execute, %{
+        plugin: :tiers_plugin,
+        operation: "SELECT sql FROM sqlite_master WHERE name = 'tiers'"
+      })
+
+    assert [%{"sql" => sql}] = rows
+    assert sql =~ "CHECK (level IN ('bronze', 'silver'))"
   end
 
   test "rejects attributes outside the resource schema" do

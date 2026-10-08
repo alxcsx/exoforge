@@ -45,6 +45,7 @@ defmodule Exoforge.Std.Dashboard.ResourceForms do
         badge: column[:badge] || column["badge"] || false,
         role: column[:role] || column["role"],
         default: column[:default] || column["default"],
+        choices: column[:choices] || column["choices"] || [],
         primary_key: to_string(key) == primary
       }
     end)

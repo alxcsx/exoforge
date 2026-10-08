@@ -31,7 +31,11 @@ public static class PluginJson
     private static readonly JsonSerializerOptions ReflectionOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-        PropertyNameCaseInsensitive = true
+        PropertyNameCaseInsensitive = true,
+        // An enum is written as its name, snake_cased - the same spelling a schema's `choices` uses and
+        // the same one an Elixir contract writes. Without this it serialises as its number, which is
+        // not what a `text` column holds and not what the choices say.
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower) }
     };
 
     private static JsonSerializerOptions? _options;
@@ -72,8 +76,12 @@ public static class PluginJson
         _options = new JsonSerializerOptions
         {
             TypeInfoResolver = resolver,
-            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-            PropertyNameCaseInsensitive = true
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        PropertyNameCaseInsensitive = true,
+        // An enum is written as its name, snake_cased - the same spelling a schema's `choices` uses and
+        // the same one an Elixir contract writes. Without this it serialises as its number, which is
+        // not what a `text` column holds and not what the choices say.
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower) }
         };
     }
 

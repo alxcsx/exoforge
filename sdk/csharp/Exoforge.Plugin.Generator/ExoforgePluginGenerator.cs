@@ -598,7 +598,8 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
                 NamedBool(colAttr, "Filterable"),
                 NamedBool(colAttr, "Badge"),
                 NamedString(colAttr, "Role"),
-                DefaultOf(property)));
+                DefaultOf(property),
+                ChoicesOf(property)));
 
             if (pkAttr is not null && string.IsNullOrEmpty(primaryKey)) primaryKey = colName;
         }
@@ -736,6 +737,27 @@ namespace Exoforge.Generated
     // ---- type mapping ----
 
     /// <summary>
+    /// The fixed set a column's values come from, when its type is an enum.
+    ///
+    /// Declaring the enum is the whole declaration: `public CounterStatus Status` is a string column
+    /// that accepts those names, and nothing has to be repeated in an attribute. An Elixir contract
+    /// says the same thing with <c>column(:status, :string, choices: ~w(active retired))</c> - there is
+    /// no enum type to read there, so the list is the declaration.
+    /// </summary>
+    private static List<string>? ChoicesOf(IPropertySymbol property)
+    {
+        if (property.Type is not INamedTypeSymbol { TypeKind: TypeKind.Enum } enumType) return null;
+
+        var names = enumType.GetMembers()
+            .OfType<IFieldSymbol>()
+            .Where(field => field.IsConst)
+            .Select(field => ToSnakeCase(field.Name))
+            .ToList();
+
+        return names.Count == 0 ? null : names;
+    }
+
+    /// <summary>
     /// A property's initializer, as the schema's default. A record that says `= "active"` has said it
     /// once; without this the store has no default, the form sends nothing, and the column is absent
     /// from every row written through the Studio.
@@ -753,6 +775,8 @@ namespace Exoforge.Generated
                 LiteralExpressionSyntax { Token.Value: not null } literal => literal.Token.ValueText,
                 PrefixUnaryExpressionSyntax { Operand: LiteralExpressionSyntax operand } unary =>
                     unary.OperatorToken.Text + operand.Token.ValueText,
+                // `= CounterStatus.Active` - the enum's own spelling, snake_cased like the choices.
+                MemberAccessExpressionSyntax member => ToSnakeCase(member.Name.Identifier.Text),
                 _ => null,
             };
         }
@@ -796,6 +820,10 @@ namespace Exoforge.Generated
             case SpecialType.System_Decimal:
                 return "float";
         }
+
+        // An enum is one of a fixed set of names, so it is a string with choices - not a map, which is
+        // what it used to fall through to.
+        if (type.TypeKind == TypeKind.Enum) return "string";
 
         string display = type.ToDisplayString();
 

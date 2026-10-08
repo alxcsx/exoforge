@@ -1036,6 +1036,17 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                   </label>
 
                   <%= case column.type do %>
+                    <% _ when column.choices != [] -> %>
+                      <select
+                        name={"values[#{key}]"}
+                        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent font-mono bg-white"
+                      >
+                        <%= for choice <- column.choices do %>
+                          <option value={choice} selected={to_string(value) == to_string(choice)}>
+                            <%= choice %>
+                          </option>
+                        <% end %>
+                      </select>
                     <% :boolean -> %>
                       <input type="hidden" name={"values[#{key}]"} value="false" />
                       <input

@@ -34,7 +34,6 @@ defmodule Exoforge.Std.Resources do
     dashboard_view: %{id: :resources, title: "Resource Store", icon: "🗄️"}
   }
 
-  @bookkeeping "resource_schema"
   @cache :exo_resource_migrated
 
   ## ---- LIFECYCLE ----
@@ -70,7 +69,6 @@ defmodule Exoforge.Std.Resources do
 
       table ->
         key = {pid, table}
-        ensure_bookkeeping(pid)
         _ = db(pid, "CREATE TABLE IF NOT EXISTS #{table} (#{column_defs(res)})")
         repair_primary_key(pid, table, res)
         reconcile_columns(pid, table, res)
@@ -105,51 +103,37 @@ defmodule Exoforge.Std.Resources do
     end
   end
 
-  # Additive reconciliation: record columns we created; ADD COLUMN for any new
-  # ones. Renames/type changes need an explicit migration (documented ceiling).
+  # Additive reconciliation: `ADD COLUMN` for anything the resource declares that the table does not
+  # have.
+  #
+  # It used to compare against a bookkeeping table rather than the table itself, and treat an empty
+  # bookkeeping table as "nothing to do" - so a resource that gained a column recorded it and never
+  # added it, and every write naming that column failed with "table has no column named". The database
+  # already knows which columns exist; asking it is both correct and one table fewer.
+  #
+  # Renames and type changes still need an explicit migration (documented ceiling), and SQLite cannot
+  # add a CHECK to an existing table, so a column that gains choices keeps them on new tables only.
   defp reconcile_columns(pid, table, res) do
-    recorded = recorded_columns(pid, table)
-    columns = res.columns || []
+    existing = existing_columns(pid, table)
 
-    if recorded == [] do
-      Enum.each(columns, &record_column(pid, table, &1.name))
-    else
-      Enum.each(columns, fn col ->
-        name = to_string(col.name)
+    Enum.each(res.columns || [], fn column ->
+      name = to_string(column.name)
 
-        unless name in recorded do
-          _ = db(pid, "ALTER TABLE #{table} ADD COLUMN #{name} #{sql_type(col.type)}")
-          record_column(pid, table, col.name)
-        end
-      end)
-    end
+      unless name in existing do
+        _ =
+          db(
+            pid,
+            "ALTER TABLE #{table} ADD COLUMN #{name} #{sql_type(column.type)}#{default_clause(column)}"
+          )
+      end
+    end)
   end
 
-  defp ensure_bookkeeping(pid) do
-    _ =
-      db(
-        pid,
-        "CREATE TABLE IF NOT EXISTS #{@bookkeeping} (table_name text, column_name text, applied_at text)"
-      )
-  end
-
-  defp recorded_columns(pid, table) do
-    case db(pid, "SELECT column_name FROM #{@bookkeeping} WHERE table_name = $1", [table]) do
-      {:ok, %{rows: rows}} -> Enum.map(rows, &(&1["column_name"] || &1[:column_name]))
+  defp existing_columns(pid, table) do
+    case db(pid, "PRAGMA table_info(#{table})") do
+      {:ok, %{rows: rows}} -> Enum.map(rows, &to_string(&1["name"] || &1[:name]))
       _ -> []
     end
-  end
-
-  defp record_column(pid, table, column) do
-    db(
-      pid,
-      "INSERT INTO #{@bookkeeping} (table_name, column_name, applied_at) VALUES ($1, $2, $3)",
-      [
-        table,
-        to_string(column),
-        DateTime.utc_now() |> DateTime.to_iso8601()
-      ]
-    )
   end
 
   defp column_defs(res) do
@@ -160,9 +144,22 @@ defmodule Exoforge.Std.Resources do
     cols =
       (res.columns || [])
       |> Enum.reject(&(to_string(&1.name) == pk))
-      |> Enum.map(fn c -> "#{c.name} #{sql_type(c.type)}#{default_clause(c)}" end)
+      |> Enum.map(fn c -> "#{c.name} #{sql_type(c.type)}#{default_clause(c)}#{choices_clause(c)}" end)
 
     Enum.join(["#{pk} #{pk_type} PRIMARY KEY" | cols], ", ")
+  end
+
+  # A column that declares its choices is a closed set, so the database enforces it too - anything
+  # writing SQL directly is held to the same schema as the API.
+  defp choices_clause(column) do
+    choices = column[:choices] || column["choices"]
+
+    if is_list(choices) and choices != [] do
+      values = Enum.map_join(choices, ", ", &"'#{&1}'")
+      " CHECK (#{column[:name] || column["name"]} IN (#{values}))"
+    else
+      ""
+    end
   end
 
   # A column's default, as SQL. Quoted for text and left bare for numbers, so the database's idea of
@@ -578,11 +575,27 @@ defmodule Exoforge.Std.Resources do
       |> Enum.map(fn {k, v} -> {to_string(k), v} end)
       |> Enum.filter(fn {k, _v} -> k in allowed end)
 
-    if pairs == [] do
-      {:error, :invalid_attributes}
-    else
-      {:ok, pairs}
+    stray = Enum.find(pairs, &out_of_choices?(&1, res))
+
+    cond do
+      pairs == [] ->
+        {:error, :invalid_attributes}
+
+      # The database would reject this too, but saying it here names the column and the value instead
+      # of surfacing a constraint violation from three layers down.
+      stray != nil ->
+        {:error, {:not_a_choice, elem(stray, 0), elem(stray, 1)}}
+
+      true ->
+        {:ok, pairs}
     end
+  end
+
+  defp out_of_choices?({name, value}, res) do
+    column = Enum.find(res.columns || [], &(to_string(&1.name) == name))
+    choices = (column && (column[:choices] || column["choices"])) || []
+
+    choices != [] and to_string(value) not in Enum.map(choices, &to_string/1)
   end
 
   defp resource_info(name) do

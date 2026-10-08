@@ -15,7 +15,8 @@ internal sealed record ColumnModel(
     bool Filterable,
     bool Badge,
     string? Role,
-    string? Default);
+    string? Default,
+    List<string>? Choices);
 
 internal sealed record ActionModel(
     string Name,
@@ -178,8 +179,9 @@ internal static class ManifestEmitter
                     string columnComma = c == resource.Columns.Count - 1 ? "" : ", ";
                     string role = column.Role is null ? "" : $", \"role\": {Str(column.Role)}";
                     string fallback = column.Default is null ? "" : $", \"default\": {Str(column.Default)}";
+                    string choices = column.Choices is null ? "" : $", \"choices\": {Atoms(column.Choices)}";
 
-                    sb.Append($"{{{Column(column)}{role}{fallback}}}");
+                    sb.Append($"{{{Column(column)}{role}{fallback}{choices}}}");
                     sb.Append(columnComma);
                 }
 

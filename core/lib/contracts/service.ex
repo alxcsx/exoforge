@@ -260,7 +260,15 @@ defmodule Exoforge.Contracts.Service do
           Map.update!(acc, :columns, &[col | &1])
 
         {:column, _, [col_name, type, opts]} when is_atom(col_name) and is_atom(type) ->
-          opts_map = if Keyword.keyword?(opts), do: Map.new(opts), else: %{}
+          # Evaluated rather than read as AST. `choices: ~w(a b)` is a sigil, and a sigil's AST is not
+          # the list the author wrote - so the idiomatic way to write a word list in Elixir did not
+          # work, while literal options did and hid it.
+          opts_map =
+            case Code.eval_quoted(opts) do
+              {map, _} when is_map(map) -> map
+              {list, _} when is_list(list) -> if Keyword.keyword?(list), do: Map.new(list), else: %{}
+              _ -> %{}
+            end
 
           col = %{
             name: col_name,
