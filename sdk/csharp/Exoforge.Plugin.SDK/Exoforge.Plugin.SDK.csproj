@@ -33,6 +33,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Exoforge.Plugin.SDK.Tests" />
+    <InternalsVisibleTo Include="Exoforge.Plugin.Generator.Tests" />
   </ItemGroup>
 
 </Project>

@@ -73,10 +73,11 @@ test-plugins:
 test-system:
 	mix test
 
-# Test C# SDKs (Client, Plugin SDK & Management Engine)
+# Test C# SDKs (Client, Plugin SDK, Generator & Management Engine)
 test-sdk:
 	dotnet test sdk/csharp/Exoforge.Client.Tests
 	dotnet test sdk/csharp/Exoforge.Plugin.SDK.Tests
+	dotnet test sdk/csharp/Exoforge.Plugin.Generator.Tests
 	dotnet test sdk/csharp/Exoforge.Management.Tests
 
 # Run live end-to-end integration test (Client -> WS :4000 -> WASM -> Event -> Client)
@@ -276,15 +277,15 @@ build-unity-sdk root=".":
 		cp "$out/$project/bin/Release/netstandard2.1/$project.pdb" "$pkg/$dest/Plugins/" 2>/dev/null || true
 	done
 
-	# The manifest generator is a runnable tool, not a library: it loads the plugin assembly, which
-	# Unity's runtime cannot, so it has to run out of process. It ships as source under a `~` folder,
-	# which Unity ignores - otherwise the editor compiles it as part of its own assembly and it fails
-	# on its net10.0 imports.
-	generator="$pkg/Editor/Plugins/Tools~/ManifestGen"
-	rm -rf "$generator"
+	# The manifest generator is a Roslyn source generator now: the plugin's own compile runs it, so
+	# there is no out-of-process tool to ship. It still has to live under a `~` folder - Unity would
+	# otherwise load the analyzer as one of its own assemblies, and it references Roslyn.
+	dotnet build "$out/Exoforge.Plugin.Generator" -c Release --nologo -v q
+
+	generator="$pkg/Editor/Plugins/Tools~/Exoforge.Plugin.Generator"
+	rm -rf "$generator" "$pkg/Editor/Plugins/Tools~/ManifestGen"
 	mkdir -p "$generator"
-	cp "$out/Exoforge.Management/Tools~/ManifestGen/ManifestGen.csproj" "$generator/"
-	cp "$out/Exoforge.Management/Tools~/ManifestGen/Program.cs" "$generator/"
+	cp "$out/Exoforge.Plugin.Generator/bin/Release/netstandard2.0/Exoforge.Plugin.Generator.dll" "$generator/"
 
 	echo "[build-unity-sdk] Runtime/Plugins + Editor/Plugins populated"
 

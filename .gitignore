@@ -30,9 +30,6 @@ dist/
 # `just build-unity-sdk`. Build output: a committed DLL is a copy that can silently go stale, which
 # is the same failure a synced source file has.
 sdk/unity/Exoforge.SDK/*/Plugins/
-# The shipped generator's build output, produced when a plugin is built from the Control Center.
-sdk/unity/Exoforge.SDK/Editor/Plugins/Tools~/ManifestGen/bin/
-sdk/unity/Exoforge.SDK/Editor/Plugins/Tools~/ManifestGen/obj/
 
 # `*~` also matches the SDK's Unity-ignored Tools~ and Samples~ directories; keep those tracked.
 !**/Samples~/
@@ -44,8 +41,14 @@ sdk/unity/Exoforge.SDK/Editor/Plugins/Tools~/ManifestGen/obj/
 log/*.log
 
 # === ExoForge Engine Specifics ===
-priv/static/components/
 priv/data/
+
+# Plugin build outputs: the manifest, the build counter and the staged binary. All three are
+# produced by `exo plugin build` / the Control Center, and the manifest carries the build counter,
+# so tracking them means a diff on every build.
+manifest.exs
+.buildcount
+.exoforge/
 
 # === Environment & Secrets ===
 .env
@@ -64,8 +67,6 @@ priv/data/
 [Uu]serSettings/
 MemoryCaptures/
 Recordings/
-# sdk/unity/sample_unity/ is tracked
-sdk/unity/unity_sample/
 
 # === Unity-generated IDE project files (regenerated on import) ===
 sdk/unity/sample_unity/*.csproj

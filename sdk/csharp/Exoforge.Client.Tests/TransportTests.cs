@@ -203,7 +203,7 @@ public class TransportTests
 
     /// <summary>
     /// Drives the dispatcher until <paramref name="task"/> finishes, the way
-    /// <c>ExoforgeBehaviour.Update()</c> does in Unity. Without a pump the callbacks never run.
+    /// <c>ExoforgeManager.Update()</c> does in Unity. Without a pump the callbacks never run.
     /// </summary>
     private static async Task<T> PumpAsync<T>(Task<T> task, ExoClient client, TimeSpan timeout)
     {

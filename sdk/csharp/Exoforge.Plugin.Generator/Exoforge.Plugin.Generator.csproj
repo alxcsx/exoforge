@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!--
+      A Roslyn source generator, so netstandard2.0 is required (that is what the compiler loads).
+      It replaces the out-of-process ManifestGen tool: the manifest, the entry point, and (later)
+      the JSON context and the dispatch table are all produced from the plugin's own compilation.
+    -->
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <IsRoslynComponent>true</IsRoslynComponent>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <NuGetAudit>false</NuGetAudit>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!--
+      RS1035: the manifest is written to disk. That is the point - the host reads manifest.exs at
+      deploy time and a generator is the only step that already has the full semantic model.
+      Guarded against design-time builds and no-op when the content is unchanged.
+    -->
+    <NoWarn>$(NoWarn);RS1035;RS2008</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

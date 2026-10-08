@@ -4,8 +4,13 @@ namespace Exoforge.Plugin.SDK;
 
 /// <summary>
 /// Declares a service contract provided by the plugin.
+///
+/// On a <b>class</b> the class is its own contract and implementation: its <c>[ExoAction]</c> and
+/// <c>[ExoEvent]</c> members are the service's. On an <b>interface</b> the interface is the contract
+/// and the class that implements it is the plugin's implementation, which is how one plugin provides
+/// several services or shares a contract with another project.
 /// </summary>
-[AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = true)]
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Interface, Inherited = false, AllowMultiple = true)]
 public class ExoServiceAttribute : Attribute
 {
     public string Name { get; }
@@ -63,6 +68,12 @@ public class ExoActionAttribute : Attribute
     public string Scope { get; set; } = "global";
     public ActionTransport Transport { get; set; } = ActionTransport.Auto;
 
+    /// <summary>
+    /// The service this action belongs to, when the plugin provides more than one. Defaults to the
+    /// plugin's first <see cref="ExoServiceAttribute"/>.
+    /// </summary>
+    public string? Service { get; set; }
+
     public ExoActionAttribute(string? name = null)
     {
         Name = name;
@@ -79,6 +90,12 @@ public class ExoEventAttribute : Attribute
     public string? Topic { get; set; }
     public string Scope { get; set; } = "global";
     public Type? PayloadType { get; set; }
+
+    /// <summary>
+    /// The service this event belongs to, when the plugin provides more than one. Defaults to the
+    /// plugin's first <see cref="ExoServiceAttribute"/>.
+    /// </summary>
+    public string? Service { get; set; }
 
     public ExoEventAttribute(string name, Type? payloadType = null)
     {
@@ -131,6 +148,10 @@ public class ExoColumnAttribute : Attribute
     public string? Name { get; set; }
     public string? DataType { get; set; }
     public string? Label { get; set; }
+
+    /// <summary>Semantic role of the value (e.g. "user_id"), which the Studio renders specially.</summary>
+    public string? Role { get; set; }
+
     public bool Sortable { get; set; }
     public bool Filterable { get; set; }
     public bool Badge { get; set; }

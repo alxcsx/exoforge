@@ -48,6 +48,7 @@ public static class PluginHost
     private static long _nextHostCallId;
     private static object? _instance;
     private static MethodInfo? _eventHandler;
+    private static IExoforgeDispatch? _dispatch;
 
     /// <summary>Runs <typeparamref name="T"/> until stdin closes.</summary>
     /// <remarks>
@@ -82,11 +83,28 @@ public static class PluginHost
         RunInstance(new T());
     }
 
-    /// <summary>Runs a plugin instance until stdin closes.</summary>
-    public static int RunInstance(object instance)
+    /// <summary>
+    /// Runs <typeparamref name="T"/> with a source-generated JSON context and a compile-time dispatch
+    /// table. This is the overload generated plugins use: nothing reflects over the plugin's methods,
+    /// so NativeAOT trimming needs no annotations to keep them alive.
+    /// </summary>
+    public static void Run<T, TContext, TDispatch>()
+        where T : class, new()
+        where TContext : JsonSerializerContext, new()
+        where TDispatch : IExoforgeDispatch, new()
+    {
+        PluginJson.AddContext(new TContext());
+        RunInstance(new T(), new TDispatch());
+    }
+
+    /// <summary>Runs a plugin instance until stdin closes, discovering its actions by reflection.</summary>
+    public static int RunInstance(object instance) => RunInstance(instance, dispatch: null);
+
+    /// <summary>Runs a plugin instance with a compile-time dispatch table until stdin closes.</summary>
+    public static int RunInstance(object instance, IExoforgeDispatch? dispatch)
     {
         _stdout = Console.OpenStandardOutput();
-        RunInstance(instance, new StreamReader(Console.OpenStandardInput(), Encoding.UTF8));
+        RunInstance(instance, new StreamReader(Console.OpenStandardInput(), Encoding.UTF8), dispatch);
         return 0;
     }
 
@@ -95,19 +113,25 @@ public static class PluginHost
     /// host calls read through the same one, because two readers over one stdin each buffer ahead
     /// and lose whatever the other buffered.
     /// </summary>
-    internal static void RunInstance(object instance, TextReader reader)
+    internal static void RunInstance(object instance, TextReader reader) =>
+        RunInstance(instance, reader, dispatch: null);
+
+    internal static void RunInstance(object instance, TextReader reader, IExoforgeDispatch? dispatch)
     {
         _stdin = reader;
         HostBridge.UseTransport(new NativeTransport());
 
         _instance = instance;
+        _dispatch = dispatch;
         var pluginType = instance.GetType();
 
         // Wire [Inject] dependencies (including static properties on plain plugin classes).
         HostPluginContext.Wire(instance, new HostPluginContext(ResolvePluginId(pluginType)));
 
-        _eventHandler = FindEventHandler(pluginType);
-        var actions = BuildActionTable(pluginType);
+        // A generated table needs no reflection. The reflection path stays as the fallback for a
+        // plugin that has not been through the generator - including this SDK's own tests.
+        _eventHandler = dispatch is null ? FindEventHandler(pluginType) : null;
+        var actions = dispatch is null ? BuildActionTable(pluginType) : null;
 
         while (reader.ReadLine() is { } line)
         {
@@ -152,7 +176,7 @@ public static class PluginHost
 
     private static string ResolvePluginId(Type pluginType)
     {
-        // ManifestGen derives the manifest id from the assembly name; the host keys the plugin's
+        // The manifest generator derives the manifest id from the assembly name; the host keys
         // isolated database (KV and SQL) by that id, so use the same source.
         return pluginType.Assembly.GetName().Name?.ToLowerInvariant() ?? pluginType.Name.ToLowerInvariant();
     }
@@ -173,7 +197,7 @@ public static class PluginHost
     /// <summary>Dispatches an inbound host event to the plugin's <c>OnEvent</c> handler.</summary>
     private static void DispatchEvent(string line)
     {
-        if (_eventHandler == null)
+        if (_dispatch == null && _eventHandler == null)
         {
             return;
         }
@@ -186,7 +210,13 @@ public static class PluginHost
             string name = root.TryGetProperty("event", out var eventProp) ? eventProp.GetString() ?? "" : "";
             JsonElement payload = root.TryGetProperty("payload", out var payloadProp) ? payloadProp : default;
 
-            var parameters = _eventHandler.GetParameters();
+            if (_dispatch != null)
+            {
+                _dispatch.TryHandleEvent(_instance!, name, payload);
+                return;
+            }
+
+            var parameters = _eventHandler!.GetParameters();
             object?[] args;
 
             if (parameters.Length == 2)
@@ -205,7 +235,7 @@ public static class PluginHost
                 args = new object?[] { name };
             }
 
-            _eventHandler.Invoke(_instance, args);
+            _eventHandler!.Invoke(_instance, args);
         }
         catch (Exception ex)
         {
@@ -232,7 +262,7 @@ public static class PluginHost
         return table;
     }
 
-    private static void Dispatch(string line, object? instance, Dictionary<string, (MethodInfo Method, ParameterInfo[] Params)> actions)
+    private static void Dispatch(string line, object? instance, Dictionary<string, (MethodInfo Method, ParameterInfo[] Params)>? actions)
     {
         long id = 0;
         string action = "";
@@ -245,15 +275,29 @@ public static class PluginHost
             id = root.TryGetProperty("id", out var idProp) ? idProp.GetInt64() : 0;
             action = root.TryGetProperty("action", out var actionProp) ? actionProp.GetString() ?? "" : "";
 
-            if (!actions.TryGetValue(action, out var entry))
+            var payload = root.TryGetProperty("payload", out var payloadProp) ? payloadProp : default;
+            object? result;
+
+            if (_dispatch != null)
             {
-                Write($"{{\"type\":\"action_result\",\"id\":{id},\"status\":\"error\",\"error\":\"unknown_action\"}}");
-                return;
+                if (!_dispatch.TryInvoke(instance!, action, payload, out result))
+                {
+                    Write($"{{\"type\":\"action_result\",\"id\":{id},\"status\":\"error\",\"error\":\"unknown_action\"}}");
+                    return;
+                }
+            }
+            else
+            {
+                if (actions == null || !actions.TryGetValue(action, out var entry))
+                {
+                    Write($"{{\"type\":\"action_result\",\"id\":{id},\"status\":\"error\",\"error\":\"unknown_action\"}}");
+                    return;
+                }
+
+                result = entry.Method.Invoke(instance, BindArguments(entry.Params, payload));
             }
 
-            var payload = root.TryGetProperty("payload", out var payloadProp) ? payloadProp : default;
-            object?[] args = BindArguments(entry.Params, payload);
-            object? result = AwaitResult(entry.Method.Invoke(instance, args));
+            result = AwaitResult(result);
 
             Write($"{{\"type\":\"action_result\",\"id\":{id},\"status\":\"ok\",\"data\":{ToJson(result)}}}");
         }

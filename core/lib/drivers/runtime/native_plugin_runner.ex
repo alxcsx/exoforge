@@ -362,10 +362,15 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
     dir = manifest.physical_path || ""
 
     # `prepare_manifest/1` replaces entry_point with the proxy module, so the binary is
-    # always named after the plugin id.
+    # always named after the plugin id. `.exoforge/` is where `exo plugin build` stages it; the
+    # plugin root is the older layout, kept so an already-deployed plugin still loads.
+    staged = Path.join(dir, ".exoforge")
+
     candidates =
       [
+        Path.join(staged, to_string(manifest.id)),
         Path.join(dir, to_string(manifest.id)),
+        if(is_binary(manifest.entry_point), do: Path.join(staged, manifest.entry_point)),
         if(is_binary(manifest.entry_point), do: Path.join(dir, manifest.entry_point))
       ]
       |> Enum.reject(&is_nil/1)

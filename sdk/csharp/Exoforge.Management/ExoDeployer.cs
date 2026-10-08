@@ -79,13 +79,7 @@ public class ExoDeployer
         }
 
         string pluginType = wasmPath != null ? "wasm" : "native";
-        string binaryPath = wasmPath ?? Path.Combine(pluginDir, cleanName);
-
-        // Windows builds append .exe; native deploys are usually cross-built for a Linux RID.
-        if (wasmPath == null && !File.Exists(binaryPath) && File.Exists(binaryPath + ".exe"))
-        {
-            binaryPath += ".exe";
-        }
+        string binaryPath = wasmPath ?? StagedBinary(pluginDir, cleanName);
 
         if (!File.Exists(binaryPath))
         {
@@ -323,7 +317,11 @@ public class ExoDeployer
         string pluginDir = Path.Combine(_workspace.PluginsPath, cleanName);
         string output = Path.Combine(pluginDir, "src", "Generated", "PluginServices.g.cs");
         string exportJson = await GetContractsExportJsonAsync(existingClient: existingClient, cancellationToken: cancellationToken).ConfigureAwait(false);
-        ExoCodeGenerator.GeneratePluginStubsToFile(exportJson, output, services: ReadManifestDependencies(pluginDir));
+        ExoCodeGenerator.GeneratePluginStubsToFile(
+            exportJson,
+            output,
+            services: ReadManifestDependencies(pluginDir),
+            pluginId: cleanName);
         return output;
     }
 
@@ -433,8 +431,7 @@ public class ExoDeployer
         string pluginName,
         string? rid = null,
         string dotnetPath = "dotnet",
-        Action<string>? log = null,
-        string? manifestGenPath = null)
+        Action<string>? log = null)
     {
         string cleanName = NormalizePluginName(pluginName);
         string pluginDir = Path.Combine(_workspace.PluginsPath, cleanName);
@@ -480,7 +477,7 @@ public class ExoDeployer
         else
         {
             pluginType = "native";
-            binaryPath = PublishNative(csproj ?? throw new FileNotFoundException($"No .csproj found for '{cleanName}'."), pluginDir, cleanName, rid, dotnet, buildStamp, manifestGenPath, Emit);
+            binaryPath = PublishNative(csproj ?? throw new FileNotFoundException($"No .csproj found for '{cleanName}'."), pluginDir, cleanName, rid, dotnet, buildStamp, Emit);
         }
 
         CommitBuildNumber(pluginDir, buildNumber);
@@ -495,23 +492,33 @@ public class ExoDeployer
         string? rid = null,
         string dotnetPath = "dotnet",
         Action<string>? log = null,
-        string? manifestGenPath = null,
         CancellationToken cancellationToken = default)
     {
-        return Task.Run(() => BuildPlugin(pluginName, rid, dotnetPath, log, manifestGenPath), cancellationToken);
+        return Task.Run(() => BuildPlugin(pluginName, rid, dotnetPath, log), cancellationToken);
     }
 
-    private string PublishNative(string csproj, string pluginDir, string cleanName, string? rid, string dotnetPath, string buildStamp, string? manifestGenPath, Action<string> emit)
+    private string PublishNative(string csproj, string pluginDir, string cleanName, string? rid, string dotnetPath, string buildStamp, Action<string> emit)
     {
         string targetRid = string.IsNullOrWhiteSpace(rid) ? HostRuntimeIdentifier() : rid!;
+        string manifest = Path.Combine(pluginDir, "manifest.exs");
+
+        // The manifest is written by Exoforge.Plugin.Generator during this same compile, so the
+        // version stamped into it always describes the binary just produced. There is no second pass
+        // over the compiled assembly, which is what used to let a stale Release tree win.
         emit($"[build] dotnet publish -c Release -r {targetRid}");
-        RunProcess(dotnetPath, $"publish \"{RelativeTo(pluginDir, csproj)}\" -c Release -r {targetRid}", pluginDir, emit);
+        RunProcess(
+            dotnetPath,
+            $"publish \"{RelativeTo(pluginDir, csproj)}\" -c Release -r {targetRid} " +
+            $"-p:ExoforgePluginType=native -p:ExoforgeBuildStamp={buildStamp} " +
+            $"-p:ExoforgeManifestPath=\"{RelativeTo(pluginDir, manifest)}\"",
+            pluginDir,
+            emit);
 
         // The project may sit at the plugin root or under src/, and a plugin that has moved between
         // the two leaves both trees behind. Search every Release tree and take the newest match:
         // picking a tree first and searching inside it means one stale directory wins for all of its
-        // contents, and the manifest is then generated from code that is no longer there - silently,
-        // because a manifest is still produced and still looks right.
+        // contents, and the binary staged is then not the one that was just built - silently,
+        // because a binary is still produced.
         string[] releaseTrees = Directory.GetDirectories(pluginDir, "Release", SearchOption.AllDirectories)
             .Where(dir => string.Equals(Path.GetFileName(Path.GetDirectoryName(dir) ?? ""), "bin", StringComparison.OrdinalIgnoreCase))
             .ToArray();
@@ -529,33 +536,24 @@ public class ExoDeployer
             .FirstOrDefault()
             ?? throw new FileNotFoundException($"Published native binary not found for '{cleanName}' under {pluginDir}.");
 
-        string staged = Path.Combine(pluginDir, cleanName);
+        // Staged under a dot folder: the plugin directory holds source, and a multi-megabyte binary
+        // named after the plugin sitting next to it is noise.
+        string stagedDir = Path.Combine(pluginDir, ".exoforge");
+        Directory.CreateDirectory(stagedDir);
+
+        string staged = Path.Combine(stagedDir, cleanName);
         File.Copy(published, staged, overwrite: true);
         MakeExecutable(staged);
         emit($"[build] staged native binary -> {staged}");
 
-        string dll = releaseTrees
-            .SelectMany(tree => Directory.GetFiles(tree, cleanName + ".dll", SearchOption.AllDirectories))
-            .OrderByDescending(File.GetLastWriteTimeUtc)
-            .FirstOrDefault()
-            ?? throw new FileNotFoundException($"Compiled assembly not found for '{cleanName}' under {pluginDir}.");
+        if (!File.Exists(manifest))
+        {
+            throw new FileNotFoundException(
+                $"No manifest was generated for '{cleanName}' at {manifest}. " +
+                "Does the plugin project reference Exoforge.Plugin.Generator?");
+        }
 
-        string manifestGen = FindManifestGen(manifestGenPath);
-        string manifest = Path.Combine(pluginDir, "manifest.exs");
-
-        // The child process runs with pluginDir as its working directory, so every path it is given
-        // must be expressed relative to pluginDir. Unity reports paths that look absolute but are
-        // not (its Mono treats a bare relative path as rooted, so Path.GetFullPath is a no-op), and
-        // a path relative to any other base then resolves against the wrong directory in the child
-        // and fails with "The provided file path does not exist".
         emit($"[build] manifest -> {manifest}");
-        RunProcess(
-            dotnetPath,
-            $"run --project \"{RelativeTo(pluginDir, manifestGen)}\" -- " +
-            $"\"{RelativeTo(pluginDir, dll)}\" \"{RelativeTo(pluginDir, manifest)}\" " +
-            $"--type native --build {buildStamp}",
-            pluginDir,
-            emit);
 
         return staged;
     }
@@ -594,6 +592,26 @@ public class ExoDeployer
     /// Short content hash of a plugin's sources (<c>.cs</c>/<c>.csproj</c>). Used as SemVer build
     /// metadata (<c>1.0.0+ab12cd34</c>) and to tell whether a local plugin changed since its last build.
     /// </summary>
+    /// <summary>
+    /// Where a native binary was staged: <c>.exoforge/</c> under the plugin, with the plugin root as
+    /// the older layout. Returns the staged path when neither exists, so a "not built" message names
+    /// where a build would put it.
+    /// </summary>
+    public static string StagedBinary(string pluginDir, string cleanName)
+    {
+        string staged = Path.Combine(pluginDir, ".exoforge", cleanName);
+        string legacy = Path.Combine(pluginDir, cleanName);
+
+        // Windows builds append .exe; native deploys are usually cross-built for a Linux RID.
+        foreach (string candidate in new[] { staged, legacy })
+        {
+            if (File.Exists(candidate)) return candidate;
+            if (File.Exists(candidate + ".exe")) return candidate + ".exe";
+        }
+
+        return staged;
+    }
+
     public static string ComputeSourceFingerprint(string pluginDir)
     {
         var files = Directory.EnumerateFiles(pluginDir, "*.cs", SearchOption.AllDirectories)
@@ -651,55 +669,6 @@ public class ExoDeployer
     {
         return Directory.GetFiles(root, fileName, SearchOption.AllDirectories).FirstOrDefault();
     }
-
-    /// <summary>Environment variable pointing at the manifest generator, for unusual layouts.</summary>
-    public const string ManifestGenEnvVar = "EXOFORGE_MANIFESTGEN";
-
-    /// <summary>
-    /// Locates the manifest generator.
-    ///
-    /// The SDK never guesses at a directory layout: a consumer's project structure is unknown, and
-    /// a package installed from a tarball has no Exoforge checkout anywhere near it. So an explicit
-    /// path wins, then the environment, then the copy that ships beside this assembly. Nothing walks
-    /// up the tree.
-    /// </summary>
-    private static string FindManifestGen(string? explicitPath)
-    {
-        if (IsManifestGen(explicitPath))
-        {
-            return explicitPath!;
-        }
-
-        if (Environment.GetEnvironmentVariable(ManifestGenEnvVar) is { Length: > 0 } configured &&
-            IsManifestGen(configured))
-        {
-            return configured;
-        }
-
-        string assemblyDir = Path.GetDirectoryName(typeof(ExoDeployer).Assembly.Location) ?? "";
-
-        foreach (string candidate in new[]
-        {
-            Path.Combine(assemblyDir, "Tools~", "ManifestGen"),
-            Path.Combine(assemblyDir, "Management", "Tools~", "ManifestGen"),
-        })
-        {
-            if (IsManifestGen(candidate)) return candidate;
-        }
-
-        throw new DirectoryNotFoundException(
-            "Could not locate the Exoforge manifest generator, which a native plugin build needs. " +
-            "It ships with the SDK at Editor/Management/Tools~/ManifestGen — pass that path to " +
-            $"BuildPlugin, or set {ManifestGenEnvVar}=/path/to/ManifestGen.");
-    }
-
-    /// <summary>
-    /// True when <paramref name="dir"/> really is the generator. Checks for its project file rather
-    /// than the directory: a directory check accepts paths that do not resolve, which then fail
-    /// later inside `dotnet` with a message that says nothing about why.
-    /// </summary>
-    private static bool IsManifestGen(string? dir) =>
-        !string.IsNullOrEmpty(dir) && File.Exists(Path.Combine(dir!, "ManifestGen.csproj"));
 
     /// <summary>
     /// Re-expresses <paramref name="path"/> relative to <paramref name="baseDir"/>, when that is

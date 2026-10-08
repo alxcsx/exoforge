@@ -209,6 +209,9 @@ public class VerticalSliceIntegrationTests
 
         string device = "dev_two_stage_" + Guid.NewGuid().ToString("N")[..8];
 
+        // Display names are unique across players, so a constant one collides on the second run.
+        string displayName = "TwoStage" + device.Substring(device.Length - 6);
+
         // Stage 1 - enter or register the account, no name.
         var anonymous = await client.SendActionAsync<JsonElement>("auth", "anonymous", new { player_id = device });
         Assert.Equal(device, anonymous.GetProperty("player_id").GetString());
@@ -220,12 +223,12 @@ public class VerticalSliceIntegrationTests
         Assert.Equal(device, auth.PlayerId);
 
         // Stage 2 - name the signed-in player. The server takes the player from the caller.
-        var named = await client.SendActionAsync<JsonElement>("auth", "set_display_name", new { name = "TwoStage" });
-        Assert.Equal("TwoStage", named.GetProperty("name").GetString());
+        var named = await client.SendActionAsync<JsonElement>("auth", "set_display_name", new { name = displayName });
+        Assert.Equal(displayName, named.GetProperty("name").GetString());
 
         // Re-entering the device now returns the name.
         var again = await client.SendActionAsync<JsonElement>("auth", "anonymous", new { player_id = device });
-        Assert.Equal("TwoStage", again.GetProperty("name").GetString());
+        Assert.Equal(displayName, again.GetProperty("name").GetString());
 
         await client.DisconnectAsync();
     }

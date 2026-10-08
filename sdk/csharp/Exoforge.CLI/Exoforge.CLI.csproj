@@ -9,17 +9,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!--
-      The manifest generator ships beside the CLI, so a native plugin build finds it without
-      knowing anything about the layout it was installed into.
-    -->
-    <None Include="..\Exoforge.Management\Tools~\ManifestGen\Program.cs"
-          Link="Tools~\ManifestGen\Program.cs"
-          CopyToOutputDirectory="PreserveNewest" />
-    <None Include="..\Exoforge.Management\Tools~\ManifestGen\ManifestGen.csproj"
-          Link="Tools~\ManifestGen\ManifestGen.csproj"
-          CopyToOutputDirectory="PreserveNewest" />
-
     <ProjectReference Include="..\Exoforge.Management\Exoforge.Management.csproj" />
     <!-- Referenced directly: ExoDeployer's API exposes ExoClient (e.g. VerifyPluginAsync's
          optional parameter), so compiling a call to it needs the assembly. Warm builds hid

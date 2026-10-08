@@ -3,15 +3,13 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Locate the Exoforge repo. The marker is the manifest generator itself, so finding it means the
-# tool this script runs exists: it moved to Exoforge.Management/Tools~ in M29, and the old path here
-# left ROOT empty and tried to source "/sdk/build/wasi-sdk.sh".
+# Locate the Exoforge repo, for the WASI toolchain the guest is compiled with.
 ROOT="$SCRIPT_DIR"
-while [ "$ROOT" != "/" ] && [ ! -d "$ROOT/sdk/csharp/Exoforge.Management/Tools~/ManifestGen" ]; do
+while [ "$ROOT" != "/" ] && [ ! -d "$ROOT/sdk/build" ]; do
   ROOT="$(dirname "$ROOT")"
 done
 
-if [ ! -d "$ROOT/sdk/csharp/Exoforge.Management/Tools~/ManifestGen" ]; then
+if [ ! -d "$ROOT/sdk/build" ]; then
   echo "error: could not find the Exoforge repo above $SCRIPT_DIR" >&2
   exit 1
 fi
@@ -20,13 +18,10 @@ fi
 source "$ROOT/sdk/build/wasi-sdk.sh"
 WASI_CLANG="$(resolve_wasi_clang)"
 
+# The manifest is written by Exoforge.Plugin.Generator during this build, so there is no separate
+# generator tool to locate or invoke.
 echo "Building C# contract assembly..."
 dotnet build "$SCRIPT_DIR/sample_wasm.csproj" -c Release
-
-echo "Generating plugin manifest from C# attributes..."
-dotnet run --project "$ROOT/sdk/csharp/Exoforge.Management/Tools~/ManifestGen" -- \
-  "$SCRIPT_DIR/bin/Release/net10.0/sample_wasm.dll" \
-  "$SCRIPT_DIR/manifest.exs"
 
 echo "Compiling guest ($(basename "$WASI_CLANG"))..."
 "$WASI_CLANG" -O2 -mexec-model=reactor \

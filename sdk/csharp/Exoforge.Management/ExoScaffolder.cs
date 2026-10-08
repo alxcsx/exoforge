@@ -8,12 +8,13 @@ namespace Exoforge.Management;
 /// <code>
 /// plugins/&lt;name&gt;/
 ///   &lt;name&gt;.slnx          solution for the plugin
-///   .gitignore           ignores the staged native binary
+///   .gitignore           ignores the build outputs (the staged binary, the manifest)
 ///   src/&lt;name&gt;.csproj
 ///   src/&lt;Name&gt;Plugin.cs  the actions
-///   src/&lt;Name&gt;JsonContext.cs  source-generated JSON metadata
+///   src/Generated/       typed service stubs and the JSON context, from `exo plugin stubs`
 /// </code>
-/// The built binary and <c>manifest.exs</c> stay at the plugin root, where the deployer expects them.
+/// The built binary is staged under <c>.exoforge/</c> and <c>manifest.exs</c> is written at the plugin
+/// root; both are build outputs.
 /// </summary>
 public static class ExoScaffolder
 {
@@ -33,12 +34,11 @@ public static class ExoScaffolder
 
         File.WriteAllText(Path.Combine(srcDir, $"{cleanName}.csproj"), GenerateCsproj(sdkProjectPath, srcDir));
         File.WriteAllText(Path.Combine(srcDir, $"{className}Plugin.cs"), GeneratePluginCode(cleanName, className, template));
-        File.WriteAllText(Path.Combine(srcDir, $"{className}JsonContext.cs"), GenerateJsonContextCode(className, template));
         File.WriteAllText(Path.Combine(targetDir, $"{cleanName}.slnx"), GenerateSolution(cleanName));
         File.WriteAllText(Path.Combine(targetDir, "README.md"), GenerateReadme(cleanName, className));
 
         // The staged native binary and the local build counter are build artifacts.
-        File.WriteAllText(Path.Combine(targetDir, ".gitignore"), $"/{cleanName}\n/.buildcount\n");
+        File.WriteAllText(Path.Combine(targetDir, ".gitignore"), "/.exoforge/\n/.buildcount\n/manifest.exs\n");
 
         return targetDir;
     }
@@ -107,8 +107,15 @@ public static class ExoScaffolder
             : $"    <!-- Published package. Point {SdkPathEnvVar} at a local checkout to build against that instead. -->\n" +
               $"    <PackageReference Include=\"{SdkPackageId}\" Version=\"{SdkPackageVersion}\" />";
 
-        return $"""
-<Project Sdk="Microsoft.NET.Sdk">
+        string? generatorProject = GeneratorProjectPath(sdkProjectPath);
+
+        string generator = generatorProject != null
+            ? "    <!-- Writes manifest.exs and the entry point from the attributes. -->\n" +
+              $"    <ProjectReference Include=\"{ReferencePath(srcDir, generatorProject)}\" OutputItemType=\"Analyzer\" ReferenceOutputAssembly=\"false\" />"
+            : "    <!-- The published package ships the Exoforge generator as an analyzer. -->";
+
+        return $@"
+<Project Sdk=""Microsoft.NET.Sdk"">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
@@ -117,13 +124,45 @@ public static class ExoScaffolder
     <OutputType>Exe</OutputType>
     <PublishAot>true</PublishAot>
     <InvariantGlobalization>true</InvariantGlobalization>
+
+    <!-- Consumed by the Exoforge generator. ExoDeployer overrides the build stamp per build. -->
+    <ExoforgePluginType>native</ExoforgePluginType>
+    <ExoforgeManifestPath Condition=""'$(ExoforgeManifestPath)' == ''"">$(MSBuildProjectDirectory)/../manifest.exs</ExoforgeManifestPath>
   </PropertyGroup>
 
   <ItemGroup>
 {reference}
+{generator}
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The manifest is a build output the generator writes, so a missing one has to re-run the
+         compile rather than being treated as up to date. -->
+    <UpToDateCheckOutput Include=""$(ExoforgeManifestPath)"" />
+    <FileWrites Include=""$(ExoforgeManifestPath)"" />
+
+    <CompilerVisibleProperty Include=""ExoforgePluginType"" />
+    <CompilerVisibleProperty Include=""ExoforgeBuildStamp"" />
+    <CompilerVisibleProperty Include=""ExoforgeManifestPath"" />
+    <CompilerVisibleProperty Include=""DesignTimeBuild"" />
   </ItemGroup>
 </Project>
-""";
+";
+    }
+
+    /// <summary>
+    /// The generator project that ships beside the SDK. A local checkout builds against it directly;
+    /// the published package carries it as an analyzer.
+    /// </summary>
+    private static string? GeneratorProjectPath(string? sdkProjectPath)
+    {
+        if (sdkProjectPath is null) return null;
+
+        string? dir = Path.GetDirectoryName(sdkProjectPath);
+        if (string.IsNullOrEmpty(dir)) return null;
+
+        string candidate = Path.GetFullPath(Path.Combine(dir!, "..", "Exoforge.Plugin.Generator", "Exoforge.Plugin.Generator.csproj"));
+        return File.Exists(candidate) ? candidate : null;
     }
 
     private static string GenerateReadme(string cleanName, string className) => $"""
@@ -136,8 +175,7 @@ public static class ExoScaffolder
     | Path | What it is |
     | :--- | :--- |
     | `src/{className}Plugin.cs` | the plugin: `[ExoAction]` methods are what callers invoke |
-    | `src/{className}JsonContext.cs` | source-generated JSON — NativeAOT has no reflection |
-    | `src/Generated/` | typed service stubs (`exo plugin stubs {cleanName}`) |
+    | `src/Generated/` | typed service stubs and the JSON context (`exo plugin stubs {cleanName}`) |
     | `manifest.exs` | generated from the attributes; do not edit |
     | `{cleanName}` | the staged native binary; generated |
 
@@ -191,42 +229,6 @@ public static class ExoScaffolder
         return StandardTemplate(serviceName, className);
     }
 
-    private static string GenerateJsonContextCode(string className, string template)
-    {
-        string kind = template.ToLowerInvariant();
-
-        string attributes;
-        if (kind.Contains("inventory"))
-        {
-            attributes =
-                $"[JsonSerializable(typeof({className}Item))]\n" +
-                "[JsonSerializable(typeof(ItemGrantedEvent))]";
-        }
-        else if (kind.Contains("liveops") || kind.Contains("schedule"))
-        {
-            attributes =
-                $"[JsonSerializable(typeof({className}Schedule))]\n" +
-                "[JsonSerializable(typeof(LiveOpsBannerEvent))]";
-        }
-        else
-        {
-            attributes = $"[JsonSerializable(typeof({className}Item))]";
-        }
-
-        return $$"""
-using System.Text.Json.Serialization;
-
-namespace Exoforge.Plugins;
-
-// Source-generated JSON for this plugin's records — NativeAOT has no reflection.
-[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
-{{attributes}}
-internal partial class {{className}}JsonContext : JsonSerializerContext
-{
-}
-""";
-    }
-
     private static string StandardTemplate(string serviceName, string className) => $$"""
 using Exoforge.Plugin.SDK;
 
@@ -239,10 +241,10 @@ namespace Exoforge.Plugins;
 public class {{className}}Plugin
 {
     [Inject("database")]
-    public static IDatabase? Database { get; set; }
+    public IDatabase? Database { get; set; }
 
     [Inject]
-    public static ILogger? Logger { get; set; }
+    public ILogger? Logger { get; set; }
 
     [ExoAction]
     public int Ping()
@@ -253,8 +255,6 @@ public class {{className}}Plugin
 
     [ExoAction]
     public int Echo(int value) => value;
-
-    public static void Main() => PluginHost.Run<{{className}}Plugin, {{className}}JsonContext>();
 }
 
 // Row stored in the plugin's isolated database.
@@ -289,10 +289,10 @@ namespace Exoforge.Plugins;
 public class {{className}}Plugin
 {
     [Inject("database")]
-    public static IDatabase? Database { get; set; }
+    public IDatabase? Database { get; set; }
 
     [Inject]
-    public static IEventDispatcher? Events { get; set; }
+    public IEventDispatcher? Events { get; set; }
 
     [ExoAction]
     public List<{{className}}Item> GetInventory(string playerId) =>
@@ -309,8 +309,6 @@ public class {{className}}Plugin
 
         return quantity;
     }
-
-    public static void Main() => PluginHost.Run<{{className}}Plugin, {{className}}JsonContext>();
 }
 
 public record ItemGrantedEvent

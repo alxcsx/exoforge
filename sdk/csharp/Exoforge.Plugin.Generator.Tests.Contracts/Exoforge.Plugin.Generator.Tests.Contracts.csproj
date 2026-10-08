@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- A contracts-only library: interfaces, no implementation and no generator. A plugin that
+         references it implements the contract; the generator reads the metadata from here. -->
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>12</LangVersion>
+    <IsPackable>false</IsPackable>
+    <NuGetAudit>false</NuGetAudit>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Exoforge.Plugin.SDK\Exoforge.Plugin.SDK.csproj" />
+  </ItemGroup>
+</Project>

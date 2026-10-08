@@ -574,7 +574,7 @@ public static class Program
             ? servicesOption.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             : ExoDeployer.ReadManifestDependencies(pluginDir);
 
-        ExoCodeGenerator.GeneratePluginStubsToFile(exportJson, stubsOut, services: services);
+        ExoCodeGenerator.GeneratePluginStubsToFile(exportJson, stubsOut, services: services, pluginId: name);
         Success($"[Exoforge] Generated typed plugin service stubs:\n  {stubsOut}");
         return 0;
     }

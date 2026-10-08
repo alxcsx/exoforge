@@ -5,9 +5,27 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <OutputType>Exe</OutputType>
+
+    <!-- The guest is WASM, so the manifest points at the .wasm entry point. -->
+    <ExoforgePluginType>wasm</ExoforgePluginType>
+    <ExoforgeManifestPath Condition="'$(ExoforgeManifestPath)' == ''">$(MSBuildProjectDirectory)/manifest.exs</ExoforgeManifestPath>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\sdk\csharp\Exoforge.Plugin.SDK\Exoforge.Plugin.SDK.csproj" />
+    <ProjectReference Include="..\..\sdk\csharp\Exoforge.Plugin.Generator\Exoforge.Plugin.Generator.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The manifest is a build output the generator writes, so a missing one has to re-run the
+         compile rather than being treated as up to date. -->
+    <UpToDateCheckOutput Include="$(ExoforgeManifestPath)" />
+    <FileWrites Include="$(ExoforgeManifestPath)" />
+
+    <CompilerVisibleProperty Include="ExoforgePluginType" />
+    <CompilerVisibleProperty Include="ExoforgeBuildStamp" />
+    <CompilerVisibleProperty Include="ExoforgeManifestPath" />
+    <CompilerVisibleProperty Include="DesignTimeBuild" />
   </ItemGroup>
 </Project>

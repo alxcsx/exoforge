@@ -67,7 +67,13 @@ public class ManagementTests : IDisposable
 
         string csprojFile = Path.Combine(createdDir, "src", "guild_system.csproj");
         Assert.True(File.Exists(csprojFile));
-        Assert.Contains("Exoforge.Plugin.SDK", File.ReadAllText(csprojFile));
+
+        // The project references the SDK and the generator, and tells the generator where to write.
+        string csprojText = File.ReadAllText(csprojFile);
+        Assert.Contains("Exoforge.Plugin.SDK", csprojText);
+        Assert.Contains("Exoforge.Plugin.Generator", csprojText);
+        Assert.Contains("OutputItemType=\"Analyzer\"", csprojText);
+        Assert.Contains("ExoforgeManifestPath", csprojText);
 
         string serviceFile = Path.Combine(createdDir, "src", "GuildSystemPlugin.cs");
         Assert.True(File.Exists(serviceFile));
@@ -75,12 +81,14 @@ public class ManagementTests : IDisposable
         Assert.Contains("[ExoService(\"guild_system\"", serviceText);
         Assert.Contains("public class GuildSystemPlugin", serviceText);
         Assert.Contains("[ExoAction]", serviceText);
-        Assert.Contains("PluginHost.Run<GuildSystemPlugin, GuildSystemJsonContext>()", serviceText);
         Assert.Contains("[ExoResource(\"guild_system_items\"", serviceText);
 
-        string contextFile = Path.Combine(createdDir, "src", "GuildSystemJsonContext.cs");
-        Assert.True(File.Exists(contextFile));
-        Assert.Contains("[JsonSerializable(typeof(GuildSystemItem))]", File.ReadAllText(contextFile));
+        // Injection is per instance, and the entry point, the dispatch table and the JSON context are
+        // all generated - the scaffold writes none of them.
+        Assert.Contains("public IDatabase? Database { get; set; }", serviceText);
+        Assert.DoesNotContain("public static void Main", serviceText);
+        Assert.DoesNotContain("JsonContext", serviceText);
+        Assert.False(File.Exists(Path.Combine(createdDir, "src", "GuildSystemJsonContext.cs")));
 
         Assert.True(File.Exists(Path.Combine(createdDir, ".gitignore")));
     }
@@ -221,7 +229,8 @@ public class ManagementTests : IDisposable
                                         "params": [
                                             { "name": "counter_id", "type": "integer" },
                                             { "name": "amount", "type": "integer" }
-                                        ]
+                                        ],
+                                        "returns": "integer"
                                     }
                                 ]
                             }
@@ -242,9 +251,10 @@ public class ManagementTests : IDisposable
         Assert.Contains("public class SampleWasmIncrementRequest", code);
         Assert.Contains("public long CounterId { get; set; }", code);
         Assert.Contains("public long Amount { get; set; }", code);
-        Assert.Contains("public Task<JsonElement> IncrementAsync(long counterId, long amount, CancellationToken cancellationToken = default)", code);
-        Assert.Contains("public Task<JsonElement> IncrementAsync(SampleWasmIncrementRequest request, CancellationToken cancellationToken = default)", code);
-        Assert.Contains("public Task<JsonElement> IncrementAsync(object? payload = null, CancellationToken cancellationToken = default)", code);
+        // A declared return type is honoured; there is no untyped object overload to fall back to.
+        Assert.Contains("public Task<long> IncrementAsync(long counterId, long amount, CancellationToken cancellationToken = default)", code);
+        Assert.Contains("public Task<long> IncrementAsync(SampleWasmIncrementRequest request, CancellationToken cancellationToken = default)", code);
+        Assert.DoesNotContain("object? payload = null", code);
         Assert.Contains("public Task<JsonElement> PingAsync(", code);
     }
 
@@ -335,7 +345,7 @@ public class ManagementTests : IDisposable
         string runtimeDir = Path.Combine(unityPkgDir, "Runtime");
         Assert.True(Directory.Exists(runtimeDir));
         Assert.True(File.Exists(Path.Combine(runtimeDir, "Exoforge.SDK.asmdef")));
-        Assert.True(File.Exists(Path.Combine(runtimeDir, "ExoforgeBehaviour.cs")));
+        Assert.True(File.Exists(Path.Combine(runtimeDir, "ExoforgeManager.cs")));
         Assert.True(File.Exists(Path.Combine(runtimeDir, "ExoforgeSDK.cs")));
         Assert.True(File.Exists(Path.Combine(runtimeDir, "ExoforgeAuth.cs")));
         Assert.True(File.Exists(Path.Combine(runtimeDir, "ExoTokenStore.cs")));
@@ -347,7 +357,7 @@ public class ManagementTests : IDisposable
         Assert.True(File.Exists(Path.Combine(editorDir, "ExoforgeControlCenter.cs")));
         Assert.True(File.Exists(Path.Combine(editorDir, "ExoforgeEditorConfig.cs")));
         Assert.True(File.Exists(Path.Combine(editorDir, "ExoforgeSceneSetup.cs")));
-        Assert.True(File.Exists(Path.Combine(editorDir, "ExoforgeBehaviourEditor.cs")));
+        Assert.True(File.Exists(Path.Combine(editorDir, "ExoforgeManagerEditor.cs")));
 
         // The engine-agnostic libraries arrive as assemblies, not as source (M29). If any of these
         // reappears as .cs in the package, the package has started owning code that is not Unity's
@@ -438,5 +448,63 @@ public class ManagementTests : IDisposable
             current = parent;
         }
         return Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."));
+    }
+
+    /// <summary>
+    /// A plugin's own records need source-generated JSON metadata, and its own compile cannot supply
+    /// it - a source generator's output is invisible to the System.Text.Json generator. The stubs are
+    /// a real file, so they carry it.
+    /// </summary>
+    [Fact]
+    public void PluginStubs_Register_The_Plugins_Own_Records_For_Json()
+    {
+        string exportJson = """
+        {
+            "plugins": [
+                {
+                    "id": "snake_leaderboard",
+                    "services": [
+                        {
+                            "name": "snake_leaderboard",
+                            "actions": [
+                                {
+                                    "name": "get_leaderboard",
+                                    "scope": "global",
+                                    "params": [],
+                                    "returns": { "player_id": "string" },
+                                    "returns_list": true,
+                                    "returns_type": "global::MyGame.SnakeLeaderboardEntry"
+                                }
+                            ],
+                            "events": [
+                                { "name": "score_submitted", "payload_type": "global::MyGame.SnakeScoreSubmitted" }
+                            ],
+                            "resources": [
+                                {
+                                    "name": "snake_scores",
+                                    "primary_key": "player_id",
+                                    "columns": [ { "name": "player_id", "type": "string" } ],
+                                    "type": "global::MyGame.SnakeScoreRecord"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+        """;
+
+        string code = ExoCodeGenerator.GeneratePluginStubs(exportJson, pluginId: "snake_leaderboard");
+
+        Assert.Contains("[JsonSerializable(typeof(global::MyGame.SnakeScoreRecord))]", code);
+        Assert.Contains("[JsonSerializable(typeof(global::MyGame.SnakeScoreSubmitted))]", code);
+        Assert.Contains("[JsonSerializable(typeof(global::MyGame.SnakeLeaderboardEntry))]", code);
+
+        // The model is named after the contract's record, not after the action.
+        Assert.Contains("public class SnakeLeaderboardEntry", code);
+
+        // Another plugin's records are not this plugin's business.
+        string other = ExoCodeGenerator.GeneratePluginStubs(exportJson, pluginId: "something_else");
+        Assert.DoesNotContain("MyGame.SnakeScoreRecord", other);
     }
 }
