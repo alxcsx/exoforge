@@ -408,7 +408,13 @@ public partial class ExoforgeControlCenter : EditorWindow
         try
         {
             string template = ExoScaffolder.Templates[Mathf.Clamp(_newPluginTemplateIndex, 0, ExoScaffolder.Templates.Length - 1)];
-            string dir = ExoScaffolder.ScaffoldPlugin(Workspace.PluginsPath, _newPluginName, template: template);
+            // The package ships the plugin SDK as a local feed, so a scaffolded plugin builds with no
+            // repository and no published package anywhere.
+            string? feed = ExoforgeEditorConfig.PackageRoot is { } root
+                ? Path.Combine(root, "Editor", "Plugins", "NuGet~")
+                : null;
+
+            string dir = ExoScaffolder.ScaffoldPlugin(Workspace.PluginsPath, _newPluginName, template: template, feed: feed);
             string pluginFile = Path.Combine(dir, "src", ExoScaffolder.ClassNameFor(_newPluginName) + "Plugin.cs");
 
             RefreshLocalPlugins();

@@ -416,7 +416,8 @@ clean-room-sdk:
 
 # ---- Unity SDK Distribution ----
 
-# Package Unity SDK into a self-contained UPM tarball (.tgz) for game developers
+# Build the distributable Unity package: the UPM tarball, with the plugin SDK inside it so a
+# developer with no repository and no published feed can build their first plugin.
 pack-unity:
 	#!/usr/bin/env bash
 	set -euo pipefail
@@ -427,6 +428,12 @@ pack-unity:
 	rm -rf dist/package dist/com.exoforge.sdk-*.tgz
 	mkdir -p dist/package
 	cp -RL sdk/unity/Exoforge.SDK/. dist/package/
+
+	# The plugin SDK travels with the package. A developer has no repository and no published feed, so
+	# without this their first `dotnet build` is NU1101 and nothing they can do fixes it.
+	just pack-sdk >/dev/null
+	mkdir -p "dist/package/Editor/Plugins/NuGet~"
+	cp dist/nuget/*.nupkg "dist/package/Editor/Plugins/NuGet~/"
 	# Build output in the package is not the package: Unity compiles what it is given, and a stale
 	# bin/ or obj/ is the source of a whole class of "works on my machine".
 	find dist/package -type d \( -name bin -o -name obj \) -prune -exec rm -rf {} +
@@ -447,5 +454,5 @@ pack-unity:
 	fi
 	echo "[Exoforge] Package is self-contained."
 
-	echo "Ready to import in Unity: Window > Package Manager > [+] > Add package from tarball..."
+	echo "Distributable: dist/com.exoforge.sdk-*.tgz"
 

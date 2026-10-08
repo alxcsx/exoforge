@@ -21,7 +21,7 @@ public static class ExoScaffolder
     /// <summary>Templates a caller may ask for. Keep in step with <see cref="GeneratePluginCode"/>.</summary>
     public static readonly string[] Templates = { "standard", "inventory" };
 
-    public static string ScaffoldPlugin(string pluginsDirectory, string rawName, string template = "standard")
+    public static string ScaffoldPlugin(string pluginsDirectory, string rawName, string template = "standard", string? feed = null)
     {
         string cleanName = NormalizeName(rawName);
         string className = ToPascalCase(cleanName);
@@ -38,7 +38,7 @@ public static class ExoScaffolder
         // The staged native binary and the local build counter are build artifacts.
         File.WriteAllText(Path.Combine(targetDir, ".gitignore"), "/.exoforge/\n/.buildcount\n/manifest.json\n");
 
-        RegisterLocalFeed(pluginsDirectory);
+        RegisterLocalFeed(pluginsDirectory, feed);
 
         return targetDir;
     }
@@ -54,7 +54,8 @@ public static class ExoScaffolder
 
     /// <summary>
     /// Environment variable naming a directory of packed Exoforge packages, for a plugin built
-    /// outside a checkout. A published feed needs nothing: nuget.org is already a source.
+    /// outside a checkout. A caller that knows where the feed is passes it instead; a published feed
+    /// needs neither, since nuget.org is already a source.
     /// </summary>
     public const string FeedEnvVar = "EXOFORGE_FEED";
 
@@ -65,9 +66,9 @@ public static class ExoScaffolder
     /// property of the workspace, not of the plugin, which is why the reference in the project file
     /// reads the same whether the feed is a directory on this machine or a real one.
     /// </summary>
-    private static void RegisterLocalFeed(string pluginsDirectory)
+    private static void RegisterLocalFeed(string pluginsDirectory, string? explicitFeed)
     {
-        string? feed = Environment.GetEnvironmentVariable(FeedEnvVar);
+        string? feed = explicitFeed ?? Environment.GetEnvironmentVariable(FeedEnvVar);
 
         if (string.IsNullOrEmpty(feed) || !Directory.Exists(feed)) return;
 

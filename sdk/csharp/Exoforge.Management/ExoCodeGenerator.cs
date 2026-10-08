@@ -161,7 +161,9 @@ public static class ExoCodeGenerator
             }
         }
 
-        return new List<ServiceContractModel>(result.Values);
+        // Sorted, not insertion-ordered. The output is committed, so its order has to be a property of
+        // the contracts rather than of the order they arrived in.
+        return result.Values.OrderBy(s => s.Name, StringComparer.Ordinal).ToList();
     }
 
     private static ServiceContractModel ParseServiceElement(JsonElement svc)

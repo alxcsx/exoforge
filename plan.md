@@ -24,6 +24,10 @@ else.
   codegen and deploy are pure C# (`netstandard2.1`).
 - **The Unity package is the unit of distribution.** It ships into projects with no Exoforge checkout
   anywhere near them, so it must work exactly as it is shipped.
+- **The instance is the unit of deployment.** A developer has Unity, the package and their own
+  plugins; the kernel and the standard plugins run somewhere else and are reached over the wire.
+  Anything that assumes a checkout — a `_build` path, a `just` recipe, a sibling directory — is a
+  tool for this repository's own team, not for a user.
 - **No engine SDK owns engine-agnostic code.** The C# client and the plugin tooling belong to the
   dotnet side; each engine ships them as a compiled assembly. Adding an engine adds a bucket that
   ships those libraries, not one that reimplements them.

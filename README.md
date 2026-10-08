@@ -44,6 +44,28 @@ Exoforge is an open, high-density game backend and LiveOps platform. It combines
 +--------------------------------------------------------------------------+
 ```
 
+### Deployments
+
+Exoforge runs as an **instance**. A developer does not run the kernel; they point their tools at one.
+
+```
+   instance  (yours, or one you are given)      developer's machine
+   ───────────────────────────────────────     ──────────────────────────
+   kernel  •  standard plugins                  Unity  •  com.exoforge.sdk
+   database  •  LiveView Studio                 Exoforge/plugins/*   (theirs)
+   :4000 ws  •  :4001 rest  •  :4005 studio            │
+        ▲                                              │  build, deploy, stubs
+        └───────────────  wss:// + https://  ──────────┘
+```
+
+The standard plugins are **builtin and server-side**. They are not installed on the developer's
+machine and their contracts arrive over the wire; a team that wants its own can remove or replace
+any of them.
+
+Two audiences, two UIs, one instance: the **Unity editor window** is for developers, so they never
+leave Unity while building a plugin, and the **LiveView Studio** is for designers and producers —
+though developers use it too for visualisation and integration work.
+
 ### Architectural Doctrine
 
 > **The Rule**: Everything above the kernel is a plugin.  
@@ -86,14 +108,14 @@ A dedicated Unity Editor extension (`Tools ▸ Exoforge ▸ Exoforge Studio`, or
 - **Compilation & Deployment**: Build the NativeAOT binary + manifest and upload them to the running server.
 - **Live Action Sandbox**: Test actions and inspect payloads with latency metrics (`µs`).
 - **Real-Time Event Stream**: Monitor backend broadcasts and filter topics inside Unity.
-- **LiveOps Schedule Timeline**: Visual timeline of active and scheduled game windows.
 
 ### 2. Standalone C# CLI (`exo`)
 
-Cross-platform command-line tool (`netstandard2.1` / `.NET 10`) for CI/CD pipelines and headless workflows:
+The **engine-agnostic** tool: the same commands a Unity developer clicks, for other engines, for
+CI/CD, and for headless work. A Unity project does not need it.
 ```bash
 exo init                     # Initialize /exoforge workspace
-exo plugin new combat        # Scaffold a native C# plugin (--template standard|inventory|liveops)
+exo plugin new combat        # Scaffold a native C# plugin (--template standard|inventory)
 exo plugin build combat      # Build the NativeAOT binary + manifest.json
 exo plugin stubs combat      # Generate typed service stubs from the cluster contracts
 exo plugin push combat       # Hot-load plugin onto live cluster
@@ -141,12 +163,23 @@ Benchmarked on commodity single-node hardware (Apple Silicon / Linux x86_64):
 
 ## Quickstart
 
-### Prerequisites
-- [Elixir 1.20+ & Erlang/OTP 29+](https://elixir-lang.org) (or via `mise` / `asdf`)
-- [.NET 10.0 SDK](https://dotnet.microsoft.com)
-- [Just](https://github.com/casey/just) command runner
+### Using Exoforge
 
-### Development
+You need an instance and the Unity package. The package is distributed as a tarball
+(`dist/com.exoforge.sdk-*.tgz`) and carries everything a plugin build needs, the plugin SDK
+included — nothing here requires a clone of this repository.
+
+1. **Package Manager ▸ + ▸ Add package from tarball**, and pick the `.tgz`.
+2. **Tools ▸ Exoforge ▸ Exoforge Studio**, and point it at your instance in the Settings tab.
+3. **Plugins ▸ Scaffold**, then **Build & Deploy**.
+
+The sample project ships with the package and is the reference for the whole loop.
+
+### Working on the kernel
+
+Prerequisites: [Elixir 1.20+ & Erlang/OTP 29+](https://elixir-lang.org) (or via `mise` / `asdf`),
+the [.NET 10.0 SDK](https://dotnet.microsoft.com), and
+[Just](https://github.com/casey/just).
 ```bash
 # Run all tests (Core, Plugins, System, C# SDKs)
 just test

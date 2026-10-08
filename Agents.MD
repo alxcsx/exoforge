@@ -54,6 +54,10 @@ The kernel is strictly limited to:
 
 ## 2. Monorepo Topology & Standard Plugins
 
+These are **builtin and server-side**. They live in this repository, they are not installed on a
+game developer's machine, and their contracts reach the tooling over the wire. A team may remove or
+replace any of them with its own services.
+
 ```
 database ──▶ auth ──▶ player_data
                │

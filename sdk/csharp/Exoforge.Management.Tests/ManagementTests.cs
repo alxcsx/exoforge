@@ -313,6 +313,23 @@ public class ManagementTests : IDisposable
         Assert.Contains("public Task<JsonElement> PingAsync(", code);
     }
 
+    /// <summary>
+    /// The generated client is committed, so its order has to come from the contracts rather than from
+    /// the order the export happened to list them in. Without that, a deploy that answers with the same
+    /// plugins in another order is a diff that says nothing.
+    /// </summary>
+    [Fact]
+    public void CodeGenerator_Is_Deterministic_Regardless_Of_Export_Order()
+    {
+        string alpha = ServiceJson("alpha", "one");
+        string beta = ServiceJson("beta", "two");
+
+        string first = ExoCodeGenerator.GenerateFromExportJson(Export(alpha, beta), "Determinism.Client");
+        string second = ExoCodeGenerator.GenerateFromExportJson(Export(beta, alpha), "Determinism.Client");
+
+        Assert.Equal(first, second);
+    }
+
     [Fact]
     public void CodeGenerator_Generates_Strongly_Typed_Events_Responses_And_Http_Transport()
     {
@@ -562,4 +579,13 @@ public class ManagementTests : IDisposable
         string other = ExoCodeGenerator.GeneratePluginStubs(exportJson, pluginId: "something_else");
         Assert.DoesNotContain("MyGame.SnakeScoreRecord", other);
     }
+
+    private static string ServiceJson(string service, string action) =>
+        "{\"name\":\"" + service + "\",\"actions\":[{\"name\":\"" + action +
+        "\",\"scope\":\"global\",\"params\":[{\"name\":\"id\",\"type\":\"string\"}]," +
+        "\"returns\":\"string\"}]}";
+
+    private static string Export(params string[] services) =>
+        "{\"export\":{\"cluster\":\"test\",\"plugins\":[{\"id\":\"p\",\"provides\":[\"p\"]," +
+        "\"services\":[" + string.Join(",", services) + "]}]}}";
 }

@@ -678,6 +678,11 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
             foreach (var name in emit.Dependencies.Split(',')) if (name.Length > 0 && !dependencies.Contains(name)) dependencies.Add(name);
         }
 
+        // Sorted for the same reason the generated client is: a manifest that reorders itself between
+        // builds is a diff that says nothing. The services are already ordered by name.
+        provides.Sort(StringComparer.Ordinal);
+        dependencies.Sort(StringComparer.Ordinal);
+
         // Every emit's services, not just the primary one's: a plugin whose services are declared on
         // several roots would otherwise ship a manifest that mentions only the first.
         var models = new List<ServiceModel>();
