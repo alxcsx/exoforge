@@ -103,13 +103,43 @@ plugin_manager ───▶ (independent root)
 | Elixir | `:elixir` | Elixir | `mix` | System plugins |
 
 Native plugins are plain C# — **no C, no WASI toolchain**. `exo plugin build` compiles the plugin to a
-self-contained ~2 MB binary and generates `manifest.exs` from the C# attributes. The Unity
-**Control Center ▸ Plugins** tab runs the same build (`dotnet publish -p:PublishAot=true` + ManifestGen)
-and deploys the result, so game teams never need the CLI. The plugin's entry point is:
+self-contained ~2 MB binary. `manifest.exs` and the entry point are written by the
+`Exoforge.Plugin.Generator` source generator during that same compile — there is no separate manifest
+tool. The Unity **Control Center ▸ Plugins** tab runs the same build
+(`dotnet publish -p:PublishAot=true`) and deploys the result, so game teams never need the CLI. The
+entry point and the action/event dispatch table are generated for you, so the host never reflects
+over the plugin's methods:
 
 ```csharp
-public static void Main() => PluginHost.Run<MyPlugin>();
+// Exoforge.Generated.ExoforgeEntryPoint
+public static void Main() => PluginHost.Run<MyPlugin, MyJsonContext, ExoforgeDispatch>();
 ```
+
+**Services** are declared two ways, and they compose:
+
+```csharp
+// The class is its own contract and implementation.
+[ExoService("my_service", Category = "Game", Title = "My Service", Icon = "🎮")]
+public partial class MyPlugin
+{
+    [ExoAction] public int DoThing(int amount) => amount;
+}
+
+// Or the contract is a declared interface; the class implementing it is the plugin's root.
+[ExoService("my_contract")]
+public interface IMyContract { [ExoAction] int DoThing(int amount); }
+
+public partial class MyPlugin : IMyContract { public int DoThing(int amount) => amount; }
+```
+
+A contract may also live in its **own assembly** — a shared contracts package — and the generator
+reads it from there, so nothing in the plugin's source names the service.
+
+A class-declared service gets a contract interface generated for it
+(`Exoforge.Generated.Contracts.I…`) and, when the class is `partial`, the generator makes the class
+implement it — so the contract always exists as a named type and moves into a shared project
+unchanged. Declare several `[ExoService]`s for several services; attribute an action or event with
+`Service = "…"` when they belong to different ones. A plugin runs one instance, so it has one root.
 
 The host spawns the binary as an OS process (`Exoforge.Drivers.Runtime.NativePluginRunner`) and speaks
 newline-delimited JSON over stdio. Host capabilities are injected into the plugin (`IDatabase`, `ILogger`,
@@ -134,7 +164,7 @@ runner:
 [JsonSerializable(typeof(SnakeScoreRecord))]
 internal partial class SnakeJsonContext : JsonSerializerContext { }
 
-public static void Main() => PluginHost.Run<SnakeLeaderboardPlugin, SnakeJsonContext>();
+// No Main to write: the generator emits it and passes this context to the runner.
 
 // Key/value
 var best = Database!.Get<SnakeScoreRecord>("snake_scores", playerId);

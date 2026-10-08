@@ -52,6 +52,7 @@ Numbers are historical identifiers, not a sequence to maintain — they are refe
 | **M23** | SQLite local mode — `Exoforge.Std.Database.Adapters.Sqlite` + `:sqlite` driver, no PostgreSQL daemon needed |
 | **M24** | Plugin Tooling DX ([`DX.md`](DX.md)) — 21 fixes across plugin creation, upload and management |
 | **M25** | LiveOps *(withdrawn)* — time windows, schedule timeline and calendar view removed; game rules belong in the game, not the platform |
+| **M26** | `Exoforge.Plugin.Generator` — a Roslyn source generator replaces the out-of-process `ManifestGen` tool. The manifest, the entry point, the action/event dispatch table and the contract interfaces come from the plugin's own compile, so native and WASM builds share one pipeline, the host no longer reflects over a generated plugin's methods, and a C# plugin declares services on a class or on a contract interface in its own assembly |
 
 ---
 
@@ -149,9 +150,9 @@ Not planned. Recorded so they stop reappearing as "next":
 | :--- | :--- |
 | `Runtime/*.cs`, `Editor/Management/*.cs` symlinked into `sdk/csharp/` | real files in the package, and canonical |
 | `Exoforge.Client` / `Exoforge.Management` held the sources | they compile the package's files |
-| `FindManifestGen` / `FindSdkProjectPath` walked up for `sdk/csharp` | resolved beside the assembly, or passed in |
+| `FindManifestGen` / `FindSdkProjectPath` walked up for `sdk/csharp` | the generator is a compile-time analyzer; there is nothing to locate at build time |
 | scaffolder emitted a `ProjectReference` to a repo path | the published `PackageReference`, or a local one via `EXOFORGE_PLUGIN_SDK` |
-| the manifest generator lived in `sdk/csharp` and was copied | lives only at `Editor/Management/Tools~/ManifestGen` |
+| the manifest generator lived in `sdk/csharp` and was copied | `Exoforge.Plugin.Generator`, referenced by the plugin project |
 
 Running `just clean-room-sdk` for the first time found and fixed `ExoWorkspace.Initialize` writing
 `exoforge.json` into a directory it never created — the first action a new developer takes.
@@ -204,13 +205,13 @@ it), then 2.4, then 2.3 — which gates reconnect.
       In the Control Center, a failed disconnect during teardown now logs, and a failed telemetry
       fetch reports in the status bar — it used to leave the window showing stale telemetry and a
       stale service catalog with nothing to say why. (My review had listed a third site in
-      `ExoforgeBehaviourEditor`; there is none.)
+      `ExoforgeManagerEditor`; there is none.)
 - [x] **3.3 Make timeouts configurable.** `ExoClient.DefaultTimeout` replaces the three magic
       numbers, overridable per call; `ExoTransport.CloseTimeout` bounds the close handshake, which
       had none — `DisconnectAsync` awaited `CloseAsync` forever if the peer never replied, which is
       what hung the test suite until the stub was made to reply.
       *Proven by:* `TransportTests.The_default_timeout_is_configurable`.
-- [x] **3.4 Reconnect with backoff.** `ExoforgeBehaviour` retries with exponential backoff
+- [x] **3.4 Reconnect with backoff.** `ExoforgeManager` retries with exponential backoff
       (`ExoBackoff`, capped at 30s by default), starting from a **failed first connect** as well as
       from a drop — a backend that is not up yet is the common case at boot, and was the motivating
       one. A background task, not something driven from `Update()`, because disconnect notifications
@@ -232,7 +233,7 @@ it), then 2.4, then 2.3 — which gates reconnect.
 
 ### API shape
 
-- [x] **4.1 One way to get a client.** *(Partly a correction: `ExoforgeBehaviour.Client` has
+- [x] **4.1 One way to get a client.** *(Partly a correction: `ExoforgeManager.Client` has
       legitimate users — the editor window and the play-mode tests — so making it internal would
       break them for little gain.)* The real defect was the inconsistency: `ExoforgeSDK.Client`
       returned a client whenever one had been *constructed*, and a failed connect constructs one
@@ -259,7 +260,7 @@ Moved to §8: it is the only thing left, and it is a release step rather than co
 | `just pack-unity` | the package resolves nothing into this repo | fast |
 | `just clean-room-sdk` | a new Unity project installs the tarball and builds a plugin | slow |
 | `just sample-check` | sample scene, board maths, leaderboard parsing | fast |
-| `just sample-play-tests` | `ExoforgeBehaviour` lifecycle, token store | medium |
+| `just sample-play-tests` | `ExoforgeManager` lifecycle, token store | medium |
 | `Exoforge.Client.Tests` | transport and client behaviour | fast |
 
 **Two gaps this milestone depends on:**
@@ -267,7 +268,7 @@ Moved to §8: it is the only thing left, and it is a release step rather than co
 1. ~~**`ExoClient` / `ExoTransport` have no unit coverage.**~~ **Done** — `StubWebSocketServer` plus
    `TransportTests` (connect, action round trip, server error, dropped connection). They are
    Unity-free, so this is where reconnect, timeout and error-surfacing get pinned.
-2. ~~**`ExoforgeBehaviour` is Unity-only.**~~ **Done** — `Assets/Tests/PlayMode` on the Unity test
+2. ~~**`ExoforgeManager` is Unity-only.**~~ **Done** — `Assets/Tests/PlayMode` on the Unity test
    framework (`just sample-play-tests`). Play mode, not edit: `Awake` does not run in the editor, so
    the behaviour is inert there and none of its lifecycle is observable. `ExoforgeSampleCheck` stays
    for the headless parts. Note for 3.5: the framework fails a test on an unexpected
@@ -289,7 +290,7 @@ engine SDK owns them.** Each engine ships them as a compiled assembly.
 | Bucket | Holds | Where |
 | :--- | :--- | :--- |
 | **Exo** | deploy + manage, language-agnostic | `sdk/csharp/Exoforge.CLI` — thin, no build logic of its own |
-| **dotnetSDK** | plugin authoring, manifest gen, build, codegen, the C# client | `Exoforge.Plugin.SDK`, `Exoforge.Client`, `Exoforge.Management` (+ `Tools~/ManifestGen`) |
+| **dotnetSDK** | plugin authoring, manifest gen, build, codegen, the C# client | `Exoforge.Plugin.SDK`, `Exoforge.Plugin.Generator`, `Exoforge.Client`, `Exoforge.Management` |
 | **unitySDK** | Unity runtime wrappers + editor | `com.exoforge.sdk` — `Runtime/`, `Editor/`, and `*/Plugins/*.dll` built by `just build-unity-sdk` |
 
 The Unity package now contains **only Unity-specific code**. `Runtime/Plugins/Exoforge.Client.dll` and
