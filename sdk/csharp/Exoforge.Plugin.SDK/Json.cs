@@ -281,6 +281,18 @@ public static class PluginJson
         // default, and it shares generic code across reference-type instantiations. Unity developers
         // meet the IL2CPP half of this too - link.xml, [Preserve], AOTGenericReferences, and code that
         // works in the Editor and breaks in the build. It is not a configuration mistake in either.
+        //
+        // What it costs to have reflection back, measured on this plugin rather than guessed:
+        //
+        //   NativeAOT                2.8MB on disk    3.7MB Pss    no reflection
+        //   framework-dependent      144KB on disk   14.7MB Pss    reflection, nothing else needed
+        //   self-contained JIT        71MB on disk   ~same Pss     reflection
+        //
+        // 20x less disk for 4x more memory, and the memory is the one that multiplies - the plugin
+        // runs as a process per plugin, so twenty of them is 74MB against 294MB. Under a container the
+        // disk is an image layer and effectively free, so the trade is disk for RAM, and RAM is what
+        // runs out. Worth knowing before switching: the whole reason for the workarounds above is the
+        // deployment mode, and choosing a different one deletes them rather than fixing them.
         if (type.IsDefined(typeof(System.Runtime.CompilerServices.CompilerGeneratedAttribute), false) &&
             type.Name.StartsWith("<", StringComparison.Ordinal))
         {
