@@ -271,6 +271,16 @@ public static class PluginJson
         // empty. A wrong answer on the wire is worse than the loud failure this hint replaces, and no
         // guard can detect it, since a partly trimmed type is indistinguishable from a small one. So
         // there is deliberately no such fallback: declare the type, and its name makes it rootable.
+        //
+        // Nor can the switches be turned back on, which is worth knowing before trying. Publishing with
+        // JsonSerializerIsReflectionEnabledByDefault=true and IlcTrimMetadata=false - reflection on,
+        // metadata kept, 2.8MB of binary becoming 7.2MB - gets further and still fails: it reaches the
+        // anonymous type, then cannot build a converter for it, because NativeAOT compiles generic
+        // instantiations statically and the one STJ needs here was never in the program. IL2CPP gets
+        // away with the same trick for two reasons that AOT does not share: it strips nothing by
+        // default, and it shares generic code across reference-type instantiations. Unity developers
+        // meet the IL2CPP half of this too - link.xml, [Preserve], AOTGenericReferences, and code that
+        // works in the Editor and breaks in the build. It is not a configuration mistake in either.
         if (type.IsDefined(typeof(System.Runtime.CompilerServices.CompilerGeneratedAttribute), false) &&
             type.Name.StartsWith("<", StringComparison.Ordinal))
         {
