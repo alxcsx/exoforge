@@ -6,6 +6,42 @@ using Xunit;
 
 namespace Exoforge.Plugin.SDK.Tests;
 
+/// <summary>
+/// An anonymous return, which is the case the hint exists for.
+/// </summary>
+/// <remarks>
+/// It serializes here - a test run has reflection - and fails in the published plugin, which is the
+/// worst shape a failure can take: green tests, broken build. And the obvious advice cannot be
+/// followed, because a compiler-generated type cannot be named in source, so
+/// <c>[JsonSerializable(typeof(...))]</c> is not missing, it is unwritable.
+/// </remarks>
+public class AnonymousTypeTests
+{
+    /// <summary>Which is exactly what hides the problem until the plugin is published.</summary>
+    [Fact]
+    public void An_anonymous_object_serializes_where_reflection_is_available()
+    {
+        Assert.Equal("{\"value\":1}", PluginJson.Serialize(new { value = 1 }));
+    }
+
+    [Fact]
+    public void The_hint_says_an_anonymous_type_cannot_be_registered_at_all()
+    {
+        string hint = PluginJson.AotHint(new { value = 1 }.GetType());
+
+        Assert.Contains("compiler-generated", hint, StringComparison.Ordinal);
+        Assert.Contains("record", hint, StringComparison.Ordinal);
+        // Not the ordinary advice: there is no name to put in it.
+        Assert.DoesNotContain("[JsonSerializable", hint, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_named_type_still_gets_the_registration_hint()
+    {
+        Assert.Contains("[JsonSerializable", PluginJson.AotHint(typeof(TypedScoreRow)), StringComparison.Ordinal);
+    }
+}
+
 public record TypedScoreRow
 {
     public string PlayerId { get; init; } = "";

@@ -35,15 +35,12 @@ public class HostPluginContext : IPluginContext
     /// Inspects plugin object properties and injects services decorated with [Inject].
     /// Handles both instance and static members, so plain plugin classes get their dependencies too.
     /// </summary>
-    // Every Run overload roots the plugin type's properties, which is what keeps this call safe. One
-    // that stops doing so makes this a lie, and the failure is a null dependency at runtime rather
-    // than a warning at build time.
-    [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Every Run overload roots PublicProperties/NonPublicProperties on the plugin type.")]
-    public static void Wire(
-        [DynamicallyAccessedMembers(
-            DynamicallyAccessedMemberTypes.PublicProperties |
-            DynamicallyAccessedMemberTypes.NonPublicProperties)] object target,
-        IPluginContext context)
+    // The generated entry point roots the plugin type's properties with [DynamicDependency], which is
+    // what keeps this reflection safe. The annotation that used to sit on `target` did nothing - the
+    // attribute applies only to a `Type` or a `string`, so on an instance it was invalid and the ILC
+    // said so on every plugin build (IL2098). Removing it changes no behaviour, only the noise.
+    [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "The generated entry point roots the plugin type's properties with [DynamicDependency].")]
+    public static void Wire(object target, IPluginContext context)
     {
         if (target == null || context == null) return;
 

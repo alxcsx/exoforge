@@ -28,7 +28,21 @@ namespace Exoforge.Plugin.SDK;
 /// </summary>
 public static class PluginJson
 {
-    private static readonly JsonSerializerOptions ReflectionOptions = new()
+    private static readonly JsonSerializerOptions ReflectionOptions = BuildReflectionOptions();
+
+    /// <summary>
+    /// Options for the reflection fallback, which is the path with no source-generated context.
+    /// </summary>
+    /// <remarks>
+    /// It needs the runtime <see cref="JsonStringEnumConverter"/>, and that converter cannot be
+    /// statically analyzed - it is the only one that works without a type in hand, since the generic
+    /// form needs the enum. So this path cannot be AOT-safe, and it does not need to be: it runs only
+    /// when no context is registered, and in a NativeAOT build reflection serialization is disabled
+    /// outright, so the code is unreachable there. Suppressed here rather than by a blanket NoWarn so
+    /// the reason travels with it.
+    /// </remarks>
+    [UnconditionalSuppressMessage("AOT", "IL3050", Justification = "Reflection-only path; unreachable under NativeAOT, where reflection serialization is disabled.")]
+    private static JsonSerializerOptions BuildReflectionOptions() => new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
         PropertyNameCaseInsensitive = true,
@@ -73,15 +87,15 @@ public static class PluginJson
             ? Contexts[0]
             : JsonTypeInfoResolver.Combine(Contexts.ToArray());
 
+        // No enum converter here, deliberately. The generator writes one per enum the plugin
+        // declares and registers it on the context, which is AOT-safe; the runtime
+        // JsonStringEnumConverter is not, and adding it here as well was both redundant and one of
+        // the warnings that reached every plugin author's build log.
         _options = new JsonSerializerOptions
         {
             TypeInfoResolver = resolver,
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-        PropertyNameCaseInsensitive = true,
-        // An enum is written as its name, snake_cased - the same spelling a schema's `choices` uses and
-        // the same one an Elixir contract writes. Without this it serialises as its number, which is
-        // not what a `text` column holds and not what the choices say.
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower) }
+            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+            PropertyNameCaseInsensitive = true,
         };
     }
 
@@ -201,8 +215,26 @@ public static class PluginJson
         return false;
     }
 
-    private static string AotHint(Type type) =>
-        $"Could not (de)serialize '{type}'. On NativeAOT, register the type on a source-generated " +
-        "JsonSerializerContext and start the plugin with PluginHost.Run<TPlugin, TJsonContext>(), " +
-        "adding [JsonSerializable(typeof(" + type.Name + "))].";
+    internal static string AotHint(Type type)
+    {
+        // An anonymous object is the trap this message exists for. It serializes fine in a test run,
+        // where reflection is available, and fails in the published plugin - so the author sees green
+        // tests and a broken build. And the usual advice is impossible to follow: a compiler-generated
+        // type cannot be named in source, so "[JsonSerializable(typeof(...))]" is not missing, it is
+        // unwritable. A closure's display class is the same shape of problem.
+        if (type.IsDefined(typeof(System.Runtime.CompilerServices.CompilerGeneratedAttribute), false) &&
+            type.Name.StartsWith("<", StringComparison.Ordinal))
+        {
+            return $"Could not serialize '{type.Name}': it is a compiler-generated type, so it cannot be " +
+                   "named in source and there is no way to register it. An anonymous object works in a " +
+                   "test run, where reflection is available, and fails here in the published plugin. " +
+                   "Declare a record instead - `public record MyResult(int Value);` - and return " +
+                   "`new MyResult(7)`. Its name is what the manifest, the generated client and the " +
+                   "dashboard describe; an anonymous object has none to describe.";
+        }
+
+        return $"Could not (de)serialize '{type}'. On NativeAOT, register the type on a source-generated " +
+               "JsonSerializerContext and start the plugin with PluginHost.Run<TPlugin, TJsonContext>(), " +
+               "adding [JsonSerializable(typeof(" + type.Name + "))].";
+    }
 }
