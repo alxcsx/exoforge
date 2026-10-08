@@ -26,23 +26,37 @@ public partial class ExoforgeControlCenter : EditorWindow
     {
         _pluginsScroll = EditorGUILayout.BeginScrollView(_pluginsScroll);
 
-        bool wsExists = ExoWorkspace.Exists(_workspace.RootPath);
+        // Build and Scaffold work offline; Deploy, Stubs and Logs do not. Said here rather than gating
+        // the tab, which would take the one thing that does work with it.
+        if (!CanReachCluster)
+        {
+            EditorGUILayout.HelpBox(
+                _isConnecting
+                    ? "Connecting to the cluster — Deploy, Stubs and Logs unlock when it lands."
+                    : "Offline. Building and scaffolding work; Deploy, Stubs and Logs need a connection — sign in from the header.",
+                _isConnecting ? MessageType.Info : MessageType.Warning);
+        }
+
+        bool wsExists = ExoWorkspace.Exists(Workspace.RootPath);
 
         // Workspace
         EditorGUILayout.LabelField("Workspace", EditorStyles.boldLabel);
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-        EditorGUILayout.LabelField(_workspace.RootPath, EditorStyles.miniLabel);
+        EditorGUILayout.LabelField(Workspace.RootPath, EditorStyles.miniLabel);
 
         EditorGUILayout.BeginHorizontal();
         if (!wsExists && GUILayout.Button("Initialize Workspace", EditorStyles.miniButton))
         {
-            _workspace = ExoWorkspace.Initialize(_workspace.RootPath);
-            ShowStatus($"Initialized workspace at {_workspace.RootPath}", MessageType.Info);
+            ExoWorkspace.Initialize(Workspace.RootPath);
+
+            // Force a reload: Initialize may have created files the cached workspace has not seen.
+            _workspaceLoadedFrom = "";
+            ShowStatus($"Initialized workspace at {Workspace.RootPath}", MessageType.Info);
         }
 
         if (GUILayout.Button("Reveal in Finder", EditorStyles.miniButton))
         {
-            EditorUtility.RevealInFinder(_workspace.RootPath);
+            EditorUtility.RevealInFinder(Workspace.RootPath);
         }
         EditorGUILayout.EndHorizontal();
 
@@ -372,22 +386,11 @@ public partial class ExoforgeControlCenter : EditorWindow
 
         try
         {
-            var deployer = new ExoDeployer(_workspace);
+            var deployer = new ExoDeployer(Workspace);
             string? rid = string.IsNullOrWhiteSpace(_buildRid) ? null : _buildRid.Trim();
-            // The generator ships inside the SDK; resolve it through the package rather than
-            // letting the deployer guess at a layout.
-            string? manifestGen = ExoforgeEditorConfig.ManifestGenPath;
-
-            if (manifestGen == null)
-            {
-                ShowStatus(
-                    "The SDK's manifest generator is missing from this package — reinstall com.exoforge.sdk.",
-                    MessageType.Error);
-                return;
-            }
 
             var build = await deployer.BuildPluginAsync(
-                plugin.Name, rid, ExoforgeEditorConfig.DotnetPath, AppendBuildLog, manifestGen);
+                plugin.Name, rid, ExoforgeEditorConfig.DotnetPath, AppendBuildLog);
 
             _buildLog = build.Output;
             SessionState.EraseString(BuildFailureKey(plugin.Name));
@@ -417,7 +420,7 @@ public partial class ExoforgeControlCenter : EditorWindow
     {
         try
         {
-            var deployer = new ExoDeployer(_workspace);
+            var deployer = new ExoDeployer(Workspace);
             string output = await deployer.GeneratePluginStubsAsync(plugin.Name, existingClient: _isConnected ? _editorClient : null);
             ShowStatus($"✓ Generated typed service stubs for '{plugin.Name}' → {output}", MessageType.Info);
         }
@@ -433,7 +436,7 @@ public partial class ExoforgeControlCenter : EditorWindow
     {
         try
         {
-            var deployer = new ExoDeployer(_workspace);
+            var deployer = new ExoDeployer(Workspace);
             var outputs = await deployer.GenerateAllPluginStubsAsync(existingClient: _isConnected ? _editorClient : null);
             ShowStatus($"✓ Generated typed service stubs for {outputs.Count} plugin(s).", MessageType.Info);
         }
@@ -448,7 +451,7 @@ public partial class ExoforgeControlCenter : EditorWindow
     private async Task DeployPluginAsync(LocalPluginInfo plugin)    {
         try
         {
-            var deployer = new ExoDeployer(_workspace);
+            var deployer = new ExoDeployer(Workspace);
             await deployer.UploadPluginAsync(plugin.Name, existingClient: _editorClient);
             ShowStatus($"Successfully deployed '{plugin.Name}' to cluster.", MessageType.Info);
             await RefreshRemoteInfoAsync();
@@ -499,7 +502,7 @@ public partial class ExoforgeControlCenter : EditorWindow
 
         try
         {
-            var deployer = new ExoDeployer(_workspace);
+            var deployer = new ExoDeployer(Workspace);
             var lines = await deployer.GetPluginLogsAsync(clean, 100, existingClient: _isConnected ? _editorClient : null);
 
             _pluginLogs = lines.Count == 0
@@ -520,7 +523,7 @@ public partial class ExoforgeControlCenter : EditorWindow
     {
         try
         {
-            var deployer = new ExoDeployer(_workspace);
+            var deployer = new ExoDeployer(Workspace);
             await deployer.RemovePluginAsync(pluginId, existingClient: _editorClient);
             ShowStatus($"Removed remote plugin '{pluginId}'.", MessageType.Info);
             await RefreshRemoteInfoAsync();

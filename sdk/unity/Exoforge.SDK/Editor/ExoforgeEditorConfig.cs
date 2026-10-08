@@ -316,12 +316,10 @@ public static class ExoforgeEditorConfig
     }
 
     /// <summary>
-    /// The manifest generator shipped inside this SDK, or null when it is missing.
-    ///
-    /// A native plugin build needs it; when it is null the build says so rather than failing inside
-    /// `dotnet` with a path that does not exist.
+    /// The source generator shipped inside this SDK, or null when it is missing. A plugin build
+    /// needs it: it writes the manifest and the entry point during the plugin's own compile.
     /// </summary>
-    public static string? ManifestGenPath
+    public static string? GeneratorPath
     {
         get
         {
@@ -332,10 +330,12 @@ public static class ExoforgeEditorConfig
                 return null;
             }
 
-            // Tools~ because Unity ignores a folder ending in ~: the generator is a net10.0 program
-            // and would not compile as part of the editor assembly.
-            string candidate = Path.Combine(root!, "Editor", "Plugins", "Tools~", "ManifestGen");
-            return File.Exists(Path.Combine(candidate, "ManifestGen.csproj")) ? candidate : null;
+            // Tools~ because Unity ignores a folder ending in ~: the analyzer references Roslyn and
+            // must not be loaded as one of the editor's own assemblies.
+            string candidate = Path.Combine(
+                root!, "Editor", "Plugins", "Tools~", "Exoforge.Plugin.Generator", "Exoforge.Plugin.Generator.dll");
+
+            return File.Exists(candidate) ? candidate : null;
         }
     }
 

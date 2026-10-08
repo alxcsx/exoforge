@@ -26,20 +26,53 @@ public partial class ExoforgeControlCenter : EditorWindow
     // Per-editor-session flag: auto-connect on editor start, but not on every script reload.
     private const string AutoConnectSessionKey = "Exoforge_AutoConnected";
 
-    private static readonly string[] TabNames =
+    /// <summary>
+    /// The tabs in order. One list on purpose: the toolbar returns an index, so a separate array of
+    /// labels that drifted out of step would silently select the wrong tab.
+    /// </summary>
+    private static readonly (Tab Id, string Label)[] Tabs =
     {
-        "Overview", "Live Events", "Action Sandbox", "Plugins", "Settings"
+        (Tab.Overview, "Overview"),
+        (Tab.LiveEvents, "Live Events"),
+        (Tab.ActionSandbox, "Action Sandbox"),
+        (Tab.Plugins, "Plugins"),
+        (Tab.Settings, "Settings"),
     };
+
+    private static readonly string[] TabLabels = Tabs.Select(t => t.Label).ToArray();
 
     // Connection & Client
     private ExoClient? _editorClient;
-    private ExoWorkspace _workspace = null!;
+    private ExoWorkspace? _workspace;
+    private string _workspaceLoadedFrom = "";
+
+    /// <summary>
+    /// The workspace, reloaded whenever the configured path changes.
+    ///
+    /// It used to be loaded once in OnEnable, so changing the path in Settings left Build, Deploy and
+    /// Stubs pointed at the old workspace until the window was reloaded.
+    /// </summary>
+    private ExoWorkspace Workspace
+    {
+        get
+        {
+            string path = ExoforgeEditorConfig.GetAbsoluteWorkspacePath();
+
+            if (_workspace == null || _workspaceLoadedFrom != path)
+            {
+                _workspace = ExoWorkspace.Load(path);
+                _workspaceLoadedFrom = path;
+            }
+
+            return _workspace;
+        }
+    }
     private bool _isConnected;
     private bool _isConnecting;
     private string _connectionStatus = "Disconnected";
 
     // Authentication foldout
-    private bool _showAuthFoldout = false;
+    private bool _showAuthFoldout;
     private string _loginEmail = ExoforgeEditorConfig.DefaultLoginEmail;
     private string _loginPassword = "";
 
@@ -146,7 +179,6 @@ public partial class ExoforgeControlCenter : EditorWindow
         _loginEmail = ExoforgeEditorConfig.LastLoginEmail;
         _loginPassword = ExoforgeEditorConfig.RememberedPassword;
 
-        _workspace = ExoWorkspace.Load(ExoforgeEditorConfig.GetAbsoluteWorkspacePath());
         RefreshLocalPlugins();
 
         EditorApplication.update += OnEditorUpdate;
@@ -163,7 +195,7 @@ public partial class ExoforgeControlCenter : EditorWindow
 
     private void TryAutoConnect()
     {
-        bool hasSession = !string.IsNullOrEmpty(ExoTokenStore.PlayerId)
+        bool hasSession = !string.IsNullOrEmpty(ExoTokenStore.StudioPlayerId)
             || (!string.IsNullOrEmpty(ActiveToken)
                 && ActiveToken != "dev:developer");
         bool hasSavedLogin = !string.IsNullOrEmpty(ExoforgeEditorConfig.RememberedPassword);
@@ -209,7 +241,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         DrawHeader();
         EditorGUILayout.Space(2);
 
-        _currentTab = (Tab)GUILayout.Toolbar((int)_currentTab, TabNames, GUILayout.Height(24));
+        _currentTab = Tabs[GUILayout.Toolbar((int)_currentTab, TabLabels, GUILayout.Height(24))].Id;
         EditorGUILayout.Space(4);
 
         if (!string.IsNullOrEmpty(_statusMessage))
@@ -320,16 +352,16 @@ public partial class ExoforgeControlCenter : EditorWindow
         {
             EditorGUILayout.BeginVertical(GUI.skin.box);
 
-            if (!string.IsNullOrEmpty(ExoTokenStore.PlayerId))
+            if (!string.IsNullOrEmpty(ExoTokenStore.StudioPlayerId))
             {
                 EditorGUILayout.BeginHorizontal();
                 string sessionLabel = _isConnected
-                    ? $"Signed in as: {ExoTokenStore.PlayerId}"
-                    : $"Stored session: {ExoTokenStore.PlayerId} (disconnected)";
+                    ? $"Signed in as: {ExoTokenStore.StudioPlayerId}"
+                    : $"Stored session: {ExoTokenStore.StudioPlayerId} (disconnected)";
                 EditorGUILayout.LabelField(sessionLabel, EditorStyles.boldLabel);
-                if (!string.IsNullOrEmpty(ExoTokenStore.Scopes))
+                if (!string.IsNullOrEmpty(ExoTokenStore.StudioScopes))
                 {
-                    EditorGUILayout.LabelField($"Scopes: [{ExoTokenStore.Scopes}]", EditorStyles.miniLabel);
+                    EditorGUILayout.LabelField($"Scopes: [{ExoTokenStore.StudioScopes}]", EditorStyles.miniLabel);
                 }
                 EditorGUILayout.EndHorizontal();
             }
@@ -377,7 +409,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         try
         {
             string template = ExoScaffolder.Templates[Mathf.Clamp(_newPluginTemplateIndex, 0, ExoScaffolder.Templates.Length - 1)];
-            string dir = ExoScaffolder.ScaffoldPlugin(_workspace.PluginsPath, _newPluginName, template: template);
+            string dir = ExoScaffolder.ScaffoldPlugin(Workspace.PluginsPath, _newPluginName, template: template);
             string pluginFile = Path.Combine(dir, "src", ExoScaffolder.ClassNameFor(_newPluginName) + "Plugin.cs");
 
             RefreshLocalPlugins();
@@ -451,9 +483,9 @@ public partial class ExoforgeControlCenter : EditorWindow
     {
         var list = new List<EnvOption>();
 
-        if (_workspace?.Config?.Environments != null)
+        if (Workspace?.Config?.Environments != null)
         {
-            foreach (var kvp in _workspace.Config.Environments)
+            foreach (var kvp in Workspace.Config.Environments)
             {
                 list.Add(new EnvOption(kvp.Key, kvp.Value.WsUrl, kvp.Value.Token, kvp.Value.HttpUrl));
             }
@@ -497,6 +529,39 @@ public partial class ExoforgeControlCenter : EditorWindow
     }
 
 
+    /// <summary>Whether the cluster is reachable. One name for the state every remote action checks.</summary>
+    private bool CanReachCluster => _isConnected && _editorClient != null;
+
+    /// <summary>
+    /// Renders a gate for a tab that needs the cluster, and says whether it did. Returns false when
+    /// connected, so a caller reads <c>if (DrawClusterGate()) return;</c>.
+    ///
+    /// The status banner used to say "sign in below" while the login form sat collapsed, so there was
+    /// nothing to click; this puts the button where the message is.
+    /// </summary>
+    private bool DrawClusterGate()
+    {
+        if (CanReachCluster) return false;
+
+        EditorGUILayout.Space(4);
+        EditorGUILayout.HelpBox(
+            _isConnecting
+                ? "Connecting to the cluster…"
+                : "Not connected — sign in to use this tab.",
+            _isConnecting ? MessageType.Info : MessageType.Warning);
+
+        using (new EditorGUI.DisabledScope(_isConnecting))
+        {
+            if (GUILayout.Button(_isConnecting ? "Connecting…" : "Sign in", GUILayout.Height(26)))
+            {
+                _showAuthFoldout = true;
+                Repaint();
+            }
+        }
+
+        return true;
+    }
+
     private void DrawStatusBanner()
     {
         EditorGUILayout.BeginHorizontal(EditorStyles.helpBox);
@@ -520,7 +585,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         try
         {
             string outputPath = ExoforgeEditorConfig.GetAbsoluteGeneratedScriptPath();
-            var deployer = new ExoDeployer(_workspace);
+            var deployer = new ExoDeployer(Workspace);
 
             if (_isConnected && _editorClient != null)
             {

@@ -9,6 +9,11 @@ namespace Exoforge.Client
     /// Persists the bearer token, player id, name, and scopes in Unity's PlayerPrefs so a client
     /// can reuse them across sessions, scenes, and builds.
     ///
+    /// Two sessions are kept apart: this device's own, and the one the Exoforge Studio window is
+    /// signed in as. <see cref="UseStudioSession"/> picks which one the accessors below read, so play
+    /// mode can act as the Studio's account - same leaderboard rows, same player data - without
+    /// destroying the device's.
+    ///
     /// Low-level: game code should use <see cref="ExoforgeSDK.Auth"/> instead. Exposed for
     /// advanced cases (custom credential storage, tooling).
     /// </summary>
@@ -23,38 +28,83 @@ namespace Exoforge.Client
         private const string ScopesKey = "Exoforge.Scopes";
         private const string NameKey = "Exoforge.PlayerName";
 
+        private const string StudioTokenKey = "Exoforge.Studio.Token";
+        private const string StudioPlayerIdKey = "Exoforge.Studio.PlayerId";
+        private const string StudioScopesKey = "Exoforge.Studio.Scopes";
+        private const string StudioNameKey = "Exoforge.Studio.PlayerName";
+
+        /// <summary>
+        /// Read the Studio's session instead of this device's. Set from <c>ExoforgeManager</c>'s
+        /// "use studio connection" flag, which is what decides it in play mode.
+        /// </summary>
+        public static bool UseStudioSession { get; set; }
+
         // Setters write to PlayerPrefs but do not flush it. SaveSession and Clear flush once, so
         // storing a session is one disk write rather than four. Unity flushes on quit regardless.
 
         public static string Token
         {
-            get => PlayerPrefs.GetString(TokenKey, string.Empty);
-            set => PlayerPrefs.SetString(TokenKey, value ?? string.Empty);
+            get => Read(TokenKey, StudioTokenKey);
+            set => Write(TokenKey, StudioTokenKey, value);
         }
 
         public static string PlayerId
         {
-            get => PlayerPrefs.GetString(PlayerIdKey, string.Empty);
-            set => PlayerPrefs.SetString(PlayerIdKey, value ?? string.Empty);
+            get => Read(PlayerIdKey, StudioPlayerIdKey);
+            set => Write(PlayerIdKey, StudioPlayerIdKey, value);
         }
 
         /// <summary>Scopes as a comma-separated string. Written for diagnostics; the SDK reads scopes from the session.</summary>
         public static string Scopes
         {
-            get => PlayerPrefs.GetString(ScopesKey, string.Empty);
-            set => PlayerPrefs.SetString(ScopesKey, value ?? string.Empty);
+            get => Read(ScopesKey, StudioScopesKey);
+            set => Write(ScopesKey, StudioScopesKey, value);
         }
 
         /// <summary>Display name chosen by the player during onboarding (empty for a fresh anonymous session).</summary>
         public static string PlayerName
         {
-            get => PlayerPrefs.GetString(NameKey, string.Empty);
-            set => PlayerPrefs.SetString(NameKey, value ?? string.Empty);
+            get => Read(NameKey, StudioNameKey);
+            set => Write(NameKey, StudioNameKey, value);
         }
 
         public static bool HasToken => !string.IsNullOrEmpty(Token);
 
-        public static void SaveSession(string token, string? playerId = null, IEnumerable<string>? scopes = null, string? name = null)
+        // The Studio's slot, whatever UseStudioSession says. The editor works with these directly:
+        // it is the Studio, and its session is not the device's.
+
+        /// <summary>The Studio's bearer token.</summary>
+        public static string StudioToken => PlayerPrefs.GetString(StudioTokenKey, string.Empty);
+
+        /// <summary>The Studio's player id.</summary>
+        public static string StudioPlayerId => PlayerPrefs.GetString(StudioPlayerIdKey, string.Empty);
+
+        /// <summary>The Studio's scopes, comma-separated.</summary>
+        public static string StudioScopes => PlayerPrefs.GetString(StudioScopesKey, string.Empty);
+
+        /// <summary>Forgets the Studio's session, leaving the device's alone.</summary>
+        public static void ClearStudioSession()
+        {
+            PlayerPrefs.DeleteKey(StudioTokenKey);
+            PlayerPrefs.DeleteKey(StudioPlayerIdKey);
+            PlayerPrefs.DeleteKey(StudioScopesKey);
+            PlayerPrefs.DeleteKey(StudioNameKey);
+            PlayerPrefs.Save();
+        }
+
+        public static void SaveSession(string token, string? playerId = null, IEnumerable<string>? scopes = null, string? name = null) =>
+            Store(TokenKey, PlayerIdKey, ScopesKey, NameKey, token, playerId, scopes, name);
+
+        /// <summary>
+        /// Stores the Exoforge Studio window's session. Written by the editor on connect; read in play
+        /// mode when <see cref="UseStudioSession"/> is on.
+        /// </summary>
+        public static void SaveStudioSession(string token, string? playerId = null, IEnumerable<string>? scopes = null, string? name = null) =>
+            Store(StudioTokenKey, StudioPlayerIdKey, StudioScopesKey, StudioNameKey, token, playerId, scopes, name);
+
+        private static void Store(
+            string tokenKey, string playerIdKey, string scopesKey, string nameKey,
+            string token, string? playerId, IEnumerable<string>? scopes, string? name)
         {
             string resolvedPlayerId = playerId ?? string.Empty;
 
@@ -63,31 +113,41 @@ namespace Exoforge.Client
             // ExoSession.DisplayName reported the wrong player — which is how someone else's name
             // ends up on a shared leaderboard.
             bool samePlayer = !string.IsNullOrEmpty(resolvedPlayerId) &&
-                              string.Equals(PlayerId, resolvedPlayerId, StringComparison.Ordinal);
+                              string.Equals(PlayerPrefs.GetString(playerIdKey, string.Empty), resolvedPlayerId, StringComparison.Ordinal);
 
-            Token = token;
-            PlayerId = resolvedPlayerId;
-            Scopes = scopes != null ? string.Join(",", scopes) : string.Empty;
+            PlayerPrefs.SetString(tokenKey, token);
+            PlayerPrefs.SetString(playerIdKey, resolvedPlayerId);
+            PlayerPrefs.SetString(scopesKey, scopes != null ? string.Join(",", scopes) : string.Empty);
 
             if (name != null)
             {
-                PlayerName = name;
+                PlayerPrefs.SetString(nameKey, name);
             }
             else if (!samePlayer)
             {
-                PlayerName = string.Empty;
+                PlayerPrefs.SetString(nameKey, string.Empty);
             }
 
             PlayerPrefs.Save();
         }
 
+        /// <summary>Clears the session in use, leaving the other one alone.</summary>
         public static void Clear()
         {
-            PlayerPrefs.DeleteKey(TokenKey);
-            PlayerPrefs.DeleteKey(PlayerIdKey);
-            PlayerPrefs.DeleteKey(ScopesKey);
-            PlayerPrefs.DeleteKey(NameKey);
+            Delete(TokenKey, StudioTokenKey);
+            Delete(PlayerIdKey, StudioPlayerIdKey);
+            Delete(ScopesKey, StudioScopesKey);
+            Delete(NameKey, StudioNameKey);
             PlayerPrefs.Save();
         }
+
+        private static string Read(string deviceKey, string studioKey) =>
+            PlayerPrefs.GetString(UseStudioSession ? studioKey : deviceKey, string.Empty);
+
+        private static void Write(string deviceKey, string studioKey, string? value) =>
+            PlayerPrefs.SetString(UseStudioSession ? studioKey : deviceKey, value ?? string.Empty);
+
+        private static void Delete(string deviceKey, string studioKey) =>
+            PlayerPrefs.DeleteKey(UseStudioSession ? studioKey : deviceKey);
     }
 }

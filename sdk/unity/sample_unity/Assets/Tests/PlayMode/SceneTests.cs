@@ -76,7 +76,7 @@ public class SceneTests
         // The scene's Exoforge prefab calls DontDestroyOnLoad, so it outlives the unload. Leaving it
         // makes this test poison the next one: a second behaviour is destroyed by the
         // duplicate-instance guard and never becomes Current.
-        var host = ExoforgeBehaviour.Current;
+        var host = ExoforgeManager.Current;
         if (host != null)
         {
             Object.DestroyImmediate(host.gameObject);
@@ -86,7 +86,7 @@ public class SceneTests
         yield return null;
 
         LogAssert.ignoreFailingMessages = false;
-        Assert.IsNull(ExoforgeBehaviour.Current, "the scene's Exoforge host outlived the test");
+        Assert.IsNull(ExoforgeManager.Current, "the scene's Exoforge host outlived the test");
     }
 
     private static T? Find<T>() where T : Component =>

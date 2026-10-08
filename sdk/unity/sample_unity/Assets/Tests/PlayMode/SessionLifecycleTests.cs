@@ -9,7 +9,7 @@ using UnityEngine;
 using UnityEngine.TestTools;
 
 /// <summary>
-/// Session lifecycle for <see cref="ExoforgeBehaviour"/> and <see cref="ExoTokenStore"/>.
+/// Session lifecycle for <see cref="ExoforgeManager"/> and <see cref="ExoTokenStore"/>.
 ///
 /// Play mode, not edit mode: <c>Awake</c> does not run in the editor, so the behaviour is inert
 /// there and none of this is observable. <see cref="ExoforgeSampleCheck"/> covers the parts that
@@ -35,12 +35,12 @@ public class SessionLifecycleTests
     /// Creates a behaviour without letting <c>Awake</c> connect: an inactive GameObject defers
     /// Awake until it is activated, so the fields can be set first.
     /// </summary>
-    private ExoforgeBehaviour NewBehaviour(string? wsUrl)
+    private ExoforgeManager NewBehaviour(string? wsUrl)
     {
         _host = new GameObject("ExoforgeTestHost");
         _host.SetActive(false);
 
-        var behaviour = _host.AddComponent<ExoforgeBehaviour>();
+        var behaviour = _host.AddComponent<ExoforgeManager>();
 
         var so = new SerializedObject(behaviour);
         so.FindProperty("connectOnAwake").boolValue = false;
@@ -126,7 +126,7 @@ public class SessionLifecycleTests
         var behaviour = NewBehaviour("ws://127.0.0.1:1/ws");
         yield return null;
 
-        Assert.AreSame(behaviour, ExoforgeBehaviour.Current);
+        Assert.AreSame(behaviour, ExoforgeManager.Current);
 
         // The teardown disconnects, and ConnectAsync may have logged a failure if it got that far.
         LogAssert.ignoreFailingMessages = true;
@@ -134,12 +134,12 @@ public class SessionLifecycleTests
         _host = null;
         yield return null;
 
-        Assert.IsNull(ExoforgeBehaviour.Current,
+        Assert.IsNull(ExoforgeManager.Current,
             "a destroyed behaviour was still reachable as Current");
 
         Assert.Throws<InvalidOperationException>(() =>
         {
-            var _ = ExoforgeBehaviour.Instance;
+            var _ = ExoforgeManager.Instance;
         }, "Instance should report that no behaviour is in the scene, not hand back a destroyed one");
 
         LogAssert.ignoreFailingMessages = false;

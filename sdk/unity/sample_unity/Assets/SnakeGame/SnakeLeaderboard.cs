@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Text.Json;
 using System.Threading.Tasks;
 using Exoforge.Client;
 using Exoforge.Client.Unity;
@@ -8,22 +7,6 @@ using UnityEngine;
 
 namespace SnakeGame
 {
-    public readonly struct SnakeScoreRow
-    {
-        public SnakeScoreRow(string playerId, string name, long score, long length)
-        {
-            PlayerId = playerId;
-            Name = name;
-            Score = score;
-            Length = length;
-        }
-
-        public string PlayerId { get; }
-        public string Name { get; }
-        public long Score { get; }
-        public long Length { get; }
-    }
-
     // The only file in the sample that talks to Exoforge. Gameplay publishes RunEnded; this
     // component bridges it to the generated client. Delete it and Snake still runs.
     [DefaultExecutionOrder(-750)]
@@ -34,12 +17,11 @@ namespace SnakeGame
         [SerializeField] private int topN = 10;
 
         private const string Topic = "snake:leaderboard";
-        private const string EventName = "score_submitted";
 
-        private readonly List<SnakeScoreRow> _rows = new();
+        private readonly List<SnakeLeaderboardEntry> _rows = new();
         private ExoClient? _client;
 
-        public IReadOnlyList<SnakeScoreRow> Rows => _rows;
+        public IReadOnlyList<SnakeLeaderboardEntry> Rows => _rows;
         public string Status { get; private set; } = "not loaded";
         public bool IsBusy { get; private set; }
         public long PersonalBest { get; private set; }
@@ -63,7 +45,15 @@ namespace SnakeGame
             // This is what opens the socket. Everything else this sample does is request/response,
             // which goes over HTTP, and the connection is lazy: subscribing is the first thing that
             // actually needs realtime.
-            _ = SubscribeAsync();
+            _ = LoadAsync();
+        }
+
+        // Subscribe for live updates, then load the current board so the ranking is on screen
+        // before the first run ends.
+        private async Task LoadAsync()
+        {
+            await SubscribeAsync();
+            await RefreshAsync();
         }
 
         private void OnDisable()
@@ -84,7 +74,8 @@ namespace SnakeGame
                 // host that outlived everything and poisoned the next test.
                 _client = client;
 
-                client.OnAnyEvent += OnEvent;
+                // The generated client raises the typed event, so nothing here reads a JSON frame.
+                client.SnakeLeaderboard().OnScoreSubmitted += OnScoreSubmitted;
                 await client.SubscribeAsync(Topic);
 
                 IsSubscribed = true;
@@ -113,7 +104,7 @@ namespace SnakeGame
 
             try
             {
-                client.OnAnyEvent -= OnEvent;
+                client.SnakeLeaderboard().OnScoreSubmitted -= OnScoreSubmitted;
                 await client.UnsubscribeAsync(Topic);
             }
             catch (Exception)
@@ -125,19 +116,19 @@ namespace SnakeGame
         // A score landed on the board. Merged into the rows we already have rather than re-read: the
         // event carries what the board shows, and not having to ask is the whole point of subscribing.
         // The board's own refresh still resolves names live, so a rename is corrected there.
-        private void OnEvent(ExoEventFrame frame)
+        private void OnScoreSubmitted(SnakeLeaderboardScoreSubmittedEvent score)
         {
-            if (frame.Event != EventName) return;
+            LastEvent = $"{score.Name} {score.Score}";
 
-            var row = new SnakeScoreRow(
-                ReadString(frame.Payload, "player_id"),
-                ReadString(frame.Payload, "name"),
-                ReadLong(frame.Payload, "score"),
-                ReadLong(frame.Payload, "snake_length"));
+            if (string.IsNullOrEmpty(score.PlayerId)) return;
 
-            if (string.IsNullOrEmpty(row.PlayerId)) return;
-
-            LastEvent = $"{row.Name} {row.Score}";
+            var row = new SnakeLeaderboardEntry
+            {
+                PlayerId = score.PlayerId,
+                Name = score.Name,
+                Score = score.Score,
+                SnakeLength = score.SnakeLength
+            };
 
             int existing = _rows.FindIndex(r => r.PlayerId == row.PlayerId);
 
@@ -182,10 +173,10 @@ namespace SnakeGame
                 // raced with the SDK's own reconnect loop when the link had dropped.
                 var client = ExoforgeSDK.Client;
 
-                var best = await client.SnakeLeaderboard().SubmitScoreAsync(
+                // submit_score returns the caller's best, so the HUD needs no follow-up read.
+                PersonalBest = await client.SnakeLeaderboard().SubmitScoreAsync(
                     session.DisplayName, session.PlayerId, score, length);
 
-                PersonalBest = ReadLong(best);
                 Status = $"submitted {score} — personal best {PersonalBest}";
 
                 await RefreshAsync();
@@ -207,12 +198,14 @@ namespace SnakeGame
             try
             {
                 var client = ExoforgeSDK.Client;
-                var result = await client.SnakeLeaderboard().GetLeaderboardAsync(topN);
+                var entries = await client.SnakeLeaderboard().GetLeaderboardAsync(topN);
 
                 _rows.Clear();
-                _rows.AddRange(ParseRows(result));
+                if (entries != null) _rows.AddRange(entries);
 
-                Status = $"{_rows.Count} of top {topN} loaded";
+                Status = IsSubscribed
+                    ? $"{_rows.Count} of top {topN} · live"
+                    : $"{_rows.Count} of top {topN} loaded";
             }
             catch (Exception ex)
             {
@@ -220,37 +213,5 @@ namespace SnakeGame
                 Debug.LogWarning($"[Snake] could not load leaderboard: {ex.Message}");
             }
         }
-
-        // Tolerant on purpose: a row with a missing or oddly-typed field still shows up.
-        public static IReadOnlyList<SnakeScoreRow> ParseRows(JsonElement leaderboard)
-        {
-            var rows = new List<SnakeScoreRow>();
-
-            if (leaderboard.ValueKind != JsonValueKind.Array) return rows;
-
-            foreach (var row in leaderboard.EnumerateArray())
-            {
-                rows.Add(new SnakeScoreRow(
-                    ReadString(row, "player_id"),
-                    ReadString(row, "name"),
-                    ReadLong(row, "score"),
-                    ReadLong(row, "snake_length")));
-            }
-
-            return rows;
-        }
-
-        private static long ReadLong(JsonElement element) =>
-            element.ValueKind == JsonValueKind.Number ? element.GetInt64() : 0;
-
-        private static long ReadLong(JsonElement row, string property) =>
-            row.ValueKind == JsonValueKind.Object && row.TryGetProperty(property, out var value)
-                ? ReadLong(value)
-                : 0;
-
-        private static string ReadString(JsonElement row, string property) =>
-            row.ValueKind == JsonValueKind.Object && row.TryGetProperty(property, out var value)
-                ? value.GetString() ?? "?"
-                : "?";
     }
 }

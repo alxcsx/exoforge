@@ -69,7 +69,10 @@ public partial class ExoforgeControlCenter : EditorWindow
             {
                 _isConnected = true;
                 _connectionStatus = auth.PlayerId ?? "authenticated";
-                ExoTokenStore.SaveSession(ExoTokenStore.Token, auth.PlayerId, auth.Scopes);
+                // Stored as the Studio's session, not the device's: play mode reads it when
+                // ExoforgeManager's "use studio connection" flag is on, and the device's own session
+                // is left intact for when it is off.
+                ExoTokenStore.SaveStudioSession(ExoTokenStore.Token, auth.PlayerId, auth.Scopes);
 
                 ShowStatus($"Connected as {auth.PlayerId} to {ActiveWsUrl}.", MessageType.Info);
 
@@ -157,8 +160,7 @@ public partial class ExoforgeControlCenter : EditorWindow
                 return;
             }
 
-            ExoTokenStore.SaveSession(token, playerId);
-            ExoTokenStore.SaveSession(token, playerId);
+            ExoTokenStore.SaveStudioSession(token, playerId);
 
             // Keep the dev login for the next editor start.
             ExoforgeEditorConfig.LastLoginEmail = _loginEmail;
@@ -177,8 +179,7 @@ public partial class ExoforgeControlCenter : EditorWindow
 
     private async Task LogOutAsync()
     {
-        ExoTokenStore.Clear();
-        ExoTokenStore.Clear();
+        ExoTokenStore.ClearStudioSession();
         await DisconnectAsync();
         ShowStatus("Logged out and cleared stored credentials from EditorPrefs and PlayerPrefs.", MessageType.Info);
         Repaint();
@@ -358,7 +359,7 @@ public partial class ExoforgeControlCenter : EditorWindow
     private void RefreshLocalPlugins()
     {
         _localPlugins = new List<LocalPluginInfo>();
-        string pluginsDir = _workspace.PluginsPath;
+        string pluginsDir = Workspace.PluginsPath;
         if (!Directory.Exists(pluginsDir)) return;
 
         foreach (var dir in Directory.GetDirectories(pluginsDir))
@@ -386,11 +387,8 @@ public partial class ExoforgeControlCenter : EditorWindow
             }
             else
             {
-                string nativeBinary = Path.Combine(dir, name);
-                string nativeExe = nativeBinary + ".exe";
-
-                if (File.Exists(nativeBinary)) binaryPath = nativeBinary;
-                else if (File.Exists(nativeExe)) binaryPath = nativeExe;
+                // `exo plugin build` stages it under .exoforge/; the plugin root is the older layout.
+                binaryPath = ExoDeployer.StagedBinary(dir, name);
             }
 
             bool isBuilt = binaryPath != "" && File.Exists(binaryPath);

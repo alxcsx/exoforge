@@ -65,7 +65,7 @@ Built by `ExoforgeSampleSetup.SetUp`, never by hand.
 
 | Object | Component(s) | Role |
 | :--- | :--- | :--- |
-| `Exoforge` | `ExoforgeBehaviour` (prefab) | the runtime host. **Exactly one** — the setup deletes duplicates. |
+| `Exoforge` | `ExoforgeManager` (prefab) | the runtime host. **Exactly one** — the setup deletes duplicates. |
 | `Player` | `SnakePlayerController` | signs in, prompts for the name, activates `Gameplay` |
 | `Gameplay` | `SnakeGameController` | the game. Starts **inactive**. |
 | `Hud` | `SnakeGameView` + `SnakeLeaderboard` | everything on screen. Stays active. |

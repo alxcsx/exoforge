@@ -501,6 +501,36 @@ public class SnakeLeaderboardGetLeaderboardRequest
     public long Limit { get; set; } = default!;
 }
 
+/// <summary>Response model for snake_leaderboard.get_leaderboard action.</summary>
+public class SnakeLeaderboardEntry
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = default!;
+    [JsonPropertyName("player_id")]
+    public string PlayerId { get; set; } = default!;
+    [JsonPropertyName("score")]
+    public long Score { get; set; } = default!;
+    [JsonPropertyName("snake_length")]
+    public long SnakeLength { get; set; } = default!;
+    [JsonPropertyName("updated_at")]
+    public long UpdatedAt { get; set; } = default!;
+}
+
+/// <summary>Event payload for snake:leaderboard -> score_submitted.</summary>
+public class SnakeLeaderboardScoreSubmittedEvent
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = default!;
+    [JsonPropertyName("player_id")]
+    public string PlayerId { get; set; } = default!;
+    [JsonPropertyName("score")]
+    public long Score { get; set; } = default!;
+    [JsonPropertyName("snake_length")]
+    public long SnakeLength { get; set; } = default!;
+    [JsonPropertyName("improved")]
+    public bool Improved { get; set; } = default!;
+}
+
 /// <summary>Request payload for resource_store.migrate action.</summary>
 public class ResourceStoreMigrateRequest
 {
@@ -872,6 +902,13 @@ public class LldbConnectionLostEvent
     public long Timestamp { get; set; } = default!;
 }
 
+/// <summary>Request payload for background_change.echo action.</summary>
+public class BackgroundChangeEchoRequest
+{
+    [JsonPropertyName("value")]
+    public long Value { get; set; } = default!;
+}
+
 /// <summary>Request payload for dashboard.get_dashboard_mount action.</summary>
 public class DashboardGetDashboardMountRequest
 {
@@ -954,6 +991,10 @@ public static class ExoClientGeneratedExtensions
     public static LldbServiceClient Lldb(this ExoClient client) =>
         client.Services().Lldb;
 
+    /// <summary>Access the BackgroundChange service contract.</summary>
+    public static BackgroundChangeServiceClient BackgroundChange(this ExoClient client) =>
+        client.Services().BackgroundChange;
+
     /// <summary>Access the Dashboard service contract.</summary>
     public static DashboardServiceClient Dashboard(this ExoClient client) =>
         client.Services().Dashboard;
@@ -1005,6 +1046,9 @@ public class ExoforgeServicesHub
     private LldbServiceClient? _lldb;
     public LldbServiceClient Lldb => _lldb ??= new LldbServiceClient(_client);
 
+    private BackgroundChangeServiceClient? _background_change;
+    public BackgroundChangeServiceClient BackgroundChange => _background_change ??= new BackgroundChangeServiceClient(_client);
+
     private DashboardServiceClient? _dashboard;
     public DashboardServiceClient Dashboard => _dashboard ??= new DashboardServiceClient(_client);
 
@@ -1036,12 +1080,6 @@ public class AuthServiceClient
         return _client.SendActionAsync<AuthAuthenticateResponse>("auth", "authenticate", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
-    /// <summary>Authenticates a client credential or token.</summary>
-    public Task<JsonElement> AuthenticateAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("auth", "authenticate", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
     /// <summary>Authenticates an account with email and password.</summary>
     public Task<AuthLoginResponse> LoginAsync(string email, string password, CancellationToken cancellationToken = default)
     {
@@ -1057,12 +1095,6 @@ public class AuthServiceClient
     public Task<AuthLoginResponse> LoginAsync(AuthLoginRequest request, CancellationToken cancellationToken = default)
     {
         return _client.SendActionAsync<AuthLoginResponse>("auth", "login", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Authenticates an account with email and password.</summary>
-    public Task<JsonElement> LoginAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("auth", "login", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
     /// <summary>Verifies whether a player or user has the required authorization scope.</summary>
@@ -1081,12 +1113,6 @@ public class AuthServiceClient
     public Task<AuthVerifyScopeResponse> VerifyScopeAsync(AuthVerifyScopeRequest request, CancellationToken cancellationToken = default)
     {
         return _client.SendActionAsync<AuthVerifyScopeResponse>("auth", "verify_scope", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Verifies whether a player or user has the required authorization scope.</summary>
-    public Task<JsonElement> VerifyScopeAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("auth", "verify_scope", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
     /// <summary>Registers a new user account and profile in both auth and player_data.</summary>
@@ -1110,12 +1136,6 @@ public class AuthServiceClient
         return _client.SendActionAsync<AuthRegisterResponse>("auth", "register", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
-    /// <summary>Registers a new user account and profile in both auth and player_data.</summary>
-    public Task<JsonElement> RegisterAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("auth", "register", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
     /// <summary>Creates a new player or user account with authentication credentials.</summary>
     public Task<AuthCreatePlayerResponse> CreatePlayerAsync(JsonElement name, JsonElement userId, JsonElement email, JsonElement password, JsonElement playerId, JsonElement scopes, CancellationToken cancellationToken = default)
     {
@@ -1137,12 +1157,6 @@ public class AuthServiceClient
         return _client.SendActionAsync<AuthCreatePlayerResponse>("auth", "create_player", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
-    /// <summary>Creates a new player or user account with authentication credentials.</summary>
-    public Task<JsonElement> CreatePlayerAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("auth", "create_player", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
     /// <summary>Creates or resumes an anonymous player session.</summary>
     public Task<AuthAnonymousResponse> AnonymousAsync(JsonElement name, JsonElement playerId, CancellationToken cancellationToken = default)
     {
@@ -1160,12 +1174,6 @@ public class AuthServiceClient
         return _client.SendActionAsync<AuthAnonymousResponse>("auth", "anonymous", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
-    /// <summary>Creates or resumes an anonymous player session.</summary>
-    public Task<JsonElement> AnonymousAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("auth", "anonymous", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
     /// <summary>Sets the signed-in player's display name.</summary>
     public Task<AuthSetDisplayNameResponse> SetDisplayNameAsync(string name, JsonElement playerId, CancellationToken cancellationToken = default)
     {
@@ -1181,12 +1189,6 @@ public class AuthServiceClient
     public Task<AuthSetDisplayNameResponse> SetDisplayNameAsync(AuthSetDisplayNameRequest request, CancellationToken cancellationToken = default)
     {
         return _client.SendActionAsync<AuthSetDisplayNameResponse>("auth", "set_display_name", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Sets the signed-in player's display name.</summary>
-    public Task<JsonElement> SetDisplayNameAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("auth", "set_display_name", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
     /// <summary>Issues an authentication token for a user or player.</summary>
@@ -1207,12 +1209,6 @@ public class AuthServiceClient
         return _client.SendActionAsync<AuthIssueTokenResponse>("auth", "issue_token", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
-    /// <summary>Issues an authentication token for a user or player.</summary>
-    public Task<JsonElement> IssueTokenAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("auth", "issue_token", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
     /// <summary>Lists all registered user accounts and their assigned authorization scopes.</summary>
     public Task<AuthListUsersResponse> ListUsersAsync(JsonElement query, CancellationToken cancellationToken = default)
     {
@@ -1227,12 +1223,6 @@ public class AuthServiceClient
     public Task<AuthListUsersResponse> ListUsersAsync(AuthListUsersRequest request, CancellationToken cancellationToken = default)
     {
         return _client.SendActionAsync<AuthListUsersResponse>("auth", "list_users", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Lists all registered user accounts and their assigned authorization scopes.</summary>
-    public Task<JsonElement> ListUsersAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("auth", "list_users", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
     /// <summary>Resets the password for an existing account.</summary>
@@ -1251,12 +1241,6 @@ public class AuthServiceClient
     public Task<AuthResetPasswordResponse> ResetPasswordAsync(AuthResetPasswordRequest request, CancellationToken cancellationToken = default)
     {
         return _client.SendActionAsync<AuthResetPasswordResponse>("auth", "reset_password", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Resets the password for an existing account.</summary>
-    public Task<JsonElement> ResetPasswordAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("auth", "reset_password", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
     /// <summary>Updates authorization scopes/roles for a user account.</summary>
@@ -1278,12 +1262,6 @@ public class AuthServiceClient
         return _client.SendActionAsync<AuthUpdateUserRolesResponse>("auth", "update_user_roles", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
-    /// <summary>Updates authorization scopes/roles for a user account.</summary>
-    public Task<JsonElement> UpdateUserRolesAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("auth", "update_user_roles", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
     /// <summary>Deletes a user account and associated auth credentials.</summary>
     public Task<AuthDeleteUserResponse> DeleteUserAsync(JsonElement userId, JsonElement playerId, CancellationToken cancellationToken = default)
     {
@@ -1299,12 +1277,6 @@ public class AuthServiceClient
     public Task<AuthDeleteUserResponse> DeleteUserAsync(AuthDeleteUserRequest request, CancellationToken cancellationToken = default)
     {
         return _client.SendActionAsync<AuthDeleteUserResponse>("auth", "delete_user", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Deletes a user account and associated auth credentials.</summary>
-    public Task<JsonElement> DeleteUserAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("auth", "delete_user", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
 }
@@ -1359,12 +1331,6 @@ public class PlayerDataServiceClient
         return _client.SendActionAsync<PlayerDataGetPlayerResponse>("player_data", "get_player", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
-    /// <summary>Retrieves player profile record.</summary>
-    public Task<JsonElement> GetPlayerAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("player_data", "get_player", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
     /// <summary>Creates a player profile record, optionally linked to a user account.</summary>
     public Task<PlayerDataCreatePlayerResponse> CreatePlayerAsync(JsonElement profile, JsonElement userId, JsonElement playerId, CancellationToken cancellationToken = default)
     {
@@ -1383,12 +1349,6 @@ public class PlayerDataServiceClient
         return _client.SendActionAsync<PlayerDataCreatePlayerResponse>("player_data", "create_player", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
-    /// <summary>Creates a player profile record, optionally linked to a user account.</summary>
-    public Task<JsonElement> CreatePlayerAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("player_data", "create_player", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
     /// <summary>Deletes a player profile record.</summary>
     public Task<PlayerDataDeletePlayerResponse> DeletePlayerAsync(string playerId, CancellationToken cancellationToken = default)
     {
@@ -1403,12 +1363,6 @@ public class PlayerDataServiceClient
     public Task<PlayerDataDeletePlayerResponse> DeletePlayerAsync(PlayerDataDeletePlayerRequest request, CancellationToken cancellationToken = default)
     {
         return _client.SendActionAsync<PlayerDataDeletePlayerResponse>("player_data", "delete_player", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Deletes a player profile record.</summary>
-    public Task<JsonElement> DeletePlayerAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("player_data", "delete_player", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
     /// <summary>Unlinks user and marks player record as retained/orphaned for data retention policies.</summary>
@@ -1427,12 +1381,6 @@ public class PlayerDataServiceClient
         return _client.SendActionAsync<PlayerDataRetainPlayerResponse>("player_data", "retain_player", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
-    /// <summary>Unlinks user and marks player record as retained/orphaned for data retention policies.</summary>
-    public Task<JsonElement> RetainPlayerAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("player_data", "retain_player", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
     /// <summary>Lists all registered player profiles with optional filtering (all, valid, orphaned).</summary>
     public Task<PlayerDataListPlayersResponse> ListPlayersAsync(JsonElement filter, CancellationToken cancellationToken = default)
     {
@@ -1447,12 +1395,6 @@ public class PlayerDataServiceClient
     public Task<PlayerDataListPlayersResponse> ListPlayersAsync(PlayerDataListPlayersRequest request, CancellationToken cancellationToken = default)
     {
         return _client.SendActionAsync<PlayerDataListPlayersResponse>("player_data", "list_players", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Lists all registered player profiles with optional filtering (all, valid, orphaned).</summary>
-    public Task<JsonElement> ListPlayersAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("player_data", "list_players", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
     /// <summary>Updates player profile record.</summary>
@@ -1472,12 +1414,6 @@ public class PlayerDataServiceClient
         return _client.SendActionAsync<PlayerDataUpdatePlayerResponse>("player_data", "update_player", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
-    /// <summary>Updates player profile record.</summary>
-    public Task<JsonElement> UpdatePlayerAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("player_data", "update_player", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
     /// <summary>Retrieves a fine-grained key-value JSON state entry for a player.</summary>
     public Task<PlayerDataGetDataResponse> GetDataAsync(string key, string playerId, CancellationToken cancellationToken = default)
     {
@@ -1493,12 +1429,6 @@ public class PlayerDataServiceClient
     public Task<PlayerDataGetDataResponse> GetDataAsync(PlayerDataGetDataRequest request, CancellationToken cancellationToken = default)
     {
         return _client.SendActionAsync<PlayerDataGetDataResponse>("player_data", "get_data", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Retrieves a fine-grained key-value JSON state entry for a player.</summary>
-    public Task<JsonElement> GetDataAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("player_data", "get_data", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
     /// <summary>Sets a fine-grained key-value JSON state entry for a player.</summary>
@@ -1519,12 +1449,6 @@ public class PlayerDataServiceClient
         return _client.SendActionAsync<PlayerDataSetDataResponse>("player_data", "set_data", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
-    /// <summary>Sets a fine-grained key-value JSON state entry for a player.</summary>
-    public Task<JsonElement> SetDataAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("player_data", "set_data", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
     /// <summary>Deletes a fine-grained key-value JSON state entry for a player.</summary>
     public Task<PlayerDataDeleteDataResponse> DeleteDataAsync(string key, string playerId, CancellationToken cancellationToken = default)
     {
@@ -1542,12 +1466,6 @@ public class PlayerDataServiceClient
         return _client.SendActionAsync<PlayerDataDeleteDataResponse>("player_data", "delete_data", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
-    /// <summary>Deletes a fine-grained key-value JSON state entry for a player.</summary>
-    public Task<JsonElement> DeleteDataAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("player_data", "delete_data", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
     /// <summary>Retrieves all key-value state entries for a player as a map.</summary>
     public Task<PlayerDataGetAllDataResponse> GetAllDataAsync(string playerId, CancellationToken cancellationToken = default)
     {
@@ -1562,12 +1480,6 @@ public class PlayerDataServiceClient
     public Task<PlayerDataGetAllDataResponse> GetAllDataAsync(PlayerDataGetAllDataRequest request, CancellationToken cancellationToken = default)
     {
         return _client.SendActionAsync<PlayerDataGetAllDataResponse>("player_data", "get_all_data", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Retrieves all key-value state entries for a player as a map.</summary>
-    public Task<JsonElement> GetAllDataAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("player_data", "get_all_data", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
 }
@@ -1600,22 +1512,10 @@ public class WsServiceClient
         return _client.SendActionAsync<WsBroadcastResponse>("ws", "broadcast", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
-    /// <summary>Broadcasts a frame to an active WebSocket topic.</summary>
-    public Task<JsonElement> BroadcastAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("ws", "broadcast", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
     /// <summary>Retrieves current active WebSocket connection count.</summary>
-    public Task<JsonElement> ConnectionCountAsync(CancellationToken cancellationToken = default)
+    public Task<WsConnectionCountResponse> ConnectionCountAsync(CancellationToken cancellationToken = default)
     {
-        return _client.SendActionAsync<JsonElement>("ws", "connection_count", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Retrieves current active WebSocket connection count.</summary>
-    public Task<JsonElement> ConnectionCountAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("ws", "connection_count", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+        return _client.SendActionAsync<WsConnectionCountResponse>("ws", "connection_count", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
 }
@@ -1625,13 +1525,30 @@ public class SnakeLeaderboardServiceClient
 {
     private readonly ExoClient _client;
 
+    /// <summary>Fired when server emits score_submitted event.</summary>
+    public event Action<SnakeLeaderboardScoreSubmittedEvent>? OnScoreSubmitted;
+
     public SnakeLeaderboardServiceClient(ExoClient client)
     {
         _client = client ?? throw new ArgumentNullException(nameof(client));
+        _client.OnAnyEvent += HandleIncomingEvent;
     }
 
+    private void HandleIncomingEvent(ExoEventFrame evt)
+    {
+        if (evt.Event == "score_submitted" && OnScoreSubmitted != null)
+        {
+            var parsed = evt.DeserializePayload<SnakeLeaderboardScoreSubmittedEvent>();
+            if (parsed != null) OnScoreSubmitted.Invoke(parsed);
+        }
+    }
+
+    /// <summary>Subscribes to all events for snake_leaderboard on topic 'snake:leaderboard'.</summary>
+    public Task SubscribeAsync(string topic = "snake:leaderboard", CancellationToken cancellationToken = default) =>
+        _client.SubscribeAsync(topic, cancellationToken);
+
     /// <summary>Executes submit_score action with typed arguments.</summary>
-    public Task<JsonElement> SubmitScoreAsync(string name, string playerId, long score, long snakeLength, CancellationToken cancellationToken = default)
+    public Task<long> SubmitScoreAsync(string name, string playerId, long score, long snakeLength, CancellationToken cancellationToken = default)
     {
         var req = new SnakeLeaderboardSubmitScoreRequest
         {
@@ -1644,19 +1561,13 @@ public class SnakeLeaderboardServiceClient
     }
 
     /// <summary>Executes submit_score action with a typed request DTO.</summary>
-    public Task<JsonElement> SubmitScoreAsync(SnakeLeaderboardSubmitScoreRequest request, CancellationToken cancellationToken = default)
+    public Task<long> SubmitScoreAsync(SnakeLeaderboardSubmitScoreRequest request, CancellationToken cancellationToken = default)
     {
-        return _client.SendActionAsync<JsonElement>("snake_leaderboard", "submit_score", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Executes submit_score action.</summary>
-    public Task<JsonElement> SubmitScoreAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("snake_leaderboard", "submit_score", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+        return _client.SendActionAsync<long>("snake_leaderboard", "submit_score", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
     /// <summary>Executes get_leaderboard action with typed arguments.</summary>
-    public Task<JsonElement> GetLeaderboardAsync(long limit, CancellationToken cancellationToken = default)
+    public Task<List<SnakeLeaderboardEntry>> GetLeaderboardAsync(long limit, CancellationToken cancellationToken = default)
     {
         var req = new SnakeLeaderboardGetLeaderboardRequest
         {
@@ -1666,15 +1577,9 @@ public class SnakeLeaderboardServiceClient
     }
 
     /// <summary>Executes get_leaderboard action with a typed request DTO.</summary>
-    public Task<JsonElement> GetLeaderboardAsync(SnakeLeaderboardGetLeaderboardRequest request, CancellationToken cancellationToken = default)
+    public Task<List<SnakeLeaderboardEntry>> GetLeaderboardAsync(SnakeLeaderboardGetLeaderboardRequest request, CancellationToken cancellationToken = default)
     {
-        return _client.SendActionAsync<JsonElement>("snake_leaderboard", "get_leaderboard", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Executes get_leaderboard action.</summary>
-    public Task<JsonElement> GetLeaderboardAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("snake_leaderboard", "get_leaderboard", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+        return _client.SendActionAsync<List<SnakeLeaderboardEntry>>("snake_leaderboard", "get_leaderboard", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
 }
@@ -1705,12 +1610,6 @@ public class ResourceStoreServiceClient
         return _client.SendActionAsync<ResourceStoreMigrateResponse>("resource_store", "migrate", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
-    /// <summary>Creates/updates the tables backing all declared resources (additive migrations).</summary>
-    public Task<JsonElement> MigrateAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("resource_store", "migrate", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
     /// <summary>Lists rows for a resource with filtering, sorting, and pagination.</summary>
     public Task<ResourceStoreListResponse> ListAsync(JsonElement offset, JsonElement sort, JsonElement filter, JsonElement search, JsonElement limit, string resource, CancellationToken cancellationToken = default)
     {
@@ -1732,12 +1631,6 @@ public class ResourceStoreServiceClient
         return _client.SendActionAsync<ResourceStoreListResponse>("resource_store", "list", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
-    /// <summary>Lists rows for a resource with filtering, sorting, and pagination.</summary>
-    public Task<JsonElement> ListAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("resource_store", "list", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
     /// <summary>Fetches one row by primary key.</summary>
     public Task<ResourceStoreGetResponse> GetAsync(JsonElement id, string resource, CancellationToken cancellationToken = default)
     {
@@ -1755,12 +1648,6 @@ public class ResourceStoreServiceClient
         return _client.SendActionAsync<ResourceStoreGetResponse>("resource_store", "get", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
-    /// <summary>Fetches one row by primary key.</summary>
-    public Task<JsonElement> GetAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("resource_store", "get", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
     /// <summary>Creates a row.</summary>
     public Task<ResourceStoreCreateResponse> CreateAsync(JsonElement attributes, string resource, CancellationToken cancellationToken = default)
     {
@@ -1776,12 +1663,6 @@ public class ResourceStoreServiceClient
     public Task<ResourceStoreCreateResponse> CreateAsync(ResourceStoreCreateRequest request, CancellationToken cancellationToken = default)
     {
         return _client.SendActionAsync<ResourceStoreCreateResponse>("resource_store", "create", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Creates a row.</summary>
-    public Task<JsonElement> CreateAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("resource_store", "create", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
     /// <summary>Updates a row by primary key.</summary>
@@ -1802,12 +1683,6 @@ public class ResourceStoreServiceClient
         return _client.SendActionAsync<ResourceStoreUpdateResponse>("resource_store", "update", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
-    /// <summary>Updates a row by primary key.</summary>
-    public Task<JsonElement> UpdateAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("resource_store", "update", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
     /// <summary>Deletes a row by primary key.</summary>
     public Task<ResourceStoreDeleteResponse> DeleteAsync(JsonElement id, string resource, CancellationToken cancellationToken = default)
     {
@@ -1825,12 +1700,6 @@ public class ResourceStoreServiceClient
         return _client.SendActionAsync<ResourceStoreDeleteResponse>("resource_store", "delete", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
-    /// <summary>Deletes a row by primary key.</summary>
-    public Task<JsonElement> DeleteAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("resource_store", "delete", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
     /// <summary>Inserts or updates a row on conflict.</summary>
     public Task<ResourceStoreUpsertResponse> UpsertAsync(JsonElement attributes, string resource, CancellationToken cancellationToken = default)
     {
@@ -1846,12 +1715,6 @@ public class ResourceStoreServiceClient
     public Task<ResourceStoreUpsertResponse> UpsertAsync(ResourceStoreUpsertRequest request, CancellationToken cancellationToken = default)
     {
         return _client.SendActionAsync<ResourceStoreUpsertResponse>("resource_store", "upsert", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Inserts or updates a row on conflict.</summary>
-    public Task<JsonElement> UpsertAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("resource_store", "upsert", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
 }
@@ -1884,19 +1747,13 @@ public class SampleWasmServiceClient
         _client.SubscribeAsync(topic, cancellationToken);
 
     /// <summary>Executes ping action.</summary>
-    public Task<JsonElement> PingAsync(CancellationToken cancellationToken = default)
+    public Task<long> PingAsync(CancellationToken cancellationToken = default)
     {
-        return _client.SendActionAsync<JsonElement>("sample_wasm", "ping", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Executes ping action.</summary>
-    public Task<JsonElement> PingAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("sample_wasm", "ping", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+        return _client.SendActionAsync<long>("sample_wasm", "ping", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
     /// <summary>Executes increment action with typed arguments.</summary>
-    public Task<JsonElement> IncrementAsync(long counterId, long amount, CancellationToken cancellationToken = default)
+    public Task<long> IncrementAsync(long counterId, long amount, CancellationToken cancellationToken = default)
     {
         var req = new SampleWasmIncrementRequest
         {
@@ -1907,19 +1764,13 @@ public class SampleWasmServiceClient
     }
 
     /// <summary>Executes increment action with a typed request DTO.</summary>
-    public Task<JsonElement> IncrementAsync(SampleWasmIncrementRequest request, CancellationToken cancellationToken = default)
+    public Task<long> IncrementAsync(SampleWasmIncrementRequest request, CancellationToken cancellationToken = default)
     {
-        return _client.SendActionAsync<JsonElement>("sample_wasm", "increment", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Executes increment action.</summary>
-    public Task<JsonElement> IncrementAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("sample_wasm", "increment", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+        return _client.SendActionAsync<long>("sample_wasm", "increment", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
     /// <summary>Executes echo action with typed arguments.</summary>
-    public Task<JsonElement> EchoAsync(long value, CancellationToken cancellationToken = default)
+    public Task<long> EchoAsync(long value, CancellationToken cancellationToken = default)
     {
         var req = new SampleWasmEchoRequest
         {
@@ -1929,15 +1780,9 @@ public class SampleWasmServiceClient
     }
 
     /// <summary>Executes echo action with a typed request DTO.</summary>
-    public Task<JsonElement> EchoAsync(SampleWasmEchoRequest request, CancellationToken cancellationToken = default)
+    public Task<long> EchoAsync(SampleWasmEchoRequest request, CancellationToken cancellationToken = default)
     {
-        return _client.SendActionAsync<JsonElement>("sample_wasm", "echo", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Executes echo action.</summary>
-    public Task<JsonElement> EchoAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("sample_wasm", "echo", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+        return _client.SendActionAsync<long>("sample_wasm", "echo", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
 }
@@ -1968,22 +1813,10 @@ public class DashboardViewServiceClient
         return _client.SendActionAsync<DashboardViewResolveViewResponse>("dashboard_view", "resolve_view", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
-    /// <summary>Resolves the LiveView component module for a given service or extension id.</summary>
-    public Task<JsonElement> ResolveViewAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("dashboard_view", "resolve_view", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
     /// <summary>Lists all registered custom dashboard view modules.</summary>
-    public Task<JsonElement> ListViewsAsync(CancellationToken cancellationToken = default)
+    public Task<DashboardViewListViewsResponse> ListViewsAsync(CancellationToken cancellationToken = default)
     {
-        return _client.SendActionAsync<JsonElement>("dashboard_view", "list_views", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Lists all registered custom dashboard view modules.</summary>
-    public Task<JsonElement> ListViewsAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("dashboard_view", "list_views", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+        return _client.SendActionAsync<DashboardViewListViewsResponse>("dashboard_view", "list_views", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
     /// <summary>Retrieves dashboard mount specification: {:live, Module} | {:hook, config} | {:iframe, config}</summary>
@@ -2002,12 +1835,6 @@ public class DashboardViewServiceClient
         return _client.SendActionAsync<DashboardViewGetDashboardMountResponse>("dashboard_view", "get_dashboard_mount", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
-    /// <summary>Retrieves dashboard mount specification: {:live, Module} | {:hook, config} | {:iframe, config}</summary>
-    public Task<JsonElement> GetDashboardMountAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("dashboard_view", "get_dashboard_mount", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
     /// <summary>Retrieves data payload for hydrating the dashboard view.</summary>
     public Task<DashboardViewGetDashboardDataResponse> GetDashboardDataAsync(JsonElement viewId, CancellationToken cancellationToken = default)
     {
@@ -2024,12 +1851,6 @@ public class DashboardViewServiceClient
         return _client.SendActionAsync<DashboardViewGetDashboardDataResponse>("dashboard_view", "get_dashboard_data", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
-    /// <summary>Retrieves data payload for hydrating the dashboard view.</summary>
-    public Task<JsonElement> GetDashboardDataAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("dashboard_view", "get_dashboard_data", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
 }
 
 /// <summary>Client interface for the http service.</summary>
@@ -2043,15 +1864,9 @@ public class HttpServiceClient
     }
 
     /// <summary>Returns HTTP server status and registered route summaries.</summary>
-    public Task<JsonElement> StatusAsync(CancellationToken cancellationToken = default)
+    public Task<HttpStatusResponse> StatusAsync(CancellationToken cancellationToken = default)
     {
-        return _client.SendActionAsync<JsonElement>("http", "status", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Returns HTTP server status and registered route summaries.</summary>
-    public Task<JsonElement> StatusAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("http", "status", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+        return _client.SendActionAsync<HttpStatusResponse>("http", "status", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
 }
@@ -2067,15 +1882,9 @@ public class PluginManagerServiceClient
     }
 
     /// <summary>Lists all registered plugins with their metadata and contracts.</summary>
-    public Task<JsonElement> ListPluginsAsync(CancellationToken cancellationToken = default)
+    public Task<PluginManagerListPluginsResponse> ListPluginsAsync(CancellationToken cancellationToken = default)
     {
-        return _client.SendActionAsync<JsonElement>("plugin_manager", "list_plugins", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Lists all registered plugins with their metadata and contracts.</summary>
-    public Task<JsonElement> ListPluginsAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("plugin_manager", "list_plugins", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+        return _client.SendActionAsync<PluginManagerListPluginsResponse>("plugin_manager", "list_plugins", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
     /// <summary>Retrieves details and contract metadata for a single plugin.</summary>
@@ -2094,22 +1903,10 @@ public class PluginManagerServiceClient
         return _client.SendActionAsync<PluginManagerGetPluginResponse>("plugin_manager", "get_plugin", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
-    /// <summary>Retrieves details and contract metadata for a single plugin.</summary>
-    public Task<JsonElement> GetPluginAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("plugin_manager", "get_plugin", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
     /// <summary>Retrieves runtime node health, memory, and cluster stats.</summary>
-    public Task<JsonElement> GetSystemInfoAsync(CancellationToken cancellationToken = default)
+    public Task<PluginManagerGetSystemInfoResponse> GetSystemInfoAsync(CancellationToken cancellationToken = default)
     {
-        return _client.SendActionAsync<JsonElement>("plugin_manager", "get_system_info", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Retrieves runtime node health, memory, and cluster stats.</summary>
-    public Task<JsonElement> GetSystemInfoAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("plugin_manager", "get_system_info", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+        return _client.SendActionAsync<PluginManagerGetSystemInfoResponse>("plugin_manager", "get_system_info", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
     /// <summary>Uploads and installs a new plugin (e.g. C# WASM package).</summary>
@@ -2130,12 +1927,6 @@ public class PluginManagerServiceClient
         return _client.SendActionAsync<PluginManagerUploadPluginResponse>("plugin_manager", "upload_plugin", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
-    /// <summary>Uploads and installs a new plugin (e.g. C# WASM package).</summary>
-    public Task<JsonElement> UploadPluginAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("plugin_manager", "upload_plugin", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
     /// <summary>Removes an installed plugin.</summary>
     public Task<PluginManagerRemovePluginResponse> RemovePluginAsync(string id, CancellationToken cancellationToken = default)
     {
@@ -2152,22 +1943,10 @@ public class PluginManagerServiceClient
         return _client.SendActionAsync<PluginManagerRemovePluginResponse>("plugin_manager", "remove_plugin", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
-    /// <summary>Removes an installed plugin.</summary>
-    public Task<JsonElement> RemovePluginAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("plugin_manager", "remove_plugin", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
     /// <summary>Triggers a system re-index and reload of all plugins.</summary>
-    public Task<JsonElement> RestartSystemAsync(CancellationToken cancellationToken = default)
+    public Task<PluginManagerRestartSystemResponse> RestartSystemAsync(CancellationToken cancellationToken = default)
     {
-        return _client.SendActionAsync<JsonElement>("plugin_manager", "restart_system", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Triggers a system re-index and reload of all plugins.</summary>
-    public Task<JsonElement> RestartSystemAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("plugin_manager", "restart_system", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+        return _client.SendActionAsync<PluginManagerRestartSystemResponse>("plugin_manager", "restart_system", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
     /// <summary>Returns the most recent log lines a plugin emitted. Plugin output otherwise only reaches the server's Logger, which a developer working in Unity cannot see. Lines are held in memory and capped, so this is "what did my plugin just do?".</summary>
@@ -2187,12 +1966,6 @@ public class PluginManagerServiceClient
         return _client.SendActionAsync<PluginManagerLogsResponse>("plugin_manager", "logs", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
-    /// <summary>Returns the most recent log lines a plugin emitted. Plugin output otherwise only reaches the server's Logger, which a developer working in Unity cannot see. Lines are held in memory and capped, so this is "what did my plugin just do?".</summary>
-    public Task<JsonElement> LogsAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("plugin_manager", "logs", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
     /// <summary>Re-boots an installed plugin from its staged files, without re-uploading it.</summary>
     public Task<PluginManagerReloadPluginResponse> ReloadPluginAsync(string id, CancellationToken cancellationToken = default)
     {
@@ -2209,22 +1982,10 @@ public class PluginManagerServiceClient
         return _client.SendActionAsync<PluginManagerReloadPluginResponse>("plugin_manager", "reload_plugin", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
-    /// <summary>Re-boots an installed plugin from its staged files, without re-uploading it.</summary>
-    public Task<JsonElement> ReloadPluginAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("plugin_manager", "reload_plugin", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
     /// <summary>Exports the complete catalog of plugins and contracts for external tools (CLI/Unity).</summary>
-    public Task<JsonElement> ExportPluginInfoAsync(CancellationToken cancellationToken = default)
+    public Task<PluginManagerExportPluginInfoResponse> ExportPluginInfoAsync(CancellationToken cancellationToken = default)
     {
-        return _client.SendActionAsync<JsonElement>("plugin_manager", "export_plugin_info", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Exports the complete catalog of plugins and contracts for external tools (CLI/Unity).</summary>
-    public Task<JsonElement> ExportPluginInfoAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("plugin_manager", "export_plugin_info", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+        return _client.SendActionAsync<PluginManagerExportPluginInfoResponse>("plugin_manager", "export_plugin_info", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
 }
@@ -2255,12 +2016,6 @@ public class DatabaseServiceClient
     public Task<DatabaseExecuteResponse> ExecuteAsync(DatabaseExecuteRequest request, CancellationToken cancellationToken = default)
     {
         return _client.SendActionAsync<DatabaseExecuteResponse>("database", "execute", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Executes a driver-agnostic query or data operation.</summary>
-    public Task<JsonElement> ExecuteAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("database", "execute", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
 }
@@ -2308,22 +2063,44 @@ public class LldbServiceClient
         return _client.SendActionAsync<LldbConnectionConfigResponse>("lldb", "connection_config", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
-    /// <summary>Retrieves namespaced database connection details.</summary>
-    public Task<JsonElement> ConnectionConfigAsync(object? payload = null, CancellationToken cancellationToken = default)
+    /// <summary>Performs a low-level ping to verify the database is reachable.</summary>
+    public Task<LldbHealthCheckResponse> HealthCheckAsync(CancellationToken cancellationToken = default)
     {
-        return _client.SendActionAsync<JsonElement>("lldb", "connection_config", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+        return _client.SendActionAsync<LldbHealthCheckResponse>("lldb", "health_check", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
-    /// <summary>Performs a low-level ping to verify the database is reachable.</summary>
-    public Task<JsonElement> HealthCheckAsync(CancellationToken cancellationToken = default)
+}
+
+/// <summary>Client interface for the background_change service.</summary>
+public class BackgroundChangeServiceClient
+{
+    private readonly ExoClient _client;
+
+    public BackgroundChangeServiceClient(ExoClient client)
     {
-        return _client.SendActionAsync<JsonElement>("lldb", "health_check", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+        _client = client ?? throw new ArgumentNullException(nameof(client));
     }
 
-    /// <summary>Performs a low-level ping to verify the database is reachable.</summary>
-    public Task<JsonElement> HealthCheckAsync(object? payload = null, CancellationToken cancellationToken = default)
+    /// <summary>Executes get_color action.</summary>
+    public Task<string> GetColorAsync(CancellationToken cancellationToken = default)
     {
-        return _client.SendActionAsync<JsonElement>("lldb", "health_check", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+        return _client.SendActionAsync<string>("background_change", "get_color", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Executes echo action with typed arguments.</summary>
+    public Task<long> EchoAsync(long value, CancellationToken cancellationToken = default)
+    {
+        var req = new BackgroundChangeEchoRequest
+        {
+            Value = value,
+        };
+        return EchoAsync(req, cancellationToken);
+    }
+
+    /// <summary>Executes echo action with a typed request DTO.</summary>
+    public Task<long> EchoAsync(BackgroundChangeEchoRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<long>("background_change", "echo", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
 }
@@ -2354,12 +2131,6 @@ public class DashboardServiceClient
         return _client.SendActionAsync<DashboardGetDashboardMountResponse>("dashboard", "get_dashboard_mount", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
-    /// <summary>Retrieves dashboard mount specification: {:live, Module} | {:hook, config} | {:iframe, config}</summary>
-    public Task<JsonElement> GetDashboardMountAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("dashboard", "get_dashboard_mount", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
     /// <summary>Retrieves data payload for hydrating the dashboard view.</summary>
     public Task<DashboardGetDashboardDataResponse> GetDashboardDataAsync(JsonElement viewId, CancellationToken cancellationToken = default)
     {
@@ -2374,12 +2145,6 @@ public class DashboardServiceClient
     public Task<DashboardGetDashboardDataResponse> GetDashboardDataAsync(DashboardGetDashboardDataRequest request, CancellationToken cancellationToken = default)
     {
         return _client.SendActionAsync<DashboardGetDashboardDataResponse>("dashboard", "get_dashboard_data", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Retrieves data payload for hydrating the dashboard view.</summary>
-    public Task<JsonElement> GetDashboardDataAsync(object? payload = null, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<JsonElement>("dashboard", "get_dashboard_data", payload, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
 }

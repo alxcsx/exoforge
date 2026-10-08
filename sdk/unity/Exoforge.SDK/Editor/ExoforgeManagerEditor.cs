@@ -1,4 +1,3 @@
-#if UNITY_EDITOR
 using UnityEditor;
 using UnityEngine;
 using Exoforge.Client;
@@ -6,12 +5,12 @@ using Exoforge.Client.Unity;
 
 namespace Exoforge.Unity.Editor;
 
-[CustomEditor(typeof(ExoforgeBehaviour))]
-public class ExoforgeBehaviourEditor : UnityEditor.Editor
+[CustomEditor(typeof(ExoforgeManager))]
+public class ExoforgeManagerEditor : UnityEditor.Editor
 {
     public override void OnInspectorGUI()
     {
-        var behaviour = (ExoforgeBehaviour)target;
+        var behaviour = (ExoforgeManager)target;
 
         // Custom Header Status Banner
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
@@ -76,4 +75,3 @@ public class ExoforgeBehaviourEditor : UnityEditor.Editor
         EditorGUILayout.EndVertical();
     }
 }
-#endif

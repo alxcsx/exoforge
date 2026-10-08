@@ -7,7 +7,7 @@ namespace Exoforge.Plugins.SnakeLeaderboard;
 [ExoResource("snake_scores", PrimaryKey = "player_id", DrawerTabs = new[] { "overview", "attributes" })]
 public record SnakeScoreRecord
 {
-    [ExoColumn(Label = "Player ID", Sortable = true, Filterable = true)]
+    [ExoColumn(Label = "Player ID", Sortable = true, Filterable = true, Role = "user_id")]
     public string PlayerId { get; init; } = "";
 
     [ExoColumn(Label = "High Score", Sortable = true)]

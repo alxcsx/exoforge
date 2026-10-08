@@ -24,6 +24,8 @@ public partial class ExoforgeControlCenter : EditorWindow
 
     private void DrawLiveEvents()
     {
+        if (DrawClusterGate()) return;
+
         EditorGUILayout.BeginHorizontal();
         EditorGUILayout.LabelField($"Live Broadcast Events ({_eventLog.Count})", EditorStyles.boldLabel);
 

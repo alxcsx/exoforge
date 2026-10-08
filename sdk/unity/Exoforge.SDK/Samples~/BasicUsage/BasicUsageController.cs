@@ -15,7 +15,7 @@ namespace Exoforge.Unity.Samples;
 /// <summary>
 /// Minimal sample showing the standard Exoforge integration:
 /// - The cluster connection is owned by the <c>Exoforge</c> prefab
-///   (<see cref="ExoforgeBehaviour"/>), which resolves settings from the workspace
+///   (<see cref="ExoforgeManager"/>), which resolves settings from the workspace
 ///   <c>exoforge.json</c>. Gameplay scripts contain no URLs, tokens, or session code.
 /// - Dispatches actions to a deployed WASM plugin.
 /// - Receives real-time event broadcasts on the Unity main thread.
@@ -38,7 +38,7 @@ public class BasicUsageController : MonoBehaviour
         try
         {
             // Everything connection-related is handled by the Exoforge prefab.
-            _client = await ExoforgeBehaviour.Instance.GetClientAsync();
+            _client = await ExoforgeManager.Instance.GetClientAsync();
 
             _client.OnAnyEvent += HandleEvent;
             await _client.SubscribeAsync("sample:events");

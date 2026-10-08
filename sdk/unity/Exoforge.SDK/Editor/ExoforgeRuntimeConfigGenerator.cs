@@ -1,4 +1,3 @@
-#if UNITY_EDITOR
 using System.IO;
 using Exoforge.Client.Unity;
 using Exoforge.Management;
@@ -53,4 +52,3 @@ public static class ExoforgeRuntimeConfigGenerator
         return matches.Length > 0 ? matches[0] : null;
     }
 }
-#endif

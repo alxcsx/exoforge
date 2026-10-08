@@ -51,13 +51,13 @@ public class LiveClusterTests
         // Tear down the host ExoforgeSDK created on demand. Leaving it alive makes this test poison
         // the next one: a second behaviour is destroyed by the duplicate-instance guard, so the
         // lifecycle test would never see its own become Current.
-        var host = ExoforgeBehaviour.Current;
+        var host = ExoforgeManager.Current;
         if (host != null)
         {
             UnityEngine.Object.DestroyImmediate(host.gameObject);
         }
 
-        Assert.IsNull(ExoforgeBehaviour.Current, "the host outlived the test");
+        Assert.IsNull(ExoforgeManager.Current, "the host outlived the test");
         Assert.GreaterOrEqual(work.Result, 100, "the server reported a best score below the run");
     }
 
@@ -83,35 +83,33 @@ public class LiveClusterTests
         long score = 100 + new System.Random().Next(1, 800);
         var board = ExoforgeSDK.Client.SnakeLeaderboard();
 
-        JsonElement best = await board.SubmitScoreAsync(session.DisplayName, session.PlayerId, score, 7);
+        // Both returns are typed now, so the test reads them instead of probing JSON.
+        long best = await board.SubmitScoreAsync(session.DisplayName, session.PlayerId, score, 7);
+        Assert.GreaterOrEqual(best, score, "the server reported a best below the run just sent");
 
-        Assert.AreEqual(JsonValueKind.Number, best.ValueKind, "submit_score did not return the best score");
-        Assert.GreaterOrEqual(best.GetInt64(), score, "the server reported a best below the run just sent");
-
-        JsonElement ranking = await board.GetLeaderboardAsync(10);
-        Assert.AreEqual(JsonValueKind.Array, ranking.ValueKind, "get_leaderboard did not return an array");
+        var ranking = await board.GetLeaderboardAsync(10);
+        Assert.IsNotNull(ranking, "get_leaderboard returned nothing");
 
         bool found = false;
 
-        foreach (var row in ranking.EnumerateArray())
+        foreach (var row in ranking)
         {
-            if (row.TryGetProperty("player_id", out var id) && id.GetString() == session.PlayerId)
+            if (row.PlayerId == session.PlayerId)
             {
                 found = true;
 
                 // Not the name: the board is shared and its database persists across runs, and another
                 // test renames this same device account, so a specific name is order-dependent. That
                 // the name was resolved at all is the thing under test.
-                string name = row.GetProperty("name").GetString() ?? "";
-                Assert.IsNotEmpty(name, "the board row has no name");
-                Assert.AreNotEqual(session.PlayerId, name, "the name was not resolved, it fell back to the id");
+                Assert.IsNotEmpty(row.Name, "the board row has no name");
+                Assert.AreNotEqual(session.PlayerId, row.Name, "the name was not resolved, it fell back to the id");
             }
         }
 
         Assert.IsTrue(found, "this player is missing from the board they just submitted to");
 
         ExoforgeSDK.Auth.LogoutAndForgetDevice();
-        return best.GetInt64();
+        return best;
     }
 
     /// <summary>
@@ -200,19 +198,19 @@ public class LiveClusterTests
 
         // Destroy here rather than relying on the finally, so the assertion means something: the
         // finally is the safety net for a failure above this line.
-        var sceneHost = ExoforgeBehaviour.Current;
+        var sceneHost = ExoforgeManager.Current;
         if (sceneHost != null)
         {
             UnityEngine.Object.DestroyImmediate(sceneHost.gameObject);
         }
 
-        Assert.IsNull(ExoforgeBehaviour.Current, "the scene's Exoforge host outlived the test");
+        Assert.IsNull(ExoforgeManager.Current, "the scene's Exoforge host outlived the test");
         }
         finally
         {
             // No yield here - an iterator cannot resume in a finally - so the unload completes on the
             // runner's next frame. The destroy is immediate, which is what the next test depends on.
-            var host = ExoforgeBehaviour.Current;
+            var host = ExoforgeManager.Current;
             if (host != null)
             {
                 UnityEngine.Object.DestroyImmediate(host.gameObject);
@@ -303,7 +301,7 @@ public class LiveClusterTests
         }
         finally
         {
-            var host = ExoforgeBehaviour.Current;
+            var host = ExoforgeManager.Current;
             if (host != null)
             {
                 UnityEngine.Object.DestroyImmediate(host.gameObject);

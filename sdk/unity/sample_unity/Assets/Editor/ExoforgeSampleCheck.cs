@@ -2,7 +2,6 @@ using System;
 using System.IO;
 using System.Linq;
 using Exoforge.Unity.Editor;
-using System.Text.Json;
 using SnakeGame;
 using UnityEditor;
 using UnityEngine;
@@ -29,7 +28,6 @@ public static class ExoforgeSampleCheck
         _failures = 0;
 
         CheckBoardPixels();
-        CheckLeaderboardParsing();
         CheckPluginToolchain();
 
         if (_failures == 0)
@@ -49,28 +47,16 @@ public static class ExoforgeSampleCheck
     /// <c>x</c>/<c>y</c> or an off-by-one row stride — invisible until you look at the board.
     /// </summary>
     /// <summary>
-    /// The Control Center builds plugins out of process, so the generator has to travel with the
-    /// package. This resolved to null after M29 moved the generator into the dotnet project and
-    /// nothing noticed, because nothing exercised the editor's resolution: the CLI finds it beside
-    /// its own assembly and clean-build goes through the CLI, so both kept passing while Build &amp;
-    /// Deploy failed with "the SDK's manifest generator is missing".
+    /// The Control Center builds plugins out of process, so the source generator has to travel with
+    /// the package - the plugin's own compile is what writes manifest.exs. This resolved to null
+    /// once before and nothing noticed, because nothing exercised the editor's resolution.
     /// </summary>
     private static void CheckPluginToolchain()
     {
-        string? generator = ExoforgeEditorConfig.ManifestGenPath;
+        string? generator = ExoforgeEditorConfig.GeneratorPath;
 
         Expect(generator != null,
-            "the package does not carry the manifest generator - run 'just build-unity-sdk'");
-
-        if (generator == null)
-        {
-            return;
-        }
-
-        Expect(File.Exists(Path.Combine(generator, "ManifestGen.csproj")),
-            "the shipped manifest generator has no project file");
-        Expect(File.Exists(Path.Combine(generator, "Program.cs")),
-            "the shipped manifest generator has no source");
+            "the package does not carry the source generator - run 'just build-unity-sdk'");
     }
 
     /// <summary>
@@ -129,24 +115,6 @@ public static class ExoforgeSampleCheck
         }
     }
 
-
-    private static void CheckLeaderboardParsing()
-    {
-        var rows = SnakeLeaderboard.ParseRows(JsonDocument.Parse(
-            """[{"name":"Viper","score":120,"snake_length":7},{"name":"Ada","score":90,"snake_length":5},{"score":10}]""")
-            .RootElement);
-
-        Expect(rows.Count == 3, $"parsed {rows.Count} rows, expected 3");
-        Expect(rows[0].Name == "Viper" && rows[0].Score == 120 && rows[0].Length == 7, "row 0 parsed wrong");
-        Expect(rows[1].Name == "Ada" && rows[1].Score == 90 && rows[1].Length == 5, "row 1 parsed wrong");
-
-        // A row missing fields still shows up, with placeholders instead of an exception.
-        Expect(rows[2].Name == "?" && rows[2].Score == 10 && rows[2].Length == 0, "row 2 (partial) parsed wrong");
-
-        // Anything that is not an array is simply empty.
-        Expect(SnakeLeaderboard.ParseRows(JsonDocument.Parse("{}").RootElement).Count == 0,
-            "a non-array leaderboard should parse to no rows");
-    }
 
     private static Vector2Int FirstEmptyCell(SnakeGameController game, out bool found)
     {

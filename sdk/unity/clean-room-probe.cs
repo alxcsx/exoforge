@@ -35,11 +35,11 @@ public static class CleanRoomProbe
         string projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
         Debug.Log("[clean-room] project     = " + projectRoot);
         Debug.Log("[clean-room] package     = " + ExoforgeEditorConfig.PackageRoot);
-        Debug.Log("[clean-room] manifestgen = " + ExoforgeEditorConfig.ManifestGenPath);
+        Debug.Log("[clean-room] generator   = " + ExoforgeEditorConfig.GeneratorPath);
 
         // 1. The package resolved from the tarball, with nothing outside it.
         Check(ExoforgeEditorConfig.PackageRoot != null, "the SDK package was not found");
-        Check(ExoforgeEditorConfig.ManifestGenPath != null, "the SDK shipped without its manifest generator");
+        Check(ExoforgeEditorConfig.GeneratorPath != null, "the SDK shipped without its source generator");
 
         // 2. The workspace can be created from nothing.
         var ws = ExoWorkspace.Initialize(Path.Combine(projectRoot, "Exoforge"));
@@ -70,7 +70,7 @@ public static class CleanRoomProbe
 
         var build = new ExoDeployer(ws).BuildPlugin(
             PluginName, null, ExoforgeEditorConfig.DotnetPath,
-            line => Debug.Log("[clean-room-build] " + line), ExoforgeEditorConfig.ManifestGenPath);
+            line => Debug.Log("[clean-room-build] " + line));
 
         Check(File.Exists(build.BinaryPath), "no binary at " + build.BinaryPath);
         Check(File.Exists(build.ManifestPath), "no manifest at " + build.ManifestPath);

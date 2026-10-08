@@ -15,20 +15,27 @@ public class SnakeLeaderboardPlugin
 {
     private const string Table = "snake_scores";
 
+    // Instance rather than static: the host runs one plugin instance and wires that, and a test can
+    // wire its own without leaking into the next one.
+
     // The plugin's own isolated database.
     [Inject("database")]
-    public static IDatabase? Database { get; set; }
+    public IDatabase? Database { get; set; }
 
-    // Typed client generated from the player_data contract — no dependency on its implementation.
+    // The player_data service's contract, generated from the server's plugin list. Injecting the
+    // interface means no dependency on its implementation - and a test can hand in a fake.
     [Inject("player_data")]
-    public static PlayerDataServiceClient? PlayerData { get; set; }
+    public IPlayerDataService? PlayerData { get; set; }
 
     [Inject]
-    public static ILogger? Logger { get; set; }
+    public IEventDispatcher? Events { get; set; }
+
+    [Inject]
+    public ILogger? Logger { get; set; }
 
     [ExoAction]
     [ExoEvent("score_submitted", typeof(SnakeScoreSubmitted), Topic = "snake:leaderboard")]
-    public int SubmitScore(string playerId, string name, int score, int snakeLength)
+    public async Task<int> SubmitScore(string playerId, string name, int score, int snakeLength)
     {
         var existing = Database!.Get<SnakeScoreRecord>(Table, playerId);
         bool improved = existing is null || existing.Score < score;
@@ -48,14 +55,17 @@ public class SnakeLeaderboardPlugin
         // only improvements looks right and is not: the board keeps its best across runs, so a run
         // that ties the stored score emits nothing, and a subscriber cannot tell that from a broken
         // subscription.
-        HostBridge.EmitEvent("snake:leaderboard", "score_submitted", new SnakeScoreSubmitted
-        {
-            PlayerId = playerId,
-            Name = string.IsNullOrEmpty(name) ? playerId : name,
-            Score = score,
-            SnakeLength = snakeLength,
-            Improved = improved
-        });
+        await Events!.EmitAsync(
+            "score_submitted",
+            new SnakeScoreSubmitted
+            {
+                PlayerId = playerId,
+                Name = string.IsNullOrEmpty(name) ? playerId : name,
+                Score = score,
+                SnakeLength = snakeLength,
+                Improved = improved
+            },
+            "snake:leaderboard");
 
         return best.Score;
     }
@@ -83,13 +93,11 @@ public class SnakeLeaderboardPlugin
     }
 
     // Names are resolved at read time, so a rename never leaves a stale name on the board.
-    private static async Task<string> DisplayNameAsync(string playerId)
+    private async Task<string> DisplayNameAsync(string playerId)
     {
         if (PlayerData is null) return playerId;
 
         var response = await PlayerData.GetPlayerAsync(new PlayerDataGetPlayerRequest { PlayerId = playerId });
         return string.IsNullOrEmpty(response?.Player?.Name) ? playerId : response!.Player!.Name!;
     }
-
-    public static void Main() => PluginHost.Run<SnakeLeaderboardPlugin, SnakeJsonContext>();
 }

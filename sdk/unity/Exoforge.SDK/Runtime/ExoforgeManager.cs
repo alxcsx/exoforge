@@ -13,23 +13,23 @@ namespace Exoforge.Client.Unity
     /// <see cref="ExoTokenStore"/>, and pumps the dispatcher on the main thread.
     ///
     /// Drop the standard <c>Exoforge</c> prefab into a scene, then read
-    /// <see cref="Instance"/> or <c>await ExoforgeBehaviour.Instance.GetClientAsync()</c> from
+    /// <see cref="Instance"/> or <c>await ExoforgeManager.Instance.GetClientAsync()</c> from
     /// game code — no connection configuration belongs in gameplay scripts.
     /// </summary>
     [DefaultExecutionOrder(-1000)]
-    public class ExoforgeBehaviour : MonoBehaviour
+    public class ExoforgeManager : MonoBehaviour
     {
-        private static ExoforgeBehaviour? _instance;
+        private static ExoforgeManager? _instance;
 
         /// <summary>The active instance, or null when no Exoforge prefab is in the scene.</summary>
-        public static ExoforgeBehaviour? Current => _instance;
+        public static ExoforgeManager? Current => _instance;
 
         /// <summary>The active instance; throws a clear error when the prefab is missing.</summary>
-        public static ExoforgeBehaviour Instance =>
+        public static ExoforgeManager Instance =>
             _instance != null
                 ? _instance
                 : throw new InvalidOperationException(
-                    "No ExoforgeBehaviour in the scene. Add the Exoforge prefab (Exoforge SDK) to bootstrap the client.");
+                    "No ExoforgeManager in the scene. Add the Exoforge prefab (Exoforge SDK) to bootstrap the client.");
 
         [Header("Configuration")]
         [Tooltip("Optional workspace config (exoforge.json). Empty loads Resources/exoforge.json.")]
@@ -40,6 +40,14 @@ namespace Exoforge.Client.Unity
 
         [Tooltip("Connect as soon as the scene loads.")]
         [SerializeField] private bool connectOnAwake = true;
+
+        [Header("Session")]
+        [Tooltip(
+            "In the editor, play as the account the Exoforge Studio window is signed in as, instead of " +
+            "this device's own session. Play mode then shares the Studio's player - the same leaderboard " +
+            "rows and the same player data - and no anonymous account is minted for the editor. " +
+            "A build has no Studio window, so it falls back to the device's own session.")]
+        [SerializeField] private bool useStudioConnection = true;
 
         [Header("Reconnect")]
         [Tooltip("Reconnect automatically when the connection drops.")]
@@ -117,6 +125,10 @@ namespace Exoforge.Client.Unity
 
             _instance = this;
             DontDestroyOnLoad(gameObject);
+
+            // Decided before anything connects: the session this run reads is either the Studio's or
+            // the device's own.
+            ExoTokenStore.UseStudioSession = useStudioConnection;
 
             if (connectOnAwake)
             {
@@ -352,7 +364,7 @@ namespace Exoforge.Client.Unity
         {
             // Before anything can await: leaving this set meant Current/Instance kept returning a
             // destroyed object, so game code got a MissingReferenceException instead of the
-            // "no ExoforgeBehaviour in the scene" message this class is careful to give.
+            // "no ExoforgeManager in the scene" message this class is careful to give.
             if (_instance == this)
             {
                 _instance = null;

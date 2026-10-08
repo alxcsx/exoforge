@@ -24,6 +24,8 @@ public partial class ExoforgeControlCenter : EditorWindow
 
     private void DrawSandbox()
     {
+        if (DrawClusterGate()) return;
+
         EditorGUILayout.LabelField("Action Sandbox & Service Dispatcher", EditorStyles.boldLabel);
         EditorGUILayout.HelpBox("Test and dispatch actions directly to the cluster with typed JSON payloads.", MessageType.None);
 

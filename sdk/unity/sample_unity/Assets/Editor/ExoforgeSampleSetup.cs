@@ -78,7 +78,7 @@ public static class ExoforgeSampleSetup
     /// <summary>Ensures exactly one Exoforge host, keeping whichever instance already exists.</summary>
     private static GameObject EnsureSingleHost()
     {
-        var hosts = Object.FindObjectsByType<ExoforgeBehaviour>(FindObjectsInactive.Include);
+        var hosts = Object.FindObjectsByType<ExoforgeManager>(FindObjectsInactive.Include);
         GameObject? keeper = null;
 
         foreach (var candidate in hosts)
@@ -100,7 +100,7 @@ public static class ExoforgeSampleSetup
 
         ExoforgeSceneSetup.AddToScene();
 
-        var added = Object.FindAnyObjectByType<ExoforgeBehaviour>(FindObjectsInactive.Include);
+        var added = Object.FindAnyObjectByType<ExoforgeManager>(FindObjectsInactive.Include);
         return added != null ? added.gameObject : new GameObject("Exoforge");
     }
 

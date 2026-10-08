@@ -1,4 +1,3 @@
-#if UNITY_EDITOR
 using Exoforge.Client.Unity;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -8,7 +7,7 @@ namespace Exoforge.Unity.Editor;
 
 /// <summary>
 /// Adds the standard Exoforge prefab to the active scene. The prefab carries the
-/// <see cref="ExoforgeBehaviour"/> that bootstraps and owns the client, so scenes never
+/// <see cref="ExoforgeManager"/> that bootstraps and owns the client, so scenes never
 /// need to configure cluster URLs or tokens by hand.
 /// </summary>
 public static class ExoforgeSceneSetup
@@ -26,9 +25,9 @@ public static class ExoforgeSceneSetup
             return;
         }
 
-        if (Object.FindAnyObjectByType<ExoforgeBehaviour>() != null)
+        if (Object.FindAnyObjectByType<ExoforgeManager>() != null)
         {
-            Debug.Log("[Exoforge] Scene already contains an ExoforgeBehaviour.");
+            Debug.Log("[Exoforge] Scene already contains an ExoforgeManager.");
             return;
         }
 
@@ -55,4 +54,3 @@ public static class ExoforgeSceneSetup
         return null;
     }
 }
-#endif

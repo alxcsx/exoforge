@@ -12,7 +12,7 @@ namespace Exoforge.Client.Unity
     /// var board   = await ExoforgeSDK.Client.SnakeLeaderboard().GetLeaderboardAsync(10);
     /// </code>
     ///
-    /// Connection and dispatcher pumping live in <see cref="ExoforgeBehaviour"/>, which is created
+    /// Connection and dispatcher pumping live in <see cref="ExoforgeManager"/>, which is created
     /// on demand if no Exoforge prefab is in the scene — game code never has to place one.
     /// </summary>
     public static class ExoforgeSDK
@@ -46,18 +46,18 @@ namespace Exoforge.Client.Unity
         /// </summary>
         public static Task DisconnectAsync() => Behaviour.DisconnectAsync();
 
-        private static ExoforgeBehaviour Behaviour
+        private static ExoforgeManager Behaviour
         {
             get
             {
-                if (ExoforgeBehaviour.Current != null)
+                if (ExoforgeManager.Current != null)
                 {
-                    return ExoforgeBehaviour.Current;
+                    return ExoforgeManager.Current;
                 }
 
                 // No prefab in the scene: create the runtime host on demand.
                 var host = new GameObject("[ExoforgeSDK]");
-                return host.AddComponent<ExoforgeBehaviour>();
+                return host.AddComponent<ExoforgeManager>();
             }
         }
     }
