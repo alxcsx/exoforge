@@ -282,17 +282,24 @@ public static class PluginJson
         // meet the IL2CPP half of this too - link.xml, [Preserve], AOTGenericReferences, and code that
         // works in the Editor and breaks in the build. It is not a configuration mistake in either.
         //
-        // What it costs to have reflection back, measured on this plugin rather than guessed:
+        // What it costs to have reflection back, measured rather than guessed. Disk is cheap and RAM
+        // is not, so the number that matters is the marginal one, and a single process does not show
+        // it: Pss divides shared pages among their sharers, so per-process cost falls as plugins are
+        // added. Eight of each, spawned directly and left idle:
         //
-        //   NativeAOT                2.8MB on disk    3.7MB Pss    no reflection
-        //   framework-dependent      144KB on disk   14.7MB Pss    reflection, nothing else needed
-        //   self-contained JIT        71MB on disk   ~same Pss     reflection
+        //                                    N=1        N=8 total    marginal per plugin
+        //   NativeAOT                        3.2MB Pss    10MB        ~1MB      (2.8MB on disk)
+        //   framework-dependent             12.5MB Pss    57MB        ~6.4MB    (144KB on disk)
         //
-        // 20x less disk for 4x more memory, and the memory is the one that multiplies - the plugin
-        // runs as a process per plugin, so twenty of them is 74MB against 294MB. Under a container the
-        // disk is an image layer and effectively free, so the trade is disk for RAM, and RAM is what
-        // runs out. Worth knowing before switching: the whole reason for the workarounds above is the
-        // deployment mode, and choosing a different one deletes them rather than fixing them.
+        // So dropping AOT buys 20x less disk and costs 6x more RAM per plugin. Disk is an image layer
+        // in a container and effectively free; RAM is what runs out. AOT's per-process Pss falls as
+        // plugins are added, because they share the binary's code pages - which is also why a shared
+        // in-process host is a weaker RAM argument than it looks: eight AOT plugins cost less in total
+        // than one framework-dependent host process, before any plugin's own working set.
+        //
+        // None of this is an argument about code. It is the whole reason the workarounds above exist:
+        // the deployment mode is the cause, and changing it deletes them rather than fixing them. It
+        // just costs more RAM than it saves, which is the wrong trade when RAM is the scarce thing.
         if (type.IsDefined(typeof(System.Runtime.CompilerServices.CompilerGeneratedAttribute), false) &&
             type.Name.StartsWith("<", StringComparison.Ordinal))
         {
