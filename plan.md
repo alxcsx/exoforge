@@ -2,7 +2,7 @@
 
 > **Status**: Kernel, 9 standard plugins, C# Client SDK, C# Plugin SDK, C# Management Engine (`exo`
 > CLI), Unity SDK (`com.exoforge.sdk`), Producer Studio, clustering and Kubernetes manifests are
-> **complete** — **240 Elixir + 71 C# = 311 tests passing**, plus a live E2E vertical slice.
+> **complete** — **250 Elixir + 71 C# = 321 tests passing**, plus a live E2E vertical slice.
 > **Benchmarks**: 729k stateful actor ops/sec, 1.4 µs latency, 0.07 ms 50x event fanout.
 
 Completed work is not kept here. It is in `git log`, which is the record that does not drift; this

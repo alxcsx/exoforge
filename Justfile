@@ -31,7 +31,9 @@ clean-build:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	work=$(mktemp -d)
-	trap 'rm -rf "$work"' EXIT
+	# Keep the workspace on failure. The log is the only thing that says why the probe threw, and
+	# deleting it with the directory turns every failure into an identical blind re-run.
+	trap 'status=$?; if [ $status -eq 0 ]; then rm -rf "$work"; else echo "[clean-room] kept $work"; fi; exit $status' EXIT
 	echo "[clean-build] exporting HEAD"
 	git archive HEAD | tar -x -C "$work"
 	echo "[clean-build] building the engine-agnostic libraries into the package"
@@ -363,7 +365,9 @@ clean-room-sdk:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	work=$(mktemp -d)
-	trap 'rm -rf "$work"' EXIT
+	# Keep the workspace on failure. The log is the only thing that says why the probe threw, and
+	# deleting it with the directory turns every failure into an identical blind re-run.
+	trap 'status=$?; if [ $status -eq 0 ]; then rm -rf "$work"; else echo "[clean-room] kept $work"; fi; exit $status' EXIT
 
 	echo "[clean-room] packing the SDK"
 	just pack-unity >/dev/null
