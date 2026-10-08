@@ -394,14 +394,14 @@ defmodule Exoforge.Std.PluginManager do
     end
   end
 
+  # A payload is either raw bytes or base64 of them. Trying the decode is the whole test: a compiled
+  # binary starts with bytes outside the base64 alphabet, so it always fails and comes back untouched.
+  # There used to be a WASM magic-header check in front of this, which was redundant for WASM and
+  # wrong for anything else.
   defp decode_binary(bin) when is_binary(bin) do
-    if String.starts_with?(bin, @wasm_magic) do
-      bin
-    else
-      case Base.decode64(bin) do
-        {:ok, decoded} -> decoded
-        _ -> bin
-      end
+    case Base.decode64(bin) do
+      {:ok, decoded} -> decoded
+      _ -> bin
     end
   end
 
