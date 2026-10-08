@@ -22,9 +22,19 @@ internal sealed record ActionModel(
     string Scope,
     string Transport,
     List<ParamModel> Params,
-    string Returns,
+    string? ReturnsScalar,
+    List<ParamModel> ReturnFields,
     bool ReturnsList,
-    string? ReturnsType);
+    string? ReturnsType)
+{
+    /// <summary>
+    /// The return type as Elixir: an atom for a scalar, a map literal for a record. Rendered here
+    /// rather than carried around pre-rendered, because the JSON twin needs the same data.
+    /// </summary>
+    public string ReturnsExs => ReturnFields.Count > 0
+        ? "%{" + string.Join(", ", ReturnFields.Select(f => f.Name + ": :" + f.Type)) + "}"
+        : ":" + (ReturnsScalar ?? "term");
+}
 
 internal sealed record EventModel(
     string Name,
@@ -78,7 +88,7 @@ internal static class ManifestEmitter
             string paramList = string.Join(", ", action.Params.Select(p => $"{p.Name}: :{p.Type}"));
             string returnsList = action.ReturnsList ? ", returns_list: true" : "";
             string returnsType = action.ReturnsType is null ? "" : $", returns_type: \"{action.ReturnsType}\"";
-            sb.AppendLine($"        %{{name: :{action.Name}, mode: :{action.Mode}, scope: :{action.Scope}, transport: :{action.Transport}, arity: {action.Params.Count}, params: [{paramList}], returns: {action.Returns}{returnsList}{returnsType}}},");
+            sb.AppendLine($"        %{{name: :{action.Name}, mode: :{action.Mode}, scope: :{action.Scope}, transport: :{action.Transport}, arity: {action.Params.Count}, params: [{paramList}], returns: {action.ReturnsExs}{returnsList}{returnsType}}},");
         }
 
         sb.AppendLine("      ],");
@@ -171,6 +181,155 @@ internal static class ManifestEmitter
             .Replace(TypePlaceholder, pluginType)
             .Replace(VersionPlaceholder, stamped)
             .Replace(EntryPlaceholder, entry);
+    }
+
+    /// <summary>
+    /// The same contracts as JSON, in the shape <c>plugin_manager.export_plugin_info</c> returns.
+    ///
+    /// The manifest is Elixir source and the tooling that generates client stubs is pure C# — a game
+    /// developer has no Elixir toolchain — so it cannot read one. This is the same information in a
+    /// form it can, written beside the manifest: a plugin that is built but not deployed then still
+    /// has a contract to generate against.
+    ///
+    /// Written by hand rather than with a serializer because this is a Roslyn component on
+    /// netstandard2.0 with one dependency, and the shape is fixed.
+    /// </summary>
+    public static string Contracts(
+        string id,
+        IEnumerable<string> provides,
+        IEnumerable<string> dependencies,
+        IEnumerable<ServiceModel> services)
+    {
+        var sb = new StringBuilder();
+        sb.Append("{\n  \"export\": {\n    \"plugins\": [\n      {\n");
+        sb.Append($"        \"id\": {Str(id)},\n");
+        sb.Append($"        \"name\": {Str(id)},\n");
+        sb.Append($"        \"version\": {Str(VersionPlaceholder)},\n");
+        sb.Append($"        \"type\": {Str(TypePlaceholder)},\n");
+        sb.Append($"        \"entry_point\": {Str(EntryPlaceholder)},\n");
+        sb.Append($"        \"provides\": [{string.Join(", ", provides.Select(Str))}],\n");
+        sb.Append($"        \"dependencies\": [{string.Join(", ", dependencies.Select(Str))}],\n");
+        sb.Append("        \"services\": [\n");
+
+        bool firstService = true;
+
+        foreach (var service in services)
+        {
+            if (!firstService) sb.Append(",\n");
+            firstService = false;
+
+            sb.Append("          {\n");
+            sb.Append($"            \"name\": {Str(service.Name)},\n");
+
+            sb.Append("            \"actions\": [\n");
+            for (int i = 0; i < service.Actions.Count; i++)
+            {
+                var action = service.Actions[i];
+                string comma = i == service.Actions.Count - 1 ? "" : ",";
+                string returnsType = action.ReturnsType is null ? "" : ", \"returns_type\": " + Str(action.ReturnsType);
+                string returns = action.ReturnFields.Count > 0
+                    ? ParamMap(action.ReturnFields)
+                    : Str(action.ReturnsScalar ?? "term");
+
+                sb.Append("              {\n");
+                sb.Append($"                \"name\": {Str(action.Name)},\n");
+                sb.Append($"                \"mode\": {Str(action.Mode)},\n");
+                sb.Append($"                \"scope\": {Str(action.Scope)},\n");
+                sb.Append($"                \"transport\": {Str(action.Transport)},\n");
+                sb.Append($"                \"arity\": {action.Params.Count},\n");
+                sb.Append($"                \"params\": {ParamMap(action.Params)},\n");
+                sb.Append($"                \"returns\": {returns},\n");
+                sb.Append($"                \"returns_list\": {Lower(action.ReturnsList)}{returnsType}\n");
+                sb.Append($"              }}{comma}\n");
+            }
+
+            sb.Append("            ],\n");
+
+            sb.Append("            \"events\": [\n");
+            for (int i = 0; i < service.Events.Count; i++)
+            {
+                var evt = service.Events[i];
+                string comma = i == service.Events.Count - 1 ? "" : ",";
+                string topic = evt.Topic is null ? "" : ", \"topic\": " + Str(evt.Topic);
+                string payload = evt.Payload.Count == 0 ? "" : ", \"payload\": " + ParamMap(evt.Payload);
+                string payloadType = evt.PayloadTypeName is null ? "" : ", \"payload_type\": " + Str(evt.PayloadTypeName);
+
+                sb.Append($"              {{\"name\": {Str(evt.Name)}{topic}, \"scope\": {Str(evt.Scope)}{payload}{payloadType}}}{comma}\n");
+            }
+
+            sb.Append("            ],\n");
+
+            sb.Append("            \"resources\": [\n");
+            for (int i = 0; i < service.Resources.Count; i++)
+            {
+                var resource = service.Resources[i];
+                string comma = i == service.Resources.Count - 1 ? "" : ",";
+                string type = resource.TypeName is null ? "" : "\"type\": " + Str(resource.TypeName) + ",\n                ";
+
+                sb.Append("              {\n");
+                sb.Append($"                \"name\": {Str(resource.Name)},\n");
+                sb.Append($"                \"primary_key\": {Str(resource.PrimaryKey)},\n");
+                sb.Append("                ");
+                sb.Append(type);
+                sb.Append($"\"drawer\": [{string.Join(", ", resource.Drawer.Select(Str))}],\n");
+                sb.Append($"                \"actions\": [{string.Join(", ", resource.Actions.Select(Str))}],\n");
+                sb.Append("                \"columns\": [\n");
+
+                for (int c = 0; c < resource.Columns.Count; c++)
+                {
+                    var column = resource.Columns[c];
+                    string columnComma = c == resource.Columns.Count - 1 ? "" : ",";
+                    string role = column.Role is null ? "" : ", \"role\": " + Str(column.Role);
+
+                    sb.Append($"                  {{\"name\": {Str(column.Name)}, \"type\": {Str(column.Type)}, \"label\": {Str(column.Label)}, \"sortable\": {Lower(column.Sortable)}, \"filterable\": {Lower(column.Filterable)}, \"badge\": {Lower(column.Badge)}{role}}}{columnComma}\n");
+                }
+
+                sb.Append("                ]\n");
+                sb.Append($"              }}{comma}\n");
+            }
+
+            sb.Append("            ]\n");
+            sb.Append("          }");
+        }
+
+        sb.Append("\n        ],\n");
+        sb.Append("        \"entities\": []\n");
+        sb.Append("      }\n    ]\n  }\n}\n");
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// A <c>{"name": "type"}</c> object. A keyword list in the manifest is what a map becomes once
+    /// it has been through <c>PluginRegistry.sanitize_for_json/1</c>, which is the shape the client
+    /// generator reads.
+    /// </summary>
+    private static string ParamMap(IEnumerable<ParamModel> parameters) =>
+        "{" + string.Join(", ", parameters.Select(p => Str(p.Name) + ": " + Str(p.Type))) + "}";
+
+    /// <summary>A JSON string literal. The only values here that are not identifiers are labels and topics.</summary>
+    private static string Str(string value)
+    {
+        var sb = new StringBuilder(value.Length + 2);
+        sb.Append('"');
+
+        foreach (char c in value)
+        {
+            switch (c)
+            {
+                case '"': sb.Append("\\\""); break;
+                case '\\': sb.Append("\\\\"); break;
+                case '\n': sb.Append("\\n"); break;
+                case '\r': sb.Append("\\r"); break;
+                case '\t': sb.Append("\\t"); break;
+                default:
+                    if (c < ' ') sb.Append("\\u").Append(((int)c).ToString("x4"));
+                    else sb.Append(c);
+                    break;
+            }
+        }
+
+        sb.Append('"');
+        return sb.ToString();
     }
 
     private static string Lower(bool value) => value ? "true" : "false";

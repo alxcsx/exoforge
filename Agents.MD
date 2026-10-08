@@ -1,32 +1,26 @@
 # Exoforge Operating Manual (`AGENTS.md`)
 
 > **Branch**: `projetao_mvp`  
-> **Status**: Kernel, 9 standard plugins, C# Client & Plugin SDKs, C# Management Engine (`exo` CLI), Unity SDK (`com.exoforge.sdk`), Producer Studio and the stateful entity runtime are **complete** — **250 Elixir + 71 C# = 321 tests passing**, plus a live E2E vertical slice.  
+> **Status**: Kernel, 9 standard plugins, C# Client & Plugin SDKs, C# Management Engine (`exo` CLI), Unity SDK (`com.exoforge.sdk`), Producer Studio and the stateful entity runtime are **complete** — **250 Elixir + 72 C# = 322 tests passing**, plus a live E2E vertical slice.  
 > **Verified SLAs**: 729k stateful actor ops/sec, 1.4 µs latency, 0.07 ms 50x event fanout.
 
 ---
 
-## 0. Current Task: Put the SDK on a Real Feed
+## 0. Where Things Stand
 
-**See [`plan.md`](plan.md) §4.** The only open item, and it is release work, not code.
+No open task. The two that were outstanding are settled: `Exoforge.Plugin.SDK` is not being
+published (the local feed covers development, and `just clean-room-sdk` proves the consumer path),
+and client stubs no longer need a cluster — each plugin's generator writes its contracts as JSON
+beside the manifest, and stub generation lays those over the cluster export, so a plugin that is
+built but not deployed still has stubs. See [`plan.md`](plan.md) §4.
 
-`just pack-sdk` fills `dist/nuget` with `Exoforge.Plugin.SDK`, and a plugin scaffolded outside this
-repository builds against it — one `PackageReference`, no paths, the generator arriving in the same
-package's analyzers folder. `just clean-room-sdk` proves that from a pristine export of `HEAD`. What
-is missing is a feed for people who are not on this machine.
-
-**How a build input is found**, which is the rule the tooling now follows: a project names no other
+**How a build input is found**, which is the rule the tooling follows: a project names no other
 project's path. `Directory.Build.targets` at the repository root supplies a plugin's SDK, generator
 and manifest plumbing from the single declaration `<ExoforgePlugin>true</ExoforgePlugin>` — from
 source when the SDK is beside it, from the package when it is not — and stages the compiled
 libraries into the Unity package as a side effect of building them. `NuGet.config` adds the local
 feed for anything under this repository; `EXOFORGE_FEED` points a workspace outside it at one.
-
-**Recently completed:**
-
-- **M31 — Dev Hooks and the Plugin Feed**: the hooks above, `just pack-sdk`, the declarative plugin
-  project, and the WASM fix in the generator (a WASM plugin's assembly is a contract, not a host
-  process, so it gets no dispatch table and no entry point of its own).
+`just unity-sync` places the built package into the sample, which names no path outside itself.
 
 ## 1. Architectural Doctrine: The Rule, and Its One Exception
 

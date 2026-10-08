@@ -36,7 +36,7 @@ public static class ExoScaffolder
         File.WriteAllText(Path.Combine(targetDir, "README.md"), GenerateReadme(cleanName, className));
 
         // The staged native binary and the local build counter are build artifacts.
-        File.WriteAllText(Path.Combine(targetDir, ".gitignore"), "/.exoforge/\n/.buildcount\n/manifest.exs\n");
+        File.WriteAllText(Path.Combine(targetDir, ".gitignore"), "/.exoforge/\n/.buildcount\n/manifest.exs\n/manifest.json\n");
 
         RegisterLocalFeed(pluginsDirectory);
 

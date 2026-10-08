@@ -123,7 +123,8 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
         string DispatchCases,
         string EventHandler,
         string ContractInterface,
-        string ContractBinding);
+        string ContractBinding,
+        List<ServiceModel> Models);
 
     // ---- service extraction ----
 
@@ -204,7 +205,7 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
             string actionName = PositionalString(actionAttr, 0) ?? ToSnakeCase(method.Name);
             dispatches.Add(new ActionDispatch(actionName, method));
 
-            var (returns, returnsList, returnsType) = DescribeReturn(method.ReturnType);
+            var (returnsScalar, returnFields, returnsList, returnsType) = DescribeReturn(method.ReturnType);
 
             ServiceFor(NamedString(actionAttr, "Service")).Actions.Add(new ActionModel(
                 actionName,
@@ -212,7 +213,8 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
                 NamedString(actionAttr, "Scope") ?? "global",
                 (NamedEnum(actionAttr, "Transport") ?? "auto").ToLowerInvariant(),
                 method.Parameters.Select(p => new ParamModel(ToSnakeCase(p.Name), MapTypeToElixir(p.Type))).ToList(),
-                returns,
+                returnsScalar,
+                returnFields,
                 returnsList,
                 returnsType));
         }
@@ -352,7 +354,8 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
             DispatchEmitter.Cases(rootFq, dispatches),
             DispatchEmitter.EventHandler(rootFq, FindEventHandler(root)),
             contract,
-            binding);
+            binding,
+            services);
     }
 
     private static ImmutableArray<ServiceEmit> ExtractReferencedContracts(Compilation compilation, CancellationToken ct)
@@ -700,6 +703,15 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
         string final = ManifestEmitter.Finalize(
             manifest.ToString(), primary.Id, primary.Version, settings.PluginType, settings.BuildStamp);
 
+        // The manifest is Elixir source. The tooling that generates client stubs is pure C# - a game
+        // developer has no Elixir toolchain - so the same contracts go out again as JSON, in the shape
+        // `plugin_manager.export_plugin_info` returns. A plugin that is built but not deployed then
+        // still has a contract to generate against.
+        string contractsPath = Path.ChangeExtension(settings.ManifestPath, ".json");
+        string contractsJson = ManifestEmitter.Finalize(
+            ManifestEmitter.Contracts(primary.Id, provides, dependencies, primary.Models),
+            primary.Id, primary.Version, settings.PluginType, settings.BuildStamp);
+
         try
         {
             var directory = Path.GetDirectoryName(settings.ManifestPath);
@@ -708,6 +720,7 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
             if (File.Exists(settings.ManifestPath) && File.ReadAllText(settings.ManifestPath) == final) return;
 
             File.WriteAllText(settings.ManifestPath, final, new UTF8Encoding(false));
+            File.WriteAllText(contractsPath, contractsJson, new UTF8Encoding(false));
         }
         catch (Exception ex)
         {
@@ -793,13 +806,13 @@ namespace Exoforge.Generated
     /// <c>:ok</c> for nothing - plus whether the whole thing is a list. Without the field shape a
     /// generated client can only offer <c>JsonElement</c>.
     /// </summary>
-    private static (string Returns, bool IsList, string? TypeName) DescribeReturn(ITypeSymbol type)
+    private static (string? Scalar, List<ParamModel> Fields, bool IsList, string? TypeName) DescribeReturn(ITypeSymbol type)
     {
         if (type is INamedTypeSymbol named)
         {
             if (named.Name == "Task" && named.ContainingNamespace?.ToDisplayString() == "System.Threading.Tasks")
             {
-                return named.TypeArguments.Length == 1 ? DescribeReturn(named.TypeArguments[0]) : (":ok", false, null);
+                return named.TypeArguments.Length == 1 ? DescribeReturn(named.TypeArguments[0]) : ("ok", new List<ParamModel>(), false, null);
             }
 
             if (named.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T && named.TypeArguments.Length == 1)
@@ -809,33 +822,33 @@ namespace Exoforge.Generated
         }
 
         // Checked before the list case: a byte array is binary, not a list of integers.
-        if (type is IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_Byte }) return (":binary", false, null);
+        if (type is IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_Byte }) return ("binary", new List<ParamModel>(), false, null);
 
         if (IsList(type, out var element))
         {
-            var (inner, _, innerType) = DescribeReturn(element!);
-            return (inner, true, innerType);
+            var (scalar, innerFields, _, typeName) = DescribeReturn(element!);
+            return (scalar, innerFields, true, typeName);
         }
 
         if (type.SpecialType != SpecialType.None || IsKnownScalar(type) || type.TypeKind == TypeKind.Enum)
         {
-            return (":" + MapTypeToElixir(type), false, null);
+            return (MapTypeToElixir(type), new List<ParamModel>(), false, null);
         }
 
         // A record: its public properties are the response fields.
-        var fields = new List<string>();
+        var fields = new List<ParamModel>();
 
         foreach (var member in type.GetMembers())
         {
             if (member is IPropertySymbol property && property.DeclaredAccessibility == Accessibility.Public && !property.IsStatic)
             {
-                fields.Add($"{ToSnakeCase(property.Name)}: :{MapTypeToElixir(property.Type)}");
+                fields.Add(new ParamModel(ToSnakeCase(property.Name), MapTypeToElixir(property.Type)));
             }
         }
 
-        if (fields.Count == 0) return (":" + MapTypeToElixir(type), false, null);
+        if (fields.Count == 0) return (MapTypeToElixir(type), fields, false, null);
 
-        return ("%{" + string.Join(", ", fields) + "}", false, type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+        return (null, fields, false, type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
     }
 
     private static bool IsList(ITypeSymbol type, out ITypeSymbol? element)

@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Linq;
+using System.Text.Json;
 using Xunit;
 using Exoforge.Management;
 
@@ -47,6 +49,55 @@ public class ManagementTests : IDisposable
         // Verify reloading workspace from disk
         var loaded = ExoWorkspace.Load(_tempDir);
         Assert.Equal("TestGameProject", loaded.Config.ProjectName);
+    }
+
+    /// <summary>
+    /// A plugin that is built but not deployed has no entry on the cluster, and one that is deployed
+    /// but edited locally has a stale one. Laying the local contracts over the export covers both, and
+    /// this is the only place that decision is made.
+    /// </summary>
+    [Fact]
+    public void Local_Contracts_Override_And_Extend_The_Cluster_Export()
+    {
+        var ws = ExoWorkspace.Initialize(_tempDir, "TestGameProject");
+        var deployer = new ExoDeployer(ws);
+
+        WriteContracts(ws.PluginsPath, "leaderboard", """
+        {"export":{"plugins":[{"id":"leaderboard","version":"2.0.0-local","services":[{"name":"leaderboard"}]}]}}
+        """);
+
+        // Built, never deployed: the cluster has never heard of it.
+        WriteContracts(ws.PluginsPath, "guilds", """
+        {"export":{"plugins":[{"id":"guilds","version":"1.0.0-local","services":[{"name":"guilds"}]}]}}
+        """);
+
+        string cluster = """
+        {"export":{"cluster":"local@host","plugins":[
+          {"id":"leaderboard","version":"1.0.0","services":[{"name":"leaderboard"}]},
+          {"id":"database","version":"1.0.0","services":[{"name":"database"}]}]}}
+        """;
+
+        using var doc = JsonDocument.Parse(deployer.MergeLocalContracts(cluster));
+        var export = doc.RootElement.GetProperty("export");
+        var byId = export.GetProperty("plugins").EnumerateArray()
+            .ToDictionary(p => p.GetProperty("id").GetString()!);
+
+        // Local wins where both have an entry: what the developer is editing is the local one.
+        Assert.Equal("2.0.0-local", byId["leaderboard"].GetProperty("version").GetString());
+
+        // And a plugin the cluster has never seen is added rather than dropped.
+        Assert.True(byId.ContainsKey("guilds"));
+
+        // Everything else is left alone, cluster metadata included.
+        Assert.Equal("1.0.0", byId["database"].GetProperty("version").GetString());
+        Assert.Equal("local@host", export.GetProperty("cluster").GetString());
+    }
+
+    private static void WriteContracts(string pluginsPath, string name, string json)
+    {
+        string dir = Path.Combine(pluginsPath, name);
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "manifest.json"), json);
     }
 
     [Fact]
@@ -145,15 +196,20 @@ public class ManagementTests : IDisposable
     }
 
     [Fact]
-    public void ReadManifestDependencies_ParsesAndFallsBack()
+    public void ReadManifestDependencies_ReadsTheGeneratedContracts()
     {
         string pluginDir = Path.Combine(_tempDir, "plugin");
         Directory.CreateDirectory(pluginDir);
-        File.WriteAllText(Path.Combine(pluginDir, "manifest.exs"), "%{\n  dependencies: [:database, :player_data],\n}");
+        File.WriteAllText(Path.Combine(pluginDir, "manifest.json"), """
+        {"export":{"plugins":[{"id":"plugin","dependencies":["database","player_data","database"]}]}}
+        """);
 
         var deps = ExoDeployer.ReadManifestDependencies(pluginDir);
         Assert.NotNull(deps);
         Assert.Equal(new[] { "database", "player_data" }, deps!);
+
+        // No file: a plugin that has not been built has no dependencies to scope by, and the caller
+        // then offers every service rather than none.
         Assert.Null(ExoDeployer.ReadManifestDependencies(_tempDir));
     }
 

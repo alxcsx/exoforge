@@ -6,6 +6,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using Exoforge.Client;
@@ -311,41 +312,207 @@ public class ExoDeployer
     public async Task<string> GeneratePluginStubsAsync(
         string pluginName,
         ExoClient? existingClient = null,
+        Action<string>? emit = null,
         CancellationToken cancellationToken = default)
     {
         string cleanName = NormalizePluginName(pluginName);
         string pluginDir = Path.Combine(_workspace.PluginsPath, cleanName);
         string output = Path.Combine(pluginDir, "src", "Generated", "PluginServices.g.cs");
-        string exportJson = await GetContractsExportJsonAsync(existingClient: existingClient, cancellationToken: cancellationToken).ConfigureAwait(false);
-        ExoCodeGenerator.GeneratePluginStubsToFile(
-            exportJson,
-            output,
-            services: ReadManifestDependencies(pluginDir),
-            pluginId: cleanName);
+        string exportJson;
+
+        try
+        {
+            exportJson = await GetContractsExportJsonAsync(existingClient: existingClient, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (existingClient == null)
+        {
+            // No cluster to ask. Every plugin that has been built still has its contracts on disk,
+            // which is the point: stubs for a plugin that is built but not deployed. Anything that was
+            // neither built nor deployed simply will not appear.
+            emit?.Invoke($"[stubs] no cluster ({ex.Message}) - generating from local contracts only");
+            exportJson = "{\"export\":{\"plugins\":[]}}";
+        }
+
+        string merged = MergeLocalContracts(exportJson);
+        var services = ReadManifestDependencies(pluginDir);
+        var missing = MissingServices(merged, services);
+
+        if (missing.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"No contracts for: {string.Join(", ", missing)}. Nothing was written — {output} still " +
+                "holds the last stubs that were generated. Start the cluster, or build the plugin that " +
+                "provides them.");
+        }
+
+        ExoCodeGenerator.GeneratePluginStubsToFile(merged, output, services: services, pluginId: cleanName);
         return output;
     }
 
     /// <summary>
-    /// Reads service dependencies from a plugin's generated <c>manifest.exs</c>, so stubs are only
-    /// generated for the contracts it actually calls. Returns null when there is no manifest yet.
+    /// The declared dependencies the export has no contract for.
+    ///
+    /// A caller checks this before writing stubs, because generating from an export that is missing
+    /// them produces a file with fewer stubs than the one it replaces — which is worse than doing
+    /// nothing, since the existing file still compiles and still calls what it called.
+    /// </summary>
+    public static IReadOnlyList<string> MissingServices(string exportJson, IEnumerable<string>? services)
+    {
+        var wanted = services?.ToList();
+        if (wanted is null || wanted.Count == 0) return Array.Empty<string>();
+
+        var available = new HashSet<string>(StringComparer.Ordinal);
+
+        try
+        {
+            if (JsonNode.Parse(exportJson)?["export"]?["plugins"] is JsonArray plugins)
+            {
+                foreach (JsonNode? plugin in plugins)
+                {
+                    if (plugin?["services"] is not JsonArray declared) continue;
+
+                    foreach (JsonNode? service in declared)
+                    {
+                        if (service?["name"]?.GetValue<string>() is { Length: > 0 } name) available.Add(name);
+                    }
+                }
+            }
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
+        {
+            // An export that cannot be read is not this check's problem to report.
+            return Array.Empty<string>();
+        }
+
+        return wanted.Where(name => !available.Contains(name)).ToList();
+    }
+
+    /// <summary>
+    /// The cluster's contract export with every locally built plugin's contracts laid over it.
+    ///
+    /// A plugin that is built but not deployed has no entry on the cluster, so stubs generated from the
+    /// export alone leave the caller with nothing to call. Each plugin's generator writes its contracts
+    /// as JSON beside the manifest for exactly this. Local wins where both have an entry, because what
+    /// the developer is editing is the local one.
+    /// </summary>
+    public string MergeLocalContracts(string clusterJson)
+    {
+        JsonNode? parsed;
+
+        try
+        {
+            parsed = JsonNode.Parse(clusterJson);
+        }
+        catch (JsonException)
+        {
+            return clusterJson;
+        }
+
+        if (parsed is not JsonObject root || root["export"] is not JsonObject export) return clusterJson;
+        if (export["plugins"] is not JsonArray plugins) return clusterJson;
+
+        bool changed = false;
+
+        foreach (var (id, local) in LocalContracts())
+        {
+            JsonNode? existing = plugins.FirstOrDefault(p => string.Equals(PluginId(p), id, StringComparison.Ordinal));
+            int index = existing is null ? -1 : plugins.IndexOf(existing);
+
+            // Cloned: a parsed node belongs to the document it came from, and assigning it into a
+            // second one throws "the node already has a parent".
+            JsonNode detached = local.DeepClone();
+
+            if (index >= 0) plugins[index] = detached;
+            else plugins.Add(detached);
+
+            changed = true;
+        }
+
+        return changed ? root.ToJsonString() : clusterJson;
+    }
+
+    /// <summary>
+    /// Every workspace plugin's generated contracts, by plugin id. A plugin that has not been built has
+    /// no file and is simply absent — the same as it being absent from the cluster.
+    /// </summary>
+    private IEnumerable<(string Id, JsonNode Node)> LocalContracts()
+    {
+        if (!Directory.Exists(_workspace.PluginsPath)) yield break;
+
+        var found = new List<(string Id, JsonNode Node)>();
+
+        foreach (string dir in Directory.GetDirectories(_workspace.PluginsPath).OrderBy(d => d, StringComparer.Ordinal))
+        {
+            string path = Path.Combine(dir, "manifest.json");
+            if (!File.Exists(path)) continue;
+
+            try
+            {
+                if (JsonNode.Parse(File.ReadAllText(path))?["export"]?["plugins"] is not JsonArray localPlugins) continue;
+
+                foreach (JsonNode? plugin in localPlugins)
+                {
+                    if (plugin is not null && PluginId(plugin) is { Length: > 0 } id) found.Add((id, plugin));
+                }
+            }
+            catch (Exception ex) when (ex is JsonException or InvalidOperationException)
+            {
+                // A half-written file is not worth failing a build over: the plugin is treated as one
+                // with no local contract, which is what it was before the file existed.
+            }
+        }
+
+        foreach (var entry in found) yield return entry;
+    }
+
+    private static string? PluginId(JsonNode plugin)
+    {
+        try
+        {
+            return plugin["id"]?.GetValue<string>();
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Reads service dependencies from a plugin's generated <c>manifest.json</c>, so stubs are only
+    /// generated for the contracts it actually calls. Returns null when there is no manifest yet, or
+    /// when it was built before the JSON twin existed — in which case every service is offered rather
+    /// than none.
     /// </summary>
     public static IReadOnlyList<string>? ReadManifestDependencies(string pluginDir)
     {
-        string manifestPath = Path.Combine(pluginDir, "manifest.exs");
-        if (!File.Exists(manifestPath)) return null;
+        string path = Path.Combine(pluginDir, "manifest.json");
+        if (!File.Exists(path)) return null;
 
-        var match = System.Text.RegularExpressions.Regex.Match(
-            File.ReadAllText(manifestPath), @"dependencies:\s*\[([^\]]*)\]");
+        try
+        {
+            if (JsonNode.Parse(File.ReadAllText(path))?["export"]?["plugins"] is not JsonArray plugins) return null;
 
-        if (!match.Success) return null;
+            var dependencies = new List<string>();
 
-        var dependencies = match.Groups[1].Value
-            .Split(',')
-            .Select(dep => dep.Trim().TrimStart(':'))
-            .Where(dep => dep.Length > 0)
-            .ToList();
+            foreach (JsonNode? plugin in plugins)
+            {
+                if (plugin?["dependencies"] is not JsonArray declared) continue;
 
-        return dependencies.Count > 0 ? dependencies : null;
+                foreach (JsonNode? dependency in declared)
+                {
+                    if (dependency?.GetValue<string>() is { Length: > 0 } name && !dependencies.Contains(name))
+                    {
+                        dependencies.Add(name);
+                    }
+                }
+            }
+
+            return dependencies.Count == 0 ? null : dependencies;
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
+        {
+            return null;
+        }
     }
 
     /// <summary>Generates typed stubs for every plugin in the workspace that has a project.</summary>
@@ -386,7 +553,7 @@ public class ExoDeployer
         {
             var exportResult = await client.SendActionAsync<JsonElement>("plugin_manager", "export_plugin_info", null, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-            string rawJson = exportResult.GetRawText();
+            string rawJson = MergeLocalContracts(exportResult.GetRawText());
             string targetPath = outputPathOverride ?? _workspace.GeneratedPath;
             ExoCodeGenerator.GenerateToFile(rawJson, targetPath, _workspace.Config.Codegen.Namespace);
 

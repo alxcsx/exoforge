@@ -14,13 +14,10 @@ server source, and without opening a terminal if they don't want to.
 
 ## Open
 
-- [ ] Generate the client stubs **locally from the workspace manifests** instead of fetching from a
-      live cluster, so a plugin that is built (but not deployed) still produces stubs.
-- [ ] A resource table missing its primary key self-heals, and a failed preference write is not
-      silent. See below.
-- [ ] Publishing `Exoforge.Plugin.SDK` where other people can reach it. `just pack-sdk` closes the
-      local case; a consumer with no checkout still has nothing to restore from. See
-      [`plan.md`](plan.md) §4.
+Nothing. The last item here — a resource table that predates its primary key — is fixed: the
+migration gives the table a unique index, which is what `ON CONFLICT` needs, and the write that
+used to discard its own failure no longer does. The account below is kept because the shape of the
+bug is worth remembering: it was invisible in tests, and the caller reported success either way.
 
 ### A resource table can exist without its primary key, and nothing notices
 

@@ -100,7 +100,7 @@ public static class Program
           dev <name>       Watch sources and re-deploy on every change
           reload <name>    Re-boot an installed plugin without re-uploading it
           logs <name>      Show recent log lines the plugin emitted
-          stubs <name>     Generate typed service stubs from the live contracts
+          stubs <name>     Generate typed service stubs from the contracts this plugin calls
           list             List installed plugins
           remove <id>      Remove a plugin from the cluster
 
@@ -546,6 +546,10 @@ public static class Program
             Console.WriteLine("""
             Usage: exo plugin stubs <name> [--services a,b] [--out <path>] [--file <export.json>]
 
+            Reads the cluster's contracts, and lays this workspace's own built plugins over them, so a
+            plugin that is built but not deployed still produces stubs. Without a cluster it uses what
+            has been built locally.
+
             Generates typed stubs for the contracts this plugin calls, so plugin code does not
             hand-roll service and action names.
             """);
@@ -562,9 +566,31 @@ public static class Program
         var deployer = new ExoDeployer(ws);
 
         string? contractsFile = cli.Value("file");
-        string exportJson = !string.IsNullOrEmpty(contractsFile) && File.Exists(contractsFile)
-            ? File.ReadAllText(contractsFile)
-            : await deployer.GetContractsExportJsonAsync(cli.Value("env")).ConfigureAwait(false);
+        string exportJson;
+
+        if (!string.IsNullOrEmpty(contractsFile) && File.Exists(contractsFile))
+        {
+            exportJson = File.ReadAllText(contractsFile);
+        }
+        else
+        {
+            try
+            {
+                exportJson = await deployer.GetContractsExportJsonAsync(cli.Value("env")).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                // No cluster to ask. Every plugin that has been built has its contracts on disk beside
+                // its manifest, which is the point: stubs for a plugin that is built but not deployed.
+                // Services that were neither built here nor deployed are simply absent.
+                Console.WriteLine($"[Exoforge] No cluster ({ex.Message}) — generating from local contracts only.");
+                exportJson = "{\"export\":{\"plugins\":[]}}";
+            }
+        }
+
+        // Local contracts win over the cluster's, so a plugin that is being edited generates stubs for
+        // what it is now rather than for what was last deployed.
+        exportJson = deployer.MergeLocalContracts(exportJson);
 
         string pluginDir = Path.Combine(ws.PluginsPath, name);
         string stubsOut = cli.Value("out") ?? Path.Combine(pluginDir, "src", "Generated", "PluginServices.g.cs");
@@ -573,6 +599,14 @@ public static class Program
         IEnumerable<string>? services = servicesOption != null
             ? servicesOption.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             : ExoDeployer.ReadManifestDependencies(pluginDir);
+
+        var missing = ExoDeployer.MissingServices(exportJson, services);
+
+        if (missing.Count > 0)
+        {
+            Error($"[Exoforge] No contracts for: {string.Join(", ", missing)}. Nothing was written — {stubsOut} still holds the last stubs that were generated. Start the cluster (`just dev`), or build the plugin that provides them.");
+            return 1;
+        }
 
         ExoCodeGenerator.GeneratePluginStubsToFile(exportJson, stubsOut, services: services, pluginId: name);
         Success($"[Exoforge] Generated typed plugin service stubs:\n  {stubsOut}");

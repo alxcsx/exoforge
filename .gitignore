@@ -54,6 +54,11 @@ manifest.exs
 .buildcount
 .exoforge/
 
+# The generator writes the same contracts as JSON beside the manifest, for the C# tooling to read.
+# Not `manifest.json` unqualified: a Unity project's Packages/manifest.json is source.
+sdk/unity/sample_unity/Exoforge/plugins/*/manifest.json
+plugins_csharp/*/manifest.json
+
 # === Environment & Secrets ===
 .env
 .env.local

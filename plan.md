@@ -2,7 +2,7 @@
 
 > **Status**: Kernel, 9 standard plugins, C# Client SDK, C# Plugin SDK, C# Management Engine (`exo`
 > CLI), Unity SDK (`com.exoforge.sdk`), Producer Studio, clustering and Kubernetes manifests are
-> **complete** — **250 Elixir + 71 C# = 321 tests passing**, plus a live E2E vertical slice.
+> **complete** — **250 Elixir + 72 C# = 322 tests passing**, plus a live E2E vertical slice.
 > **Benchmarks**: 729k stateful actor ops/sec, 1.4 µs latency, 0.07 ms 50x event fanout.
 
 Completed work is not kept here. It is in `git log`, which is the record that does not drift; this
@@ -81,22 +81,24 @@ shortest working path.
 
 ---
 
-## 4. Next: Put the SDK on a Real Feed
+## 4. Next
 
-The only open item, and it is release work, not code.
+Nothing outstanding.
 
-`just pack-sdk` fills `dist/nuget` and a plugin outside this repository builds against it — the local
-development path is closed, and `just clean-room-sdk` proves it from a pristine export. What is
-missing is a feed that exists for people who are not on this machine: a scaffolded plugin published
-for a game developer still resolves `Exoforge.Plugin.SDK` from their own sources, and a consumer with
-no checkout has nothing to restore from.
+Two things were on this list and are settled:
 
-What that amounts to: publish `Exoforge.Plugin.SDK` (which already carries the generator in its
-analyzers folder and the manifest plumbing in its `build/` folder, so one `PackageReference` is the
-whole contract), and then the scaffolder's `SdkPackageVersion` becomes the thing to bump rather than
-the thing to remember.
+- **Publishing `Exoforge.Plugin.SDK` to a public feed** — decided against. `just pack-sdk` fills the
+  local feed, a plugin built outside this repository resolves from it, and `just clean-room-sdk`
+  proves the consumer path from a pristine export of `HEAD`. A published feed buys nothing until
+  someone without a checkout needs one.
+- **Generating client stubs without a cluster** — done. Each plugin's generator writes its contracts
+  as JSON beside the manifest, in the shape the cluster export uses, and stub generation lays those
+  over the export. A plugin that is built but not deployed therefore has stubs, and a plugin being
+  edited generates stubs for what it is now rather than for what was last deployed.
 
----
+What that leaves: a service that is neither built locally nor deployed has no contract, so stubs for
+it cannot be generated. The command says which services are missing and writes nothing, rather than
+replacing working stubs with a file that has fewer of them.
 
 ## 5. Out of Scope for the MVP
 
