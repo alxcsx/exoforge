@@ -18,4 +18,4 @@ session calls in it.
 
 This sample calls `SendActionAsync` directly so it compiles without code generation.
 Run **Exoforge Studio ▸ Overview ▸ Sync Contracts & Generate C# Client** to generate the
-strongly-typed client, then use `client.SampleWasm().IncrementAsync(...)` instead.
+strongly-typed client, then use `client.SamplePlugin().IncrementAsync(...)` instead.

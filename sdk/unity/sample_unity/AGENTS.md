@@ -124,7 +124,7 @@ Input uses the **Input System package** (`Keyboard.current`) — this project is
 
 ## 5. The server side
 
-`snake_leaderboard` is a **native C# plugin** (no WASM, no C). It is the only server code:
+`snake_leaderboard` is a **native C# plugin**. It is the only server code:
 
 | Action | Params | Behaviour |
 | :--- | :--- | :--- |

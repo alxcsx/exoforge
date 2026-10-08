@@ -117,7 +117,7 @@ defmodule Exoforge.Std.PluginManagerTest do
       assert "test_game_service" in test_p["provides"]
     end
 
-    test "upload_plugin rejects invalid binaries without WASM magic bytes" do
+    test "upload_plugin rejects a binary that is not a plugin" do
       bad_binary = "This is not a valid WASM binary at all"
 
       assert {:error, :invalid_package} =
@@ -127,39 +127,6 @@ defmodule Exoforge.Std.PluginManagerTest do
                  %{name: "invalid_test_wasm", binary: bad_binary},
                  caller_scopes: ["admin"]
                )
-    end
-
-    test "upload_plugin accepts valid WASM binary with magic header and writes to disk" do
-      # Minimal mock WASM binary starting with \0asm header + 4-byte version
-      valid_wasm = @wasm_magic <> <<1, 0, 0, 0>>
-
-      assert {:ok, result} =
-               ActionDispatcher.dispatch(
-                 :plugin_manager,
-                 :upload_plugin,
-                 %{
-                   name: "test_uploaded_wasm",
-                   binary: valid_wasm,
-                   manifest: %{
-                     id: :test_uploaded_wasm,
-                     name: "TestUploadedWasm",
-                     version: "0.1.0",
-                     type: :wasm,
-                     entry_point: TestUploadedWasm,
-                     provides: [:test_uploaded_service],
-                     dependencies: []
-                   }
-                 },
-                 caller_scopes: ["admin"]
-               )
-
-      assert result.plugin_id == "test_uploaded_wasm"
-      assert result.status in ["installed", "saved_pending_restart"]
-
-      # Verify files were persisted to disk
-      target_dir = "priv/data/uploaded_plugins/test_uploaded_wasm"
-      assert File.exists?(Path.join(target_dir, "test_uploaded_wasm.wasm"))
-      assert File.exists?(Path.join(target_dir, "manifest.json"))
     end
 
     test "upload_plugin accepts valid Elixir plugin code, persists, compiles, and registers it" do

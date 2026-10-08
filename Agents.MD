@@ -42,7 +42,7 @@ The kernel is strictly limited to:
 - [`EventDispatcher`](core/lib/event_dispatcher.ex): Real-time pub/sub bus with pattern matching and Registry fanout.
 - [`WorkerRegistry`](core/lib/worker_registry.ex): Named singleton process locator.
 - [`PluginSupervisor`](core/lib/plugin_supervisor.ex) & [`PluginBootstrapper`](core/lib/plugin_bootstrapper.ex): Topological DAG ordering and process lifecycle.
-- DSL & Drivers: [`Exoforge.Plugin`](core/lib/plugin.ex), [`Service`](core/lib/contracts/service.ex), [`ElixirPluginRunner`](core/lib/drivers/runtime/elixir_plugin_runner.ex), and `WasmPluginRunner`.
+- DSL & Drivers: [`Exoforge.Plugin`](core/lib/plugin.ex), [`Service`](core/lib/contracts/service.ex), [`ElixirPluginRunner`](core/lib/drivers/runtime/elixir_plugin_runner.ex), and `NativePluginRunner`.
 
 ### The 4-Question Litmus Test: "Should this be a plugin?"
 1. **Can two implementations be swapped?** (REST ↔ gRPC ↔ WebSocket, Postgres ↔ SQLite, web ↔ TUI) → **Plugin**.
@@ -77,18 +77,18 @@ plugin_manager ───▶ (independent root)
 | `exoforge_std_ws` | Realtime (:4000) | `ws` | `auth` | Low-latency binary/JSON framing for actions and event pub/sub. |
 | `exoforge_std_dashboard` | Studio (:4005) | `dashboard` | — | System plugin hosting LiveView Producer Studio and Actor Inspector. |
 | `exoforge_std_dashboard_views` | Studio Views | `dashboard_view` | `dashboard` | Decoupled UI components for player data, plugin manager, auth. |
-| `exoforge_std_plugin_manager`| Lifecycle | `plugin_manager` | — | Hot WASM/Elixir plugin upload, reload, and manifest export. |
+| `exoforge_std_plugin_manager`| Lifecycle | `plugin_manager` | — | Hot plugin upload, reload, and manifest export. |
 
 ### Plugin Placement Rules
 
 **System-level plugins** (generic, reusable, demonstrates SDK features):
 - Elixir plugins: `plugins/exoforge_std_*/`
-- C# WASM sample plugins: `plugins_csharp/` (e.g., `sample_wasm`)
+- C# sample plugins: `plugins_csharp/` (e.g., `sample_plugin`)
 
 **Game-specific plugins** (belong to the game project, NOT the system):
 - Unity game projects: `<game>/Exoforge/plugins/`
 - Example: `sdk/unity/sample_unity/Exoforge/plugins/snake_game/`
-- The workspace (`exoforge.json` + `plugins/`) lives **outside** `Assets/`, so dotnet/WASM plugin
+- The workspace (`exoforge.json` + `plugins/`) lives **outside** `Assets/`, so dotnet plugin
   projects can target modern .NET/C# versions without Unity importing or compiling them.
   `ExoWorkspace.PluginsDir` = `plugins`, resolved against the workspace root.
 - Only Unity-consumed artifacts stay inside `Assets/`: the generated client
@@ -97,18 +97,17 @@ plugin_manager ───▶ (independent root)
 - **Caveat**: the workspace is invisible to Unity's AssetDatabase, so editor tooling must reach it
   through `System.IO` (`ExoWorkspace.PluginsPath`, `ExoDeployer`), never `AssetDatabase`/`Resources`.
 
-> **Rule**: Game-specific plugins must NOT touch `core/`, `plugins/`, or `plugins_csharp/`. They live exclusively inside the game project and are built/deployed independently. The system `just build-wasm` only builds `plugins_csharp/`; game plugins are built within their own project (e.g., Unity Editor menu or the game's own build scripts).
+> **Rule**: Game-specific plugins must NOT touch `core/`, `plugins/`, or `plugins_csharp/`. They live exclusively inside the game project and are built/deployed independently. The system `just build-plugins` only builds `plugins_csharp/`; game plugins are built within their own project (e.g., Unity Editor menu or the game's own build scripts).
 
 ### Plugin Runtimes
 
 | Runtime | Manifest `type` | Written in | Built by | Use for |
 | :--- | :--- | :--- | :--- | :--- |
 | **Native (AOT process)** | `:native` | C# | `exo plugin build` → `dotnet publish -p:PublishAot=true` | First-party game servers. **Default.** |
-| WASM reactor | `:wasm` | C# contract + C guest | `build.sh` (needs wasi-sdk) | Sandboxed / third-party guests |
 | Elixir | `:elixir` | Elixir | `mix` | System plugins |
 
-Native plugins are plain C# — **no C, no WASI toolchain**. `exo plugin build` compiles the plugin to a
-self-contained ~2 MB binary. `manifest.exs` and the entry point are written by the
+Native plugins are plain C# — no C, no extra toolchain. `exo plugin build` compiles the plugin to a
+self-contained ~2 MB binary. `manifest.json` and the entry point are written by the
 `Exoforge.Plugin.Generator` source generator during that same compile — there is no separate manifest
 tool. The Unity **Exoforge Studio ▸ Plugins** tab runs the same build
 (`dotnet publish -p:PublishAot=true`) and deploys the result, so game teams never need the CLI. The
@@ -194,7 +193,7 @@ Action declarations follow conventions, so the attribute is usually bare:
 Plugins call other services through **generated, region-agnostic stubs**: `exo plugin stubs <name>`
 reads the cluster contract export and writes `src/Generated/PluginServices.g.cs` (typed
 request/response records + a typed client per service). Only the services in the plugin's
-`manifest.exs` dependencies are generated (`--services a,b` overrides), so the file — and the NativeAOT
+`manifest.json` dependencies are generated (`--services a,b` overrides), so the file — and the NativeAOT
 build — stay small. The host injects those clients (`[Inject("player_data")]
 PlayerDataServiceClient PlayerData`), so plugin code only deals with services and never touches
 `IActionDispatcher`. The stubs depend on the service *contract*, never on the plugin that implements it.
@@ -237,8 +236,8 @@ Gameplay must not hold a client, an endpoint, or a token. It publishes hooks (e.
 1. **Stdlib & OTP First**: Reach for Erlang/Elixir built-ins (`:ets`, `:pg`, `Registry`, `DynamicSupervisor`) before adding third-party dependencies.
 2. **Zero Module Coupling**: Plugins depend on **service atoms** (`:database`, `:auth`, `:player_data`), NEVER on another plugin's Elixir module name. Use `ActionDispatcher.dispatch(service, action, payload)`.
 3. **Pure C# Outside Mix**: External game developers and Unity designers do not have Elixir or Mix installed. All client tooling, scaffolding (`ExoScaffolder`), and code generation (`ExoCodeGenerator`) must remain pure C# (`netstandard2.1`).
-4. **C# for Game Code**: First-party game plugins are written in C# and compiled to a NativeAOT binary — never hand-written C, and never a WASI toolchain. Keep the host boundary to newline-delimited JSON. Reserve the WASM reactor runtime for sandboxed or third-party guests.
-5. **Virtual Actors over Distributed Locks**: Use Horde process registries and `:pg` groups. Do not introduce external distributed lock managers (no Redis locks, no ZooKeeper).
+4. **C# for Game Code**: Game plugins are written in C# and compiled to a NativeAOT binary. Keep the host boundary to newline-delimited JSON — that is what makes a different runtime a runner rather than a rewrite.
+5. **No Distributed Locks**: State that has to be serialized belongs in a plugin's own process. Do not introduce external distributed lock managers (no Redis locks, no ZooKeeper).
 6. **Deletion Over Addition**: The best code is code you never had to write. Remove dead code, redundant wrappers, and unneeded abstractions ruthlessly.
 
 ---
@@ -247,12 +246,12 @@ Gameplay must not hold a client, an endpoint, or a token. It publishes hooks (e.
 
 | Command | Action |
 | :--- | :--- |
-| `just test` | Run entire test suite (Core, Plugins, System, C# SDKs — 164 tests) |
-| `just test-e2e` | Run live end-to-end vertical slice (WebSocket + WASM + Event loop) |
+| `just test` | Run the whole test suite (core, plugins, system, C# SDKs) |
+| `just test-e2e` | Run the live end-to-end vertical slice (WebSocket + plugin + event loop) |
 | `just dev` | Start backend development server (ports 4000, 4001, 4005) |
 | `just dev-reset` | Stop the dev server and wipe all dev data (SQLite databases + uploaded plugins) |
-| `just build-wasm` | Compile the **system** WASM samples (`plugins_csharp/*/build.sh`) |
-| `exo plugin build <name>` | Build a game plugin (NativeAOT binary + `manifest.exs`) |
+| `just build-plugins` | Build the system sample plugin (`plugins_csharp/`) |
+| `exo plugin build <name>` | Build a game plugin (NativeAOT binary + `manifest.json`) |
 | `exo plugin push <name>` | Build and deploy a plugin to a running cluster |
 | `exo plugin stubs <name>` | Generate typed service-call stubs from the cluster contracts |
 | `just test-sdk` | Run C# test suite (`Exoforge.Client`, `Plugin.SDK`, `Management`) |

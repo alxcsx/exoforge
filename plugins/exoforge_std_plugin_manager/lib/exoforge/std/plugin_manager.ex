@@ -2,7 +2,7 @@ defmodule Exoforge.Std.PluginManager do
   @moduledoc """
   Standard Plugin Manager for Exoforge.
   Provides the :plugin_manager service contract for runtime inspection,
-  hot-loading of both Elixir and WebAssembly (WASM) plugins, lifecycle restarts,
+  hot-loading of Elixir and native C# plugins, lifecycle restarts,
   and CLI/SDK synchronization.
   """
   use Exoforge.Plugin, provides: [:plugin_manager]
@@ -21,8 +21,6 @@ defmodule Exoforge.Std.PluginManager do
       icon: "📦"
     }
   }
-
-  @wasm_magic <<0, 97, 115, 109>>
 
   @doc "Dashboard visualization specification."
   def dashboard_view, do: @manifest.dashboard_view
@@ -81,8 +79,7 @@ defmodule Exoforge.Std.PluginManager do
             "services" => PluginRegistry.sanitize_for_json(m.services || []),
               "dashboard_view" => m.dashboard_view,
             "physical_path" => m.physical_path,
-            "size_bytes" => size_bytes,
-            "wasm_size_bytes" => size_bytes
+            "size_bytes" => size_bytes
           }
 
           {:ok, %{plugin: plugin_data}}
@@ -136,7 +133,6 @@ defmodule Exoforge.Std.PluginManager do
         _ = PluginBootstrapper.unload_plugin(name_str)
 
         case plugin_type do
-          :wasm -> handle_upload_wasm(name_str, raw_binary, manifest_param)
           :native -> handle_upload_native(name_str, raw_binary, manifest_param)
           :elixir -> handle_upload_elixir(name_str, elixir_code, files_map, manifest_param)
         end
@@ -261,14 +257,14 @@ defmodule Exoforge.Std.PluginManager do
 
   defp find_manifest(_), do: nil
 
-  defp detect_plugin_type(type, raw_wasm, elixir_code, files_map) do
+  # A binary is native, source is Elixir. There was a third kind; it is a runner away, and adding one
+  # back means a clause here and a handler beside `handle_upload_native/3`.
+  defp detect_plugin_type(type, _raw_binary, elixir_code, files_map) do
     type_str = to_string(type || "") |> String.downcase()
 
     cond do
-      type_str == "wasm" -> :wasm
-      type_str == "native" -> :native
+      type_str in ["native", "wasm"] -> :native
       type_str == "elixir" -> :elixir
-      not is_nil(raw_wasm) and raw_wasm != "" -> :wasm
       not is_nil(elixir_code) and elixir_code != "" -> :elixir
       is_map(files_map) and map_size(files_map) > 0 -> :elixir
       true -> nil
@@ -297,33 +293,6 @@ defmodule Exoforge.Std.PluginManager do
         load_and_boot_plugin(target_dir, clean_name, :native)
       else
         _ -> {:error, :write_failed}
-      end
-    end
-  end
-
-  defp handle_upload_wasm(name_str, raw_wasm, manifest_param) do
-    if is_nil(raw_wasm) or raw_wasm == "" do
-      {:error, :invalid_package}
-    else
-      clean_name = sanitize_name(name_str)
-      wasm_bytes = decode_binary(raw_wasm)
-
-      case wasm_bytes do
-        <<0, 97, 115, 109, _rest::binary>> ->
-          target_dir = upload_target_dir(clean_name)
-          wasm_path = Path.join(target_dir, "#{clean_name}.wasm")
-          manifest_path = Path.join(target_dir, "manifest.json")
-
-          with :ok <- File.mkdir_p(target_dir),
-               :ok <- File.write(wasm_path, wasm_bytes),
-               :ok <- write_manifest_file(manifest_path, clean_name, manifest_param, :wasm) do
-            load_and_boot_plugin(target_dir, clean_name, :wasm)
-          else
-            _ -> {:error, :write_failed}
-          end
-
-        _invalid ->
-          {:error, :invalid_package}
       end
     end
   end
@@ -412,13 +381,7 @@ defmodule Exoforge.Std.PluginManager do
 
   defp calculate_plugin_size(m) do
     if m.physical_path && File.dir?(m.physical_path) do
-      pattern =
-        case m.type do
-          :wasm -> Path.join(m.physical_path, "*.wasm")
-          _ -> Path.join([m.physical_path, "**", "*"])
-        end
-
-      Path.wildcard(pattern)
+      Path.wildcard(Path.join([m.physical_path, "**", "*"]))
       |> Enum.reduce(0, fn file, acc ->
         if File.regular?(file) do
           acc + (File.stat(file) |> elem(1) |> Map.get(:size, 0))

@@ -372,23 +372,12 @@ public partial class ExoforgeControlCenter : EditorWindow
                     .FirstOrDefault(path => !IsBuildPath(path)) ?? "";
             }
 
-            string buildSh = Path.Combine(dir, "build.sh");
-            bool canBuild = File.Exists(csproj) || File.Exists(buildSh);
+            bool canBuild = File.Exists(csproj);
 
             string pluginType = "native";
-            string binaryPath = "";
 
-            var wasmFiles = Directory.GetFiles(dir, "*.wasm", SearchOption.AllDirectories);
-            if (wasmFiles.Length > 0)
-            {
-                pluginType = "wasm";
-                binaryPath = wasmFiles[0];
-            }
-            else
-            {
-                // `exo plugin build` stages it under .exoforge/; the plugin root is the older layout.
-                binaryPath = ExoDeployer.StagedBinary(dir, name);
-            }
+            // `exo plugin build` stages it under .exoforge/; the plugin root is the older layout.
+            string binaryPath = ExoDeployer.StagedBinary(dir, name);
 
             bool isBuilt = binaryPath != "" && File.Exists(binaryPath);
             long size = isBuilt ? new FileInfo(binaryPath).Length : 0;

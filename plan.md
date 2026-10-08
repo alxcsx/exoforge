@@ -49,18 +49,18 @@ plugin_manager ───▶ (independent root)
 
 | M | Delivered |
 | :--- | :--- |
-| **M1–M6** | Kernel (`PluginRegistry` ETS, `ActionDispatcher`, `EventDispatcher`), Bandit HTTP/WS ingress, WASM runtime (`wasmex`), SQLite DB, Auth, PlayerData |
+| **M1–M6** | Kernel (`PluginRegistry` ETS, `ActionDispatcher`, `EventDispatcher`), Bandit HTTP/WS ingress, SQLite DB, Auth, PlayerData |
 | **M7–M13** | Producer Studio (LiveView, `:4005`), Horde delta-CRDT virtual actors, `:pg` event fanout, cluster benchmark, Kubernetes manifests |
 | **M14–M17** | `Cmd+K` palette, actor passivation, typed resources (`[ExoResource]`), dynamic action forms, C# client generation |
 | **M18** | Zero compiler warnings, WebSocket `AuthenticateAsync`, green E2E slice |
-| **M19** | `exoforge_std_plugin_manager`: hot WASM upload, runtime reload, manifest export |
+| **M19** | `exoforge_std_plugin_manager`: hot plugin upload, runtime reload, manifest export |
 | **M20** | C# Management engine + `exo` CLI — `init`, `plugin new\|build\|push\|dev\|reload\|logs\|stubs\|list\|remove`, `sync`, `status`. `push` verifies the deployed version; `dev` redeploys on save; `logs` reads back plugin output |
 | **M21** | Unity SDK `com.exoforge.sdk` — one game-facing entry point (`ExoforgeSDK.Auth`/`.Client`/`.ConnectAsync`), device-keyed two-stage anonymous sign-in, prefab created on demand, `Samples~/BasicUsage` |
 | **M22** | Control Center window — cluster ping, environment switcher, event monitor, action sandbox, plugin scaffold/build/deploy/logs, typed codegen. Split across `ExoforgeControlCenter*.cs` partials; `just pack-unity` builds the tarball |
 | **M23** | SQLite local mode — `Exoforge.Std.Database.Adapters.Sqlite` + `:sqlite` driver, no PostgreSQL daemon needed |
 | **M24** | Plugin Tooling DX ([`DX.md`](DX.md)) — 21 fixes across plugin creation, upload and management |
 | **M25** | LiveOps *(withdrawn)* — time windows, schedule timeline and calendar view removed; game rules belong in the game, not the platform |
-| **M26** | `Exoforge.Plugin.Generator` — a Roslyn source generator replaces the out-of-process `ManifestGen` tool. The manifest, the entry point, the action/event dispatch table and the contract interfaces come from the plugin's own compile, so native and WASM builds share one pipeline, the host no longer reflects over a generated plugin's methods, and a C# plugin declares services on a class or on a contract interface in its own assembly |
+| **M26** | `Exoforge.Plugin.Generator` — a Roslyn source generator replaces the out-of-process `ManifestGen` tool. The manifest, the entry point, the action/event dispatch table and the contract interfaces come from the plugin's own compile, so every build shares one pipeline, the host no longer reflects over a generated plugin's methods, and a C# plugin declares services on a class or on a contract interface in its own assembly |
 | **M27** | Self-Contained Unity Package — no symlink leaves the package, no path is resolved by walking out of it, and nothing in package code names this repository's layout |
 | **M28** | SDK Runtime Hardening — four correctness bugs and six DX problems on the game-facing path, each with a test that fails when the fix is reverted |
 | **M29** | Engine-Agnostic C# Core — the C# client and plugin tooling moved out of the Unity package, which now contains only Unity-specific code and ships the libraries as binaries |
@@ -76,8 +76,8 @@ shortest working path.
 
 - **One code generator.** Pure C# `ExoCodeGenerator` is the single source for client bindings; the
   old Mix task is gone.
-- **Keep the WASM host boundary small.** JSON over memory buffers, no per-plugin FFI bindings, so any
-  WASI language works unchanged.
+- **The host boundary is a pipe.** JSON frames over stdin and stdout, no per-plugin bindings, so a
+  runtime that is not a process is a runner rather than a rewrite.
 - **No heavy ORMs.** Raw SQL or light `:postgrex`; actor state is a serialized blob, not a relational
   object graph.
 - **Zero-config containers.** Local defaults are baked into `docker-compose.yml`, the K8s manifests
@@ -113,9 +113,9 @@ Not planned. Recorded so they stop reappearing as "next":
 
 - **Unreal Engine SDK (`ExoforgeUE`)** — a second engine client. M29/M30 already did the work that
   would make this cheap (engine SDKs ship the dotnetSDK binaries), but nothing needs it yet.
-- **Clustered matchmaking / lobby** — Horde-backed matchmaking by MMR and latency.
-- **Non-standard plugin runtimes** — anything beyond native (AOT), WASM reactor and Elixir. The
-  three runtimes cover first-party, sandboxed third-party and system plugins.
+- **Clustered matchmaking / lobby** — matchmaking by MMR and latency.
+- **Non-standard plugin runtimes** — anything beyond native (AOT) and Elixir. A sandboxed runtime
+  is the obvious next one, and it is a runner rather than a rewrite.
 
 ---
 
@@ -125,7 +125,7 @@ Three buckets, one rule: **no engine SDK owns engine-agnostic code.**
 
 | Bucket | Is | Holds |
 | :--- | :--- | :--- |
-| **Exo** | language-agnostic deploy & management | the CLI. Deploys C#, Elixir and WASM alike; carries no build logic of its own |
+| **Exo** | language-agnostic deploy & management | the CLI. Deploys C# and Elixir alike; carries no build logic of its own |
 | **dotnetSDK** | C#-specific | plugin authoring (`Exoforge.Plugin.SDK`), manifest gen, build and codegen tooling, the C# client |
 | **unitySDK** | Unity-specific | the UPM package: Unity runtime wrappers, editor tooling, and the dotnetSDK assemblies as binaries |
 

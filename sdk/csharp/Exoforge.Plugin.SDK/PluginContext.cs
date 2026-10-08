@@ -35,13 +35,21 @@ public class HostPluginContext : IPluginContext
     /// Inspects plugin object properties and injects services decorated with [Inject].
     /// Handles both instance and static members, so plain plugin classes get their dependencies too.
     /// </summary>
-    [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Run<T> roots PublicProperties/NonPublicProperties on the plugin type.")]
-    public static void Wire(object target, IPluginContext context)
+    // Every Run overload roots the plugin type's properties, which is what keeps this call safe. One
+    // that stops doing so makes this a lie, and the failure is a null dependency at runtime rather
+    // than a warning at build time.
+    [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Every Run overload roots PublicProperties/NonPublicProperties on the plugin type.")]
+    public static void Wire(
+        [DynamicallyAccessedMembers(
+            DynamicallyAccessedMemberTypes.PublicProperties |
+            DynamicallyAccessedMemberTypes.NonPublicProperties)] object target,
+        IPluginContext context)
     {
         if (target == null || context == null) return;
 
         var type = target.GetType();
         var props = type.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+
 
         foreach (var prop in props)
         {

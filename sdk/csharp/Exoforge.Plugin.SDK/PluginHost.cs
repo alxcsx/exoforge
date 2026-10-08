@@ -85,10 +85,18 @@ public static class PluginHost
 
     /// <summary>
     /// Runs <typeparamref name="T"/> with a source-generated JSON context and a compile-time dispatch
-    /// table. This is the overload generated plugins use: nothing reflects over the plugin's methods,
-    /// so NativeAOT trimming needs no annotations to keep them alive.
+    /// table. This is the overload generated plugins use.
     /// </summary>
-    public static void Run<T, TContext, TDispatch>()
+    /// <remarks>
+    /// The dispatch table means nothing reflects over the plugin's <em>methods</em>, but the
+    /// <c>[Inject]</c> wiring still reflects over its <em>properties</em>, so they have to be rooted
+    /// like the others. Without this they are trimmed away, <c>Wire</c> finds nothing, and every
+    /// injected dependency is null at runtime — silently, until an action dereferences one.
+    /// </remarks>
+    public static void Run<[DynamicallyAccessedMembers(
+        DynamicallyAccessedMemberTypes.PublicProperties |
+        DynamicallyAccessedMemberTypes.NonPublicProperties |
+        DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] T, TContext, TDispatch>()
         where T : class, new()
         where TContext : JsonSerializerContext, new()
         where TDispatch : IExoforgeDispatch, new()
@@ -98,10 +106,19 @@ public static class PluginHost
     }
 
     /// <summary>Runs a plugin instance until stdin closes, discovering its actions by reflection.</summary>
-    public static int RunInstance(object instance) => RunInstance(instance, dispatch: null);
+    /// <remarks>
+    /// The instance is annotated because <c>[Inject]</c> wiring reflects over its properties. A plugin
+    /// without a JSON context — one with no record-returning action — reaches the runtime through here
+    /// rather than through a <c>Run&lt;T, …&gt;</c>, so this is the only thing keeping them alive.
+    /// </remarks>
+    public static int RunInstance([DynamicallyAccessedMembers(
+        DynamicallyAccessedMemberTypes.PublicProperties |
+        DynamicallyAccessedMemberTypes.NonPublicProperties)] object instance) => RunInstance(instance, dispatch: null);
 
     /// <summary>Runs a plugin instance with a compile-time dispatch table until stdin closes.</summary>
-    public static int RunInstance(object instance, IExoforgeDispatch? dispatch)
+    public static int RunInstance([DynamicallyAccessedMembers(
+        DynamicallyAccessedMemberTypes.PublicProperties |
+        DynamicallyAccessedMemberTypes.NonPublicProperties)] object instance, IExoforgeDispatch? dispatch)
     {
         _stdout = Console.OpenStandardOutput();
         RunInstance(instance, new StreamReader(Console.OpenStandardInput(), Encoding.UTF8), dispatch);
@@ -113,10 +130,14 @@ public static class PluginHost
     /// host calls read through the same one, because two readers over one stdin each buffer ahead
     /// and lose whatever the other buffered.
     /// </summary>
-    internal static void RunInstance(object instance, TextReader reader) =>
+    internal static void RunInstance([DynamicallyAccessedMembers(
+        DynamicallyAccessedMemberTypes.PublicProperties |
+        DynamicallyAccessedMemberTypes.NonPublicProperties)] object instance, TextReader reader) =>
         RunInstance(instance, reader, dispatch: null);
 
-    internal static void RunInstance(object instance, TextReader reader, IExoforgeDispatch? dispatch)
+    internal static void RunInstance([DynamicallyAccessedMembers(
+        DynamicallyAccessedMemberTypes.PublicProperties |
+        DynamicallyAccessedMemberTypes.NonPublicProperties)] object instance, TextReader reader, IExoforgeDispatch? dispatch)
     {
         _stdin = reader;
         HostBridge.UseTransport(new NativeTransport());

@@ -122,8 +122,11 @@ build-plugins:
 	plugin=plugins_csharp/sample_plugin
 	rid=$(dotnet --info | awk '/RID:/ {print $2; exit}')
 	dotnet publish "$plugin/sample_plugin.csproj" -c Release -r "$rid" -v q --nologo
-	cp "$plugin/bin/Release/net10.0/$rid/publish/sample_plugin" "$plugin/sample_plugin"
-	chmod +x "$plugin/sample_plugin"
+	# Replaced, not overwritten: a server running the plugin holds the binary open, and writing over a
+	# busy file fails with "Text file busy".
+	cp "$plugin/bin/Release/net10.0/$rid/publish/sample_plugin" "$plugin/sample_plugin.new"
+	chmod +x "$plugin/sample_plugin.new"
+	mv -f "$plugin/sample_plugin.new" "$plugin/sample_plugin"
 	echo "[build-plugins] $plugin/sample_plugin"
 
 # Run backend in production mode (foreground)

@@ -1,7 +1,7 @@
 # Exoforge
 
 > **The High-Performance, Modular Game Backend Platform & LiveOps Engine.**  
-> Built on Erlang/BEAM, WebAssembly (WASI), and native Unity / C# integration.
+> Built on Erlang/BEAM, with native C# plugins and Unity integration.
 
 [![Build Status](https://img.shields.io/badge/tests-181%20passing-brightgreen)](Justfile)
 [![E2E Vertical Slice](https://img.shields.io/badge/E2E%20Slice-verified%20live-blue)](sdk/csharp/Exoforge.Client.Tests/VerticalSliceIntegrationTests.cs)
@@ -16,7 +16,7 @@ Exoforge is an open, high-density game backend and LiveOps platform. It combines
 
 ### What it is for
 
-- **Authoritative Gameplay Logic**: Run combat calculations, inventory reconciliation, loot tables, and economy logic on the server using C# compiled to WebAssembly (WASI).
+- **Authoritative Gameplay Logic**: Run combat calculations, inventory reconciliation, loot tables, and economy logic on the server, in C# compiled ahead of time.
 - **Zero-Downtime LiveOps**: Update drop rates, rebalance gameplay numbers, and deploy new game rules dynamically without rebuilding game clients or awaiting app store approvals.
 - **Stateful Plugins, Not a Framework**: A plugin *is* the actor — a supervised, long-lived process holding its own state, free to spawn a worker per matchmaking queue, game room, or chat channel. There is no grain API to learn and nothing to adopt.
 - **Unified Game Services**: Provides out-of-the-box identity, isolated multi-tenant databases, real-time WebSocket pub/sub, dynamic REST APIs, and a LiveView designer studio.
@@ -33,7 +33,7 @@ Exoforge is an open, high-density game backend and LiveOps platform. It combines
 |      REST INGRESS (:4001)         |        WEBSOCKET INGRESS (:4000)     |
 |   (Dynamic OpenAPI Routes)        |   (Real-time JSON/Binary Protocol)   |
 +-----------------------------------+--------------------------------------+
-|                 SANDBOXED C# WASM PLUGINS (WASI Runtime)                  |
+|                      NATIVE C# PLUGINS (AOT)                             |
 |          authoritative combat • inventory • liveops • matchmaking        |
 +--------------------------------------------------------------------------+
 |                     STANDARD EXTENSION SERVICES                          |
@@ -77,7 +77,7 @@ The kernel is minimal and deterministic, containing only:
 - **`EventDispatcher`**: Real-time pub/sub bus with pattern matching and Registry fanout.
 - **`WorkerRegistry`**: Named singleton process locator.
 - **`PluginSupervisor` & `PluginBootstrapper`**: Topological DAG ordering and process lifecycle.
-- **Plugin Drivers**: Native Elixir (`ElixirPluginRunner`) and WASM (`WasmPluginRunner`).
+- **Plugin Drivers**: Native Elixir (`ElixirPluginRunner`) and native C# (`NativePluginRunner`).
 
 All networking, storage, authentication, and game domains exist as swappable plugins.
 
@@ -93,7 +93,7 @@ All networking, storage, authentication, and game domains exist as swappable plu
 | `exoforge_std_http` | REST (:4001) | `:http` | Dynamic OpenAPI endpoints generated directly from service contracts. |
 | `exoforge_std_ws` | Realtime (:4000) | `:ws` | Low-latency binary and JSON WebSocket framing for actions and event pub/sub. |
 | `exoforge_std_dashboard` | Studio (:4005) | `:dashboard_view` | Game Producer & Designer Studio (LiveView UI, actor inspector, schedule calendars). |
-| `exoforge_std_plugin_manager` | Lifecycle | `:plugin_manager` | Runtime plugin lifecycle, hot WASM binary uploads, and manifest exports. |
+| `exoforge_std_plugin_manager` | Lifecycle | `:plugin_manager` | Runtime plugin lifecycle, hot binary uploads, and manifest exports. |
 
 ---
 
@@ -184,7 +184,7 @@ the [.NET 10.0 SDK](https://dotnet.microsoft.com), and
 # Run all tests (Core, Plugins, System, C# SDKs)
 just test
 
-# Run live end-to-end integration test (Client -> WS -> WASM -> Event -> Client)
+# Run live end-to-end integration test (Client -> WS -> Plugin -> Event -> Client)
 just test-e2e
 
 # Start the local development server (WS :4000, REST :4001, Studio :4005)
@@ -223,12 +223,12 @@ just k8s-deploy
 │   ├── exoforge_std_ws/          # WebSocket binary/JSON ingress
 │   ├── exoforge_std_dashboard/   # Phoenix LiveView Producer Studio
 │   └── exoforge_std_plugin_manager/ # Runtime plugin lifecycle & upload
-├── plugins_csharp/               # Sample C# WASM Plugins
-│   └── combat_wasm/              # Authoritative combat logic compiled to WASM
+├── plugins_csharp/               # Sample C# plugins
+│   └── sample_plugin/            # The reference plugin, and the E2E test subject
 ├── sdk/
 │   ├── csharp/                   # Pure C# SDKs & Tooling
 │   │   ├── Exoforge.Client/      # Runtime client library (.NET Standard 2.1)
-│   │   ├── Exoforge.Plugin.SDK/  # Attributes and interfaces for C# WASM plugins
+│   │   ├── Exoforge.Plugin.SDK/  # Attributes and interfaces for C# plugins
 │   │   ├── Exoforge.Management/  # Workspace, scaffolding, and code generation engine
 │   │   └── Exoforge.CLI/         # `exo` command-line executable
 │   └── unity/

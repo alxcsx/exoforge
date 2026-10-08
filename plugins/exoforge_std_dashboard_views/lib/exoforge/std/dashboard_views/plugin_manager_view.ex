@@ -119,7 +119,7 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
        upload_file_info: nil,
        upload_form: %{
          "name" => "",
-         "type" => "wasm",
+         "type" => "native",
          "binary" => "",
          "elixir_code" => "",
          "manifest_json" => ""
@@ -330,11 +330,6 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
 
   defp format_uptime(_), do: "—"
 
-  defp wasm_plugin?(plugin) do
-    type = String.downcase(to_string(plugin["type"] || ""))
-    type in ["wasm", "c# wasm", "wasi"]
-  end
-
   defp csharp_snippet(plugin) do
     provides = plugin["provides"] || ["service"]
 
@@ -364,8 +359,6 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
   @impl true
   def render(assigns) do
     total_plugins = length(assigns.plugins)
-    wasm_count = Enum.count(assigns.plugins, &wasm_plugin?/1)
-    native_count = total_plugins - wasm_count
     memory_mb = Map.get(assigns.system_info, "memory_mb", 0.0)
     node_name = Map.get(assigns.system_info, "node", "nonode@nohost")
     uptime = format_uptime(Map.get(assigns.system_info, "uptime_seconds"))
@@ -375,8 +368,6 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
     assigns =
       assigns
       |> assign(:total_plugins, total_plugins)
-      |> assign(:wasm_count, wasm_count)
-      |> assign(:native_count, native_count)
       |> assign(:memory_mb, memory_mb)
       |> assign(:node_name, node_name)
       |> assign(:uptime, uptime)
@@ -592,7 +583,6 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
               </thead>
               <tbody class="divide-y divide-gray-100 text-sm">
                 <%= for plugin <- @filtered_plugins do %>
-                  <% is_wasm = wasm_plugin?(plugin) %>
                   <tr class="hover:bg-violet-50/20 transition-colors group">
                     <td class="py-3 px-4">
                       <div class="flex items-center gap-3">
@@ -650,8 +640,7 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
                           Inspect
                         </button>
 
-                        <%= if is_wasm do %>
-                          <button
+                        <button
                             phx-click="remove_plugin"
                             phx-value-id={plugin["id"]}
                             phx-target={@myself}
@@ -661,11 +650,6 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
                           >
                             Remove
                           </button>
-                        <% else %>
-                          <span class="text-[11px] text-gray-400 px-1 font-medium" title="Core system plugin cannot be removed">
-                            System
-                          </span>
-                        <% end %>
                       </div>
                     </td>
                   </tr>
@@ -765,7 +749,6 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
                   </div>
                 <% end %>
           <div class="pt-4 border-t border-gray-100 flex items-center justify-between">
-              <%= if wasm_plugin?(@selected_plugin) do %>
                 <button
                   phx-click="remove_plugin"
                   phx-value-id={@selected_plugin["id"]}
@@ -775,10 +758,6 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
                 >
                   Unload &amp; Remove Plugin
                 </button>
-              <% else %>
-                <span class="text-xs text-gray-400 italic">Built-in standard plugin</span>
-              <% end %>
-
               <button
                 phx-click="close_focus"
                 class="px-4 py-2 text-xs font-bold text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-xl transition-colors shadow-sm ml-auto"
@@ -826,13 +805,13 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
                     <input
                       type="radio"
                       name="upload[type]"
-                      value="wasm"
+                      value="native"
                       checked={@upload_form["type"] != "elixir"}
                       class="text-violet-600 focus:ring-violet-500"
                     />
                     <div>
-                      <span class="text-xs font-bold block">C# WASM</span>
-                      <span class="text-[10px] text-gray-500">Compiled .wasm binary</span>
+                      <span class="text-xs font-bold block">C# Native</span>
+                      <span class="text-[10px] text-gray-500">A compiled plugin binary</span>
                     </div>
                   </label>
                   <label class={"flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition-colors #{if @upload_form["type"] == "elixir", do: "border-violet-500 bg-violet-50/50 text-violet-900", else: "border-gray-200 bg-gray-50 text-gray-700"}"}>
@@ -857,7 +836,7 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
                   type="text"
                   name="upload[name]"
                   value={@upload_form["name"]}
-                  placeholder={if @upload_form["type"] == "elixir", do: "e.g. custom_quest", else: "e.g. my_wasm_plugin"}
+                  placeholder={if @upload_form["type"] == "elixir", do: "e.g. custom_quest", else: "e.g. my_plugin"}
                   class="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:bg-white font-mono"
                 />
               </div>

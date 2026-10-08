@@ -59,33 +59,15 @@ public class ExoDeployer
         string cleanName = pluginName.Trim().ToLowerInvariant().Replace("-", "_");
         string pluginDir = Path.Combine(_workspace.PluginsPath, cleanName);
 
-        // A plugin is either a WASM reactor (.wasm) or a native AOT binary (no extension).
-        string? wasmPath = null;
-        string wasmCandidate = Path.Combine(pluginDir, $"{cleanName}.wasm");
-
-        if (File.Exists(wasmCandidate))
-        {
-            wasmPath = wasmCandidate;
-        }
-        else
-        {
-            var matches = Directory.GetFiles(pluginDir, "*.wasm", SearchOption.AllDirectories)
-                .Where(path => !IsBuildPath(path))
-                .ToArray();
-
-            if (matches.Length > 0)
-            {
-                wasmPath = matches[0];
-            }
-        }
-
-        string pluginType = wasmPath != null ? "wasm" : "native";
-        string binaryPath = wasmPath ?? StagedBinary(pluginDir, cleanName);
+        // One compiled kind: the native binary the runner spawns. A runtime that is not a process -
+        // a WASM reactor, say - adds a branch here and a runner in the kernel.
+        string pluginType = "native";
+        string binaryPath = StagedBinary(pluginDir, cleanName);
 
         if (!File.Exists(binaryPath))
         {
             throw new FileNotFoundException(
-                $"No plugin binary found for '{cleanName}' (expected {cleanName}.wasm or {cleanName}). Build it first.");
+                $"No plugin binary found for '{cleanName}' (expected {cleanName}). Build it first.");
         }
 
         byte[] binaryBytes = await File.ReadAllBytesAsync(binaryPath, cancellationToken).ConfigureAwait(false);
@@ -688,23 +670,10 @@ public class ExoDeployer
         string buildStamp = $"{buildNumber}.{fingerprint}";
         Emit($"[build] build {buildStamp}");
 
-        string buildSh = Path.Combine(pluginDir, "build.sh");
-        string pluginType;
-        string binaryPath;
-
-        if (File.Exists(buildSh))
-        {
-            pluginType = "wasm";
-            Emit("[build] bash build.sh");
-            RunProcess("bash", $"\"{RelativeTo(pluginDir, buildSh)}\"", pluginDir, Emit);
-            binaryPath = FindFile(pluginDir, cleanName + ".wasm")
-                ?? throw new FileNotFoundException($"build.sh did not produce a .wasm for '{cleanName}'.");
-        }
-        else
-        {
-            pluginType = "native";
-            binaryPath = PublishNative(csproj ?? throw new FileNotFoundException($"No .csproj found for '{cleanName}'."), pluginDir, cleanName, rid, dotnet, buildStamp, Emit);
-        }
+        // One compiled kind. The `build.sh` hook was how a WASM guest was built; a runtime that needs
+        // its own toolchain adds that branch back alongside its runner.
+        string pluginType = "native";
+        string binaryPath = PublishNative(csproj ?? throw new FileNotFoundException($"No .csproj found for '{cleanName}'."), pluginDir, cleanName, rid, dotnet, buildStamp, Emit);
 
         CommitBuildNumber(pluginDir, buildNumber);
 

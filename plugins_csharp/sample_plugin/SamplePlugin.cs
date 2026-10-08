@@ -51,6 +51,13 @@ public class SamplePlugin
         return newValue;
     }
 
+    /// <summary>
+    /// What the host actually injected. Temporary: this is how the `Object reference not set` in
+    /// `Increment` gets located - whether the property is null, or whether it was never found.
+    /// </summary>
+    [ExoAction("injected")]
+    public string Injected() => $"database={Database is not null} events={Events is not null}";
+
     /// <summary>Returns what it was given.</summary>
     [ExoAction("echo")]
     public int Echo(int value) => value;
