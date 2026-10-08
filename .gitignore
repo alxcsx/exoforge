@@ -36,6 +36,10 @@ sdk/unity/Exoforge.SDK/*/Plugins/
 !**/Tools~/
 !**/Tools~
 
+# The sample's copy of the Unity package, placed by `just unity-sync`. The sample names no path
+# outside itself, so the package is copied in - and being a copy, it is output, not source.
+sdk/unity/sample_unity/Packages/com.exoforge.sdk/
+
 # === Test & Coverage Reports ===
 .htmlcov/
 log/*.log
@@ -80,3 +84,8 @@ sdk/unity/sample_unity/*.slnx
 
 # Unity/Mono crash dumps.
 sdk/unity/sample_unity/mono_crash.*.json
+
+# Whatever `-runTests` was last told to write. The Justfile points it at /tmp; an editor run does
+# not, and drops the file next to the project.
+sdk/unity/sample_unity/TestResults*.xml
+sdk/unity/sample_unity/*.log

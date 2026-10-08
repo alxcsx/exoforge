@@ -1,4 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
@@ -9,28 +10,20 @@
     <InvariantGlobalization>true</InvariantGlobalization>
 
     <!--
-      Consumed by Exoforge.Plugin.Generator: it writes manifest.exs next to the plugin and stamps
-      the build metadata into the version. ExoDeployer overrides ExoforgeBuildStamp per build.
+      An Exoforge plugin, and that is the whole declaration. The package below carries the SDK, the
+      generator and the manifest plumbing, so this project builds from a feed wherever it is put -
+      including with no Exoforge checkout anywhere near it, which is the point of the sample.
     -->
+    <ExoforgePlugin>true</ExoforgePlugin>
+
+    <!-- A native plugin is a process. Building it through the CLI overrides the build stamp. -->
     <ExoforgePluginType>native</ExoforgePluginType>
-    <ExoforgeManifestPath Condition="'$(ExoforgeManifestPath)' == ''">$(MSBuildProjectDirectory)/../manifest.exs</ExoforgeManifestPath>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../../../../../csharp/Exoforge.Plugin.SDK/Exoforge.Plugin.SDK.csproj" />
-    <ProjectReference Include="../../../../../../csharp/Exoforge.Plugin.Generator/Exoforge.Plugin.Generator.csproj"
-                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <!-- Inside the Exoforge repository the root Directory.Build.targets swaps this for the sources
+         beside it, so an edit to the SDK lands in the next build here with nothing to sync. -->
+    <PackageReference Include="Exoforge.Plugin.SDK" Version="0.1.0" />
   </ItemGroup>
 
-  <ItemGroup>
-    <!-- The manifest is a build output the generator writes, so a missing one has to re-run the
-         compile rather than being treated as up to date. -->
-    <UpToDateCheckOutput Include="$(ExoforgeManifestPath)" />
-    <FileWrites Include="$(ExoforgeManifestPath)" />
-
-    <CompilerVisibleProperty Include="ExoforgePluginType" />
-    <CompilerVisibleProperty Include="ExoforgeBuildStamp" />
-    <CompilerVisibleProperty Include="ExoforgeManifestPath" />
-    <CompilerVisibleProperty Include="DesignTimeBuild" />
-  </ItemGroup>
 </Project>

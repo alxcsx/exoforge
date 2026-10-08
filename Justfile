@@ -58,16 +58,17 @@ test: test-core test-plugins test-system test-sdk
 test-core:
 	(cd core && mix test)
 
-# Test all standard plugins
+# Test every standard plugin. Each is its own Mix project with its own deps directory, and only the
+# root's are fetched by a checkout: without `mix deps.get` here the first plugin dies with "Unchecked
+# dependencies for environment test" and the other seven never run.
 test-plugins:
-	(cd plugins/exoforge_std_database && mix test)
-	(cd plugins/exoforge_std_auth && mix test)
-	(cd plugins/exoforge_std_player_data && mix test)
-	(cd plugins/exoforge_std_http && mix test)
-	(cd plugins/exoforge_std_ws && mix test)
-	(cd plugins/exoforge_std_dashboard && mix test)
-	(cd plugins/exoforge_std_dashboard_views && mix test)
-	(cd plugins/exoforge_std_plugin_manager && mix test)
+	#!/usr/bin/env bash
+	set -euo pipefail
+	for dir in plugins/*/; do
+		[ -f "$dir/mix.exs" ] || continue
+		echo "== $dir"
+		(cd "$dir" && mix deps.get >/dev/null && mix test)
+	done
 
 # Test root system integration
 test-system:
@@ -75,10 +76,11 @@ test-system:
 
 # Test C# SDKs (Client, Plugin SDK, Generator & Management Engine)
 test-sdk:
-	dotnet test sdk/csharp/Exoforge.Client.Tests
-	dotnet test sdk/csharp/Exoforge.Plugin.SDK.Tests
-	dotnet test sdk/csharp/Exoforge.Plugin.Generator.Tests
-	dotnet test sdk/csharp/Exoforge.Management.Tests
+	#!/usr/bin/env bash
+	set -euo pipefail
+	for suite in Exoforge.Client.Tests Exoforge.Plugin.SDK.Tests Exoforge.Plugin.Generator.Tests Exoforge.Management.Tests; do
+		dotnet test "sdk/csharp/$suite"
+	done
 	# A WASM plugin's assembly is a contract, not a host process: it has no dispatch table and no
 	# entry point of its own, so compiling one is the check that the generator still agrees.
 	dotnet build plugins_csharp/sample_wasm/sample_wasm.csproj -v q --nologo
@@ -193,25 +195,76 @@ k8s-deploy:
 k8s-destroy:
 	kubectl delete -k deploy/k8s
 
+# ---- Unity SDK Package ----
+
+# Place the built package inside the sample, where Unity picks it up as an embedded package.
+#
+# The sample names no path outside itself - it is an example, and it has to open and run for someone
+# who has this repository nowhere near them. So the package is copied in rather than referenced, and
+# Packages/manifest.json lists only real registry packages.
+unity-sync: build-unity-sdk
+	#!/usr/bin/env bash
+	set -euo pipefail
+	dest="{{SAMPLE}}/Packages/com.exoforge.sdk"
+	rm -rf "$dest"
+	mkdir -p "$dest"
+	cp -RL sdk/unity/Exoforge.SDK/. "$dest/"
+	find "$dest" -type d \( -name bin -o -name obj \) -prune -exec rm -rf {} +
+	echo "[unity-sync] package placed in {{SAMPLE}}/Packages/com.exoforge.sdk"
+
+# Rebuild and re-place the package whenever the SDK changes. For editing the package or the C#
+# libraries: nothing to remember to run, and Unity reimports on its own when the files change.
+watch-unity:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	watched=(sdk/unity/Exoforge.SDK sdk/csharp/Exoforge.Client sdk/csharp/Exoforge.Management sdk/csharp/Exoforge.Plugin.SDK sdk/csharp/Exoforge.Plugin.Generator)
+	# Polling rather than inotify: it costs a `find` a second, and needs nothing installed. `%T@` is
+	# mtime to the nanosecond, so a rewrite that keeps the size still shows up.
+	stamp() {
+		find "${watched[@]}" -type f \
+			\( -name '*.cs' -o -name '*.asmdef' -o -name '*.json' -o -name '*.csproj' -o -name '*.targets' \) \
+			-not -path '*/bin/*' -not -path '*/obj/*' -printf '%T@ %p\n' 2>/dev/null | sort | md5sum
+	}
+
+	previously=$(stamp)
+	just unity-sync
+	echo "[watch-unity] watching the package and the C# libraries - ctrl-c to stop"
+
+	while true; do
+		sleep 1
+		current=$(stamp)
+		[ "$current" = "$previously" ] && continue
+		previously=$current
+		if just unity-sync >/dev/null; then
+			echo "[watch-unity] rebuilt and placed at $(date +%T)"
+		else
+			echo "[watch-unity] build failed; still watching"
+		fi
+	done
+
 # ---- Unity Sample (CLI-driven) ----
 # The sample scene is built from code, not hand-edited YAML. Everything runs headless.
-UNITY := env_var_or_default("UNITY_PATH", "/Applications/Unity/Hub/Editor/6000.6.3f1/Unity.app/Contents/MacOS/Unity")
+# The Unity editor, found rather than assumed. UNITY_PATH wins; otherwise the newest Hub install on
+# either platform. The previous value was one hard-coded macOS path, which is wrong on every other
+# machine and does not say so - `just sample-check` just failed.
+UNITY := `if [ -n "${UNITY_PATH:-}" ]; then echo "$UNITY_PATH"; else found=$(ls -d "$HOME"/Unity/Hub/Editor/*/Editor/Unity "$HOME"/Unity/Hub/Editor/*/Unity.app/Contents/MacOS/Unity /Applications/Unity/Hub/Editor/*/Unity.app/Contents/MacOS/Unity /opt/unity/editors/*/Editor/Unity 2>/dev/null | tail -1); echo "${found:-$(command -v unity || echo unity)}"; fi`
 SAMPLE := "sdk/unity/sample_unity"
 
 # Private: stop Unity and clear its lockfile, so a batch run starts from a known state.
 _unity-reset:
 	#!/usr/bin/env bash
-	pkill -f "Unity.app/Contents/MacOS/Unity" 2>/dev/null || true
+	# By the editor's own name: the bundle path above is macOS's, and Linux's is different.
+	pkill -f "$(basename "{{UNITY}}")" 2>/dev/null || true
 	sleep 1
 	rm -f {{SAMPLE}}/Temp/UnityLockfile
 
 # Rebuild the sample scene (idempotent)
-sample-setup: build-unity-sdk _unity-reset
+sample-setup: unity-sync _unity-reset
 	@{{UNITY}} -batchmode -quit -nographics -projectPath "$(pwd)/{{SAMPLE}}" -executeMethod ExoforgeSampleSetup.SetUp -logFile /tmp/exoforge-sample-setup.log; status=$?; grep -E "ExoforgeSample\]" /tmp/exoforge-sample-setup.log || true; exit $status
 
 # Play mode, because Awake does not run in the editor — the session lifecycle is inert there.
 # Run the sample's play-mode tests (session lifecycle)
-sample-play-tests: build-unity-sdk _unity-reset
+sample-play-tests: unity-sync _unity-reset
 	#!/usr/bin/env bash
 	set -euo pipefail
 	rm -f /tmp/exoforge-play-tests.xml
@@ -222,14 +275,13 @@ sample-play-tests: build-unity-sdk _unity-reset
 	python3 -c "import xml.etree.ElementTree as E; r=E.parse('/tmp/exoforge-play-tests.xml').getroot(); print('  tests=%s passed=%s failed=%s' % (r.get('testcasecount'), r.get('passed'), r.get('failed')))"
 
 # Headless self-check for the sample (board pixel maths + leaderboard parsing)
-sample-check: build-unity-sdk _unity-reset
+sample-check: unity-sync _unity-reset
 	@{{UNITY}} -batchmode -nographics -projectPath "$(pwd)/{{SAMPLE}}" -executeMethod ExoforgeSampleCheck.Run -logFile /tmp/exoforge-sample-check.log; status=$?; grep -E "ExoforgeSampleCheck\]" /tmp/exoforge-sample-check.log || true; exit $status
 
 # ---- Unity SDK Package ----
 
 # Starts the backend, deploys the sample plugin, runs the tests, stops the server again.
-# Play-mode tests against a live cluster: the engine-side path, end to end
-sample-live-tests: build-unity-sdk
+sample-live-tests: unity-sync
 	#!/usr/bin/env bash
 	set -euo pipefail
 	pkill -f "mix run" 2>/dev/null || true
@@ -259,8 +311,9 @@ sample-live-tests: build-unity-sdk
 # next engine (Unreal, Godot) reuses the same libraries rather than reimplementing them.
 #
 # A build step rather than committed binaries: a checked-in DLL is a copy that can silently go stale,
-# which is the same failure a synced source file has.
-# Build the engine-agnostic C# libraries into the Unity package
+# which is the same failure a synced source file has. The package's own sources (Runtime/*.cs,
+# Editor/*.cs) are the real thing - nothing outside the package compiles them, so there is no second
+# copy of those to keep in step.
 build-unity-sdk root=".":
 	#!/usr/bin/env bash
 	set -euo pipefail
@@ -294,12 +347,8 @@ pack-sdk:
 	ls -1 dist/nuget
 
 
-# The Unity package's own sources (Runtime/*.cs, Editor/*.cs) are the real thing - nothing outside
-# the package compiles them, so there is no second copy to keep in step. What it does not own is the
-# compiled libraries it ships, which is what build-unity-sdk stages into it.
-
 # Force Unity to re-read the package (clears the import caches the editor builds up)
-unity-reimport: build-unity-sdk _unity-reset
+unity-reimport: unity-sync _unity-reset
 	#!/usr/bin/env bash
 	set -euo pipefail
 	project=sdk/unity/sample_unity
@@ -308,9 +357,8 @@ unity-reimport: build-unity-sdk _unity-reset
 	       "$project/Library/SourceAssetDB" "$project/Library/SourceAssetDB-lock"
 	echo "[unity-reimport] import caches cleared — Unity recompiles on next open"
 
-# Slow — creates a Unity project and runs a NativeAOT publish — but it is the only check that
-# tests what a consumer actually does.
-# Prove a new Unity project can install the package and build a plugin with no Exoforge checkout
+# Slow — creates a Unity project and runs a NativeAOT publish — but it is the only check that tests
+# what a consumer actually does.
 clean-room-sdk:
 	#!/usr/bin/env bash
 	set -euo pipefail
@@ -359,7 +407,8 @@ pack-unity:
 	rm -rf dist/package dist/com.exoforge.sdk-*.tgz
 	mkdir -p dist/package
 	cp -RL sdk/unity/Exoforge.SDK/. dist/package/
-	# The manifest generator ships as source; its build output should not.
+	# Build output in the package is not the package: Unity compiles what it is given, and a stale
+	# bin/ or obj/ is the source of a whole class of "works on my machine".
 	find dist/package -type d \( -name bin -o -name obj \) -prune -exec rm -rf {} +
 	tar -czf "dist/com.exoforge.sdk-${VERSION}.tgz" -C dist package
 	echo "[Exoforge] Created UPM package archive:"

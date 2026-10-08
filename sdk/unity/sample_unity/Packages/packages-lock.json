@@ -1,11 +1,5 @@
 {
   "dependencies": {
-    "com.exoforge.sdk": {
-      "version": "file:../../Exoforge.SDK",
-      "depth": 0,
-      "source": "local",
-      "dependencies": {}
-    },
     "com.unity.2d.animation": {
       "version": "16.0.1",
       "depth": 0,

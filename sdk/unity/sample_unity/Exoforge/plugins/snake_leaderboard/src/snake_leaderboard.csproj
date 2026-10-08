@@ -10,16 +10,20 @@
     <InvariantGlobalization>true</InvariantGlobalization>
 
     <!--
-      An Exoforge plugin, and that is the whole declaration. The repository's
-      Directory.Build.targets supplies the SDK, the generator and the manifest plumbing, so nothing
-      here names a path to another project - and the same file builds outside the repository, where
-      the published package supplies the same three things.
+      An Exoforge plugin, and that is the whole declaration. The package below carries the SDK, the
+      generator and the manifest plumbing, so this project builds from a feed wherever it is put -
+      including with no Exoforge checkout anywhere near it, which is the point of the sample.
     -->
     <ExoforgePlugin>true</ExoforgePlugin>
 
-    <!-- A native plugin is a process. ExoDeployer overrides the build stamp per build. The manifest
-         path is not set here: this is the scaffolded layout, so the default applies. -->
+    <!-- A native plugin is a process. Building it through the CLI overrides the build stamp. -->
     <ExoforgePluginType>native</ExoforgePluginType>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Inside the Exoforge repository the root Directory.Build.targets swaps this for the sources
+         beside it, so an edit to the SDK lands in the next build here with nothing to sync. -->
+    <PackageReference Include="Exoforge.Plugin.SDK" Version="0.1.0" />
+  </ItemGroup>
 
 </Project>

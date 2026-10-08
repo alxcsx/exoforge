@@ -46,13 +46,19 @@ sample_unity/
 │       ├── src/
 │       │   ├── snake_leaderboard.csproj
 │       │   ├── SnakeScore.cs          stored row + leaderboard entry records
-│       │   ├── SnakeJsonContext.cs    JSON metadata for this plugin's own records (NativeAOT)
 │       │   ├── SnakeLeaderboardPlugin.cs  the actions (talk to IDatabase directly)
 │       │   └── Generated/PluginServices.g.cs  typed player_data stubs (generated)
 │       ├── snake_leaderboard          built NativeAOT binary (generated, git-ignored)
 │       └── manifest.exs               GENERATED from the C# attributes
-└── Packages/manifest.json           references com.exoforge.sdk (file:../../Exoforge.SDK)
+├── Packages/
+│   ├── manifest.json                registry packages only — no path leaves this project
+│   └── com.exoforge.sdk/            the SDK, PLACED here by `just unity-sync` (git-ignored)
+└── ProjectSettings/
 ```
+
+**Nothing here points outside the project.** The sample is an example: it has to open and run for
+someone who has the Exoforge repository nowhere near them, so the SDK is copied in rather than
+referenced by path, and `Packages/` is the whole of what the project depends on.
 
 **Why the workspace is outside `Assets/`:** plugin sources are ordinary `dotnet` projects
 (`net10.0`, NativeAOT). Keeping them out of `Assets/` means Unity never imports, compiles, or
@@ -153,9 +159,16 @@ Snake still runs.
 
 ```bash
 just dev                # backend on :4000 (ws) / :4001 (http) / :4005 (studio)
+just unity-sync         # rebuild the SDK and place it in Packages/com.exoforge.sdk
+just watch-unity        # ...and keep doing that while you edit the SDK
 just sample-setup       # rebuild the scene via the Unity CLI (idempotent)
 just sample-check       # headless self-check; exit 0 = pass
 ```
+
+The SDK is a copy, so it goes stale the moment the package changes — which is why `just watch-unity`
+exists. It watches the package and the C# libraries it ships, rebuilds, and re-places them; Unity
+reimports on its own when the files change. Every `sample-*` recipe runs `unity-sync` first, so they
+never run against yesterday's package.
 
 `just sample-check` runs `ExoforgeSampleCheck.Run`, which covers the two fiddly bits — the board's
 pixel index maths and the leaderboard JSON parsing. Both are pure functions on purpose so they can
