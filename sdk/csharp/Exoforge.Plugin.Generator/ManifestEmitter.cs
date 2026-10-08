@@ -14,7 +14,8 @@ internal sealed record ColumnModel(
     bool Sortable,
     bool Filterable,
     bool Badge,
-    string? Role);
+    string? Role,
+    string? Default);
 
 internal sealed record ActionModel(
     string Name,
@@ -36,6 +37,7 @@ internal sealed record EventModel(
 
 internal sealed record ResourceModel(
     string Name,
+    string Source,
     string PrimaryKey,
     string[] Drawer,
     List<string> Actions,
@@ -163,6 +165,9 @@ internal static class ManifestEmitter
                 sb.Append("        {");
                 sb.Append($"\"name\": {Str(resource.Name)}, ");
                 sb.Append($"\"primary_key\": {Str(resource.PrimaryKey)}{record}, ");
+                // The shape `Exoforge.Std.Resources.normalize_source/1` reads. A bare string would not
+                // match, and a resource with no source is stored as an opaque key-value document.
+                sb.Append($"\"source\": {{\"table\": {Str(resource.Source)}}}, ");
                 sb.Append($"\"drawer\": {Atoms(resource.Drawer)}, ");
                 sb.Append($"\"actions\": {Atoms(resource.Actions)}, ");
                 sb.Append("\"columns\": [");
@@ -172,8 +177,9 @@ internal static class ManifestEmitter
                     var column = resource.Columns[c];
                     string columnComma = c == resource.Columns.Count - 1 ? "" : ", ";
                     string role = column.Role is null ? "" : $", \"role\": {Str(column.Role)}";
+                    string fallback = column.Default is null ? "" : $", \"default\": {Str(column.Default)}";
 
-                    sb.Append($"{{{Column(column)}{role}}}");
+                    sb.Append($"{{{Column(column)}{role}{fallback}}}");
                     sb.Append(columnComma);
                 }
 

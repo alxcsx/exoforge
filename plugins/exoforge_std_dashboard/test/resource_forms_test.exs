@@ -17,6 +17,24 @@ defmodule Exoforge.Std.Dashboard.ResourceFormsTest do
     }
   end
 
+  test "a column's declared default wins over the type's placeholder" do
+    columns = ResourceForms.columns(%{
+      name: :counters,
+      primary_key: :id,
+      columns: [
+        %{name: :id, type: :integer},
+        %{name: :status, type: :string, default: "active"}
+      ]
+    })
+
+    defaults = ResourceForms.defaults(columns)
+
+    # The plugin said what the value should be, and the schema heard it - which is why a column with
+    # a default is not simply absent from every row the form writes.
+    assert defaults["status"] == "active"
+    assert defaults["id"] == "1"
+  end
+
   test "columns come from the schema, with the primary key marked" do
     columns = ResourceForms.columns(resource())
 

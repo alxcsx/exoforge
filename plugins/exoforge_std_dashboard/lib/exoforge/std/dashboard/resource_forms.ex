@@ -44,15 +44,24 @@ defmodule Exoforge.Std.Dashboard.ResourceForms do
         type: column[:type] || column["type"] || :string,
         badge: column[:badge] || column["badge"] || false,
         role: column[:role] || column["role"],
+        default: column[:default] || column["default"],
         primary_key: to_string(key) == primary
       }
     end)
     |> Enum.uniq_by(& &1.key)
   end
 
-  @doc "Form defaults for a set of columns, as strings — what the inputs start from."
+  @doc """
+  Form defaults for a set of columns, as strings — what the inputs start from.
+
+  A column's declared default wins over the type's placeholder: it is what the plugin said the value
+  should be, and it is the reason a column with one is not simply absent from every row the Studio
+  writes.
+  """
   def defaults(columns) do
-    Map.new(columns, fn column -> {to_string(column.key), default(column.type)} end)
+    Map.new(columns, fn column ->
+      {to_string(column.key), column[:default] || default(column.type)}
+    end)
   end
 
   @doc "Form defaults for a row being edited: its own values, as the strings the inputs expect."

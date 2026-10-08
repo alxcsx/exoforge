@@ -266,6 +266,7 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
             string resName = NamedString(attr, "Name") ?? PositionalString(attr, 0) ?? ToSnakeCase(declared.Name);
             AddResource(primary.Resources, new ResourceModel(
                 resName,
+                NamedString(attr, "Source") ?? resName,
                 NamedString(attr, "PrimaryKey") ?? "id",
                 NamedStringArray(attr, "DrawerTabs") ?? new[] { "overview" },
                 ActionNames(primary),
@@ -561,6 +562,7 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
 
         return new ResourceModel(
             resName,
+            NamedString(resAttr, "Source") ?? resName,
             primaryKey!,
             NamedStringArray(resAttr, "DrawerTabs") ?? new[] { "overview", "attributes" },
             serviceActions,
@@ -595,7 +597,8 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
                 NamedBool(colAttr, "Sortable") || isExplicitPk,
                 NamedBool(colAttr, "Filterable"),
                 NamedBool(colAttr, "Badge"),
-                NamedString(colAttr, "Role")));
+                NamedString(colAttr, "Role"),
+                DefaultOf(property)));
 
             if (pkAttr is not null && string.IsNullOrEmpty(primaryKey)) primaryKey = colName;
         }
@@ -731,6 +734,31 @@ namespace Exoforge.Generated
     }
 
     // ---- type mapping ----
+
+    /// <summary>
+    /// A property's initializer, as the schema's default. A record that says `= "active"` has said it
+    /// once; without this the store has no default, the form sends nothing, and the column is absent
+    /// from every row written through the Studio.
+    /// </summary>
+    private static string? DefaultOf(IPropertySymbol property)
+    {
+        foreach (var reference in property.DeclaringSyntaxReferences)
+        {
+            if (reference.GetSyntax() is not PropertyDeclarationSyntax declaration) continue;
+            if (declaration.Initializer?.Value is not { } value) continue;
+
+            return value switch
+            {
+                LiteralExpressionSyntax literal when literal.Token.Value is string text => text,
+                LiteralExpressionSyntax { Token.Value: not null } literal => literal.Token.ValueText,
+                PrefixUnaryExpressionSyntax { Operand: LiteralExpressionSyntax operand } unary =>
+                    unary.OperatorToken.Text + operand.Token.ValueText,
+                _ => null,
+            };
+        }
+
+        return null;
+    }
 
     private static string MapTypeToElixir(ITypeSymbol type)
     {

@@ -116,6 +116,13 @@ public class ExoResourceAttribute : Attribute
     public string[]? DrawerTabs { get; set; }
     public Type? ResourceType { get; set; }
 
+    /// <summary>
+    /// The table this resource is stored in. Defaults to the resource's own name, so a resource is a
+    /// real table unless it says otherwise - which is what makes it queryable: typed columns, an
+    /// index, and <c>WHERE</c>/<c>ORDER BY</c> in SQL rather than in the plugin.
+    /// </summary>
+    public string? Source { get; set; }
+
     public ExoResourceAttribute()
     {
     }

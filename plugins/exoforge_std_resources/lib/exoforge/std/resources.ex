@@ -160,9 +160,22 @@ defmodule Exoforge.Std.Resources do
     cols =
       (res.columns || [])
       |> Enum.reject(&(to_string(&1.name) == pk))
-      |> Enum.map(fn c -> "#{c.name} #{sql_type(c.type)}" end)
+      |> Enum.map(fn c -> "#{c.name} #{sql_type(c.type)}#{default_clause(c)}" end)
 
     Enum.join(["#{pk} #{pk_type} PRIMARY KEY" | cols], ", ")
+  end
+
+  # A column's default, as SQL. Quoted for text and left bare for numbers, so the database's idea of
+  # the type matches the schema's rather than the value's spelling.
+  defp default_clause(column) do
+    value = column[:default] || column["default"]
+    type = column[:type] || column["type"]
+
+    cond do
+      is_nil(value) -> ""
+      type == :string -> " DEFAULT '#{value}'"
+      true -> " DEFAULT #{value}"
+    end
   end
 
   ## ---- ACTIONS ----
@@ -602,13 +615,21 @@ defmodule Exoforge.Std.Resources do
       {:table, t} -> {:table, to_string(t)}
       [:table, t] -> {:table, to_string(t)}
       ["table", t] -> {:table, to_string(t)}
+      # The manifest is JSON, and the loader turns map keys into atoms, so a source written as an
+      # object arrives with an atom key. Only the string key was matched, which meant a source
+      # declared that way read as no source at all.
+      %{table: t} -> {:table, to_string(t)}
       %{"table" => t} -> {:table, to_string(t)}
       {:action, a} -> {:action, to_atom(a)}
       [:action, a] -> {:action, to_atom(a)}
       ["action", a] -> {:action, to_atom(a)}
+      %{action: a} -> {:action, to_atom(a)}
+      %{"action" => a} -> {:action, to_atom(a)}
       {:query, q} -> {:query, q}
       [:query, q] -> {:query, q}
       ["query", q] -> {:query, q}
+      %{query: q} -> {:query, q}
+      %{"query" => q} -> {:query, q}
       _ -> nil
     end
   end
