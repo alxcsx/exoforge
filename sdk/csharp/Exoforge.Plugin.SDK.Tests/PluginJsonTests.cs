@@ -33,6 +33,8 @@ public class AnonymousTypeTests
         Assert.Contains("record", hint, StringComparison.Ordinal);
         // Not the ordinary advice: there is no name to put in it.
         Assert.DoesNotContain("[JsonSerializable", hint, StringComparison.Ordinal);
+        // And not the JsonObject way around it, which drops fields instead of failing.
+        Assert.Contains("JsonObject", hint, StringComparison.Ordinal);
     }
 
     [Fact]

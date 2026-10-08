@@ -222,6 +222,16 @@ public static class PluginJson
         // tests and a broken build. And the usual advice is impossible to follow: a compiler-generated
         // type cannot be named in source, so "[JsonSerializable(typeof(...))]" is not missing, it is
         // unwritable. A closure's display class is the same shape of problem.
+        //
+        // The obvious way out was tried, and it does not hold. Walking the object into a JsonObject
+        // works - JsonObject and JsonValue are known to STJ without a context entry - and in a flat
+        // object it works in a published AOT plugin. It is not reliable: the trimmer removes property
+        // metadata nothing references, and a type with no name cannot be rooted, so the walk finds
+        // some properties and not others. An action returning `new { value = 7, nested = new { deep =
+        // true } }` came back as {"value":7,"nested":{}} - the outer object intact, the inner one
+        // empty. A wrong answer on the wire is worse than the loud failure this hint replaces, and no
+        // guard can detect it, since a partly trimmed type is indistinguishable from a small one. So
+        // there is deliberately no such fallback: declare the type, and its name makes it rootable.
         if (type.IsDefined(typeof(System.Runtime.CompilerServices.CompilerGeneratedAttribute), false) &&
             type.Name.StartsWith("<", StringComparison.Ordinal))
         {
@@ -230,7 +240,9 @@ public static class PluginJson
                    "test run, where reflection is available, and fails here in the published plugin. " +
                    "Declare a record instead - `public record MyResult(int Value);` - and return " +
                    "`new MyResult(7)`. Its name is what the manifest, the generated client and the " +
-                   "dashboard describe; an anonymous object has none to describe.";
+                   "dashboard describe, and it is what makes the type rootable. Converting the object " +
+                   "to a JsonObject is not a way around this: the trimmer removes the property " +
+                   "metadata the conversion needs, and it drops fields rather than failing.";
         }
 
         return $"Could not (de)serialize '{type}'. On NativeAOT, register the type on a source-generated " +
