@@ -451,6 +451,68 @@ defmodule Exoforge.DashboardLiveViewTest do
                :binary.match(html, "exoforge_std_resources")
     end
 
+    # The Data tab used to be read-only: a developer could look at their plugin's rows and delete
+    # them, but not make one. The form is built from the schema the plugin declares, so a record that
+    # gains a column gains an input without anything here knowing what the column means.
+    test "a resource row is created and edited from its declared schema" do
+      PluginRegistry.register(%Exoforge.Domain.Manifest{
+        id: :row_form_ext,
+        name: "row_form_ext",
+        version: "0.1.0",
+        entry_point: nil,
+        provides: [UserRefsContract.UserRefs],
+        category: "Gameplay",
+        dashboard_view: %{id: :row_form_ext, title: "Rows", icon: "📝"}
+      })
+
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{
+          "admin_player_id" => "admin",
+          "admin_scopes" => ["admin"]
+        })
+
+      {:ok, view, _html} = live(conn, "/")
+      html = render_click(view, "switch_tab", %{"tab" => "row_form_ext"})
+
+      # The form is the schema: both declared columns, and the key marked as one.
+      html = view |> element("button[phx-click=new_resource]") |> render_click()
+      assert html =~ "Fields come from the schema this plugin declares"
+      assert html =~ "Id · key"
+      assert html =~ "Player id"
+
+      # A resource with no key cannot be identified, so the form refuses it.
+      html =
+        view
+        |> element("form[phx-submit=submit_resource_form]")
+        |> render_submit(%{"values" => %{"id" => "", "player_id" => "p1"}})
+
+      assert html =~ "is required"
+
+      html =
+        view
+        |> element("form[phx-submit=submit_resource_form]")
+        |> render_submit(%{"values" => %{"id" => "g1", "player_id" => "p1"}})
+
+      assert html =~ "g1"
+      assert Enum.any?(PluginRegistry.fetch_resource_rows("user_ref_rows"), &(&1["id"] == "g1"))
+
+      # And it can be edited, which is the other half of what the tab was missing.
+      html = view |> element("button[phx-click=open_focus]") |> render_click()
+      html = view |> element("button[phx-click=edit_resource]") |> render_click()
+      assert html =~ "Edit"
+
+      html =
+        view
+        |> element("form[phx-submit=submit_resource_form]")
+        |> render_submit(%{"values" => %{"id" => "g1", "player_id" => "p2"}})
+
+      assert Enum.any?(
+               PluginRegistry.fetch_resource_rows("user_ref_rows"),
+               &(&1["player_id"] == "p2")
+             )
+    end
+
     test "a resource column tagged with a role renders as a deep link" do
       PluginRegistry.register(%Exoforge.Domain.Manifest{
         id: :user_ref_ext,

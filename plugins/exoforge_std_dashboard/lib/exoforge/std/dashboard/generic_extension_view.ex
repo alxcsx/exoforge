@@ -6,6 +6,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
   """
   use Phoenix.LiveComponent
   alias Exoforge.ActionDispatcher
+  alias Exoforge.Std.Dashboard.ResourceForms
   alias Exoforge.EventDispatcher
   alias Exoforge.PluginRegistry
   alias Exoforge.DrawerRegistry
@@ -26,6 +27,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
        inspected_row: nil,
        inspected_drawer_tab: "overview",
        drawer_tabs: [],
+       resource_form: nil,
        export_modal_open: false,
        export_format: "CSV",
        export_content: "",
@@ -231,6 +233,78 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
     {:noreply, assign(socket, inspected_drawer_tab: tab)}
   end
 
+  # A new row and an edited one are the same form: the schema decides the fields, and the primary key
+  # is the only thing that differs — it is what identifies the row, so it is fixed once it exists.
+  @impl true
+  def handle_event("new_resource", _params, socket) do
+    columns = current_resource_columns(socket)
+
+    {:noreply,
+     assign(socket, resource_form: %{mode: :new, values: ResourceForms.defaults(columns), errors: %{}})}
+  end
+
+  @impl true
+  def handle_event("edit_resource", _params, socket) do
+    columns = current_resource_columns(socket)
+    values = ResourceForms.values_for(socket.assigns.inspected_row, columns)
+
+    {:noreply,
+     assign(socket, resource_form: %{mode: :edit, values: values, errors: %{}})}
+  end
+
+  @impl true
+  def handle_event("resource_form_change", %{"values" => values}, socket) do
+    {:noreply, assign(socket, resource_form: %{socket.assigns.resource_form | values: values})}
+  end
+
+  @impl true
+  def handle_event("close_resource_form", _params, socket) do
+    {:noreply, assign(socket, resource_form: nil)}
+  end
+
+  @impl true
+  def handle_event("submit_resource_form", %{"values" => values}, socket) do
+    columns = current_resource_columns(socket)
+    form = socket.assigns.resource_form
+    name = socket.assigns.selected_resource_name
+
+    case ResourceForms.errors(values, columns) do
+      errors when errors != %{} ->
+        {:noreply, assign(socket, resource_form: %{form | values: values, errors: errors})}
+
+      _ ->
+        attributes = ResourceForms.attributes(values, columns)
+        key = Enum.find(columns, & &1.primary_key)
+
+        result =
+          case form.mode do
+            :new ->
+              ActionDispatcher.dispatch(:resource_store, :create, %{
+                resource: name,
+                attributes: attributes
+              })
+
+            :edit ->
+              ActionDispatcher.dispatch(:resource_store, :update, %{
+                resource: name,
+                id: Map.get(values, to_string(key.key)),
+                attributes: attributes
+              })
+          end
+
+        case result do
+          {:ok, _} ->
+            {:noreply, socket |> assign(resource_form: nil) |> load_resource_data()}
+
+          {:error, reason} ->
+            {:noreply,
+             assign(socket,
+               resource_form: %{form | values: values, errors: %{"_form" => inspect(reason)}}
+             )}
+        end
+    end
+  end
+
   @impl true
   def handle_event("delete_resource", _params, socket) do
     _ =
@@ -345,30 +419,19 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
   end
 
   defp current_resource_columns(assigns) when is_map(assigns) do
+    case ResourceForms.columns(current_resource(assigns)) do
+      [] -> [%{key: :id, label: "ID"}, %{key: :data, label: "Data"}]
+      columns -> columns
+    end
+  end
+
+  # The resource the Data tab is showing, as the manifest declares it.
+  defp current_resource(assigns) when is_map(assigns) do
     res_name = assigns[:selected_resource_name]
     ext = assigns[:extension] || %{}
-    resources = ext[:resources] || []
 
-    res =
-      Enum.find(resources, fn r -> to_string(r[:name] || r["name"]) == to_string(res_name) end)
-
-    cols = if res, do: res[:columns] || res["columns"] || [], else: []
-
-    if Enum.empty?(cols) do
-      [%{key: :id, label: "ID"}, %{key: :data, label: "Data"}]
-    else
-      Enum.map(cols, fn c ->
-        key = c[:name] || c["name"]
-        label = c[:label] || c["label"] || Phoenix.Naming.humanize(to_string(key))
-
-        %{
-          key: key,
-          label: label,
-          badge: c[:badge] || c["badge"] || false,
-          role: c[:role] || c["role"]
-        }
-      end)
-    end
+    (ext[:resources] || [])
+    |> Enum.find(fn r -> to_string(r[:name] || r["name"]) == to_string(res_name) end)
   end
 
   # A column role (e.g. "user_id") turns a plain string into a deep link. The target is
@@ -731,6 +794,15 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
 
               <button
                 type="button"
+                phx-click="new_resource"
+                phx-target={@myself}
+                class="px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl hover:bg-emerald-100 shadow-xs flex items-center gap-1"
+              >
+                <span>＋ New</span>
+              </button>
+
+              <button
+                type="button"
                 phx-click="delete_resource"
                 phx-target={@myself}
                 data-confirm={"Delete all data for resource '#{@selected_resource_name}'? This cannot be undone."}
@@ -897,11 +969,20 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
             </div>
           </div>
 
-          <div class="pt-4 border-t border-gray-100">
+          <div class="pt-4 border-t border-gray-100 flex items-center gap-2">
+            <button
+              type="button"
+              phx-click="edit_resource"
+              phx-target={@myself}
+              class="px-4 py-2 text-xs font-bold text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 rounded-xl transition-colors"
+            >
+              Edit
+            </button>
+
             <button
               type="button"
               phx-click="close_focus"
-              class="w-full py-2 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+              class="flex-1 py-2 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
             >
               Close Inspector
             </button>
@@ -910,6 +991,122 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
       <% end %>
 
       <!-- CSV / JSON Export Modal -->
+      <!--
+        The row form. Every field comes from the plugin's declared schema, so a record that gains a
+        column gains an input and nothing here has to know what the column means.
+      -->
+      <%= if @resource_form do %>
+        <div class="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-200 space-y-4">
+            <div class="flex items-start justify-between">
+              <div>
+                <h3 class="text-base font-bold text-gray-900">
+                  <%= if @resource_form.mode == :new, do: "New", else: "Edit" %>
+                  <%= Phoenix.Naming.humanize(to_string(@selected_resource_name)) %>
+                </h3>
+                <p class="text-xs text-gray-500 mt-0.5">
+                  Fields come from the schema this plugin declares.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                phx-click="close_resource_form"
+                phx-target={@myself}
+                class="text-gray-400 hover:text-gray-600 font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form
+              phx-submit="submit_resource_form"
+              phx-change="resource_form_change"
+              phx-target={@myself}
+              class="space-y-3"
+            >
+              <%= for column <- current_resource_columns(assigns) do %>
+                <% key = to_string(column.key) %>
+                <% value = Map.get(@resource_form.values, key, "") %>
+                <% locked = column.primary_key and @resource_form.mode == :edit %>
+
+                <div>
+                  <label class="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                    <%= column.label %><%= if column.primary_key, do: " · key" %>
+                  </label>
+
+                  <%= case column.type do %>
+                    <% :boolean -> %>
+                      <input type="hidden" name={"values[#{key}]"} value="false" />
+                      <input
+                        type="checkbox"
+                        name={"values[#{key}]"}
+                        value="true"
+                        checked={value == "true"}
+                        class="w-4 h-4 text-violet-600 rounded border-gray-300 focus:ring-violet-500"
+                      />
+                    <% :integer -> %>
+                      <input
+                        type="number"
+                        step="1"
+                        name={"values[#{key}]"}
+                        value={value}
+                        readonly={locked}
+                        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent font-mono"
+                      />
+                    <% :float -> %>
+                      <input
+                        type="number"
+                        step="any"
+                        name={"values[#{key}]"}
+                        value={value}
+                        readonly={locked}
+                        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent font-mono"
+                      />
+                    <% _ -> %>
+                      <input
+                        type="text"
+                        name={"values[#{key}]"}
+                        value={value}
+                        readonly={locked}
+                        class={"w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent font-mono #{if locked, do: "bg-gray-50 text-gray-500"}"}
+                      />
+                  <% end %>
+
+                  <%= if error = @resource_form.errors[key] do %>
+                    <p class="text-[11px] text-red-600 mt-1 font-semibold"><%= error %></p>
+                  <% end %>
+                </div>
+              <% end %>
+
+              <%= if error = @resource_form.errors["_form"] do %>
+                <p class="text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl p-3 font-mono">
+                  <%= error %>
+                </p>
+              <% end %>
+
+              <div class="pt-2 flex items-center gap-2">
+                <button
+                  type="submit"
+                  class="px-4 py-2 text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 rounded-xl transition-colors shadow-sm"
+                >
+                  Save
+                </button>
+
+                <button
+                  type="button"
+                  phx-click="close_resource_form"
+                  phx-target={@myself}
+                  class="px-4 py-2 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      <% end %>
+
       <%= if @export_modal_open do %>
         <div class="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div class="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-gray-200 space-y-4">

@@ -218,17 +218,22 @@ defmodule Exoforge.Std.Resources do
     with {:ok, info} <- resource_info(name),
          {:ok, pairs} <- writable_pairs(info.resource, attrs) do
       ensure_migrated(info)
-      table = table_for(info.resource)
-      {names, values} = Enum.unzip(pairs)
-      placeholders = Enum.map_join(1..length(names), ", ", &"$#{&1}")
 
-      case db(
-             info.plugin_id,
-             "INSERT INTO #{table} (#{Enum.join(names, ", ")}) VALUES (#{placeholders})",
-             values
-           ) do
-        {:ok, _} -> fetch_created(info, attrs)
-        error -> error
+      if table_source(info.resource) == nil do
+        kv_write(info, Map.new(pairs))
+      else
+        table = table_for(info.resource)
+        {names, values} = Enum.unzip(pairs)
+        placeholders = Enum.map_join(1..length(names), ", ", &"$#{&1}")
+
+        case db(
+               info.plugin_id,
+               "INSERT INTO #{table} (#{Enum.join(names, ", ")}) VALUES (#{placeholders})",
+               values
+             ) do
+          {:ok, _} -> fetch_created(info, attrs)
+          error -> error
+        end
       end
     end
   end
@@ -242,21 +247,25 @@ defmodule Exoforge.Std.Resources do
     with {:ok, info} <- resource_info(name),
          {:ok, pairs} <- writable_pairs(info.resource, attrs) do
       ensure_migrated(info)
-      res = info.resource
-      table = table_for(res)
-      pk = to_string(res.primary_key || :id)
-      {names, values} = Enum.unzip(pairs)
 
-      assignments =
-        names
-        |> Enum.with_index(1)
-        |> Enum.map_join(", ", fn {n, i} -> "#{n} = $#{i}" end)
+      if table_source(info.resource) == nil do
+        kv_write(info, Map.new(pairs))
+      else
+        table = table_for(info.resource)
+        pk = to_string(info.resource.primary_key || :id)
+        {names, values} = Enum.unzip(pairs)
 
-      sql = "UPDATE #{table} SET #{assignments} WHERE #{pk} = $#{length(names) + 1}"
+        assignments =
+          names
+          |> Enum.with_index(1)
+          |> Enum.map_join(", ", fn {n, i} -> "#{n} = $#{i}" end)
 
-      case db(info.plugin_id, sql, values ++ [id]) do
-        {:ok, _} -> get(%{resource: name, id: id})
-        error -> error
+        sql = "UPDATE #{table} SET #{assignments} WHERE #{pk} = $#{length(names) + 1}"
+
+        case db(info.plugin_id, sql, values ++ [id]) do
+          {:ok, _} -> get(%{resource: name, id: id})
+          error -> error
+        end
       end
     end
   end
@@ -311,25 +320,30 @@ defmodule Exoforge.Std.Resources do
          {:ok, pairs} <- writable_pairs(info.resource, attrs) do
       ensure_migrated(info)
       res = info.resource
-      table = table_for(res)
-      pk = to_string(res.primary_key || :id)
-      {names, values} = Enum.unzip(pairs)
-      placeholders = Enum.map_join(1..length(names), ", ", &"$#{&1}")
 
-      updates =
-        names
-        |> Enum.reject(&(&1 == pk))
-        |> Enum.map_join(", ", fn n -> "#{n} = excluded.#{n}" end)
+      if table_source(res) == nil do
+        kv_write(info, Map.new(pairs))
+      else
+        table = table_for(res)
+        pk = to_string(res.primary_key || :id)
+        {names, values} = Enum.unzip(pairs)
+        placeholders = Enum.map_join(1..length(names), ", ", &"$#{&1}")
 
-      conflict = if updates == "", do: "DO NOTHING", else: "DO UPDATE SET #{updates}"
+        updates =
+          names
+          |> Enum.reject(&(&1 == pk))
+          |> Enum.map_join(", ", fn n -> "#{n} = excluded.#{n}" end)
 
-      sql =
-        "INSERT INTO #{table} (#{Enum.join(names, ", ")}) VALUES (#{placeholders}) " <>
-          "ON CONFLICT(#{pk}) #{conflict}"
+        conflict = if updates == "", do: "DO NOTHING", else: "DO UPDATE SET #{updates}"
 
-      case db(info.plugin_id, sql, values) do
-        {:ok, _} -> fetch_created(info, attrs)
-        error -> error
+        sql =
+          "INSERT INTO #{table} (#{Enum.join(names, ", ")}) VALUES (#{placeholders}) " <>
+            "ON CONFLICT(#{pk}) #{conflict}"
+
+        case db(info.plugin_id, sql, values) do
+          {:ok, _} -> fetch_created(info, attrs)
+          error -> error
+        end
       end
     end
   end
@@ -416,6 +430,22 @@ defmodule Exoforge.Std.Resources do
   # Native plugins write through the host key/value bridge, so their rows live in the plugin's
   # KV store, not in a table shaped like the resource. The database adapter's `:all` command
   # returns those records already decoded.
+  # A resource with no `source` is stored by its own plugin, through the host's key-value bridge.
+  # `list` already reads both kinds; without this a row made in the Studio could be listed and not
+  # written, which is the asymmetry the Data tab's form walked into.
+  defp kv_write(%{plugin_id: pid, resource: res}, attrs) do
+    db = Module.concat([Exoforge, Std, Database])
+    table = to_string(res.name)
+    pk = to_string(res.primary_key || :id)
+
+    case attrs[pk] do
+      nil -> {:error, :missing_primary_key}
+      id -> apply(db, :put, [pid, table, to_string(id), attrs])
+    end
+  rescue
+    e -> {:error, e}
+  end
+
   defp kv_list(%{plugin_id: pid, resource: res}, payload) do
     limit = to_int(param(payload, :limit), 50)
     offset = to_int(param(payload, :offset), 0)
