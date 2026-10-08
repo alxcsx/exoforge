@@ -21,8 +21,6 @@ defmodule Exoforge.Application do
           Exoforge.EventDispatcher,
           Exoforge.WorkerRegistry,
           Exoforge.PluginRegistry,
-          Exoforge.Entities.registry_spec(),
-          Exoforge.Entities.supervisor_spec(),
           Exoforge.PluginSupervisor
         ]
 

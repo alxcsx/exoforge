@@ -122,8 +122,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
        events_paused: false,
        event_filter_topic: "",
        extensions_search: "",
-       extensions_category: "all",
-       active_entities: fetch_active_entities()
+       extensions_category: "all"
      )}
   end
 
@@ -212,10 +211,6 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   # `tab_path/1` (no focus) is how they close.
   defp focus_url(tab, kind, id) do
     "#{tab_path(tab)}?focus=#{kind}:#{URI.encode_www_form(to_string(id))}"
-  end
-
-  defp maybe_refresh_tab_data(socket, :overview) do
-    assign(socket, active_entities: fetch_active_entities())
   end
 
   defp maybe_refresh_tab_data(socket, _other), do: socket
@@ -327,29 +322,6 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     {:noreply, socket}
   end
 
-  def handle_event("passivate_entity", %{"plugin" => plugin, "type" => type, "id" => id}, socket) do
-    plugin_atom =
-      Enum.find_value(socket.assigns.active_entities, fn entity ->
-        if to_string(entity.plugin) == plugin, do: entity.plugin
-      end)
-
-    type_term = Exoforge.Atoms.existing(type, type)
-
-    if (plugin_atom && Code.ensure_loaded?(Exoforge.Entities)) and
-         function_exported?(Exoforge.Entities, :stop, 3) do
-      Exoforge.Entities.stop(plugin_atom, type_term, id)
-    end
-
-    {:noreply,
-     socket
-     |> assign(:active_entities, fetch_active_entities())
-     |> show_toast(:info, "Passivated actor #{plugin}.#{id}")}
-  end
-
-  def handle_event("refresh_entities", _params, socket) do
-    {:noreply, assign(socket, :active_entities, fetch_active_entities())}
-  end
-
   def handle_event("open_cmd_palette", _params, socket) do
     {:noreply,
      assign(socket,
@@ -387,13 +359,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     case type do
       "navigation" ->
         target =
-          cond do
-            String.starts_with?(id, "entity:") ->
-              :overview
-
-            true ->
-              resolve_tab(id, socket.assigns.overview.extensions)
-          end
+          resolve_tab(id, socket.assigns.overview.extensions)
 
         {:noreply, push_patch(socket, to: tab_path(target))}
 
@@ -812,21 +778,8 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         }
       end)
 
-    # 5. Active Stateful Entity Actors
-    active_ents = socket.assigns[:active_entities] || []
-
-    entity_items =
-      Enum.map(active_ents, fn ent ->
-        %{
-          id: "entity:#{ent.plugin}:#{ent.id}",
-          title: "🤖 Actor: #{ent.plugin}.#{ent.id} (#{ent.memory_kb} KB)",
-          subtitle: "Stateful Actor • PID #{ent.pid} • Queue: #{ent.queue_len}",
-          type: "navigation"
-        }
-      end)
-
     base_navs ++
-      pinned_navs ++ extra_ext_navs ++ entity_items ++ tool_items ++ rpc_items ++ resource_items
+      pinned_navs ++ extra_ext_navs ++ tool_items ++ rpc_items ++ resource_items
   end
 
   defp handle_quick_action(action, socket) do
@@ -858,19 +811,6 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
           String.contains?(String.downcase(to_string(ev.id)), q) or
           (is_map(ev.payload) and String.contains?(String.downcase(Jason.encode!(ev.payload)), q))
       end)
-    end
-  end
-
-  defp fetch_active_entities do
-    if Code.ensure_loaded?(Exoforge.Entities) and
-         function_exported?(Exoforge.Entities, :list_active, 0) do
-      try do
-        Exoforge.Entities.list_active()
-      rescue
-        _ -> []
-      end
-    else
-      []
     end
   end
 
@@ -1244,86 +1184,6 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
             </div>
           </div>
 
-          <!-- ACTIVE STATEFUL ENTITIES & ACTOR CLUSTER RUNTIME -->
-          <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow-card space-y-4">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-3">
-                <span class="w-10 h-10 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center text-xl shadow-xs">
-                  🤖
-                </span>
-                <div>
-                  <h3 class="font-bold text-gray-900 text-sm flex items-center gap-2">
-                    <span>Stateful Entity Actors</span>
-                    <span class="text-[10px] font-black px-2 py-0.5 rounded-full bg-purple-100 text-purple-800">
-                      <%= length(@active_entities) %> active
-                    </span>
-                  </h3>
-                  <p class="text-xs text-gray-400 mt-0.5">Live game entity actors with automated state hydration and passivation</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                phx-click="refresh_entities"
-                class="px-3 py-1.5 text-xs font-bold text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-200 rounded-xl transition-colors flex items-center gap-1.5"
-                title="Refresh active entities"
-              >
-                <span>🔄</span>
-                <span>Refresh</span>
-              </button>
-            </div>
-
-            <%= if Enum.empty?(@active_entities) do %>
-              <div class="p-8 text-center bg-gray-50/70 rounded-xl border border-gray-100 space-y-2">
-                <span class="text-2xl block">💤</span>
-                <h4 class="text-xs font-bold text-gray-700">All Entity Actors Passivated</h4>
-                <p class="text-[11px] text-gray-400 max-w-md mx-auto">
-                  Actors spawn and hydrate automatically on incoming game RPCs or client actions, and passivate to persistent storage on idle timeout.
-                </p>
-              </div>
-            <% else %>
-              <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr class="bg-gray-50/75 border-b border-gray-200 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                      <th class="py-2.5 px-3">Plugin</th>
-                      <th class="py-2.5 px-3">Entity Type</th>
-                      <th class="py-2.5 px-3">Entity ID</th>
-                      <th class="py-2.5 px-3">PID</th>
-                      <th class="py-2.5 px-3">Memory</th>
-                      <th class="py-2.5 px-3">Queue</th>
-                      <th class="py-2.5 px-3 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-gray-100">
-                    <%= for ent <- @active_entities do %>
-                      <tr class="hover:bg-purple-50/30 transition-colors">
-                        <td class="py-2.5 px-3 font-semibold text-gray-800"><%= ent.plugin %></td>
-                        <td class="py-2.5 px-3 font-mono text-purple-700 font-bold"><%= ent.type %></td>
-                        <td class="py-2.5 px-3 font-mono font-medium text-gray-900"><%= ent.id %></td>
-                        <td class="py-2.5 px-3 font-mono text-[11px] text-gray-400"><%= ent.pid %></td>
-                        <td class="py-2.5 px-3 font-mono text-[11px] text-emerald-700 font-semibold"><%= ent.memory_kb %> KB</td>
-                        <td class="py-2.5 px-3 font-mono text-[11px] text-gray-500"><%= ent.queue_len %></td>
-                        <td class="py-2.5 px-3 text-right">
-                          <button
-                            type="button"
-                            phx-click="passivate_entity"
-                            phx-value-plugin={to_string(ent.plugin)}
-                            phx-value-type={to_string(ent.type)}
-                            phx-value-id={to_string(ent.id)}
-                            class="px-2.5 py-1 text-[11px] font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-colors"
-                            title="Force flush state and terminate actor"
-                          >
-                            Passivate
-                          </button>
-                        </td>
-                      </tr>
-                    <% end %>
-                  </tbody>
-                </table>
-              </div>
-            <% end %>
-          </div>
-
           <!-- DYNAMIC OVERVIEW WIDGET HOOKS (Contributed by Plugins) -->
           <%= if @overview_widgets != [] do %>
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1433,7 +1293,6 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         environments={@environments}
         current_env={@current_env}
         overview={@overview}
-        active_entities={@active_entities}
         node_name={to_string(node())}
         on_close="close_settings"
       />

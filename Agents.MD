@@ -1,8 +1,8 @@
 # Exoforge Operating Manual (`AGENTS.md`)
 
 > **Branch**: `projetao_mvp`  
-> **Status**: Kernel, 9 standard plugins, C# Client & Plugin SDKs, C# Management Engine (`exo` CLI), Unity SDK (`com.exoforge.sdk`), Producer Studio and the stateful entity runtime are **complete** — **251 Elixir + 72 C# = 323 tests passing**, plus a live E2E vertical slice.  
-> **Verified SLAs**: 729k stateful actor ops/sec, 1.4 µs latency, 0.07 ms 50x event fanout.
+> **Status**: Kernel, 9 standard plugins, C# Client & Plugin SDKs, C# Management Engine (`exo` CLI), Unity SDK (`com.exoforge.sdk`), Producer Studio and the plugin runtime are **complete** — **240 Elixir + 72 C# = 312 tests passing**, plus a live E2E vertical slice.  
+> **Verified SLA**: 0.07 ms fanout to 50 event subscribers over `:pg`.
 
 ---
 
@@ -42,7 +42,6 @@ The kernel is strictly limited to:
 - [`EventDispatcher`](core/lib/event_dispatcher.ex): Real-time pub/sub bus with pattern matching and Registry fanout.
 - [`WorkerRegistry`](core/lib/worker_registry.ex): Named singleton process locator.
 - [`PluginSupervisor`](core/lib/plugin_supervisor.ex) & [`PluginBootstrapper`](core/lib/plugin_bootstrapper.ex): Topological DAG ordering and process lifecycle.
-- [`Entities`](core/lib/entities.ex): Clustered stateful virtual actors (Horde + `:pg`).
 - DSL & Drivers: [`Exoforge.Plugin`](core/lib/plugin.ex), [`Service`](core/lib/contracts/service.ex), [`ElixirPluginRunner`](core/lib/drivers/runtime/elixir_plugin_runner.ex), and `WasmPluginRunner`.
 
 ### The 4-Question Litmus Test: "Should this be a plugin?"
@@ -256,7 +255,7 @@ Gameplay must not hold a client, an endpoint, or a token. It publishes hooks (e.
 | `just compose-up` | Run full production stack with PostgreSQL via Docker Compose |
 | `just compose-down` | Stop and tear down Compose stack |
 | `just k8s-deploy` | Deploy cluster to Kubernetes via Kustomize (with sensible defaults) |
-| `just benchmark` | Run stateful entity cluster performance benchmark |
+| `just benchmark` | Run the cluster event fanout benchmark |
 | `just sample-setup` | Rebuild the Unity Snake sample scene via the Unity CLI (idempotent) |
 | `just sample-check` | Headless self-check for the Unity Snake sample (exit 0 = pass) |
 

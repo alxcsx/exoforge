@@ -277,7 +277,6 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
   defp pm_inspect_tabs do
     [
       %{id: "overview", title: "Overview"},
-      %{id: "entities", title: "Entities"},
       %{id: "csharp", title: "C# / Unity SDK"},
       %{id: "manifest", title: "Raw Manifest"}
     ]
@@ -367,7 +366,6 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
     total_plugins = length(assigns.plugins)
     wasm_count = Enum.count(assigns.plugins, &wasm_plugin?/1)
     native_count = total_plugins - wasm_count
-    active_entities = Map.get(assigns.system_info, "active_entities_count", 0)
     memory_mb = Map.get(assigns.system_info, "memory_mb", 0.0)
     node_name = Map.get(assigns.system_info, "node", "nonode@nohost")
     uptime = format_uptime(Map.get(assigns.system_info, "uptime_seconds"))
@@ -379,7 +377,6 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
       |> assign(:total_plugins, total_plugins)
       |> assign(:wasm_count, wasm_count)
       |> assign(:native_count, native_count)
-      |> assign(:active_entities, active_entities)
       |> assign(:memory_mb, memory_mb)
       |> assign(:node_name, node_name)
       |> assign(:uptime, uptime)
@@ -525,14 +522,11 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
         <!-- 4. Stateful Actors & Engine -->
         <div class="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm">
           <div class="flex items-center justify-between mb-2">
-            <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Active Entities</span>
-            <span class="text-lg">👾</span>
+            <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">OTP Release</span>
+            <span class="text-lg">⚙️</span>
           </div>
           <div class="flex items-baseline gap-2">
-            <span class="text-2xl font-black text-gray-900"><%= @active_entities %></span>
-            <span class="text-xs font-bold px-1.5 py-0.5 rounded-md bg-purple-50 text-purple-700">
-              OTP <%= @otp_release %>
-            </span>
+            <span class="text-2xl font-black text-gray-900"><%= @otp_release %></span>
           </div>
           <p class="text-[11px] text-gray-400 mt-1 font-medium">Distributed virtual actors</p>
         </div>
@@ -753,29 +747,6 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
                         <% end %>
                       </div>
                     </div>
-                  </div>
-                <% end %>
-
-                <%= if @active_drawer_tab == "entities" do %>
-                  <div class="space-y-4">
-                    <% entities = @selected_plugin["entities"] || [] %>
-                    <%= if entities == [] do %>
-                      <p class="text-xs text-gray-400 italic bg-gray-50 p-4 rounded-xl border border-gray-200">
-                        No stateful virtual entities registered for this plugin.
-                      </p>
-                    <% else %>
-                      <%= for ent <- entities do %>
-                        <div class="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-2">
-                          <div class="flex items-center justify-between">
-                            <span class="text-sm font-bold font-mono text-purple-700">:<%= ent["name"] || ent[:name] %></span>
-                            <span class="text-[10px] font-bold text-gray-500">Stateful Entity</span>
-                          </div>
-                          <p class="text-xs text-gray-500">
-                            Clustered actor supervised via Horde / :pg distributed runtime.
-                          </p>
-                        </div>
-                      <% end %>
-                    <% end %>
                   </div>
                 <% end %>
 

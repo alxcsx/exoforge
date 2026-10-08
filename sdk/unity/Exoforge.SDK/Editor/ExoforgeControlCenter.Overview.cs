@@ -39,7 +39,6 @@ public partial class ExoforgeControlCenter : EditorWindow
         EditorGUILayout.Space(2);
 
         EditorGUILayout.BeginHorizontal();
-        DrawMetricPill("Active Entities", _activeEntities.ToString());
         DrawMetricPill("Plugins", _pluginsCount.ToString());
         DrawMetricPill("Status", _isConnected ? "HEALTHY" : "OFFLINE");
         EditorGUILayout.EndHorizontal();

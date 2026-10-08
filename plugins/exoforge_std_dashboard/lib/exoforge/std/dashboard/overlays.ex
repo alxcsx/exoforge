@@ -479,7 +479,6 @@ defmodule Exoforge.Std.Dashboard.Overlays do
   attr(:environments, :list, default: [])
   attr(:current_env, :string, default: "dev")
   attr(:overview, :map, default: %{extensions: []})
-  attr(:active_entities, :list, default: [])
   attr(:node_name, :string, default: "")
   attr(:on_close, :string, default: "close_settings")
 
@@ -580,10 +579,6 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   <div class="p-2.5 bg-white border border-gray-200 rounded-lg">
                     <span class="text-[10px] font-bold text-gray-400 uppercase">Registered Extensions</span>
                     <p class="text-sm font-bold text-gray-800 font-mono mt-0.5"><%= length(@overview.extensions) %></p>
-                  </div>
-                  <div class="p-2.5 bg-white border border-gray-200 rounded-lg">
-                    <span class="text-[10px] font-bold text-gray-400 uppercase">Active Virtual Actors</span>
-                    <p class="text-sm font-bold text-gray-800 font-mono mt-0.5"><%= length(@active_entities) %></p>
                   </div>
                 </div>
               </div>

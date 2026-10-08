@@ -40,6 +40,17 @@ defmodule Exoforge.Drivers.Loaders.ManifestLoader do
       raise "this looks like a contract export, not a manifest. Rebuild the plugin to write manifest.json."
     end
 
+    # A manifest may carry a field this build does not know - a newer plugin, or one written before a
+    # field was removed. Dropping it keeps the format additive: adding a field does not break old
+    # servers, removing one does not break old manifests.
+    {manifest_map, unknown} = Map.split(manifest_map, Map.keys(Manifest.__struct__()))
+
+    if unknown != %{} do
+      Logger.warning(
+        "[ManifestLoader] #{file_path} declares fields this build does not know: #{inspect(Map.keys(unknown))}"
+      )
+    end
+
     manifest_version = Version.parse!(manifest_map.version)
 
     final_map =

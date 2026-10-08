@@ -45,7 +45,6 @@ defmodule Exoforge.Std.PluginManager do
           "provides" => Enum.map(m.provides || [], &to_string/1),
           "dependencies" => Enum.map(m.dependencies || [], &to_string/1),
           "services" => PluginRegistry.sanitize_for_json(m.services || []),
-          "entities" => PluginRegistry.sanitize_for_json(m.entities || []),
           "physical_path" => m.physical_path
         }
       end)
@@ -80,8 +79,7 @@ defmodule Exoforge.Std.PluginManager do
             "provides" => Enum.map(m.provides || [], &to_string/1),
             "dependencies" => Enum.map(m.dependencies || [], &to_string/1),
             "services" => PluginRegistry.sanitize_for_json(m.services || []),
-            "entities" => PluginRegistry.sanitize_for_json(m.entities || []),
-            "dashboard_view" => m.dashboard_view,
+              "dashboard_view" => m.dashboard_view,
             "physical_path" => m.physical_path,
             "size_bytes" => size_bytes,
             "wasm_size_bytes" => size_bytes
@@ -94,18 +92,6 @@ defmodule Exoforge.Std.PluginManager do
 
   @impl true
   defaction get_system_info, scope: Exoforge.Auth.Roles.studio() do
-    active_ents =
-      if Code.ensure_loaded?(Exoforge.Entities) and
-           function_exported?(Exoforge.Entities, :list_active, 0) do
-        try do
-          length(Exoforge.Entities.list_active())
-        rescue
-          _ -> 0
-        end
-      else
-        0
-      end
-
     mem_total = :erlang.memory(:total)
 
     info = %{
@@ -116,8 +102,7 @@ defmodule Exoforge.Std.PluginManager do
       "process_count" => :erlang.system_info(:process_count),
       "elixir_version" => System.version(),
       "otp_release" => System.otp_release(),
-      "plugins_count" => length(PluginRegistry.all_manifests()),
-      "active_entities_count" => active_ents
+      "plugins_count" => length(PluginRegistry.all_manifests())
     }
 
     {:ok, %{system: info}}
@@ -252,7 +237,6 @@ defmodule Exoforge.Std.PluginManager do
           "provides" => clean_provides,
           "dependencies" => clean_deps,
           "services" => Enum.map(PluginRegistry.manifest_services(m), &PluginRegistry.sanitize_for_json/1),
-          "entities" => m.entities || []
         }
       end)
 

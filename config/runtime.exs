@@ -73,7 +73,6 @@ if config_env() == :prod do
       ]
 
       config :libcluster, topologies: topologies
-      config :exoforge, :entity_adapter, Exoforge.Entities.Adapters.Horde
 
     "epmd" ->
       topologies = [
@@ -86,7 +85,6 @@ if config_env() == :prod do
       ]
 
       config :libcluster, topologies: topologies
-      config :exoforge, :entity_adapter, Exoforge.Entities.Adapters.Horde
 
     _ ->
       :ok

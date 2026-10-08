@@ -185,8 +185,7 @@ internal static class ManifestEmitter
             sb.Append("    }");
         }
 
-        sb.Append("\n  ],\n");
-        sb.Append("  \"entities\": []\n");
+        sb.Append("\n  ]\n");
         sb.Append("}\n");
         return sb.ToString();
     }

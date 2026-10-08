@@ -234,7 +234,6 @@ public partial class ExoforgeControlCenter : EditorWindow
             {
                 _nodeName = sys.TryGetProperty("node", out var n) ? n.GetString() ?? "—" : "—";
                 _memoryMb = sys.TryGetProperty("memory_mb", out var m) ? $"{m.GetRawText()} MB" : "—";
-                _activeEntities = sys.TryGetProperty("active_entities_count", out var a) ? a.GetInt32() : 0;
                 if (sys.TryGetProperty("plugins_count", out var pc))
                 {
                     _pluginsCount = pc.GetInt32();

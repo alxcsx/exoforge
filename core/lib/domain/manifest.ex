@@ -45,7 +45,6 @@ defmodule Exoforge.Domain.Manifest do
     provides: [],
     services: [],
     events: [],
-    entities: [],
     dashboard_view: nil,
     title: nil,
     icon: nil,

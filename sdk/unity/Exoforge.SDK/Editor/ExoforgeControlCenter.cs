@@ -84,7 +84,6 @@ public partial class ExoforgeControlCenter : EditorWindow
     private string _nodeName = "—";
     private string _uptime = "—";
     private string _memoryMb = "—";
-    private int _activeEntities;
     private int _pluginsCount;
 
     /// <summary>One action from the live contract export, with the params needed to build a payload.</summary>

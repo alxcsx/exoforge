@@ -5,7 +5,7 @@
 
 [![Build Status](https://img.shields.io/badge/tests-181%20passing-brightgreen)](Justfile)
 [![E2E Vertical Slice](https://img.shields.io/badge/E2E%20Slice-verified%20live-blue)](sdk/csharp/Exoforge.Client.Tests/VerticalSliceIntegrationTests.cs)
-[![Actor Throughput](https://img.shields.io/badge/stateful%20actors-729k%20ops%2Fsec-purple)](test/cluster_benchmark_test.exs)
+[![Event Fanout](https://img.shields.io/badge/event%20fanout-0.07%20ms%20to%2050%20subs-purple)](test/cluster_benchmark_test.exs)
 [![Unity SDK](https://img.shields.io/badge/Unity%20SDK-UPM%20Ready-black)](sdk/unity/Exoforge.SDK)
 
 ---
@@ -18,7 +18,7 @@ Exoforge is an open, high-density game backend and LiveOps platform. It combines
 
 - **Authoritative Gameplay Logic**: Run combat calculations, inventory reconciliation, loot tables, and economy logic on the server using C# compiled to WebAssembly (WASI).
 - **Zero-Downtime LiveOps**: Update drop rates, rebalance gameplay numbers, and deploy new game rules dynamically without rebuilding game clients or awaiting app store approvals.
-- **Stateful Virtual Entities**: Maintain active player sessions, matches, and world state in-memory across a cluster with automatic failover and microsecond-level access.
+- **Stateful Plugins, Not a Framework**: A plugin *is* the actor — a supervised, long-lived process holding its own state, free to spawn a worker per matchmaking queue, game room, or chat channel. There is no grain API to learn and nothing to adopt.
 - **Unified Game Services**: Provides out-of-the-box identity, isolated multi-tenant databases, real-time WebSocket pub/sub, dynamic REST APIs, and a LiveView designer studio.
 
 ---
@@ -40,7 +40,7 @@ Exoforge is an open, high-density game backend and LiveOps platform. It combines
 |         :auth  •  :player_data  •  :database  •  :plugin_manager         |
 +--------------------------------------------------------------------------+
 |                      EXOFORGE KERNEL (OTP Core)                          |
-|   Registry  •  Dispatcher  •  Supervisor  •  Entities  •  Event Bus      |
+|   Registry  •  Dispatcher  •  Supervisor  •  Event Bus                   |
 +--------------------------------------------------------------------------+
 ```
 
@@ -55,7 +55,6 @@ The kernel is minimal and deterministic, containing only:
 - **`EventDispatcher`**: Real-time pub/sub bus with pattern matching and Registry fanout.
 - **`WorkerRegistry`**: Named singleton process locator.
 - **`PluginSupervisor` & `PluginBootstrapper`**: Topological DAG ordering and process lifecycle.
-- **`Entities`**: Clustered stateful virtual actors (Horde + `:pg`).
 - **Plugin Drivers**: Native Elixir (`ElixirPluginRunner`) and WASM (`WasmPluginRunner`).
 
 All networking, storage, authentication, and game domains exist as swappable plugins.
@@ -136,7 +135,7 @@ Benchmarked on commodity single-node hardware (Apple Silicon / Linux x86_64):
 | **Actor Latency** | **2.4 µs** (0.0024 ms) | In-memory distributed actor round-trip |
 | **Actor Activation** | **0.024 ms / entity** | Instant on-demand actor state hydration |
 | **Cluster Fanout** | **0.15 ms** | 50 concurrent subscribers per broadcast |
-| **Test Suite** | **251 Elixir + 72 C# passing** | Core, the 9 standard plugins, system integration, and the C# SDKs |
+| **Test Suite** | **240 Elixir + 72 C# passing** | Core, the 9 standard plugins, system integration, and the C# SDKs |
 
 ---
 
@@ -181,7 +180,7 @@ just k8s-deploy
 
 ```
 ├── core/                         # Exoforge OTP Kernel
-│   ├── lib/                      # Dispatcher, Registry, Entities, Supervisors
+│   ├── lib/                      # Dispatcher, Registry, Supervisors
 │   └── test/                     # Kernel unit & benchmark tests
 ├── plugins/                      # Standard Elixir Plugins
 │   ├── exoforge_std_auth/        # Authentication & RBAC scopes

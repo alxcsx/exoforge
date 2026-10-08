@@ -729,25 +729,6 @@ defmodule Exoforge.DashboardLiveViewTest do
       assert html =~ "Maximum of 8 pinned extensions reached"
     end
 
-    test "stateful entity runtime panel displays cluster actors and supports refresh" do
-      conn =
-        build_conn()
-        |> Plug.Test.init_test_session(%{
-          "admin_player_id" => "admin",
-          "admin_scopes" => ["admin"]
-        })
-
-      {:ok, view, html} = live(conn, "/")
-
-      # Overview includes the new Actor panel
-      assert html =~ "Stateful Entity Actors"
-
-      # Refresh entities event
-      html = render_click(view, "refresh_entities", %{})
-      assert html =~ "Stateful Entity Actors"
-      assert html =~ "Refresh"
-    end
-
     test "plugin manager extension view displays cluster runtime telemetry, inspector drawer, and modals" do
       conn =
         build_conn()
@@ -768,7 +749,6 @@ defmodule Exoforge.DashboardLiveViewTest do
       assert html =~ "Installed Plugins"
       assert html =~ "BEAM Memory &amp; Load" or html =~ "BEAM Memory & Load"
       assert html =~ "Cluster Node"
-      assert html =~ "Active Entities"
       assert html =~ "Upload WASM Plugin"
       assert html =~ "Restart Cluster"
 

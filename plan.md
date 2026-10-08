@@ -2,8 +2,8 @@
 
 > **Status**: Kernel, 9 standard plugins, C# Client SDK, C# Plugin SDK, C# Management Engine (`exo`
 > CLI), Unity SDK (`com.exoforge.sdk`), Producer Studio, clustering and Kubernetes manifests are
-> **complete** — **251 Elixir + 72 C# = 323 tests passing**, plus a live E2E vertical slice.
-> **Benchmarks**: 729k stateful actor ops/sec, 1.4 µs latency, 0.07 ms 50x event fanout.
+> **complete** — **240 Elixir + 72 C# = 312 tests passing**, plus a live E2E vertical slice.
+> **Benchmark**: 0.07 ms fanout to 50 event subscribers over `:pg`.
 
 Completed work is not kept here. It is in `git log`, which is the record that does not drift; this
 file is the invariants and what is next. Milestone identifiers (**M1**…**M30**) are historical and are
@@ -16,7 +16,7 @@ else.
 
 **The Rule**: everything above the kernel is a plugin.
 **The Exception**: the kernel is not — `PluginRegistry`, `ActionDispatcher`, `EventDispatcher`,
-`WorkerRegistry`, `PluginSupervisor`, `PluginBootstrapper`, `Entities`.
+`WorkerRegistry`, `PluginSupervisor`, `PluginBootstrapper`.
 
 - **Service atoms, never module names.** Plugins depend on `:database`, `:auth`, `:player_data`.
   Swapping PostgreSQL for SQLite changes no consumer.
