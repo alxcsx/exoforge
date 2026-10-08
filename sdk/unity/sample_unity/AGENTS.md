@@ -161,6 +161,20 @@ just sample-check       # headless self-check; exit 0 = pass
 pixel index maths and the leaderboard JSON parsing. Both are pure functions on purpose so they can
 be checked headlessly. Override the editor with `UNITY_PATH=... just sample-check`.
 
+On Linux the Editor adds the Linux-only toolchain packages (`com.unity.sdk.linux-*`,
+`com.unity.toolchain.linux-*`, and the `com.unity.sysroot.base` they pull in) to
+`Packages/manifest.json` and `packages-lock.json` on every import. Neither belongs in the repo — a
+Windows or macOS checkout does not need them and the Editor re-adds them anyway. Both files carry a
+local `skip-worktree` flag so git ignores the churn. The flag is per-clone, so a fresh checkout
+needs it once:
+
+```bash
+git update-index --skip-worktree sdk/unity/sample_unity/Packages/{manifest,packages-lock}.json
+```
+
+Run `--no-skip-worktree` on the same paths before committing a real package change, or the change
+will not show up in `git status`.
+
 Deploy the plugin and regenerate the client:
 
 ```bash
