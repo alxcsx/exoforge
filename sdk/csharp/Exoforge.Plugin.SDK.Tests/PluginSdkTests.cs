@@ -6,9 +6,9 @@ using Xunit;
 
 namespace Exoforge.Plugin.SDK.Tests;
 
-[ExoService("sample_wasm", Version = "1.0.0")]
+[ExoService("sample_plugin", Version = "1.0.0")]
 [ExoResource("counters", PrimaryKey = "counter_id", DrawerTabs = new[] { "overview", "attributes", "events" })]
-public class SampleWasmPlugin
+public class SamplePluginPlugin
 {
     [Inject("database")]
     public IDatabase? CustomDb { get; set; }
@@ -73,11 +73,11 @@ public class PluginSdkTests
     [Fact]
     public void PluginAttributes_ExposeCorrectMetadata()
     {
-        var type = typeof(SampleWasmPlugin);
+        var type = typeof(SamplePluginPlugin);
 
         var serviceAttr = type.GetCustomAttribute<ExoServiceAttribute>();
         Assert.NotNull(serviceAttr);
-        Assert.Equal("sample_wasm", serviceAttr.Name);
+        Assert.Equal("sample_plugin", serviceAttr.Name);
         Assert.Equal("1.0.0", serviceAttr.Version);
 
         var resourceAttr = type.GetCustomAttribute<ExoResourceAttribute>();
@@ -86,14 +86,14 @@ public class PluginSdkTests
         Assert.Equal("counter_id", resourceAttr.PrimaryKey);
         Assert.Contains("overview", resourceAttr.DrawerTabs!);
 
-        var pingMethod = type.GetMethod(nameof(SampleWasmPlugin.Ping));
+        var pingMethod = type.GetMethod(nameof(SamplePluginPlugin.Ping));
         Assert.NotNull(pingMethod);
         var pingAction = pingMethod.GetCustomAttribute<ExoActionAttribute>();
         Assert.NotNull(pingAction);
         Assert.Equal("ping", pingAction.Name);
         Assert.Equal(ActionMode.Sync, pingAction.Mode);
 
-        var incrementMethod = type.GetMethod(nameof(SampleWasmPlugin.Increment));
+        var incrementMethod = type.GetMethod(nameof(SamplePluginPlugin.Increment));
         Assert.NotNull(incrementMethod);
         var incrementAction = incrementMethod.GetCustomAttribute<ExoActionAttribute>();
         Assert.NotNull(incrementAction);

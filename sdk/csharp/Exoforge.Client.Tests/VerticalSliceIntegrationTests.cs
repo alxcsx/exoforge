@@ -35,8 +35,8 @@ public class VerticalSliceIntegrationTests
         Assert.True(client.IsAuthenticated);
         Assert.Equal("test_e2e_player", client.PlayerId);
 
-        // 1. Client invokes action `sample_wasm.ping` -> WASM plugin executes and returns 42
-        int pingResult = await client.SendActionAsync<int>("sample_wasm", "ping", Array.Empty<int>());
+        // 1. Client invokes action `sample_plugin.ping` -> WASM plugin executes and returns 42
+        int pingResult = await client.SendActionAsync<int>("sample_plugin", "ping", Array.Empty<int>());
         Assert.Equal(42, pingResult);
 
         // 2. Client subscribes to topic `sample:events`
@@ -52,8 +52,8 @@ public class VerticalSliceIntegrationTests
             eventReceivedSignal.TrySetResult(true);
         });
 
-        // 3. Client invokes action `sample_wasm.increment` with counter_id=7, amount=65
-        int incrementResult = await client.SendActionAsync<int>("sample_wasm", "increment", new[] { 7, 65 });
+        // 3. Client invokes action `sample_plugin.increment` with counter_id=7, amount=65
+        int incrementResult = await client.SendActionAsync<int>("sample_plugin", "increment", new[] { 7, 65 });
         Assert.Equal(65, incrementResult);
 
         // 4. Pump dispatcher while waiting for event broadcast from server
@@ -107,7 +107,7 @@ public class VerticalSliceIntegrationTests
         };
 
         // Trigger action that emits value_changed
-        await client.SendActionAsync<int>("sample_wasm", "increment", new[] { 10, 80 });
+        await client.SendActionAsync<int>("sample_plugin", "increment", new[] { 10, 80 });
 
         for (int i = 0; i < 30 && !signal.Task.IsCompleted; i++)
         {
@@ -176,7 +176,7 @@ public class VerticalSliceIntegrationTests
         var auth = await client.AuthenticateAsync("dev:developer");
         Assert.True(auth.IsSuccess);
 
-        int ping = await client.SendActionAsync<int>("sample_wasm", "ping", Array.Empty<int>());
+        int ping = await client.SendActionAsync<int>("sample_plugin", "ping", Array.Empty<int>());
         Assert.Equal(42, ping);
 
         var plugins = await client.SendActionAsync<JsonElement>("plugin_manager", "list_plugins", null);

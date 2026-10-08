@@ -67,7 +67,7 @@ internal sealed record ServiceModel(
 /// would have cost a path-aware reader.
 ///
 /// <c>type</c>, <c>version</c> and <c>entry_point</c> are placeholders: they depend on build settings
-/// (native vs wasm, the build stamp) that the generator's per-file transform cannot see.
+/// (the plugin kind, the build stamp) that the generator's per-file transform cannot see.
 /// <see cref="Finalize"/> fills them in at output time.
 /// </summary>
 internal static class ManifestEmitter
@@ -193,13 +193,14 @@ internal static class ManifestEmitter
     /// <summary>Fills in the build-dependent fields.</summary>
     public static string Finalize(string manifest, string id, string version, string pluginType, string? buildStamp)
     {
-        string entry = pluginType == "native" ? id : id + ".wasm";
+        // The plugin's binary, named after it. A runtime that needs a different entry point - a
+        // WASM reactor's .wasm file, say - is a change here and a runner module in the kernel.
         string stamped = string.IsNullOrEmpty(buildStamp) ? version : version + "+" + buildStamp;
 
         return manifest
             .Replace(TypePlaceholder, pluginType)
             .Replace(VersionPlaceholder, stamped)
-            .Replace(EntryPlaceholder, entry);
+            .Replace(EntryPlaceholder, id);
     }
 
     private static string Column(ColumnModel column) =>

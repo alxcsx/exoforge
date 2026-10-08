@@ -53,6 +53,10 @@ priv/data/
 .buildcount
 .exoforge/
 
+# A plugin's built binary, staged beside its manifest the way a workspace stages it into .exoforge/.
+plugins_csharp/*/sample_plugin
+plugins_csharp/*/*.wasm
+
 # The generator writes the same contracts as JSON beside the manifest, for the C# tooling to read.
 # Not `manifest.json` unqualified: a Unity project's Packages/manifest.json is source.
 sdk/unity/sample_unity/Exoforge/plugins/*/manifest.json

@@ -13,7 +13,7 @@ defmodule Exoforge.SystemIntegrationTest do
   end
 
   describe "Kernel Boot and Plugin Discovery" do
-    test "loads all standard plugins and WASM plugins" do
+    test "loads all standard plugins and the sample plugin" do
       database = PluginRegistry.fetch_service(:database)
       assert database != nil
       assert database.id == :exoforge_std_database
@@ -42,17 +42,23 @@ defmodule Exoforge.SystemIntegrationTest do
       assert dashboard_views != nil
       assert dashboard_views.id == :exoforge_std_dashboard_views
 
-      sample_wasm = PluginRegistry.fetch_service(:sample_wasm)
-      assert sample_wasm != nil
-      assert sample_wasm.type == :wasm
-      assert sample_wasm.entry_point == Exoforge.Plugins.SampleWasm
-      assert function_exported?(sample_wasm.entry_point, :__exoforge_plugin__?, 0)
-      assert sample_wasm.entry_point.provides_contracts() == [:sample_wasm]
+      # A native plugin: the kernel runs the binary as a process, so the manifest names it and there
+      # is no Elixir module behind it. `just test-system` builds it first.
+      sample_plugin = PluginRegistry.fetch_service(:sample_plugin)
+
+      assert sample_plugin != nil,
+             "the sample plugin is not loaded - build it with `just build-plugins`"
+
+      assert sample_plugin.type == :native
+
+      # The runner replaces the entry point with its proxy module, so plugin code is called through a
+      # module rather than through the binary's path. The binary's name is what the manifest says.
+      assert is_atom(sample_plugin.entry_point)
 
       # Verify counters resource is discovered with columns derived from C# attributes
       counters = Enum.find(PluginRegistry.all_resources(), fn r -> r.resource.name == :counters end)
       assert counters != nil
-      assert counters.plugin_id == :sample_wasm
+      assert counters.plugin_id == :sample_plugin
       assert Enum.any?(counters.resource.columns, fn c -> c.name == :counter_id end)
     end
   end
@@ -98,7 +104,7 @@ defmodule Exoforge.SystemIntegrationTest do
       assert hd(auth_system_rows)["val"] == "super_secret_auth_token"
     end
 
-    test "complete workflow: Auth -> PlayerData -> WASM Sample -> Event" do
+    test "complete workflow: Auth -> PlayerData -> Sample Plugin -> Event" do
       # 1. Subscribe to sample event
       EventDispatcher.subscribe(:value_changed, topic: "sample:events")
 
@@ -119,7 +125,7 @@ defmodule Exoforge.SystemIntegrationTest do
 
       # 4. Invoke C# WASM Plugin action
       assert {:ok, _result} =
-               ActionDispatcher.dispatch(:sample_wasm, :increment, [1, 25])
+               ActionDispatcher.dispatch(:sample_plugin, :increment, [1, 25])
 
       # 5. Verify C# WASM host_emit_event reached EventDispatcher
       assert_receive {:exo_event, :value_changed, event_payload, _ctx}, 1000

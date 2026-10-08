@@ -57,7 +57,7 @@ defmodule Exoforge.PluginBootstrapper do
       t_start = System.monotonic_time(:millisecond)
       initialize_and_register(manifest)
       t_elapsed = System.monotonic_time(:millisecond) - t_start
-      type_label = if manifest.type == :wasm, do: "WASM", else: "Elixir"
+      type_label = if manifest.type == :native, do: "Native", else: "Elixir"
 
       provides_str =
         (manifest.provides || [])
@@ -100,8 +100,9 @@ defmodule Exoforge.PluginBootstrapper do
     runner.load(manifest)
   end
 
+  # One clause per runtime. WASM was the third; a runtime added later adds a clause here and a runner
+  # module, and nothing else in the kernel changes.
   defp runner_for(:elixir), do: ElixirPluginRunner
-  defp runner_for(:wasm), do: Exoforge.Drivers.Runtime.WasmPluginRunner
   defp runner_for(:native), do: Exoforge.Drivers.Runtime.NativePluginRunner
   defp runner_for(mod) when is_atom(mod), do: mod
 
@@ -158,21 +159,6 @@ defmodule Exoforge.PluginBootstrapper do
   defp terminate_plugin_processes(%Manifest{type: :elixir, entry_point: plugin_mod}) when is_atom(plugin_mod) do
     plugin_sup_name = Module.concat(plugin_mod, Supervisor)
     stop_child_supervisor(plugin_sup_name)
-  end
-
-  defp terminate_plugin_processes(%Manifest{type: :wasm} = manifest) do
-    mod_name =
-      if is_atom(manifest.entry_point) and manifest.entry_point != nil do
-        manifest.entry_point
-      else
-        manifest.id
-        |> to_string()
-        |> Macro.camelize()
-        |> then(&Module.concat([Exoforge, Plugins, &1]))
-      end
-
-    sup_name = Module.concat([Exoforge, Plugins, mod_name, Supervisor])
-    stop_child_supervisor(sup_name)
   end
 
   defp terminate_plugin_processes(_), do: :ok

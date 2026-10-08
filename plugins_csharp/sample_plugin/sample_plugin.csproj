@@ -6,6 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <OutputType>Exe</OutputType>
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
 
     <!--
       An Exoforge plugin, and that is the whole declaration. The repository's
@@ -15,7 +17,7 @@
     <ExoforgePlugin>true</ExoforgePlugin>
 
     <!-- The guest is WASM, so the manifest points at the .wasm entry point beside it. -->
-    <ExoforgePluginType>wasm</ExoforgePluginType>
+    <ExoforgePluginType>native</ExoforgePluginType>
     <ExoforgeManifestPath Condition="'$(ExoforgeManifestPath)' == ''">$(MSBuildProjectDirectory)/manifest.json</ExoforgeManifestPath>
   </PropertyGroup>
 

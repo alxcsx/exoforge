@@ -44,11 +44,9 @@ clean-build:
 	echo "[clean-build] building a plugin"
 	MSBUILDDISABLENODEREUSE=1 dotnet run --project "$work/sdk/csharp/Exoforge.CLI" -- plugin build snake_leaderboard --dir "$work/sdk/unity/sample_unity/Exoforge"
 	# Every runtime the kernel can host, not just the one. This path was only reachable through
-	# recipes needing Docker or a live server, so it rotted: the sample's build.sh still looked for
-	# the manifest generator where it lived before M29, and took build-wasm down with it.
-	echo "[clean-build] building a WASM plugin"
-	"$work/plugins_csharp/sample_wasm/build.sh"
-	test -f "$work/plugins_csharp/sample_wasm/sample_wasm.wasm"
+	# recipes needing Docker or a live server, so it rotted.
+	echo "[clean-build] building the sample plugin"
+	MSBUILDDISABLENODEREUSE=1 dotnet run --project "$work/sdk/csharp/Exoforge.CLI" -- plugin build sample_plugin --dir "$work/plugins_csharp"
 	test -f "$work/sdk/unity/sample_unity/Exoforge/plugins/snake_leaderboard/manifest.json"
 	echo "[clean-build] OK: the tree builds from a clean checkout"
 
@@ -73,7 +71,7 @@ test-plugins:
 	done
 
 # Test root system integration
-test-system:
+test-system: build-plugins
 	mix test
 
 # Test C# SDKs (Client, Plugin SDK, Generator & Management Engine)
@@ -83,12 +81,12 @@ test-sdk:
 	for suite in Exoforge.Client.Tests Exoforge.Plugin.SDK.Tests Exoforge.Plugin.Generator.Tests Exoforge.Management.Tests; do
 		dotnet test "sdk/csharp/$suite"
 	done
-	# A WASM plugin's assembly is a contract, not a host process: it has no dispatch table and no
-	# entry point of its own, so compiling one is the check that the generator still agrees.
-	dotnet build plugins_csharp/sample_wasm/sample_wasm.csproj -v q --nologo
+	# A plugin's assembly is compiled to a process the server runs, so compiling the sample is the
+	# check that the generator and the SDK still agree about what a plugin is.
+	dotnet build plugins_csharp/sample_plugin/sample_plugin.csproj -v q --nologo
 
 # Run live end-to-end integration test (Client -> WS :4000 -> WASM -> Event -> Client)
-test-e2e: build-wasm
+test-e2e: build-plugins
 	#!/usr/bin/env bash
 	set -euo pipefail
 	pkill -f beam.smp 2>/dev/null || true
@@ -116,25 +114,25 @@ benchmark:
 
 # ---- Build & Release ----
 
-# Build C# WASM plugins (e.g. just build-wasm, or just build-wasm sample_wasm)
-build-wasm plugin="":
+# Build the sample plugin. The native runner looks for the binary beside the manifest, so the publish
+# output is copied there - which is what `exo plugin build` stages into .exoforge/ for a workspace.
+build-plugins:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	if [ -n "{{plugin}}" ]; then
-		[ -f "./plugins_csharp/{{plugin}}/build.sh" ] && ./plugins_csharp/{{plugin}}/build.sh
-	else
-		for script in plugins_csharp/*/build.sh; do
-			[ -f "$script" ] && "$script"
-		done
-	fi
+	plugin=plugins_csharp/sample_plugin
+	rid=$(dotnet --info | awk '/RID:/ {print $2; exit}')
+	dotnet publish "$plugin/sample_plugin.csproj" -c Release -r "$rid" -v q --nologo
+	cp "$plugin/bin/Release/net10.0/$rid/publish/sample_plugin" "$plugin/sample_plugin"
+	chmod +x "$plugin/sample_plugin"
+	echo "[build-plugins] $plugin/sample_plugin"
 
 # Run backend in production mode (foreground)
-prod: build-wasm
+prod: build-plugins
 	# Local prod-mode run: opt in to SQLite explicitly (real deploys must set DATABASE_URL).
 	SECRET_KEY_BASE="${SECRET_KEY_BASE:-$(mix phx.gen.secret)}" EXOFORGE_ALLOW_SQLITE_FALLBACK=true MIX_ENV=prod mix run --no-halt
 
 # Assemble standalone OTP production release
-release: build-wasm
+release: build-plugins
 	MIX_ENV=prod mix release --overwrite
 
 # Run standalone production release (daemon)
@@ -152,11 +150,11 @@ stop-release:
 # ---- Containers & Kubernetes ----
 
 # Build production container image
-docker-build: build-wasm
+docker-build: build-plugins
 	{{container_engine}} build -t exoforge:latest .
 
 # Run full stack with PostgreSQL using Compose
-compose-up: build-wasm
+compose-up: build-plugins
 	{{compose_cmd}} up -d --build
 
 # Follow Compose logs

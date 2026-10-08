@@ -31,7 +31,6 @@ defmodule Exoforge.Project do
     [
       {:exoforge_core, path: "core"},
       {:jason, "~> 1.4"},
-      {:wasmex, "~> 0.15.1"},
       {:libcluster, "~> 3.4"}
     ]
   end

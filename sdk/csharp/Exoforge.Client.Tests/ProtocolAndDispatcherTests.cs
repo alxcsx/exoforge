@@ -14,7 +14,7 @@ public class ProtocolAndDispatcherTests
         var request = new ExoActionRequest
         {
             Id = "req_1",
-            Service = "sample_wasm",
+            Service = "sample_plugin",
             Action = "increment",
             Payload = new { counter_id = 1, amount = 25 }
         };
@@ -23,7 +23,7 @@ public class ProtocolAndDispatcherTests
 
         Assert.Contains("\"type\":\"action\"", json);
         Assert.Contains("\"id\":\"req_1\"", json);
-        Assert.Contains("\"service\":\"sample_wasm\"", json);
+        Assert.Contains("\"service\":\"sample_plugin\"", json);
         Assert.Contains("\"action\":\"increment\"", json);
         Assert.Contains("\"amount\":25", json);
     }
@@ -86,7 +86,7 @@ public class ProtocolAndDispatcherTests
     public void CanAccessGeneratedServiceClientsFromExoClient()
     {
         var client = new ExoClient();
-        Assert.NotNull(client.SampleWasm());
+        Assert.NotNull(client.SamplePlugin());
         Assert.NotNull(client.PlayerData());
         Assert.NotNull(client.Auth());
         Assert.NotNull(client.Http());
@@ -95,7 +95,7 @@ public class ProtocolAndDispatcherTests
         Assert.NotNull(client.PluginManager());
 
         // Same client yields same cached service instance
-        Assert.Same(client.SampleWasm(), client.SampleWasm());
+        Assert.Same(client.SamplePlugin(), client.SamplePlugin());
         Assert.Same(client.PlayerData(), client.PlayerData());
         Assert.Same(client.PluginManager(), client.PluginManager());
     }

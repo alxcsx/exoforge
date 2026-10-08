@@ -263,12 +263,12 @@ public class ManagementTests : IDisposable
                 "plugins_count": 2,
                 "plugins": [
                     {
-                        "id": "sample_wasm",
-                        "name": "SampleWasm",
-                        "provides": ["sample_wasm"],
+                        "id": "sample_plugin",
+                        "name": "SamplePlugin",
+                        "provides": ["sample_plugin"],
                         "services": [
                             {
-                                "name": "sample_wasm",
+                                "name": "sample_plugin",
                                 "doc": "Sample calculations.",
                                 "actions": [
                                     {
@@ -300,15 +300,15 @@ public class ManagementTests : IDisposable
 
         Assert.Contains("namespace MyGame.Client", code);
         Assert.Contains("public static class ExoClientGeneratedExtensions", code);
-        Assert.Contains("public static SampleWasmServiceClient SampleWasm(this ExoClient client)", code);
+        Assert.Contains("public static SamplePluginServiceClient SamplePlugin(this ExoClient client)", code);
         Assert.Contains("public class ExoforgeServicesHub", code);
-        Assert.Contains("public class SampleWasmServiceClient", code);
-        Assert.Contains("public class SampleWasmIncrementRequest", code);
+        Assert.Contains("public class SamplePluginServiceClient", code);
+        Assert.Contains("public class SamplePluginIncrementRequest", code);
         Assert.Contains("public long CounterId { get; set; }", code);
         Assert.Contains("public long Amount { get; set; }", code);
         // A declared return type is honoured; there is no untyped object overload to fall back to.
         Assert.Contains("public Task<long> IncrementAsync(long counterId, long amount, CancellationToken cancellationToken = default)", code);
-        Assert.Contains("public Task<long> IncrementAsync(SampleWasmIncrementRequest request, CancellationToken cancellationToken = default)", code);
+        Assert.Contains("public Task<long> IncrementAsync(SamplePluginIncrementRequest request, CancellationToken cancellationToken = default)", code);
         Assert.DoesNotContain("object? payload = null", code);
         Assert.Contains("public Task<JsonElement> PingAsync(", code);
     }

@@ -12,7 +12,6 @@ defmodule Exoforge.Core do
 
   defp deps do
     [
-      {:wasmex, "~> 0.15.1"},
       {:jason, "~> 1.4"},
       {:libcluster, "~> 3.4", optional: true}
     ]
