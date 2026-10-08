@@ -7,6 +7,9 @@ namespace Exoforge.Plugin.Generator;
 
 internal sealed record ParamModel(string Name, string Type);
 
+/// <summary>An enum a column is typed as: its type, and its members with the names the schema uses.</summary>
+internal sealed record EnumModel(string Type, List<KeyValuePair<string, string>> Members);
+
 internal sealed record ColumnModel(
     string Name,
     string Type,

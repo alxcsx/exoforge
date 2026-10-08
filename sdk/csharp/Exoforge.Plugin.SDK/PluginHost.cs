@@ -107,18 +107,16 @@ public static class PluginHost
 
     /// <summary>Runs a plugin instance until stdin closes, discovering its actions by reflection.</summary>
     /// <remarks>
-    /// The instance is annotated because <c>[Inject]</c> wiring reflects over its properties. A plugin
-    /// without a JSON context — one with no record-returning action — reaches the runtime through here
-    /// rather than through a <c>Run&lt;T, …&gt;</c>, so this is the only thing keeping them alive.
+    /// A plugin without a JSON context — one with no record-returning action — reaches the runtime
+    /// through here rather than through a <c>Run&lt;T, …&gt;</c>. Its <c>[Inject]</c> properties are kept
+    /// alive by the generated entry point's <c>[DynamicDependency]</c>, not by an annotation here: the
+    /// attribute applies only to a <c>Type</c> or a <c>string</c>, so on an instance it was invalid and
+    /// did nothing — the ILC said as much, as IL2098.
     /// </remarks>
-    public static int RunInstance([DynamicallyAccessedMembers(
-        DynamicallyAccessedMemberTypes.PublicProperties |
-        DynamicallyAccessedMemberTypes.NonPublicProperties)] object instance) => RunInstance(instance, dispatch: null);
+    public static int RunInstance(object instance) => RunInstance(instance, dispatch: null);
 
     /// <summary>Runs a plugin instance with a compile-time dispatch table until stdin closes.</summary>
-    public static int RunInstance([DynamicallyAccessedMembers(
-        DynamicallyAccessedMemberTypes.PublicProperties |
-        DynamicallyAccessedMemberTypes.NonPublicProperties)] object instance, IExoforgeDispatch? dispatch)
+    public static int RunInstance(object instance, IExoforgeDispatch? dispatch)
     {
         _stdout = Console.OpenStandardOutput();
         RunInstance(instance, new StreamReader(Console.OpenStandardInput(), Encoding.UTF8), dispatch);
@@ -130,14 +128,10 @@ public static class PluginHost
     /// host calls read through the same one, because two readers over one stdin each buffer ahead
     /// and lose whatever the other buffered.
     /// </summary>
-    internal static void RunInstance([DynamicallyAccessedMembers(
-        DynamicallyAccessedMemberTypes.PublicProperties |
-        DynamicallyAccessedMemberTypes.NonPublicProperties)] object instance, TextReader reader) =>
+    internal static void RunInstance(object instance, TextReader reader) =>
         RunInstance(instance, reader, dispatch: null);
 
-    internal static void RunInstance([DynamicallyAccessedMembers(
-        DynamicallyAccessedMemberTypes.PublicProperties |
-        DynamicallyAccessedMemberTypes.NonPublicProperties)] object instance, TextReader reader, IExoforgeDispatch? dispatch)
+    internal static void RunInstance(object instance, TextReader reader, IExoforgeDispatch? dispatch)
     {
         _stdin = reader;
         HostBridge.UseTransport(new NativeTransport());

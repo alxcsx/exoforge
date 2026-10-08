@@ -61,8 +61,10 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
 
         // Contracts declared in a referenced assembly - a shared contracts project - are invisible to
         // ForAttributeWithMetadataName, which only walks this compilation's syntax.
+        // The compilation is already needed here, so the enums ride along with the referenced
+        // contracts rather than being a second provider that would invalidate on every keystroke.
         var referenced = context.CompilationProvider.Select(static (compilation, ct) =>
-            ExtractReferencedContracts(compilation, ct));
+            (Contracts: ExtractReferencedContracts(compilation, ct), Enums: EnumsIn(compilation.Assembly.GlobalNamespace)));
 
         var settings = context.AnalyzerConfigOptionsProvider.Select(static (provider, _) => new Settings(
             Option(provider.GlobalOptions, "build_property.ExoforgePluginType") ?? "native",
@@ -73,7 +75,7 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
         context.RegisterSourceOutput(services.Combine(referenced).Combine(settings), static (spc, pair) =>
         {
             var ((local, external), build) = pair;
-            Report(spc, local.AddRange(external), build);
+            Report(spc, local.AddRange(external.Contracts), build, external.Enums);
         });
     }
 
@@ -607,7 +609,7 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
                 NamedBool(colAttr, "Badge"),
                 NamedString(colAttr, "Role"),
                 DefaultOf(property),
-                ChoicesOf(property)));
+                EnumOf(property)?.Members.Select(m => m.Value).ToList()));
 
             if (pkAttr is not null && string.IsNullOrEmpty(primaryKey)) primaryKey = colName;
         }
@@ -617,7 +619,8 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
 
     // ---- output ----
 
-    private static void Report(SourceProductionContext spc, ImmutableArray<ServiceEmit> emits, Settings settings)
+    private static void Report(
+        SourceProductionContext spc, ImmutableArray<ServiceEmit> emits, Settings settings, List<EnumModel> enums)
     {
         if (emits.IsDefaultOrEmpty) return;
 
@@ -700,7 +703,7 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
         // compile that needs it: a source generator's output is invisible to the System.Text.Json
         // generator, which is what fills in the context's members. A real file is visible to it - so
         // this is written like the manifest, and the compile after this one has it.
-        string context = Context(primary.Id, models);
+        string context = Context(primary.Id, models, enums);
 
         try
         {
@@ -743,8 +746,9 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
     /// an action's return type. An anonymous object cannot be registered and is not the shape the SDK
     /// asks for anyway.
     /// </summary>
-    private static string Context(string id, List<ServiceModel> models)
+    private static string Context(string id, List<ServiceModel> models, List<EnumModel> enums)
     {
+
         var types = new List<string>();
 
         foreach (var model in models)
@@ -773,6 +777,7 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
         sb.AppendLine("// </auto-generated>");
         sb.AppendLine("#nullable enable");
         sb.AppendLine();
+        sb.AppendLine("using System.Text.Json;");
         sb.AppendLine("using System.Text.Json.Serialization;");
         sb.AppendLine();
 
@@ -781,10 +786,101 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
             sb.AppendLine($"[JsonSerializable(typeof({type}))]");
         }
 
+        if (enums.Count > 0)
+        {
+            string converters = string.Join(", ", enums.Select(e => $"typeof({ConverterName(e)})"));
+            sb.AppendLine();
+            sb.AppendLine($"[JsonSourceGenerationOptions(Converters = new[] {{ {converters} }})]");
+        }
+
         sb.AppendLine($"public partial class ExoforgeJsonContext : JsonSerializerContext");
         sb.AppendLine("{");
         sb.AppendLine("}");
+        sb.AppendLine();
+
+        // One converter per enum. The generic JsonStringEnumConverter<T> is the only AOT-safe form and
+        // takes no naming policy, so it would write `Active` where the schema's choices say `active` -
+        // and an Elixir contract writing the same column says `active` too. Generated, both hold.
+        foreach (var model in enums)
+        {
+            sb.AppendLine($"internal sealed class {ConverterName(model)} : JsonConverter<{model.Type}>");
+            sb.AppendLine("{");
+            sb.AppendLine($"    public override {model.Type} Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)");
+            sb.AppendLine("    {");
+            sb.AppendLine("        return reader.GetString() switch");
+            sb.AppendLine("        {");
+
+            foreach (var member in model.Members)
+            {
+                sb.AppendLine($"            \"{member.Value}\" => {model.Type}.{member.Key},");
+            }
+
+            sb.AppendLine($"            _ => throw new JsonException(\"Not a {model.Type}: \" + reader.GetString())");
+            sb.AppendLine("        };");
+            sb.AppendLine("    }");
+            sb.AppendLine();
+            sb.AppendLine($"    public override void Write(Utf8JsonWriter writer, {model.Type} value, JsonSerializerOptions options)");
+            sb.AppendLine("    {");
+            sb.AppendLine("        writer.WriteStringValue(value switch");
+            sb.AppendLine("        {");
+
+            foreach (var member in model.Members)
+            {
+                sb.AppendLine($"            {model.Type}.{member.Key} => \"{member.Value}\",");
+            }
+
+            sb.AppendLine($"            _ => throw new JsonException(\"Not a {model.Type}: \" + value)");
+            sb.AppendLine("        });");
+            sb.AppendLine("    }");
+            sb.AppendLine("}");
+            sb.AppendLine();
+        }
+
         return sb.ToString();
+    }
+
+    private static string ConverterName(EnumModel model) =>
+        model.Type.Replace("global::", "").Replace(".", "_").Replace("+", "_") + "Converter";
+
+    /// <summary>
+    /// Every enum the assembly declares, sorted so the output is stable.
+    ///
+    /// Not only the ones a resource column is typed as: a converter is needed wherever an enum reaches
+    /// JSON, and a column is not the only place - an event payload or an action's return type carries
+    /// one too, and neither is a resource. A converter is a few lines of generated code, and one the
+    /// plugin never serialises is dead, which the trimmer removes. Finding the reachable set would be
+    /// the real cost, and it would be a graph walk to save nothing.
+    /// </summary>
+    private static List<EnumModel> EnumsIn(INamespaceSymbol ns)
+    {
+        var found = new List<EnumModel>();
+
+        foreach (var member in ns.GetMembers())
+        {
+            switch (member)
+            {
+                case INamespaceSymbol nested:
+                    found.AddRange(EnumsIn(nested));
+                    break;
+
+                case INamedTypeSymbol { TypeKind: TypeKind.Enum } enumType:
+                    var members = enumType.GetMembers()
+                        .OfType<IFieldSymbol>()
+                        .Where(field => field.IsConst)
+                        .Select(field => new KeyValuePair<string, string>(field.Name, ToSnakeCase(field.Name)))
+                        .ToList();
+
+                    if (members.Count > 0)
+                    {
+                        found.Add(new EnumModel(
+                            enumType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), members));
+                    }
+
+                    break;
+            }
+        }
+
+        return found.OrderBy(e => e.Type, StringComparer.Ordinal).ToList();
     }
 
     private static string EntryPoint(ServiceEmit emit, string context)
@@ -833,17 +929,19 @@ namespace Exoforge.Generated
     /// says the same thing with <c>column(:status, :string, choices: ~w(active retired))</c> - there is
     /// no enum type to read there, so the list is the declaration.
     /// </summary>
-    private static List<string>? ChoicesOf(IPropertySymbol property)
+    private static EnumModel? EnumOf(IPropertySymbol property)
     {
         if (property.Type is not INamedTypeSymbol { TypeKind: TypeKind.Enum } enumType) return null;
 
-        var names = enumType.GetMembers()
+        var members = enumType.GetMembers()
             .OfType<IFieldSymbol>()
             .Where(field => field.IsConst)
-            .Select(field => ToSnakeCase(field.Name))
+            .Select(field => new KeyValuePair<string, string>(field.Name, ToSnakeCase(field.Name)))
             .ToList();
 
-        return names.Count == 0 ? null : names;
+        return members.Count == 0
+            ? null
+            : new EnumModel(enumType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), members);
     }
 
     /// <summary>

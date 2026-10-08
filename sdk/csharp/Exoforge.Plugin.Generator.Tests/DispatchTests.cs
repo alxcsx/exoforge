@@ -100,10 +100,19 @@ public record ValueChanged
     public int Value { get; init; }
 }
 
+/// <summary>A column's type is not the only place an enum reaches JSON.</summary>
+public enum ScoreTier
+{
+    Bronze,
+    Silver,
+    Gold
+}
+
 public record ScoreRow
 {
     public string PlayerId { get; init; } = "";
     public int Score { get; init; }
+    public ScoreTier Tier { get; init; } = ScoreTier.Bronze;
 }
 
 /// <summary>
@@ -175,6 +184,56 @@ public class DispatchTests
 
     /// <summary>The generated manifest, parsed.</summary>
     private static JsonNode Manifest() => JsonNode.Parse(File.ReadAllText(ManifestPath()))!;
+
+    /// <summary>
+    /// The JSON context the generator wrote beside the manifest. Written rather than added to the
+    /// compilation, because a source generator's output is invisible to the System.Text.Json
+    /// generator — only a real file is, on the compile after this one.
+    /// </summary>
+    private static string Context()
+    {
+        string path = Path.Combine(Path.GetDirectoryName(ManifestPath())!, "src", "Generated", "ExoforgeJsonContext.g.cs");
+        Assert.True(File.Exists(path), $"the JSON context was not written to {path}");
+
+        return File.ReadAllText(path);
+    }
+
+    [Fact]
+    public void The_json_context_registers_the_records_the_plugin_sends()
+    {
+        string context = Context();
+
+        // A resource's record and an event's payload, from the attributes alone.
+        Assert.Contains("ScoreRow", context, StringComparison.Ordinal);
+        Assert.Contains("ValueChanged", context, StringComparison.Ordinal);
+        Assert.Contains("[JsonSerializable(", context, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// An enum gets a converter, and a generated one — the generic JsonStringEnumConverter&lt;T&gt; is
+    /// the only AOT-safe form and takes no naming policy, so it would write `Bronze` where the schema
+    /// and every Elixir contract say `bronze`.
+    /// </summary>
+    [Fact]
+    public void An_enum_gets_a_converter_that_writes_the_name_the_schema_uses()
+    {
+        string context = Context();
+
+        Assert.Contains("ScoreTierConverter", context, StringComparison.Ordinal);
+        Assert.Contains("\"bronze\"", context, StringComparison.Ordinal);
+        Assert.Contains("JsonConverter<global::Exoforge.Plugin.Generator.Tests.ScoreTier>", context, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// And it covers an enum that no resource declares: this one is only an action's return type's
+    /// property, which is still serialised, and a converter only for resource columns would miss it.
+    /// </summary>
+    [Fact]
+    public void An_enum_that_no_resource_declares_still_gets_a_converter()
+    {
+        Assert.DoesNotContain("ScoreTier", Manifest()["services"]!.ToJsonString(), StringComparison.Ordinal);
+        Assert.Contains("ScoreTierConverter", Context(), StringComparison.Ordinal);
+    }
 
     /// <summary>One service by name.</summary>
     private static JsonNode Service(JsonNode manifest, string name) =>
@@ -288,7 +347,7 @@ public class DispatchTests
             .SelectMany(s => s!["actions"]!.AsArray())
             .ToList();
 
-        JsonNode listed = actions.First(a => a!["returns_list"]!.GetValue<bool>());
+        JsonNode listed = actions.First(a => a!["returns_list"]!.GetValue<bool>())!;
 
         // The type name is fully qualified so the generated JSON context can resolve it.
         Assert.StartsWith("global::", listed["returns_type"]!.GetValue<string>());
