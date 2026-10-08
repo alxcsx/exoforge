@@ -15,6 +15,18 @@ defmodule Exoforge.DashboardLiveViewTest do
 
   @endpoint Endpoint
 
+  defmodule UserRefsContract do
+    import Exoforge.Contracts.Service
+
+    defservice user_refs do
+      resource :user_ref_rows do
+        primary_key(:id)
+        column(:id, :string)
+        column(:player_id, :string, role: "user_id")
+      end
+    end
+  end
+
   setup do
     PluginRegistry.initialize_ets()
 
@@ -88,6 +100,11 @@ defmodule Exoforge.DashboardLiveViewTest do
         title: "Users & Auth",
         icon: "🛡️",
         module: Exoforge.Std.DashboardViews.AuthView
+      },
+      ui_hooks: %{
+        resource_column: [
+          %{id: :user_id, role: "user_id", target: "exoforge_std_auth", focus: "user", order: 10}
+        ]
       }
     })
 
@@ -101,7 +118,18 @@ defmodule Exoforge.DashboardLiveViewTest do
       provides: [Exoforge.Std.Services.PlayerData],
       dependencies: [Exoforge.Std.Services.Database, Exoforge.Std.Services.Auth],
       category: "LiveOps",
-      dashboard_view: %{id: :player_data, title: "Player Data", icon: "👤"}
+      dashboard_view: %{id: :player_data, title: "Player Data", icon: "👤"},
+      ui_hooks: %{
+        user_inspect: [
+          %{
+            id: :players,
+            title: "Players",
+            icon: "🎮",
+            order: 30,
+            module: Exoforge.Std.DashboardViews.UserPlayersTab
+          }
+        ]
+      }
     })
 
     Exoforge.Std.PlayerData.init_schema()
@@ -138,6 +166,7 @@ defmodule Exoforge.DashboardLiveViewTest do
       provides: [Exoforge.Std.Services.PluginManager],
       dependencies: [],
       category: "Management",
+      system: true,
       dashboard_view: %{
         id: :plugin_manager,
         title: "Plugin Manager",
@@ -392,8 +421,105 @@ defmodule Exoforge.DashboardLiveViewTest do
 
       # Switch to combat_wasm extension tab (has no custom LiveView)
       html = render_click(view, "switch_tab", %{"tab" => "combat_wasm"})
-      assert html =~ "Interactive Action Control Panel"
-      assert html =~ "Execute typed backend RPCs"
+      # This test manifest declares no actions/resources/events, so the generic view opens on
+      # its contract.
+      assert html =~ "Architecture Specification"
+    end
+
+    test "the registry marks custom UIs subtly and lists system plugins first" do
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{
+          "admin_player_id" => "admin",
+          "admin_scopes" => ["admin"]
+        })
+
+      {:ok, view, _html} = live(conn, "/")
+      html = render_click(view, "switch_tab", %{"tab" => "apps"})
+
+      # Every view opens as a Control Panel; no custom-vs-generated badge remains.
+      assert html =~ "Control Panel"
+      assert html =~ "Inspect"
+      refute html =~ "Dedicated UI"
+      refute html =~ "Auto-Generated"
+
+      # Plugins shipping their own UI carry a subtle marker.
+      assert html =~ "✦"
+
+      # System plugins with a UI sort ahead of headless ones.
+      assert :binary.match(html, "exoforge_std_plugin_manager") <
+               :binary.match(html, "exoforge_std_resources")
+    end
+
+    test "a resource column tagged with a role renders as a deep link" do
+      PluginRegistry.register(%Exoforge.Domain.Manifest{
+        id: :user_ref_ext,
+        name: "user_ref_ext",
+        version: "0.1.0",
+        entry_point: nil,
+        provides: [UserRefsContract.UserRefs],
+        category: "Gameplay",
+        dashboard_view: %{id: :user_ref_ext, title: "Refs", icon: "🔗"}
+      })
+
+      Exoforge.Std.Database.put(:user_ref_ext, "user_ref_rows", "row1", %{
+        "id" => "row1",
+        "player_id" => "player_7"
+      })
+
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{
+          "admin_player_id" => "admin",
+          "admin_scopes" => ["admin"]
+        })
+
+      {:ok, view, _html} = live(conn, "/")
+      html = render_click(view, "switch_tab", %{"tab" => "user_ref_ext"})
+
+      assert html =~ "/tab/exoforge_std_auth?focus=user:player_7"
+    end
+
+    test "the user inspector renders plugin-contributed tabs" do
+      {:ok, _} =
+        Exoforge.ActionDispatcher.dispatch(:auth, :register, %{
+          user_id: "u_test",
+          player_id: "u_test",
+          name: "Test User",
+          email: "test@example.com",
+          password: "secret123",
+          scopes: ["player"]
+        })
+
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{
+          "admin_player_id" => "admin",
+          "admin_scopes" => ["admin"]
+        })
+
+      {:ok, view, _html} = live(conn, "/")
+      render_click(view, "switch_tab", %{"tab" => "exoforge_std_auth"})
+
+      html = view |> element("button[phx-click=open_focus]") |> render_click()
+
+      # Opening the drawer is a URL change, so it is linkable and back-navigable.
+      assert_patch(view, "/tab/exoforge_std_auth?focus=user:u_test")
+
+      # The tab comes from the player data plugin's `:user_inspect` hook.
+      assert html =~ "Players"
+
+      html =
+        view
+        |> element(~s{button[phx-click=switch_user_inspect_tab][phx-value-tab="players"]})
+        |> render_click()
+
+      assert html =~ "Linked Players"
+
+      # Closing is a URL change too.
+      view |> element("button[phx-click=close_focus]", "Close") |> render_click()
+      assert_patch(view, "/tab/exoforge_std_auth")
+      refute render(view) =~ "Linked Players"
     end
 
     test "mounts PlayerDataView from dashboard_views for exoforge_std_player_data" do

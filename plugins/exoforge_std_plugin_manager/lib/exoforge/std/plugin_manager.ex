@@ -14,6 +14,7 @@ defmodule Exoforge.Std.PluginManager do
   @manifest %{
     dependencies: [],
     category: "Management",
+    system: true,
     dashboard_view: %{
       id: :plugin_manager,
       title: "Plugin Manager",

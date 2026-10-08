@@ -58,20 +58,7 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
             </div>
           </div>
           <div class="flex flex-col items-end gap-1">
-            <%= if @ext.has_dashboard_view do %>
-              <%= if custom_ui?(@ext) do %>
-                <span
-                  class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-200"
-                  title="This extension provides its own custom LiveView"
-                >
-                  ✨ Custom UI
-                </span>
-              <% else %>
-                <span class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-purple-50 text-purple-700 border border-purple-200">
-                  🎛️ Controls
-                </span>
-              <% end %>
-            <% else %>
+            <%= if not @ext.has_dashboard_view do %>
               <span class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-gray-100 text-gray-600 border border-gray-200" title="Headless service without dedicated UI">
                 ⚙️ Headless
               </span>
@@ -137,7 +124,10 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
               phx-value-tab={to_string(@ext.id)}
               class="px-3 py-1 text-[11px] font-bold text-white bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors flex items-center gap-1 shadow-xs"
             >
-              <span>Open Controls</span>
+              <%= if custom_ui?(@ext) do %>
+                <span class="text-[9px] opacity-70" title="Ships its own UI">✦</span>
+              <% end %>
+              <span>Control Panel</span>
               <span>&rarr;</span>
             </button>
           <% else %>
@@ -208,8 +198,20 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
 
     ~H"""
           <% filtered_exts = filter_extensions(@extensions, @search, @category) %>
-          <% ui_exts = Enum.filter(filtered_exts, & &1.has_dashboard_view) |> Enum.sort_by(&ExtensionPresenter.display_name/1) %>
-          <% headless_exts = Enum.reject(filtered_exts, & &1.has_dashboard_view) |> Enum.sort_by(&ExtensionPresenter.display_name/1) %>
+          <% ui_exts = filtered_exts |> Enum.reject(& &1.system) |> Enum.filter(& &1.has_dashboard_view) |> Enum.sort_by(&ExtensionPresenter.display_name/1) %>
+          <% system_exts =
+               filtered_exts
+               |> Enum.filter(&(&1.system or not &1.has_dashboard_view))
+               |> Enum.sort_by(fn ext ->
+                 rank =
+                   cond do
+                     custom_ui?(ext) -> 0
+                     ext.has_dashboard_view -> 1
+                     true -> 2
+                   end
+
+                 {rank, ExtensionPresenter.display_name(ext)}
+               end) %>
           <div class="space-y-6">
             <!-- Header with Title, Search & Category Filters -->
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-gray-200/90 shadow-sm">
@@ -307,11 +309,11 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
                 <div class="flex items-center gap-2">
                   <h4 class="text-base font-bold text-gray-900">System Plugins</h4>
                   <span class="text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 border border-gray-200">
-                    <%= length(headless_exts) %>
+                    <%= length(system_exts) %>
                   </span>
                 </div>
 
-                <%= if Enum.empty?(headless_exts) do %>
+                <%= if Enum.empty?(system_exts) do %>
                   <p class="p-6 bg-white border border-gray-200 rounded-2xl text-xs text-gray-400 italic">No system plugins found matching filter.</p>
                 <% else %>
                   <div class="bg-white border border-gray-200/90 rounded-2xl shadow-sm overflow-x-auto">
@@ -326,7 +328,7 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
                         </tr>
                       </thead>
                       <tbody class="divide-y divide-gray-100">
-                        <%= for ext <- headless_exts do %>
+                        <%= for ext <- system_exts do %>
                           <tr class="hover:bg-gray-50/60">
                             <td class="px-4 py-3">
                               <div class="font-bold text-gray-900"><%= ExtensionPresenter.display_name(ext) %></div>
@@ -344,14 +346,30 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
                               <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold"><%= ext.status %></span>
                             </td>
                             <td class="px-4 py-3 text-right">
-                              <button
-                                type="button"
-                                phx-click="inspect_extension"
-                                phx-value-id={ext.id}
-                                class="px-2.5 py-1 text-[11px] font-bold text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-200 rounded-lg transition-colors"
-                              >
-                                Inspect
-                              </button>
+                              <div class="flex items-center justify-end gap-1.5">
+                                <%= if ext.has_dashboard_view do %>
+                                  <button
+                                    type="button"
+                                    phx-click="switch_tab"
+                                    phx-value-tab={to_string(ext.id)}
+                                    class="px-2.5 py-1 text-[11px] font-bold text-white bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors flex items-center gap-1"
+                                    title="Open the plugin's control panel"
+                                  >
+                                    <%= if custom_ui?(ext) do %>
+                                      <span class="text-[9px] opacity-70" title="Ships its own UI">✦</span>
+                                    <% end %>
+                                    <span>Control Panel</span>
+                                  </button>
+                                <% end %>
+                                <button
+                                  type="button"
+                                  phx-click="inspect_extension"
+                                  phx-value-id={ext.id}
+                                  class="px-2.5 py-1 text-[11px] font-bold text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-200 rounded-lg transition-colors"
+                                >
+                                  Inspect
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         <% end %>

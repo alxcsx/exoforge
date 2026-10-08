@@ -76,6 +76,40 @@ defmodule Exoforge.PlayerDataTest do
       assert player["class"] == "paladin"
     end
 
+    test "display names are unique across players" do
+      assert {:ok, _} =
+               ActionDispatcher.dispatch(:player_data, :create_player, %{
+                 player_id: "p_a",
+                 profile: %{"name" => "Viper"}
+               })
+
+      # A second player cannot take the same name, even with different casing.
+      assert {:error, :name_taken} =
+               ActionDispatcher.dispatch(:player_data, :create_player, %{
+                 player_id: "p_b",
+                 profile: %{"name" => "viper"}
+               })
+
+      assert {:ok, _} =
+               ActionDispatcher.dispatch(:player_data, :create_player, %{
+                 player_id: "p_c",
+                 profile: %{"name" => "Cobra"}
+               })
+
+      # Renaming onto a taken name is refused; keeping your own name is fine.
+      assert {:error, :name_taken} =
+               ActionDispatcher.dispatch(:player_data, :update_player, %{
+                 player_id: "p_c",
+                 data: %{"name" => "Viper"}
+               })
+
+      assert {:ok, _} =
+               ActionDispatcher.dispatch(:player_data, :update_player, %{
+                 player_id: "p_c",
+                 data: %{"name" => "Cobra"}
+               })
+    end
+
     test "updates player record" do
       _ =
         ActionDispatcher.dispatch(:player_data, :create_player, %{

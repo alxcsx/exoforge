@@ -27,6 +27,12 @@ defmodule Exoforge.UIHookRegistryTest do
         ],
         player_inspect: [
           %{id: :my_player_hook, title: "Player Badge", icon: "🎖️", order: 25}
+        ],
+        user_inspect: [
+          %{id: :my_user_hook, title: "Linked Players", icon: "🎮", order: 30, module: SomeTabModule}
+        ],
+        resource_column: [
+          %{id: :user_id, role: "user_id", target: "exoforge_std_auth", focus: "user", order: 10}
         ]
       }
     }
@@ -40,9 +46,21 @@ defmodule Exoforge.UIHookRegistryTest do
     player = UIHookRegistry.list_hooks(:player_inspect)
     assert Enum.any?(player, &(&1.id == :my_player_hook and &1.title == "Player Badge"))
 
+    user = UIHookRegistry.list_hooks(:user_inspect)
+    assert Enum.any?(user, &(&1.id == :my_user_hook and &1.module == SomeTabModule))
+
+    column = UIHookRegistry.list_hooks(:resource_column)
+
+    assert Enum.any?(
+             column,
+             &(&1.role == "user_id" and &1.target == "exoforge_std_auth" and &1.focus == "user")
+           )
+
     assert :ok = PluginRegistry.unregister(:my_extension)
     refute Enum.any?(UIHookRegistry.list_hooks(:settings), &(&1.id == :my_settings))
     refute Enum.any?(UIHookRegistry.list_hooks(:player_inspect), &(&1.id == :my_player_hook))
+    refute Enum.any?(UIHookRegistry.list_hooks(:user_inspect), &(&1.id == :my_user_hook))
+    refute Enum.any?(UIHookRegistry.list_hooks(:resource_column), &(&1.role == "user_id"))
   end
 
   test "DrawerRegistry lists declared tabs and resolves binary names without creating atoms" do

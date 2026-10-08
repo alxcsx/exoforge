@@ -16,6 +16,15 @@ defmodule Exoforge.Std.PlayerData do
       player_inspect: [
         %{id: :kv_store, title: "Key-Value Database", icon: "🔑", order: 10},
         %{id: :profile, title: "Profile (Raw JSON)", icon: "👤", order: 20}
+      ],
+      user_inspect: [
+        %{
+          id: :players,
+          title: "Players",
+          icon: "🎮",
+          order: 30,
+          module: Exoforge.Std.DashboardViews.UserPlayersTab
+        }
       ]
     }
   }
@@ -116,18 +125,23 @@ defmodule Exoforge.Std.PlayerData do
         {:ok, %{rows: [existing_row | _]}} ->
           existing = decode_player_row(existing_row)
           updated = Map.merge(existing, data)
-          profile_json = Jason.encode!(updated)
 
-          update_query = "UPDATE players SET profile = $1 WHERE player_id = $2"
+          if name_taken?(Map.get(updated, "name") || Map.get(updated, :name), player_id) do
+            {:error, :name_taken}
+          else
+            profile_json = Jason.encode!(updated)
 
-          _ =
-            ActionDispatcher.dispatch(:database, :execute, %{
-              plugin: :player_data,
-              operation: update_query,
-              arguments: [profile_json, player_id]
-            })
+            update_query = "UPDATE players SET profile = $1 WHERE player_id = $2"
 
-          {:ok, %{player: updated}}
+            _ =
+              ActionDispatcher.dispatch(:database, :execute, %{
+                plugin: :player_data,
+                operation: update_query,
+                arguments: [profile_json, player_id]
+              })
+
+            {:ok, %{player: updated}}
+          end
 
         {:ok, %{rows: []}} ->
           {:error, :player_not_found}
@@ -147,51 +161,55 @@ defmodule Exoforge.Std.PlayerData do
     if is_nil(player_id) or player_id == "" do
       {:error, :invalid_attributes}
     else
-      init_schema()
-      now = System.system_time(:millisecond)
+      if name_taken?(Map.get(profile, "name") || Map.get(profile, :name), player_id) do
+        {:error, :name_taken}
+      else
+        init_schema()
+        now = System.system_time(:millisecond)
 
-      raw_uid =
-        Map.get(payload, :user_id) || Map.get(payload, "user_id") ||
-          Map.get(profile, "user_id")
+        raw_uid =
+          Map.get(payload, :user_id) || Map.get(payload, "user_id") ||
+            Map.get(profile, "user_id")
 
-      # If user_id is explicitly passed, respect it (can be nil/empty for retained).
-      # If omitted entirely, default to player_id to link valid players.
-      user_id =
-        cond do
-          Map.has_key?(payload, :user_id) or Map.has_key?(payload, "user_id") ->
-            if raw_uid && raw_uid != "", do: to_string(raw_uid), else: ""
+        # If user_id is explicitly passed, respect it (can be nil/empty for retained).
+        # If omitted entirely, default to player_id to link valid players.
+        user_id =
+          cond do
+            Map.has_key?(payload, :user_id) or Map.has_key?(payload, "user_id") ->
+              if raw_uid && raw_uid != "", do: to_string(raw_uid), else: ""
 
-          raw_uid && raw_uid != "" ->
-            to_string(raw_uid)
+            raw_uid && raw_uid != "" ->
+              to_string(raw_uid)
 
-          true ->
-            player_id
+            true ->
+              player_id
+          end
+
+        state = if user_id == "", do: "retained", else: "active"
+
+        profile_with_id =
+          profile
+          |> Map.put("player_id", player_id)
+          |> Map.put("user_id", if(user_id != "", do: user_id, else: nil))
+
+        profile_json = Jason.encode!(profile_with_id)
+
+        insert_query =
+          "INSERT INTO players (id, player_id, user_id, profile, state) VALUES ($1, $2, $3, $4, $5)"
+
+        case ActionDispatcher.dispatch(:database, :execute, %{
+               plugin: :player_data,
+               operation: insert_query,
+               arguments: [player_id, player_id, user_id, profile_json, state]
+             }) do
+          {:ok, _} ->
+            # Emit player_created lifecycle event
+            player_created(player_id, now)
+            {:ok, %{player: profile_with_id}}
+
+          {:error, reason} ->
+            {:error, reason}
         end
-
-      state = if user_id == "", do: "retained", else: "active"
-
-      profile_with_id =
-        profile
-        |> Map.put("player_id", player_id)
-        |> Map.put("user_id", if(user_id != "", do: user_id, else: nil))
-
-      profile_json = Jason.encode!(profile_with_id)
-
-      insert_query =
-        "INSERT INTO players (id, player_id, user_id, profile, state) VALUES ($1, $2, $3, $4, $5)"
-
-      case ActionDispatcher.dispatch(:database, :execute, %{
-             plugin: :player_data,
-             operation: insert_query,
-             arguments: [player_id, player_id, user_id, profile_json, state]
-           }) do
-        {:ok, _} ->
-          # Emit player_created lifecycle event
-          player_created(player_id, now)
-          {:ok, %{player: profile_with_id}}
-
-        {:error, reason} ->
-          {:error, reason}
       end
     end
   end
@@ -494,6 +512,34 @@ defmodule Exoforge.Std.PlayerData do
       end
 
     if user_id && user_id != "", do: Map.put_new(decoded, "user_id", user_id), else: decoded
+  end
+
+  # Display names are unique across players: two players must not share one. `except_player_id`
+  # lets a player keep (or re-set) their own name.
+  defp name_taken?(name, except_player_id) do
+    normalized = if is_binary(name), do: String.downcase(String.trim(name)), else: ""
+
+    if normalized == "" do
+      false
+    else
+      case ActionDispatcher.dispatch(:database, :execute, %{
+             plugin: :player_data,
+             operation: "SELECT * FROM players"
+           }) do
+        {:ok, %{rows: rows}} when is_list(rows) ->
+          Enum.any?(rows, fn row ->
+            profile = decode_player_row(row)
+            pid = to_string(Map.get(row, "player_id") || Map.get(row, :player_id) || "")
+            pname = Map.get(profile, "name") || Map.get(profile, :name)
+
+            pid != to_string(except_player_id) and is_binary(pname) and
+              String.downcase(String.trim(pname)) == normalized
+          end)
+
+        _ ->
+          false
+      end
+    end
   end
 
   defp normalize_player_rows(rows) do

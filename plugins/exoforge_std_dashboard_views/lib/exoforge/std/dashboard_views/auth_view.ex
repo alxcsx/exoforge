@@ -26,6 +26,8 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
        roles_error: nil,
        issued_token_info: nil,
        selected_user: nil,
+       user_inspect_tab: "overview",
+       user_inspect_hooks: [],
        register_form: %{
          "user_id" => "",
          "player_id" => "",
@@ -53,7 +55,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
         |> load_users()
       end
 
-    {:ok, socket}
+    {:ok, sync_focus(socket)}
   end
 
   @impl true
@@ -323,17 +325,52 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
   end
 
   @impl true
-  def handle_event("inspect_user", %{"player_id" => player_id}, socket) do
-    user = Enum.find(socket.assigns.users, &(&1["player_id"] == player_id))
-    {:noreply, assign(socket, selected_user: user)}
-  end
-
-  @impl true
-  def handle_event("close_user_drawer", _params, socket) do
-    {:noreply, assign(socket, selected_user: nil)}
+  def handle_event("switch_user_inspect_tab", %{"tab" => tab}, socket) do
+    {:noreply, assign(socket, :user_inspect_tab, tab)}
   end
 
   ## ---- PRIVATE HELPERS ----
+
+  # Opens a user's inspector drawer, resetting it to the Overview tab and picking up whatever
+  # tabs plugins contribute through the `:user_inspect` hook point.
+  # The Overview tab is always present; hooked tabs come after it. No hooks means no rail.
+  defp user_inspect_tabs([]), do: []
+
+  defp user_inspect_tabs(hooks) do
+    [%{id: :overview, title: "Overview", icon: "🧭"} | hooks]
+  end
+
+  defp select_user(socket, player_id) do
+    current =
+      case socket.assigns[:selected_user] do
+        %{"player_id" => pid} -> to_string(pid)
+        _ -> nil
+      end
+
+    if current == to_string(player_id) do
+      socket
+    else
+      case Enum.find(socket.assigns.users, &(to_string(&1["player_id"]) == to_string(player_id))) do
+        nil ->
+          assign(socket, :selected_user, nil)
+
+        user ->
+          socket
+          |> assign(:selected_user, user)
+          |> assign(:user_inspect_tab, "overview")
+          |> assign(:user_inspect_hooks, Exoforge.UIHookRegistry.list_hooks(:user_inspect))
+      end
+    end
+  end
+
+  # The drawer is a URL (`/tab/exoforge_std_auth?focus=user:<id>`), not component state, so the
+  # browser back button closes it and a deep link opens it.
+  defp sync_focus(socket) do
+    case socket.assigns[:focus] do
+      %{kind: "user", id: id} -> select_user(socket, id)
+      _ -> assign(socket, :selected_user, nil)
+    end
+  end
 
   defp load_users(socket) do
     case ActionDispatcher.dispatch(:auth, :list_users, %{}) do
@@ -719,9 +756,9 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                         <% end %>
 
                         <button
-                          phx-click="inspect_user"
-                          phx-value-player_id={user["player_id"]}
-                          phx-target={@myself}
+                          phx-click="open_focus"
+                          phx-value-kind="user"
+                          phx-value-id={user["player_id"]}
                           title="View tokens & details"
                           class="px-2 py-1 text-xs font-semibold text-gray-600 hover:text-gray-900 border border-transparent hover:border-gray-200 rounded-lg transition-colors"
                         >
@@ -991,148 +1028,144 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
         </div>
       <% end %>
 
-      <!-- User Inspection Slide-over Drawer -->
+      <!-- User Inspection Popup -->
       <%= if @selected_user do %>
         <% sel_is_protected = @selected_user["is_protected"] == true %>
-        <div class="fixed inset-0 z-50 overflow-hidden bg-black/30 backdrop-blur-xs flex justify-end">
-          <div class="bg-white w-full max-w-md h-full shadow-2xl border-l border-gray-200 p-6 flex flex-col justify-between overflow-y-auto animate-in slide-in-from-right duration-200">
+        <Exoforge.Std.DashboardViews.InspectPopup.inspect_popup
+          open={true}
+          icon="👤"
+          title={@selected_user["name"] || @selected_user["player_id"]}
+          subtitle="Identity details & security tokens"
+          tabs={user_inspect_tabs(@user_inspect_hooks)}
+          active_tab={@user_inspect_tab}
+          on_close="close_focus"
+          on_select_tab="switch_user_inspect_tab"
+          target={@myself}
+        >
+          <%= if @user_inspect_tab == "overview" or @user_inspect_hooks == [] do %>
+            <%= if sel_is_protected do %>
+              <div class="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-center gap-2">
+                <span>🔒</span>
+                <span>This account is hardcoded via environment variables and cannot be altered or deleted.</span>
+              </div>
+            <% end %>
+
+            <%= if @selected_user["email"] do %>
+              <div>
+                <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Email</h4>
+                <p class="text-xs font-mono text-gray-800 bg-gray-50 p-2 rounded-lg border border-gray-200">
+                  <%= @selected_user["email"] %>
+                </p>
+              </div>
+            <% end %>
+
             <div>
-              <div class="flex items-center justify-between pb-4 border-b border-gray-100">
-                <div class="flex items-center gap-3">
-                  <div class="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-lg">
-                    👤
-                  </div>
-                  <div>
-                    <h3 class="text-base font-bold text-gray-900"><%= @selected_user["name"] || @selected_user["player_id"] %></h3>
-                    <p class="text-xs text-gray-500">Identity details &amp; security tokens</p>
-                  </div>
-                </div>
+              <div class="flex items-center justify-between mb-2">
+                <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Granted Scopes</h4>
+                <%= unless sel_is_protected do %>
+                  <button
+                    phx-click="open_roles_modal"
+                    phx-value-player_id={@selected_user["player_id"]}
+                    phx-target={@myself}
+                    class="text-xs font-semibold text-purple-600 hover:text-purple-800"
+                  >
+                    Edit Roles
+                  </button>
+                <% end %>
+              </div>
+              <div class="flex flex-wrap gap-1.5">
+                <%= for scope <- @selected_user["scopes"] || [] do %>
+                  <span class={"inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold #{case scope do
+                    "admin" -> "bg-purple-100 text-purple-800 border border-purple-200"
+                    "player" -> "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                    "guest" -> "bg-gray-100 text-gray-800 border border-gray-200"
+                    _ -> "bg-blue-100 text-blue-800 border border-blue-200"
+                  end}"}>
+                    <%= scope %>
+                  </span>
+                <% end %>
+              </div>
+            </div>
+
+            <%= unless sel_is_protected do %>
+              <button
+                phx-click="open_reset_password_modal"
+                phx-value-player_id={@selected_user["player_id"]}
+                phx-target={@myself}
+                class="w-full py-2 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl transition-colors text-center"
+              >
+                🔑 Reset Password
+              </button>
+            <% end %>
+
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Active Bearer Tokens</h4>
                 <button
-                  phx-click="close_user_drawer"
+                  phx-click="issue_token"
+                  phx-value-player_id={@selected_user["player_id"]}
                   phx-target={@myself}
-                  class="text-gray-400 hover:text-gray-600 text-lg font-bold p-1"
+                  class="text-xs font-semibold text-purple-600 hover:text-purple-800"
                 >
-                  ✕
+                  + Generate Token
                 </button>
               </div>
 
-              <div class="mt-5 space-y-5">
-                <%= if sel_is_protected do %>
-                  <div class="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-center gap-2">
-                    <span>🔒</span>
-                    <span>This account is hardcoded via environment variables and cannot be altered or deleted.</span>
-                  </div>
-                <% end %>
-
-                <%= if @selected_user["email"] do %>
-                  <div>
-                    <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Email</h4>
-                    <p class="text-xs font-mono text-gray-800 bg-gray-50 p-2 rounded-lg border border-gray-200">
-                      <%= @selected_user["email"] %>
-                    </p>
-                  </div>
-                <% end %>
-
-                <div>
-                  <div class="flex items-center justify-between mb-2">
-                    <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Granted Scopes</h4>
-                    <%= unless sel_is_protected do %>
+              <%= if (@selected_user["active_tokens"] || []) == [] do %>
+                <p class="text-xs text-gray-400 italic bg-gray-50 p-3 rounded-xl border border-gray-200">
+                  No active tokens found for this account.
+                </p>
+              <% else %>
+                <div class="space-y-2">
+                  <%= for token <- @selected_user["active_tokens"] do %>
+                    <div class="p-2.5 bg-gray-50 rounded-xl border border-gray-200 flex items-center justify-between">
+                      <span class="font-mono text-xs text-gray-800 truncate mr-2 select-all"><%= token %></span>
                       <button
-                        phx-click="open_roles_modal"
-                        phx-value-player_id={@selected_user["player_id"]}
-                        phx-target={@myself}
-                        class="text-xs font-semibold text-purple-600 hover:text-purple-800"
+                        phx-click={Phoenix.LiveView.JS.dispatch("exoforge:clip", detail: %{text: token})}
+                        title="Copy Token"
+                        class="text-xs text-purple-600 hover:text-purple-800 font-bold shrink-0"
                       >
-                        Edit Roles
+                        Copy
                       </button>
-                    <% end %>
-                  </div>
-                  <div class="flex flex-wrap gap-1.5">
-                    <%= for scope <- @selected_user["scopes"] || [] do %>
-                      <span class={"inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold #{case scope do
-                        "admin" -> "bg-purple-100 text-purple-800 border border-purple-200"
-                        "player" -> "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                        "guest" -> "bg-gray-100 text-gray-800 border border-gray-200"
-                        _ -> "bg-blue-100 text-blue-800 border border-blue-200"
-                      end}"}>
-                        <%= scope %>
-                      </span>
-                    <% end %>
-                  </div>
-                </div>
-
-                <%= unless sel_is_protected do %>
-                  <div>
-                    <button
-                      phx-click="open_reset_password_modal"
-                      phx-value-player_id={@selected_user["player_id"]}
-                      phx-target={@myself}
-                      class="w-full py-2 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl transition-colors text-center"
-                    >
-                      🔑 Reset Password
-                    </button>
-                  </div>
-                <% end %>
-
-                <div>
-                  <div class="flex items-center justify-between mb-2">
-                    <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Active Bearer Tokens</h4>
-                    <button
-                      phx-click="issue_token"
-                      phx-value-player_id={@selected_user["player_id"]}
-                      phx-target={@myself}
-                      class="text-xs font-semibold text-purple-600 hover:text-purple-800"
-                    >
-                      + Generate Token
-                    </button>
-                  </div>
-
-                  <%= if (@selected_user["active_tokens"] || []) == [] do %>
-                    <p class="text-xs text-gray-400 italic bg-gray-50 p-3 rounded-xl border border-gray-200">
-                      No active tokens found for this account.
-                    </p>
-                  <% else %>
-                    <div class="space-y-2">
-                      <%= for token <- @selected_user["active_tokens"] do %>
-                        <div class="p-2.5 bg-gray-50 rounded-xl border border-gray-200 flex items-center justify-between">
-                          <span class="font-mono text-xs text-gray-800 truncate mr-2 select-all"><%= token %></span>
-                          <button
-                            phx-click={Phoenix.LiveView.JS.dispatch("exoforge:clip", detail: %{text: token})}
-                            title="Copy Token"
-                            class="text-xs text-purple-600 hover:text-purple-800 font-bold shrink-0"
-                          >
-                            Copy
-                          </button>
-                        </div>
-                      <% end %>
                     </div>
                   <% end %>
                 </div>
-              </div>
-            </div>
-
-            <div class="pt-4 border-t border-gray-100 space-y-2">
-              <%= unless sel_is_protected do %>
-                <button
-                  phx-click="delete_user"
-                  phx-value-player_id={@selected_user["player_id"]}
-                  phx-target={@myself}
-                  data-confirm={"Are you sure you want to permanently delete account '#{@selected_user["name"] || @selected_user["player_id"]}'?"}
-                  class="w-full py-2 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-colors"
-                >
-                  Delete Account
-                </button>
               <% end %>
-              <button
-                phx-click="close_user_drawer"
-                phx-target={@myself}
-                class="w-full py-2 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
-              >
-                Close Drawer
-              </button>
             </div>
+          <% else %>
+            <%= for hook <- @user_inspect_hooks, to_string(hook.id) == @user_inspect_tab do %>
+              <%= if hook[:module] do %>
+                <.live_component
+                  module={hook[:module]}
+                  id={"user_inspect_#{hook.id}"}
+                  user={@selected_user}
+                />
+              <% else %>
+                <p class="text-xs text-gray-400 italic">This tab does not provide a view.</p>
+              <% end %>
+            <% end %>
+          <% end %>
+
+          <div class="pt-4 border-t border-gray-100 space-y-2">
+            <%= unless sel_is_protected do %>
+              <button
+                phx-click="delete_user"
+                phx-value-player_id={@selected_user["player_id"]}
+                phx-target={@myself}
+                data-confirm={"Are you sure you want to permanently delete account '#{@selected_user["name"] || @selected_user["player_id"]}'?"}
+                class="w-full py-2 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-colors"
+              >
+                Delete Account
+              </button>
+            <% end %>
+            <button
+              phx-click="close_focus"
+              class="w-full py-2 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+            >
+              Close
+            </button>
           </div>
-        </div>
+        </Exoforge.Std.DashboardViews.InspectPopup.inspect_popup>
       <% end %>
     </div>
     """

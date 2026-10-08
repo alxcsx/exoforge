@@ -23,6 +23,16 @@ defmodule Exoforge.Std.Auth do
           icon: "🔐",
           order: 25
         }
+      ],
+      resource_column: [
+        %{
+          id: :user_id,
+          role: "user_id",
+          target: "exoforge_std_auth",
+          focus: "user",
+          icon: "↗",
+          order: 10
+        }
       ]
     }
   }
@@ -262,6 +272,7 @@ defmodule Exoforge.Std.Auth do
       true ->
         case rename_player(player_id, trimmed) do
           :ok -> {:ok, %{player_id: player_id, name: trimmed}}
+          {:error, reason} -> {:error, reason}
           :error -> {:error, :player_not_found}
         end
     end
@@ -273,6 +284,7 @@ defmodule Exoforge.Std.Auth do
            data: %{"name" => name}
          }) do
       {:ok, _} -> :ok
+      {:error, reason} -> {:error, reason}
       _ -> :error
     end
   end
@@ -685,15 +697,18 @@ defmodule Exoforge.Std.Auth do
         }
 
         # Hook into player_data canonical profile store, linking player to user
-        _ =
-          ActionDispatcher.dispatch(:player_data, :create_player, %{
-            player_id: user_id,
-            user_id: user_id,
-            profile: profile
-          })
+        case ActionDispatcher.dispatch(:player_data, :create_player, %{
+               player_id: user_id,
+               user_id: user_id,
+               profile: profile
+             }) do
+          {:error, reason} ->
+            {:error, reason}
 
-        {:ok,
-         %{user_id: user_id, player_id: user_id, token: token, scopes: scopes, player: profile}}
+          _ ->
+            {:ok,
+             %{user_id: user_id, player_id: user_id, token: token, scopes: scopes, player: profile}}
+        end
 
       {:error, reason} ->
         {:error, reason}

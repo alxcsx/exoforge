@@ -752,13 +752,13 @@ defmodule Exoforge.Std.Dashboard.Overlays do
   def plugin_inspector_modal(assigns) do
     ~H"""
     <%= if @extension do %>
-      <.modal
-        id="plugin_inspector_modal"
+      <.inspect_popup
         open={true}
-        max_width="max-w-2xl"
-        title={"Inspect: #{display_name(@extension)}"}
+        icon={(is_map(@extension.dashboard_view) && @extension.dashboard_view[:icon]) || ExtensionPresenter.icon(@extension)}
+        title={display_name(@extension)}
         subtitle={"Plugin #{@extension.id} (v#{@extension.version})"}
         on_close={@on_close}
+        width="max-w-2xl"
       >
         <div class="space-y-4 text-xs">
           <div class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
@@ -857,7 +857,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             <% end %>
           </div>
         </div>
-      </.modal>
+      </.inspect_popup>
     <% end %>
     """
   end

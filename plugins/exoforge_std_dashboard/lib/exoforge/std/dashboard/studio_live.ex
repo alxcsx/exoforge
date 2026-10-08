@@ -82,6 +82,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     {:ok,
      assign(socket,
        current_tab: :overview,
+       focus: nil,
        project_name: "Exoforge Cluster",
        studio_name: "Exoforge Dashboard",
        environments: ["Live", "Dev", "Staging"],
@@ -144,9 +145,13 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
           resolve_tab(tab_param, extensions)
       end
 
+    focus = parse_focus(params["focus"])
+
     socket =
       socket
       |> assign(:current_tab, tab)
+      |> assign(:focus, focus)
+      |> assign(:inspecting_extension, focused_extension(focus, extensions))
       |> assign(:pinned_menu_open, false)
       |> maybe_refresh_tab_data(tab)
 
@@ -183,6 +188,30 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       nil ->
         Exoforge.Atoms.existing(str, str)
     end
+  end
+
+  # Deep links carry `?focus=<kind>:<id>` (e.g. `focus=user:player_1`); each tab view decides
+  # whether it understands that kind. Absent or malformed focus is simply nil.
+  defp parse_focus(nil), do: nil
+  defp parse_focus(""), do: nil
+
+  defp parse_focus(raw) when is_binary(raw) do
+    case String.split(raw, ":", parts: 2) do
+      [kind, id] when kind != "" and id != "" -> %{kind: kind, id: id}
+      _ -> nil
+    end
+  end
+
+  defp focused_extension(%{kind: "ext", id: id}, extensions) do
+    Enum.find(extensions, &(to_string(&1.id) == to_string(id)))
+  end
+
+  defp focused_extension(_focus, _extensions), do: nil
+
+  # Every popup is a URL, so the browser back button closes it. `focus_url/3` opens one;
+  # `tab_path/1` (no focus) is how they close.
+  defp focus_url(tab, kind, id) do
+    "#{tab_path(tab)}?focus=#{kind}:#{URI.encode_www_form(to_string(id))}"
   end
 
   defp maybe_refresh_tab_data(socket, :overview) do
@@ -420,14 +449,21 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   end
 
   def handle_event("inspect_extension", %{"id" => id}, socket) do
-    ext =
-      Enum.find(socket.assigns.overview.extensions, fn e -> to_string(e.id) == to_string(id) end)
-
-    {:noreply, assign(socket, inspecting_extension: ext)}
+    {:noreply, push_patch(socket, to: focus_url(socket.assigns.current_tab, "ext", id))}
   end
 
   def handle_event("close_inspect_extension", _params, socket) do
-    {:noreply, assign(socket, inspecting_extension: nil)}
+    {:noreply, push_patch(socket, to: tab_path(socket.assigns.current_tab))}
+  end
+
+  # Generic popup navigation: any view can open a drawer by bubbling `open_focus` with a
+  # kind/id, and close it by bubbling `close_focus`.
+  def handle_event("open_focus", %{"kind" => kind, "id" => id}, socket) do
+    {:noreply, push_patch(socket, to: focus_url(socket.assigns.current_tab, kind, id))}
+  end
+
+  def handle_event("close_focus", _params, socket) do
+    {:noreply, push_patch(socket, to: tab_path(socket.assigns.current_tab))}
   end
 
   def handle_event("quick_action", %{"action" => action}, socket) do
@@ -1346,12 +1382,14 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                 module={mod}
                 id={"ext_view_#{active_ext.id}"}
                 extension={active_ext}
+                focus={@focus}
               />
             <% else %>
               <.live_component
                 module={Exoforge.Std.Dashboard.GenericExtensionView}
                 id={"ext_generic_#{active_ext.id}"}
                 extension={active_ext}
+                focus={@focus}
               />
             <% end %>
           <% else %>

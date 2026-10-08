@@ -273,7 +273,7 @@ defmodule Exoforge.PluginRegistry do
         Map.new(data, fn {k, v} -> {k, sanitize_for_json(v)} end)
 
       is_list(data) ->
-        if Keyword.keyword?(data) do
+        if data != [] and Keyword.keyword?(data) do
           Map.new(data, fn {k, v} -> {k, sanitize_for_json(v)} end)
         else
           Enum.map(data, &sanitize_for_json/1)

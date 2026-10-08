@@ -251,6 +251,50 @@ defmodule Exoforge.Std.Resources do
   end
 
   @impl true
+  @doc "Deletes every row of a resource. Table-backed resources are truncated; KV-backed ones are emptied key by key."
+  defaction clear(payload), scope: Exoforge.Auth.Roles.studio() do
+    name = resource_name(payload)
+
+    with {:ok, info} <- resource_info(name) do
+      ensure_migrated(info)
+      res = info.resource
+
+      result =
+        case table_source(res) do
+          nil -> kv_clear(info)
+          table -> db(info.plugin_id, "DELETE FROM #{table}", [])
+        end
+
+      case result do
+        {:ok, _} -> {:ok, %{cleared: true}}
+        error -> error
+      end
+    end
+  end
+
+  # Native plugins keep rows in the host KV store, so clearing means dropping each key.
+  defp kv_clear(%{plugin_id: pid, resource: res}) do
+    db = Module.concat([Exoforge, Std, Database])
+    table = to_string(res.name)
+    pk = to_string(res.primary_key || :id)
+
+    case apply(db, :all, [pid, table]) do
+      {:ok, rows} when is_list(rows) ->
+        Enum.each(rows, fn row ->
+          id = row["id"] || row[pk]
+          if id, do: apply(db, :delete, [pid, table, to_string(id)])
+        end)
+
+        {:ok, %{rows: []}}
+
+      other ->
+        other
+    end
+  rescue
+    _ -> {:ok, %{rows: []}}
+  end
+
+  @impl true
   defaction upsert(payload), scope: Exoforge.Auth.Roles.studio() do
     name = resource_name(payload)
     attrs = param(payload, :attributes) || %{}
@@ -286,22 +330,41 @@ defmodule Exoforge.Std.Resources do
 
   defp list_without_source(info, payload) do
     case list_action(info.resource) do
-      nil -> table_list(info, payload)
+      nil -> table_or_kv_list(info, payload)
       action -> delegate_list(info.plugin_id, action, payload)
+    end
+  end
+
+  # A resource with no declared source may be backed by a real table the plugin created, or by
+  # the host KV bridge native plugins write through. Use the table when it looks like the
+  # resource (its primary key is present); otherwise read the KV store.
+  defp table_or_kv_list(info, payload) do
+    case table_list(info, payload) do
+      {:ok, %{rows: [first | _]} = result} ->
+        pk = to_string(info.resource.primary_key || :id)
+
+        if Map.has_key?(first, pk), do: {:ok, result}, else: kv_list(info, payload)
+
+      _ ->
+        kv_list(info, payload)
     end
   end
 
   defp list_action(res) do
     res
     |> Map.get(:actions, [])
-    |> List.wrap()
-    |> Enum.map(&to_string/1)
+    |> action_names()
     |> Enum.find(&String.starts_with?(&1, "list_"))
     |> case do
       nil -> nil
       name -> Exoforge.Atoms.existing(name)
     end
   end
+
+  # An empty `actions` list survives JSON sanitization as `%{}`, so accept either shape.
+  defp action_names(actions) when is_list(actions), do: Enum.map(actions, &to_string/1)
+  defp action_names(actions) when is_map(actions), do: Enum.map(Map.keys(actions), &to_string/1)
+  defp action_names(_), do: []
 
   defp table_list(%{plugin_id: pid, resource: res}, payload) do
     table = table_for(res)
@@ -319,6 +382,25 @@ defmodule Exoforge.Std.Resources do
       error ->
         error
     end
+  end
+
+  # Native plugins write through the host key/value bridge, so their rows live in the plugin's
+  # KV store, not in a table shaped like the resource. The database adapter's `:all` command
+  # returns those records already decoded.
+  defp kv_list(%{plugin_id: pid, resource: res}, payload) do
+    limit = to_int(param(payload, :limit), 50)
+    offset = to_int(param(payload, :offset), 0)
+    db = Module.concat([Exoforge, Std, Database])
+
+    case apply(db, :all, [pid, to_string(res.name)]) do
+      {:ok, rows} when is_list(rows) ->
+        {:ok, %{rows: Enum.slice(rows, offset, limit), total: length(rows)}}
+
+      _ ->
+        {:ok, %{rows: [], total: 0}}
+    end
+  rescue
+    _ -> {:ok, %{rows: [], total: 0}}
   end
 
   defp count_rows(pid, table, where_sql, where_args, rows) do

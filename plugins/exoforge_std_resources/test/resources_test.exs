@@ -25,6 +25,21 @@ defmodule Exoforge.Std.ResourcesTest do
     end
   end
 
+  defmodule ScoresContract do
+    import Exoforge.Contracts.Service
+
+    defservice scores do
+      # No `source`: the plugin stores rows through the host KV bridge.
+      resource :snake_score do
+        primary_key(:player_id)
+
+        column(:player_id, :string, sortable: true)
+        column(:name, :string, filterable: true)
+        column(:score, :integer, sortable: true)
+      end
+    end
+  end
+
   setup do
     PluginRegistry.initialize_ets()
     start_supervised!({DbManager, [driver: :sqlite]})
@@ -110,6 +125,26 @@ defmodule Exoforge.Std.ResourcesTest do
     assert Enum.map(searched, & &1["id"]) == ["c"]
   end
 
+  test "lists rows stored through the host KV bridge when the resource has no table source" do
+    PluginRegistry.register(%Exoforge.Domain.Manifest{
+      id: :snake_plugin,
+      name: "snake_plugin",
+      version: "0.1.0",
+      entry_point: Resources,
+      provides: [ScoresContract.Scores]
+    })
+
+    assert {:ok, _} =
+             Exoforge.Std.Database.put(:snake_plugin, "snake_score", "p1", %{
+               "player_id" => "p1",
+               "name" => "Viper",
+               "score" => 42
+             })
+
+    assert {:ok, %{rows: rows, total: 1}} = dispatch(:list, %{resource: "snake_score"})
+    assert [%{"score" => 42, "name" => "Viper"}] = rows
+  end
+
   test "upsert inserts then updates on conflict" do
     assert {:ok, %{row: r1}} =
              dispatch(:upsert, %{
@@ -131,6 +166,37 @@ defmodule Exoforge.Std.ResourcesTest do
   test "rejects attributes outside the resource schema" do
     assert {:error, :invalid_attributes} =
              dispatch(:create, %{resource: "widget", attributes: %{"nope" => 1}})
+  end
+
+  test "clear deletes every row of a resource" do
+    for {id, name, score} <- [{"ca", "Alpha", 5}, {"cb", "Beta", 30}] do
+      dispatch(:create, %{
+        resource: "widget",
+        attributes: %{"id" => id, "name" => name, "score" => score}
+      })
+    end
+
+    assert {:ok, %{cleared: true}} = dispatch(:clear, %{resource: "widget"})
+    assert {:ok, %{rows: []}} = dispatch(:list, %{resource: "widget"})
+  end
+
+  test "clear empties a KV-backed resource" do
+    PluginRegistry.register(%Exoforge.Domain.Manifest{
+      id: :snake_plugin,
+      name: "snake_plugin",
+      version: "0.1.0",
+      entry_point: Resources,
+      provides: [ScoresContract.Scores]
+    })
+
+    Exoforge.Std.Database.put(:snake_plugin, "snake_score", "clear_p1", %{
+      "player_id" => "clear_p1",
+      "name" => "Clear Me",
+      "score" => 1
+    })
+
+    assert {:ok, %{cleared: true}} = dispatch(:clear, %{resource: "snake_score"})
+    assert {:ok, %{rows: []}} = dispatch(:list, %{resource: "snake_score"})
   end
 
   test "resource_store actions reject callers below studio scope" do

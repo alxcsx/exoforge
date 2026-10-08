@@ -11,6 +11,10 @@ defmodule Exoforge.UIHookRegistry do
     * `:overview_widget` - Full widgets on the Overview tab.
     * `:settings` - Tabs in the Project Settings modal.
     * `:player_inspect` - Tabs in the Player Profile inspector drawer.
+    * `:user_inspect` - Tabs in the user (account) inspector drawer. A spec may carry a
+      `:module` (a LiveComponent) that renders the tab body.
+    * `:resource_column` - Rendering for a resource column `role` (e.g. `"user_id"`). A spec
+      carries the `role`, plus `target`/`focus` for a deep link into another tab.
     * Custom domain hook points.
   """
 

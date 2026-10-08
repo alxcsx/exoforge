@@ -58,7 +58,7 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
         |> load_data()
       end
 
-    {:ok, socket}
+    {:ok, sync_focus(socket)}
   end
 
   ## ---- EVENT HANDLERS ----
@@ -103,27 +103,6 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
   @impl true
   def handle_event("refresh", _params, socket) do
     {:noreply, load_data(socket)}
-  end
-
-  @impl true
-  def handle_event("inspect_plugin", %{"id" => id}, socket) do
-    plugin =
-      case ActionDispatcher.dispatch(:plugin_manager, :get_plugin, %{id: id}) do
-        {:ok, %{plugin: p}} ->
-          p
-
-        _ ->
-          Enum.find(socket.assigns.plugins, fn p ->
-            to_string(p["id"]) == to_string(id)
-          end)
-      end
-
-    {:noreply, assign(socket, selected_plugin: plugin, active_drawer_tab: "overview")}
-  end
-
-  @impl true
-  def handle_event("close_drawer", _params, socket) do
-    {:noreply, assign(socket, selected_plugin: nil)}
   end
 
   @impl true
@@ -266,6 +245,43 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
   end
 
   ## ---- PRIVATE HELPERS ----
+
+  # The plugin drawer is a URL (`?focus=plugin:<id>`), not component state, so back/forward works.
+  defp sync_focus(socket) do
+    case socket.assigns[:focus] do
+      %{kind: "plugin", id: id} -> select_plugin(socket, id)
+      _ -> assign(socket, selected_plugin: nil)
+    end
+  end
+
+  defp select_plugin(socket, id) do
+    current = socket.assigns[:selected_plugin] && socket.assigns.selected_plugin["id"]
+
+    if to_string(current) == to_string(id) do
+      socket
+    else
+      plugin =
+        case ActionDispatcher.dispatch(:plugin_manager, :get_plugin, %{id: id}) do
+          {:ok, %{plugin: p}} ->
+            p
+
+          _ ->
+            Enum.find(socket.assigns.plugins, fn p -> to_string(p["id"]) == to_string(id) end)
+        end
+
+      assign(socket, selected_plugin: plugin, active_drawer_tab: "overview")
+    end
+  end
+
+  # The plugin inspector's tabs. Same ids the `set_drawer_tab` handler switches on.
+  defp pm_inspect_tabs do
+    [
+      %{id: "overview", title: "Overview"},
+      %{id: "entities", title: "Entities"},
+      %{id: "csharp", title: "C# / Unity SDK"},
+      %{id: "manifest", title: "Raw Manifest"}
+    ]
+  end
 
   defp load_data(socket) do
     plugins =
@@ -631,9 +647,9 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
                     <td class="py-3 px-4 text-right">
                       <div class="flex items-center justify-end gap-2">
                         <button
-                          phx-click="inspect_plugin"
+                          phx-click="open_focus"
+                          phx-value-kind="plugin"
                           phx-value-id={plugin["id"]}
-                          phx-target={@myself}
                           title="Inspect manifest, actions, and schemas"
                           class="px-2.5 py-1 text-xs font-semibold text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors"
                         >
@@ -668,45 +684,18 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
 
       <!-- Slide-over Plugin Inspector Drawer -->
       <%= if @selected_plugin do %>
-        <div class="fixed inset-0 z-50 overflow-hidden bg-black/40 backdrop-blur-xs flex justify-end">
-          <div class="bg-white w-full max-w-2xl h-full shadow-2xl border-l border-gray-200 flex flex-col justify-between overflow-y-auto animate-in slide-in-from-right duration-200">
-            <div>
-              <!-- Drawer Header -->
-              <div class="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/70">
-                <div class="flex items-center gap-3">
-                  <div class="w-10 h-10 rounded-xl bg-violet-100 text-violet-800 flex items-center justify-center font-bold text-lg">
-                    📦
-                  </div>
-                  <div>
-                    <h3 class="text-base font-bold text-gray-900"><%= @selected_plugin["name"] %></h3>
-                    <p class="text-xs font-mono text-gray-500"><%= @selected_plugin["id"] %> (v<%= @selected_plugin["version"] %>)</p>
-                  </div>
-                </div>
-                <button
-                  phx-click="close_drawer"
-                  phx-target={@myself}
-                  class="text-gray-400 hover:text-gray-600 text-lg font-bold p-1"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <!-- Drawer Tabs -->
-              <div class="flex items-center gap-1 px-6 py-2 border-b border-gray-100 bg-white">
-                <%= for {tab_id, tab_label} <- [{"overview", "Overview"}, {"entities", "Entities"}, {"csharp", "C# / Unity SDK"}, {"manifest", "Raw Manifest"}] do %>
-                  <button
-                    phx-click="set_drawer_tab"
-                    phx-value-tab={tab_id}
-                    phx-target={@myself}
-                    class={"px-3 py-1.5 rounded-lg text-xs font-bold transition-all #{if @active_drawer_tab == tab_id, do: "bg-violet-50 text-violet-800 border border-violet-200", else: "text-gray-500 hover:text-gray-900 hover:bg-gray-50"}"}
-                  >
-                    <%= tab_label %>
-                  </button>
-                <% end %>
-              </div>
-
-              <!-- Drawer Tab Content -->
-              <div class="p-6 space-y-6">
+        <Exoforge.Std.DashboardViews.InspectPopup.inspect_popup
+          open={true}
+          icon="📦"
+          title={@selected_plugin["name"]}
+          subtitle={"#{@selected_plugin["id"]} (v#{@selected_plugin["version"]})"}
+          tabs={pm_inspect_tabs()}
+          active_tab={@active_drawer_tab}
+          on_close="close_focus"
+          on_select_tab="set_drawer_tab"
+          target={@myself}
+          width="max-w-2xl"
+        >
                 <%= if @active_drawer_tab == "overview" do %>
                   <div class="space-y-4">
                     <div class="grid grid-cols-2 gap-3">
@@ -804,11 +793,7 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
                     <pre class="bg-gray-900 text-gray-100 p-4 rounded-xl font-mono text-xs overflow-x-auto select-all leading-relaxed max-h-96"><%= Jason.encode!(@selected_plugin, pretty: true) %></pre>
                   </div>
                 <% end %>
-              </div>
-            </div>
-
-            <!-- Drawer Footer -->
-            <div class="p-6 border-t border-gray-100 bg-gray-50 flex items-center justify-between">
+          <div class="pt-4 border-t border-gray-100 flex items-center justify-between">
               <%= if wasm_plugin?(@selected_plugin) do %>
                 <button
                   phx-click="remove_plugin"
@@ -824,15 +809,13 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
               <% end %>
 
               <button
-                phx-click="close_drawer"
-                phx-target={@myself}
+                phx-click="close_focus"
                 class="px-4 py-2 text-xs font-bold text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-xl transition-colors shadow-sm ml-auto"
               >
                 Close
               </button>
-            </div>
           </div>
-        </div>
+        </Exoforge.Std.DashboardViews.InspectPopup.inspect_popup>
       <% end %>
 
       <!-- Upload WASM Plugin Modal -->

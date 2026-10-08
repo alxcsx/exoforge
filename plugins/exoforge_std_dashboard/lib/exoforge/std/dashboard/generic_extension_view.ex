@@ -9,12 +9,13 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
   alias Exoforge.EventDispatcher
   alias Exoforge.PluginRegistry
   alias Exoforge.DrawerRegistry
+  import Exoforge.Std.Dashboard.Components
 
   @impl true
   def mount(socket) do
     {:ok,
      assign(socket,
-       subtab: "actions",
+       subtab: nil,
        action_forms: %{},
        action_results: %{},
        selected_resource_name: nil,
@@ -43,11 +44,11 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
         socket.assigns.subtab in ["actions", "resources", "events", "contract"] ->
           socket.assigns.subtab
 
-        (ext[:actions] || []) != [] ->
-          "actions"
-
         (ext[:resources] || []) != [] ->
           "resources"
+
+        (ext[:actions] || []) != [] ->
+          "actions"
 
         (ext[:events] || []) != [] ->
           "events"
@@ -69,8 +70,42 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
       |> assign(:subtab, subtab)
       |> assign(:selected_resource_name, selected_res_name)
       |> load_resource_data()
+      |> sync_focus()
 
     {:ok, socket}
+  end
+
+  # The row drawer is a URL (`?focus=row:<id>`), not component state, so the browser back button
+  # closes it and a deep link opens it.
+  defp sync_focus(socket) do
+    case socket.assigns[:focus] do
+      %{kind: "row", id: id} -> open_row(socket, id)
+      _ -> assign(socket, drawer_open: false, inspected_row: nil)
+    end
+  end
+
+  defp open_row(socket, id) do
+    current = socket.assigns[:inspected_row]
+    current_id = current && (current[:id] || current["id"] || current[:player_id] || current["player_id"])
+
+    if current && to_string(current_id) == to_string(id) do
+      socket
+    else
+      row =
+        Enum.find(socket.assigns.resource_rows, fn r ->
+          to_string(r[:id] || r["id"] || r[:player_id] || r["player_id"]) == to_string(id)
+        end)
+
+      res_name = socket.assigns.selected_resource_name
+      tabs = if res_name, do: DrawerRegistry.list_tabs(res_name), else: []
+
+      assign(socket,
+        drawer_open: true,
+        inspected_row: row,
+        drawer_tabs: tabs,
+        inspected_drawer_tab: "overview"
+      )
+    end
   end
 
   # ---- EVENT HANDLERS ----
@@ -192,32 +227,18 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
   end
 
   @impl true
-  def handle_event("inspect_row", %{"id" => id}, socket) do
-    row =
-      Enum.find(socket.assigns.resource_rows, fn r ->
-        to_string(r[:id] || r["id"] || r[:player_id] || r["player_id"]) == to_string(id)
-      end)
-
-    res_name = socket.assigns.selected_resource_name
-    tabs = if res_name, do: DrawerRegistry.list_tabs(res_name), else: []
-
-    {:noreply,
-     assign(socket,
-       drawer_open: true,
-       inspected_row: row,
-       drawer_tabs: tabs,
-       inspected_drawer_tab: "overview"
-     )}
-  end
-
-  @impl true
-  def handle_event("close_drawer", _params, socket) do
-    {:noreply, assign(socket, drawer_open: false, inspected_row: nil)}
-  end
-
-  @impl true
   def handle_event("select_drawer_tab", %{"tab" => tab}, socket) do
     {:noreply, assign(socket, inspected_drawer_tab: tab)}
+  end
+
+  @impl true
+  def handle_event("delete_resource", _params, socket) do
+    _ =
+      ActionDispatcher.dispatch(:resource_store, :clear, %{
+        resource: socket.assigns.selected_resource_name
+      })
+
+    {:noreply, load_resource_data(socket)}
   end
 
   @impl true
@@ -339,9 +360,34 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
       Enum.map(cols, fn c ->
         key = c[:name] || c["name"]
         label = c[:label] || c["label"] || Phoenix.Naming.humanize(to_string(key))
-        %{key: key, label: label, badge: c[:badge] || c["badge"] || false}
+
+        %{
+          key: key,
+          label: label,
+          badge: c[:badge] || c["badge"] || false,
+          role: c[:role] || c["role"]
+        }
       end)
     end
+  end
+
+  # A column role (e.g. "user_id") turns a plain string into a deep link. The target is
+  # contributed by whichever plugin owns the role, through a `:resource_column` UI hook, so the
+  # dashboard never hardcodes a plugin's tab.
+  defp column_link(nil), do: nil
+
+  defp column_link(role) do
+    role = to_string(role)
+
+    Exoforge.UIHookRegistry.list_hooks(:resource_column)
+    |> Enum.find(fn hook ->
+      to_string(hook[:role] || hook[:id]) == role and is_binary(hook[:target]) and
+        is_binary(hook[:focus])
+    end)
+  end
+
+  defp focus_path(link, value) do
+    "/tab/#{link[:target]}?focus=#{link[:focus]}:#{URI.encode_www_form(to_string(value))}"
   end
 
   defp default_value_for(type) do
@@ -442,18 +488,6 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
 
         <!-- Subtab Switcher -->
         <div class="flex items-center gap-1.5 bg-gray-100/80 p-1.5 rounded-xl border border-gray-200/60 overflow-x-auto">
-          <%= if @actions != [] do %>
-            <button
-              phx-click="switch_subtab"
-              phx-value-tab="actions"
-              phx-target={@myself}
-              class={"px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 #{if @subtab == "actions", do: "bg-white text-purple-700 shadow-sm", else: "text-gray-600 hover:text-gray-900"}"}
-            >
-              <span>⚡ Actions</span>
-              <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-purple-100 text-purple-800"><%= length(@actions) %></span>
-            </button>
-          <% end %>
-
           <%= if @resources != [] do %>
             <button
               phx-click="switch_subtab"
@@ -463,6 +497,18 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
             >
               <span>📦 Data</span>
               <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-blue-100 text-blue-800"><%= length(@resources) %></span>
+            </button>
+          <% end %>
+
+          <%= if @actions != [] do %>
+            <button
+              phx-click="switch_subtab"
+              phx-value-tab="actions"
+              phx-target={@myself}
+              class={"px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 #{if @subtab == "actions", do: "bg-white text-purple-700 shadow-sm", else: "text-gray-600 hover:text-gray-900"}"}
+            >
+              <span>⚡ Actions</span>
+              <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-purple-100 text-purple-800"><%= length(@actions) %></span>
             </button>
           <% end %>
 
@@ -682,6 +728,16 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
               >
                 <span>⬇ JSON</span>
               </button>
+
+              <button
+                type="button"
+                phx-click="delete_resource"
+                phx-target={@myself}
+                data-confirm={"Delete all data for resource '#{@selected_resource_name}'? This cannot be undone."}
+                class="px-3 py-1.5 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-xl hover:bg-red-100 shadow-xs flex items-center gap-1"
+              >
+                <span>🗑 Delete</span>
+              </button>
             </div>
           </div>
 
@@ -713,21 +769,32 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                         <%= for col <- @columns do %>
                           <% val = Map.get(row, col[:key]) || Map.get(row, to_string(col[:key])) || "" %>
                           <td class="py-3 px-4">
-                            <%= if col[:badge] do %>
-                              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                <%= val %>
-                              </span>
+                            <%= if link = column_link(col[:role]) do %>
+                              <.link
+                                patch={focus_path(link, val)}
+                                class="inline-flex items-center gap-1 font-mono font-semibold text-primary-700 hover:text-primary-900 hover:underline"
+                                title={"Open " <> to_string(col[:label])}
+                              >
+                                <span><%= to_string(val) %></span>
+                                <span class="text-[10px]"><%= link[:icon] || "↗" %></span>
+                              </.link>
                             <% else %>
-                              <span class="font-mono font-medium text-gray-800"><%= to_string(val) %></span>
+                              <%= if col[:badge] do %>
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  <%= val %>
+                                </span>
+                              <% else %>
+                                <span class="font-mono font-medium text-gray-800"><%= to_string(val) %></span>
+                              <% end %>
                             <% end %>
                           </td>
                         <% end %>
                         <td class="py-3 px-4 text-right">
                           <button
                             type="button"
-                            phx-click="inspect_row"
+                            phx-click="open_focus"
+                            phx-value-kind="row"
                             phx-value-id={to_string(row_id)}
-                            phx-target={@myself}
                             class="px-2.5 py-1 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition-colors"
                           >
                             Inspect
@@ -804,73 +871,42 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
         </div>
       <% end %>
 
-      <!-- Slide-Over Entity/Row Inspector Drawer -->
+      <!-- Entity/Row Inspector Popup -->
       <%= if @drawer_open and @inspected_row do %>
-        <div class="fixed inset-0 z-50 overflow-hidden bg-black/30 backdrop-blur-xs flex justify-end">
-          <div class="bg-white w-full max-w-md h-full shadow-2xl border-l border-gray-200 p-6 flex flex-col justify-between overflow-y-auto animate-in slide-in-from-right duration-200">
-            <div>
-              <div class="flex items-center justify-between pb-4 border-b border-gray-100">
-                <div class="flex items-center gap-3">
-                  <span class="text-2xl">📦</span>
-                  <div>
-                    <h3 class="text-base font-bold text-gray-900 font-mono">
-                      <%= Map.get(@inspected_row, :id) || Map.get(@inspected_row, "id") || "Record" %>
-                    </h3>
-                    <p class="text-xs text-gray-500">Resource: <%= @selected_resource_name %></p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  phx-click="close_drawer"
-                  phx-target={@myself}
-                  class="text-gray-400 hover:text-gray-600 text-lg font-bold p-1"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <!-- Drawer Tabs -->
-              <%= if @drawer_tabs != [] do %>
-                <div class="flex gap-2 pt-3 pb-2 border-b border-gray-100 overflow-x-auto">
-                  <%= for tab <- @drawer_tabs do %>
-                    <button
-                      type="button"
-                      phx-click="select_resource_drawer_tab"
-                      phx-value-tab={tab.id}
-                      phx-target={@myself}
-                      class={"px-3 py-1 text-xs font-bold rounded-lg #{if @inspected_drawer_tab == tab.id, do: "bg-purple-100 text-purple-800", else: "text-gray-500 hover:text-gray-900"}"}
-                    >
-                      <%= tab.label %>
-                    </button>
-                  <% end %>
+        <.inspect_popup
+          open={true}
+          icon="📦"
+          title={to_string(Map.get(@inspected_row, :id) || Map.get(@inspected_row, "id") || "Record")}
+          subtitle={"Resource: #{@selected_resource_name}"}
+          tabs={@drawer_tabs}
+          active_tab={@inspected_drawer_tab}
+          on_close="close_focus"
+          on_select_tab="select_drawer_tab"
+          target={@myself}
+          width="max-w-2xl"
+        >
+          <div class="space-y-3">
+            <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Record Fields</h4>
+            <div class="space-y-2">
+              <%= for {k, v} <- @inspected_row do %>
+                <div class="p-2.5 bg-gray-50 rounded-xl border border-gray-100 flex flex-col text-xs font-mono">
+                  <span class="text-gray-400 text-[10px] uppercase font-bold"><%= k %></span>
+                  <span class="text-gray-900 break-all"><%= inspect(v) %></span>
                 </div>
               <% end %>
-
-              <div class="mt-4 space-y-3">
-                <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Record Fields</h4>
-                <div class="space-y-2">
-                  <%= for {k, v} <- @inspected_row do %>
-                    <div class="p-2.5 bg-gray-50 rounded-xl border border-gray-100 flex flex-col text-xs font-mono">
-                      <span class="text-gray-400 text-[10px] uppercase font-bold"><%= k %></span>
-                      <span class="text-gray-900 break-all"><%= inspect(v) %></span>
-                    </div>
-                  <% end %>
-                </div>
-              </div>
-            </div>
-
-            <div class="pt-4 border-t border-gray-100">
-              <button
-                type="button"
-                phx-click="close_drawer"
-                phx-target={@myself}
-                class="w-full py-2 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
-              >
-                Close Inspector
-              </button>
             </div>
           </div>
-        </div>
+
+          <div class="pt-4 border-t border-gray-100">
+            <button
+              type="button"
+              phx-click="close_focus"
+              class="w-full py-2 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+            >
+              Close Inspector
+            </button>
+          </div>
+        </.inspect_popup>
       <% end %>
 
       <!-- CSV / JSON Export Modal -->

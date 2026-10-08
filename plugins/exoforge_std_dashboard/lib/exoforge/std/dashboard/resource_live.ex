@@ -55,13 +55,30 @@ defmodule Exoforge.Std.Dashboard.ResourceLive do
   end
 
   @impl true
+  def handle_params(params, _uri, socket) do
+    # The inspector is a URL (`?focus=row:<id>`), so it is linkable and back-navigable.
+    row =
+      case params["focus"] do
+        "row:" <> id ->
+          Enum.find(socket.assigns.rows, fn r ->
+            to_string(r[:id] || r["id"] || r[:player_id] || r["player_id"]) == id
+          end)
+
+        _ ->
+          nil
+      end
+
+    {:noreply, assign(socket, drawer_open: row != nil, inspected_row: row)}
+  end
+
+  @impl true
   def handle_event("inspect_row", %{"id" => id}, socket) do
-    row = Enum.find(socket.assigns.rows, fn r -> (r[:id] || r["id"] || r["player_id"]) == id end)
-    {:noreply, assign(socket, drawer_open: true, inspected_row: row, inspected_tab: "overview")}
+    path = "/resources/#{socket.assigns.resource_name}?focus=row:#{URI.encode_www_form(to_string(id))}"
+    {:noreply, push_patch(socket, to: path)}
   end
 
   def handle_event("close_drawer", _params, socket) do
-    {:noreply, assign(socket, drawer_open: false, inspected_row: nil)}
+    {:noreply, push_patch(socket, to: "/resources/#{socket.assigns.resource_name}")}
   end
 
   def handle_event("select_drawer_tab", %{"tab" => tab}, socket) do
