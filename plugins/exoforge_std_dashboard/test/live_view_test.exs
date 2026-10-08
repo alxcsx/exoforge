@@ -501,7 +501,12 @@ defmodule Exoforge.DashboardLiveViewTest do
       {:ok, view, _html} = live(conn, "/")
       render_click(view, "switch_tab", %{"tab" => "exoforge_std_auth"})
 
-      html = view |> element("button[phx-click=open_focus]") |> render_click()
+      # One "Inspect" button per user row, and the table is shared with every other test in the
+      # suite, so select this user's rather than the only one there is.
+      html =
+        view
+        |> element(~s{button[phx-click=open_focus][phx-value-id="u_test"]})
+        |> render_click()
 
       # Opening the drawer is a URL change, so it is linkable and back-navigable.
       assert_patch(view, "/tab/exoforge_std_auth?focus=user:u_test")
