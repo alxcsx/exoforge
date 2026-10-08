@@ -123,11 +123,13 @@ defmodule Exoforge.SystemIntegrationTest do
 
       assert player_res.player["name"] == "King Arthur"
 
-      # 4. Invoke C# WASM Plugin action
+      # 4. Invoke the plugin's action. A named payload, not the positional list the WASM sample
+      #    took: a WASI export has an ABI of positional arguments, and a native plugin takes an
+      #    object keyed by the action's declared parameters.
       assert {:ok, _result} =
-               ActionDispatcher.dispatch(:sample_plugin, :increment, [1, 25])
+               ActionDispatcher.dispatch(:sample_plugin, :increment, %{counter_id: 1, amount: 25})
 
-      # 5. Verify C# WASM host_emit_event reached EventDispatcher
+      # 5. Verify the emitted event reached EventDispatcher
       assert_receive {:exo_event, :value_changed, event_payload, _ctx}, 1000
       assert event_payload["counter_id"] == 1
       assert event_payload["new_value"] == 25

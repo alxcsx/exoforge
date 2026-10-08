@@ -123,7 +123,8 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
         string EventHandler,
         string ContractInterface,
         string ContractBinding,
-        List<ServiceModel> Models);
+        List<ServiceModel> Models,
+        List<string> InjectedProperties);
 
     // ---- service extraction ----
 
@@ -289,12 +290,18 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
         // explicit service name counts - an unnamed [Inject] is a context capability, not a
         // plugin dependency.
         var dependencies = new List<string>();
+
+        // Every [Inject] property, named, so the entry point can keep them from being trimmed.
+        var injected = new List<string>();
+
         foreach (var member in root.GetMembers())
         {
             if (member is not IPropertySymbol property) continue;
 
             var inject = FindAttribute(property.GetAttributes(), InjectAttribute);
             if (inject is null) continue;
+
+            injected.Add(property.Name);
 
             string? dep = PositionalString(inject, 0) ?? NamedString(inject, "ServiceName");
             if (!string.IsNullOrEmpty(dep) && !dependencies.Contains(dep!)) dependencies.Add(dep!);
@@ -351,7 +358,8 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
             DispatchEmitter.EventHandler(rootFq, FindEventHandler(root)),
             contract,
             binding,
-            services);
+            services,
+            injected);
     }
 
     private static ImmutableArray<ServiceEmit> ExtractReferencedContracts(Compilation compilation, CancellationToken ct)
@@ -715,6 +723,17 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
 
         // The three-argument Run needs a context. Without one the plugin falls back to the host's
         // reflection path, which is what it had before the generator existed.
+        // The plugin's [Inject] properties are reached by reflection - the host assigns them - and an
+        // annotation at a use site did not survive: the dataflow has to reach the call site, and the
+        // call site is here, in the plugin's own assembly. They were trimmed and every injected
+        // dependency was silently null. Naming the members keeps them unconditionally.
+        //
+        // By name, not by member kind: the SDK ships an internal polyfill of the kinds enum for
+        // netstandard2.1, so a project that can see it - the generator's own tests, through
+        // InternalsVisibleTo - sees the type twice.
+        string injected = string.Concat(emit.InjectedProperties.Select(name =>
+            $"        [global::System.Diagnostics.CodeAnalysis.DynamicDependency(\"{name}\", typeof({emit.RootClass}))]\n"));
+
         string run = context.Length == 0
             ? $"global::Exoforge.Plugin.SDK.PluginHost.RunInstance(new {emit.RootClass}(), new {dispatch}());"
             : $"global::Exoforge.Plugin.SDK.PluginHost.Run<{emit.RootClass}, {context}, {dispatch}>();";
@@ -728,7 +747,7 @@ namespace Exoforge.Generated
 {{
     internal static class ExoforgeEntryPoint
     {{
-        public static void Main() => {run}
+{injected}        public static void Main() => {run}
     }}
 }}
 ";

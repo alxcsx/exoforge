@@ -24,10 +24,10 @@ public class AuthAuthenticateRequest
 /// <summary>Response model for auth.authenticate action.</summary>
 public class AuthAuthenticateResponse
 {
-    [JsonPropertyName("player_id")]
-    public string PlayerId { get; set; } = default!;
     [JsonPropertyName("scopes")]
     public JsonElement Scopes { get; set; } = default!;
+    [JsonPropertyName("player_id")]
+    public string PlayerId { get; set; } = default!;
 }
 
 /// <summary>Request payload for auth.login action.</summary>
@@ -44,10 +44,10 @@ public class AuthLoginResponse
 {
     [JsonPropertyName("token")]
     public string Token { get; set; } = default!;
-    [JsonPropertyName("player_id")]
-    public string PlayerId { get; set; } = default!;
     [JsonPropertyName("scopes")]
     public JsonElement Scopes { get; set; } = default!;
+    [JsonPropertyName("player_id")]
+    public string PlayerId { get; set; } = default!;
 }
 
 /// <summary>Request payload for auth.verify_scope action.</summary>
@@ -79,10 +79,10 @@ public class AuthRegisterRequest
     public JsonElement Email { get; set; } = default!;
     [JsonPropertyName("password")]
     public JsonElement Password { get; set; } = default!;
-    [JsonPropertyName("player_id")]
-    public JsonElement PlayerId { get; set; } = default!;
     [JsonPropertyName("scopes")]
     public JsonElement Scopes { get; set; } = default!;
+    [JsonPropertyName("player_id")]
+    public JsonElement PlayerId { get; set; } = default!;
 }
 
 /// <summary>Response model for auth.register action.</summary>
@@ -92,12 +92,12 @@ public class AuthRegisterResponse
     public string Token { get; set; } = default!;
     [JsonPropertyName("user_id")]
     public string UserId { get; set; } = default!;
+    [JsonPropertyName("scopes")]
+    public JsonElement Scopes { get; set; } = default!;
     [JsonPropertyName("player")]
     public JsonElement Player { get; set; } = default!;
     [JsonPropertyName("player_id")]
     public string PlayerId { get; set; } = default!;
-    [JsonPropertyName("scopes")]
-    public JsonElement Scopes { get; set; } = default!;
 }
 
 /// <summary>Request payload for auth.create_player action.</summary>
@@ -111,10 +111,10 @@ public class AuthCreatePlayerRequest
     public JsonElement Email { get; set; } = default!;
     [JsonPropertyName("password")]
     public JsonElement Password { get; set; } = default!;
-    [JsonPropertyName("player_id")]
-    public JsonElement PlayerId { get; set; } = default!;
     [JsonPropertyName("scopes")]
     public JsonElement Scopes { get; set; } = default!;
+    [JsonPropertyName("player_id")]
+    public JsonElement PlayerId { get; set; } = default!;
 }
 
 /// <summary>Response model for auth.create_player action.</summary>
@@ -124,12 +124,12 @@ public class AuthCreatePlayerResponse
     public string Token { get; set; } = default!;
     [JsonPropertyName("user_id")]
     public string UserId { get; set; } = default!;
+    [JsonPropertyName("scopes")]
+    public JsonElement Scopes { get; set; } = default!;
     [JsonPropertyName("player")]
     public JsonElement Player { get; set; } = default!;
     [JsonPropertyName("player_id")]
     public string PlayerId { get; set; } = default!;
-    [JsonPropertyName("scopes")]
-    public JsonElement Scopes { get; set; } = default!;
 }
 
 /// <summary>Request payload for auth.anonymous action.</summary>
@@ -146,10 +146,10 @@ public class AuthAnonymousResponse
 {
     [JsonPropertyName("token")]
     public string Token { get; set; } = default!;
-    [JsonPropertyName("player_id")]
-    public string PlayerId { get; set; } = default!;
     [JsonPropertyName("scopes")]
     public JsonElement Scopes { get; set; } = default!;
+    [JsonPropertyName("player_id")]
+    public string PlayerId { get; set; } = default!;
 }
 
 /// <summary>Request payload for auth.set_display_name action.</summary>
@@ -175,10 +175,10 @@ public class AuthIssueTokenRequest
 {
     [JsonPropertyName("user_id")]
     public JsonElement UserId { get; set; } = default!;
-    [JsonPropertyName("player_id")]
-    public string PlayerId { get; set; } = default!;
     [JsonPropertyName("scopes")]
     public JsonElement Scopes { get; set; } = default!;
+    [JsonPropertyName("player_id")]
+    public string PlayerId { get; set; } = default!;
 }
 
 /// <summary>Response model for auth.issue_token action.</summary>
@@ -237,10 +237,10 @@ public class AuthUpdateUserRolesRequest
     public JsonElement UserId { get; set; } = default!;
     [JsonPropertyName("role")]
     public JsonElement Role { get; set; } = default!;
-    [JsonPropertyName("player_id")]
-    public JsonElement PlayerId { get; set; } = default!;
     [JsonPropertyName("scopes")]
     public JsonElement Scopes { get; set; } = default!;
+    [JsonPropertyName("player_id")]
+    public JsonElement PlayerId { get; set; } = default!;
 }
 
 /// <summary>Response model for auth.update_user_roles action.</summary>
@@ -248,10 +248,10 @@ public class AuthUpdateUserRolesResponse
 {
     [JsonPropertyName("user_id")]
     public string UserId { get; set; } = default!;
-    [JsonPropertyName("player_id")]
-    public string PlayerId { get; set; } = default!;
     [JsonPropertyName("scopes")]
     public JsonElement Scopes { get; set; } = default!;
+    [JsonPropertyName("player_id")]
+    public string PlayerId { get; set; } = default!;
 }
 
 /// <summary>Request payload for auth.delete_user action.</summary>
@@ -272,6 +272,167 @@ public class AuthDeleteUserResponse
     public string UserId { get; set; } = default!;
     [JsonPropertyName("player_id")]
     public string PlayerId { get; set; } = default!;
+}
+
+/// <summary>Request payload for auth.purge_disposable action.</summary>
+public class AuthPurgeDisposableRequest
+{
+    [JsonPropertyName("dry_run")]
+    public JsonElement DryRun { get; set; } = default!;
+}
+
+/// <summary>Response model for auth.purge_disposable action.</summary>
+public class AuthPurgeDisposableResponse
+{
+    [JsonPropertyName("purged")]
+    public long Purged { get; set; } = default!;
+    [JsonPropertyName("dry_run")]
+    public bool DryRun { get; set; } = default!;
+}
+
+/// <summary>Request payload for background_change.echo action.</summary>
+public class BackgroundChangeEchoRequest
+{
+    [JsonPropertyName("value")]
+    public long Value { get; set; } = default!;
+}
+
+/// <summary>Request payload for dashboard.get_dashboard_mount action.</summary>
+public class DashboardGetDashboardMountRequest
+{
+    [JsonPropertyName("view_id")]
+    public JsonElement ViewId { get; set; } = default!;
+}
+
+/// <summary>Response model for dashboard.get_dashboard_mount action.</summary>
+public class DashboardGetDashboardMountResponse
+{
+    [JsonPropertyName("mount")]
+    public JsonElement Mount { get; set; } = default!;
+}
+
+/// <summary>Request payload for dashboard.get_dashboard_data action.</summary>
+public class DashboardGetDashboardDataRequest
+{
+    [JsonPropertyName("view_id")]
+    public JsonElement ViewId { get; set; } = default!;
+}
+
+/// <summary>Response model for dashboard.get_dashboard_data action.</summary>
+public class DashboardGetDashboardDataResponse
+{
+    [JsonPropertyName("data")]
+    public JsonElement Data { get; set; } = default!;
+}
+
+/// <summary>Request payload for dashboard_view.resolve_view action.</summary>
+public class DashboardViewResolveViewRequest
+{
+    [JsonPropertyName("id")]
+    public JsonElement Id { get; set; } = default!;
+}
+
+/// <summary>Response model for dashboard_view.resolve_view action.</summary>
+public class DashboardViewResolveViewResponse
+{
+    [JsonPropertyName("module")]
+    public JsonElement Module { get; set; } = default!;
+}
+
+/// <summary>Response model for dashboard_view.list_views action.</summary>
+public class DashboardViewListViewsResponse
+{
+    [JsonPropertyName("views")]
+    public JsonElement Views { get; set; } = default!;
+}
+
+/// <summary>Request payload for dashboard_view.get_dashboard_mount action.</summary>
+public class DashboardViewGetDashboardMountRequest
+{
+    [JsonPropertyName("view_id")]
+    public JsonElement ViewId { get; set; } = default!;
+}
+
+/// <summary>Response model for dashboard_view.get_dashboard_mount action.</summary>
+public class DashboardViewGetDashboardMountResponse
+{
+    [JsonPropertyName("mount")]
+    public JsonElement Mount { get; set; } = default!;
+}
+
+/// <summary>Request payload for dashboard_view.get_dashboard_data action.</summary>
+public class DashboardViewGetDashboardDataRequest
+{
+    [JsonPropertyName("view_id")]
+    public JsonElement ViewId { get; set; } = default!;
+}
+
+/// <summary>Response model for dashboard_view.get_dashboard_data action.</summary>
+public class DashboardViewGetDashboardDataResponse
+{
+    [JsonPropertyName("data")]
+    public JsonElement Data { get; set; } = default!;
+}
+
+/// <summary>Request payload for database.execute action.</summary>
+public class DatabaseExecuteRequest
+{
+    [JsonPropertyName("arguments")]
+    public JsonElement Arguments { get; set; } = default!;
+    [JsonPropertyName("operation")]
+    public string Operation { get; set; } = default!;
+    [JsonPropertyName("plugin")]
+    public JsonElement Plugin { get; set; } = default!;
+}
+
+/// <summary>Response model for database.execute action.</summary>
+public class DatabaseExecuteResponse
+{
+    [JsonPropertyName("rows")]
+    public JsonElement Rows { get; set; } = default!;
+}
+
+/// <summary>Response model for http.status action.</summary>
+public class HttpStatusResponse
+{
+    [JsonPropertyName("port")]
+    public long Port { get; set; } = default!;
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = default!;
+}
+
+/// <summary>Request payload for lldb.connection_config action.</summary>
+public class LldbConnectionConfigRequest
+{
+    [JsonPropertyName("namespace")]
+    public JsonElement Namespace { get; set; } = default!;
+}
+
+/// <summary>Response model for lldb.connection_config action.</summary>
+public class LldbConnectionConfigResponse
+{
+    [JsonPropertyName("driver")]
+    public JsonElement Driver { get; set; } = default!;
+    [JsonPropertyName("url")]
+    public string Url { get; set; } = default!;
+    [JsonPropertyName("pool_size")]
+    public long PoolSize { get; set; } = default!;
+}
+
+/// <summary>Response model for lldb.health_check action.</summary>
+public class LldbHealthCheckResponse
+{
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = default!;
+}
+
+/// <summary>Event payload for lldb -> connection_lost.</summary>
+public class LldbConnectionLostEvent
+{
+    [JsonPropertyName("reason")]
+    public string Reason { get; set; } = default!;
+    [JsonPropertyName("timestamp")]
+    public long Timestamp { get; set; } = default!;
 }
 
 /// <summary>Request payload for player_data.get_player action.</summary>
@@ -456,284 +617,6 @@ public class PlayerDataPlayerDeletedEvent
     public string PlayerId { get; set; } = default!;
 }
 
-/// <summary>Request payload for ws.broadcast action.</summary>
-public class WsBroadcastRequest
-{
-    [JsonPropertyName("topic")]
-    public string Topic { get; set; } = default!;
-    [JsonPropertyName("event")]
-    public string Event { get; set; } = default!;
-    [JsonPropertyName("payload")]
-    public JsonElement Payload { get; set; } = default!;
-}
-
-/// <summary>Response model for ws.broadcast action.</summary>
-public class WsBroadcastResponse
-{
-    [JsonPropertyName("status")]
-    public string Status { get; set; } = default!;
-}
-
-/// <summary>Response model for ws.connection_count action.</summary>
-public class WsConnectionCountResponse
-{
-    [JsonPropertyName("count")]
-    public long Count { get; set; } = default!;
-}
-
-/// <summary>Request payload for snake_leaderboard.submit_score action.</summary>
-public class SnakeLeaderboardSubmitScoreRequest
-{
-    [JsonPropertyName("name")]
-    public string Name { get; set; } = default!;
-    [JsonPropertyName("player_id")]
-    public string PlayerId { get; set; } = default!;
-    [JsonPropertyName("score")]
-    public long Score { get; set; } = default!;
-    [JsonPropertyName("snake_length")]
-    public long SnakeLength { get; set; } = default!;
-}
-
-/// <summary>Request payload for snake_leaderboard.get_leaderboard action.</summary>
-public class SnakeLeaderboardGetLeaderboardRequest
-{
-    [JsonPropertyName("limit")]
-    public long Limit { get; set; } = default!;
-}
-
-/// <summary>Response model for snake_leaderboard.get_leaderboard action.</summary>
-public class SnakeLeaderboardEntry
-{
-    [JsonPropertyName("name")]
-    public string Name { get; set; } = default!;
-    [JsonPropertyName("player_id")]
-    public string PlayerId { get; set; } = default!;
-    [JsonPropertyName("score")]
-    public long Score { get; set; } = default!;
-    [JsonPropertyName("snake_length")]
-    public long SnakeLength { get; set; } = default!;
-    [JsonPropertyName("updated_at")]
-    public long UpdatedAt { get; set; } = default!;
-}
-
-/// <summary>Event payload for snake:leaderboard -> score_submitted.</summary>
-public class SnakeLeaderboardScoreSubmittedEvent
-{
-    [JsonPropertyName("name")]
-    public string Name { get; set; } = default!;
-    [JsonPropertyName("player_id")]
-    public string PlayerId { get; set; } = default!;
-    [JsonPropertyName("score")]
-    public long Score { get; set; } = default!;
-    [JsonPropertyName("snake_length")]
-    public long SnakeLength { get; set; } = default!;
-    [JsonPropertyName("improved")]
-    public bool Improved { get; set; } = default!;
-}
-
-/// <summary>Request payload for resource_store.migrate action.</summary>
-public class ResourceStoreMigrateRequest
-{
-    [JsonPropertyName("resource")]
-    public JsonElement Resource { get; set; } = default!;
-}
-
-/// <summary>Response model for resource_store.migrate action.</summary>
-public class ResourceStoreMigrateResponse
-{
-    [JsonPropertyName("migrated")]
-    public long Migrated { get; set; } = default!;
-}
-
-/// <summary>Request payload for resource_store.list action.</summary>
-public class ResourceStoreListRequest
-{
-    [JsonPropertyName("offset")]
-    public JsonElement Offset { get; set; } = default!;
-    [JsonPropertyName("sort")]
-    public JsonElement Sort { get; set; } = default!;
-    [JsonPropertyName("filter")]
-    public JsonElement Filter { get; set; } = default!;
-    [JsonPropertyName("search")]
-    public JsonElement Search { get; set; } = default!;
-    [JsonPropertyName("limit")]
-    public JsonElement Limit { get; set; } = default!;
-    [JsonPropertyName("resource")]
-    public string Resource { get; set; } = default!;
-}
-
-/// <summary>Response model for resource_store.list action.</summary>
-public class ResourceStoreListResponse
-{
-    [JsonPropertyName("total")]
-    public long Total { get; set; } = default!;
-    [JsonPropertyName("rows")]
-    public JsonElement Rows { get; set; } = default!;
-}
-
-/// <summary>Request payload for resource_store.get action.</summary>
-public class ResourceStoreGetRequest
-{
-    [JsonPropertyName("id")]
-    public JsonElement Id { get; set; } = default!;
-    [JsonPropertyName("resource")]
-    public string Resource { get; set; } = default!;
-}
-
-/// <summary>Response model for resource_store.get action.</summary>
-public class ResourceStoreGetResponse
-{
-    [JsonPropertyName("row")]
-    public JsonElement Row { get; set; } = default!;
-}
-
-/// <summary>Request payload for resource_store.create action.</summary>
-public class ResourceStoreCreateRequest
-{
-    [JsonPropertyName("attributes")]
-    public JsonElement Attributes { get; set; } = default!;
-    [JsonPropertyName("resource")]
-    public string Resource { get; set; } = default!;
-}
-
-/// <summary>Response model for resource_store.create action.</summary>
-public class ResourceStoreCreateResponse
-{
-    [JsonPropertyName("row")]
-    public JsonElement Row { get; set; } = default!;
-}
-
-/// <summary>Request payload for resource_store.update action.</summary>
-public class ResourceStoreUpdateRequest
-{
-    [JsonPropertyName("attributes")]
-    public JsonElement Attributes { get; set; } = default!;
-    [JsonPropertyName("id")]
-    public JsonElement Id { get; set; } = default!;
-    [JsonPropertyName("resource")]
-    public string Resource { get; set; } = default!;
-}
-
-/// <summary>Response model for resource_store.update action.</summary>
-public class ResourceStoreUpdateResponse
-{
-    [JsonPropertyName("row")]
-    public JsonElement Row { get; set; } = default!;
-}
-
-/// <summary>Request payload for resource_store.delete action.</summary>
-public class ResourceStoreDeleteRequest
-{
-    [JsonPropertyName("id")]
-    public JsonElement Id { get; set; } = default!;
-    [JsonPropertyName("resource")]
-    public string Resource { get; set; } = default!;
-}
-
-/// <summary>Response model for resource_store.delete action.</summary>
-public class ResourceStoreDeleteResponse
-{
-    [JsonPropertyName("deleted")]
-    public bool Deleted { get; set; } = default!;
-}
-
-/// <summary>Request payload for resource_store.upsert action.</summary>
-public class ResourceStoreUpsertRequest
-{
-    [JsonPropertyName("attributes")]
-    public JsonElement Attributes { get; set; } = default!;
-    [JsonPropertyName("resource")]
-    public string Resource { get; set; } = default!;
-}
-
-/// <summary>Response model for resource_store.upsert action.</summary>
-public class ResourceStoreUpsertResponse
-{
-    [JsonPropertyName("row")]
-    public JsonElement Row { get; set; } = default!;
-}
-
-/// <summary>Request payload for sample_wasm.increment action.</summary>
-public class SampleWasmIncrementRequest
-{
-    [JsonPropertyName("counter_id")]
-    public long CounterId { get; set; } = default!;
-    [JsonPropertyName("amount")]
-    public long Amount { get; set; } = default!;
-}
-
-/// <summary>Request payload for sample_wasm.echo action.</summary>
-public class SampleWasmEchoRequest
-{
-    [JsonPropertyName("value")]
-    public long Value { get; set; } = default!;
-}
-
-/// <summary>Event payload for sample:events -> value_changed.</summary>
-public class SampleWasmValueChangedEvent
-{
-    [JsonExtensionData]
-    public Dictionary<string, JsonElement>? ExtraData { get; set; }
-}
-
-/// <summary>Request payload for dashboard_view.resolve_view action.</summary>
-public class DashboardViewResolveViewRequest
-{
-    [JsonPropertyName("id")]
-    public JsonElement Id { get; set; } = default!;
-}
-
-/// <summary>Response model for dashboard_view.resolve_view action.</summary>
-public class DashboardViewResolveViewResponse
-{
-    [JsonPropertyName("module")]
-    public JsonElement Module { get; set; } = default!;
-}
-
-/// <summary>Response model for dashboard_view.list_views action.</summary>
-public class DashboardViewListViewsResponse
-{
-    [JsonPropertyName("views")]
-    public JsonElement Views { get; set; } = default!;
-}
-
-/// <summary>Request payload for dashboard_view.get_dashboard_mount action.</summary>
-public class DashboardViewGetDashboardMountRequest
-{
-    [JsonPropertyName("view_id")]
-    public JsonElement ViewId { get; set; } = default!;
-}
-
-/// <summary>Response model for dashboard_view.get_dashboard_mount action.</summary>
-public class DashboardViewGetDashboardMountResponse
-{
-    [JsonPropertyName("mount")]
-    public JsonElement Mount { get; set; } = default!;
-}
-
-/// <summary>Request payload for dashboard_view.get_dashboard_data action.</summary>
-public class DashboardViewGetDashboardDataRequest
-{
-    [JsonPropertyName("view_id")]
-    public JsonElement ViewId { get; set; } = default!;
-}
-
-/// <summary>Response model for dashboard_view.get_dashboard_data action.</summary>
-public class DashboardViewGetDashboardDataResponse
-{
-    [JsonPropertyName("data")]
-    public JsonElement Data { get; set; } = default!;
-}
-
-/// <summary>Response model for http.status action.</summary>
-public class HttpStatusResponse
-{
-    [JsonPropertyName("port")]
-    public long Port { get; set; } = default!;
-    [JsonPropertyName("status")]
-    public string Status { get; set; } = default!;
-}
-
 /// <summary>Response model for plugin_manager.list_plugins action.</summary>
 public class PluginManagerListPluginsResponse
 {
@@ -850,91 +733,242 @@ public class PluginManagerExportPluginInfoResponse
     public JsonElement Export { get; set; } = default!;
 }
 
-/// <summary>Request payload for database.execute action.</summary>
-public class DatabaseExecuteRequest
+/// <summary>Request payload for resource_store.migrate action.</summary>
+public class ResourceStoreMigrateRequest
 {
-    [JsonPropertyName("arguments")]
-    public JsonElement Arguments { get; set; } = default!;
-    [JsonPropertyName("operation")]
-    public string Operation { get; set; } = default!;
-    [JsonPropertyName("plugin")]
-    public JsonElement Plugin { get; set; } = default!;
+    [JsonPropertyName("resource")]
+    public JsonElement Resource { get; set; } = default!;
 }
 
-/// <summary>Response model for database.execute action.</summary>
-public class DatabaseExecuteResponse
+/// <summary>Response model for resource_store.migrate action.</summary>
+public class ResourceStoreMigrateResponse
 {
+    [JsonPropertyName("migrated")]
+    public long Migrated { get; set; } = default!;
+}
+
+/// <summary>Request payload for resource_store.list action.</summary>
+public class ResourceStoreListRequest
+{
+    [JsonPropertyName("offset")]
+    public JsonElement Offset { get; set; } = default!;
+    [JsonPropertyName("sort")]
+    public JsonElement Sort { get; set; } = default!;
+    [JsonPropertyName("search")]
+    public JsonElement Search { get; set; } = default!;
+    [JsonPropertyName("filter")]
+    public JsonElement Filter { get; set; } = default!;
+    [JsonPropertyName("limit")]
+    public JsonElement Limit { get; set; } = default!;
+    [JsonPropertyName("resource")]
+    public string Resource { get; set; } = default!;
+}
+
+/// <summary>Response model for resource_store.list action.</summary>
+public class ResourceStoreListResponse
+{
+    [JsonPropertyName("total")]
+    public long Total { get; set; } = default!;
     [JsonPropertyName("rows")]
     public JsonElement Rows { get; set; } = default!;
 }
 
-/// <summary>Request payload for lldb.connection_config action.</summary>
-public class LldbConnectionConfigRequest
+/// <summary>Request payload for resource_store.get action.</summary>
+public class ResourceStoreGetRequest
 {
-    [JsonPropertyName("namespace")]
-    public JsonElement Namespace { get; set; } = default!;
+    [JsonPropertyName("id")]
+    public JsonElement Id { get; set; } = default!;
+    [JsonPropertyName("resource")]
+    public string Resource { get; set; } = default!;
 }
 
-/// <summary>Response model for lldb.connection_config action.</summary>
-public class LldbConnectionConfigResponse
+/// <summary>Response model for resource_store.get action.</summary>
+public class ResourceStoreGetResponse
 {
-    [JsonPropertyName("driver")]
-    public JsonElement Driver { get; set; } = default!;
-    [JsonPropertyName("url")]
-    public string Url { get; set; } = default!;
-    [JsonPropertyName("pool_size")]
-    public long PoolSize { get; set; } = default!;
+    [JsonPropertyName("row")]
+    public JsonElement Row { get; set; } = default!;
 }
 
-/// <summary>Response model for lldb.health_check action.</summary>
-public class LldbHealthCheckResponse
+/// <summary>Request payload for resource_store.create action.</summary>
+public class ResourceStoreCreateRequest
 {
-    [JsonPropertyName("status")]
-    public string Status { get; set; } = default!;
+    [JsonPropertyName("attributes")]
+    public JsonElement Attributes { get; set; } = default!;
+    [JsonPropertyName("resource")]
+    public string Resource { get; set; } = default!;
 }
 
-/// <summary>Event payload for lldb -> connection_lost.</summary>
-public class LldbConnectionLostEvent
+/// <summary>Response model for resource_store.create action.</summary>
+public class ResourceStoreCreateResponse
 {
-    [JsonPropertyName("reason")]
-    public string Reason { get; set; } = default!;
-    [JsonPropertyName("timestamp")]
-    public long Timestamp { get; set; } = default!;
+    [JsonPropertyName("row")]
+    public JsonElement Row { get; set; } = default!;
 }
 
-/// <summary>Request payload for background_change.echo action.</summary>
-public class BackgroundChangeEchoRequest
+/// <summary>Request payload for resource_store.update action.</summary>
+public class ResourceStoreUpdateRequest
+{
+    [JsonPropertyName("attributes")]
+    public JsonElement Attributes { get; set; } = default!;
+    [JsonPropertyName("id")]
+    public JsonElement Id { get; set; } = default!;
+    [JsonPropertyName("resource")]
+    public string Resource { get; set; } = default!;
+}
+
+/// <summary>Response model for resource_store.update action.</summary>
+public class ResourceStoreUpdateResponse
+{
+    [JsonPropertyName("row")]
+    public JsonElement Row { get; set; } = default!;
+}
+
+/// <summary>Request payload for resource_store.delete action.</summary>
+public class ResourceStoreDeleteRequest
+{
+    [JsonPropertyName("id")]
+    public JsonElement Id { get; set; } = default!;
+    [JsonPropertyName("resource")]
+    public string Resource { get; set; } = default!;
+}
+
+/// <summary>Response model for resource_store.delete action.</summary>
+public class ResourceStoreDeleteResponse
+{
+    [JsonPropertyName("deleted")]
+    public bool Deleted { get; set; } = default!;
+}
+
+/// <summary>Request payload for resource_store.upsert action.</summary>
+public class ResourceStoreUpsertRequest
+{
+    [JsonPropertyName("attributes")]
+    public JsonElement Attributes { get; set; } = default!;
+    [JsonPropertyName("resource")]
+    public string Resource { get; set; } = default!;
+}
+
+/// <summary>Response model for resource_store.upsert action.</summary>
+public class ResourceStoreUpsertResponse
+{
+    [JsonPropertyName("row")]
+    public JsonElement Row { get; set; } = default!;
+}
+
+/// <summary>Request payload for resource_store.clear action.</summary>
+public class ResourceStoreClearRequest
+{
+    [JsonPropertyName("resource")]
+    public JsonElement Resource { get; set; } = default!;
+}
+
+/// <summary>Response model for resource_store.clear action.</summary>
+public class ResourceStoreClearResponse
+{
+    [JsonPropertyName("cleared")]
+    public long Cleared { get; set; } = default!;
+}
+
+/// <summary>Request payload for sample_plugin.increment action.</summary>
+public class SamplePluginIncrementRequest
+{
+    [JsonPropertyName("amount")]
+    public long Amount { get; set; } = default!;
+    [JsonPropertyName("counter_id")]
+    public long CounterId { get; set; } = default!;
+}
+
+/// <summary>Request payload for sample_plugin.echo action.</summary>
+public class SamplePluginEchoRequest
 {
     [JsonPropertyName("value")]
     public long Value { get; set; } = default!;
 }
 
-/// <summary>Request payload for dashboard.get_dashboard_mount action.</summary>
-public class DashboardGetDashboardMountRequest
+/// <summary>Event payload for sample:events -> value_changed.</summary>
+public class SamplePluginValueChangedEvent
 {
-    [JsonPropertyName("view_id")]
-    public JsonElement ViewId { get; set; } = default!;
+    [JsonPropertyName("new_value")]
+    public long NewValue { get; set; } = default!;
+    [JsonPropertyName("delta")]
+    public long Delta { get; set; } = default!;
+    [JsonPropertyName("counter_id")]
+    public long CounterId { get; set; } = default!;
 }
 
-/// <summary>Response model for dashboard.get_dashboard_mount action.</summary>
-public class DashboardGetDashboardMountResponse
+/// <summary>Request payload for snake_leaderboard.submit_score action.</summary>
+public class SnakeLeaderboardSubmitScoreRequest
 {
-    [JsonPropertyName("mount")]
-    public JsonElement Mount { get; set; } = default!;
+    [JsonPropertyName("player_id")]
+    public string PlayerId { get; set; } = default!;
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = default!;
+    [JsonPropertyName("score")]
+    public long Score { get; set; } = default!;
+    [JsonPropertyName("snake_length")]
+    public long SnakeLength { get; set; } = default!;
 }
 
-/// <summary>Request payload for dashboard.get_dashboard_data action.</summary>
-public class DashboardGetDashboardDataRequest
+/// <summary>Request payload for snake_leaderboard.get_leaderboard action.</summary>
+public class SnakeLeaderboardGetLeaderboardRequest
 {
-    [JsonPropertyName("view_id")]
-    public JsonElement ViewId { get; set; } = default!;
+    [JsonPropertyName("limit")]
+    public long Limit { get; set; } = default!;
 }
 
-/// <summary>Response model for dashboard.get_dashboard_data action.</summary>
-public class DashboardGetDashboardDataResponse
+/// <summary>Response model for snake_leaderboard.get_leaderboard action.</summary>
+public class SnakeLeaderboardEntry
 {
-    [JsonPropertyName("data")]
-    public JsonElement Data { get; set; } = default!;
+    [JsonPropertyName("player_id")]
+    public string PlayerId { get; set; } = default!;
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = default!;
+    [JsonPropertyName("score")]
+    public long Score { get; set; } = default!;
+    [JsonPropertyName("snake_length")]
+    public long SnakeLength { get; set; } = default!;
+    [JsonPropertyName("updated_at")]
+    public long UpdatedAt { get; set; } = default!;
+}
+
+/// <summary>Event payload for snake:leaderboard -> score_submitted.</summary>
+public class SnakeLeaderboardScoreSubmittedEvent
+{
+    [JsonPropertyName("player_id")]
+    public string PlayerId { get; set; } = default!;
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = default!;
+    [JsonPropertyName("score")]
+    public long Score { get; set; } = default!;
+    [JsonPropertyName("snake_length")]
+    public long SnakeLength { get; set; } = default!;
+    [JsonPropertyName("improved")]
+    public bool Improved { get; set; } = default!;
+}
+
+/// <summary>Request payload for ws.broadcast action.</summary>
+public class WsBroadcastRequest
+{
+    [JsonPropertyName("topic")]
+    public string Topic { get; set; } = default!;
+    [JsonPropertyName("event")]
+    public string Event { get; set; } = default!;
+    [JsonPropertyName("payload")]
+    public JsonElement Payload { get; set; } = default!;
+}
+
+/// <summary>Response model for ws.broadcast action.</summary>
+public class WsBroadcastResponse
+{
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = default!;
+}
+
+/// <summary>Response model for ws.connection_count action.</summary>
+public class WsConnectionCountResponse
+{
+    [JsonPropertyName("count")]
+    public long Count { get; set; } = default!;
 }
 
 /// <summary>
@@ -951,46 +985,6 @@ public static class ExoClientGeneratedExtensions
     public static AuthServiceClient Auth(this ExoClient client) =>
         client.Services().Auth;
 
-    /// <summary>Access the PlayerData service contract.</summary>
-    public static PlayerDataServiceClient PlayerData(this ExoClient client) =>
-        client.Services().PlayerData;
-
-    /// <summary>Access the Ws service contract.</summary>
-    public static WsServiceClient Ws(this ExoClient client) =>
-        client.Services().Ws;
-
-    /// <summary>Access the SnakeLeaderboard service contract.</summary>
-    public static SnakeLeaderboardServiceClient SnakeLeaderboard(this ExoClient client) =>
-        client.Services().SnakeLeaderboard;
-
-    /// <summary>Access the ResourceStore service contract.</summary>
-    public static ResourceStoreServiceClient ResourceStore(this ExoClient client) =>
-        client.Services().ResourceStore;
-
-    /// <summary>Access the SampleWasm service contract.</summary>
-    public static SampleWasmServiceClient SampleWasm(this ExoClient client) =>
-        client.Services().SampleWasm;
-
-    /// <summary>Access the DashboardView service contract.</summary>
-    public static DashboardViewServiceClient DashboardView(this ExoClient client) =>
-        client.Services().DashboardView;
-
-    /// <summary>Access the Http service contract.</summary>
-    public static HttpServiceClient Http(this ExoClient client) =>
-        client.Services().Http;
-
-    /// <summary>Access the PluginManager service contract.</summary>
-    public static PluginManagerServiceClient PluginManager(this ExoClient client) =>
-        client.Services().PluginManager;
-
-    /// <summary>Access the Database service contract.</summary>
-    public static DatabaseServiceClient Database(this ExoClient client) =>
-        client.Services().Database;
-
-    /// <summary>Access the Lldb service contract.</summary>
-    public static LldbServiceClient Lldb(this ExoClient client) =>
-        client.Services().Lldb;
-
     /// <summary>Access the BackgroundChange service contract.</summary>
     public static BackgroundChangeServiceClient BackgroundChange(this ExoClient client) =>
         client.Services().BackgroundChange;
@@ -998,6 +992,46 @@ public static class ExoClientGeneratedExtensions
     /// <summary>Access the Dashboard service contract.</summary>
     public static DashboardServiceClient Dashboard(this ExoClient client) =>
         client.Services().Dashboard;
+
+    /// <summary>Access the DashboardView service contract.</summary>
+    public static DashboardViewServiceClient DashboardView(this ExoClient client) =>
+        client.Services().DashboardView;
+
+    /// <summary>Access the Database service contract.</summary>
+    public static DatabaseServiceClient Database(this ExoClient client) =>
+        client.Services().Database;
+
+    /// <summary>Access the Http service contract.</summary>
+    public static HttpServiceClient Http(this ExoClient client) =>
+        client.Services().Http;
+
+    /// <summary>Access the Lldb service contract.</summary>
+    public static LldbServiceClient Lldb(this ExoClient client) =>
+        client.Services().Lldb;
+
+    /// <summary>Access the PlayerData service contract.</summary>
+    public static PlayerDataServiceClient PlayerData(this ExoClient client) =>
+        client.Services().PlayerData;
+
+    /// <summary>Access the PluginManager service contract.</summary>
+    public static PluginManagerServiceClient PluginManager(this ExoClient client) =>
+        client.Services().PluginManager;
+
+    /// <summary>Access the ResourceStore service contract.</summary>
+    public static ResourceStoreServiceClient ResourceStore(this ExoClient client) =>
+        client.Services().ResourceStore;
+
+    /// <summary>Access the SamplePlugin service contract.</summary>
+    public static SamplePluginServiceClient SamplePlugin(this ExoClient client) =>
+        client.Services().SamplePlugin;
+
+    /// <summary>Access the SnakeLeaderboard service contract.</summary>
+    public static SnakeLeaderboardServiceClient SnakeLeaderboard(this ExoClient client) =>
+        client.Services().SnakeLeaderboard;
+
+    /// <summary>Access the Ws service contract.</summary>
+    public static WsServiceClient Ws(this ExoClient client) =>
+        client.Services().Ws;
 
 }
 
@@ -1016,41 +1050,41 @@ public class ExoforgeServicesHub
     private AuthServiceClient? _auth;
     public AuthServiceClient Auth => _auth ??= new AuthServiceClient(_client);
 
-    private PlayerDataServiceClient? _player_data;
-    public PlayerDataServiceClient PlayerData => _player_data ??= new PlayerDataServiceClient(_client);
-
-    private WsServiceClient? _ws;
-    public WsServiceClient Ws => _ws ??= new WsServiceClient(_client);
-
-    private SnakeLeaderboardServiceClient? _snake_leaderboard;
-    public SnakeLeaderboardServiceClient SnakeLeaderboard => _snake_leaderboard ??= new SnakeLeaderboardServiceClient(_client);
-
-    private ResourceStoreServiceClient? _resource_store;
-    public ResourceStoreServiceClient ResourceStore => _resource_store ??= new ResourceStoreServiceClient(_client);
-
-    private SampleWasmServiceClient? _sample_wasm;
-    public SampleWasmServiceClient SampleWasm => _sample_wasm ??= new SampleWasmServiceClient(_client);
-
-    private DashboardViewServiceClient? _dashboard_view;
-    public DashboardViewServiceClient DashboardView => _dashboard_view ??= new DashboardViewServiceClient(_client);
-
-    private HttpServiceClient? _http;
-    public HttpServiceClient Http => _http ??= new HttpServiceClient(_client);
-
-    private PluginManagerServiceClient? _plugin_manager;
-    public PluginManagerServiceClient PluginManager => _plugin_manager ??= new PluginManagerServiceClient(_client);
-
-    private DatabaseServiceClient? _database;
-    public DatabaseServiceClient Database => _database ??= new DatabaseServiceClient(_client);
-
-    private LldbServiceClient? _lldb;
-    public LldbServiceClient Lldb => _lldb ??= new LldbServiceClient(_client);
-
     private BackgroundChangeServiceClient? _background_change;
     public BackgroundChangeServiceClient BackgroundChange => _background_change ??= new BackgroundChangeServiceClient(_client);
 
     private DashboardServiceClient? _dashboard;
     public DashboardServiceClient Dashboard => _dashboard ??= new DashboardServiceClient(_client);
+
+    private DashboardViewServiceClient? _dashboard_view;
+    public DashboardViewServiceClient DashboardView => _dashboard_view ??= new DashboardViewServiceClient(_client);
+
+    private DatabaseServiceClient? _database;
+    public DatabaseServiceClient Database => _database ??= new DatabaseServiceClient(_client);
+
+    private HttpServiceClient? _http;
+    public HttpServiceClient Http => _http ??= new HttpServiceClient(_client);
+
+    private LldbServiceClient? _lldb;
+    public LldbServiceClient Lldb => _lldb ??= new LldbServiceClient(_client);
+
+    private PlayerDataServiceClient? _player_data;
+    public PlayerDataServiceClient PlayerData => _player_data ??= new PlayerDataServiceClient(_client);
+
+    private PluginManagerServiceClient? _plugin_manager;
+    public PluginManagerServiceClient PluginManager => _plugin_manager ??= new PluginManagerServiceClient(_client);
+
+    private ResourceStoreServiceClient? _resource_store;
+    public ResourceStoreServiceClient ResourceStore => _resource_store ??= new ResourceStoreServiceClient(_client);
+
+    private SamplePluginServiceClient? _sample_plugin;
+    public SamplePluginServiceClient SamplePlugin => _sample_plugin ??= new SamplePluginServiceClient(_client);
+
+    private SnakeLeaderboardServiceClient? _snake_leaderboard;
+    public SnakeLeaderboardServiceClient SnakeLeaderboard => _snake_leaderboard ??= new SnakeLeaderboardServiceClient(_client);
+
+    private WsServiceClient? _ws;
+    public WsServiceClient Ws => _ws ??= new WsServiceClient(_client);
 
 }
 
@@ -1116,7 +1150,7 @@ public class AuthServiceClient
     }
 
     /// <summary>Registers a new user account and profile in both auth and player_data.</summary>
-    public Task<AuthRegisterResponse> RegisterAsync(JsonElement name, JsonElement userId, JsonElement email, JsonElement password, JsonElement playerId, JsonElement scopes, CancellationToken cancellationToken = default)
+    public Task<AuthRegisterResponse> RegisterAsync(JsonElement name, JsonElement userId, JsonElement email, JsonElement password, JsonElement scopes, JsonElement playerId, CancellationToken cancellationToken = default)
     {
         var req = new AuthRegisterRequest
         {
@@ -1124,8 +1158,8 @@ public class AuthServiceClient
             UserId = userId,
             Email = email,
             Password = password,
-            PlayerId = playerId,
             Scopes = scopes,
+            PlayerId = playerId,
         };
         return RegisterAsync(req, cancellationToken);
     }
@@ -1137,7 +1171,7 @@ public class AuthServiceClient
     }
 
     /// <summary>Creates a new player or user account with authentication credentials.</summary>
-    public Task<AuthCreatePlayerResponse> CreatePlayerAsync(JsonElement name, JsonElement userId, JsonElement email, JsonElement password, JsonElement playerId, JsonElement scopes, CancellationToken cancellationToken = default)
+    public Task<AuthCreatePlayerResponse> CreatePlayerAsync(JsonElement name, JsonElement userId, JsonElement email, JsonElement password, JsonElement scopes, JsonElement playerId, CancellationToken cancellationToken = default)
     {
         var req = new AuthCreatePlayerRequest
         {
@@ -1145,8 +1179,8 @@ public class AuthServiceClient
             UserId = userId,
             Email = email,
             Password = password,
-            PlayerId = playerId,
             Scopes = scopes,
+            PlayerId = playerId,
         };
         return CreatePlayerAsync(req, cancellationToken);
     }
@@ -1192,13 +1226,13 @@ public class AuthServiceClient
     }
 
     /// <summary>Issues an authentication token for a user or player.</summary>
-    public Task<AuthIssueTokenResponse> IssueTokenAsync(JsonElement userId, string playerId, JsonElement scopes, CancellationToken cancellationToken = default)
+    public Task<AuthIssueTokenResponse> IssueTokenAsync(JsonElement userId, JsonElement scopes, string playerId, CancellationToken cancellationToken = default)
     {
         var req = new AuthIssueTokenRequest
         {
             UserId = userId,
-            PlayerId = playerId,
             Scopes = scopes,
+            PlayerId = playerId,
         };
         return IssueTokenAsync(req, cancellationToken);
     }
@@ -1244,14 +1278,14 @@ public class AuthServiceClient
     }
 
     /// <summary>Updates authorization scopes/roles for a user account.</summary>
-    public Task<AuthUpdateUserRolesResponse> UpdateUserRolesAsync(JsonElement userId, JsonElement role, JsonElement playerId, JsonElement scopes, CancellationToken cancellationToken = default)
+    public Task<AuthUpdateUserRolesResponse> UpdateUserRolesAsync(JsonElement userId, JsonElement role, JsonElement scopes, JsonElement playerId, CancellationToken cancellationToken = default)
     {
         var req = new AuthUpdateUserRolesRequest
         {
             UserId = userId,
             Role = role,
-            PlayerId = playerId,
             Scopes = scopes,
+            PlayerId = playerId,
         };
         return UpdateUserRolesAsync(req, cancellationToken);
     }
@@ -1277,6 +1311,265 @@ public class AuthServiceClient
     public Task<AuthDeleteUserResponse> DeleteUserAsync(AuthDeleteUserRequest request, CancellationToken cancellationToken = default)
     {
         return _client.SendActionAsync<AuthDeleteUserResponse>("auth", "delete_user", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Removes every account that was created disposable, and nothing else. A player is disposable because the caller said so when it registered — a test, a demo, a load run. Nothing is inferred, so this is safe to call on a live cluster: it removes the guests and leaves the players who signed up.</summary>
+    public Task<AuthPurgeDisposableResponse> PurgeDisposableAsync(JsonElement dryRun, CancellationToken cancellationToken = default)
+    {
+        var req = new AuthPurgeDisposableRequest
+        {
+            DryRun = dryRun,
+        };
+        return PurgeDisposableAsync(req, cancellationToken);
+    }
+
+    /// <summary>Removes every account that was created disposable, and nothing else. A player is disposable because the caller said so when it registered — a test, a demo, a load run. Nothing is inferred, so this is safe to call on a live cluster: it removes the guests and leaves the players who signed up.</summary>
+    public Task<AuthPurgeDisposableResponse> PurgeDisposableAsync(AuthPurgeDisposableRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<AuthPurgeDisposableResponse>("auth", "purge_disposable", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+}
+
+/// <summary>Client interface for the background_change service.</summary>
+public class BackgroundChangeServiceClient
+{
+    private readonly ExoClient _client;
+
+    public BackgroundChangeServiceClient(ExoClient client)
+    {
+        _client = client ?? throw new ArgumentNullException(nameof(client));
+    }
+
+    /// <summary>Executes get_color action.</summary>
+    public Task<string> GetColorAsync(CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<string>("background_change", "get_color", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Executes echo action with typed arguments.</summary>
+    public Task<long> EchoAsync(long value, CancellationToken cancellationToken = default)
+    {
+        var req = new BackgroundChangeEchoRequest
+        {
+            Value = value,
+        };
+        return EchoAsync(req, cancellationToken);
+    }
+
+    /// <summary>Executes echo action with a typed request DTO.</summary>
+    public Task<long> EchoAsync(BackgroundChangeEchoRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<long>("background_change", "echo", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+}
+
+/// <summary>Client interface for the dashboard service.</summary>
+public class DashboardServiceClient
+{
+    private readonly ExoClient _client;
+
+    public DashboardServiceClient(ExoClient client)
+    {
+        _client = client ?? throw new ArgumentNullException(nameof(client));
+    }
+
+    /// <summary>Retrieves dashboard mount specification: {:live, Module} | {:hook, config} | {:iframe, config}</summary>
+    public Task<DashboardGetDashboardMountResponse> GetDashboardMountAsync(JsonElement viewId, CancellationToken cancellationToken = default)
+    {
+        var req = new DashboardGetDashboardMountRequest
+        {
+            ViewId = viewId,
+        };
+        return GetDashboardMountAsync(req, cancellationToken);
+    }
+
+    /// <summary>Retrieves dashboard mount specification: {:live, Module} | {:hook, config} | {:iframe, config}</summary>
+    public Task<DashboardGetDashboardMountResponse> GetDashboardMountAsync(DashboardGetDashboardMountRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<DashboardGetDashboardMountResponse>("dashboard", "get_dashboard_mount", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Retrieves data payload for hydrating the dashboard view.</summary>
+    public Task<DashboardGetDashboardDataResponse> GetDashboardDataAsync(JsonElement viewId, CancellationToken cancellationToken = default)
+    {
+        var req = new DashboardGetDashboardDataRequest
+        {
+            ViewId = viewId,
+        };
+        return GetDashboardDataAsync(req, cancellationToken);
+    }
+
+    /// <summary>Retrieves data payload for hydrating the dashboard view.</summary>
+    public Task<DashboardGetDashboardDataResponse> GetDashboardDataAsync(DashboardGetDashboardDataRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<DashboardGetDashboardDataResponse>("dashboard", "get_dashboard_data", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+}
+
+/// <summary>Client interface for the dashboard_view service.</summary>
+public class DashboardViewServiceClient
+{
+    private readonly ExoClient _client;
+
+    public DashboardViewServiceClient(ExoClient client)
+    {
+        _client = client ?? throw new ArgumentNullException(nameof(client));
+    }
+
+    /// <summary>Resolves the LiveView component module for a given service or extension id.</summary>
+    public Task<DashboardViewResolveViewResponse> ResolveViewAsync(JsonElement id, CancellationToken cancellationToken = default)
+    {
+        var req = new DashboardViewResolveViewRequest
+        {
+            Id = id,
+        };
+        return ResolveViewAsync(req, cancellationToken);
+    }
+
+    /// <summary>Resolves the LiveView component module for a given service or extension id.</summary>
+    public Task<DashboardViewResolveViewResponse> ResolveViewAsync(DashboardViewResolveViewRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<DashboardViewResolveViewResponse>("dashboard_view", "resolve_view", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Lists all registered custom dashboard view modules.</summary>
+    public Task<DashboardViewListViewsResponse> ListViewsAsync(CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<DashboardViewListViewsResponse>("dashboard_view", "list_views", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Retrieves dashboard mount specification: {:live, Module} | {:hook, config} | {:iframe, config}</summary>
+    public Task<DashboardViewGetDashboardMountResponse> GetDashboardMountAsync(JsonElement viewId, CancellationToken cancellationToken = default)
+    {
+        var req = new DashboardViewGetDashboardMountRequest
+        {
+            ViewId = viewId,
+        };
+        return GetDashboardMountAsync(req, cancellationToken);
+    }
+
+    /// <summary>Retrieves dashboard mount specification: {:live, Module} | {:hook, config} | {:iframe, config}</summary>
+    public Task<DashboardViewGetDashboardMountResponse> GetDashboardMountAsync(DashboardViewGetDashboardMountRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<DashboardViewGetDashboardMountResponse>("dashboard_view", "get_dashboard_mount", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Retrieves data payload for hydrating the dashboard view.</summary>
+    public Task<DashboardViewGetDashboardDataResponse> GetDashboardDataAsync(JsonElement viewId, CancellationToken cancellationToken = default)
+    {
+        var req = new DashboardViewGetDashboardDataRequest
+        {
+            ViewId = viewId,
+        };
+        return GetDashboardDataAsync(req, cancellationToken);
+    }
+
+    /// <summary>Retrieves data payload for hydrating the dashboard view.</summary>
+    public Task<DashboardViewGetDashboardDataResponse> GetDashboardDataAsync(DashboardViewGetDashboardDataRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<DashboardViewGetDashboardDataResponse>("dashboard_view", "get_dashboard_data", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+}
+
+/// <summary>Client interface for the database service.</summary>
+public class DatabaseServiceClient
+{
+    private readonly ExoClient _client;
+
+    public DatabaseServiceClient(ExoClient client)
+    {
+        _client = client ?? throw new ArgumentNullException(nameof(client));
+    }
+
+    /// <summary>Executes a driver-agnostic query or data operation.</summary>
+    public Task<DatabaseExecuteResponse> ExecuteAsync(JsonElement arguments, string operation, JsonElement plugin, CancellationToken cancellationToken = default)
+    {
+        var req = new DatabaseExecuteRequest
+        {
+            Arguments = arguments,
+            Operation = operation,
+            Plugin = plugin,
+        };
+        return ExecuteAsync(req, cancellationToken);
+    }
+
+    /// <summary>Executes a driver-agnostic query or data operation.</summary>
+    public Task<DatabaseExecuteResponse> ExecuteAsync(DatabaseExecuteRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<DatabaseExecuteResponse>("database", "execute", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+}
+
+/// <summary>Client interface for the http service.</summary>
+public class HttpServiceClient
+{
+    private readonly ExoClient _client;
+
+    public HttpServiceClient(ExoClient client)
+    {
+        _client = client ?? throw new ArgumentNullException(nameof(client));
+    }
+
+    /// <summary>Returns HTTP server status and registered route summaries.</summary>
+    public Task<HttpStatusResponse> StatusAsync(CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<HttpStatusResponse>("http", "status", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+}
+
+/// <summary>Client interface for the lldb service.</summary>
+public class LldbServiceClient
+{
+    private readonly ExoClient _client;
+
+    /// <summary>Fired when server emits connection_lost event.</summary>
+    public event Action<LldbConnectionLostEvent>? OnConnectionLost;
+
+    public LldbServiceClient(ExoClient client)
+    {
+        _client = client ?? throw new ArgumentNullException(nameof(client));
+        _client.OnAnyEvent += HandleIncomingEvent;
+    }
+
+    private void HandleIncomingEvent(ExoEventFrame evt)
+    {
+        if (evt.Event == "connection_lost" && OnConnectionLost != null)
+        {
+            var parsed = evt.DeserializePayload<LldbConnectionLostEvent>();
+            if (parsed != null) OnConnectionLost.Invoke(parsed);
+        }
+    }
+
+    /// <summary>Subscribes to all events for lldb on topic 'lldb:*'.</summary>
+    public Task SubscribeAsync(string topic = "lldb:*", CancellationToken cancellationToken = default) =>
+        _client.SubscribeAsync(topic, cancellationToken);
+
+    /// <summary>Retrieves namespaced database connection details.</summary>
+    public Task<LldbConnectionConfigResponse> ConnectionConfigAsync(JsonElement @namespace, CancellationToken cancellationToken = default)
+    {
+        var req = new LldbConnectionConfigRequest
+        {
+            Namespace = @namespace,
+        };
+        return ConnectionConfigAsync(req, cancellationToken);
+    }
+
+    /// <summary>Retrieves namespaced database connection details.</summary>
+    public Task<LldbConnectionConfigResponse> ConnectionConfigAsync(LldbConnectionConfigRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<LldbConnectionConfigResponse>("lldb", "connection_config", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Performs a low-level ping to verify the database is reachable.</summary>
+    public Task<LldbHealthCheckResponse> HealthCheckAsync(CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<LldbHealthCheckResponse>("lldb", "health_check", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
 }
@@ -1484,393 +1777,6 @@ public class PlayerDataServiceClient
 
 }
 
-/// <summary>Client interface for the ws service.</summary>
-public class WsServiceClient
-{
-    private readonly ExoClient _client;
-
-    public WsServiceClient(ExoClient client)
-    {
-        _client = client ?? throw new ArgumentNullException(nameof(client));
-    }
-
-    /// <summary>Broadcasts a frame to an active WebSocket topic.</summary>
-    public Task<WsBroadcastResponse> BroadcastAsync(string topic, string @event, JsonElement payload, CancellationToken cancellationToken = default)
-    {
-        var req = new WsBroadcastRequest
-        {
-            Topic = topic,
-            Event = @event,
-            Payload = payload,
-        };
-        return BroadcastAsync(req, cancellationToken);
-    }
-
-    /// <summary>Broadcasts a frame to an active WebSocket topic.</summary>
-    public Task<WsBroadcastResponse> BroadcastAsync(WsBroadcastRequest request, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<WsBroadcastResponse>("ws", "broadcast", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Retrieves current active WebSocket connection count.</summary>
-    public Task<WsConnectionCountResponse> ConnectionCountAsync(CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<WsConnectionCountResponse>("ws", "connection_count", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-}
-
-/// <summary>Client interface for the snake_leaderboard service.</summary>
-public class SnakeLeaderboardServiceClient
-{
-    private readonly ExoClient _client;
-
-    /// <summary>Fired when server emits score_submitted event.</summary>
-    public event Action<SnakeLeaderboardScoreSubmittedEvent>? OnScoreSubmitted;
-
-    public SnakeLeaderboardServiceClient(ExoClient client)
-    {
-        _client = client ?? throw new ArgumentNullException(nameof(client));
-        _client.OnAnyEvent += HandleIncomingEvent;
-    }
-
-    private void HandleIncomingEvent(ExoEventFrame evt)
-    {
-        if (evt.Event == "score_submitted" && OnScoreSubmitted != null)
-        {
-            var parsed = evt.DeserializePayload<SnakeLeaderboardScoreSubmittedEvent>();
-            if (parsed != null) OnScoreSubmitted.Invoke(parsed);
-        }
-    }
-
-    /// <summary>Subscribes to all events for snake_leaderboard on topic 'snake:leaderboard'.</summary>
-    public Task SubscribeAsync(string topic = "snake:leaderboard", CancellationToken cancellationToken = default) =>
-        _client.SubscribeAsync(topic, cancellationToken);
-
-    /// <summary>Executes submit_score action with typed arguments.</summary>
-    public Task<long> SubmitScoreAsync(string name, string playerId, long score, long snakeLength, CancellationToken cancellationToken = default)
-    {
-        var req = new SnakeLeaderboardSubmitScoreRequest
-        {
-            Name = name,
-            PlayerId = playerId,
-            Score = score,
-            SnakeLength = snakeLength,
-        };
-        return SubmitScoreAsync(req, cancellationToken);
-    }
-
-    /// <summary>Executes submit_score action with a typed request DTO.</summary>
-    public Task<long> SubmitScoreAsync(SnakeLeaderboardSubmitScoreRequest request, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<long>("snake_leaderboard", "submit_score", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Executes get_leaderboard action with typed arguments.</summary>
-    public Task<List<SnakeLeaderboardEntry>> GetLeaderboardAsync(long limit, CancellationToken cancellationToken = default)
-    {
-        var req = new SnakeLeaderboardGetLeaderboardRequest
-        {
-            Limit = limit,
-        };
-        return GetLeaderboardAsync(req, cancellationToken);
-    }
-
-    /// <summary>Executes get_leaderboard action with a typed request DTO.</summary>
-    public Task<List<SnakeLeaderboardEntry>> GetLeaderboardAsync(SnakeLeaderboardGetLeaderboardRequest request, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<List<SnakeLeaderboardEntry>>("snake_leaderboard", "get_leaderboard", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-}
-
-/// <summary>Client interface for the resource_store service.</summary>
-public class ResourceStoreServiceClient
-{
-    private readonly ExoClient _client;
-
-    public ResourceStoreServiceClient(ExoClient client)
-    {
-        _client = client ?? throw new ArgumentNullException(nameof(client));
-    }
-
-    /// <summary>Creates/updates the tables backing all declared resources (additive migrations).</summary>
-    public Task<ResourceStoreMigrateResponse> MigrateAsync(JsonElement resource, CancellationToken cancellationToken = default)
-    {
-        var req = new ResourceStoreMigrateRequest
-        {
-            Resource = resource,
-        };
-        return MigrateAsync(req, cancellationToken);
-    }
-
-    /// <summary>Creates/updates the tables backing all declared resources (additive migrations).</summary>
-    public Task<ResourceStoreMigrateResponse> MigrateAsync(ResourceStoreMigrateRequest request, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<ResourceStoreMigrateResponse>("resource_store", "migrate", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Lists rows for a resource with filtering, sorting, and pagination.</summary>
-    public Task<ResourceStoreListResponse> ListAsync(JsonElement offset, JsonElement sort, JsonElement filter, JsonElement search, JsonElement limit, string resource, CancellationToken cancellationToken = default)
-    {
-        var req = new ResourceStoreListRequest
-        {
-            Offset = offset,
-            Sort = sort,
-            Filter = filter,
-            Search = search,
-            Limit = limit,
-            Resource = resource,
-        };
-        return ListAsync(req, cancellationToken);
-    }
-
-    /// <summary>Lists rows for a resource with filtering, sorting, and pagination.</summary>
-    public Task<ResourceStoreListResponse> ListAsync(ResourceStoreListRequest request, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<ResourceStoreListResponse>("resource_store", "list", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Fetches one row by primary key.</summary>
-    public Task<ResourceStoreGetResponse> GetAsync(JsonElement id, string resource, CancellationToken cancellationToken = default)
-    {
-        var req = new ResourceStoreGetRequest
-        {
-            Id = id,
-            Resource = resource,
-        };
-        return GetAsync(req, cancellationToken);
-    }
-
-    /// <summary>Fetches one row by primary key.</summary>
-    public Task<ResourceStoreGetResponse> GetAsync(ResourceStoreGetRequest request, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<ResourceStoreGetResponse>("resource_store", "get", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Creates a row.</summary>
-    public Task<ResourceStoreCreateResponse> CreateAsync(JsonElement attributes, string resource, CancellationToken cancellationToken = default)
-    {
-        var req = new ResourceStoreCreateRequest
-        {
-            Attributes = attributes,
-            Resource = resource,
-        };
-        return CreateAsync(req, cancellationToken);
-    }
-
-    /// <summary>Creates a row.</summary>
-    public Task<ResourceStoreCreateResponse> CreateAsync(ResourceStoreCreateRequest request, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<ResourceStoreCreateResponse>("resource_store", "create", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Updates a row by primary key.</summary>
-    public Task<ResourceStoreUpdateResponse> UpdateAsync(JsonElement attributes, JsonElement id, string resource, CancellationToken cancellationToken = default)
-    {
-        var req = new ResourceStoreUpdateRequest
-        {
-            Attributes = attributes,
-            Id = id,
-            Resource = resource,
-        };
-        return UpdateAsync(req, cancellationToken);
-    }
-
-    /// <summary>Updates a row by primary key.</summary>
-    public Task<ResourceStoreUpdateResponse> UpdateAsync(ResourceStoreUpdateRequest request, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<ResourceStoreUpdateResponse>("resource_store", "update", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Deletes a row by primary key.</summary>
-    public Task<ResourceStoreDeleteResponse> DeleteAsync(JsonElement id, string resource, CancellationToken cancellationToken = default)
-    {
-        var req = new ResourceStoreDeleteRequest
-        {
-            Id = id,
-            Resource = resource,
-        };
-        return DeleteAsync(req, cancellationToken);
-    }
-
-    /// <summary>Deletes a row by primary key.</summary>
-    public Task<ResourceStoreDeleteResponse> DeleteAsync(ResourceStoreDeleteRequest request, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<ResourceStoreDeleteResponse>("resource_store", "delete", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Inserts or updates a row on conflict.</summary>
-    public Task<ResourceStoreUpsertResponse> UpsertAsync(JsonElement attributes, string resource, CancellationToken cancellationToken = default)
-    {
-        var req = new ResourceStoreUpsertRequest
-        {
-            Attributes = attributes,
-            Resource = resource,
-        };
-        return UpsertAsync(req, cancellationToken);
-    }
-
-    /// <summary>Inserts or updates a row on conflict.</summary>
-    public Task<ResourceStoreUpsertResponse> UpsertAsync(ResourceStoreUpsertRequest request, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<ResourceStoreUpsertResponse>("resource_store", "upsert", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-}
-
-/// <summary>Client interface for the sample_wasm service.</summary>
-public class SampleWasmServiceClient
-{
-    private readonly ExoClient _client;
-
-    /// <summary>Fired when server emits value_changed event.</summary>
-    public event Action<SampleWasmValueChangedEvent>? OnValueChanged;
-
-    public SampleWasmServiceClient(ExoClient client)
-    {
-        _client = client ?? throw new ArgumentNullException(nameof(client));
-        _client.OnAnyEvent += HandleIncomingEvent;
-    }
-
-    private void HandleIncomingEvent(ExoEventFrame evt)
-    {
-        if (evt.Event == "value_changed" && OnValueChanged != null)
-        {
-            var parsed = evt.DeserializePayload<SampleWasmValueChangedEvent>();
-            if (parsed != null) OnValueChanged.Invoke(parsed);
-        }
-    }
-
-    /// <summary>Subscribes to all events for sample_wasm on topic 'sample:events'.</summary>
-    public Task SubscribeAsync(string topic = "sample:events", CancellationToken cancellationToken = default) =>
-        _client.SubscribeAsync(topic, cancellationToken);
-
-    /// <summary>Executes ping action.</summary>
-    public Task<long> PingAsync(CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<long>("sample_wasm", "ping", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Executes increment action with typed arguments.</summary>
-    public Task<long> IncrementAsync(long counterId, long amount, CancellationToken cancellationToken = default)
-    {
-        var req = new SampleWasmIncrementRequest
-        {
-            CounterId = counterId,
-            Amount = amount,
-        };
-        return IncrementAsync(req, cancellationToken);
-    }
-
-    /// <summary>Executes increment action with a typed request DTO.</summary>
-    public Task<long> IncrementAsync(SampleWasmIncrementRequest request, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<long>("sample_wasm", "increment", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Executes echo action with typed arguments.</summary>
-    public Task<long> EchoAsync(long value, CancellationToken cancellationToken = default)
-    {
-        var req = new SampleWasmEchoRequest
-        {
-            Value = value,
-        };
-        return EchoAsync(req, cancellationToken);
-    }
-
-    /// <summary>Executes echo action with a typed request DTO.</summary>
-    public Task<long> EchoAsync(SampleWasmEchoRequest request, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<long>("sample_wasm", "echo", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-}
-
-/// <summary>Client interface for the dashboard_view service.</summary>
-public class DashboardViewServiceClient
-{
-    private readonly ExoClient _client;
-
-    public DashboardViewServiceClient(ExoClient client)
-    {
-        _client = client ?? throw new ArgumentNullException(nameof(client));
-    }
-
-    /// <summary>Resolves the LiveView component module for a given service or extension id.</summary>
-    public Task<DashboardViewResolveViewResponse> ResolveViewAsync(JsonElement id, CancellationToken cancellationToken = default)
-    {
-        var req = new DashboardViewResolveViewRequest
-        {
-            Id = id,
-        };
-        return ResolveViewAsync(req, cancellationToken);
-    }
-
-    /// <summary>Resolves the LiveView component module for a given service or extension id.</summary>
-    public Task<DashboardViewResolveViewResponse> ResolveViewAsync(DashboardViewResolveViewRequest request, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<DashboardViewResolveViewResponse>("dashboard_view", "resolve_view", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Lists all registered custom dashboard view modules.</summary>
-    public Task<DashboardViewListViewsResponse> ListViewsAsync(CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<DashboardViewListViewsResponse>("dashboard_view", "list_views", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Retrieves dashboard mount specification: {:live, Module} | {:hook, config} | {:iframe, config}</summary>
-    public Task<DashboardViewGetDashboardMountResponse> GetDashboardMountAsync(JsonElement viewId, CancellationToken cancellationToken = default)
-    {
-        var req = new DashboardViewGetDashboardMountRequest
-        {
-            ViewId = viewId,
-        };
-        return GetDashboardMountAsync(req, cancellationToken);
-    }
-
-    /// <summary>Retrieves dashboard mount specification: {:live, Module} | {:hook, config} | {:iframe, config}</summary>
-    public Task<DashboardViewGetDashboardMountResponse> GetDashboardMountAsync(DashboardViewGetDashboardMountRequest request, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<DashboardViewGetDashboardMountResponse>("dashboard_view", "get_dashboard_mount", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Retrieves data payload for hydrating the dashboard view.</summary>
-    public Task<DashboardViewGetDashboardDataResponse> GetDashboardDataAsync(JsonElement viewId, CancellationToken cancellationToken = default)
-    {
-        var req = new DashboardViewGetDashboardDataRequest
-        {
-            ViewId = viewId,
-        };
-        return GetDashboardDataAsync(req, cancellationToken);
-    }
-
-    /// <summary>Retrieves data payload for hydrating the dashboard view.</summary>
-    public Task<DashboardViewGetDashboardDataResponse> GetDashboardDataAsync(DashboardViewGetDashboardDataRequest request, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<DashboardViewGetDashboardDataResponse>("dashboard_view", "get_dashboard_data", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-}
-
-/// <summary>Client interface for the http service.</summary>
-public class HttpServiceClient
-{
-    private readonly ExoClient _client;
-
-    public HttpServiceClient(ExoClient client)
-    {
-        _client = client ?? throw new ArgumentNullException(nameof(client));
-    }
-
-    /// <summary>Returns HTTP server status and registered route summaries.</summary>
-    public Task<HttpStatusResponse> StatusAsync(CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<HttpStatusResponse>("http", "status", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-}
-
 /// <summary>Client interface for the plugin_manager service.</summary>
 public class PluginManagerServiceClient
 {
@@ -1990,45 +1896,166 @@ public class PluginManagerServiceClient
 
 }
 
-/// <summary>Client interface for the database service.</summary>
-public class DatabaseServiceClient
+/// <summary>Client interface for the resource_store service.</summary>
+public class ResourceStoreServiceClient
 {
     private readonly ExoClient _client;
 
-    public DatabaseServiceClient(ExoClient client)
+    public ResourceStoreServiceClient(ExoClient client)
     {
         _client = client ?? throw new ArgumentNullException(nameof(client));
     }
 
-    /// <summary>Executes a driver-agnostic query or data operation.</summary>
-    public Task<DatabaseExecuteResponse> ExecuteAsync(JsonElement arguments, string operation, JsonElement plugin, CancellationToken cancellationToken = default)
+    /// <summary>Creates/updates the tables backing all declared resources (additive migrations).</summary>
+    public Task<ResourceStoreMigrateResponse> MigrateAsync(JsonElement resource, CancellationToken cancellationToken = default)
     {
-        var req = new DatabaseExecuteRequest
+        var req = new ResourceStoreMigrateRequest
         {
-            Arguments = arguments,
-            Operation = operation,
-            Plugin = plugin,
+            Resource = resource,
         };
-        return ExecuteAsync(req, cancellationToken);
+        return MigrateAsync(req, cancellationToken);
     }
 
-    /// <summary>Executes a driver-agnostic query or data operation.</summary>
-    public Task<DatabaseExecuteResponse> ExecuteAsync(DatabaseExecuteRequest request, CancellationToken cancellationToken = default)
+    /// <summary>Creates/updates the tables backing all declared resources (additive migrations).</summary>
+    public Task<ResourceStoreMigrateResponse> MigrateAsync(ResourceStoreMigrateRequest request, CancellationToken cancellationToken = default)
     {
-        return _client.SendActionAsync<DatabaseExecuteResponse>("database", "execute", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+        return _client.SendActionAsync<ResourceStoreMigrateResponse>("resource_store", "migrate", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Lists rows for a resource with filtering, sorting, and pagination.</summary>
+    public Task<ResourceStoreListResponse> ListAsync(JsonElement offset, JsonElement sort, JsonElement search, JsonElement filter, JsonElement limit, string resource, CancellationToken cancellationToken = default)
+    {
+        var req = new ResourceStoreListRequest
+        {
+            Offset = offset,
+            Sort = sort,
+            Search = search,
+            Filter = filter,
+            Limit = limit,
+            Resource = resource,
+        };
+        return ListAsync(req, cancellationToken);
+    }
+
+    /// <summary>Lists rows for a resource with filtering, sorting, and pagination.</summary>
+    public Task<ResourceStoreListResponse> ListAsync(ResourceStoreListRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<ResourceStoreListResponse>("resource_store", "list", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Fetches one row by primary key.</summary>
+    public Task<ResourceStoreGetResponse> GetAsync(JsonElement id, string resource, CancellationToken cancellationToken = default)
+    {
+        var req = new ResourceStoreGetRequest
+        {
+            Id = id,
+            Resource = resource,
+        };
+        return GetAsync(req, cancellationToken);
+    }
+
+    /// <summary>Fetches one row by primary key.</summary>
+    public Task<ResourceStoreGetResponse> GetAsync(ResourceStoreGetRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<ResourceStoreGetResponse>("resource_store", "get", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Creates a row.</summary>
+    public Task<ResourceStoreCreateResponse> CreateAsync(JsonElement attributes, string resource, CancellationToken cancellationToken = default)
+    {
+        var req = new ResourceStoreCreateRequest
+        {
+            Attributes = attributes,
+            Resource = resource,
+        };
+        return CreateAsync(req, cancellationToken);
+    }
+
+    /// <summary>Creates a row.</summary>
+    public Task<ResourceStoreCreateResponse> CreateAsync(ResourceStoreCreateRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<ResourceStoreCreateResponse>("resource_store", "create", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Updates a row by primary key.</summary>
+    public Task<ResourceStoreUpdateResponse> UpdateAsync(JsonElement attributes, JsonElement id, string resource, CancellationToken cancellationToken = default)
+    {
+        var req = new ResourceStoreUpdateRequest
+        {
+            Attributes = attributes,
+            Id = id,
+            Resource = resource,
+        };
+        return UpdateAsync(req, cancellationToken);
+    }
+
+    /// <summary>Updates a row by primary key.</summary>
+    public Task<ResourceStoreUpdateResponse> UpdateAsync(ResourceStoreUpdateRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<ResourceStoreUpdateResponse>("resource_store", "update", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Deletes a row by primary key.</summary>
+    public Task<ResourceStoreDeleteResponse> DeleteAsync(JsonElement id, string resource, CancellationToken cancellationToken = default)
+    {
+        var req = new ResourceStoreDeleteRequest
+        {
+            Id = id,
+            Resource = resource,
+        };
+        return DeleteAsync(req, cancellationToken);
+    }
+
+    /// <summary>Deletes a row by primary key.</summary>
+    public Task<ResourceStoreDeleteResponse> DeleteAsync(ResourceStoreDeleteRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<ResourceStoreDeleteResponse>("resource_store", "delete", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Inserts or updates a row on conflict.</summary>
+    public Task<ResourceStoreUpsertResponse> UpsertAsync(JsonElement attributes, string resource, CancellationToken cancellationToken = default)
+    {
+        var req = new ResourceStoreUpsertRequest
+        {
+            Attributes = attributes,
+            Resource = resource,
+        };
+        return UpsertAsync(req, cancellationToken);
+    }
+
+    /// <summary>Inserts or updates a row on conflict.</summary>
+    public Task<ResourceStoreUpsertResponse> UpsertAsync(ResourceStoreUpsertRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<ResourceStoreUpsertResponse>("resource_store", "upsert", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Removes every row of a resource, table-backed or KV-backed, without dropping the table.</summary>
+    public Task<ResourceStoreClearResponse> ClearAsync(JsonElement resource, CancellationToken cancellationToken = default)
+    {
+        var req = new ResourceStoreClearRequest
+        {
+            Resource = resource,
+        };
+        return ClearAsync(req, cancellationToken);
+    }
+
+    /// <summary>Removes every row of a resource, table-backed or KV-backed, without dropping the table.</summary>
+    public Task<ResourceStoreClearResponse> ClearAsync(ResourceStoreClearRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<ResourceStoreClearResponse>("resource_store", "clear", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
 }
 
-/// <summary>Client interface for the lldb service.</summary>
-public class LldbServiceClient
+/// <summary>Client interface for the sample_plugin service.</summary>
+public class SamplePluginServiceClient
 {
     private readonly ExoClient _client;
 
-    /// <summary>Fired when server emits connection_lost event.</summary>
-    public event Action<LldbConnectionLostEvent>? OnConnectionLost;
+    /// <summary>Fired when server emits value_changed event.</summary>
+    public event Action<SamplePluginValueChangedEvent>? OnValueChanged;
 
-    public LldbServiceClient(ExoClient client)
+    public SamplePluginServiceClient(ExoClient client)
     {
         _client = client ?? throw new ArgumentNullException(nameof(client));
         _client.OnAnyEvent += HandleIncomingEvent;
@@ -2036,61 +2063,50 @@ public class LldbServiceClient
 
     private void HandleIncomingEvent(ExoEventFrame evt)
     {
-        if (evt.Event == "connection_lost" && OnConnectionLost != null)
+        if (evt.Event == "value_changed" && OnValueChanged != null)
         {
-            var parsed = evt.DeserializePayload<LldbConnectionLostEvent>();
-            if (parsed != null) OnConnectionLost.Invoke(parsed);
+            var parsed = evt.DeserializePayload<SamplePluginValueChangedEvent>();
+            if (parsed != null) OnValueChanged.Invoke(parsed);
         }
     }
 
-    /// <summary>Subscribes to all events for lldb on topic 'lldb:*'.</summary>
-    public Task SubscribeAsync(string topic = "lldb:*", CancellationToken cancellationToken = default) =>
+    /// <summary>Subscribes to all events for sample_plugin on topic 'sample:events'.</summary>
+    public Task SubscribeAsync(string topic = "sample:events", CancellationToken cancellationToken = default) =>
         _client.SubscribeAsync(topic, cancellationToken);
 
-    /// <summary>Retrieves namespaced database connection details.</summary>
-    public Task<LldbConnectionConfigResponse> ConnectionConfigAsync(JsonElement @namespace, CancellationToken cancellationToken = default)
+    /// <summary>Executes ping action.</summary>
+    public Task<long> PingAsync(CancellationToken cancellationToken = default)
     {
-        var req = new LldbConnectionConfigRequest
+        return _client.SendActionAsync<long>("sample_plugin", "ping", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Executes increment action with typed arguments.</summary>
+    public Task<long> IncrementAsync(long amount, long counterId, CancellationToken cancellationToken = default)
+    {
+        var req = new SamplePluginIncrementRequest
         {
-            Namespace = @namespace,
+            Amount = amount,
+            CounterId = counterId,
         };
-        return ConnectionConfigAsync(req, cancellationToken);
+        return IncrementAsync(req, cancellationToken);
     }
 
-    /// <summary>Retrieves namespaced database connection details.</summary>
-    public Task<LldbConnectionConfigResponse> ConnectionConfigAsync(LldbConnectionConfigRequest request, CancellationToken cancellationToken = default)
+    /// <summary>Executes increment action with a typed request DTO.</summary>
+    public Task<long> IncrementAsync(SamplePluginIncrementRequest request, CancellationToken cancellationToken = default)
     {
-        return _client.SendActionAsync<LldbConnectionConfigResponse>("lldb", "connection_config", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+        return _client.SendActionAsync<long>("sample_plugin", "increment", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
-    /// <summary>Performs a low-level ping to verify the database is reachable.</summary>
-    public Task<LldbHealthCheckResponse> HealthCheckAsync(CancellationToken cancellationToken = default)
+    /// <summary>Executes injected action.</summary>
+    public Task<string> InjectedAsync(CancellationToken cancellationToken = default)
     {
-        return _client.SendActionAsync<LldbHealthCheckResponse>("lldb", "health_check", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-}
-
-/// <summary>Client interface for the background_change service.</summary>
-public class BackgroundChangeServiceClient
-{
-    private readonly ExoClient _client;
-
-    public BackgroundChangeServiceClient(ExoClient client)
-    {
-        _client = client ?? throw new ArgumentNullException(nameof(client));
-    }
-
-    /// <summary>Executes get_color action.</summary>
-    public Task<string> GetColorAsync(CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<string>("background_change", "get_color", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+        return _client.SendActionAsync<string>("sample_plugin", "injected", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
     /// <summary>Executes echo action with typed arguments.</summary>
     public Task<long> EchoAsync(long value, CancellationToken cancellationToken = default)
     {
-        var req = new BackgroundChangeEchoRequest
+        var req = new SamplePluginEchoRequest
         {
             Value = value,
         };
@@ -2098,53 +2114,109 @@ public class BackgroundChangeServiceClient
     }
 
     /// <summary>Executes echo action with a typed request DTO.</summary>
-    public Task<long> EchoAsync(BackgroundChangeEchoRequest request, CancellationToken cancellationToken = default)
+    public Task<long> EchoAsync(SamplePluginEchoRequest request, CancellationToken cancellationToken = default)
     {
-        return _client.SendActionAsync<long>("background_change", "echo", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+        return _client.SendActionAsync<long>("sample_plugin", "echo", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
 }
 
-/// <summary>Client interface for the dashboard service.</summary>
-public class DashboardServiceClient
+/// <summary>Client interface for the snake_leaderboard service.</summary>
+public class SnakeLeaderboardServiceClient
 {
     private readonly ExoClient _client;
 
-    public DashboardServiceClient(ExoClient client)
+    /// <summary>Fired when server emits score_submitted event.</summary>
+    public event Action<SnakeLeaderboardScoreSubmittedEvent>? OnScoreSubmitted;
+
+    public SnakeLeaderboardServiceClient(ExoClient client)
+    {
+        _client = client ?? throw new ArgumentNullException(nameof(client));
+        _client.OnAnyEvent += HandleIncomingEvent;
+    }
+
+    private void HandleIncomingEvent(ExoEventFrame evt)
+    {
+        if (evt.Event == "score_submitted" && OnScoreSubmitted != null)
+        {
+            var parsed = evt.DeserializePayload<SnakeLeaderboardScoreSubmittedEvent>();
+            if (parsed != null) OnScoreSubmitted.Invoke(parsed);
+        }
+    }
+
+    /// <summary>Subscribes to all events for snake_leaderboard on topic 'snake:leaderboard'.</summary>
+    public Task SubscribeAsync(string topic = "snake:leaderboard", CancellationToken cancellationToken = default) =>
+        _client.SubscribeAsync(topic, cancellationToken);
+
+    /// <summary>Executes submit_score action with typed arguments.</summary>
+    public Task<long> SubmitScoreAsync(string playerId, string name, long score, long snakeLength, CancellationToken cancellationToken = default)
+    {
+        var req = new SnakeLeaderboardSubmitScoreRequest
+        {
+            PlayerId = playerId,
+            Name = name,
+            Score = score,
+            SnakeLength = snakeLength,
+        };
+        return SubmitScoreAsync(req, cancellationToken);
+    }
+
+    /// <summary>Executes submit_score action with a typed request DTO.</summary>
+    public Task<long> SubmitScoreAsync(SnakeLeaderboardSubmitScoreRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<long>("snake_leaderboard", "submit_score", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Executes get_leaderboard action with typed arguments.</summary>
+    public Task<List<SnakeLeaderboardEntry>> GetLeaderboardAsync(long limit, CancellationToken cancellationToken = default)
+    {
+        var req = new SnakeLeaderboardGetLeaderboardRequest
+        {
+            Limit = limit,
+        };
+        return GetLeaderboardAsync(req, cancellationToken);
+    }
+
+    /// <summary>Executes get_leaderboard action with a typed request DTO.</summary>
+    public Task<List<SnakeLeaderboardEntry>> GetLeaderboardAsync(SnakeLeaderboardGetLeaderboardRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<List<SnakeLeaderboardEntry>>("snake_leaderboard", "get_leaderboard", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+}
+
+/// <summary>Client interface for the ws service.</summary>
+public class WsServiceClient
+{
+    private readonly ExoClient _client;
+
+    public WsServiceClient(ExoClient client)
     {
         _client = client ?? throw new ArgumentNullException(nameof(client));
     }
 
-    /// <summary>Retrieves dashboard mount specification: {:live, Module} | {:hook, config} | {:iframe, config}</summary>
-    public Task<DashboardGetDashboardMountResponse> GetDashboardMountAsync(JsonElement viewId, CancellationToken cancellationToken = default)
+    /// <summary>Broadcasts a frame to an active WebSocket topic.</summary>
+    public Task<WsBroadcastResponse> BroadcastAsync(string topic, string @event, JsonElement payload, CancellationToken cancellationToken = default)
     {
-        var req = new DashboardGetDashboardMountRequest
+        var req = new WsBroadcastRequest
         {
-            ViewId = viewId,
+            Topic = topic,
+            Event = @event,
+            Payload = payload,
         };
-        return GetDashboardMountAsync(req, cancellationToken);
+        return BroadcastAsync(req, cancellationToken);
     }
 
-    /// <summary>Retrieves dashboard mount specification: {:live, Module} | {:hook, config} | {:iframe, config}</summary>
-    public Task<DashboardGetDashboardMountResponse> GetDashboardMountAsync(DashboardGetDashboardMountRequest request, CancellationToken cancellationToken = default)
+    /// <summary>Broadcasts a frame to an active WebSocket topic.</summary>
+    public Task<WsBroadcastResponse> BroadcastAsync(WsBroadcastRequest request, CancellationToken cancellationToken = default)
     {
-        return _client.SendActionAsync<DashboardGetDashboardMountResponse>("dashboard", "get_dashboard_mount", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+        return _client.SendActionAsync<WsBroadcastResponse>("ws", "broadcast", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
-    /// <summary>Retrieves data payload for hydrating the dashboard view.</summary>
-    public Task<DashboardGetDashboardDataResponse> GetDashboardDataAsync(JsonElement viewId, CancellationToken cancellationToken = default)
+    /// <summary>Retrieves current active WebSocket connection count.</summary>
+    public Task<WsConnectionCountResponse> ConnectionCountAsync(CancellationToken cancellationToken = default)
     {
-        var req = new DashboardGetDashboardDataRequest
-        {
-            ViewId = viewId,
-        };
-        return GetDashboardDataAsync(req, cancellationToken);
-    }
-
-    /// <summary>Retrieves data payload for hydrating the dashboard view.</summary>
-    public Task<DashboardGetDashboardDataResponse> GetDashboardDataAsync(DashboardGetDashboardDataRequest request, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<DashboardGetDashboardDataResponse>("dashboard", "get_dashboard_data", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+        return _client.SendActionAsync<WsConnectionCountResponse>("ws", "connection_count", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
 }

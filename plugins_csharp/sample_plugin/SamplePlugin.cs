@@ -2,6 +2,15 @@ using Exoforge.Plugin.SDK;
 
 namespace Exoforge.Plugins.SamplePlugin;
 
+/// <summary>What a counter did, as the event carries it. A record, not an anonymous object: the
+/// generated JSON context can only carry a declared type.</summary>
+public record CounterChanged
+{
+    public int CounterId { get; init; }
+    public int NewValue { get; init; }
+    public int Delta { get; init; }
+}
+
 /// <summary>
 /// What a counter can be. Declaring this is the whole declaration of the column's choices - the
 /// generator reads the names, and the schema, the form and the database's own constraint all follow
@@ -48,16 +57,28 @@ public class SamplePlugin
     [ExoAction("ping")]
     public int Ping() => 42;
 
-    /// <summary>Increments a counter and announces it on a topic.</summary>
+    /// <summary>
+    /// Increments a counter, stores it, and announces it on a topic.
+    ///
+    /// It writes through SQL rather than the key-value bridge because the resource declares a table -
+    /// which is what the schema says and what the dashboard reads.
+    /// </summary>
     [ExoAction("increment", Scope = "global")]
-    [ExoEvent("value_changed", Topic = "sample:events")]
+    [ExoEvent("value_changed", typeof(CounterChanged), Topic = "sample:events")]
     public async Task<int> Increment(int counterId, int amount)
     {
         int newValue = amount > 0 ? amount : 1;
 
+        // `status` is left to the column's default, which came from the enum's own value.
+        Database!.Execute(
+            "INSERT INTO counters (counter_id, value) VALUES ($1, $2) " +
+            "ON CONFLICT(counter_id) DO UPDATE SET value = excluded.value",
+            counterId,
+            newValue);
+
         await Events!.EmitAsync(
             "value_changed",
-            new { counter_id = counterId, new_value = newValue, delta = amount },
+            new CounterChanged { CounterId = counterId, NewValue = newValue, Delta = amount },
             "sample:events");
 
         return newValue;
