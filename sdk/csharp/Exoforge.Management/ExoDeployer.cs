@@ -510,7 +510,9 @@ public class ExoDeployer
             dotnetPath,
             $"publish \"{RelativeTo(pluginDir, csproj)}\" -c Release -r {targetRid} " +
             $"-p:ExoforgePluginType=native -p:ExoforgeBuildStamp={buildStamp} " +
-            $"-p:ExoforgeManifestPath=\"{RelativeTo(pluginDir, manifest)}\"",
+            // Absolute: a relative path is resolved by whoever consumes it, and the compiler runs
+            // from its own directory rather than this one.
+            $"-p:ExoforgeManifestPath=\"{manifest}\"",
             pluginDir,
             emit);
 

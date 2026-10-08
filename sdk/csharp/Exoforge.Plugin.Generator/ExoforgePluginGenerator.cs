@@ -67,7 +67,7 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
         var settings = context.AnalyzerConfigOptionsProvider.Select(static (provider, _) => new Settings(
             Option(provider.GlobalOptions, "build_property.ExoforgePluginType") ?? "native",
             Option(provider.GlobalOptions, "build_property.ExoforgeBuildStamp"),
-            Option(provider.GlobalOptions, "build_property.ExoforgeManifestPath"),
+            ResolveManifestPath(provider),
             Option(provider.GlobalOptions, "build_property.DesignTimeBuild") == "true"));
 
         context.RegisterSourceOutput(services.Combine(referenced).Combine(settings), static (spc, pair) =>
@@ -80,6 +80,23 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
     private static string? Option(AnalyzerConfigOptions options, string key)
     {
         return options.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value) ? value : null;
+    }
+
+    /// <summary>
+    /// The manifest's full path. A relative one is resolved against the project, not the process.
+    ///
+    /// The compiler does not run from the project directory - it runs from the .NET SDK's Roslyn
+    /// folder - so a bare <c>manifest.exs</c> was written there instead. It succeeded, silently, in
+    /// a directory nobody looks in, and the build then failed claiming the generator was missing.
+    /// </summary>
+    private static string? ResolveManifestPath(AnalyzerConfigOptionsProvider provider)
+    {
+        string? path = Option(provider.GlobalOptions, "build_property.ExoforgeManifestPath");
+        if (path is null || Path.IsPathRooted(path)) return path;
+
+        string? projectDir = Option(provider.GlobalOptions, "build_property.ProjectDir");
+
+        return projectDir is null ? path : Path.GetFullPath(Path.Combine(projectDir, path));
     }
 
     /// <summary>Build settings that shape the manifest. Strings only, so the cache compares by value.</summary>

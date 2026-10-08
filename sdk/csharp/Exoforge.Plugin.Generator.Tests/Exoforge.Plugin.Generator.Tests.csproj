@@ -1,4 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
@@ -6,8 +7,16 @@
     <NuGetAudit>false</NuGetAudit>
 
     <!-- The generator runs here, so this project is also the manifest generator's smoke test. -->
+    <ExoforgePlugin>true</ExoforgePlugin>
     <ExoforgePluginType>native</ExoforgePluginType>
-    <ExoforgeManifestPath>$(MSBuildProjectDirectory)/obj/Exoforge/manifest.exs</ExoforgeManifestPath>
+
+    <!--
+      Relative on purpose. The generator writes wherever this points, and it runs inside the
+      compiler, which does not start in the project directory - so a relative path is the one shape
+      that can silently write somewhere else. `ManifestPath()` in the tests looks for exactly this
+      file, which makes every test in the suite a check on it.
+    -->
+    <ExoforgeManifestPath>obj/Exoforge/manifest.exs</ExoforgeManifestPath>
   </PropertyGroup>
 
   <ItemGroup>
@@ -19,22 +28,10 @@
     </PackageReference>
   </ItemGroup>
 
+  <!-- The SDK and the generator come from Directory.Build.targets: this project declares itself a
+       plugin and gets both, plus the manifest plumbing. The contracts project is its own thing. -->
   <ItemGroup>
-    <ProjectReference Include="..\Exoforge.Plugin.SDK\Exoforge.Plugin.SDK.csproj" />
     <ProjectReference Include="..\Exoforge.Plugin.Generator.Tests.Contracts\Exoforge.Plugin.Generator.Tests.Contracts.csproj" />
-    <ProjectReference Include="..\Exoforge.Plugin.Generator\Exoforge.Plugin.Generator.csproj"
-                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
-  <ItemGroup>
-    <!-- The manifest is a build output the generator writes, so a missing one has to re-run the
-         compile rather than being treated as up to date. -->
-    <UpToDateCheckOutput Include="$(ExoforgeManifestPath)" />
-    <FileWrites Include="$(ExoforgeManifestPath)" />
-
-    <CompilerVisibleProperty Include="ExoforgePluginType" />
-    <CompilerVisibleProperty Include="ExoforgeBuildStamp" />
-    <CompilerVisibleProperty Include="ExoforgeManifestPath" />
-    <CompilerVisibleProperty Include="DesignTimeBuild" />
-  </ItemGroup>
 </Project>
