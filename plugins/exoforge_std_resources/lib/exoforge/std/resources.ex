@@ -22,6 +22,8 @@ defmodule Exoforge.Std.Resources do
   """
   use Exoforge.Plugin, provides: [:resource_store]
 
+  require Logger
+
   alias Exoforge.ActionDispatcher
   alias Exoforge.PluginRegistry
 
@@ -70,8 +72,35 @@ defmodule Exoforge.Std.Resources do
         key = {pid, table}
         ensure_bookkeeping(pid)
         _ = db(pid, "CREATE TABLE IF NOT EXISTS #{table} (#{column_defs(res)})")
+        repair_primary_key(pid, table, res)
         reconcile_columns(pid, table, res)
         mark_migrated(key)
+        :ok
+    end
+  end
+
+  # `CREATE TABLE IF NOT EXISTS` does not repair a table that already exists, so one created by an
+  # older schema keeps what it had. Without a PRIMARY KEY every upsert against it fails forever with
+  # "ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint" - and nothing said so,
+  # because the one caller that mattered discarded the result.
+  #
+  # A UNIQUE INDEX satisfies a column-targeted `ON CONFLICT` exactly as a PRIMARY KEY does, so the
+  # data does not have to move: one statement, no rows copied, nothing to recover if it fails.
+  defp repair_primary_key(pid, table, res) do
+    pk = to_string(res.primary_key || :id)
+
+    case db(pid, "CREATE UNIQUE INDEX IF NOT EXISTS #{table}_#{pk}_key ON #{table} (#{pk})") do
+      {:ok, _} ->
+        :ok
+
+      error ->
+        # Duplicate keys, or a column the table does not have. Say it out loud: the alternative is an
+        # upsert that reports success and writes nothing.
+        Logger.warning(
+          "[Resources] #{table} could not be given a unique key on #{pk} " <>
+            "(#{inspect(error)}); upserts against it will keep failing."
+        )
+
         :ok
     end
   end

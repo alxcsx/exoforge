@@ -31,16 +31,15 @@ defmodule Exoforge.Std.Dashboard.Preferences do
   @doc "Persists the pinned extension ids for an account."
   def put_pinned(player_id, pinned)
       when is_binary(player_id) and player_id != "" and is_list(pinned) do
-    _ =
-      store(:upsert, %{
-        resource: @resource,
-        attributes: %{
-          "player_id" => player_id,
-          "data" => Jason.encode!(Enum.map(pinned, &to_string/1))
-        }
-      })
-
-    :ok
+    # The result is returned rather than dropped. Discarding it meant a write that failed - a table
+    # with no unique key, say - looked exactly like one that worked.
+    store(:upsert, %{
+      resource: @resource,
+      attributes: %{
+        "player_id" => player_id,
+        "data" => Jason.encode!(Enum.map(pinned, &to_string/1))
+      }
+    })
   end
 
   def put_pinned(_player_id, _pinned), do: :ok

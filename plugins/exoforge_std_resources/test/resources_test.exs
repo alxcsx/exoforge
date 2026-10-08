@@ -163,6 +163,48 @@ defmodule Exoforge.Std.ResourcesTest do
     assert r2["score"] == 9
   end
 
+  # A table created before the resource declared a primary key has none, and `CREATE TABLE IF NOT
+  # EXISTS` never repairs it. Every upsert against it then failed forever with "ON CONFLICT clause
+  # does not match any PRIMARY KEY or UNIQUE constraint" - silently, because the one caller that
+  # mattered threw the result away.
+  test "migration repairs a table that predates the primary key" do
+    # The resource's table lives in the database of the plugin that declared it, which is not the
+    # plugin serving the store. Getting this wrong makes the test pass without testing anything.
+    sql = fn statement ->
+      ActionDispatcher.dispatch(:database, :execute, %{
+        plugin: :widgets_plugin,
+        operation: statement,
+        arguments: []
+      })
+    end
+
+    # Prove the setup is real before relying on it.
+    assert {:ok, _} = sql.("DROP TABLE IF EXISTS widgets")
+    assert {:ok, _} = sql.("CREATE TABLE widgets (id text, name text, score integer)")
+    assert {:error, _} = sql.("INSERT INTO widgets (id, name, score) VALUES ('d', 'dup', 1) ON CONFLICT(id) DO NOTHING")
+
+    Resources.run_migrations("widget")
+
+    assert {:ok, %{row: row}} =
+             dispatch(:upsert, %{
+               resource: "widget",
+               attributes: %{"id" => "w9", "name" => "Repaired", "score" => 1}
+             })
+
+    assert row["name"] == "Repaired"
+
+    # The point of the key: the second write updates in place rather than inserting a duplicate.
+    assert {:ok, %{row: again}} =
+             dispatch(:upsert, %{
+               resource: "widget",
+               attributes: %{"id" => "w9", "name" => "Repaired", "score" => 2}
+             })
+
+    assert again["score"] == 2
+    assert {:ok, %{rows: rows}} = dispatch(:list, %{resource: "widget"})
+    assert length(rows) == 1
+  end
+
   test "rejects attributes outside the resource schema" do
     assert {:error, :invalid_attributes} =
              dispatch(:create, %{resource: "widget", attributes: %{"nope" => 1}})
