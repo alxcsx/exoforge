@@ -54,7 +54,7 @@ Two things make it invisible:
 - Nothing verifies a table's shape after migration — `ensure_migrated/1` trusts an ETS cache keyed
   `{plugin_id, table}`, and `migrate_resource/1` uses `IF NOT EXISTS`.
 
-**Fix (not yet applied):** have `migrate_resource/1` check `sqlite_master` for the declared primary
+**Fix:** `migrate_resource/1` checks `sqlite_master` for the declared primary
 key and rebuild the table when it is missing, so a stale schema self-heals instead of failing every
 write. Separately, a fire-and-forget caller like `put_pinned/2` should at least log the failure.
 
@@ -98,7 +98,8 @@ Better than most plugin tooling; these are why the SDK feels good when it works:
 - [x] 2. Sandbox catalog comes from the live export; default action exists
 - [x] 3. Plugin logs: server action + Control Center pane + `exo plugin logs`
 - [x] 4. Native build works outside the repo — the generator now ships inside the SDK and is
-      dependency-free. Publishing `Exoforge.Plugin.SDK` to a feed remains a release step.
+      dependency-free, and `just pack-sdk` fills a local feed for it. Publishing to a public feed was
+      decided against.
 - [x] 5. Template picker in the Unity Plugins tab
 - [x] 6. Scaffolding tells you what to do next (and opens the file)
 - [x] 7. `liveops` template + stale help removed

@@ -12,6 +12,9 @@
 
     <!-- The feed `just pack-sdk` fills, and the version it fills it with. -->
     <ExoforgeLocalFeed>$(ExoforgeRoot)dist/nuget</ExoforgeLocalFeed>
+    <!-- The version of Exoforge.Plugin.SDK the build hook and the samples reference. A scaffolded
+         plugin is usually outside this repository and gets a literal instead, from
+         ExoScaffolder.SdkPackageVersion - the two have to be bumped together. -->
     <ExoforgePluginSdkVersion>0.1.0</ExoforgePluginSdkVersion>
 
     <!-- Skip the NuGet vulnerability audit: it fetches nuget.org on every restore and stalls

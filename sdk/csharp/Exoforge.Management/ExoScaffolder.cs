@@ -87,7 +87,13 @@ public static class ExoScaffolder
         File.WriteAllText(Path.Combine(workspace, "nuget.config"), config);
     }
 
-    /// <summary>The published package a scaffolded plugin references, and gets everything from.</summary>
+    /// <summary>
+    /// The published package a scaffolded plugin references, and gets everything from.
+    ///
+    /// The version is a literal because a scaffolded plugin is usually outside this repository, where
+    /// no property is available to it. In here, <c>Directory.Build.props</c> holds the same number for
+    /// everything the build hook wires up — the two have to be bumped together.
+    /// </summary>
     public const string SdkPackageId = "Exoforge.Plugin.SDK";
 
     /// <summary>Version of <see cref="SdkPackageId"/> a scaffolded plugin references.</summary>

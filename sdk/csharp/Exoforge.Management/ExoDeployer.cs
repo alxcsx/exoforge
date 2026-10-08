@@ -472,7 +472,7 @@ public class ExoDeployer
     /// shape the cluster answers with. Converting on read rather than writing a second file is the
     /// point of the manifest being JSON: one artifact per plugin, not two that mean the same thing.
     /// </summary>
-    public static string ToExport(string manifestJson)
+    private static string ToExport(string manifestJson)
     {
         JsonNode? parsed;
 

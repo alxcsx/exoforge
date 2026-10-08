@@ -23,6 +23,9 @@
   <ItemGroup>
     <!-- Inside the Exoforge repository the root Directory.Build.targets swaps this for the sources
          beside it, so an edit to the SDK lands in the next build here with nothing to sync. -->
+    <!-- A literal, not a property: this project has to build with no Exoforge repository around it,
+         which is the point of the sample. Bump it with Directory.Build.props's
+         ExoforgePluginSdkVersion. -->
     <PackageReference Include="Exoforge.Plugin.SDK" Version="0.1.0" />
   </ItemGroup>
 
