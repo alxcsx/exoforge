@@ -1,10 +1,58 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Exoforge.Plugin.SDK;
 using Xunit;
 
 namespace Exoforge.Plugin.SDK.Tests;
+
+/// <summary>
+/// The values JSON cannot hold. Each of these used to be written raw, which made the whole frame
+/// unparseable on the host - so a plugin worked until a position went sideways, and then failed with
+/// a decode error naming no field.
+/// </summary>
+public class UnrepresentableValueTests
+{
+    [Theory]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(double.NegativeInfinity)]
+    public void A_non_finite_double_is_refused_rather_than_written_as_invalid_json(double value)
+    {
+        var error = Assert.Throws<InvalidOperationException>(() => PluginJson.Serialize(value));
+
+        Assert.Contains("NaN or infinity", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_non_finite_float_is_refused_too()
+    {
+        Assert.Throws<InvalidOperationException>(() => PluginJson.Serialize(float.NaN));
+    }
+
+    [Fact]
+    public void A_finite_double_still_goes_through()
+    {
+        Assert.Equal("1.5", PluginJson.Serialize(1.5));
+    }
+
+    /// <summary>A truncated emoji is the usual way to get one of these.</summary>
+    [Fact]
+    public void A_lone_surrogate_does_not_produce_invalid_json()
+    {
+        string json = PluginJson.Serialize("half \ud83d");
+
+        Assert.Equal("\"half \ufffd\"", json);
+        JsonNode.Parse(json);
+    }
+
+    [Fact]
+    public void A_matched_pair_survives_intact()
+    {
+        Assert.Equal("\"ok \ud83d\ude00\"", PluginJson.Serialize("ok \ud83d\ude00"));
+    }
+}
 
 /// <summary>
 /// An anonymous return, which is the case the hint exists for.

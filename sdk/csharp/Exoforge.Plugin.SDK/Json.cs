@@ -113,8 +113,17 @@ public static class PluginJson
         if (value is long l) return l.ToString(CultureInfo.InvariantCulture);
         if (value is short sh) return sh.ToString(CultureInfo.InvariantCulture);
         if (value is byte by) return by.ToString(CultureInfo.InvariantCulture);
-        if (value is double d) return d.ToString("R", CultureInfo.InvariantCulture);
-        if (value is float f) return f.ToString("R", CultureInfo.InvariantCulture);
+        if (value is double d)
+        {
+            if (double.IsNaN(d) || double.IsInfinity(d)) throw new InvalidOperationException(NonFiniteHint("double", d));
+            return d.ToString("R", CultureInfo.InvariantCulture);
+        }
+
+        if (value is float f)
+        {
+            if (float.IsNaN(f) || float.IsInfinity(f)) throw new InvalidOperationException(NonFiniteHint("float", f));
+            return f.ToString("R", CultureInfo.InvariantCulture);
+        }
         if (value is decimal m) return m.ToString(CultureInfo.InvariantCulture);
         if (value is DateTime dt) return EncodeString(dt.ToString("O", CultureInfo.InvariantCulture));
         if (value is DateTimeOffset dto) return EncodeString(dto.ToString("O", CultureInfo.InvariantCulture));
@@ -170,14 +179,44 @@ public static class PluginJson
     /// <summary>Deserializes JSON into <typeparamref name="T"/>.</summary>
     public static T? Deserialize<T>(string json) => (T?)Deserialize(json, typeof(T));
 
+    /// <summary>
+    /// Why a non-finite number cannot be sent, and what to do instead.
+    /// </summary>
+    /// <remarks>
+    /// JSON has no NaN or infinity. Written raw - which is what this used to do - they make the whole
+    /// frame unparseable, so the host sees a decode error rather than a value, and nothing says which
+    /// field was at fault. Refusing is louder and points at the number.
+    /// </remarks>
+    private static string NonFiniteHint(string kind, object value) =>
+        $"Cannot send the {kind} '{value}': JSON has no representation for NaN or infinity, and writing " +
+        "it raw makes the whole frame unreadable to the host. Send null, or a sentinel of your own, if " +
+        "a non-finite value is meaningful here - which in position and physics code it often is.";
+
     /// <summary>JSON-encodes a string, including the surrounding quotes.</summary>
     internal static string EncodeString(string value)
     {
         var sb = new StringBuilder(value.Length + 2);
         sb.Append('"');
 
-        foreach (char c in value)
+        for (int index = 0; index < value.Length; index++)
         {
+            char c = value[index];
+
+            // A matched pair is one character and goes through as it is.
+            if (char.IsHighSurrogate(c) && index + 1 < value.Length && char.IsLowSurrogate(value[index + 1]))
+            {
+                sb.Append(c).Append(value[++index]);
+                continue;
+            }
+
+            // An unpaired one cannot be escaped into validity - \uD800 on its own is still not valid
+            // JSON - so it has to be replaced. Truncating a string mid-character is how this happens.
+            if (char.IsSurrogate(c))
+            {
+                sb.Append("\ufffd");
+                continue;
+            }
+
             switch (c)
             {
                 case '"': sb.Append("\\\""); break;
