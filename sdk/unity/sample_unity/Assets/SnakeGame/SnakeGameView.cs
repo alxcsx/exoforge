@@ -1,18 +1,9 @@
 using System;
+using System.Threading.Tasks;
 using UnityEngine;
 
 namespace SnakeGame
 {
-    /// <summary>
-    /// Everything the player sees: the board, the score, the name prompt, the leaderboard.
-    ///
-    /// Deliberately primitive — the board is a <c>gridWidth × gridHeight</c> point-filtered texture
-    /// where one pixel <em>is</em> one coloured square, and the panels are IMGUI. No art, no prefab,
-    /// no Canvas, so the sample stays about the Exoforge integration rather than about Unity setup.
-    ///
-    /// This component lives on an always-active object: the name prompt has to work before
-    /// gameplay is switched on.
-    /// </summary>
     [DefaultExecutionOrder(-700)]
     public class SnakeGameView : MonoBehaviour
     {
@@ -24,14 +15,12 @@ namespace SnakeGame
         [SerializeField] private SnakePlayerController? player;
         [SerializeField] private SnakeLeaderboard? leaderboard;
 
-
         private string _nameInput = "";
         private bool _submittingName;
         private string _nameError = "";
 
         private void Awake()
         {
-            // Refs are wired by the scene setup; fall back to a search so hand-edited scenes work.
             game ??= FindAny<SnakeGameController>();
             player ??= FindAny<SnakePlayerController>();
             leaderboard ??= FindAny<SnakeLeaderboard>();
@@ -62,15 +51,10 @@ namespace SnakeGame
         private static T? FindAny<T>() where T : Component =>
             UnityEngine.Object.FindAnyObjectByType<T>(FindObjectsInactive.Include);
 
-        // ---- board -------------------------------------------------------------------------
-
-        // ---- hud ---------------------------------------------------------------------------
-
         private void OnGUI()
         {
             if (game == null) return;
 
-            // The board is drawn with sprites (SnakeBoardView); this is the panel beside it.
             DrawScorePanel(new Rect(20f, 20f, panelWidth, Mathf.Min(Screen.height - 40f, 560f)));
 
             if (player != null && player.NeedsDisplayName)
@@ -78,7 +62,6 @@ namespace SnakeGame
                 DrawNamePrompt();
             }
         }
-
 
         private void DrawScorePanel(Rect panel)
         {
@@ -213,7 +196,7 @@ namespace SnakeGame
             }
         }
 
-        private async System.Threading.Tasks.Task SubmitNameAsync()
+        private async Task SubmitNameAsync()
         {
             if (player == null) return;
 
@@ -223,7 +206,6 @@ namespace SnakeGame
             try
             {
                 bool ok = await player.SetDisplayNameAsync(_nameInput);
-
                 if (!ok)
                 {
                     _nameError = "Could not save that name — try another.";
@@ -235,7 +217,6 @@ namespace SnakeGame
             }
         }
 
-        /// <summary>Scoped <c>GUI.enabled</c> — IMGUI has no using-block of its own.</summary>
         private readonly struct GuiEnabled : IDisposable
         {
             private readonly bool _previous;

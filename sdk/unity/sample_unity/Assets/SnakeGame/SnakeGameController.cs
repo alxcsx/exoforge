@@ -7,15 +7,6 @@ namespace SnakeGame
 {
     public enum SnakeGameState { Stopped, Playing, Dead }
 
-    /// <summary>
-    /// Self-contained Snake game. Pure Unity — no backend, no networking, no rendering.
-    ///
-    /// The only backend-facing surface is <see cref="RunEnded"/>: a finished run raises it with the
-    /// score and final length, and a leaderboard component subscribes (through
-    /// <c>ExoforgeSDK.Client</c>). Gameplay never holds a client or an endpoint.
-    ///
-    /// Presentation lives in <see cref="SnakeGameView"/>, which reads the board from here.
-    /// </summary>
     public class SnakeGameController : MonoBehaviour
     {
         [Header("Game Configuration")]
@@ -25,8 +16,6 @@ namespace SnakeGame
         [SerializeField] private int applePoints = 10;
 
         private float _stepTimer;
-
-        // 0=Up, 1=Right, 2=Down, 3=Left
         private int _direction = 1;
         private int _pendingDirection = 1;
 
@@ -38,29 +27,15 @@ namespace SnakeGame
         private int _highScore;
         private int _applesEaten;
 
-        /// <summary>Raised when a run ends, with (score, snakeLength).</summary>
         public event Action<int, int>? RunEnded;
-
-        /// <summary>Raised when a run starts.</summary>
         public event Action? RunStarted;
 
         public SnakeGameState State { get; private set; } = SnakeGameState.Stopped;
-
-        /// <summary>Current score.</summary>
         public int Score => _score;
-
-        /// <summary>Best score in this session.</summary>
         public int HighScore => _highScore;
-
-        /// <summary>Current snake length, head included.</summary>
         public int SnakeLength => _body.Count + 1;
-
-        /// <summary>Apples eaten this run.</summary>
         public int ApplesEaten => _applesEaten;
-
         public bool IsPlaying => State == SnakeGameState.Playing;
-
-        /// <summary>Short "what just happened" line for the HUD, empty when there is nothing to say.</summary>
         public string Notification { get; private set; } = "";
 
         public int GridWidth => gridWidth;
@@ -71,13 +46,8 @@ namespace SnakeGame
             set => applePoints = Mathf.Max(1, value);
         }
 
-        /// <summary>Snake head cell.</summary>
         public Vector2Int Head => _head;
-
-        /// <summary>Snake body cells, tail last.</summary>
         public IReadOnlyList<Vector2Int> Body => _body;
-
-        /// <summary>Apple cell.</summary>
         public Vector2Int Food => _food;
 
         private void Start() => StartNewGame();
@@ -90,18 +60,11 @@ namespace SnakeGame
             Advance(Time.deltaTime);
         }
 
-        /// <summary>
-        /// Runs the loop for <paramref name="deltaTime"/> seconds.
-        ///
-        /// Separate from <see cref="Update"/> so a test can drive the game a step at a time instead of
-        /// waiting on real frames, and so the timing is the caller's business rather than Unity's.
-        /// </summary>
         public void Advance(float deltaTime)
         {
             if (State != SnakeGameState.Playing) return;
 
             _stepTimer += deltaTime;
-
             while (_stepTimer >= stepInterval && State == SnakeGameState.Playing)
             {
                 _stepTimer -= stepInterval;
@@ -110,12 +73,11 @@ namespace SnakeGame
             }
         }
 
-        /// <summary>Turns the snake, ignoring reversals and repeats. 0=up, 1=right, 2=down, 3=left.</summary>
         public void Turn(int direction)
         {
             if (direction < 0 || direction > 3) return;
             if (direction == _direction) return;
-            if ((direction + 2) % 4 == _direction) return; // straight back into itself
+            if ((direction + 2) % 4 == _direction) return;
 
             _pendingDirection = direction;
         }
@@ -205,7 +167,6 @@ namespace SnakeGame
         private void SpawnFood()
         {
             var free = new List<Vector2Int>();
-
             for (int x = 0; x < gridWidth; x++)
             {
                 for (int y = 0; y < gridHeight; y++)
@@ -220,9 +181,7 @@ namespace SnakeGame
 
             if (free.Count == 0)
             {
-                State = SnakeGameState.Dead;
-                Notify($"Board filled! Final Score: {_score}");
-                RunEnded?.Invoke(_score, SnakeLength);
+                Die("Board Filled");
                 return;
             }
 

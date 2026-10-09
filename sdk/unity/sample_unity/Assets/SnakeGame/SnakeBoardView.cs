@@ -4,16 +4,6 @@ using UnityEngine;
 
 namespace SnakeGame
 {
-    /// <summary>
-    /// Draws the board as coloured squares — one pooled <see cref="SpriteRenderer"/> per cell.
-    ///
-    /// A runtime-generated 1x1 white sprite is tinted per cell, so there is no art to import and no
-    /// prefab to wire: the grid, the snake and the apple are all the same square. The board is centred
-    /// on the origin with one world unit per cell, which is what the camera frames.
-    ///
-    /// Reads the game, never drives it. <see cref="CellColour"/> is pure, so the headless check can
-    /// assert what a cell will look like without rendering anything.
-    /// </summary>
     [DefaultExecutionOrder(-650)]
     public class SnakeBoardView : MonoBehaviour
     {
@@ -59,7 +49,7 @@ namespace SnakeGame
             {
                 var bgGo = new GameObject("BoardBackground");
                 bgGo.transform.SetParent(transform, worldPositionStays: false);
-                bgGo.transform.localPosition = new Vector3(0, 0, 1f); // behind board cells
+                bgGo.transform.localPosition = new Vector3(0, 0, 1f);
                 backgroundRenderer = bgGo.AddComponent<SpriteRenderer>();
             }
 
@@ -77,31 +67,21 @@ namespace SnakeGame
 
         private void Awake()
         {
-            // Wired by the scene setup; the search keeps a hand-made scene working.
             game ??= FindAnyObjectByType<SnakeGameController>(FindObjectsInactive.Include);
         }
 
         private void LateUpdate() => Paint();
 
-        /// <summary>What a cell looks like right now. Pure — no renderer involved.</summary>
         public Color32 CellColour(Vector2Int cell)
         {
             if (game == null) return squareA;
-
             if (cell == game.Head) return headColor;
             if (cell == game.Food) return foodColor;
             if (game.Body.Contains(cell)) return bodyColor;
 
-            // Checkerboard, so the grid reads as a grid of squares even when it is empty.
             return (cell.x + cell.y) % 2 == 0 ? squareA : squareB;
         }
 
-        /// <summary>
-        /// World position of a cell, with the board centred on the origin.
-        ///
-        /// Reads the grid from the game rather than from the pooled renderers, which only exist once
-        /// a frame has run — otherwise this is wrong in the editor, where LateUpdate does not.
-        /// </summary>
         public Vector3 CellToWorld(Vector2Int cell)
         {
             int width = game != null ? game.GridWidth : _width;
@@ -139,7 +119,6 @@ namespace SnakeGame
             _width = game.GridWidth;
             _height = game.GridHeight;
 
-            // Rebuild rather than resize: the grid only changes if someone edits the serialized field.
             foreach (var cell in _cells)
             {
                 if (cell != null) Destroy(cell.gameObject);
@@ -165,7 +144,6 @@ namespace SnakeGame
 
         private static Sprite Square => _square != null ? _square : _square = CreateSquare();
 
-        /// <summary>A 1x1 white sprite, point-filtered, created once for the whole sample.</summary>
         private static Sprite CreateSquare()
         {
             var texture = new Texture2D(1, 1, TextureFormat.RGBA32, false)
@@ -181,7 +159,6 @@ namespace SnakeGame
             var sprite = Sprite.Create(texture, new Rect(0f, 0f, 1f, 1f), new Vector2(0.5f, 0.5f), 1f);
             sprite.name = "SnakeCell";
             sprite.hideFlags = HideFlags.HideAndDontSave;
-
             return sprite;
         }
     }

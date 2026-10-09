@@ -7,8 +7,6 @@ using UnityEngine;
 
 namespace SnakeGame
 {
-    // The only file in the sample that talks to Exoforge. Gameplay publishes RunEnded; this
-    // component bridges it to the generated client. Delete it and Snake still runs.
     [DefaultExecutionOrder(-750)]
     public class SnakeLeaderboard : MonoBehaviour
     {
@@ -25,11 +23,7 @@ namespace SnakeGame
         public string Status { get; private set; } = "not loaded";
         public bool IsBusy { get; private set; }
         public long PersonalBest { get; private set; }
-
-        /// <summary>True while the board is subscribed to live updates.</summary>
         public bool IsSubscribed { get; private set; }
-
-        /// <summary>The last update that arrived as an event, for the HUD and for tests.</summary>
         public string LastEvent { get; private set; } = "";
 
         private void Awake()
@@ -41,15 +35,9 @@ namespace SnakeGame
         private void OnEnable()
         {
             if (game != null) game.RunEnded += OnRunEnded;
-
-            // This is what opens the socket. Everything else this sample does is request/response,
-            // which goes over HTTP, and the connection is lazy: subscribing is the first thing that
-            // actually needs realtime.
             _ = LoadAsync();
         }
 
-        // Subscribe for live updates, then load the current board so the ranking is on screen
-        // before the first run ends.
         private async Task LoadAsync()
         {
             await SubscribeAsync();
@@ -62,19 +50,13 @@ namespace SnakeGame
             _ = UnsubscribeAsync();
         }
 
-        /// <summary>Subscribes to the board so scores land without asking for them.</summary>
         public async Task SubscribeAsync()
         {
             try
             {
                 var client = ExoforgeSDK.Client;
-
-                // Held, so unsubscribing does not have to ask for a client. ExoforgeSDK.Client builds
-                // one on demand, and OnDisable runs during scene teardown - asking there created a
-                // host that outlived everything and poisoned the next test.
                 _client = client;
 
-                // The generated client raises the typed event, so nothing here reads a JSON frame.
                 client.SnakeLeaderboard().OnScoreSubmitted += OnScoreSubmitted;
                 await client.SubscribeAsync(Topic);
 
@@ -83,7 +65,6 @@ namespace SnakeGame
             }
             catch (Exception ex)
             {
-                // The sample stays playable offline; only the live board is unavailable.
                 Status = $"offline: {ex.Message}";
                 Debug.LogWarning($"[Snake] could not subscribe: {ex.Message}");
             }
@@ -94,12 +75,7 @@ namespace SnakeGame
             IsSubscribed = false;
 
             var client = _client;
-
-            if (client == null)
-            {
-                return;
-            }
-
+            if (client == null) return;
             _client = null;
 
             try
@@ -109,17 +85,12 @@ namespace SnakeGame
             }
             catch (Exception)
             {
-                // Going away. The server drops the subscription with the connection anyway.
             }
         }
 
-        // A score landed on the board. Merged into the rows we already have rather than re-read: the
-        // event carries what the board shows, and not having to ask is the whole point of subscribing.
-        // The board's own refresh still resolves names live, so a rename is corrected there.
         private void OnScoreSubmitted(SnakeLeaderboardScoreSubmittedEvent score)
         {
             LastEvent = $"{score.Name} {score.Score}";
-
             if (string.IsNullOrEmpty(score.PlayerId)) return;
 
             var row = new SnakeLeaderboardEntry
@@ -131,7 +102,6 @@ namespace SnakeGame
             };
 
             int existing = _rows.FindIndex(r => r.PlayerId == row.PlayerId);
-
             if (existing >= 0)
             {
                 _rows[existing] = row;
@@ -142,7 +112,6 @@ namespace SnakeGame
             }
 
             _rows.Sort((a, b) => b.Score.CompareTo(a.Score));
-
             if (_rows.Count > topN)
             {
                 _rows.RemoveRange(topN, _rows.Count - topN);
@@ -156,7 +125,6 @@ namespace SnakeGame
         public async Task SubmitRunAsync(int score, int length)
         {
             var session = player?.Session;
-
             if (session == null || string.IsNullOrEmpty(session.PlayerId))
             {
                 Status = "not signed in — score not submitted";
@@ -168,22 +136,15 @@ namespace SnakeGame
 
             try
             {
-                // The session comes from sign-in and ExoforgeSDK reconnects on its own, so the bridge
-                // only asks for the client. Connecting here was redundant in the happy path and
-                // raced with the SDK's own reconnect loop when the link had dropped.
                 var client = ExoforgeSDK.Client;
-
-                // submit_score returns the caller's best, so the HUD needs no follow-up read.
                 PersonalBest = await client.SnakeLeaderboard().SubmitScoreAsync(
                     session.DisplayName, session.PlayerId, score, length);
 
                 Status = $"submitted {score} — personal best {PersonalBest}";
-
                 await RefreshAsync();
             }
             catch (Exception ex)
             {
-                // The sample stays playable offline; only the shared board is unavailable.
                 Status = $"offline: {ex.Message}";
                 Debug.LogWarning($"[Snake] leaderboard unavailable: {ex.Message}");
             }

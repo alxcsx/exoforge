@@ -1,5 +1,7 @@
 # Sample Unity Snake — AGENTS.md
 
+> **Conference Presentation Sample**: This sample is designed to be showcased live at conferences and demos. The C# code is intentionally kept as minimal, readable, and direct as possible — zero comment noise, no complex abstractions or over-engineering, and crystal clear structure that any developer can understand at a glance.
+
 A 2D Snake game that shows the whole Exoforge loop end to end: sign a player in, play locally,
 and keep the high score on the server so the leaderboard is **shared between every player**.
 

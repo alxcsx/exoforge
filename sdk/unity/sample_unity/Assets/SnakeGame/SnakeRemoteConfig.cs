@@ -6,12 +6,6 @@ using UnityEngine;
 
 namespace SnakeGame
 {
-    /// <summary>
-    /// Fetches runtime gameplay configuration from the snake_config plugin and custom background
-    /// image from the file_bucket plugin.
-    ///
-    /// Applies snake color, apple color, apple score points, and custom board background.
-    /// </summary>
     public class SnakeRemoteConfig : MonoBehaviour
     {
         [SerializeField] private SnakeGameController? game;
@@ -37,8 +31,6 @@ namespace SnakeGame
             try
             {
                 var client = ExoforgeSDK.Client;
-
-                // Dispatch get_config action to snake_config plugin
                 var config = await client.SendActionAsync<JsonElement>("snake_config", "get_config", null);
 
                 string snakeColorHex = config.TryGetProperty("snake_color", out var sc) ? sc.GetString() ?? "#3DD157" : "#3DD157";
@@ -48,13 +40,11 @@ namespace SnakeGame
                 string bgFileId = config.TryGetProperty("background_file_id", out var bf) ? bf.GetString() ?? "" : "";
                 string bgFilename = config.TryGetProperty("background_filename", out var bfn) ? bfn.GetString() ?? "board_bg.png" : "board_bg.png";
 
-                // Apply to game
                 if (game != null)
                 {
                     game.ApplePoints = applePoints;
                 }
 
-                // Apply to board view
                 if (boardView != null)
                 {
                     if (ColorUtility.TryParseHtmlString(snakeColorHex, out var snakeColor))
@@ -67,7 +57,6 @@ namespace SnakeGame
                         boardView.SetAppleColor(appleColor);
                     }
 
-                    // If a background file ID is configured, download image from file_bucket
                     if (!string.IsNullOrEmpty(bgFileId))
                     {
                         try
@@ -95,7 +84,6 @@ namespace SnakeGame
 
                 IsLoaded = true;
                 Status = $"loaded (points={applePoints}, snake={snakeColorHex})";
-                Debug.Log($"[SnakeRemoteConfig] Config loaded: snake={snakeColorHex}, apple={appleColorHex}, points={applePoints}");
             }
             catch (Exception ex)
             {
