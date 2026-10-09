@@ -211,10 +211,26 @@ defmodule Exoforge.Std.Resources do
       table = table_for(res)
       pk = to_string(res.primary_key || :id)
 
-      case db(info.plugin_id, "SELECT * FROM #{table} WHERE #{pk} = $1", [id]) do
-        {:ok, %{rows: [row | _]}} -> {:ok, %{row: row}}
-        {:ok, _} -> {:error, :not_found}
-        error -> error
+      target_id =
+        if is_nil(id) and is_singleton?(res) do
+          singleton_key(res)
+        else
+          id
+        end
+
+      case db(info.plugin_id, "SELECT * FROM #{table} WHERE #{pk} = $1", [target_id]) do
+        {:ok, %{rows: [row | _]}} ->
+          {:ok, %{row: row}}
+
+        {:ok, _} ->
+          if is_singleton?(res) do
+            create_default_singleton(info, target_id)
+          else
+            {:error, :not_found}
+          end
+
+        error ->
+          error
       end
     end
   end
@@ -420,7 +436,7 @@ defmodule Exoforge.Std.Resources do
   defp action_names(actions) when is_map(actions), do: Enum.map(Map.keys(actions), &to_string/1)
   defp action_names(_), do: []
 
-  defp table_list(%{plugin_id: pid, resource: res}, payload) do
+  defp table_list(%{plugin_id: pid, resource: res} = info, payload) do
     table = table_for(res)
     {where_sql, where_args} = where_clause(res, param(payload, :filter), param(payload, :search))
     order_sql = order_clause(res, param(payload, :sort))
@@ -430,6 +446,14 @@ defmodule Exoforge.Std.Resources do
     sql = "SELECT * FROM #{table} #{where_sql} #{order_sql} LIMIT #{limit} OFFSET #{offset}"
 
     case db(pid, sql, where_args) do
+      {:ok, %{rows: []}} ->
+        if is_singleton?(res) and where_sql == "" do
+          {:ok, %{row: row}} = create_default_singleton(info, singleton_key(res))
+          {:ok, %{rows: [row], total: 1}}
+        else
+          {:ok, %{rows: [], total: 0}}
+        end
+
       {:ok, %{rows: rows}} ->
         {:ok, %{rows: rows, total: count_rows(pid, table, where_sql, where_args, rows)}}
 
@@ -716,4 +740,67 @@ defmodule Exoforge.Std.Resources do
   defp sql_type(:map), do: "text"
   defp sql_type(:term), do: "text"
   defp sql_type(_), do: "text"
+
+  defp is_singleton?(res) do
+    res[:singleton] == true or
+      res["singleton"] == true or
+      to_string(res[:kind] || res["kind"]) == "singleton"
+  end
+
+  defp singleton_key(res) do
+    pk_col_name = to_string(res.primary_key || :id)
+    pk_col = Enum.find(res.columns || [], &(to_string(&1.name || &1["name"]) == pk_col_name))
+    default_val = pk_col && (pk_col[:default] || pk_col["default"])
+
+    if default_val && default_val != "" do
+      to_string(default_val)
+    else
+      "default"
+    end
+  end
+
+  defp create_default_singleton(info, target_id) do
+    res = info.resource
+    pk = to_string(res.primary_key || :id)
+    key_val = target_id || singleton_key(res)
+
+    default_attrs =
+      (res.columns || [])
+      |> Enum.reduce(%{}, fn col, acc ->
+        name = to_string(col.name || col["name"])
+        raw_default = col[:default] || col["default"]
+        type = col[:type] || col["type"] || :string
+
+        val =
+          cond do
+            name == pk ->
+              key_val
+
+            raw_default != nil and raw_default != "" ->
+              case type do
+                :integer -> if(is_integer(raw_default), do: raw_default, else: String.to_integer(to_string(raw_default)))
+                :float -> if(is_float(raw_default), do: raw_default, else: String.to_float(to_string(raw_default)))
+                :boolean -> raw_default in [true, "true", 1, "1"]
+                _ -> to_string(raw_default)
+              end
+
+            true ->
+              case type do
+                :integer -> 0
+                :float -> 0.0
+                :boolean -> false
+                :map -> %{}
+                :list -> []
+                _ -> ""
+              end
+          end
+
+        Map.put(acc, name, val)
+      end)
+
+    case create(%{resource: to_string(res.name), attributes: default_attrs}) do
+      {:ok, %{row: row}} -> {:ok, %{row: row}}
+      _ -> {:ok, %{row: default_attrs}}
+    end
+  end
 end
