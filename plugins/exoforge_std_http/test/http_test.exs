@@ -17,6 +17,34 @@ defmodule Exoforge.HttpTest do
     end
   end
 
+  defmodule MockWebhookService do
+    use Exoforge.Plugin
+
+    defwebhook stripe(body, headers) do
+      signature = headers["stripe-signature"] || ""
+
+      if signature == "valid_signature" do
+        {:ok, %{verified: true, size: byte_size(body)}}
+      else
+        {:error, :bad_signature}
+      end
+    end
+
+    defwebhook challenge(payload) do
+      query = payload["query"] || %{}
+
+      if challenge = query["hub.challenge"] do
+        {:ok, %{status_code: 200, body: challenge}}
+      else
+        {:ok, %{status_code: 202, body: "accepted"}}
+      end
+    end
+
+    defwebhook ping do
+      {:ok, %{pong: true}}
+    end
+  end
+
   setup do
     Exoforge.PluginCase.allow_dev_tokens()
     Exoforge.PluginCase.start_kernel()
@@ -27,6 +55,10 @@ defmodule Exoforge.HttpTest do
 
     Exoforge.PluginCase.register_database(Exoforge.Std.Database)
     Exoforge.PluginCase.register_auth(Exoforge.Std.Auth)
+    Exoforge.PluginCase.register_plugin(Exoforge.Std.FileBucket,
+      id: :exoforge_std_file_bucket,
+      provides: [Exoforge.Std.Services.FileBucket]
+    )
 
     Exoforge.PluginCase.register_plugin(Exoforge.Std.Http,
       id: :exoforge_std_http,
@@ -35,6 +67,7 @@ defmodule Exoforge.HttpTest do
     )
 
     Exoforge.PluginCase.register_plugin(MockAdminService, id: :mock_admin)
+    Exoforge.PluginCase.register_plugin(MockWebhookService, id: :mock_webhook)
     :ok
   end
 
@@ -193,6 +226,140 @@ defmodule Exoforge.HttpTest do
 
       assert conn.status == 403
       assert Jason.decode!(conn.resp_body)["error"] == "forbidden_scope"
+    end
+  end
+
+  describe "Inbound Webhooks" do
+    test "POST /api/webhooks/:service/:action dispatches raw body and headers" do
+      body = "{\"event\":\"charge.succeeded\",\"amount\":1000}"
+
+      conn =
+        conn(:post, "/api/webhooks/mock_webhook/stripe", body)
+        |> put_req_header("content-type", "application/json")
+        |> put_req_header("stripe-signature", "valid_signature")
+        |> Router.call(@opts)
+
+      assert conn.status == 200
+      data = Jason.decode!(conn.resp_body)
+      assert data["status"] == "ok"
+      assert data["data"]["verified"] == true
+      assert data["data"]["size"] == byte_size(body)
+    end
+
+    test "POST /api/webhook/:service/:action supports singular route" do
+      conn =
+        conn(:post, "/api/webhook/mock_webhook/stripe", "raw_payload")
+        |> put_req_header("stripe-signature", "valid_signature")
+        |> Router.call(@opts)
+
+      assert conn.status == 200
+      assert Jason.decode!(conn.resp_body)["data"]["verified"] == true
+    end
+
+    test "POST /api/webhooks rejects invalid signature from plugin handler" do
+      conn =
+        conn(:post, "/api/webhooks/mock_webhook/stripe", "fake_payload")
+        |> put_req_header("stripe-signature", "wrong_signature")
+        |> Router.call(@opts)
+
+      assert conn.status == 400
+      assert Jason.decode!(conn.resp_body)["error"] =~ "bad_signature"
+    end
+
+    test "GET /api/webhooks responds to verification challenges with custom status and body" do
+      conn =
+        conn(:get, "/api/webhooks/mock_webhook/challenge?hub.challenge=xyz123")
+        |> Router.call(@opts)
+
+      assert conn.status == 200
+      assert conn.resp_body == "xyz123"
+    end
+
+    test "GET /api/webhooks custom status code without challenge" do
+      conn =
+        conn(:get, "/api/webhooks/mock_webhook/challenge")
+        |> Router.call(@opts)
+
+      assert conn.status == 202
+      assert conn.resp_body == "accepted"
+    end
+
+    test "POST /api/webhooks 0-arity ping webhook works" do
+      conn =
+        conn(:post, "/api/webhooks/mock_webhook/ping", "")
+        |> Router.call(@opts)
+
+      assert conn.status == 200
+      assert Jason.decode!(conn.resp_body)["data"]["pong"] == true
+    end
+
+    test "Security: webhooks cannot invoke admin-scoped actions" do
+      conn =
+        conn(:post, "/api/webhooks/mock_admin/secret_op", "{}")
+        |> Router.call(@opts)
+
+      assert conn.status == 403
+      assert Jason.decode!(conn.resp_body)["error"] == "forbidden_scope"
+    end
+  end
+
+  describe "File Bucket Endpoints" do
+    test "POST /api/files/upload with JSON base64 content succeeds and GET serves file" do
+      payload = %{
+        "bucket" => "assets",
+        "filename" => "hello.txt",
+        "content" => Base.encode64("Hello World from REST"),
+        "content_type" => "text/plain"
+      }
+
+      conn =
+        conn(:post, "/api/files/upload", Jason.encode!(payload))
+        |> put_req_header("content-type", "application/json")
+        |> put_req_header("authorization", "Bearer dev:admin")
+        |> Router.call(@opts)
+
+      assert conn.status in [200, 201]
+      resp = Jason.decode!(conn.resp_body)
+      assert resp["status"] == "ok"
+      file = resp["file"]
+      assert file["filename"] == "hello.txt"
+      assert file["bucket"] == "assets"
+
+      # Download/serve the file
+      get_conn =
+        conn(:get, "/api/files/assets/#{file["id"]}")
+        |> Router.call(@opts)
+
+      assert get_conn.status == 200
+      assert get_conn.resp_body == "Hello World from REST"
+      assert get_resp_header(get_conn, "content-type") == ["text/plain"]
+    end
+
+    test "POST /api/files/upload with multipart form data succeeds" do
+      # Create a temp file to simulate Plug.Upload
+      tmp_path = Path.join(System.tmp_dir!(), "exo_test_upload.png")
+      File.write!(tmp_path, <<0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A>>)
+
+      upload = %Plug.Upload{
+        path: tmp_path,
+        filename: "test_image.png",
+        content_type: "image/png"
+      }
+
+      conn =
+        conn(:post, "/api/files/upload", %{"file" => upload, "bucket" => "images"})
+        |> put_req_header("authorization", "Bearer dev:admin")
+        |> Router.call(@opts)
+
+      assert conn.status in [200, 201]
+      resp = Jason.decode!(conn.resp_body)
+      assert resp["status"] == "ok"
+      file = resp["file"]
+      assert file["filename"] == "test_image.png"
+      assert file["size_bytes"] == 8
+
+      # Clean up tmp file
+      File.rm(tmp_path)
     end
   end
 end

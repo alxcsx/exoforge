@@ -13,9 +13,11 @@ defmodule Exoforge.Std.Http.Router do
   plug(:match)
 
   plug(Plug.Parsers,
-    parsers: [:json],
-    pass: ["application/json"],
-    json_decoder: Jason
+    parsers: [:urlencoded, :multipart, :json],
+    pass: ["*/*"],
+    json_decoder: Jason,
+    length: 100_000_000,
+    body_reader: {__MODULE__, :cache_body, []}
   )
 
   plug(:authorize_ingress)
@@ -113,6 +115,130 @@ defmodule Exoforge.Std.Http.Router do
     |> send_resp(200, html)
   end
 
+  @doc false
+  def cache_body(conn, opts) do
+    case Plug.Conn.read_body(conn, opts) do
+      {:ok, body, conn} ->
+        existing = conn.assigns[:raw_body] || ""
+        {:ok, body, Plug.Conn.assign(conn, :raw_body, existing <> body)}
+
+      {:more, body, conn} ->
+        existing = conn.assigns[:raw_body] || ""
+        {:more, body, Plug.Conn.assign(conn, :raw_body, existing <> body)}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  match "/api/webhooks/:service/:action" do
+    dispatch_webhook(conn, service, action)
+  end
+
+  match "/api/webhook/:service/:action" do
+    dispatch_webhook(conn, service, action)
+  end
+
+  defp dispatch_webhook(conn, service, action) do
+    t0 = System.monotonic_time(:microsecond)
+
+    raw_body =
+      case conn.assigns[:raw_body] do
+        body when is_binary(body) and body != "" ->
+          body
+
+        _ ->
+          case Plug.Conn.read_body(conn) do
+            {:ok, body, _conn} -> body
+            _ -> ""
+          end
+      end
+
+    parsed_json =
+      case conn.body_params do
+        p when is_map(p) and map_size(p) > 0 ->
+          p
+
+        _ ->
+          case Jason.decode(raw_body) do
+            {:ok, p} when is_map(p) -> p
+            _ -> %{}
+          end
+      end
+
+    headers = Map.new(conn.req_headers)
+
+    payload = %{
+      "body" => raw_body,
+      "raw_body" => raw_body,
+      "json" => parsed_json,
+      "headers" => headers,
+      "method" => conn.method,
+      "query" => conn.query_params
+    }
+
+    result = ActionDispatcher.dispatch(service, action, payload, caller_scopes: ["webhook", "global"])
+    latency_us = System.monotonic_time(:microsecond) - t0
+
+    case result do
+      {:ok, %{status_code: code, body: resp_body}} when is_integer(code) ->
+        Logger.info("[HTTP:Webhook] #{service}.#{action} -> #{code} (#{latency_us}µs)")
+        send_resp(conn, code, to_string(resp_body))
+
+      {:ok, %{"status_code" => code, "body" => resp_body}} when is_integer(code) ->
+        Logger.info("[HTTP:Webhook] #{service}.#{action} -> #{code} (#{latency_us}µs)")
+        send_resp(conn, code, to_string(resp_body))
+
+      {:ok, result} ->
+        Logger.info("[HTTP:Webhook] #{service}.#{action} -> 200 OK (#{latency_us}µs)")
+        send_json(conn, 200, %{status: "ok", data: result})
+
+      :ok ->
+        Logger.info("[HTTP:Webhook] #{service}.#{action} -> 200 OK (#{latency_us}µs)")
+        send_json(conn, 200, %{status: "ok"})
+
+      {:error, :service_not_found} ->
+        Logger.warning("[HTTP:Webhook] #{service}.#{action} -> 404 service_not_found (#{latency_us}µs)")
+        send_json(conn, 404, %{status: "error", error: "service_not_found"})
+
+      {:error, {:action_not_found, _}} ->
+        Logger.warning("[HTTP:Webhook] #{service}.#{action} -> 404 action_not_found (#{latency_us}µs)")
+        send_json(conn, 404, %{status: "error", error: "action_not_found"})
+
+      {:error, :unauthorized} ->
+        Logger.warning("[HTTP:Webhook] #{service}.#{action} -> 401 unauthorized (#{latency_us}µs)")
+        send_json(conn, 401, %{status: "error", error: "unauthorized"})
+
+      {:error, :forbidden_scope} ->
+        Logger.warning("[HTTP:Webhook] #{service}.#{action} -> 403 forbidden_scope (#{latency_us}µs)")
+        send_json(conn, 403, %{status: "error", error: "forbidden_scope"})
+
+      {:error, reason} ->
+        Logger.warning("[HTTP:Webhook] #{service}.#{action} -> 400 error: #{inspect(reason)} (#{latency_us}µs)")
+        send_json(conn, 400, %{status: "error", error: inspect(reason)})
+    end
+  end
+
+  # ---- FILE BUCKET INGRESS & SERVING ----
+
+  post "/api/files/upload" do
+    case authenticate_token(token_from_request(conn)) do
+      {:ok, auth_info} ->
+        handle_file_upload(conn, auth_info)
+
+      :error ->
+        unauthenticated(conn)
+    end
+  end
+
+  get "/api/files/:bucket/:id" do
+    serve_file(conn, bucket, id, nil)
+  end
+
+  get "/api/files/:bucket/:id/:filename" do
+    serve_file(conn, bucket, id, filename)
+  end
+
   post "/api/:service/:action" do
     raw_payload =
       case conn.body_params do
@@ -132,8 +258,11 @@ defmodule Exoforge.Std.Http.Router do
           auth_info.scopes
         )
 
+      # A public action without a token still gets an identity, so the action's own checks
+      # (register scopes, anonymous takeover) see an external caller rather than the dispatcher's
+      # implicit full trust (M33 Fix 1).
       :error when public? ->
-        dispatch_http(conn, service, action, raw_payload, [])
+        dispatch_http(conn, service, action, with_identity(raw_payload, %{player_id: nil, scopes: []}), [])
 
       :error ->
         unauthenticated(conn)
@@ -191,12 +320,78 @@ defmodule Exoforge.Std.Http.Router do
   end
 
   defp with_identity(raw_payload, auth_info) when is_map(raw_payload) do
+    # The authenticated identity wins: a body naming another player must not reach the action as
+    # that player. A caller with no player yet - the public account-creating actions - keeps what
+    # it sent.
     raw_payload
-    |> Map.put("player_id", auth_info.player_id)
     |> Map.put("_auth", auth_info)
+    |> then(fn payload ->
+      if auth_info.player_id in [nil, ""],
+        do: payload,
+        else: Map.put(payload, "player_id", auth_info.player_id)
+    end)
   end
 
   defp with_identity(raw_payload, _auth_info), do: raw_payload
+
+  defp handle_file_upload(conn, auth_info) do
+    # Support multipart file upload as well as JSON body
+    params = conn.body_params
+
+    {filename, path, content, explicit_ct} =
+      case params["file"] do
+        %Plug.Upload{path: upload_path, filename: orig_name, content_type: ct} ->
+          {orig_name, upload_path, nil, ct}
+
+        _ ->
+          name = params["filename"] || "uploaded_file.bin"
+          data = params["content"]
+          ct = params["content_type"]
+          {name, nil, data, ct}
+      end
+
+    bucket = params["bucket"] || "default"
+
+    upload_payload = %{
+      "bucket" => bucket,
+      "filename" => filename,
+      "path" => path,
+      "content" => content,
+      "content_type" => explicit_ct,
+      "metadata" => params["metadata"] || %{}
+    }
+
+    case ActionDispatcher.dispatch(:file_bucket, :upload_file, upload_payload, caller_scopes: auth_info.scopes) do
+      {:ok, %{file: file}} ->
+        send_json(conn, 201, %{status: "ok", file: file})
+
+      {:ok, result} ->
+        send_json(conn, 200, %{status: "ok", data: result})
+
+      {:error, reason} ->
+        send_json(conn, 400, %{status: "error", error: reason})
+    end
+  end
+
+  defp serve_file(conn, bucket, id, _filename) do
+    case ActionDispatcher.dispatch(:file_bucket, :get_file_info, %{"bucket" => bucket, "id" => id}) do
+      {:ok, %{file: file}} ->
+        disk_path = file["disk_path"] || file[:disk_path]
+        content_type = file["content_type"] || file[:content_type] || "application/octet-stream"
+
+        if disk_path && File.exists?(disk_path) do
+          conn
+          |> put_resp_header("content-type", content_type)
+          |> put_resp_header("cache-control", "public, max-age=86400")
+          |> send_file(200, disk_path)
+        else
+          send_json(conn, 404, %{status: "error", error: "file_missing_on_disk"})
+        end
+
+      _ ->
+        send_json(conn, 404, %{status: "error", error: "not_found"})
+    end
+  end
 
   match _ do
     send_json(conn, 404, %{status: "error", error: "not_found"})
@@ -212,7 +407,14 @@ defmodule Exoforge.Std.Http.Router do
       conn.request_path == "/health" ->
         conn
 
+      String.starts_with?(conn.request_path, "/api/webhooks/") or
+          String.starts_with?(conn.request_path, "/api/webhook/") ->
+        conn
+
       conn.method == "POST" and String.starts_with?(conn.request_path, "/api/") ->
+        conn
+
+      conn.method == "GET" and String.starts_with?(conn.request_path, "/api/files/") ->
         conn
 
       true ->
@@ -343,6 +545,4 @@ defmodule Exoforge.Std.Http.Router do
       })
     end
   end
-
-
 end

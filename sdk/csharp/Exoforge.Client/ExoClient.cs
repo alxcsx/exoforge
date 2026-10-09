@@ -550,6 +550,105 @@ public class ExoClient : IDisposable
         _dispatcher.Post(() => OnDisconnected?.Invoke(ex));
     }
 
+    /// <summary>
+    /// Uploads a file to the Exoforge file bucket service via multipart form-data.
+    /// </summary>
+    /// <param name="bucket">The destination bucket name (e.g. "avatars", "screenshots").</param>
+    /// <param name="fileName">The filename with extension.</param>
+    /// <param name="fileBytes">Raw byte content of the file.</param>
+    /// <param name="contentType">MIME type (optional, auto-detected by server if omitted).</param>
+    /// <param name="metadata">Custom metadata dictionary (optional).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The uploaded file metadata dictionary returned by the server.</returns>
+    public async Task<JsonElement> UploadFileAsync(
+        string bucket,
+        string fileName,
+        byte[] fileBytes,
+        string? contentType = null,
+        Dictionary<string, object>? metadata = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (HttpBaseUri == null)
+        {
+            throw new InvalidOperationException("HttpBaseUri is not set on ExoClient. Configure HttpBaseUri to upload files.");
+        }
+
+        var endpoint = new Uri(HttpBaseUri, "/api/files/upload");
+        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint);
+
+        if (!string.IsNullOrEmpty(AuthToken))
+        {
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", AuthToken);
+        }
+
+        using var content = new MultipartFormDataContent();
+        var fileContent = new ByteArrayContent(fileBytes);
+        if (!string.IsNullOrEmpty(contentType))
+        {
+            fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+        }
+
+        content.Add(fileContent, "file", fileName);
+        content.Add(new StringContent(bucket), "bucket");
+
+        if (metadata != null && metadata.Count > 0)
+        {
+            content.Add(new StringContent(JsonSerializer.Serialize(metadata)), "metadata");
+        }
+
+        request.Content = content;
+
+        var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        string responseText = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        using var doc = JsonDocument.Parse(responseText);
+        var root = doc.RootElement;
+
+        string status = root.TryGetProperty("status", out var sProp) ? sProp.GetString() ?? "" : "";
+        if (status != "ok" && !response.IsSuccessStatusCode)
+        {
+            string err = root.TryGetProperty("error", out var eProp) ? eProp.ToString() : $"HTTP {(int)response.StatusCode}";
+            throw new ExoActionException("upload_failed", err);
+        }
+
+        return root.TryGetProperty("file", out var fProp) ? fProp.Clone() : root.Clone();
+    }
+
+    /// <summary>
+    /// Downloads raw bytes of a file stored in a bucket by its ID.
+    /// </summary>
+    public async Task<byte[]> DownloadFileAsync(
+        string bucket,
+        string fileId,
+        string? fileName = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (HttpBaseUri == null)
+        {
+            throw new InvalidOperationException("HttpBaseUri is not set on ExoClient. Configure HttpBaseUri to download files.");
+        }
+
+        string path = string.IsNullOrEmpty(fileName)
+            ? $"/api/files/{bucket}/{fileId}"
+            : $"/api/files/{bucket}/{fileId}/{Uri.EscapeDataString(fileName)}";
+
+        var endpoint = new Uri(HttpBaseUri, path);
+        using var request = new HttpRequestMessage(HttpMethod.Get, endpoint);
+
+        if (!string.IsNullOrEmpty(AuthToken))
+        {
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", AuthToken);
+        }
+
+        var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new ExoActionException("download_failed", $"HTTP {(int)response.StatusCode}");
+        }
+
+        return await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+    }
+
     public void Dispose()
     {
         _transport.Dispose();
