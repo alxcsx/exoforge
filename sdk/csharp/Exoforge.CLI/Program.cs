@@ -100,6 +100,7 @@ public static class Program
           dev <name>       Watch sources and re-deploy on every change
           reload <name>    Re-boot an installed plugin without re-uploading it
           logs <name>      Show recent log lines the plugin emitted
+          usage [name]     Show metered usage (calls, CPU, memory) for a plugin or the title
           stubs <name>     Generate typed service stubs from the contracts this plugin calls
           list             List installed plugins
           remove <id>      Remove a plugin from the cluster
@@ -241,6 +242,9 @@ public static class Program
 
             case "logs":
                 return await HandlePluginLogsAsync(rest).ConfigureAwait(false);
+
+            case "usage":
+                return await HandlePluginUsageAsync(rest).ConfigureAwait(false);
 
             case "stubs":
                 return await HandlePluginStubsAsync(rest).ConfigureAwait(false);
@@ -539,6 +543,63 @@ public static class Program
         }
     }
 
+    private static async Task<int> HandlePluginUsageAsync(CliArgs cli)
+    {
+        if (cli.WantsHelp)
+        {
+            Console.WriteLine("""
+            Usage: exo plugin usage [name] [--since <unix-seconds>] [--json] [--env <name>]
+
+              Without a name, every plugin the instance has metered.
+              --since <n>   Only usage recorded at or after this Unix time.
+
+            Counts, durations, bytes, CPU and peak RSS. Never payloads, and never player data.
+            """);
+            return 0;
+        }
+
+        string? name = cli.Positional.Count > 0
+            ? ExoScaffolder.NormalizePluginName(cli.Positional[0])
+            : null;
+
+        long? since = null;
+        if (cli.Value("since") is { } raw)
+        {
+            if (!long.TryParse(raw, out long parsed))
+            {
+                Error($"--since expects Unix seconds, got '{raw}'.");
+                return 1;
+            }
+
+            since = parsed;
+        }
+
+        var ws = ExoWorkspace.Load(cli.Value("dir") ?? Directory.GetCurrentDirectory());
+        var deployer = new ExoDeployer(ws);
+
+        PluginUsageReport report;
+        try
+        {
+            report = await deployer.GetPluginUsageAsync(name, since, cli.Value("env")).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Error(Describe(ex));
+            return 1;
+        }
+
+        if (cli.Json)
+        {
+            Console.WriteLine(JsonSerializer.Serialize(report, JsonOptions));
+        }
+        else
+        {
+            PrintUsage(report);
+        }
+
+        return 0;
+    }
+
     private static async Task<int> HandlePluginStubsAsync(CliArgs cli)
     {
         if (cli.WantsHelp)
@@ -753,6 +814,48 @@ public static class Program
 
     private static string PrettyJson(JsonElement element) =>
         JsonSerializer.Serialize(element, JsonOptions);
+
+    private static void PrintUsage(PluginUsageReport report)
+    {
+        Console.WriteLine($"Title {report.TitleId}  (studio {report.StudioId})");
+
+        if (report.Plugins.Count == 0)
+        {
+            Console.WriteLine("(no usage recorded yet)");
+            return;
+        }
+
+        foreach (var plugin in report.Plugins)
+        {
+            long calls = plugin.Actions.Sum(a => a.Invocations);
+            long errors = plugin.Actions.Sum(a => a.Errors);
+
+            Console.WriteLine();
+            Console.WriteLine(
+                $"{plugin.PluginId}  {calls} calls  {errors} errors  " +
+                $"cpu {FormatDuration(plugin.CpuMs)}  peak RSS {FormatBytes(plugin.PeakRssKb * 1024L)}  " +
+                $"up {FormatDuration(plugin.UptimeMs)}  {plugin.Events} events  " +
+                $"{plugin.HostCalls} host calls  {plugin.Restarts} restarts");
+
+            foreach (var action in plugin.Actions)
+            {
+                Console.WriteLine(
+                    $"  {action.Action,-24} {action.Invocations,8} calls  {action.Errors,5} errors  " +
+                    $"avg {FormatMicros(action.AvgWallUs),8}  in {FormatBytes(action.BytesIn),8}  out {FormatBytes(action.BytesOut),8}");
+            }
+        }
+    }
+
+    private static string FormatDuration(long milliseconds) =>
+        milliseconds < 1000 ? $"{milliseconds}ms" : $"{milliseconds / 1000.0:0.##}s";
+
+    private static string FormatMicros(long microseconds) =>
+        microseconds < 1000 ? $"{microseconds}us" : FormatDuration(microseconds / 1000);
+
+    private static string FormatBytes(long bytes) =>
+        bytes < 1024 ? $"{bytes}B"
+        : bytes < 1024 * 1024 ? $"{bytes / 1024.0:0.#}KB"
+        : $"{bytes / (1024.0 * 1024.0):0.#}MB";
 
     private static void PrintLogLines(List<PluginLogLine> lines)
     {

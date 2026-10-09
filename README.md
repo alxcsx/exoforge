@@ -157,7 +157,7 @@ Benchmarked on commodity single-node hardware (Apple Silicon / Linux x86_64):
 | **Actor Latency** | **2.4 µs** (0.0024 ms) | In-memory distributed actor round-trip |
 | **Actor Activation** | **0.024 ms / entity** | Instant on-demand actor state hydration |
 | **Cluster Fanout** | **0.15 ms** | 50 concurrent subscribers per broadcast |
-| **Test Suite** | **240 Elixir + 72 C# passing** | Core, the 9 standard plugins, system integration, and the C# SDKs |
+| **Test Suite** | **240 Elixir + 72 C# passing** | Core, the 10 standard plugins, system integration, and the C# SDKs |
 
 ---
 

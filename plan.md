@@ -1,6 +1,6 @@
 # Exoforge Architecture & Plan (`plan.md`)
 
-> **Status**: Kernel, 9 standard plugins, C# Client SDK, C# Plugin SDK, C# Management Engine (`exo`
+> **Status**: Kernel, 10 standard plugins, C# Client SDK, C# Plugin SDK, C# Management Engine (`exo`
 > CLI), Unity SDK (`com.exoforge.sdk`), Producer Studio, clustering and Kubernetes manifests are
 > **complete** — **241 Elixir + 86 C# = 327 tests passing**, plus a live E2E vertical slice.
 > **Benchmark**: 0.07 ms fanout to 50 event subscribers over `:pg`.
@@ -126,7 +126,7 @@ remove the property metadata reflection needs, so a record serialises as an empt
 and only once deployed.
 
 The image carries the SDK in the builder and the runtime in the runner. **Built and booted**: the
-release reaches `Discovered 9 plugin manifests`, `All 9 plugins loaded`, `System online in 47ms`.
+release reaches `Discovered 10 plugin manifests`, `All 10 plugins loaded`, `System online in 47ms`.
 Six defects stood between the image and that line, none of them visible by reading, all of them in
 `git log` under `fix(docker)` - and the phase 1 image change, written without a container runtime to
 build against, did not work until one existed.
@@ -166,8 +166,15 @@ usage with it.
 
 CPU time and peak RSS are sampled from the plugin's OS process every five seconds (`os_pid/1`
 existed for exactly this); `VmHWM` is a high-water mark, so a peak between samples is not lost.
-Still open in this phase: persistence into the operator's database, the query surface for `exo` and
-the Studio, and `title_id`/`studio_id` travelling on deployments.
+
+**Persistence and the CLI landed.** `exoforge_std_metering` flushes deltas from the kernel's
+counters into its own isolated database every minute - and on graceful shutdown - as append-only
+rows stamped with title and studio. The `:metering` service's `usage` action rolls them up per
+plugin and action, flushing first so the answer is current, and `exo plugin usage [name]` renders
+it. A hard crash loses at most a minute of counters.
+
+Still open in this phase: `title_id`/`studio_id` travelling on deployments, the Studio's usage view,
+and the separate egress switch for sending the same numbers off the instance.
 
 **Meter shape, never content** — counts, durations, bytes, CPU, RSS, plugin and action *names*.
 Never payloads, never player or user identifiers. That is what makes "on by default" defensible, and

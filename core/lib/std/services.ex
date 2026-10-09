@@ -510,12 +510,28 @@ defmodule Exoforge.Std.Services do
       returns(row: :map)
     end
 
-@doc "Removes every row of a resource, table-backed or KV-backed, without dropping the table."
+    @doc "Removes every row of a resource, table-backed or KV-backed, without dropping the table."
     action :clear do
       params(resource: [type: :string, optional: true])
       returns(cleared: :integer)
     end
 
     @doc "Deletes a user account and associated auth credentials."
+  end
+
+  defservice metering do
+    @moduledoc "Local usage metering: what each plugin was called with, and what it cost."
+
+    @doc "Rolls up persisted usage per plugin and action for this title."
+    action :usage do
+      scope(:studio)
+
+      params(
+        plugin_id: [type: :string, optional: true],
+        since: [type: :integer, optional: true]
+      )
+
+      returns(title_id: :string, studio_id: :string, plugins: [:map], totals: :map)
+    end
   end
 end

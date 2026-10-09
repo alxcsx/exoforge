@@ -235,6 +235,44 @@ public class ExoDeployer
         }
     }
 
+    /// <summary>
+    /// Persisted usage for one plugin or the whole title: calls by action, wall time, bytes, CPU
+    /// and peak RSS. <paramref name="since"/> is Unix seconds; null means everything recorded.
+    /// </summary>
+    public async Task<PluginUsageReport> GetPluginUsageAsync(
+        string? pluginName = null,
+        long? since = null,
+        string? environmentName = null,
+        ExoClient? existingClient = null,
+        CancellationToken cancellationToken = default)
+    {
+        var client = existingClient ?? await CreateConnectedClientAsync(environmentName, cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            var payload = new
+            {
+                plugin_id = pluginName == null ? null : NormalizePluginName(pluginName),
+                since,
+            };
+
+            var result = await client.SendActionAsync<JsonElement>(
+                "metering",
+                "usage",
+                payload,
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            return PluginUsageReport.Parse(result);
+        }
+        finally
+        {
+            if (existingClient == null)
+            {
+                client.Dispose();
+            }
+        }
+    }
+
     private static string? ReadString(JsonElement root, string outer, string inner)
     {
         if (root.ValueKind != JsonValueKind.Object) return null;

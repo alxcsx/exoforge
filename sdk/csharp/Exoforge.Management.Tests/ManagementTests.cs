@@ -580,6 +580,50 @@ public class ManagementTests : IDisposable
         Assert.DoesNotContain("MyGame.SnakeScoreRecord", other);
     }
 
+    /// <summary>
+    /// The usage action's response is the billing shape: per-plugin counters and per-action calls,
+    /// with no payloads anywhere. The server owns the arithmetic; this side reads the shape.
+    /// </summary>
+    [Fact]
+    public void Usage_Report_Parses_The_Action_Shape()
+    {
+        using var document = JsonDocument.Parse("""
+        {
+          "title_id": "local",
+          "studio_id": "local",
+          "plugins": [
+            {
+              "plugin_id": "sample_plugin",
+              "plugin": {"starts": 2, "restarts": 1, "events": 3, "host_calls": 4, "cpu_ms": 120, "peak_rss_kb": 4096, "uptime_ms": 60000},
+              "actions": [
+                {"action": "ping", "invocations": 5, "errors": 1, "wall_us": 1500, "avg_wall_us": 300, "bytes_in": 50, "bytes_out": 25}
+              ]
+            }
+          ]
+        }
+        """);
+
+        var report = PluginUsageReport.Parse(document.RootElement);
+
+        Assert.Equal("local", report.TitleId);
+        Assert.Equal("local", report.StudioId);
+
+        var plugin = Assert.Single(report.Plugins);
+        Assert.Equal("sample_plugin", plugin.PluginId);
+        Assert.Equal(2, plugin.Starts);
+        Assert.Equal(1, plugin.Restarts);
+        Assert.Equal(120, plugin.CpuMs);
+        Assert.Equal(4096, plugin.PeakRssKb);
+        Assert.Equal(60000, plugin.UptimeMs);
+
+        var action = Assert.Single(plugin.Actions);
+        Assert.Equal("ping", action.Action);
+        Assert.Equal(5, action.Invocations);
+        Assert.Equal(1, action.Errors);
+        Assert.Equal(300, action.AvgWallUs);
+        Assert.Equal(25, action.BytesOut);
+    }
+
     private static string ServiceJson(string service, string action) =>
         "{\"name\":\"" + service + "\",\"actions\":[{\"name\":\"" + action +
         "\",\"scope\":\"global\",\"params\":[{\"name\":\"id\",\"type\":\"string\"}]," +
