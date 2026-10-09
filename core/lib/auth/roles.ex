@@ -62,7 +62,7 @@ defmodule Exoforge.Auth.Roles do
   `:server` means "never reachable from a transport" — the dispatcher rejects it for any external
   caller and only kernel-internal calls (which pass `caller_scopes: :internal`) get through.
   """
-  @action_scopes [@admin, @studio, @player, @guest, @service, "server", "global"]
+  @action_scopes [@admin, @studio, @player, @guest, @service, "server", "global", "webhook"]
 
   def action_scopes, do: @action_scopes
 

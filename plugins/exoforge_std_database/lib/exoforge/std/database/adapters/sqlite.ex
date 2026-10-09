@@ -46,7 +46,8 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
 
   @impl true
   def execute(plugin_id, sql, args, config) when is_binary(sql) do
-    with {:ok, conn} <- open_for(plugin_id, config) do
+    with {:ok, args} <- positional_args(args),
+         {:ok, conn} <- open_for(plugin_id, config) do
       result = run_sql(conn, sql, args)
       Exqlite.Sqlite3.close(conn)
       result
@@ -60,6 +61,14 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
       :delete -> kv_delete(plugin_id, command, config)
       :all -> kv_all(plugin_id, command, config)
       other -> {:error, {:unknown_action, other}}
+    end
+  end
+
+  @impl true
+  def table_columns(plugin_id, table, config) do
+    case execute(plugin_id, "PRAGMA table_info(#{table})", [], config) do
+      {:ok, %{rows: rows}} -> {:ok, Enum.map(rows, &to_string(&1["name"]))}
+      error -> error
     end
   end
 
@@ -114,9 +123,16 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
 
   defp table_error(reason, _read?), do: {:error, reason}
 
+  # A map's values have no order, so binding them to positional parameters would make the query's
+  # meaning depend on an implementation detail (M33 Fix 10). Key-value work is the command path.
+  defp positional_args(args) when is_list(args), do: {:ok, args}
+  defp positional_args(nil), do: {:ok, []}
+  defp positional_args(args) when is_map(args), do: {:error, :positional_args_must_be_list}
+
+  defp positional_args(other), do: {:ok, [other]}
+
   defp normalize_args(nil), do: []
   defp normalize_args(args) when is_list(args), do: args
-  defp normalize_args(args) when is_map(args), do: Map.values(args)
   defp normalize_args(other), do: [other]
 
   ## ---- KEY-VALUE OPERATIONS ----
@@ -214,5 +230,4 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
   end
 
   defp database_name(plugin_id), do: "exoforge_#{Exoforge.Std.Database.clean_id(plugin_id)}"
-
 end

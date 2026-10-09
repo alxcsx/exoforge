@@ -37,6 +37,18 @@ defmodule Exoforge.Std.WsTest do
     defaction kick_user(_payload), scope: :admin do
       {:ok, %{status: "kicked"}}
     end
+
+    # M33 Fix 5: what the action sees when the frame tries to name someone else.
+    @impl true
+    defaction whoami(payload) do
+      auth = payload[:_auth] || payload["_auth"] || %{}
+
+      {:ok,
+       %{
+         player_id: payload[:player_id] || payload["player_id"],
+         auth_scopes: auth[:scopes] || auth["scopes"] || []
+       }}
+    end
   end
 
   setup do
@@ -275,6 +287,29 @@ defmodule Exoforge.Std.WsTest do
 
     assert {:push, {:text, resp2}, _} = SocketHandler.handle_in({kick, :text}, state)
     assert Jason.decode!(resp2)["error"]["code"] == "forbidden_scope"
+  end
+
+  test "a frame cannot act as another player, nor carry its own _auth (M33 Fix 5)" do
+    {:ok, real} = Exoforge.Std.Auth.issue_token("real_player", ["player"])
+    {:ok, state} = SocketHandler.init([])
+    {:push, {:text, _}, state} = authenticate(state, real)
+
+    action_msg =
+      Jason.encode!(%{
+        "type" => "action",
+        "id" => "spoof-1",
+        "service" => "Exoforge.Std.WsTest.DummyService.Mock",
+        "action" => "whoami",
+        "payload" => %{"player_id" => "victim", "_auth" => %{"scopes" => ["admin"]}}
+      })
+
+    assert {:push, {:text, resp_json}, _} = SocketHandler.handle_in({action_msg, :text}, state)
+    resp = Jason.decode!(resp_json)
+
+    # The signed-in identity wins over both claims the frame tried to make.
+    assert resp["data"]["player_id"] == "real_player"
+    # "player" resolves to the full player scope set - and not to the spoofed ["admin"].
+    assert resp["data"]["auth_scopes"] == ["player", "read", "write"]
   end
 
   describe "idle connections" do

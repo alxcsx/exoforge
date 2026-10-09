@@ -29,9 +29,7 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
                   # CREATE DATABASE cannot run in a transaction
                   Postgrex.query(conn, "CREATE DATABASE \"#{db_name}\"", [])
 
-                  Logger.info(
-                    "[Database] Provisioned dedicated database #{db_name} for plugin #{inspect(plugin_id)}"
-                  )
+                  Logger.info("[Database] Provisioned dedicated database #{db_name} for plugin #{inspect(plugin_id)}")
 
                   {:ok, %{status: :created, database: db_name, plugin: plugin_id}}
 
@@ -39,9 +37,7 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
                   {:ok, %{status: :exists, database: db_name, plugin: plugin_id}}
 
                 {:error, reason} ->
-                  Logger.warning(
-                    "[Database] Error checking/creating database #{db_name}: #{inspect(reason)}, falling back to schema"
-                  )
+                  Logger.warning("[Database] Error checking/creating database #{db_name}: #{inspect(reason)}, falling back to schema")
 
                   ensure_schema(conn, schema_name, plugin_id)
               end
@@ -61,9 +57,7 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
   defp ensure_schema(conn, schema_name, plugin_id) do
     case Postgrex.query(conn, "CREATE SCHEMA IF NOT EXISTS \"#{schema_name}\"", []) do
       {:ok, _} ->
-        Logger.info(
-          "[Database] Provisioned dedicated schema #{schema_name} for plugin #{inspect(plugin_id)}"
-        )
+        Logger.info("[Database] Provisioned dedicated schema #{schema_name} for plugin #{inspect(plugin_id)}")
 
         {:ok, %{status: :ready, schema: schema_name, plugin: plugin_id}}
 
@@ -136,39 +130,14 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
   def execute(plugin_id, query, args, config) when is_binary(query) do
     schema_name = schema_name(plugin_id, config)
 
-    case connect_for_plugin(plugin_id, config) do
-      {:ok, conn} ->
-        try do
-          # Enforce isolated search_path for this plugin
-          _ = Postgrex.query(conn, "SET search_path TO \"#{schema_name}\", public", [])
-
-          params = normalize_args(args)
-
-          case Postgrex.query(conn, query, params) do
-            {:ok, %Postgrex.Result{columns: columns, rows: rows, num_rows: num_rows}} ->
-              formatted_rows =
-                if columns != nil and rows != nil do
-                  Enum.map(rows, fn row ->
-                    Enum.zip(columns, row) |> Enum.into(%{})
-                  end)
-                else
-                  []
-                end
-
-              {:ok, %{rows: formatted_rows, num_rows: num_rows}}
-
-            {:error, %Postgrex.Error{postgres: %{message: msg}}} ->
-              {:error, {:postgres_error, msg}}
-
-            {:error, reason} ->
-              {:error, reason}
-          end
-        after
-          GenServer.stop(conn)
-        end
-
-      {:error, reason} ->
-        {:error, {:connection_failed, reason}}
+    with {:ok, params} <- positional_args(args),
+         {:ok, {mode, conn}} <- pooled_connection(plugin_id, schema_name, config) do
+      try do
+        query_pooled(conn, query, params)
+      after
+        # An unmanaged connection (no pool supervisor running) is per-call, as before.
+        if mode == :unmanaged, do: GenServer.stop(conn)
+      end
     end
   end
 
@@ -238,6 +207,45 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
     end
   end
 
+
+  @impl true
+  def table_columns(plugin_id, table, config) do
+    schema_name = schema_name(plugin_id, config)
+
+    case execute(
+           plugin_id,
+           "SELECT column_name FROM information_schema.columns " <>
+             "WHERE table_schema = $1 AND table_name = $2 ORDER BY ordinal_position",
+           [schema_name, to_string(table)],
+           config
+         ) do
+      {:ok, %{rows: rows}} -> {:ok, Enum.map(rows, &to_string(&1["column_name"]))}
+      error -> error
+    end
+  end
+
+  defp query_pooled(conn, query, params) do
+    case Postgrex.query(conn, query, params) do
+      {:ok, %Postgrex.Result{columns: columns, rows: rows, num_rows: num_rows}} ->
+        formatted_rows =
+          if columns != nil and rows != nil do
+            Enum.map(rows, fn row ->
+              Enum.zip(columns, row) |> Enum.into(%{})
+            end)
+          else
+            []
+          end
+
+        {:ok, %{rows: formatted_rows, num_rows: num_rows}}
+
+      {:error, %Postgrex.Error{postgres: %{message: msg}}} ->
+        {:error, {:postgres_error, msg}}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
   defp table_schema_sql(schema_name, tbl) do
     """
     CREATE TABLE IF NOT EXISTS "#{schema_name}"."#{tbl}" (
@@ -251,45 +259,76 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
   ## ---- PRIVATE HELPERS ----
 
   defp connect_root(config) do
-    opts = [
-      hostname: Map.get(config, :host, "localhost"),
-      port: Map.get(config, :port, 5432),
-      username: Map.get(config, :username, "postgres"),
-      password: Map.get(config, :password, ""),
-      database: Map.get(config, :database, "postgres"),
-      pool_size: 1,
-      timeout: @connect_timeout
-    ]
-
-    Postgrex.start_link(opts)
+    Postgrex.start_link(connection_opts(root_database(config), config) ++ [pool_size: 1])
   end
 
-  defp connect_for_plugin(plugin_id, config) do
-    isolation_mode = Map.get(config, :isolation_mode, :schema)
+  # One supervised pool per (database, schema) pair, named so a second start finds the first
+  # (M33 Fix 8): a query reuses an established connection instead of dialing per call, and the
+  # supervisor restarts a pool that drops. The search_path is a startup parameter, so every
+  # connection in the pool opens inside the plugin's schema and no per-query SET is needed.
+  defp pooled_connection(plugin_id, schema_name, config) do
+    if Process.whereis(Exoforge.Std.Database.PoolSupervisor) != nil do
+      supervise_pooled(plugin_id, schema_name, config)
+    else
+      # ponytail: unsupervised single connection for direct adapter use (tests without the
+      # plugin's supervision tree); the tree is the upgrade path.
+      unmanaged_connection(plugin_id, config)
+    end
+  end
 
-    target_db =
-      if isolation_mode == :database do
-        database_name(plugin_id, config)
-      else
-        Map.get(config, :database, "postgres")
-      end
+  defp supervise_pooled(plugin_id, schema_name, config) do
+    name = {:via, Registry, {Exoforge.Std.Database.PoolRegistry, {target_database(plugin_id, config), schema_name}}}
 
-    opts = [
+    opts =
+      connection_opts(target_database(plugin_id, config), config)
+      |> Keyword.merge(
+        name: name,
+        pool_size: Map.get(config, :pool_size, 10),
+        parameters: [search_path: ~s("#{schema_name}", public)]
+      )
+
+    case DynamicSupervisor.start_child(Exoforge.Std.Database.PoolSupervisor, Postgrex.child_spec(opts)) do
+      {:ok, pid} -> {:ok, {:managed, pid}}
+      {:error, {:already_started, pid}} -> {:ok, {:managed, pid}}
+      {:error, reason} -> {:error, {:connection_failed, reason}}
+    end
+  end
+
+  defp unmanaged_connection(plugin_id, config) do
+    case Postgrex.start_link(connection_opts(target_database(plugin_id, config), config) ++ [pool_size: 1]) do
+      {:ok, conn} -> {:ok, {:unmanaged, conn}}
+      {:error, reason} -> {:error, {:connection_failed, reason}}
+    end
+  end
+
+  defp connection_opts(target_db, config) do
+    [
       hostname: Map.get(config, :host, "localhost"),
       port: Map.get(config, :port, 5432),
       username: Map.get(config, :username, "postgres"),
       password: Map.get(config, :password, ""),
       database: target_db,
-      pool_size: 1,
       timeout: @connect_timeout
     ]
-
-    Postgrex.start_link(opts)
   end
 
-  defp normalize_args(args) when is_list(args), do: args
-  defp normalize_args(args) when is_map(args), do: Map.values(args)
-  defp normalize_args(_), do: []
+  defp root_database(config), do: Map.get(config, :database, "postgres")
+
+  defp target_database(plugin_id, config) do
+    if Map.get(config, :isolation_mode, :schema) == :database do
+      database_name(plugin_id, config)
+    else
+      root_database(config)
+    end
+  end
+
+  # A map's values have no order, so binding them to positional parameters would make the query's
+  # meaning depend on an implementation detail (M33 Fix 10). Key-value work is the command path.
+  defp positional_args(args) when is_list(args), do: {:ok, args}
+  defp positional_args(nil), do: {:ok, []}
+  defp positional_args(args) when is_map(args), do: {:error, :positional_args_must_be_list}
+
+  defp positional_args(_), do: {:ok, []}
 
   defp database_name(plugin_id, config) do
     prefix = Map.get(config, :db_prefix, "exoforge_")
@@ -300,5 +339,4 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
     prefix = Map.get(config, :schema_prefix, "plugin_")
     "#{prefix}#{Exoforge.Std.Database.clean_id(plugin_id)}"
   end
-
 end

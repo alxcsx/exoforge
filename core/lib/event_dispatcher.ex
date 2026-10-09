@@ -50,33 +50,47 @@ defmodule Exoforge.EventDispatcher do
       event: event_key
     }
 
-    do_dispatch(event_key, topic, event_key, payload, context)
-    do_dispatch(:all, topic, event_key, payload, context)
+    # One pid, one message (M33 Fix 13): overlapping subscriptions - an event and `:all`, a topic
+    # and the global one, or the same key registered twice - are one recipient.
+    recipients = MapSet.new()
 
-    if topic != :global do
-      do_dispatch(event_key, :global, event_key, payload, context)
-      do_dispatch(:all, :global, event_key, payload, context)
+    recipients =
+      for {reg_key, t} <- targets(event_key, topic),
+          {pid, _opts} <- Registry.lookup(@registry, {reg_key, t}),
+          into: recipients do
+        pid
+      end
+
+    recipients =
+      if Process.whereis(:exo_cluster_pg) do
+        try do
+          for {reg_key, t} <- targets(event_key, topic),
+              pid <- :pg.get_members(:exo_cluster_pg, {reg_key, t}),
+              node(pid) != node(),
+              into: recipients do
+            pid
+          end
+        catch
+          _, _ -> recipients
+        end
+      else
+        recipients
+      end
+
+    for pid <- recipients do
+      send(pid, {:exo_event, event_key, payload, context})
     end
+
+    :ok
   end
 
   defp normalize_topic(t) when t in [:global, "global", :*, "*", "all", :all], do: :global
   defp normalize_topic(t), do: t
 
-  defp do_dispatch(reg_key, topic, actual_event_key, payload, context) do
-    Registry.dispatch(@registry, {reg_key, topic}, fn entries ->
-      for {pid, _opts} <- entries do
-        send(pid, {:exo_event, actual_event_key, payload, context})
-      end
-    end)
-
-    if Process.whereis(:exo_cluster_pg) do
-      try do
-        for pid <- :pg.get_members(:exo_cluster_pg, {reg_key, topic}), node(pid) != node() do
-          send(pid, {:exo_event, actual_event_key, payload, context})
-        end
-      catch
-        _, _ -> :ok
-      end
-    end
+  # The key pairs a broadcast is delivered under. A subscriber to the exact event, to `:all`, and
+  # to the topic's global fallback each receive it.
+  defp targets(event_key, topic) do
+    base = [{event_key, topic}, {:all, topic}]
+    if topic == :global, do: base, else: base ++ [{event_key, :global}, {:all, :global}]
   end
 end

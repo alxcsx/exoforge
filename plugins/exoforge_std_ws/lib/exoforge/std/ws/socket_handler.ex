@@ -100,6 +100,7 @@ defmodule Exoforge.Std.Ws.SocketHandler do
           reply(%{type: @frame_subscribed, topic: topic}, new_state)
         else
           Logger.warning("[WS] Subscribe rejected: socket unauthenticated")
+
           reply(
             %{
               type: @frame_error,
@@ -245,11 +246,14 @@ defmodule Exoforge.Std.Ws.SocketHandler do
         other -> other
       end
 
+    # The authenticated identity wins (M33 Fix 5): a frame naming another player must not reach
+    # the action as that player, and a frame carrying its own `_auth` must not be believed. A
+    # caller with no player yet - the public account-creating actions - keeps what it sent.
     payload =
       if is_map(raw_payload) do
         raw_payload
-        |> Map.put_new("player_id", auth.player_id)
-        |> Map.put_new("_auth", auth)
+        |> Map.put("_auth", auth)
+        |> stamp_player_id(auth)
       else
         raw_payload
       end
@@ -266,6 +270,7 @@ defmodule Exoforge.Std.Ws.SocketHandler do
     case res do
       {:ok, data} ->
         Logger.info("[WS:Action] #{service}.#{action} by #{auth.player_id} -> OK (#{latency_us}µs)")
+
         reply(
           %{
             type: @frame_action_result,
@@ -278,6 +283,7 @@ defmodule Exoforge.Std.Ws.SocketHandler do
 
       :ok ->
         Logger.info("[WS:Action] #{service}.#{action} by #{auth.player_id} -> OK (#{latency_us}µs)")
+
         reply(
           %{
             type: @frame_action_result,
@@ -290,6 +296,7 @@ defmodule Exoforge.Std.Ws.SocketHandler do
 
       {:error, reason} when reason in [:unauthorized, :forbidden_scope] ->
         Logger.warning("[WS:Action] #{service}.#{action} by #{auth.player_id} -> #{reason} (#{latency_us}µs)")
+
         reply(
           %{
             type: @frame_action_result,
@@ -305,6 +312,7 @@ defmodule Exoforge.Std.Ws.SocketHandler do
 
       {:error, reason} ->
         Logger.warning("[WS:Action] #{service}.#{action} by #{auth.player_id} -> error: #{inspect(reason)} (#{latency_us}µs)")
+
         reply(
           %{
             type: @frame_action_result,
@@ -319,6 +327,10 @@ defmodule Exoforge.Std.Ws.SocketHandler do
         )
     end
   end
+
+  defp stamp_player_id(payload, %{player_id: player_id}) when player_id in [nil, ""], do: payload
+  defp stamp_player_id(payload, %{player_id: player_id}), do: Map.put(payload, "player_id", player_id)
+  defp stamp_player_id(payload, _auth), do: payload
 
   defp reply(data, state) do
     case Jason.encode(data) do
@@ -342,7 +354,6 @@ defmodule Exoforge.Std.Ws.SocketHandler do
   end
 
   defp parse_action(other), do: other
-
 
   defp format_event_name(key) when is_atom(key) do
     str = Atom.to_string(key)

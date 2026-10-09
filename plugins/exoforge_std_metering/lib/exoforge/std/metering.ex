@@ -15,6 +15,7 @@ defmodule Exoforge.Std.Metering do
   use Exoforge.Plugin, provides: [:metering]
 
   @manifest %{
+    system: true,
     dependencies: [Exoforge.Std.Services.Database],
     category: "Operations",
     # The Studio's generic extension view renders the `usage` action from this; without it the

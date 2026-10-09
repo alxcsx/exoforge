@@ -157,4 +157,93 @@ defmodule Exoforge.DatabaseTest do
       assert {:ok, %{status: "ok"}} = Database.health_check()
     end
   end
+
+
+  describe "M33 hardening" do
+    test "a plugin's database is provisioned once, not per query (M33 Fix 7)" do
+      table = :adapter_calls
+
+      if :ets.info(table) == :undefined do
+        :ets.new(table, [:set, :public, :named_table])
+      end
+
+      :ets.insert(table, {:ensures, 0})
+
+      defmodule CountingSqlite do
+        @behaviour Exoforge.Std.Database.Adapter
+        alias Exoforge.Std.Database.Adapters.Sqlite
+
+        @table :adapter_calls
+
+        def ensures, do: :ets.lookup_element(@table, :ensures, 2)
+
+        @impl true
+        def ensure_database(id, config) do
+          :ets.update_counter(@table, :ensures, {2, 1}, {:ensures, 0})
+          Sqlite.ensure_database(id, config)
+        end
+
+        @impl true
+        defdelegate execute(id, q, a, c), to: Sqlite
+        @impl true
+        defdelegate table_columns(id, t, c), to: Sqlite
+        @impl true
+        defdelegate connection_config(id, c), to: Sqlite
+        @impl true
+        defdelegate health_check(c), to: Sqlite
+        @impl true
+        defdelegate reset(id, c), to: Sqlite
+      end
+
+      # Parallel ExUnit modules share one Manager process; whatever happens in this test, they and
+      # later runs must never meet the counting spy. The pid is captured once: a Manager from a
+      # parallel module may stop between a name lookup and the call.
+      on_exit(fn ->
+        case Process.whereis(Manager) do
+          pid when is_pid(pid) ->
+            try do
+              GenServer.call(pid, {:set_adapter, Exoforge.Std.Database.Adapters.Sqlite})
+            rescue
+              _ -> :ok
+            end
+
+          _ ->
+            :ok
+        end
+      end)
+
+      Manager.set_adapter(CountingSqlite)
+
+      # A unique plugin id: other tests (and other runs) must not share its database file.
+      plugin = :"counted_#{System.unique_integer([:positive])}"
+
+      assert {:ok, _} = Database.execute(plugin, "CREATE TABLE t (id text)")
+      assert {:ok, _} = Database.execute(plugin, "INSERT INTO t VALUES ($1)", ["x"])
+      assert {:ok, %{rows: rows}} = Database.execute(plugin, "SELECT * FROM t")
+      assert length(rows) == 1
+
+      # Three queries, one provision.
+      assert CountingSqlite.ensures() == 1
+
+      Manager.set_adapter(Exoforge.Std.Database.Adapters.Sqlite)
+    end
+
+    test "table_columns answers through the adapter's dialect (M33 Fix 9)" do
+      plugin = :"cols_#{System.unique_integer([:positive])}"
+
+      assert {:ok, _} = Database.execute(plugin, "CREATE TABLE things (id text, size integer)")
+
+      assert {:ok, columns} = Manager.table_columns(plugin, "things")
+
+      assert "id" in columns
+      assert "size" in columns
+    end
+
+    test "positional SQL rejects map arguments (M33 Fix 10)" do
+      plugin = :"map_args_#{System.unique_integer([:positive])}"
+
+      assert {:error, :positional_args_must_be_list} =
+               Database.execute(plugin, "SELECT * FROM t WHERE id = $1", %{"id" => "x"})
+    end
+  end
 end

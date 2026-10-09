@@ -35,6 +35,10 @@ defmodule Exoforge.Std.Database do
 
   def children do
     [
+      # Named Postgres pools live here (M33 Fix 8): one supervisor to restart a pool that drops,
+      # one unique registry to name them. Both die with the plugin, which is the lifecycle owner.
+      {Registry, keys: :unique, name: Exoforge.Std.Database.PoolRegistry},
+      {DynamicSupervisor, name: Exoforge.Std.Database.PoolSupervisor, strategy: :one_for_one},
       Manager
     ]
   end
@@ -84,6 +88,17 @@ defmodule Exoforge.Std.Database do
 
       {:error, reason} ->
         {:error, reason}
+    end
+  end
+
+  @impl true
+  defaction table_columns(payload) do
+    plugin = extract_plugin(payload)
+    table = fetch_any(payload, [:table, "table"], "")
+
+    case Manager.table_columns(plugin, table) do
+      {:ok, columns} -> {:ok, %{columns: columns}}
+      error -> error
     end
   end
 

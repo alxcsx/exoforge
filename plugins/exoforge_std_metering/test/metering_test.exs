@@ -32,6 +32,51 @@ defmodule Exoforge.Std.MeteringTest do
 
   defp usage(plugin_id), do: ActionDispatcher.dispatch(:metering, :usage, %{plugin_id: plugin_id})
 
+  # A spy on the database adapter: the flusher's batch size is what this milestone pins (M33 Fix 11).
+  defmodule CountingSqlite do
+    @behaviour Exoforge.Std.Database.Adapter
+    alias Exoforge.Std.Database.Adapters.Sqlite
+
+    @table :exo_metering_batch_calls
+
+    def queries, do: :ets.lookup_element(@table, :queries, 2)
+
+    @impl true
+    def ensure_database(id, config), do: Sqlite.ensure_database(id, config)
+
+    @impl true
+    def execute(id, q, a, c) do
+      :ets.update_counter(@table, :queries, {2, 1}, {:queries, 0})
+      Sqlite.execute(id, q, a, c)
+    end
+
+    @impl true
+    defdelegate table_columns(id, t, c), to: Sqlite
+    @impl true
+    defdelegate connection_config(id, c), to: Sqlite
+    @impl true
+    defdelegate health_check(c), to: Sqlite
+    @impl true
+    defdelegate reset(id, c), to: Sqlite
+  end
+
+  test "a flush batches the delta rows (M33 Fix 11)", %{plugin: id} do
+    :ets.new(:exo_metering_batch_calls, [:set, :public, :named_table])
+    :ets.insert(:exo_metering_batch_calls, {:queries, 0})
+
+    DbManager.set_adapter(CountingSqlite)
+    Exoforge.Std.Metering.init_schema()
+
+    # 120 distinct actions -> 120 delta rows -> three chunks of 50, plus the plugin's own row.
+    for n <- 1..120, do: Exoforge.Metering.record_invocation(id, "action_#{n}", 1, :ok, 1, 1)
+    Flusher.flush()
+
+    # 2 schema creates + 3 batched action statements + 1 plugin row: six statements, not 121 calls.
+    assert CountingSqlite.queries() == 6
+
+    DbManager.set_adapter(Exoforge.Std.Database.Adapters.Sqlite)
+  end
+
   test "persists the counters and serves the rollup", %{plugin: id} do
     Exoforge.Metering.record_start(id)
     Exoforge.Metering.record_invocation(id, :ping, 100, :ok, 10, 20)

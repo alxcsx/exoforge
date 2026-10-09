@@ -25,4 +25,14 @@ defmodule Exoforge.EventDispatcherTest do
     EventDispatcher.broadcast("test:event", %{val: 1})
     refute_receive {:exo_event, "test:event", _, _}, 50
   end
+
+  test "a process that subscribed twice receives the event once (M33 Fix 13)" do
+    EventDispatcher.subscribe(:dup_probe)
+    EventDispatcher.subscribe(:dup_probe)
+
+    EventDispatcher.broadcast(:dup_probe, %{})
+
+    assert_receive {:exo_event, :dup_probe, %{}, _ctx}, 500
+    refute_receive {:exo_event, :dup_probe, %{}, _ctx}, 50
+  end
 end

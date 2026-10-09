@@ -40,8 +40,8 @@ defmodule Exoforge.Std.PluginManager do
           "type" => to_string(m.type),
           "entry_point" => to_string(m.entry_point),
           "category" => m.category || "Extension",
-          "provides" => Enum.map(m.provides || [], &to_string/1),
-          "dependencies" => Enum.map(m.dependencies || [], &to_string/1),
+          "provides" => Enum.map(m.provides || [], &PluginRegistry.service_alias_or_module/1),
+          "dependencies" => Enum.map(m.dependencies || [], &PluginRegistry.service_alias_or_module/1),
           "services" => PluginRegistry.sanitize_for_json(m.services || []),
           "physical_path" => m.physical_path
         }
@@ -74,8 +74,8 @@ defmodule Exoforge.Std.PluginManager do
             "version" => to_string(m.version),
             "type" => to_string(m.type),
             "entry_point" => to_string(m.entry_point),
-            "provides" => Enum.map(m.provides || [], &to_string/1),
-            "dependencies" => Enum.map(m.dependencies || [], &to_string/1),
+            "provides" => Enum.map(m.provides || [], &PluginRegistry.service_alias_or_module/1),
+            "dependencies" => Enum.map(m.dependencies || [], &PluginRegistry.service_alias_or_module/1),
             "services" => PluginRegistry.sanitize_for_json(m.services || []),
             "dashboard_view" => m.dashboard_view,
             "physical_path" => m.physical_path,

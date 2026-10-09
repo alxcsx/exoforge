@@ -338,4 +338,27 @@ defmodule Exoforge.PlayerDataTest do
       refute Map.has_key?(via_get_data, "stats:hp")
     end
   end
+
+  describe "M33 hardening" do
+    test "user-facing listing and deletion is staff-gated over transports (M33 Fix 3)" do
+      assert {:error, :forbidden_scope} =
+               ActionDispatcher.dispatch(:player_data, :list_players, %{}, caller_scopes: ["player"])
+
+      assert {:error, :forbidden_scope} =
+               ActionDispatcher.dispatch(:player_data, :delete_player, %{player_id: "someone"}, caller_scopes: ["player"])
+
+      # The Studio is staff; its calls are unaffected.
+      assert {:ok, _} = ActionDispatcher.dispatch(:player_data, :list_players, %{user_id: "someone"})
+    end
+
+    test "list_players filters by user_id in the query (M33 Fix 33)" do
+      {:ok, _} = ActionDispatcher.dispatch(:player_data, :create_player, %{player_id: "p_link", user_id: "u_link"})
+      {:ok, _} = ActionDispatcher.dispatch(:player_data, :create_player, %{player_id: "p_other", user_id: "u_other"})
+
+      assert {:ok, %{players: players}} =
+               ActionDispatcher.dispatch(:player_data, :list_players, %{user_id: "u_link"})
+
+      assert [%{id: "p_link"}] = players
+    end
+  end
 end

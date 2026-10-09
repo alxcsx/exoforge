@@ -146,23 +146,44 @@ defmodule Exoforge.Std.Metering.Flusher do
 
   # -- persistence --
 
+  # Multi-row VALUES in chunks (M33 Fix 11): one round trip per 50 rows instead of one per row.
+  @rows_per_statement 50
+
   @insert_actions """
   INSERT INTO usage_actions
     (title_id, studio_id, plugin_id, action, period_start, period_end,
      invocations, errors, wall_us, bytes_in, bytes_out)
-  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+  VALUES
   """
 
   @insert_plugins """
   INSERT INTO usage_plugins
     (title_id, studio_id, plugin_id, period_start, period_end,
      events, host_calls, starts, cpu_ms, peak_rss_kb, uptime_ms)
-  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+  VALUES
   """
 
   defp persist(action_rows, plugin_rows) do
-    Enum.each(action_rows, &insert(@insert_actions, &1))
-    Enum.each(plugin_rows, &insert(@insert_plugins, &1))
+    batch_insert(@insert_actions, action_rows, 11)
+    batch_insert(@insert_plugins, plugin_rows, 11)
+  end
+
+  defp batch_insert(_sql, [], _cols), do: :ok
+
+  defp batch_insert(sql, rows, cols) do
+    rows
+    |> Enum.chunk_every(@rows_per_statement)
+    |> Enum.each(fn chunk ->
+      insert(sql <> placeholders(chunk, cols), List.flatten(chunk))
+    end)
+  end
+
+  defp placeholders(rows, cols) do
+    for n <- 1..length(rows) do
+      first = (n - 1) * cols + 1
+      "(" <> Enum.map_join(first..(n * cols), ", ", &"$#{&1}") <> ")"
+    end
+    |> Enum.join(", ")
   end
 
   defp insert(sql, args) do

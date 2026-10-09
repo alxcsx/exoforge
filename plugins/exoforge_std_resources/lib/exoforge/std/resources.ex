@@ -130,8 +130,9 @@ defmodule Exoforge.Std.Resources do
   end
 
   defp existing_columns(pid, table) do
-    case db(pid, "PRAGMA table_info(#{table})") do
-      {:ok, %{rows: rows}} -> Enum.map(rows, &to_string(&1["name"] || &1[:name]))
+    # The adapter answers with its own dialect (M33 Fix 9); a PRAGMA is SQLite-only.
+    case ActionDispatcher.dispatch(:database, :table_columns, %{plugin: pid, table: table}) do
+      {:ok, %{columns: columns}} -> columns
       _ -> []
     end
   end

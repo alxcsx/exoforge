@@ -41,15 +41,13 @@ defmodule Exoforge.Std.PlayerData do
     _ =
       ActionDispatcher.dispatch(:database, :execute, %{
         plugin: :player_data,
-        operation:
-          "CREATE TABLE IF NOT EXISTS players (id text, player_id text, user_id text, profile text, state text)"
+        operation: "CREATE TABLE IF NOT EXISTS players (id text, player_id text, user_id text, profile text, state text)"
       })
 
     _ =
       ActionDispatcher.dispatch(:database, :execute, %{
         plugin: :player_data,
-        operation:
-          "CREATE TABLE IF NOT EXISTS player_kv (id text, player_id text, key text, value text, updated_at integer)"
+        operation: "CREATE TABLE IF NOT EXISTS player_kv (id text, player_id text, key text, value text, updated_at integer)"
       })
 
     _ =
@@ -216,7 +214,7 @@ defmodule Exoforge.Std.PlayerData do
 
   @impl true
   @doc "Action to retain/unlink a player profile when user account is deleted."
-  defaction retain_player(payload) do
+  defaction retain_player(payload), scope: Exoforge.Auth.Roles.admin() do
     player_id = extract_player_id(payload)
 
     if is_nil(player_id) or player_id == "" do
@@ -262,20 +260,33 @@ defmodule Exoforge.Std.PlayerData do
 
   @impl true
   @doc "Action to list all registered player profiles with optional filtering (all, valid, orphaned)."
-  defaction list_players(payload) do
+  defaction list_players(payload), scope: Exoforge.Auth.Roles.studio() do
     init_schema()
     filter = Map.get(payload, :filter) || Map.get(payload, "filter") || "all"
-    query = "SELECT * FROM players"
+    user_id = Map.get(payload, :user_id) || Map.get(payload, "user_id")
+    limit = Map.get(payload, :limit) || Map.get(payload, "limit")
 
-    case ActionDispatcher.dispatch(:database, :execute, %{plugin: :player_data, operation: query}) do
+    # Filtered in the database, not in Elixir over every player (M33 Fix 33).
+    {query, args} =
+      if user_id in [nil, ""],
+        do: {"SELECT * FROM players", []},
+        else: {"SELECT * FROM players WHERE user_id = $1", [to_string(user_id)]}
+
+    case ActionDispatcher.dispatch(:database, :execute, %{
+           plugin: :player_data,
+           operation: query,
+           arguments: args
+         }) do
       {:ok, %{rows: rows}} when is_list(rows) ->
         normalized = normalize_player_rows(rows)
         filtered = apply_player_filter(normalized, filter)
+        filtered = if is_integer(limit) and limit > 0, do: Enum.take(filtered, limit), else: filtered
         {:ok, %{players: filtered, rows: filtered}}
 
       {:ok, rows} when is_list(rows) ->
         normalized = normalize_player_rows(rows)
         filtered = apply_player_filter(normalized, filter)
+        filtered = if is_integer(limit) and limit > 0, do: Enum.take(filtered, limit), else: filtered
         {:ok, %{players: filtered, rows: filtered}}
 
       _ ->
@@ -285,7 +296,7 @@ defmodule Exoforge.Std.PlayerData do
 
   @impl true
   @doc "Action to delete a player profile and emit :player_deleted lifecycle event."
-  defaction delete_player(payload) do
+  defaction delete_player(payload), scope: Exoforge.Auth.Roles.admin() do
     player_id = extract_player_id(payload)
 
     if is_nil(player_id) or player_id == "" do
@@ -455,8 +466,7 @@ defmodule Exoforge.Std.PlayerData do
 
       {query, args} =
         if prefix && prefix != "" do
-          {"SELECT * FROM player_kv WHERE player_id = $1 AND key LIKE $2",
-           [player_id, "#{prefix}%"]}
+          {"SELECT * FROM player_kv WHERE player_id = $1 AND key LIKE $2", [player_id, "#{prefix}%"]}
         else
           {"SELECT * FROM player_kv WHERE player_id = $1", [player_id]}
         end

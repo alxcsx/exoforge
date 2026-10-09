@@ -34,6 +34,11 @@ defmodule Exoforge.Std.Database.Manager do
     GenServer.call(@name, {:connection_config, plugin_id})
   end
 
+  @doc "Lists the columns of a table in the plugin's isolated database."
+  def table_columns(plugin_id, table) do
+    GenServer.call(@name, {:table_columns, plugin_id, table}, 15_000)
+  end
+
   @doc "Performs a health check of the underlying database system."
   def health_check do
     GenServer.call(@name, :health_check)
@@ -88,10 +93,19 @@ defmodule Exoforge.Std.Database.Manager do
   @impl true
   def handle_call({:execute, plugin_id, query, args}, _from, state) do
     clean = Database.clean_id(plugin_id)
-    # Automatically ensure database exists on first query
-    _ = state.adapter.ensure_database(clean, state.config)
+    # Ensure the database exists on first use, not on every query (M33 Fix 7): provisioning DDL on
+    # each request was a round trip to the server per query, and the manager already remembers.
+    state = ensure_once(clean, state)
     result = state.adapter.execute(clean, query, args, state.config)
     {:reply, result, state}
+  end
+
+  @impl true
+  def handle_call({:table_columns, plugin_id, table}, _from, state) do
+    clean = Database.clean_id(plugin_id)
+    # Column inspection wants the table to exist; same first-use rule as execute.
+    state = ensure_once(clean, state)
+    {:reply, state.adapter.table_columns(clean, table, state.config), state}
   end
 
   @impl true
@@ -125,6 +139,19 @@ defmodule Exoforge.Std.Database.Manager do
   end
 
   ## Helpers
+
+  # Provisioning is remembered, so a second query for a known database skips the DDL round trip
+  # (M33 Fix 7). A failed provision is not remembered, so the next call retries it.
+  defp ensure_once(clean, state) do
+    if MapSet.member?(state.databases, clean) do
+      state
+    else
+      case state.adapter.ensure_database(clean, state.config) do
+        {:ok, _} -> %{state | databases: MapSet.put(state.databases, clean)}
+        _ -> state
+      end
+    end
+  end
 
   defp resolve_config(opts) do
     app_config = Application.get_env(:exoforge, :database, [])
@@ -177,9 +204,7 @@ defmodule Exoforge.Std.Database.Manager do
             Postgres
 
           {:error, _reason} ->
-            Logger.warning(
-              "[Database] PostgreSQL not reachable at configured host. Using the local SQLite adapter."
-            )
+            Logger.warning("[Database] PostgreSQL not reachable at configured host. Using the local SQLite adapter.")
 
             Sqlite
         end
@@ -236,5 +261,4 @@ defmodule Exoforge.Std.Database.Manager do
   end
 
   defp parse_database_url(_), do: %{}
-
 end
