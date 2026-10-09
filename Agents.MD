@@ -267,6 +267,11 @@ Gameplay must not hold a client, an endpoint, or a token. It publishes hooks (e.
 4. **C# for Game Code**: Game plugins are written in C# and compiled to a framework-dependent .NET assembly. Keep the host boundary to newline-delimited JSON — that is what makes a different runtime a runner rather than a rewrite.
 5. **No Distributed Locks**: State that has to be serialized belongs in a plugin's own process. Do not introduce external distributed lock managers (no Redis locks, no ZooKeeper).
 6. **Deletion Over Addition**: The best code is code you never had to write. Remove dead code, redundant wrappers, and unneeded abstractions ruthlessly.
+7. **Test Small, Run Fast**: verify with the narrowest check that can fail - one test file, one
+   suite, one build. Long operations - full suite sweeps, end-to-end runs, container and Unity
+   builds - are unencouraged locally; they run in CI/CD, which does them faster and on every push.
+   Write the wide tests and keep them green there, but do not pay for them on the developer's
+   machine.
 
 ---
 
@@ -295,6 +300,8 @@ Gameplay must not hold a client, an endpoint, or a token. It publishes hooks (e.
 ## 5. Agent & Contributor Guidelines
 
 1. **Read before editing**: Inspect existing contracts and tests before adding new abstractions.
-2. **Verify every change**: Always run `just test` or the relevant unit suite (`just test-core`, `just test-plugins`, `just test-sdk`).
+2. **Verify every change - with the smallest check that can fail**: run the relevant unit test file
+   or one build, not the whole suite. The wide recipes (`just test`, `just test-e2e`) are CI's job:
+   end-to-end integration is written here and run there, not locally.
 3. **Honor the Rule**: Everything above the kernel is a plugin.
 4. **Shortest working diff wins**: Do not create speculative configuration, wrapper classes with one implementation, or premature abstractions.
