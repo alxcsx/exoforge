@@ -88,10 +88,6 @@ Better than most plugin tooling; these are why the SDK feels good when it works:
 
 ---
 
----
-
----
-
 ## Checklist
 
 - [x] 1. `push` aborts when the build fails
@@ -117,7 +113,7 @@ Better than most plugin tooling; these are why the SDK feels good when it works:
 - [x] 19. `--json` on `plugin list` / `logs` / `status`
 - [x] 20. Flag parsing independent of argument position
 - [x] 21. `exo plugin reload`
-- [ ] 22. A resource table missing its primary key self-heals, and a failed preference write is not
+- [x] 22. A resource table missing its primary key self-heals, and a failed preference write is not
       silent (see Open above)
 
 ---

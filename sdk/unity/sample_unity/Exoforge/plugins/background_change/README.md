@@ -9,7 +9,7 @@ An Exoforge plugin. Actions are declared with attributes and discovered at build
 | `src/BackgroundChangePlugin.cs` | the plugin: `[ExoAction]` methods are what callers invoke |
 | `src/Generated/` | typed service stubs and the JSON context (`exo plugin stubs background_change`) |
 | `manifest.json` | generated from the attributes; do not edit |
-| `background_change` | the staged native binary; generated |
+| `background_change` | the staged plugin binary; generated |
 
 ## Working on it
 
@@ -18,6 +18,7 @@ exo plugin build background_change     # compile
 exo plugin push  background_change     # build, deploy, verify
 exo plugin dev   background_change     # redeploy on every save
 exo plugin logs  background_change     # what the plugin just did
+exo plugin usage background_change     # what it cost: calls, wall time, CPU, memory
 ```
 
 In Unity: **Tools ▸ Exoforge ▸ Exoforge Studio**, then the Plugins tab.

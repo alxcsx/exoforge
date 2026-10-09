@@ -48,7 +48,7 @@ sample_unity/
 │       │   ├── SnakeScore.cs          stored row + leaderboard entry records
 │       │   ├── SnakeLeaderboardPlugin.cs  the actions (talk to IDatabase directly)
 │       │   └── Generated/PluginServices.g.cs  typed player_data stubs (generated)
-│       ├── snake_leaderboard          built NativeAOT binary (generated, git-ignored)
+│       ├── snake_leaderboard          built plugin binary (generated, git-ignored)
 │       └── manifest.json               GENERATED from the C# attributes
 ├── Packages/
 │   ├── manifest.json                registry packages only — no path leaves this project
@@ -61,9 +61,9 @@ someone who has the Exoforge repository nowhere near them, so the SDK is copied 
 referenced by path, and `Packages/` is the whole of what the project depends on.
 
 **Why the workspace is outside `Assets/`:** plugin sources are ordinary `dotnet` projects
-(`net10.0`, NativeAOT). Keeping them out of `Assets/` means Unity never imports, compiles, or
-adds `.meta` files to them, and they can use any .NET/C# version. Only two things must live under
-`Assets/`: the **generated client** and the **runtime config**.
+(`net10.0`, framework-dependent .NET). Keeping them out of `Assets/` means Unity never imports,
+compiles, or adds `.meta` files to them, and they can use any .NET/C# version. Only two things must
+live under `Assets/`: the **generated client** and the **runtime config**.
 
 ### Scene
 
@@ -202,7 +202,7 @@ Deploy the plugin and regenerate the client:
 # Option B — CLI. The `exo` CLI is not installed on PATH — run it from the repo:
 CLI="dotnet run --project <repo>/sdk/csharp/Exoforge.CLI --"
 
-$CLI plugin push snake_leaderboard      # build (NativeAOT) + deploy to the running cluster
+$CLI plugin push snake_leaderboard      # build + deploy to the running cluster
 $CLI sync                               # regenerate Assets/Exoforge/Generated/ExoforgeServices.g.cs
 ```
 
@@ -212,9 +212,9 @@ deploys; **Settings** holds paths and credentials. Only `Tools ▸ Exoforge ▸ 
 stays a menu item, since it is a one-off scene edit. In the **Plugins** tab, every folder in
 `Exoforge/plugins/` gets a **Build**, **Build & Deploy**, **Deploy**, and **Stubs** button (plus
 **Sync Stubs** to regenerate every plugin at once). Stub generation fetches the live contracts and
-writes each plugin's `src/Generated/PluginServices.g.cs`. Native builds run `dotnet publish` (AOT)
-and regenerate `manifest.json`; set a **Native RID** (e.g. `linux-x64`) to build for a non-host deploy
-target. If Unity can't find `dotnet` (GUI apps often don't inherit your shell PATH), set
+writes each plugin's `src/Generated/PluginServices.g.cs`. Native builds run `dotnet publish`
+(framework-dependent) and regenerate `manifest.json`; set a **Native RID** (e.g. `linux-x64`) to build
+for a non-host deploy target. If Unity can't find `dotnet` (GUI apps often don't inherit your shell PATH), set
 **Dotnet Path** in the Settings tab. The build streams its log into the window, and every build stamps
 the manifest version with a build counter and source fingerprint (`1.0.0+42.<hash>`), so a deploy is
 traceable. The tab marks a plugin **● Modified** when its sources changed since the last build, and
@@ -230,9 +230,9 @@ Rules of thumb:
 - Call the server through the **generated** clients:
   `ExoforgeSDK.Client.SnakeLeaderboard().SubmitScoreAsync(...)`.
 - Plugin payloads are **records**, not raw JSON: `SnakeScoreRecord` flows through the injected
-  `IDatabase`, and `get_leaderboard` returns `List<SnakeScoreRecord>`. Register those types on the
-  plugin's `SnakeJsonContext` (`[JsonSerializable]`) and start it with
-  `PluginHost.Run<SnakeLeaderboardPlugin, SnakeJsonContext>()` — NativeAOT trims reflection-based JSON.
+  `IDatabase`, and `get_leaderboard` returns `List<SnakeScoreRecord>`. Nothing needs registering:
+  the generator writes the entry point, and a framework-dependent plugin serialises its records by
+  reflection. A hand-written `JsonSerializerContext` is still honoured, just not required.
 - Plugins build per OS: `$CLI plugin build snake_leaderboard --rid linux-x64` for a Linux deploy.
 - Uploaded plugins **do not survive a server restart** — re-`push` after restarting the backend.
 - `just dev-reset` stops the dev server and wipes every `priv/data` (SQLite databases and

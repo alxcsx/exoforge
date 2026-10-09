@@ -80,7 +80,7 @@ shortest working path.
 - **The host boundary is a pipe.** JSON frames over stdin and stdout, no per-plugin bindings, so a
   runtime that is not a process is a runner rather than a rewrite.
 - **A plugin ships IL, not a runtime.** Framework-dependent .NET assemblies, one process per plugin.
-  *(Decided; lands in M32 — the code is still AOT until Phase 1 below.)*
+  *(Landed in M32; the switch is Phase 1 below.)*
   The runtime lives in the image, paid for once; the plugin pays for its own code. This is what
   UGS Cloud Code does (`.ccm` = a zip of the DLL, its `deps.json`, dependencies and PDBs), and it is
   why reflection works and none of the plugin authoring path needs generated help to serialise.

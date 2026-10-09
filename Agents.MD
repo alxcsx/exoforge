@@ -1,4 +1,4 @@
-# Exoforge Operating Manual (`AGENTS.md`)
+# Exoforge Operating Manual (`Agents.MD`)
 
 > **Branch**: `projetao_mvp`  
 > **Status**: Kernel, 10 standard plugins, C# Client & Plugin SDKs, C# Management Engine (`exo` CLI), Unity SDK (`com.exoforge.sdk`), Producer Studio and the plugin runtime are **complete** — **266 Elixir + 81 C# = 347 tests passing**, plus a live E2E vertical slice of 6 tests against a running server.  
@@ -42,7 +42,7 @@ The kernel is strictly limited to:
 - [`EventDispatcher`](core/lib/event_dispatcher.ex): Real-time pub/sub bus with pattern matching and Registry fanout.
 - [`WorkerRegistry`](core/lib/worker_registry.ex): Named singleton process locator.
 - [`PluginSupervisor`](core/lib/plugin_supervisor.ex) & [`PluginBootstrapper`](core/lib/plugin_bootstrapper.ex): Topological DAG ordering and process lifecycle.
-- DSL & Drivers: [`Exoforge.Plugin`](core/lib/plugin.ex), [`Service`](core/lib/contracts/service.ex), [`ElixirPluginRunner`](core/lib/drivers/runtime/elixir_plugin_runner.ex), and `NativePluginRunner`.
+- DSL & Drivers: [`Exoforge.Plugin`](core/lib/plugin.ex), [`Service`](core/lib/contracts/service.ex), [`ElixirPluginRunner`](core/lib/drivers/runtime/elixir_plugin_runner.ex), `NativePluginRunner`, and [`PluginProtocol`](core/lib/drivers/runtime/plugin_protocol.ex) (the host side of the wire handshake).
 
 ### The 4-Question Litmus Test: "Should this be a plugin?"
 1. **Can two implementations be swapped?** (REST ↔ gRPC ↔ WebSocket, Postgres ↔ SQLite, web ↔ TUI) → **Plugin**.
@@ -62,22 +62,26 @@ replace any of them with its own services.
 database ──▶ auth ──▶ player_data
                │
                ├──▶ http (:4001)
-               ├──▶ ws   (:4000)
+               └──▶ ws   (:4000)
 
 dashboard (:4005) ──▶ dashboard_views
 plugin_manager ───▶ (independent root)
+resources ──▶ database
+metering  ──▶ database
 ```
 
 | Plugin | Port / Role | Provides | Depends on | Purpose |
 | :--- | :--- | :--- | :--- | :--- |
-| `exoforge_std_database` | Storage | `database`, `lldb` | — | Per-plugin schema isolation with Postgres and Sandbox adapters. |
+| `exoforge_std_database` | Storage | `database`, `lldb` | — | Per-plugin schema isolation with Postgres and SQLite adapters. |
 | `exoforge_std_auth` | Identity | `auth` | `database` | Token issuance, session verification, scope validation. |
 | `exoforge_std_player_data` | Profiles | `player_data` | `database`, `auth` | Canonical player profile persistence and lifecycle events. |
 | `exoforge_std_http` | REST (:4001) | `http` | `auth` | Dynamic OpenAPI routes derived from service contracts. |
-| `exoforge_std_ws` | Realtime (:4000) | `ws` | `auth` | Low-latency binary/JSON framing for actions and event pub/sub. |
+| `exoforge_std_ws` | Realtime (:4000) | `ws` | `auth` | Low-latency JSON framing for actions and event pub/sub. |
 | `exoforge_std_dashboard` | Studio (:4005) | `dashboard` | — | System plugin hosting LiveView Producer Studio and Actor Inspector. |
 | `exoforge_std_dashboard_views` | Studio Views | `dashboard_view` | `dashboard` | Decoupled UI components for player data, plugin manager, auth. |
 | `exoforge_std_plugin_manager`| Lifecycle | `plugin_manager` | — | Hot plugin upload, reload, and manifest export. |
+| `exoforge_std_resources` | Store | `resource_store` | `database` | Schema-driven resource tables and generic CRUD. |
+| `exoforge_std_metering` | Operations | `metering` | `database` | Usage metering per plugin and action, persisted on the instance. |
 
 ### Plugin Placement Rules
 
@@ -278,7 +282,7 @@ Gameplay must not hold a client, an endpoint, or a token. It publishes hooks (e.
 | `exo plugin build <name>` | Build a game plugin (framework-dependent .NET single file + `manifest.json`) |
 | `exo plugin push <name>` | Build and deploy a plugin to a running cluster |
 | `exo plugin stubs <name>` | Generate typed service-call stubs from the cluster contracts |
-| `just test-sdk` | Run C# test suite (`Exoforge.Client`, `Plugin.SDK`, `Management`) |
+| `just test-sdk` | Run the offline C# suite (`Exoforge.Client` unit, `Plugin.SDK`, `Generator`, `Management`) |
 | `just compose-up` | Run full production stack with PostgreSQL via Docker Compose |
 | `just compose-down` | Stop and tear down Compose stack |
 | `just k8s-deploy` | Deploy cluster to Kubernetes via Kustomize (with sensible defaults) |

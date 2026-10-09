@@ -3,7 +3,7 @@
 > **The High-Performance, Modular Game Backend Platform & LiveOps Engine.**  
 > Built on Erlang/BEAM, with native C# plugins and Unity integration.
 
-[![Build Status](https://img.shields.io/badge/tests-181%20passing-brightgreen)](Justfile)
+[![Build Status](https://img.shields.io/badge/tests-347%20passing-brightgreen)](Justfile)
 [![E2E Vertical Slice](https://img.shields.io/badge/E2E%20Slice-verified%20live-blue)](sdk/csharp/Exoforge.Client.Tests/VerticalSliceIntegrationTests.cs)
 [![Event Fanout](https://img.shields.io/badge/event%20fanout-0.07%20ms%20to%2050%20subs-purple)](test/cluster_benchmark_test.exs)
 [![Unity SDK](https://img.shields.io/badge/Unity%20SDK-UPM%20Ready-black)](sdk/unity/Exoforge.SDK)
@@ -12,11 +12,11 @@
 
 ## What is Exoforge?
 
-Exoforge is an open, high-density game backend and LiveOps platform. It combines the distributed actor concurrency of the Erlang/BEAM virtual machine with sandboxed WebAssembly execution to run authoritative game logic without external cache layers or heavy microservice sprawl.
+Exoforge is an open, high-density game backend and LiveOps platform. It combines the distributed actor concurrency of the Erlang/BEAM virtual machine with supervised, framework-dependent C# plugin processes to run authoritative game logic without external cache layers or heavy microservice sprawl.
 
 ### What it is for
 
-- **Authoritative Gameplay Logic**: Run combat calculations, inventory reconciliation, loot tables, and economy logic on the server, in C# compiled ahead of time.
+- **Authoritative Gameplay Logic**: Run combat calculations, inventory reconciliation, loot tables, and economy logic on the server, in C# running on the .NET runtime the instance carries.
 - **Zero-Downtime LiveOps**: Update drop rates, rebalance gameplay numbers, and deploy new game rules dynamically without rebuilding game clients or awaiting app store approvals.
 - **Stateful Plugins, Not a Framework**: A plugin *is* the actor — a supervised, long-lived process holding its own state, free to spawn a worker per matchmaking queue, game room, or chat channel. There is no grain API to learn and nothing to adopt.
 - **Unified Game Services**: Provides out-of-the-box identity, isolated multi-tenant databases, real-time WebSocket pub/sub, dynamic REST APIs, and a LiveView designer studio.
@@ -31,7 +31,7 @@ Exoforge is an open, high-density game backend and LiveOps platform. It combines
 |             (LiveView Dashboard, Actor Inspector, Plugin Manager)        |
 +--------------------------------------------------------------------------+
 |      REST INGRESS (:4001)         |        WEBSOCKET INGRESS (:4000)     |
-|   (Dynamic OpenAPI Routes)        |   (Real-time JSON/Binary Protocol)   |
+|   (Dynamic OpenAPI Routes)        |   (Real-time JSON Protocol)          |
 +-----------------------------------+--------------------------------------+
 |                     NATIVE C# PLUGINS (.NET)                             |
 |          authoritative combat • inventory • liveops • matchmaking        |
@@ -91,9 +91,12 @@ All networking, storage, authentication, and game domains exist as swappable plu
 | `exoforge_std_auth` | Identity | `:auth` | Session verification, bearer token issuance, and RBAC scope validation. |
 | `exoforge_std_player_data` | Profiles | `:player_data` | Canonical player profile persistence, schemas, and lifecycle events. |
 | `exoforge_std_http` | REST (:4001) | `:http` | Dynamic OpenAPI endpoints generated directly from service contracts. |
-| `exoforge_std_ws` | Realtime (:4000) | `:ws` | Low-latency binary and JSON WebSocket framing for actions and event pub/sub. |
-| `exoforge_std_dashboard` | Studio (:4005) | `:dashboard_view` | Game Producer & Designer Studio (LiveView UI, actor inspector, schedule calendars). |
+| `exoforge_std_ws` | Realtime (:4000) | `:ws` | Low-latency JSON WebSocket framing for actions and event pub/sub. |
+| `exoforge_std_dashboard` | Studio (:4005) | `:dashboard` | Game Producer & Designer Studio (LiveView UI, actor inspector, plugin management). |
 | `exoforge_std_plugin_manager` | Lifecycle | `:plugin_manager` | Runtime plugin lifecycle, hot binary uploads, and manifest exports. |
+| `exoforge_std_resources` | Store | `:resource_store` | Schema-driven resource tables and generic CRUD over the `:database` contract. |
+| `exoforge_std_dashboard_views` | Studio Views | `:dashboard_view` | View modules for the Studio's core extensions. |
+| `exoforge_std_metering` | Operations | `:metering` | Usage metering: calls, wall time, bytes, CPU and RSS, persisted per title. |
 
 ---
 
@@ -119,6 +122,8 @@ exo plugin new combat        # Scaffold a native C# plugin (--template standard|
 exo plugin build combat      # Build the plugin (framework-dependent .NET) + manifest.json
 exo plugin stubs combat      # Generate typed service stubs from the cluster contracts
 exo plugin push combat       # Hot-load plugin onto live cluster
+exo plugin logs combat       # Show recent log lines the plugin emitted
+exo plugin usage combat      # Metered usage: calls, wall time, CPU, memory
 exo sync                     # Generate strongly-typed C# client bindings
 exo status                   # Inspect cluster health and telemetry
 ```
@@ -220,8 +225,11 @@ just k8s-deploy
 │   ├── exoforge_std_database/    # PostgreSQL & SQLite storage adapters
 │   ├── exoforge_std_player_data/ # Player profile management
 │   ├── exoforge_std_http/        # REST ingress & OpenAPI reflection
-│   ├── exoforge_std_ws/          # WebSocket binary/JSON ingress
+│   ├── exoforge_std_ws/          # WebSocket JSON ingress
 │   ├── exoforge_std_dashboard/   # Phoenix LiveView Producer Studio
+│   ├── exoforge_std_dashboard_views/ # Studio view components
+│   ├── exoforge_std_resources/   # Schema-driven resource tables
+│   ├── exoforge_std_metering/    # Usage metering, persisted per title
 │   └── exoforge_std_plugin_manager/ # Runtime plugin lifecycle & upload
 ├── plugins_csharp/               # Sample C# plugins
 │   └── sample_plugin/            # The reference plugin, and the E2E test subject
@@ -234,6 +242,6 @@ just k8s-deploy
 │   └── unity/
 │       └── Exoforge.SDK/         # Unity Package Manager (UPM) package
 ├── deploy/                       # Kubernetes manifests & Docker configurations
-├── AGENTS.md                     # Architectural rules & manual
+├── Agents.MD                     # Architectural rules & manual
 └── Justfile                      # Central automation recipes
 ```
