@@ -3,6 +3,8 @@ defmodule Exoforge.Std.FileBucketTest do
   alias Exoforge.ActionDispatcher
 
   setup do
+    Exoforge.PluginCase.start_kernel()
+
     Exoforge.PluginCase.register_plugin(Exoforge.Std.FileBucket,
       id: :exoforge_std_file_bucket,
       provides: [:file_bucket]
@@ -58,7 +60,7 @@ defmodule Exoforge.Std.FileBucketTest do
     assert read_file["id"] == file["id"]
   end
 
-  test "get_file_info and list_files" do
+  test "get_file_info and list_files with search" do
     for i <- 1..3 do
       ActionDispatcher.dispatch(:file_bucket, :upload_file, %{
         "bucket" => "avatars",
@@ -73,11 +75,61 @@ defmodule Exoforge.Std.FileBucketTest do
     assert length(files) == 3
 
     first = hd(files)
+    # Lookup by id without specifying bucket
     assert {:ok, %{file: fetched}} =
-             ActionDispatcher.dispatch(:file_bucket, :get_file_info, %{"id" => first["id"], "bucket" => "avatars"})
+             ActionDispatcher.dispatch(:file_bucket, :get_file_info, %{"id" => first["id"]})
 
     assert fetched["id"] == first["id"]
     assert fetched["filename"] == first["filename"]
+
+    # Search filter
+    assert {:ok, %{files: search_res, count: 1}} =
+             ActionDispatcher.dispatch(:file_bucket, :list_files, %{"search" => "avatar_2"})
+    assert hd(search_res)["filename"] == "avatar_2.png"
+  end
+
+  test "list_buckets lists all active buckets" do
+    ActionDispatcher.dispatch(:file_bucket, :upload_file, %{
+      "bucket" => "bucket_alpha",
+      "filename" => "alpha.txt",
+      "content" => "alpha"
+    })
+
+    ActionDispatcher.dispatch(:file_bucket, :upload_file, %{
+      "bucket" => "bucket_beta",
+      "filename" => "beta.txt",
+      "content" => "beta"
+    })
+
+    assert {:ok, %{buckets: buckets}} = ActionDispatcher.dispatch(:file_bucket, :list_buckets, %{})
+    assert "bucket_alpha" in buckets
+    assert "bucket_beta" in buckets
+    assert "default" in buckets
+  end
+
+  test "update_file modifies filename and replaces content while keeping id" do
+    assert {:ok, %{file: file}} = ActionDispatcher.dispatch(:file_bucket, :upload_file, %{
+      "bucket" => "docs",
+      "filename" => "old_name.txt",
+      "content" => "old content"
+    })
+
+    id = file["id"]
+
+    assert {:ok, %{file: updated}} = ActionDispatcher.dispatch(:file_bucket, :update_file, %{
+      "id" => id,
+      "bucket" => "docs",
+      "filename" => "new_name.txt",
+      "content" => "new replaced content!"
+    })
+
+    assert updated["id"] == id
+    assert updated["filename"] == "new_name.txt"
+    assert updated["size_bytes"] == byte_size("new replaced content!")
+
+    assert {:ok, %{content: read_content}} =
+             ActionDispatcher.dispatch(:file_bucket, :read_file, %{"id" => id, "bucket" => "docs"})
+    assert read_content == "new replaced content!"
   end
 
   test "delete_file removes metadata and file from disk" do
