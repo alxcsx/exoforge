@@ -8,7 +8,7 @@ using Exoforge.Plugins.Generated;
 namespace Exoforge.Plugins.SnakeLeaderboard;
 
 // A native Exoforge plugin is plain C#. Attributes declare the contract; the host injects
-// capabilities; `exo plugin build` produces a self-contained NativeAOT binary.
+// capabilities; `exo plugin build` produces a framework-dependent plugin binary.
 [ExoService("snake_leaderboard", Version = "1.0.0", Resources = new[] { typeof(SnakeScoreRecord) },
     Category = "Game", Title = "Snake Leaderboard", Icon = "🏆")]
 public class SnakeLeaderboardPlugin

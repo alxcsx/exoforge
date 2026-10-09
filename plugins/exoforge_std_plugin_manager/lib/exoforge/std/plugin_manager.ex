@@ -267,6 +267,8 @@ defmodule Exoforge.Std.PluginManager do
     type_str = to_string(type || "") |> String.downcase()
 
     cond do
+      # "wasm" is what Studio builds before the native rename sent; accepted so an older editor can
+      # still deploy.
       type_str in ["native", "wasm"] -> :native
       type_str == "elixir" -> :elixir
       not is_nil(elixir_code) and elixir_code != "" -> :elixir
@@ -400,8 +402,8 @@ defmodule Exoforge.Std.PluginManager do
 
   # A payload is either raw bytes or base64 of them. Trying the decode is the whole test: a compiled
   # binary starts with bytes outside the base64 alphabet, so it always fails and comes back untouched.
-  # There used to be a WASM magic-header check in front of this, which was redundant for WASM and
-  # wrong for anything else.
+  # There used to be a magic-header check in front of this, which was redundant for the one format
+  # it knew and wrong for anything else.
   defp decode_binary(bin) when is_binary(bin) do
     case Base.decode64(bin) do
       {:ok, decoded} -> decoded

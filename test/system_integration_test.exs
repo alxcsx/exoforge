@@ -123,9 +123,8 @@ defmodule Exoforge.SystemIntegrationTest do
 
       assert player_res.player["name"] == "King Arthur"
 
-      # 4. Invoke the plugin's action. A named payload, not the positional list the WASM sample
-      #    took: a WASI export has an ABI of positional arguments, and a native plugin takes an
-      #    object keyed by the action's declared parameters.
+      # 4. Invoke the plugin's action. A named payload, not a positional list: a plugin action takes
+      #    an object keyed by its declared parameters.
       assert {:ok, _result} =
                ActionDispatcher.dispatch(:sample_plugin, :increment, %{counter_id: 1, amount: 25})
 

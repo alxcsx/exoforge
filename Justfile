@@ -382,8 +382,8 @@ unity-reimport: unity-sync _unity-reset
 	       "$project/Library/SourceAssetDB" "$project/Library/SourceAssetDB-lock"
 	echo "[unity-reimport] import caches cleared — Unity recompiles on next open"
 
-# Slow — creates a Unity project and runs a NativeAOT publish — but it is the only check that tests
-# what a consumer actually does.
+# Slow — creates a Unity project and runs a framework-dependent publish — but it is the only check
+# that tests what a consumer actually does. Build it here; run it in CI, not in the local loop.
 clean-room-sdk:
 	#!/usr/bin/env bash
 	set -euo pipefail

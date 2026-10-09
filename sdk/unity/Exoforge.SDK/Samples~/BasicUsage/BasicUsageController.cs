@@ -17,7 +17,7 @@ namespace Exoforge.Unity.Samples;
 /// - The cluster connection is owned by the <c>Exoforge</c> prefab
 ///   (<see cref="ExoforgeManager"/>), which resolves settings from the workspace
 ///   <c>exoforge.json</c>. Gameplay scripts contain no URLs, tokens, or session code.
-/// - Dispatches actions to a deployed WASM plugin.
+/// - Dispatches actions to a deployed plugin.
 /// - Receives real-time event broadcasts on the Unity main thread.
 /// - Renders a small OnGUI() debug HUD.
 /// </summary>
@@ -61,8 +61,8 @@ public class BasicUsageController : MonoBehaviour
 
         try
         {
-            var result = await _client.SendActionAsync<JsonElement>("sample_wasm", "ping", Array.Empty<int>());
-            _lastResult = $"sample_wasm.ping → {result.GetInt64()}";
+            var result = await _client.SendActionAsync<JsonElement>("sample_plugin", "ping", Array.Empty<int>());
+            _lastResult = $"sample_plugin.ping → {result.GetInt64()}";
         }
         catch (Exception ex)
         {
@@ -76,8 +76,8 @@ public class BasicUsageController : MonoBehaviour
 
         try
         {
-            var result = await _client.SendActionAsync<JsonElement>("sample_wasm", "increment", new[] { counterId, amount });
-            _lastResult = $"sample_wasm.increment → {result.GetInt64()}";
+            var result = await _client.SendActionAsync<JsonElement>("sample_plugin", "increment", new[] { counterId, amount });
+            _lastResult = $"sample_plugin.increment → {result.GetInt64()}";
         }
         catch (Exception ex)
         {

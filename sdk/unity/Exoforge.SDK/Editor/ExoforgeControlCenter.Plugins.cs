@@ -19,7 +19,7 @@ namespace Exoforge.Unity.Editor
 public partial class ExoforgeControlCenter : EditorWindow
 {
     // =========================================================================
-    // Tab 4: Plugins & WASM
+    // Tab 4: Plugins
     // =========================================================================
 
     private void DrawPlugins()

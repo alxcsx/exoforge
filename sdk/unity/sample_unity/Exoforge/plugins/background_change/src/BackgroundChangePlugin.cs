@@ -3,7 +3,7 @@ using Exoforge.Plugin.SDK;
 namespace Exoforge.Plugins;
 
 // A native Exoforge plugin is plain C#. Attributes declare the contract; the host injects
-// capabilities; `exo plugin build` produces a self-contained NativeAOT binary.
+// capabilities; `exo plugin build` produces a framework-dependent plugin binary.
 [ExoService("background_change", Version = "0.1.0", Resources = new[] { typeof(BackgroundChangeItem) },
     Category = "Game", Title = "BackgroundChange", Icon = "🧩")]
 public class BackgroundChangePlugin

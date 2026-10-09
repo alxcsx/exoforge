@@ -4,8 +4,6 @@ defmodule Exoforge.Std.PluginManagerTest do
   alias Exoforge.ActionDispatcher
   alias Exoforge.PluginRegistry
 
-  @wasm_magic <<0, 97, 115, 109>>
-
   setup do
     Exoforge.PluginCase.start_kernel()
 
@@ -28,10 +26,10 @@ defmodule Exoforge.Std.PluginManagerTest do
 
     on_exit(fn ->
       # Clean up test directories if created
-      File.rm_rf("plugins_csharp/test_uploaded_wasm")
-      File.rm_rf("plugins_csharp/invalid_test_wasm")
+      File.rm_rf("plugins_csharp/test_uploaded_binary")
+      File.rm_rf("plugins_csharp/invalid_test_binary")
       File.rm_rf("plugins/test_uploaded_elixir")
-      File.rm_rf("priv/data/uploaded_plugins/test_uploaded_wasm")
+      File.rm_rf("priv/data/uploaded_plugins/test_uploaded_binary")
       File.rm_rf("priv/data/uploaded_plugins/test_uploaded_elixir")
     end)
 
@@ -105,13 +103,13 @@ defmodule Exoforge.Std.PluginManagerTest do
     end
 
     test "upload_plugin rejects a binary that is not a plugin" do
-      bad_binary = "This is not a valid WASM binary at all"
+      bad_binary = "This is not a plugin binary at all"
 
       assert {:error, :invalid_package} =
                ActionDispatcher.dispatch(
                  :plugin_manager,
                  :upload_plugin,
-                 %{name: "invalid_test_wasm", binary: bad_binary},
+                 %{name: "invalid_test_binary", binary: bad_binary},
                  caller_scopes: ["admin"]
                )
     end
