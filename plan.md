@@ -270,6 +270,38 @@ by whether they were worth doing on the spot.
 - **The image change from phase 1 has never been built.** No Docker daemon in the environment it was
   written in. It needs one `docker build` before it can be called done.
 
+### The deployment model: how a plugin reaches a running server
+
+**The image is the server, and a plugin is not an image.** One container holds the kernel, the standard
+plugins and the .NET runtime, because plugins run as child processes of the BEAM *inside* it — one
+container, N processes. A plugin is a 195KB file that is pushed and becomes a process, which is the
+whole point of the stdio boundary. Making plugins containers would put a container runtime in the
+middle of a pipe and defeat the orchestrator that is already there.
+
+**So the split is:** whoever deploys the server runs it with a volume on the plugin directory, once.
+A game developer clicks Deploy in Unity and the plugin is uploaded and hot-loaded, forever after.
+They never see a Dockerfile, a tag or a pipeline. The image also works with no volume at all —
+plugins are then ephemeral, which is fine for a demo or a dev box — so the volume is one operator
+flag and one line of documentation.
+
+**A derived image was considered and rejected**, not on merit but on this: one-click deploy from the
+Unity Editor is the product, and a container build per plugin change puts CI/CD between the developer
+and their change. Plugins as containers orchestrated by something else was rejected for the mirror
+reason: the BEAM is the orchestrator.
+
+**Replicas are the open problem, and it is a design problem.** Verified: a push reaches exactly one
+node. `WorkerRegistry` is a local `Registry` and not Horde, and `plugin_manager` broadcasts nothing —
+so both the artifact and the runner stay where the push landed. With N replicas and per-replica
+volumes, a plugin pushed to one node is missing from the others.
+
+The answer is the one thing that also makes titles work: **a single source of truth.** The artifact
+belongs to the *title*, not to a container. Push writes there, and instances converge from it — pull
+at boot, or a broadcast on push, or both. That is a change in where the endpoint lives and how
+instances converge, not in the plugin model: the plugin stays a file that becomes a process.
+
+Until that exists, the honest statement is **one replica**. Anything more silently loses plugins, and
+losing them silently is worse than not supporting it.
+
 **Phase 5 — flexibility and boilerplate.** A versioned handshake with declared capabilities, the way
 LSP and Terraform providers do it, so host and plugin can negotiate rather than assume. The runner
 seam stays (native and Elixir; a shared-host runner remains a runner, not a rewrite). The plugin
