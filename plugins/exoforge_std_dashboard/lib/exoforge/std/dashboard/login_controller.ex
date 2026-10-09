@@ -12,6 +12,14 @@ defmodule Exoforge.Std.Dashboard.LoginController do
     if authenticated?(conn) do
       redirect(conn, to: "/")
     else
+      # If the session carried a stale or player-only login, clear it so it doesn't loop.
+      conn =
+        if present?(get_session(conn, "admin_player_id")) or present?(get_session(conn, "admin_user_id")) do
+          clear_session(conn)
+        else
+          conn
+        end
+
       conn
       |> put_resp_content_type("text/html")
       |> send_resp(200, render_login(params["error"]))
@@ -19,32 +27,22 @@ defmodule Exoforge.Std.Dashboard.LoginController do
   end
 
   defp authenticated?(conn) do
-    present?(get_session(conn, "admin_player_id")) or present?(get_session(conn, "admin_user_id"))
+    scopes = get_session(conn, "admin_scopes") || []
+
+    (present?(get_session(conn, "admin_player_id")) or present?(get_session(conn, "admin_user_id"))) and
+      Exoforge.Auth.Roles.rank_of(scopes) >= 2
   end
 
   defp present?(value), do: is_binary(value) and value != ""
 
   defp render_login(error) do
     csrf = Plug.CSRFProtection.get_csrf_token()
-    dev_admin? = Exoforge.Config.allow_dev_tokens?()
 
+    # The error travels in the URL; it never travels into the HTML unescaped (M33 Fix 25).
     error_html =
       if error,
-        do: ~s(<div class="error">#{error}</div>),
+        do: ~s(<div class="error">#{Plug.HTML.html_escape(to_string(error))}</div>),
         else: ""
-
-    dev_form =
-      if dev_admin? do
-        """
-        <form action="/login" method="post">
-          <input type="hidden" name="_csrf_token" value="#{csrf}" />
-          <input type="hidden" name="dev_admin" value="true" />
-          <button type="submit" class="secondary">⚡ Quick Dev Sign-In</button>
-        </form>
-        """
-      else
-        ""
-      end
 
     """
     <!DOCTYPE html>
@@ -53,13 +51,11 @@ defmodule Exoforge.Std.Dashboard.LoginController do
       <meta charset="utf-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       <title>EXOFORGE - Sign in</title>
-      <script src="https://cdn.tailwindcss.com"></script>
+      <script src="/vendor/tailwind.js"></script>
       <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
         body { font-family: 'Inter', sans-serif; }
         .error { background:#fef2f2; border:1px solid #fecaca; color:#b91c1c; border-radius:8px; padding:.6rem .8rem; font-size:.85rem; margin-bottom:1rem; }
-        .secondary { width:100%; padding:.6rem; border-radius:.75rem; background:#f3f4f6; border:1px solid #e5e7eb; color:#374151; font-weight:700; font-size:.8rem; cursor:pointer; }
-        .secondary:hover { background:#e5e7eb; }
       </style>
     </head>
     <body class="min-h-screen bg-[#f3f4f6] flex items-center justify-center p-4">
@@ -88,7 +84,6 @@ defmodule Exoforge.Std.Dashboard.LoginController do
             Sign in
           </button>
         </form>
-        #{dev_form}
       </div>
     </body>
     </html>

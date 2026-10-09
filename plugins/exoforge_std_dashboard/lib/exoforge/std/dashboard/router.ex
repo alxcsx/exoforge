@@ -123,10 +123,12 @@ defmodule Exoforge.Std.Dashboard.Router do
       end
 
     if token do
+      # http_only: the token is not readable by page JavaScript, so an XSS elsewhere on the page
+      # cannot walk off with the bearer credential (M33 Fix 31).
       Plug.Conn.put_resp_cookie(conn, "exo_auth_token", token,
         path: "/",
         same_site: "Lax",
-        http_only: false
+        http_only: true
       )
     else
       conn

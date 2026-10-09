@@ -125,7 +125,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
               profile: profile_map
             }
 
-            case ActionDispatcher.dispatch(:player_data, :create_player, payload) do
+            case ActionDispatcher.dispatch(:player_data, :create_player, payload, caller_scopes: caller_scopes(socket)) do
               {:ok, _result} ->
                 socket =
                   socket
@@ -179,7 +179,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
 
   @impl true
   def handle_event("retain_player", %{"id" => player_id}, socket) do
-    case ActionDispatcher.dispatch(:player_data, :retain_player, %{player_id: player_id}) do
+    case ActionDispatcher.dispatch(:player_data, :retain_player, %{player_id: player_id}, caller_scopes: caller_scopes(socket)) do
       {:ok, _} ->
         socket =
           socket
@@ -199,7 +199,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
 
   @impl true
   def handle_event("delete_player", %{"id" => player_id}, socket) do
-    case ActionDispatcher.dispatch(:player_data, :delete_player, %{player_id: player_id}) do
+    case ActionDispatcher.dispatch(:player_data, :delete_player, %{player_id: player_id}, caller_scopes: caller_scopes(socket)) do
       {:ok, _} ->
         socket =
           socket
@@ -266,8 +266,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
         _ -> %{}
       end
 
-    {:noreply,
-     assign(socket, player_kv_data: kv_data, action_notification: "Key '#{key}' removed.")}
+    {:noreply, assign(socket, player_kv_data: kv_data, action_notification: "Key '#{key}' removed.")}
   end
 
   @impl true
@@ -355,7 +354,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
       apply_filters(players, socket.assigns.retention_filter, socket.assigns.search_query)
 
     user_names =
-      case ActionDispatcher.dispatch(:auth, :list_users, %{}) do
+      case ActionDispatcher.dispatch(:auth, :list_users, %{limit: 50}) do
         {:ok, %{users: users}} ->
           Map.new(users, fn u ->
             id = to_string(u["user_id"] || u["player_id"])
@@ -901,4 +900,8 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
     </div>
     """
   end
+
+  # The session's verified scopes (M33 Fix 28): administrative dispatches authorize with
+  # the login, not with the dispatcher's internal default.
+  defp caller_scopes(socket), do: socket.assigns[:current_scopes] || []
 end

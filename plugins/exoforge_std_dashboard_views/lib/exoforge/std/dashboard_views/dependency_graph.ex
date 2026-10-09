@@ -63,14 +63,12 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
   attr(:target, :any, required: true)
 
   def graph(assigns) do
-    assigns = assign(assigns, :selected_plugin_id, assigns.selected_plugin_id)
-
     ~H"""
         <% graph_nodes = build_dependency_graph(@plugins) %>
         <% graph_tiers = graph_nodes |> Enum.map(& &1.tier) |> Enum.uniq() |> Enum.sort() %>
-        <% selected_node = Enum.find(graph_nodes, &(&1.id == @graph_selected_plugin_id)) %>
+        <% selected_node = Enum.find(graph_nodes, &(&1.id == @selected_plugin_id)) %>
         <div class="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div class="bg-white rounded-3xl max-w-4xl w-full p-6 shadow-2xl border border-gray-200 relative animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[90vh]">
+          <div class="bg-white rounded-3xl max-w-7xl w-full p-6 shadow-2xl border border-gray-200 relative animate-in fade-in zoom-in-95 duration-150 flex flex-col h-[90vh]">
             <!-- Modal Header -->
             <div class="flex items-center justify-between pb-4 border-b border-gray-100">
               <div class="flex items-center gap-3">
@@ -94,7 +92,7 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
             <!-- Graph Canvas / Architecture Tiers -->
             <div class="overflow-y-auto py-5 space-y-6 flex-1 pr-1">
               <!-- Tier Pipeline View -->
-              <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                 <%= for tier_name <- graph_tiers do %>
                   <% tier_nodes = Enum.filter(graph_nodes, &(&1.tier == tier_name)) %>
                   <div class="bg-gray-50/80 rounded-2xl p-3 border border-gray-200/80 flex flex-col">
@@ -105,7 +103,7 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
 
                     <div class="space-y-2.5 flex-1">
                       <%= for node <- tier_nodes do %>
-                        <% is_selected = @graph_selected_plugin_id == node.id %>
+                        <% is_selected = @selected_plugin_id == node.id %>
                         <% is_dependent = selected_node && node.id in (selected_node.dependents || []) %>
                         <% is_dependency = selected_node && Enum.any?(selected_node.dependencies, fn d -> d.provider == node.id end) %>
                         <div

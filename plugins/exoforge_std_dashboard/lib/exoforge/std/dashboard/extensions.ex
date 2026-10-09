@@ -15,8 +15,8 @@ defmodule Exoforge.Std.Dashboard.Extensions do
     PluginRegistry.all_manifests()
     |> Enum.map(fn manifest ->
       provides = Map.get(manifest, :provides, [])
-      clean_provides = Enum.map(provides, &PluginRegistry.clean_service_name/1)
-      clean_dependencies = Enum.map(Map.get(manifest, :dependencies, []), &PluginRegistry.clean_service_name/1)
+      clean_provides = Enum.map(provides, &PluginRegistry.service_alias_or_module/1)
+      clean_dependencies = Enum.map(Map.get(manifest, :dependencies, []), &PluginRegistry.service_alias_or_module/1)
 
       services = Enum.map(PluginRegistry.manifest_services(manifest), &normalize_service_metadata/1)
 
@@ -107,7 +107,17 @@ defmodule Exoforge.Std.Dashboard.Extensions do
   defp safe_type(atom) when is_atom(atom), do: atom
   defp safe_type(_), do: :string
 
-  @doc "Normalizes action parameter definitions into [%{name: string, type: atom, optional: boolean}]."
+  # The input-override travels with the param spec, whatever shape it arrived in: a keyword from a
+  # contract, a map from a manifest, `input: :color` (an id) or a whole spec.
+  defp input_override(v) do
+    case v do
+      m when is_map(m) -> Map.get(m, :input) || Map.get(m, "input") || nil
+      l when is_list(l) -> Keyword.get(l, :input, nil)
+      _ -> nil
+    end
+  end
+
+  @doc "Normalizes action parameter definitions into [%{name: string, type, optional: boolean, input}]."
   def normalize_action_params(params) do
     cond do
       is_map(params) ->
@@ -128,7 +138,7 @@ defmodule Exoforge.Std.Dashboard.Extensions do
               _ -> false
             end
 
-          %{name: to_string(k), type: type, optional: !!optional}
+          %{name: to_string(k), type: type, optional: !!optional, input: input_override(v)}
         end)
 
       is_list(params) and Keyword.keyword?(params) ->
@@ -149,7 +159,7 @@ defmodule Exoforge.Std.Dashboard.Extensions do
               _ -> false
             end
 
-          %{name: to_string(k), type: type, optional: !!optional}
+          %{name: to_string(k), type: type, optional: !!optional, input: input_override(v)}
         end)
 
       is_list(params) ->
@@ -181,7 +191,8 @@ defmodule Exoforge.Std.Dashboard.Extensions do
             %{
               name: to_string(name),
               type: safe_type(type),
-              optional: !!optional
+              optional: !!optional,
+              input: Map.get(item, :input) || Map.get(item, "input")
             }
 
           other ->

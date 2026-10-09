@@ -13,55 +13,43 @@ defmodule Exoforge.Std.Dashboard.ApiController do
   end
 
   def login(conn, params) do
-    dev_admin? = params["dev_admin"] == "true" or params[:dev_admin] == true
+    email = params["email"] || params[:email]
+    password = params["password"] || params[:password]
 
-    cond do
-      dev_admin? and Exoforge.Config.allow_dev_tokens?() ->
-        conn
-        |> clear_session()
-        |> put_session("admin_user_id", "studio")
-        |> put_session("admin_player_id", "studio")
-        |> put_session("user_name", "Studio Producer")
-        |> put_session("user_role", "Admin")
-        |> put_session("auth_token", "dev:admin")
-        |> put_resp_cookie("exo_auth_token", "dev:admin",
-          path: "/",
-          same_site: "Lax",
-          http_only: false
-        )
-        |> put_flash(:info, "Signed in as Studio Producer")
-        |> redirect(to: "/")
+    case ActionDispatcher.dispatch(:auth, :login, %{email: email, password: password}) do
+      {:ok, result} ->
+        # The Studio is staff tooling (M33 Fix 26): a player account signing in here would
+        # start a session the whole dashboard trusts, so it is refused at the door.
+        if Exoforge.Auth.Roles.rank_of(result.scopes) >= 2 do
+          player_id = result.player_id
+          token = result.token
+          role = result[:role] || "Admin"
 
-      true ->
-        email = params["email"] || params[:email]
-        password = params["password"] || params[:password]
-
-        case ActionDispatcher.dispatch(:auth, :login, %{email: email, password: password}) do
-          {:ok, result} ->
-            player_id = result.player_id
-            token = result.token
-            role = result[:role] || "Admin"
-
-            conn
-            |> clear_session()
-            |> put_session("admin_user_id", player_id)
-            |> put_session("admin_player_id", player_id)
-            |> put_session("user_name", player_id)
-            |> put_session("user_role", role)
-            |> put_session("auth_token", token)
-            |> put_resp_cookie("exo_auth_token", token,
-              path: "/",
-              same_site: "Lax",
-              http_only: false
-            )
-            |> put_flash(:info, "Signed in successfully as #{player_id}")
-            |> redirect(to: "/")
-
-          {:error, _reason} ->
-            conn
-            |> put_flash(:error, "Invalid email or password.")
-            |> redirect(to: "/login?error=Invalid+email+or+password")
+          conn
+          |> clear_session()
+          |> put_session("admin_user_id", player_id)
+          |> put_session("admin_player_id", player_id)
+          |> put_session("admin_scopes", result.scopes)
+          |> put_session("user_name", player_id)
+          |> put_session("user_role", role)
+          |> put_session("auth_token", token)
+          |> put_resp_cookie("exo_auth_token", token,
+            path: "/",
+            same_site: "Lax",
+            http_only: true
+          )
+          |> put_flash(:info, "Signed in successfully as #{player_id}")
+          |> redirect(to: "/")
+        else
+          conn
+          |> put_flash(:error, "The Studio requires a staff account (studio or admin).")
+          |> redirect(to: "/login?error=Staff+access+required")
         end
+
+      {:error, _reason} ->
+        conn
+        |> put_flash(:error, "Invalid email or password.")
+        |> redirect(to: "/login?error=Invalid+email+or+password")
     end
   end
 
@@ -93,9 +81,7 @@ defmodule Exoforge.Std.Dashboard.ApiController do
             |> json(%{status: "error", error: "resource_has_no_create_action"})
 
           action ->
-            case ActionDispatcher.dispatch(plugin_id, action, Map.drop(params, ["name"]),
-                   caller_scopes: caller_scopes(conn)
-                 ) do
+            case ActionDispatcher.dispatch(plugin_id, action, Map.drop(params, ["name"]), caller_scopes: caller_scopes(conn)) do
               {:ok, result} ->
                 json(conn, %{status: "ok", data: result})
 
@@ -243,15 +229,13 @@ defmodule Exoforge.Std.Dashboard.ApiController do
     end
   end
 
-  # A browser session established by the login controller grants Studio access,
-  # so the Studio's own SSE/API calls work without a bearer token.
+  # A browser session established by the login controller grants Studio access at the scopes the
+  # login verified (M33 Fix 26) — never a default admin.
   defp session_auth(conn) do
     if Map.get(conn.private, :plug_session_fetch) == :done do
       case get_session(conn, "admin_player_id") do
         player_id when is_binary(player_id) and player_id != "" ->
-          scopes =
-            get_session(conn, "admin_scopes") ||
-              [Exoforge.Auth.Roles.admin()]
+          scopes = get_session(conn, "admin_scopes") || []
 
           {:ok, %{player_id: player_id, scopes: scopes, role: Exoforge.Auth.Roles.role(scopes)}}
 

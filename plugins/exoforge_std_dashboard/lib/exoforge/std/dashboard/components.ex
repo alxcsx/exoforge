@@ -23,7 +23,7 @@ defmodule Exoforge.Std.Dashboard.Components do
         <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider"><%= @title %></span>
         <div class="w-8 h-8 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center">
           <%= if @icon_svg do %>
-            <%= Phoenix.HTML.raw(@icon_svg) %>
+            <%= Phoenix.HTML.raw(Exoforge.Std.Dashboard.IconSanitizer.sanitize(@icon_svg)) %>
           <% else %>
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
@@ -418,6 +418,26 @@ defmodule Exoforge.Std.Dashboard.Components do
     <% end %>
     """
   end
+end
+
+# The icon arrives in extension metadata, not from us, so it does not get to execute. Script
+# blocks are dropped whole; handler attributes, URL attributes and dangerous elements are dropped
+# with them (M33 Fix 35).
+# ponytail: blocklist, not a parser — icons come from plugins the operator deployed; a full
+# SVG sanitizer is warranted only if third parties author Studio metadata.
+defmodule Exoforge.Std.Dashboard.IconSanitizer do
+  @unsafe [
+    ~r/<script[\s\S]*?<\/script>/i,
+    ~r/<\/?(?:script|iframe|object|embed|link|style|foreignObject)\b[^>]*>/i,
+    ~r/\son\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/i,
+    ~r/(?:javascript|vbscript)\s*:/i
+  ]
+
+  @spec sanitize(term()) :: String.t()
+  def sanitize(svg) when is_binary(svg),
+    do: Enum.reduce(@unsafe, svg, fn pattern, acc -> String.replace(acc, pattern, "") end)
+
+  def sanitize(_), do: ""
 end
 
 defimpl Phoenix.HTML.Safe, for: Version do

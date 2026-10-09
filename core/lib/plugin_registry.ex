@@ -309,6 +309,45 @@ defmodule Exoforge.PluginRegistry do
 
   def clean_service_name(other), do: to_string(other)
 
+  @doc """
+  Returns a clean service alias (e.g. :database) if declared, otherwise falls back
+  to the full module or type name (without Elixir. prefix).
+  """
+  def service_alias_or_module(ref) when is_atom(ref) do
+    cond do
+      Code.ensure_loaded?(ref) and function_exported?(ref, :__service_name__, 0) ->
+        to_string(ref.__service_name__())
+
+      true ->
+        str = to_string(ref)
+        cond do
+          String.starts_with?(str, "Elixir.Exoforge.Std.Services.") ->
+            Macro.underscore(Module.split(ref) |> List.last())
+
+          String.starts_with?(str, "Elixir.") ->
+            String.replace_prefix(str, "Elixir.", "")
+
+          true ->
+            str
+        end
+    end
+  end
+
+  def service_alias_or_module(ref) when is_binary(ref) do
+    cond do
+      String.starts_with?(ref, "Elixir.Exoforge.Std.Services.") ->
+        ref |> String.replace_prefix("Elixir.Exoforge.Std.Services.", "") |> Macro.underscore()
+
+      String.starts_with?(ref, "Elixir.") ->
+        String.replace_prefix(ref, "Elixir.", "")
+
+      true ->
+        ref
+    end
+  end
+
+  def service_alias_or_module(other), do: to_string(other)
+
   @doc "Resolves a contract atom or shorthand to its full contract module."
   def resolve_contract_module(contract_ref) when is_binary(contract_ref) do
     case fetch_service(contract_ref) do

@@ -4,6 +4,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
   """
   use Phoenix.Component
   import Exoforge.Std.Dashboard.Components
+  import Exoforge.Std.Dashboard.InputTypes, only: [widget: 1]
   alias Exoforge.Std.Dashboard.ExtensionPresenter
 
   @doc """
@@ -221,6 +222,14 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                           </div>
                         </label>
 
+                        <% custom_spec = Exoforge.Std.Dashboard.InputTypes.resolve(param) %>
+
+                        <%= case custom_spec do %>
+                          <% spec when is_map(spec) -> %>
+                            <.widget spec={spec} name={"param_#{param.name}"} value={Map.get(@action_params, param.name, "")} />
+                          <% nil -> %>
+                        <% end %>
+
                         <%= case p_type do %>
                           <% t when t in [:integer, :float] -> %>
                             <input
@@ -266,15 +275,11 @@ defmodule Exoforge.Std.Dashboard.Overlays do
 
               <div>
                 <label class="block text-[11px] font-bold text-gray-600 uppercase mb-1">
-                  Caller Scopes (comma-separated RBAC scopes)
+                  Caller Scopes (verified session scopes)
                 </label>
-                <input
-                  type="text"
-                  name="caller_scopes"
-                  value={@caller_scopes}
-                  placeholder="admin, player"
-                  class="w-full px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-gray-800 focus:outline-none focus:border-primary-500"
-                />
+                <div class="w-full px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-gray-500">
+                  <%= @caller_scopes %>
+                </div>
               </div>
 
               <div class="pt-2 border-t border-gray-100 flex items-center justify-end gap-2">
@@ -917,24 +922,6 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               Sign In
             </button>
           </div>
-        </form>
-
-        <div class="relative flex py-2 items-center">
-          <div class="flex-grow border-t border-gray-200"></div>
-          <span class="flex-shrink mx-3 text-gray-400 text-[10px] font-bold uppercase tracking-wider">Or</span>
-          <div class="flex-grow border-t border-gray-200"></div>
-        </div>
-
-        <form action="/login" method="post">
-          <input type="hidden" name="_csrf_token" value={@csrf_token} />
-          <input type="hidden" name="dev_admin" value="true" />
-          <button
-            type="submit"
-            class="w-full py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl text-xs transition-colors border border-gray-200/80 flex items-center justify-center gap-1.5"
-          >
-            <span>⚡</span>
-            <span>Quick Dev Sign-In (Studio Admin)</span>
-          </button>
         </form>
       </div>
     </.modal>

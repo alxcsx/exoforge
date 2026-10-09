@@ -49,6 +49,9 @@ defmodule Exoforge.Domain.Manifest do
     title: nil,
     icon: nil,
     ui_hooks: %{},
+    # Custom Studio input widgets a plugin contributes, keyed by id. A spec is data
+    # (renderable by any dashboard) or a module implementing the Dashboard.Input behaviour.
+    input_types: %{},
     category: "Extension",
     system: false,
     assets_path: "assets"

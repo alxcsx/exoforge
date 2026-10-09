@@ -46,6 +46,8 @@ defmodule Exoforge.Std.Dashboard.ResourceForms do
         role: column[:role] || column["role"],
         default: column[:default] || column["default"],
         choices: column[:choices] || column["choices"] || [],
+        # The input-override a column declared, so a resource can edit any value with any widget.
+        input: column[:input] || column["input"] || nil,
         primary_key: to_string(key) == primary
       }
     end)
@@ -69,11 +71,19 @@ defmodule Exoforge.Std.Dashboard.ResourceForms do
   def values_for(row, columns) when is_map(row) do
     Map.new(columns, fn column ->
       key = to_string(column.key)
-      {key, stringify(row[key] || row[String.to_atom(key)], column.type)}
+      {key, stringify(row[key] || row[existing_atom(key)], column.type)}
     end)
   end
 
   def values_for(_row, columns), do: defaults(columns)
+
+  # Rows key by string or by atom. The atom is one that already exists - the column's own name -
+  # never one minted from arbitrary input (M33 Fix 34).
+  defp existing_atom(key) do
+    String.to_existing_atom(key)
+  rescue
+    ArgumentError -> nil
+  end
 
   @doc """
   The typed attributes for `resource_store.create`/`update`, from submitted form strings.

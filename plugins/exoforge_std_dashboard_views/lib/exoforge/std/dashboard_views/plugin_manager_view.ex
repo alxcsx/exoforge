@@ -90,7 +90,10 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
 
   @impl true
   def handle_event("close_dependency_graph", _params, socket) do
-    {:noreply, assign(socket, show_dependency_graph: false, graph_selected_plugin_id: nil)}
+    {:noreply,
+     socket
+     |> push_event("close-popup", %{})
+     |> assign(show_dependency_graph: false, graph_selected_plugin_id: nil)}
   end
 
   @impl true
@@ -129,7 +132,10 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
 
   @impl true
   def handle_event("close_upload_modal", _params, socket) do
-    {:noreply, assign(socket, show_upload_modal: false, upload_error: nil)}
+    {:noreply,
+     socket
+     |> push_event("close-popup", %{})
+     |> assign(show_upload_modal: false, upload_error: nil)}
   end
 
   @impl true
@@ -159,7 +165,7 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
         {:noreply, assign(socket, upload_error: message)}
 
       {:ok, payload} ->
-        case ActionDispatcher.dispatch(:plugin_manager, :upload_plugin, payload) do
+        case ActionDispatcher.dispatch(:plugin_manager, :upload_plugin, payload, caller_scopes: caller_scopes(socket)) do
           {:ok, result} ->
             socket =
               socket
@@ -181,7 +187,7 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
 
   @impl true
   def handle_event("remove_plugin", %{"id" => id}, socket) do
-    case ActionDispatcher.dispatch(:plugin_manager, :remove_plugin, %{id: id}) do
+    case ActionDispatcher.dispatch(:plugin_manager, :remove_plugin, %{id: id}, caller_scopes: caller_scopes(socket)) do
       {:ok, _result} ->
         socket =
           socket
@@ -205,12 +211,15 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
 
   @impl true
   def handle_event("close_restart_modal", _params, socket) do
-    {:noreply, assign(socket, show_restart_modal: false)}
+    {:noreply,
+     socket
+     |> push_event("close-popup", %{})
+     |> assign(show_restart_modal: false)}
   end
 
   @impl true
   def handle_event("confirm_restart", _params, socket) do
-    case ActionDispatcher.dispatch(:plugin_manager, :restart_system, %{}) do
+    case ActionDispatcher.dispatch(:plugin_manager, :restart_system, %{}, caller_scopes: caller_scopes(socket)) do
       {:ok, result} ->
         socket =
           socket
@@ -402,18 +411,6 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
             Refresh
-          </button>
-
-          <button
-            phx-click="open_dependency_graph"
-            phx-target={@myself}
-            class="px-3.5 py-2 text-sm font-semibold text-violet-700 bg-violet-50 border border-violet-200 rounded-xl hover:bg-violet-100 transition-colors shadow-sm flex items-center gap-2"
-            title="View visual dependency graph"
-          >
-            <svg class="w-4 h-4 text-violet-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
-            </svg>
-            Dependency Graph
           </button>
 
           <button
@@ -980,4 +977,8 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
     </div>
     """
   end
+
+  # The session's verified scopes (M33 Fix 28): administrative dispatches authorize with
+  # the login, not with the dispatcher's internal default.
+  defp caller_scopes(socket), do: socket.assigns[:current_scopes] || []
 end

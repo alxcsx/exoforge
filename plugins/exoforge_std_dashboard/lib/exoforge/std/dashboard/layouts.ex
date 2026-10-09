@@ -14,13 +14,9 @@ defmodule Exoforge.Std.Dashboard.Layouts do
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta name="csrf-token" content={Plug.CSRFProtection.get_csrf_token()} />
         <title>EXOFORGE - Game Producer & Designer Studio</title>
-        <!-- Tailwind CSS (Vendored locally for instant load without network latency, with CDN fallback) -->
+        <!-- Tailwind CSS, vendored locally: instant load, no network dependency, and no
+             third-party script the page does not control (M33 Fix 36) -->
         <script src="/vendor/tailwind.js"></script>
-        <script>
-          if (typeof tailwind === 'undefined') {
-            document.write('<script src="https://cdn.tailwindcss.com"><\/script>');
-          }
-        </script>
         <script>
           if (typeof tailwind !== 'undefined') {
             tailwind.config = {
@@ -94,6 +90,11 @@ defmodule Exoforge.Std.Dashboard.Layouts do
               const csrfToken = metaEl ? metaEl.getAttribute("content") : "";
               const liveSocket = new window.LiveView.LiveSocket("/live", window.Phoenix.Socket, {
                 params: { _csrf_token: csrfToken }
+              });
+              window.addEventListener("phx:close-popup", function() {
+                if (window.history.length > 1) {
+                  window.history.back();
+                }
               });
               liveSocket.connect();
               window.liveSocket = liveSocket;

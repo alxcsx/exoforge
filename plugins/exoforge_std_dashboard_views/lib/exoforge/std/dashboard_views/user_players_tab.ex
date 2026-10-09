@@ -28,13 +28,11 @@ defmodule Exoforge.Std.DashboardViews.UserPlayersTab do
   defp user_id(user), do: user["player_id"] || user["user_id"] || user[:player_id]
 
   defp load_players(socket, user_id) do
+    # The database filters (M33 Fix 33); this used to load every player and filter in Elixir.
     players =
-      case ActionDispatcher.dispatch(:player_data, :list_players, %{}) do
-        {:ok, %{players: players}} when is_list(players) ->
-          Enum.filter(players, &(to_string(&1[:user_id] || &1["user_id"]) == to_string(user_id)))
-
-        _ ->
-          []
+      case ActionDispatcher.dispatch(:player_data, :list_players, %{user_id: user_id}) do
+        {:ok, %{players: players}} when is_list(players) -> players
+        _ -> []
       end
 
     assign(socket, :players, players)

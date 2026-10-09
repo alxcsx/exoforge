@@ -316,8 +316,9 @@ defmodule Exoforge.DashboardLiveViewTest do
 
       {:ok, view, _html} = live(conn, "/")
 
-      # Simulate kernel broadcasting an event
-      EventDispatcher.broadcast(:player_created, %{player_id: "p_live_999", name: "Nova"})
+      # Simulate kernel broadcasting an event on the studio topic the dock subscribes to
+      # (M33 Fix 32: gameplay topics no longer reach the Studio).
+      EventDispatcher.broadcast(:player_created, %{player_id: "p_live_999", name: "Nova"}, topic: "studio")
 
       # Allow message to be processed by LiveView
       :timer.sleep(50)
@@ -349,16 +350,14 @@ defmodule Exoforge.DashboardLiveViewTest do
       html = render_change(view, "select_action_name", %{"action" => "health_check"})
       assert html =~ "health_check"
 
-      # 3. Update form inputs and scopes
-      html =
-        render_change(view, "change_action_form", %{
-          "caller_scopes" => "admin"
-        })
+      # 3. Update form inputs. Caller scopes are not a form input anymore (M33 Fix 27): what the
+      # console dispatches with is the session's verified scopes, shown read-only.
+      html = render_change(view, "change_action_form", %{})
 
-      assert html =~ "caller_scopes"
+      assert html =~ "Caller Scopes (verified session scopes)"
 
-      # 4. Dispatch the action
-      html = render_submit(view, "dispatch_action", %{"caller_scopes" => "admin"})
+      # 4. Dispatch the action — a form-supplied caller_scopes is discarded, not honored.
+      html = render_submit(view, "dispatch_action", %{"caller_scopes" => "server, admin"})
       assert html =~ "Execution Output"
       assert html =~ "SUCCESS (200)"
       assert html =~ "healthy" or html =~ "ok" or html =~ "status"

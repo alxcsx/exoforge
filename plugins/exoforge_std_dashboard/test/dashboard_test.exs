@@ -73,6 +73,60 @@ defmodule Exoforge.DashboardTest do
       assert get_resp_header(conn, "location") == ["/login"]
     end
 
+    test "GET / rejects a session whose scopes are not staff (M33 Fix 26)" do
+      conn =
+        conn(:get, "/")
+        |> Plug.Test.init_test_session(%{
+          "admin_player_id" => "plain_player",
+          "admin_scopes" => ["player"]
+        })
+        |> Router.call(@opts)
+
+      # The LiveView gate turns a non-staff session away at sign-in.
+      assert conn.status == 302
+      assert get_resp_header(conn, "location") == ["/login"]
+    end
+
+    test "GET /login renders form when session lacks staff scopes (prevents redirect loop)" do
+      conn =
+        conn(:get, "/login")
+        |> Plug.Test.init_test_session(%{
+          "admin_player_id" => "plain_player",
+          "admin_scopes" => ["player"]
+        })
+        |> Router.call(@opts)
+
+      assert conn.status == 200
+      assert String.contains?(conn.resp_body, "Sign in")
+    end
+
+    test "GET /api/overview rejects a player-scoped session (M33 Fix 26)" do
+      conn =
+        conn(:get, "/api/overview")
+        |> Plug.Test.init_test_session(%{
+          "admin_player_id" => "plain_player",
+          "admin_scopes" => ["player"]
+        })
+        |> Router.call(@opts)
+
+      assert conn.status == 403
+    end
+
+    test "the sign-in page escapes the reflected error (M33 Fix 25)" do
+      conn = conn(:get, "/login?error=<script>alert(1)</script>") |> Router.call(@opts)
+
+      body = conn.resp_body
+      refute body =~ "<script>alert(1)</script>"
+      assert body =~ "&lt;script&gt;alert(1)&lt;/script&gt;"
+    end
+
+    test "GET /login does not expose quick dev sign-in bypass" do
+      conn = conn(:get, "/login") |> Router.call(@opts)
+      assert conn.status == 200
+      refute conn.resp_body =~ "Quick Dev Sign-In"
+      refute conn.resp_body =~ "dev_admin"
+    end
+
     test "GET / renders the dashboard with a session" do
       conn =
         conn(:get, "/")
@@ -224,6 +278,44 @@ defmodule Exoforge.DashboardTest do
         |> Router.call(@opts)
 
       assert dispatch.status == 403
+    end
+  end
+
+  describe "M33 hardening" do
+    test "the dependency graph renders without a KeyError (M33 Fix 29)" do
+      html =
+        Exoforge.Std.DashboardViews.DependencyGraph.graph(%{
+          plugins: [],
+          selected_plugin_id: "exoforge_std_auth",
+          target: nil
+        })
+        |> Phoenix.LiveViewTest.rendered_to_string()
+
+      assert html =~ "Plugin Dependency Architecture"
+    end
+
+    test "an SVG icon from metadata cannot script (M33 Fix 35)" do
+      html =
+        Exoforge.Std.Dashboard.Components.metric_card(%{
+          title: "Users",
+          value: "3",
+          icon_svg: "<svg><script>alert(1)</script><path d=\"M0 0\" onerror=\"alert(1)\"/></svg>"
+        })
+        |> Phoenix.LiveViewTest.rendered_to_string()
+
+      refute html =~ "<script>"
+      refute html =~ "onerror"
+      assert html =~ "Users"
+    end
+
+    test "the layout carries no document.write CDN fallback (M33 Fix 36)" do
+      html =
+        Exoforge.Std.Dashboard.Layouts.root(%{inner_content: ""})
+        |> Phoenix.LiveViewTest.rendered_to_string()
+
+      refute html =~ "document.write"
+      refute html =~ "cdn.tailwindcss.com"
+      assert html =~ "/vendor/tailwind.js"
     end
   end
 end

@@ -47,8 +47,10 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     if connected?(socket) do
       Logger.info("[StudioLive] Connected session for #{player_id}")
 
+      # The Studio dock is for studio/system traffic, not the game's event stream (M33 Fix 32):
+      # subscribing to everything piped every gameplay tick into every open Studio window.
       try do
-        EventDispatcher.subscribe(:all)
+        EventDispatcher.subscribe(:all, topic: "studio")
       rescue
         _ -> :ok
       end
@@ -114,7 +116,9 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
        selected_action_service: default_service_name,
        selected_action_name: default_action_name,
        action_form_params: default_params,
-       caller_scopes: "admin, player",
+       # The verified scopes the session signed in with (M33 Fix 27): what the console may
+       # dispatch is decided by the session, never by a form field.
+       current_scopes: session["admin_scopes"] || [],
        action_modal_open: false,
        action_result: nil,
        action_latency_ms: nil,
@@ -301,8 +305,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         new_open = !socket.assigns.cmd_palette_open
         results = if new_open, do: default_cmd_results(socket), else: []
 
-        {:noreply,
-         assign(socket, cmd_palette_open: new_open, cmd_query: "", cmd_results: results)}
+        {:noreply, assign(socket, cmd_palette_open: new_open, cmd_query: "", cmd_results: results)}
 
       key in ["Escape", "Esc"] ->
         {:noreply,
@@ -394,7 +397,10 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   end
 
   def handle_event("close_login_modal", _params, socket) do
-    {:noreply, assign(socket, login_open: false)}
+    {:noreply,
+     socket
+     |> push_event("close-popup", %{})
+     |> assign(login_open: false)}
   end
 
   def handle_event("toggle_pinned_menu", _params, socket) do
@@ -407,7 +413,10 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   end
 
   def handle_event("close_settings", _params, socket) do
-    {:noreply, assign(socket, :settings_open, false)}
+    {:noreply,
+     socket
+     |> push_event("close-popup", %{})
+     |> assign(:settings_open, false)}
   end
 
   def handle_event("set_settings_tab", %{"tab" => tab}, socket) do
@@ -419,7 +428,10 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   end
 
   def handle_event("close_inspect_extension", _params, socket) do
-    {:noreply, push_patch(socket, to: tab_path(socket.assigns.current_tab))}
+    {:noreply,
+     socket
+     |> push_event("close-popup", %{})
+     |> push_patch(to: tab_path(socket.assigns.current_tab))}
   end
 
   # Generic popup navigation: any view can open a drawer by bubbling `open_focus` with a
@@ -429,7 +441,10 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   end
 
   def handle_event("close_focus", _params, socket) do
-    {:noreply, push_patch(socket, to: tab_path(socket.assigns.current_tab))}
+    {:noreply,
+     socket
+     |> push_event("close-popup", %{})
+     |> push_patch(to: tab_path(socket.assigns.current_tab))}
   end
 
   def handle_event("quick_action", %{"action" => action}, socket) do
@@ -461,7 +476,10 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   end
 
   def handle_event("close_action_modal", _params, socket) do
-    {:noreply, assign(socket, action_modal_open: false, action_result: nil)}
+    {:noreply,
+     socket
+     |> push_event("close-popup", %{})
+     |> assign(action_modal_open: false, action_result: nil)}
   end
 
   def handle_event("select_action_service", %{"service" => svc_name}, socket) do
@@ -495,20 +513,16 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   end
 
   def handle_event("change_action_form", params, socket) do
-    caller_scopes = Map.get(params, "caller_scopes", socket.assigns.caller_scopes)
-
     updated_params =
       Enum.reduce(params, socket.assigns.action_form_params, fn
         {"param_" <> name, val}, acc -> Map.put(acc, name, val)
         _other, acc -> acc
       end)
 
-    {:noreply, assign(socket, action_form_params: updated_params, caller_scopes: caller_scopes)}
+    {:noreply, assign(socket, action_form_params: updated_params)}
   end
 
   def handle_event("dispatch_action", params, socket) do
-    caller_scopes_str = Map.get(params, "caller_scopes") || socket.assigns.caller_scopes
-
     updated_params =
       Enum.reduce(params, socket.assigns.action_form_params, fn
         {"param_" <> name, val}, acc -> Map.put(acc, name, val)
@@ -520,7 +534,8 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
     if svc && act do
       payload = ActionForms.build_payload(act, updated_params)
-      scopes = ActionForms.parse_scopes(caller_scopes_str)
+      # The session's verified scopes (M33 Fix 27): a form field cannot claim `admin` or `server`.
+      scopes = socket.assigns.current_scopes
 
       start_time = System.monotonic_time(:microsecond)
 
@@ -540,8 +555,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
        assign(socket,
          action_result: result,
          action_latency_ms: latency_ms,
-         action_form_params: updated_params,
-         caller_scopes: caller_scopes_str
+         action_form_params: updated_params
        )}
     else
       {:noreply, show_toast(socket, :error, "Selected service or action not found.")}
@@ -577,7 +591,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       timestamp: System.system_time(:millisecond)
     }
 
-    EventDispatcher.broadcast(:studio_telemetry, payload)
+    EventDispatcher.broadcast(:studio_telemetry, payload, topic: "studio")
     {:noreply, show_toast(socket, :info, "Simulated telemetry event ##{ping_id} broadcasted!")}
   end
 
@@ -632,8 +646,8 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
             name: to_string(m.name),
             version: to_string(m.version),
             type: to_string(m.type),
-            provides: Enum.map(m.provides || [], &PluginRegistry.clean_service_name/1),
-            dependencies: Enum.map(m.dependencies || [], &PluginRegistry.clean_service_name/1)
+            provides: Enum.map(m.provides || [], &PluginRegistry.service_alias_or_module/1),
+            dependencies: Enum.map(m.dependencies || [], &PluginRegistry.service_alias_or_module/1)
           }
         end)
       rescue
@@ -1243,6 +1257,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                 id={"ext_view_#{active_ext.id}"}
                 extension={active_ext}
                 focus={@focus}
+                current_scopes={@current_scopes}
               />
             <% else %>
               <.live_component
@@ -1250,6 +1265,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                 id={"ext_generic_#{active_ext.id}"}
                 extension={active_ext}
                 focus={@focus}
+                current_scopes={@current_scopes}
               />
             <% end %>
           <% else %>
@@ -1318,7 +1334,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         selected_service={@selected_action_service}
         selected_action={@selected_action_name}
         action_params={@action_form_params}
-        caller_scopes={@caller_scopes}
+        caller_scopes={Enum.join(@current_scopes, ", ")}
         result={@action_result}
         latency_ms={@action_latency_ms}
         on_close="close_action_modal"

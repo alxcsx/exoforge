@@ -18,14 +18,15 @@ defmodule Exoforge.Std.Dashboard.ResourceFormsTest do
   end
 
   test "a column's declared default wins over the type's placeholder" do
-    columns = ResourceForms.columns(%{
-      name: :counters,
-      primary_key: :id,
-      columns: [
-        %{name: :id, type: :integer},
-        %{name: :status, type: :string, default: "active"}
-      ]
-    })
+    columns =
+      ResourceForms.columns(%{
+        name: :counters,
+        primary_key: :id,
+        columns: [
+          %{name: :id, type: :integer},
+          %{name: :status, type: :string, default: "active"}
+        ]
+      })
 
     defaults = ResourceForms.defaults(columns)
 

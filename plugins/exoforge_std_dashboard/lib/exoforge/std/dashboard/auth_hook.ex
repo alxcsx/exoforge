@@ -6,17 +6,17 @@ defmodule Exoforge.Std.Dashboard.AuthHook do
   login page, so logged-out users cannot reach the dashboard.
   """
   import Phoenix.LiveView
-
-  # Any of these session keys proves the browser established a session.
-  @session_keys ["admin_player_id", "admin_user_id", "auth_token"]
+  import Phoenix.Component
 
   def on_mount(:require_studio, _params, session, socket) do
-    if Enum.any?(@session_keys, &present?(session[&1])) do
-      {:cont, socket}
+    scopes = session["admin_scopes"] || []
+
+    # A session proves a login happened; a staff rank proves the login was a Studio account
+    # (M33 Fix 26): a player's session is refused rather than promoted to staff.
+    if Exoforge.Auth.Roles.rank_of(scopes) >= 2 do
+      {:cont, assign(socket, :current_scopes, scopes)}
     else
       {:halt, redirect(socket, to: "/login")}
     end
   end
-
-  defp present?(value), do: is_binary(value) and value != ""
 end

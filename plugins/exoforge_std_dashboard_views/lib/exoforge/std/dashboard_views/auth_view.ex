@@ -116,15 +116,14 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
   def handle_event("submit_register", %{"register" => params}, socket) do
     payload = UserForms.registration_payload(params)
 
-    case ActionDispatcher.dispatch(:auth, :register, payload) do
+    case ActionDispatcher.dispatch(:auth, :register, payload, caller_scopes: caller_scopes(socket)) do
       {:ok, result} ->
         socket =
           socket
           |> assign(
             show_register_modal: false,
             error_message: nil,
-            action_notification:
-              "User '#{UserForms.display_name(payload.name, result.player_id)}' successfully created!",
+            action_notification: "User '#{UserForms.display_name(payload.name, result.player_id)}' successfully created!",
             issued_token_info: %{
               name: UserForms.display_name(payload.name, result.player_id),
               player_id: result.player_id,
@@ -170,7 +169,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
         {:noreply, assign(socket, reset_password_error: message)}
 
       {:ok, payload} ->
-        case ActionDispatcher.dispatch(:auth, :reset_password, payload) do
+        case ActionDispatcher.dispatch(:auth, :reset_password, payload, caller_scopes: caller_scopes(socket)) do
           {:ok, _} ->
             socket =
               socket
@@ -187,8 +186,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
           {:error, reason} ->
             {:noreply,
              assign(socket,
-               reset_password_error:
-                 "Password reset failed: #{UserForms.failure_message(reason)}"
+               reset_password_error: "Password reset failed: #{UserForms.failure_message(reason)}"
              )}
         end
     end
@@ -229,11 +227,14 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
     pid = if user, do: user["user_id"] || user["player_id"], else: nil
     scopes = Exoforge.Auth.Roles.scopes_for_role(role)
 
-    case ActionDispatcher.dispatch(:auth, :update_user_roles, %{
-           user_id: pid,
-           role: role,
-           scopes: scopes
-         }) do
+    case ActionDispatcher.dispatch(
+           :auth,
+           :update_user_roles,
+           %{
+             user_id: pid,
+             role: role,
+             scopes: scopes
+           }, caller_scopes: caller_scopes(socket)) do
       {:ok, _} ->
         socket =
           socket
@@ -247,8 +248,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
         {:noreply, socket}
 
       {:error, :protected_admin_account} ->
-        {:noreply,
-         assign(socket, roles_error: "Cannot alter roles of the protected environment admin.")}
+        {:noreply, assign(socket, roles_error: "Cannot alter roles of the protected environment admin.")}
 
       {:error, reason} ->
         {:noreply, assign(socket, roles_error: "Failed to update roles: #{inspect(reason)}")}
@@ -257,7 +257,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
 
   @impl true
   def handle_event("delete_user", %{"player_id" => player_id}, socket) do
-    case ActionDispatcher.dispatch(:auth, :delete_user, %{player_id: player_id}) do
+    case ActionDispatcher.dispatch(:auth, :delete_user, %{player_id: player_id}, caller_scopes: caller_scopes(socket)) do
       {:ok, _} ->
         socket =
           socket
@@ -283,8 +283,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
          )}
 
       {:error, reason} ->
-        {:noreply,
-         assign(socket, action_notification: "Failed to delete account: #{inspect(reason)}")}
+        {:noreply, assign(socket, action_notification: "Failed to delete account: #{inspect(reason)}")}
     end
   end
 
@@ -298,7 +297,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
     user = Enum.find(socket.assigns.users, &(&1["player_id"] == player_id))
     scopes = if user, do: user["scopes"], else: ["player"]
 
-    case ActionDispatcher.dispatch(:auth, :issue_token, %{player_id: player_id, scopes: scopes}) do
+    case ActionDispatcher.dispatch(:auth, :issue_token, %{player_id: player_id, scopes: scopes}, caller_scopes: caller_scopes(socket)) do
       {:ok, result} ->
         socket =
           socket
@@ -373,7 +372,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
   end
 
   defp load_users(socket) do
-    case ActionDispatcher.dispatch(:auth, :list_users, %{}) do
+    case ActionDispatcher.dispatch(:auth, :list_users, %{limit: 50}) do
       {:ok, %{users: users}} ->
         socket
         |> assign(users: users)
@@ -1170,4 +1169,8 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
     </div>
     """
   end
+
+  # The session's verified scopes (M33 Fix 28): administrative dispatches authorize with
+  # the login, not with the dispatcher's internal default.
+  defp caller_scopes(socket), do: socket.assigns[:current_scopes] || []
 end

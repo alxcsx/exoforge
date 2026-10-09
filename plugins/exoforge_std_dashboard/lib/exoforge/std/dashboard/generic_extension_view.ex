@@ -11,6 +11,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
   alias Exoforge.PluginRegistry
   alias Exoforge.DrawerRegistry
   import Exoforge.Std.Dashboard.Components
+  import Exoforge.Std.Dashboard.InputTypes, only: [widget: 1]
 
   @impl true
   def mount(socket) do
@@ -149,7 +150,6 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
     updated_act_form =
       Enum.reduce(params, act_form, fn
         {"param_" <> p_name, val}, acc -> Map.put(acc, p_name, val)
-        {"caller_scopes", val}, acc -> Map.put(acc, "caller_scopes", val)
         _, acc -> acc
       end)
 
@@ -163,15 +163,10 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
     action_def = Enum.find(ext[:actions] || [], &(&1[:name] == act_name))
 
     act_form = Map.get(socket.assigns.action_forms, act_name, %{})
-    scopes_str = Map.get(act_form, "caller_scopes", "admin, player")
 
-    scopes =
-      scopes_str
-      |> String.split(",")
-      |> Enum.map(&String.trim/1)
-      |> Enum.reject(&(&1 == ""))
-
-    scopes = if scopes == [], do: [Exoforge.Auth.Roles.admin()], else: scopes
+    # The session's verified scopes (M33 Fix 27): the caller's RBAC comes from the login, not
+    # from a form field that could claim `admin` or `server`.
+    scopes = socket.assigns[:current_scopes] || []
 
     # Cast parameters
     payload =
@@ -239,8 +234,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
   def handle_event("new_resource", _params, socket) do
     columns = current_resource_columns(socket)
 
-    {:noreply,
-     assign(socket, resource_form: %{mode: :new, values: ResourceForms.defaults(columns), errors: %{}})}
+    {:noreply, assign(socket, resource_form: %{mode: :new, values: ResourceForms.defaults(columns), errors: %{}})}
   end
 
   @impl true
@@ -248,8 +242,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
     columns = current_resource_columns(socket)
     values = ResourceForms.values_for(socket.assigns.inspected_row, columns)
 
-    {:noreply,
-     assign(socket, resource_form: %{mode: :edit, values: values, errors: %{}})}
+    {:noreply, assign(socket, resource_form: %{mode: :edit, values: values, errors: %{}})}
   end
 
   @impl true
@@ -394,7 +387,6 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
         |> apply_resource_search()
     end
   end
-
 
   defp apply_resource_search(socket) do
     q = String.downcase(String.trim(socket.assigns.resource_search))
@@ -652,7 +644,12 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                             <span class="text-[10px] text-purple-600 font-mono"><%= p_type %></span>
                           </div>
 
-                          <%= case p_type do %>
+                          <% custom_spec = Exoforge.Std.Dashboard.InputTypes.resolve(p) %>
+
+                          <%= if is_map(custom_spec) do %>
+                            <.widget spec={custom_spec} name={"param_#{p_name}"} value={val} />
+                          <% else %>
+                            <%= case p_type do %>
                             <% :boolean -> %>
                               <select
                                 name={"param_#{p_name}"}
@@ -677,23 +674,21 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                                 value={val}
                                 class="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono"
                               />
+                            <% end %>
                           <% end %>
                         </div>
                       <% end %>
                     </div>
                   <% end %>
 
-                  <!-- Scope Gating Input -->
+                  <!-- Scope Gating (display only, M33 Fix 27) -->
                   <div>
                     <div class="flex items-center justify-between mb-1">
                       <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Caller Scopes</label>
                     </div>
-                    <input
-                      type="text"
-                      name="caller_scopes"
-                      value={Map.get(act_form, "caller_scopes", "admin, player")}
-                      class="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 focus:bg-white font-mono text-gray-600"
-                    />
+                    <div class="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 font-mono text-gray-500">
+                      <%= Enum.join(@current_scopes || [], ", ") %>
+                    </div>
                   </div>
 
                   <!-- Run Button -->
@@ -1080,53 +1075,59 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                     <%= column.label %><%= if column.primary_key, do: " · key" %>
                   </label>
 
-                  <%= case column.type do %>
-                    <% _ when column.choices != [] -> %>
-                      <select
-                        name={"values[#{key}]"}
-                        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent font-mono bg-white"
-                      >
-                        <%= for choice <- column.choices do %>
-                          <option value={choice} selected={to_string(value) == to_string(choice)}>
-                            <%= choice %>
-                          </option>
-                        <% end %>
-                      </select>
-                    <% :boolean -> %>
-                      <input type="hidden" name={"values[#{key}]"} value="false" />
-                      <input
-                        type="checkbox"
-                        name={"values[#{key}]"}
-                        value="true"
-                        checked={value == "true"}
-                        class="w-4 h-4 text-violet-600 rounded border-gray-300 focus:ring-violet-500"
-                      />
-                    <% :integer -> %>
-                      <input
-                        type="number"
-                        step="1"
-                        name={"values[#{key}]"}
-                        value={value}
-                        readonly={locked}
-                        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent font-mono"
-                      />
-                    <% :float -> %>
-                      <input
-                        type="number"
-                        step="any"
-                        name={"values[#{key}]"}
-                        value={value}
-                        readonly={locked}
-                        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent font-mono"
-                      />
-                    <% _ -> %>
-                      <input
-                        type="text"
-                        name={"values[#{key}]"}
-                        value={value}
-                        readonly={locked}
-                        class={"w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent font-mono #{if locked, do: "bg-gray-50 text-gray-500"}"}
-                      />
+                  <% custom_spec = Exoforge.Std.Dashboard.InputTypes.resolve(column) %>
+
+                  <%= if is_map(custom_spec) do %>
+                    <.widget spec={custom_spec} name={"values[#{key}]"} value={value} readonly={locked} />
+                  <% else %>
+                    <%= case column.type do %>
+                      <% _ when column.choices != [] -> %>
+                        <select
+                          name={"values[#{key}]"}
+                          class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent font-mono bg-white"
+                        >
+                          <%= for choice <- column.choices do %>
+                            <option value={choice} selected={to_string(value) == to_string(choice)}>
+                              <%= choice %>
+                            </option>
+                          <% end %>
+                        </select>
+                      <% :boolean -> %>
+                        <input type="hidden" name={"values[#{key}]"} value="false" />
+                        <input
+                          type="checkbox"
+                          name={"values[#{key}]"}
+                          value="true"
+                          checked={value == "true"}
+                          class="w-4 h-4 text-violet-600 rounded border-gray-300 focus:ring-violet-500"
+                        />
+                      <% :integer -> %>
+                        <input
+                          type="number"
+                          step="1"
+                          name={"values[#{key}]"}
+                          value={value}
+                          readonly={locked}
+                          class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent font-mono"
+                        />
+                      <% :float -> %>
+                        <input
+                          type="number"
+                          step="any"
+                          name={"values[#{key}]"}
+                          value={value}
+                          readonly={locked}
+                          class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent font-mono"
+                        />
+                      <% _ -> %>
+                        <input
+                          type="text"
+                          name={"values[#{key}]"}
+                          value={value}
+                          readonly={locked}
+                          class={"w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent font-mono #{if locked, do: "bg-gray-50 text-gray-500"}"}
+                        />
+                    <% end %>
                   <% end %>
 
                   <%= if error = @resource_form.errors[key] do %>
