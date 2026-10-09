@@ -156,17 +156,40 @@ What ownership unit exists today: **none beyond the instance.** `auth` has users
 (dev/prod) are deploy targets. Nothing answers "whose plugins are these", because there has only
 ever been one answer.
 
-Two shapes, and the choice is a product decision:
+**The ownership unit is a project, and a studio sits above it.** The shape PlayFab uses — a Studio
+holds Titles — and the one UGS uses, where an organisation holds projects. One studio, many
+projects; usage belongs to a project and rolls up to the studio:
 
-- **(A) One instance, one owner.** Already true. The billing unit is the instance, attribution is
-  free, and nothing needs adding but the record of it. Environments hang off it.
-- **(B) One instance, many games.** Then a real ownership unit is needed — **project**, which is the
-  word UGS uses and which is free here — carried on plugins, on player data, on auth and on the
-  metering records. That is genuine multi-tenancy: every table scoped, every query filtered,
-  per-project keys.
+```
+studio    the account, and the thing the bill goes to
+  └── project   the tenant: plugins, players, environments, usage
+        ├── environment   dev / staging / prod — a deploy target
+        ├── plugins
+        ├── players
+        └── usage records
+```
 
-Start with **(A)**, but key the metering records so **(B)** can arrive without a migration — one
-`project` column now, defaulted, rather than a migration through every table later.
+**A project gets its own instance.** That is what both PlayFab and UGS do, and it is what collapses
+"tenant" back into "the instance" instead of requiring multi-tenancy: nothing is shared, so nothing
+needs scoping and there is no query to filter. Projects are separated by a process boundary and a
+database file, which is a stronger guarantee than a `WHERE` clause — and it makes many-projects-per-
+instance a shape to avoid rather than one to build.
+
+So the MVP needs **no isolation work at all** — one studio, one project, both ids constant. What it
+needs is the **shape**: the instance knows its `project_id` and `studio_id`, deploys carry them, and
+metering records carry them. Then the rollup — usage per plugin, summed to the project, summed to
+the studio — is a `GROUP BY` that is already correct on day one and does not change when the second
+project appears.
+
+**Deferred until there is more than one project**, and cheap when it comes because the identity
+already exists: studio membership and per-project permissions (who may deploy to which project), and
+per-project isolation *only if* projects are ever made to share an instance, which this design
+deliberately avoids.
+
+**Two naming collisions to be aware of.** "Tenant" is already taken here for a plugin's private
+database namespace, so it is not used for this. And "project" mildly collides with MSBuild's
+`.csproj`, which is the other thing this codebase calls a project — `title` is the alternative if
+that grates, and it is what PlayFab calls it.
 
 **Phase 5 — flexibility and boilerplate.** A versioned handshake with declared capabilities, the way
 LSP and Terraform providers do it, so host and plugin can negotiate rather than assume. The runner
