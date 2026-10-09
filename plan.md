@@ -257,15 +257,17 @@ by whether they were worth doing on the spot.
   55 KB, with ~0.2 MB less marginal Pss at 8 instances. Kept, because cold start is paid on every
   boot and reload and disk is the cheap axis here. The same numbers sit beside the property in the
   SDK targets.
+- **The health probes pointed at a 404, and three callers shared the path.** The Dockerfile's
+  `HEALTHCHECK`, the compose healthcheck and both Kubernetes probes all curled `:4005/api/health`.
+  The dashboard serves `/health` (200); `/api/health` is a 404 there and a 401 on `:4001`, and
+  `curl -f` rejects both. In Kubernetes that is not documentation: the pod would never become ready.
+  All three now hit `/health`, verified against a running server - and the live check also shows
+  `:4001/health` answering 200, while `:4005/health` does too, so the probes keep their port. Podman
+  still drops the Dockerfile instruction under its default OCI format, which the comment there now
+  says rather than reading as though it runs.
 
 *Worth doing later, in rough order of value:*
 
-- **The `HEALTHCHECK` is wrong twice.** Verified against the running container: the path it curls,
-  `:4005/api/health`, is `Not Found`; the working public health route is `:4001/health`, and
-  `:4001/api/health` answers `401`, which `curl -f` also rejects. And podman builds OCI-format images
-  by default and drops the instruction with a warning, so the line only exists under `--format
-  docker` even when it is right. Kubernetes takes its probes from the manifest, so this is
-  documentation rather than function - but it should be right documentation.
 - **`upload_plugin` base64s the plugin** into a JSON action payload: +33%, encoded and decoded on
   both sides. A WebSocket binary frame for that one field would fix it, and deploying is rare enough
   that it is hygiene rather than performance.

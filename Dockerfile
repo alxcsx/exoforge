@@ -110,8 +110,12 @@ USER exoforge
 # 9000: BEAM node distribution
 EXPOSE 4005 4000 4001 4369 9000
 
-# Container / Kubernetes Healthcheck hitting Studio API
+# Container healthcheck, the dashboard's public health route. `/api/health` is a 404 on :4005 and a
+# 401 on :4001, and `curl -f` rejects both - the probe looked alive and would have failed on a healthy
+# server. Kubernetes takes its probes from `deploy/k8s/backend-deployment.yaml`; this line is for
+# `docker run` and is dropped by podman's default OCI image format, which is why the comment says
+# where the real probes live.
 HEALTHCHECK --interval=5s --timeout=3s --retries=5 --start-period=5s \
-  CMD curl -f http://localhost:4005/api/health || exit 1
+  CMD curl -f http://localhost:4005/health || exit 1
 
 CMD ["/app/bin/exoforge", "start"]

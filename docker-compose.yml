@@ -48,7 +48,7 @@ services:
       - "4000:4000" # WebSocket Gateway
       - "4001:4001" # REST API Ingress
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:4005/api/health || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:4005/health || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 5
