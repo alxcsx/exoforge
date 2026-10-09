@@ -227,16 +227,23 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
     end
   end
 
-  # Levels come from the SDK: 3 error, 2 warning, anything else informational.
+  # The plugin's own log and exception channel. The same line goes to the server log and to the
+  # developer-facing buffer: `exo plugin logs` reads the buffer, and an exception trace is exactly
+  # what a developer is looking for there.
   defp log_from_plugin(msg, state) do
-    level =
-      case Map.get(msg, "level") do
-        3 -> :error
-        2 -> :warning
-        _ -> :info
-      end
+    record_log(state.manifest.id, Map.get(msg, "level", 1), Map.get(msg, "message", ""))
+  end
 
-    Logger.log(level, "[#{state.manifest.id}] #{Map.get(msg, "message", "")}")
+  defp record_log(plugin_id, level, message) do
+    # Keep it where the developer can see it: the server log alone is invisible from Unity.
+    Exoforge.PluginLogs.append(plugin_id, level, message)
+
+    case level do
+      0 -> Logger.debug("[#{plugin_id}] #{message}")
+      2 -> Logger.warning("[#{plugin_id}] #{message}")
+      3 -> Logger.error("[#{plugin_id}] #{message}")
+      _ -> Logger.info("[#{plugin_id}] #{message}")
+    end
   end
 
   defp reply_action_result(msg, state) do
@@ -333,19 +340,7 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
   end
 
   defp run_host_call("log", args, manifest) do
-    level = Map.get(args, "level", 1)
-    message = Map.get(args, "message", "")
-
-    # Also keep it where the developer can see it: the server log alone is invisible from Unity.
-    Exoforge.PluginLogs.append(manifest.id, level, message)
-
-    case level do
-      0 -> Logger.debug("[#{manifest.id}] #{message}")
-      2 -> Logger.warning("[#{manifest.id}] #{message}")
-      3 -> Logger.error("[#{manifest.id}] #{message}")
-      _ -> Logger.info("[#{manifest.id}] #{message}")
-    end
-
+    record_log(manifest.id, Map.get(args, "level", 1), Map.get(args, "message", ""))
     true
   end
 

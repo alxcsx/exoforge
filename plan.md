@@ -124,10 +124,11 @@ Two errors guard the deployment, both verified by setting the property and watch
 remove the property metadata reflection needs, so a record serialises as an empty object — silently,
 and only once deployed.
 
-The image carries the SDK in the builder and the runtime in the runner. **Unverified**: there is no
-Docker daemon in the environment this was written in, so the image change is conventional rather
-than tested, and it is the one part of Phase 1 that still needs a `docker build` before it can be
-called done.
+The image carries the SDK in the builder and the runtime in the runner. **Built and booted**: the
+release reaches `Discovered 9 plugin manifests`, `All 9 plugins loaded`, `System online in 47ms`.
+Six defects stood between the image and that line, none of them visible by reading, all of them in
+`git log` under `fix(docker)` - and the phase 1 image change, written without a container runtime to
+build against, did not work until one existed.
 
 **Not in Phase 1, and deliberately:** the two-pass build stays. It exists only so the generated JSON
 context is visible to the System.Text.Json generator on a second compile, and the context is what
@@ -238,58 +239,28 @@ by whether they were worth doing on the spot.
 - **The kill test was a hand-run.** It is now two tests: a plugin that dies mid-call answers its
   caller rather than leaving it waiting, and the supervisor replaces a plugin whose process the OS
   killed.
+- **`exo plugin logs` read only half the channel.** The reader and the CLI already existed; the
+  exception path did not write to them. `host_log` frames — the SDK's own log and exception channel —
+  went to the server log alone, so an unhandled plugin exception showed up in the server log and
+  never in the CLI, despite the SDK comment promising `exo plugin logs` the file and the line. Both
+  paths now record through one `record_log/3`, and a stub-protocol test asserts the buffer holds the
+  trace.
 
 *Worth doing later, in rough order of value:*
 
-- **`exo plugin logs` should read what the runner now receives.** With `host_log` handled, the
-  material for a plugin log view exists in one place; nothing yet reads it back.
 - **Plugin log volume is unbounded.** A chatty or crash-looping plugin can now fill the server log,
   and there is no rate limit or ring buffer between it and the operator.
 - **`PublishReadyToRun` is unmeasured.** It costs about 50KB on a 195KB plugin and is there for cold
   start, which nobody has timed. Either measure it or drop it.
-- **The image had never booted, and now it does.** Six defects, each found only by building and
-  running it, three of them predating every change in M32. The largest: `mix release` carries only
-  `ebin/` and `priv/` per application and a plugin's manifest sits at the application root, so a
-  release drops every standard plugin's manifest. The standard plugins now come from the build tree,
-  copied into `plugins/`. Boot log: `Discovered 9 plugin manifests`, `All 9 plugins loaded`,
-  `System online in 47ms`. Recorded as one entry rather than five because the pattern matters more
-  than the list: none were visible by reading, and "written but unverified" would have stood
-  indefinitely without a container runtime to build against. Built for the first time under podman, it
-  failed three times in a row, each one a real defect rather than a tooling quirk:
-  an `ARG` declared in the builder stage was out of scope in the runner, so `COPY --from=` resolved to
-  an empty name; the runner was Alpine 3.21 with openssl 3.3.7 while the builder had 3.24 with 3.5.8,
-  and OTP 29's crypto NIF needs 3.4+, so the kernel died on `EVP_PKEY_sign_message_init`; and it now
-  gets as far as the application, which refuses to start because `plugins_csharp/` ships
-  `sample_plugin`'s manifest with no binary beside it, and the dependency sort then reports
-  `requires service 'database', which is not provided`. The first two are fixed. The third is the
-  item below, and it is what stands between the image and a first successful boot.
-- **The release scans a path that does not exist.** With the image finally booting, the boot log
-  reads `Discovered 0 plugin manifests` and warns about `plugins_build/prod/libplugins_csharp`. The
-  prod scan path is `["_build/prod/lib", "plugins_csharp"]`, which is correct for a checkout and wrong
-  for a release: the release's own applications are in `lib/` beside `bin/`, not under `_build`. So a
-  containerised server boots with **no standard plugins at all** - no `:database`, no `:auth` - and
-  says nothing louder than a warning. The fix is for the release's scan path to name the release's own
-  `lib` (or the `/app/plugins_elixir` copy the Dockerfile already makes, which suggests this was the
-  intent and the path was never pointed at it). Worth checking whether `config/runtime.exs` can
-  resolve it rather than requiring an env var in every deployment.
-- **The image does not build a plugin.** The Dockerfile copies `plugins_csharp/`, but the binary is a
-  build output and is not there, so the image ships manifests without assemblies - and the sample's
-  manifest alone is enough to stop the application booting. Building the sample in the image is now
-  cheap (195KB, one pass, the SDK is already in the builder) and is the obvious fix.
-- **The `HEALTHCHECK` points at a path that returns 404.** Verified against the running container:
-  `:4005/api/health` is `Not Found` while `:4001/api/health` answers `401`, so the check as written
-  would fail on a healthy server. It is also silently ignored under OCI image format, which is
-  podman's default - so the two mistakes hid each other. Kubernetes takes its probes from the
-  manifest, so this is documentation rather than function, but it should be right documentation.
-- **`HEALTHCHECK` is silently dropped.** Podman builds OCI-format images by default and ignores it
-  with a warning, so the healthcheck only exists under `--format docker`. Kubernetes takes its
-  probes from the manifest anyway, so this is documentation rather than function - but it is
-  currently a line that reads as though it does something.
+- **The `HEALTHCHECK` is wrong twice.** Verified against the running container: the path it curls,
+  `:4005/api/health`, is `Not Found`; the working public health route is `:4001/health`, and
+  `:4001/api/health` answers `401`, which `curl -f` also rejects. And podman builds OCI-format images
+  by default and drops the instruction with a warning, so the line only exists under `--format
+  docker` even when it is right. Kubernetes takes its probes from the manifest, so this is
+  documentation rather than function - but it should be right documentation.
 - **`upload_plugin` base64s the plugin** into a JSON action payload: +33%, encoded and decoded on
   both sides. A WebSocket binary frame for that one field would fix it, and deploying is rare enough
   that it is hygiene rather than performance.
-- **The image change from phase 1 has never been built.** No Docker daemon in the environment it was
-  written in. It needs one `docker build` before it can be called done.
 
 ### The deployment model: how a plugin reaches a running server
 

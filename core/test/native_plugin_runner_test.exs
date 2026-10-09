@@ -19,6 +19,10 @@ defmodule Exoforge.NativePluginRunnerTest do
         printf '{"type":"action_result","id":%s,"status":"ok","data":1}\\n' "$id" ;;
       *'"action":"boom"'*)
         printf '{"type":"action_result","id":%s,"status":"error","error":"exploded"}\\n' "$id" ;;
+      *'"action":"log_trace"'*)
+        # The SDK's unhandled-exception path: a fire-and-forget `host_log` frame, then the result.
+        printf '{"type":"host_log","level":3,"message":"boom at Stub.cs:line 100"}\n'
+        printf '{"type":"action_result","id":%s,"status":"ok","data":7}\n' "$id" ;;
       *'"action":"die"'*)
         # No reply at all: the process goes away without saying anything, which is what a segfault,
         # an OOM kill or an Environment.Exit looks like from the host's side.
@@ -180,6 +184,24 @@ defmodule Exoforge.NativePluginRunnerTest do
     # and supervisor inside a unit test, and ExUnit tears down what a test supervises, taking the rest
     # of the suite with it. It was verified by hand - kill -9, new pid, calls still answered.
     assert_receive {:EXIT, ^pid, {:plugin_exited, ^status}}, 1_000
+  end
+
+  test "a plugin's own log and exception lines reach `exo plugin logs`", %{
+    manifest: manifest,
+    binary: binary
+  } do
+    Exoforge.PluginLogs.clear(manifest.id)
+    on_exit(fn -> Exoforge.PluginLogs.clear(manifest.id) end)
+
+    pid = start_runner(manifest, binary)
+
+    # The frame is written before the result, so by the time the call returns the buffer holds it.
+    assert {:ok, 7} = GenServer.call(pid, {:execute_action, "log_trace", %{}}, 5_000)
+
+    assert [%{level: 3, level_name: "error", message: "boom at Stub.cs:line 100"}] =
+             Exoforge.PluginLogs.list(manifest.id)
+
+    GenServer.stop(pid)
   end
 
   test "fails loudly when the binary is missing", %{manifest: manifest} do
