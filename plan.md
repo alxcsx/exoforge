@@ -256,6 +256,16 @@ by whether they were worth doing on the spot.
   `sample_plugin`'s manifest with no binary beside it, and the dependency sort then reports
   `requires service 'database', which is not provided`. The first two are fixed. The third is the
   item below, and it is what stands between the image and a first successful boot.
+- **The standard plugins are in the image but not in a layout the loader reads.** Two halves, the
+  first fixed: the prod scan path was `["plugins", "_build/prod/lib", "plugins_csharp"]`, none of
+  which exist in a release, and `config/runtime.exs` now adds the release's own `lib` — the log shows
+  `/app/lib` being scanned. The second half is shape: a loader looks for `<dir>/<name>/manifest.json`,
+  the same layout `upload_plugin` writes, and an OTP release's `lib` is versioned
+  (`exoforge_std_database-1.0.0/`), so nothing matches and the boot still discovers zero plugins. The
+  Dockerfile already makes a copy at `/app/plugins_elixir` for exactly this reason and copies
+  `_build/prod/lib` into it, which is versioned too — so the copy needs to be **flattened** into
+  `<name>/`, or the loader taught to read `<name>-<version>/`. The former is smaller and keeps the
+  loader's contract, which pushed plugins already depend on.
 - **The release scans a path that does not exist.** With the image finally booting, the boot log
   reads `Discovered 0 plugin manifests` and warns about `plugins_build/prod/libplugins_csharp`. The
   prod scan path is `["_build/prod/lib", "plugins_csharp"]`, which is correct for a checkout and wrong

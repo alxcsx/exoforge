@@ -43,12 +43,19 @@ if config_env() == :prod do
       driver: :postgres
   end
 
+  # The release's own applications live in `lib/` beside `bin/`, not under `_build/prod/lib` - which
+  # is a checkout path and does not exist in a release. Without this a containerised server boots with
+  # no standard plugins at all: no database, no auth, and nothing louder than a warning.
+  release_lib = Path.join([:code.root_dir(), "lib"])
+
   scan_paths =
     [
       System.get_env("PLUGINS_PATH") || "plugins",
       "_build/prod/lib",
+      release_lib,
       "plugins_csharp"
     ]
+    |> Enum.uniq()
 
   config :exoforge, :module_loader, scan_path: scan_paths
 
