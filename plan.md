@@ -247,7 +247,14 @@ by whether they were worth doing on the spot.
   and there is no rate limit or ring buffer between it and the operator.
 - **`PublishReadyToRun` is unmeasured.** It costs about 50KB on a 195KB plugin and is there for cold
   start, which nobody has timed. Either measure it or drop it.
-- **The image has never booted, and now it nearly does.** Built for the first time under podman, it
+- **The image had never booted, and now it does.** Six defects, each found only by building and
+  running it, three of them predating every change in M32. The largest: `mix release` carries only
+  `ebin/` and `priv/` per application and a plugin's manifest sits at the application root, so a
+  release drops every standard plugin's manifest. The standard plugins now come from the build tree,
+  copied into `plugins/`. Boot log: `Discovered 9 plugin manifests`, `All 9 plugins loaded`,
+  `System online in 47ms`. Recorded as one entry rather than five because the pattern matters more
+  than the list: none were visible by reading, and "written but unverified" would have stood
+  indefinitely without a container runtime to build against. Built for the first time under podman, it
   failed three times in a row, each one a real defect rather than a tooling quirk:
   an `ARG` declared in the builder stage was out of scope in the runner, so `COPY --from=` resolved to
   an empty name; the runner was Alpine 3.21 with openssl 3.3.7 while the builder had 3.24 with 3.5.8,
@@ -256,16 +263,6 @@ by whether they were worth doing on the spot.
   `sample_plugin`'s manifest with no binary beside it, and the dependency sort then reports
   `requires service 'database', which is not provided`. The first two are fixed. The third is the
   item below, and it is what stands between the image and a first successful boot.
-- **The standard plugins are in the image but not in a layout the loader reads.** Two halves, the
-  first fixed: the prod scan path was `["plugins", "_build/prod/lib", "plugins_csharp"]`, none of
-  which exist in a release, and `config/runtime.exs` now adds the release's own `lib` — the log shows
-  `/app/lib` being scanned. The second half is shape: a loader looks for `<dir>/<name>/manifest.json`,
-  the same layout `upload_plugin` writes, and an OTP release's `lib` is versioned
-  (`exoforge_std_database-1.0.0/`), so nothing matches and the boot still discovers zero plugins. The
-  Dockerfile already makes a copy at `/app/plugins_elixir` for exactly this reason and copies
-  `_build/prod/lib` into it, which is versioned too — so the copy needs to be **flattened** into
-  `<name>/`, or the loader taught to read `<name>-<version>/`. The former is smaller and keeps the
-  loader's contract, which pushed plugins already depend on.
 - **The release scans a path that does not exist.** With the image finally booting, the boot log
   reads `Discovered 0 plugin manifests` and warns about `plugins_build/prod/libplugins_csharp`. The
   prod scan path is `["_build/prod/lib", "plugins_csharp"]`, which is correct for a checkout and wrong
