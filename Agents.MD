@@ -1,7 +1,7 @@
 # Exoforge Operating Manual (`AGENTS.md`)
 
 > **Branch**: `projetao_mvp`  
-> **Status**: Kernel, 10 standard plugins, C# Client & Plugin SDKs, C# Management Engine (`exo` CLI), Unity SDK (`com.exoforge.sdk`), Producer Studio and the plugin runtime are **complete** — **240 Elixir + 72 C# = 312 tests passing**, plus a live E2E vertical slice.  
+> **Status**: Kernel, 10 standard plugins, C# Client & Plugin SDKs, C# Management Engine (`exo` CLI), Unity SDK (`com.exoforge.sdk`), Producer Studio and the plugin runtime are **complete** — **266 Elixir + 81 C# = 347 tests passing**, plus a live E2E vertical slice of 6 tests against a running server.  
 > **Verified SLA**: 0.07 ms fanout to 50 event subscribers over `:pg`.
 
 ---
@@ -155,6 +155,25 @@ capability mismatch is refused with a reason instead of fed frames that cannot b
 Host capabilities are injected into the plugin (`IDatabase`, `ILogger`,
 `IEventDispatcher`, …) and answered by the runner synchronously; `HostBridge` is the low-level layer
 underneath them.
+
+**The plugin wire protocol.** One definition, implemented by
+`Exoforge.Drivers.Runtime.PluginProtocol` on the host and `PluginHost`/`HostBridge` in the SDK;
+`plugin_protocol_test.exs` and `HandshakeTests.cs` pin each side's copy of it. Frames are
+newline-delimited JSON with a `type`:
+
+| type | direction | carries |
+| :--- | :--- | :--- |
+| `hello` | host → plugin | `protocol`, `host`, `capabilities` |
+| `hello` | plugin → host | `protocol`, `plugin`, `capabilities` |
+| `action` / `action_result` | host → plugin / back | `id`, `action`, `payload` / `status`, `data` or `error` |
+| `event` | host → plugin | `event`, `payload` |
+| `host_call` / `host_call_result` | plugin → host / back | `id`, `op`, `args` / `result` |
+| `host_log` | plugin → host | `level`, `message` |
+
+Protocol `1`, handshake timeout five seconds. Capabilities are the frame types a side can
+*receive*: the host declares `action_result`, `host_call`, `host_log`; a plugin must declare
+`action` and `event`. A protocol mismatch, a missing capability, or no answer at all is one log
+line and a refusal - never a retry.
 
 **Inbound events**: the runner subscribes to the events a plugin declares in its manifest (with their declared
 topic) and forwards them as `{"type":"event"}` frames. The plugin handles them in an optional

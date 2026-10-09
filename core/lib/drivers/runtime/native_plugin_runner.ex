@@ -2,17 +2,9 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
   @moduledoc """
   Runs a C# plugin compiled to a self-contained native binary (NativeAOT).
 
-  The binary is spawned as an OS process and speaks newline-delimited JSON over stdio:
-
-      host  -> plugin   {"type":"hello","protocol":1,"host":"exoforge","capabilities":[...]}
-      plugin -> host    {"type":"hello","protocol":1,"plugin":"sample_plugin","capabilities":[...]}
-      host  -> plugin   {"type":"action","id":1,"action":"move","payload":{...}}
-      plugin -> host    {"type":"action_result","id":1,"status":"ok","data":1}
-      plugin -> host    {"type":"host_call","id":7,"op":"emit_event","args":{...}}
-      host  -> plugin   {"type":"host_call_result","id":7,"result":true}
-
-  The host opens with `hello` and the plugin answers before it sees an action, so a pair that
-  disagrees about the protocol or the frames it handles is refused with a reason instead of fed
+  The binary is spawned as an OS process and speaks newline-delimited JSON over stdio. The frames
+  and the handshake are `Exoforge.Drivers.Runtime.PluginProtocol`; a plugin that does not speak the
+  host's protocol or cannot handle what the host sends is refused with a reason rather than fed
   frames it cannot parse. Host calls are synchronous: the plugin blocks reading the reply, so the
   runner answers them inline while waiting for the action result. This keeps the plugin free of any
   WASM/C toolchain while preserving the same manifest/contract surface.
@@ -23,6 +15,7 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
 
   alias Exoforge.ActionDispatcher
   alias Exoforge.Domain.Manifest
+  alias Exoforge.Drivers.Runtime.PluginProtocol
   alias Exoforge.EventDispatcher
   alias Exoforge.WorkerRegistry
 
@@ -32,15 +25,6 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
   # instrumenting the plugin. Five seconds is often enough for a billing-quality number and cheap
   # enough to leave on; `VmHWM` is a high-water mark, so a peak between samples is never lost.
   @os_sample_ms 5_000
-
-  # Wire protocol. The host opens with a `hello` frame and the plugin answers before it sees an
-  # action, so a pair that disagrees is refused instead of exchanging frames neither understands.
-  # Capabilities are the frame types each side can receive. Bump @protocol only for a change that
-  # is not backward compatible.
-  @protocol 1
-  @host_capabilities ["action_result", "host_call", "host_log"]
-  @plugin_capabilities ["action", "event"]
-  @handshake_timeout_ms 5_000
 
   @doc "Prepares the manifest by ensuring the proxy module is created and set as entry_point."
   def prepare_manifest(%Manifest{} = manifest) do
@@ -64,8 +48,12 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
             :start_link,
             [
               [
+                # `:transient`, not permanent: a plugin the OS killed should be replaced, but a
+                # plugin that is incompatible must not be restarted forever. `refuse/2` stops with
+                # `{:shutdown, ...}`, which a transient child does not restart; a crash does.
                 %{
                   id: __MODULE__,
+                  restart: :transient,
                   start: {__MODULE__, :start_link, [{updated_manifest, binary_path, runner_name}]}
                 }
               ],
@@ -84,7 +72,7 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
   end
 
   def start_link({%Manifest{} = manifest, binary_path, name}) do
-    start_link({manifest, binary_path, name, @handshake_timeout_ms})
+    start_link({manifest, binary_path, name, PluginProtocol.handshake_timeout_ms()})
   end
 
   def start_link({%Manifest{} = manifest, binary_path, name, handshake_timeout_ms}) do
@@ -147,15 +135,7 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
       {event, _topic} -> EventDispatcher.subscribe(event)
     end)
 
-    hello =
-      Jason.encode!(%{
-        type: "hello",
-        protocol: @protocol,
-        host: "exoforge",
-        capabilities: @host_capabilities
-      })
-
-    Port.command(port, hello <> "\n")
+    Port.command(port, PluginProtocol.hello_frame() <> "\n")
     handshake_timer = Process.send_after(self(), :handshake_timeout, handshake_timeout_ms)
 
     # Metering is on from the first start: the first start is the uptime origin, later ones are
@@ -332,30 +312,23 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
   defp handle_hello(msg, state) do
     if state.handshake_timer, do: Process.cancel_timer(state.handshake_timer)
 
-    protocol = Map.get(msg, "protocol")
-    capabilities = List.wrap(Map.get(msg, "capabilities", []))
-    missing = @plugin_capabilities -- capabilities
-
-    cond do
-      protocol != @protocol ->
-        refuse(state, {:protocol_mismatch, protocol})
-
-      missing != [] ->
-        refuse(state, {:missing_capabilities, missing})
-
-      true ->
+    case PluginProtocol.accept_hello(msg) do
+      {:ok, handshake} ->
         Logger.info(
-          "[NativePluginRunner] #{state.manifest.id} speaks protocol #{protocol} " <>
-            "(#{Enum.join(capabilities, ", ")})"
+          "[NativePluginRunner] #{state.manifest.id} speaks protocol #{handshake.protocol} " <>
+            "(#{Enum.join(handshake.capabilities, ", ")})"
         )
 
-        %{state | handshake: %{protocol: protocol, capabilities: capabilities}, handshake_timer: nil}
+        %{state | handshake: handshake, handshake_timer: nil}
+
+      {:refuse, reason} ->
+        refuse(state, reason)
     end
   end
 
   defp refuse(state, reason) do
     Logger.error(
-      "[NativePluginRunner] Refusing #{state.manifest.id}: #{refusal(reason)}. " <>
+      "[NativePluginRunner] Refusing #{state.manifest.id}: #{PluginProtocol.refusal(reason)}. " <>
         "Rebuild the plugin against the current SDK, or update the image."
     )
 
@@ -363,16 +336,8 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
       GenServer.reply(entry.from, {:error, {:plugin_incompatible, reason}})
     end)
 
-    {:stop, {:plugin_incompatible, reason}, %{state | pending: %{}}}
+    {:stop, {:shutdown, {:plugin_incompatible, reason}}, %{state | pending: %{}}}
   end
-
-  defp refusal({:protocol_mismatch, version}),
-    do: "it speaks protocol #{inspect(version)} and the host speaks #{@protocol}"
-
-  defp refusal({:missing_capabilities, missing}),
-    do: "it does not handle #{Enum.join(missing, ", ")} frames"
-
-  defp refusal(:no_handshake), do: "it did not complete the protocol handshake"
 
   # The plugin's own log and exception channel. The same line goes to the server log and to the
   # developer-facing buffer: `exo plugin logs` reads the buffer, and an exception trace is exactly

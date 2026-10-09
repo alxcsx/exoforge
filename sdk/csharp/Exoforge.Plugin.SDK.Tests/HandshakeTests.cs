@@ -22,6 +22,9 @@ public class HandshakeProbe
 /// <summary>
 /// The hello exchange. The host declares its protocol and the frames it handles; the plugin answers
 /// with its own, and from then on both sides rely on what was said instead of assuming it.
+///
+/// The other implementation is `Exoforge.Drivers.Runtime.PluginProtocol` and the spec is Agents.MD,
+/// "The plugin wire protocol"; these assertions are this side's golden copy of it.
 /// </summary>
 public class HandshakeTests
 {

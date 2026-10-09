@@ -259,18 +259,21 @@ defmodule Exoforge.NativePluginRunnerTest do
     assert Enum.all?(usage.actions, &(&1.bytes_in > 0 and &1.bytes_out > 0))
   end
 
+  # The refusals stop with `{:shutdown, ...}`: the runner child is `:transient`, so an incompatible
+  # plugin is refused once and not restarted, while a plugin the OS killed is.
   test "refuses a plugin that speaks a different protocol", %{manifest: manifest} do
     Process.flag(:trap_exit, true)
     pid = start_runner(manifest, write_variant(manifest, @wrong_protocol))
 
-    assert_receive {:EXIT, ^pid, {:plugin_incompatible, {:protocol_mismatch, 2}}}, 1_000
+    assert_receive {:EXIT, ^pid, {:shutdown, {:plugin_incompatible, {:protocol_mismatch, 2}}}},
+                   1_000
   end
 
   test "refuses a plugin that cannot handle the frames the host sends", %{manifest: manifest} do
     Process.flag(:trap_exit, true)
     pid = start_runner(manifest, write_variant(manifest, @no_capabilities))
 
-    assert_receive {:EXIT, ^pid, {:plugin_incompatible, {:missing_capabilities, ["action", "event"]}}},
+    assert_receive {:EXIT, ^pid, {:shutdown, {:plugin_incompatible, {:missing_capabilities, ["action", "event"]}}}},
                    1_000
   end
 
@@ -278,7 +281,7 @@ defmodule Exoforge.NativePluginRunnerTest do
     Process.flag(:trap_exit, true)
     pid = start_runner(manifest, write_variant(manifest, @no_handshake), 100)
 
-    assert_receive {:EXIT, ^pid, {:plugin_incompatible, :no_handshake}}, 1_000
+    assert_receive {:EXIT, ^pid, {:shutdown, {:plugin_incompatible, :no_handshake}}}, 1_000
   end
 
   test "fails loudly when the binary is missing", %{manifest: manifest} do
