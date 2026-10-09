@@ -1,6 +1,9 @@
 ARG ELIXIR_VERSION=1.20
 ARG OTP_VERSION=29
-ARG ALPINE_VERSION=3.21
+# Must match the builder's Alpine, which is the one the BEAM release was compiled against. At 3.21 the
+# runner shipped openssl 3.3.7 while the builder had 3.5.8, and OTP 29's crypto NIF needs 3.4 or newer:
+# the container died on boot with "EVP_PKEY_sign_message_init: symbol not found".
+ARG ALPINE_VERSION=3.24
 
 ARG MIX_ENV=prod
 
@@ -49,6 +52,10 @@ RUN mix deps.get --only ${MIX_ENV} && \
 # Stage 2: Minimal Production Runtime
 # ---------------------------------------------------------------------
 FROM docker.io/library/alpine:${ALPINE_VERSION} AS runner
+
+# Re-declared: an ARG is scoped to the stage that declares it, so the builder's copy is not visible
+# here and `COPY --from=` resolves to nothing.
+ARG DOTNET_RUNTIME_IMAGE=mcr.microsoft.com/dotnet/runtime:10.0-alpine
 
 ENV LANG=C.UTF-8 \
     MIX_ENV=prod \

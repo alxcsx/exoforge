@@ -247,9 +247,23 @@ by whether they were worth doing on the spot.
   and there is no rate limit or ring buffer between it and the operator.
 - **`PublishReadyToRun` is unmeasured.** It costs about 50KB on a 195KB plugin and is there for cold
   start, which nobody has timed. Either measure it or drop it.
+- **The image has never booted, and now it nearly does.** Built for the first time under podman, it
+  failed three times in a row, each one a real defect rather than a tooling quirk:
+  an `ARG` declared in the builder stage was out of scope in the runner, so `COPY --from=` resolved to
+  an empty name; the runner was Alpine 3.21 with openssl 3.3.7 while the builder had 3.24 with 3.5.8,
+  and OTP 29's crypto NIF needs 3.4+, so the kernel died on `EVP_PKEY_sign_message_init`; and it now
+  gets as far as the application, which refuses to start because `plugins_csharp/` ships
+  `sample_plugin`'s manifest with no binary beside it, and the dependency sort then reports
+  `requires service 'database', which is not provided`. The first two are fixed. The third is the
+  item below, and it is what stands between the image and a first successful boot.
 - **The image does not build a plugin.** The Dockerfile copies `plugins_csharp/`, but the binary is a
-  build output and is not there, so the image ships manifests without assemblies. Harmless while
-  plugins are pushed, wrong the moment someone expects the sample to work out of the box.
+  build output and is not there, so the image ships manifests without assemblies - and the sample's
+  manifest alone is enough to stop the application booting. Building the sample in the image is now
+  cheap (195KB, one pass, the SDK is already in the builder) and is the obvious fix.
+- **`HEALTHCHECK` is silently dropped.** Podman builds OCI-format images by default and ignores it
+  with a warning, so the healthcheck only exists under `--format docker`. Kubernetes takes its
+  probes from the manifest anyway, so this is documentation rather than function - but it is
+  currently a line that reads as though it does something.
 - **`upload_plugin` base64s the plugin** into a JSON action payload: +33%, encoded and decoded on
   both sides. A WebSocket binary frame for that one field would fix it, and deploying is rare enough
   that it is hygiene rather than performance.
