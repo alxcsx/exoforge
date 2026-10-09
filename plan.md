@@ -133,8 +133,40 @@ per-plugin CPU and RSS, so nothing needs instrumenting inside the runtime. **Thi
 shared-host question** — metering and fault isolation both want a process per plugin, and a shared
 host would make usage attribution guesswork. Meter in the runner, which holds the port's pid and
 sees every call: invocations by action, wall and CPU time, peak RSS, bytes, events, host calls,
-restarts and uptime. Attribute to a **tenant**, which needs a concept the manifest and the deploy
-path do not have yet. Off by default when self-hosted.
+restarts and uptime. On by default, including self-hosted: it is cheap, and it is the operator's own
+data in the operator's own database.
+
+**Meter shape, never content** — counts, durations, bytes, CPU, RSS, plugin and action *names*.
+Never payloads, never player or user identifiers. That is what makes "on by default" defensible, and
+it belongs in the invariants, not in a config comment. Action names are the one grey area: useful to
+the operator, mildly revealing to us, so aggregate or hash them if they ever leave the instance.
+
+Two masters, and only one of them needs a switch. **Local metering** answers the operator's own
+questions — capacity, which plugin is expensive, what to charge internally — and is on by default.
+**Sending the same numbers off the instance** so they can be billed against is a data-egress
+question rather than a cost one, and is separately configured. Cost was never the objection.
+
+**Attribution, and a naming collision to avoid.** This repository already uses **tenant** for
+something else — `exoforge_std_database` calls a plugin's private database namespace its "tenant
+namespace", and describes the isolation as "per-plugin multi-tenant". Using the same word for the
+billing unit would be actively confusing, so it is not used here.
+
+What ownership unit exists today: **none beyond the instance.** `auth` has users and roles,
+`player_data` has players, `ExoWorkspace` is a developer's local plugin directory, and environments
+(dev/prod) are deploy targets. Nothing answers "whose plugins are these", because there has only
+ever been one answer.
+
+Two shapes, and the choice is a product decision:
+
+- **(A) One instance, one owner.** Already true. The billing unit is the instance, attribution is
+  free, and nothing needs adding but the record of it. Environments hang off it.
+- **(B) One instance, many games.** Then a real ownership unit is needed — **project**, which is the
+  word UGS uses and which is free here — carried on plugins, on player data, on auth and on the
+  metering records. That is genuine multi-tenancy: every table scoped, every query filtered,
+  per-project keys.
+
+Start with **(A)**, but key the metering records so **(B)** can arrive without a migration — one
+`project` column now, defaulted, rather than a migration through every table later.
 
 **Phase 5 — flexibility and boilerplate.** A versioned handshake with declared capabilities, the way
 LSP and Terraform providers do it, so host and plugin can negotiate rather than assume. The runner
