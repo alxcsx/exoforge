@@ -231,9 +231,14 @@ defmodule Exoforge.Std.Http.Router do
     end
   end
 
+  get "/api/files/:id" do
+    serve_file(conn, nil, id, nil)
+  end
+
   get "/api/files/:bucket/:id" do
     serve_file(conn, bucket, id, nil)
   end
+
 
   get "/api/files/:bucket/:id/:filename" do
     serve_file(conn, bucket, id, filename)
