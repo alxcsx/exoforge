@@ -2,7 +2,7 @@
 
 > **Status**: Kernel, 9 standard plugins, C# Client SDK, C# Plugin SDK, C# Management Engine (`exo`
 > CLI), Unity SDK (`com.exoforge.sdk`), Producer Studio, clustering and Kubernetes manifests are
-> **complete** — **240 Elixir + 72 C# = 312 tests passing**, plus a live E2E vertical slice.
+> **complete** — **241 Elixir + 86 C# = 327 tests passing**, plus a live E2E vertical slice.
 > **Benchmark**: 0.07 ms fanout to 50 event subscribers over `:pg`.
 
 Completed work is not kept here. It is in `git log`, which is the record that does not drift; this
@@ -78,6 +78,11 @@ shortest working path.
   old Mix task is gone.
 - **The host boundary is a pipe.** JSON frames over stdin and stdout, no per-plugin bindings, so a
   runtime that is not a process is a runner rather than a rewrite.
+- **A plugin ships IL, not a runtime.** Framework-dependent .NET assemblies, one process per plugin.
+  *(Decided; lands in M32 — the code is still AOT until Phase 1 below.)*
+  The runtime lives in the image, paid for once; the plugin pays for its own code. This is what
+  UGS Cloud Code does (`.ccm` = a zip of the DLL, its `deps.json`, dependencies and PDBs), and it is
+  why reflection works and none of the plugin authoring path needs generated help to serialise.
 - **No heavy ORMs.** Raw SQL or light `:postgrex`; actor state is a serialized blob, not a relational
   object graph.
 - **Zero-config containers.** Local defaults are baked into `docker-compose.yml`, the K8s manifests
@@ -85,9 +90,72 @@ shortest working path.
 
 ---
 
-## 4. Next
+## 4. Next — M32: Framework-Dependent Plugins and Usage Metering
 
-Nothing outstanding.
+**The decision.** Plugins ship as framework-dependent .NET assemblies and run on a runtime in the
+image. AOT is dropped. Measured on the sample plugin, spawned in batches and left idle:
+
+| | on disk | N=1 Pss | N=8 total | marginal per plugin |
+| :--- | ---: | ---: | ---: | ---: |
+| NativeAOT | 2.8 MB | 3.2 MB | 10 MB | ~1 MB |
+| framework-dependent | 144 KB | 12.5 MB | 57 MB | ~6.4 MB |
+
+Dropping AOT buys 20× less disk and costs 6× more RAM per plugin. Disk is a container image layer
+and effectively free; RAM is what runs out, so this trade is only sound because **usage is billable**
+— which is the same position Unity is in, and the reason they can ship IL and not care.
+
+What it buys, beyond the number: **reflection works**, so records, enums, `[Inject]`, nested and
+anonymous shapes all serialise without generated help. Most of the machinery in M31 exists only to
+work around AOT, and this deletes it rather than fixing it.
+
+**Phase 1 — the switch.** `Directory.Build.targets` sets the deployment defaults for anything
+opt-ing into `ExoforgePlugin`, so a plugin `.csproj` stays a declaration: `PublishAot=false`,
+`SelfContained=false`, `PublishSingleFile=true`, `PublishReadyToRun=true` (Unity recommends R2R for
+cold start and documents the size cost), `RollForward=LatestMajor`, and an **error** if
+`PublishTrimmed=true` — trimming reintroduces every problem AOT had, with none of its benefits.
+`just build-plugins` and `ExoDeployer.PublishNative` become **one pass**; the two-pass build exists
+only because a source generator's output is invisible to the System.Text.Json generator.
+
+**Phase 2 — delete the workarounds.** The generator stops emitting the JSON context, the per-enum
+converters and the `[DynamicDependency]`. `FindJsonContext` stays: a hand-written context is still
+honoured, it is just no longer required. `AotHint` becomes an ordinary serialization error, and the
+notes about the `JsonObject` route and `IlcTrimMetadata` go, because their premise is gone —
+reflection handles both. The manifest, dispatch table, contracts and client stubs are untouched.
+
+**Phase 3 — make the runtime dependency safe.** The builder stage takes the .NET SDK, the runner
+stage the runtime. `RollForward=LatestMajor` plus the plugin's own `runtimeconfig.json` states the
+requirement. **Ship PDBs**, as Unity does: the crash story is currently strong on isolation (a
+`kill -9` is caught and the plugin restarts) and weak on diagnosis, and an AOT binary is the worst
+of the two for a stack trace.
+
+**Phase 4 — usage metering.** Process-per-plugin is what makes this cheap: the OS already reports
+per-plugin CPU and RSS, so nothing needs instrumenting inside the runtime. **This also settles the
+shared-host question** — metering and fault isolation both want a process per plugin, and a shared
+host would make usage attribution guesswork. Meter in the runner, which holds the port's pid and
+sees every call: invocations by action, wall and CPU time, peak RSS, bytes, events, host calls,
+restarts and uptime. Attribute to a **tenant**, which needs a concept the manifest and the deploy
+path do not have yet. Off by default when self-hosted.
+
+**Phase 5 — flexibility and boilerplate.** A versioned handshake with declared capabilities, the way
+LSP and Terraform providers do it, so host and plugin can negotiate rather than assume. The runner
+seam stays (native and Elixir; a shared-host runner remains a runner, not a rewrite). The plugin
+`.csproj` stays ~20 lines, `exo plugin new` to a running plugin stays one command, and it gets
+faster, because a plugin no longer AOT-compiles.
+
+**Phase 6 — verification.** The `kill -9` isolation check becomes a real test rather than something
+run by hand. Add a runtime-mismatch test and a guard test that `PublishTrimmed` cannot be turned on.
+Correct the recorded numbers above when they change.
+
+**What this costs, stated plainly.** 6× RAM per plugin, absorbed by billing. Runtime version
+coupling between plugin and image, which AOT did not have. And **IL is decompilable where an AOT
+binary is not** — for third-party plugins that is an intellectual-property consideration, and UGS
+has exactly the same property.
+
+**Prior art this follows.** UGS Cloud Code (framework-dependent .NET 9, zip of assemblies, R2R for
+cold start, size limits, no trimming); LSP and DAP (stdio JSON-RPC, process per server, versioned
+handshake); Terraform providers (process per provider, versioned protocol); Grafana (process per
+plugin, supervised restart). The counterexample is the VS Code extension host — one host for every
+extension, no isolation, and extension bisect as the only mitigation.
 
 Two things were on this list and are settled:
 
@@ -114,8 +182,8 @@ Not planned. Recorded so they stop reappearing as "next":
 - **Unreal Engine SDK (`ExoforgeUE`)** — a second engine client. M29/M30 already did the work that
   would make this cheap (engine SDKs ship the dotnetSDK binaries), but nothing needs it yet.
 - **Clustered matchmaking / lobby** — matchmaking by MMR and latency.
-- **Non-standard plugin runtimes** — anything beyond native (AOT) and Elixir. A sandboxed runtime
-  is the obvious next one, and it is a runner rather than a rewrite.
+- **Non-standard plugin runtimes** — anything beyond native (framework-dependent .NET) and Elixir. A
+  sandboxed runtime is the obvious next one, and it is a runner rather than a rewrite.
 
 ---
 
