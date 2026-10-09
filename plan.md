@@ -156,37 +156,53 @@ What ownership unit exists today: **none beyond the instance.** `auth` has users
 (dev/prod) are deploy targets. Nothing answers "whose plugins are these", because there has only
 ever been one answer.
 
-**The ownership unit is a project, and a studio sits above it.** The shape PlayFab uses — a Studio
-holds Titles — and the one UGS uses, where an organisation holds projects. One studio, many
-projects; usage belongs to a project and rolls up to the studio:
+**The tenant is a Title, and a studio sits above it.** PlayFab's shape — a Studio holds Titles —
+with the studio as a **field** rather than an entity: one studio, many titles, usage belongs to a
+title and rolls up to the studio.
 
 ```
-studio    the account, and the thing the bill goes to
-  └── project   the tenant: plugins, players, environments, usage
+studio_id   a field, not an entity: the account the bill goes to
+  └── Title   the tenant: plugins, players, environments, usage
         ├── environment   dev / staging / prod — a deploy target
         ├── plugins
         ├── players
         └── usage records
 ```
 
-**A project gets its own instance.** That is what both PlayFab and UGS do, and it is what collapses
+**A Title gets its own instance.** That is what both PlayFab and UGS do, and it is what collapses
 "tenant" back into "the instance" instead of requiring multi-tenancy: nothing is shared, so nothing
-needs scoping and there is no query to filter. Projects are separated by a process boundary and a
-database file, which is a stronger guarantee than a `WHERE` clause — and it makes many-projects-per-
+needs scoping and there is no query to filter. Titles are separated by a process boundary and a
+database file, which is a stronger guarantee than a `WHERE` clause — and it makes many-titles-per-
 instance a shape to avoid rather than one to build.
 
-So the MVP needs **no isolation work at all** — one studio, one project, both ids constant. What it
-needs is the **shape**: the instance knows its `project_id` and `studio_id`, deploys carry them, and
-metering records carry them. Then the rollup — usage per plugin, summed to the project, summed to
-the studio — is a `GROUP BY` that is already correct on day one and does not change when the second
-project appears.
+So the MVP needs **no isolation work at all** — one studio, one title, both ids constant. What it
+needs is the **shape**: the instance knows its `title_id` and `studio_id`, deploys carry them, and
+metering records carry them. Then the rollup — usage per plugin, summed to the title, summed to the
+studio — is a `GROUP BY` that is already correct on day one and does not change when the second
+title appears.
 
-**Deferred until there is more than one project**, and cheap when it comes because the identity
-already exists: studio membership and per-project permissions (who may deploy to which project), and
-per-project isolation *only if* projects are ever made to share an instance, which this design
+**Staff are ordinary users with a higher role, and that is already built.** `Exoforge.Auth.Roles`
+carries `admin > studio > player > guest` as scopes on a caller's auth context, and an action
+declares the scope it requires. A studio-role user *is* staff; a player-role user *is* a player;
+both are users, in the same table, with the same tokens and the same sign-in. **Nothing new is
+needed for the staff model.** "Staff assigned to particular players" is an optional relationship on
+top of that rather than a different kind of account — not modelled, and not needed until someone
+asks for it.
+
+The `studio` **role** and the `studio_id` **field** are different things that happen to share a
+word, and the overlap reads correctly: the role is the staff *of* the studio. Worth knowing they are
+not the same concept before either is renamed.
+
+**Naming: `title_id`, not `title`.** The manifest already uses `title` for a service's display name
+(`Title = "Dispatch Sample"`), so the tenant takes PlayFab's own term, `title_id`, and stays
+distinguishable from it. This is the third near-collision in this area — "tenant" was taken for a
+plugin's private database namespace, "project" for MSBuild's `.csproj` — so the vocabulary is worth
+settling here rather than discovering later.
+
+**Deferred until there is more than one Title**, and cheap when it comes because the identity
+already exists: studio membership and per-title permissions (who may deploy to which title), and
+per-title isolation *only if* titles are ever made to share an instance, which this design
 deliberately avoids.
-
-**Two naming collisions to be aware of.** "Tenant" is already taken here for a plugin's private
 database namespace, so it is not used for this. And "project" mildly collides with MSBuild's
 `.csproj`, which is the other thing this codebase calls a project — `title` is the alternative if
 that grates, and it is what PlayFab calls it.
