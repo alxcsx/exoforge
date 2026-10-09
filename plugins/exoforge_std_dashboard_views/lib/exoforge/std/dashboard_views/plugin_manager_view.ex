@@ -4,10 +4,10 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
   for the Plugin Manager & Cluster Runtime service (:plugin_manager).
 
   Enables game producers and backend engineers to:
-  - Inspect installed standard and WASM plugins, entity schemas, and manifests
+  - Inspect installed standard and native plugins, entity schemas, and manifests
     (capability inspection lives in the Extensions Registry; this view owns lifecycle)
   - Monitor live BEAM node metrics, memory, process counts, and active stateful entities
-  - Drag-and-drop or upload new sandboxed C# WASM plugins directly into the running cluster
+  - Drag-and-drop or upload new native C# plugins directly into the running cluster
   - Hot-reload and restart the cluster runtime supervision tree
   - Remove dynamically installed plugins safely
   """
@@ -167,8 +167,7 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
                 show_upload_modal: false,
                 upload_error: nil,
                 upload_file_info: nil,
-                upload_success:
-                  "Plugin '#{result.plugin_id}' (#{result[:type] || payload.type}) successfully uploaded and initialized!"
+                upload_success: "Plugin '#{result.plugin_id}' (#{result[:type] || payload.type}) successfully uploaded and initialized!"
               )
               |> load_data()
 
@@ -195,8 +194,7 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
         {:noreply, socket}
 
       {:error, reason} ->
-        {:noreply,
-         assign(socket, action_notification: "Failed to remove plugin: #{inspect(reason)}")}
+        {:noreply, assign(socket, action_notification: "Failed to remove plugin: #{inspect(reason)}")}
     end
   end
 
@@ -218,8 +216,7 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
           socket
           |> assign(
             show_restart_modal: false,
-            restart_status:
-              "Runtime cluster restarted. #{result.plugins_count} plugins reloaded successfully."
+            restart_status: "Runtime cluster restarted. #{result.plugins_count} plugins reloaded successfully."
           )
           |> load_data()
 
@@ -439,7 +436,7 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
             </svg>
-            Upload WASM Plugin
+            Upload Plugin
           </button>
         </div>
       </div>
@@ -768,7 +765,7 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
         </Exoforge.Std.DashboardViews.InspectPopup.inspect_popup>
       <% end %>
 
-      <!-- Upload WASM Plugin Modal -->
+      <!-- Upload Plugin Modal -->
       <%= if @show_upload_modal do %>
         <div class="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-200 relative animate-in fade-in duration-150">
@@ -785,8 +782,8 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
                 ⚡
               </div>
               <div>
-                <h3 class="text-lg font-bold text-gray-900"><%= if @upload_form["type"] == "elixir", do: "Upload Elixir Plugin", else: "Upload C# WASM Plugin" %></h3>
-                <p class="text-xs text-gray-500">Deploy a compiled WebAssembly binary or live Elixir plugin into the runtime.</p>
+                <h3 class="text-lg font-bold text-gray-900"><%= if @upload_form["type"] == "elixir", do: "Upload Elixir Plugin", else: "Upload C# Plugin" %></h3>
+                <p class="text-xs text-gray-500">Deploy a compiled native plugin binary or live Elixir plugin into the runtime.</p>
               </div>
             </div>
 
@@ -856,21 +853,20 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
                   ><%= @upload_form["elixir_code"] %></textarea>
                 </div>
               <% else %>
-                <!-- WASM File Dropzone / Selector -->
+                <!-- Plugin Binary Dropzone / Selector -->
                 <div>
-                  <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">WASM Binary (.wasm)</label>
+                  <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Plugin Binary</label>
                   <div class="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:border-violet-400 transition-colors bg-gray-50/50">
                     <input
                       type="file"
-                      id="wasm_file_picker"
-                      accept=".wasm"
+                      id="plugin_file_picker"
                       onchange="
                         const file = this.files[0];
                         if (file) {
                           const reader = new FileReader();
                           reader.onload = (e) => {
                             const base64 = e.target.result.split(',')[1];
-                            const input = document.getElementById('wasm_base64_input');
+                            const input = document.getElementById('binary_base64_input');
                             if (input) {
                               input.value = base64;
                               input.dispatchEvent(new Event('input', {bubbles: true}));
@@ -890,15 +886,15 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
                 </div>
 
                 <div>
-                  <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Or Paste Base64 WASM Data</label>
+                  <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Or Paste Base64 Binary Data</label>
                   <textarea
-                    id="wasm_base64_input"
+                    id="binary_base64_input"
                     name="upload[binary]"
                     rows="3"
-                    placeholder="AGFzbQEAAAA... (Base64 encoded binary)"
+                    placeholder="Base64-encoded plugin binary"
                     class="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:bg-white font-mono"
                   ><%= @upload_form["binary"] %></textarea>
-                  <p class="text-[11px] text-gray-400 mt-0.5">Must start with WASM magic bytes (\0asm).</p>
+                  <p class="text-[11px] text-gray-400 mt-0.5">The published plugin binary - the file beside its manifest.json.</p>
                 </div>
               <% end %>
 
@@ -948,7 +944,7 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
             </div>
 
             <p class="text-xs text-gray-600 mb-5 leading-relaxed bg-amber-50 p-3 rounded-xl border border-amber-200">
-              This action re-executes topological sorting, re-initializes plugin worker registries, and hot-swaps updated WASM binaries into memory.
+              This action re-executes topological sorting, re-initializes plugin worker registries, and hot-swaps updated plugin binaries into memory.
             </p>
 
             <div class="flex items-center justify-end gap-3">

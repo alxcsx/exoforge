@@ -147,11 +147,11 @@ defmodule Exoforge.DashboardLiveViewTest do
     })
 
     PluginRegistry.register(%Exoforge.Domain.Manifest{
-      id: :combat_wasm,
-      name: "combat_wasm",
+      id: :combat_plugin,
+      name: "combat_plugin",
       version: Version.parse!("1.0.0"),
-      entry_point: :combat_wasm,
-      type: :wasm,
+      entry_point: :combat_plugin,
+      type: :native,
       provides: [Exoforge.Std.Services.Combat],
       dependencies: [],
       category: "Gameplay",
@@ -419,8 +419,8 @@ defmodule Exoforge.DashboardLiveViewTest do
 
       {:ok, view, _html} = live(conn, "/")
 
-      # Switch to combat_wasm extension tab (has no custom LiveView)
-      html = render_click(view, "switch_tab", %{"tab" => "combat_wasm"})
+      # Switch to combat_plugin extension tab (has no custom LiveView)
+      html = render_click(view, "switch_tab", %{"tab" => "combat_plugin"})
       # This test manifest declares no actions/resources/events, so the generic view opens on
       # its contract.
       assert html =~ "Architecture Specification"
@@ -650,7 +650,7 @@ defmodule Exoforge.DashboardLiveViewTest do
       # Switch to extensions tab
       html = render_click(view, "switch_tab", %{"tab" => "apps"})
       assert html =~ "Extensions Registry"
-      assert html =~ "combat_wasm"
+      assert html =~ "combat_plugin"
       assert html =~ "exoforge_std_ws"
 
       # 1. Search extensions
@@ -826,17 +826,17 @@ defmodule Exoforge.DashboardLiveViewTest do
       assert html =~ "Installed Plugins"
       assert html =~ "BEAM Memory &amp; Load" or html =~ "BEAM Memory & Load"
       assert html =~ "Cluster Node"
-      assert html =~ "Upload WASM Plugin"
+      assert html =~ "Upload Plugin"
       assert html =~ "Restart Cluster"
 
       # Open upload modal via PluginManagerView component
-      html = view |> element("button", "Upload WASM Plugin") |> render_click()
-      assert html =~ "Upload C# WASM Plugin"
-      assert html =~ "WASM Binary (.wasm)"
+      html = view |> element("button", "Upload Plugin") |> render_click()
+      assert html =~ "Upload C# Plugin"
+      assert html =~ "Plugin Binary"
 
       # Close upload modal
       html = view |> element("button", "Cancel") |> render_click()
-      refute html =~ "Upload C# WASM Plugin"
+      refute html =~ "Upload C# Plugin"
 
       # Open restart cluster modal
       html = view |> element("button", "Restart Cluster") |> render_click()

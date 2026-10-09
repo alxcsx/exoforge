@@ -68,7 +68,7 @@ defmodule Exoforge.Std.Dashboard.Components do
         s when s in ["suspended", "banned", "error", "failed"] ->
           "bg-red-50 text-red-700 border-red-200"
 
-        s when s in ["wasm", "c# wasm", "wasi"] ->
+        s when s in ["native", "c#", "dotnet"] ->
           "bg-violet-50 text-violet-700 border-violet-200"
 
         s when s in ["beam", "elixir", "standard"] ->

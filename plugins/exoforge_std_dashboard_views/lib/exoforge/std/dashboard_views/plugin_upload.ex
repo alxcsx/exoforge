@@ -17,7 +17,7 @@ defmodule Exoforge.Std.DashboardViews.PluginUpload do
   typed by the user is kept — dropping a file should not rename what they just wrote.
   """
   def form_with_file(form, filename, base64) do
-    type = if elixir_source?(filename), do: "elixir", else: "wasm"
+    type = if elixir_source?(filename), do: "elixir", else: "native"
 
     content_key = if type == "elixir", do: "elixir_code", else: "binary"
     content = if type == "elixir", do: decode_base64(base64), else: base64
@@ -54,7 +54,7 @@ defmodule Exoforge.Std.DashboardViews.PluginUpload do
   """
   def payload(params, form) do
     name = fetch(params, form, "name")
-    type = fetch(params, form, "type", "wasm")
+    type = fetch(params, form, "type", "native")
 
     case validate(name, type, fetch(params, form, "binary"), fetch(params, form, "elixir_code")) do
       {:error, message} ->
@@ -78,8 +78,8 @@ defmodule Exoforge.Std.DashboardViews.PluginUpload do
   defp validate(_name, "elixir", _binary, ""),
     do: {:error, "Elixir module code is required."}
 
-  defp validate(_name, "wasm", "", _code),
-    do: {:error, "WASM binary content or file is required."}
+  defp validate(_name, "native", "", _code),
+    do: {:error, "Plugin binary content or file is required."}
 
   defp validate(_name, _type, _binary, _code), do: :ok
 

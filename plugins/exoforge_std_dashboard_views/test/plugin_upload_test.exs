@@ -5,7 +5,7 @@ defmodule Exoforge.Std.DashboardViews.PluginUploadTest do
 
   @empty_form %{
     "name" => "",
-    "type" => "wasm",
+    "type" => "native",
     "binary" => "",
     "elixir_code" => "",
     "manifest_json" => ""
@@ -13,17 +13,17 @@ defmodule Exoforge.Std.DashboardViews.PluginUploadTest do
 
   describe "plugin_name_from/1" do
     test "derives the id the CLI and scaffolder would use" do
-      assert PluginUpload.plugin_name_from("guild_system.wasm") == "guild_system"
+      assert PluginUpload.plugin_name_from("guild_system.exe") == "guild_system"
       assert PluginUpload.plugin_name_from("GuildSystem.exs") == "guild_system"
-      assert PluginUpload.plugin_name_from("My Cool Plugin!.wasm") == "my_cool_plugin"
+      assert PluginUpload.plugin_name_from("My Cool Plugin!") == "my_cool_plugin"
     end
   end
 
   describe "form_with_file/3" do
-    test "a .wasm file becomes a binary upload" do
-      form = PluginUpload.form_with_file(@empty_form, "guild.wasm", "QUJD")
+    test "a compiled binary becomes a binary upload" do
+      form = PluginUpload.form_with_file(@empty_form, "guild", "QUJD")
 
-      assert form["type"] == "wasm"
+      assert form["type"] == "native"
       assert form["binary"] == "QUJD"
       assert form["name"] == "guild"
     end
@@ -37,7 +37,7 @@ defmodule Exoforge.Std.DashboardViews.PluginUploadTest do
     end
 
     test "a name the user already typed is kept" do
-      form = PluginUpload.form_with_file(%{@empty_form | "name" => "chosen"}, "other.wasm", "QUJD")
+      form = PluginUpload.form_with_file(%{@empty_form | "name" => "chosen"}, "other", "QUJD")
 
       assert form["name"] == "chosen"
     end
@@ -53,11 +53,11 @@ defmodule Exoforge.Std.DashboardViews.PluginUploadTest do
     test "builds a binary upload from submitted params" do
       assert {:ok, payload} =
                PluginUpload.payload(
-                 %{"name" => "guild", "type" => "wasm", "binary" => "QUJD"},
+                 %{"name" => "guild", "type" => "native", "binary" => "QUJD"},
                  @empty_form
                )
 
-      assert payload == %{name: "guild", type: "wasm", binary: "QUJD", manifest: nil}
+      assert payload == %{name: "guild", type: "native", binary: "QUJD", manifest: nil}
     end
 
     test "builds an Elixir upload" do
@@ -74,7 +74,7 @@ defmodule Exoforge.Std.DashboardViews.PluginUploadTest do
     test "falls back to the form when a dropped file populated state, not an input" do
       form = %{@empty_form | "name" => "dropped", "binary" => "QUJD"}
 
-      assert {:ok, payload} = PluginUpload.payload(%{"type" => "wasm"}, form)
+      assert {:ok, payload} = PluginUpload.payload(%{"type" => "native"}, form)
       assert payload.name == "dropped"
       assert payload.binary == "QUJD"
     end
@@ -104,7 +104,7 @@ defmodule Exoforge.Std.DashboardViews.PluginUploadTest do
       assert message =~ "name"
 
       assert {:error, message} =
-               PluginUpload.payload(%{"name" => "g", "type" => "wasm"}, @empty_form)
+               PluginUpload.payload(%{"name" => "g", "type" => "native"}, @empty_form)
 
       assert message =~ "binary"
 
