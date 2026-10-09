@@ -2,7 +2,8 @@
 
 > **Status**: Kernel, 10 standard plugins, C# Client SDK, C# Plugin SDK, C# Management Engine (`exo`
 > CLI), Unity SDK (`com.exoforge.sdk`), Producer Studio, clustering and Kubernetes manifests are
-> **complete** — **241 Elixir + 86 C# = 327 tests passing**, plus a live E2E vertical slice.
+> **complete** — **266 Elixir + 81 C# = 347 tests passing**, plus a live E2E vertical slice of 6 tests
+> against a running server.
 > **Benchmark**: 0.07 ms fanout to 50 event subscribers over `:pg`.
 
 Completed work is not kept here. It is in `git log`, which is the record that does not drift; this
@@ -248,53 +249,12 @@ by whether they were worth doing on the spot.
 
 *Done:*
 
-- **A plugin's logs went nowhere.** `host_log` frames — the SDK's own log and exception channel — fell
-  into the runner's `{:ok, _other} -> state` clause and were discarded. A plugin that threw sent the
-  caller a message and put the trace into the void. The runner handles them now, tagged with the
-  plugin id.
-- **The exception trace was thrown away too**, even once there was somewhere to put it: the SDK sent
-  `ex.Message` and nothing else. It now sends `ToString` to the log and the message to the caller —
-  the trace carries file paths and internals that a game client should not receive, and the message
-  is all it needs.
-- **PDBs were not shipped**, so even a trace had no line numbers. `DebugType=embedded` in the SDK
-  targets, because the deploy uploads one file and a separate `.pdb` never travels with it. Verified
-  end to end: a deliberate throw now logs `SamplePlugin.cs:line 100`. Costs about 9KB.
-- **The runner had no OS pid accessor**, which made it impossible to observe a plugin from outside
-  the BEAM. `os_pid/1` now exists, and phase 4's metering needs exactly it.
-- **The kill test was a hand-run.** It is now two tests: a plugin that dies mid-call answers its
-  caller rather than leaving it waiting, and the supervisor replaces a plugin whose process the OS
-  killed.
-- **`exo plugin logs` read only half the channel.** The reader and the CLI already existed; the
-  exception path did not write to them. `host_log` frames — the SDK's own log and exception channel —
-  went to the server log alone, so an unhandled plugin exception showed up in the server log and
-  never in the CLI, despite the SDK comment promising `exo plugin logs` the file and the line. Both
-  paths now record through one `record_log/3`, and a stub-protocol test asserts the buffer holds the
-  trace.
-- **Plugin log volume is bounded per plugin.** `host_log` handling gave a plugin a free megaphone
-  into the server log: `PluginLogs` capped the CLI buffer at 200 lines, but nothing capped the rate,
-  so a plugin logging in a tight loop could fill the operator's log while the buffer cycled. A
-  per-plugin second window now admits 100 lines and refuses the rest with `:rate_limited` before
-  either the buffer or the server log sees them, so one plugin cannot drown another's lines. Drops
-  are silent by design; a "N lines suppressed" summary is the upgrade if an operator asks.
-- **`PublishReadyToRun` is measured.** Process spawn to first action reply on the sample, 60 runs
-  each: 28.7 ms median with R2R (195 KB binary) against 31.0 ms without (139 KB) - about 2 ms for
-  55 KB, with ~0.2 MB less marginal Pss at 8 instances. Kept, because cold start is paid on every
-  boot and reload and disk is the cheap axis here. The same numbers sit beside the property in the
-  SDK targets.
-- **The health probes pointed at a 404, and three callers shared the path.** The Dockerfile's
-  `HEALTHCHECK`, the compose healthcheck and both Kubernetes probes all curled `:4005/api/health`.
-  The dashboard serves `/health` (200); `/api/health` is a 404 there and a 401 on `:4001`, and
-  `curl -f` rejects both. In Kubernetes that is not documentation: the pod would never become ready.
-  All three now hit `/health`, verified against a running server - and the live check also shows
-  `:4001/health` answering 200, while `:4005/health` does too, so the probes keep their port. Podman
-  still drops the Dockerfile instruction under its default OCI format, which the comment there now
-  says rather than reading as though it runs.
-- **A deployment property passed on the command line broke the SDK build, not the plugin's.**
-  Writing the guard test found it: `dotnet build -p:PublishAot=true` sent the property into the
-  netstandard SDK reference, which failed with NETSDK1207 before the plugin's guard could fire - the
-  one thing the guard exists to prevent. NuGet's restore ignores `GlobalPropertiesToRemove`, so the
-  SDK and generator projects use `TreatAsLocalProperty` to refuse to inherit a plugin's deployment
-  properties. The guard is reachable from the CLI now, and a test keeps it that way.
+The fixes made while doing phases 1–4, kept here as an index only - each is in `git log` with its
+reasoning: a plugin's logs went nowhere; the exception trace was thrown away; PDBs were not shipped;
+the runner had no OS pid accessor; the kill test was a hand run; `exo plugin logs` read only half the
+channel; plugin log volume is now bounded per plugin; `PublishReadyToRun` is measured; the health
+probes pointed at a 404 in three places; and a deployment property passed on the command line broke
+the SDK build instead of the plugin's.
 
 *Worth doing later, in rough order of value:*
 
