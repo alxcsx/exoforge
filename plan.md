@@ -276,6 +276,11 @@ by whether they were worth doing on the spot.
   build output and is not there, so the image ships manifests without assemblies - and the sample's
   manifest alone is enough to stop the application booting. Building the sample in the image is now
   cheap (195KB, one pass, the SDK is already in the builder) and is the obvious fix.
+- **The `HEALTHCHECK` points at a path that returns 404.** Verified against the running container:
+  `:4005/api/health` is `Not Found` while `:4001/api/health` answers `401`, so the check as written
+  would fail on a healthy server. It is also silently ignored under OCI image format, which is
+  podman's default - so the two mistakes hid each other. Kubernetes takes its probes from the
+  manifest, so this is documentation rather than function, but it should be right documentation.
 - **`HEALTHCHECK` is silently dropped.** Podman builds OCI-format images by default and ignores it
   with a warning, so the healthcheck only exists under `--format docker`. Kubernetes takes its
   probes from the manifest anyway, so this is documentation rather than function - but it is
