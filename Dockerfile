@@ -86,9 +86,11 @@ RUN addgroup -S exoforge && adduser -S exoforge -G exoforge && \
 # Copy assembled OTP release
 COPY --from=builder --chown=exoforge:exoforge /build/_build/prod/rel/exoforge ./
 
-# Copy plugin manifests. The built assemblies are not here: a plugin is deployed with `exo plugin
-# build`/`push` rather than baked into the image, and the binary is a build output.
-COPY --from=builder --chown=exoforge:exoforge /build/plugins_csharp ./plugins_csharp
+# No plugin ships in the image. A plugin arrives by push - that is the whole DX, one click from the
+# Unity Editor - and a manifest here without its binary is worse than nothing: the bootstrapper reads
+# it, cannot find the plugin, and refuses to start. The directory itself is created above, empty and
+# writable, for the push to land in. Mount a volume over it to make pushed plugins outlive the
+# container; without one they are ephemeral, which is fine for a dev box.
 COPY --from=builder --chown=exoforge:exoforge /build/_build/prod/lib ./plugins_elixir
 
 USER exoforge

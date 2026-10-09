@@ -256,6 +256,15 @@ by whether they were worth doing on the spot.
   `sample_plugin`'s manifest with no binary beside it, and the dependency sort then reports
   `requires service 'database', which is not provided`. The first two are fixed. The third is the
   item below, and it is what stands between the image and a first successful boot.
+- **The release scans a path that does not exist.** With the image finally booting, the boot log
+  reads `Discovered 0 plugin manifests` and warns about `plugins_build/prod/libplugins_csharp`. The
+  prod scan path is `["_build/prod/lib", "plugins_csharp"]`, which is correct for a checkout and wrong
+  for a release: the release's own applications are in `lib/` beside `bin/`, not under `_build`. So a
+  containerised server boots with **no standard plugins at all** - no `:database`, no `:auth` - and
+  says nothing louder than a warning. The fix is for the release's scan path to name the release's own
+  `lib` (or the `/app/plugins_elixir` copy the Dockerfile already makes, which suggests this was the
+  intent and the path was never pointed at it). Worth checking whether `config/runtime.exs` can
+  resolve it rather than requiring an env var in every deployment.
 - **The image does not build a plugin.** The Dockerfile copies `plugins_csharp/`, but the binary is a
   build output and is not there, so the image ships manifests without assemblies - and the sample's
   manifest alone is enough to stop the application booting. Building the sample in the image is now
