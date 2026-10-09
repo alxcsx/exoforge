@@ -32,7 +32,14 @@ public static class ExoDispatch
     public static T Get<T>(JsonElement payload, string name, T fallback)
     {
         if (payload.ValueKind != JsonValueKind.Object) return fallback;
-        if (!TryFind(payload, name, out var value)) return fallback;
+        if (!TryFind(payload, name, out var value))
+        {
+            if ((name == "payload" || name == "request") && typeof(T) == typeof(JsonElement))
+            {
+                return (T)(object)payload.Clone();
+            }
+            return fallback;
+        }
         if (value.ValueKind == JsonValueKind.Null || value.ValueKind == JsonValueKind.Undefined) return fallback;
 
         return Convert<T>(value);

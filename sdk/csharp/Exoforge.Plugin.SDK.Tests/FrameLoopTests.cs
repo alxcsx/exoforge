@@ -55,4 +55,25 @@ public class FrameLoopTests
         Assert.Equal("{\"v\":1}", plugin.HostResult);
         Assert.Equal(2, plugin.Dispatched);
     }
+
+    [Fact]
+    public void An_action_arriving_during_a_host_call_is_replayed_not_dropped()
+    {
+        var plugin = new FrameLoopPlugin();
+
+        // The second action frame arrives while the first is blocked inside its host call: the
+        // host call's read loop must buffer it for the main loop, not swallow it (M33 Fix 6).
+        var input = new StringReader(string.Join("\n", new[]
+        {
+            "{\"type\":\"action\",\"id\":1,\"action\":\"with_host_call\",\"payload\":{}}",
+            "{\"type\":\"action\",\"id\":2,\"action\":\"count\",\"payload\":{}}",
+            "{\"type\":\"host_call_result\",\"id\":1,\"result\":{\"v\":1}}",
+            ""
+        }));
+
+        PluginHost.RunInstance(plugin, input);
+
+        Assert.Equal(2, plugin.Dispatched);
+        Assert.Equal("{\"v\":1}", plugin.HostResult);
+    }
 }

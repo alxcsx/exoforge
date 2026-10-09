@@ -74,6 +74,12 @@ public partial class DispatchSamplePlugin : IContractPing, ISharedContract
     [ExoAction("wipe", Service = "dispatch_admin")]
     public bool Wipe() => true;
 
+    [ExoWebhook("stripe_webhook")]
+    public string HandleStripe(string body, Dictionary<string, string>? headers = null)
+    {
+        return $"handled:{body}:{(headers != null && headers.ContainsKey("sig") ? headers["sig"] : "")}";
+    }
+
     [ExoAction]
     public List<ScoreRow> TopScores(int limit) => new();
 
@@ -309,5 +315,31 @@ public class DispatchTests
 
         // A scalar stays a scalar.
         Assert.Contains(actions, a => a!["returns"]!.GetValue<string>() == "string");
+    }
+
+    [Fact]
+    public void Manifest_Includes_Webhook_With_Webhook_Transport_And_Scope()
+    {
+        JsonNode manifest = Manifest();
+        var actions = Service(manifest, "dispatch_sample")["actions"]!.AsArray();
+        var webhook = actions.FirstOrDefault(a => a?["name"]?.GetValue<string>() == "stripe_webhook");
+
+        Assert.NotNull(webhook);
+        Assert.Equal("webhook", webhook!["transport"]?.GetValue<string>());
+        Assert.Equal("webhook", webhook!["scope"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void The_dispatch_serves_a_webhook()
+    {
+        var plugin = new DispatchSamplePlugin();
+
+        var input = new StringReader(string.Join("\n", new[]
+        {
+            "{\"type\":\"action\",\"id\":1,\"action\":\"stripe_webhook\",\"payload\":{\"body\":\"raw_data\",\"headers\":{\"sig\":\"xyz\"}}}",
+            ""
+        }));
+
+        PluginHost.RunInstance(plugin, input, new ExoforgeDispatch());
     }
 }

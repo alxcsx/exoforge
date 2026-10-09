@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Text.Json.Nodes;
 using Xunit;
@@ -23,24 +24,25 @@ public class DeploymentGuardTests
     [Theory]
     [InlineData("PublishAot", "EXOFORGE001")]
     [InlineData("PublishTrimmed", "EXOFORGE002")]
-    public void A_plugin_cannot_build_with_a_property_that_removes_reflection_metadata(
+    public async Task A_plugin_cannot_build_with_a_property_that_removes_reflection_metadata(
         string property,
         string errorCode)
     {
-        var (exitCode, output) = RunDotnet($"build \"{FixtureProject}\" -p:{property}=true -v q --nologo");
+        var (exitCode, output) =
+          await RunDotnetAsync($"build \"{FixtureProject}\" -p:{property}=true -v q --nologo");
 
         Assert.NotEqual(0, exitCode);
         Assert.Contains(errorCode, output);
     }
 
     [Fact]
-    public void The_published_plugin_states_its_runtime_and_refuses_a_missing_one()
+    public async Task The_published_plugin_states_its_runtime_and_refuses_a_missing_one()
     {
         string outputDir = Path.Combine(Path.GetTempPath(), $"exo_runtime_contract_{Guid.NewGuid():N}");
 
         try
         {
-            var (exitCode, log) = RunDotnet(
+            var (exitCode, log) = await RunDotnetAsync(
                 $"publish \"{FixtureProject}\" -c Release -r {RuntimeInformation.RuntimeIdentifier} " +
                 $"-p:PublishSingleFile=false -o \"{outputDir}\" -v q --nologo");
 
@@ -84,13 +86,19 @@ public class DeploymentGuardTests
             Task<string> stdout = process.StandardOutput.ReadToEndAsync();
             Task<string> stderr = process.StandardError.ReadToEndAsync();
 
-            if (!process.WaitForExit(30_000))
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+
+            try
+            {
+                await process.WaitForExitAsync(timeout.Token);
+            }
+            catch (OperationCanceledException)
             {
                 process.Kill(entireProcessTree: true);
                 throw new TimeoutException("The published plugin did not exit, so it did not refuse the missing runtime.");
             }
 
-            Task.WaitAll(stdout, stderr);
+            await Task.WhenAll(stdout, stderr);
             string message = stderr.Result + stdout.Result;
 
             Assert.NotEqual(0, process.ExitCode);
@@ -112,7 +120,7 @@ public class DeploymentGuardTests
     private static string FixtureProject => Path.GetFullPath(Path.Combine(
         AppContext.BaseDirectory, "..", "..", "..", "fixtures", "guard_probe", "guard_probe.csproj"));
 
-    private static (int ExitCode, string Output) RunDotnet(string arguments)
+    private static async Task<(int ExitCode, string Output)> RunDotnetAsync(string arguments)
     {
         var start = new ProcessStartInfo("dotnet", arguments)
         {
@@ -129,13 +137,21 @@ public class DeploymentGuardTests
         Task<string> stdout = process.StandardOutput.ReadToEndAsync();
         Task<string> stderr = process.StandardError.ReadToEndAsync();
 
-        if (!process.WaitForExit(180_000))
+        // Async wait, not a blocking WaitForExit (M33 Fix 12): the xunit worker thread parks while
+        // the build runs, starving the pool the stream reads and the other tests need.
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token);
+        }
+        catch (OperationCanceledException)
         {
             process.Kill(entireProcessTree: true);
             throw new TimeoutException($"dotnet {arguments} did not finish within three minutes.");
         }
 
-        Task.WaitAll(stdout, stderr);
+        await Task.WhenAll(stdout, stderr);
         return (process.ExitCode, stdout.Result + stderr.Result);
     }
 }

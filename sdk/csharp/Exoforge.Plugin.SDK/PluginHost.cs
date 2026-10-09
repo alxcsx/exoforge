@@ -56,6 +56,7 @@ public static class PluginHost
     public const int ProtocolVersion = 1;
 
     private static readonly object WriteLock = new();
+    private static readonly Queue<string> BufferedActions = new();
     private static Stream? _stdout;
     private static TextReader? _stdin;
     private static long _nextHostCallId;
@@ -168,6 +169,8 @@ public static class PluginHost
         _stdin = reader;
         HostBridge.UseTransport(new NativeTransport());
 
+        BufferedActions.Clear();
+        _nextHostCallId = 0;
         _instance = instance;
         _dispatch = dispatch;
         var pluginType = instance.GetType();
@@ -180,8 +183,16 @@ public static class PluginHost
         _eventHandler = dispatch is null ? FindEventHandler(pluginType) : null;
         var actions = dispatch is null ? BuildActionTable(pluginType) : null;
 
-        while (reader.ReadLine() is { } line)
+        while (true)
         {
+            // A frame buffered while an action was blocked on a host call replays here (M33 Fix 6).
+            string? line = BufferedActions.Count > 0 ? BufferedActions.Dequeue() : reader.ReadLine();
+
+            if (line is null)
+            {
+                break;
+            }
+
             if (string.IsNullOrWhiteSpace(line))
             {
                 continue;
@@ -598,25 +609,29 @@ public static class PluginHost
                 using var doc = JsonDocument.Parse(line);
                 var root = doc.RootElement;
 
-                // Events may arrive while an action is blocked on a host call; handle them here
-                // too so they are not dropped.
-                if (root.TryGetProperty("type", out var frameType) && frameType.GetString() == "event")
+                if (root.TryGetProperty("type", out var frameType))
                 {
-                    DispatchEvent(line);
-                    continue;
-                }
-
-                if (root.TryGetProperty("type", out var typeProp) &&
-                    typeProp.GetString() == "host_call_result" &&
-                    root.TryGetProperty("id", out var idProp) &&
-                    idProp.GetInt64() == id)
-                {
-                    if (!root.TryGetProperty("result", out var resultProp) || resultProp.ValueKind == JsonValueKind.Null)
+                    switch (frameType.GetString())
                     {
-                        return null;
-                    }
+                        // Events may arrive while an action is blocked on a host call; handle them
+                        // here too so they are not dropped.
+                        case "event":
+                            DispatchEvent(line);
+                            continue;
 
-                    return resultProp.GetRawText();
+                        // Same for an action frame: buffered, not dropped; the main loop replays it
+                        // once the blocking call returns (M33 Fix 6).
+                        case "action":
+                            BufferedActions.Enqueue(line);
+                            continue;
+
+                        case "host_call_result"
+                            when root.TryGetProperty("id", out var idProp) && idProp.GetInt64() == id:
+                            return root.TryGetProperty("result", out var resultProp) &&
+                                   resultProp.ValueKind != JsonValueKind.Null
+                                ? resultProp.GetRawText()
+                                : null;
+                    }
                 }
             }
             catch (JsonException)
