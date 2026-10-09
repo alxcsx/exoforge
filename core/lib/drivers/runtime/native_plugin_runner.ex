@@ -235,14 +235,15 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
   end
 
   defp record_log(plugin_id, level, message) do
-    # Keep it where the developer can see it: the server log alone is invisible from Unity.
-    Exoforge.PluginLogs.append(plugin_id, level, message)
-
-    case level do
-      0 -> Logger.debug("[#{plugin_id}] #{message}")
-      2 -> Logger.warning("[#{plugin_id}] #{message}")
-      3 -> Logger.error("[#{plugin_id}] #{message}")
-      _ -> Logger.info("[#{plugin_id}] #{message}")
+    # Keep it where the developer can see it: the server log alone is invisible from Unity. A
+    # rate-limited line does not reach here at all, so a flood cannot fill the operator's log either.
+    if Exoforge.PluginLogs.append(plugin_id, level, message) == :ok do
+      case level do
+        0 -> Logger.debug("[#{plugin_id}] #{message}")
+        2 -> Logger.warning("[#{plugin_id}] #{message}")
+        3 -> Logger.error("[#{plugin_id}] #{message}")
+        _ -> Logger.info("[#{plugin_id}] #{message}")
+      end
     end
   end
 
@@ -385,7 +386,6 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
   defp normalize_error(nil), do: "unknown_error"
   defp normalize_error(error) when is_binary(error), do: error
   defp normalize_error(error), do: inspect(error)
-
 
   defp split_lines(buffer) do
     parts = String.split(buffer, "\n")

@@ -245,11 +245,15 @@ by whether they were worth doing on the spot.
   never in the CLI, despite the SDK comment promising `exo plugin logs` the file and the line. Both
   paths now record through one `record_log/3`, and a stub-protocol test asserts the buffer holds the
   trace.
+- **Plugin log volume is bounded per plugin.** `host_log` handling gave a plugin a free megaphone
+  into the server log: `PluginLogs` capped the CLI buffer at 200 lines, but nothing capped the rate,
+  so a plugin logging in a tight loop could fill the operator's log while the buffer cycled. A
+  per-plugin second window now admits 100 lines and refuses the rest with `:rate_limited` before
+  either the buffer or the server log sees them, so one plugin cannot drown another's lines. Drops
+  are silent by design; a "N lines suppressed" summary is the upgrade if an operator asks.
 
 *Worth doing later, in rough order of value:*
 
-- **Plugin log volume is unbounded.** A chatty or crash-looping plugin can now fill the server log,
-  and there is no rate limit or ring buffer between it and the operator.
 - **`PublishReadyToRun` is unmeasured.** It costs about 50KB on a 195KB plugin and is there for cold
   start, which nobody has timed. Either measure it or drop it.
 - **The `HEALTHCHECK` is wrong twice.** Verified against the running container: the path it curls,

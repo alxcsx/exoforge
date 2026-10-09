@@ -27,12 +27,27 @@ defmodule Exoforge.PluginLogsTest do
   end
 
   test "caps how many lines a single plugin can hold", %{plugin: plugin} do
-    for i <- 1..250, do: PluginLogs.append(plugin, 1, "line #{i}")
+    # One per second: the line cap is what this tests, not the rate cap.
+    for i <- 1..250, do: PluginLogs.append(plugin, 1, "line #{i}", i * 1_000)
 
     assert PluginLogs.count(plugin) == 200
     # The oldest were dropped, the newest kept.
     assert List.last(PluginLogs.list(plugin)).message == "line 250"
     refute Enum.any?(PluginLogs.list(plugin), &(&1.message == "line 1"))
+  end
+
+  test "caps how many lines a plugin can emit per second", %{plugin: plugin} do
+    limit = PluginLogs.rate_limit()
+    now = 1_000
+
+    results = for _ <- 1..(limit + 5), do: PluginLogs.append(plugin, 1, "flood", now)
+    assert Enum.count(results, &(&1 == :ok)) == limit
+    assert PluginLogs.count(plugin) == limit
+
+    # The same second stays closed, the next one opens.
+    assert PluginLogs.append(plugin, 1, "late", now + 999) == :rate_limited
+    assert PluginLogs.append(plugin, 1, "next second", now + 1_000) == :ok
+    assert PluginLogs.count(plugin) == limit + 1
   end
 
   test "limit returns the newest lines", %{plugin: plugin} do
