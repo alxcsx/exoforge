@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Threading.Tasks;
 using System.Text.Json.Nodes;
 using Xunit;
 
@@ -80,8 +81,17 @@ public class DeploymentGuardTests
 
             using var process = Process.Start(start)!;
             process.StandardInput.Close();
-            string message = process.StandardError.ReadToEnd() + process.StandardOutput.ReadToEnd();
-            process.WaitForExit();
+            Task<string> stdout = process.StandardOutput.ReadToEndAsync();
+            Task<string> stderr = process.StandardError.ReadToEndAsync();
+
+            if (!process.WaitForExit(30_000))
+            {
+                process.Kill(entireProcessTree: true);
+                throw new TimeoutException("The published plugin did not exit, so it did not refuse the missing runtime.");
+            }
+
+            Task.WaitAll(stdout, stderr);
+            string message = stderr.Result + stdout.Result;
 
             Assert.NotEqual(0, process.ExitCode);
             Assert.Contains("Microsoft.NETCore.App", message);
@@ -112,8 +122,20 @@ public class DeploymentGuardTests
         };
 
         using var process = Process.Start(start)!;
-        string output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
-        process.WaitForExit();
-        return (process.ExitCode, output);
+
+        // Both streams are drained while the build runs. ReadToEnd on one and then the other is the
+        // classic deadlock: a build that fills the second pipe blocks, and the first never reaches
+        // EOF, so the test hangs with a build that already finished its work.
+        Task<string> stdout = process.StandardOutput.ReadToEndAsync();
+        Task<string> stderr = process.StandardError.ReadToEndAsync();
+
+        if (!process.WaitForExit(180_000))
+        {
+            process.Kill(entireProcessTree: true);
+            throw new TimeoutException($"dotnet {arguments} did not finish within three minutes.");
+        }
+
+        Task.WaitAll(stdout, stderr);
+        return (process.ExitCode, stdout.Result + stderr.Result);
     }
 }

@@ -79,13 +79,19 @@ test-sdk:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	for suite in Exoforge.Client.Tests Exoforge.Plugin.SDK.Tests Exoforge.Plugin.Generator.Tests Exoforge.Management.Tests; do
-		dotnet test "sdk/csharp/$suite"
+		if [ "$suite" = "Exoforge.Client.Tests" ]; then
+			# The vertical slice needs a live server; `test-e2e` owns it. Without this filter the recipe
+			# failed whenever no server was running, under a name that says it does not need one.
+			dotnet test "sdk/csharp/$suite" --filter "FullyQualifiedName!~VerticalSliceIntegrationTests"
+		else
+			dotnet test "sdk/csharp/$suite"
+		fi
 	done
 	# A plugin's assembly is compiled to a process the server runs, so compiling the sample is the
 	# check that the generator and the SDK still agree about what a plugin is.
 	dotnet build plugins_csharp/sample_plugin/sample_plugin.csproj -v q --nologo
 
-# Run live end-to-end integration test (Client -> WS :4000 -> WASM -> Event -> Client)
+# Run live end-to-end integration test (Client -> WS :4000 -> native plugin -> Event -> Client)
 test-e2e: build-plugins
 	#!/usr/bin/env bash
 	set -euo pipefail
