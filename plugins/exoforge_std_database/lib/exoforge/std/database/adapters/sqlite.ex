@@ -140,24 +140,97 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
   defp kv_put(plugin_id, command, config) do
     tbl = to_string(command[:table])
     id = to_string(command[:id])
-    record = Map.put(command[:data] || %{}, "id", id)
+    data = command[:data] || %{}
+    record = Map.put(data, "id", id)
 
-    sql =
-      "INSERT INTO kv (tbl, id, data) VALUES ($1, $2, $3) " <>
-        "ON CONFLICT(tbl, id) DO UPDATE SET data = excluded.data"
+    with {:ok, conn} <- open_for(plugin_id, config) do
+      res =
+        case real_table_info(conn, tbl) do
+          {:ok, %{columns: cols, pk: pk_col}} ->
+            data_with_pk = Map.put(data, pk_col, id)
 
-    _ = run(plugin_id, config, sql, [tbl, id, encode(record)])
-    {:ok, %{rows: [record], num_rows: 1}}
+            valid_pairs =
+              Enum.flat_map(cols, fn col ->
+                case Map.fetch(data_with_pk, col) do
+                  {:ok, val} ->
+                    [{col, val}]
+
+                  :error ->
+                    case Map.fetch(data_with_pk, String.to_atom(col)) do
+                      {:ok, val} -> [{col, val}]
+                      :error -> []
+                    end
+                end
+              end)
+
+            if valid_pairs == [] do
+              put_into_kv(conn, tbl, id, record)
+            else
+              safe_tbl = String.replace(tbl, "\"", "")
+              safe_pk = String.replace(pk_col, "\"", "")
+              {names, values} = Enum.unzip(valid_pairs)
+              placeholders = Enum.map_join(1..length(names), ", ", &"$#{&1}")
+
+              updates =
+                names
+                |> Enum.reject(&(&1 == pk_col))
+                |> Enum.map_join(", ", fn col ->
+                  "\"#{String.replace(col, "\"", "")}\" = excluded.\"#{String.replace(col, "\"", "")}\""
+                end)
+
+              sql =
+                "INSERT INTO \"#{safe_tbl}\" (" <>
+                  Enum.map_join(names, ", ", &"\"#{String.replace(&1, "\"", "")}\"") <>
+                  ") VALUES (#{placeholders}) " <>
+                  if(updates == "",
+                    do: "ON CONFLICT(\"#{safe_pk}\") DO NOTHING",
+                    else: "ON CONFLICT(\"#{safe_pk}\") DO UPDATE SET #{updates}"
+                  )
+
+              case run_sql(conn, sql, values) do
+                {:ok, _} ->
+                  _ = run_sql(conn, "DELETE FROM kv WHERE tbl = $1 AND id = $2", [tbl, id])
+                  {:ok, %{rows: [record], num_rows: 1}}
+
+                error ->
+                  error
+              end
+            end
+
+          :error ->
+            put_into_kv(conn, tbl, id, record)
+        end
+
+      Exqlite.Sqlite3.close(conn)
+      res
+    end
   end
 
   defp kv_get(plugin_id, command, config) do
     tbl = to_string(command[:table])
     id = to_string(command[:id])
 
-    case run(plugin_id, config, "SELECT data FROM kv WHERE tbl = $1 AND id = $2", [tbl, id]) do
-      {:ok, %{rows: [row | _]}} -> {:ok, %{rows: [decode(row["data"])], num_rows: 1}}
-      {:ok, _} -> {:ok, %{rows: [], num_rows: 0}}
-      error -> error
+    with {:ok, conn} <- open_for(plugin_id, config) do
+      res =
+        case real_table_info(conn, tbl) do
+          {:ok, %{pk: pk_col}} ->
+            safe_tbl = String.replace(tbl, "\"", "")
+            safe_pk = String.replace(pk_col, "\"", "")
+
+            case run_sql(conn, "SELECT * FROM \"#{safe_tbl}\" WHERE \"#{safe_pk}\" = $1", [id]) do
+              {:ok, %{rows: [row | _]}} ->
+                {:ok, %{rows: [row], num_rows: 1}}
+
+              _ ->
+                get_from_kv(conn, tbl, id)
+            end
+
+          :error ->
+            get_from_kv(conn, tbl, id)
+        end
+
+      Exqlite.Sqlite3.close(conn)
+      res
     end
   end
 
@@ -165,30 +238,97 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
     tbl = to_string(command[:table])
     id = to_string(command[:id])
 
-    case run(plugin_id, config, "DELETE FROM kv WHERE tbl = $1 AND id = $2", [tbl, id]) do
-      {:ok, result} -> {:ok, %{result | rows: []}}
-      error -> error
+    with {:ok, conn} <- open_for(plugin_id, config) do
+      res =
+        case real_table_info(conn, tbl) do
+          {:ok, %{pk: pk_col}} ->
+            safe_tbl = String.replace(tbl, "\"", "")
+            safe_pk = String.replace(pk_col, "\"", "")
+            _ = run_sql(conn, "DELETE FROM \"#{safe_tbl}\" WHERE \"#{safe_pk}\" = $1", [id])
+            _ = run_sql(conn, "DELETE FROM kv WHERE tbl = $1 AND id = $2", [tbl, id])
+            {:ok, %{rows: [], num_rows: 1}}
+
+          :error ->
+            case run_sql(conn, "DELETE FROM kv WHERE tbl = $1 AND id = $2", [tbl, id]) do
+              {:ok, result} -> {:ok, %{result | rows: []}}
+              error -> error
+            end
+        end
+
+      Exqlite.Sqlite3.close(conn)
+      res
     end
   end
 
   defp kv_all(plugin_id, command, config) do
     tbl = to_string(command[:table])
 
-    case run(plugin_id, config, "SELECT data FROM kv WHERE tbl = $1", [tbl]) do
-      {:ok, %{rows: rows}} ->
-        decoded = Enum.map(rows, &decode(&1["data"]))
-        {:ok, %{rows: decoded, num_rows: length(decoded)}}
+    with {:ok, conn} <- open_for(plugin_id, config) do
+      res =
+        case real_table_info(conn, tbl) do
+          {:ok, _} ->
+            safe_tbl = String.replace(tbl, "\"", "")
 
-      error ->
-        error
+            case run_sql(conn, "SELECT * FROM \"#{safe_tbl}\"", []) do
+              {:ok, %{rows: rows}} -> {:ok, %{rows: rows, num_rows: length(rows)}}
+              error -> error
+            end
+
+          :error ->
+            case run_sql(conn, "SELECT data FROM kv WHERE tbl = $1", [tbl]) do
+              {:ok, %{rows: rows}} ->
+                decoded = Enum.map(rows, &decode(&1["data"]))
+                {:ok, %{rows: decoded, num_rows: length(decoded)}}
+
+              error ->
+                error
+            end
+        end
+
+      Exqlite.Sqlite3.close(conn)
+      res
     end
   end
 
-  defp run(plugin_id, config, sql, args) do
-    with {:ok, conn} <- open_for(plugin_id, config) do
-      result = run_sql(conn, sql, args)
-      Exqlite.Sqlite3.close(conn)
-      result
+  defp real_table_info(_conn, "kv"), do: :error
+
+  defp real_table_info(conn, tbl) do
+    safe_tbl = String.replace(tbl, "\"", "")
+
+    case run_sql(conn, "SELECT name FROM sqlite_master WHERE type = 'table' AND name = $1", [safe_tbl]) do
+      {:ok, %{rows: [%{"name" => ^safe_tbl} | _]}} ->
+        case run_sql(conn, "PRAGMA table_info(\"#{safe_tbl}\")", []) do
+          {:ok, %{rows: rows}} when rows != [] ->
+            cols = Enum.map(rows, &to_string(&1["name"]))
+            pk_row = Enum.find(rows, fn r -> (r["pk"] || 0) > 0 end)
+            pk_col = if pk_row, do: to_string(pk_row["name"]), else: "id"
+            {:ok, %{columns: cols, pk: pk_col}}
+
+          _ ->
+            :error
+        end
+
+      _ ->
+        :error
+    end
+  end
+
+  defp put_into_kv(conn, tbl, id, record) do
+    sql =
+      "INSERT INTO kv (tbl, id, data) VALUES ($1, $2, $3) " <>
+        "ON CONFLICT(tbl, id) DO UPDATE SET data = excluded.data"
+
+    case run_sql(conn, sql, [tbl, id, encode(record)]) do
+      {:ok, _} -> {:ok, %{rows: [record], num_rows: 1}}
+      error -> error
+    end
+  end
+
+  defp get_from_kv(conn, tbl, id) do
+    case run_sql(conn, "SELECT data FROM kv WHERE tbl = $1 AND id = $2", [tbl, id]) do
+      {:ok, %{rows: [row | _]}} -> {:ok, %{rows: [decode(row["data"])], num_rows: 1}}
+      {:ok, _} -> {:ok, %{rows: [], num_rows: 0}}
+      error -> error
     end
   end
 
