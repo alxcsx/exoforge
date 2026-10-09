@@ -61,10 +61,8 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
 
         // Contracts declared in a referenced assembly - a shared contracts project - are invisible to
         // ForAttributeWithMetadataName, which only walks this compilation's syntax.
-        // The compilation is already needed here, so the enums ride along with the referenced
-        // contracts rather than being a second provider that would invalidate on every keystroke.
         var referenced = context.CompilationProvider.Select(static (compilation, ct) =>
-            (Contracts: ExtractReferencedContracts(compilation, ct), Enums: EnumsIn(compilation.Assembly.GlobalNamespace)));
+            ExtractReferencedContracts(compilation, ct));
 
         var settings = context.AnalyzerConfigOptionsProvider.Select(static (provider, _) => new Settings(
             Option(provider.GlobalOptions, "build_property.ExoforgePluginType") ?? "native",
@@ -75,7 +73,7 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
         context.RegisterSourceOutput(services.Combine(referenced).Combine(settings), static (spc, pair) =>
         {
             var ((local, external), build) = pair;
-            Report(spc, local.AddRange(external.Contracts), build, external.Enums);
+            Report(spc, local.AddRange(external), build);
         });
     }
 
@@ -125,8 +123,8 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
         string EventHandler,
         string ContractInterface,
         string ContractBinding,
-        List<ServiceModel> Models,
-        List<string> InjectedProperties);
+        List<ServiceModel> Models);
+
 
     // ---- service extraction ----
 
@@ -293,17 +291,12 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
         // plugin dependency.
         var dependencies = new List<string>();
 
-        // Every [Inject] property, named, so the entry point can keep them from being trimmed.
-        var injected = new List<string>();
-
         foreach (var member in root.GetMembers())
         {
             if (member is not IPropertySymbol property) continue;
 
             var inject = FindAttribute(property.GetAttributes(), InjectAttribute);
             if (inject is null) continue;
-
-            injected.Add(property.Name);
 
             string? dep = PositionalString(inject, 0) ?? NamedString(inject, "ServiceName");
             if (!string.IsNullOrEmpty(dep) && !dependencies.Contains(dep!)) dependencies.Add(dep!);
@@ -360,8 +353,7 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
             DispatchEmitter.EventHandler(rootFq, FindEventHandler(root)),
             contract,
             binding,
-            services,
-            injected);
+            services);
     }
 
     private static ImmutableArray<ServiceEmit> ExtractReferencedContracts(Compilation compilation, CancellationToken ct)
@@ -620,7 +612,7 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
     // ---- output ----
 
     private static void Report(
-        SourceProductionContext spc, ImmutableArray<ServiceEmit> emits, Settings settings, List<EnumModel> enums)
+        SourceProductionContext spc, ImmutableArray<ServiceEmit> emits, Settings settings)
     {
         if (emits.IsDefaultOrEmpty) return;
 
@@ -699,19 +691,12 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
                 primary.Category, primary.Title, primary.Icon, primary.System),
             primary.Id, primary.Version, settings.PluginType, settings.BuildStamp);
 
-        // The plugin's own records need a JsonSerializerContext, and nothing can generate one *into* the
-        // compile that needs it: a source generator's output is invisible to the System.Text.Json
-        // generator, which is what fills in the context's members. A real file is visible to it - so
-        // this is written like the manifest, and the compile after this one has it.
-        string context = Context(primary.Id, models, enums);
-
         try
         {
             var directory = Path.GetDirectoryName(settings.ManifestPath);
             if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
 
             WriteIfChanged(settings.ManifestPath, final);
-            WriteIfChanged(Path.Combine(directory ?? ".", "src", "Generated", "ExoforgeJsonContext.g.cs"), context);
 
             // The Elixir manifest this replaced is now a stale copy of a different format. Left behind,
             // the server would find and evaluate it in preference to nothing, and the plugin would
@@ -739,167 +724,13 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
         File.WriteAllText(path, content, new UTF8Encoding(false));
     }
 
-    /// <summary>
-    /// The plugin's JSON context, as a file the System.Text.Json generator can see.
-    ///
-    /// Everything it needs is already in the attributes: a resource's record, an event's payload type,
-    /// an action's return type. An anonymous object cannot be registered and is not the shape the SDK
-    /// asks for anyway.
-    /// </summary>
-    private static string Context(string id, List<ServiceModel> models, List<EnumModel> enums)
-    {
-
-        var types = new List<string>();
-
-        foreach (var model in models)
-        {
-            foreach (var resource in model.Resources)
-            {
-                if (resource.TypeName is not null && !types.Contains(resource.TypeName)) types.Add(resource.TypeName);
-            }
-
-            foreach (var evt in model.Events)
-            {
-                if (evt.PayloadTypeName is not null && !types.Contains(evt.PayloadTypeName)) types.Add(evt.PayloadTypeName);
-            }
-
-            foreach (var action in model.Actions)
-            {
-                if (action.ReturnsType is not null && !types.Contains(action.ReturnsType)) types.Add(action.ReturnsType);
-            }
-        }
-
-        types.Sort(StringComparer.Ordinal);
-
-        var sb = new StringBuilder();
-        sb.AppendLine("// <auto-generated>");
-        sb.AppendLine("//     Generated by Exoforge.Plugin.Generator. Do not edit.");
-        sb.AppendLine("// </auto-generated>");
-        sb.AppendLine("#nullable enable");
-        sb.AppendLine();
-        sb.AppendLine("using System.Text.Json;");
-        sb.AppendLine("using System.Text.Json.Serialization;");
-        sb.AppendLine();
-
-        foreach (string type in types)
-        {
-            sb.AppendLine($"[JsonSerializable(typeof({type}))]");
-        }
-
-        if (enums.Count > 0)
-        {
-            string converters = string.Join(", ", enums.Select(e => $"typeof({ConverterName(e)})"));
-            sb.AppendLine();
-            sb.AppendLine($"[JsonSourceGenerationOptions(Converters = new[] {{ {converters} }})]");
-        }
-
-        sb.AppendLine($"public partial class ExoforgeJsonContext : JsonSerializerContext");
-        sb.AppendLine("{");
-        sb.AppendLine("}");
-        sb.AppendLine();
-
-        // One converter per enum. The generic JsonStringEnumConverter<T> is the only AOT-safe form and
-        // takes no naming policy, so it would write `Active` where the schema's choices say `active` -
-        // and an Elixir contract writing the same column says `active` too. Generated, both hold.
-        foreach (var model in enums)
-        {
-            sb.AppendLine($"internal sealed class {ConverterName(model)} : JsonConverter<{model.Type}>");
-            sb.AppendLine("{");
-            sb.AppendLine($"    public override {model.Type} Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)");
-            sb.AppendLine("    {");
-            sb.AppendLine("        return reader.GetString() switch");
-            sb.AppendLine("        {");
-
-            foreach (var member in model.Members)
-            {
-                sb.AppendLine($"            \"{member.Value}\" => {model.Type}.{member.Key},");
-            }
-
-            sb.AppendLine($"            _ => throw new JsonException(\"Not a {model.Type}: \" + reader.GetString())");
-            sb.AppendLine("        };");
-            sb.AppendLine("    }");
-            sb.AppendLine();
-            sb.AppendLine($"    public override void Write(Utf8JsonWriter writer, {model.Type} value, JsonSerializerOptions options)");
-            sb.AppendLine("    {");
-            sb.AppendLine("        writer.WriteStringValue(value switch");
-            sb.AppendLine("        {");
-
-            foreach (var member in model.Members)
-            {
-                sb.AppendLine($"            {model.Type}.{member.Key} => \"{member.Value}\",");
-            }
-
-            sb.AppendLine($"            _ => throw new JsonException(\"Not a {model.Type}: \" + value)");
-            sb.AppendLine("        });");
-            sb.AppendLine("    }");
-            sb.AppendLine("}");
-            sb.AppendLine();
-        }
-
-        return sb.ToString();
-    }
-
-    private static string ConverterName(EnumModel model) =>
-        model.Type.Replace("global::", "").Replace(".", "_").Replace("+", "_") + "Converter";
-
-    /// <summary>
-    /// Every enum the assembly declares, sorted so the output is stable.
-    ///
-    /// Not only the ones a resource column is typed as: a converter is needed wherever an enum reaches
-    /// JSON, and a column is not the only place - an event payload or an action's return type carries
-    /// one too, and neither is a resource. A converter is a few lines of generated code, and one the
-    /// plugin never serialises is dead, which the trimmer removes. Finding the reachable set would be
-    /// the real cost, and it would be a graph walk to save nothing.
-    /// </summary>
-    private static List<EnumModel> EnumsIn(INamespaceSymbol ns)
-    {
-        var found = new List<EnumModel>();
-
-        foreach (var member in ns.GetMembers())
-        {
-            switch (member)
-            {
-                case INamespaceSymbol nested:
-                    found.AddRange(EnumsIn(nested));
-                    break;
-
-                case INamedTypeSymbol { TypeKind: TypeKind.Enum } enumType:
-                    var members = enumType.GetMembers()
-                        .OfType<IFieldSymbol>()
-                        .Where(field => field.IsConst)
-                        .Select(field => new KeyValuePair<string, string>(field.Name, ToSnakeCase(field.Name)))
-                        .ToList();
-
-                    if (members.Count > 0)
-                    {
-                        found.Add(new EnumModel(
-                            enumType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), members));
-                    }
-
-                    break;
-            }
-        }
-
-        return found.OrderBy(e => e.Type, StringComparer.Ordinal).ToList();
-    }
-
     private static string EntryPoint(ServiceEmit emit, string context)
     {
         const string dispatch = "global::Exoforge.Generated.ExoforgeDispatch";
 
-        // The three-argument Run needs a context. Without one the plugin falls back to the host's
-        // reflection path, which is what it had before the generator existed.
-        // The plugin's [Inject] properties are reached by reflection - the host assigns them - and an
-        // annotation at a use site did not survive: the dataflow has to reach the call site, and the
-        // call site is here, in the plugin's own assembly. They were trimmed and every injected
-        // dependency was silently null. Naming the members keeps them unconditionally.
-        //
-        // By name, not by member kind: the SDK ships an internal polyfill of the kinds enum for
-        // netstandard2.1, so a project that can see it - the generator's own tests, through
-        // InternalsVisibleTo - sees the type twice.
-        string injected = string.Concat(emit.InjectedProperties.Select(name =>
-            $"        [global::System.Diagnostics.CodeAnalysis.DynamicDependency(\"{name}\", typeof({emit.RootClass}))]\n"));
-
+        // A hand-written context is still honoured - it is faster than reflection and a plugin may
+        // want the types pinned - but none is generated, because none is needed: plugins are
+        // framework-dependent, so nothing is trimmed and reflection serialises what they send.
         string run = context.Length == 0
             ? $"global::Exoforge.Plugin.SDK.PluginHost.RunInstance(new {emit.RootClass}(), new {dispatch}());"
             : $"global::Exoforge.Plugin.SDK.PluginHost.Run<{emit.RootClass}, {context}, {dispatch}>();";
@@ -913,7 +744,7 @@ namespace Exoforge.Generated
 {{
     internal static class ExoforgeEntryPoint
     {{
-{injected}        public static void Main() => {run}
+        public static void Main() => {run}
     }}
 }}
 ";

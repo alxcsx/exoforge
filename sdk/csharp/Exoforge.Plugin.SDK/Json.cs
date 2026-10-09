@@ -152,7 +152,7 @@ public static class PluginJson
         }
         catch (InvalidOperationException ex)
         {
-            throw new InvalidOperationException(AotHint(value.GetType()), ex);
+            throw new InvalidOperationException(SerializationHint(value.GetType()), ex);
         }
     }
 
@@ -172,7 +172,7 @@ public static class PluginJson
         }
         catch (InvalidOperationException ex)
         {
-            throw new InvalidOperationException(AotHint(type), ex);
+            throw new InvalidOperationException(SerializationHint(type), ex);
         }
     }
 
@@ -254,67 +254,18 @@ public static class PluginJson
         return false;
     }
 
-    internal static string AotHint(Type type)
-    {
-        // An anonymous object is the trap this message exists for. It serializes fine in a test run,
-        // where reflection is available, and fails in the published plugin - so the author sees green
-        // tests and a broken build. And the usual advice is impossible to follow: a compiler-generated
-        // type cannot be named in source, so "[JsonSerializable(typeof(...))]" is not missing, it is
-        // unwritable. A closure's display class is the same shape of problem.
-        //
-        // The obvious way out was tried, and it does not hold. Walking the object into a JsonObject
-        // works - JsonObject and JsonValue are known to STJ without a context entry - and in a flat
-        // object it works in a published AOT plugin. It is not reliable: the trimmer removes property
-        // metadata nothing references, and a type with no name cannot be rooted, so the walk finds
-        // some properties and not others. An action returning `new { value = 7, nested = new { deep =
-        // true } }` came back as {"value":7,"nested":{}} - the outer object intact, the inner one
-        // empty. A wrong answer on the wire is worse than the loud failure this hint replaces, and no
-        // guard can detect it, since a partly trimmed type is indistinguishable from a small one. So
-        // there is deliberately no such fallback: declare the type, and its name makes it rootable.
-        //
-        // Nor can the switches be turned back on, which is worth knowing before trying. Publishing with
-        // JsonSerializerIsReflectionEnabledByDefault=true and IlcTrimMetadata=false - reflection on,
-        // metadata kept, 2.8MB of binary becoming 7.2MB - gets further and still fails: it reaches the
-        // anonymous type, then cannot build a converter for it, because NativeAOT compiles generic
-        // instantiations statically and the one STJ needs here was never in the program. IL2CPP gets
-        // away with the same trick for two reasons that AOT does not share: it strips nothing by
-        // default, and it shares generic code across reference-type instantiations. Unity developers
-        // meet the IL2CPP half of this too - link.xml, [Preserve], AOTGenericReferences, and code that
-        // works in the Editor and breaks in the build. It is not a configuration mistake in either.
-        //
-        // What it costs to have reflection back, measured rather than guessed. Disk is cheap and RAM
-        // is not, so the number that matters is the marginal one, and a single process does not show
-        // it: Pss divides shared pages among their sharers, so per-process cost falls as plugins are
-        // added. Eight of each, spawned directly and left idle:
-        //
-        //                                    N=1        N=8 total    marginal per plugin
-        //   NativeAOT                        3.2MB Pss    10MB        ~1MB      (2.8MB on disk)
-        //   framework-dependent             12.5MB Pss    57MB        ~6.4MB    (144KB on disk)
-        //
-        // So dropping AOT buys 20x less disk and costs 6x more RAM per plugin. Disk is an image layer
-        // in a container and effectively free; RAM is what runs out. AOT's per-process Pss falls as
-        // plugins are added, because they share the binary's code pages - which is also why a shared
-        // in-process host is a weaker RAM argument than it looks: eight AOT plugins cost less in total
-        // than one framework-dependent host process, before any plugin's own working set.
-        //
-        // None of this is an argument about code. It is the whole reason the workarounds above exist:
-        // the deployment mode is the cause, and changing it deletes them rather than fixing them. It
-        // just costs more RAM than it saves, which is the wrong trade when RAM is the scarce thing.
-        if (type.IsDefined(typeof(System.Runtime.CompilerServices.CompilerGeneratedAttribute), false) &&
-            type.Name.StartsWith("<", StringComparison.Ordinal))
-        {
-            return $"Could not serialize '{type.Name}': it is a compiler-generated type, so it cannot be " +
-                   "named in source and there is no way to register it. An anonymous object works in a " +
-                   "test run, where reflection is available, and fails here in the published plugin. " +
-                   "Declare a record instead - `public record MyResult(int Value);` - and return " +
-                   "`new MyResult(7)`. Its name is what the manifest, the generated client and the " +
-                   "dashboard describe, and it is what makes the type rootable. Converting the object " +
-                   "to a JsonObject is not a way around this: the trimmer removes the property " +
-                   "metadata the conversion needs, and it drops fields rather than failing.";
-        }
-
-        return $"Could not (de)serialize '{type}'. On NativeAOT, register the type on a source-generated " +
-               "JsonSerializerContext and start the plugin with PluginHost.Run<TPlugin, TJsonContext>(), " +
-               "adding [JsonSerializable(typeof(" + type.Name + "))].";
-    }
+    /// <summary>
+    /// Why a value could not be serialised, in terms the author can act on.
+    /// </summary>
+    /// <remarks>
+    /// This used to explain a deployment problem: under NativeAOT the trimmer removed the property
+    /// metadata reflection needed, and a compiler-generated type could not be rooted by name, so the
+    /// only answer was to declare a record. Plugins are framework-dependent now, so reflection works
+    /// and this fires for a genuinely unserialisable value instead - a cycle, a property that throws,
+    /// a type with nothing readable on it.
+    /// </remarks>
+    internal static string SerializationHint(Type type) =>
+        $"Could not serialize '{type.FullName}'. Reflection is available, so the value is the problem " +
+        "rather than the deployment: look for a reference cycle, a property whose getter throws, or a " +
+        "type with no readable properties.";
 }

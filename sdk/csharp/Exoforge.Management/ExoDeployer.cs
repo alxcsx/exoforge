@@ -700,25 +700,9 @@ public class ExoDeployer
         // The manifest is written by Exoforge.Plugin.Generator during this same compile, so the
         // version stamped into it always describes the binary just produced. There is no second pass
         // over the compiled assembly, which is what used to let a stale Release tree win.
-        // Two passes, and only because of the JSON context.
-        //
-        // A plugin's records need a JsonSerializerContext, and nothing can generate one *into* the
-        // compile that needs it: a source generator's output is invisible to the System.Text.Json
-        // generator, which is what fills the context's members in. So the generator writes the context
-        // as a real file - the manifest's trick - and the compile after that one has it. A cheap build
-        // first, then the publish that actually ships.
-        //
-        // One pass would leave the plugin building and failing at runtime on the first record it tried
-        // to send, which is the sort of thing that gets blamed on the SDK.
-        emit("[build] dotnet build (writes the JSON context)");
-        RunProcess(
-            dotnetPath,
-            $"build \"{RelativeTo(pluginDir, csproj)}\" -c Release " +
-            $"-p:ExoforgePluginType=native -p:ExoforgeBuildStamp={buildStamp} " +
-            $"-p:ExoforgeManifestPath=\"{manifest}\"",
-            pluginDir,
-            emit);
-
+        // One pass. It was two while the generator wrote a JsonSerializerContext for a second compile
+        // to pick up; plugins are framework-dependent now, so reflection serialises their records and
+        // there is nothing to write.
         emit($"[build] dotnet publish -c Release -r {targetRid}");
         RunProcess(
             dotnetPath,

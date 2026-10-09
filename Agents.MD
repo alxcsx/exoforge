@@ -166,16 +166,13 @@ rather than the runtime. A record has a *name*, and that name is what the manife
 client stub and the Studio describe; an anonymous object would serialise fine and be describable by
 nobody. The
 SDK owns the JSON: action arguments and results, stored records, and event payloads are typed, and
-`IDatabase` (injected as `[Inject]`) is a typed key/value store with a typed SQL runner. The
-generator registers the record types on a source-generated `JsonSerializerContext` and starts the
-plugin with the context-aware runner:
+`IDatabase` (injected as `[Inject]`) is a typed key/value store with a typed SQL runner.
+
+There is no `Main` to write and no `JsonSerializerContext` to declare — the generator emits the entry
+point, and because a plugin is framework-dependent, reflection serialises what it sends. A plugin
+that declares a context anyway is still honoured; nothing requires one.
 
 ```csharp
-[JsonSerializable(typeof(SnakeScoreRecord))]
-internal partial class SnakeJsonContext : JsonSerializerContext { }
-
-// No Main to write: the generator emits it and passes this context to the runner.
-
 // Key/value
 var best = Database!.Get<SnakeScoreRecord>("snake_scores", playerId);
 Database.Put("snake_scores", playerId, record);

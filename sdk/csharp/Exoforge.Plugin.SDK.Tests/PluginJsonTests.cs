@@ -65,31 +65,16 @@ public class UnrepresentableValueTests
 /// </remarks>
 public class AnonymousTypeTests
 {
-    /// <summary>Which is exactly what hides the problem until the plugin is published.</summary>
+    /// <summary>
+    /// Which is the point of being framework-dependent: reflection is available, so an anonymous
+    /// object serialises and a record is a contract rather than a requirement.
+    /// </summary>
     [Fact]
     public void An_anonymous_object_serializes_where_reflection_is_available()
     {
         Assert.Equal("{\"value\":1}", PluginJson.Serialize(new { value = 1 }));
     }
 
-    [Fact]
-    public void The_hint_says_an_anonymous_type_cannot_be_registered_at_all()
-    {
-        string hint = PluginJson.AotHint(new { value = 1 }.GetType());
-
-        Assert.Contains("compiler-generated", hint, StringComparison.Ordinal);
-        Assert.Contains("record", hint, StringComparison.Ordinal);
-        // Not the ordinary advice: there is no name to put in it.
-        Assert.DoesNotContain("[JsonSerializable", hint, StringComparison.Ordinal);
-        // And not the JsonObject way around it, which drops fields instead of failing.
-        Assert.Contains("JsonObject", hint, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void A_named_type_still_gets_the_registration_hint()
-    {
-        Assert.Contains("[JsonSerializable", PluginJson.AotHint(typeof(TypedScoreRow)), StringComparison.Ordinal);
-    }
 }
 
 public record TypedScoreRow
@@ -99,7 +84,7 @@ public record TypedScoreRow
     public int Score { get; init; }
 }
 
-/// <summary>Mirrors what a plugin ships for NativeAOT: snake_case names, one entry per record type.</summary>
+/// <summary>A context a plugin may still declare itself: snake_case names, one entry per record.</summary>
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
 [JsonSerializable(typeof(TypedScoreRow))]
 internal partial class TestJsonContext : JsonSerializerContext
