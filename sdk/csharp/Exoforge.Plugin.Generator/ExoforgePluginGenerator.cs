@@ -26,6 +26,7 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
     private const string ServiceAttribute = "Exoforge.Plugin.SDK.ExoServiceAttribute";
     private const string ResourceAttribute = "Exoforge.Plugin.SDK.ExoResourceAttribute";
     private const string ActionAttribute = "Exoforge.Plugin.SDK.ExoActionAttribute";
+    private const string WebhookAttribute = "Exoforge.Plugin.SDK.ExoWebhookAttribute";
     private const string EventAttribute = "Exoforge.Plugin.SDK.ExoEventAttribute";
     private const string ColumnAttribute = "Exoforge.Plugin.SDK.ExoColumnAttribute";
     private const string PrimaryKeyAttribute = "Exoforge.Plugin.SDK.PrimaryKeyAttribute";
@@ -200,18 +201,22 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
             if (member is not IMethodSymbol method) continue;
 
             var actionAttr = FindAttribute(method.GetAttributes(), ActionAttribute);
-            if (actionAttr is null) continue;
+            var webhookAttr = FindAttribute(method.GetAttributes(), WebhookAttribute);
+            if (actionAttr is null && webhookAttr is null) continue;
 
-            string actionName = PositionalString(actionAttr, 0) ?? ToSnakeCase(method.Name);
+            bool isWebhook = webhookAttr is not null;
+            var targetAttr = webhookAttr ?? actionAttr!;
+
+            string actionName = PositionalString(targetAttr, 0) ?? ToSnakeCase(method.Name);
             dispatches.Add(new ActionDispatch(actionName, method));
 
             var (returnsScalar, returnFields, returnsList, returnsType) = DescribeReturn(method.ReturnType);
 
-            ServiceFor(NamedString(actionAttr, "Service")).Actions.Add(new ActionModel(
+            ServiceFor(NamedString(targetAttr, "Service")).Actions.Add(new ActionModel(
                 actionName,
-                ResolveActionMode(actionAttr, method.ReturnType),
-                NamedString(actionAttr, "Scope") ?? "global",
-                (NamedEnum(actionAttr, "Transport") ?? "auto").ToLowerInvariant(),
+                isWebhook ? "sync" : ResolveActionMode(targetAttr, method.ReturnType),
+                NamedString(targetAttr, "Scope") ?? (isWebhook ? "webhook" : "global"),
+                isWebhook ? "webhook" : (NamedEnum(targetAttr, "Transport") ?? "auto").ToLowerInvariant(),
                 method.Parameters.Select(p => new ParamModel(ToSnakeCase(p.Name), MapTypeToElixir(p.Type))).ToList(),
                 returnsScalar,
                 returnFields,

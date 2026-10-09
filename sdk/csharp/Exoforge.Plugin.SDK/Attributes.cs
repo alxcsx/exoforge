@@ -50,7 +50,8 @@ public enum ActionTransport
 {
     Auto,
     WebSocket,
-    Http
+    Http,
+    Webhook
 }
 
 /// <summary>
@@ -75,6 +76,29 @@ public class ExoActionAttribute : Attribute
     public string? Service { get; set; }
 
     public ExoActionAttribute(string? name = null)
+    {
+        Name = name;
+    }
+}
+
+/// <summary>
+/// Marks a method as an inbound webhook handler.
+/// Webhooks are dispatched via HTTP from external providers (e.g. Stripe, GitHub, Discord)
+/// with raw request payloads and headers.
+/// </summary>
+[AttributeUsage(AttributeTargets.Method, Inherited = false, AllowMultiple = false)]
+public class ExoWebhookAttribute : Attribute
+{
+    /// <summary>Webhook action name on the wire. When omitted, the method name is used in snake_case.</summary>
+    public string? Name { get; }
+
+    /// <summary>The service this webhook belongs to. Defaults to the plugin's first <see cref="ExoServiceAttribute"/>.</summary>
+    public string? Service { get; set; }
+
+    /// <summary>Action scope required to invoke this webhook. Defaults to "webhook".</summary>
+    public string Scope { get; set; } = "webhook";
+
+    public ExoWebhookAttribute(string? name = null)
     {
         Name = name;
     }
