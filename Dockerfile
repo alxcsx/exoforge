@@ -80,7 +80,7 @@ WORKDIR /app
 
 # Non-root user for security (essential for Kubernetes runAsNonRoot)
 RUN addgroup -S exoforge && adduser -S exoforge -G exoforge && \
-    mkdir -p /app/plugins_csharp /app/plugins_elixir && \
+    mkdir -p /app/plugins /app/plugins_csharp && \
     chown -R exoforge:exoforge /app
 
 # Copy assembled OTP release
@@ -91,7 +91,14 @@ COPY --from=builder --chown=exoforge:exoforge /build/_build/prod/rel/exoforge ./
 # it, cannot find the plugin, and refuses to start. The directory itself is created above, empty and
 # writable, for the push to land in. Mount a volume over it to make pushed plugins outlive the
 # container; without one they are ephemeral, which is fine for a dev box.
-COPY --from=builder --chown=exoforge:exoforge /build/_build/prod/lib ./plugins_elixir
+# The standard plugins, from the build tree rather than the release.
+#
+# `mix release` carries only `ebin/` and `priv/` for each application, and a plugin's manifest sits at
+# the application root in `_build/prod/lib/<name>/manifest.json` - so a release drops every standard
+# plugin's manifest, and scanning the release's own lib finds directories with nothing in them. The
+# build tree has both, unversioned, which is the layout the loader expects and the one `upload_plugin`
+# writes. Copied to `plugins/`, which is a scan path already, so this needs no config.
+COPY --from=builder --chown=exoforge:exoforge /build/_build/prod/lib ./plugins
 
 USER exoforge
 
