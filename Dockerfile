@@ -13,7 +13,18 @@ ARG MIX_ENV=prod
 ENV MIX_ENV=${MIX_ENV} \
     LANG=C.UTF-8
 
-RUN apk add --no-cache build-base git curl
+# Plugins are framework-dependent .NET assemblies, so building one needs the SDK and running one
+# needs the runtime. Both come from the official images rather than from Alpine's repositories, which
+# lag the SDK version a plugin targets.
+ARG DOTNET_SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0-alpine
+ARG DOTNET_RUNTIME_IMAGE=mcr.microsoft.com/dotnet/runtime:10.0-alpine
+
+RUN apk add --no-cache build-base git curl \
+    libstdc++ icu-libs krb5-libs zlib libgcc
+
+COPY --from=${DOTNET_SDK_IMAGE} /usr/share/dotnet /usr/share/dotnet
+ENV DOTNET_ROOT=/usr/share/dotnet \
+    PATH=${PATH}:/usr/share/dotnet
 
 WORKDIR /build
 
@@ -48,8 +59,15 @@ ENV LANG=C.UTF-8 \
     HTTP_PORT=4001 \
     PHX_HOST=localhost
 
-# Install runtime dependencies for BEAM and WASM NIFs
-RUN apk add --no-cache libstdc++ ncurses-libs openssl ca-certificates curl
+# BEAM's own dependencies, plus what the .NET runtime needs to load a plugin assembly.
+RUN apk add --no-cache libstdc++ ncurses-libs openssl ca-certificates curl \
+    icu-libs krb5-libs zlib libgcc
+
+# The runtime only: a plugin ships IL and its dependencies, and nothing in the plugin carries a
+# runtime of its own.
+COPY --from=${DOTNET_RUNTIME_IMAGE} /usr/share/dotnet /usr/share/dotnet
+ENV DOTNET_ROOT=/usr/share/dotnet \
+    PATH=${PATH}:/usr/share/dotnet
 
 WORKDIR /app
 
@@ -61,7 +79,8 @@ RUN addgroup -S exoforge && adduser -S exoforge -G exoforge && \
 # Copy assembled OTP release
 COPY --from=builder --chown=exoforge:exoforge /build/_build/prod/rel/exoforge ./
 
-# Copy plugin manifests and WASM binaries
+# Copy plugin manifests. The built assemblies are not here: a plugin is deployed with `exo plugin
+# build`/`push` rather than baked into the image, and the binary is a build output.
 COPY --from=builder --chown=exoforge:exoforge /build/plugins_csharp ./plugins_csharp
 COPY --from=builder --chown=exoforge:exoforge /build/_build/prod/lib ./plugins_elixir
 

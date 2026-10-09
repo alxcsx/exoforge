@@ -108,8 +108,6 @@ public static class ExoScaffolder
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <OutputType>Exe</OutputType>
-    <PublishAot>true</PublishAot>
-    <InvariantGlobalization>true</InvariantGlobalization>
 
     <!--
       An Exoforge plugin. The package below brings the SDK, the generator and the manifest plumbing

@@ -33,7 +33,7 @@ Exoforge is an open, high-density game backend and LiveOps platform. It combines
 |      REST INGRESS (:4001)         |        WEBSOCKET INGRESS (:4000)     |
 |   (Dynamic OpenAPI Routes)        |   (Real-time JSON/Binary Protocol)   |
 +-----------------------------------+--------------------------------------+
-|                      NATIVE C# PLUGINS (AOT)                             |
+|                     NATIVE C# PLUGINS (.NET)                             |
 |          authoritative combat • inventory • liveops • matchmaking        |
 +--------------------------------------------------------------------------+
 |                     STANDARD EXTENSION SERVICES                          |
@@ -105,7 +105,7 @@ Exoforge separates game engineering from backend operations. Game developers wor
 
 A dedicated Unity Editor extension (`Tools ▸ Exoforge ▸ Exoforge Studio`, or `Window ▸ Exoforge`) providing:
 - **One-Click Scaffolding**: Generate standard, inventory, or LiveOps native C# plugins directly into `plugins/` — each with its own solution (`.slnx`) and sources under `src/`.
-- **Compilation & Deployment**: Build the NativeAOT binary + manifest and upload them to the running server.
+- **Compilation & Deployment**: Build the plugin and its manifest and upload them to the running server.
 - **Live Action Sandbox**: Test actions and inspect payloads with latency metrics (`µs`).
 - **Real-Time Event Stream**: Monitor backend broadcasts and filter topics inside Unity.
 
@@ -116,7 +116,7 @@ CI/CD, and for headless work. A Unity project does not need it.
 ```bash
 exo init                     # Initialize /exoforge workspace
 exo plugin new combat        # Scaffold a native C# plugin (--template standard|inventory)
-exo plugin build combat      # Build the NativeAOT binary + manifest.json
+exo plugin build combat      # Build the plugin (framework-dependent .NET) + manifest.json
 exo plugin stubs combat      # Generate typed service stubs from the cluster contracts
 exo plugin push combat       # Hot-load plugin onto live cluster
 exo sync                     # Generate strongly-typed C# client bindings

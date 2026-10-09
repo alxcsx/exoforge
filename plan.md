@@ -108,13 +108,31 @@ What it buys, beyond the number: **reflection works**, so records, enums, `[Inje
 anonymous shapes all serialise without generated help. Most of the machinery in M31 exists only to
 work around AOT, and this deletes it rather than fixing it.
 
-**Phase 1 — the switch.** `Directory.Build.targets` sets the deployment defaults for anything
-opt-ing into `ExoforgePlugin`, so a plugin `.csproj` stays a declaration: `PublishAot=false`,
-`SelfContained=false`, `PublishSingleFile=true`, `PublishReadyToRun=true` (Unity recommends R2R for
-cold start and documents the size cost), `RollForward=LatestMajor`, and an **error** if
-`PublishTrimmed=true` — trimming reintroduces every problem AOT had, with none of its benefits.
-`just build-plugins` and `ExoDeployer.PublishNative` become **one pass**; the two-pass build exists
-only because a source generator's output is invisible to the System.Text.Json generator.
+**Phase 1 — the switch.** *Done.* The deployment defaults live in
+`Exoforge.Plugin.SDK/build/Exoforge.Plugin.SDK.targets`, which is imported both by NuGet for a
+consumer and by this repository for its own plugins, so a plugin built here and one built against
+the package deploy identically: `PublishAot=false`, `SelfContained=false`, `PublishSingleFile=true`
+(the deploy protocol uploads one binary), `PublishReadyToRun=true` (Unity recommends R2R for cold
+start and documents the size cost), `RollForward=LatestMajor`.
+
+Every one of those is **conditional** on being unset, which is not a style choice: unconditional,
+the import overwrote what a plugin set for itself, so `PublishAot=true` became `false`, the build
+succeeded and the guard could never fire. A default that overrides hides the intent.
+
+Two errors guard the deployment, both verified by setting the property and watching them fire:
+`EXOFORGE001` for `PublishAot=true`, `EXOFORGE002` for `PublishTrimmed=true`. Trimming and AOT both
+remove the property metadata reflection needs, so a record serialises as an empty object — silently,
+and only once deployed.
+
+The image carries the SDK in the builder and the runtime in the runner. **Unverified**: there is no
+Docker daemon in the environment this was written in, so the image change is conventional rather
+than tested, and it is the one part of Phase 1 that still needs a `docker build` before it can be
+called done.
+
+**Not in Phase 1, and deliberately:** the two-pass build stays. It exists only so the generated JSON
+context is visible to the System.Text.Json generator on a second compile, and the context is what
+Phase 2 deletes — so the two go together, and collapsing the build now would leave a context that is
+written and never compiled.
 
 **Phase 2 — delete the workarounds.** The generator stops emitting the JSON context, the per-enum
 converters and the `[DynamicDependency]`. `FindJsonContext` stays: a hand-written context is still

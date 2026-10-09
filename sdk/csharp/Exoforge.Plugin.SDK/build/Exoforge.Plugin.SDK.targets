@@ -14,6 +14,58 @@
     <ExoforgeManifestPath Condition="'$(ExoforgeManifestPath)' == ''">$(MSBuildProjectDirectory)/../manifest.json</ExoforgeManifestPath>
   </PropertyGroup>
 
+  <!--
+    How a plugin is deployed.
+
+    Framework-dependent: a plugin ships IL and its dependencies, and the runtime comes from the host.
+    That is what UGS Cloud Code ships - a .ccm is a zip of the module DLL, its deps.json, its
+    dependencies and its PDBs, with no runtime in it - and it is why reflection works, which is why
+    nothing in the plugin authoring path needs generated help to serialise a record.
+
+    Declared here rather than in a plugin's own project file, for the same reason as the manifest
+    path: a plugin should be a declaration of what it provides, not a build recipe. Setting these
+    here also means a plugin built in this repository and one built against the package get the same
+    deployment, which is the thing that must not differ between the two.
+  -->
+  <PropertyGroup>
+    <!--
+      Every one of these is conditional, and that matters. Unconditional, the import would overwrite
+      what a plugin set for itself - which is how the guard below came to be unreachable: setting
+      PublishAot=true was silently replaced with false, so the build succeeded and the error never
+      fired. A default that overrides is worse than no default, because it hides the intent.
+    -->
+    <PublishAot Condition="'$(PublishAot)' == ''">false</PublishAot>
+    <SelfContained Condition="'$(SelfContained)' == ''">false</SelfContained>
+
+    <!-- One file, because the deploy protocol uploads one binary. -->
+    <PublishSingleFile Condition="'$(PublishSingleFile)' == ''">true</PublishSingleFile>
+
+    <!-- Precompiled IL: better cold start for a few hundred KB. Unity recommends the same for
+         modules, and documents the size cost the same way. -->
+    <PublishReadyToRun Condition="'$(PublishReadyToRun)' == ''">true</PublishReadyToRun>
+
+    <!-- The host's runtime is at least the one the plugin was built against, never older. Without
+         this, a plugin built against a newer SDK than the image carries fails to start. -->
+    <RollForward Condition="'$(RollForward)' == ''">LatestMajor</RollForward>
+  </PropertyGroup>
+
+  <!--
+    Both of these are refused rather than defaulted, because each one silently breaks a plugin in a
+    way that only shows up at runtime: trimming removes the property metadata reflection needs, so a
+    record serialises as an empty object, and AOT removes both the metadata and the generic
+    instantiations, so it cannot serialise at all. The failure is a wrong value on the wire rather
+    than an error, which is the worst shape it could take. Failing the build is the point.
+  -->
+  <Target Name="ExoforgePluginDeploymentGuard" BeforeTargets="PrepareForBuild;PrepareForPublish">
+    <Error Condition="'$(PublishAot)' == 'true'"
+           Code="EXOFORGE001"
+           Text="Exoforge plugins are framework-dependent and cannot be published with PublishAot. AOT trims the metadata and generic instantiations that System.Text.Json reflection needs, so a plugin that builds will fail or send empty objects at runtime. Remove &lt;PublishAot&gt; from $(MSBuildProjectName)." />
+
+    <Error Condition="'$(PublishTrimmed)' == 'true'"
+           Code="EXOFORGE002"
+           Text="Exoforge plugins cannot be published trimmed. Trimming removes property metadata that reflection needs, so records serialise as empty objects - silently, and only once deployed. Remove &lt;PublishTrimmed&gt; from $(MSBuildProjectName)." />
+  </Target>
+
   <ItemGroup>
     <!-- The manifest is written by the generator during the compile, so a missing one has to re-run
          the compile rather than be treated as up to date. -->

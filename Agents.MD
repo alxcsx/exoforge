@@ -103,14 +103,17 @@ plugin_manager ───▶ (independent root)
 
 | Runtime | Manifest `type` | Written in | Built by | Use for |
 | :--- | :--- | :--- | :--- | :--- |
-| **Native (AOT process)** | `:native` | C# | `exo plugin build` → `dotnet publish -p:PublishAot=true` | First-party game servers. **Default.** |
+| **Native (.NET process)** | `:native` | C# | `exo plugin build` → `dotnet publish` | First-party game servers. **Default.** |
 | Elixir | `:elixir` | Elixir | `mix` | System plugins |
 
 Native plugins are plain C# — no C, no extra toolchain. `exo plugin build` compiles the plugin to a
-self-contained ~2 MB binary. `manifest.json` and the entry point are written by the
+**framework-dependent** single file of a couple of hundred KB: the plugin carries its own IL and
+dependencies, and the runtime comes from the host, which is how UGS Cloud Code ships modules too
+(a `.ccm` is a zip of the module DLL, its `deps.json`, its dependencies and its PDBs, with no
+runtime in it). `manifest.json` and the entry point are written by the
 `Exoforge.Plugin.Generator` source generator during that same compile — there is no separate manifest
-tool. The Unity **Exoforge Studio ▸ Plugins** tab runs the same build
-(`dotnet publish -p:PublishAot=true`) and deploys the result, so game teams never need the CLI. The
+tool. The Unity **Exoforge Studio ▸ Plugins** tab runs the same build and deploys the result, so game
+teams never need the CLI. The
 entry point and the action/event dispatch table are generated for you, so the host never reflects
 over the plugin's methods:
 
@@ -155,14 +158,17 @@ topic) and forwards them as `{"type":"event"}` frames. The plugin handles them i
 `public void OnEvent(string name, TPayload payload)` — it is called even while an action is blocked on a
 host call. The payload is deserialized to `TPayload`; register it on the plugin's JSON context (below).
 
-**Per-OS builds**: plugins ship as native binaries, so build for the deploy target:
+**Per-OS builds**: a plugin is an assembly with a native apphost, so build for the deploy target:
 `exo plugin build <name> --rid linux-x64` (defaults to the host).
 
-Because NativeAOT trims reflection, plugin payloads are **records**, not raw `JsonObject`/`JsonElement`. The
+Plugin payloads are **records**, not raw `JsonObject`/`JsonElement` — and the reason is the contract
+rather than the runtime. A record has a *name*, and that name is what the manifest, the generated
+client stub and the Studio describe; an anonymous object would serialise fine and be describable by
+nobody. The
 SDK owns the JSON: action arguments and results, stored records, and event payloads are typed, and
-`IDatabase` (injected as `[Inject]`) is a typed key/value store with a typed SQL runner. Register the
-record types on a source-generated `JsonSerializerContext` and start the plugin with the context-aware
-runner:
+`IDatabase` (injected as `[Inject]`) is a typed key/value store with a typed SQL runner. The
+generator registers the record types on a source-generated `JsonSerializerContext` and starts the
+plugin with the context-aware runner:
 
 ```csharp
 [JsonSerializable(typeof(SnakeScoreRecord))]
@@ -193,8 +199,7 @@ Action declarations follow conventions, so the attribute is usually bare:
 Plugins call other services through **generated, region-agnostic stubs**: `exo plugin stubs <name>`
 reads the cluster contract export and writes `src/Generated/PluginServices.g.cs` (typed
 request/response records + a typed client per service). Only the services in the plugin's
-`manifest.json` dependencies are generated (`--services a,b` overrides), so the file — and the NativeAOT
-build — stay small. The host injects those clients (`[Inject("player_data")]
+`manifest.json` dependencies are generated (`--services a,b` overrides), so the file stays small. The host injects those clients (`[Inject("player_data")]
 PlayerDataServiceClient PlayerData`), so plugin code only deals with services and never touches
 `IActionDispatcher`. The stubs depend on the service *contract*, never on the plugin that implements it.
 
@@ -236,7 +241,7 @@ Gameplay must not hold a client, an endpoint, or a token. It publishes hooks (e.
 1. **Stdlib & OTP First**: Reach for Erlang/Elixir built-ins (`:ets`, `:pg`, `Registry`, `DynamicSupervisor`) before adding third-party dependencies.
 2. **Zero Module Coupling**: Plugins depend on **service atoms** (`:database`, `:auth`, `:player_data`), NEVER on another plugin's Elixir module name. Use `ActionDispatcher.dispatch(service, action, payload)`.
 3. **Pure C# Outside Mix**: External game developers and Unity designers do not have Elixir or Mix installed. All client tooling, scaffolding (`ExoScaffolder`), and code generation (`ExoCodeGenerator`) must remain pure C# (`netstandard2.1`).
-4. **C# for Game Code**: Game plugins are written in C# and compiled to a NativeAOT binary. Keep the host boundary to newline-delimited JSON — that is what makes a different runtime a runner rather than a rewrite.
+4. **C# for Game Code**: Game plugins are written in C# and compiled to a framework-dependent .NET assembly. Keep the host boundary to newline-delimited JSON — that is what makes a different runtime a runner rather than a rewrite.
 5. **No Distributed Locks**: State that has to be serialized belongs in a plugin's own process. Do not introduce external distributed lock managers (no Redis locks, no ZooKeeper).
 6. **Deletion Over Addition**: The best code is code you never had to write. Remove dead code, redundant wrappers, and unneeded abstractions ruthlessly.
 
@@ -251,7 +256,7 @@ Gameplay must not hold a client, an endpoint, or a token. It publishes hooks (e.
 | `just dev` | Start backend development server (ports 4000, 4001, 4005) |
 | `just dev-reset` | Stop the dev server and wipe all dev data (SQLite databases + uploaded plugins) |
 | `just build-plugins` | Build the system sample plugin (`plugins_csharp/`) |
-| `exo plugin build <name>` | Build a game plugin (NativeAOT binary + `manifest.json`) |
+| `exo plugin build <name>` | Build a game plugin (framework-dependent .NET single file + `manifest.json`) |
 | `exo plugin push <name>` | Build and deploy a plugin to a running cluster |
 | `exo plugin stubs <name>` | Generate typed service-call stubs from the cluster contracts |
 | `just test-sdk` | Run C# test suite (`Exoforge.Client`, `Plugin.SDK`, `Management`) |
