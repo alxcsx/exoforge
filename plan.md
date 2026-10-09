@@ -146,11 +146,6 @@ questions — capacity, which plugin is expensive, what to charge internally —
 **Sending the same numbers off the instance** so they can be billed against is a data-egress
 question rather than a cost one, and is separately configured. Cost was never the objection.
 
-**Attribution, and a naming collision to avoid.** This repository already uses **tenant** for
-something else — `exoforge_std_database` calls a plugin's private database namespace its "tenant
-namespace", and describes the isolation as "per-plugin multi-tenant". Using the same word for the
-billing unit would be actively confusing, so it is not used here.
-
 What ownership unit exists today: **none beyond the instance.** `auth` has users and roles,
 `player_data` has players, `ExoWorkspace` is a developer's local plugin directory, and environments
 (dev/prod) are deploy targets. Nothing answers "whose plugins are these", because there has only
@@ -203,9 +198,6 @@ settling here rather than discovering later.
 already exists: studio membership and per-title permissions (who may deploy to which title), and
 per-title isolation *only if* titles are ever made to share an instance, which this design
 deliberately avoids.
-database namespace, so it is not used for this. And "project" mildly collides with MSBuild's
-`.csproj`, which is the other thing this codebase calls a project — `title` is the alternative if
-that grates, and it is what PlayFab calls it.
 
 **Phase 5 — flexibility and boilerplate.** A versioned handshake with declared capabilities, the way
 LSP and Terraform providers do it, so host and plugin can negotiate rather than assume. The runner
