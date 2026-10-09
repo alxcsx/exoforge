@@ -19,7 +19,8 @@ internal sealed record ColumnModel(
     bool Badge,
     string? Role,
     string? Default,
-    List<string>? Choices);
+    List<string>? Choices,
+    string? Bucket = null);
 
 internal sealed record ActionModel(
     string Name,
@@ -46,7 +47,8 @@ internal sealed record ResourceModel(
     string[] Drawer,
     List<string> Actions,
     List<ColumnModel> Columns,
-    string? TypeName);
+    string? TypeName,
+    bool Singleton = false);
 
 internal sealed record ServiceModel(
     string Name,
@@ -169,6 +171,10 @@ internal static class ManifestEmitter
                 sb.Append("        {");
                 sb.Append($"\"name\": {Str(resource.Name)}, ");
                 sb.Append($"\"primary_key\": {Str(resource.PrimaryKey)}{record}, ");
+                if (resource.Singleton)
+                {
+                    sb.Append("\"singleton\": true, \"kind\": \"singleton\", ");
+                }
                 // The shape `Exoforge.Std.Resources.normalize_source/1` reads. A bare string would not
                 // match, and a resource with no source is stored as an opaque key-value document.
                 sb.Append($"\"source\": {{\"table\": {Str(resource.Source)}}}, ");
@@ -181,10 +187,11 @@ internal static class ManifestEmitter
                     var column = resource.Columns[c];
                     string columnComma = c == resource.Columns.Count - 1 ? "" : ", ";
                     string role = column.Role is null ? "" : $", \"role\": {Str(column.Role)}";
+                    string bucket = column.Bucket is null ? "" : $", \"bucket\": {Str(column.Bucket)}";
                     string fallback = column.Default is null ? "" : $", \"default\": {Str(column.Default)}";
                     string choices = column.Choices is null ? "" : $", \"choices\": {Atoms(column.Choices)}";
 
-                    sb.Append($"{{{Column(column)}{role}{fallback}{choices}}}");
+                    sb.Append($"{{{Column(column)}{role}{bucket}{fallback}{choices}}}");
                     sb.Append(columnComma);
                 }
 

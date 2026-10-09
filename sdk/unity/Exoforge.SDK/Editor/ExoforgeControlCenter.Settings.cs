@@ -117,17 +117,18 @@ public partial class ExoforgeControlCenter : EditorWindow
         EditorGUILayout.LabelField("Add or change environments in Exoforge/exoforge.json.", EditorStyles.miniLabel);
 
         EditorGUILayout.BeginHorizontal();
-        string newToken = EditorGUILayout.TextField("Bearer Token", ExoTokenStore.Token);
-        if (newToken != ExoTokenStore.Token)
+        string currentStudioToken = ExoTokenStore.StudioToken;
+        string newToken = EditorGUILayout.TextField("Bearer Token", currentStudioToken);
+        if (newToken != currentStudioToken)
         {
-            ExoTokenStore.Token = newToken;
+            ExoTokenStore.SaveStudioSession(newToken);
         }
 
         foreach (var (label, token) in ExoforgeEditorConfig.TokenPresets)
         {
             if (GUILayout.Button(label, EditorStyles.miniButton, GUILayout.Width(45)))
             {
-                ExoTokenStore.Token = token;
+                ExoTokenStore.SaveStudioSession(token);
                 ShowStatus($"Switched token to '{token}'.", MessageType.Info);
                 if (_isConnected)
                 {
@@ -136,6 +137,22 @@ public partial class ExoforgeControlCenter : EditorWindow
             }
         }
         EditorGUILayout.EndHorizontal();
+        EditorGUILayout.EndVertical();
+
+        EditorGUILayout.Space(8);
+
+        // Anonymous Player Session
+        EditorGUILayout.LabelField("Anonymous Player Session", EditorStyles.boldLabel);
+        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+        EditorGUILayout.LabelField($"Device ID: {PlayerPrefs.GetString("Exoforge.DeviceId", "(none)")}", EditorStyles.miniLabel);
+        EditorGUILayout.LabelField($"Player Token: {(PlayerPrefs.HasKey("Exoforge.Token") ? "(cached in PlayerPrefs)" : "(none)")}", EditorStyles.miniLabel);
+        EditorGUILayout.LabelField($"Player Name: {PlayerPrefs.GetString("Exoforge.PlayerName", "(unnamed)")}", EditorStyles.miniLabel);
+        EditorGUILayout.Space(4);
+        if (GUILayout.Button("Reset Anonymous Player Session (New Device ID & Fresh Account)"))
+        {
+            ResetAnonymousPlayerSession();
+            ShowStatus("Anonymous player session reset. A fresh player account will be minted on next run.", MessageType.Info);
+        }
         EditorGUILayout.EndVertical();
 
         EditorGUILayout.Space(8);
@@ -161,9 +178,9 @@ public partial class ExoforgeControlCenter : EditorWindow
         // Credential Management
         EditorGUILayout.LabelField("Credential Persistence", EditorStyles.boldLabel);
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-        EditorGUILayout.LabelField($"Active Token: {ActiveToken}", EditorStyles.miniLabel);
-        EditorGUILayout.LabelField($"Stored Player ID: {ExoTokenStore.PlayerId}", EditorStyles.miniLabel);
-        EditorGUILayout.LabelField($"Scopes: {ExoTokenStore.Scopes}", EditorStyles.miniLabel);
+        EditorGUILayout.LabelField($"Studio Token: {ExoTokenStore.StudioToken}", EditorStyles.miniLabel);
+        EditorGUILayout.LabelField($"Studio Player ID: {ExoTokenStore.StudioPlayerId}", EditorStyles.miniLabel);
+        EditorGUILayout.LabelField($"Scopes: {ExoTokenStore.StudioScopes}", EditorStyles.miniLabel);
 
         EditorGUILayout.Space(4);
         if (GUILayout.Button("Purge All Saved Credentials (EditorPrefs & PlayerPrefs)"))

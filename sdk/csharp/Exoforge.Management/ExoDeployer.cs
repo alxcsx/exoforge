@@ -93,7 +93,7 @@ public class ExoDeployer
                 manifest = manifestContent
             };
 
-            var result = await client.SendActionAsync<JsonElement>("plugin_manager", "upload_plugin", payload, cancellationToken: cancellationToken).ConfigureAwait(false);
+            var result = await client.SendActionAsync<JsonElement>("plugin_manager", "upload_plugin", payload, ExoTransportPreference.Http, cancellationToken: cancellationToken).ConfigureAwait(false);
             return result.ToString();
         }
         finally

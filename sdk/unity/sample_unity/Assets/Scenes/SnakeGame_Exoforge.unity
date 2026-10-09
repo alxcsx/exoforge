@@ -373,6 +373,10 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 7612840000000000002, guid: 7e3a91c4d5b24f0a9c1e6b8d2f4a7c30, type: 3}
+      propertyPath: useStudioConnection
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -427,6 +431,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: SnakeGame::SnakeGame.SnakeRemoteConfig
   game: {fileID: 1737476889}
   boardView: {fileID: 1737476891}
+  playerController: {fileID: 730416802}
 --- !u!114 &1737476891
 MonoBehaviour:
   m_ObjectHideFlags: 0

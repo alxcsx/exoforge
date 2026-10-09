@@ -258,7 +258,14 @@ namespace Exoforge.Client.Unity
                     var auth = await Client.AuthenticateAsync(targetToken);
                     if (auth.IsSuccess)
                     {
-                        ExoTokenStore.SaveSession(targetToken, auth.PlayerId, auth.Scopes);
+                        if (useStudioConnection)
+                        {
+                            ExoTokenStore.SaveStudioSession(targetToken, auth.PlayerId, auth.Scopes);
+                        }
+                        else
+                        {
+                            ExoTokenStore.SaveSession(targetToken, auth.PlayerId, auth.Scopes);
+                        }
                         Debug.Log($"[Exoforge] Connected and authenticated as {auth.PlayerId} ({cfg?.Environment ?? "?"})");
                     }
                     else

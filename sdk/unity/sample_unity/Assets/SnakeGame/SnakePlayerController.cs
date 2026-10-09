@@ -60,9 +60,24 @@ namespace SnakeGame
             }
             catch (Exception ex)
             {
+                if (ex.Message.Contains("player_not_found"))
+                {
+                    ExoforgeSDK.Auth.ResetSession();
+                    Session = await ExoforgeSDK.Auth.LoginAnonymously();
+                    Session = await ExoforgeSDK.Auth.SetDisplayName(displayName);
+                    Ready();
+                    return true;
+                }
+
                 Debug.LogError($"[Snake] could not set display name: {ex.Message}");
                 return false;
             }
+        }
+
+        public void ResetSessionAndSignIn()
+        {
+            ExoforgeSDK.Auth.ResetSession();
+            Start();
         }
 
         private void Ready()

@@ -19,7 +19,7 @@ namespace Exoforge.Management;
 public static class ExoScaffolder
 {
     /// <summary>Templates a caller may ask for. Keep in step with <see cref="GeneratePluginCode"/>.</summary>
-    public static readonly string[] Templates = { "standard", "inventory" };
+    public static readonly string[] Templates = { "standard" };
 
     public static string ScaffoldPlugin(string pluginsDirectory, string rawName, string template = "standard", string? feed = null)
     {
@@ -162,12 +162,10 @@ public static class ExoScaffolder
     {
         string kind = template.ToLowerInvariant();
 
-        if (kind.Contains("inventory")) return InventoryTemplate(serviceName, className);
-
         if (kind is not ("standard" or ""))
         {
             throw new ArgumentException(
-                $"Unknown template '{template}'. Available templates: standard, inventory.", nameof(template));
+                $"Unknown template '{template}'. Available templates: standard.", nameof(template));
         }
 
         return StandardTemplate(serviceName, className);
@@ -202,66 +200,6 @@ public class {{className}}Plugin
 }
 
 // Row stored in the plugin's isolated database.
-[ExoResource("{{serviceName}}_items", PrimaryKey = "id", DrawerTabs = new[] { "overview", "attributes" })]
-public record {{className}}Item
-{
-    [ExoColumn(Label = "Id", Sortable = true, Filterable = true)]
-    public string Id { get; init; } = "";
-
-    [ExoColumn(Label = "Owner", Sortable = true, Filterable = true)]
-    public string OwnerId { get; init; } = "";
-
-    [ExoColumn(Label = "Quantity", Sortable = true)]
-    public int Quantity { get; init; }
-
-    [ExoColumn(Label = "Status", Badge = true)]
-    public string Status { get; init; } = "active";
-}
-""";
-
-    private static string InventoryTemplate(string serviceName, string className) => $$"""
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using Exoforge.Plugin.SDK;
-
-namespace Exoforge.Plugins;
-
-// Native Exoforge plugin: attributes declare the contract, the host injects capabilities,
-// and `exo plugin build` produces the framework-dependent plugin binary.
-[ExoService("{{serviceName}}", Version = "0.1.0", Resources = new[] { typeof({{className}}Item) },
-    Category = "Game", Title = "{{className}}", Icon = "🧩")]
-public class {{className}}Plugin
-{
-    [Inject("database")]
-    public IDatabase? Database { get; set; }
-
-    [Inject]
-    public IEventDispatcher? Events { get; set; }
-
-    [ExoAction]
-    public List<{{className}}Item> GetInventory(string playerId) =>
-        new(Database!.All<{{className}}Item>("{{serviceName}}_items"));
-
-    [ExoAction]
-    [ExoEvent("item_granted", Topic = "{{serviceName}}:events", PayloadType = typeof(ItemGrantedEvent))]
-    public async Task<int> GrantItem(string playerId, string itemId, int quantity = 1)
-    {
-        await Events!.EmitAsync(
-            "item_granted",
-            new ItemGrantedEvent { PlayerId = playerId, ItemId = itemId, Quantity = quantity },
-            "{{serviceName}}:events");
-
-        return quantity;
-    }
-}
-
-public record ItemGrantedEvent
-{
-    public string PlayerId { get; init; } = "";
-    public string ItemId { get; init; } = "";
-    public int Quantity { get; init; }
-}
-
 [ExoResource("{{serviceName}}_items", PrimaryKey = "id", DrawerTabs = new[] { "overview", "attributes" })]
 public record {{className}}Item
 {

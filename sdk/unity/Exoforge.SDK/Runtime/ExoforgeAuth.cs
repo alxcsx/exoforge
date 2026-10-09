@@ -41,20 +41,29 @@ namespace Exoforge.Client.Unity
 
                 if (existing != null)
                 {
-                    client.UseToken(ExoTokenStore.Token);
-                    if (client.IsConnected && !client.IsAuthenticated)
+                    bool isStaff = existing.Value.Scopes.Contains("admin") || existing.Value.Scopes.Contains("studio");
+                    if (isStaff && !ExoTokenStore.UseStudioSession)
                     {
-                        await client.AuthenticateAsync(ExoTokenStore.Token);
+                        Debug.LogWarning("[Exoforge] Cached token belongs to staff/admin while running as player. Resetting session to mint fresh anonymous account.");
+                        LogoutAndForgetDevice();
                     }
+                    else
+                    {
+                        client.UseToken(ExoTokenStore.Token);
+                        if (client.IsConnected && !client.IsAuthenticated)
+                        {
+                            await client.AuthenticateAsync(ExoTokenStore.Token);
+                        }
 
-                    Current = new ExoSession(
-                        existing.Value.PlayerId,
-                        ExoTokenStore.PlayerName,
-                        ExoTokenStore.Token,
-                        existing.Value.Scopes,
-                        false);
+                        Current = new ExoSession(
+                            existing.Value.PlayerId,
+                            ExoTokenStore.PlayerName,
+                            ExoTokenStore.Token,
+                            existing.Value.Scopes,
+                            false);
 
-                    return Current;
+                        return Current;
+                    }
                 }
 
                 // Stored credential is stale — fall through and mint a fresh account.
@@ -176,6 +185,11 @@ namespace Exoforge.Client.Unity
         {
             ExoTokenStore.Clear();
             Current = null;
+            try
+            {
+                ExoforgeSDK.Client.UseToken(null);
+            }
+            catch { }
         }
 
         /// <summary>Forgets the stored session <em>and</em> the device identity (claims a new player).</summary>
@@ -184,5 +198,8 @@ namespace Exoforge.Client.Unity
             Logout();
             ExoDeviceId.Reset();
         }
+
+        /// <summary>Alias for <see cref="LogoutAndForgetDevice"/> to start completely fresh as an anonymous player.</summary>
+        public void ResetSession() => LogoutAndForgetDevice();
     }
 }

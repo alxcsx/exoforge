@@ -74,17 +74,17 @@ public class CliIntegrationTests : IDisposable
         // plugin has to work in: the project it writes references the package, not a checkout.
         int code = await Exoforge.CLI.Program.Main(new[]
         {
-            "plugin", "new", "inventory_system",
+            "plugin", "new", "combat_system",
             "--dir", _tempDir
         });
 
         Assert.Equal(0, code);
 
-        string pluginDir = Path.Combine(_tempDir, "plugins", "inventory_system");
+        string pluginDir = Path.Combine(_tempDir, "plugins", "combat_system");
         Assert.True(Directory.Exists(pluginDir));
-        Assert.True(File.Exists(Path.Combine(pluginDir, "inventory_system.slnx")));
-        Assert.True(File.Exists(Path.Combine(pluginDir, "src", "inventory_system.csproj")));
-        Assert.True(File.Exists(Path.Combine(pluginDir, "src", "InventorySystemPlugin.cs")));
+        Assert.True(File.Exists(Path.Combine(pluginDir, "combat_system.slnx")));
+        Assert.True(File.Exists(Path.Combine(pluginDir, "src", "combat_system.csproj")));
+        Assert.True(File.Exists(Path.Combine(pluginDir, "src", "CombatSystemPlugin.cs")));
     }
 
     [Fact]

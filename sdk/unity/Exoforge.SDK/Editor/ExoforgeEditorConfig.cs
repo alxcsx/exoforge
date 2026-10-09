@@ -52,6 +52,7 @@ public static class ExoforgeEditorConfig
     private static string GeneratedScriptPathKey => Scoped("Exoforge_GeneratedScriptPath");
     private static string LastSyncTimeKey => Scoped("Exoforge_LastSyncTime");
     private static string LoginEmailKey => Scoped("Exoforge_LoginEmail");
+    private static string LoginPasswordKey => Scoped("Exoforge_LoginPassword");
 
     public const string DefaultLoginEmail = "dev@exoforge.game";
     public const string DefaultWorkspaceRelPath = "Exoforge";
@@ -78,6 +79,7 @@ public static class ExoforgeEditorConfig
     private static string _fallbackLastSyncTime = "";
     private static string _fallbackDotnetPath = "dotnet";
     private static string _fallbackLoginEmail = DefaultLoginEmail;
+    private static string _fallbackLoginPassword = "";
 
     private static string Scoped(string key) => key;
 #else
@@ -180,9 +182,29 @@ public static class ExoforgeEditorConfig
         }
     }
 
-    // The password is not persisted at all (M33 Fix 22): EditorPrefs is the system registry, and a
-    // password stored there is readable by anything on the machine. The session token is what
-    // reconnects; a password is typed once per editor session.
+    /// <summary>
+    /// Last password used in the Control Center's <c>auth.login</c> form, persisted in per-user
+    /// EditorPrefs.
+    /// </summary>
+    public static string LastLoginPassword
+    {
+        get
+        {
+#if UNITY_EDITOR
+            return EditorPrefs.GetString(LoginPasswordKey, string.Empty);
+#else
+            return _fallbackLoginPassword;
+#endif
+        }
+        set
+        {
+#if UNITY_EDITOR
+            EditorPrefs.SetString(LoginPasswordKey, value ?? string.Empty);
+#else
+            _fallbackLoginPassword = value ?? string.Empty;
+#endif
+        }
+    }
 
     public static string WorkspacePath
     {

@@ -25,6 +25,7 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
 {
     private const string ServiceAttribute = "Exoforge.Plugin.SDK.ExoServiceAttribute";
     private const string ResourceAttribute = "Exoforge.Plugin.SDK.ExoResourceAttribute";
+    private const string SingletonResourceAttribute = "Exoforge.Plugin.SDK.ExoSingletonResourceAttribute";
     private const string ActionAttribute = "Exoforge.Plugin.SDK.ExoActionAttribute";
     private const string WebhookAttribute = "Exoforge.Plugin.SDK.ExoWebhookAttribute";
     private const string EventAttribute = "Exoforge.Plugin.SDK.ExoEventAttribute";
@@ -257,7 +258,7 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
 
         foreach (var attr in declared.GetAttributes())
         {
-            if (!IsAttribute(attr, ResourceAttribute)) continue;
+            if (!IsResourceAttribute(attr)) continue;
 
             var target = NamedType(attr, "ResourceType");
             if (target is not null)
@@ -269,6 +270,7 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
             var columns = ColumnsFor(declared, attr, out _);
             if (columns.Count == 0) continue;
 
+            bool isSingleton = IsSingletonAttribute(attr) || NamedBool(attr, "Singleton");
             string resName = NamedString(attr, "Name") ?? PositionalString(attr, 0) ?? ToSnakeCase(declared.Name);
             AddResource(primary.Resources, new ResourceModel(
                 resName,
@@ -277,7 +279,8 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
                 NamedStringArray(attr, "DrawerTabs") ?? new[] { "overview" },
                 ActionNames(primary),
                 columns,
-                declared.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
+                declared.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                isSingleton));
         }
 
         foreach (var candidate in AllTypes(compilation.Assembly.GlobalNamespace))
@@ -285,7 +288,7 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
             if (SymbolEqualityComparer.Default.Equals(candidate, declared)) continue;
             if (candidate.GetAttributes().Any(a => IsAttribute(a, ServiceAttribute))) continue;
 
-            var resAttr = FindAttribute(candidate.GetAttributes(), ResourceAttribute);
+            var resAttr = FindResourceAttribute(candidate.GetAttributes());
             if (resAttr is null) continue;
 
             AddResource(primary.Resources, ResourceFromType(candidate, ActionNames(primary)));
@@ -548,7 +551,7 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
     {
         if (symbol is not INamedTypeSymbol resourceType) return null;
 
-        var resAttr = FindAttribute(resourceType.GetAttributes(), ResourceAttribute);
+        var resAttr = FindResourceAttribute(resourceType.GetAttributes());
 
         string typeName = resourceType.Name;
         if (typeName.EndsWith("Resource", StringComparison.OrdinalIgnoreCase) && typeName.Length > 8)
@@ -567,6 +570,8 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
             primaryKey = candidate?.Name ?? (columns.Count > 0 ? columns[0].Name : "id");
         }
 
+        bool isSingleton = IsSingletonAttribute(resAttr) || NamedBool(resAttr, "Singleton");
+
         return new ResourceModel(
             resName,
             NamedString(resAttr, "Source") ?? resName,
@@ -574,7 +579,8 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
             NamedStringArray(resAttr, "DrawerTabs") ?? new[] { "overview", "attributes" },
             serviceActions,
             columns,
-            resourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+            resourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+            isSingleton);
     }
 
     private static List<ColumnModel> ColumnsFor(INamedTypeSymbol type, AttributeData? resourceAttr, out string? primaryKey)
@@ -597,6 +603,22 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
 
             string colName = NamedString(colAttr, "Name") ?? PositionalString(colAttr, 0) ?? ToSnakeCase(property.Name);
 
+            var fileRefAttr = FindAttribute(property.GetAttributes(), "ExoFileReferenceAttribute") ??
+                              FindAttribute(property.GetAttributes(), "FileReferenceAttribute");
+
+            string? role = NamedString(colAttr, "Role");
+            if (string.IsNullOrEmpty(role))
+            {
+                if (fileRefAttr is not null || NamedBool(colAttr, "FileReference"))
+                {
+                    role = "file_reference";
+                }
+            }
+
+            string? bucket = NamedString(colAttr, "Bucket") ??
+                             NamedString(fileRefAttr, "Bucket") ??
+                             PositionalString(fileRefAttr, 0);
+
             columns.Add(new ColumnModel(
                 colName,
                 NamedString(colAttr, "DataType") ?? MapTypeToElixir(property.Type),
@@ -604,9 +626,10 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
                 NamedBool(colAttr, "Sortable") || isExplicitPk,
                 NamedBool(colAttr, "Filterable"),
                 NamedBool(colAttr, "Badge"),
-                NamedString(colAttr, "Role"),
+                role,
                 DefaultOf(property),
-                EnumOf(property)?.Members.Select(m => m.Value).ToList()));
+                EnumOf(property)?.Members.Select(m => m.Value).ToList(),
+                bucket));
 
             if (pkAttr is not null && string.IsNullOrEmpty(primaryKey)) primaryKey = colName;
         }
@@ -986,9 +1009,24 @@ namespace Exoforge.Generated
         return attr.AttributeClass?.ToDisplayString() == metadataName;
     }
 
+    private static bool IsResourceAttribute(AttributeData attr)
+    {
+        return IsAttribute(attr, ResourceAttribute) || IsAttribute(attr, SingletonResourceAttribute);
+    }
+
+    private static bool IsSingletonAttribute(AttributeData? attr)
+    {
+        return attr is not null && IsAttribute(attr, SingletonResourceAttribute);
+    }
+
     private static AttributeData? FindAttribute(IEnumerable<AttributeData> attributes, string metadataName)
     {
         return attributes.FirstOrDefault(a => IsAttribute(a, metadataName));
+    }
+
+    private static AttributeData? FindResourceAttribute(IEnumerable<AttributeData> attributes)
+    {
+        return attributes.FirstOrDefault(a => IsResourceAttribute(a));
     }
 
     private static string? PositionalString(AttributeData? attr, int index)

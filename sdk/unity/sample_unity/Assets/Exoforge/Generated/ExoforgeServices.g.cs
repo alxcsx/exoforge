@@ -24,10 +24,10 @@ public class AuthAuthenticateRequest
 /// <summary>Response model for auth.authenticate action.</summary>
 public class AuthAuthenticateResponse
 {
-    [JsonPropertyName("player_id")]
-    public string PlayerId { get; set; } = default!;
     [JsonPropertyName("scopes")]
     public JsonElement Scopes { get; set; } = default!;
+    [JsonPropertyName("player_id")]
+    public string PlayerId { get; set; } = default!;
 }
 
 /// <summary>Request payload for auth.login action.</summary>
@@ -44,10 +44,10 @@ public class AuthLoginResponse
 {
     [JsonPropertyName("token")]
     public string Token { get; set; } = default!;
-    [JsonPropertyName("player_id")]
-    public string PlayerId { get; set; } = default!;
     [JsonPropertyName("scopes")]
     public JsonElement Scopes { get; set; } = default!;
+    [JsonPropertyName("player_id")]
+    public string PlayerId { get; set; } = default!;
 }
 
 /// <summary>Request payload for auth.verify_scope action.</summary>
@@ -79,10 +79,10 @@ public class AuthRegisterRequest
     public JsonElement Email { get; set; } = default!;
     [JsonPropertyName("password")]
     public JsonElement Password { get; set; } = default!;
-    [JsonPropertyName("player_id")]
-    public JsonElement PlayerId { get; set; } = default!;
     [JsonPropertyName("scopes")]
     public JsonElement Scopes { get; set; } = default!;
+    [JsonPropertyName("player_id")]
+    public JsonElement PlayerId { get; set; } = default!;
 }
 
 /// <summary>Response model for auth.register action.</summary>
@@ -92,12 +92,12 @@ public class AuthRegisterResponse
     public string Token { get; set; } = default!;
     [JsonPropertyName("user_id")]
     public string UserId { get; set; } = default!;
-    [JsonPropertyName("player_id")]
-    public string PlayerId { get; set; } = default!;
     [JsonPropertyName("scopes")]
     public JsonElement Scopes { get; set; } = default!;
     [JsonPropertyName("player")]
     public JsonElement Player { get; set; } = default!;
+    [JsonPropertyName("player_id")]
+    public string PlayerId { get; set; } = default!;
 }
 
 /// <summary>Request payload for auth.create_player action.</summary>
@@ -111,10 +111,10 @@ public class AuthCreatePlayerRequest
     public JsonElement Email { get; set; } = default!;
     [JsonPropertyName("password")]
     public JsonElement Password { get; set; } = default!;
-    [JsonPropertyName("player_id")]
-    public JsonElement PlayerId { get; set; } = default!;
     [JsonPropertyName("scopes")]
     public JsonElement Scopes { get; set; } = default!;
+    [JsonPropertyName("player_id")]
+    public JsonElement PlayerId { get; set; } = default!;
 }
 
 /// <summary>Response model for auth.create_player action.</summary>
@@ -124,12 +124,12 @@ public class AuthCreatePlayerResponse
     public string Token { get; set; } = default!;
     [JsonPropertyName("user_id")]
     public string UserId { get; set; } = default!;
-    [JsonPropertyName("player_id")]
-    public string PlayerId { get; set; } = default!;
     [JsonPropertyName("scopes")]
     public JsonElement Scopes { get; set; } = default!;
     [JsonPropertyName("player")]
     public JsonElement Player { get; set; } = default!;
+    [JsonPropertyName("player_id")]
+    public string PlayerId { get; set; } = default!;
 }
 
 /// <summary>Request payload for auth.anonymous action.</summary>
@@ -146,10 +146,10 @@ public class AuthAnonymousResponse
 {
     [JsonPropertyName("token")]
     public string Token { get; set; } = default!;
-    [JsonPropertyName("player_id")]
-    public string PlayerId { get; set; } = default!;
     [JsonPropertyName("scopes")]
     public JsonElement Scopes { get; set; } = default!;
+    [JsonPropertyName("player_id")]
+    public string PlayerId { get; set; } = default!;
 }
 
 /// <summary>Request payload for auth.set_display_name action.</summary>
@@ -175,10 +175,10 @@ public class AuthIssueTokenRequest
 {
     [JsonPropertyName("user_id")]
     public JsonElement UserId { get; set; } = default!;
-    [JsonPropertyName("player_id")]
-    public string PlayerId { get; set; } = default!;
     [JsonPropertyName("scopes")]
     public JsonElement Scopes { get; set; } = default!;
+    [JsonPropertyName("player_id")]
+    public string PlayerId { get; set; } = default!;
 }
 
 /// <summary>Response model for auth.issue_token action.</summary>
@@ -239,10 +239,10 @@ public class AuthUpdateUserRolesRequest
     public JsonElement UserId { get; set; } = default!;
     [JsonPropertyName("role")]
     public JsonElement Role { get; set; } = default!;
-    [JsonPropertyName("player_id")]
-    public JsonElement PlayerId { get; set; } = default!;
     [JsonPropertyName("scopes")]
     public JsonElement Scopes { get; set; } = default!;
+    [JsonPropertyName("player_id")]
+    public JsonElement PlayerId { get; set; } = default!;
 }
 
 /// <summary>Response model for auth.update_user_roles action.</summary>
@@ -250,10 +250,10 @@ public class AuthUpdateUserRolesResponse
 {
     [JsonPropertyName("user_id")]
     public string UserId { get; set; } = default!;
-    [JsonPropertyName("player_id")]
-    public string PlayerId { get; set; } = default!;
     [JsonPropertyName("scopes")]
     public JsonElement Scopes { get; set; } = default!;
+    [JsonPropertyName("player_id")]
+    public string PlayerId { get; set; } = default!;
 }
 
 /// <summary>Request payload for auth.delete_user action.</summary>
@@ -479,6 +479,37 @@ public class FileBucketListFilesResponse
     public long Count { get; set; } = default!;
     [JsonPropertyName("files")]
     public JsonElement Files { get; set; } = default!;
+}
+
+/// <summary>Response model for file_bucket.list_buckets action.</summary>
+public class FileBucketListBucketsResponse
+{
+    [JsonPropertyName("buckets")]
+    public JsonElement Buckets { get; set; } = default!;
+}
+
+/// <summary>Request payload for file_bucket.update_file action.</summary>
+public class FileBucketUpdateFileRequest
+{
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = default!;
+    [JsonPropertyName("filename")]
+    public JsonElement Filename { get; set; } = default!;
+    [JsonPropertyName("metadata")]
+    public JsonElement Metadata { get; set; } = default!;
+    [JsonPropertyName("bucket")]
+    public JsonElement Bucket { get; set; } = default!;
+    [JsonPropertyName("content")]
+    public JsonElement Content { get; set; } = default!;
+    [JsonPropertyName("content_type")]
+    public JsonElement ContentType { get; set; } = default!;
+}
+
+/// <summary>Response model for file_bucket.update_file action.</summary>
+public class FileBucketUpdateFileResponse
+{
+    [JsonPropertyName("file")]
+    public JsonElement File { get; set; } = default!;
 }
 
 /// <summary>Request payload for file_bucket.delete_file action.</summary>
@@ -1040,8 +1071,6 @@ public class SnakeConfigData
     public string BackgroundBucket { get; set; } = default!;
     [JsonPropertyName("background_file_id")]
     public string BackgroundFileId { get; set; } = default!;
-    [JsonPropertyName("background_filename")]
-    public string BackgroundFilename { get; set; } = default!;
 }
 
 /// <summary>Request payload for snake_config.update_config action.</summary>
@@ -1057,8 +1086,6 @@ public class SnakeConfigUpdateConfigRequest
     public string BackgroundBucket { get; set; } = default!;
     [JsonPropertyName("background_file_id")]
     public string BackgroundFileId { get; set; } = default!;
-    [JsonPropertyName("background_filename")]
-    public string BackgroundFilename { get; set; } = default!;
 }
 
 /// <summary>Request payload for snake_leaderboard.submit_score action.</summary>
@@ -1114,12 +1141,12 @@ public class SnakeLeaderboardScoreSubmittedEvent
 /// <summary>Request payload for ws.broadcast action.</summary>
 public class WsBroadcastRequest
 {
-    [JsonPropertyName("event")]
-    public string Event { get; set; } = default!;
     [JsonPropertyName("payload")]
     public JsonElement Payload { get; set; } = default!;
     [JsonPropertyName("topic")]
     public string Topic { get; set; } = default!;
+    [JsonPropertyName("event")]
+    public string Event { get; set; } = default!;
 }
 
 /// <summary>Response model for ws.broadcast action.</summary>
@@ -1329,7 +1356,7 @@ public class AuthServiceClient
     }
 
     /// <summary>Registers a new user account and profile in both auth and player_data.</summary>
-    public Task<AuthRegisterResponse> RegisterAsync(JsonElement name, JsonElement userId, JsonElement email, JsonElement password, JsonElement playerId, JsonElement scopes, CancellationToken cancellationToken = default)
+    public Task<AuthRegisterResponse> RegisterAsync(JsonElement name, JsonElement userId, JsonElement email, JsonElement password, JsonElement scopes, JsonElement playerId, CancellationToken cancellationToken = default)
     {
         var req = new AuthRegisterRequest
         {
@@ -1337,8 +1364,8 @@ public class AuthServiceClient
             UserId = userId,
             Email = email,
             Password = password,
-            PlayerId = playerId,
             Scopes = scopes,
+            PlayerId = playerId,
         };
         return RegisterAsync(req, cancellationToken);
     }
@@ -1350,7 +1377,7 @@ public class AuthServiceClient
     }
 
     /// <summary>Creates a new player or user account with authentication credentials.</summary>
-    public Task<AuthCreatePlayerResponse> CreatePlayerAsync(JsonElement name, JsonElement userId, JsonElement email, JsonElement password, JsonElement playerId, JsonElement scopes, CancellationToken cancellationToken = default)
+    public Task<AuthCreatePlayerResponse> CreatePlayerAsync(JsonElement name, JsonElement userId, JsonElement email, JsonElement password, JsonElement scopes, JsonElement playerId, CancellationToken cancellationToken = default)
     {
         var req = new AuthCreatePlayerRequest
         {
@@ -1358,8 +1385,8 @@ public class AuthServiceClient
             UserId = userId,
             Email = email,
             Password = password,
-            PlayerId = playerId,
             Scopes = scopes,
+            PlayerId = playerId,
         };
         return CreatePlayerAsync(req, cancellationToken);
     }
@@ -1405,13 +1432,13 @@ public class AuthServiceClient
     }
 
     /// <summary>Issues an authentication token for a user or player.</summary>
-    public Task<AuthIssueTokenResponse> IssueTokenAsync(JsonElement userId, string playerId, JsonElement scopes, CancellationToken cancellationToken = default)
+    public Task<AuthIssueTokenResponse> IssueTokenAsync(JsonElement userId, JsonElement scopes, string playerId, CancellationToken cancellationToken = default)
     {
         var req = new AuthIssueTokenRequest
         {
             UserId = userId,
-            PlayerId = playerId,
             Scopes = scopes,
+            PlayerId = playerId,
         };
         return IssueTokenAsync(req, cancellationToken);
     }
@@ -1458,14 +1485,14 @@ public class AuthServiceClient
     }
 
     /// <summary>Updates authorization scopes/roles for a user account.</summary>
-    public Task<AuthUpdateUserRolesResponse> UpdateUserRolesAsync(JsonElement userId, JsonElement role, JsonElement playerId, JsonElement scopes, CancellationToken cancellationToken = default)
+    public Task<AuthUpdateUserRolesResponse> UpdateUserRolesAsync(JsonElement userId, JsonElement role, JsonElement scopes, JsonElement playerId, CancellationToken cancellationToken = default)
     {
         var req = new AuthUpdateUserRolesRequest
         {
             UserId = userId,
             Role = role,
-            PlayerId = playerId,
             Scopes = scopes,
+            PlayerId = playerId,
         };
         return UpdateUserRolesAsync(req, cancellationToken);
     }
@@ -1733,7 +1760,7 @@ public class FileBucketServiceClient
         return _client.SendActionAsync<FileBucketReadFileResponse>("file_bucket", "read_file", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
-    /// <summary>Lists stored files within a bucket.</summary>
+    /// <summary>Lists stored files within a bucket or across all buckets.</summary>
     public Task<FileBucketListFilesResponse> ListFilesAsync(JsonElement offset, JsonElement limit, JsonElement bucket, CancellationToken cancellationToken = default)
     {
         var req = new FileBucketListFilesRequest
@@ -1745,10 +1772,37 @@ public class FileBucketServiceClient
         return ListFilesAsync(req, cancellationToken);
     }
 
-    /// <summary>Lists stored files within a bucket.</summary>
+    /// <summary>Lists stored files within a bucket or across all buckets.</summary>
     public Task<FileBucketListFilesResponse> ListFilesAsync(FileBucketListFilesRequest request, CancellationToken cancellationToken = default)
     {
         return _client.SendActionAsync<FileBucketListFilesResponse>("file_bucket", "list_files", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Lists all existing storage buckets.</summary>
+    public Task<FileBucketListBucketsResponse> ListBucketsAsync(CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<FileBucketListBucketsResponse>("file_bucket", "list_buckets", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Modifies an existing file's name, metadata, or content.</summary>
+    public Task<FileBucketUpdateFileResponse> UpdateFileAsync(string id, JsonElement filename, JsonElement metadata, JsonElement bucket, JsonElement content, JsonElement contentType, CancellationToken cancellationToken = default)
+    {
+        var req = new FileBucketUpdateFileRequest
+        {
+            Id = id,
+            Filename = filename,
+            Metadata = metadata,
+            Bucket = bucket,
+            Content = content,
+            ContentType = contentType,
+        };
+        return UpdateFileAsync(req, cancellationToken);
+    }
+
+    /// <summary>Modifies an existing file's name, metadata, or content.</summary>
+    public Task<FileBucketUpdateFileResponse> UpdateFileAsync(FileBucketUpdateFileRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<FileBucketUpdateFileResponse>("file_bucket", "update_file", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
     /// <summary>Deletes a stored file.</summary>
@@ -2434,7 +2488,7 @@ public class SnakeConfigServiceClient
     }
 
     /// <summary>Executes update_config action with typed arguments.</summary>
-    public Task<SnakeConfigData> UpdateConfigAsync(string snakeColor, string appleColor, long applePoints, string backgroundBucket, string backgroundFileId, string backgroundFilename, CancellationToken cancellationToken = default)
+    public Task<SnakeConfigData> UpdateConfigAsync(string snakeColor, string appleColor, long applePoints, string backgroundBucket, string backgroundFileId, CancellationToken cancellationToken = default)
     {
         var req = new SnakeConfigUpdateConfigRequest
         {
@@ -2443,7 +2497,6 @@ public class SnakeConfigServiceClient
             ApplePoints = applePoints,
             BackgroundBucket = backgroundBucket,
             BackgroundFileId = backgroundFileId,
-            BackgroundFilename = backgroundFilename,
         };
         return UpdateConfigAsync(req, cancellationToken);
     }
@@ -2531,13 +2584,13 @@ public class WsServiceClient
     }
 
     /// <summary>Broadcasts a frame to an active WebSocket topic.</summary>
-    public Task<WsBroadcastResponse> BroadcastAsync(string @event, JsonElement payload, string topic, CancellationToken cancellationToken = default)
+    public Task<WsBroadcastResponse> BroadcastAsync(JsonElement payload, string topic, string @event, CancellationToken cancellationToken = default)
     {
         var req = new WsBroadcastRequest
         {
-            Event = @event,
             Payload = payload,
             Topic = topic,
+            Event = @event,
         };
         return BroadcastAsync(req, cancellationToken);
     }

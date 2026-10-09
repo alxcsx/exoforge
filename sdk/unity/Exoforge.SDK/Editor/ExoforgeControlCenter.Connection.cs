@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Exoforge.Client;
 using Exoforge.Management;
@@ -40,18 +41,34 @@ public partial class ExoforgeControlCenter : EditorWindow
         Repaint();
     }
 
-    private async Task ConnectAsync()
+    private async Task ConnectAsync(string? tokenOverride = null)
     {
+        try
+        {
+            _connectCts?.Cancel();
+            _connectCts?.Dispose();
+        }
+        catch { }
+
+        var cts = new CancellationTokenSource(TimeSpan.FromSeconds(6));
+        _connectCts = cts;
+
         _isConnecting = true;
         _connectionStatus = "Connecting...";
         Repaint();
 
-        if (string.IsNullOrWhiteSpace(ExoTokenStore.Token))
+        string targetToken = !string.IsNullOrWhiteSpace(tokenOverride)
+            ? tokenOverride
+            : (!string.IsNullOrWhiteSpace(ExoTokenStore.StudioToken)
+                ? ExoTokenStore.StudioToken
+                : ExoTokenStore.Token);
+
+        if (string.IsNullOrWhiteSpace(targetToken))
         {
             _isConnected = false;
             _isConnecting = false;
             _connectionStatus = "No token";
-            ShowStatus("A bearer token is required. Enter one above (e.g. 'dev:developer').", MessageType.Error);
+            ShowStatus("A bearer token is required. Enter one above (e.g. 'dev:developer') or sign in.", MessageType.Error);
             Repaint();
             return;
         }
@@ -60,11 +77,15 @@ public partial class ExoforgeControlCenter : EditorWindow
         {
             _editorClient?.Dispose();
             _editorClient = new ExoClient();
+            if (!string.IsNullOrEmpty(ActiveHttpUrl))
+            {
+                _editorClient.HttpBaseUri = new Uri(ActiveHttpUrl);
+            }
             _editorClient.OnAnyEvent += HandleIncomingEvent;
 
-            await _editorClient.ConnectAsync(new Uri(ActiveWsUrl));
+            await _editorClient.ConnectAsync(new Uri(ActiveWsUrl), cts.Token);
 
-            var auth = await _editorClient.AuthenticateAsync(ExoTokenStore.Token);
+            var auth = await _editorClient.AuthenticateAsync(targetToken, cancellationToken: cts.Token);
             if (auth.IsSuccess)
             {
                 // The Studio is staff tooling (M33 Fix 14): its tabs read users, tokens, plugins and
@@ -73,6 +94,7 @@ public partial class ExoforgeControlCenter : EditorWindow
                 if (!ExoStaff.HasAccess(auth.Scopes))
                 {
                     _isConnected = false;
+                    SessionState.SetBool(WasConnectedSessionKey, false);
                     _connectionStatus = "Access Denied (Staff Only)";
                     ShowStatus(
                         "Editor tools require a staff account (studio or admin). Player and guest access is denied.",
@@ -85,27 +107,37 @@ public partial class ExoforgeControlCenter : EditorWindow
                 }
 
                 _isConnected = true;
+                SessionState.SetBool(WasConnectedSessionKey, true);
                 _connectionStatus = auth.PlayerId ?? "authenticated";
                 // Stored as the Studio's session, not the device's: play mode reads it when
                 // ExoforgeManager's "use studio connection" flag is on, and the device's own session
                 // is left intact for when it is off.
-                ExoTokenStore.SaveStudioSession(ExoTokenStore.Token, auth.PlayerId, auth.Scopes);
+                ExoTokenStore.SaveStudioSession(targetToken, auth.PlayerId, auth.Scopes);
 
                 ShowStatus($"Connected as {auth.PlayerId} to {ActiveWsUrl}.", MessageType.Info);
 
-                await _editorClient.SubscribeAsync("*");
+                await _editorClient.SubscribeAsync("*", cancellationToken: cts.Token);
                 await RefreshRemoteInfoAsync();
             }
             else
             {
                 _isConnected = false;
+                SessionState.SetBool(WasConnectedSessionKey, false);
                 _connectionStatus = "Auth failed";
                 ShowStatus($"Authentication failed: {auth.Error}", MessageType.Error);
             }
         }
+        catch (OperationCanceledException)
+        {
+            _isConnected = false;
+            SessionState.SetBool(WasConnectedSessionKey, false);
+            _connectionStatus = "Timed out";
+            ShowStatus($"Connection to {ActiveWsUrl} timed out or was retried. Click Retry to connect.", MessageType.Warning);
+        }
         catch (ExoActionException ex)
         {
             _isConnected = false;
+            SessionState.SetBool(WasConnectedSessionKey, false);
             _connectionStatus = "Auth rejected";
             ShowStatus(
                 $"Auth rejected: {ex.Message}\n" +
@@ -115,18 +147,31 @@ public partial class ExoforgeControlCenter : EditorWindow
         catch (Exception ex)
         {
             _isConnected = false;
+            SessionState.SetBool(WasConnectedSessionKey, false);
             _connectionStatus = "Connection error";
             ShowStatus($"Could not connect to {ActiveWsUrl}: {ex.Message}", MessageType.Error);
         }
         finally
         {
-            _isConnecting = false;
+            if (_connectCts == cts)
+            {
+                _isConnecting = false;
+            }
             Repaint();
         }
     }
 
     private async Task DisconnectAsync()
     {
+        try
+        {
+            _connectCts?.Cancel();
+            _connectCts?.Dispose();
+            _connectCts = null;
+        }
+        catch { }
+
+        SessionState.SetBool(WasConnectedSessionKey, false);
         if (_editorClient != null)
         {
             try
@@ -172,9 +217,18 @@ public partial class ExoforgeControlCenter : EditorWindow
 
             using var loginClient = new ExoClient { HttpBaseUri = new Uri(httpUrl) };
 
-            var data = await loginClient.SendActionAsync<JsonElement>("auth", "login", new { email = _loginEmail, password = _loginPassword });
+            var data = await loginClient.SendActionAsync<JsonElement>("auth", "login", new { email = _loginEmail, password = _loginPassword }, ExoTransportPreference.Http);
             string token = data.TryGetProperty("token", out var tProp) ? tProp.GetString() ?? "" : "";
             string playerId = data.TryGetProperty("player_id", out var pProp) ? pProp.GetString() ?? "" : "";
+
+            var scopes = new List<string>();
+            if (data.TryGetProperty("scopes", out var sProp) && sProp.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var s in sProp.EnumerateArray())
+                {
+                    scopes.Add(s.GetString() ?? "");
+                }
+            }
 
             if (string.IsNullOrEmpty(token))
             {
@@ -183,13 +237,14 @@ public partial class ExoforgeControlCenter : EditorWindow
                 return;
             }
 
-            ExoTokenStore.SaveStudioSession(token, playerId);
+            ExoTokenStore.SaveStudioSession(token, playerId, scopes);
 
-            // Keep the dev login for the next editor start — the email only (M33 Fix 22).
+            // Keep the dev login for the next editor start
             ExoforgeEditorConfig.LastLoginEmail = _loginEmail;
+            ExoforgeEditorConfig.LastLoginPassword = _loginPassword;
             ShowStatus($"Successfully logged in as {playerId}.", MessageType.Info);
 
-            await ConnectAsync();
+            await ConnectAsync(token);
         }
         catch (Exception ex)
         {
@@ -202,6 +257,8 @@ public partial class ExoforgeControlCenter : EditorWindow
     private async Task LogOutAsync()
     {
         ExoTokenStore.ClearStudioSession();
+        ExoTokenStore.Clear();
+        ExoforgeEditorConfig.LastLoginPassword = string.Empty;
         await DisconnectAsync();
         ShowStatus("Logged out and cleared the stored session.", MessageType.Info);
         Repaint();
@@ -221,7 +278,12 @@ public partial class ExoforgeControlCenter : EditorWindow
 
     private async Task RefreshRemoteInfoAsync()
     {
-        if (_editorClient == null || !_isConnected) return;
+        if (_editorClient == null || !_isConnected)
+        {
+            ShowStatus("Not connected to cluster. Connect to view remote plugins.", MessageType.Warning);
+            Repaint();
+            return;
+        }
 
         bool updated = false;
 
@@ -231,7 +293,7 @@ public partial class ExoforgeControlCenter : EditorWindow
             var plugins = await _editorClient.SendActionAsync<JsonElement>("plugin_manager", "list_plugins", null);
             if (plugins.ValueKind == JsonValueKind.Object && plugins.TryGetProperty("plugins", out var arr) && arr.ValueKind == JsonValueKind.Array)
             {
-                _remotePlugins = arr.EnumerateArray().ToList();
+                _remotePlugins = arr.EnumerateArray().Select(x => x.Clone()).ToList();
                 _pluginsCount = _remotePlugins.Count;
                 updated = true;
             }
@@ -239,6 +301,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         catch (Exception ex)
         {
             UnityEngine.Debug.LogWarning($"[Exoforge] Failed to list remote plugins: {ex.Message}");
+            ShowStatus($"Failed to list remote plugins: {ex.Message}", MessageType.Error);
         }
 
         // 2. Cluster Telemetry
@@ -276,17 +339,29 @@ public partial class ExoforgeControlCenter : EditorWindow
         }
         catch (Exception ex)
         {
-            // Previously silent: the window kept showing stale telemetry and a stale service
-            // catalog, with nothing to say why.
             ShowStatus($"Could not read cluster telemetry: {ex.Message}", MessageType.Error);
         }
 
         if (updated)
         {
-            ShowStatus($"✓ Telemetry updated: {_pluginsCount} active plugins, cluster node: {_nodeName}.", MessageType.Info);
+            ShowStatus($"✓ Plugins & telemetry updated: {_remotePlugins.Count} remote plugins, cluster node: {_nodeName}.", MessageType.Info);
         }
 
         Repaint();
+    }
+
+    private async Task RefreshPluginsAsync()
+    {
+        RefreshLocalPlugins();
+        if (_isConnected && _editorClient != null)
+        {
+            await RefreshRemoteInfoAsync();
+        }
+        else
+        {
+            ShowStatus($"✓ Local plugins refreshed ({_localPlugins.Count} found). Connect to cluster to refresh remote plugins.", MessageType.Info);
+            Repaint();
+        }
     }
 
     private void ParseServiceCatalog(JsonElement export)

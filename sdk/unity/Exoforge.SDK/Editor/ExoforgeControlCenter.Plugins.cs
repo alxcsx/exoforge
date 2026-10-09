@@ -93,7 +93,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         EditorGUILayout.LabelField($"Local Plugins ({_localPlugins.Count})", EditorStyles.boldLabel);
         if (GUILayout.Button("Refresh Local", EditorStyles.miniButton, GUILayout.Width(90)))
         {
-            RefreshLocalPlugins();
+            _ = RefreshPluginsAsync();
         }
         using (new EditorGUI.DisabledScope(_isBuilding))
         {
@@ -276,7 +276,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         {
             if (GUILayout.Button("Refresh Remote", EditorStyles.miniButton, GUILayout.Width(100)))
             {
-                _ = RefreshRemoteInfoAsync();
+                _ = RefreshPluginsAsync();
             }
         }
         EditorGUILayout.EndHorizontal();
@@ -448,13 +448,14 @@ public partial class ExoforgeControlCenter : EditorWindow
         Repaint();
     }
 
-    private async Task DeployPluginAsync(LocalPluginInfo plugin)    {
+    private async Task DeployPluginAsync(LocalPluginInfo plugin)
+    {
         try
         {
             var deployer = new ExoDeployer(Workspace);
             await deployer.UploadPluginAsync(plugin.Name, existingClient: _editorClient);
             ShowStatus($"Successfully deployed '{plugin.Name}' to cluster.", MessageType.Info);
-            await RefreshRemoteInfoAsync();
+            await RefreshPluginsAsync();
             await SyncAndGenerateClientAsync();
         }
         catch (Exception ex)
@@ -526,7 +527,7 @@ public partial class ExoforgeControlCenter : EditorWindow
             var deployer = new ExoDeployer(Workspace);
             await deployer.RemovePluginAsync(pluginId, existingClient: _editorClient);
             ShowStatus($"Removed remote plugin '{pluginId}'.", MessageType.Info);
-            await RefreshRemoteInfoAsync();
+            await RefreshPluginsAsync();
             await SyncAndGenerateClientAsync();
         }
         catch (Exception ex)

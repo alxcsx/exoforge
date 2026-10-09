@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Exoforge.Client;
 using Exoforge.Management;
@@ -26,6 +27,7 @@ public partial class ExoforgeControlCenter : EditorWindow
 
     // Per-editor-session flag: auto-connect on editor start, but not on every script reload.
     private const string AutoConnectSessionKey = "Exoforge_AutoConnected";
+    private const string WasConnectedSessionKey = "Exoforge_WasConnected";
 
     /// <summary>
     /// The tabs in order. One list on purpose: the toolbar returns an index, so a separate array of
@@ -70,6 +72,7 @@ public partial class ExoforgeControlCenter : EditorWindow
     }
     private bool _isConnected;
     private bool _isConnecting;
+    private CancellationTokenSource? _connectCts;
     private string _connectionStatus = "Disconnected";
 
     // Authentication foldout
@@ -163,15 +166,36 @@ public partial class ExoforgeControlCenter : EditorWindow
         window.minSize = new Vector2(480, 560);
     }
 
+    [MenuItem("Tools/Exoforge/Reset Anonymous Player Session", false, 200)]
+    [MenuItem("Window/Exoforge/Reset Anonymous Player Session", false, 2001)]
+    public static void ResetAnonymousPlayerSession()
+    {
+        PlayerPrefs.DeleteKey("Exoforge.Token");
+        PlayerPrefs.DeleteKey("Exoforge.PlayerId");
+        PlayerPrefs.DeleteKey("Exoforge.Scopes");
+        PlayerPrefs.DeleteKey("Exoforge.PlayerName");
+        PlayerPrefs.DeleteKey("Exoforge.DeviceId");
+        PlayerPrefs.Save();
+        UnityEngine.Debug.Log("[Exoforge] Cleared anonymous player session and reset device identifier.");
+    }
+
+    [MenuItem("Tools/Exoforge/Clear All Sessions (Player & Studio)", false, 201)]
+    [MenuItem("Window/Exoforge/Clear All Sessions (Player & Studio)", false, 2002)]
+    public static void ClearAllSessions()
+    {
+        ResetAnonymousPlayerSession();
+        ExoTokenStore.ClearStudioSession();
+        UnityEngine.Debug.Log("[Exoforge] Cleared all stored sessions.");
+    }
+
     private void OnEnable()
     {
             // The editor authenticates with the runtime session token. Seed it from the active
             // environment, so exoforge.json decides what a fresh editor signs in as rather than a
-            // hardcoded default. A legacy "admin" migration used to live here; that is the
-            // workspace's business now.
-            if (!ExoTokenStore.HasToken && !string.IsNullOrEmpty(ActiveToken))
+            // hardcoded default.
+            if (string.IsNullOrEmpty(ExoTokenStore.StudioToken) && !string.IsNullOrEmpty(ActiveToken))
             {
-                ExoTokenStore.Token = ActiveToken;
+                ExoTokenStore.SaveStudioSession(ActiveToken);
             }
 
         if (ExoforgeEditorConfig.WorkspacePath == "exoforge")
@@ -179,18 +203,21 @@ public partial class ExoforgeControlCenter : EditorWindow
             ExoforgeEditorConfig.WorkspacePath = ExoforgeEditorConfig.DefaultWorkspaceRelPath;
         }
 
-        // Restore the last login so the auth form doesn't reset on every editor start. The password
-        // is not restored: it is not stored anywhere (M33 Fix 22).
+        // Restore the last login and password so the auth form doesn't reset on every editor start.
         _loginEmail = ExoforgeEditorConfig.LastLoginEmail;
-        _loginPassword = "";
+        _loginPassword = ExoforgeEditorConfig.LastLoginPassword;
 
         RefreshLocalPlugins();
 
         EditorApplication.update += OnEditorUpdate;
 
-        // Reconnect when the editor opens. `SessionState` survives script reloads, so the guard stops
-        // reconnect spam; it is cleared when Unity exits, so this still runs on every editor start.
-        if (!SessionState.GetBool(AutoConnectSessionKey, false))
+        // Reconnect when the editor opens or reloads.
+        bool wasConnected = SessionState.GetBool(WasConnectedSessionKey, false);
+        if (wasConnected)
+        {
+            EditorApplication.delayCall += () => _ = ConnectAsync();
+        }
+        else if (!SessionState.GetBool(AutoConnectSessionKey, false))
         {
             SessionState.SetBool(AutoConnectSessionKey, true);
             // Defer: OnEnable can run before the editor/network stack is ready.
@@ -200,12 +227,11 @@ public partial class ExoforgeControlCenter : EditorWindow
 
     private void TryAutoConnect()
     {
-        bool hasSession = !string.IsNullOrEmpty(ExoTokenStore.StudioPlayerId)
-            || (!string.IsNullOrEmpty(ActiveToken)
-                && ActiveToken != "dev:developer");
+        string token = !string.IsNullOrWhiteSpace(ExoTokenStore.StudioToken)
+            ? ExoTokenStore.StudioToken
+            : ExoTokenStore.Token;
 
-        // A saved password no longer exists to sign in with (M33 Fix 22): reconnect with the token.
-        if (string.IsNullOrWhiteSpace(ExoTokenStore.Token))
+        if (string.IsNullOrWhiteSpace(token))
         {
             _showAuthFoldout = true;
             ShowStatus("No saved credentials — sign in below, or set a bearer token in Settings.", MessageType.Warning);
@@ -219,6 +245,7 @@ public partial class ExoforgeControlCenter : EditorWindow
     private void OnDisable()
     {
         EditorApplication.update -= OnEditorUpdate;
+        SessionState.SetBool(WasConnectedSessionKey, _isConnected);
         _ = DisconnectAsync();
     }
 
@@ -266,7 +293,10 @@ public partial class ExoforgeControlCenter : EditorWindow
             case Tab.Overview: DrawOverview(); break;
             case Tab.LiveEvents: DrawLiveEvents(); break;
             case Tab.ActionSandbox: DrawSandbox(); break;
-            case Tab.Plugins: DrawPlugins(); break;
+            case Tab.Plugins:
+                if (_localPlugins.Count == 0) RefreshLocalPlugins();
+                DrawPlugins();
+                break;
             case Tab.Settings: DrawSettings(); break;
         }
     }
@@ -319,12 +349,10 @@ public partial class ExoforgeControlCenter : EditorWindow
         }
         else
         {
-            using (new EditorGUI.DisabledScope(_isConnecting))
+            string connectBtnLabel = _isConnecting ? "Retry" : "Connect";
+            if (GUILayout.Button(connectBtnLabel, EditorStyles.miniButton, GUILayout.Width(80)))
             {
-                if (GUILayout.Button("Connect", EditorStyles.miniButton, GUILayout.Width(80)))
-                {
-                    _ = ConnectAsync();
-                }
+                _ = ConnectAsync();
             }
         }
 
@@ -388,8 +416,8 @@ public partial class ExoforgeControlCenter : EditorWindow
             string typedPassword = EditorGUILayout.PasswordField("Password", _loginPassword);
             if (typedPassword != _loginPassword)
             {
-                // Held for this editor session only — never into EditorPrefs (M33 Fix 22).
                 _loginPassword = typedPassword;
+                ExoforgeEditorConfig.LastLoginPassword = typedPassword;
             }
 
             EditorGUILayout.LabelField(

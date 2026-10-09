@@ -42,7 +42,9 @@ public class SnakeConfigPlugin
     [ExoAction]
     public SnakeConfigData GetConfig()
     {
-        var existing = Database?.Get<SnakeConfigRecord>(Table, ConfigKey);
+        var existing = Database?.Get<SnakeConfigRecord>(Table, ConfigKey)
+                       ?? Database?.QuerySingle<SnakeConfigRecord>($"SELECT * FROM {Table} WHERE key = $1", ConfigKey);
+
         if (existing == null)
         {
             var defaults = new SnakeConfigData();
@@ -108,30 +110,38 @@ public class SnakeConfigPlugin
     }
 }
 
-[ExoResource("snake_config_records", PrimaryKey = "key")]
+[ExoSingletonResource("snake_config", PrimaryKey = "key", Source = "game_config")]
 public record SnakeConfigRecord
 {
+    [JsonPropertyName("key")]
     [ExoColumn(Label = "Key")]
-    public string Key { get; init; } = "";
+    public string Key { get; init; } = "active_config";
 
+    [JsonPropertyName("snake_color")]
     [ExoColumn(Label = "Snake Color")]
     public string SnakeColor { get; init; } = "#3DD157";
 
+    [JsonPropertyName("apple_color")]
     [ExoColumn(Label = "Apple Color")]
     public string AppleColor { get; init; } = "#FF525C";
 
+    [JsonPropertyName("apple_points")]
     [ExoColumn(Label = "Apple Points")]
     public int ApplePoints { get; init; } = 10;
 
+    [JsonPropertyName("background_bucket")]
     [ExoColumn(Label = "Background Bucket")]
     public string BackgroundBucket { get; init; } = "snake_assets";
 
-    [ExoColumn(Label = "Background File ID")]
+    [JsonPropertyName("background_file_id")]
+    [ExoColumn(Label = "Background File ID", Role = "file_reference", Bucket = "snake_assets")]
     public string BackgroundFileId { get; init; } = "";
 
+    [JsonPropertyName("background_filename")]
     [ExoColumn(Label = "Background Filename")]
     public string BackgroundFilename { get; init; } = "board_bg.png";
 
+    [JsonPropertyName("updated_at")]
     [ExoColumn(Label = "Updated At")]
     public long UpdatedAt { get; init; }
 }

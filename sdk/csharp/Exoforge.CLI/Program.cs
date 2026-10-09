@@ -268,13 +268,13 @@ public static class Program
         if (cli.WantsHelp)
         {
             Console.WriteLine("""
-            Usage: exo plugin new <name> [--template standard|inventory] [--dir <path>]
+            Usage: exo plugin new <name> [--template standard] [--dir <path>]
 
             Scaffolds plugins/<name>/ with a src/ project, a solution, and a .gitignore. The project
             references the Exoforge.Plugin.SDK package, so it builds wherever it is put; run
             `just pack-sdk` to fill the local feed from a checkout.
 
-              --template <t>   standard (default) or inventory
+              --template <t>   standard (default)
             """);
             return 0;
         }

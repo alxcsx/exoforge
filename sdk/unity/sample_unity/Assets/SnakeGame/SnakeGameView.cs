@@ -187,6 +187,13 @@ namespace SnakeGame
                 }
             }
 
+            if (GUILayout.Button("↻ New Account", GUILayout.Height(30), GUILayout.Width(110)))
+            {
+                _nameInput = "";
+                _nameError = "";
+                player?.ResetSessionAndSignIn();
+            }
+
             GUILayout.EndHorizontal();
             GUILayout.EndArea();
 

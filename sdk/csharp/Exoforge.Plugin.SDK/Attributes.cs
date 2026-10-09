@@ -147,6 +147,11 @@ public class ExoResourceAttribute : Attribute
     /// </summary>
     public string? Source { get; set; }
 
+    /// <summary>
+    /// Indicates whether this resource is a singleton (only one record stored).
+    /// </summary>
+    public bool Singleton { get; set; }
+
     public ExoResourceAttribute()
     {
     }
@@ -159,6 +164,30 @@ public class ExoResourceAttribute : Attribute
     public ExoResourceAttribute(Type resourceType)
     {
         ResourceType = resourceType;
+    }
+}
+
+/// <summary>
+/// Declares a Singleton Resource (exactly one record stored).
+/// Creates a default record when queried if none exists yet in the database.
+/// In Studio Dashboard, it is presented as a direct configuration form without row table visualization.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface, Inherited = false, AllowMultiple = true)]
+public class ExoSingletonResourceAttribute : ExoResourceAttribute
+{
+    public ExoSingletonResourceAttribute()
+    {
+        Singleton = true;
+    }
+
+    public ExoSingletonResourceAttribute(string name) : base(name)
+    {
+        Singleton = true;
+    }
+
+    public ExoSingletonResourceAttribute(Type resourceType) : base(resourceType)
+    {
+        Singleton = true;
     }
 }
 
@@ -187,6 +216,16 @@ public class ExoColumnAttribute : Attribute
     public bool Filterable { get; set; }
     public bool Badge { get; set; }
 
+    /// <summary>Target bucket name when referencing a file in a bucket.</summary>
+    public string? Bucket { get; set; }
+
+    /// <summary>Convenience property to mark this column as a file reference.</summary>
+    public bool FileReference
+    {
+        get => Role == "file_reference";
+        set { if (value) Role = "file_reference"; }
+    }
+
     public ExoColumnAttribute()
     {
     }
@@ -194,6 +233,21 @@ public class ExoColumnAttribute : Attribute
     public ExoColumnAttribute(string name)
     {
         Name = name;
+    }
+}
+
+/// <summary>
+/// Marks a resource column as a file reference pointing to a file in a storage bucket.
+/// Renders direct preview and search/select file picker in Studio Dashboard.
+/// </summary>
+[AttributeUsage(AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Parameter, Inherited = false, AllowMultiple = false)]
+public class ExoFileReferenceAttribute : Attribute
+{
+    public string? Bucket { get; set; }
+
+    public ExoFileReferenceAttribute(string? bucket = null)
+    {
+        Bucket = bucket;
     }
 }
 

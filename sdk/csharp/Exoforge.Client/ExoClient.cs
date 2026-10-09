@@ -649,6 +649,39 @@ public class ExoClient : IDisposable
         return await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Downloads raw bytes of a file by its ID directly.
+    /// </summary>
+    public Task<byte[]> DownloadFileAsync(
+        string fileId,
+        CancellationToken cancellationToken = default)
+    {
+        if (HttpBaseUri == null)
+        {
+            throw new InvalidOperationException("HttpBaseUri is not set on ExoClient. Configure HttpBaseUri to download files.");
+        }
+
+        string path = $"/api/files/{Uri.EscapeDataString(fileId)}";
+        return DownloadFromUriAsync(new Uri(HttpBaseUri, path), cancellationToken);
+    }
+
+    private async Task<byte[]> DownloadFromUriAsync(Uri endpoint, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, endpoint);
+        if (!string.IsNullOrEmpty(AuthToken))
+        {
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", AuthToken);
+        }
+
+        var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new ExoActionException("download_failed", $"HTTP {(int)response.StatusCode}");
+        }
+
+        return await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+    }
+
     public void Dispose()
     {
         _transport.Dispose();
