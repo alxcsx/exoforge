@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
@@ -18,7 +20,44 @@ public static class HostBridge
     private static IPluginTransport? _transport;
 
     /// <summary>Routes host calls through a process transport (native plugins). Pass <c>null</c> to reset.</summary>
-    public static void UseTransport(IPluginTransport? transport) => _transport = transport;
+    public static void UseTransport(IPluginTransport? transport)
+    {
+        _transport = transport;
+        // A new transport is a new host session: what the last host declared does not carry over.
+        _hostProtocol = 0;
+        _hostCapabilities = null;
+        Handshaken = false;
+    }
+
+    // -- protocol handshake --
+
+    /// <summary>The frames this SDK can receive; declared to the host in the hello reply.</summary>
+    public static readonly IReadOnlyList<string> PluginCapabilities =
+        new[] { "action", "event", "host_call_result" };
+
+    private static int _hostProtocol;
+    private static IReadOnlyList<string>? _hostCapabilities;
+
+    /// <summary>True once the host's hello has been read.</summary>
+    public static bool Handshaken { get; private set; }
+
+    /// <summary>The host's protocol version, once handshaken; 0 before that.</summary>
+    public static int HostProtocol => _hostProtocol;
+
+    internal static void NoteHandshake(int protocol, IReadOnlyList<string> capabilities)
+    {
+        _hostProtocol = protocol;
+        _hostCapabilities = capabilities;
+        Handshaken = true;
+    }
+
+    /// <summary>
+    /// Whether the host declared it can receive a frame. Before a handshake this is permissive: a
+    /// host that does not negotiate is assumed to be one that predates capabilities and handles
+    /// everything this protocol version has.
+    /// </summary>
+    public static bool HostSupports(string capability) =>
+        _hostCapabilities == null || _hostCapabilities.Contains(capability);
 
     /// <summary>
     /// Serializes a host-call payload without reflection where possible, so it stays NativeAOT-safe.

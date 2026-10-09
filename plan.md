@@ -289,6 +289,12 @@ by whether they were worth doing on the spot.
   `:4001/health` answering 200, while `:4005/health` does too, so the probes keep their port. Podman
   still drops the Dockerfile instruction under its default OCI format, which the comment there now
   says rather than reading as though it runs.
+- **A deployment property passed on the command line broke the SDK build, not the plugin's.**
+  Writing the guard test found it: `dotnet build -p:PublishAot=true` sent the property into the
+  netstandard SDK reference, which failed with NETSDK1207 before the plugin's guard could fire - the
+  one thing the guard exists to prevent. NuGet's restore ignores `GlobalPropertiesToRemove`, so the
+  SDK and generator projects use `TreatAsLocalProperty` to refuse to inherit a plugin's deployment
+  properties. The guard is reachable from the CLI now, and a test keeps it that way.
 
 *Worth doing later, in rough order of value:*
 
@@ -328,14 +334,24 @@ instances converge, not in the plugin model: the plugin stays a file that become
 Until that exists, the honest statement is **one replica**. Anything more silently loses plugins, and
 losing them silently is worse than not supporting it.
 
-**Phase 5 — flexibility and boilerplate.** A versioned handshake with declared capabilities, the way
-LSP and Terraform providers do it, so host and plugin can negotiate rather than assume. The runner
-seam stays (native and Elixir; a shared-host runner remains a runner, not a rewrite). The plugin
-`.csproj` stays ~20 lines, `exo plugin new` to a running plugin stays one command, and it gets
-faster, because a plugin no longer AOT-compiles.
+**Phase 5 — flexibility and boilerplate.** *Landed.* The host opens every native plugin with a
+`hello` frame declaring protocol `1` and the frames it can receive (`action_result`, `host_call`,
+`host_log`); the SDK answers with its own (`action`, `event`, `host_call_result`) before the first
+action is read. The host refuses a plugin that speaks another protocol or cannot handle what will
+be sent, naming which, and refuses one that never answers after five seconds; the SDK refuses to
+make a host call a host said it cannot answer, and sends an exception trace to stderr rather than a
+`host_log` frame a host did not declare. Adding a frame type is now a capability to negotiate, not a
+version to bump. The runner seam stays (native and Elixir; a shared-host runner remains a runner,
+not a rewrite). The plugin `.csproj` stays ~20 lines, `exo plugin new` to a running plugin stays one
+command, and it gets faster, because a plugin no longer AOT-compiles.
 
-**Phase 6 — verification.** The `kill -9` isolation check becomes a real test rather than something
-run by hand. Add a runtime-mismatch test and a guard test that `PublishTrimmed` cannot be turned on.
+**Phase 6 — verification.** *Landed.* The `kill -9` isolation check is a real test: a plugin that
+dies mid-call answers its caller and stops with the reason the supervisor restarts on. The
+deployment guards now have tests that build a fixture plugin and assert `EXOFORGE001` and
+`EXOFORGE002`, and the runtime contract has one that publishes the fixture, asserts the
+runtimeconfig's `LatestMajor` and framework version, then demands a runtime no image has and
+asserts the apphost refuses naming it. What is not tested here is a real second runtime - the test
+environment has only one - so the container build remains where the image's runtime is verified.
 Correct the recorded numbers above when they change.
 
 **What this costs, stated plainly.** 6× RAM per plugin, absorbed by billing. Runtime version

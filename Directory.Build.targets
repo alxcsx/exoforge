@@ -25,10 +25,18 @@
          project file reads the same inside the repository and out. -->
     <PackageReference Remove="Exoforge.Plugin.SDK" />
 
-    <ProjectReference Include="$(ExoforgeCSharpSdk)/Exoforge.Plugin.SDK/Exoforge.Plugin.SDK.csproj" />
+    <!--
+      A plugin's deployment properties say how the plugin is published, not how the SDK and the
+      generator it references are built. Left to flow as global properties, `dotnet build
+      -p:PublishAot=true` fails first in the netstandard SDK project with NETSDK1207 - before the
+      plugin's own guard can say what is actually wrong, which is the one thing it exists for.
+    -->
+    <ProjectReference Include="$(ExoforgeCSharpSdk)/Exoforge.Plugin.SDK/Exoforge.Plugin.SDK.csproj"
+                      GlobalPropertiesToRemove="PublishAot;PublishTrimmed;SelfContained;PublishSingleFile;PublishReadyToRun;RollForward" />
     <ProjectReference Include="$(ExoforgeCSharpSdk)/Exoforge.Plugin.Generator/Exoforge.Plugin.Generator.csproj"
                       OutputItemType="Analyzer"
-                      ReferenceOutputAssembly="false" />
+                      ReferenceOutputAssembly="false"
+                      GlobalPropertiesToRemove="PublishAot;PublishTrimmed;SelfContained;PublishSingleFile;PublishReadyToRun;RollForward" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(ExoforgePlugin)' == 'true' and '$(ExoforgeInRepo)' != 'true'">

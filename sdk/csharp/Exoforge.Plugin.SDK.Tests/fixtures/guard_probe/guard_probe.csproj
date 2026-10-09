@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- A plugin, and nothing else: the repository hooks supply the SDK and the generator, exactly
+         as they do for a plugin a developer owns. -->
+    <ExoforgePlugin>true</ExoforgePlugin>
+    <ExoforgePluginType>native</ExoforgePluginType>
+
+    <!-- Never at the project root: the fixture is built from a test, and a manifest appearing in the
+         source tree would be a generated file to notice and delete. -->
+    <ExoforgeManifestPath>$(MSBuildProjectDirectory)/obj/manifest.json</ExoforgeManifestPath>
+  </PropertyGroup>
+
+</Project>

@@ -1,5 +1,15 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk" TreatAsLocalProperty="PublishAot;PublishTrimmed">
   <PropertyGroup>
+    <!--
+      This is the library a plugin references, not the plugin. A plugin deployment property can
+      arrive here as a global property - a plugin author trying `dotnet build -p:PublishAot=true`
+      - and NuGet's restore does not honour the reference's GlobalPropertiesToRemove, so the build
+      fails here with NETSDK1207 before the plugin's own guard can say what is actually wrong.
+      TreatAsLocalProperty lets this project refuse to inherit them.
+    -->
+    <PublishAot>false</PublishAot>
+    <PublishTrimmed>false</PublishTrimmed>
+
     <!-- netstandard2.1 only: plugins target net10.0 and consume this fine. -->
     <TargetFramework>netstandard2.1</TargetFramework>
     <Nullable>enable</Nullable>

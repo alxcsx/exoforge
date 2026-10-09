@@ -17,4 +17,9 @@
   <ItemGroup>
     <ProjectReference Include="..\Exoforge.Plugin.SDK\Exoforge.Plugin.SDK.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!-- The fixture is built by a test, on purpose, not compiled into this assembly. -->
+    <Compile Remove="fixtures/**/*.cs" />
+  </ItemGroup>
 </Project>

@@ -4,14 +4,18 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
 
   The binary is spawned as an OS process and speaks newline-delimited JSON over stdio:
 
+      host  -> plugin   {"type":"hello","protocol":1,"host":"exoforge","capabilities":[...]}
+      plugin -> host    {"type":"hello","protocol":1,"plugin":"sample_plugin","capabilities":[...]}
       host  -> plugin   {"type":"action","id":1,"action":"move","payload":{...}}
       plugin -> host    {"type":"action_result","id":1,"status":"ok","data":1}
       plugin -> host    {"type":"host_call","id":7,"op":"emit_event","args":{...}}
       host  -> plugin   {"type":"host_call_result","id":7,"result":true}
 
-  Host calls are synchronous: the plugin blocks reading the reply, so the runner answers them
-  inline while waiting for the action result. This keeps the plugin free of any WASM/C toolchain
-  while preserving the same manifest/contract surface.
+  The host opens with `hello` and the plugin answers before it sees an action, so a pair that
+  disagrees about the protocol or the frames it handles is refused with a reason instead of fed
+  frames it cannot parse. Host calls are synchronous: the plugin blocks reading the reply, so the
+  runner answers them inline while waiting for the action result. This keeps the plugin free of any
+  WASM/C toolchain while preserving the same manifest/contract surface.
   """
   @behaviour Exoforge.Contracts.PluginRunner
   use GenServer
@@ -28,6 +32,15 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
   # instrumenting the plugin. Five seconds is often enough for a billing-quality number and cheap
   # enough to leave on; `VmHWM` is a high-water mark, so a peak between samples is never lost.
   @os_sample_ms 5_000
+
+  # Wire protocol. The host opens with a `hello` frame and the plugin answers before it sees an
+  # action, so a pair that disagrees is refused instead of exchanging frames neither understands.
+  # Capabilities are the frame types each side can receive. Bump @protocol only for a change that
+  # is not backward compatible.
+  @protocol 1
+  @host_capabilities ["action_result", "host_call", "host_log"]
+  @plugin_capabilities ["action", "event"]
+  @handshake_timeout_ms 5_000
 
   @doc "Prepares the manifest by ensuring the proxy module is created and set as entry_point."
   def prepare_manifest(%Manifest{} = manifest) do
@@ -71,7 +84,11 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
   end
 
   def start_link({%Manifest{} = manifest, binary_path, name}) do
-    GenServer.start_link(__MODULE__, {manifest, binary_path}, name: name)
+    start_link({manifest, binary_path, name, @handshake_timeout_ms})
+  end
+
+  def start_link({%Manifest{} = manifest, binary_path, name, handshake_timeout_ms}) do
+    GenServer.start_link(__MODULE__, {manifest, binary_path, handshake_timeout_ms}, name: name)
   end
 
   @doc "Forwards an inbound BEAM event to the plugin process as an `event` frame."
@@ -112,7 +129,7 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
   end
 
   @impl true
-  def init({manifest, binary_path}) do
+  def init({manifest, binary_path, handshake_timeout_ms}) do
     Logger.info("[NativePluginRunner] Starting native plugin #{manifest.id} from #{binary_path}")
 
     port =
@@ -130,12 +147,32 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
       {event, _topic} -> EventDispatcher.subscribe(event)
     end)
 
+    hello =
+      Jason.encode!(%{
+        type: "hello",
+        protocol: @protocol,
+        host: "exoforge",
+        capabilities: @host_capabilities
+      })
+
+    Port.command(port, hello <> "\n")
+    handshake_timer = Process.send_after(self(), :handshake_timeout, handshake_timeout_ms)
+
     # Metering is on from the first start: the first start is the uptime origin, later ones are
     # restarts.
     Exoforge.Metering.record_start(manifest.id)
     schedule_os_sample()
 
-    {:ok, %{manifest: manifest, port: port, buffer: "", pending: %{}, seq: 0}}
+    {:ok,
+     %{
+       manifest: manifest,
+       port: port,
+       buffer: "",
+       pending: %{},
+       seq: 0,
+       handshake: nil,
+       handshake_timer: handshake_timer
+     }}
   end
 
   @impl true
@@ -171,8 +208,11 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
   @impl true
   def handle_info({port, {:data, chunk}}, %{port: port} = state) do
     {lines, rest} = split_lines(state.buffer <> chunk)
-    state = Enum.reduce(lines, %{state | buffer: rest}, &handle_line/2)
-    {:noreply, state}
+
+    case run_lines(lines, %{state | buffer: rest}) do
+      {:ok, state} -> {:noreply, state}
+      {:stop, reason, state} -> {:stop, reason, state}
+    end
   end
 
   def handle_info({:forward_event, event_key, payload}, state) do
@@ -186,6 +226,16 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
   end
 
   def handle_info({port, {:exit_status, status}}, %{port: port} = state) do
+    # A process that dies without a hello most often cannot start at all: the runtime it was built
+    # against is not in this image, or the binary is not what the manifest says. Say so, because
+    # the exit status alone sends the reader looking in the wrong place.
+    if is_nil(state.handshake) do
+      Logger.error(
+        "[NativePluginRunner] #{state.manifest.id} exited before the protocol handshake. " <>
+          "If it was built for a newer .NET, this image may not carry that runtime."
+      )
+    end
+
     Logger.warning("[NativePluginRunner] Plugin #{state.manifest.id} exited with status #{status}")
 
     Enum.each(state.pending, fn {_id, entry} ->
@@ -195,6 +245,9 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
 
     {:stop, {:plugin_exited, status}, %{state | pending: %{}}}
   end
+
+  def handle_info(:handshake_timeout, %{handshake: nil} = state), do: refuse(state, :no_handshake)
+  def handle_info(:handshake_timeout, state), do: {:noreply, state}
 
   def handle_info(:sample_os, state) do
     case Port.info(state.port, :os_pid) do
@@ -209,6 +262,15 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
   def handle_info(_msg, state), do: {:noreply, state}
 
   defp schedule_os_sample, do: Process.send_after(self(), :sample_os, @os_sample_ms)
+
+  defp run_lines(lines, state) do
+    Enum.reduce_while(lines, {:ok, state}, fn line, {:ok, state} ->
+      case handle_line(line, state) do
+        {:stop, reason, state} -> {:halt, {:stop, reason, state}}
+        state -> {:cont, {:ok, state}}
+      end
+    end)
+  end
 
   defp send_event(state, event_key, payload) do
     frame = Jason.encode!(%{type: "event", event: to_string(event_key), payload: sanitize(payload)})
@@ -237,6 +299,9 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
 
   defp handle_line(line, state) do
     case Jason.decode(line) do
+      {:ok, %{"type" => "hello"} = msg} ->
+        handle_hello(msg, state)
+
       {:ok, %{"type" => "action_result"} = msg} ->
         reply_action_result(msg, byte_size(line), state)
 
@@ -259,6 +324,55 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
         state
     end
   end
+
+  # The handshake. The plugin states its protocol and the frames it handles; the host decides
+  # whether it can run the pair, and says what is wrong when it cannot.
+  defp handle_hello(_msg, %{handshake: %{}} = state), do: state
+
+  defp handle_hello(msg, state) do
+    if state.handshake_timer, do: Process.cancel_timer(state.handshake_timer)
+
+    protocol = Map.get(msg, "protocol")
+    capabilities = List.wrap(Map.get(msg, "capabilities", []))
+    missing = @plugin_capabilities -- capabilities
+
+    cond do
+      protocol != @protocol ->
+        refuse(state, {:protocol_mismatch, protocol})
+
+      missing != [] ->
+        refuse(state, {:missing_capabilities, missing})
+
+      true ->
+        Logger.info(
+          "[NativePluginRunner] #{state.manifest.id} speaks protocol #{protocol} " <>
+            "(#{Enum.join(capabilities, ", ")})"
+        )
+
+        %{state | handshake: %{protocol: protocol, capabilities: capabilities}, handshake_timer: nil}
+    end
+  end
+
+  defp refuse(state, reason) do
+    Logger.error(
+      "[NativePluginRunner] Refusing #{state.manifest.id}: #{refusal(reason)}. " <>
+        "Rebuild the plugin against the current SDK, or update the image."
+    )
+
+    Enum.each(state.pending, fn {_id, entry} ->
+      GenServer.reply(entry.from, {:error, {:plugin_incompatible, reason}})
+    end)
+
+    {:stop, {:plugin_incompatible, reason}, %{state | pending: %{}}}
+  end
+
+  defp refusal({:protocol_mismatch, version}),
+    do: "it speaks protocol #{inspect(version)} and the host speaks #{@protocol}"
+
+  defp refusal({:missing_capabilities, missing}),
+    do: "it does not handle #{Enum.join(missing, ", ")} frames"
+
+  defp refusal(:no_handshake), do: "it did not complete the protocol handshake"
 
   # The plugin's own log and exception channel. The same line goes to the server log and to the
   # developer-facing buffer: `exo plugin logs` reads the buffer, and an exception trace is exactly

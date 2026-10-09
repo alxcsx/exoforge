@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
@@ -33,15 +34,27 @@ public interface IPluginTransport
 ///
 /// The host spawns the binary and speaks newline-delimited JSON over stdin/stdout:
 /// <code>
+/// host  -> plugin   {"type":"hello","protocol":1,"host":"exoforge","capabilities":[...]}
+/// plugin -> host    {"type":"hello","protocol":1,"plugin":"sample_plugin","capabilities":[...]}
 /// host  -> plugin   {"type":"action","id":1,"action":"move","payload":{"x":1}}
 /// plugin -> host    {"type":"action_result","id":1,"status":"ok","data":1}
 /// plugin -> host    {"type":"host_call","id":7,"op":"emit_event","args":{...}}
 /// host  -> plugin   {"type":"host_call_result","id":7,"result":true}
 /// </code>
+/// The host opens with `hello` and the plugin answers it before anything runs. Capabilities are
+/// the frame types each side can receive, so adding a frame type is a negotiation rather than an
+/// assumption; the protocol number is what the host refuses on.
 /// Host calls are synchronous: the plugin writes a request and reads the matching reply.
 /// </summary>
 public static class PluginHost
 {
+    /// <summary>
+    /// The wire protocol this SDK speaks. The host refuses a plugin that does not speak it rather
+    /// than feeding it frames it cannot parse; a plugin answers with its own version and lets the
+    /// host make the same call.
+    /// </summary>
+    public const int ProtocolVersion = 1;
+
     private static readonly object WriteLock = new();
     private static Stream? _stdout;
     private static TextReader? _stdin;
@@ -131,6 +144,25 @@ public static class PluginHost
     internal static void RunInstance(object instance, TextReader reader) =>
         RunInstance(instance, reader, dispatch: null);
 
+    /// <summary>
+    /// Runs the frame loop with a caller-supplied stdout, so a test can read what the plugin wrote
+    /// (the hello reply, an action result, a log frame) without a process behind it.
+    /// </summary>
+    internal static void RunInstance(object instance, TextReader reader, Stream stdout, IExoforgeDispatch? dispatch)
+    {
+        Stream? previous = _stdout;
+        _stdout = stdout;
+
+        try
+        {
+            RunInstance(instance, reader, dispatch);
+        }
+        finally
+        {
+            _stdout = previous;
+        }
+    }
+
     internal static void RunInstance(object instance, TextReader reader, IExoforgeDispatch? dispatch)
     {
         _stdin = reader;
@@ -155,7 +187,11 @@ public static class PluginHost
                 continue;
             }
 
-            if (IsEventFrame(line))
+            if (IsFrameOfType(line, "hello"))
+            {
+                HandleHello(line);
+            }
+            else if (IsEventFrame(line))
             {
                 DispatchEvent(line);
             }
@@ -196,17 +232,70 @@ public static class PluginHost
         return pluginType.Assembly.GetName().Name?.ToLowerInvariant() ?? pluginType.Name.ToLowerInvariant();
     }
 
-    private static bool IsEventFrame(string line)
+    private static bool IsEventFrame(string line) => IsFrameOfType(line, "event");
+
+    private static bool IsFrameOfType(string line, string frameType)
     {
         try
         {
             using var doc = JsonDocument.Parse(line);
-            return doc.RootElement.TryGetProperty("type", out var type) && type.GetString() == "event";
+            return doc.RootElement.TryGetProperty("type", out var type) && type.GetString() == frameType;
         }
         catch (JsonException)
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// Answers the host's hello with this plugin's protocol version and the frames it handles. The
+    /// host decides whether the pair is compatible; the plugin's job is to state what it is, not
+    /// to police the host.
+    /// </summary>
+    private static void HandleHello(string line)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(line);
+            var root = doc.RootElement;
+
+            int protocol = root.TryGetProperty("protocol", out var p) && p.TryGetInt32(out int value) ? value : 0;
+            HostBridge.NoteHandshake(protocol, ReadCapabilities(root));
+        }
+        catch (JsonException)
+        {
+            HostBridge.NoteHandshake(0, Array.Empty<string>());
+        }
+
+        Write(HelloFrame());
+    }
+
+    private static string HelloFrame()
+    {
+        string id = _instance == null ? "unknown" : ResolvePluginId(_instance.GetType());
+        string capabilities = string.Join(",", HostBridge.PluginCapabilities.Select(JsonEncode));
+
+        return $"{{\"type\":\"hello\",\"protocol\":{ProtocolVersion},\"plugin\":{JsonEncode(id)},\"capabilities\":[{capabilities}]}}";
+    }
+
+    private static IReadOnlyList<string> ReadCapabilities(JsonElement root)
+    {
+        if (!root.TryGetProperty("capabilities", out var caps) || caps.ValueKind != JsonValueKind.Array)
+        {
+            return Array.Empty<string>();
+        }
+
+        var capabilities = new List<string>();
+
+        foreach (var item in caps.EnumerateArray())
+        {
+            if (item.ValueKind == JsonValueKind.String)
+            {
+                capabilities.Add(item.GetString()!);
+            }
+        }
+
+        return capabilities;
     }
 
     /// <summary>Dispatches an inbound host event to the plugin's <c>OnEvent</c> handler.</summary>
@@ -257,7 +346,7 @@ public static class PluginHost
             // ToString, not Message: an event handler that throws is the plugin's own bug, and the
             // trace is the only thing that says where. It goes to the log rather than to a caller,
             // because a trace carries file paths and internals that are not the caller's business.
-            Write($"{{\"type\":\"host_log\",\"level\":3,\"message\":{JsonEncode(Cause(ex).ToString())}}}");
+            WriteHostLog(3, Cause(ex).ToString());
         }
     }
 
@@ -325,7 +414,7 @@ public static class PluginHost
 
             // The trace is logged and the message is returned. A caller gets "index out of range";
             // `exo plugin logs` gets the file and the line, which is what fixes it.
-            Write($"{{\"type\":\"host_log\",\"level\":3,\"message\":{JsonEncode(cause.ToString())}}}");
+            WriteHostLog(3, cause.ToString());
             Write($"{{\"type\":\"action_result\",\"id\":{id},\"status\":\"error\",\"error\":{JsonEncode(cause.Message)}}}");
         }
     }
@@ -468,9 +557,32 @@ public static class PluginHost
         }
     }
 
+    /// <summary>
+    /// The plugin's own log and exception channel. A host that did not declare `host_log` gets the
+    /// line on stderr instead: a host that cannot read the frame is not where it belongs, and a
+    /// plugin bug should not disappear because the host is older.
+    /// </summary>
+    private static void WriteHostLog(int level, string message)
+    {
+        if (!HostBridge.HostSupports("host_log"))
+        {
+            Console.Error.WriteLine(message);
+            return;
+        }
+
+        Write($"{{\"type\":\"host_log\",\"level\":{level},\"message\":{JsonEncode(message)}}}");
+    }
+
     /// <summary>Issues a synchronous host call and returns the raw result JSON.</summary>
     private static string? HostCall(string op, string argsJson)
     {
+        if (!HostBridge.HostSupports("host_call"))
+        {
+            throw new InvalidOperationException(
+                $"The host did not declare it handles host_call frames, so '{op}' cannot be answered. " +
+                 "The plugin and host disagree about capabilities; rebuild the plugin or update the host.");
+        }
+
         long id = ++_nextHostCallId;
         Write($"{{\"type\":\"host_call\",\"id\":{id},\"op\":{JsonEncode(op)},\"args\":{argsJson}}}");
 

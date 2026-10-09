@@ -11,6 +11,8 @@ defmodule Exoforge.NativePluginRunnerTest do
   while IFS= read -r line; do
     id=$(printf '%s' "$line" | sed -n 's/.*"id":\\([0-9]*\\).*/\\1/p')
     case "$line" in
+      *'"type":"hello"'*)
+        printf '{"type":"hello","protocol":1,"plugin":"stub_plugin","capabilities":["action","event","host_call_result"]}\\n' ;;
       *'"action":"ping"'*)
         printf '{"type":"action_result","id":%s,"status":"ok","data":42}\\n' "$id" ;;
       *'"action":"emit"'*)
@@ -41,6 +43,27 @@ defmodule Exoforge.NativePluginRunnerTest do
         printf '{"type":"action_result","id":%s,"status":"ok","data":%s}\\n' "$id" "$reply" ;;
     esac
   done
+  """
+
+  # Variants for the handshake refusal tests: each answers the host's hello differently, or not at
+  # all, and none of them need the action protocol.
+  @no_handshake """
+  #!/usr/bin/env bash
+  while IFS= read -r _line; do :; done
+  """
+
+  @wrong_protocol """
+  #!/usr/bin/env bash
+  read -r _hello
+  printf '{"type":"hello","protocol":2,"plugin":"stub_plugin","capabilities":["action","event"]}\\n'
+  while IFS= read -r _line; do :; done
+  """
+
+  @no_capabilities """
+  #!/usr/bin/env bash
+  read -r _hello
+  printf '{"type":"hello","protocol":1,"plugin":"stub_plugin","capabilities":[]}\\n'
+  while IFS= read -r _line; do :; done
   """
 
   setup do
@@ -74,6 +97,19 @@ defmodule Exoforge.NativePluginRunnerTest do
     name = :"stub_runner_#{System.unique_integer([:positive])}"
     {:ok, pid} = NativePluginRunner.start_link({manifest, binary, name})
     pid
+  end
+
+  defp start_runner(manifest, binary, handshake_timeout_ms) do
+    name = :"stub_runner_#{System.unique_integer([:positive])}"
+    {:ok, pid} = NativePluginRunner.start_link({manifest, binary, name, handshake_timeout_ms})
+    pid
+  end
+
+  defp write_variant(manifest, body) do
+    path = Path.join(manifest.physical_path, "variant_#{System.unique_integer([:positive])}")
+    File.write!(path, body)
+    File.chmod!(path, 0o755)
+    path
   end
 
   test "executes an action and returns its result", %{manifest: manifest, binary: binary} do
@@ -221,6 +257,28 @@ defmodule Exoforge.NativePluginRunnerTest do
              Enum.map(usage.actions, &%{action: &1.action, invocations: &1.invocations})
 
     assert Enum.all?(usage.actions, &(&1.bytes_in > 0 and &1.bytes_out > 0))
+  end
+
+  test "refuses a plugin that speaks a different protocol", %{manifest: manifest} do
+    Process.flag(:trap_exit, true)
+    pid = start_runner(manifest, write_variant(manifest, @wrong_protocol))
+
+    assert_receive {:EXIT, ^pid, {:plugin_incompatible, {:protocol_mismatch, 2}}}, 1_000
+  end
+
+  test "refuses a plugin that cannot handle the frames the host sends", %{manifest: manifest} do
+    Process.flag(:trap_exit, true)
+    pid = start_runner(manifest, write_variant(manifest, @no_capabilities))
+
+    assert_receive {:EXIT, ^pid, {:plugin_incompatible, {:missing_capabilities, ["action", "event"]}}},
+                   1_000
+  end
+
+  test "refuses a plugin that never completes the handshake", %{manifest: manifest} do
+    Process.flag(:trap_exit, true)
+    pid = start_runner(manifest, write_variant(manifest, @no_handshake), 100)
+
+    assert_receive {:EXIT, ^pid, {:plugin_incompatible, :no_handshake}}, 1_000
   end
 
   test "fails loudly when the binary is missing", %{manifest: manifest} do

@@ -1,5 +1,10 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk" TreatAsLocalProperty="PublishAot;PublishTrimmed">
   <PropertyGroup>
+    <!-- Same reason as the SDK's copy: a plugin's deployment property must not break the analyzer
+         it references, least of all during restore, where the reference cannot opt out. -->
+    <PublishAot>false</PublishAot>
+    <PublishTrimmed>false</PublishTrimmed>
+
     <!--
       A Roslyn source generator, so netstandard2.0 is required (that is what the compiler loads).
       It replaces the out-of-process ManifestGen tool: the manifest, the entry point, and (later)

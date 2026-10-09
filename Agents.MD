@@ -149,7 +149,10 @@ unchanged. Declare several `[ExoService]`s for several services; attribute an ac
 `Service = "…"` when they belong to different ones. A plugin runs one instance, so it has one root.
 
 The host spawns the binary as an OS process (`Exoforge.Drivers.Runtime.NativePluginRunner`) and speaks
-newline-delimited JSON over stdio. Host capabilities are injected into the plugin (`IDatabase`, `ILogger`,
+newline-delimited JSON over stdio. It opens with a `hello` frame declaring the protocol and the
+frames it handles, and the SDK answers with its own before the first action is read, so a version or
+capability mismatch is refused with a reason instead of fed frames that cannot be parsed.
+Host capabilities are injected into the plugin (`IDatabase`, `ILogger`,
 `IEventDispatcher`, …) and answered by the runner synchronously; `HostBridge` is the low-level layer
 underneath them.
 
