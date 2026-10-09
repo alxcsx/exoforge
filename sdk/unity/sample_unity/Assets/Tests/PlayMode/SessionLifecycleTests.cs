@@ -24,6 +24,8 @@ public class SessionLifecycleTests
     [TearDown]
     public void TearDown()
     {
+        ExoTokenStore.UseStudioSession = false;
+
         if (_host != null)
         {
             UnityEngine.Object.DestroyImmediate(_host);

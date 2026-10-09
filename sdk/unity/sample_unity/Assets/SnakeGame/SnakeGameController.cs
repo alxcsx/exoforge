@@ -22,6 +22,7 @@ namespace SnakeGame
         [SerializeField] private int gridWidth = 20;
         [SerializeField] private int gridHeight = 20;
         [SerializeField] private float stepInterval = 0.18f;
+        [SerializeField] private int applePoints = 10;
 
         private float _stepTimer;
 
@@ -64,6 +65,11 @@ namespace SnakeGame
 
         public int GridWidth => gridWidth;
         public int GridHeight => gridHeight;
+        public int ApplePoints
+        {
+            get => applePoints;
+            set => applePoints = Mathf.Max(1, value);
+        }
 
         /// <summary>Snake head cell.</summary>
         public Vector2Int Head => _head;
@@ -178,7 +184,7 @@ namespace SnakeGame
 
             if (_head == _food)
             {
-                _score += 10;
+                _score += applePoints;
                 _applesEaten++;
                 if (_score > _highScore) _highScore = _score;
                 SpawnFood();

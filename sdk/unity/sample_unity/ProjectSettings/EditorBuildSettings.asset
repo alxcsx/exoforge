@@ -6,6 +6,12 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
+    path: Assets/Scenes/SnakeGame_Offline.unity
+    guid: d95fdbf53bc877b5bb0ec6a4b036ec36
+  - enabled: 1
+    path: Assets/Scenes/SnakeGame_Exoforge.unity
+    guid: 599b6931247418abd8ff8161f85fc008
+  - enabled: 1
     path: Assets/Scenes/SampleScene.unity
     guid: 8c9cfa26abfee488c85f1582747f6a02
   m_configObjects:

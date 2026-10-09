@@ -26,24 +26,77 @@ using UnityEngine;
 public static class ExoforgeSampleSetup
 {
     private const string ScenePath = "Assets/Scenes/SampleScene.unity";
+    private const string OfflineScenePath = "Assets/Scenes/SnakeGame_Offline.unity";
+    private const string ExoforgeScenePath = "Assets/Scenes/SnakeGame_Exoforge.unity";
 
     public static void SetUp()
     {
-        EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+        SetUpOffline();
+        SetUpExoforge();
+        // Also update the legacy SampleScene for compatibility with existing tests
+        SetUpExoforgeScene(ScenePath);
+        UpdateEditorBuildSettings();
+    }
+
+    public static void SetUpOffline()
+    {
+        SetUpOfflineScene(OfflineScenePath);
+    }
+
+    public static void SetUpExoforge()
+    {
+        SetUpExoforgeScene(ExoforgeScenePath);
+    }
+
+    private static void SetUpOfflineScene(string path)
+    {
+        var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+
+        // Camera & Light
+        CreateCamera();
+        CreateLight();
+
+        // Gameplay: always active in offline scene
+        var gameplayGo = new GameObject("Gameplay");
+        var game = gameplayGo.AddComponent<SnakeGameController>();
+        var board = gameplayGo.AddComponent<SnakeBoardView>();
+        Wire(board, "game", game);
+        gameplayGo.SetActive(true);
+
+        // Hud: view only, no leaderboard
+        var hudGo = new GameObject("Hud");
+        var view = hudGo.AddComponent<SnakeGameView>();
+        Wire(view, "game", game);
+
+        FrameCamera();
+
+        EditorSceneManager.SaveScene(scene, path);
+        Debug.Log($"[ExoforgeSample] Offline scene built: {path}");
+    }
+
+    private static void SetUpExoforgeScene(string path)
+    {
+        var scene = System.IO.File.Exists(path)
+            ? EditorSceneManager.OpenScene(path, OpenSceneMode.Single)
+            : EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
         ExoforgeRuntimeConfigGenerator.Generate();
 
-        // The runtime host: one prefab instance, never two. (Re-running an earlier setup used to
-        // stack them, because the guard only checked a scene that was still loading.)
+        CreateCamera();
+        CreateLight();
+
+        // The runtime host
         var host = EnsureSingleHost();
 
-        // Gameplay: the game itself, switched on once the player is signed in and named.
+        // Gameplay: game + board + remote config
         var gameplayGo = EnsureObject<SnakeGameController>("Gameplay");
         var game = gameplayGo.GetComponent<SnakeGameController>();
-
-        // The board is drawn with sprites, so it lives with the game rather than with the HUD.
         var board = gameplayGo.GetComponent<SnakeBoardView>() ?? gameplayGo.AddComponent<SnakeBoardView>();
+        var remoteConfig = gameplayGo.GetComponent<SnakeRemoteConfig>() ?? gameplayGo.AddComponent<SnakeRemoteConfig>();
+
         Wire(board, "game", game);
+        Wire(remoteConfig, "game", game);
+        Wire(remoteConfig, "boardView", board);
 
         gameplayGo.SetActive(false);
 
@@ -52,7 +105,7 @@ public static class ExoforgeSampleSetup
         var player = playerGo.GetComponent<SnakePlayerController>();
         WireArray(player, "enableOnReady", new Object[] { gameplayGo });
 
-        // Hud: everything on screen. Stays active so the name prompt works before gameplay starts.
+        // Hud: view + leaderboard
         var hudGo = EnsureObject<SnakeGameView>("Hud");
         var view = hudGo.GetComponent<SnakeGameView>();
         var ranking = hudGo.GetComponent<SnakeLeaderboard>() ?? hudGo.AddComponent<SnakeLeaderboard>();
@@ -67,12 +120,45 @@ public static class ExoforgeSampleSetup
         RemoveStaleObjects();
         FrameCamera();
 
-        var scene = EditorSceneManager.GetActiveScene();
         EditorSceneManager.MarkSceneDirty(scene);
-        EditorSceneManager.SaveScene(scene);
+        EditorSceneManager.SaveScene(scene, path);
 
-        Debug.Log($"[ExoforgeSample] Scene built: host={host.name}, gameplay={gameplayGo.name} (inactive), " +
-                  $"player={playerGo.name}, hud={hudGo.name}.");
+        Debug.Log($"[ExoforgeSample] Exoforge scene built: {path} with host={host.name}, remoteConfig={remoteConfig.name}.");
+    }
+
+    private static void UpdateEditorBuildSettings()
+    {
+        var scenes = new EditorBuildSettingsScene[]
+        {
+            new EditorBuildSettingsScene(OfflineScenePath, true),
+            new EditorBuildSettingsScene(ExoforgeScenePath, true),
+            new EditorBuildSettingsScene(ScenePath, true)
+        };
+        EditorBuildSettings.scenes = scenes;
+    }
+
+    private static void CreateCamera()
+    {
+        var cam = Camera.main;
+        if (cam == null)
+        {
+            var camGo = new GameObject("Main Camera");
+            camGo.tag = "MainCamera";
+            cam = camGo.AddComponent<Camera>();
+            camGo.AddComponent<AudioListener>();
+        }
+    }
+
+    private static void CreateLight()
+    {
+        var lights = Object.FindObjectsByType<Light>(FindObjectsInactive.Include);
+        if (lights.Length == 0)
+        {
+            var lightGo = new GameObject("Directional Light");
+            var l = lightGo.AddComponent<Light>();
+            l.type = LightType.Directional;
+            l.intensity = 1f;
+        }
     }
 
     /// <summary>Ensures exactly one Exoforge host, keeping whichever instance already exists.</summary>

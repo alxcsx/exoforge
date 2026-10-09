@@ -30,10 +30,50 @@ namespace SnakeGame
         [Header("Layout")]
         [SerializeField] private float cellSize = 1f;
 
+        [Header("Background")]
+        [SerializeField] private SpriteRenderer? backgroundRenderer;
+
         private static Sprite? _square;
         private SpriteRenderer[] _cells = Array.Empty<SpriteRenderer>();
         private int _width;
         private int _height;
+
+        public Color BodyColor { get => bodyColor; set => bodyColor = value; }
+        public Color HeadColor { get => headColor; set => headColor = value; }
+        public Color FoodColor { get => foodColor; set => foodColor = value; }
+
+        public void SetSnakeColor(Color color)
+        {
+            bodyColor = color;
+            headColor = Color.Lerp(color, Color.white, 0.35f);
+        }
+
+        public void SetAppleColor(Color color)
+        {
+            foodColor = color;
+        }
+
+        public void SetBackgroundSprite(Sprite? sprite)
+        {
+            if (backgroundRenderer == null)
+            {
+                var bgGo = new GameObject("BoardBackground");
+                bgGo.transform.SetParent(transform, worldPositionStays: false);
+                bgGo.transform.localPosition = new Vector3(0, 0, 1f); // behind board cells
+                backgroundRenderer = bgGo.AddComponent<SpriteRenderer>();
+            }
+
+            backgroundRenderer.sprite = sprite;
+            if (sprite != null && game != null)
+            {
+                float targetWidth = game.GridWidth * cellSize;
+                float targetHeight = game.GridHeight * cellSize;
+                backgroundRenderer.transform.localScale = new Vector3(
+                    targetWidth / sprite.bounds.size.x,
+                    targetHeight / sprite.bounds.size.y,
+                    1f);
+            }
+        }
 
         private void Awake()
         {

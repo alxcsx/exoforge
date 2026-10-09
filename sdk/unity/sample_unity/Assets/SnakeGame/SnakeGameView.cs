@@ -121,14 +121,20 @@ namespace SnakeGame
                 game.StartNewGame();
             }
 
-            if (GUILayout.Button("↻ Refresh board", GUILayout.Height(28)) && leaderboard != null)
+            if (leaderboard != null)
             {
-                _ = leaderboard.RefreshAsync();
+                if (GUILayout.Button("↻ Refresh board", GUILayout.Height(28)))
+                {
+                    _ = leaderboard.RefreshAsync();
+                }
             }
             GUILayout.EndHorizontal();
 
-            GUILayout.Space(10);
-            DrawLeaderboard();
+            if (leaderboard != null)
+            {
+                GUILayout.Space(10);
+                DrawLeaderboard();
+            }
 
             GUILayout.EndArea();
         }
