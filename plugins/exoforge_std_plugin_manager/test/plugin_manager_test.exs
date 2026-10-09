@@ -50,9 +50,7 @@ defmodule Exoforge.Std.PluginManagerTest do
   describe "Plugin Manager Service Actions" do
     test "list_plugins returns all registered plugins and count" do
       assert {:ok, result} =
-               ActionDispatcher.dispatch(:plugin_manager, :list_plugins, %{},
-                 caller_scopes: ["studio"]
-               )
+               ActionDispatcher.dispatch(:plugin_manager, :list_plugins, %{}, caller_scopes: ["studio"])
 
       assert is_list(result.plugins)
       assert result.count >= 2
@@ -87,9 +85,7 @@ defmodule Exoforge.Std.PluginManagerTest do
 
     test "get_system_info returns BEAM runtime and cluster statistics" do
       assert {:ok, result} =
-               ActionDispatcher.dispatch(:plugin_manager, :get_system_info, %{},
-                 caller_scopes: ["studio"]
-               )
+               ActionDispatcher.dispatch(:plugin_manager, :get_system_info, %{}, caller_scopes: ["studio"])
 
       sys = result.system
       assert is_binary(sys["node"])
@@ -98,13 +94,13 @@ defmodule Exoforge.Std.PluginManagerTest do
       assert sys["plugins_count"] >= 2
       assert is_binary(sys["elixir_version"])
       assert is_binary(sys["otp_release"])
+      assert is_binary(sys["title_id"])
+      assert is_binary(sys["studio_id"])
     end
 
     test "export_plugin_info produces a complete bundle for external SDKs and CLI" do
       assert {:ok, result} =
-               ActionDispatcher.dispatch(:plugin_manager, :export_plugin_info, %{},
-                 caller_scopes: ["studio"]
-               )
+               ActionDispatcher.dispatch(:plugin_manager, :export_plugin_info, %{}, caller_scopes: ["studio"])
 
       export = result.export
       assert is_binary(export["cluster"])

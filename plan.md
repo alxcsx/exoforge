@@ -173,8 +173,12 @@ rows stamped with title and studio. The `:metering` service's `usage` action rol
 plugin and action, flushing first so the answer is current, and `exo plugin usage [name]` renders
 it. A hard crash loses at most a minute of counters.
 
-Still open in this phase: `title_id`/`studio_id` travelling on deployments, the Studio's usage view,
-and the separate egress switch for sending the same numbers off the instance.
+The Studio's generic extension view now renders the `usage` action (the plugin declares a
+`dashboard_view`) and `exo status` reports the instance's `title_id`/`studio_id`, so "which title is
+this?" is answered by the target rather than by an id on the wire. Deliberately not built: a
+bespoke Studio table, deploy records carrying the ids, and egress - the first two have no consumer
+yet, and egress needs a destination and an idempotency key (the rows are deltas, so a retry would
+double-bill) before it can be correct.
 
 **Meter shape, never content** — counts, durations, bytes, CPU, RSS, plugin and action *names*.
 Never payloads, never player or user identifiers. That is what makes "on by default" defensible, and

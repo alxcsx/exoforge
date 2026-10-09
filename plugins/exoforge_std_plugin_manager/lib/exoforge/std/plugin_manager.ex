@@ -77,7 +77,7 @@ defmodule Exoforge.Std.PluginManager do
             "provides" => Enum.map(m.provides || [], &to_string/1),
             "dependencies" => Enum.map(m.dependencies || [], &to_string/1),
             "services" => PluginRegistry.sanitize_for_json(m.services || []),
-              "dashboard_view" => m.dashboard_view,
+            "dashboard_view" => m.dashboard_view,
             "physical_path" => m.physical_path,
             "size_bytes" => size_bytes
           }
@@ -99,7 +99,11 @@ defmodule Exoforge.Std.PluginManager do
       "process_count" => :erlang.system_info(:process_count),
       "elixir_version" => System.version(),
       "otp_release" => System.otp_release(),
-      "plugins_count" => length(PluginRegistry.all_manifests())
+      "plugins_count" => length(PluginRegistry.all_manifests()),
+      # The tenant this instance is: what usage records are stamped with, and what a deploy to this
+      # instance is a deploy to. Named here so `exo status` answers "which title am I hitting?".
+      "title_id" => Exoforge.Metering.title_id(),
+      "studio_id" => Exoforge.Metering.studio_id()
     }
 
     {:ok, %{system: info}}
@@ -168,7 +172,7 @@ defmodule Exoforge.Std.PluginManager do
 
           Exoforge.PluginLogs.clear(m.id)
 
-          if delete_files and m.physical_path && File.dir?(m.physical_path) do
+          if (delete_files and m.physical_path) && File.dir?(m.physical_path) do
             clean_delete_directory(m.physical_path)
           end
 
@@ -232,7 +236,7 @@ defmodule Exoforge.Std.PluginManager do
           "type" => to_string(m.type),
           "provides" => clean_provides,
           "dependencies" => clean_deps,
-          "services" => Enum.map(PluginRegistry.manifest_services(m), &PluginRegistry.sanitize_for_json/1),
+          "services" => Enum.map(PluginRegistry.manifest_services(m), &PluginRegistry.sanitize_for_json/1)
         }
       end)
 
@@ -458,8 +462,8 @@ defmodule Exoforge.Std.PluginManager do
     root_uploaded = Path.expand(Application.get_env(:exoforge_std_plugin_manager, :upload_dir, "priv/data/uploaded_plugins"))
 
     if (String.starts_with?(norm, root_plugins) and norm != root_plugins) or
-       (String.starts_with?(norm, root_csharp) and norm != root_csharp) or
-       (String.starts_with?(norm, root_uploaded) and norm != root_uploaded) do
+         (String.starts_with?(norm, root_csharp) and norm != root_csharp) or
+         (String.starts_with?(norm, root_uploaded) and norm != root_uploaded) do
       File.rm_rf(norm)
     end
   end
@@ -482,5 +486,4 @@ defmodule Exoforge.Std.PluginManager do
     |> Macro.underscore()
     |> String.replace(~r/[^a-z0-9_]/, "")
   end
-
 end
