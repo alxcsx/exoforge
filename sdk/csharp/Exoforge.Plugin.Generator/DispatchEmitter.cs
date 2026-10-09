@@ -13,8 +13,7 @@ internal sealed record ActionDispatch(string Name, IMethodSymbol Method);
 
 /// <summary>
 /// Emits the compile-time action/event table and the contract interface for a service. The host calls
-/// straight into the plugin's methods, so nothing reflects over them and NativeAOT trimming needs no
-/// annotations to keep them alive.
+/// straight into the plugin's methods, so nothing reflects over them.
 /// </summary>
 internal static class DispatchEmitter
 {

@@ -7,7 +7,7 @@ namespace Exoforge.Plugin.SDK;
 /// Registry of generated service clients, so a plugin can inject a typed client directly
 /// (<c>[Inject("player_data")] public static PlayerDataServiceClient PlayerData</c>) and never touch
 /// <see cref="IActionDispatcher"/>. Generated stubs register their clients from a module initializer,
-/// which also keeps the client constructors rooted for NativeAOT.
+/// which runs before the plugin's entry point, so the clients are ready to inject.
 /// </summary>
 public static class PluginServiceRegistry
 {

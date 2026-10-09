@@ -7,9 +7,8 @@ namespace Exoforge.Plugin.SDK;
 /// Compile-time action and event dispatch for a plugin.
 ///
 /// The <c>Exoforge.Plugin.Generator</c> source generator emits an implementation from the plugin's
-/// own <c>[ExoAction]</c> methods, so the host never reflects over them. That keeps the plugin's action
-/// table alive under NativeAOT trimming without the <c>DynamicallyAccessedMembers</c> annotations
-/// the reflection path needs.
+/// own <c>[ExoAction]</c> methods, so the host never reflects over them: the table is generated at
+/// compile time and kept alive by the call site that uses it.
 /// </summary>
 public interface IExoforgeDispatch
 {

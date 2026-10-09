@@ -100,8 +100,8 @@ defmodule Exoforge.PluginBootstrapper do
     runner.load(manifest)
   end
 
-  # One clause per runtime. WASM was the third; a runtime added later adds a clause here and a runner
-  # module, and nothing else in the kernel changes.
+  # One clause per runtime. A runtime added later adds a clause here and a runner module, and
+  # nothing else in the kernel changes.
   defp runner_for(:elixir), do: ElixirPluginRunner
   defp runner_for(:native), do: Exoforge.Drivers.Runtime.NativePluginRunner
   defp runner_for(mod) when is_atom(mod), do: mod
@@ -176,7 +176,6 @@ defmodule Exoforge.PluginBootstrapper do
         :ok
     end
   end
-
 
   defp print_startup_banner(manifests, total_ms) do
     env = current_env()

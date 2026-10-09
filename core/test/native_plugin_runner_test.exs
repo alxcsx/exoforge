@@ -5,7 +5,7 @@ defmodule Exoforge.NativePluginRunnerTest do
   alias Exoforge.Drivers.Runtime.NativePluginRunner
 
   # A stub "plugin": any executable that speaks the JSON line protocol works, which is the
-  # point of the runtime — no WASM toolchain, no C# toolchain needed to exercise the host side.
+  # point of the runtime — no C# toolchain needed to exercise the host side.
   @stub """
   #!/usr/bin/env bash
   while IFS= read -r line; do
@@ -151,7 +151,7 @@ defmodule Exoforge.NativePluginRunnerTest do
   test "a plugin may not call a service it never declared", %{manifest: manifest, binary: binary} do
     pid = start_runner(manifest, binary)
 
-    # The WASM runner always enforced this; the native runner dispatched anything, so a native
+    # The capability check is not optional: the native runner used to dispatch anything, so a native
     # plugin could reach every service in the cluster while claiming none of them.
     assert {:ok, %{"result" => %{"error" => "service_not_declared"}}} =
              GenServer.call(pid, {:execute_action, "call_undeclared", %{}}, 5_000)

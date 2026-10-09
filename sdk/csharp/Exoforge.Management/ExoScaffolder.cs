@@ -179,7 +179,7 @@ using Exoforge.Plugin.SDK;
 namespace Exoforge.Plugins;
 
 // Native Exoforge plugin: attributes declare the contract, the host injects capabilities,
-// and `exo plugin build` produces the NativeAOT binary.
+// and `exo plugin build` produces the framework-dependent plugin binary.
 [ExoService("{{serviceName}}", Version = "0.1.0", Resources = new[] { typeof({{className}}Item) },
     Category = "Game", Title = "{{className}}", Icon = "🧩")]
 public class {{className}}Plugin
@@ -227,7 +227,7 @@ using Exoforge.Plugin.SDK;
 namespace Exoforge.Plugins;
 
 // Native Exoforge plugin: attributes declare the contract, the host injects capabilities,
-// and `exo plugin build` produces the NativeAOT binary.
+// and `exo plugin build` produces the framework-dependent plugin binary.
 [ExoService("{{serviceName}}", Version = "0.1.0", Resources = new[] { typeof({{className}}Item) },
     Category = "Game", Title = "{{className}}", Icon = "🧩")]
 public class {{className}}Plugin

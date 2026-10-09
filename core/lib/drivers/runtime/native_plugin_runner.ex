@@ -1,13 +1,13 @@
 defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
   @moduledoc """
-  Runs a C# plugin compiled to a self-contained native binary (NativeAOT).
+  Runs a C# plugin as an OS process: a framework-dependent .NET binary, spawned over stdio.
 
   The binary is spawned as an OS process and speaks newline-delimited JSON over stdio. The frames
   and the handshake are `Exoforge.Drivers.Runtime.PluginProtocol`; a plugin that does not speak the
   host's protocol or cannot handle what the host sends is refused with a reason rather than fed
   frames it cannot parse. Host calls are synchronous: the plugin blocks reading the reply, so the
   runner answers them inline while waiting for the action result. This keeps the plugin free of any
-  WASM/C toolchain while preserving the same manifest/contract surface.
+  toolchain beyond `dotnet publish` while preserving the same manifest/contract surface.
   """
   @behaviour Exoforge.Contracts.PluginRunner
   use GenServer
@@ -449,7 +449,7 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
 
     cond do
       not Manifest.allows_service?(manifest, service) ->
-        # Same rule as the WASM runner: a plugin calls what it declared, nothing else.
+        # A plugin calls what it declared, nothing else.
         Logger.warning("[NativePluginRunner] #{manifest.id} called undeclared service #{service}")
         %{error: "service_not_declared"}
 
@@ -486,7 +486,7 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
     Enum.any?(owned, &(Manifest.service_name(&1) == svc))
   end
 
-  # Key-value helpers exposed by the :database plugin (same shape the WASM host bridge uses).
+  # Key-value helpers exposed by the :database plugin.
   # Resolved dynamically so the kernel never links against a plugin module.
   defp db_put(manifest, table, key, value) do
     case db_call(:put, [manifest.id, table, key, value]) do

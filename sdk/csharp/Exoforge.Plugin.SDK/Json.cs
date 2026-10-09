@@ -15,16 +15,16 @@ namespace Exoforge.Plugin.SDK;
 /// stored records). Plugin code should never touch <see cref="JsonElement"/> or raw JSON:
 /// use records and let this class convert.
 ///
-/// On NativeAOT, reflection-based JSON is disabled by the runtime. Declare a source-generated
-/// context and register it with <see cref="PluginHost.Run{TPlugin, TJsonContext}"/>:
+/// A plugin may declare a source-generated context and register it with
+/// <see cref="PluginHost.Run{TPlugin, TJsonContext}"/>, which serialises without reflection:
 /// <code>
 /// [JsonSerializable(typeof(SnakeScoreRecord))]
 /// internal partial class PluginJsonContext : JsonSerializerContext { }
 ///
 /// public static void Main() => PluginHost.Run&lt;MyPlugin, PluginJsonContext&gt;();
 /// </code>
-/// Values are written with snake_case names to match the host wire format. Outside AOT
-/// (unit tests, WASM contract stubs) a reflection fallback keeps things working without a context.
+/// Values are written with snake_case names to match the host wire format. A context is optional:
+/// without one, reflection serialises the value, because a plugin is framework-dependent.
 /// </summary>
 public static class PluginJson
 {
@@ -36,12 +36,11 @@ public static class PluginJson
     /// <remarks>
     /// It needs the runtime <see cref="JsonStringEnumConverter"/>, and that converter cannot be
     /// statically analyzed - it is the only one that works without a type in hand, since the generic
-    /// form needs the enum. So this path cannot be AOT-safe, and it does not need to be: it runs only
-    /// when no context is registered, and in a NativeAOT build reflection serialization is disabled
-    /// outright, so the code is unreachable there. Suppressed here rather than by a blanket NoWarn so
-    /// the reason travels with it.
+    /// form needs the enum. So this path cannot satisfy the trimmer on its own. The suppression keeps
+    /// SDK code from warning in a consumer that trims directly; the plugin build refuses trimming
+    /// anyway. Suppressed here rather than by a blanket NoWarn so the reason travels with it.
     /// </remarks>
-    [UnconditionalSuppressMessage("AOT", "IL3050", Justification = "Reflection-only path; unreachable under NativeAOT, where reflection serialization is disabled.")]
+    [UnconditionalSuppressMessage("AOT", "IL3050", Justification = "Reflection-only path used when no JSON context is registered; the plugin build refuses trimming.")]
     private static JsonSerializerOptions BuildReflectionOptions() => new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,

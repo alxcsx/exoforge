@@ -33,8 +33,8 @@
     <IsPackable>true</IsPackable>
     <PackageId>Exoforge.Plugin.SDK</PackageId>
     <Version>$(ExoforgePluginSdkVersion)</Version>
-    <Description>Author Exoforge game-backend plugins in C#. Attributes declare the contract; PluginHost runs them as a NativeAOT process.</Description>
-    <PackageTags>exoforge;game-backend;plugins;nativeaot</PackageTags>
+    <Description>Author Exoforge game-backend plugins in C#. Attributes declare the contract; PluginHost runs them as a supervised .NET process.</Description>
+    <PackageTags>exoforge;game-backend;plugins;dotnet</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

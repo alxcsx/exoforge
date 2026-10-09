@@ -11,7 +11,7 @@ public class VerticalSliceIntegrationTests
     private static readonly Uri ServerUri = new("ws://127.0.0.1:4000/ws");
 
     [Fact]
-    public async Task EndToEnd_Client_WsPlugin_Kernel_WasmPlugin_Event_Loop()
+    public async Task EndToEnd_Client_WsPlugin_Kernel_NativePlugin_Event_Loop()
     {
         var dispatcher = new ExoDispatcher(useSynchronizationContext: false);
         using var client = new ExoClient(dispatcher);
@@ -35,7 +35,7 @@ public class VerticalSliceIntegrationTests
         Assert.True(client.IsAuthenticated);
         Assert.Equal("test_e2e_player", client.PlayerId);
 
-        // 1. Client invokes action `sample_plugin.ping` -> WASM plugin executes and returns 42
+        // 1. Client invokes action `sample_plugin.ping` -> native plugin executes and returns 42
         int pingResult = await client.SendActionAsync<int>("sample_plugin", "ping", Array.Empty<int>());
         Assert.Equal(42, pingResult);
 

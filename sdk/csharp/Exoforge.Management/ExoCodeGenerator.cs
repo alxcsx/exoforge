@@ -340,7 +340,7 @@ public static class ExoCodeGenerator
     /// </summary>
     /// <summary>
     /// Generates typed plugin service stubs. Pass <paramref name="services"/> to include only the
-    /// contracts the plugin depends on; this keeps the generated file (and the NativeAOT build) small.
+    /// contracts the plugin depends on; this keeps the generated file small.
     /// </summary>
     public static string GeneratePluginStubs(
         string json,

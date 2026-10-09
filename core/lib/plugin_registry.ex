@@ -148,7 +148,7 @@ defmodule Exoforge.PluginRegistry do
   end
 
   @doc """
-  Returns a manifest's service metadata, regardless of source: WASM plugins
+  Returns a manifest's service metadata, regardless of source: native plugins
   declare it in the manifest, Elixir plugins provide a contract module.
   """
   def manifest_services(manifest) do
@@ -287,7 +287,7 @@ defmodule Exoforge.PluginRegistry do
     end
   end
 
-  # WASM plugins carry their contract metadata in the manifest; Elixir plugins
+  # Native plugins carry their contract metadata in the manifest; Elixir plugins
   # carry it in the provided contract module. Both are normalized here.
   @doc "Strips Elixir., Exoforge.Std.Services., and module namespaces to return a clean snake_case service identifier."
   def clean_service_name(name) when is_atom(name), do: clean_service_name(to_string(name))
@@ -368,5 +368,4 @@ defmodule Exoforge.PluginRegistry do
       :error -> Enum.find_value(map, fn {map_key, value} -> if to_string(map_key) == key, do: value end)
     end
   end
-
 end

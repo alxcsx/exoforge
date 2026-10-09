@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 namespace Exoforge.Plugin.SDK;
 
 /// <summary>
-/// Host transport used by a plugin when it runs as a native process instead of a WASM guest.
+/// Host transport used by a plugin when it runs as a native process.
 /// </summary>
 public interface IPluginTransport
 {
@@ -66,8 +66,8 @@ public static class PluginHost
     /// <summary>Runs <typeparamref name="T"/> until stdin closes.</summary>
     /// <remarks>
     /// The <see cref="DynamicallyAccessedMembersAttribute"/> keeps the plugin's action methods
-    /// (and their parameter names) alive through NativeAOT trimming — they are only reached by
-    /// reflection.
+    /// (and their parameter names) reachable by reflection; a trimmed build would remove them, and
+    /// the plugin build refuses trimming.
     /// </remarks>
     public static void Run<[DynamicallyAccessedMembers(
         DynamicallyAccessedMemberTypes.PublicMethods |
@@ -78,9 +78,9 @@ public static class PluginHost
         where T : class, new() => RunInstance(new T());
 
     /// <summary>
-    /// Runs <typeparamref name="T"/> with a source-generated <see cref="JsonSerializerContext"/>.
-    /// This is the NativeAOT-safe overload: reflection-based JSON is disabled in AOT, so typed
-    /// action arguments, results, event payloads and stored records need a context.
+    /// Runs <typeparamref name="T"/> with a source-generated <see cref="JsonSerializerContext"/>,
+    /// which serialises typed action arguments, results, event payloads and stored records without
+    /// reflection. Optional: a framework-dependent plugin serialises by reflection without one.
     /// </summary>
     public static void Run<[DynamicallyAccessedMembers(
         DynamicallyAccessedMemberTypes.PublicMethods |
@@ -520,7 +520,7 @@ public static class PluginHost
     }
 
     /// <summary>
-    /// Roots <c>Task&lt;T&gt;.Result</c> for reflection; NativeAOT trims the metadata otherwise and
+    /// Roots <c>Task&lt;T&gt;.Result</c> for reflection; a trimmed build would remove the property and
     /// async action results would silently come back as <c>null</c>.
     /// </summary>
     [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)]

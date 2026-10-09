@@ -60,7 +60,7 @@ public class ExoDeployer
         string pluginDir = Path.Combine(_workspace.PluginsPath, cleanName);
 
         // One compiled kind: the native binary the runner spawns. A runtime that is not a process -
-        // a WASM reactor, say - adds a branch here and a runner in the kernel.
+        // one hosted in-process, say - adds a branch here and a runner in the kernel.
         string pluginType = "native";
         string binaryPath = StagedBinary(pluginDir, cleanName);
 
@@ -87,8 +87,8 @@ public class ExoDeployer
             {
                 name = cleanName,
                 type = pluginType,
-                // Named 'binary', not 'wasm_binary': the same field carries the NativeAOT
-                // executable for native plugins, which confused anyone reading the protocol.
+                // Named 'binary', not 'wasm_binary': the field carries whatever the runtime produces,
+                // and the old name read as a format.
                 binary = binaryBase64,
                 manifest = manifestContent
             };
@@ -666,11 +666,8 @@ public class ExoDeployer
     // -- Build --
 
     /// <summary>
-    /// Builds a local plugin in the workspace:
-    /// <list type="bullet">
-    /// <item><c>build.sh</c> present → run it (WASM reactor guest).</item>
-    /// <item>otherwise → <c>dotnet publish</c> a NativeAOT binary and regenerate <c>manifest.json</c>.</item>
-    /// </list>
+    /// Builds a local plugin in the workspace with <c>dotnet publish</c>: a framework-dependent
+    /// binary, with <c>manifest.json</c> regenerated.
     /// The result is staged next to <c>manifest.json</c>, ready for <see cref="UploadPluginAsync"/>.
     /// </summary>
     public ExoPluginBuild BuildPlugin(
@@ -708,8 +705,8 @@ public class ExoDeployer
         string buildStamp = $"{buildNumber}.{fingerprint}";
         Emit($"[build] build {buildStamp}");
 
-        // One compiled kind. The `build.sh` hook was how a WASM guest was built; a runtime that needs
-        // its own toolchain adds that branch back alongside its runner.
+        // One compiled kind. A runtime that needs its own toolchain adds that branch back alongside
+        // its runner.
         string pluginType = "native";
         string binaryPath = PublishNative(csproj ?? throw new FileNotFoundException($"No .csproj found for '{cleanName}'."), pluginDir, cleanName, rid, dotnet, buildStamp, Emit);
 

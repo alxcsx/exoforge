@@ -205,7 +205,7 @@ internal static class ManifestEmitter
     public static string Finalize(string manifest, string id, string version, string pluginType, string? buildStamp)
     {
         // The plugin's binary, named after it. A runtime that needs a different entry point - a
-        // WASM reactor's .wasm file, say - is a change here and a runner module in the kernel.
+        // different artifact extension, say - is a change here and a runner module in the kernel.
         string stamped = string.IsNullOrEmpty(buildStamp) ? version : version + "+" + buildStamp;
 
         return manifest

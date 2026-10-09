@@ -95,7 +95,7 @@ public static class Program
 
         Subcommands:
           new <name>       Scaffold a C# plugin project
-          build <name>     Compile the plugin (NativeAOT, or WASM when build.sh exists)
+          build <name>     Compile the plugin (framework-dependent .NET)
           push <name>      Build, deploy, and verify the plugin on the live cluster
           dev <name>       Watch sources and re-deploy on every change
           reload <name>    Re-boot an installed plugin without re-uploading it

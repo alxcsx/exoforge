@@ -55,7 +55,7 @@ defmodule Exoforge.Drivers.Loaders.ManifestLoader do
 
     final_map =
       manifest_map
-      # An Elixir plugin's entry point is a module and a native or WASM one's is a file, so this is
+      # An Elixir plugin's entry point is a module and a native one's is a file, so this is
       # the single field the key alone cannot classify. Everything else is decided by key.
       |> Map.update!(:entry_point, &elixir_module(manifest_map.type, &1))
       # The file does not carry a name: it is the id, and two fields for one value is one to

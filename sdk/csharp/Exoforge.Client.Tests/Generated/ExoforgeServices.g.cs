@@ -1815,7 +1815,7 @@ public class PluginManagerServiceClient
         return _client.SendActionAsync<PluginManagerGetSystemInfoResponse>("plugin_manager", "get_system_info", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
-    /// <summary>Uploads and installs a new plugin (e.g. C# WASM package).</summary>
+    /// <summary>Uploads and installs a new plugin binary.</summary>
     public Task<PluginManagerUploadPluginResponse> UploadPluginAsync(JsonElement binary, string name, JsonElement manifest, CancellationToken cancellationToken = default)
     {
         var req = new PluginManagerUploadPluginRequest
@@ -1827,7 +1827,7 @@ public class PluginManagerServiceClient
         return UploadPluginAsync(req, cancellationToken);
     }
 
-    /// <summary>Uploads and installs a new plugin (e.g. C# WASM package).</summary>
+    /// <summary>Uploads and installs a new plugin binary.</summary>
     public Task<PluginManagerUploadPluginResponse> UploadPluginAsync(PluginManagerUploadPluginRequest request, CancellationToken cancellationToken = default)
     {
         return _client.SendActionAsync<PluginManagerUploadPluginResponse>("plugin_manager", "upload_plugin", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);

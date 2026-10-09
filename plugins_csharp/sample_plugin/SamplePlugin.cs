@@ -40,9 +40,9 @@ public record Counter
 /// <summary>
 /// The reference plugin: one instance, injected dependencies, actions that emit events.
 ///
-/// It is a native plugin — compiled to a single binary the server runs as a process. It used to be
-/// the WASM sample; that runtime is gone for now, and the shape of a plugin is the same either way,
-/// which is the point of it being the reference.
+/// It is a native plugin — a framework-dependent .NET binary the server runs as a process. It has
+/// been the reference through more than one runtime, and the shape of a plugin has been the same
+/// every time, which is the point of it being the reference.
 /// </summary>
 [ExoService("sample_plugin", Version = "1.0.0", Resources = new[] { typeof(Counter) }, Category = "Utility", Title = "Sample Plugin", Icon = "🔧")]
 public class SamplePlugin

@@ -8,14 +8,15 @@ using System.Text.Json;
 namespace Exoforge.Plugin.SDK;
 
 /// <summary>
-/// Low-level WASM P/Invoke host bridge and native runtime interface.
-/// Interacts directly with Exoforge WasmPluginRunner imports.
+/// Low-level bridge between a plugin and its host: routes capability calls through the transport
+/// <see cref="PluginHost"/> installs, with the P/Invoke imports below as the fallback for a runner
+/// that hosts the plugin in-process.
 /// </summary>
 public static class HostBridge
 {
     private const int BufferSize = 65536;
 
-    // When set, host calls go through a process transport instead of the WASM `env` imports.
+    // When set, host calls go through the process transport instead of the in-process `env` imports.
     // PluginHost.Run<T>() installs one for native plugins.
     private static IPluginTransport? _transport;
 
@@ -60,9 +61,9 @@ public static class HostBridge
         _hostCapabilities == null || _hostCapabilities.Contains(capability);
 
     /// <summary>
-    /// Serializes a host-call payload without reflection where possible, so it stays NativeAOT-safe.
-    /// A <c>string</c> is treated as already-encoded JSON; everything else is serialized through
-    /// <see cref="PluginJson"/> (which uses the registered source-generated context under AOT).
+    /// Serializes a host-call payload without reflection where possible. A <c>string</c> is treated
+    /// as already-encoded JSON; everything else goes through <see cref="PluginJson"/>, which prefers
+    /// a registered source-generated context and falls back to reflection.
     /// </summary>
     private static string ToJson(object? payload) => payload switch
     {
@@ -184,8 +185,8 @@ public static class HostBridge
 
     /// <summary>
     /// Calls another service's action and returns the raw JSON response, or <c>null</c> when the
-    /// call could not be made. Works over the native transport and the WASM `host_call_action_json`
-    /// import alike.
+    /// call could not be made. Works over the process transport and over the in-process import when
+    /// no transport is installed.
     /// </summary>
     public static string? CallActionRaw(string service, string action, object payload)
     {

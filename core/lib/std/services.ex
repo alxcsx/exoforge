@@ -398,7 +398,7 @@ defmodule Exoforge.Std.Services do
       returns(system: :map)
     end
 
-    @doc "Uploads and installs a new plugin (e.g. C# WASM package)."
+    @doc "Uploads and installs a new plugin binary."
     action :upload_plugin do
       scope("admin")
 

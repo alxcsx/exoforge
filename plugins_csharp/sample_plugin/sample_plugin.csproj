@@ -14,7 +14,8 @@
     -->
     <ExoforgePlugin>true</ExoforgePlugin>
 
-    <!-- The guest is WASM, so the manifest points at the .wasm entry point beside it. -->
+    <!-- The manifest lives at the project root, beside the published binary, which is where the
+         runner looks for it. -->
     <ExoforgePluginType>native</ExoforgePluginType>
     <ExoforgeManifestPath Condition="'$(ExoforgeManifestPath)' == ''">$(MSBuildProjectDirectory)/manifest.json</ExoforgeManifestPath>
   </PropertyGroup>

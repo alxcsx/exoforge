@@ -2,9 +2,9 @@ defmodule Exoforge.Drivers.Runtime.PluginProxy do
   @moduledoc """
   Generates the module the kernel calls into for a non-Elixir plugin.
 
-  Both the WASM reactor runner and the native (AOT process) runner register a generated proxy
-  module as the manifest's `entry_point`, so `ActionDispatcher` stays runtime-agnostic and calls
-  `__execute_action__/2` without knowing where the plugin actually runs.
+  A runner registers a generated proxy module as the manifest's `entry_point`, so
+  `ActionDispatcher` stays runtime-agnostic and calls `__execute_action__/2` without knowing where
+  the plugin actually runs.
   """
   alias Exoforge.Domain.Manifest
 

@@ -8,9 +8,9 @@ defmodule Exoforge.Domain.Manifest do
   @doc """
   Whether a plugin may call a service: it must declare it as a dependency or provide it.
 
-  Both runtimes gate `call_action` on this. It lives here because the WASM runner had it and the
-  native runner did not, which is not the kind of difference two implementations should be free to
-  develop on their own.
+  Every runtime gates `call_action` on this, from the same implementation: it lives here because
+  two runners once disagreed about it, which is not the kind of difference two implementations
+  should be free to develop on their own.
   """
   def allows_service?(%__MODULE__{dependencies: deps, provides: provides}, service) do
     svc = to_string(service)
