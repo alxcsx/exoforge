@@ -47,6 +47,16 @@
     <!-- The host's runtime is at least the one the plugin was built against, never older. Without
          this, a plugin built against a newer SDK than the image carries fails to start. -->
     <RollForward Condition="'$(RollForward)' == ''">LatestMajor</RollForward>
+
+    <!--
+      Embedded, not portable. The deploy uploads one file, so a separate .pdb never travels with the
+      plugin and every stack trace from a deployed plugin comes back without file or line - which is
+      exactly the information needed to fix it. Costs a few tens of KB on a couple of hundred.
+    -->
+    <!-- Guarded on portable as well as unset: the SDK sets portable before this file is imported, so
+         an unset check alone loses and the .pdb stays a separate file. A plugin that wants portable
+         anyway can say so after the import. -->
+    <DebugType Condition="'$(DebugType)' == '' or '$(DebugType)' == 'portable'">embedded</DebugType>
   </PropertyGroup>
 
   <!--

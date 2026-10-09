@@ -254,7 +254,10 @@ public static class PluginHost
         }
         catch (Exception ex)
         {
-            Write($"{{\"type\":\"host_log\",\"level\":3,\"message\":{JsonEncode((ex as TargetInvocationException)?.InnerException?.Message ?? ex.Message)}}}");
+            // ToString, not Message: an event handler that throws is the plugin's own bug, and the
+            // trace is the only thing that says where. It goes to the log rather than to a caller,
+            // because a trace carries file paths and internals that are not the caller's business.
+            Write($"{{\"type\":\"host_log\",\"level\":3,\"message\":{JsonEncode(Cause(ex).ToString())}}}");
         }
     }
 
@@ -318,10 +321,20 @@ public static class PluginHost
         }
         catch (Exception ex)
         {
-            string message = JsonEncode((ex as TargetInvocationException)?.InnerException?.Message ?? ex.Message);
-            Write($"{{\"type\":\"action_result\",\"id\":{id},\"status\":\"error\",\"error\":{message}}}");
+            Exception cause = Cause(ex);
+
+            // The trace is logged and the message is returned. A caller gets "index out of range";
+            // `exo plugin logs` gets the file and the line, which is what fixes it.
+            Write($"{{\"type\":\"host_log\",\"level\":3,\"message\":{JsonEncode(cause.ToString())}}}");
+            Write($"{{\"type\":\"action_result\",\"id\":{id},\"status\":\"error\",\"error\":{JsonEncode(cause.Message)}}}");
         }
     }
+
+    /// <summary>
+    /// The exception a plugin actually threw. Invoking through reflection wraps it, and the wrapper
+    /// says nothing useful about the plugin.
+    /// </summary>
+    private static Exception Cause(Exception ex) => (ex as TargetInvocationException)?.InnerException ?? ex;
 
     private static object?[] BindArguments(ParameterInfo[] parameters, JsonElement payload)
     {

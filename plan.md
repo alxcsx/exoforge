@@ -217,6 +217,45 @@ already exists: studio membership and per-title permissions (who may deploy to w
 per-title isolation *only if* titles are ever made to share an instance, which this design
 deliberately avoids.
 
+**Found while doing phases 1–3**, which is the other half of the work: things noticed in passing, split
+by whether they were worth doing on the spot.
+
+*Done:*
+
+- **A plugin's logs went nowhere.** `host_log` frames — the SDK's own log and exception channel — fell
+  into the runner's `{:ok, _other} -> state` clause and were discarded. A plugin that threw sent the
+  caller a message and put the trace into the void. The runner handles them now, tagged with the
+  plugin id.
+- **The exception trace was thrown away too**, even once there was somewhere to put it: the SDK sent
+  `ex.Message` and nothing else. It now sends `ToString` to the log and the message to the caller —
+  the trace carries file paths and internals that a game client should not receive, and the message
+  is all it needs.
+- **PDBs were not shipped**, so even a trace had no line numbers. `DebugType=embedded` in the SDK
+  targets, because the deploy uploads one file and a separate `.pdb` never travels with it. Verified
+  end to end: a deliberate throw now logs `SamplePlugin.cs:line 100`. Costs about 9KB.
+- **The runner had no OS pid accessor**, which made it impossible to observe a plugin from outside
+  the BEAM. `os_pid/1` now exists, and phase 4's metering needs exactly it.
+- **The kill test was a hand-run.** It is now two tests: a plugin that dies mid-call answers its
+  caller rather than leaving it waiting, and the supervisor replaces a plugin whose process the OS
+  killed.
+
+*Worth doing later, in rough order of value:*
+
+- **`exo plugin logs` should read what the runner now receives.** With `host_log` handled, the
+  material for a plugin log view exists in one place; nothing yet reads it back.
+- **Plugin log volume is unbounded.** A chatty or crash-looping plugin can now fill the server log,
+  and there is no rate limit or ring buffer between it and the operator.
+- **`PublishReadyToRun` is unmeasured.** It costs about 50KB on a 195KB plugin and is there for cold
+  start, which nobody has timed. Either measure it or drop it.
+- **The image does not build a plugin.** The Dockerfile copies `plugins_csharp/`, but the binary is a
+  build output and is not there, so the image ships manifests without assemblies. Harmless while
+  plugins are pushed, wrong the moment someone expects the sample to work out of the box.
+- **`upload_plugin` base64s the plugin** into a JSON action payload: +33%, encoded and decoded on
+  both sides. A WebSocket binary frame for that one field would fix it, and deploying is rare enough
+  that it is hygiene rather than performance.
+- **The image change from phase 1 has never been built.** No Docker daemon in the environment it was
+  written in. It needs one `docker build` before it can be called done.
+
 **Phase 5 — flexibility and boilerplate.** A versioned handshake with declared capabilities, the way
 LSP and Terraform providers do it, so host and plugin can negotiate rather than assume. The runner
 seam stays (native and Elixir; a shared-host runner remains a runner, not a rewrite). The plugin

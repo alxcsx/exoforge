@@ -19,6 +19,10 @@ defmodule Exoforge.NativePluginRunnerTest do
         printf '{"type":"action_result","id":%s,"status":"ok","data":1}\\n' "$id" ;;
       *'"action":"boom"'*)
         printf '{"type":"action_result","id":%s,"status":"error","error":"exploded"}\\n' "$id" ;;
+      *'"action":"die"'*)
+        # No reply at all: the process goes away without saying anything, which is what a segfault,
+        # an OOM kill or an Environment.Exit looks like from the host's side.
+        exit 1 ;;
       *'"action":"call_declared"'*)
         printf '{"type":"host_call","id":1,"op":"call_action","args":{"service":"database","action":"ping","payload":{}}}\\n'
         IFS= read -r reply
@@ -154,6 +158,28 @@ defmodule Exoforge.NativePluginRunnerTest do
     refute error == "service_not_declared", "a declared dependency was refused"
 
     GenServer.stop(pid)
+  end
+
+  test "a plugin that dies mid-call answers its caller instead of leaving it waiting", %{
+    manifest: manifest,
+    binary: binary
+  } do
+    # The runner is linked to this process and stops when the plugin dies, which is the point.
+    Process.flag(:trap_exit, true)
+    pid = start_runner(manifest, binary)
+
+    assert {:error, {:plugin_exited, status}} =
+             GenServer.call(pid, {:execute_action, "die", %{}}, 5_000)
+
+    assert is_integer(status)
+
+    # And it stops with that reason, which is the contract the supervisor rests on. A runner left
+    # holding a dead port would answer every later call with a timeout and nothing would restart it.
+    #
+    # The restart itself is not asserted here: doing so means starting the application's own registry
+    # and supervisor inside a unit test, and ExUnit tears down what a test supervises, taking the rest
+    # of the suite with it. It was verified by hand - kill -9, new pid, calls still answered.
+    assert_receive {:EXIT, ^pid, {:plugin_exited, ^status}}, 1_000
   end
 
   test "fails loudly when the binary is missing", %{manifest: manifest} do

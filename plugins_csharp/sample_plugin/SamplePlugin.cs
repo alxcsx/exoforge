@@ -94,4 +94,5 @@ public class SamplePlugin
     /// <summary>Returns what it was given.</summary>
     [ExoAction("echo")]
     public int Echo(int value) => value;
+
 }

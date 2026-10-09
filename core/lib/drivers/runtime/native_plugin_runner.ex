@@ -81,6 +81,15 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
     end
   end
 
+  @doc """
+  The operating-system pid of the plugin process.
+
+  The only handle on a plugin from outside the BEAM. The OS accounts for the process's CPU and memory
+  there, so this is what usage metering reads, and what makes a kill test a real one rather than a
+  test of the runner's own protocol.
+  """
+  def os_pid(pid) when is_pid(pid), do: GenServer.call(pid, :os_pid)
+
   @doc "Executes an action on a running native plugin."
   def execute_action(plugin_id, action, payload, timeout \\ 5000) do
     case WorkerRegistry.lookup(plugin_id, @runner_key) do
@@ -120,6 +129,17 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
   end
 
   @impl true
+  def handle_call(:os_pid, _from, state) do
+    # Port.info returns {:os_pid, pid}; the bare pid is what callers want.
+    os_pid =
+      case Port.info(state.port, :os_pid) do
+        {:os_pid, pid} -> pid
+        _ -> nil
+      end
+
+    {:reply, os_pid, state}
+  end
+
   def handle_call({:execute_action, action, payload}, from, state) do
     seq = state.seq + 1
     request = Jason.encode!(%{type: "action", id: seq, action: action, payload: payload || %{}})
@@ -191,6 +211,13 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
         answer_host_call(msg, state)
         state
 
+      # A plugin's own logs, including the exception trace the SDK now sends. Dropped until now,
+      # which meant a plugin that threw said nothing anywhere: the caller got a message, and the
+      # file and line that would fix it went into the void.
+      {:ok, %{"type" => "host_log"} = msg} ->
+        log_from_plugin(msg, state)
+        state
+
       {:ok, _other} ->
         state
 
@@ -198,6 +225,18 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
         Logger.warning("[NativePluginRunner] Bad frame from #{state.manifest.id}: #{inspect(reason)}")
         state
     end
+  end
+
+  # Levels come from the SDK: 3 error, 2 warning, anything else informational.
+  defp log_from_plugin(msg, state) do
+    level =
+      case Map.get(msg, "level") do
+        3 -> :error
+        2 -> :warning
+        _ -> :info
+      end
+
+    Logger.log(level, "[#{state.manifest.id}] #{Map.get(msg, "message", "")}")
   end
 
   defp reply_action_result(msg, state) do
