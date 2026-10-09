@@ -60,6 +60,27 @@ defmodule Exoforge.MeteringTest do
     assert Metering.snapshot("never_seen_#{System.unique_integer([:positive])}").plugins == []
   end
 
+  if File.exists?("/proc/self/stat") do
+    test "samples CPU and peak RSS from the OS process" do
+      id = plugin_id()
+      os_pid = String.to_integer(System.pid())
+
+      assert :ok = Metering.sample_os(id, os_pid)
+      assert :ok = Metering.sample_os(id, os_pid)
+
+      assert %{plugins: [usage]} = Metering.snapshot(id)
+      assert usage.plugin.peak_rss_kb > 0
+      assert usage.plugin.cpu_ms > 0
+    end
+  end
+
+  test "sampling a process that does not exist is a no-op" do
+    id = plugin_id()
+
+    assert :ok = Metering.sample_os(id, 999_999_999)
+    assert Metering.snapshot(id).plugins == []
+  end
+
   test "a snapshot with no argument includes every plugin" do
     id = plugin_id()
     Metering.record_invocation(id, :ping, 1, :ok, 0, 0)

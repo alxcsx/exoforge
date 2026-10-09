@@ -24,6 +24,11 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
 
   @runner_key :native_runner
 
+  # The OS already accounts for a process's CPU and peak memory, so metering samples it instead of
+  # instrumenting the plugin. Five seconds is often enough for a billing-quality number and cheap
+  # enough to leave on; `VmHWM` is a high-water mark, so a peak between samples is never lost.
+  @os_sample_ms 5_000
+
   @doc "Prepares the manifest by ensuring the proxy module is created and set as entry_point."
   def prepare_manifest(%Manifest{} = manifest) do
     Exoforge.Drivers.Runtime.PluginProxy.prepare(manifest, __MODULE__, native_module_name(manifest))
@@ -128,6 +133,7 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
     # Metering is on from the first start: the first start is the uptime origin, later ones are
     # restarts.
     Exoforge.Metering.record_start(manifest.id)
+    schedule_os_sample()
 
     {:ok, %{manifest: manifest, port: port, buffer: "", pending: %{}, seq: 0}}
   end
@@ -190,7 +196,19 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
     {:stop, {:plugin_exited, status}, %{state | pending: %{}}}
   end
 
+  def handle_info(:sample_os, state) do
+    case Port.info(state.port, :os_pid) do
+      {:os_pid, os_pid} -> Exoforge.Metering.sample_os(state.manifest.id, os_pid)
+      _ -> :ok
+    end
+
+    schedule_os_sample()
+    {:noreply, state}
+  end
+
   def handle_info(_msg, state), do: {:noreply, state}
+
+  defp schedule_os_sample, do: Process.send_after(self(), :sample_os, @os_sample_ms)
 
   defp send_event(state, event_key, payload) do
     frame = Jason.encode!(%{type: "event", event: to_string(event_key), payload: sanitize(payload)})

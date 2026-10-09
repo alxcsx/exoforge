@@ -91,6 +91,85 @@ defmodule Exoforge.Metering do
 
   defp instance, do: Application.get_env(:exoforge, :instance, [])
 
+  @doc """
+  Samples the plugin's OS process: cumulative CPU and the high-water RSS mark.
+
+  Linux reads these from `/proc`: `utime + stime` in clock ticks, `VmHWM` in kB. `VmHWM` is a peak
+  for the process's lifetime, so the stored value is a max across restarts; CPU is cumulative per
+  pid, so the stored value accumulates deltas. On anything without `/proc` this is a no-op.
+  """
+  def sample_os(plugin_id, os_pid) when is_integer(os_pid) do
+    with {:ok, ticks} <- read_cpu_ticks(os_pid),
+         {:ok, peak_kb} <- read_peak_rss_kb(os_pid) do
+      id = to_string(plugin_id)
+      # USER_HZ is 100 on every Linux this runs on; the division keeps the unit honest anyway.
+      # ponytail: fixed USER_HZ, read sysconf if a platform ever disagrees.
+      add_cpu(id, os_pid, div(ticks * 1000, 100))
+      keep_peak_rss(id, peak_kb)
+      :ok
+    else
+      _ -> :ok
+    end
+  end
+
+  def sample_os(_plugin_id, _os_pid), do: :ok
+
+  defp add_cpu(id, os_pid, cpu_ms) do
+    table = ensure_table()
+
+    delta =
+      case :ets.lookup(table, {:plugin, id, :cpu_last}) do
+        [{{:plugin, ^id, :cpu_last}, {^os_pid, previous_ms}}] when cpu_ms >= previous_ms ->
+          cpu_ms - previous_ms
+
+        # A pid we have not seen is a process that just started, and its counter starts at zero.
+        _ ->
+          cpu_ms
+      end
+
+    :ets.insert(table, {{:plugin, id, :cpu_last}, {os_pid, cpu_ms}})
+    incr({:plugin, id, :cpu_ms}, delta)
+  end
+
+  defp keep_peak_rss(id, peak_kb) do
+    table = ensure_table()
+    previous = current_peak_rss(table, id)
+    if peak_kb > previous, do: :ets.insert(table, {{:plugin, id, :peak_rss_kb}, peak_kb})
+    :ok
+  end
+
+  defp current_peak_rss(table, id) do
+    case :ets.lookup(table, {:plugin, id, :peak_rss_kb}) do
+      [{{:plugin, ^id, :peak_rss_kb}, kb}] -> kb
+      _ -> 0
+    end
+  end
+
+  defp read_cpu_ticks(os_pid) do
+    with {:ok, stat} <- File.read("/proc/#{os_pid}/stat") do
+      # The comm field is parenthesised and may contain spaces, so fields are counted from after
+      # the last `)`: index 11 is utime and 12 is stime when the first token is `state`.
+      fields = stat |> String.split(")") |> List.last() |> String.split()
+
+      with [utime, stime] <- Enum.slice(fields, 11, 2),
+           {u, ""} <- Integer.parse(utime),
+           {s, ""} <- Integer.parse(stime) do
+        {:ok, u + s}
+      else
+        _ -> :error
+      end
+    end
+  end
+
+  defp read_peak_rss_kb(os_pid) do
+    with {:ok, status} <- File.read("/proc/#{os_pid}/status") do
+      case Regex.run(~r/^VmHWM:\s+(\d+)\s+kB/m, status) do
+        [_, kb] -> {:ok, String.to_integer(kb)}
+        _ -> :error
+      end
+    end
+  end
+
   defp plugin_usage(id, rows, now) do
     plugin = for {{:plugin, ^id, field}, value} <- rows, into: %{}, do: {field, value}
     started_at = Map.get(plugin, :started_at)
@@ -118,6 +197,8 @@ defmodule Exoforge.Metering do
         restarts: max(starts - 1, 0),
         started_at: started_at,
         uptime_ms: if(started_at, do: now - started_at, else: nil),
+        cpu_ms: Map.get(plugin, :cpu_ms, 0),
+        peak_rss_kb: Map.get(plugin, :peak_rss_kb, 0),
         events: Map.get(plugin, :events, 0),
         host_calls: Map.get(plugin, :host_calls, 0)
       },

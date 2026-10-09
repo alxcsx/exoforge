@@ -164,9 +164,10 @@ env-overridable), so the rollup is already a `GROUP BY`. Both this table and the
 by `Exoforge.TableOwner`, not by the first caller: a runner restart must not take a plugin's own
 usage with it.
 
-Still open in this phase: CPU time and peak RSS sampled from the plugin's OS process (`os_pid/1`
-is there; nothing reads it yet), persistence into the operator's database, the query surface for
-`exo` and the Studio, and `title_id`/`studio_id` travelling on deployments.
+CPU time and peak RSS are sampled from the plugin's OS process every five seconds (`os_pid/1`
+existed for exactly this); `VmHWM` is a high-water mark, so a peak between samples is not lost.
+Still open in this phase: persistence into the operator's database, the query surface for `exo` and
+the Studio, and `title_id`/`studio_id` travelling on deployments.
 
 **Meter shape, never content** — counts, durations, bytes, CPU, RSS, plugin and action *names*.
 Never payloads, never player or user identifiers. That is what makes "on by default" defensible, and
