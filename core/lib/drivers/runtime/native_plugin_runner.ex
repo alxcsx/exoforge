@@ -125,6 +125,10 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
       {event, _topic} -> EventDispatcher.subscribe(event)
     end)
 
+    # Metering is on from the first start: the first start is the uptime origin, later ones are
+    # restarts.
+    Exoforge.Metering.record_start(manifest.id)
+
     {:ok, %{manifest: manifest, port: port, buffer: "", pending: %{}, seq: 0}}
   end
 
@@ -146,7 +150,16 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
 
     Port.command(state.port, request <> "\n")
 
-    {:noreply, %{state | seq: seq, pending: Map.put(state.pending, seq, from)}}
+    # The pending entry carries what metering needs: who to reply to, and the clock and request
+    # size the reply will be measured against.
+    entry = %{
+      from: from,
+      action: action,
+      t0: System.monotonic_time(:microsecond),
+      bytes_in: byte_size(request)
+    }
+
+    {:noreply, %{state | seq: seq, pending: Map.put(state.pending, seq, entry)}}
   end
 
   @impl true
@@ -169,8 +182,9 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
   def handle_info({port, {:exit_status, status}}, %{port: port} = state) do
     Logger.warning("[NativePluginRunner] Plugin #{state.manifest.id} exited with status #{status}")
 
-    Enum.each(state.pending, fn {_id, from} ->
-      GenServer.reply(from, {:error, {:plugin_exited, status}})
+    Enum.each(state.pending, fn {_id, entry} ->
+      record_call(state.manifest.id, entry, :exited, 0)
+      GenServer.reply(entry.from, {:error, {:plugin_exited, status}})
     end)
 
     {:stop, {:plugin_exited, status}, %{state | pending: %{}}}
@@ -181,6 +195,7 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
   defp send_event(state, event_key, payload) do
     frame = Jason.encode!(%{type: "event", event: to_string(event_key), payload: sanitize(payload)})
     Port.command(state.port, frame <> "\n")
+    Exoforge.Metering.record_event(state.manifest.id, event_key)
   rescue
     _ -> :ok
   end
@@ -205,7 +220,7 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
   defp handle_line(line, state) do
     case Jason.decode(line) do
       {:ok, %{"type" => "action_result"} = msg} ->
-        reply_action_result(msg, state)
+        reply_action_result(msg, byte_size(line), state)
 
       {:ok, %{"type" => "host_call"} = msg} ->
         answer_host_call(msg, state)
@@ -247,27 +262,46 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
     end
   end
 
-  defp reply_action_result(msg, state) do
+  defp reply_action_result(msg, bytes_out, state) do
     id = Map.get(msg, "id")
 
     case Map.pop(state.pending, id) do
       {nil, _pending} ->
         state
 
-      {from, pending} ->
+      {entry, pending} ->
+        status = Map.get(msg, "status")
+
         reply =
-          case Map.get(msg, "status") do
+          case status do
             "ok" -> {:ok, Map.get(msg, "data")}
             _ -> {:error, normalize_error(Map.get(msg, "error"))}
           end
 
-        GenServer.reply(from, reply)
+        record_call(state.manifest.id, entry, if(status == "ok", do: :ok, else: :error), bytes_out)
+        GenServer.reply(entry.from, reply)
         %{state | pending: pending}
     end
   end
 
+  # Metered where the wire bytes are known: the request size at send, the reply size here. `:exited`
+  # is a call the plugin never answered because its process died.
+  defp record_call(plugin_id, entry, status, bytes_out) do
+    duration_us = System.monotonic_time(:microsecond) - entry.t0
+
+    Exoforge.Metering.record_invocation(
+      plugin_id,
+      entry.action,
+      duration_us,
+      status,
+      entry.bytes_in,
+      bytes_out
+    )
+  end
+
   defp answer_host_call(%{"id" => id, "op" => op, "args" => args}, state) do
     result = run_host_call(op, args || %{}, state.manifest)
+    Exoforge.Metering.record_host_call(state.manifest.id, op)
     response = Jason.encode!(%{type: "host_call_result", id: id, result: sanitize(result)})
     Port.command(state.port, response <> "\n")
   end

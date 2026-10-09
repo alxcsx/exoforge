@@ -28,6 +28,13 @@ if config_env() == :prod do
       password: System.get_env("EXOFORGE_STUDIO_PASSWORD")
     ]
 
+  # The shape usage records are stamped with. A deployment names its own title and studio; the
+  # defaults from config.exs ("local") stand in for a self-hosted instance until there is more
+  # than one Title to distinguish.
+  config :exoforge, :instance,
+    title_id: System.get_env("EXOFORGE_TITLE_ID") || "local",
+    studio_id: System.get_env("EXOFORGE_STUDIO_ID") || "local"
+
   config :exoforge_std_dashboard, Exoforge.Std.Dashboard.Endpoint,
     url: [host: host, port: dashboard_port],
     http: [

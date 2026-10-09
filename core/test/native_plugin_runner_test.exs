@@ -204,6 +204,25 @@ defmodule Exoforge.NativePluginRunnerTest do
     GenServer.stop(pid)
   end
 
+  test "meters the calls the runner sees", %{manifest: manifest, binary: binary} do
+    metered = %{manifest | id: :metered_stub}
+    pid = start_runner(metered, binary)
+
+    assert {:ok, 42} = GenServer.call(pid, {:execute_action, "ping", %{}}, 5_000)
+    assert {:ok, 1} = GenServer.call(pid, {:execute_action, "emit", %{}}, 5_000)
+    GenServer.stop(pid)
+
+    assert %{plugins: [usage]} = Exoforge.Metering.snapshot(:metered_stub)
+    assert usage.plugin.starts == 1
+    assert usage.plugin.host_calls == 1
+
+    # Sorted by action name, and each call carries the bytes the runner put on the wire.
+    assert [%{action: "emit", invocations: 1}, %{action: "ping", invocations: 1}] =
+             Enum.map(usage.actions, &%{action: &1.action, invocations: &1.invocations})
+
+    assert Enum.all?(usage.actions, &(&1.bytes_in > 0 and &1.bytes_out > 0))
+  end
+
   test "fails loudly when the binary is missing", %{manifest: manifest} do
     missing = %{manifest | physical_path: Path.join(System.tmp_dir!(), "exo_native_missing")}
     assert {:error, {:binary_not_found, _}} = NativePluginRunner.load(missing)

@@ -156,6 +156,18 @@ sees every call: invocations by action, wall and CPU time, peak RSS, bytes, even
 restarts and uptime. On by default, including self-hosted: it is cheap, and it is the operator's own
 data in the operator's own database.
 
+**The call shape has landed.** `Exoforge.Metering` holds per-plugin counters in ETS - invocations
+and errors by action, wall time and wire bytes, events, host calls, starts, restarts, uptime - fed
+by the native runner, which is where the port and its byte counts are visible. `snapshot/0` and
+`snapshot/1` stamp them with the instance's `title_id` and `studio_id` (`config :exoforge, :instance`,
+env-overridable), so the rollup is already a `GROUP BY`. Both this table and the log buffer are owned
+by `Exoforge.TableOwner`, not by the first caller: a runner restart must not take a plugin's own
+usage with it.
+
+Still open in this phase: CPU time and peak RSS sampled from the plugin's OS process (`os_pid/1`
+is there; nothing reads it yet), persistence into the operator's database, the query surface for
+`exo` and the Studio, and `title_id`/`studio_id` travelling on deployments.
+
 **Meter shape, never content** — counts, durations, bytes, CPU, RSS, plugin and action *names*.
 Never payloads, never player or user identifiers. That is what makes "on by default" defensible, and
 it belongs in the invariants, not in a config comment. Action names are the one grey area: useful to

@@ -86,6 +86,16 @@ defmodule Exoforge.PluginLogs do
 
   defp ensure_table do
     case :ets.info(@table) do
+      :undefined -> Exoforge.TableOwner.ensure_started()
+      _ -> @table
+    end
+
+    init_table()
+  end
+
+  @doc "Creates the table if it does not exist. Called by `Exoforge.TableOwner`, its owner."
+  def init_table do
+    case :ets.info(@table) do
       :undefined ->
         # `duplicate_bag`: several lines can share a millisecond, and we must keep them all.
         :ets.new(@table, [:duplicate_bag, :named_table, :public, read_concurrency: true])
