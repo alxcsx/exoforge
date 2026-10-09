@@ -34,6 +34,7 @@ services:
       MIX_ENV: prod
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/exoforge_prod
       SECRET_KEY_BASE: ${SECRET_KEY_BASE:-exoforge_super_secret_key_base_at_least_64_bytes_long_for_dev_mode}
+      LIVEVIEW_SIGNING_SALT: ${LIVEVIEW_SIGNING_SALT:-exoforge_liveview_salt_for_studio_sockets_at_least_8}
       RELEASE_COOKIE: ${RELEASE_COOKIE:-exoforge_cluster_cookie}
       PHX_HOST: localhost
       PORT: "4005"
@@ -41,8 +42,8 @@ services:
       GATEWAY_PORT: "4000"
       HTTP_PORT: "4001"
       PLUGINS_PATH: "/app/plugins_elixir"
-      EXOFORGE_ADMIN_EMAIL: ${EXOFORGE_ADMIN_EMAIL:-admin@exoforge.local}
-      EXOFORGE_ADMIN_PASSWORD: ${EXOFORGE_ADMIN_PASSWORD:-admin12345}
+      EXOFORGE_ADMIN_EMAIL: ${EXOFORGE_ADMIN_EMAIL:-admin}
+      EXOFORGE_ADMIN_PASSWORD: ${EXOFORGE_ADMIN_PASSWORD:-admin}
     ports:
       - "4005:4005" # Game Producer & Designer Studio LiveView
       - "4000:4000" # WebSocket Gateway

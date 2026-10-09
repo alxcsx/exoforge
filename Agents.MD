@@ -1,7 +1,7 @@
 # Exoforge Operating Manual (`Agents.MD`)
 
 > **Branch**: `projetao_mvp`  
-> **Status**: Kernel, 10 standard plugins, C# Client & Plugin SDKs, C# Management Engine (`exo` CLI), Unity SDK (`com.exoforge.sdk`), Producer Studio and the plugin runtime are **complete** — **266 Elixir + 81 C# = 347 tests passing**, plus a live E2E vertical slice of 6 tests against a running server.  
+> **Status**: Kernel, 10 standard plugins, C# Client & Plugin SDKs, C# Management Engine (`exo` CLI), Unity SDK (`com.exoforge.sdk`), Producer Studio and the plugin runtime are **complete** — **286 Elixir + 91 C# = 377 tests passing**, plus a live E2E vertical slice of 6 tests against a running server.  
 > **Verified SLA**: 0.07 ms fanout to 50 event subscribers over `:pg`.
 
 ---

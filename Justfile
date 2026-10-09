@@ -138,7 +138,9 @@ build-plugins:
 # Run backend in production mode (foreground)
 prod: build-plugins
 	# Local prod-mode run: opt in to SQLite explicitly (real deploys must set DATABASE_URL).
-	SECRET_KEY_BASE="${SECRET_KEY_BASE:-$(mix phx.gen.secret)}" EXOFORGE_ALLOW_SQLITE_FALLBACK=true MIX_ENV=prod mix run --no-halt
+	SECRET_KEY_BASE="${SECRET_KEY_BASE:-$(mix phx.gen.secret)}" \
+	LIVEVIEW_SIGNING_SALT="${LIVEVIEW_SIGNING_SALT:-exoforge_local_prod_liveview_salt}" \
+	EXOFORGE_ALLOW_SQLITE_FALLBACK=true MIX_ENV=prod mix run --no-halt
 
 # Assemble standalone OTP production release
 release: build-plugins
@@ -192,6 +194,7 @@ k8s-deploy:
 	DATABASE_URL="${DATABASE_URL:-postgres://postgres:postgres@postgres:5432/exoforge_prod}"
 	POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-postgres}"
 	SECRET_KEY_BASE="${SECRET_KEY_BASE:-$(mix phx.gen.secret 2>/dev/null || echo exoforge_secret_key_base_min_64_characters_long_for_dev_mode_testing)}"
+	LIVEVIEW_SIGNING_SALT="${LIVEVIEW_SIGNING_SALT:-exoforge_liveview_salt_for_studio_sockets_at_least_8}"
 	RELEASE_COOKIE="${RELEASE_COOKIE:-exoforge_cluster_cookie}"
 	EXOFORGE_ADMIN_PASSWORD="${EXOFORGE_ADMIN_PASSWORD:-admin12345}"
 	kubectl create namespace exoforge --dry-run=client -o yaml | kubectl apply -f -
@@ -199,6 +202,7 @@ k8s-deploy:
 		--from-literal=DATABASE_URL="$DATABASE_URL" \
 		--from-literal=POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
 		--from-literal=SECRET_KEY_BASE="$SECRET_KEY_BASE" \
+		--from-literal=LIVEVIEW_SIGNING_SALT="$LIVEVIEW_SIGNING_SALT" \
 		--from-literal=RELEASE_COOKIE="$RELEASE_COOKIE" \
 		--from-literal=EXOFORGE_ADMIN_PASSWORD="$EXOFORGE_ADMIN_PASSWORD" \
 		--dry-run=client -o yaml | kubectl apply -f -

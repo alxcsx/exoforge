@@ -2,12 +2,12 @@
 
 > **Status**: Kernel, 10 standard plugins, C# Client SDK, C# Plugin SDK, C# Management Engine (`exo`
 > CLI), Unity SDK (`com.exoforge.sdk`), Producer Studio, clustering and Kubernetes manifests are
-> **complete** — **266 Elixir + 81 C# = 347 tests passing**, plus a live E2E vertical slice of 6 tests
+> **complete** — **286 Elixir + 91 C# = 377 tests passing**, plus a live E2E vertical slice of 6 tests
 > against a running server.
 > **Benchmark**: 0.07 ms fanout to 50 event subscribers over `:pg`.
 
 Completed work is not kept here. It is in `git log`, which is the record that does not drift; this
-file is the invariants and what is next. Milestone identifiers (**M1**…**M30**) are historical and are
+file is the invariants and what is next. Milestone identifiers (**M1**…**M33**) are historical and are
 referenced from `Agents.MD`, `DX.md` and commit messages, so they stay in the table below and nowhere
 else.
 
@@ -67,6 +67,8 @@ plugin_manager ───▶ (independent root)
 | **M29** | Engine-Agnostic C# Core — the C# client and plugin tooling moved out of the Unity package, which now contains only Unity-specific code and ships the libraries as binaries |
 | **M30** | Duplication and Build-Step Cleanup — one code generator, one manifest path, no second implementation of anything |
 | **M31** | Dev Hooks and the Plugin Feed — `Directory.Build.targets` supplies a plugin's SDK, generator and manifest plumbing from a single opt-in, the Unity package stages its own libraries by building, and `Exoforge.Plugin.SDK` packs into a feed a plugin outside this repository builds against |
+| **M32** | Framework-Dependent Plugins and Usage Metering — AOT dropped for IL on a runtime in the image (reflections serialises without generated help), deployment defaults + `EXOFORGE001/2` guards, protocol handshake, `kill -9` isolation as a real test, PDBs shipped; per-plugin usage counters (`Exoforge.Metering`), `exoforge_std_metering` persisting deltas with the `title_id`/`studio_id` shape, rollups and `exo plugin usage` |
+| **M33** | Full-Stack Security & Hardening — the whole-repo audit's 36 fixes: kernel auth/ingress (scope clamp, takeover guard, staff-gated user management, dev-prefix gate, WS identity spoofing), C# host frame buffering, database provisioning once + pooled PostgreSQL + `table_columns` + positional-arg rejection, metering flush batching, async guard tests, event dedup; Unity SDK staff-only editor with zero guest access, crash-free background reconnect/teardown, sanitized build config; dashboard XSS, session-staff enforcement, verified-scope dispatch, HttpOnly cookies, prod secrets |
 
 ---
 
@@ -91,7 +93,7 @@ shortest working path.
 
 ---
 
-## 4. Next — M32: Framework-Dependent Plugins and Usage Metering
+## 4. M32: Framework-Dependent Plugins and Usage Metering (Completed)
 
 **The decision.** Plugins ship as framework-dependent .NET assemblies and run on a runtime in the
 image. AOT is dropped. Measured on the sample plugin, spawned in batches and left idle:
@@ -343,7 +345,125 @@ What that leaves: a service that is neither built locally nor deployed has no co
 it cannot be generated. The command says which services are missing and writes nothing, rather than
 replacing working stubs with a file that has fewer of them.
 
-## 5. Out of Scope for the MVP
+## 5. M33: Security & Platform Hardening (Full-Stack Audit Remediation) — *Landed*
+
+The whole-repo audit identified 36 security, stability, and concurrency bottlenecks across the Kernel, Unity SDK, and Web Dashboard. Detailed specifications live in [remediation_plan.md](file:///home/alexcs/.gemini/antigravity-cli/brain/214d94cd-4909-48a8-aa8f-0fca0427c292/remediation_plan.md). All 36 landed in four phases, each with the narrowest check that fails when the fix reverts; the two deployment-guard build tests and the live E2E slice stay CI-side, per Agents.MD.
+
+- **Phase 1: Kernel Security & Identity Hardening**
+  - Fix 1: Restrict public `register` and `anonymous` scopes to `[Roles.player()]` unless caller holds verified admin session (`auth.ex:L742`).
+  - Fix 2: Guard `auth:anonymous` to prevent taking over password-protected accounts with known `player_id` (`auth.ex:L253`).
+  - Fix 3: Add explicit scope declarations (`admin`, `staff`) to sensitive actions in `services.ex` (`list_users`, `reset_password`, `update_user_roles`, `delete_user`, `issue_token`, `delete_player`).
+  - Fix 4: Gate `dev_admin` username prefix bypass on `allow_dev_tokens?()` (`auth.ex:L208`).
+  - Fix 5: Disallow `player_id` spoofing in WebSocket `socket_handler.ex:L248` by replacing `Map.put_new` with `Map.put`.
+
+- **Phase 2: Core Platform, DB Scaling & Plugin Host**
+  - Fix 6: Buffer incoming `action` frames arriving in `PluginHost.cs` while synchronously awaiting a `host_call_result`.
+  - Fix 7: Cache database initialization in `Database.Manager` using `state.databases`, ending redundant DDL checks on every query.
+  - Fix 8: Implement supervised connection pooling in `Postgres` adapter (`postgres.ex:L139`), ending per-query connection churn.
+  - Fix 9: Add `table_columns/3` callback to `Database.Adapter` using `information_schema` on PostgreSQL instead of SQLite `PRAGMA`.
+  - Fix 10: Reject non-deterministic map arguments in positional SQL queries in `sqlite.ex:L119` and `postgres.ex:L291`.
+  - Fix 11: Batch multi-row insertions in `Metering.Flusher:persist`.
+  - Fix 12: Convert blocking `DeploymentGuardTests.cs` process calls to `async Task` with `WaitForExitAsync`.
+  - Fix 13: De-duplicate recipient PIDs in `EventDispatcher.broadcast`.
+
+- **Phase 3: Unity SDK Runtime & Editor (Strict Staff Security)**
+  - Fix 14: Enforce strict staff-only access in Unity Editor Studio (remove guest presets, eliminate guest fallback in login, require `staff`/`studio`/`admin` scopes on connection).
+  - Fix 15: Fix background reconnect `UnityException` by caching config on the main thread in `Awake()`.
+  - Fix 16: Prevent ghost client creation during teardown by checking private `_client` field and removing async void delays in `OnDestroy`.
+  - Fix 17: Stage incoming editor live events in a thread-safe `ConcurrentQueue` to prevent collection modification crashes during GUI rendering.
+  - Fix 18: Strip bootstrap tokens and private network endpoints from player builds when generating `Resources/exoforge.json`.
+  - Fix 19: Rename anonymous device ID prefix from `dev_` to `did_` to prevent collisions with backend developer token checks.
+  - Fix 20: Ensure main-thread SDK initialization via `[RuntimeInitializeOnLoadMethod]`.
+  - Fix 21: Add `SemaphoreSlim` lock to `GetClientAsync()` to prevent simultaneous socket collisions.
+  - Fix 22: Remove plaintext password storage from `EditorPrefs`.
+  - Fix 23: Resolve dynamic dashboard and Swagger URLs from `ActiveEnvironment.HttpUrl`.
+  - Fix 24: Wrap `JsonDocument.Parse` in `using` inside the Action Sandbox.
+
+- **Phase 4: Web Dashboard & LiveView Security Hardening**
+  - Fix 25: Remediate reflected XSS on the sign-in page (`login_controller.ex:L31-35`).
+  - Fix 26: Prevent regular player privilege escalation by requiring verified staff/admin roles before granting Studio sessions (`api_controller.ex:L45-51`).
+  - Fix 27: Enforce verified session scopes in Action Console dispatch, discarding client-supplied `caller_scopes` overrides.
+  - Fix 28: Pass verified `caller_scopes` in LiveComponent administrative actions (`plugin_manager_view.ex`, `auth_view.ex`, `player_data_view.ex`).
+  - Fix 29: Fix LiveView crash on opening Dependency Graph modal by resolving `@graph_selected_plugin_id` attribute mismatch.
+  - Fix 30: Load production `secret_key_base` from `SECRET_KEY_BASE` environment variable in `prod.exs`.
+  - Fix 31: Set `http_only: true` on `exo_auth_token` cookies.
+  - Fix 32: Throttle live event streaming in `StudioLive` using topic filtering and LiveView streams.
+  - Fix 33: Add database-level filtering (`WHERE user_id = $1`) and pagination to user and player inspector queries.
+  - Fix 34: Prevent dynamic atom creation in `resource_forms.ex:L72`.
+  - Fix 35: Sanitize raw SVG icons in `components.ex`.
+  - Fix 36: Remove deprecated `document.write` CDN fallback in `layouts.ex`.
+
+**What the fixes did, where judgment was applied.**
+
+*Phase 1 — kernel.* `register` is a public action that honored any `scopes` the payload named, so
+anyone could mint an admin token by asking; the requested scopes are now honored only for a caller
+the dispatcher already trusts — in-process (no `_auth`, its own rule) or one presenting admin
+scopes — and everyone else gets `[player]` (Fix 1). Both transports stamp `_auth` with the
+authenticated identity, server value winning, which also kills a frame carrying its own fake
+`_auth` over WebSocket, and closes HTTP's unauthenticated public path, which previously reached the
+dispatcher as `:internal` — full trust. `anonymous` no longer reissues a token for an account that
+has a password: the returning-device feature, entered by password only (Fix 2). `issue_token`,
+`list_users`, `list_players`, `reset_password`, `update_user_roles`, `delete_user`,
+`delete_player` and `retain_player` are staff- or admin-gated — in the contract **and** on the
+plugin's own `defaction`, which is where enforcement actually happens; the contract alone is
+development truth that the plugin's action map silently shadows (Fix 3). The `dev_admin` prefix
+bypass in `verify_scope` only answers while dev tokens are allowed (Fix 4). The WebSocket handler
+stamps the authenticated `player_id` (`Map.put`, was `Map.put_new`) (Fix 5).
+
+*Phase 2 — platform.* An `action` frame arriving while a plugin action is blocked inside a host
+call is buffered and replayed by the frame loop instead of being read and dropped (Fix 6), and the
+host-call id counter resets per run. The database manager remembers what it has provisioned and
+stops running DDL per query (Fix 7); a failed provision is not remembered, so the next call
+retries. PostgreSQL keeps one named, supervised pool per (database, schema) under the database
+plugin's own supervisor, with the `search_path` as a startup parameter so no per-query `SET` round
+trip remains (Fix 8). Column discovery is the adapter's dialect — `PRAGMA table_info` for SQLite,
+`information_schema` for PostgreSQL — so the auth migration check and the resource reconciler read
+the truth on both backends (Fix 9). Positional SQL refuses maps, whose value order is not an
+argument order (Fix 10). The metering flusher batches `VALUES` in chunks of 50 (Fix 11).
+`DeploymentGuardTests` build via `async Task` with `WaitForExitAsync` (Fix 12). `EventDispatcher`
+answers one pid once per broadcast, however many ways that pid subscribed (Fix 13).
+
+*Phase 3 — Unity SDK.* The editor is staff tooling: the Guest preset and the `"guest"` login
+fallback are gone, sign-in runs over plain HTTP `auth.login`, and a session scoped below staff is
+denied at connect (`ExoStaff.HasAccess`, a pure helper in the C# client testable without Unity)
+(Fix 14). The runtime config is resolved once in `Awake` on the main thread, so the background
+reconnect loop never calls `Resources.Load` (Fix 15). `OnDestroy` reads the private `_client` —
+the property would have lazily created a client just in time to dispose it — and closes without
+being `async void` (Fix 16). Editor events arrive on background threads into a `ConcurrentQueue`
+and drain on the main thread (Fix 17). The player build gets a sanitized config: the selected
+environment's two public endpoints, no tokens, no other environments (Fix 18). Device ids start
+`did_` (Fix 19). `ExoforgeSDK` initializes its host through `[RuntimeInitializeOnLoadMethod]`, so
+no off-thread `new GameObject()` (Fix 20). `GetClientAsync` holds a `SemaphoreSlim` (Fix 21). The
+password is never written to EditorPrefs at all — the session token is what reconnects (Fix 22).
+Dashboard and Swagger URLs come from the environment's `http_url` (Fix 23). The Action Sandbox
+disposes the `JsonDocument` it parses (Fix 24).
+
+*Phase 4 — dashboard.* The sign-in page escapes the reflected `error` (Fix 25). A player account
+that logs in to the Studio is refused at the door, the session carries the login's verified
+scopes, and `session_auth` no longer defaults a missing scope list to admin — the LiveView `on_mount`
+hook now demands a staff rank too (Fix 26). The action console and extension views dispatch with
+the session's verified scopes; the form field that used to claim them is a read-only display
+(Fix 27). Every administrative dispatch in the Studio's views passes `caller_scopes` explicitly
+(Fix 28). The dependency graph reads the assign it is actually given (`@selected_plugin_id`)
+(Fix 29). Production demands `SECRET_KEY_BASE` and now also `LIVEVIEW_SIGNING_SALT` from the
+environment — in runtime.exs for the release, and the local defaults are baked into compose and
+the Justfile so a self-hosted instance stays zero-config (Fix 30). The auth cookie is HttpOnly —
+Swagger's cookie preauthorization stops working, which is the price; the server still reads the
+cookie cross-port, and a token can be pasted into Swagger's auth field (Fix 31). StudioLive
+subscribes to the `studio` topic instead of everything, so gameplay ticks do not reach the window
+— the event dock's LiveView-stream conversion is deliberately deferred; the 100-event cap is the
+ceiling it had (Fix 32). User/player inspectors filter in the query (`user_id` param, `LIMIT`)
+instead of loading everything and filtering in Elixir (Fix 33). Resource forms stop minting atoms
+from column names — `to_existing_atom` or nothing (Fix 34). SVG icons from metadata are stripped
+of scripts, handlers, URL attributes and dangerous elements before `raw` — a blocklist, since the
+icons come from plugins the operator deployed (Fix 35). The `document.write` CDN fallback is gone,
+plus the same CDN script in the login page it was missed in (Fix 36).
+
+**Counts**: 286 Elixir + 91 C# = 377 passing, plus the live E2E vertical slice (6 tests, CI).
+
+---
+
+## 6. Out of Scope for the MVP
 
 Not planned. Recorded so they stop reappearing as "next":
 
@@ -355,7 +475,7 @@ Not planned. Recorded so they stop reappearing as "next":
 
 ---
 
-## 6. Naming
+## 7. Naming
 
 Three buckets, one rule: **no engine SDK owns engine-agnostic code.**
 
@@ -367,3 +487,48 @@ Three buckets, one rule: **no engine SDK owns engine-agnostic code.**
 
 Adding an engine means adding a fourth bucket that ships the same two libraries — not a fourth
 implementation of them.
+
+
+---
+
+## 8. External Integrations (M34)
+
+Planned DX improvements for integrating Exoforge with external systems:
+
+1. **Inbound Webhooks:** Add a raw HTTP ingress route (e.g., `ANY /api/webhook/:service/:action`) to `exoforge_std_http` that bypasses `Plug.Parsers`. This will forward the raw HTTP body and headers to the C# plugin so it can validate HMAC signatures (e.g., Stripe, Discord).
+2. **Outbound REST & SDK Dependencies:** C# plugins already compile as framework-dependent natives using `dotnet publish -c Release -p:PublishSingleFile=true`. Developers can natively use `HttpClient` and add any NuGet package (e.g. `dotnet add package Stripe.net`). The pipeline bundles all dependencies automatically. Zero extra work required.
+### First-Class Webhooks Plan
+
+1. **C# SDK DSL (`Exoforge.Plugin.SDK/Attributes.cs`)**
+   Add a new `[ExoWebhook]` attribute:
+   ```csharp
+   [AttributeUsage(AttributeTargets.Method)]
+   public class ExoWebhookAttribute : Attribute
+   {
+       public string Path { get; set; }
+       public string Method { get; set; } = "POST";
+       public bool RequiresSignature { get; set; }
+       public string SignatureHeader { get; set; }
+   }
+   ```
+   Methods decorated with this take a standard request shape:
+   `public WebhookResponse HandleStripe([Inject] WebhookRequest req)`
+
+2. **Manifest Generator (`Exoforge.Plugin.Generator`)**
+   Update the generator to parse `[ExoWebhook]` and emit a `"webhooks": [...]` array under each service in `manifest.json`, alongside `"actions"` and `"events"`.
+
+3. **HTTP Gateway Ingress (`plugins/exoforge_std_http/router.ex`)**
+   Add `match "/webhook/:plugin/:name"` *before* the generic JSON parsers.
+   Use a custom `Plug.Conn.read_body` to extract the raw text and HTTP headers. 
+   Wrap them into a standard map: `%{method: "POST", body: raw_body, headers: headers}` and dispatch it to the plugin's webhook action.
+
+4. **Kernel Registration**
+   Update `Exoforge.ActionDispatcher` or the Plugin Manager to recognize the `"webhooks"` array from the manifest so the router can discover and validate valid webhook paths dynamically.
+
+### 5. Elixir DSL (`Exoforge.Plugin`)
+   Add a `defwebhook` macro to the Elixir DSL alongside `defaction` and `defevent`. This macro will allow Elixir plugins to cleanly define webhooks with pattern matching and built-in payload/header mapping.
+   ```elixir
+   defwebhook stripe_webhook(payload, headers) do
+     # validate signature and handle raw payload here
+   end
+   ```
