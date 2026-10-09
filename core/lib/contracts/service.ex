@@ -178,7 +178,9 @@ defmodule Exoforge.Contracts.Service do
         columns: unquote(Macro.escape(parsed[:columns])),
         drawer: unquote(Macro.escape(parsed[:drawer])),
         actions: unquote(Macro.escape(parsed[:actions])),
-        source: unquote(parsed[:source])
+        source: unquote(parsed[:source]),
+        singleton: unquote(parsed[:singleton]),
+        kind: unquote(parsed[:kind])
       }
     end
   end
@@ -195,7 +197,11 @@ defmodule Exoforge.Contracts.Service do
             extra_actions = Keyword.get(unquote(opts), :actions, [])
             actions = if extra_actions != [], do: extra_actions, else: res.actions
             name = Keyword.get(unquote(opts), :name, res.name)
+            singleton = Keyword.get(unquote(opts), :singleton, res[:singleton] || false)
+            kind = Keyword.get(unquote(opts), :kind, res[:kind] || if(singleton, do: :singleton, else: :standard))
             %{res | name: name, actions: actions}
+            |> Map.put(:singleton, singleton)
+            |> Map.put(:kind, kind)
 
           true ->
             res_name =
@@ -205,12 +211,17 @@ defmodule Exoforge.Contracts.Service do
                 Exoforge.Resource.default_resource_name(mod)
               )
 
+            singleton = Keyword.get(unquote(opts), :singleton, Keyword.get(unquote(opts), :kind) == :singleton)
+            kind = Keyword.get(unquote(opts), :kind, if(singleton, do: :singleton, else: :standard))
+
             %{
               name: res_name,
               primary_key: Keyword.get(unquote(opts), :primary_key, :id),
               columns: [],
               drawer: Keyword.get(unquote(opts), :drawer, [:overview, :attributes]),
-              actions: Keyword.get(unquote(opts), :actions, [])
+              actions: Keyword.get(unquote(opts), :actions, []),
+              singleton: singleton,
+              kind: kind
             }
         end
 
@@ -233,7 +244,9 @@ defmodule Exoforge.Contracts.Service do
       drawer: [:overview, :attributes],
       actions: [],
       source: nil,
-      doc: nil
+      doc: nil,
+      singleton: false,
+      kind: :standard
     }
   end
 
@@ -293,6 +306,21 @@ defmodule Exoforge.Contracts.Service do
 
         {:source, _, [src]} ->
           Map.put(acc, :source, src)
+
+        {:singleton, _, [is_single]} ->
+          acc
+          |> Map.put(:singleton, is_single == true)
+          |> Map.put(:kind, if(is_single == true, do: :singleton, else: acc[:kind] || :standard))
+
+        {:singleton, _, []} ->
+          acc
+          |> Map.put(:singleton, true)
+          |> Map.put(:kind, :singleton)
+
+        {:kind, _, [k]} ->
+          acc
+          |> Map.put(:kind, k)
+          |> Map.put(:singleton, k == :singleton)
 
         {:doc, _, [doc_str]} when is_binary(doc_str) ->
           Map.put(acc, :doc, doc_str)

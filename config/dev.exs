@@ -5,7 +5,7 @@ config :exoforge,
 
 config :exoforge, :module_loader,
   driver: Exoforge.Drivers.Loaders.ManifestLoader,
-  scan_path: ["_build/dev/lib", "plugins_csharp"]
+  scan_path: ["_build/dev/lib", "plugins_csharp", "priv/data/uploaded_plugins"]
 
 config :exoforge_std_dashboard, Exoforge.Std.Dashboard.Endpoint,
   http: [port: 4005],

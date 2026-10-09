@@ -8,7 +8,8 @@ config :exoforge, :module_loader,
   driver: Exoforge.Drivers.Loaders.ManifestLoader,
   scan_path: [
     System.get_env("PLUGINS_PATH") || "_build/prod/lib",
-    "plugins_csharp"
+    "plugins_csharp",
+    "priv/data/uploaded_plugins"
   ]
 
 config :exoforge_std_dashboard, Exoforge.Std.Dashboard.Endpoint,

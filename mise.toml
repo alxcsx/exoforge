@@ -1,4 +1,5 @@
 [tools]
+dotnet = "8"
 elixir = "latest"
 erlang = "29.0.2"
 just = "latest"

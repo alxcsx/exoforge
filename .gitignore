@@ -29,7 +29,11 @@ dist/
 # The Unity package ships the engine-agnostic C# libraries as binaries, built by
 # `just build-unity-sdk`. Build output: a committed DLL is a copy that can silently go stale, which
 # is the same failure a synced source file has.
-sdk/unity/Exoforge.SDK/*/Plugins/
+sdk/unity/Exoforge.SDK/*/Plugins/*.dll
+sdk/unity/Exoforge.SDK/*/Plugins/*.pdb
+sdk/unity/Exoforge.SDK/*/Plugins/Tools~/**/*.dll
+sdk/unity/Exoforge.SDK/*/Plugins/Tools~/**/*.pdb
+!sdk/unity/Exoforge.SDK/*/Plugins/*.meta
 
 # `*~` also matches the SDK's Unity-ignored Tools~ and Samples~ directories; keep those tracked.
 !**/Samples~/

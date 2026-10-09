@@ -63,7 +63,8 @@ if config_env() == :prod do
       System.get_env("PLUGINS_PATH") || "plugins",
       "_build/prod/lib",
       release_lib,
-      "plugins_csharp"
+      "plugins_csharp",
+      "priv/data/uploaded_plugins"
     ]
     |> Enum.uniq()
 

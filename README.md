@@ -107,7 +107,7 @@ Exoforge separates game engineering from backend operations. Game developers wor
 ### 1. Unity Exoforge Studio (`com.exoforge.sdk`)
 
 A dedicated Unity Editor extension (`Tools ▸ Exoforge ▸ Exoforge Studio`, or `Window ▸ Exoforge`) providing:
-- **One-Click Scaffolding**: Generate standard, inventory, or LiveOps native C# plugins directly into `plugins/` — each with its own solution (`.slnx`) and sources under `src/`.
+- **One-Click Scaffolding**: Generate native C# plugins directly into `plugins/` — each with its own solution (`.slnx`) and sources under `src/`.
 - **Compilation & Deployment**: Build the plugin and its manifest and upload them to the running server.
 - **Live Action Sandbox**: Test actions and inspect payloads with latency metrics (`µs`).
 - **Real-Time Event Stream**: Monitor backend broadcasts and filter topics inside Unity.
@@ -118,7 +118,7 @@ The **engine-agnostic** tool: the same commands a Unity developer clicks, for ot
 CI/CD, and for headless work. A Unity project does not need it.
 ```bash
 exo init                     # Initialize /exoforge workspace
-exo plugin new combat        # Scaffold a native C# plugin (--template standard|inventory)
+exo plugin new combat        # Scaffold a native C# plugin (--template standard)
 exo plugin build combat      # Build the plugin (framework-dependent .NET) + manifest.json
 exo plugin stubs combat      # Generate typed service stubs from the cluster contracts
 exo plugin push combat       # Hot-load plugin onto live cluster

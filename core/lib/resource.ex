@@ -35,6 +35,8 @@ defmodule Exoforge.Resource do
       @exo_resource_name Keyword.get(unquote(opts), :name, nil)
       @exo_actions Keyword.get(unquote(opts), :actions, [])
       @exo_source Keyword.get(unquote(opts), :source, nil)
+      @exo_singleton Keyword.get(unquote(opts), :singleton, Keyword.get(unquote(opts), :kind) == :singleton)
+      @exo_kind Keyword.get(unquote(opts), :kind, if(Keyword.get(unquote(opts), :singleton), do: :singleton, else: :standard))
 
       @before_compile Exoforge.Resource
     end
@@ -79,6 +81,8 @@ defmodule Exoforge.Resource do
         sortable: Keyword.get(unquote(opts), :sortable, false),
         filterable: Keyword.get(unquote(opts), :filterable, false),
         badge: Keyword.get(unquote(opts), :badge, false),
+        role: Keyword.get(unquote(opts), :role, nil),
+        bucket: Keyword.get(unquote(opts), :bucket, nil),
         default: Keyword.get(unquote(opts), :default, nil)
       }
 
@@ -99,6 +103,9 @@ defmodule Exoforge.Resource do
     explicit_name = Module.get_attribute(env.module, :exo_resource_name)
     resource_name = explicit_name || default_resource_name(env.module)
 
+    singleton = Module.get_attribute(env.module, :exo_singleton) || false
+    kind = Module.get_attribute(env.module, :exo_kind) || if(singleton, do: :singleton, else: :standard)
+
     struct_fields =
       Enum.map(columns, fn col ->
         {col.name, col.default}
@@ -115,7 +122,9 @@ defmodule Exoforge.Resource do
           drawer: unquote(drawer),
           actions: unquote(actions),
           source: unquote(Macro.escape(source)),
-          columns: unquote(Macro.escape(columns))
+          columns: unquote(Macro.escape(columns)),
+          singleton: unquote(singleton),
+          kind: unquote(kind)
         }
       end
 

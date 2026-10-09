@@ -620,7 +620,7 @@ defmodule Exoforge.Std.Services do
       errors([:not_found, :read_failed])
     end
 
-    @doc "Lists stored files within a bucket."
+    @doc "Lists stored files within a bucket or across all buckets."
     action :list_files do
       scope(:server)
 
@@ -631,6 +631,30 @@ defmodule Exoforge.Std.Services do
       )
 
       returns(files: [:map], count: :integer)
+    end
+
+    @doc "Lists all existing storage buckets."
+    action :list_buckets do
+      scope(:server)
+      params()
+      returns(buckets: [:string])
+    end
+
+    @doc "Modifies an existing file's name, metadata, or content."
+    action :update_file do
+      scope(:server)
+
+      params(
+        id: :string,
+        bucket: [type: :string, optional: true],
+        filename: [type: :string, optional: true],
+        content: [type: :term, optional: true],
+        content_type: [type: :string, optional: true],
+        metadata: [type: :map, optional: true]
+      )
+
+      returns(file: :map)
+      errors([:not_found, :write_failed])
     end
 
     @doc "Deletes a stored file."
