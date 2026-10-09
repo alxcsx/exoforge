@@ -113,7 +113,8 @@ work around AOT, and this deletes it rather than fixing it.
 consumer and by this repository for its own plugins, so a plugin built here and one built against
 the package deploy identically: `PublishAot=false`, `SelfContained=false`, `PublishSingleFile=true`
 (the deploy protocol uploads one binary), `PublishReadyToRun=true` (Unity recommends R2R for cold
-start and documents the size cost), `RollForward=LatestMajor`.
+start; measured on the sample at 28.7 ms against 31.0 ms median to the first action, for 55 KB),
+`RollForward=LatestMajor`.
 
 Every one of those is **conditional** on being unset, which is not a style choice: unconditional,
 the import overwrote what a plugin set for itself, so `PublishAot=true` became `false`, the build
@@ -251,11 +252,14 @@ by whether they were worth doing on the spot.
   per-plugin second window now admits 100 lines and refuses the rest with `:rate_limited` before
   either the buffer or the server log sees them, so one plugin cannot drown another's lines. Drops
   are silent by design; a "N lines suppressed" summary is the upgrade if an operator asks.
+- **`PublishReadyToRun` is measured.** Process spawn to first action reply on the sample, 60 runs
+  each: 28.7 ms median with R2R (195 KB binary) against 31.0 ms without (139 KB) - about 2 ms for
+  55 KB, with ~0.2 MB less marginal Pss at 8 instances. Kept, because cold start is paid on every
+  boot and reload and disk is the cheap axis here. The same numbers sit beside the property in the
+  SDK targets.
 
 *Worth doing later, in rough order of value:*
 
-- **`PublishReadyToRun` is unmeasured.** It costs about 50KB on a 195KB plugin and is there for cold
-  start, which nobody has timed. Either measure it or drop it.
 - **The `HEALTHCHECK` is wrong twice.** Verified against the running container: the path it curls,
   `:4005/api/health`, is `Not Found`; the working public health route is `:4001/health`, and
   `:4001/api/health` answers `401`, which `curl -f` also rejects. And podman builds OCI-format images
