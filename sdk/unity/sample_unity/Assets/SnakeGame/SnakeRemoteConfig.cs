@@ -27,11 +27,13 @@ namespace SnakeGame
 
         public async Task LoadConfigAsync()
         {
+            if (this == null || !isActiveAndEnabled) return;
             Status = "fetching config…";
             try
             {
                 var client = ExoforgeSDK.Client;
                 var config = await client.SendActionAsync<JsonElement>("snake_config", "get_config", null);
+                if (this == null || !isActiveAndEnabled) return;
 
                 string snakeColorHex = config.TryGetProperty("snake_color", out var sc) ? sc.GetString() ?? "#3DD157" : "#3DD157";
                 string appleColorHex = config.TryGetProperty("apple_color", out var ac) ? ac.GetString() ?? "#FF525C" : "#FF525C";

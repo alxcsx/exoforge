@@ -27,6 +27,7 @@ namespace SnakeGame
             try
             {
                 Session = await ExoforgeSDK.Auth.LoginAnonymously();
+                if (this == null || !isActiveAndEnabled) return;
                 Debug.Log($"[Snake] signed in as {PlayerId}");
 
                 if (NeedsDisplayName)

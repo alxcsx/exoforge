@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Exoforge.Client;
 using UnityEngine;
 
 namespace Exoforge.Client.Unity
@@ -41,6 +42,10 @@ namespace Exoforge.Client.Unity
                 if (existing != null)
                 {
                     client.UseToken(ExoTokenStore.Token);
+                    if (client.IsConnected && !client.IsAuthenticated)
+                    {
+                        await client.AuthenticateAsync(ExoTokenStore.Token);
+                    }
 
                     Current = new ExoSession(
                         existing.Value.PlayerId,
@@ -62,7 +67,7 @@ namespace Exoforge.Client.Unity
             {
                 player_id = ExoDeviceId.Get(),
                 disposable
-            });
+            }, ExoTransportPreference.Http);
 
             string token = result.ValueKind == JsonValueKind.Object && result.TryGetProperty("token", out var tokenProp)
                 ? tokenProp.GetString() ?? ""
@@ -74,6 +79,10 @@ namespace Exoforge.Client.Unity
             }
 
             client.UseToken(token);
+            if (client.IsConnected)
+            {
+                await client.AuthenticateAsync(token);
+            }
 
             var auth = await AuthenticateAsync(client, token)
                 ?? throw new InvalidOperationException("Could not authenticate the new session.");
@@ -99,7 +108,7 @@ namespace Exoforge.Client.Unity
         {
             try
             {
-                var result = await client.SendActionAsync<JsonElement>("auth", "authenticate", new { token });
+                var result = await client.SendActionAsync<JsonElement>("auth", "authenticate", new { token }, ExoTransportPreference.Http);
 
                 if (result.ValueKind != JsonValueKind.Object)
                 {
@@ -147,7 +156,7 @@ namespace Exoforge.Client.Unity
 
             string trimmed = displayName.Trim();
             var client = ExoforgeSDK.Client;
-            var result = await client.SendActionAsync<JsonElement>("auth", "set_display_name", new { name = trimmed });
+            var result = await client.SendActionAsync<JsonElement>("auth", "set_display_name", new { name = trimmed }, ExoTransportPreference.Http);
 
             string applied = result.ValueKind == JsonValueKind.Object && result.TryGetProperty("name", out var nameProp)
                 ? nameProp.GetString() ?? trimmed

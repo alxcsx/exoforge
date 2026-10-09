@@ -41,6 +41,7 @@ namespace SnakeGame
         private async Task LoadAsync()
         {
             await SubscribeAsync();
+            if (this == null || !isActiveAndEnabled) return;
             await RefreshAsync();
         }
 
@@ -156,9 +157,10 @@ namespace SnakeGame
 
         public async Task RefreshAsync()
         {
+            if (this == null || !isActiveAndEnabled) return;
             try
             {
-                var client = ExoforgeSDK.Client;
+                var client = _client ?? ExoforgeSDK.Client;
                 var entries = await client.SnakeLeaderboard().GetLeaderboardAsync(topN);
 
                 _rows.Clear();

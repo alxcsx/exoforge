@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -18,18 +19,26 @@ namespace Exoforge.Client.Unity
     public static class ExoforgeSDK
     {
         private static ExoforgeAuth? _auth;
+        private static SynchronizationContext? _mainContext;
+        private static int _mainThreadId;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetSubsystem()
+        {
+            _auth = null;
+            _mainContext = null;
+            _mainThreadId = 0;
+        }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void CaptureMainThread()
+        {
+            _mainContext = SynchronizationContext.Current;
+            _mainThreadId = Environment.CurrentManagedThreadId;
+        }
 
         /// <summary>Player sign-in.</summary>
         public static ExoforgeAuth Auth => _auth ??= new ExoforgeAuth();
-
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-        private static void InitializeOnMainThread()
-        {
-            // The host is created here, on the main thread, once (M33 Fix 20): the lazy path in
-            // Behaviour runs `new GameObject()`, which is main-thread-only, and a game calling
-            // ExoforgeSDK.Client from a Task used to hit it.
-            _ = Behaviour;
-        }
 
         /// <summary>
         /// The client. Usable with or without a socket: an action over HTTP needs no connection.
@@ -64,10 +73,31 @@ namespace Exoforge.Client.Unity
                     return ExoforgeManager.Current;
                 }
 
-                // No prefab in the scene: create the runtime host on demand.
-                var host = new GameObject("[ExoforgeSDK]");
-                return host.AddComponent<ExoforgeManager>();
+                if (_mainThreadId == 0 || Environment.CurrentManagedThreadId == _mainThreadId || _mainContext == null)
+                {
+                    return CreateOrFindHost();
+                }
+
+                ExoforgeManager? manager = null;
+                _mainContext.Send(_ =>
+                {
+                    manager = ExoforgeManager.Current ?? CreateOrFindHost();
+                }, null);
+
+                return manager ?? throw new InvalidOperationException("Failed to initialize ExoforgeManager on main thread.");
             }
+        }
+
+        private static ExoforgeManager CreateOrFindHost()
+        {
+            var existing = UnityEngine.Object.FindAnyObjectByType<ExoforgeManager>(FindObjectsInactive.Include);
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            var host = new GameObject("[ExoforgeSDK]");
+            return host.AddComponent<ExoforgeManager>();
         }
     }
 }

@@ -21,6 +21,12 @@ namespace Exoforge.Client.Unity
     {
         private static ExoforgeManager? _instance;
 
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetStaticState()
+        {
+            _instance = null;
+        }
+
         /// <summary>The active instance, or null when no Exoforge prefab is in the scene.</summary>
         public static ExoforgeManager? Current => _instance;
 
@@ -98,29 +104,21 @@ namespace Exoforge.Client.Unity
         {
             get
             {
-                if (_resolvedConfig != null)
-                {
-                    return _resolvedConfig;
-                }
-
-                // Awake resolves once, on the main thread. After that a miss means "none": the
-                // reconnect loop runs on a background thread, and Resources.Load from there throws
-                // a UnityException (M33 Fix 15).
                 if (_configResolved)
                 {
-                    return null;
+                    return _resolvedConfig;
                 }
 
                 var asset = workspaceConfig != null
                     ? workspaceConfig
                     : Resources.Load<TextAsset>(ExoforgeRuntimeConfig.ResourcePath);
 
-                if (asset == null)
+                if (asset != null)
                 {
-                    return null;
+                    _resolvedConfig = ExoforgeRuntimeConfig.FromWorkspaceJson(asset.text);
                 }
 
-                _resolvedConfig = ExoforgeRuntimeConfig.FromWorkspaceJson(asset.text);
+                _configResolved = true;
                 return _resolvedConfig;
             }
         }
@@ -138,7 +136,6 @@ namespace Exoforge.Client.Unity
 
             // Resolved here, on the main thread, once — so no background thread ever loads a
             // resource (M33 Fix 15).
-            _configResolved = true;
             _ = Config;
 
             // Decided before anything connects: the session this run reads is either the Studio's or

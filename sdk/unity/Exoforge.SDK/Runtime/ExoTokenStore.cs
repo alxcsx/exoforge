@@ -39,6 +39,12 @@ namespace Exoforge.Client
         /// </summary>
         public static bool UseStudioSession { get; set; }
 
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetSubsystem()
+        {
+            UseStudioSession = false;
+        }
+
         // Setters write to PlayerPrefs but do not flush it. SaveSession and Clear flush once, so
         // storing a session is one disk write rather than four. Unity flushes on quit regardless.
 
