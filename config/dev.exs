@@ -13,8 +13,8 @@ config :exoforge_std_dashboard, Exoforge.Std.Dashboard.Endpoint,
 
 # First-access admin account for local development.
 config :exoforge, :admin,
-  email: "admin@exoforge.local",
-  password: "exoforge"
+  email: System.get_env("EXOFORGE_ADMIN_EMAIL") || "admin",
+  password: System.get_env("EXOFORGE_ADMIN_PASSWORD") || "admin"
 
 # Optional studio (read-mostly) account.
 config :exoforge, :studio,

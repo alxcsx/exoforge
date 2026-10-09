@@ -150,6 +150,59 @@ defmodule Exoforge.AuthTest do
                  required_scope: "anything"
                })
     end
+
+    test "the dev_admin prefix is not a scope override in production (M33 Fix 4)" do
+      Application.put_env(:exoforge, :allow_dev_tokens, false)
+
+      assert {:ok, %{authorized: false}} =
+               ActionDispatcher.dispatch(:auth, :verify_scope, %{
+                 player_id: "dev_admin_anyone",
+                 required_scope: "admin"
+               })
+    after
+      Application.delete_env(:exoforge, :allow_dev_tokens)
+    end
+  end
+
+  describe "Sensitive actions are staff-gated over transports (M33 Fix 3)" do
+    test "a player-scoped caller cannot reach them" do
+      assert {:error, :forbidden_scope} =
+               ActionDispatcher.dispatch(:auth, :list_users, %{}, caller_scopes: ["player"])
+
+      assert {:error, :forbidden_scope} =
+               ActionDispatcher.dispatch(:auth, :issue_token, %{player_id: "someone"}, caller_scopes: ["player"])
+    end
+
+    test "an in-process caller (the Studio's own views) keeps working" do
+      assert {:ok, _} = ActionDispatcher.dispatch(:auth, :list_users, %{})
+    end
+  end
+
+  describe "Public registration scope clamp (M33 Fix 1)" do
+    test "a public register cannot mint elevated scopes" do
+      assert {:ok, result} =
+               ActionDispatcher.dispatch(:auth, :register, %{
+                 player_id: "self_escalator",
+                 scopes: ["admin"],
+                 # The shape a transport hands the action: an external caller's identity.
+                 _auth: %{player_id: "self_escalator", scopes: ["player"]}
+               })
+
+      assert result.scopes == ["player"]
+
+      assert {:ok, authed} = ActionDispatcher.dispatch(:auth, :authenticate, %{token: result.token})
+      refute "admin" in authed.scopes
+    end
+
+    test "an in-process caller keeps caller-chosen scopes" do
+      assert {:ok, result} =
+               ActionDispatcher.dispatch(:auth, :register, %{
+                 player_id: "staff_maker",
+                 scopes: ["player", "knight"]
+               })
+
+      assert "knight" in result.scopes
+    end
   end
 
   describe "Player Registration & Auth Hook" do
@@ -263,6 +316,35 @@ defmodule Exoforge.AuthTest do
                ActionDispatcher.dispatch(:auth, :authenticate, %{token: token})
 
       assert "admin" in authed_scopes
+
+      # Also succeeds when passing player_id as the identifier
+      assert {:ok, %{player_id: "admin"}} =
+               ActionDispatcher.dispatch(:auth, :login, %{player_id: "admin", password: "s3cret"})
+    end
+
+    test "admin account can login with email 'admin' and password 'admin' in default dev setup" do
+      with_admin_env("admin", "admin")
+
+      assert :ok = Auth.ensure_admin_account()
+
+      assert {:ok, %{player_id: "admin"}} =
+               ActionDispatcher.dispatch(:auth, :login, %{email: "admin", password: "admin"})
+
+      assert {:ok, %{player_id: "admin"}} =
+               ActionDispatcher.dispatch(:auth, :login, %{player_id: "admin", password: "admin"})
+    end
+
+    test "ensure_admin_account logs credentials and warns about production environment" do
+      with_admin_env("env_admin@test.local", "supersecret")
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert :ok = Auth.ensure_admin_account()
+        end)
+
+      assert log =~ "email=env_admin@test.local"
+      assert log =~ "password=supersecret"
+      assert log =~ "should not be defined in environment variables in production after the initial setup"
     end
 
     test "login rejects a wrong password or unknown account" do
@@ -275,6 +357,39 @@ defmodule Exoforge.AuthTest do
 
       assert {:error, :invalid_credentials} =
                ActionDispatcher.dispatch(:auth, :login, %{email: "nobody@exoforge.test", password: "right"})
+    end
+
+    test "admin password can be replaced by changing env, and survives when env password is removed" do
+      # 1. Initially set to initial_pass
+      with_admin_env("admin", "initial_pass")
+      assert :ok = Auth.ensure_admin_account()
+      assert {:ok, %{player_id: "admin"}} =
+               ActionDispatcher.dispatch(:auth, :login, %{email: "admin", password: "initial_pass"})
+
+      # 2. Replaced by just changing the env
+      System.put_env("EXOFORGE_ADMIN_PASSWORD", "new_env_pass")
+      assert {:ok, %{player_id: "admin"}} =
+               ActionDispatcher.dispatch(:auth, :login, %{email: "admin", password: "new_env_pass"})
+      assert {:error, :invalid_credentials} =
+               ActionDispatcher.dispatch(:auth, :login, %{email: "admin", password: "initial_pass"})
+
+      # 3. Removed from env (explicitly empty): persists and works with last configured password
+      System.put_env("EXOFORGE_ADMIN_PASSWORD", "")
+      assert {:ok, %{player_id: "admin"}} =
+               ActionDispatcher.dispatch(:auth, :login, %{email: "admin", password: "new_env_pass"})
+
+      # 4. When removed from env, password reset via API is allowed
+      assert {:ok, %{status: "password_reset"}} =
+               ActionDispatcher.dispatch(:auth, :reset_password, %{player_id: "admin", password: "api_reset_pass"}, caller_scopes: ["admin"])
+      assert {:ok, %{player_id: "admin"}} =
+               ActionDispatcher.dispatch(:auth, :login, %{email: "admin", password: "api_reset_pass"})
+
+      # 5. When env is set again, it overrides/replaces the reset password
+      System.put_env("EXOFORGE_ADMIN_PASSWORD", "final_env_pass")
+      assert {:ok, %{player_id: "admin"}} =
+               ActionDispatcher.dispatch(:auth, :login, %{email: "admin", password: "final_env_pass"})
+      assert {:error, :invalid_credentials} =
+               ActionDispatcher.dispatch(:auth, :login, %{email: "admin", password: "api_reset_pass"})
     end
   end
 
@@ -384,6 +499,23 @@ defmodule Exoforge.AuthTest do
   end
 
   describe "Anonymous sessions (two stage)" do
+    test "anonymous refuses a password-protected account (M33 Fix 2)" do
+      assert {:ok, %{player_id: "protected_user"}} =
+               ActionDispatcher.dispatch(:auth, :register, %{
+                 player_id: "protected_user",
+                 email: "protected@exoforge.test",
+                 password: "secret123"
+               })
+
+      # Knowing the player_id must not be enough to hold its token.
+      assert {:error, :unauthorized} =
+               ActionDispatcher.dispatch(:auth, :anonymous, %{player_id: "protected_user"})
+
+      # The passwordless path still reissues.
+      assert {:ok, %{player_id: "protected_user"}} =
+               ActionDispatcher.dispatch(:auth, :login, %{email: "protected@exoforge.test", password: "secret123"})
+    end
+
     test "enters an unnamed account for a device, then names it" do
       device = "dev_test_#{System.unique_integer([:positive])}"
 
@@ -428,39 +560,40 @@ defmodule Exoforge.AuthTest do
   # signed up, so cleaning up after one meant wiping the database. A disposable account says so at
   # registration, and a purge removes only those.
   test "a disposable account is marked, survives a role change, and is purged" do
+    disp = "dev_disp_#{System.unique_integer([:positive])}"
+    kept = "dev_kept_#{System.unique_integer([:positive])}"
+
     assert {:ok, _} =
              ActionDispatcher.dispatch(:auth, :anonymous, %{
-               player_id: "dev_disposable",
+               player_id: disp,
                disposable: true
              })
 
     # Registered beside it and not disposable: a purge has to leave it alone.
-    assert {:ok, _} = ActionDispatcher.dispatch(:auth, :anonymous, %{player_id: "dev_kept"})
+    assert {:ok, _} = ActionDispatcher.dispatch(:auth, :anonymous, %{player_id: kept})
 
     # Changing roles must not quietly make a disposable account permanent.
     assert {:ok, _} =
              ActionDispatcher.dispatch(:auth, :update_user_roles, %{
-               player_id: "dev_disposable",
+               player_id: disp,
                scopes: ["player"]
              })
 
     assert {:ok, %{purged: 1, dry_run: true}} =
-             ActionDispatcher.dispatch(:auth, :purge_disposable, %{dry_run: true},
-               caller_scopes: ["studio"]
-             )
+             ActionDispatcher.dispatch(:auth, :purge_disposable, %{dry_run: true}, caller_scopes: ["studio"])
 
     # A dry run reports without removing.
-    assert player_row("dev_disposable")
+    assert player_row(disp)
 
     assert {:ok, %{purged: 1}} =
              ActionDispatcher.dispatch(:auth, :purge_disposable, %{}, caller_scopes: ["studio"])
 
-    refute player_row("dev_disposable")
-    assert player_row("dev_kept")
+    refute player_row(disp)
+    assert player_row(kept)
 
     # The tokens went with it, and the other account kept its own.
-    assert token_count("dev_disposable") == 0
-    assert token_count("dev_kept") == 1
+    assert token_count(disp) == 0
+    assert token_count(kept) == 1
   end
 
   defp player_row(player_id) do

@@ -18,6 +18,19 @@ defmodule Exoforge.Std.Services do
       returns(rows: [:map])
       errors([:syntax_error, :not_found, :unauthorized])
     end
+
+    @doc "Lists the columns of a table in a plugin's isolated database (M33 Fix 9)."
+    action :table_columns do
+      scope(:server)
+
+      params(
+        plugin: [type: :term, optional: true],
+        table: :string
+      )
+
+      returns(columns: [:string])
+      errors([:not_found])
+    end
   end
 
   defservice lldb do
@@ -173,7 +186,7 @@ defmodule Exoforge.Std.Services do
       )
 
       returns(player_id: :string, token: :string, scopes: [:string])
-      errors([:invalid_attributes, :registration_failed])
+      errors([:invalid_attributes, :registration_failed, :unauthorized])
     end
 
     @doc "Sets the signed-in player's display name."
@@ -185,6 +198,9 @@ defmodule Exoforge.Std.Services do
 
     @doc "Issues an authentication token for a user or player."
     action :issue_token do
+      # Mints tokens with arbitrary scopes - admin only (M33 Fix 3).
+      scope("admin")
+
       params(
         player_id: :string,
         user_id: [type: :string, optional: true],
@@ -197,12 +213,20 @@ defmodule Exoforge.Std.Services do
 
     @doc "Lists all registered user accounts and their assigned authorization scopes."
     action :list_users do
-      params(query: [type: :string, optional: true])
+      scope("studio")
+
+      params(
+        query: [type: :string, optional: true],
+        limit: [type: :integer, optional: true]
+      )
+
       returns(users: [:map], count: :integer)
     end
 
     @doc "Resets the password for an existing account."
     action :reset_password do
+      scope("admin")
+
       params(
         user_id: [type: :string, optional: true],
         player_id: [type: :string, optional: true],
@@ -215,6 +239,8 @@ defmodule Exoforge.Std.Services do
 
     @doc "Updates authorization scopes/roles for a user account."
     action :update_user_roles do
+      scope("admin")
+
       params(
         user_id: [type: :string, optional: true],
         player_id: [type: :string, optional: true],
@@ -228,6 +254,8 @@ defmodule Exoforge.Std.Services do
 
     @doc "Deletes a user account and associated auth credentials."
     action :delete_user do
+      scope("admin")
+
       params(
         user_id: [type: :string, optional: true],
         player_id: [type: :string, optional: true]
@@ -285,6 +313,8 @@ defmodule Exoforge.Std.Services do
 
     @doc "Deletes a player profile record."
     action :delete_player do
+      scope("admin")
+
       params(player_id: :string)
       returns(status: :string, player_id: :string)
       errors([:player_not_found])
@@ -292,6 +322,8 @@ defmodule Exoforge.Std.Services do
 
     @doc "Unlinks user and marks player record as retained/orphaned for data retention policies."
     action :retain_player do
+      scope("admin")
+
       params(player_id: :string)
       returns(status: :string, player_id: :string)
       errors([:player_not_found])
@@ -299,7 +331,14 @@ defmodule Exoforge.Std.Services do
 
     @doc "Lists all registered player profiles with optional filtering (all, valid, orphaned)."
     action :list_players do
-      params(filter: [type: :string, optional: true])
+      scope("studio")
+
+      params(
+        filter: [type: :string, optional: true],
+        user_id: [type: :string, optional: true],
+        limit: [type: :integer, optional: true]
+      )
+
       returns(players: [:map])
     end
 
@@ -532,6 +571,79 @@ defmodule Exoforge.Std.Services do
       )
 
       returns(title_id: :string, studio_id: :string, plugins: [:map], totals: :map)
+    end
+  end
+
+  defservice file_bucket do
+    @moduledoc "Cluster file storage and retrieval engine for binary assets, uploads, and blobs."
+
+    @doc "Stores a file in a specified bucket from raw binary, base64 content, or disk path."
+    action :upload_file do
+      scope(:server)
+
+      params(
+        filename: :string,
+        bucket: [type: :string, optional: true],
+        content: [type: :term, optional: true],
+        path: [type: :string, optional: true],
+        content_type: [type: :string, optional: true],
+        metadata: [type: :map, optional: true]
+      )
+
+      returns(file: :map)
+      errors([:invalid_payload, :write_failed])
+    end
+
+    @doc "Retrieves metadata and local storage path for a file."
+    action :get_file_info do
+      scope(:server)
+
+      params(
+        id: :string,
+        bucket: [type: :string, optional: true]
+      )
+
+      returns(file: :map)
+      errors([:not_found])
+    end
+
+    @doc "Reads raw binary content of a file."
+    action :read_file do
+      scope(:server)
+
+      params(
+        id: :string,
+        bucket: [type: :string, optional: true]
+      )
+
+      returns(content: :term, file: :map)
+      errors([:not_found, :read_failed])
+    end
+
+    @doc "Lists stored files within a bucket."
+    action :list_files do
+      scope(:server)
+
+      params(
+        bucket: [type: :string, optional: true],
+        limit: [type: :integer, optional: true],
+        offset: [type: :integer, optional: true]
+      )
+
+      returns(files: [:map], count: :integer)
+    end
+
+    @doc "Deletes a stored file."
+    action :delete_file do
+      scope(:server)
+
+      params(
+        id: :string,
+        bucket: [type: :string, optional: true]
+      )
+
+      returns(deleted: :boolean)
+      errors([:not_found])
     end
   end
 end

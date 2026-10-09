@@ -20,8 +20,8 @@ if config_env() == :prod do
     allow_dev_tokens: false,
     require_admin_auth: true,
     admin: [
-      email: System.get_env("EXOFORGE_ADMIN_EMAIL") || "admin@exoforge.local",
-      password: System.get_env("EXOFORGE_ADMIN_PASSWORD") || "exoforge"
+      email: System.get_env("EXOFORGE_ADMIN_EMAIL"),
+      password: System.get_env("EXOFORGE_ADMIN_PASSWORD")
     ],
     studio: [
       email: System.get_env("EXOFORGE_STUDIO_EMAIL"),
@@ -42,6 +42,9 @@ if config_env() == :prod do
       port: dashboard_port
     ],
     secret_key_base: secret_key_base,
+    # The salt signs LiveView sockets (M33 Fix 30); demanded, like the key base, and
+    # baked into the local defaults (compose) so a self-hosted instance stays zero-config.
+    live_view: [signing_salt: System.fetch_env!("LIVEVIEW_SIGNING_SALT")],
     server: true
 
   if database_url = System.get_env("DATABASE_URL") do

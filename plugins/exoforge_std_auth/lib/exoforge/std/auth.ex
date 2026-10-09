@@ -39,6 +39,7 @@ defmodule Exoforge.Std.Auth do
 
   alias Exoforge.ActionDispatcher
   alias Exoforge.Auth.Roles
+  require Logger
 
   @admin_id "admin"
   @studio_id "studio"
@@ -63,22 +64,19 @@ defmodule Exoforge.Std.Auth do
     _ =
       ActionDispatcher.dispatch(:database, :execute, %{
         plugin: :auth,
-        operation:
-          "CREATE TABLE IF NOT EXISTS #{@tokens_table} (id text, token text, player_id text, scopes text)"
+        operation: "CREATE TABLE IF NOT EXISTS #{@tokens_table} (id text, token text, player_id text, scopes text)"
       })
 
     _ =
       ActionDispatcher.dispatch(:database, :execute, %{
         plugin: :auth,
-        operation:
-          "CREATE TABLE IF NOT EXISTS #{@players_table} (id text, player_id text, scopes text)"
+        operation: "CREATE TABLE IF NOT EXISTS #{@players_table} (id text, player_id text, scopes text)"
       })
 
     _ =
       ActionDispatcher.dispatch(:database, :execute, %{
         plugin: :auth,
-        operation:
-          "CREATE TABLE IF NOT EXISTS #{@accounts_table} (id text, player_id text, email text, password_hash text, scopes text)"
+        operation: "CREATE TABLE IF NOT EXISTS #{@accounts_table} (id text, player_id text, email text, password_hash text, scopes text)"
       })
 
     # `CREATE TABLE IF NOT EXISTS` does not add a column to a table that already exists, so databases
@@ -95,15 +93,11 @@ defmodule Exoforge.Std.Auth do
   end
 
   defp column_exists?(table, column) do
-    case ActionDispatcher.dispatch(:database, :execute, %{
-           plugin: :auth,
-           operation: "PRAGMA table_info(#{table})"
-         }) do
-      {:ok, %{rows: rows}} ->
-        Enum.any?(rows, fn row -> (row["name"] || row[:name]) == column end)
-
-      _ ->
-        false
+    # Column inspection is the adapter's dialect, not a PRAGMA here (M33 Fix 9): PostgreSQL does
+    # not answer `PRAGMA table_info`, so the check read "no such column" there forever.
+    case ActionDispatcher.dispatch(:database, :table_columns, %{plugin: :auth, table: table}) do
+      {:ok, %{columns: columns}} -> to_string(column) in columns
+      _ -> false
     end
   end
 
@@ -126,8 +120,7 @@ defmodule Exoforge.Std.Auth do
       token == Roles.guest() ->
         scopes = [Roles.guest()]
 
-        {:ok,
-         %{user_id: "guest_anon", player_id: "guest_anon", scopes: scopes, role: role(scopes)}}
+        {:ok, %{user_id: "guest_anon", player_id: "guest_anon", scopes: scopes, role: role(scopes)}}
 
       true ->
         query = "SELECT * FROM #{@tokens_table} WHERE token = $1"
@@ -157,38 +150,68 @@ defmodule Exoforge.Std.Auth do
 
   @impl true
   defaction login(payload) do
-    email = Map.get(payload, :email) || Map.get(payload, "email")
+    identifier =
+      Map.get(payload, :email) || Map.get(payload, "email") ||
+        Map.get(payload, :player_id) || Map.get(payload, "player_id")
+
     password = Map.get(payload, :password) || Map.get(payload, "password")
 
-    if is_nil(email) or email == "" or is_nil(password) or password == "" do
+    if is_nil(identifier) or identifier == "" or is_nil(password) or password == "" do
       {:error, :invalid_credentials}
     else
-      query = "SELECT * FROM #{@accounts_table} WHERE email = $1"
+      clean_id = String.downcase(to_string(identifier))
+      {admin_email, env_password} = credentials(:admin, "EXOFORGE_ADMIN_EMAIL", "EXOFORGE_ADMIN_PASSWORD")
+      admin_match? = clean_id == @admin_id or (is_binary(admin_email) and clean_id == String.downcase(to_string(admin_email)))
 
-      case ActionDispatcher.dispatch(:database, :execute, %{
-             plugin: :auth,
-             operation: query,
-             arguments: [String.downcase(to_string(email))]
-           }) do
-        {:ok, %{rows: [row | _]}} ->
-          player_id = Map.get(row, "player_id") || Map.get(row, :player_id)
-          hash = Map.get(row, "password_hash") || Map.get(row, :password_hash)
-          scopes = parse_scopes(Map.get(row, "scopes") || Map.get(row, :scopes) || Roles.player())
+      # If the admin password is actively configured in the env, it immediately overrides and replaces any stored password
+      if admin_match? and is_binary(env_password) and env_password != "" do
+        if password == env_password do
+          effective_email = if is_binary(admin_email) and admin_email != "", do: admin_email, else: @admin_id
+          _ = upsert_account(@admin_id, effective_email, env_password, [Roles.admin()])
 
-          if verify_password(password, hash) do
-            case generate_and_store_token(player_id, scopes) do
-              {:ok, token} ->
-                {:ok, %{player_id: player_id, token: token, scopes: scopes, role: role(scopes)}}
+          case generate_and_store_token(@admin_id, [Roles.admin()]) do
+            {:ok, token} ->
+              {:ok, %{player_id: @admin_id, token: token, scopes: [Roles.admin()], role: role([Roles.admin()])}}
 
-              error ->
-                error
-            end
-          else
-            {:error, :invalid_credentials}
+            error ->
+              error
           end
-
-        _ ->
+        else
           {:error, :invalid_credentials}
+        end
+      else
+        query = "SELECT * FROM #{@accounts_table} WHERE email = $1 OR player_id = $2"
+
+        case ActionDispatcher.dispatch(:database, :execute, %{
+               plugin: :auth,
+               operation: query,
+               arguments: [clean_id, to_string(identifier)]
+             }) do
+          {:ok, %{rows: rows}} when is_list(rows) and rows != [] ->
+            matching_row =
+              Enum.find(rows, fn row ->
+                hash = Map.get(row, "password_hash") || Map.get(row, :password_hash)
+                verify_password(password, hash)
+              end)
+
+            if matching_row do
+              player_id = Map.get(matching_row, "player_id") || Map.get(matching_row, :player_id)
+              scopes = parse_scopes(Map.get(matching_row, "scopes") || Map.get(matching_row, :scopes) || Roles.player())
+
+              case generate_and_store_token(player_id, scopes) do
+                {:ok, token} ->
+                  {:ok, %{player_id: player_id, token: token, scopes: scopes, role: role(scopes)}}
+
+                error ->
+                  error
+              end
+            else
+              {:error, :invalid_credentials}
+            end
+
+          _ ->
+            {:error, :invalid_credentials}
+        end
       end
     end
   end
@@ -205,7 +228,12 @@ defmodule Exoforge.Std.Auth do
       is_nil(user_id) or is_nil(required) ->
         {:error, :unauthorized}
 
-      user_id == @admin_id or String.starts_with?(user_id, @dev_admin_prefix) ->
+      user_id == @admin_id ->
+        {:ok, %{authorized: true}}
+
+      # dev_admin_* ids only exist while dev tokens do (M33 Fix 4): in production, where
+      # `allow_dev_tokens?` is false, the prefix must not answer yes to anything.
+      String.starts_with?(user_id, @dev_admin_prefix) and Exoforge.Config.allow_dev_tokens?() ->
         {:ok, %{authorized: true}}
 
       true ->
@@ -256,16 +284,24 @@ defmodule Exoforge.Std.Auth do
     cond do
       # Entering (or claiming) an account for a known device identity.
       is_binary(player_id) and player_id != "" ->
-        case player_name(player_id) do
-          nil ->
-            # First sight of this device: register the account, unnamed. The whole payload goes
-            # through: rebuilding it here silently dropped every other field a caller sent, scopes
-            # and the disposable marker among them.
+        cond do
+          # A password-protected account cannot be entered by naming its player_id (M33 Fix 2):
+          # anonymous mints a token for the id it is given, so for someone who learned another
+          # player's id that is account takeover. Such an account is entered by password (`login`),
+          # not by id.
+          password_protected?(player_id) ->
+            {:error, :unauthorized}
+
+          # First sight of this device: register the account, unnamed. The whole payload goes
+          # through: rebuilding it here silently dropped every other field a caller sent, scopes
+          # and the disposable marker among them.
+          player_name(player_id) == nil ->
             register_unnamed(Map.put(payload, :player_id, player_id))
 
-          name ->
+          # A returning device, still passwordless: reissue its token.
+          true ->
             case anonymous_token(player_id) do
-              {:ok, result} -> {:ok, Map.put(result, :name, name)}
+              {:ok, result} -> {:ok, Map.put(result, :name, player_name(player_id))}
               error -> error
             end
         end
@@ -304,7 +340,7 @@ defmodule Exoforge.Std.Auth do
   end
 
   @impl true
-  defaction issue_token(payload) do
+  defaction issue_token(payload), scope: Exoforge.Auth.Roles.admin() do
     user_id =
       Map.get(payload, :user_id) || Map.get(payload, "user_id") ||
         Map.get(payload, :player_id) || Map.get(payload, "player_id")
@@ -341,7 +377,7 @@ defmodule Exoforge.Std.Auth do
   end
 
   @impl true
-  defaction list_users(_payload) do
+  defaction list_users(payload), scope: Exoforge.Auth.Roles.studio() do
     init_schema()
 
     players_query = "SELECT * FROM #{@players_table}"
@@ -429,11 +465,19 @@ defmodule Exoforge.Std.Auth do
         }
       end)
 
-    {:ok, %{users: users, count: length(users)}}
+    # A page, not the whole directory (M33 Fix 33): the Studio asks for a bounded list; count says
+    # how many exist in total. Unlimited remains possible by passing a big limit.
+    limit = Map.get(payload, :limit) || Map.get(payload, "limit")
+    total = length(users)
+
+    users =
+      if is_integer(limit) and limit > 0, do: Enum.take(users, limit), else: users
+
+    {:ok, %{users: users, count: total}}
   end
 
   @impl true
-  defaction reset_password(payload) do
+  defaction reset_password(payload), scope: Exoforge.Auth.Roles.admin() do
     user_id =
       Map.get(payload, :user_id) || Map.get(payload, "user_id") ||
         Map.get(payload, :player_id) || Map.get(payload, "player_id")
@@ -481,9 +525,7 @@ defmodule Exoforge.Std.Auth do
             actual_pid = Map.get(acc_row, "player_id") || Map.get(acc_row, :player_id) || pid
 
             scopes =
-              parse_scopes(
-                Map.get(acc_row, "scopes") || Map.get(acc_row, :scopes) || Roles.player()
-              )
+              parse_scopes(Map.get(acc_row, "scopes") || Map.get(acc_row, :scopes) || Roles.player())
 
             _ = upsert_account(actual_pid, email, password, scopes)
             {:ok, %{user_id: actual_pid, player_id: actual_pid, status: "password_reset"}}
@@ -498,9 +540,7 @@ defmodule Exoforge.Std.Auth do
                  }) do
               {:ok, %{rows: [prow | _]}} ->
                 scopes =
-                  parse_scopes(
-                    Map.get(prow, "scopes") || Map.get(prow, :scopes) || Roles.player()
-                  )
+                  parse_scopes(Map.get(prow, "scopes") || Map.get(prow, :scopes) || Roles.player())
 
                 _ = upsert_account(pid, "#{pid}@player.exoforge.io", password, scopes)
                 {:ok, %{user_id: pid, player_id: pid, status: "password_reset"}}
@@ -513,7 +553,7 @@ defmodule Exoforge.Std.Auth do
   end
 
   @impl true
-  defaction update_user_roles(payload) do
+  defaction update_user_roles(payload), scope: Exoforge.Auth.Roles.admin() do
     user_id =
       Map.get(payload, :user_id) || Map.get(payload, "user_id") ||
         Map.get(payload, :player_id) || Map.get(payload, "player_id")
@@ -602,7 +642,7 @@ defmodule Exoforge.Std.Auth do
   end
 
   @impl true
-  defaction delete_user(payload) do
+  defaction delete_user(payload), scope: Exoforge.Auth.Roles.admin() do
     user_id =
       Map.get(payload, :user_id) || Map.get(payload, "user_id") ||
         Map.get(payload, :player_id) || Map.get(payload, "player_id")
@@ -664,6 +704,7 @@ defmodule Exoforge.Std.Auth do
       _ -> :error
     end
   end
+
   defp anonymous_token(player_id) do
     scopes = [Roles.player()]
 
@@ -675,6 +716,7 @@ defmodule Exoforge.Std.Auth do
         error
     end
   end
+
   defp remove_disposable(ids) do
     Enum.each(ids, fn player_id ->
       Enum.each([@tokens_table, @accounts_table, @players_table], fn table ->
@@ -740,7 +782,13 @@ defmodule Exoforge.Std.Auth do
         else: "#{user_id}@player.exoforge.io"
 
     raw_scopes = Map.get(payload, :scopes) || Map.get(payload, "scopes") || [Roles.player()]
-    scopes = parse_scopes(raw_scopes)
+
+    # Register is a public action, so a payload naming `scopes: ["admin"]` would mint an admin
+    # token to whoever sent it (M33 Fix 1). Only a trusted caller may choose scopes; everyone
+    # else gets a player.
+    scopes =
+      if trusted_caller?(payload), do: parse_scopes(raw_scopes), else: [Roles.player()]
+
     raw_password = Map.get(payload, :password) || Map.get(payload, "password")
 
     # A caller that says the account is disposable gets one that a purge may remove. Nothing is
@@ -781,8 +829,7 @@ defmodule Exoforge.Std.Auth do
             {:error, reason}
 
           _ ->
-            {:ok,
-             %{user_id: user_id, player_id: user_id, token: token, scopes: scopes, player: profile}}
+            {:ok, %{user_id: user_id, player_id: user_id, token: token, scopes: scopes, player: profile}}
         end
 
       {:error, reason} ->
@@ -793,8 +840,27 @@ defmodule Exoforge.Std.Auth do
   @doc "Checks if a player ID belongs to the protected env-configured admin."
   def is_env_admin?(player_id) do
     pid = to_string(player_id)
-    {env_email, _} = credentials(:admin, "EXOFORGE_ADMIN_EMAIL", "EXOFORGE_ADMIN_PASSWORD")
-    pid == @admin_id or (is_binary(env_email) and env_email != "" and pid == env_email)
+    {env_email, env_password} = credentials(:admin, "EXOFORGE_ADMIN_EMAIL", "EXOFORGE_ADMIN_PASSWORD")
+    is_admin = pid == @admin_id or (is_binary(env_email) and env_email != "" and pid == env_email)
+    is_admin and is_binary(env_password) and env_password != ""
+  end
+
+  @doc "True when the account has a password, so `anonymous` may not reissue its token."
+  def password_protected?(player_id) do
+    case ActionDispatcher.dispatch(:database, :execute, %{
+           plugin: :auth,
+           operation: "SELECT password_hash FROM #{@accounts_table} WHERE player_id = $1",
+           arguments: [to_string(player_id)]
+         }) do
+      {:ok, %{rows: rows}} ->
+        Enum.any?(rows, fn row ->
+          hash = Map.get(row, "password_hash") || Map.get(row, :password_hash)
+          is_binary(hash) and hash != ""
+        end)
+
+      _ ->
+        false
+    end
   end
 
   ## ---- ROLES (context differentiation) ----
@@ -819,9 +885,35 @@ defmodule Exoforge.Std.Auth do
   """
   def ensure_admin_account do
     case credentials(:admin, "EXOFORGE_ADMIN_EMAIL", "EXOFORGE_ADMIN_PASSWORD") do
-      {email, password} when is_binary(email) and is_binary(password) ->
+      {email, password} when is_binary(email) and email != "" and is_binary(password) and password != "" ->
         _ = upsert_account(@admin_id, email, password, [Roles.admin()])
+        Logger.info("[Auth] Admin credentials defined on environment: email=#{email}, password=#{password}")
+        Logger.warning("[Auth] Admin credentials should not be defined in environment variables in production after the initial setup.")
         :ok
+
+      {email, _} when is_binary(email) and email != "" ->
+        sync_admin_email_if_needed(email)
+        :ok
+
+      _ ->
+        :ok
+    end
+  end
+
+  defp sync_admin_email_if_needed(email) do
+    case ActionDispatcher.dispatch(:database, :execute, %{
+           plugin: :auth,
+           operation: "SELECT * FROM #{@accounts_table} WHERE player_id = $1",
+           arguments: [@admin_id]
+         }) do
+      {:ok, %{rows: [row | _]}} ->
+        current_email = Map.get(row, "email") || Map.get(row, :email)
+
+        if String.downcase(to_string(current_email)) != String.downcase(to_string(email)) do
+          hash = Map.get(row, "password_hash") || Map.get(row, :password_hash)
+          scopes = parse_scopes(Map.get(row, "scopes") || Map.get(row, :scopes) || Roles.admin())
+          _ = upsert_account_with_hash(@admin_id, email, hash, scopes)
+        end
 
       _ ->
         :ok
@@ -846,34 +938,64 @@ defmodule Exoforge.Std.Auth do
 
   @doc "Creates or updates an email/password account and its scopes."
   def upsert_account(player_id, email, password, scopes) do
+    upsert_account_with_hash(player_id, email, hash_password(password), scopes)
+  end
+
+  @doc "Creates or updates an account preserving an existing password hash."
+  def upsert_account_with_hash(player_id, email, hash, scopes) do
     init_schema()
     email = String.downcase(to_string(email))
+    player_id = to_string(player_id)
 
     _ =
       ActionDispatcher.dispatch(:database, :execute, %{
         plugin: :auth,
-        operation: "DELETE FROM #{@accounts_table} WHERE email = $1",
-        arguments: [email]
+        operation: "DELETE FROM #{@accounts_table} WHERE email = $1 OR player_id = $2",
+        arguments: [email, player_id]
       })
 
     _ =
       ActionDispatcher.dispatch(:database, :execute, %{
         plugin: :auth,
-        operation:
-          "INSERT INTO #{@accounts_table} (id, player_id, email, password_hash, scopes) VALUES ($1, $2, $3, $4, $5)",
-        arguments: [email, player_id, email, hash_password(password), Enum.join(scopes, ",")]
+        operation: "INSERT INTO #{@accounts_table} (id, player_id, email, password_hash, scopes) VALUES ($1, $2, $3, $4, $5)",
+        arguments: [email, player_id, email, hash, Enum.join(scopes, ",")]
       })
 
     _ = set_player_scopes(player_id, scopes)
     {:ok, %{player_id: player_id, email: email, scopes: scopes}}
   end
 
+  @doc "True when the caller may choose an account's scopes, not just receive `player`."
+  def trusted_caller?(payload) do
+    auth = Map.get(payload, :_auth) || Map.get(payload, "_auth")
+
+    # Mirrors the dispatcher's trust rule (`extract_caller_scopes`): a payload without `_auth` is an
+    # in-process caller - kernel or plugin code, the server itself. Anything presenting `_auth` is
+    # an external caller and must hold admin scopes (M33 Fix 1).
+    if auth == nil do
+      true
+    else
+      caller = Map.get(auth, "scopes") || Map.get(auth, :scopes) || []
+      Roles.satisfies?(List.wrap(caller), Roles.admin())
+    end
+  end
+
   defp credentials(config_key, env_email, env_password) do
     config = Application.get_env(:exoforge, config_key, [])
 
-    # Environment overrides config, so direnv / deployment vars win locally.
-    email = System.get_env(env_email) || config[:email]
-    password = System.get_env(env_password) || config[:password]
+    email =
+      case System.get_env(env_email) do
+        nil -> config[:email]
+        "" -> nil
+        val -> val
+      end
+
+    password =
+      case System.get_env(env_password) do
+        nil -> config[:password]
+        "" -> nil
+        val -> val
+      end
 
     {email, password}
   end
