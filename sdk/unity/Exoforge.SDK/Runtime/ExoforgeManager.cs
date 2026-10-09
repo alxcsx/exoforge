@@ -62,6 +62,8 @@ namespace Exoforge.Client.Unity
         private Task? _pendingConnect;
         private ExoClient? _client;
         private ExoforgeRuntimeConfig? _resolvedConfig;
+        private bool _configResolved;
+        private readonly SemaphoreSlim _connectGate = new(1, 1);
         private CancellationTokenSource? _reconnectCts;
         private int _reconnectAttempt;
 
@@ -101,6 +103,14 @@ namespace Exoforge.Client.Unity
                     return _resolvedConfig;
                 }
 
+                // Awake resolves once, on the main thread. After that a miss means "none": the
+                // reconnect loop runs on a background thread, and Resources.Load from there throws
+                // a UnityException (M33 Fix 15).
+                if (_configResolved)
+                {
+                    return null;
+                }
+
                 var asset = workspaceConfig != null
                     ? workspaceConfig
                     : Resources.Load<TextAsset>(ExoforgeRuntimeConfig.ResourcePath);
@@ -126,6 +136,11 @@ namespace Exoforge.Client.Unity
             _instance = this;
             DontDestroyOnLoad(gameObject);
 
+            // Resolved here, on the main thread, once — so no background thread ever loads a
+            // resource (M33 Fix 15).
+            _configResolved = true;
+            _ = Config;
+
             // Decided before anything connects: the session this run reads is either the Studio's or
             // the device's own.
             ExoTokenStore.UseStudioSession = useStudioConnection;
@@ -142,31 +157,42 @@ namespace Exoforge.Client.Unity
         /// </summary>
         public async Task<ExoClient> GetClientAsync()
         {
-            // Await any connect already in flight before handing out a client. Short-circuiting on
-            // IsConnected alone returned a client that was connected but still authenticating, so a
-            // second caller authenticated on the same socket and one of them lost it with
-            // "Disconnected from server".
-            if (_pendingConnect == null)
-            {
-                if (Client is { IsConnected: true })
-                {
-                    return Client;
-                }
-
-                _pendingConnect = ConnectAsync();
-            }
+            // One at a time (M33 Fix 21): two callers racing the check-then-assign below each
+            // started a connect, and one disposed the client the other was authenticating on.
+            await _connectGate.WaitAsync().ConfigureAwait(false);
 
             try
             {
-                await _pendingConnect;
+                // Await any connect already in flight before handing out a client. Short-circuiting on
+                // IsConnected alone returned a client that was connected but still authenticating, so a
+                // second caller authenticated on the same socket and one of them lost it with
+                // "Disconnected from server".
+                if (_pendingConnect == null)
+                {
+                    if (Client is { IsConnected: true })
+                    {
+                        return Client;
+                    }
+
+                    _pendingConnect = ConnectAsync();
+                }
+
+                try
+                {
+                    await _pendingConnect;
+                }
+                finally
+                {
+                    // Cleared either way. On success the guard above short-circuits the next call; on
+                    // failure the next call has to be allowed to try again. Leaving this set made a
+                    // failed connection permanent — the backend being down at boot meant the game could
+                    // never connect, and every later call awaited the same finished task.
+                    _pendingConnect = null;
+                }
             }
             finally
             {
-                // Cleared either way. On success the guard above short-circuits the next call; on
-                // failure the next call has to be allowed to try again. Leaving this set made a
-                // failed connection permanent — the backend being down at boot meant the game could
-                // never connect, and every later call awaited the same finished task.
-                _pendingConnect = null;
+                _connectGate.Release();
             }
 
             return Client is { IsConnected: true }
@@ -360,7 +386,7 @@ namespace Exoforge.Client.Unity
             }
         }
 
-        private async void OnDestroy()
+        private void OnDestroy()
         {
             // Before anything can await: leaving this set meant Current/Instance kept returning a
             // destroyed object, so game code got a MissingReferenceException instead of the
@@ -373,23 +399,34 @@ namespace Exoforge.Client.Unity
             _reconnectCts?.Cancel();
             _reconnectCts = null;
 
-            if (Client == null)
+            // The private field, not the property (M33 Fix 16): reading `Client` here would lazily
+            // create a fresh client just in time to dispose it.
+            var client = _client;
+            _client = null;
+
+            if (client == null)
             {
                 return;
             }
 
-            try
+            // Not `async void` (M33 Fix 16): a teardown that raced the await surfaced its exception
+            // on a destroyed behaviour. The close runs against the client, which outlives this
+            // object, and disposes it when done.
+            _ = Task.Run(async () =>
             {
-                await Client.DisconnectAsync();
-            }
-            catch (Exception ex)
-            {
-                Debug.LogWarning($"[Exoforge] Disconnect during teardown failed: {ex.Message}");
-            }
-            finally
-            {
-                Client.Dispose();
-            }
+                try
+                {
+                    await client.DisconnectAsync();
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"[Exoforge] Disconnect during teardown failed: {ex.Message}");
+                }
+                finally
+                {
+                    client.Dispose();
+                }
+            });
         }
     }
 }

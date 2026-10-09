@@ -67,6 +67,23 @@ public partial class ExoforgeControlCenter : EditorWindow
             var auth = await _editorClient.AuthenticateAsync(ExoTokenStore.Token);
             if (auth.IsSuccess)
             {
+                // The Studio is staff tooling (M33 Fix 14): its tabs read users, tokens, plugins and
+                // telemetry. A session scoped below staff connects to the game, never to this
+                // window.
+                if (!ExoStaff.HasAccess(auth.Scopes))
+                {
+                    _isConnected = false;
+                    _connectionStatus = "Access Denied (Staff Only)";
+                    ShowStatus(
+                        "Editor tools require a staff account (studio or admin). Player and guest access is denied.",
+                        MessageType.Error);
+
+                    await _editorClient.DisconnectAsync();
+                    _editorClient.Dispose();
+                    _editorClient = null;
+                    return;
+                }
+
                 _isConnected = true;
                 _connectionStatus = auth.PlayerId ?? "authenticated";
                 // Stored as the Studio's session, not the device's: play mode reads it when
@@ -142,14 +159,20 @@ public partial class ExoforgeControlCenter : EditorWindow
 
         try
         {
-            if (_editorClient == null || !_isConnected)
+            // Over HTTP, with no socket: signing in no longer pretends to be "guest" to get a
+            // connection to sign in over (M33 Fix 14).
+            string httpUrl = ActiveHttpUrl;
+
+            if (string.IsNullOrEmpty(httpUrl))
             {
-                ExoTokenStore.Token = "guest";
-                await ConnectAsync();
-                if (!_isConnected) return;
+                ShowStatus("This environment declares no http_url; add one to exoforge.json to sign in with email/password.", MessageType.Error);
+                Repaint();
+                return;
             }
 
-            var data = await _editorClient!.SendActionAsync<JsonElement>("auth", "login", new { email = _loginEmail, password = _loginPassword });
+            using var loginClient = new ExoClient { HttpBaseUri = new Uri(httpUrl) };
+
+            var data = await loginClient.SendActionAsync<JsonElement>("auth", "login", new { email = _loginEmail, password = _loginPassword });
             string token = data.TryGetProperty("token", out var tProp) ? tProp.GetString() ?? "" : "";
             string playerId = data.TryGetProperty("player_id", out var pProp) ? pProp.GetString() ?? "" : "";
 
@@ -162,9 +185,8 @@ public partial class ExoforgeControlCenter : EditorWindow
 
             ExoTokenStore.SaveStudioSession(token, playerId);
 
-            // Keep the dev login for the next editor start.
+            // Keep the dev login for the next editor start — the email only (M33 Fix 22).
             ExoforgeEditorConfig.LastLoginEmail = _loginEmail;
-            ExoforgeEditorConfig.RememberedPassword = _loginPassword;
             ShowStatus($"Successfully logged in as {playerId}.", MessageType.Info);
 
             await ConnectAsync();
@@ -181,10 +203,11 @@ public partial class ExoforgeControlCenter : EditorWindow
     {
         ExoTokenStore.ClearStudioSession();
         await DisconnectAsync();
-        ShowStatus("Logged out and cleared stored credentials from EditorPrefs and PlayerPrefs.", MessageType.Info);
+        ShowStatus("Logged out and cleared the stored session.", MessageType.Info);
         Repaint();
     }
 
+    // Serialized on a background thread; only drawn on the main thread.
     private void HandleIncomingEvent(ExoEventFrame evt)
     {
         if (_eventPaused) return;
@@ -193,15 +216,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         try { raw = JsonSerializer.Serialize(evt.Payload, new JsonSerializerOptions { WriteIndented = true }); }
         catch { raw = evt.Payload.ToString() ?? "{}"; }
 
-        _eventLog.Insert(0, new LoggedEvent(DateTime.UtcNow, evt.Topic, evt.Event, raw));
-        if (_eventLog.Count > 200) _eventLog.RemoveAt(_eventLog.Count - 1);
-
-        if (_eventAutoScroll)
-        {
-            _eventScroll.y = 0;
-        }
-
-        Repaint();
+        _pendingEvents.Enqueue(new LoggedEvent(DateTime.UtcNow, evt.Topic, evt.Event, raw));
     }
 
     private async Task RefreshRemoteInfoAsync()

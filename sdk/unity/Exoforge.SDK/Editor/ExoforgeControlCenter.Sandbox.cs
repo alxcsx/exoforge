@@ -204,9 +204,19 @@ public partial class ExoforgeControlCenter : EditorWindow
         var sw = Stopwatch.StartNew();
         try
         {
-            object? payload = string.IsNullOrWhiteSpace(_sandboxPayload)
-                ? null
-                : JsonDocument.Parse(_sandboxPayload).RootElement;
+            object? payload;
+
+            if (string.IsNullOrWhiteSpace(_sandboxPayload))
+            {
+                payload = null;
+            }
+            else
+            {
+                // The document owns pooled buffers; owning the element means owning the copy
+                // (M33 Fix 24).
+                using var doc = JsonDocument.Parse(_sandboxPayload);
+                payload = doc.RootElement.Clone();
+            }
 
             var result = await _editorClient.SendActionAsync<JsonElement>(_sandboxService, _sandboxAction, payload);
             sw.Stop();

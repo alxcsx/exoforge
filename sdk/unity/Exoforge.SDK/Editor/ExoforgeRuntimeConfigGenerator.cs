@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using System.IO;
+using System.Text.Json;
 using Exoforge.Client.Unity;
 using Exoforge.Management;
 using UnityEditor;
@@ -7,14 +9,17 @@ using UnityEngine;
 namespace Exoforge.Unity.Editor;
 
 /// <summary>
-/// Links the workspace <c>exoforge.json</c> into <c>Resources/exoforge.json</c> so the
-/// standard Exoforge prefab can resolve cluster settings at runtime with zero scene wiring.
+/// Writes the runtime config the standard Exoforge prefab reads (<c>Resources/exoforge.json</c>).
 /// </summary>
 public static class ExoforgeRuntimeConfigGenerator
 {
     public const string OutputPath = "Assets/Resources/" + ExoforgeRuntimeConfig.ResourcePath + ".json";
 
-    /// <summary>Copies the workspace config into Resources. Returns false when none exists.</summary>
+    /// <summary>
+    /// Writes a sanitized runtime config (M33 Fix 18): only the selected environment's public
+    /// endpoints. What ships in a player build is where the game connects — not the workspace's
+    /// bootstrap tokens, and not the other environments it also knows how to reach.
+    /// </summary>
     public static bool Generate()
     {
         string? configPath = FindWorkspaceConfig();
@@ -24,18 +29,40 @@ public static class ExoforgeRuntimeConfigGenerator
             return false;
         }
 
-        string source = Path.GetFullPath(configPath);
+        var config = ExoforgeRuntimeConfig.FromWorkspaceJson(File.ReadAllText(configPath));
+
         string destination = Path.GetFullPath(OutputPath);
 
-        if (source != destination)
+        if (Path.GetFullPath(configPath) == destination)
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-            File.Copy(source, destination, overwrite: true);
-            AssetDatabase.ImportAsset(OutputPath);
+            // The workspace config would be overwritten with its own sanitized copy, losing every
+            // other environment. Say so and leave it alone.
+            Debug.LogWarning(
+                "[Exoforge] The workspace exoforge.json already lives at " + OutputPath +
+                "; it carries the workspace's tokens and must not be the file a build reads. Move it into the Exoforge workspace folder.");
+            return false;
         }
 
-        var config = ExoforgeRuntimeConfig.FromWorkspaceJson(File.ReadAllText(destination));
-        Debug.Log($"[Exoforge] Runtime config linked from {configPath} → {OutputPath} (env: {config.Environment})");
+        var payload = new Dictionary<string, object>
+        {
+            ["default_environment"] = config.Environment,
+            ["environments"] = new Dictionary<string, object>
+            {
+                [config.Environment] = new Dictionary<string, string>
+                {
+                    ["ws_url"] = config.WsUrl,
+                    ["http_url"] = config.HttpUrl
+                }
+            }
+        };
+
+        Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+        File.WriteAllText(
+            destination,
+            JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));
+        AssetDatabase.ImportAsset(OutputPath);
+
+        Debug.Log($"[Exoforge] Runtime config written for '{config.Environment}' → {OutputPath} (endpoints only, no token)");
         return true;
     }
 

@@ -52,17 +52,17 @@ public static class ExoforgeEditorConfig
     private static string GeneratedScriptPathKey => Scoped("Exoforge_GeneratedScriptPath");
     private static string LastSyncTimeKey => Scoped("Exoforge_LastSyncTime");
     private static string LoginEmailKey => Scoped("Exoforge_LoginEmail");
-    private static string LoginPasswordKey => Scoped("Exoforge_LoginPassword");
 
     public const string DefaultLoginEmail = "dev@exoforge.game";
     public const string DefaultWorkspaceRelPath = "Exoforge";
     public const string DefaultGeneratedScriptRelPath = "Assets/Exoforge/Generated/ExoforgeServices.g.cs";
 
+    // No Guest preset (M33 Fix 14): the Studio is staff tooling, and a guest token is a session
+    // a player mints for itself - never one the editor signs in with.
     public static readonly (string Label, string Token)[] TokenPresets = new[]
     {
         ("Dev", "dev:developer"),
-        ("Admin", "dev:admin"),
-        ("Guest", "guest")
+        ("Admin", "dev:admin")
     };
 
     /// <summary>True when the endpoint is on this machine. Uses the URI rather than a port literal.</summary>
@@ -78,7 +78,6 @@ public static class ExoforgeEditorConfig
     private static string _fallbackLastSyncTime = "";
     private static string _fallbackDotnetPath = "dotnet";
     private static string _fallbackLoginEmail = DefaultLoginEmail;
-    private static string _fallbackLoginPassword = "";
 
     private static string Scoped(string key) => key;
 #else
@@ -181,29 +180,9 @@ public static class ExoforgeEditorConfig
         }
     }
 
-    /// <summary>
-    /// Dev login password, kept in per-user EditorPrefs (plaintext, outside the repo) so the
-    /// Control Center can reconnect without retyping. Cleared on log out.
-    /// </summary>
-    public static string RememberedPassword
-    {
-        get
-        {
-#if UNITY_EDITOR
-            return EditorPrefs.GetString(LoginPasswordKey, string.Empty);
-#else
-            return _fallbackLoginPassword;
-#endif
-        }
-        set
-        {
-#if UNITY_EDITOR
-            EditorPrefs.SetString(LoginPasswordKey, value ?? string.Empty);
-#else
-            _fallbackLoginPassword = value ?? string.Empty;
-#endif
-        }
-    }
+    // The password is not persisted at all (M33 Fix 22): EditorPrefs is the system registry, and a
+    // password stored there is readable by anything on the machine. The session token is what
+    // reconnects; a password is typed once per editor session.
 
     public static string WorkspacePath
     {

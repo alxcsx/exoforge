@@ -57,7 +57,9 @@ namespace Exoforge.Client.Unity
             using var sha = SHA256.Create();
             byte[] hash = sha.ComputeHash(Encoding.UTF8.GetBytes(seed));
 
-            var sb = new StringBuilder("dev_", 4 + 32);
+            // did_, not dev_ (M33 Fix 19): the backend's developer-token checks watch for dev-ish
+            // prefixes, and a device identity is a player id, not a developer credential.
+            var sb = new StringBuilder("did_", 4 + 32);
 
             for (int i = 0; i < 16; i++)
             {

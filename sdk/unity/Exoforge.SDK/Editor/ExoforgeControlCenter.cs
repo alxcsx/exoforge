@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -103,6 +104,10 @@ public partial class ExoforgeControlCenter : EditorWindow
     // Live Events
     private sealed record LoggedEvent(DateTime At, string Topic, string EventName, string RawJson);
     private readonly List<LoggedEvent> _eventLog = new();
+
+    // Network callbacks arrive on background threads; OnGUI enumerates _eventLog on the main one.
+    // Incoming events are staged here and drained in OnEditorUpdate (M33 Fix 17).
+    private readonly ConcurrentQueue<LoggedEvent> _pendingEvents = new();
     private bool _eventPaused;
     private bool _eventAutoScroll = true;
     private string _eventFilter = "";
@@ -174,9 +179,10 @@ public partial class ExoforgeControlCenter : EditorWindow
             ExoforgeEditorConfig.WorkspacePath = ExoforgeEditorConfig.DefaultWorkspaceRelPath;
         }
 
-        // Restore the last login so the auth form doesn't reset on every editor start.
+        // Restore the last login so the auth form doesn't reset on every editor start. The password
+        // is not restored: it is not stored anywhere (M33 Fix 22).
         _loginEmail = ExoforgeEditorConfig.LastLoginEmail;
-        _loginPassword = ExoforgeEditorConfig.RememberedPassword;
+        _loginPassword = "";
 
         RefreshLocalPlugins();
 
@@ -197,16 +203,8 @@ public partial class ExoforgeControlCenter : EditorWindow
         bool hasSession = !string.IsNullOrEmpty(ExoTokenStore.StudioPlayerId)
             || (!string.IsNullOrEmpty(ActiveToken)
                 && ActiveToken != "dev:developer");
-        bool hasSavedLogin = !string.IsNullOrEmpty(ExoforgeEditorConfig.RememberedPassword);
 
-        // Saved email/password but no session yet: sign in. Otherwise reconnect with the token.
-        if (!hasSession && hasSavedLogin)
-        {
-            ShowStatus("Signing in with saved credentials…", MessageType.Info);
-            _ = LogInAsync();
-            return;
-        }
-
+        // A saved password no longer exists to sign in with (M33 Fix 22): reconnect with the token.
         if (string.IsNullOrWhiteSpace(ExoTokenStore.Token))
         {
             _showAuthFoldout = true;
@@ -227,7 +225,22 @@ public partial class ExoforgeControlCenter : EditorWindow
     // Keeps the window repainting while a build runs, so the streamed build log updates live.
     private void OnEditorUpdate()
     {
-        if (_isBuilding) Repaint();
+        // Drain what background threads staged, on the thread that renders it (M33 Fix 17).
+        bool arrived = false;
+
+        while (_pendingEvents.TryDequeue(out var evt))
+        {
+            _eventLog.Insert(0, evt);
+            if (_eventLog.Count > 200) _eventLog.RemoveAt(_eventLog.Count - 1);
+            arrived = true;
+        }
+
+        if (arrived && _eventAutoScroll)
+        {
+            _eventScroll.y = 0;
+        }
+
+        if (_isBuilding || arrived) Repaint();
     }
 
     private void AppendBuildLog(string line)
@@ -375,8 +388,8 @@ public partial class ExoforgeControlCenter : EditorWindow
             string typedPassword = EditorGUILayout.PasswordField("Password", _loginPassword);
             if (typedPassword != _loginPassword)
             {
+                // Held for this editor session only — never into EditorPrefs (M33 Fix 22).
                 _loginPassword = typedPassword;
-                ExoforgeEditorConfig.RememberedPassword = typedPassword;
             }
 
             EditorGUILayout.LabelField(
@@ -521,6 +534,9 @@ public partial class ExoforgeControlCenter : EditorWindow
     private string ActiveWsUrl => ActiveEnvironment?.WsUrl ?? "";
 
     private string ActiveToken => ActiveEnvironment?.Token ?? "";
+
+    /// <summary>The HTTP endpoint the active environment declares; sign-in, Swagger and the dashboard hang off this host (M33 Fix 23).</summary>
+    private string ActiveHttpUrl => ActiveEnvironment?.HttpUrl ?? "";
 
     private void ApplyEnvironment(EnvOption env)
     {

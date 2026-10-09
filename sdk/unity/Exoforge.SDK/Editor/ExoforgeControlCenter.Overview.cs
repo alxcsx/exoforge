@@ -115,20 +115,32 @@ public partial class ExoforgeControlCenter : EditorWindow
         }
 
         EditorGUILayout.BeginHorizontal();
-        if (GUILayout.Button("🌐 Open Web Dashboard (:4005)", GUILayout.Height(24)))
+        // URLs come from the environment, not from localhost (M33 Fix 23): a remote staging
+        // cluster opens its own dashboard and its own Swagger, or none when none is declared.
+        using (new EditorGUI.DisabledScope(string.IsNullOrEmpty(ActiveHttpUrl)))
         {
-            Application.OpenURL("http://localhost:4005");
-        }
+            if (GUILayout.Button("🌐 Open Web Dashboard", GUILayout.Height(24)))
+            {
+                Application.OpenURL(DashboardUrl());
+            }
 
-        if (GUILayout.Button("📖 Open Swagger API Docs (:4001)", GUILayout.Height(24)))
-        {
-            Application.OpenURL("http://localhost:4001/swagger");
+            if (GUILayout.Button("📖 Open Swagger API Docs", GUILayout.Height(24)))
+            {
+                Application.OpenURL(new Uri(new Uri(ActiveHttpUrl), "/swagger").ToString());
+            }
         }
         EditorGUILayout.EndHorizontal();
 
         EditorGUILayout.EndVertical();
 
         EditorGUILayout.EndScrollView();
+    }
+
+    // The dashboard's port is fixed; its host is the environment's (M33 Fix 23).
+    private string DashboardUrl()
+    {
+        if (!Uri.TryCreate(ActiveHttpUrl, UriKind.Absolute, out var uri)) return "";
+        return $"{uri.Scheme}://{uri.Host}:4005";
     }
 
     private static void DrawMetricPill(string label, string val)

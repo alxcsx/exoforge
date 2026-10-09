@@ -22,6 +22,15 @@ namespace Exoforge.Client.Unity
         /// <summary>Player sign-in.</summary>
         public static ExoforgeAuth Auth => _auth ??= new ExoforgeAuth();
 
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void InitializeOnMainThread()
+        {
+            // The host is created here, on the main thread, once (M33 Fix 20): the lazy path in
+            // Behaviour runs `new GameObject()`, which is main-thread-only, and a game calling
+            // ExoforgeSDK.Client from a Task used to hit it.
+            _ = Behaviour;
+        }
+
         /// <summary>
         /// The client. Usable with or without a socket: an action over HTTP needs no connection.
         /// Use it with the generated service extensions
