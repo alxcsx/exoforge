@@ -2,12 +2,11 @@ defmodule Exoforge.Std.MeteringTest do
   use ExUnit.Case, async: false
 
   alias Exoforge.ActionDispatcher
-  alias Exoforge.PluginRegistry
   alias Exoforge.Std.Database.Manager, as: DbManager
   alias Exoforge.Std.Metering.Flusher
 
   setup do
-    PluginRegistry.initialize_ets()
+    Exoforge.PluginCase.start_kernel()
 
     unless Process.whereis(DbManager) do
       start_supervised!({DbManager, [driver: :sqlite]})
@@ -17,22 +16,13 @@ defmodule Exoforge.Std.MeteringTest do
       start_supervised!(Flusher)
     end
 
-    PluginRegistry.register(%Exoforge.Domain.Manifest{
-      id: :exoforge_std_database,
-      name: "exoforge_std_database",
-      version: "0.1.0",
-      entry_point: Exoforge.Std.Database,
-      provides: [Exoforge.Std.Services.Database, Exoforge.Std.Services.Lldb]
-    })
+    Exoforge.PluginCase.register_database(Exoforge.Std.Database)
 
-    PluginRegistry.register(%Exoforge.Domain.Manifest{
+    Exoforge.PluginCase.register_plugin(Exoforge.Std.Metering,
       id: :exoforge_std_metering,
-      name: "exoforge_std_metering",
-      version: "0.1.0",
-      entry_point: Exoforge.Std.Metering,
       provides: [Exoforge.Std.Services.Metering],
       dependencies: [Exoforge.Std.Services.Database]
-    })
+    )
 
     Exoforge.Std.Metering.init_schema()
 

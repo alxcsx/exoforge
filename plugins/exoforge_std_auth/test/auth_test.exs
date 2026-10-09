@@ -3,7 +3,6 @@ defmodule Exoforge.AuthTest do
 
   alias Exoforge.Std.Auth
   alias Exoforge.Std.Database.Manager, as: DbManager
-  alias Exoforge.PluginRegistry
   alias Exoforge.ActionDispatcher
 
   # Minimal in-memory player store, so auth's create / look-up / rename paths behave like the
@@ -64,44 +63,26 @@ defmodule Exoforge.AuthTest do
   end
 
   setup do
-    Application.put_env(:exoforge, :allow_dev_tokens, true)
-    on_exit(fn -> Application.delete_env(:exoforge, :allow_dev_tokens) end)
-    PluginRegistry.initialize_ets()
+    Exoforge.PluginCase.allow_dev_tokens()
 
     if :ets.info(:stub_player_data) != :undefined do
       :ets.delete_all_objects(:stub_player_data)
     end
+
+    Exoforge.PluginCase.start_kernel()
+
     unless Process.whereis(DbManager) do
       start_supervised!({DbManager, [driver: :sqlite]})
     end
 
-    # Register database plugin in registry
-    PluginRegistry.register(%Exoforge.Domain.Manifest{
-      id: :exoforge_std_database,
-      name: "exoforge_std_database",
-      version: "0.1.0",
-      entry_point: Exoforge.Std.Database,
-      provides: [Exoforge.Std.Services.Database, Exoforge.Std.Services.Lldb]
-    })
+    Exoforge.PluginCase.register_database(Exoforge.Std.Database)
+    Exoforge.PluginCase.register_auth(Exoforge.Std.Auth)
 
-    # Register auth plugin in registry
-    PluginRegistry.register(%Exoforge.Domain.Manifest{
-      id: :exoforge_std_auth,
-      name: "exoforge_std_auth",
-      version: "0.1.0",
-      entry_point: Exoforge.Std.Auth,
-      provides: [Exoforge.Std.Services.Auth],
-      dependencies: [Exoforge.Std.Services.Database]
-    })
-
-    PluginRegistry.register(%Exoforge.Domain.Manifest{
+    Exoforge.PluginCase.register_plugin(StubPlayerData,
       id: :exoforge_std_player_data,
-      name: "exoforge_std_player_data",
-      version: "0.1.0",
-      entry_point: StubPlayerData,
       provides: [Exoforge.Std.Services.PlayerData],
       dependencies: [Exoforge.Std.Services.Database, Exoforge.Std.Services.Auth]
-    })
+    )
 
     Auth.init_schema()
     :ok

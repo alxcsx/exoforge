@@ -57,40 +57,25 @@ defmodule Exoforge.Std.ResourcesTest do
   end
 
   setup do
-    PluginRegistry.initialize_ets()
+    Exoforge.PluginCase.start_kernel()
     start_supervised!({DbManager, [driver: :sqlite]})
 
-    PluginRegistry.register(%Exoforge.Domain.Manifest{
-      id: :exoforge_std_database,
-      name: "exoforge_std_database",
-      version: "0.1.0",
-      entry_point: Exoforge.Std.Database,
-      provides: [Exoforge.Std.Services.Database, Exoforge.Std.Services.Lldb]
-    })
+    Exoforge.PluginCase.register_database(Exoforge.Std.Database)
 
-    PluginRegistry.register(%Exoforge.Domain.Manifest{
+    Exoforge.PluginCase.register_plugin(Resources,
       id: :exoforge_std_resources,
-      name: "exoforge_std_resources",
-      version: "0.1.0",
-      entry_point: Resources,
       provides: [:resource_store]
-    })
+    )
 
-    PluginRegistry.register(%Exoforge.Domain.Manifest{
+    Exoforge.PluginCase.register_plugin(Resources,
       id: :tiers_plugin,
-      name: "tiers_plugin",
-      version: "0.1.0",
-      entry_point: Resources,
       provides: [TiersContract.Tiers]
-    })
+    )
 
-    PluginRegistry.register(%Exoforge.Domain.Manifest{
+    Exoforge.PluginCase.register_plugin(Resources,
       id: :widgets_plugin,
-      name: "widgets_plugin",
-      version: "0.1.0",
-      entry_point: Resources,
       provides: [WidgetsContract.Widgets]
-    })
+    )
 
     Resources.run_migrations()
 

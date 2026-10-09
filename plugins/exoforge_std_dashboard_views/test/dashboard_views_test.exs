@@ -2,25 +2,21 @@ defmodule Exoforge.Std.DashboardViewsTest do
   use ExUnit.Case, async: false
 
   alias Exoforge.ActionDispatcher
-  alias Exoforge.PluginRegistry
-  alias Exoforge.Domain.Manifest
   alias Exoforge.Std.DashboardViews
   alias Exoforge.Std.DashboardViews.PlayerDataView
   alias Exoforge.Std.DashboardViews.PluginManagerView
   alias Exoforge.Std.DashboardViews.AuthView
 
   setup do
-    PluginRegistry.initialize_ets()
+    Exoforge.PluginCase.start_kernel()
 
-    PluginRegistry.register(%Manifest{
+    Exoforge.PluginCase.register_plugin(DashboardViews,
       id: :exoforge_std_dashboard_views,
       name: "ExoforgeStdDashboardViews",
       version: Version.parse!("0.1.0"),
       type: :elixir,
-      entry_point: DashboardViews,
-      provides: [:dashboard_view],
-      dependencies: []
-    })
+      provides: [:dashboard_view]
+    )
 
     :ok
   end

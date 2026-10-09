@@ -3,46 +3,24 @@ defmodule Exoforge.PlayerDataTest do
 
   alias Exoforge.Std.PlayerData
   alias Exoforge.Std.Database.Manager, as: DbManager
-  alias Exoforge.PluginRegistry
   alias Exoforge.ActionDispatcher
   alias Exoforge.EventDispatcher
 
   setup do
-    PluginRegistry.initialize_ets()
+    Exoforge.PluginCase.start_kernel()
 
     unless Process.whereis(DbManager) do
       start_supervised!({DbManager, [driver: :sqlite]})
     end
 
-    unless Process.whereis(Exoforge.EventDispatcher.registry_name()) do
-      start_supervised!(Exoforge.EventDispatcher)
-    end
+    Exoforge.PluginCase.register_database(Exoforge.Std.Database)
+    Exoforge.PluginCase.register_auth(Exoforge.Std.Auth)
 
-    PluginRegistry.register(%Exoforge.Domain.Manifest{
-      id: :exoforge_std_database,
-      name: "exoforge_std_database",
-      version: "0.1.0",
-      entry_point: Exoforge.Std.Database,
-      provides: [Exoforge.Std.Services.Database, Exoforge.Std.Services.Lldb]
-    })
-
-    PluginRegistry.register(%Exoforge.Domain.Manifest{
-      id: :exoforge_std_auth,
-      name: "exoforge_std_auth",
-      version: "0.1.0",
-      entry_point: Exoforge.Std.Auth,
-      provides: [Exoforge.Std.Services.Auth],
-      dependencies: [Exoforge.Std.Services.Database]
-    })
-
-    PluginRegistry.register(%Exoforge.Domain.Manifest{
+    Exoforge.PluginCase.register_plugin(Exoforge.Std.PlayerData,
       id: :exoforge_std_player_data,
-      name: "exoforge_std_player_data",
-      version: "0.1.0",
-      entry_point: Exoforge.Std.PlayerData,
       provides: [Exoforge.Std.Services.PlayerData],
       dependencies: [Exoforge.Std.Services.Database, Exoforge.Std.Services.Auth]
-    })
+    )
 
     PlayerData.init_schema()
     :ok

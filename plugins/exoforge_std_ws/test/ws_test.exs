@@ -6,8 +6,6 @@ defmodule Exoforge.Std.WsTest do
   alias Exoforge.Std.Ws.Router
   alias Exoforge.Std.Ws.SocketHandler
   alias Exoforge.EventDispatcher
-  alias Exoforge.PluginRegistry
-  alias Exoforge.Domain.Manifest
 
   defmodule DummyService do
     import Exoforge.Contracts.Service
@@ -42,42 +40,22 @@ defmodule Exoforge.Std.WsTest do
   end
 
   setup do
-    Application.put_env(:exoforge, :allow_dev_tokens, true)
-    unless Process.whereis(EventDispatcher.registry_name()) do
-      start_supervised!(EventDispatcher)
-    end
-    PluginRegistry.initialize_ets()
+    Exoforge.PluginCase.allow_dev_tokens()
+    Exoforge.PluginCase.start_kernel()
 
     unless Process.whereis(Exoforge.Std.Database.Manager) do
       start_supervised!({Exoforge.Std.Database.Manager, [driver: :sqlite]})
     end
 
-    PluginRegistry.register(%Manifest{
-      id: :exoforge_std_database,
-      name: "exoforge_std_database",
-      version: "0.1.0",
-      entry_point: Exoforge.Std.Database,
-      provides: [Exoforge.Std.Services.Database, Exoforge.Std.Services.Lldb]
-    })
+    Exoforge.PluginCase.register_database(Exoforge.Std.Database)
+    Exoforge.PluginCase.register_auth(Exoforge.Std.Auth)
 
-    PluginRegistry.register(%Manifest{
-      id: :exoforge_std_auth,
-      name: "exoforge_std_auth",
-      version: "0.1.0",
-      entry_point: Exoforge.Std.Auth,
-      provides: [Exoforge.Std.Services.Auth],
-      dependencies: [Exoforge.Std.Services.Database]
-    })
-
-    manifest = %Manifest{
+    Exoforge.PluginCase.register_plugin(DummyPlugin,
       id: :dummy_plugin,
-      name: "dummy_plugin",
       version: "1.0.0",
-      entry_point: DummyPlugin,
       provides: [DummyService.Mock]
-    }
+    )
 
-    PluginRegistry.register(manifest)
     :ok
   end
 

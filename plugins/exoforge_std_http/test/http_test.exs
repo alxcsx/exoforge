@@ -5,7 +5,6 @@ defmodule Exoforge.HttpTest do
 
   alias Exoforge.Std.Http.Router
   alias Exoforge.Std.Http
-  alias Exoforge.PluginRegistry
   alias Exoforge.Std.Database.Manager, as: DbManager
 
   @opts Router.init([])
@@ -19,46 +18,23 @@ defmodule Exoforge.HttpTest do
   end
 
   setup do
-    Application.put_env(:exoforge, :allow_dev_tokens, true)
-    on_exit(fn -> Application.delete_env(:exoforge, :allow_dev_tokens) end)
-    PluginRegistry.initialize_ets()
+    Exoforge.PluginCase.allow_dev_tokens()
+    Exoforge.PluginCase.start_kernel()
+
     unless Process.whereis(DbManager) do
       start_supervised!({DbManager, [driver: :sqlite]})
     end
 
-    PluginRegistry.register(%Exoforge.Domain.Manifest{
-      id: :exoforge_std_database,
-      name: "exoforge_std_database",
-      version: "0.1.0",
-      entry_point: Exoforge.Std.Database,
-      provides: [Exoforge.Std.Services.Database, Exoforge.Std.Services.Lldb]
-    })
+    Exoforge.PluginCase.register_database(Exoforge.Std.Database)
+    Exoforge.PluginCase.register_auth(Exoforge.Std.Auth)
 
-    PluginRegistry.register(%Exoforge.Domain.Manifest{
-      id: :exoforge_std_auth,
-      name: "exoforge_std_auth",
-      version: "0.1.0",
-      entry_point: Exoforge.Std.Auth,
-      provides: [Exoforge.Std.Services.Auth],
-      dependencies: [Exoforge.Std.Services.Database]
-    })
-
-    PluginRegistry.register(%Exoforge.Domain.Manifest{
+    Exoforge.PluginCase.register_plugin(Exoforge.Std.Http,
       id: :exoforge_std_http,
-      name: "exoforge_std_http",
-      version: "0.1.0",
-      entry_point: Exoforge.Std.Http,
       provides: [Exoforge.Std.Services.Http],
       dependencies: [Exoforge.Std.Services.Auth]
-    })
+    )
 
-    PluginRegistry.register(%Exoforge.Domain.Manifest{
-      id: :mock_admin,
-      name: "mock_admin",
-      version: "0.1.0",
-      entry_point: MockAdminService
-    })
-
+    Exoforge.PluginCase.register_plugin(MockAdminService, id: :mock_admin)
     :ok
   end
 

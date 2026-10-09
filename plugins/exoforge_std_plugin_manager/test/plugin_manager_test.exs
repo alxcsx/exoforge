@@ -3,37 +3,28 @@ defmodule Exoforge.Std.PluginManagerTest do
 
   alias Exoforge.ActionDispatcher
   alias Exoforge.PluginRegistry
-  alias Exoforge.Domain.Manifest
 
   @wasm_magic <<0, 97, 115, 109>>
 
   setup do
-    PluginRegistry.initialize_ets()
+    Exoforge.PluginCase.start_kernel()
 
-    test_manifest = %Manifest{
+    Exoforge.PluginCase.register_plugin(TestEntryPoint,
       id: :test_game_plugin,
       name: "TestGamePlugin",
       version: Version.parse!("1.0.0"),
       type: :elixir,
-      entry_point: TestEntryPoint,
-      provides: [:test_game_service],
-      dependencies: []
-    }
+      provides: [:test_game_service]
+    )
 
-    PluginRegistry.register(test_manifest)
-
-    # Register plugin_manager manifest so ActionDispatcher can route to it
-    pm_manifest = %Manifest{
+    # Registered so ActionDispatcher can route to it.
+    Exoforge.PluginCase.register_plugin(Exoforge.Std.PluginManager,
       id: :exoforge_std_plugin_manager,
       name: "ExoforgeStdPluginManager",
       version: Version.parse!("0.1.0"),
       type: :elixir,
-      entry_point: Exoforge.Std.PluginManager,
-      provides: [:plugin_manager],
-      dependencies: []
-    }
-
-    PluginRegistry.register(pm_manifest)
+      provides: [:plugin_manager]
+    )
 
     on_exit(fn ->
       # Clean up test directories if created

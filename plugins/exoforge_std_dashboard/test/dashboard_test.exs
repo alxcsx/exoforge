@@ -4,65 +4,36 @@ defmodule Exoforge.DashboardTest do
   import Plug.Conn
 
   alias Exoforge.Std.Dashboard.Router
-  alias Exoforge.PluginRegistry
   alias Exoforge.ActionDispatcher
   alias Exoforge.Std.Database.Manager, as: DbManager
 
   @opts Router.init([])
 
   setup do
-    Application.put_env(:exoforge, :allow_dev_tokens, true)
+    Exoforge.PluginCase.allow_dev_tokens()
     Application.put_env(:exoforge, :require_admin_auth, false)
+    on_exit(fn -> Application.delete_env(:exoforge, :require_admin_auth) end)
 
-    on_exit(fn ->
-      Application.delete_env(:exoforge, :allow_dev_tokens)
-      Application.delete_env(:exoforge, :require_admin_auth)
-    end)
-
-    PluginRegistry.initialize_ets()
+    Exoforge.PluginCase.start_kernel()
 
     unless Process.whereis(DbManager) do
       start_supervised!({DbManager, [driver: :sqlite]})
     end
 
-    PluginRegistry.register(%Exoforge.Domain.Manifest{
-      id: :exoforge_std_database,
-      name: "exoforge_std_database",
-      version: "0.1.0",
-      entry_point: Exoforge.Std.Database,
-      provides: [Exoforge.Std.Services.Database, Exoforge.Std.Services.Lldb]
-    })
+    Exoforge.PluginCase.register_database(Exoforge.Std.Database)
 
-    PluginRegistry.register(%Exoforge.Domain.Manifest{
+    Exoforge.PluginCase.register_plugin(Exoforge.Std.Dashboard,
       id: :exoforge_std_dashboard,
-      name: "exoforge_std_dashboard",
-      version: "0.1.0",
-      entry_point: Exoforge.Std.Dashboard,
-      provides: [Exoforge.Std.Services.Dashboard],
-      dependencies: []
-    })
+      provides: [Exoforge.Std.Services.Dashboard]
+    )
 
-    PluginRegistry.register(%Exoforge.Domain.Manifest{
-      id: :exoforge_std_auth,
-      name: "exoforge_std_auth",
-      version: "0.1.0",
-      entry_point: Exoforge.Std.Auth,
-      provides: [Exoforge.Std.Services.Auth],
-      dependencies: [Exoforge.Std.Services.Database]
-    })
+    Exoforge.PluginCase.register_auth(Exoforge.Std.Auth)
 
-    PluginRegistry.register(%Exoforge.Domain.Manifest{
+    Exoforge.PluginCase.register_plugin(Exoforge.Std.PlayerData,
       id: :exoforge_std_player_data,
-      name: "exoforge_std_player_data",
-      version: "0.1.0",
-      entry_point: Exoforge.Std.PlayerData,
       provides: [Exoforge.Std.Services.PlayerData],
       dependencies: [Exoforge.Std.Services.Database, Exoforge.Std.Services.Auth]
-    })
-
-    unless Process.whereis(Exoforge.EventDispatcher.registry_name()) do
-      start_supervised!(Exoforge.EventDispatcher)
-    end
+    )
 
     unless Process.whereis(Exoforge.Std.Dashboard.PubSub) do
       start_supervised!({Phoenix.PubSub, name: Exoforge.Std.Dashboard.PubSub})
