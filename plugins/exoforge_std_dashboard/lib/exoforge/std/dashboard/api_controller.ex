@@ -298,4 +298,31 @@ defmodule Exoforge.Std.Dashboard.ApiController do
       Exoforge.Auth.Request.header(conn.req_headers, "x-admin-token") ||
       Exoforge.Auth.Request.query(conn.query_params)
   end
+
+  def serve_file(conn, %{"id" => id} = params) do
+    bucket = params["bucket"]
+    payload = if bucket, do: %{"bucket" => bucket, "id" => id}, else: %{"id" => id}
+
+    case ActionDispatcher.dispatch(:file_bucket, :get_file_info, payload) do
+      {:ok, %{file: file}} ->
+        disk_path = file["disk_path"] || file[:disk_path]
+        content_type = file["content_type"] || file[:content_type] || "application/octet-stream"
+
+        if disk_path && File.exists?(disk_path) do
+          conn
+          |> put_resp_header("content-type", content_type)
+          |> put_resp_header("cache-control", "public, max-age=86400")
+          |> send_file(200, disk_path)
+        else
+          conn
+          |> put_status(404)
+          |> json(%{status: "error", error: "file_missing_on_disk"})
+        end
+
+      _ ->
+        conn
+        |> put_status(404)
+        |> json(%{status: "error", error: "not_found"})
+    end
+  end
 end

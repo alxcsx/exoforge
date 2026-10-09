@@ -16,7 +16,7 @@ defmodule Exoforge.Std.DashboardViews do
   }
 
   # Custom views are resolved by convention: <ServiceId>View in this namespace.
-  @view_ids [:player_data, :plugin_manager, :auth]
+  @view_ids [:player_data, :plugin_manager, :auth, :file_bucket]
 
   @doc "Returns the registered view module for a given service or extension id."
   def view_for(id) when is_atom(id) or is_binary(id) do

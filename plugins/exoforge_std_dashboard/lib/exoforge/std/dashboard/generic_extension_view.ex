@@ -32,7 +32,15 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
        export_modal_open: false,
        export_format: "CSV",
        export_content: "",
-       export_filename: "export.csv"
+       export_filename: "export.csv",
+       file_picker_open: false,
+       file_picker_field: nil,
+       file_picker_target: nil,
+       file_picker_bucket: "default",
+       file_picker_buckets: [],
+       file_picker_files: [],
+       file_picker_filtered_files: [],
+       file_picker_search: ""
      )}
   end
 
@@ -255,6 +263,222 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
     {:noreply, assign(socket, resource_form: nil)}
   end
 
+  # ---- FILE REFERENCE PICKER HANDLERS ----
+
+  @impl true
+  def handle_event("open_file_picker", params, socket) do
+    field = params["field"]
+    target = params["target"] || "singleton"
+    raw_bucket = params["bucket"]
+
+    buckets =
+      case ActionDispatcher.dispatch(:file_bucket, :list_buckets, %{}) do
+        {:ok, %{buckets: b}} when is_list(b) -> b
+        _ -> ["default"]
+      end
+
+    bucket =
+      if raw_bucket in ["", nil] do
+        List.first(buckets) || "default"
+      else
+        raw_bucket
+      end
+
+    files =
+      case ActionDispatcher.dispatch(:file_bucket, :list_files, %{"bucket" => bucket, "limit" => 200}) do
+        {:ok, %{files: f}} when is_list(f) -> f
+        _ -> []
+      end
+
+    {:noreply,
+     assign(socket,
+       file_picker_open: true,
+       file_picker_field: field,
+       file_picker_target: target,
+       file_picker_bucket: bucket,
+       file_picker_buckets: buckets,
+       file_picker_files: files,
+       file_picker_filtered_files: files,
+       file_picker_search: ""
+     )}
+  end
+
+  @impl true
+  def handle_event("file_picker_change_bucket", %{"bucket" => bucket}, socket) do
+    files =
+      case ActionDispatcher.dispatch(:file_bucket, :list_files, %{"bucket" => bucket, "limit" => 200}) do
+        {:ok, %{files: f}} when is_list(f) -> f
+        _ -> []
+      end
+
+    q = String.downcase(String.trim(socket.assigns.file_picker_search || ""))
+
+    filtered =
+      if q == "" do
+        files
+      else
+        Enum.filter(files, fn f ->
+          String.contains?(String.downcase(to_string(f["filename"] || "")), q) or
+            String.contains?(String.downcase(to_string(f["id"] || "")), q)
+        end)
+      end
+
+    {:noreply,
+     assign(socket,
+       file_picker_bucket: bucket,
+       file_picker_files: files,
+       file_picker_filtered_files: filtered
+     )}
+  end
+
+  @impl true
+  def handle_event("file_picker_search", %{"query" => query}, socket) do
+    q = String.downcase(String.trim(query))
+    files = socket.assigns.file_picker_files
+
+    filtered =
+      if q == "" do
+        files
+      else
+        Enum.filter(files, fn f ->
+          String.contains?(String.downcase(to_string(f["filename"] || "")), q) or
+            String.contains?(String.downcase(to_string(f["id"] || "")), q)
+        end)
+      end
+
+    {:noreply, assign(socket, file_picker_search: query, file_picker_filtered_files: filtered)}
+  end
+
+  @impl true
+  def handle_event("file_picker_select", %{"id" => id}, socket) do
+    field = to_string(socket.assigns.file_picker_field)
+    target = socket.assigns.file_picker_target
+
+    socket =
+      case target do
+        "singleton" ->
+          form = socket.assigns[:singleton_form] || %{values: %{}, errors: %{}, saved: false}
+          new_values = Map.put(form.values, field, id)
+          assign(socket, singleton_form: %{form | values: new_values, saved: false})
+
+        _ ->
+          if form = socket.assigns.resource_form do
+            new_values = Map.put(form.values, field, id)
+            assign(socket, resource_form: %{form | values: new_values})
+          else
+            socket
+          end
+      end
+
+    {:noreply, assign(socket, file_picker_open: false, file_picker_field: nil)}
+  end
+
+  @impl true
+  def handle_event("clear_file_ref", params, socket) do
+    field = to_string(params["field"])
+    target = params["target"] || "singleton"
+
+    socket =
+      case target do
+        "singleton" ->
+          form = socket.assigns[:singleton_form] || %{values: %{}, errors: %{}, saved: false}
+          new_values = Map.put(form.values, field, "")
+          assign(socket, singleton_form: %{form | values: new_values, saved: false})
+
+        _ ->
+          if form = socket.assigns.resource_form do
+            new_values = Map.put(form.values, field, "")
+            assign(socket, resource_form: %{form | values: new_values})
+          else
+            socket
+          end
+      end
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("close_file_picker", _params, socket) do
+    {:noreply, assign(socket, file_picker_open: false, file_picker_field: nil)}
+  end
+
+  @impl true
+  def handle_event("file_picker_uploaded", %{"filename" => filename, "base64" => base64, "content_type" => content_type}, socket) do
+    bucket = socket.assigns.file_picker_bucket || "default"
+    payload = %{
+      "bucket" => bucket,
+      "filename" => filename,
+      "content" => base64,
+      "content_type" => content_type
+    }
+
+    case ActionDispatcher.dispatch(:file_bucket, :upload_file, payload) do
+      {:ok, %{file: file}} ->
+        field = to_string(socket.assigns.file_picker_field)
+        target = socket.assigns.file_picker_target
+        id = file["id"]
+
+        socket =
+          case target do
+            "singleton" ->
+              form = socket.assigns[:singleton_form] || %{values: %{}, errors: %{}, saved: false}
+              new_values = Map.put(form.values, field, id)
+              assign(socket, singleton_form: %{form | values: new_values, saved: false})
+
+            _ ->
+              if form = socket.assigns.resource_form do
+                new_values = Map.put(form.values, field, id)
+                assign(socket, resource_form: %{form | values: new_values})
+              else
+                socket
+              end
+          end
+
+        {:noreply, assign(socket, file_picker_open: false, file_picker_field: nil)}
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("singleton_form_change", %{"values" => values}, socket) do
+    form = socket.assigns[:singleton_form] || %{values: %{}, errors: %{}, saved: false}
+    {:noreply, assign(socket, singleton_form: %{form | values: values, saved: false})}
+  end
+
+  @impl true
+  def handle_event("submit_singleton_form", %{"values" => values}, socket) do
+    columns = current_resource_columns(socket)
+    form = socket.assigns[:singleton_form] || %{values: %{}, errors: %{}, saved: false}
+    name = socket.assigns.selected_resource_name
+
+    case ResourceForms.errors(values, columns) do
+      errors when errors != %{} ->
+        {:noreply, assign(socket, singleton_form: %{form | values: values, errors: errors, saved: false})}
+
+      _ ->
+        attributes = ResourceForms.attributes(values, columns)
+
+        case ActionDispatcher.dispatch(:resource_store, :upsert, %{
+               resource: name,
+               attributes: attributes
+             }) do
+          {:ok, _} ->
+            {:noreply,
+             socket
+             |> assign(:singleton_saved, true)
+             |> load_resource_data()}
+
+          {:error, reason} ->
+            {:noreply,
+             assign(socket,
+               singleton_form: %{form | values: values, errors: %{"_form" => inspect(reason)}, saved: false}
+             )}
+        end
+    end
+  end
+
   @impl true
   def handle_event("submit_resource_form", %{"values" => values}, socket) do
     columns = current_resource_columns(socket)
@@ -377,10 +601,21 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
   defp load_resource_data(socket) do
     case socket.assigns.selected_resource_name do
       nil ->
-        assign(socket, resource_rows: [], filtered_resource_rows: [])
+        assign(socket, resource_rows: [], filtered_resource_rows: [], singleton_form: nil)
 
       name ->
         rows = PluginRegistry.fetch_resource_rows(name)
+        columns = current_resource_columns(socket)
+
+        socket =
+          if singleton_resource?(socket) do
+            row = List.first(rows) || %{}
+            values = ResourceForms.values_for(row, columns)
+            saved_indicator = socket.assigns[:singleton_saved] || false
+            assign(socket, singleton_form: %{values: values, errors: %{}, saved: saved_indicator})
+          else
+            assign(socket, singleton_form: nil)
+          end
 
         socket
         |> assign(:resource_rows, rows)
@@ -424,6 +659,15 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
 
     (ext[:resources] || [])
     |> Enum.find(fn r -> to_string(r[:name] || r["name"]) == to_string(res_name) end)
+  end
+
+  defp singleton_resource?(%Phoenix.LiveView.Socket{assigns: assigns}) do
+    singleton_resource?(assigns)
+  end
+
+  defp singleton_resource?(assigns) when is_map(assigns) do
+    res = current_resource(assigns)
+    res != nil and (res[:singleton] == true or res["singleton"] == true or to_string(res[:kind] || res["kind"]) == "singleton")
   end
 
   # A column role (e.g. "user_id") turns a plain string into a deep link. The target is
@@ -494,6 +738,151 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
   end
 
   defp cast_value(val, _), do: val
+
+  defp column_input(assigns) do
+    key = to_string(assigns.column.key)
+    custom_spec = Exoforge.Std.Dashboard.InputTypes.resolve(assigns.column)
+    is_file_ref = to_string(assigns.column[:role] || assigns.column["role"]) == "file_reference"
+    bucket = assigns.column[:bucket] || assigns.column["bucket"] || "default"
+
+    assigns =
+      assigns
+      |> assign(:key, key)
+      |> assign(:custom_spec, custom_spec)
+      |> assign(:is_file_ref, is_file_ref)
+      |> assign(:bucket, bucket)
+
+    ~H"""
+    <div>
+      <label class="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1">
+        <%= @column.label %><%= if @column.primary_key, do: " · key" %>
+      </label>
+
+      <%= if @is_file_ref do %>
+        <input type="hidden" name={"values[#{@key}]"} value={@value} />
+        <div class="p-3 bg-gray-50 border border-gray-200 rounded-xl space-y-2">
+          <%= if @value != "" and @value != nil do %>
+            <div class="flex items-center justify-between gap-3 bg-white p-2.5 rounded-lg border border-gray-100 shadow-2xs">
+              <div class="flex items-center gap-2.5 min-w-0">
+                <img
+                  src={"/api/files/#{@bucket}/#{@value}"}
+                  class="w-10 h-10 object-contain rounded-lg border border-gray-100 bg-gray-50 shrink-0"
+                  alt="Preview"
+                  onerror="this.style.display='none'"
+                />
+                <div class="truncate">
+                  <span class="font-mono text-xs font-bold text-violet-700 bg-violet-50 px-2 py-0.5 rounded border border-violet-100"><%= @value %></span>
+                  <div class="text-[10px] text-gray-400 mt-0.5">Bucket: <%= @bucket %></div>
+                </div>
+              </div>
+              <div class="flex items-center gap-1 shrink-0">
+                <a
+                  href={"/api/files/#{@bucket}/#{@value}"}
+                  target="_blank"
+                  class="text-[11px] font-bold text-violet-600 hover:text-violet-800 px-2 py-1 bg-violet-50 hover:bg-violet-100 rounded-lg transition-colors"
+                >
+                  ↗ Open
+                </a>
+                <button
+                  type="button"
+                  phx-click="open_file_picker"
+                  phx-value-field={@key}
+                  phx-value-target={@target}
+                  phx-value-bucket={@bucket}
+                  phx-target={@myself}
+                  class="text-[11px] font-bold text-gray-700 hover:text-gray-900 px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  Change
+                </button>
+                <button
+                  type="button"
+                  phx-click="clear_file_ref"
+                  phx-value-field={@key}
+                  phx-value-target={@target}
+                  phx-target={@myself}
+                  class="text-[11px] font-bold text-red-600 hover:text-red-800 px-2 py-1 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          <% else %>
+            <div class="flex items-center justify-between gap-3">
+              <span class="text-xs text-gray-400 italic">No file selected</span>
+              <button
+                type="button"
+                phx-click="open_file_picker"
+                phx-value-field={@key}
+                phx-value-target={@target}
+                phx-value-bucket={@bucket}
+                phx-target={@myself}
+                class="px-3 py-1.5 text-xs font-bold text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 rounded-xl transition-colors shadow-2xs flex items-center gap-1.5"
+              >
+                <span>🗂️</span>
+                <span>Select from Bucket</span>
+              </button>
+            </div>
+          <% end %>
+        </div>
+      <% else %>
+        <%= if is_map(@custom_spec) do %>
+          <.widget spec={@custom_spec} name={"values[#{@key}]"} value={@value} readonly={@locked} />
+        <% else %>
+          <%= if @column.choices != [] do %>
+            <select
+              name={"values[#{@key}]"}
+              class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent font-mono bg-white"
+            >
+              <%= for choice <- @column.choices do %>
+                <option value={choice} selected={to_string(@value) == to_string(choice)}>
+                  <%= choice %>
+                </option>
+              <% end %>
+            </select>
+          <% else %>
+            <%= case @column.type do %>
+              <% :boolean -> %>
+                <input type="hidden" name={"values[#{@key}]"} value="false" />
+                <input
+                  type="checkbox"
+                  name={"values[#{@key}]"}
+                  value="true"
+                  checked={@value in ["true", true]}
+                  class="w-4 h-4 text-violet-600 rounded border-gray-300 focus:ring-violet-500"
+                />
+              <% :integer -> %>
+                <input
+                  type="number"
+                  step="1"
+                  name={"values[#{@key}]"}
+                  value={@value}
+                  readonly={@locked}
+                  class={"w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent font-mono #{if @locked, do: "bg-gray-50 text-gray-400"}"}
+                />
+              <% :float -> %>
+                <input
+                  type="number"
+                  step="any"
+                  name={"values[#{@key}]"}
+                  value={@value}
+                  readonly={@locked}
+                  class={"w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent font-mono #{if @locked, do: "bg-gray-50 text-gray-400"}"}
+                />
+              <% _ -> %>
+                <input
+                  type="text"
+                  name={"values[#{@key}]"}
+                  value={@value}
+                  readonly={@locked}
+                  class={"w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent font-mono #{if @locked, do: "bg-gray-50 text-gray-400"}"}
+                />
+            <% end %>
+          <% end %>
+        <% end %>
+      <% end %>
+    </div>
+    """
+  end
 
   ## ---- TEMPLATE RENDERING ----
 
@@ -757,123 +1146,206 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
               <% end %>
             </div>
 
-            <div class="flex items-center gap-3">
-              <input
-                type="text"
-                placeholder="Search rows..."
-                value={@resource_search}
-                phx-input="search_resource"
-                phx-target={@myself}
-                phx-debounce="200"
-                name="query"
-                class="px-3 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500"
-              />
+            <%= if not singleton_resource?(assigns) do %>
+              <div class="flex items-center gap-3">
+                <input
+                  type="text"
+                  placeholder="Search rows..."
+                  value={@resource_search}
+                  phx-input="search_resource"
+                  phx-target={@myself}
+                  phx-debounce="200"
+                  name="query"
+                  class="px-3 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
 
-              <button
-                type="button"
-                phx-click="export_csv"
-                phx-target={@myself}
-                class="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 shadow-xs flex items-center gap-1"
-              >
-                <span>⬇ CSV</span>
-              </button>
+                <button
+                  type="button"
+                  phx-click="export_csv"
+                  phx-target={@myself}
+                  class="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 shadow-xs flex items-center gap-1"
+                >
+                  <span>⬇ CSV</span>
+                </button>
 
-              <button
-                type="button"
-                phx-click="export_json"
-                phx-target={@myself}
-                class="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 shadow-xs flex items-center gap-1"
-              >
-                <span>⬇ JSON</span>
-              </button>
+                <button
+                  type="button"
+                  phx-click="export_json"
+                  phx-target={@myself}
+                  class="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 shadow-xs flex items-center gap-1"
+                >
+                  <span>⬇ JSON</span>
+                </button>
 
-              <button
-                type="button"
-                phx-click="new_resource"
-                phx-target={@myself}
-                class="px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl hover:bg-emerald-100 shadow-xs flex items-center gap-1"
-              >
-                <span>＋ New</span>
-              </button>
+                <button
+                  type="button"
+                  phx-click="new_resource"
+                  phx-target={@myself}
+                  class="px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl hover:bg-emerald-100 shadow-xs flex items-center gap-1"
+                >
+                  <span>＋ New</span>
+                </button>
 
-              <button
-                type="button"
-                phx-click="delete_resource"
-                phx-target={@myself}
-                data-confirm={"Delete all data for resource '#{@selected_resource_name}'? This cannot be undone."}
-                class="px-3 py-1.5 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-xl hover:bg-red-100 shadow-xs flex items-center gap-1"
-              >
-                <span>🗑 Delete</span>
-              </button>
-            </div>
-          </div>
-
-          <!-- Declarative Resource Table -->
-          <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
-            <%= if @filtered_resource_rows == [] do %>
-              <div class="p-12 text-center space-y-2">
-                <span class="text-3xl block">📦</span>
-                <h3 class="text-sm font-bold text-gray-900">No records found</h3>
-                <p class="text-xs text-gray-500 max-w-sm mx-auto">
-                  No rows currently stored in resource <code class="font-mono text-purple-700 font-bold"><%= @selected_resource_name %></code>.
-                </p>
+                <button
+                  type="button"
+                  phx-click="delete_resource"
+                  phx-target={@myself}
+                  data-confirm={"Delete all data for resource '#{@selected_resource_name}'? This cannot be undone."}
+                  class="px-3 py-1.5 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-xl hover:bg-red-100 shadow-xs flex items-center gap-1"
+                >
+                  <span>🗑 Delete</span>
+                </button>
               </div>
             <% else %>
-              <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr class="bg-gray-50/75 border-b border-gray-200 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                      <%= for col <- @columns do %>
-                        <th class="py-3 px-4"><%= col[:label] %></th>
-                      <% end %>
-                      <th class="py-3 px-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-gray-100">
-                    <%= for row <- @filtered_resource_rows do %>
-                      <% row_id = Map.get(row, :id) || Map.get(row, "id") || Map.get(row, :player_id) || Map.get(row, "player_id") || "item" %>
-                      <tr class="hover:bg-purple-50/30 transition-colors group">
-                        <%= for col <- @columns do %>
-                          <% val = Map.get(row, col[:key]) || Map.get(row, to_string(col[:key])) || "" %>
-                          <td class="py-3 px-4">
-                            <%= if link = column_link(col[:role]) do %>
-                              <.link
-                                patch={focus_path(link, val)}
-                                class="inline-flex items-center gap-1 font-mono font-semibold text-primary-700 hover:text-primary-900 hover:underline"
-                                title={"Open " <> to_string(col[:label])}
-                              >
-                                <span><%= to_string(val) %></span>
-                                <span class="text-[10px]"><%= link[:icon] || "↗" %></span>
-                              </.link>
-                            <% else %>
-                              <%= if col[:badge] do %>
-                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                  <%= val %>
-                                </span>
-                              <% else %>
-                                <span class="font-mono font-medium text-gray-800"><%= to_string(val) %></span>
-                              <% end %>
-                            <% end %>
-                          </td>
-                        <% end %>
-                        <td class="py-3 px-4 text-right">
-                          <button
-                            type="button"
-                            phx-click="open_focus"
-                            phx-value-kind="row"
-                            phx-value-id={to_string(row_id)}
-                            class="px-2.5 py-1 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition-colors"
-                          >
-                            Inspect
-                          </button>
-                        </td>
-                      </tr>
-                    <% end %>
-                  </tbody>
-                </table>
+              <div class="flex items-center gap-2">
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                  ⚙️ Singleton Config
+                </span>
               </div>
             <% end %>
           </div>
+
+          <%= if singleton_resource?(assigns) do %>
+            <!-- Singleton Resource Direct Configuration Card -->
+            <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-6 space-y-6">
+              <div class="flex items-center justify-between border-b border-gray-100 pb-4">
+                <div>
+                  <h3 class="text-base font-bold text-gray-900 flex items-center gap-2">
+                    <span><%= Phoenix.Naming.humanize(to_string(@selected_resource_name)) %></span>
+                    <span class="text-xs font-mono font-normal text-purple-600 bg-purple-50 px-2 py-0.5 rounded-md">singleton</span>
+                  </h3>
+                  <p class="text-xs text-gray-500 mt-1">
+                    This resource contains a single instance configuration. Updating values persists directly into cluster storage.
+                  </p>
+                </div>
+                <%= if @singleton_form && @singleton_form.saved do %>
+                  <span class="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 animate-pulse">
+                    ✓ Saved successfully
+                  </span>
+                <% end %>
+              </div>
+
+              <%= if @singleton_form do %>
+                <form
+                  phx-submit="submit_singleton_form"
+                  phx-change="singleton_form_change"
+                  phx-target={@myself}
+                  class="space-y-4 max-w-2xl"
+                >
+                  <%= for column <- current_resource_columns(assigns) do %>
+                    <% key = to_string(column.key) %>
+                    <% value = Map.get(@singleton_form.values, key, "") %>
+                    <% locked = column.primary_key %>
+
+                    <.column_input column={column} value={value} locked={locked} target="singleton" myself={@myself} />
+
+                    <%= if error = @singleton_form.errors[key] do %>
+                      <p class="text-[11px] text-red-600 mt-1 font-semibold"><%= error %></p>
+                    <% end %>
+                  <% end %>
+
+                  <%= if error = @singleton_form.errors["_form"] do %>
+                    <p class="text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl p-3 font-mono">
+                      <%= error %>
+                    </p>
+                  <% end %>
+
+                  <div class="pt-3">
+                    <button
+                      type="submit"
+                      class="px-5 py-2 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-xl transition-colors shadow-sm flex items-center gap-1.5"
+                    >
+                      <span>💾 Save Settings</span>
+                    </button>
+                  </div>
+                </form>
+              <% end %>
+            </div>
+          <% else %>
+            <!-- Declarative Resource Table -->
+            <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
+              <%= if @filtered_resource_rows == [] do %>
+                <div class="p-12 text-center space-y-2">
+                  <span class="text-3xl block">📦</span>
+                  <h3 class="text-sm font-bold text-gray-900">No records found</h3>
+                  <p class="text-xs text-gray-500 max-w-sm mx-auto">
+                    No rows currently stored in resource <code class="font-mono text-purple-700 font-bold"><%= @selected_resource_name %></code>.
+                  </p>
+                </div>
+              <% else %>
+                <div class="overflow-x-auto">
+                  <table class="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr class="bg-gray-50/75 border-b border-gray-200 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                        <%= for col <- @columns do %>
+                          <th class="py-3 px-4"><%= col[:label] %></th>
+                        <% end %>
+                        <th class="py-3 px-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                      <%= for row <- @filtered_resource_rows do %>
+                        <% row_id = Map.get(row, :id) || Map.get(row, "id") || Map.get(row, :player_id) || Map.get(row, "player_id") || "item" %>
+                        <tr class="hover:bg-purple-50/30 transition-colors group">
+                          <%= for col <- @columns do %>
+                            <% val = Map.get(row, col[:key]) || Map.get(row, to_string(col[:key])) || "" %>
+                            <td class="py-3 px-4">
+                              <%= cond do %>
+                                <% to_string(col[:role]) == "file_reference" -> %>
+                                  <%= if val not in ["", nil] do %>
+                                    <a
+                                      href={"/api/files/#{col[:bucket] || "default"}/#{val}"}
+                                      target="_blank"
+                                      class="inline-flex items-center gap-1.5 font-mono text-xs font-semibold text-violet-700 bg-violet-50 hover:bg-violet-100 hover:text-violet-900 px-2 py-0.5 rounded-lg border border-violet-200 transition-colors"
+                                      title={"View file " <> to_string(val)}
+                                    >
+                                      <span>📎</span>
+                                      <span><%= to_string(val) %></span>
+                                      <span class="text-[10px]">↗</span>
+                                    </a>
+                                  <% else %>
+                                    <span class="text-xs text-gray-400 italic">none</span>
+                                  <% end %>
+
+                                <% link = column_link(col[:role]) -> %>
+                                  <.link
+                                    patch={focus_path(link, val)}
+                                    class="inline-flex items-center gap-1 font-mono font-semibold text-primary-700 hover:text-primary-900 hover:underline"
+                                    title={"Open " <> to_string(col[:label])}
+                                  >
+                                    <span><%= to_string(val) %></span>
+                                    <span class="text-[10px]"><%= link[:icon] || "↗" %></span>
+                                  </.link>
+
+                                <% col[:badge] -> %>
+                                  <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    <%= val %>
+                                  </span>
+
+                                <% true -> %>
+                                  <span class="font-mono font-medium text-gray-800"><%= to_string(val) %></span>
+                              <% end %>
+                            </td>
+                          <% end %>
+                          <td class="py-3 px-4 text-right">
+                            <button
+                              type="button"
+                              phx-click="open_focus"
+                              phx-value-kind="row"
+                              phx-value-id={to_string(row_id)}
+                              class="px-2.5 py-1 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition-colors"
+                            >
+                              Inspect
+                            </button>
+                          </td>
+                        </tr>
+                      <% end %>
+                    </tbody>
+                  </table>
+                </div>
+              <% end %>
+            </div>
+          <% end %>
         </div>
       <% end %>
 
@@ -1070,70 +1542,11 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                 <% value = Map.get(@resource_form.values, key, "") %>
                 <% locked = column.primary_key and @resource_form.mode == :edit %>
 
-                <div>
-                  <label class="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
-                    <%= column.label %><%= if column.primary_key, do: " · key" %>
-                  </label>
+                <.column_input column={column} value={value} locked={locked} target="resource_form" myself={@myself} />
 
-                  <% custom_spec = Exoforge.Std.Dashboard.InputTypes.resolve(column) %>
-
-                  <%= if is_map(custom_spec) do %>
-                    <.widget spec={custom_spec} name={"values[#{key}]"} value={value} readonly={locked} />
-                  <% else %>
-                    <%= case column.type do %>
-                      <% _ when column.choices != [] -> %>
-                        <select
-                          name={"values[#{key}]"}
-                          class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent font-mono bg-white"
-                        >
-                          <%= for choice <- column.choices do %>
-                            <option value={choice} selected={to_string(value) == to_string(choice)}>
-                              <%= choice %>
-                            </option>
-                          <% end %>
-                        </select>
-                      <% :boolean -> %>
-                        <input type="hidden" name={"values[#{key}]"} value="false" />
-                        <input
-                          type="checkbox"
-                          name={"values[#{key}]"}
-                          value="true"
-                          checked={value == "true"}
-                          class="w-4 h-4 text-violet-600 rounded border-gray-300 focus:ring-violet-500"
-                        />
-                      <% :integer -> %>
-                        <input
-                          type="number"
-                          step="1"
-                          name={"values[#{key}]"}
-                          value={value}
-                          readonly={locked}
-                          class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent font-mono"
-                        />
-                      <% :float -> %>
-                        <input
-                          type="number"
-                          step="any"
-                          name={"values[#{key}]"}
-                          value={value}
-                          readonly={locked}
-                          class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent font-mono"
-                        />
-                      <% _ -> %>
-                        <input
-                          type="text"
-                          name={"values[#{key}]"}
-                          value={value}
-                          readonly={locked}
-                          class={"w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent font-mono #{if locked, do: "bg-gray-50 text-gray-500"}"}
-                        />
-                    <% end %>
-                  <% end %>
-
-                  <%= if error = @resource_form.errors[key] do %>
-                    <p class="text-[11px] text-red-600 mt-1 font-semibold"><%= error %></p>
-                  <% end %>
-                </div>
+                <%= if error = @resource_form.errors[key] do %>
+                  <p class="text-[11px] text-red-600 mt-1 font-semibold"><%= error %></p>
+                <% end %>
               <% end %>
 
               <%= if error = @resource_form.errors["_form"] do %>
@@ -1200,6 +1613,136 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                 class="px-4 py-2 text-xs font-bold text-white bg-purple-600 rounded-xl hover:bg-purple-700"
               >
                 Copy to Clipboard
+              </button>
+            </div>
+          </div>
+        </div>
+      <% end %>
+
+      <!-- File Bucket Picker Modal -->
+      <%= if @file_picker_open do %>
+        <div class="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-gray-200 space-y-4">
+            <div class="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div class="flex items-center gap-2">
+                <span class="text-xl">🗂️</span>
+                <div>
+                  <h3 class="text-sm font-bold text-gray-900">Select File from Bucket</h3>
+                  <p class="text-xs text-gray-400">Selecting for field <code class="font-mono text-violet-700 font-bold"><%= @file_picker_field %></code></p>
+                </div>
+              </div>
+              <button phx-click="close_file_picker" phx-target={@myself} class="text-gray-400 hover:text-gray-600 font-bold text-sm">✕</button>
+            </div>
+
+            <!-- Bucket tabs & Search -->
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div class="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto">
+                <%= for b <- @file_picker_buckets do %>
+                  <button
+                    type="button"
+                    phx-click="file_picker_change_bucket"
+                    phx-value-bucket={b}
+                    phx-target={@myself}
+                    class={"px-3 py-1 text-xs font-semibold rounded-lg border transition-colors shrink-0 #{if @file_picker_bucket == b, do: "bg-violet-600 text-white border-violet-600", else: "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}"}
+                  >
+                    📁 <%= b %>
+                  </button>
+                <% end %>
+              </div>
+
+              <div class="relative w-full sm:w-56">
+                <input
+                  type="text"
+                  placeholder="Search files..."
+                  value={@file_picker_search}
+                  phx-keyup="file_picker_search"
+                  phx-target={@myself}
+                  class="w-full text-xs pl-7 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500"
+                />
+                <span class="absolute left-2.5 top-2 text-xs text-gray-400">🔍</span>
+              </div>
+            </div>
+
+            <!-- File Grid / List -->
+            <div class="max-h-80 overflow-y-auto p-1 grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <%= if @file_picker_filtered_files == [] do %>
+                <div class="col-span-full py-12 text-center text-xs text-gray-400">
+                  No files found in bucket <strong class="text-gray-700"><%= @file_picker_bucket %></strong>.
+                </div>
+              <% else %>
+                <%= for file <- @file_picker_filtered_files do %>
+                  <% is_img = String.starts_with?(to_string(file["content_type"] || ""), "image/") or Path.extname(file["filename"] || "") in [".png", ".jpg", ".jpeg", ".webp", ".svg"] %>
+                  <div
+                    phx-click="file_picker_select"
+                    phx-value-id={file["id"]}
+                    phx-target={@myself}
+                    class="p-2.5 rounded-xl border border-gray-200 hover:border-violet-400 hover:bg-violet-50/30 cursor-pointer transition-all flex flex-col justify-between group bg-white shadow-2xs"
+                  >
+                    <div class="h-20 bg-gray-50 rounded-lg mb-2 flex items-center justify-center overflow-hidden border border-gray-100">
+                      <%= if is_img do %>
+                        <img src={file["url"]} class="max-h-full max-w-full object-contain" alt="" />
+                      <% else %>
+                        <span class="text-2xl">📄</span>
+                      <% end %>
+                    </div>
+                    <div>
+                      <p class="text-xs font-bold text-gray-800 truncate" title={file["filename"]}><%= file["filename"] %></p>
+                      <div class="flex items-center justify-between text-[10px] text-gray-400 mt-1">
+                        <code class="font-mono truncate"><%= file["id"] %></code>
+                        <span><%= if file["size_bytes"], do: "#{Float.round(file["size_bytes"] / 1024, 1)} KB", else: "" %></span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      phx-click="file_picker_select"
+                      phx-value-id={file["id"]}
+                      phx-target={@myself}
+                      class="mt-2 w-full py-1 text-[11px] font-bold text-violet-700 bg-violet-50 group-hover:bg-violet-600 group-hover:text-white rounded-lg transition-colors text-center"
+                    >
+                      Select
+                    </button>
+                  </div>
+                <% end %>
+              <% end %>
+            </div>
+
+            <div class="flex items-center justify-between pt-3 border-t border-gray-100">
+              <!-- Quick upload inside picker -->
+              <form id="picker_quick_upload_form" phx-submit="file_picker_uploaded" phx-target={@myself} class="m-0 p-0 inline">
+                <input type="hidden" id="picker_upload_filename" name="filename" value="" />
+                <input type="hidden" id="picker_upload_content_type" name="content_type" value="" />
+                <input type="hidden" id="picker_upload_base64" name="base64" value="" />
+                <label class="text-xs font-bold text-violet-700 hover:text-violet-800 cursor-pointer flex items-center gap-1.5 bg-violet-50 px-3 py-1.5 rounded-xl border border-violet-100">
+                  <span>⬆️ Upload & Select</span>
+                  <input
+                    type="file"
+                    class="hidden"
+                    id="picker_quick_upload"
+                    onchange="
+                      const file = this.files[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = function(e) {
+                        const base64 = e.target.result.split(',')[1];
+                        document.getElementById('picker_upload_filename').value = file.name;
+                        document.getElementById('picker_upload_content_type').value = file.type || 'application/octet-stream';
+                        document.getElementById('picker_upload_base64').value = base64;
+                        document.getElementById('picker_quick_upload_submit').click();
+                      };
+                      reader.readAsDataURL(file);
+                    "
+                  />
+                </label>
+                <button type="submit" id="picker_quick_upload_submit" class="hidden"></button>
+              </form>
+
+              <button
+                type="button"
+                phx-click="close_file_picker"
+                phx-target={@myself}
+                class="px-4 py-1.5 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+              >
+                Cancel
               </button>
             </div>
           </div>

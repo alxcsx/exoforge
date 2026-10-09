@@ -23,6 +23,9 @@ defmodule Exoforge.Std.Dashboard.Router do
     plug(:accepts, ["json"])
   end
 
+  pipeline :public_files do
+  end
+
   pipeline :api do
     plug(:accepts, ["json"])
     plug(:ensure_session)
@@ -61,6 +64,14 @@ defmodule Exoforge.Std.Dashboard.Router do
     pipe_through(:public_api)
 
     get("/health", ApiController, :health)
+  end
+
+  scope "/", Exoforge.Std.Dashboard do
+    pipe_through(:public_files)
+
+    get("/api/files/:id", ApiController, :serve_file)
+    get("/api/files/:bucket/:id", ApiController, :serve_file)
+    get("/api/files/:bucket/:id/:filename", ApiController, :serve_file)
   end
 
   scope "/", Exoforge.Std.Dashboard do
