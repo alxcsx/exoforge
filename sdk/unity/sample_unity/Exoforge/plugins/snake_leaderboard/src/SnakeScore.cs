@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Exoforge.Plugin.SDK;
 
 namespace Exoforge.Plugins.SnakeLeaderboard;
@@ -8,25 +9,38 @@ namespace Exoforge.Plugins.SnakeLeaderboard;
 public record SnakeScoreRecord
 {
     [ExoColumn(Label = "Player ID", Sortable = true, Filterable = true, Role = "user_id")]
+    [JsonPropertyName("player_id")]
     public string PlayerId { get; init; } = "";
 
     [ExoColumn(Label = "High Score", Sortable = true)]
+    [JsonPropertyName("score")]
     public int Score { get; init; }
 
     [ExoColumn(Label = "Max Length", Sortable = true)]
+    [JsonPropertyName("snake_length")]
     public int SnakeLength { get; init; }
 
     [ExoColumn(Label = "Updated", Sortable = true)]
+    [JsonPropertyName("updated_at")]
     public long UpdatedAt { get; init; }
 }
 
 // Wire shape returned by get_leaderboard; the display name is resolved live.
 public record SnakeLeaderboardEntry
 {
+    [JsonPropertyName("player_id")]
     public string PlayerId { get; init; } = "";
+
+    [JsonPropertyName("name")]
     public string Name { get; init; } = "";
+
+    [JsonPropertyName("score")]
     public int Score { get; init; }
+
+    [JsonPropertyName("snake_length")]
     public int SnakeLength { get; init; }
+
+    [JsonPropertyName("updated_at")]
     public long UpdatedAt { get; init; }
 }
 
@@ -34,12 +48,18 @@ public record SnakeLeaderboardEntry
 // it immediately; the board's own read still resolves names live, so a rename is not left stale.
 public record SnakeScoreSubmitted
 {
+    [JsonPropertyName("player_id")]
     public string PlayerId { get; init; } = "";
+
+    [JsonPropertyName("name")]
     public string Name { get; init; } = "";
+
+    [JsonPropertyName("score")]
     public int Score { get; init; }
+
+    [JsonPropertyName("snake_length")]
     public int SnakeLength { get; init; }
 
-    // Whether this run changed the board. Every submission is announced - a subscriber wants to know
-    // a run was recorded, not only when it beats something - but a game can celebrate a best on this.
+    [JsonPropertyName("improved")]
     public bool Improved { get; init; }
 }

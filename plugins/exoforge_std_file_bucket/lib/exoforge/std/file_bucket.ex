@@ -11,7 +11,12 @@ defmodule Exoforge.Std.FileBucket do
     category: "Storage",
     title: "File Bucket",
     icon: "🗂️",
-    dashboard_view: %{id: :file_bucket, title: "File Bucket", icon: "🗂️"}
+    dashboard_view: %{
+      id: :file_bucket,
+      title: "File Bucket",
+      icon: "🗂️",
+      module: Exoforge.Std.FileBucket.DashboardView
+    }
   }
 
   @meta_table :exo_file_bucket_meta

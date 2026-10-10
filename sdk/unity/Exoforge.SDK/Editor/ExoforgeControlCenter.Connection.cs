@@ -82,6 +82,7 @@ public partial class ExoforgeControlCenter : EditorWindow
                 _editorClient.HttpBaseUri = new Uri(ActiveHttpUrl);
             }
             _editorClient.OnAnyEvent += HandleIncomingEvent;
+            _editorClient.OnDisconnected += HandleClientDisconnected;
 
             await _editorClient.ConnectAsync(new Uri(ActiveWsUrl), cts.Token);
 
@@ -100,6 +101,7 @@ public partial class ExoforgeControlCenter : EditorWindow
                         "Editor tools require a staff account (studio or admin). Player and guest access is denied.",
                         MessageType.Error);
 
+                    _editorClient.OnDisconnected -= HandleClientDisconnected;
                     await _editorClient.DisconnectAsync();
                     _editorClient.Dispose();
                     _editorClient = null;
@@ -129,14 +131,13 @@ public partial class ExoforgeControlCenter : EditorWindow
         }
         catch (OperationCanceledException)
         {
-            _isConnected = false;
-            SessionState.SetBool(WasConnectedSessionKey, false);
+            _rawConnected = false;
             _connectionStatus = "Timed out";
             ShowStatus($"Connection to {ActiveWsUrl} timed out or was retried. Click Retry to connect.", MessageType.Warning);
         }
         catch (ExoActionException ex)
         {
-            _isConnected = false;
+            _rawConnected = false;
             SessionState.SetBool(WasConnectedSessionKey, false);
             _connectionStatus = "Auth rejected";
             ShowStatus(
@@ -146,8 +147,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         }
         catch (Exception ex)
         {
-            _isConnected = false;
-            SessionState.SetBool(WasConnectedSessionKey, false);
+            _rawConnected = false;
             _connectionStatus = "Connection error";
             ShowStatus($"Could not connect to {ActiveWsUrl}: {ex.Message}", MessageType.Error);
         }
@@ -161,7 +161,60 @@ public partial class ExoforgeControlCenter : EditorWindow
         }
     }
 
-    private async Task DisconnectAsync()
+    private void HandleClientDisconnected(Exception? ex)
+    {
+        EditorApplication.delayCall += () =>
+        {
+            _rawConnected = false;
+            _connectionStatus = "Disconnected";
+            Repaint();
+
+            if (SessionState.GetBool(WasConnectedSessionKey, false) && !_isConnecting)
+            {
+                ShowStatus("Connection to cluster lost. Reconnecting…", MessageType.Warning);
+                _ = ReconnectWithRetryAsync(maxRetries: 6, delayMs: 1200);
+            }
+        };
+    }
+
+    private async Task ReconnectWithRetryAsync(int maxRetries = 6, int delayMs = 1000)
+    {
+        for (int attempt = 1; attempt <= maxRetries; attempt++)
+        {
+            _isConnecting = true;
+            _connectionStatus = attempt == 1 ? "Reconnecting..." : $"Reconnecting ({attempt}/{maxRetries})...";
+            Repaint();
+
+            try
+            {
+                await ConnectAsync();
+                if (_isConnected)
+                {
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                UnityEngine.Debug.LogWarning($"[Exoforge] Reconnection attempt {attempt} failed: {ex.Message}");
+            }
+
+            if (attempt < maxRetries)
+            {
+                _isConnecting = true;
+                _connectionStatus = $"Reconnecting ({attempt + 1}/{maxRetries})...";
+                Repaint();
+                await Task.Delay(delayMs);
+            }
+        }
+
+        _isConnecting = false;
+        _connectionStatus = "Disconnected";
+        SessionState.SetBool(WasConnectedSessionKey, false);
+        ShowStatus("Auto-reconnection timed out. Click Connect to retry.", MessageType.Warning);
+        Repaint();
+    }
+
+    private async Task DisconnectAsync(bool preserveSessionState = false)
     {
         try
         {
@@ -171,11 +224,16 @@ public partial class ExoforgeControlCenter : EditorWindow
         }
         catch { }
 
-        SessionState.SetBool(WasConnectedSessionKey, false);
+        if (!preserveSessionState)
+        {
+            SessionState.SetBool(WasConnectedSessionKey, false);
+        }
+
         if (_editorClient != null)
         {
             try
             {
+                _editorClient.OnDisconnected -= HandleClientDisconnected;
                 await _editorClient.DisconnectAsync();
             }
             catch (Exception ex)

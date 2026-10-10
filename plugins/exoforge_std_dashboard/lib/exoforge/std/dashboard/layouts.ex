@@ -14,6 +14,7 @@ defmodule Exoforge.Std.Dashboard.Layouts do
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta name="csrf-token" content={Plug.CSRFProtection.get_csrf_token()} />
         <title>EXOFORGE - Game Producer & Designer Studio</title>
+        <link rel="stylesheet" href="/vendor/exoforge-studio.css">
         <!-- Tailwind CSS, vendored locally: instant load, no network dependency, and no
              third-party script the page does not control (M33 Fix 36) -->
         <script src="/vendor/tailwind.js"></script>
@@ -96,6 +97,22 @@ defmodule Exoforge.Std.Dashboard.Layouts do
                   window.history.back();
                 }
               });
+              window.Exoforge = {
+                httpBaseUri: "/api",
+                dispatch: async function(service, action, payload = {}) {
+                  const csrf = metaEl ? metaEl.getAttribute("content") : "";
+                  const resp = await fetch("/api/dispatch", {
+                    method: "POST",
+                    headers: {
+                      "content-type": "application/json",
+                      "x-csrf-token": csrf
+                    },
+                    body: JSON.stringify({ service, action, payload })
+                  });
+                  return await resp.json();
+                }
+              };
+
               liveSocket.connect();
               window.liveSocket = liveSocket;
               console.log("[Exoforge Studio] Connected to BEAM via Phoenix LiveView!");

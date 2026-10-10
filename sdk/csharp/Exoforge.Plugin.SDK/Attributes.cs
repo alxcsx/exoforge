@@ -57,7 +57,7 @@ public enum ActionTransport
 /// <summary>
 /// Marks a method as an invokable Exoforge Action.
 /// </summary>
-[AttributeUsage(AttributeTargets.Method, Inherited = false, AllowMultiple = false)]
+[AttributeUsage(AttributeTargets.Method | AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface, Inherited = false, AllowMultiple = false)]
 public class ExoActionAttribute : Attribute
 {
     /// <summary>Action name on the wire. When omitted, the method name is used in snake_case.</summary>
@@ -219,6 +219,11 @@ public class ExoColumnAttribute : Attribute
     /// <summary>Target bucket name when referencing a file in a bucket.</summary>
     public string? Bucket { get; set; }
 
+    /// <summary>
+    /// Preferred Studio Dashboard input widget for editing this column (e.g. from <see cref="ExoInput"/>).
+    /// </summary>
+    public string? InputType { get; set; }
+
     /// <summary>Convenience property to mark this column as a file reference.</summary>
     public bool FileReference
     {
@@ -234,6 +239,29 @@ public class ExoColumnAttribute : Attribute
     {
         Name = name;
     }
+}
+
+/// <summary>
+/// Built-in standard dashboard input widget types for <see cref="ExoColumnAttribute.InputType"/>.
+/// </summary>
+public static class ExoInput
+{
+    public const string Text = "text";
+    public const string Color = "color";
+    public const string Date = "date";
+    public const string Time = "time";
+    public const string DateTimeLocal = "datetime_local";
+    public const string Textarea = "textarea";
+    public const string Email = "email";
+    public const string Url = "url";
+    public const string Tel = "tel";
+    public const string Password = "password";
+    public const string Range = "range";
+    public const string Json = "json";
+    public const string List = "list";
+    public const string Checkbox = "checkbox";
+    public const string Select = "select";
+    public const string FileReference = "file_reference";
 }
 
 /// <summary>
@@ -264,4 +292,5 @@ public class InjectAttribute : Attribute
         ServiceName = serviceName;
     }
 }
+
 

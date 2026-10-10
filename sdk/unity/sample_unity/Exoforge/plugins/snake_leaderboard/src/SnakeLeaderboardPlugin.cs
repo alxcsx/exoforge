@@ -51,10 +51,6 @@ public class SnakeLeaderboardPlugin
         Database.Put(Table, playerId, best);
         Logger?.Info($"[snake_leaderboard] {playerId} best {best.Score}");
 
-        // Every submission is announced, with `improved` saying whether the board changed. Announcing
-        // only improvements looks right and is not: the board keeps its best across runs, so a run
-        // that ties the stored score emits nothing, and a subscriber cannot tell that from a broken
-        // subscription.
         await Events!.EmitAsync(
             "score_submitted",
             new SnakeScoreSubmitted

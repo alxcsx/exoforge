@@ -299,6 +299,44 @@ defmodule Exoforge.Std.Dashboard.ApiController do
       Exoforge.Auth.Request.query(conn.query_params)
   end
 
+  def serve_plugin_asset(conn, %{"plugin_id" => plugin_id, "path" => path_parts}) do
+    path = Enum.join(path_parts, "/")
+
+    manifest =
+      try do
+        Exoforge.PluginRegistry.get(plugin_id) ||
+          Exoforge.PluginRegistry.get(String.to_existing_atom(plugin_id))
+      rescue
+        _ -> nil
+      end
+
+    cond do
+      is_nil(manifest) ->
+        conn |> put_status(404) |> json(%{status: "error", error: "plugin_not_found"})
+
+      true ->
+        base_dir =
+          case manifest.physical_path do
+            nil -> nil
+            p -> Path.join(p, manifest.assets_path || "assets")
+          end
+
+        file_path = if base_dir, do: Path.expand(Path.join(base_dir, path)), else: nil
+
+        # Guard against directory traversal attacks
+        if file_path && base_dir && String.starts_with?(file_path, Path.expand(base_dir)) && File.exists?(file_path) do
+          mime = MIME.from_path(file_path)
+
+          conn
+          |> put_resp_header("content-type", mime)
+          |> put_resp_header("cache-control", "public, max-age=3600")
+          |> send_file(200, file_path)
+        else
+          conn |> put_status(404) |> json(%{status: "error", error: "asset_not_found"})
+        end
+    end
+  end
+
   def serve_file(conn, %{"id" => id} = params) do
     bucket = params["bucket"]
     payload = if bucket, do: %{"bucket" => bucket, "id" => id}, else: %{"id" => id}

@@ -111,10 +111,64 @@ public partial class ExoforgeControlCenter : EditorWindow
         // Server Connection & Authentication
         EditorGUILayout.LabelField("Server Connection & Authentication", EditorStyles.boldLabel);
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-        // Read-only: the endpoint comes from the active environment in exoforge.json.
-        EditorGUILayout.LabelField("Server URL",
-            string.IsNullOrEmpty(ActiveWsUrl) ? "(no environment configured)" : ActiveWsUrl);
-        EditorGUILayout.LabelField("Add or change environments in Exoforge/exoforge.json.", EditorStyles.miniLabel);
+
+        string activeEnvName = ActiveEnvironment?.Name ?? "local";
+        var activeEnvConfig = Workspace?.Config?.Environments != null && Workspace.Config.Environments.TryGetValue(activeEnvName, out var foundEnv)
+            ? foundEnv
+            : null;
+
+        string currentWs = activeEnvConfig?.WsUrl ?? ActiveWsUrl;
+        string newWs = EditorGUILayout.TextField("WebSocket URL", currentWs);
+
+        string currentHttp = activeEnvConfig?.HttpUrl ?? ActiveHttpUrl;
+        string newHttp = EditorGUILayout.TextField("HTTP REST URL", currentHttp);
+
+        if (activeEnvConfig != null && (newWs != currentWs || newHttp != currentHttp))
+        {
+            activeEnvConfig.WsUrl = newWs;
+            activeEnvConfig.HttpUrl = newHttp;
+        }
+
+        EditorGUILayout.BeginHorizontal();
+        if (GUILayout.Button("Save Endpoints to exoforge.json", EditorStyles.miniButton))
+        {
+            try
+            {
+                if (Workspace != null)
+                {
+                    if (activeEnvConfig != null)
+                    {
+                        Workspace.Config.Environments[activeEnvName] = activeEnvConfig;
+                    }
+                    Workspace.Save();
+                    ExoforgeRuntimeConfigGenerator.Generate();
+                    ShowStatus($"✓ Saved endpoints for '{activeEnvName}' to exoforge.json and relinked runtime config.", MessageType.Info);
+                    if (_isConnected)
+                    {
+                        _ = ConnectAsync();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                ShowStatus($"Failed to save exoforge.json: {ex.Message}", MessageType.Error);
+            }
+        }
+
+        if (GUILayout.Button("Reset to Localhost", EditorStyles.miniButton, GUILayout.Width(125)))
+        {
+            if (activeEnvConfig != null)
+            {
+                activeEnvConfig.WsUrl = "ws://localhost:4000/ws";
+                activeEnvConfig.HttpUrl = "http://localhost:4001";
+                Workspace?.Save();
+                ExoforgeRuntimeConfigGenerator.Generate();
+                ShowStatus("✓ Endpoints reset to localhost.", MessageType.Info);
+            }
+        }
+        EditorGUILayout.EndHorizontal();
+
+        EditorGUILayout.Space(4);
 
         EditorGUILayout.BeginHorizontal();
         string currentStudioToken = ExoTokenStore.StudioToken;

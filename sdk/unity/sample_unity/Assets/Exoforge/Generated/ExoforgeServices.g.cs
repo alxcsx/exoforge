@@ -1071,6 +1071,8 @@ public class SnakeConfigData
     public string BackgroundBucket { get; set; } = default!;
     [JsonPropertyName("background_file_id")]
     public string BackgroundFileId { get; set; } = default!;
+    [JsonPropertyName("background_filename")]
+    public string BackgroundFilename { get; set; } = default!;
 }
 
 /// <summary>Request payload for snake_config.update_config action.</summary>
@@ -1086,6 +1088,8 @@ public class SnakeConfigUpdateConfigRequest
     public string BackgroundBucket { get; set; } = default!;
     [JsonPropertyName("background_file_id")]
     public string BackgroundFileId { get; set; } = default!;
+    [JsonPropertyName("background_filename")]
+    public string BackgroundFilename { get; set; } = default!;
 }
 
 /// <summary>Request payload for snake_leaderboard.submit_score action.</summary>
@@ -1141,12 +1145,12 @@ public class SnakeLeaderboardScoreSubmittedEvent
 /// <summary>Request payload for ws.broadcast action.</summary>
 public class WsBroadcastRequest
 {
-    [JsonPropertyName("payload")]
-    public JsonElement Payload { get; set; } = default!;
     [JsonPropertyName("topic")]
     public string Topic { get; set; } = default!;
     [JsonPropertyName("event")]
     public string Event { get; set; } = default!;
+    [JsonPropertyName("payload")]
+    public JsonElement Payload { get; set; } = default!;
 }
 
 /// <summary>Response model for ws.broadcast action.</summary>
@@ -2488,7 +2492,7 @@ public class SnakeConfigServiceClient
     }
 
     /// <summary>Executes update_config action with typed arguments.</summary>
-    public Task<SnakeConfigData> UpdateConfigAsync(string snakeColor, string appleColor, long applePoints, string backgroundBucket, string backgroundFileId, CancellationToken cancellationToken = default)
+    public Task<SnakeConfigData> UpdateConfigAsync(string snakeColor, string appleColor, long applePoints, string backgroundBucket, string backgroundFileId, string backgroundFilename, CancellationToken cancellationToken = default)
     {
         var req = new SnakeConfigUpdateConfigRequest
         {
@@ -2497,6 +2501,7 @@ public class SnakeConfigServiceClient
             ApplePoints = applePoints,
             BackgroundBucket = backgroundBucket,
             BackgroundFileId = backgroundFileId,
+            BackgroundFilename = backgroundFilename,
         };
         return UpdateConfigAsync(req, cancellationToken);
     }
@@ -2584,13 +2589,13 @@ public class WsServiceClient
     }
 
     /// <summary>Broadcasts a frame to an active WebSocket topic.</summary>
-    public Task<WsBroadcastResponse> BroadcastAsync(JsonElement payload, string topic, string @event, CancellationToken cancellationToken = default)
+    public Task<WsBroadcastResponse> BroadcastAsync(string topic, string @event, JsonElement payload, CancellationToken cancellationToken = default)
     {
         var req = new WsBroadcastRequest
         {
-            Payload = payload,
             Topic = topic,
             Event = @event,
+            Payload = payload,
         };
         return BroadcastAsync(req, cancellationToken);
     }

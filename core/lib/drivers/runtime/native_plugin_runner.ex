@@ -38,27 +38,26 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
         updated_manifest = prepare_manifest(manifest)
         Exoforge.PluginRegistry.register(updated_manifest)
 
-        runner_name = via_name(manifest.id)
+        
         sup_name = Module.concat([Exoforge, Plugins, module_name(manifest), Supervisor])
+
+        pool_size = Application.get_env(:exoforge, :native_plugin_pool_size, max(2, min(8, System.schedulers_online())))
+
+        children = Enum.map(1..pool_size, fn idx ->
+          runner_name = via_name(manifest.id, idx)
+          %{
+            id: {__MODULE__, idx},
+            restart: :transient,
+            start: {__MODULE__, :start_link, [{updated_manifest, binary_path, runner_name}]}
+          }
+        end)
 
         child_spec = %{
           id: sup_name,
           start: {
             Supervisor,
             :start_link,
-            [
-              [
-                # `:transient`, not permanent: a plugin the OS killed should be replaced, but a
-                # plugin that is incompatible must not be restarted forever. `refuse/2` stops with
-                # `{:shutdown, ...}`, which a transient child does not restart; a crash does.
-                %{
-                  id: __MODULE__,
-                  restart: :transient,
-                  start: {__MODULE__, :start_link, [{updated_manifest, binary_path, runner_name}]}
-                }
-              ],
-              [name: sup_name, strategy: :one_for_one]
-            ]
+            [children, [name: sup_name, strategy: :one_for_one]]
           },
           type: :supervisor
         }
@@ -81,7 +80,9 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
 
   @doc "Forwards an inbound BEAM event to the plugin process as an `event` frame."
   def dispatch_event(plugin_id, event_key, payload, _context) do
-    case WorkerRegistry.lookup(plugin_id, @runner_key) do
+    pool_size = Application.get_env(:exoforge, :native_plugin_pool_size, max(2, min(8, System.schedulers_online())))
+    idx = :erlang.phash2(make_ref(), pool_size) + 1
+    case WorkerRegistry.lookup(plugin_id, {@runner_key, idx}) do
       {:ok, pid} ->
         send(pid, {:forward_event, event_key, payload})
         :ok
@@ -102,7 +103,9 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
 
   @doc "Executes an action on a running native plugin."
   def execute_action(plugin_id, action, payload, timeout \\ 5000) do
-    case WorkerRegistry.lookup(plugin_id, @runner_key) do
+    pool_size = Application.get_env(:exoforge, :native_plugin_pool_size, max(2, min(8, System.schedulers_online())))
+    idx = :erlang.phash2(make_ref(), pool_size) + 1
+    case WorkerRegistry.lookup(plugin_id, {@runner_key, idx}) do
       {:ok, pid} ->
         try do
           GenServer.call(pid, {:execute_action, to_string(action), payload}, timeout)
@@ -118,7 +121,7 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
 
   @impl true
   def init({manifest, binary_path, handshake_timeout_ms}) do
-    Logger.info("[NativePluginRunner] Starting native plugin #{manifest.id} from #{binary_path}")
+    Logger.debug("[NativePluginRunner] Starting native plugin #{manifest.id} from #{binary_path}")
 
     port =
       Port.open({:spawn_executable, binary_path}, [
@@ -314,7 +317,7 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
 
     case PluginProtocol.accept_hello(msg) do
       {:ok, handshake} ->
-        Logger.info(
+        Logger.debug(
           "[NativePluginRunner] #{state.manifest.id} speaks protocol #{handshake.protocol} " <>
             "(#{Enum.join(handshake.capabilities, ", ")})"
         )
@@ -548,7 +551,9 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
 
   defp native_module_name(manifest), do: Module.concat([Exoforge, Plugins, manifest.id, Native])
 
-  defp via_name(plugin_id), do: WorkerRegistry.via_tuple(plugin_id, @runner_key)
+  defp via_name(plugin_id, idx) do
+    WorkerRegistry.via_tuple(plugin_id, {@runner_key, idx})
+  end
 
   defp module_name(manifest) do
     if is_atom(manifest.entry_point) and manifest.entry_point != nil do

@@ -41,8 +41,17 @@ namespace Exoforge.Client.Unity
         [Tooltip("Optional workspace config (exoforge.json). Empty loads Resources/exoforge.json.")]
         [SerializeField] private TextAsset? workspaceConfig;
 
-        [Tooltip("Optional WebSocket endpoint override. Empty uses the workspace config.")]
+        [Tooltip("Optional base Server URL (e.g. localhost or http://localhost). Automatically sets WS to :4000/ws and HTTP to :4001 when set.")]
+        [SerializeField] private string serverUrl = "";
+
+        [Tooltip("Optional WebSocket endpoint override (e.g. ws://localhost:4000/ws). Empty uses serverUrl or workspace config.")]
         [SerializeField] private string wsUrlOverride = "";
+
+        [Tooltip("Optional HTTP endpoint override (e.g. http://localhost:4001). Empty uses serverUrl or workspace config.")]
+        [SerializeField] private string httpUrlOverride = "";
+
+        [Tooltip("Default transport preference for RPC actions. HTTP is fast, isolated, and recommended for request/response operations.")]
+        [SerializeField] private ExoTransportPreference defaultTransport = ExoTransportPreference.Http;
 
         [Tooltip("Connect as soon as the scene loads.")]
         [SerializeField] private bool connectOnAwake = true;
@@ -197,6 +206,157 @@ namespace Exoforge.Client.Unity
                 : throw new InvalidOperationException("Exoforge is not connected. See the console for details.");
         }
 
+        /// <summary>Base Server URL (e.g. localhost or http://localhost). Automatically sets WS and HTTP endpoints.</summary>
+        public string ServerUrl
+        {
+            get => serverUrl;
+            set
+            {
+                serverUrl = value;
+                _configResolved = false;
+            }
+        }
+
+        /// <summary>WebSocket URL override (e.g. ws://localhost:4000/ws).</summary>
+        public string WsUrlOverride
+        {
+            get => wsUrlOverride;
+            set
+            {
+                wsUrlOverride = value;
+                _configResolved = false;
+            }
+        }
+
+        /// <summary>HTTP base address override (e.g. http://localhost:4001).</summary>
+        public string HttpUrlOverride
+        {
+            get => httpUrlOverride;
+            set
+            {
+                httpUrlOverride = value;
+                _configResolved = false;
+            }
+        }
+
+        /// <summary>Default transport preference for RPC calls.</summary>
+        public ExoTransportPreference DefaultTransport
+        {
+            get => defaultTransport;
+            set
+            {
+                defaultTransport = value;
+                if (_client != null)
+                {
+                    _client.DefaultTransportPreference = value;
+                }
+            }
+        }
+
+        /// <summary>Whether to use the Studio window's staff session in editor play mode.</summary>
+        public bool UseStudioConnection
+        {
+            get => useStudioConnection;
+            set
+            {
+                useStudioConnection = value;
+                ExoTokenStore.UseStudioSession = value;
+            }
+        }
+
+        /// <summary>Returns the effective WebSocket URL resolved from overrides, serverUrl, or workspace config.</summary>
+        public string GetEffectiveWsUrl()
+        {
+            if (!string.IsNullOrWhiteSpace(wsUrlOverride)) return wsUrlOverride.Trim();
+
+            if (!string.IsNullOrWhiteSpace(serverUrl))
+            {
+                return DeriveWsUrl(serverUrl.Trim());
+            }
+
+            return Config?.WsUrl ?? "ws://localhost:4000/ws";
+        }
+
+        /// <summary>Returns the effective HTTP base URL resolved from overrides, serverUrl, or workspace config.</summary>
+        public string GetEffectiveHttpUrl()
+        {
+            if (!string.IsNullOrWhiteSpace(httpUrlOverride)) return httpUrlOverride.Trim();
+
+            if (!string.IsNullOrWhiteSpace(serverUrl))
+            {
+                return DeriveHttpUrl(serverUrl.Trim());
+            }
+
+            return Config?.HttpUrl ?? "http://localhost:4001";
+        }
+
+        private static string DeriveWsUrl(string raw)
+        {
+            if (raw.StartsWith("ws://", StringComparison.OrdinalIgnoreCase) ||
+                raw.StartsWith("wss://", StringComparison.OrdinalIgnoreCase))
+            {
+                return raw.EndsWith("/ws") ? raw : $"{raw.TrimEnd('/')}/ws";
+            }
+
+            string clean = raw.Replace("http://", "").Replace("https://", "").TrimEnd('/');
+            bool isSecure = raw.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+            string scheme = isSecure ? "wss" : "ws";
+
+            if (clean.Contains(":"))
+            {
+                return $"{scheme}://{clean}/ws";
+            }
+
+            return $"{scheme}://{clean}:4000/ws";
+        }
+
+        private static string DeriveHttpUrl(string raw)
+        {
+            if (raw.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                raw.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            {
+                return raw.TrimEnd('/');
+            }
+
+            string clean = raw.Replace("ws://", "").Replace("wss://", "").TrimEnd('/');
+            bool isSecure = raw.StartsWith("wss://", StringComparison.OrdinalIgnoreCase);
+            string scheme = isSecure ? "https" : "http";
+
+            if (clean.Contains(":"))
+            {
+                return $"{scheme}://{clean}";
+            }
+
+            return $"{scheme}://{clean}:4001";
+        }
+
+        /// <summary>
+        /// Resets the anonymous player session so the next anonymous login mints a brand new account ID.
+        /// Existing users remain safe and intact on the backend.
+        /// </summary>
+        public void ResetAnonymousSession()
+        {
+            ExoTokenStore.Clear();
+            PlayerPrefs.DeleteKey("Exoforge.Token");
+            PlayerPrefs.DeleteKey("Exoforge.PlayerId");
+            PlayerPrefs.DeleteKey("Exoforge.Scopes");
+            PlayerPrefs.DeleteKey("Exoforge.PlayerName");
+            PlayerPrefs.Save();
+
+            ExoDeviceId.ResetWithNewId();
+
+            useStudioConnection = false;
+            ExoTokenStore.UseStudioSession = false;
+
+            if (_client != null)
+            {
+                _client.UseToken(null);
+            }
+
+            ExoforgeSDK.Auth.Current = null;
+            Debug.Log("[Exoforge] Anonymous player session reset. A new unique device ID has been generated.");
+        }
+
         /// <summary>
         /// Builds a client pointed at the workspace's HTTP endpoint. Kept separate from connecting so
         /// HTTP actions work with no socket open.
@@ -206,9 +366,19 @@ namespace Exoforge.Client.Unity
             var cfg = Config;
             var client = new ExoClient();
 
-            if (!string.IsNullOrEmpty(cfg?.HttpUrl))
+            string effectiveHttp = GetEffectiveHttpUrl();
+            if (!string.IsNullOrEmpty(effectiveHttp))
             {
-                client.HttpBaseUri = new Uri(cfg!.HttpUrl);
+                client.HttpBaseUri = new Uri(effectiveHttp);
+            }
+
+            client.DefaultTransportPreference = defaultTransport;
+
+            string? token = (ExoTokenStore.HasToken ? ExoTokenStore.Token : null)
+                            ?? (string.IsNullOrEmpty(cfg?.Token) ? null : cfg!.Token);
+            if (!string.IsNullOrEmpty(token))
+            {
+                client.UseToken(token);
             }
 
             client.OnDisconnected += OnClientDisconnected;
@@ -224,10 +394,7 @@ namespace Exoforge.Client.Unity
         {
             var cfg = Config;
 
-            string targetUrl =
-                !string.IsNullOrEmpty(url) ? url!
-                : !string.IsNullOrEmpty(wsUrlOverride) ? wsUrlOverride
-                : cfg?.WsUrl ?? "";
+            string targetUrl = !string.IsNullOrEmpty(url) ? url! : GetEffectiveWsUrl();
 
             if (string.IsNullOrEmpty(targetUrl))
             {

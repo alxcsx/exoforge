@@ -710,29 +710,37 @@ defmodule Exoforge.Std.Dashboard.Overlays do
           <%= if @settings_tab not in ["project", "environments", "database", "auth"] do %>
             <% active_hook = Enum.find(@settings_hooks, fn h -> to_string(h.id) == @settings_tab end) %>
             <%= if active_hook do %>
-              <%= if active_hook[:component] && Code.ensure_loaded?(active_hook[:component]) do %>
-                <.live_component module={active_hook[:component]} id={"settings_#{active_hook.id}"} />
-              <% else %>
-                <div class="space-y-4">
-                  <div>
-                    <h4 class="text-sm font-bold text-gray-900 flex items-center gap-2">
-                      <span><%= active_hook.icon %></span>
-                      <span><%= active_hook.title %></span>
-                    </h4>
-                    <p class="text-xs text-gray-500 mt-0.5">Settings contributed by <%= active_hook[:plugin_id] || "plugin" %>.</p>
-                  </div>
+              <%= cond do %>
+                <% active_hook[:element] || active_hook["element"] || active_hook[:type] == "iframe" -> %>
+                  <Exoforge.Std.Dashboard.Microfrontend.render_widget
+                    spec={active_hook}
+                    context={%{tab: @settings_tab}}
+                  />
 
-                  <div class="bg-gray-50 p-4 rounded-xl border border-gray-200/80 space-y-2">
-                    <div class="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
-                      <span class="font-bold text-gray-800">Hook ID</span>
-                      <span class="font-mono text-purple-700 font-bold"><%= active_hook.id %></span>
+                <% active_hook[:component] && Code.ensure_loaded?(active_hook[:component]) -> %>
+                  <.live_component module={active_hook[:component]} id={"settings_#{active_hook.id}"} />
+
+                <% true -> %>
+                  <div class="space-y-4">
+                    <div>
+                      <h4 class="text-sm font-bold text-gray-900 flex items-center gap-2">
+                        <span><%= active_hook.icon %></span>
+                        <span><%= active_hook.title %></span>
+                      </h4>
+                      <p class="text-xs text-gray-500 mt-0.5">Settings contributed by <%= active_hook[:plugin_id] || "plugin" %>.</p>
                     </div>
-                    <div class="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
-                      <span class="font-bold text-gray-800">Origin Plugin</span>
-                      <span class="font-mono text-gray-600"><%= active_hook[:plugin_id] || "n/a" %></span>
+
+                    <div class="bg-gray-50 p-4 rounded-xl border border-gray-200/80 space-y-2">
+                      <div class="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
+                        <span class="font-bold text-gray-800">Hook ID</span>
+                        <span class="font-mono text-purple-700 font-bold"><%= active_hook.id %></span>
+                      </div>
+                      <div class="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
+                        <span class="font-bold text-gray-800">Origin Plugin</span>
+                        <span class="font-mono text-gray-600"><%= active_hook[:plugin_id] || "n/a" %></span>
+                      </div>
                     </div>
                   </div>
-                </div>
               <% end %>
             <% end %>
           <% end %>

@@ -69,6 +69,7 @@ defmodule Exoforge.Std.Dashboard.Router do
   scope "/", Exoforge.Std.Dashboard do
     pipe_through(:public_files)
 
+    get("/api/plugins/:plugin_id/assets/*path", ApiController, :serve_plugin_asset)
     get("/api/files/:id", ApiController, :serve_file)
     get("/api/files/:bucket/:id", ApiController, :serve_file)
     get("/api/files/:bucket/:id/:filename", ApiController, :serve_file)

@@ -43,8 +43,8 @@ public class ManagementTests : IDisposable
         Assert.Equal("local", ws.Config.DefaultEnvironment);
 
         var env = ws.GetActiveEnvironment();
-        Assert.Equal("ws://127.0.0.1:4000/ws", env.WsUrl);
-        Assert.Equal("http://127.0.0.1:4001", env.HttpUrl);
+        Assert.Equal("ws://localhost:4000/ws", env.WsUrl);
+        Assert.Equal("http://localhost:4001", env.HttpUrl);
 
         // Verify reloading workspace from disk
         var loaded = ExoWorkspace.Load(_tempDir);

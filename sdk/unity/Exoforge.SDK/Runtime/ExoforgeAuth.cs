@@ -14,7 +14,7 @@ namespace Exoforge.Client.Unity
     public sealed class ExoforgeAuth
     {
         /// <summary>The signed-in player, or null before the first login.</summary>
-        public ExoSession? Current { get; private set; }
+        public ExoSession? Current { get; internal set; }
 
         /// <summary>
         /// Stage 1 — enters the account for this device, registering it on first sight.

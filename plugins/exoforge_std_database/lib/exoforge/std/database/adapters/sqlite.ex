@@ -14,13 +14,8 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
   @impl true
   def ensure_database(plugin_id, config) do
     path = db_path(plugin_id, config)
-    File.mkdir_p!(Path.dirname(path))
-
-    with {:ok, conn} <- open(path) do
-      _ = Exqlite.Sqlite3.execute(conn, kv_ddl())
-      Exqlite.Sqlite3.close(conn)
-      {:ok, %{status: :ok, database: database_name(plugin_id), path: path, plugin: plugin_id}}
-    end
+    Exoforge.Std.Database.Adapters.Sqlite.Connection.ensure_started(plugin_id, config)
+    {:ok, %{status: :ok, database: database_name(plugin_id), path: path, plugin: plugin_id}}
   end
 
   @impl true
@@ -46,11 +41,10 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
 
   @impl true
   def execute(plugin_id, sql, args, config) when is_binary(sql) do
-    with {:ok, args} <- positional_args(args),
-         {:ok, conn} <- open_for(plugin_id, config) do
-      result = run_sql(conn, sql, args)
-      Exqlite.Sqlite3.close(conn)
-      result
+    with {:ok, args} <- positional_args(args) do
+      Exoforge.Std.Database.Adapters.Sqlite.Connection.run(plugin_id, config, fn conn ->
+        run_sql(conn, sql, args)
+      end)
     end
   end
 
@@ -143,8 +137,7 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
     data = command[:data] || %{}
     record = Map.put(data, "id", id)
 
-    with {:ok, conn} <- open_for(plugin_id, config) do
-      res =
+    Exoforge.Std.Database.Adapters.Sqlite.Connection.run(plugin_id, config, fn conn ->
         case real_table_info(conn, tbl) do
           {:ok, %{columns: cols, pk: pk_col}} ->
             data_with_pk = Map.put(data, pk_col, id)
@@ -201,17 +194,14 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
             put_into_kv(conn, tbl, id, record)
         end
 
-      Exqlite.Sqlite3.close(conn)
-      res
-    end
+    end)
   end
 
   defp kv_get(plugin_id, command, config) do
     tbl = to_string(command[:table])
     id = to_string(command[:id])
 
-    with {:ok, conn} <- open_for(plugin_id, config) do
-      res =
+    Exoforge.Std.Database.Adapters.Sqlite.Connection.run(plugin_id, config, fn conn ->
         case real_table_info(conn, tbl) do
           {:ok, %{pk: pk_col}} ->
             safe_tbl = String.replace(tbl, "\"", "")
@@ -229,17 +219,14 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
             get_from_kv(conn, tbl, id)
         end
 
-      Exqlite.Sqlite3.close(conn)
-      res
-    end
+    end)
   end
 
   defp kv_delete(plugin_id, command, config) do
     tbl = to_string(command[:table])
     id = to_string(command[:id])
 
-    with {:ok, conn} <- open_for(plugin_id, config) do
-      res =
+    Exoforge.Std.Database.Adapters.Sqlite.Connection.run(plugin_id, config, fn conn ->
         case real_table_info(conn, tbl) do
           {:ok, %{pk: pk_col}} ->
             safe_tbl = String.replace(tbl, "\"", "")
@@ -255,16 +242,13 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
             end
         end
 
-      Exqlite.Sqlite3.close(conn)
-      res
-    end
+    end)
   end
 
   defp kv_all(plugin_id, command, config) do
     tbl = to_string(command[:table])
 
-    with {:ok, conn} <- open_for(plugin_id, config) do
-      res =
+    Exoforge.Std.Database.Adapters.Sqlite.Connection.run(plugin_id, config, fn conn ->
         case real_table_info(conn, tbl) do
           {:ok, _} ->
             safe_tbl = String.replace(tbl, "\"", "")
@@ -285,9 +269,7 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
             end
         end
 
-      Exqlite.Sqlite3.close(conn)
-      res
-    end
+    end)
   end
 
   defp real_table_info(_conn, "kv"), do: :error
@@ -334,22 +316,6 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
 
   ## ---- HELPERS ----
 
-  defp open_for(plugin_id, config) do
-    path = db_path(plugin_id, config)
-    File.mkdir_p!(Path.dirname(path))
-
-    with {:ok, conn} <- open(path) do
-      _ = Exqlite.Sqlite3.execute(conn, kv_ddl())
-      {:ok, conn}
-    end
-  end
-
-  defp open(path), do: Exqlite.Sqlite3.open(path)
-
-  defp kv_ddl do
-    "CREATE TABLE IF NOT EXISTS kv (tbl text, id text, data text, PRIMARY KEY (tbl, id))"
-  end
-
   defp encode(data), do: data |> :erlang.term_to_binary() |> Base.encode64()
 
   defp decode(nil), do: %{}
@@ -360,7 +326,7 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
     _ -> %{}
   end
 
-  defp db_path(plugin_id, config) do
+  def db_path(plugin_id, config) do
     Path.join(data_dir(config), "#{database_name(plugin_id)}.db")
   end
 
@@ -370,4 +336,64 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
   end
 
   defp database_name(plugin_id), do: "exoforge_#{Exoforge.Std.Database.clean_id(plugin_id)}"
+end
+
+
+defmodule Exoforge.Std.Database.Adapters.Sqlite.Connection do
+  use GenServer
+  def ensure_started(plugin_id, config) do
+    if Process.whereis(Exoforge.Std.Database.PoolRegistry) == nil do
+      Registry.start_link(keys: :unique, name: Exoforge.Std.Database.PoolRegistry)
+    end
+    if Process.whereis(Exoforge.Std.Database.PoolSupervisor) == nil do
+      DynamicSupervisor.start_link(name: Exoforge.Std.Database.PoolSupervisor, strategy: :one_for_one)
+    end
+
+    case Registry.lookup(Exoforge.Std.Database.PoolRegistry, {:sqlite, plugin_id}) do
+      [{pid, _}] -> {:ok, pid}
+      [] ->
+        case DynamicSupervisor.start_child(
+               Exoforge.Std.Database.PoolSupervisor,
+               {__MODULE__, {plugin_id, config}}
+             ) do
+          {:ok, pid} -> {:ok, pid}
+          {:error, {:already_started, pid}} -> {:ok, pid}
+          error -> error
+        end
+    end
+  end
+
+  def run(plugin_id, config, func) do
+    {:ok, pid} = ensure_started(plugin_id, config)
+    GenServer.call(pid, {:run, func}, 15_000)
+  end
+
+  def start_link({plugin_id, config}) do
+    GenServer.start_link(__MODULE__, {plugin_id, config}, name: via_tuple(plugin_id))
+  end
+
+  @impl true
+  def init({plugin_id, config}) do
+    path = Exoforge.Std.Database.Adapters.Sqlite.db_path(plugin_id, config)
+    File.mkdir_p!(Path.dirname(path))
+
+    case Exqlite.Sqlite3.open(path) do
+      {:ok, conn} ->
+        kv_ddl = "CREATE TABLE IF NOT EXISTS kv (tbl text, id text, data text, PRIMARY KEY (tbl, id))"
+        _ = Exqlite.Sqlite3.execute(conn, kv_ddl)
+        {:ok, %{conn: conn}}
+      error ->
+        {:stop, error}
+    end
+  end
+
+  @impl true
+  def handle_call({:run, func}, _from, %{conn: conn} = state) do
+    result = func.(conn)
+    {:reply, result, state}
+  end
+
+  defp via_tuple(plugin_id) do
+    {:via, Registry, {Exoforge.Std.Database.PoolRegistry, {:sqlite, plugin_id}}}
+  end
 end

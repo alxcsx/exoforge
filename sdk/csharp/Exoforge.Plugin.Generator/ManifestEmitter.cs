@@ -20,7 +20,8 @@ internal sealed record ColumnModel(
     string? Role,
     string? Default,
     List<string>? Choices,
-    string? Bucket = null);
+    string? Bucket = null,
+    string? Input = null);
 
 internal sealed record ActionModel(
     string Name,
@@ -221,9 +222,18 @@ internal static class ManifestEmitter
             .Replace(EntryPlaceholder, id);
     }
 
-    private static string Column(ColumnModel column) =>
-        $"\"name\": {Str(column.Name)}, \"type\": {Str(column.Type)}, \"label\": {Str(column.Label)}, " +
-        $"\"sortable\": {Lower(column.Sortable)}, \"filterable\": {Lower(column.Filterable)}, \"badge\": {Lower(column.Badge)}";
+    private static string Column(ColumnModel column)
+    {
+        string baseJson = $"\"name\": {Str(column.Name)}, \"type\": {Str(column.Type)}, \"label\": {Str(column.Label)}, " +
+            $"\"sortable\": {Lower(column.Sortable)}, \"filterable\": {Lower(column.Filterable)}, \"badge\": {Lower(column.Badge)}";
+
+        if (!string.IsNullOrEmpty(column.Input))
+        {
+            baseJson += $", \"input\": {Str(column.Input!)}";
+        }
+
+        return baseJson;
+    }
 
     /// <summary>A scalar atom, or a record's fields as a map of name to atom.</summary>
     private static string Returns(ActionModel action) =>

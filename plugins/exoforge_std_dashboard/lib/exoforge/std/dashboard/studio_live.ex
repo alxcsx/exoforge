@@ -1218,13 +1218,10 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                     <span class="text-[10px] font-mono text-gray-400"><%= Map.get(widget, :plugin_id, "") %></span>
                   </div>
 
-                  <%= if widget[:component] && Code.ensure_loaded?(widget[:component]) do %>
-                    <.live_component module={widget[:component]} id={to_string(widget.id)} />
-                  <% else %>
-                    <div class="p-4 bg-gray-50 rounded-xl border border-gray-100 text-xs text-gray-600">
-                      <p><%= Map.get(widget, :description) || "Dynamic overview widget contributed by #{widget[:plugin_id]}" %></p>
-                    </div>
-                  <% end %>
+                  <Exoforge.Std.Dashboard.Microfrontend.render_widget
+                    spec={widget}
+                    context={%{overview: @overview}}
+                  />
                 </div>
               <% end %>
             </div>
@@ -1251,22 +1248,33 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                end) %>
 
           <%= if active_ext do %>
-            <%= if mod = (active_ext[:custom_view_module] || ExtensionPresenter.view_module(active_ext)) do %>
-              <.live_component
-                module={mod}
-                id={"ext_view_#{active_ext.id}"}
-                extension={active_ext}
-                focus={@focus}
-                current_scopes={@current_scopes}
-              />
-            <% else %>
-              <.live_component
-                module={Exoforge.Std.Dashboard.GenericExtensionView}
-                id={"ext_generic_#{active_ext.id}"}
-                extension={active_ext}
-                focus={@focus}
-                current_scopes={@current_scopes}
-              />
+            <% dv = active_ext[:dashboard_view] %>
+            <%= cond do %>
+              <% is_map(dv) and (dv[:element] || dv["element"] || dv[:type] == "iframe" || dv["type"] == "iframe") -> %>
+                <div class="bg-white p-6 rounded-2xl border border-gray-200/80 shadow-sm min-h-[600px]">
+                  <Exoforge.Std.Dashboard.Microfrontend.render_widget
+                    spec={Map.merge(dv, %{plugin_id: active_ext.id})}
+                    context={%{focus: @focus, current_scopes: @current_scopes}}
+                  />
+                </div>
+
+              <% mod = (active_ext[:custom_view_module] || ExtensionPresenter.view_module(active_ext)) -> %>
+                <.live_component
+                  module={mod}
+                  id={"ext_view_#{active_ext.id}"}
+                  extension={active_ext}
+                  focus={@focus}
+                  current_scopes={@current_scopes}
+                />
+
+              <% true -> %>
+                <.live_component
+                  module={Exoforge.Std.Dashboard.GenericExtensionView}
+                  id={"ext_generic_#{active_ext.id}"}
+                  extension={active_ext}
+                  focus={@focus}
+                  current_scopes={@current_scopes}
+                />
             <% end %>
           <% else %>
             <div class="bg-white p-12 rounded-2xl border border-gray-200 text-center space-y-3">

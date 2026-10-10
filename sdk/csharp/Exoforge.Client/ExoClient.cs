@@ -49,6 +49,12 @@ public class ExoClient : IDisposable
     public IReadOnlyList<string> Scopes => _scopes.AsReadOnly();
     public ExoDispatcher Dispatcher => _dispatcher;
     public Uri? HttpBaseUri { get; set; }
+    /// <summary>
+    /// Default transport preference when <see cref="ExoTransportPreference.Auto"/> is used.
+    /// When <see cref="HttpBaseUri"/> is configured, defaults to <see cref="ExoTransportPreference.Http"/>
+    /// for fast, isolated request/response actions.
+    /// </summary>
+    public ExoTransportPreference DefaultTransportPreference { get; set; } = ExoTransportPreference.Http;
     /// <summary>The token last used to authenticate. Set by <see cref="AuthenticateAsync"/>.</summary>
     public string? AuthToken { get; private set; }
 
@@ -82,11 +88,12 @@ public class ExoClient : IDisposable
     /// <summary>
     /// Records the token an HTTP-only session sends on every request. The socket path sets this by
     /// authenticating; a session that never opens a socket still needs it.
+    /// Passing null or empty clears the token and unauthenticates the client.
     /// </summary>
-    public void UseToken(string token)
+    public void UseToken(string? token)
     {
         AuthToken = token;
-        _isAuthenticated = true;
+        _isAuthenticated = !string.IsNullOrEmpty(token);
     }
     public HttpClient HttpClient => _httpClient;
 
@@ -193,11 +200,20 @@ public class ExoClient : IDisposable
         CancellationToken cancellationToken = default)
     {
         bool useHttp = transportPreference == ExoTransportPreference.Http ||
-                       (transportPreference == ExoTransportPreference.Auto && !IsConnected && HttpBaseUri != null);
+                       (transportPreference == ExoTransportPreference.Auto &&
+                        HttpBaseUri != null &&
+                        DefaultTransportPreference != ExoTransportPreference.WebSocket);
 
         if (useHttp)
         {
-            return await SendActionHttpAsync<TResult>(service, action, payload, timeout, cancellationToken).ConfigureAwait(false);
+            try
+            {
+                return await SendActionHttpAsync<TResult>(service, action, payload, timeout, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception) when (transportPreference == ExoTransportPreference.Auto && IsConnected)
+            {
+                // Fall back to WebSocket if Auto was requested, HTTP had a transport issue, and WebSocket is connected.
+            }
         }
 
         // Not HTTP, so this one wants the socket - including when the contract asked for it

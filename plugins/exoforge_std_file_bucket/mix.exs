@@ -20,6 +20,8 @@ defmodule Exoforge.Std.FileBucket.MixProject do
   defp deps do
     [
       {:exoforge_core, path: "../../core"},
+      {:phoenix_live_view, "~> 1.0"},
+      {:phoenix_html, "~> 4.0"},
       {:jason, "~> 1.4"}
     ]
   end

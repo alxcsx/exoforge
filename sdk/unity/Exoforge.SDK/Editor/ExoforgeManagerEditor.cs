@@ -32,6 +32,9 @@ public class ExoforgeManagerEditor : UnityEditor.Editor
             EditorGUILayout.LabelField($"Active Session: {playerId}", EditorStyles.miniLabel);
         }
 
+        EditorGUILayout.LabelField($"WS Endpoint: {behaviour.GetEffectiveWsUrl()}", EditorStyles.miniLabel);
+        EditorGUILayout.LabelField($"HTTP REST: {behaviour.GetEffectiveHttpUrl()}", EditorStyles.miniLabel);
+
         EditorGUILayout.EndVertical();
 
         EditorGUILayout.Space(4);
@@ -44,6 +47,14 @@ public class ExoforgeManagerEditor : UnityEditor.Editor
         // Exoforge Studio Link & Runtime Actions
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
         EditorGUILayout.LabelField("Quick Actions", EditorStyles.boldLabel);
+
+        if (GUILayout.Button("Reset Anonymous Player Session (New ID)", GUILayout.Height(26)))
+        {
+            behaviour.ResetAnonymousSession();
+            EditorUtility.SetDirty(behaviour);
+        }
+
+        EditorGUILayout.Space(2);
 
         if (GUILayout.Button("Open Exoforge Studio", GUILayout.Height(26)))
         {

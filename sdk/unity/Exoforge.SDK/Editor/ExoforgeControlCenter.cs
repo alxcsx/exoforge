@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Exoforge.Client;
+using Exoforge.Client.Unity;
 using Exoforge.Management;
 using UnityEditor;
 using UnityEngine;
@@ -45,7 +46,7 @@ public partial class ExoforgeControlCenter : EditorWindow
     private static readonly string[] TabLabels = Tabs.Select(t => t.Label).ToArray();
 
     // Connection & Client
-    private ExoClient? _editorClient;
+    [NonSerialized] private ExoClient? _editorClient;
     private ExoWorkspace? _workspace;
     private string _workspaceLoadedFrom = "";
 
@@ -70,10 +71,15 @@ public partial class ExoforgeControlCenter : EditorWindow
             return _workspace;
         }
     }
-    private bool _isConnected;
-    private bool _isConnecting;
-    private CancellationTokenSource? _connectCts;
-    private string _connectionStatus = "Disconnected";
+    [NonSerialized] private bool _rawConnected;
+    private bool _isConnected
+    {
+        get => _rawConnected && _editorClient != null && _editorClient.IsConnected;
+        set => _rawConnected = value;
+    }
+    [NonSerialized] private bool _isConnecting;
+    [NonSerialized] private CancellationTokenSource? _connectCts;
+    [NonSerialized] private string _connectionStatus = "Disconnected";
 
     // Authentication foldout
     private bool _showAuthFoldout;
@@ -134,7 +140,6 @@ public partial class ExoforgeControlCenter : EditorWindow
     private string _pluginLogsFor = "";
     private bool _showPluginLogs;
     private Vector2 _pluginLogsScroll;
-    private bool _showScaffoldPrompt = false;
     private List<LocalPluginInfo> _localPlugins = new();
     private List<JsonElement> _remotePlugins = new();
     private Vector2 _pluginsScroll;
@@ -174,9 +179,9 @@ public partial class ExoforgeControlCenter : EditorWindow
         PlayerPrefs.DeleteKey("Exoforge.PlayerId");
         PlayerPrefs.DeleteKey("Exoforge.Scopes");
         PlayerPrefs.DeleteKey("Exoforge.PlayerName");
-        PlayerPrefs.DeleteKey("Exoforge.DeviceId");
         PlayerPrefs.Save();
-        UnityEngine.Debug.Log("[Exoforge] Cleared anonymous player session and reset device identifier.");
+        ExoDeviceId.ResetWithNewId();
+        UnityEngine.Debug.Log("[Exoforge] Cleared anonymous player session and generated a new unique device identifier.");
     }
 
     [MenuItem("Tools/Exoforge/Clear All Sessions (Player & Studio)", false, 201)]
@@ -215,7 +220,9 @@ public partial class ExoforgeControlCenter : EditorWindow
         bool wasConnected = SessionState.GetBool(WasConnectedSessionKey, false);
         if (wasConnected)
         {
-            EditorApplication.delayCall += () => _ = ConnectAsync();
+            _isConnecting = true;
+            _connectionStatus = "Reconnecting...";
+            EditorApplication.delayCall += () => _ = ReconnectWithRetryAsync(maxRetries: 6, delayMs: 800);
         }
         else if (!SessionState.GetBool(AutoConnectSessionKey, false))
         {
@@ -245,8 +252,9 @@ public partial class ExoforgeControlCenter : EditorWindow
     private void OnDisable()
     {
         EditorApplication.update -= OnEditorUpdate;
-        SessionState.SetBool(WasConnectedSessionKey, _isConnected);
-        _ = DisconnectAsync();
+        bool wasConnected = _rawConnected && (_editorClient?.IsConnected ?? false);
+        SessionState.SetBool(WasConnectedSessionKey, wasConnected);
+        _ = DisconnectAsync(preserveSessionState: wasConnected);
     }
 
     // Keeps the window repainting while a build runs, so the streamed build log updates live.
@@ -309,15 +317,9 @@ public partial class ExoforgeControlCenter : EditorWindow
     {
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
 
-        // Top Row: Title, Scaffold Shortcut, Status Badge, Connect/Disconnect
+        // Top Row: Title, Status Badge, Connect/Disconnect
         EditorGUILayout.BeginHorizontal();
         GUILayout.Label("⚡ Exoforge Studio", EditorStyles.boldLabel);
-
-        // Shortcut to Scaffold a new C# Plugin
-        if (GUILayout.Button("+ New C# Plugin", EditorStyles.miniButton, GUILayout.Width(115)))
-        {
-            _showScaffoldPrompt = !_showScaffoldPrompt;
-        }
 
         GUILayout.FlexibleSpace();
 
@@ -326,7 +328,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         if (_isConnecting)
         {
             GUI.color = new Color(1.0f, 0.85f, 0.3f);
-            GUILayout.Label("◌ CONNECTING", EditorStyles.miniBoldLabel);
+            GUILayout.Label($"◌ CONNECTING ({_connectionStatus})", EditorStyles.miniBoldLabel);
         }
         else if (_isConnected)
         {
@@ -357,29 +359,6 @@ public partial class ExoforgeControlCenter : EditorWindow
         }
 
         EditorGUILayout.EndHorizontal();
-
-        // Inline Scaffold Bar (when triggered by header shortcut)
-        if (_showScaffoldPrompt)
-        {
-            EditorGUILayout.Space(3);
-            EditorGUILayout.BeginVertical(GUI.skin.box);
-            EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("Plugin Name:", GUILayout.Width(80));
-            _newPluginName = EditorGUILayout.TextField(_newPluginName);
-            using (new EditorGUI.DisabledScope(string.IsNullOrWhiteSpace(_newPluginName)))
-            {
-                if (GUILayout.Button("Scaffold", EditorStyles.miniButton, GUILayout.Width(70)))
-                {
-                    ScaffoldNewPlugin();
-                }
-            }
-            if (GUILayout.Button("✕", EditorStyles.miniButton, GUILayout.Width(25)))
-            {
-                _showScaffoldPrompt = false;
-            }
-            EditorGUILayout.EndHorizontal();
-            EditorGUILayout.EndVertical();
-        }
 
         EditorGUILayout.Space(2);
 
@@ -471,7 +450,6 @@ public partial class ExoforgeControlCenter : EditorWindow
             }
 
             _newPluginName = "";
-            _showScaffoldPrompt = false;
             _currentTab = Tab.Plugins;
         }
         catch (Exception ex)
@@ -651,6 +629,10 @@ public partial class ExoforgeControlCenter : EditorWindow
 
             ExoforgeRuntimeConfigGenerator.Generate();
             ExoforgeEditorConfig.LastSyncTime = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss 'UTC'");
+            if (_rawConnected)
+            {
+                SessionState.SetBool(WasConnectedSessionKey, true);
+            }
             AssetDatabase.Refresh();
             ShowStatus($"✓ Strongly-typed C# client generated successfully at {ExoforgeEditorConfig.GeneratedScriptPath}", MessageType.Info);
         }

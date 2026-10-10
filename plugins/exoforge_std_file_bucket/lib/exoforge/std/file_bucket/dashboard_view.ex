@@ -1,4 +1,4 @@
-defmodule Exoforge.Std.DashboardViews.FileBucketView do
+defmodule Exoforge.Std.FileBucket.DashboardView do
   @moduledoc """
   Phoenix LiveComponent providing the Producer & Designer Studio visualization
   for the File Bucket asset and binary storage service (:file_bucket).

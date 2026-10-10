@@ -41,6 +41,12 @@ defmodule Exoforge.Std.Auth do
   alias Exoforge.Auth.Roles
   require Logger
 
+  def children do
+    [
+      Exoforge.Std.Auth.Cache
+    ]
+  end
+
   @admin_id "admin"
   @studio_id "studio"
   @dev_admin_prefix "dev_admin"
@@ -123,27 +129,34 @@ defmodule Exoforge.Std.Auth do
         {:ok, %{user_id: "guest_anon", player_id: "guest_anon", scopes: scopes, role: role(scopes)}}
 
       true ->
-        query = "SELECT * FROM #{@tokens_table} WHERE token = $1"
+        case Exoforge.Std.Auth.Cache.get(token) do
+          {:ok, cached_result} ->
+            {:ok, cached_result}
+          :error ->
+            query = "SELECT * FROM #{@tokens_table} WHERE token = $1"
 
-        case ActionDispatcher.dispatch(:database, :execute, %{
-               plugin: :auth,
-               operation: query,
-               arguments: [token]
-             }) do
-          {:ok, %{rows: [row | _]}} ->
-            uid =
-              Map.get(row, "user_id") || Map.get(row, :user_id) || Map.get(row, "player_id") ||
-                Map.get(row, :player_id)
+            case ActionDispatcher.dispatch(:database, :execute, %{
+                   plugin: :auth,
+                   operation: query,
+                   arguments: [token]
+                 }) do
+              {:ok, %{rows: [row | _]}} ->
+                uid =
+                  Map.get(row, "user_id") || Map.get(row, :user_id) || Map.get(row, "player_id") ||
+                    Map.get(row, :player_id)
 
-            raw_scopes = Map.get(row, "scopes") || Map.get(row, :scopes) || Roles.player()
-            scopes = parse_scopes(raw_scopes)
-            {:ok, %{user_id: uid, player_id: uid, scopes: scopes, role: role(scopes)}}
+                raw_scopes = Map.get(row, "scopes") || Map.get(row, :scopes) || Roles.player()
+                scopes = parse_scopes(raw_scopes)
+                result = %{user_id: uid, player_id: uid, scopes: scopes, role: role(scopes)}
+                Exoforge.Std.Auth.Cache.put(token, result)
+                {:ok, result}
 
-          {:ok, %{rows: []}} ->
-            {:error, :invalid_token}
+              {:ok, %{rows: []}} ->
+                {:error, :invalid_token}
 
-          {:error, _reason} ->
-            {:error, :invalid_token}
+              {:error, _reason} ->
+                {:error, :invalid_token}
+            end
         end
     end
   end
@@ -380,9 +393,9 @@ defmodule Exoforge.Std.Auth do
   defaction list_users(payload), scope: Exoforge.Auth.Roles.studio() do
     init_schema()
 
-    players_query = "SELECT * FROM #{@players_table}"
-    tokens_query = "SELECT * FROM #{@tokens_table}"
-    accounts_query = "SELECT * FROM #{@accounts_table}"
+    players_query = "SELECT * FROM #{@players_table} LIMIT 100"
+    tokens_query = "SELECT * FROM #{@tokens_table} LIMIT 1000"
+    accounts_query = "SELECT * FROM #{@accounts_table} LIMIT 200"
 
     players_rows =
       case ActionDispatcher.dispatch(:database, :execute, %{
@@ -1148,4 +1161,48 @@ defmodule Exoforge.Std.Auth do
   end
 
   defp parse_scopes(_), do: Roles.scopes_for_role("player")
+end
+
+
+defmodule Exoforge.Std.Auth.Cache do
+  use GenServer
+
+  @table :exoforge_auth_tokens
+
+  def start_link(_) do
+    GenServer.start_link(__MODULE__, [], name: __MODULE__)
+  end
+
+  def get(token) do
+    case :ets.lookup(@table, token) do
+      [{^token, result}] -> {:ok, result}
+      [] -> :error
+    end
+  rescue
+    ArgumentError -> :error
+  end
+
+  def put(token, result) do
+    try do
+      :ets.insert(@table, {token, result})
+    rescue
+      ArgumentError -> :ok
+    end
+    :ok
+  end
+
+  def flush do
+    try do
+      :ets.delete_all_objects(@table)
+    rescue
+      ArgumentError -> :ok
+    end
+    :ok
+  end
+
+  @impl true
+  def init(_) do
+    :ets.new(@table, [:named_table, :public, :set, read_concurrency: true])
+    {:ok, %{}}
+  end
 end

@@ -60,29 +60,61 @@ defmodule Exoforge.Std.Dashboard.ExtensionPresenter do
       is_map(dv) and is_atom(dv[:module]) and Code.ensure_loaded?(dv[:module]) ->
         dv[:module]
 
+      is_map(dv) and is_binary(dv[:module]) and Code.ensure_loaded?(safe_to_atom(dv[:module])) ->
+        safe_to_atom(dv[:module])
+
       true ->
         lookup_id =
           (is_map(dv) && (dv[:id] || dv["id"])) || (is_map(ext) && (ext[:id] || ext["id"]))
 
-        if lookup_id do
-          case Exoforge.ActionDispatcher.dispatch(:dashboard_view, :resolve_view, %{id: lookup_id}) do
-            {:ok, %{module: mod}} when is_atom(mod) and not is_nil(mod) ->
-              if Code.ensure_loaded?(mod), do: mod, else: nil
+        # Check if the plugin module itself defines a DashboardView or View sub-module convention
+        plugin_mod = (is_map(ext) && (ext[:entry_point] || ext["entry_point"])) || nil
+        plugin_view =
+          if is_atom(plugin_mod) and Code.ensure_loaded?(plugin_mod) do
+            cond do
+              Code.ensure_loaded?(Module.concat(plugin_mod, DashboardView)) ->
+                Module.concat(plugin_mod, DashboardView)
 
-            _ ->
-              clean_name =
-                lookup_id
-                |> to_string()
-                |> String.replace_prefix("exoforge_std_", "")
-                |> Macro.camelize()
+              Code.ensure_loaded?(Module.concat(plugin_mod, View)) ->
+                Module.concat(plugin_mod, View)
 
-              mod = Module.concat([Exoforge.Std.DashboardViews, clean_name <> "View"])
-              if Code.ensure_loaded?(mod), do: mod, else: nil
+              true ->
+                nil
+            end
+          else
+            nil
           end
-        else
-          nil
+
+        cond do
+          plugin_view != nil ->
+            plugin_view
+
+          lookup_id != nil ->
+            case Exoforge.ActionDispatcher.dispatch(:dashboard_view, :resolve_view, %{id: lookup_id}) do
+              {:ok, %{module: mod}} when is_atom(mod) and not is_nil(mod) ->
+                if Code.ensure_loaded?(mod), do: mod, else: nil
+
+              _ ->
+                clean_name =
+                  lookup_id
+                  |> to_string()
+                  |> String.replace_prefix("exoforge_std_", "")
+                  |> Macro.camelize()
+
+                mod = Module.concat([Exoforge.Std.DashboardViews, clean_name <> "View"])
+                if Code.ensure_loaded?(mod), do: mod, else: nil
+            end
+
+          true ->
+            nil
         end
     end
+  end
+
+  defp safe_to_atom(str) when is_binary(str) do
+    String.to_existing_atom(str)
+  rescue
+    _ -> nil
   end
 
   defp humanize(nil), do: ""

@@ -619,6 +619,8 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
                              NamedString(fileRefAttr, "Bucket") ??
                              PositionalString(fileRefAttr, 0);
 
+            string? inputType = NamedString(colAttr, "InputType");
+
             columns.Add(new ColumnModel(
                 colName,
                 NamedString(colAttr, "DataType") ?? MapTypeToElixir(property.Type),
@@ -629,7 +631,8 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
                 role,
                 DefaultOf(property),
                 EnumOf(property)?.Members.Select(m => m.Value).ToList(),
-                bucket));
+                bucket,
+                inputType));
 
             if (pkAttr is not null && string.IsNullOrEmpty(primaryKey)) primaryKey = colName;
         }

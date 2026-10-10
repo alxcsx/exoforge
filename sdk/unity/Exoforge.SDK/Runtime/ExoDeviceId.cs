@@ -16,7 +16,7 @@ namespace Exoforge.Client.Unity
     /// The raw device id is never used as the account key — it is hashed, so the player id does
     /// not leak a device fingerprint.
     /// </summary>
-    internal static class ExoDeviceId
+    public static class ExoDeviceId
     {
         private const string Key = "Exoforge.DeviceId";
 
@@ -45,11 +45,20 @@ namespace Exoforge.Client.Unity
             return deviceId;
         }
 
-        /// <summary>Clears the cached id — the next sign-in claims a fresh account.</summary>
-        public static void Reset()
+        /// <summary>Clears the cached id and generates a fresh unique device id — the next sign-in claims a brand new account.</summary>
+        public static string Reset()
         {
-            PlayerPrefs.DeleteKey(Key);
+            return ResetWithNewId();
+        }
+
+        /// <summary>Generates and persists a new unique device identifier.</summary>
+        public static string ResetWithNewId()
+        {
+            string seed = Guid.NewGuid().ToString("N");
+            string deviceId = Derive(seed);
+            PlayerPrefs.SetString(Key, deviceId);
             PlayerPrefs.Save();
+            return deviceId;
         }
 
         private static string Derive(string seed)

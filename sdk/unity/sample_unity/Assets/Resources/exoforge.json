@@ -2,8 +2,8 @@
   "default_environment": "local",
   "environments": {
     "local": {
-      "ws_url": "ws://127.0.0.1:4000/ws",
-      "http_url": "http://127.0.0.1:4001"
+      "ws_url": "ws://localhost:4000/ws",
+      "http_url": "http://localhost:4001"
     }
   }
 }

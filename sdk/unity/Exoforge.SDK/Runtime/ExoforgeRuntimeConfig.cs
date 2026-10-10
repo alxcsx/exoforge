@@ -21,10 +21,10 @@ namespace Exoforge.Client.Unity
         public string Environment { get; private set; } = "local";
 
         /// <summary>WebSocket gateway endpoint.</summary>
-        public string WsUrl { get; private set; } = "ws://127.0.0.1:4000/ws";
+        public string WsUrl { get; private set; } = "ws://localhost:4000/ws";
 
         /// <summary>HTTP REST gateway base address.</summary>
-        public string HttpUrl { get; private set; } = "http://127.0.0.1:4001";
+        public string HttpUrl { get; private set; } = "http://localhost:4001";
 
         /// <summary>Bootstrap token used when no session token is stored yet.</summary>
         public string Token { get; private set; } = "";
