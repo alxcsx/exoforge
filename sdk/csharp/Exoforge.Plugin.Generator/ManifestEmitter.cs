@@ -59,7 +59,11 @@ internal sealed record ServiceModel(
     string? Category,
     string? Title,
     string? Icon,
-    bool System);
+    bool System,
+    string? DashboardElement = null,
+    string? DashboardEntry = null);
+
+internal sealed record InputTypeModel(string Id, string Element, string Entry);
 
 /// <summary>
 /// Emits the plugin manifest as JSON.
@@ -94,7 +98,8 @@ internal static class ManifestEmitter
         string? category,
         string? title,
         string? icon,
-        bool system)
+        bool system,
+        IEnumerable<InputTypeModel>? inputTypes = null)
     {
         var sb = new StringBuilder();
         sb.Append("{\n");
@@ -111,7 +116,24 @@ internal static class ManifestEmitter
 
         if (!string.IsNullOrEmpty(title))
         {
-            sb.Append($"  \"dashboard_view\": {{\"id\": {Str(id)}, \"title\": {Str(title!)}, \"icon\": {Str(icon ?? "")}}},\n");
+            var primary = services.FirstOrDefault();
+            string extra = "";
+            if (!string.IsNullOrEmpty(primary?.DashboardElement)) extra += $", \"element\": {Str(primary!.DashboardElement!)}";
+            if (!string.IsNullOrEmpty(primary?.DashboardEntry)) extra += $", \"entry\": {Str(primary!.DashboardEntry!)}";
+            sb.Append($"  \"dashboard_view\": {{\"id\": {Str(id)}, \"title\": {Str(title!)}, \"icon\": {Str(icon ?? "")}{extra}}},\n");
+        }
+
+        if (inputTypes != null && inputTypes.Any())
+        {
+            sb.Append("  \"input_types\": {\n");
+            var itList = inputTypes.ToList();
+            for (int i = 0; i < itList.Count; i++)
+            {
+                var it = itList[i];
+                string comma = i == itList.Count - 1 ? "" : ",";
+                sb.Append($"    {Str(it.Id)}: {{\"element\": {Str(it.Element)}, \"entry\": {Str(it.Entry)}}}{comma}\n");
+            }
+            sb.Append("  },\n");
         }
 
         sb.Append("  \"services\": [\n");

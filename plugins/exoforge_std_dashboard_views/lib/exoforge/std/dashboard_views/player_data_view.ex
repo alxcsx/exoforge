@@ -274,6 +274,15 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
     {:noreply, assign(socket, action_notification: nil)}
   end
 
+  @impl true
+  def handle_event("close_focus", _params, socket) do
+    tab = (socket.assigns[:extension] && socket.assigns.extension.id) || "exoforge_std_player_data"
+    {:noreply,
+     socket
+     |> assign(selected_player: nil, selected_player_id: nil, player_kv_data: %{})
+     |> push_patch(to: "/tab/#{tab}")}
+  end
+
   ## ---- PRIVATE HELPERS ----
 
   defp select_player(socket, id) do

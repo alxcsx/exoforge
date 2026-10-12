@@ -233,14 +233,17 @@ defmodule Exoforge.Std.Dashboard.ApiController do
   # login verified (M33 Fix 26) — never a default admin.
   defp session_auth(conn) do
     if Map.get(conn.private, :plug_session_fetch) == :done do
-      case get_session(conn, "admin_player_id") do
-        player_id when is_binary(player_id) and player_id != "" ->
-          scopes = get_session(conn, "admin_scopes") || []
+      player_id =
+        get_session(conn, "admin_player_id") ||
+          get_session(conn, "admin_user_id") ||
+          get_session(conn, "user_name")
 
-          {:ok, %{player_id: player_id, scopes: scopes, role: Exoforge.Auth.Roles.role(scopes)}}
+      scopes = get_session(conn, "admin_scopes") || []
 
-        _ ->
-          :error
+      if player_id do
+        {:ok, %{player_id: player_id, scopes: scopes, role: Exoforge.Auth.Roles.role(scopes)}}
+      else
+        :error
       end
     else
       :error
@@ -293,10 +296,13 @@ defmodule Exoforge.Std.Dashboard.ApiController do
 
   defp explicit_token(conn) do
     conn = Plug.Conn.fetch_query_params(conn)
+    conn = Plug.Conn.fetch_cookies(conn)
 
     Exoforge.Auth.Request.bearer(conn.req_headers) ||
       Exoforge.Auth.Request.header(conn.req_headers, "x-admin-token") ||
-      Exoforge.Auth.Request.query(conn.query_params)
+      Exoforge.Auth.Request.query(conn.query_params) ||
+      Exoforge.Auth.Request.cookie(conn.req_cookies) ||
+      (Map.get(conn.private, :plug_session_fetch) == :done && get_session(conn, "auth_token"))
   end
 
   def serve_plugin_asset(conn, %{"plugin_id" => plugin_id, "path" => path_parts}) do
@@ -304,8 +310,8 @@ defmodule Exoforge.Std.Dashboard.ApiController do
 
     manifest =
       try do
-        Exoforge.PluginRegistry.get(plugin_id) ||
-          Exoforge.PluginRegistry.get(String.to_existing_atom(plugin_id))
+        Exoforge.PluginRegistry.fetch_manifest(plugin_id) ||
+          Exoforge.PluginRegistry.fetch_manifest(String.to_existing_atom(plugin_id))
       rescue
         _ -> nil
       end
@@ -329,7 +335,7 @@ defmodule Exoforge.Std.Dashboard.ApiController do
 
           conn
           |> put_resp_header("content-type", mime)
-          |> put_resp_header("cache-control", "public, max-age=3600")
+          |> put_resp_header("cache-control", "no-cache, no-store, must-revalidate")
           |> send_file(200, file_path)
         else
           conn |> put_status(404) |> json(%{status: "error", error: "asset_not_found"})

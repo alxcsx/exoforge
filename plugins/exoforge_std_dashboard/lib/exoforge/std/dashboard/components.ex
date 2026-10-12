@@ -368,12 +368,13 @@ defmodule Exoforge.Std.Dashboard.Components do
         role="dialog"
         aria-modal="true"
       >
-        <div class="fixed inset-0" phx-click={@on_close}></div>
+        <div class="fixed inset-0" phx-click={@on_close} phx-target={@target}></div>
 
         <div class={"relative bg-white rounded-2xl #{@width} w-full shadow-2xl border border-gray-200 animate-in fade-in duration-150 overflow-hidden"}>
           <button
             type="button"
             phx-click={@on_close}
+            phx-target={@target}
             class="absolute top-4 right-5 z-10 text-gray-400 hover:text-gray-600 text-lg font-bold"
           >
             ✕

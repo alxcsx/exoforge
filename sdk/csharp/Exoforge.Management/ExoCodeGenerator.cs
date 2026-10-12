@@ -14,6 +14,7 @@ public class ServiceContractModel
     public List<ActionContractModel> Actions { get; set; } = new();
     public List<EventContractModel> Events { get; set; } = new();
     public List<ResourceContractModel> Resources { get; set; } = new();
+    public List<(string PascalName, string Id)> CustomInputs { get; set; } = new();
 }
 
 public class ActionContractModel
@@ -134,6 +135,15 @@ public static class ExoCodeGenerator
         {
             foreach (var plugin in pluginsArray.EnumerateArray())
             {
+                var inputs = new List<(string PascalName, string Id)>();
+                if (plugin.TryGetProperty("input_types", out var inputTypes) && inputTypes.ValueKind == JsonValueKind.Object)
+                {
+                    foreach (var prop in inputTypes.EnumerateObject())
+                    {
+                        inputs.Add((ToPascalCase(prop.Name), prop.Name));
+                    }
+                }
+
                 if (plugin.TryGetProperty("services", out var servicesArray) && servicesArray.ValueKind == JsonValueKind.Array)
                 {
                     foreach (var svc in servicesArray.EnumerateArray())
@@ -141,6 +151,7 @@ public static class ExoCodeGenerator
                         var model = ParseServiceElement(svc);
                         if (!string.IsNullOrEmpty(model.Name))
                         {
+                            model.CustomInputs.AddRange(inputs);
                             result[model.Name] = model;
                         }
                     }
@@ -154,7 +165,7 @@ public static class ExoCodeGenerator
                         string sName = p.GetString() ?? "";
                         if (!string.IsNullOrEmpty(sName) && !result.ContainsKey(sName))
                         {
-                            result[sName] = new ServiceContractModel { Name = sName };
+                            result[sName] = new ServiceContractModel { Name = sName, CustomInputs = new(inputs) };
                         }
                     }
                 }
@@ -360,10 +371,80 @@ public static class ExoCodeGenerator
             parsed = parsed.Where(s => wanted.Contains(s.Name)).ToList();
         }
 
+        var customInputs = ExtractCustomInputTypes(doc.RootElement, services);
+
         return GeneratePluginStubs(
             parsed,
             targetNamespace,
-            pluginId is null ? null : OwnJsonTypes(doc.RootElement, pluginId));
+            pluginId is null ? null : OwnJsonTypes(doc.RootElement, pluginId),
+            customInputs);
+    }
+
+    public static List<(string PascalName, string Id)> ExtractCustomInputTypes(
+        JsonElement root,
+        IEnumerable<string>? services)
+    {
+        var result = new List<(string PascalName, string Id)>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        JsonElement pluginsElem;
+        if (root.TryGetProperty("export", out var export) && export.TryGetProperty("plugins", out var p1) && p1.ValueKind == JsonValueKind.Array)
+        {
+            pluginsElem = p1;
+        }
+        else if (root.TryGetProperty("plugins", out var p2) && p2.ValueKind == JsonValueKind.Array)
+        {
+            pluginsElem = p2;
+        }
+        else
+        {
+            return result;
+        }
+
+        var wanted = services != null
+            ? new HashSet<string>(services.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()), StringComparer.OrdinalIgnoreCase)
+            : null;
+
+        foreach (var plugin in pluginsElem.EnumerateArray())
+        {
+            if (wanted != null)
+            {
+                bool matches = false;
+                if (plugin.TryGetProperty("id", out var idProp) && wanted.Contains(idProp.GetString() ?? "")) matches = true;
+                if (!matches && plugin.TryGetProperty("name", out var nameProp) && wanted.Contains(nameProp.GetString() ?? "")) matches = true;
+                if (!matches && plugin.TryGetProperty("provides", out var provProp) && provProp.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var p in provProp.EnumerateArray())
+                    {
+                        if (wanted.Contains(p.GetString() ?? "")) { matches = true; break; }
+                    }
+                }
+                if (!matches && plugin.TryGetProperty("services", out var svcsProp) && svcsProp.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var s in svcsProp.EnumerateArray())
+                    {
+                        if (s.TryGetProperty("name", out var sn) && wanted.Contains(sn.GetString() ?? "")) { matches = true; break; }
+                    }
+                }
+
+                if (!matches) continue;
+            }
+
+            if (plugin.TryGetProperty("input_types", out var inputTypes) && inputTypes.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var prop in inputTypes.EnumerateObject())
+                {
+                    string id = prop.Name;
+                    string pascal = ToPascalCase(id);
+                    if (seen.Add(pascal))
+                    {
+                        result.Add((pascal, id));
+                    }
+                }
+            }
+        }
+
+        return result;
     }
 
     public static void GeneratePluginStubsToFile(
@@ -386,7 +467,8 @@ public static class ExoCodeGenerator
     public static string GeneratePluginStubs(
         IEnumerable<ServiceContractModel> services,
         string targetNamespace = "Exoforge.Plugins.Generated",
-        IEnumerable<string>? ownJsonTypes = null)
+        IEnumerable<string>? ownJsonTypes = null,
+        IReadOnlyList<(string PascalName, string Id)>? customInputs = null)
     {
         var serviceList = services.ToList();
         var sb = new StringBuilder();
@@ -439,8 +521,13 @@ public static class ExoCodeGenerator
                 sb.AppendLine("    {");
                 foreach (var p in act.Params)
                 {
+                    string propType = MapTypeToCSharp(p.Type);
                     sb.AppendLine($"        [JsonPropertyName(\"{p.Name}\")]");
-                    sb.AppendLine($"        public {MapTypeToCSharp(p.Type)} {ToPascalCase(p.Name)} {{ get; set; }} = default!;");
+                    if (p.Optional || propType == "JsonElement")
+                    {
+                        sb.AppendLine("        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]");
+                    }
+                    sb.AppendLine($"        public {propType} {ToPascalCase(p.Name)} {{ get; set; }} = default!;");
                 }
                 sb.AppendLine("    }");
                 sb.AppendLine();
@@ -501,6 +588,16 @@ public static class ExoCodeGenerator
             sb.AppendLine($"    public interface {iface}");
             sb.AppendLine("    {");
 
+            if (svc.CustomInputs.Count > 0)
+            {
+                sb.AppendLine("        // Custom dashboard input types provided by this service:");
+                foreach (var (pascal, id) in svc.CustomInputs)
+                {
+                    sb.AppendLine($"        public const string {pascal} = \"{id}\";");
+                }
+                sb.AppendLine();
+            }
+
             foreach (var act in svc.Actions)
             {
                 string actPascal = ToPascalCase(act.Name);
@@ -551,6 +648,19 @@ public static class ExoCodeGenerator
 
             sb.AppendLine("    }");
             sb.AppendLine();
+
+            if (svc.CustomInputs.Count > 0)
+            {
+                sb.AppendLine($"    /// <summary>Custom dashboard input types provided by '{svc.Name}'.</summary>");
+                sb.AppendLine($"    public static class {svcPascal}Inputs");
+                sb.AppendLine("    {");
+                foreach (var (pascal, id) in svc.CustomInputs)
+                {
+                    sb.AppendLine($"        public const string {pascal} = \"{id}\";");
+                }
+                sb.AppendLine("    }");
+                sb.AppendLine();
+            }
         }
 
         // Hub
@@ -677,6 +787,10 @@ public static class ExoCodeGenerator
                         string propName = ToPascalCase(p.Name);
                         string csType = MapTypeToCSharp(p.Type);
                         sb.AppendLine($"    [JsonPropertyName(\"{p.Name}\")]");
+                        if (p.Optional || csType == "JsonElement")
+                        {
+                            sb.AppendLine("    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]");
+                        }
                         sb.AppendLine($"    public {csType} {propName} {{ get; set; }} = default!;");
                     }
                     sb.AppendLine("}");
@@ -955,7 +1069,7 @@ public static class ExoCodeGenerator
     /// </summary>
     private static string ResponseModelName(string svcPascal, ActionContractModel act)
     {
-        if (string.IsNullOrEmpty(act.ReturnTypeName))
+        if (string.IsNullOrEmpty(act.ReturnTypeName) || act.ReturnTypeName!.Contains("<"))
         {
             return $"{svcPascal}{ToPascalCase(act.Name)}Response";
         }

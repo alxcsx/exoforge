@@ -249,6 +249,41 @@ public partial class ExoforgeControlCenter : EditorWindow
         _isConnecting = false;
         _connectionStatus = "Disconnected";
         Repaint();
+        ExoforgePluginsWindow.Instance?.Repaint();
+    }
+
+    public static async Task ConnectSharedAsync(string? tokenOverride = null)
+    {
+        if (Instance != null)
+        {
+            await Instance.ConnectAsync(tokenOverride);
+        }
+        else
+        {
+            var window = GetWindow<ExoforgeControlCenter>("Exoforge Studio");
+            await window.ConnectAsync(tokenOverride);
+        }
+    }
+
+    public static async Task DisconnectSharedAsync()
+    {
+        if (Instance != null)
+        {
+            await Instance.DisconnectAsync();
+        }
+        else if (s_editorClient != null)
+        {
+            try
+            {
+                await s_editorClient.DisconnectAsync();
+                s_editorClient.Dispose();
+            }
+            catch { }
+            s_editorClient = null;
+            s_rawConnected = false;
+            s_connectionStatus = "Disconnected";
+            ExoforgePluginsWindow.Instance?.Repaint();
+        }
     }
 
     private async Task LogInAsync()

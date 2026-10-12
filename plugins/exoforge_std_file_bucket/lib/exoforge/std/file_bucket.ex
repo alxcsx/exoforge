@@ -366,14 +366,23 @@ defmodule Exoforge.Std.FileBucket do
     end
   end
 
-  defp lookup_file(nil, id), do: lookup_by_id(id)
+  defp lookup_file(nil, id) do
+    lookup_by_id(id) || lookup_by_filename(nil, id)
+  end
 
   defp lookup_file(bucket, id) do
     ensure_meta_table()
+    id_str = to_string(id)
 
-    case :ets.lookup(@meta_table, {bucket, to_string(id)}) do
-      [{{^bucket, _id}, record}] -> record
-      [] -> lookup_by_id(id)
+    case :ets.lookup(@meta_table, {bucket, id_str}) do
+      [{{^bucket, _id}, record}] ->
+        record
+
+      [] ->
+        case lookup_by_id(id_str) do
+          nil -> lookup_by_filename(bucket, id_str)
+          record -> record
+        end
     end
   end
 
@@ -385,6 +394,20 @@ defmodule Exoforge.Std.FileBucket do
       {_key, rec} -> rec
       nil -> nil
     end
+  end
+
+  defp lookup_by_filename(bucket, filename) do
+    ensure_meta_table()
+    clean_name = Path.basename(to_string(filename))
+
+    :ets.tab2list(@meta_table)
+    |> Enum.find_value(fn {{b, _id}, rec} ->
+      if (is_nil(bucket) or b == bucket) and (rec["filename"] == clean_name or rec["filename"] == to_string(filename)) do
+        rec
+      else
+        nil
+      end
+    end)
   end
 
   defp list_bucket_files(bucket) do
@@ -527,6 +550,7 @@ defmodule Exoforge.Std.FileBucket do
       ".mp4" -> "video/mp4"
       ".webm" -> "video/webm"
       ".bin" -> "application/octet-stream"
+      ".bundle" -> "application/octet-stream"
       _ -> "application/octet-stream"
     end
   end

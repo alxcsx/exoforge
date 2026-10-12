@@ -45,8 +45,37 @@ public partial class ExoforgeControlCenter : EditorWindow
 
     private static readonly string[] TabLabels = Tabs.Select(t => t.Label).ToArray();
 
+    public static ExoforgeControlCenter? Instance { get; private set; }
+    [NonSerialized] private static ExoClient? s_editorClient;
+    public static ExoClient? SharedClient => s_editorClient;
+    public ExoClient? ActiveClient => s_editorClient;
+    private static ExoClient? _editorClient
+    {
+        get => s_editorClient;
+        set => s_editorClient = value;
+    }
+
+    public static string ActiveHttpEndpoint
+    {
+        get
+        {
+            if (Instance != null && !string.IsNullOrEmpty(Instance.ActiveHttpUrl))
+            {
+                return Instance.ActiveHttpUrl;
+            }
+            try
+            {
+                var env = ExoWorkspace.Load(ExoforgeEditorConfig.GetAbsoluteWorkspacePath())?.GetActiveEnvironment();
+                return env?.HttpUrl ?? "http://localhost:4001";
+            }
+            catch
+            {
+                return "http://localhost:4001";
+            }
+        }
+    }
+
     // Connection & Client
-    [NonSerialized] private ExoClient? _editorClient;
     private ExoWorkspace? _workspace;
     private string _workspaceLoadedFrom = "";
 
@@ -56,7 +85,7 @@ public partial class ExoforgeControlCenter : EditorWindow
     /// It used to be loaded once in OnEnable, so changing the path in Settings left Build, Deploy and
     /// Stubs pointed at the old workspace until the window was reloaded.
     /// </summary>
-    private ExoWorkspace Workspace
+    public ExoWorkspace Workspace
     {
         get
         {
@@ -71,15 +100,33 @@ public partial class ExoforgeControlCenter : EditorWindow
             return _workspace;
         }
     }
-    [NonSerialized] private bool _rawConnected;
+    [NonSerialized] private static bool s_rawConnected;
+    private static bool _rawConnected
+    {
+        get => s_rawConnected;
+        set => s_rawConnected = value;
+    }
+    public static bool IsClusterConnected => s_rawConnected && s_editorClient != null && s_editorClient.IsConnected;
     private bool _isConnected
     {
-        get => _rawConnected && _editorClient != null && _editorClient.IsConnected;
-        set => _rawConnected = value;
+        get => IsClusterConnected;
+        set => s_rawConnected = value;
     }
-    [NonSerialized] private bool _isConnecting;
+    [NonSerialized] private static bool s_isConnecting;
+    public static bool IsConnecting => s_isConnecting;
+    private bool _isConnecting
+    {
+        get => s_isConnecting;
+        set => s_isConnecting = value;
+    }
     [NonSerialized] private CancellationTokenSource? _connectCts;
-    [NonSerialized] private string _connectionStatus = "Disconnected";
+    [NonSerialized] private static string s_connectionStatus = "Disconnected";
+    public static string ConnectionStatus => s_connectionStatus;
+    private string _connectionStatus
+    {
+        get => s_connectionStatus;
+        set => s_connectionStatus = value;
+    }
 
     // Authentication foldout
     private bool _showAuthFoldout;
@@ -195,13 +242,14 @@ public partial class ExoforgeControlCenter : EditorWindow
 
     private void OnEnable()
     {
-            // The editor authenticates with the runtime session token. Seed it from the active
-            // environment, so exoforge.json decides what a fresh editor signs in as rather than a
-            // hardcoded default.
-            if (string.IsNullOrEmpty(ExoTokenStore.StudioToken) && !string.IsNullOrEmpty(ActiveToken))
-            {
-                ExoTokenStore.SaveStudioSession(ActiveToken);
-            }
+        Instance = this;
+        // The editor authenticates with the runtime session token. Seed it from the active
+        // environment, so exoforge.json decides what a fresh editor signs in as rather than a
+        // hardcoded default.
+        if (string.IsNullOrEmpty(ExoTokenStore.StudioToken) && !string.IsNullOrEmpty(ActiveToken))
+        {
+            ExoTokenStore.SaveStudioSession(ActiveToken);
+        }
 
         if (ExoforgeEditorConfig.WorkspacePath == "exoforge")
         {
@@ -251,10 +299,52 @@ public partial class ExoforgeControlCenter : EditorWindow
 
     private void OnDisable()
     {
+        if (Instance == this) Instance = null;
         EditorApplication.update -= OnEditorUpdate;
-        bool wasConnected = _rawConnected && (_editorClient?.IsConnected ?? false);
-        SessionState.SetBool(WasConnectedSessionKey, wasConnected);
-        _ = DisconnectAsync(preserveSessionState: wasConnected);
+        // Do not disconnect! In Unity, OnDisable is called when an EditorWindow is docked behind another tab
+        // (such as when switching to the Exoforge Plugins window or the Inspector).
+        // Disconnecting here would prematurely sever the cluster connection for background tools.
+    }
+
+    private void OnDestroy()
+    {
+        if (Instance == this) Instance = null;
+        EditorApplication.update -= OnEditorUpdate;
+
+        // Cleanly disconnect only if there are no open Exoforge windows left (Studio or Plugins)
+        if (!HasAnyExoforgeWindowsOpen())
+        {
+            _ = DisconnectAsync();
+        }
+    }
+
+    public static bool HasAnyExoforgeWindowsOpen()
+    {
+        var studios = Resources.FindObjectsOfTypeAll<ExoforgeControlCenter>();
+        var plugins = Resources.FindObjectsOfTypeAll<ExoforgePluginsWindow>();
+        return studios.Length > 0 || plugins.Length > 0;
+    }
+
+    [InitializeOnLoadMethod]
+    private static void InitLifecycleHooks()
+    {
+        AssemblyReloadEvents.beforeAssemblyReload += () =>
+        {
+            if (s_editorClient != null)
+            {
+                SessionState.SetBool(WasConnectedSessionKey, IsClusterConnected);
+                try { s_editorClient.Dispose(); } catch { }
+                s_editorClient = null;
+                s_rawConnected = false;
+            }
+        };
+
+        EditorApplication.quitting += () =>
+        {
+            try { s_editorClient?.Dispose(); } catch { }
+            s_editorClient = null;
+            s_rawConnected = false;
+        };
     }
 
     // Keeps the window repainting while a build runs, so the streamed build log updates live.

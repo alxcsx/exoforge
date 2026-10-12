@@ -430,7 +430,8 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   def handle_event("close_inspect_extension", _params, socket) do
     {:noreply,
      socket
-     |> push_event("close-popup", %{})
+     |> assign(:inspecting_extension, nil)
+     |> assign(:focus, nil)
      |> push_patch(to: tab_path(socket.assigns.current_tab))}
   end
 
@@ -443,7 +444,8 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   def handle_event("close_focus", _params, socket) do
     {:noreply,
      socket
-     |> push_event("close-popup", %{})
+     |> assign(:focus, nil)
+     |> assign(:inspecting_extension, nil)
      |> push_patch(to: tab_path(socket.assigns.current_tab))}
   end
 

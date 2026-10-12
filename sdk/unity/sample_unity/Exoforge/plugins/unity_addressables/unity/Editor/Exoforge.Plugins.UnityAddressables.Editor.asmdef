@@ -1,0 +1,27 @@
+{
+    "name": "Exoforge.Plugins.UnityAddressables.Editor",
+    "rootNamespace": "Exoforge.Plugins.UnityAddressables.Editor",
+    "references": [
+        "Exoforge.SDK",
+        "Exoforge.SDK.Editor",
+        "Unity.Addressables",
+        "Unity.Addressables.Editor"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [
+        {
+            "name": "com.unity.addressables",
+            "expression": "",
+            "define": "EXOFORGE_ADDRESSABLES_SUPPORT"
+        }
+    ],
+    "noEngineReferences": false
+}

@@ -32,6 +32,8 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
     private const string ColumnAttribute = "Exoforge.Plugin.SDK.ExoColumnAttribute";
     private const string PrimaryKeyAttribute = "Exoforge.Plugin.SDK.PrimaryKeyAttribute";
     private const string InjectAttribute = "Exoforge.Plugin.SDK.InjectAttribute";
+    private const string DependencyAttribute = "Exoforge.Plugin.SDK.ExoDependencyAttribute";
+    private const string InputTypeAttribute = "Exoforge.Plugin.SDK.ExoInputTypeAttribute";
     private const string JsonContextBase = "System.Text.Json.Serialization.JsonSerializerContext";
 
     private static readonly DiagnosticDescriptor MultipleRoots = new(
@@ -125,7 +127,8 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
         string EventHandler,
         string ContractInterface,
         string ContractBinding,
-        List<ServiceModel> Models);
+        List<ServiceModel> Models,
+        List<InputTypeModel> InputTypes);
 
 
     // ---- service extraction ----
@@ -179,7 +182,9 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
                 NamedString(attr, "Category"),
                 NamedString(attr, "Title"),
                 NamedString(attr, "Icon"),
-                NamedBool(attr, "System")));
+                NamedBool(attr, "System"),
+                NamedString(attr, "DashboardElement"),
+                NamedString(attr, "DashboardEntry")));
         }
 
         ServiceModel ServiceFor(string? name)
@@ -299,6 +304,26 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
         // plugin dependency.
         var dependencies = new List<string>();
 
+        foreach (var attr in root.GetAttributes())
+        {
+            if (attr.AttributeClass?.Name is "ExoDependencyAttribute" or "ExoDependency")
+            {
+                string? dep = PositionalString(attr, 0) ?? NamedString(attr, "ServiceName");
+                if (string.IsNullOrEmpty(dep))
+                {
+                    if (attr.AttributeClass.IsGenericType && attr.AttributeClass.TypeArguments.Length == 1)
+                    {
+                        dep = InferDependencyName(attr.AttributeClass.TypeArguments[0]);
+                    }
+                    else if (attr.ConstructorArguments.Length > 0 && attr.ConstructorArguments[0].Value is ITypeSymbol typeSymbol)
+                    {
+                        dep = InferDependencyName(typeSymbol);
+                    }
+                }
+                if (!string.IsNullOrEmpty(dep) && !dependencies.Contains(dep!)) dependencies.Add(dep!);
+            }
+        }
+
         foreach (var member in root.GetMembers())
         {
             if (member is not IPropertySymbol property) continue;
@@ -307,6 +332,10 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
             if (inject is null) continue;
 
             string? dep = PositionalString(inject, 0) ?? NamedString(inject, "ServiceName");
+            if (string.IsNullOrEmpty(dep))
+            {
+                dep = InferDependencyName(property.Type);
+            }
             if (!string.IsNullOrEmpty(dep) && !dependencies.Contains(dep!)) dependencies.Add(dep!);
         }
 
@@ -344,6 +373,21 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
             binding = bindings.ToString();
         }
 
+        var inputTypes = new List<InputTypeModel>();
+        foreach (var attr in declared.GetAttributes())
+        {
+            if (IsAttribute(attr, InputTypeAttribute))
+            {
+                string itId = PositionalString(attr, 0) ?? "";
+                string itElement = NamedString(attr, "Element") ?? "";
+                string itEntry = NamedString(attr, "Entry") ?? "";
+                if (!string.IsNullOrEmpty(itId))
+                {
+                    inputTypes.Add(new InputTypeModel(itId, itElement, itEntry));
+                }
+            }
+        }
+
         return new ServiceEmit(
             id,
             pluginVersion,
@@ -361,7 +405,8 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
             DispatchEmitter.EventHandler(rootFq, FindEventHandler(root)),
             contract,
             binding,
-            services);
+            services,
+            inputTypes);
     }
 
     private static ImmutableArray<ServiceEmit> ExtractReferencedContracts(Compilation compilation, CancellationToken ct)
@@ -711,15 +756,18 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
         provides.Sort(StringComparer.Ordinal);
         dependencies.Sort(StringComparer.Ordinal);
 
-        // Every emit's services, not just the primary one's: a plugin whose services are declared on
-        // several roots would otherwise ship a manifest that mentions only the first.
         var models = new List<ServiceModel>();
-        foreach (var emit in ordered) models.AddRange(emit.Models);
+        var inputTypes = new List<InputTypeModel>();
+        foreach (var emit in ordered)
+        {
+            models.AddRange(emit.Models);
+            inputTypes.AddRange(emit.InputTypes);
+        }
 
         string final = ManifestEmitter.Finalize(
             ManifestEmitter.Manifest(
                 primary.Id, provides, dependencies, models,
-                primary.Category, primary.Title, primary.Icon, primary.System),
+                primary.Category, primary.Title, primary.Icon, primary.System, inputTypes),
             primary.Id, primary.Version, settings.PluginType, settings.BuildStamp);
 
         try
@@ -989,6 +1037,35 @@ namespace Exoforge.Generated
         }
 
         return sb.ToString();
+    }
+
+    private static string? InferDependencyName(ITypeSymbol? type)
+    {
+        if (type is null) return null;
+
+        if (type.Name is "ILogger" or "IEventDispatcher" or "IActionDispatcher" or "IPluginContext")
+        {
+            return null;
+        }
+
+        var serviceAttr = FindAttribute(type.GetAttributes(), ServiceAttribute);
+        if (serviceAttr != null)
+        {
+            string? name = PositionalString(serviceAttr, 0) ?? NamedString(serviceAttr, "Name");
+            if (!string.IsNullOrEmpty(name)) return name;
+        }
+
+        string typeName = type.Name;
+        if (typeName.StartsWith("I", StringComparison.Ordinal) && typeName.Length > 1 && char.IsUpper(typeName[1]))
+        {
+            typeName = typeName.Substring(1);
+        }
+        if (typeName.EndsWith("Service", StringComparison.Ordinal) && typeName.Length > 7)
+        {
+            typeName = typeName.Substring(0, typeName.Length - 7);
+        }
+
+        return ToSnakeCase(typeName);
     }
 
     private static string ToTitleCase(string name)

@@ -20,22 +20,28 @@ defmodule Exoforge.Std.Dashboard.Microfrontend do
     entry = spec[:entry] || spec["entry"]
     plugin_id = spec[:plugin_id] || spec["plugin_id"]
 
+    entry_url = if entry, do: "/api/plugins/#{plugin_id}/assets/#{entry}?v=#{System.system_time(:second)}"
+
     assigns =
       assigns
       |> assign(:type, type)
       |> assign(:element, element)
       |> assign(:entry, entry)
+      |> assign(:entry_url, entry_url)
       |> assign(:plugin_id, plugin_id)
 
     ~H"""
     <div class={@class}>
       <%= cond do %>
         <% @element != nil -> %>
-          <%= if @entry do %>
-            <script type="module" src={"/api/plugins/#{@plugin_id}/assets/#{@entry}"}></script>
+          <%= if @entry_url do %>
+            <script type="module" src={@entry_url}></script>
           <% end %>
           <div
             id={"mfe_#{to_string(@spec[:id] || @element)}"}
+            phx-hook="MicrofrontendLoader"
+            data-entry={@entry_url}
+            data-element={@element}
             phx-update="ignore"
           >
             <%= Phoenix.HTML.raw(render_custom_element_tag(@element, @plugin_id, @target_id, @context)) %>

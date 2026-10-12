@@ -418,6 +418,10 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
     ext = Path.extname(file["filename"] || "") |> String.downcase()
     String.starts_with?(ct, "image/") or ext in [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"]
   end
+  defp match_type?(file, "bundle") do
+    ext = Path.extname(file["filename"] || "") |> String.downcase()
+    ext in [".bundle", ".bin"] or has_bundle_tag?(file)
+  end
   defp match_type?(file, "audio") do
     ct = to_string(file["content_type"] || "")
     ext = Path.extname(file["filename"] || "") |> String.downcase()
@@ -429,14 +433,16 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
     String.starts_with?(ct, "text/") or ct == "application/json" or ext in [".txt", ".json", ".csv", ".pdf", ".xml"]
   end
   defp match_type?(file, "other") do
-    not match_type?(file, "image") and not match_type?(file, "audio") and not match_type?(file, "document")
+    not match_type?(file, "image") and not match_type?(file, "bundle") and not match_type?(file, "audio") and not match_type?(file, "document")
   end
 
   defp match_search?(_file, ""), do: true
   defp match_search?(file, search) do
+    meta_str = inspect(file["metadata"] || "")
     String.contains?(String.downcase(to_string(file["filename"] || "")), search) or
       String.contains?(String.downcase(to_string(file["id"] || "")), search) or
-      String.contains?(String.downcase(to_string(file["bucket"] || "")), search)
+      String.contains?(String.downcase(to_string(file["bucket"] || "")), search) or
+      String.contains?(String.downcase(meta_str), search)
   end
 
   defp notify(socket, type, message) do
@@ -459,6 +465,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
     ext = Path.extname(file["filename"] || "") |> String.downcase()
 
     cond do
+      ext in [".bundle", ".bin"] or has_bundle_tag?(file) -> "📦"
       String.starts_with?(ct, "image/") or ext in [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"] -> "🖼️"
       String.starts_with?(ct, "audio/") or ext in [".mp3", ".wav", ".ogg"] -> "🎵"
       String.starts_with?(ct, "video/") or ext in [".mp4", ".webm"] -> "🎬"
@@ -467,6 +474,11 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
       ext in [".zip", ".gz", ".tar"] -> "📦"
       true -> "📎"
     end
+  end
+
+  defp has_bundle_tag?(file) do
+    meta = file["metadata"]
+    is_map(meta) and (meta["tag"] == "addressables" or "addressables" in List.wrap(meta["tags"]))
   end
 
   defp image_file?(file) do
@@ -607,6 +619,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
           >
             <option value="all" selected={@type_filter == "all"}>All Types</option>
             <option value="image" selected={@type_filter == "image"}>Images</option>
+            <option value="bundle" selected={@type_filter == "bundle"}>Bundles / Addressables</option>
             <option value="document" selected={@type_filter == "document"}>Documents</option>
             <option value="audio" selected={@type_filter == "audio"}>Audio & Media</option>
             <option value="other" selected={@type_filter == "other"}>Other</option>
@@ -721,6 +734,9 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
                                   <div class="flex items-center gap-2 mt-0.5">
                                     <span class="text-[10px] font-mono text-gray-400"><%= file["id"] %></span>
                                     <span class="text-[10px] text-gray-400">• <%= format_bytes(file["size_bytes"]) %></span>
+                                    <%= if has_bundle_tag?(file) do %>
+                                      <span class="px-1.5 py-0.2 rounded text-[9px] bg-violet-100 text-violet-700 font-semibold font-mono">addressables</span>
+                                    <% end %>
                                   </div>
                                 </div>
                               </div>
@@ -863,6 +879,19 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
                       <p class="text-xs font-mono text-gray-500 truncate" title={@selected_file["sha256"]}><%= String.slice(to_string(@selected_file["sha256"] || ""), 0, 12) %>...</p>
                     </div>
                   </div>
+
+                  <%= if is_map(@selected_file["metadata"]) and map_size(@selected_file["metadata"]) > 0 do %>
+                    <div class="pt-2 border-t border-gray-100">
+                      <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Metadata & Tags</span>
+                      <div class="flex flex-wrap gap-1 mt-1">
+                        <%= for {k, v} <- @selected_file["metadata"] do %>
+                          <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono bg-violet-50 text-violet-700 rounded-md border border-violet-100">
+                            <span class="text-gray-400"><%= k %>:</span> <%= to_string(v) %>
+                          </span>
+                        <% end %>
+                      </div>
+                    </div>
+                  <% end %>
 
                   <!-- API URL -->
                   <div class="pt-2 border-t border-gray-100">

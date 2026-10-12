@@ -20,6 +20,8 @@ public class ExoServiceAttribute : Attribute
     public string? Title { get; set; }
     public string? Icon { get; set; }
     public bool System { get; set; }
+    public string? DashboardElement { get; set; }
+    public string? DashboardEntry { get; set; }
 
     public ExoServiceAttribute(string name)
     {
@@ -220,7 +222,7 @@ public class ExoColumnAttribute : Attribute
     public string? Bucket { get; set; }
 
     /// <summary>
-    /// Preferred Studio Dashboard input widget for editing this column (e.g. from <see cref="ExoInput"/>).
+    /// Preferred Studio Dashboard input widget for editing this column (e.g. from <see cref="ExoStandardInput"/>).
     /// </summary>
     public string? InputType { get; set; }
 
@@ -265,6 +267,60 @@ public static class ExoInput
 }
 
 /// <summary>
+/// Backward-compatible alias for <see cref="ExoInput"/>.
+/// </summary>
+public static class ExoStandardInput
+{
+    public const string Text = ExoInput.Text;
+    public const string Color = ExoInput.Color;
+    public const string Date = ExoInput.Date;
+    public const string Time = ExoInput.Time;
+    public const string DateTimeLocal = ExoInput.DateTimeLocal;
+    public const string Textarea = ExoInput.Textarea;
+    public const string Email = ExoInput.Email;
+    public const string Url = ExoInput.Url;
+    public const string Tel = ExoInput.Tel;
+    public const string Password = ExoInput.Password;
+    public const string Range = ExoInput.Range;
+    public const string Json = ExoInput.Json;
+    public const string List = ExoInput.List;
+    public const string Checkbox = ExoInput.Checkbox;
+    public const string Select = ExoInput.Select;
+    public const string FileReference = ExoInput.FileReference;
+}
+
+/// <summary>
+/// Declares a plugin dependency on another service.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Interface, Inherited = false, AllowMultiple = true)]
+public class ExoDependencyAttribute : Attribute
+{
+    public string? ServiceName { get; }
+    public Type? ServiceType { get; }
+
+    public ExoDependencyAttribute(string serviceName)
+    {
+        ServiceName = serviceName ?? throw new ArgumentNullException(nameof(serviceName));
+    }
+
+    public ExoDependencyAttribute(Type serviceType)
+    {
+        ServiceType = serviceType ?? throw new ArgumentNullException(nameof(serviceType));
+    }
+}
+
+/// <summary>
+/// Declares a type-safe plugin dependency on a service contract.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Interface, Inherited = false, AllowMultiple = true)]
+public class ExoDependencyAttribute<TService> : ExoDependencyAttribute
+{
+    public ExoDependencyAttribute() : base(typeof(TService))
+    {
+    }
+}
+
+/// <summary>
 /// Marks a resource column as a file reference pointing to a file in a storage bucket.
 /// Renders direct preview and search/select file picker in Studio Dashboard.
 /// </summary>
@@ -290,6 +346,22 @@ public class InjectAttribute : Attribute
     public InjectAttribute(string? serviceName = null)
     {
         ServiceName = serviceName;
+    }
+}
+
+/// <summary>
+/// Registers a custom Studio form input widget provided by this plugin.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Interface, Inherited = false, AllowMultiple = true)]
+public class ExoInputTypeAttribute : Attribute
+{
+    public string Id { get; }
+    public string Element { get; set; } = "";
+    public string Entry { get; set; } = "";
+
+    public ExoInputTypeAttribute(string id)
+    {
+        Id = id ?? throw new ArgumentNullException(nameof(id));
     }
 }
 

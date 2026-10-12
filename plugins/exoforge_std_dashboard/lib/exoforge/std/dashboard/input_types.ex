@@ -40,7 +40,7 @@ defmodule Exoforge.Std.Dashboard.InputTypes do
   # browser is the engine, no JavaScript required.
   @builtin [
     {"text", %{type: "input", attributes: %{"type" => "text"}, parse: :none, options: []}},
-    {"color", %{type: "input", attributes: %{"type" => "color"}, parse: :none, options: []}},
+    {"color", %{type: "color", attributes: %{"type" => "color"}, parse: :none, options: []}},
     {"email", %{type: "input", attributes: %{"type" => "email"}, parse: :none, options: []}},
     {"url", %{type: "input", attributes: %{"type" => "url"}, parse: :none, options: []}},
     {"tel", %{type: "input", attributes: %{"type" => "tel"}, parse: :none, options: []}},
@@ -99,7 +99,17 @@ defmodule Exoforge.Std.Dashboard.InputTypes do
       manifest
       |> Map.get(:input_types, %{})
       |> Enum.filter(fn {key, _} -> to_string(key) == id end)
-      |> Enum.map(fn {_, spec_or_module} -> normalize(spec_or_module) end)
+      |> Enum.map(fn {_, spec_or_module} ->
+        case spec_or_module do
+          spec when is_map(spec) ->
+            spec
+            |> Map.put_new(:plugin_id, manifest.id)
+            |> normalize()
+
+          other ->
+            normalize(other)
+        end
+      end)
     end)
     |> List.first()
   end
@@ -113,6 +123,17 @@ defmodule Exoforge.Std.Dashboard.InputTypes do
     cond do
       module = module_in_spec(spec) ->
         %{type: "module", module: module, parse: :none, options: [], attributes: %{}}
+
+      element = fetch(spec, :element) ->
+        %{
+          type: "element",
+          element: to_string(element),
+          entry: fetch(spec, :entry),
+          plugin_id: fetch(spec, :plugin_id),
+          parse: safe_parse(fetch(spec, :parse)),
+          options: to_strings(fetch(spec, :options) || fetch(spec, :choices) || []),
+          attributes: attributes_of(spec)
+        }
 
       true ->
         %{
@@ -160,7 +181,7 @@ defmodule Exoforge.Std.Dashboard.InputTypes do
 
   defp builtin_or_element(id) do
     id = to_string(id)
-    Map.get(@builtin, id) || %{type: "input", attributes: %{"type" => id}, parse: :none, options: []}
+    registered_spec(id) || %{type: "input", attributes: %{"type" => id}, parse: :none, options: []}
   end
 
   defp attributes_of(spec) do
@@ -247,11 +268,56 @@ defmodule Exoforge.Std.Dashboard.InputTypes do
         |> assign(:checked, assigns.value in ["true", "1", "on", true])
         |> render_checkbox()
 
+      %{type: "color"} ->
+        render_color_picker(assigns)
+
+      %{type: "element", element: element} = spec when is_binary(element) and element != "" ->
+        render_custom_element(assigns, spec)
+
       spec ->
         assigns
         |> assign(:attrs, attributes(assigns, spec, keep_value?: true))
         |> render_input()
     end
+  end
+
+  defp render_color_picker(assigns) do
+    val = to_string(assigns.value || "#000000")
+
+    hex_color =
+      if Regex.match?(~r/^#[0-9A-Fa-f]{6}$/, val) do
+        val
+      else
+        "#3DD157"
+      end
+
+    assigns =
+      assigns
+      |> assign(:hex_color, hex_color)
+      |> assign(:display_val, assigns.value || "")
+
+    ~H"""
+    <div class="flex items-center gap-2">
+      <div class="relative w-8 h-8 rounded-lg overflow-hidden border border-gray-200 shadow-2xs shrink-0 cursor-pointer hover:border-purple-400 transition-colors">
+        <input
+          type="color"
+          value={@hex_color}
+          oninput="this.closest('.flex').querySelector('input[type=text]').value = this.value; this.closest('.flex').querySelector('input[type=text]').dispatchEvent(new Event('input', {bubbles: true}));"
+          class="absolute inset-0 w-[150%] h-[150%] -top-1/4 -left-1/4 cursor-pointer border-0 p-0"
+        />
+      </div>
+      <input
+        type="text"
+        name={@name}
+        value={@display_val}
+        placeholder="#RRGGBB"
+        pattern="^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$"
+        oninput="if (/^#[0-9A-Fa-f]{6}$/.test(this.value)) this.closest('.flex').querySelector('input[type=color]').value = this.value;"
+        class={input_class(@class)}
+        readonly={@readonly}
+      />
+    </div>
+    """
   end
 
   defp render_input(assigns) do
@@ -281,6 +347,38 @@ defmodule Exoforge.Std.Dashboard.InputTypes do
     ~H"""
     <input type="hidden" name={@name} value="false" />
     <input type="checkbox" name={@name} value="true" checked={@checked} class={@class} />
+    """
+  end
+
+  defp render_custom_element(assigns, spec) do
+    entry = spec[:entry] || spec["entry"]
+    plugin_id = spec[:plugin_id] || spec["plugin_id"]
+    entry_url = if entry, do: "/api/plugins/#{plugin_id}/assets/#{entry}?v=#{System.system_time(:second)}"
+
+    assigns =
+      assigns
+      |> assign(:element, spec.element)
+      |> assign(:entry_url, entry_url)
+      |> assign(:plugin_id, plugin_id)
+
+    ~H"""
+    <div
+      id={"input_widget_#{String.replace(@name, ~r/[^a-zA-Z0-9_-]/, "_")}"}
+      phx-hook="MicrofrontendLoader"
+      data-entry={@entry_url}
+      data-element={@element}
+      class="w-full"
+    >
+      <input
+        type="hidden"
+        id={"hidden_#{String.replace(@name, ~r/[^a-zA-Z0-9_-]/, "_")}"}
+        name={@name}
+        value={@value}
+      />
+      <%= Phoenix.HTML.raw(
+        "<#{@element} name=\"#{Phoenix.HTML.html_escape(@name) |> Phoenix.HTML.safe_to_string()}\" value=\"#{Phoenix.HTML.html_escape(@value || "") |> Phoenix.HTML.safe_to_string()}\" plugin-id=\"#{@plugin_id}\" phx-update=\"ignore\" #{if @readonly, do: "readonly", else: ""}></#{@element}>"
+      ) %>
+    </div>
     """
   end
 

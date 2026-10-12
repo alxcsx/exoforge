@@ -12,6 +12,36 @@ using Exoforge.Plugin.SDK;
 
 namespace Exoforge.Plugins.Generated
 {
+    public class DatabaseExecuteRequest
+    {
+        [JsonPropertyName("arguments")]
+        public JsonElement Arguments { get; set; } = default!;
+        [JsonPropertyName("operation")]
+        public string Operation { get; set; } = default!;
+        [JsonPropertyName("plugin")]
+        public JsonElement Plugin { get; set; } = default!;
+    }
+
+    public class DatabaseExecuteResponse
+    {
+        [JsonPropertyName("rows")]
+        public JsonElement Rows { get; set; } = default!;
+    }
+
+    public class DatabaseTableColumnsRequest
+    {
+        [JsonPropertyName("table")]
+        public string Table { get; set; } = default!;
+        [JsonPropertyName("plugin")]
+        public JsonElement Plugin { get; set; } = default!;
+    }
+
+    public class DatabaseTableColumnsResponse
+    {
+        [JsonPropertyName("columns")]
+        public JsonElement Columns { get; set; } = default!;
+    }
+
     public class PlayerDataPlayer
     {
         [JsonPropertyName("player_id")]
@@ -86,6 +116,10 @@ namespace Exoforge.Plugins.Generated
     {
         [JsonPropertyName("filter")]
         public JsonElement Filter { get; set; } = default!;
+        [JsonPropertyName("limit")]
+        public JsonElement Limit { get; set; } = default!;
+        [JsonPropertyName("user_id")]
+        public JsonElement UserId { get; set; } = default!;
     }
 
     public class PlayerDataListPlayersResponse
@@ -186,20 +220,29 @@ namespace Exoforge.Plugins.Generated
         public string PlayerId { get; set; } = default!;
     }
 
-    public class DatabaseExecuteRequest
+    /// <summary>Contract of the 'database' service, as the plugin providing it declares it.</summary>
+    public interface IDatabaseService
     {
-        [JsonPropertyName("arguments")]
-        public JsonElement Arguments { get; set; } = default!;
-        [JsonPropertyName("operation")]
-        public string Operation { get; set; } = default!;
-        [JsonPropertyName("plugin")]
-        public JsonElement Plugin { get; set; } = default!;
+        [ExoAction("execute", Scope = "server")]
+        Task<DatabaseExecuteResponse?> ExecuteAsync(DatabaseExecuteRequest request);
+
+        [ExoAction("table_columns", Scope = "server")]
+        Task<DatabaseTableColumnsResponse?> TableColumnsAsync(DatabaseTableColumnsRequest request);
+
     }
 
-    public class DatabaseExecuteResponse
+    public sealed class DatabaseServiceClient : IDatabaseService
     {
-        [JsonPropertyName("rows")]
-        public JsonElement Rows { get; set; } = default!;
+        private readonly IActionDispatcher _dispatcher;
+
+        public DatabaseServiceClient(IActionDispatcher dispatcher) => _dispatcher = dispatcher;
+
+        public Task<DatabaseExecuteResponse?> ExecuteAsync(DatabaseExecuteRequest request)
+            => _dispatcher.CallActionAsync<DatabaseExecuteResponse>("database", "execute", request);
+
+        public Task<DatabaseTableColumnsResponse?> TableColumnsAsync(DatabaseTableColumnsRequest request)
+            => _dispatcher.CallActionAsync<DatabaseTableColumnsResponse>("database", "table_columns", request);
+
     }
 
     /// <summary>Contract of the 'player_data' service, as the plugin providing it declares it.</summary>
@@ -211,13 +254,13 @@ namespace Exoforge.Plugins.Generated
         [ExoAction("create_player", Scope = "global")]
         Task<PlayerDataCreatePlayerResponse?> CreatePlayerAsync(PlayerDataCreatePlayerRequest request);
 
-        [ExoAction("delete_player", Scope = "global")]
+        [ExoAction("delete_player", Scope = "admin")]
         Task<PlayerDataDeletePlayerResponse?> DeletePlayerAsync(PlayerDataDeletePlayerRequest request);
 
-        [ExoAction("retain_player", Scope = "global")]
+        [ExoAction("retain_player", Scope = "admin")]
         Task<PlayerDataRetainPlayerResponse?> RetainPlayerAsync(PlayerDataRetainPlayerRequest request);
 
-        [ExoAction("list_players", Scope = "global")]
+        [ExoAction("list_players", Scope = "studio")]
         Task<PlayerDataListPlayersResponse?> ListPlayersAsync(PlayerDataListPlayersRequest request);
 
         [ExoAction("update_player", Scope = "global")]
@@ -275,38 +318,23 @@ namespace Exoforge.Plugins.Generated
 
     }
 
-    /// <summary>Contract of the 'database' service, as the plugin providing it declares it.</summary>
-    public interface IDatabaseService
-    {
-        [ExoAction("execute", Scope = "server")]
-        Task<DatabaseExecuteResponse?> ExecuteAsync(DatabaseExecuteRequest request);
-
-    }
-
-    public sealed class DatabaseServiceClient : IDatabaseService
-    {
-        private readonly IActionDispatcher _dispatcher;
-
-        public DatabaseServiceClient(IActionDispatcher dispatcher) => _dispatcher = dispatcher;
-
-        public Task<DatabaseExecuteResponse?> ExecuteAsync(DatabaseExecuteRequest request)
-            => _dispatcher.CallActionAsync<DatabaseExecuteResponse>("database", "execute", request);
-
-    }
-
     public sealed class ExoforgePluginServices
     {
         private readonly IActionDispatcher _dispatcher;
 
         public ExoforgePluginServices(IActionDispatcher dispatcher) => _dispatcher = dispatcher;
 
-        private PlayerDataServiceClient? _player_data;
-        public PlayerDataServiceClient PlayerData => _player_data ??= new PlayerDataServiceClient(_dispatcher);
         private DatabaseServiceClient? _database;
         public DatabaseServiceClient Database => _database ??= new DatabaseServiceClient(_dispatcher);
+        private PlayerDataServiceClient? _player_data;
+        public PlayerDataServiceClient PlayerData => _player_data ??= new PlayerDataServiceClient(_dispatcher);
     }
 
     [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
+    [JsonSerializable(typeof(DatabaseExecuteRequest))]
+    [JsonSerializable(typeof(DatabaseExecuteResponse))]
+    [JsonSerializable(typeof(DatabaseTableColumnsRequest))]
+    [JsonSerializable(typeof(DatabaseTableColumnsResponse))]
     [JsonSerializable(typeof(PlayerDataPlayer))]
     [JsonSerializable(typeof(PlayerDataGetPlayerRequest))]
     [JsonSerializable(typeof(PlayerDataGetPlayerResponse))]
@@ -330,11 +358,6 @@ namespace Exoforge.Plugins.Generated
     [JsonSerializable(typeof(PlayerDataGetAllDataResponse))]
     [JsonSerializable(typeof(PlayerDataPlayerCreatedEvent))]
     [JsonSerializable(typeof(PlayerDataPlayerDeletedEvent))]
-    [JsonSerializable(typeof(DatabaseExecuteRequest))]
-    [JsonSerializable(typeof(DatabaseExecuteResponse))]
-    [JsonSerializable(typeof(global::Exoforge.Plugins.SnakeLeaderboard.SnakeScoreRecord))]
-    [JsonSerializable(typeof(global::Exoforge.Plugins.SnakeLeaderboard.SnakeScoreSubmitted))]
-    [JsonSerializable(typeof(global::Exoforge.Plugins.SnakeLeaderboard.SnakeLeaderboardEntry))]
     public partial class GeneratedServicesJsonContext : JsonSerializerContext
     {
     }
@@ -346,10 +369,10 @@ namespace Exoforge.Plugins.Generated
         {
             PluginJson.AddContext(GeneratedServicesJsonContext.Default);
             PluginServiceRegistry.Register(d => new ExoforgePluginServices(d));
-            PluginServiceRegistry.Register<IPlayerDataService>(d => new PlayerDataServiceClient(d));
-            PluginServiceRegistry.Register(d => new PlayerDataServiceClient(d));
             PluginServiceRegistry.Register<IDatabaseService>(d => new DatabaseServiceClient(d));
             PluginServiceRegistry.Register(d => new DatabaseServiceClient(d));
+            PluginServiceRegistry.Register<IPlayerDataService>(d => new PlayerDataServiceClient(d));
+            PluginServiceRegistry.Register(d => new PlayerDataServiceClient(d));
         }
     }
 }

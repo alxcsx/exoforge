@@ -149,4 +149,25 @@ defmodule Exoforge.Std.FileBucketTest do
     assert {:error, :not_found} =
              ActionDispatcher.dispatch(:file_bucket, :get_file_info, %{"id" => file["id"], "bucket" => "temp"})
   end
+
+  test "lookup by filename and .bundle content type detection" do
+    assert {:ok, %{file: file}} = ActionDispatcher.dispatch(:file_bucket, :upload_file, %{
+      "bucket" => "addressables",
+      "filename" => "scene_all_123.bundle",
+      "content" => "bundle_binary_content",
+      "metadata" => %{"tag" => "addressables"}
+    })
+
+    assert file["content_type"] == "application/octet-stream"
+
+    # Lookup using filename instead of id
+    assert {:ok, %{file: by_name}} =
+             ActionDispatcher.dispatch(:file_bucket, :get_file_info, %{
+               "bucket" => "addressables",
+               "id" => "scene_all_123.bundle"
+             })
+
+    assert by_name["id"] == file["id"]
+    assert by_name["filename"] == "scene_all_123.bundle"
+  end
 end

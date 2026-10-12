@@ -122,6 +122,16 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
   # ---- EVENT HANDLERS ----
 
   @impl true
+  def handle_event("close_focus", _params, socket) do
+    tab = (socket.assigns[:extension] && socket.assigns.extension.id) || "overview"
+    path = if tab in ["overview", :overview], do: "/", else: "/tab/#{tab}"
+    {:noreply,
+     socket
+     |> assign(drawer_open: false, inspected_row: nil)
+     |> push_patch(to: path)}
+  end
+
+  @impl true
   def handle_event("switch_subtab", %{"tab" => tab}, socket) do
     {:noreply, assign(socket, :subtab, tab)}
   end
@@ -609,8 +619,21 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
 
         socket =
           if singleton_resource?(socket) do
-            row = List.first(rows) || %{}
-            values = ResourceForms.values_for(row, columns)
+            row = List.first(rows)
+            values =
+              if row && map_size(row) > 0 do
+                defaults = ResourceForms.defaults(columns)
+                row_vals = ResourceForms.values_for(row, columns)
+                Enum.reduce(defaults, row_vals, fn {k, def_v}, acc ->
+                  case Map.get(acc, k) do
+                    nil -> Map.put(acc, k, def_v)
+                    "" -> if def_v != "", do: Map.put(acc, k, def_v), else: acc
+                    _ -> acc
+                  end
+                end)
+              else
+                ResourceForms.defaults(columns)
+              end
             saved_indicator = socket.assigns[:singleton_saved] || false
             assign(socket, singleton_form: %{values: values, errors: %{}, saved: saved_indicator})
           else

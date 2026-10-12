@@ -1,0 +1,13 @@
+{
+  "name": "com.exoforge.plugins.unity-addressables",
+  "displayName": "Exoforge Unity Addressables",
+  "version": "1.0.0",
+  "description": "Unity Addressables editor integration and CCD tooling for Exoforge.",
+  "unity": "2022.3",
+  "author": {
+    "name": "Exoforge"
+  },
+  "dependencies": {
+    "com.unity.addressables": "2.11.2"
+  }
+}

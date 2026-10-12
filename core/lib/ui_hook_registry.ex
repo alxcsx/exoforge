@@ -43,11 +43,25 @@ defmodule Exoforge.UIHookRegistry do
   defp normalize_spec(spec, plugin_id) do
     spec = if is_map(spec), do: spec, else: %{id: spec}
     id = Map.get(spec, :id) || Map.get(spec, "id")
+    raw_mod = Map.get(spec, :module) || Map.get(spec, "module")
+
+    mod =
+      cond do
+        is_atom(raw_mod) -> raw_mod
+        is_binary(raw_mod) ->
+          try do
+            String.to_existing_atom(raw_mod)
+          rescue
+            _ -> nil
+          end
+        true -> nil
+      end
 
     spec
     |> default_spec(id)
     |> Map.put(:id, id)
     |> Map.put(:plugin_id, plugin_id)
+    |> Map.put(:module, mod)
   end
 
   defp default_spec(spec, id) do

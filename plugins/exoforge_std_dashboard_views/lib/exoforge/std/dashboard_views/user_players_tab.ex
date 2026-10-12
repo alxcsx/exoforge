@@ -25,13 +25,25 @@ defmodule Exoforge.Std.DashboardViews.UserPlayersTab do
   end
 
   defp user_id(nil), do: nil
-  defp user_id(user), do: user["player_id"] || user["user_id"] || user[:player_id]
+
+  defp user_id(user) when is_map(user) do
+    user["user_id"] || user["player_id"] || user["id"] ||
+      user[:user_id] || user[:player_id] || user[:id]
+  end
+
+  defp user_id(id) when is_binary(id), do: id
+  defp user_id(_), do: nil
 
   defp load_players(socket, user_id) do
-    # The database filters (M33 Fix 33); this used to load every player and filter in Elixir.
     players =
-      case ActionDispatcher.dispatch(:player_data, :list_players, %{user_id: user_id}) do
-        {:ok, %{players: players}} when is_list(players) -> players
+      case ActionDispatcher.dispatch(
+             :player_data,
+             :list_players,
+             %{user_id: user_id},
+             caller_scopes: [Exoforge.Auth.Roles.studio()]
+           ) do
+        {:ok, %{players: p}} when is_list(p) -> p
+        {:ok, %{"players" => p}} when is_list(p) -> p
         _ -> []
       end
 
@@ -54,18 +66,23 @@ defmodule Exoforge.Std.DashboardViews.UserPlayersTab do
       <% else %>
         <div class="space-y-2">
           <%= for player <- @players do %>
+            <% pid = player[:player_id] || player["player_id"] %>
+            <% name = player[:name] || player["name"] || pid %>
+            <% status = player[:status] || player["status"] || "Active" %>
+            <% total_spent = player[:total_spent] || player["total_spent"] || "$0.00" %>
+            <% time_in_game = player[:time_in_game] || player["time_in_game"] || "0m" %>
             <.link
-              patch={"/tab/exoforge_std_player_data?focus=player:#{URI.encode_www_form(to_string(player[:player_id]))}"}
+              patch={"/tab/exoforge_std_player_data?focus=player:#{URI.encode_www_form(to_string(pid))}"}
               class="block p-3 bg-gray-50 hover:bg-purple-50 border border-gray-200 hover:border-purple-200 rounded-xl transition-colors"
             >
               <div class="flex items-center justify-between">
-                <span class="text-xs font-bold text-gray-900"><%= player[:name] %></span>
-                <span class="text-[10px] font-bold text-emerald-700"><%= player[:status] %></span>
+                <span class="text-xs font-bold text-gray-900"><%= name %></span>
+                <span class="text-[10px] font-bold text-emerald-700"><%= status %></span>
               </div>
-              <div class="text-[10px] font-mono text-gray-500 mt-0.5"><%= player[:player_id] %></div>
+              <div class="text-[10px] font-mono text-gray-500 mt-0.5"><%= pid %></div>
               <div class="text-[10px] text-gray-500 mt-1">
-                Spent <span class="font-semibold"><%= player[:total_spent] %></span>
-                · Played <span class="font-semibold"><%= player[:time_in_game] %></span>
+                Spent <span class="font-semibold"><%= total_spent %></span>
+                · Played <span class="font-semibold"><%= time_in_game %></span>
               </div>
             </.link>
           <% end %>

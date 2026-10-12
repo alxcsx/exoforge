@@ -91,6 +91,10 @@ public partial class ExoforgeControlCenter : EditorWindow
         // Local Plugins
         EditorGUILayout.BeginHorizontal();
         EditorGUILayout.LabelField($"Local Plugins ({_localPlugins.Count})", EditorStyles.boldLabel);
+        if (GUILayout.Button(new GUIContent("🔌 Plugins Window", "Open dedicated Exoforge Plugins visualization window"), EditorStyles.miniButton, GUILayout.Width(115)))
+        {
+            ExoforgePluginsWindow.ShowWindow();
+        }
         if (GUILayout.Button("Refresh Local", EditorStyles.miniButton, GUILayout.Width(90)))
         {
             _ = RefreshPluginsAsync();
@@ -108,11 +112,18 @@ public partial class ExoforgeControlCenter : EditorWindow
         EditorGUILayout.LabelField("Native RID", GUILayout.Width(70));
         _buildRid = EditorGUILayout.TextField(_buildRid);
         EditorGUILayout.LabelField("(blank = host)", EditorStyles.miniLabel, GUILayout.Width(90));
-        using (new EditorGUI.DisabledScope(_isBuilding))
+        using (new EditorGUI.DisabledScope(_isBuilding || _localPlugins.Count == 0))
         {
-            if (GUILayout.Button("Build All", EditorStyles.miniButton, GUILayout.Width(70)))
+            if (GUILayout.Button(new GUIContent("Build All", "Build all local plugins in the workspace"), EditorStyles.miniButton, GUILayout.Width(70)))
             {
                 _ = BuildAllAsync();
+            }
+        }
+        using (new EditorGUI.DisabledScope(_isBuilding || !_isConnected || _localPlugins.Count == 0))
+        {
+            if (GUILayout.Button(new GUIContent("Deploy All", "Deploy all local plugins to the connected cluster"), EditorStyles.miniButton, GUILayout.Width(75)))
+            {
+                _ = DeployAllAsync();
             }
         }
         EditorGUILayout.EndHorizontal();
@@ -206,14 +217,11 @@ public partial class ExoforgeControlCenter : EditorWindow
                     }
                 }
 
-                using (new EditorGUI.DisabledScope(!_isConnected || FirstActionFor(plugin.Name) == null))
+                if (GUILayout.Button(
+                        new GUIContent("Inspect", "Inspect this plugin in the Exoforge Plugins window"),
+                        EditorStyles.miniButton, GUILayout.Width(55)))
                 {
-                    if (GUILayout.Button(
-                            new GUIContent("Test", "Open this plugin's first action in the Action Sandbox"),
-                            EditorStyles.miniButton, GUILayout.Width(45)))
-                    {
-                        OpenInSandbox(plugin.Name);
-                    }
+                    ExoforgePluginsWindow.OpenPlugin(plugin.Name);
                 }
 
                 using (new EditorGUI.DisabledScope(!_isConnected))
@@ -295,6 +303,12 @@ public partial class ExoforgeControlCenter : EditorWindow
 
                 EditorGUILayout.BeginHorizontal();
                 EditorGUILayout.LabelField($"{id}  {version}", EditorStyles.boldLabel);
+                if (GUILayout.Button(
+                        new GUIContent("Inspect", "Inspect this plugin in the Exoforge Plugins window"),
+                        EditorStyles.miniButton, GUILayout.Width(60)))
+                {
+                    ExoforgePluginsWindow.OpenPlugin(id);
+                }
                 using (new EditorGUI.DisabledScope(!_isConnected))
                 {
                     if (GUILayout.Button("Remove", EditorStyles.miniButton, GUILayout.Width(65)))
@@ -358,19 +372,99 @@ public partial class ExoforgeControlCenter : EditorWindow
 
     private async Task BuildAllAsync()
     {
-        // Everything that is not already up to date — not just the never-built ones, or clicking
-        // "Build All" after an edit would silently do nothing.
-        var stale = _localPlugins.Where(p => p.CanBuild && (!p.IsBuilt || p.Modified)).ToList();
+        if (_isBuilding) return;
 
-        if (stale.Count == 0)
+        var buildable = _localPlugins.Where(p => p.CanBuild).ToList();
+        if (buildable.Count == 0)
         {
-            ShowStatus("All plugins are already up to date.", MessageType.Info);
+            ShowStatus("No buildable plugins found.", MessageType.Info);
             return;
         }
 
-        foreach (var plugin in stale)
+        var targets = buildable.Where(p => !p.IsBuilt || p.Modified).ToList();
+        if (targets.Count == 0)
+        {
+            targets = buildable;
+        }
+
+        ShowStatus($"Building {targets.Count} plugin(s)…", MessageType.Info);
+        foreach (var plugin in targets)
         {
             await BuildPluginAsync(plugin, thenDeploy: false);
+        }
+
+        ShowStatus($"✓ Built {targets.Count} plugin(s).", MessageType.Info);
+    }
+
+    private async Task DeployAllAsync()
+    {
+        if (_isBuilding) return;
+        if (!_isConnected)
+        {
+            ShowStatus("Cannot deploy: not connected to cluster.", MessageType.Warning);
+            return;
+        }
+
+        var unbuilt = _localPlugins.Where(p => p.CanBuild && (!p.IsBuilt || p.Modified)).ToList();
+        if (unbuilt.Count > 0)
+        {
+            ShowStatus($"Building {unbuilt.Count} unbuilt/modified plugin(s) before deploy…", MessageType.Info);
+            foreach (var plugin in unbuilt)
+            {
+                await BuildPluginAsync(plugin, thenDeploy: false);
+            }
+        }
+
+        var deployable = _localPlugins.Where(p => p.IsBuilt && SessionState.GetString(BuildFailureKey(p.Name), "").Length == 0).ToList();
+        if (deployable.Count == 0)
+        {
+            ShowStatus("No built plugins available to deploy.", MessageType.Warning);
+            return;
+        }
+
+        _isBuilding = true;
+        ShowStatus($"Deploying {deployable.Count} plugin(s) to cluster…", MessageType.Info);
+        Repaint();
+
+        int successCount = 0;
+        var errors = new List<string>();
+
+        try
+        {
+            var deployer = new ExoDeployer(Workspace);
+            foreach (var plugin in deployable)
+            {
+                try
+                {
+                    await deployer.UploadPluginAsync(plugin.Name, existingClient: _editorClient);
+                    successCount++;
+                }
+                catch (Exception ex)
+                {
+                    errors.Add($"{plugin.Name}: {ex.Message}");
+                }
+            }
+
+            await RefreshPluginsAsync();
+            await SyncAndGenerateClientAsync();
+
+            if (errors.Count == 0)
+            {
+                ShowStatus($"✓ Successfully deployed all {successCount} plugin(s) to cluster.", MessageType.Info);
+            }
+            else
+            {
+                ShowStatus($"Deployed {successCount}/{deployable.Count} plugin(s). Failures: {string.Join("; ", errors)}", MessageType.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Deploy all failed: {ex.Message}", MessageType.Error);
+        }
+        finally
+        {
+            _isBuilding = false;
+            Repaint();
         }
     }
 

@@ -44,6 +44,7 @@ defmodule Exoforge.Std.Dashboard.ResourceForms do
         type: column[:type] || column["type"] || :string,
         badge: column[:badge] || column["badge"] || false,
         role: column[:role] || column["role"],
+        bucket: column[:bucket] || column["bucket"],
         default: column[:default] || column["default"],
         choices: column[:choices] || column["choices"] || [],
         # The input-override a column declared, so a resource can edit any value with any widget.

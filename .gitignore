@@ -101,3 +101,11 @@ sdk/unity/sample_unity/mono_crash.*
 # not, and drops the file next to the project.
 sdk/unity/sample_unity/TestResults*.xml
 sdk/unity/sample_unity/*.log
+sdk/unity/sample_unity/ServerData/
+
+# Transient workspace files & meta
+scratch/
+**/bin.meta
+**/obj.meta
+sdk/unity/sample_unity/Exoforge/plugins/*/manifest.json.meta
+

@@ -19,6 +19,7 @@ namespace Exoforge.Plugin.SDK.Tests;
 /// runs on a newer image, and one that demands a runtime the image does not carry must fail with a
 /// message that names it rather than start and misbehave.
 /// </summary>
+[Trait("Category", "SlowIntegration")]
 public class DeploymentGuardTests
 {
     [Theory]

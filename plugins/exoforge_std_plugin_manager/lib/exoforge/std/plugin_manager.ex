@@ -137,7 +137,7 @@ defmodule Exoforge.Std.PluginManager do
         _ = PluginBootstrapper.unload_plugin(name_str)
 
         case plugin_type do
-          :native -> handle_upload_native(name_str, raw_binary, manifest_param)
+          :native -> handle_upload_native(name_str, raw_binary, manifest_param, files_map)
           :elixir -> handle_upload_elixir(name_str, elixir_code, files_map, manifest_param)
         end
     end
@@ -234,8 +234,13 @@ defmodule Exoforge.Std.PluginManager do
           "name" => to_string(m.name),
           "version" => to_string(m.version),
           "type" => to_string(m.type),
+          "category" => m.category || "Extension",
+          "title" => m.title,
+          "icon" => m.icon,
+          "system" => m.system || false,
           "provides" => clean_provides,
           "dependencies" => clean_deps,
+          "input_types" => m.input_types || %{},
           "services" => Enum.map(PluginRegistry.manifest_services(m), &PluginRegistry.sanitize_for_json/1)
         }
       end)
@@ -277,7 +282,7 @@ defmodule Exoforge.Std.PluginManager do
     end
   end
 
-  defp handle_upload_native(name_str, raw_binary, manifest_param) do
+  defp handle_upload_native(name_str, raw_binary, manifest_param, files_map) do
     if is_nil(raw_binary) or raw_binary == "" do
       {:error, :invalid_package}
     else
@@ -295,13 +300,44 @@ defmodule Exoforge.Std.PluginManager do
            :ok <- File.write(staged_path, binary),
            :ok <- File.chmod(staged_path, 0o755),
            :ok <- File.rename(staged_path, binary_path),
+           :ok <- write_plugin_files(target_dir, files_map),
            :ok <- write_manifest_file(manifest_path, clean_name, manifest_param, :native) do
         load_and_boot_plugin(target_dir, clean_name, :native)
       else
+        {:error, reason} -> {:error, reason}
         _ -> {:error, :write_failed}
       end
     end
   end
+
+  defp write_plugin_files(_target_dir, nil), do: :ok
+
+  defp write_plugin_files(target_dir, files_map) when is_map(files_map) do
+    try do
+      Enum.each(files_map, fn {rel_path, content} ->
+        dest = safe_join(target_dir, to_string(rel_path))
+        File.mkdir_p!(Path.dirname(dest))
+
+        data =
+          case content do
+            %{"encoding" => "base64", "content" => b64} -> Base.decode64!(b64)
+            %{encoding: "base64", content: b64} -> Base.decode64!(b64)
+            %{"content" => raw} -> to_string(raw)
+            %{content: raw} -> to_string(raw)
+            str when is_binary(str) -> str
+            other -> to_string(other)
+          end
+
+        File.write!(dest, data)
+      end)
+
+      :ok
+    rescue
+      _ -> {:error, :write_failed}
+    end
+  end
+
+  defp write_plugin_files(_target_dir, _), do: :ok
 
   defp handle_upload_elixir(name_str, elixir_code, files_map, manifest_param) do
     has_code = (is_binary(elixir_code) and String.trim(elixir_code) != "") or (is_map(files_map) and map_size(files_map) > 0)

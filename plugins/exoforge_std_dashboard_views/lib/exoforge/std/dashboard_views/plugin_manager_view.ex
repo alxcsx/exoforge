@@ -90,10 +90,16 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
 
   @impl true
   def handle_event("close_dependency_graph", _params, socket) do
+    {:noreply, assign(socket, show_dependency_graph: false, graph_selected_plugin_id: nil)}
+  end
+
+  @impl true
+  def handle_event("close_focus", _params, socket) do
+    tab = (socket.assigns[:extension] && socket.assigns.extension.id) || "exoforge_std_plugin_manager"
     {:noreply,
      socket
-     |> push_event("close-popup", %{})
-     |> assign(show_dependency_graph: false, graph_selected_plugin_id: nil)}
+     |> assign(selected_plugin: nil)
+     |> push_patch(to: "/tab/#{tab}")}
   end
 
   @impl true
@@ -132,10 +138,7 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
 
   @impl true
   def handle_event("close_upload_modal", _params, socket) do
-    {:noreply,
-     socket
-     |> push_event("close-popup", %{})
-     |> assign(show_upload_modal: false, upload_error: nil)}
+    {:noreply, assign(socket, show_upload_modal: false, upload_error: nil)}
   end
 
   @impl true

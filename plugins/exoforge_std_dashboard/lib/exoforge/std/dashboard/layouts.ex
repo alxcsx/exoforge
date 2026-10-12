@@ -89,20 +89,59 @@ defmodule Exoforge.Std.Dashboard.Layouts do
             if (window.LiveView && window.Phoenix) {
               const metaEl = document.querySelector("meta[name='csrf-token']");
               const csrfToken = metaEl ? metaEl.getAttribute("content") : "";
-              const liveSocket = new window.LiveView.LiveSocket("/live", window.Phoenix.Socket, {
-                params: { _csrf_token: csrfToken }
-              });
-              window.addEventListener("phx:close-popup", function() {
-                if (window.history.length > 1) {
-                  window.history.back();
+
+              const Hooks = {
+                MicrofrontendLoader: {
+                  mounted() {
+                    this.load();
+                  },
+                  updated() {
+                    this.load();
+                  },
+                  load() {
+                    const entry = this.el.dataset.entry;
+                    const element = this.el.dataset.element;
+                    if (!entry) return;
+                    import(entry)
+                      .then((mod) => {
+                        console.log("[Exoforge MFE] Loaded successfully:", entry);
+                        const customEl = element ? this.el.querySelector(element) : null;
+                        const target = customEl || this.el;
+                        if (customEl) {
+                          customEl.style.display = 'block';
+                        }
+                        if (mod && typeof mod.mount === 'function') {
+                          mod.mount(target);
+                        } else if (customEl && typeof customEl.connectedCallback === 'function' && !customEl.hasChildNodes()) {
+                          customEl.connectedCallback();
+                        }
+                      })
+                      .catch((err) => {
+                        console.error("[Exoforge MFE] Error loading module:", entry, err);
+                        this.el.innerHTML = `
+                          <div class="p-6 bg-red-50 border border-red-200 rounded-xl text-red-700">
+                            <h3 class="font-bold text-sm">Failed to load plugin microfrontend</h3>
+                            <p class="text-xs mt-1 text-red-600 font-mono">${err && err.message ? err.message : String(err)}</p>
+                            <p class="text-[11px] text-gray-500 mt-2 font-mono">Entry: ${entry}</p>
+                          </div>
+                        `;
+                      });
+                  }
                 }
+              };
+
+              const liveSocket = new window.LiveView.LiveSocket("/live", window.Phoenix.Socket, {
+                params: { _csrf_token: csrfToken },
+                hooks: Hooks
               });
+
               window.Exoforge = {
                 httpBaseUri: "/api",
                 dispatch: async function(service, action, payload = {}) {
                   const csrf = metaEl ? metaEl.getAttribute("content") : "";
                   const resp = await fetch("/api/dispatch", {
                     method: "POST",
+                    credentials: "same-origin",
                     headers: {
                       "content-type": "application/json",
                       "x-csrf-token": csrf
@@ -110,6 +149,17 @@ defmodule Exoforge.Std.Dashboard.Layouts do
                     body: JSON.stringify({ service, action, payload })
                   });
                   return await resp.json();
+                },
+                callAction: async function(service, action, payload = {}) {
+                  const res = await this.dispatch(service, action, payload);
+                  if (res && res.status === "ok") {
+                    return res.data;
+                  }
+                  throw new Error(res && res.error ? res.error : "Action failed");
+                },
+                notifySuccess: function(msg) {
+                  console.log("[Exoforge Studio]", msg);
+                  window.dispatchEvent(new CustomEvent("exoforge:toast", { detail: { message: msg, type: "success" } }));
                 }
               };
 

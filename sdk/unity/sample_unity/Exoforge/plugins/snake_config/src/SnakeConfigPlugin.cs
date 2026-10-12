@@ -2,9 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 using Exoforge.Plugin.SDK;
+using Exoforge.Plugins.Generated;
 
 namespace Exoforge.Plugins.SnakeConfig;
 
+// DTO
 public record SnakeConfigData
 {
     [JsonPropertyName("snake_color")]
@@ -16,14 +18,11 @@ public record SnakeConfigData
     [JsonPropertyName("apple_points")]
     public int ApplePoints { get; init; } = 10;
 
-    [JsonPropertyName("background_bucket")]
-    public string BackgroundBucket { get; init; } = "snake_assets";
-
     [JsonPropertyName("background_file_id")]
     public string BackgroundFileId { get; init; } = "";
 
-    [JsonPropertyName("background_filename")]
-    public string BackgroundFilename { get; init; } = "board_bg.png";
+    [JsonPropertyName("background_addressable")]
+    public string BackgroundAddressable { get; init; } = "Background_CyberGrid";
 }
 
 [ExoService("snake_config", Version = "1.0.0",
@@ -33,11 +32,14 @@ public class SnakeConfigPlugin
     private const string Table = "game_config";
     private const string ConfigKey = "active_config";
 
-    [Inject("database")]
+    [Inject]
     public IDatabase? Database { get; set; }
 
     [Inject]
     public ILogger? Logger { get; set; }
+
+    [Inject]
+    public IUnityAddressablesService? Addressables { get; set; }
 
     [ExoAction]
     public SnakeConfigData GetConfig()
@@ -54,9 +56,8 @@ public class SnakeConfigPlugin
                 SnakeColor = defaults.SnakeColor,
                 AppleColor = defaults.AppleColor,
                 ApplePoints = defaults.ApplePoints,
-                BackgroundBucket = defaults.BackgroundBucket,
                 BackgroundFileId = defaults.BackgroundFileId,
-                BackgroundFilename = defaults.BackgroundFilename,
+                BackgroundAddressable = defaults.BackgroundAddressable,
                 UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
             });
             return defaults;
@@ -67,9 +68,8 @@ public class SnakeConfigPlugin
             SnakeColor = existing.SnakeColor,
             AppleColor = existing.AppleColor,
             ApplePoints = existing.ApplePoints,
-            BackgroundBucket = existing.BackgroundBucket,
             BackgroundFileId = existing.BackgroundFileId,
-            BackgroundFilename = existing.BackgroundFilename
+            BackgroundAddressable = existing.BackgroundAddressable
         };
     }
 
@@ -78,9 +78,8 @@ public class SnakeConfigPlugin
         string? snakeColor,
         string? appleColor,
         int? applePoints,
-        string? backgroundBucket,
         string? backgroundFileId,
-        string? backgroundFilename)
+        string? backgroundAddressable)
     {
         var current = GetConfig();
         var updated = new SnakeConfigRecord
@@ -89,28 +88,26 @@ public class SnakeConfigPlugin
             SnakeColor = !string.IsNullOrEmpty(snakeColor) ? snakeColor : current.SnakeColor,
             AppleColor = !string.IsNullOrEmpty(appleColor) ? appleColor : current.AppleColor,
             ApplePoints = applePoints.HasValue && applePoints.Value > 0 ? applePoints.Value : current.ApplePoints,
-            BackgroundBucket = !string.IsNullOrEmpty(backgroundBucket) ? backgroundBucket : current.BackgroundBucket,
             BackgroundFileId = backgroundFileId ?? current.BackgroundFileId,
-            BackgroundFilename = !string.IsNullOrEmpty(backgroundFilename) ? backgroundFilename : current.BackgroundFilename,
+            BackgroundAddressable = !string.IsNullOrEmpty(backgroundAddressable) ? backgroundAddressable : current.BackgroundAddressable,
             UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
         };
 
         Database?.Put(Table, ConfigKey, updated);
-        Logger?.Info($"[snake_config] Updated config: points={updated.ApplePoints}, snake={updated.SnakeColor}");
+        Logger?.Info($"[snake_config] Updated config: points={updated.ApplePoints}, snake={updated.SnakeColor}, addressable={updated.BackgroundAddressable}");
 
         return new SnakeConfigData
         {
             SnakeColor = updated.SnakeColor,
             AppleColor = updated.AppleColor,
             ApplePoints = updated.ApplePoints,
-            BackgroundBucket = updated.BackgroundBucket,
             BackgroundFileId = updated.BackgroundFileId,
-            BackgroundFilename = updated.BackgroundFilename
+            BackgroundAddressable = updated.BackgroundAddressable
         };
     }
 }
 
-[ExoSingletonResource("snake_config", PrimaryKey = "key", Source = "game_config")]
+[ExoSingletonResource("snake_config", PrimaryKey = "key")]
 public record SnakeConfigRecord
 {
     [JsonPropertyName("key")]
@@ -118,28 +115,24 @@ public record SnakeConfigRecord
     public string Key { get; init; } = "active_config";
 
     [JsonPropertyName("snake_color")]
-    [ExoColumn(Label = "Snake Color")]
+    [ExoColumn(Label = "Snake Color", InputType = ExoInput.Color)]
     public string SnakeColor { get; init; } = "#3DD157";
 
     [JsonPropertyName("apple_color")]
-    [ExoColumn(Label = "Apple Color")]
+    [ExoColumn(Label = "Apple Color", InputType = ExoInput.Color)]
     public string AppleColor { get; init; } = "#FF525C";
 
     [JsonPropertyName("apple_points")]
     [ExoColumn(Label = "Apple Points")]
     public int ApplePoints { get; init; } = 10;
 
-    [JsonPropertyName("background_bucket")]
-    [ExoColumn(Label = "Background Bucket")]
-    public string BackgroundBucket { get; init; } = "snake_assets";
-
     [JsonPropertyName("background_file_id")]
     [ExoColumn(Label = "Background File ID", Role = "file_reference", Bucket = "snake_assets")]
     public string BackgroundFileId { get; init; } = "";
 
-    [JsonPropertyName("background_filename")]
-    [ExoColumn(Label = "Background Filename")]
-    public string BackgroundFilename { get; init; } = "board_bg.png";
+    [JsonPropertyName("background_addressable")]
+    [ExoColumn(Label = "Background Addressable", InputType = IUnityAddressablesService.AddressableRef)]
+    public string BackgroundAddressable { get; init; } = "Background_CyberGrid";
 
     [JsonPropertyName("updated_at")]
     [ExoColumn(Label = "Updated At")]

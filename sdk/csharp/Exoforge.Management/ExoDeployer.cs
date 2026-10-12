@@ -80,6 +80,23 @@ public class ExoDeployer
             manifestContent = await File.ReadAllTextAsync(manifestPath, cancellationToken).ConfigureAwait(false);
         }
 
+        Dictionary<string, object>? filesPayload = null;
+        string assetsDir = Path.Combine(pluginDir, "assets");
+        if (Directory.Exists(assetsDir))
+        {
+            filesPayload = new Dictionary<string, object>();
+            foreach (string filePath in Directory.GetFiles(assetsDir, "*", SearchOption.AllDirectories))
+            {
+                string relPath = Path.GetRelativePath(pluginDir, filePath).Replace('\\', '/');
+                byte[] fileBytes = await File.ReadAllBytesAsync(filePath, cancellationToken).ConfigureAwait(false);
+                filesPayload[relPath] = new
+                {
+                    encoding = "base64",
+                    content = Convert.ToBase64String(fileBytes)
+                };
+            }
+        }
+
         var client = existingClient ?? await CreateConnectedClientAsync(environmentName, cancellationToken).ConfigureAwait(false);
         try
         {
@@ -90,7 +107,8 @@ public class ExoDeployer
                 // Named 'binary', not 'wasm_binary': the field carries whatever the runtime produces,
                 // and the old name read as a format.
                 binary = binaryBase64,
-                manifest = manifestContent
+                manifest = manifestContent,
+                files = filesPayload
             };
 
             var result = await client.SendActionAsync<JsonElement>("plugin_manager", "upload_plugin", payload, ExoTransportPreference.Http, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -389,7 +407,15 @@ public class ExoDeployer
             {
                 foreach (JsonNode? plugin in plugins)
                 {
-                    if (plugin?["services"] is not JsonArray declared) continue;
+                    if (plugin is null) continue;
+
+                    if (PluginId(plugin) is { Length: > 0 } pid) available.Add(pid);
+                    if (plugin["provides"] is JsonArray provides)
+                    {
+                        foreach (var p in provides) if (p?.GetValue<string>() is { Length: > 0 } pv) available.Add(pv);
+                    }
+
+                    if (plugin["services"] is not JsonArray declared) continue;
 
                     foreach (JsonNode? service in declared)
                     {
@@ -435,7 +461,7 @@ public class ExoDeployer
 
         foreach (var (id, local) in LocalContracts())
         {
-            JsonNode? existing = plugins.FirstOrDefault(p => string.Equals(PluginId(p), id, StringComparison.Ordinal));
+            JsonNode? existing = plugins.FirstOrDefault(p => p != null && string.Equals(PluginId(p), id, StringComparison.Ordinal));
             int index = existing is null ? -1 : plugins.IndexOf(existing);
 
             // Cloned: a parsed node belongs to the document it came from, and assigning it into a
@@ -519,6 +545,8 @@ public class ExoDeployer
             ["dependencies"] = manifest["dependencies"]?.DeepClone(),
             ["services"] = manifest["services"]?.DeepClone()
         };
+
+        if (manifest["input_types"] is JsonNode it) plugin["input_types"] = it.DeepClone();
 
         // A resource's C# record is `record` in the manifest, because `type` is an atom everywhere
         // else in it and one field meaning something else would have cost a path-aware reader. The
@@ -703,7 +731,25 @@ public class ExoDeployer
         // in a manifest cannot be correlated with the builds that produced them.
         int buildNumber = PeekBuildNumber(pluginDir);
         string buildStamp = $"{buildNumber}.{fingerprint}";
-        Emit($"[build] build {buildStamp}");
+        // Refresh stubs from local contracts before compiling if stubs file exists
+        string stubsFile = Path.Combine(pluginDir, "src", "Generated", "PluginServices.g.cs");
+        if (File.Exists(stubsFile))
+        {
+            try
+            {
+                var deps = ReadManifestDependencies(pluginDir);
+                string contractsJson = MergeLocalContracts("{\"export\":{\"plugins\":[]}}");
+                var missing = MissingServices(contractsJson, deps);
+                if (missing.Count == 0)
+                {
+                    ExoCodeGenerator.GeneratePluginStubsToFile(contractsJson, stubsFile, services: deps, pluginId: cleanName);
+                }
+            }
+            catch
+            {
+                // Best-effort: existing file remains if contracts cannot be resolved
+            }
+        }
 
         // One compiled kind. A runtime that needs its own toolchain adds that branch back alongside
         // its runner.

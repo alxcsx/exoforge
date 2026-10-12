@@ -412,12 +412,12 @@ public class FileBucketUploadFileRequest
     public JsonElement Path { get; set; } = default!;
     [JsonPropertyName("metadata")]
     public JsonElement Metadata { get; set; } = default!;
-    [JsonPropertyName("bucket")]
-    public JsonElement Bucket { get; set; } = default!;
     [JsonPropertyName("content")]
     public JsonElement Content { get; set; } = default!;
     [JsonPropertyName("content_type")]
     public JsonElement ContentType { get; set; } = default!;
+    [JsonPropertyName("bucket")]
+    public JsonElement Bucket { get; set; } = default!;
 }
 
 /// <summary>Response model for file_bucket.upload_file action.</summary>
@@ -497,12 +497,12 @@ public class FileBucketUpdateFileRequest
     public JsonElement Filename { get; set; } = default!;
     [JsonPropertyName("metadata")]
     public JsonElement Metadata { get; set; } = default!;
-    [JsonPropertyName("bucket")]
-    public JsonElement Bucket { get; set; } = default!;
     [JsonPropertyName("content")]
     public JsonElement Content { get; set; } = default!;
     [JsonPropertyName("content_type")]
     public JsonElement ContentType { get; set; } = default!;
+    [JsonPropertyName("bucket")]
+    public JsonElement Bucket { get; set; } = default!;
 }
 
 /// <summary>Response model for file_bucket.update_file action.</summary>
@@ -1067,12 +1067,10 @@ public class SnakeConfigData
     public string AppleColor { get; set; } = default!;
     [JsonPropertyName("apple_points")]
     public long ApplePoints { get; set; } = default!;
-    [JsonPropertyName("background_bucket")]
-    public string BackgroundBucket { get; set; } = default!;
     [JsonPropertyName("background_file_id")]
     public string BackgroundFileId { get; set; } = default!;
-    [JsonPropertyName("background_filename")]
-    public string BackgroundFilename { get; set; } = default!;
+    [JsonPropertyName("background_addressable")]
+    public string BackgroundAddressable { get; set; } = default!;
 }
 
 /// <summary>Request payload for snake_config.update_config action.</summary>
@@ -1084,12 +1082,10 @@ public class SnakeConfigUpdateConfigRequest
     public string AppleColor { get; set; } = default!;
     [JsonPropertyName("apple_points")]
     public long ApplePoints { get; set; } = default!;
-    [JsonPropertyName("background_bucket")]
-    public string BackgroundBucket { get; set; } = default!;
     [JsonPropertyName("background_file_id")]
     public string BackgroundFileId { get; set; } = default!;
-    [JsonPropertyName("background_filename")]
-    public string BackgroundFilename { get; set; } = default!;
+    [JsonPropertyName("background_addressable")]
+    public string BackgroundAddressable { get; set; } = default!;
 }
 
 /// <summary>Request payload for snake_leaderboard.submit_score action.</summary>
@@ -1140,6 +1136,228 @@ public class SnakeLeaderboardScoreSubmittedEvent
     public long SnakeLength { get; set; } = default!;
     [JsonPropertyName("improved")]
     public bool Improved { get; set; } = default!;
+}
+
+/// <summary>Request payload for teste.echo action.</summary>
+public class TesteEchoRequest
+{
+    [JsonPropertyName("value")]
+    public long Value { get; set; } = default!;
+}
+
+/// <summary>Response model for unity_addressables.get_stats action.</summary>
+public class AddressablesStats
+{
+    [JsonPropertyName("total_assets")]
+    public long TotalAssets { get; set; } = default!;
+    [JsonPropertyName("total_bundles")]
+    public long TotalBundles { get; set; } = default!;
+    [JsonPropertyName("total_size_bytes")]
+    public long TotalSizeBytes { get; set; } = default!;
+    [JsonPropertyName("active_badge")]
+    public string ActiveBadge { get; set; } = default!;
+    [JsonPropertyName("active_badges")]
+    public JsonElement ActiveBadges { get; set; } = default!;
+    [JsonPropertyName("active_version")]
+    public string ActiveVersion { get; set; } = default!;
+    [JsonPropertyName("active_build_number")]
+    public long ActiveBuildNumber { get; set; } = default!;
+}
+
+/// <summary>Request payload for unity_addressables.list_assets action.</summary>
+public class UnityAddressablesListAssetsRequest
+{
+    [JsonPropertyName("group")]
+    public string Group { get; set; } = default!;
+    [JsonPropertyName("label")]
+    public string Label { get; set; } = default!;
+    [JsonPropertyName("search")]
+    public string Search { get; set; } = default!;
+    [JsonPropertyName("tag")]
+    public string Tag { get; set; } = default!;
+}
+
+/// <summary>Response model for unity_addressables.list_assets action.</summary>
+public class AddressableAssetRecord
+{
+    [JsonPropertyName("address")]
+    public string Address { get; set; } = default!;
+    [JsonPropertyName("release_version")]
+    public string ReleaseVersion { get; set; } = default!;
+    [JsonPropertyName("asset_path")]
+    public string AssetPath { get; set; } = default!;
+    [JsonPropertyName("group_name")]
+    public string GroupName { get; set; } = default!;
+    [JsonPropertyName("labels")]
+    public string Labels { get; set; } = default!;
+    [JsonPropertyName("bundle_name")]
+    public string BundleName { get; set; } = default!;
+    [JsonPropertyName("file_size")]
+    public long FileSize { get; set; } = default!;
+    [JsonPropertyName("hash")]
+    public string Hash { get; set; } = default!;
+    [JsonPropertyName("preview_url")]
+    public string PreviewUrl { get; set; } = default!;
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = default!;
+    [JsonPropertyName("updated_at")]
+    public long UpdatedAt { get; set; } = default!;
+}
+
+/// <summary>Request payload for unity_addressables.get_asset action.</summary>
+public class UnityAddressablesGetAssetRequest
+{
+    [JsonPropertyName("address")]
+    public string Address { get; set; } = default!;
+}
+
+/// <summary>Response model for unity_addressables.list_releases action.</summary>
+public class AddressableReleaseRecord
+{
+    [JsonPropertyName("build_number")]
+    public long BuildNumber { get; set; } = default!;
+    [JsonPropertyName("version")]
+    public string Version { get; set; } = default!;
+    [JsonPropertyName("uploader")]
+    public string Uploader { get; set; } = default!;
+    [JsonPropertyName("badge")]
+    public string Badge { get; set; } = default!;
+    [JsonPropertyName("badges")]
+    public JsonElement Badges { get; set; } = default!;
+    [JsonPropertyName("catalog_hash")]
+    public string CatalogHash { get; set; } = default!;
+    [JsonPropertyName("catalog_json")]
+    public string CatalogJson { get; set; } = default!;
+    [JsonPropertyName("bundle_count")]
+    public long BundleCount { get; set; } = default!;
+    [JsonPropertyName("total_size")]
+    public long TotalSize { get; set; } = default!;
+    [JsonPropertyName("created_at")]
+    public long CreatedAt { get; set; } = default!;
+}
+
+/// <summary>Request payload for unity_addressables.get_manifest action.</summary>
+public class UnityAddressablesGetManifestRequest
+{
+    [JsonPropertyName("tag")]
+    public string Tag { get; set; } = default!;
+}
+
+/// <summary>Response model for unity_addressables.get_manifest action.</summary>
+public class AddressablesManifestDto
+{
+    [JsonPropertyName("version")]
+    public string Version { get; set; } = default!;
+    [JsonPropertyName("tag")]
+    public string Tag { get; set; } = default!;
+    [JsonPropertyName("catalog_hash")]
+    public string CatalogHash { get; set; } = default!;
+    [JsonPropertyName("catalog_json")]
+    public string CatalogJson { get; set; } = default!;
+    [JsonPropertyName("remote_load_path")]
+    public string RemoteLoadPath { get; set; } = default!;
+    [JsonPropertyName("assets")]
+    public JsonElement Assets { get; set; } = default!;
+}
+
+/// <summary>Request payload for unity_addressables.publish_release action.</summary>
+public class UnityAddressablesPublishReleaseRequest
+{
+    [JsonPropertyName("version")]
+    public string Version { get; set; } = default!;
+    [JsonPropertyName("badge")]
+    public string Badge { get; set; } = default!;
+    [JsonPropertyName("catalog_hash")]
+    public string CatalogHash { get; set; } = default!;
+    [JsonPropertyName("catalog_json")]
+    public string CatalogJson { get; set; } = default!;
+    [JsonPropertyName("assets")]
+    public JsonElement Assets { get; set; } = default!;
+    [JsonPropertyName("uploader")]
+    public string Uploader { get; set; } = default!;
+    [JsonPropertyName("badges")]
+    public JsonElement Badges { get; set; } = default!;
+}
+
+/// <summary>Response model for unity_addressables.publish_release action.</summary>
+public class UnityAddressablesPublishReleaseResponse
+{
+    [JsonPropertyName("is_success")]
+    public bool IsSuccess { get; set; } = default!;
+    [JsonPropertyName("is_error")]
+    public bool IsError { get; set; } = default!;
+    [JsonPropertyName("value")]
+    public JsonElement Value { get; set; } = default!;
+    [JsonPropertyName("error")]
+    public string Error { get; set; } = default!;
+}
+
+/// <summary>Request payload for unity_addressables.promote_release action.</summary>
+public class UnityAddressablesPromoteReleaseRequest
+{
+    [JsonPropertyName("version")]
+    public string Version { get; set; } = default!;
+    [JsonPropertyName("target_badge")]
+    public string TargetBadge { get; set; } = default!;
+}
+
+/// <summary>Response model for unity_addressables.promote_release action.</summary>
+public class UnityAddressablesPromoteReleaseResponse
+{
+    [JsonPropertyName("is_success")]
+    public bool IsSuccess { get; set; } = default!;
+    [JsonPropertyName("is_error")]
+    public bool IsError { get; set; } = default!;
+    [JsonPropertyName("value")]
+    public JsonElement Value { get; set; } = default!;
+    [JsonPropertyName("error")]
+    public string Error { get; set; } = default!;
+}
+
+/// <summary>Request payload for unity_addressables.upload_bundle action.</summary>
+public class UnityAddressablesUploadBundleRequest
+{
+    [JsonPropertyName("filename")]
+    public string Filename { get; set; } = default!;
+    [JsonPropertyName("base64_data")]
+    public string Base64Data { get; set; } = default!;
+    [JsonPropertyName("subfolder")]
+    public string Subfolder { get; set; } = default!;
+}
+
+/// <summary>Response model for unity_addressables.upload_bundle action.</summary>
+public class UnityAddressablesUploadBundleResponse
+{
+    [JsonPropertyName("is_success")]
+    public bool IsSuccess { get; set; } = default!;
+    [JsonPropertyName("is_error")]
+    public bool IsError { get; set; } = default!;
+    [JsonPropertyName("value")]
+    public string Value { get; set; } = default!;
+    [JsonPropertyName("error")]
+    public string Error { get; set; } = default!;
+}
+
+/// <summary>Request payload for unity_addressables.upload_preview action.</summary>
+public class UnityAddressablesUploadPreviewRequest
+{
+    [JsonPropertyName("address")]
+    public string Address { get; set; } = default!;
+    [JsonPropertyName("base64_image")]
+    public string Base64Image { get; set; } = default!;
+}
+
+/// <summary>Response model for unity_addressables.upload_preview action.</summary>
+public class UnityAddressablesUploadPreviewResponse
+{
+    [JsonPropertyName("is_success")]
+    public bool IsSuccess { get; set; } = default!;
+    [JsonPropertyName("is_error")]
+    public bool IsError { get; set; } = default!;
+    [JsonPropertyName("value")]
+    public string Value { get; set; } = default!;
+    [JsonPropertyName("error")]
+    public string Error { get; set; } = default!;
 }
 
 /// <summary>Request payload for ws.broadcast action.</summary>
@@ -1233,6 +1451,14 @@ public static class ExoClientGeneratedExtensions
     public static SnakeLeaderboardServiceClient SnakeLeaderboard(this ExoClient client) =>
         client.Services().SnakeLeaderboard;
 
+    /// <summary>Access the Teste service contract.</summary>
+    public static TesteServiceClient Teste(this ExoClient client) =>
+        client.Services().Teste;
+
+    /// <summary>Access the UnityAddressables service contract.</summary>
+    public static UnityAddressablesServiceClient UnityAddressables(this ExoClient client) =>
+        client.Services().UnityAddressables;
+
     /// <summary>Access the Ws service contract.</summary>
     public static WsServiceClient Ws(this ExoClient client) =>
         client.Services().Ws;
@@ -1292,6 +1518,12 @@ public class ExoforgeServicesHub
 
     private SnakeLeaderboardServiceClient? _snake_leaderboard;
     public SnakeLeaderboardServiceClient SnakeLeaderboard => _snake_leaderboard ??= new SnakeLeaderboardServiceClient(_client);
+
+    private TesteServiceClient? _teste;
+    public TesteServiceClient Teste => _teste ??= new TesteServiceClient(_client);
+
+    private UnityAddressablesServiceClient? _unity_addressables;
+    public UnityAddressablesServiceClient UnityAddressables => _unity_addressables ??= new UnityAddressablesServiceClient(_client);
 
     private WsServiceClient? _ws;
     public WsServiceClient Ws => _ws ??= new WsServiceClient(_client);
@@ -1710,16 +1942,16 @@ public class FileBucketServiceClient
     }
 
     /// <summary>Stores a file in a specified bucket from raw binary, base64 content, or disk path.</summary>
-    public Task<FileBucketUploadFileResponse> UploadFileAsync(string filename, JsonElement path, JsonElement metadata, JsonElement bucket, JsonElement content, JsonElement contentType, CancellationToken cancellationToken = default)
+    public Task<FileBucketUploadFileResponse> UploadFileAsync(string filename, JsonElement path, JsonElement metadata, JsonElement content, JsonElement contentType, JsonElement bucket, CancellationToken cancellationToken = default)
     {
         var req = new FileBucketUploadFileRequest
         {
             Filename = filename,
             Path = path,
             Metadata = metadata,
-            Bucket = bucket,
             Content = content,
             ContentType = contentType,
+            Bucket = bucket,
         };
         return UploadFileAsync(req, cancellationToken);
     }
@@ -1789,16 +2021,16 @@ public class FileBucketServiceClient
     }
 
     /// <summary>Modifies an existing file's name, metadata, or content.</summary>
-    public Task<FileBucketUpdateFileResponse> UpdateFileAsync(string id, JsonElement filename, JsonElement metadata, JsonElement bucket, JsonElement content, JsonElement contentType, CancellationToken cancellationToken = default)
+    public Task<FileBucketUpdateFileResponse> UpdateFileAsync(string id, JsonElement filename, JsonElement metadata, JsonElement content, JsonElement contentType, JsonElement bucket, CancellationToken cancellationToken = default)
     {
         var req = new FileBucketUpdateFileRequest
         {
             Id = id,
             Filename = filename,
             Metadata = metadata,
-            Bucket = bucket,
             Content = content,
             ContentType = contentType,
+            Bucket = bucket,
         };
         return UpdateFileAsync(req, cancellationToken);
     }
@@ -2492,16 +2724,15 @@ public class SnakeConfigServiceClient
     }
 
     /// <summary>Executes update_config action with typed arguments.</summary>
-    public Task<SnakeConfigData> UpdateConfigAsync(string snakeColor, string appleColor, long applePoints, string backgroundBucket, string backgroundFileId, string backgroundFilename, CancellationToken cancellationToken = default)
+    public Task<SnakeConfigData> UpdateConfigAsync(string snakeColor, string appleColor, long applePoints, string backgroundFileId, string backgroundAddressable, CancellationToken cancellationToken = default)
     {
         var req = new SnakeConfigUpdateConfigRequest
         {
             SnakeColor = snakeColor,
             AppleColor = appleColor,
             ApplePoints = applePoints,
-            BackgroundBucket = backgroundBucket,
             BackgroundFileId = backgroundFileId,
-            BackgroundFilename = backgroundFilename,
+            BackgroundAddressable = backgroundAddressable,
         };
         return UpdateConfigAsync(req, cancellationToken);
     }
@@ -2574,6 +2805,189 @@ public class SnakeLeaderboardServiceClient
     public Task<List<SnakeLeaderboardEntry>> GetLeaderboardAsync(SnakeLeaderboardGetLeaderboardRequest request, CancellationToken cancellationToken = default)
     {
         return _client.SendActionAsync<List<SnakeLeaderboardEntry>>("snake_leaderboard", "get_leaderboard", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+}
+
+/// <summary>Client interface for the teste service.</summary>
+public class TesteServiceClient
+{
+    private readonly ExoClient _client;
+
+    public TesteServiceClient(ExoClient client)
+    {
+        _client = client ?? throw new ArgumentNullException(nameof(client));
+    }
+
+    /// <summary>Executes ping action.</summary>
+    public Task<long> PingAsync(CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<long>("teste", "ping", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Executes echo action with typed arguments.</summary>
+    public Task<long> EchoAsync(long value, CancellationToken cancellationToken = default)
+    {
+        var req = new TesteEchoRequest
+        {
+            Value = value,
+        };
+        return EchoAsync(req, cancellationToken);
+    }
+
+    /// <summary>Executes echo action with a typed request DTO.</summary>
+    public Task<long> EchoAsync(TesteEchoRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<long>("teste", "echo", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+}
+
+/// <summary>Client interface for the unity_addressables service.</summary>
+public class UnityAddressablesServiceClient
+{
+    private readonly ExoClient _client;
+
+    public UnityAddressablesServiceClient(ExoClient client)
+    {
+        _client = client ?? throw new ArgumentNullException(nameof(client));
+    }
+
+    /// <summary>Executes get_stats action.</summary>
+    public Task<AddressablesStats> GetStatsAsync(CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<AddressablesStats>("unity_addressables", "get_stats", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Executes list_assets action with typed arguments.</summary>
+    public Task<List<AddressableAssetRecord>> ListAssetsAsync(string group, string label, string search, string tag, CancellationToken cancellationToken = default)
+    {
+        var req = new UnityAddressablesListAssetsRequest
+        {
+            Group = group,
+            Label = label,
+            Search = search,
+            Tag = tag,
+        };
+        return ListAssetsAsync(req, cancellationToken);
+    }
+
+    /// <summary>Executes list_assets action with a typed request DTO.</summary>
+    public Task<List<AddressableAssetRecord>> ListAssetsAsync(UnityAddressablesListAssetsRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<List<AddressableAssetRecord>>("unity_addressables", "list_assets", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Executes get_asset action with typed arguments.</summary>
+    public Task<AddressableAssetRecord> GetAssetAsync(string address, CancellationToken cancellationToken = default)
+    {
+        var req = new UnityAddressablesGetAssetRequest
+        {
+            Address = address,
+        };
+        return GetAssetAsync(req, cancellationToken);
+    }
+
+    /// <summary>Executes get_asset action with a typed request DTO.</summary>
+    public Task<AddressableAssetRecord> GetAssetAsync(UnityAddressablesGetAssetRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<AddressableAssetRecord>("unity_addressables", "get_asset", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Executes list_releases action.</summary>
+    public Task<List<AddressableReleaseRecord>> ListReleasesAsync(CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<List<AddressableReleaseRecord>>("unity_addressables", "list_releases", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Executes get_manifest action with typed arguments.</summary>
+    public Task<AddressablesManifestDto> GetManifestAsync(string tag, CancellationToken cancellationToken = default)
+    {
+        var req = new UnityAddressablesGetManifestRequest
+        {
+            Tag = tag,
+        };
+        return GetManifestAsync(req, cancellationToken);
+    }
+
+    /// <summary>Executes get_manifest action with a typed request DTO.</summary>
+    public Task<AddressablesManifestDto> GetManifestAsync(UnityAddressablesGetManifestRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<AddressablesManifestDto>("unity_addressables", "get_manifest", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Executes publish_release action with typed arguments.</summary>
+    public Task<UnityAddressablesPublishReleaseResponse> PublishReleaseAsync(string version, string badge, string catalogHash, string catalogJson, JsonElement assets, string uploader, JsonElement badges, CancellationToken cancellationToken = default)
+    {
+        var req = new UnityAddressablesPublishReleaseRequest
+        {
+            Version = version,
+            Badge = badge,
+            CatalogHash = catalogHash,
+            CatalogJson = catalogJson,
+            Assets = assets,
+            Uploader = uploader,
+            Badges = badges,
+        };
+        return PublishReleaseAsync(req, cancellationToken);
+    }
+
+    /// <summary>Executes publish_release action with a typed request DTO.</summary>
+    public Task<UnityAddressablesPublishReleaseResponse> PublishReleaseAsync(UnityAddressablesPublishReleaseRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<UnityAddressablesPublishReleaseResponse>("unity_addressables", "publish_release", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Executes promote_release action with typed arguments.</summary>
+    public Task<UnityAddressablesPromoteReleaseResponse> PromoteReleaseAsync(string version, string targetBadge, CancellationToken cancellationToken = default)
+    {
+        var req = new UnityAddressablesPromoteReleaseRequest
+        {
+            Version = version,
+            TargetBadge = targetBadge,
+        };
+        return PromoteReleaseAsync(req, cancellationToken);
+    }
+
+    /// <summary>Executes promote_release action with a typed request DTO.</summary>
+    public Task<UnityAddressablesPromoteReleaseResponse> PromoteReleaseAsync(UnityAddressablesPromoteReleaseRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<UnityAddressablesPromoteReleaseResponse>("unity_addressables", "promote_release", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Executes upload_bundle action with typed arguments.</summary>
+    public Task<UnityAddressablesUploadBundleResponse> UploadBundleAsync(string filename, string base64Data, string subfolder, CancellationToken cancellationToken = default)
+    {
+        var req = new UnityAddressablesUploadBundleRequest
+        {
+            Filename = filename,
+            Base64Data = base64Data,
+            Subfolder = subfolder,
+        };
+        return UploadBundleAsync(req, cancellationToken);
+    }
+
+    /// <summary>Executes upload_bundle action with a typed request DTO.</summary>
+    public Task<UnityAddressablesUploadBundleResponse> UploadBundleAsync(UnityAddressablesUploadBundleRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<UnityAddressablesUploadBundleResponse>("unity_addressables", "upload_bundle", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Executes upload_preview action with typed arguments.</summary>
+    public Task<UnityAddressablesUploadPreviewResponse> UploadPreviewAsync(string address, string base64Image, CancellationToken cancellationToken = default)
+    {
+        var req = new UnityAddressablesUploadPreviewRequest
+        {
+            Address = address,
+            Base64Image = base64Image,
+        };
+        return UploadPreviewAsync(req, cancellationToken);
+    }
+
+    /// <summary>Executes upload_preview action with a typed request DTO.</summary>
+    public Task<UnityAddressablesUploadPreviewResponse> UploadPreviewAsync(UnityAddressablesUploadPreviewRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<UnityAddressablesUploadPreviewResponse>("unity_addressables", "upload_preview", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
 }

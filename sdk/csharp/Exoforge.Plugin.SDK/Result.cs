@@ -16,15 +16,11 @@ public readonly struct Result<T> : IEquatable<Result<T>>
 
     public bool IsError => !IsSuccess;
 
-    /// <summary>Gets the success value. Throws if the result is an error.</summary>
-    public T Value => IsSuccess
-        ? _value!
-        : throw new InvalidOperationException($"Cannot access Value on a failed Result: {Error}");
+    /// <summary>Gets the success value (or default when failed).</summary>
+    public T? Value => _value;
 
-    /// <summary>Gets the error description. Throws if the result is a success.</summary>
-    public string Error => IsError
-        ? _error!
-        : throw new InvalidOperationException("Cannot access Error on a successful Result.");
+    /// <summary>Gets the error description (or null when succeeded).</summary>
+    public string? Error => _error;
 
     private Result(bool isSuccess, T? value, string? error)
     {

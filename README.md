@@ -95,6 +95,7 @@ All networking, storage, authentication, and game domains exist as swappable plu
 | `exoforge_std_dashboard` | Studio (:4005) | `:dashboard` | Game Producer & Designer Studio (LiveView UI, actor inspector, plugin management). |
 | `exoforge_std_plugin_manager` | Lifecycle | `:plugin_manager` | Runtime plugin lifecycle, hot binary uploads, and manifest exports. |
 | `exoforge_std_resources` | Store | `:resource_store` | Schema-driven resource tables and generic CRUD over the `:database` contract. |
+| `exoforge_std_file_bucket` | Storage / CDN | `:file_bucket` | Pluggable binary/blob asset storage with tags, metadata, and HTTP file routes. |
 | `exoforge_std_dashboard_views` | Studio Views | `:dashboard_view` | View modules for the Studio's core extensions. |
 | `exoforge_std_metering` | Operations | `:metering` | Usage metering: calls, wall time, bytes, CPU and RSS, persisted per title. |
 
@@ -130,7 +131,6 @@ exo status                   # Inspect cluster health and telemetry
 
 ### 3. C# Client SDK (`ExoClient`)
 
-High-performance WebSocket client with automatic reconnection, typed action RPC, and main-thread event dispatching:
 ```csharp
 using Exoforge.Client;
 
@@ -149,6 +149,16 @@ var result = await client.SendActionAsync<CombatResult>("combat", "attack", new 
     damage = 45
 });
 ```
+
+### 4. Native C# Plugin Architecture
+
+C# plugins are framework-dependent, headless .NET binaries executed under supervision by the OTP kernel via `NativePluginRunner` with newline-delimited JSON stdio framing:
+
+- **Implicit Dependency Injection**: Declare `[Inject]` on capabilities like `IDatabase`, `ILogger`, `IEventDispatcher`, or typed service interfaces (`IFileBucketService`, `IUnityAddressablesService`).
+- **Singleton Resources**: Declare `[ExoSingletonResource]` for game configuration and single-record settings.
+- **Type-Safe Dashboard Inputs**: Standard dashboard inputs (`ExoInput.Color`, `ExoInput.Date`, `ExoInput.Select`) and custom provider inputs (e.g., `AddressableRef`) with microfrontend support.
+- **Microfrontends & UI Hooks**: Plugins bundle pre-compiled JS/HTML Web Components under `assets/` to inject custom LiveView tabs and input editors without modifying kernel UI templates.
+- **Deterministic Action Results**: Return `Result<T>` (`Result<T>.Ok()` / `Result<T>.Fail()`) for standardized error propagation and error boundaries.
 
 ---
 
@@ -229,6 +239,7 @@ just k8s-deploy
 │   ├── exoforge_std_dashboard/   # Phoenix LiveView Producer Studio
 │   ├── exoforge_std_dashboard_views/ # Studio view components
 │   ├── exoforge_std_resources/   # Schema-driven resource tables
+│   ├── exoforge_std_file_bucket/ # Binary asset and file storage service
 │   ├── exoforge_std_metering/    # Usage metering, persisted per title
 │   └── exoforge_std_plugin_manager/ # Runtime plugin lifecycle & upload
 ├── plugins_csharp/               # Sample C# plugins

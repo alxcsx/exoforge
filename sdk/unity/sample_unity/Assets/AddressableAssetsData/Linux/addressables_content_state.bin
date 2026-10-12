@@ -1,0 +1,6 @@
+ACS@AddressablesContentState?Id‚Khttp://schemas.datacontract.org/2004/07/UnityEditor.AddressableAssets.Build	i)http://www.w3.org/2001/XMLSchema-instance	z3http://schemas.microsoft.com/2003/10/Serialization/@cachedBundles?Idˆ?Size‚@CachedBundleState?Idˆ@bundleFileId?Idˆ˜qhttp://localhost:4005/api/files/unity_addressables/backgrounds_assets_all_9527949ebde55e0637cee3fb9a5a5f78.bundle@data.type˜a:AssetBundleRequestOptions?Idˆ	aXhttp://schemas.datacontract.org/2004/07/UnityEngine.ResourceManagement.ResourceProviders^AssetLoadMode™RequestedAssetAndDependencies^
+BundleName?Idˆ™ 64cc8f74f8fe141881029406cb7cea7b^
+BundleSize‹ãP^ChunkedTransfer…^"ClearOtherCachedVersionsWhenLoaded…^Crc’ôJ>^Hash?Idˆ™ 9527949ebde55e0637cee3fb9a5a5f78^RedirectLimit‰ÿ^
+RetryCount^Timeout^UseCrcForCachedBundle‡^!UseUnityWebRequestForLocalBundles…@cachedInfos?Idˆ?Size€@editorVersion?Idˆ	™
+6000.6.3f1@playerVersion?Idˆ
+™1.0@remoteCatalogLoadPath?Idˆ™2http://localhost:4005/api/files/unity_addressables@typeTreeHashes?Idˆ?Size€	a3http://schemas.datacontract.org/2004/07/UnityEngine

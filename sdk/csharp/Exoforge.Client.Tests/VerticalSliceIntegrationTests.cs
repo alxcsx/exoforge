@@ -6,6 +6,7 @@ using Xunit;
 
 namespace Exoforge.Client.Tests;
 
+[Trait("Category", "SlowIntegration")]
 public class VerticalSliceIntegrationTests
 {
     private static readonly Uri ServerUri = new("ws://127.0.0.1:4000/ws");

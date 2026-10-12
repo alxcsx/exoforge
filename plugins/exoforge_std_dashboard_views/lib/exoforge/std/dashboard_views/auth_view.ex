@@ -328,6 +328,15 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
     {:noreply, assign(socket, :user_inspect_tab, tab)}
   end
 
+  @impl true
+  def handle_event("close_focus", _params, socket) do
+    tab = (socket.assigns[:extension] && socket.assigns.extension.id) || "exoforge_std_auth"
+    {:noreply,
+     socket
+     |> assign(:selected_user, nil)
+     |> push_patch(to: "/tab/#{tab}")}
+  end
+
   ## ---- PRIVATE HELPERS ----
 
   # Opens a user's inspector drawer, resetting it to the Overview tab and picking up whatever
@@ -1133,9 +1142,20 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
             </div>
           <% else %>
             <%= for hook <- @user_inspect_hooks, to_string(hook.id) == @user_inspect_tab do %>
-              <%= if hook[:module] do %>
+              <% mod = hook[:module] || hook["module"] %>
+              <% mod_atom = cond do
+                   is_atom(mod) -> mod
+                   is_binary(mod) ->
+                     try do
+                       String.to_existing_atom(mod)
+                     rescue
+                       _ -> nil
+                     end
+                   true -> nil
+                 end %>
+              <%= if mod_atom && Code.ensure_loaded?(mod_atom) do %>
                 <.live_component
-                  module={hook[:module]}
+                  module={mod_atom}
                   id={"user_inspect_#{hook.id}"}
                   user={@selected_user}
                 />

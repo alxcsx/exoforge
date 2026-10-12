@@ -45,23 +45,78 @@ namespace SnakeGame
 
         public void SetBackgroundSprite(Sprite? sprite)
         {
+            if (sprite == null)
+            {
+                if (backgroundRenderer != null)
+                {
+                    backgroundRenderer.sprite = null;
+                    backgroundRenderer.gameObject.SetActive(false);
+                }
+                return;
+            }
+
             if (backgroundRenderer == null)
             {
-                var bgGo = new GameObject("BoardBackground");
-                bgGo.transform.SetParent(transform, worldPositionStays: false);
-                bgGo.transform.localPosition = new Vector3(0, 0, 1f);
+                var bgGo = new GameObject("CameraBackground");
                 backgroundRenderer = bgGo.AddComponent<SpriteRenderer>();
             }
 
-            backgroundRenderer.sprite = sprite;
-            if (sprite != null && game != null)
+            var cam = Camera.main ?? FindAnyObjectByType<Camera>(FindObjectsInactive.Include);
+            if (cam != null)
             {
-                float targetWidth = game.GridWidth * cellSize;
-                float targetHeight = game.GridHeight * cellSize;
+                backgroundRenderer.transform.SetParent(cam.transform, worldPositionStays: false);
+                backgroundRenderer.transform.localPosition = new Vector3(0, 0, 15f);
+                backgroundRenderer.transform.localRotation = Quaternion.identity;
+            }
+            else
+            {
+                backgroundRenderer.transform.SetParent(transform, worldPositionStays: false);
+                backgroundRenderer.transform.localPosition = new Vector3(0, 0, 5f);
+            }
+
+            backgroundRenderer.gameObject.SetActive(true);
+            backgroundRenderer.sortingOrder = -100;
+            backgroundRenderer.sprite = sprite;
+
+            UpdateBackgroundScale();
+        }
+
+        private void UpdateBackgroundScale()
+        {
+            if (backgroundRenderer == null || backgroundRenderer.sprite == null) return;
+
+            var sprite = backgroundRenderer.sprite;
+            var cam = Camera.main ?? FindAnyObjectByType<Camera>(FindObjectsInactive.Include);
+            if (cam != null)
+            {
+                float camHeight = cam.orthographic
+                    ? 2f * cam.orthographicSize
+                    : 2f * Mathf.Tan(cam.fieldOfView * 0.5f * Mathf.Deg2Rad) * Mathf.Abs(backgroundRenderer.transform.localPosition.z);
+                float camWidth = camHeight * cam.aspect;
+
+                float scaleX = camWidth / sprite.bounds.size.x;
+                float scaleY = camHeight / sprite.bounds.size.y;
+                float scale = Mathf.Max(scaleX, scaleY) * 1.15f;
+
+                backgroundRenderer.transform.localScale = new Vector3(scale, scale, 1f);
+            }
+            else
+            {
+                game ??= FindAnyObjectByType<SnakeGameController>(FindObjectsInactive.Include);
+                float gridW = (game != null ? game.GridWidth : (_width > 0 ? _width : 20)) * cellSize * 2f;
+                float gridH = (game != null ? game.GridHeight : (_height > 0 ? _height : 20)) * cellSize * 2f;
                 backgroundRenderer.transform.localScale = new Vector3(
-                    targetWidth / sprite.bounds.size.x,
-                    targetHeight / sprite.bounds.size.y,
+                    gridW / sprite.bounds.size.x,
+                    gridH / sprite.bounds.size.y,
                     1f);
+            }
+        }
+
+        private void OnDestroy()
+        {
+            if (backgroundRenderer != null && backgroundRenderer.gameObject != null)
+            {
+                Destroy(backgroundRenderer.gameObject);
             }
         }
 
@@ -70,7 +125,11 @@ namespace SnakeGame
             game ??= FindAnyObjectByType<SnakeGameController>(FindObjectsInactive.Include);
         }
 
-        private void LateUpdate() => Paint();
+        private void LateUpdate()
+        {
+            Paint();
+            UpdateBackgroundScale();
+        }
 
         public Color32 CellColour(Vector2Int cell)
         {

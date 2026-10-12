@@ -21,5 +21,8 @@
   <ItemGroup>
     <!-- The fixture is built by a test, on purpose, not compiled into this assembly. -->
     <Compile Remove="fixtures/**/*.cs" />
+    <Compile Include="..\..\unity\sample_unity\Exoforge\plugins\unity_addressables\src\Models.cs" Link="unity_addressables\Models.cs" />
+    <Compile Include="..\..\unity\sample_unity\Exoforge\plugins\unity_addressables\src\Generated\PluginServices.g.cs" Link="unity_addressables\PluginServices.g.cs" />
+    <Compile Include="..\..\unity\sample_unity\Exoforge\plugins\unity_addressables\src\UnityAddressablesPlugin.cs" Link="unity_addressables\UnityAddressablesPlugin.cs" />
   </ItemGroup>
 </Project>
