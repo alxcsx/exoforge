@@ -107,9 +107,9 @@ Exoforge separates game engineering from backend operations. Game developers wor
 
 ### 1. Unity Exoforge Studio (`com.exoforge.sdk`)
 
-A dedicated Unity Editor extension (`Tools ▸ Exoforge ▸ Exoforge Studio`, or `Window ▸ Exoforge`) providing:
-- **One-Click Scaffolding**: Generate native C# plugins directly into `plugins/` — each with its own solution (`.slnx`) and sources under `src/`.
-- **Compilation & Deployment**: Build the plugin and its manifest and upload them to the running server.
+A dedicated Unity Editor extension (`Tools ▸ Exoforge ▸ Control Center` or `Extensions`) providing:
+- **One-Click Scaffolding**: Generate native C# extensions directly into `extensions/` — each with its own solution (`.slnx`) and sources under `src/`.
+- **Compilation & Deployment**: Build the extension and its manifest and upload them to the running server.
 - **Live Action Sandbox**: Test actions and inspect payloads with latency metrics (`µs`).
 - **Real-Time Event Stream**: Monitor backend broadcasts and filter topics inside Unity.
 
@@ -118,15 +118,15 @@ A dedicated Unity Editor extension (`Tools ▸ Exoforge ▸ Exoforge Studio`, or
 The **engine-agnostic** tool: the same commands a Unity developer clicks, for other engines, for
 CI/CD, and for headless work. A Unity project does not need it.
 ```bash
-exo init                     # Initialize /exoforge workspace
-exo plugin new combat        # Scaffold a native C# plugin (--template standard)
-exo plugin build combat      # Build the plugin (framework-dependent .NET) + manifest.json
-exo plugin stubs combat      # Generate typed service stubs from the cluster contracts
-exo plugin push combat       # Hot-load plugin onto live cluster
-exo plugin logs combat       # Show recent log lines the plugin emitted
-exo plugin usage combat      # Metered usage: calls, wall time, CPU, memory
-exo sync                     # Generate strongly-typed C# client bindings
-exo status                   # Inspect cluster health and telemetry
+exo init                        # Initialize /exoforge workspace
+exo extension new combat        # Scaffold a native C# extension (--template standard)
+exo extension build combat      # Build the extension (framework-dependent .NET) + manifest.json
+exo extension stubs combat      # Generate typed service stubs from the cluster contracts
+exo extension push combat       # Hot-load extension onto live cluster
+exo extension logs combat       # Show recent log lines the extension emitted
+exo extension usage combat      # Metered usage: calls, wall time, CPU, memory
+exo sync                        # Generate strongly-typed C# client bindings
+exo status                      # Inspect cluster health and telemetry
 ```
 
 ### 3. C# Client SDK (`ExoClient`)

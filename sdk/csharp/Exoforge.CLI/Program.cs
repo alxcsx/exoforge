@@ -280,9 +280,10 @@ public static class Program
         if (cli.WantsHelp)
         {
             Console.WriteLine("""
-            Usage: exo plugin new <name> [--template standard] [--dir <path>]
+            Usage: exo extension new <name> [--template standard] [--dir <path>]
+                   (alias: exo plugin new)
 
-            Scaffolds plugins/<name>/ with a src/ project, a solution, and a .gitignore. The project
+            Scaffolds extensions/<name>/ with a src/ project, a solution, and a .gitignore. The project
             references the Exoforge.Plugin.SDK package, so it builds wherever it is put; run
             `just pack-sdk` to fill the local feed from a checkout.
 

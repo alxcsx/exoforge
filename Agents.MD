@@ -89,19 +89,19 @@ metering  ──▶ database
 - Elixir plugins: `plugins/exoforge_std_*/`
 - C# sample plugins: `plugins_csharp/` (e.g., `sample_plugin`)
 
-**Game-specific plugins** (belong to the game project, NOT the system):
-- Unity game projects: `<game>/Exoforge/plugins/`
-- Example: `sdk/unity/sample_unity/Exoforge/plugins/snake_game/`
-- The workspace (`exoforge.json` + `plugins/`) lives **outside** `Assets/`, so dotnet plugin
+**Game-specific extensions** (belong to the game project, NOT the system):
+- Unity game projects: `<game>/Exoforge/extensions/`
+- Example: `sdk/unity/sample_unity/Exoforge/extensions/snake_game/`
+- The workspace (`exoforge.json` + `extensions/`) lives **outside** `Assets/`, so dotnet extension
   projects can target modern .NET/C# versions without Unity importing or compiling them.
-  `ExoWorkspace.PluginsDir` = `plugins`, resolved against the workspace root.
+  `ExoWorkspace.ExtensionsDir` = `extensions` (with legacy fallback to `plugins`), resolved against the workspace root.
 - Only Unity-consumed artifacts stay inside `Assets/`: the generated client
   (`Assets/Exoforge/Generated/`) and the runtime config (`Assets/Resources/exoforge.json`).
   `ExoWorkspace` resolves any `Assets/...` config path against the project root automatically.
 - **Caveat**: the workspace is invisible to Unity's AssetDatabase, so editor tooling must reach it
-  through `System.IO` (`ExoWorkspace.PluginsPath`, `ExoDeployer`), never `AssetDatabase`/`Resources`.
+  through `System.IO` (`ExoWorkspace.ExtensionsPath`, `ExoDeployer`), never `AssetDatabase`/`Resources`.
 
-> **Rule**: Game-specific plugins must NOT touch `core/`, `plugins/`, or `plugins_csharp/`. They live exclusively inside the game project and are built/deployed independently. The system `just build-plugins` only builds `plugins_csharp/`; game plugins are built within their own project (e.g., Unity Editor menu or the game's own build scripts).
+> **Rule**: Game-specific extensions must NOT touch `core/`, `plugins/`, or `plugins_csharp/`. They live exclusively inside the game project and are built/deployed independently. The system `just build-extensions` only builds `plugins_csharp/`; game extensions are built within their own project (e.g., Unity Editor menu or the game's own build scripts).
 
 ### Plugin Runtimes
 
@@ -282,11 +282,10 @@ Gameplay must not hold a client, an endpoint, or a token. It publishes hooks (e.
 | `just test` | Run the whole test suite (core, plugins, system, C# SDKs) |
 | `just test-e2e` | Run the live end-to-end vertical slice (WebSocket + plugin + event loop) |
 | `just dev` | Start backend development server (ports 4000, 4001, 4005) |
-| `just dev-reset` | Stop the dev server and wipe all dev data (SQLite databases + uploaded plugins) |
-| `just build-plugins` | Build the system sample plugin (`plugins_csharp/`) |
-| `exo plugin build <name>` | Build a game plugin (framework-dependent .NET single file + `manifest.json`) |
-| `exo plugin push <name>` | Build and deploy a plugin to a running cluster |
-| `exo plugin stubs <name>` | Generate typed service-call stubs from the cluster contracts |
+| `just build-extensions` | Build the system sample extension (`plugins_csharp/`) |
+| `exo extension build <name>` | Build a game extension (framework-dependent .NET single file + `manifest.json`) |
+| `exo extension push <name>` | Build and deploy an extension to a running cluster |
+| `exo extension stubs <name>` | Generate typed service-call stubs from the cluster contracts |
 | `just test-sdk` | Run the offline C# suite (`Exoforge.Client` unit, `Plugin.SDK`, `Generator`, `Management`) |
 | `just compose-up` | Run full production stack with PostgreSQL via Docker Compose |
 | `just compose-down` | Stop and tear down Compose stack |

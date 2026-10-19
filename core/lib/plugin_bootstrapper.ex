@@ -8,7 +8,18 @@ defmodule Exoforge.PluginBootstrapper do
     t0 = System.monotonic_time(:millisecond)
     loader_config = Application.get_env(:exoforge, :module_loader, [])
     driver = Keyword.get(loader_config, :driver, Exoforge.Drivers.Loaders.ManifestLoader)
-    path = Keyword.get(loader_config, :scan_path, "plugins")
+    path =
+      case Keyword.get(loader_config, :scan_path) do
+        nil ->
+          cond do
+            File.dir?("extensions") and File.dir?("plugins") -> ["extensions", "plugins"]
+            File.dir?("extensions") -> "extensions"
+            true -> "plugins"
+          end
+
+        custom ->
+          custom
+      end
 
     PluginRegistry.initialize_ets()
 

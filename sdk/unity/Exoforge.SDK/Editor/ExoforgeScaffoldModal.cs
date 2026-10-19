@@ -119,7 +119,7 @@ namespace Exoforge.Unity.Editor
             root.Add(templateDropdown);
 
             // 4. Target Path & Format Hint
-            _pathHintLabel = new Label("Target path: plugins/<name>/");
+            _pathHintLabel = new Label("Target path: extensions/<name>/");
             _pathHintLabel.style.fontSize = 11;
             _pathHintLabel.style.color = ExoforgeUIStyle.TextMuted;
             _pathHintLabel.style.marginBottom = 16;

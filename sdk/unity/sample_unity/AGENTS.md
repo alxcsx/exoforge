@@ -43,14 +43,14 @@ sample_unity/
 │
 ├── Exoforge/                        the Exoforge workspace (OUTSIDE Assets/)
 │   ├── exoforge.json                environments + codegen paths
-│   └── plugins/snake_leaderboard/   the server plugin (a dotnet project)
-│       ├── snake_leaderboard.slnx     the plugin's own solution
+│   └── extensions/snake_leaderboard/ the server extension (a dotnet project)
+│       ├── snake_leaderboard.slnx     the extension's own solution
 │       ├── src/
 │       │   ├── snake_leaderboard.csproj
 │       │   ├── SnakeScore.cs          stored row + leaderboard entry records
 │       │   ├── SnakeLeaderboardPlugin.cs  the actions (talk to IDatabase directly)
 │       │   └── Generated/PluginServices.g.cs  typed player_data stubs (generated)
-│       ├── snake_leaderboard          built plugin binary (generated, git-ignored)
+│       ├── snake_leaderboard          built extension binary (generated, git-ignored)
 │       └── manifest.json               GENERATED from the C# attributes
 ├── Packages/
 │   ├── manifest.json                registry packages only — no path leaves this project
@@ -208,34 +208,32 @@ $CLI plugin push snake_leaderboard      # build + deploy to the running cluster
 $CLI sync                               # regenerate Assets/Exoforge/Generated/ExoforgeServices.g.cs
 ```
 
-From the Unity Editor, everything else lives in **Exoforge Studio** (`Tools ▸ Exoforge ▸ Exoforge Studio`):
-**Overview** syncs contracts, the C# client and plugin stubs; **Plugins** scaffolds, builds and
-deploys; **Settings** holds paths and credentials. Only `Tools ▸ Exoforge ▸ Add Exoforge to Scene`
-stays a menu item, since it is a one-off scene edit. In the **Plugins** tab, every folder in
-`Exoforge/plugins/` gets a **Build**, **Build & Deploy**, **Deploy**, and **Stubs** button (plus
-**Sync Stubs** to regenerate every plugin at once). Stub generation fetches the live contracts and
-writes each plugin's `src/Generated/PluginServices.g.cs`. Native builds run `dotnet publish`
+From the Unity Editor, everything else lives in **Exoforge Control Center** and **Extensions Studio** (`Tools ▸ Exoforge ▸ Control Center` / `Extensions`):
+**Extensions** scaffolds, builds and deploys; **Metrics** and **Settings** hold live status, paths and credentials. In the **Extensions** tab, every folder in
+`Exoforge/extensions/` gets a **Build**, **Deploy**, and **Inspect** button (plus
+**Refresh Dependencies** to regenerate every extension stub at once). Stub generation fetches the live contracts and
+writes each extension's `src/Generated/PluginServices.g.cs`. Native builds run `dotnet publish`
 (framework-dependent) and regenerate `manifest.json`; set a **Native RID** (e.g. `linux-x64`) to build
 for a non-host deploy target. If Unity can't find `dotnet` (GUI apps often don't inherit your shell PATH), set
 **Dotnet Path** in the Settings tab. The build streams its log into the window, and every build stamps
 the manifest version with a build counter and source fingerprint (`1.0.0+42.<hash>`), so a deploy is
-traceable. The tab marks a plugin **● Modified** when its sources changed since the last build, and
+traceable. The tab marks an extension **● Modified** when its sources changed since the last build, and
 **● Not deployed** when the local build differs from the one on the cluster.
 
 Rules of thumb:
 
-- **Never hand-edit** `Assets/Exoforge/Generated/ExoforgeServices.g.cs`, `Exoforge/plugins/*/manifest.json`,
-  or `Assets/Scenes/SampleScene.unity` — regenerate them (`$CLI sync`, `$CLI plugin build`,
+- **Never hand-edit** `Assets/Exoforge/Generated/ExoforgeServices.g.cs`, `Exoforge/extensions/*/manifest.json`,
+  or `Assets/Scenes/SampleScene.unity` — regenerate them (`$CLI sync`, `$CLI extension build`,
   `just sample-setup`).
 - **Gameplay must not hold a client, an endpoint, or a token.** Publish a hook
   (`SnakeGameController.RunEnded`) and let `SnakeLeaderboard` bridge it to `ExoforgeSDK.Client`.
 - Call the server through the **generated** clients:
   `ExoforgeSDK.Client.SnakeLeaderboard().SubmitScoreAsync(...)`.
-- Plugin payloads are **records**, not raw JSON: `SnakeScoreRecord` flows through the injected
+- Extension payloads are **records**, not raw JSON: `SnakeScoreRecord` flows through the injected
   `IDatabase`, and `get_leaderboard` returns `List<SnakeScoreRecord>`. Nothing needs registering:
-  the generator writes the entry point, and a framework-dependent plugin serialises its records by
+  the generator writes the entry point, and a framework-dependent extension serialises its records by
   reflection. A hand-written `JsonSerializerContext` is still honoured, just not required.
-- Plugins build per OS: `$CLI plugin build snake_leaderboard --rid linux-x64` for a Linux deploy.
-- Uploaded plugins **do not survive a server restart** — re-`push` after restarting the backend.
+- Extensions build per OS: `$CLI extension build snake_leaderboard --rid linux-x64` for a Linux deploy.
+- Uploaded extensions **do not survive a server restart** — re-`push` after restarting the backend.
 - `just dev-reset` stops the dev server and wipes every `priv/data` (SQLite databases and
-  uploaded plugins). Use it for a clean slate — the server recreates its databases on boot.
+  uploaded extensions). Use it for a clean slate — the server recreates its databases on boot.
