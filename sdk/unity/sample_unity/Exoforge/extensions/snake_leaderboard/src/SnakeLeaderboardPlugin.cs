@@ -82,7 +82,7 @@ public record SnakeLeaderboardEntry(
     [property: JsonPropertyName("updated_at")] long UpdatedAt = 0
 );
 
-[ExoEvent(Topic = "snake:leaderboard")]
+[ExoEvent("score_submitted", Topic = "snake:leaderboard")]
 public record SnakeScoreSubmitted(
     [property: JsonPropertyName("player_id")] string PlayerId = "",
     [property: JsonPropertyName("name")] string Name = "",
