@@ -39,7 +39,7 @@ COPY mix.exs mix.lock* ./
 COPY config/ config/
 COPY core/ core/
 COPY plugins/ plugins/
-COPY plugins_csharp/ plugins_csharp/
+COPY extensions_csharp/ extensions_csharp/
 COPY lib/ lib/
 
 # Fetch and compile dependencies, generate plugin manifests, and assemble OTP release
@@ -80,7 +80,7 @@ WORKDIR /app
 
 # Non-root user for security (essential for Kubernetes runAsNonRoot)
 RUN addgroup -S exoforge && adduser -S exoforge -G exoforge && \
-    mkdir -p /app/plugins /app/plugins_csharp && \
+    mkdir -p /app/plugins /app/plugins_csharp /app/extensions /app/extensions_csharp && \
     chown -R exoforge:exoforge /app
 
 # Copy assembled OTP release

@@ -92,7 +92,8 @@ test-sdk:
 	done
 	# A plugin's assembly is compiled to a process the server runs, so compiling the sample is the
 	# check that the generator and the SDK still agree about what a plugin is.
-	dotnet build plugins_csharp/sample_plugin/sample_plugin.csproj -v q --nologo
+	sample_proj=$([ -f extensions_csharp/sample_plugin/sample_plugin.csproj ] && echo "extensions_csharp/sample_plugin/sample_plugin.csproj" || echo "plugins_csharp/sample_plugin/sample_plugin.csproj")
+	dotnet build "$sample_proj" -v q --nologo
 
 # Run live end-to-end integration test (Client -> WS :4000 -> native plugin -> Event -> Client)
 test-e2e: build-plugins

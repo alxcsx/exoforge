@@ -85,9 +85,9 @@ metering  ──▶ database
 
 ### Plugin Placement Rules
 
-**System-level plugins** (generic, reusable, demonstrates SDK features):
-- Elixir plugins: `plugins/exoforge_std_*/`
-- C# sample plugins: `plugins_csharp/` (e.g., `sample_plugin`)
+**System-level extensions** (generic, reusable, demonstrates SDK features):
+- Elixir extensions: `plugins/exoforge_std_*/`
+- C# sample extensions: `extensions_csharp/` (legacy alias: `plugins_csharp/`) (e.g., `sample_plugin`)
 
 **Game-specific extensions** (belong to the game project, NOT the system):
 - Unity game projects: `<game>/Exoforge/extensions/`
@@ -101,7 +101,7 @@ metering  ──▶ database
 - **Caveat**: the workspace is invisible to Unity's AssetDatabase, so editor tooling must reach it
   through `System.IO` (`ExoWorkspace.ExtensionsPath`, `ExoDeployer`), never `AssetDatabase`/`Resources`.
 
-> **Rule**: Game-specific extensions must NOT touch `core/`, `plugins/`, or `plugins_csharp/`. They live exclusively inside the game project and are built/deployed independently. The system `just build-extensions` only builds `plugins_csharp/`; game extensions are built within their own project (e.g., Unity Editor menu or the game's own build scripts).
+> **Rule**: Game-specific extensions must NOT touch `core/`, `plugins/`, or `extensions_csharp/`. They live exclusively inside the game project and are built/deployed independently. The system `just build-extensions` only builds `extensions_csharp/`; game extensions are built within their own project (e.g., Unity Editor menu or the game's own build scripts).
 
 ### Plugin Runtimes
 
@@ -282,7 +282,7 @@ Gameplay must not hold a client, an endpoint, or a token. It publishes hooks (e.
 | `just test` | Run the whole test suite (core, plugins, system, C# SDKs) |
 | `just test-e2e` | Run the live end-to-end vertical slice (WebSocket + plugin + event loop) |
 | `just dev` | Start backend development server (ports 4000, 4001, 4005) |
-| `just build-extensions` | Build the system sample extension (`plugins_csharp/`) |
+| `just build-extensions` | Build the system sample extension (`extensions_csharp/`) |
 | `exo extension build <name>` | Build a game extension (framework-dependent .NET single file + `manifest.json`) |
 | `exo extension push <name>` | Build and deploy an extension to a running cluster |
 | `exo extension stubs <name>` | Generate typed service-call stubs from the cluster contracts |

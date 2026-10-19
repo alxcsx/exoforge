@@ -242,8 +242,8 @@ just k8s-deploy
 │   ├── exoforge_std_file_bucket/ # Binary asset and file storage service
 │   ├── exoforge_std_metering/    # Usage metering, persisted per title
 │   └── exoforge_std_plugin_manager/ # Runtime plugin lifecycle & upload
-├── plugins_csharp/               # Sample C# plugins
-│   └── sample_plugin/            # The reference plugin, and the E2E test subject
+├── extensions_csharp/           # Sample C# extensions (legacy alias: plugins_csharp)
+│   └── sample_plugin/            # The reference extension, and the E2E test subject
 ├── sdk/
 │   ├── csharp/                   # Pure C# SDKs & Tooling
 │   │   ├── Exoforge.Client/      # Runtime client library (.NET Standard 2.1)

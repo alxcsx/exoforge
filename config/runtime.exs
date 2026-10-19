@@ -60,9 +60,11 @@ if config_env() == :prod do
 
   scan_paths =
     [
-      System.get_env("PLUGINS_PATH") || "plugins",
+      System.get_env("EXTENSIONS_PATH") || System.get_env("PLUGINS_PATH") || "extensions",
+      "plugins",
       "_build/prod/lib",
       release_lib,
+      "extensions_csharp",
       "plugins_csharp",
       "priv/data/uploaded_plugins"
     ]
