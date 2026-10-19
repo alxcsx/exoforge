@@ -83,6 +83,8 @@ test-sdk:
 			# The vertical slice needs a live server; `test-e2e` owns it. Without this filter the recipe
 			# failed whenever no server was running, under a name that says it does not need one.
 			dotnet test "sdk/csharp/$suite" --filter "FullyQualifiedName!~VerticalSliceIntegrationTests"
+		elif [ "$suite" = "Exoforge.Plugin.SDK.Tests" ]; then
+			dotnet test "sdk/csharp/$suite" --filter "Category!=SlowIntegration"
 		else
 			dotnet test "sdk/csharp/$suite"
 		fi
