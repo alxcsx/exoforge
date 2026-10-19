@@ -65,8 +65,8 @@ test-core:
 test-plugins:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	for dir in plugins/*/; do
-		[ -f "$dir/mix.exs" ] || continue
+	for dir in extensions/*/ plugins/*/; do
+		[ -d "$dir" ] && [ -f "$dir/mix.exs" ] || continue
 		echo "== $dir"
 		(cd "$dir" && mix deps.get >/dev/null && mix test)
 	done
