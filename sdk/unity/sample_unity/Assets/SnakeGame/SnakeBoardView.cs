@@ -52,6 +52,12 @@ namespace SnakeGame
                     backgroundRenderer.sprite = null;
                     backgroundRenderer.gameObject.SetActive(false);
                 }
+
+                var activeCam = Camera.main ?? FindAnyObjectByType<Camera>(FindObjectsInactive.Include);
+                if (activeCam != null)
+                {
+                    activeCam.backgroundColor = Color.black;
+                }
                 return;
             }
 

@@ -294,9 +294,18 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
             if (candidate.GetAttributes().Any(a => IsAttribute(a, ServiceAttribute))) continue;
 
             var resAttr = FindResourceAttribute(candidate.GetAttributes());
-            if (resAttr is null) continue;
+            if (resAttr is not null)
+            {
+                AddResource(primary.Resources, ResourceFromType(candidate, ActionNames(primary)));
+            }
 
-            AddResource(primary.Resources, ResourceFromType(candidate, ActionNames(primary)));
+            foreach (var attr in candidate.GetAttributes())
+            {
+                if (IsAttribute(attr, EventAttribute))
+                {
+                    AddEvent(ServiceFor(NamedString(attr, "Service")), attr, candidate);
+                }
+            }
         }
 
         // Dependencies come from the root: it is the instance the host runs and wires. Only an
@@ -515,12 +524,12 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
     private static List<string> ActionNames(ServiceModel service) =>
         service.Actions.Select(a => a.Name).ToList();
 
-    private static void AddEvent(ServiceModel service, AttributeData attr)
+    private static void AddEvent(ServiceModel service, AttributeData attr, ITypeSymbol? declaringType = null)
     {
-        string name = PositionalString(attr, 0) ?? "";
+        string name = PositionalString(attr, 0) ?? (declaringType != null ? ToSnakeCase(declaringType.Name) : "");
         if (name.Length == 0 || service.Events.Any(e => e.Name == name)) return;
 
-        var payloadType = NamedType(attr, "PayloadType") ?? PositionalType(attr, 1);
+        var payloadType = NamedType(attr, "PayloadType") ?? PositionalType(attr, 1) ?? declaringType;
         var payload = new List<ParamModel>();
 
         if (payloadType is not null)

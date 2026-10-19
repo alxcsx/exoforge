@@ -1,67 +1,40 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using Exoforge.Plugin.SDK;
 using Exoforge.Plugins.Generated;
 
 namespace Exoforge.Plugins.SnakeLeaderboard;
 
-// A native Exoforge plugin is plain C#. Attributes declare the contract; the host injects
-// capabilities; `exo plugin build` produces a framework-dependent plugin binary.
 [ExoService("snake_leaderboard", Version = "1.0.0", Resources = new[] { typeof(SnakeScoreRecord) },
     Category = "Game", Title = "Snake Leaderboard", Icon = "🏆")]
 public class SnakeLeaderboardPlugin
 {
     private const string Table = "snake_scores";
 
-    // Instance rather than static: the host runs one plugin instance and wires that, and a test can
-    // wire its own without leaking into the next one.
-
-    // The plugin's own isolated database.
-    [Inject("database")]
-    public IDatabase? Database { get; set; }
-
-    // The player_data service's contract, generated from the server's plugin list. Injecting the
-    // interface means no dependency on its implementation - and a test can hand in a fake.
-    [Inject("player_data")]
-    public IPlayerDataService? PlayerData { get; set; }
-
-    [Inject]
-    public IEventDispatcher? Events { get; set; }
-
-    [Inject]
-    public ILogger? Logger { get; set; }
+    [Inject] public IDatabase? Database { get; set; }
+    [Inject] public IPlayerDataService? PlayerData { get; set; }
+    [Inject] public IEventDispatcher? Events { get; set; }
+    [Inject] public ILogger? Logger { get; set; }
 
     [ExoAction]
-    [ExoEvent("score_submitted", typeof(SnakeScoreSubmitted), Topic = "snake:leaderboard")]
     public async Task<int> SubmitScore(string playerId, string name, int score, int snakeLength)
     {
         var existing = Database!.Get<SnakeScoreRecord>(Table, playerId);
         bool improved = existing is null || existing.Score < score;
+        long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-        var best = new SnakeScoreRecord
-        {
-            PlayerId = playerId,
-            Score = improved ? score : existing!.Score,
-            SnakeLength = improved ? snakeLength : existing!.SnakeLength,
-            UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
-        };
+        var best = existing != null && !improved
+            ? existing
+            : new SnakeScoreRecord(playerId, Math.Max(score, existing?.Score ?? 0), improved ? snakeLength : existing?.SnakeLength ?? snakeLength, now);
 
         Database.Put(Table, playerId, best);
         Logger?.Info($"[snake_leaderboard] {playerId} best {best.Score}");
 
-        await Events!.EmitAsync(
-            "score_submitted",
-            new SnakeScoreSubmitted
-            {
-                PlayerId = playerId,
-                Name = string.IsNullOrEmpty(name) ? playerId : name,
-                Score = score,
-                SnakeLength = snakeLength,
-                Improved = improved
-            },
-            "snake:leaderboard");
+        var submittedName = string.IsNullOrEmpty(name) ? playerId : name;
+        await Events!.EmitAsync(new SnakeScoreSubmitted(playerId, submittedName, score, snakeLength, improved));
 
         return best.Score;
     }
@@ -69,26 +42,17 @@ public class SnakeLeaderboardPlugin
     [ExoAction]
     public async Task<List<SnakeLeaderboardEntry>> GetLeaderboard(int limit)
     {
+        var scores = Database!.All<SnakeScoreRecord>(Table).OrderByDescending(s => s.Score).Take(limit > 0 ? limit : 10);
         var entries = new List<SnakeLeaderboardEntry>();
 
-        foreach (var score in Database!.All<SnakeScoreRecord>(Table)
-                     .OrderByDescending(row => row.Score)
-                     .Take(limit > 0 ? limit : 10))
+        foreach (var score in scores)
         {
-            entries.Add(new SnakeLeaderboardEntry
-            {
-                PlayerId = score.PlayerId,
-                Name = await DisplayNameAsync(score.PlayerId),
-                Score = score.Score,
-                SnakeLength = score.SnakeLength,
-                UpdatedAt = score.UpdatedAt
-            });
+            entries.Add(score.ToEntry(await DisplayNameAsync(score.PlayerId)));
         }
 
         return entries;
     }
 
-    // Names are resolved at read time, so a rename never leaves a stale name on the board.
     private async Task<string> DisplayNameAsync(string playerId)
     {
         if (PlayerData is null) return playerId;
@@ -97,3 +61,32 @@ public class SnakeLeaderboardPlugin
         return string.IsNullOrEmpty(response?.Player?.Name) ? playerId : response!.Player!.Name!;
     }
 }
+
+[ExoResource("snake_scores", PrimaryKey = "player_id", DrawerTabs = new[] { "overview", "attributes" })]
+public record SnakeScoreRecord(
+    [property: JsonPropertyName("player_id"), ExoColumn(Label = "Player ID", Sortable = true, Filterable = true, Role = "user_id")] string PlayerId = "",
+    [property: JsonPropertyName("score"), ExoColumn(Label = "High Score", Sortable = true)] int Score = 0,
+    [property: JsonPropertyName("snake_length"), ExoColumn(Label = "Max Length", Sortable = true)] int SnakeLength = 0,
+    [property: JsonPropertyName("updated_at"), ExoColumn(Label = "Updated", Sortable = true)] long UpdatedAt = 0
+)
+{
+    public SnakeLeaderboardEntry ToEntry(string name) => new(PlayerId, name, Score, SnakeLength, UpdatedAt);
+}
+
+// DTOs
+public record SnakeLeaderboardEntry(
+    [property: JsonPropertyName("player_id")] string PlayerId = "",
+    [property: JsonPropertyName("name")] string Name = "",
+    [property: JsonPropertyName("score")] int Score = 0,
+    [property: JsonPropertyName("snake_length")] int SnakeLength = 0,
+    [property: JsonPropertyName("updated_at")] long UpdatedAt = 0
+);
+
+[ExoEvent(Topic = "snake:leaderboard")]
+public record SnakeScoreSubmitted(
+    [property: JsonPropertyName("player_id")] string PlayerId = "",
+    [property: JsonPropertyName("name")] string Name = "",
+    [property: JsonPropertyName("score")] int Score = 0,
+    [property: JsonPropertyName("snake_length")] int SnakeLength = 0,
+    [property: JsonPropertyName("improved")] bool Improved = false
+);

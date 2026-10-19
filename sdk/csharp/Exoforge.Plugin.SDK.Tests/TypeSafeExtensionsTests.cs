@@ -32,6 +32,10 @@ public record TestProduct
 [ExoEvent("player_scored", Topic = "gameplay:events")]
 public record PlayerScoredEvent(string PlayerId, int Score);
 
+// Test event with [ExoEvent] using inferred name and custom topic
+[ExoEvent(Topic = "gameplay:player")]
+public record PlayerRespawned(string PlayerId);
+
 // Test event using convention (EventName = user_joined)
 public record UserJoined(string UserId);
 
@@ -183,6 +187,19 @@ public class TypeSafeExtensionsTests
 
         Assert.Equal("player_scored", events.LastEvent);
         Assert.Equal("gameplay:events", events.LastTopic);
+        Assert.Same(evt, events.LastPayload);
+    }
+
+    [Fact]
+    public async Task EventDispatcherExtensions_EmitsWithInferredNameAndCustomTopic()
+    {
+        var events = new MockEventDispatcher();
+        var evt = new PlayerRespawned("p2");
+
+        await events.EmitAsync(evt);
+
+        Assert.Equal("player_respawned", events.LastEvent);
+        Assert.Equal("gameplay:player", events.LastTopic);
         Assert.Same(evt, events.LastPayload);
     }
 

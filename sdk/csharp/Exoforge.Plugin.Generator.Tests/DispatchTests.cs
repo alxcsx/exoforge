@@ -106,6 +106,9 @@ public record ValueChanged
     public int Value { get; init; }
 }
 
+[ExoEvent(Topic = "test:decorations")]
+public record TypeLevelEvent(string Reason, int Code);
+
 /// <summary>A column's type is not the only place an enum reaches JSON.</summary>
 public enum ScoreTier
 {
@@ -341,5 +344,20 @@ public class DispatchTests
         }));
 
         PluginHost.RunInstance(plugin, input, new ExoforgeDispatch());
+    }
+
+    [Fact]
+    public void Manifest_Includes_Type_Level_ExoEvent()
+    {
+        JsonNode manifest = Manifest();
+        var events = Service(manifest, "dispatch_sample")["events"]!.AsArray();
+        var evt = events.FirstOrDefault(e => e?["name"]?.GetValue<string>() == "type_level_event");
+
+        Assert.NotNull(evt);
+        Assert.Equal("test:decorations", evt!["topic"]?.GetValue<string>());
+        Assert.Equal("global", evt!["scope"]?.GetValue<string>());
+        Assert.Equal("string", evt!["payload"]!["reason"]?.GetValue<string>());
+        Assert.Equal("integer", evt!["payload"]!["code"]?.GetValue<string>());
+        Assert.Equal("global::Exoforge.Plugin.Generator.Tests.TypeLevelEvent", evt!["payload_type"]?.GetValue<string>());
     }
 }

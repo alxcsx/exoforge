@@ -50,6 +50,7 @@ log/*.log
 
 # === ExoForge Engine Specifics ===
 priv/data/
+**/priv/data/
 
 # Plugin build outputs: the manifest, the build counter and the staged binary. All three are
 # produced by `exo plugin build` / the Control Center, and the manifest carries the build counter,

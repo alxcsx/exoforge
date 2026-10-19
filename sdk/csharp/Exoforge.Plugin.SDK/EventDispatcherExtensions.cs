@@ -42,9 +42,9 @@ internal static class EventMetadata<T>
         var type = typeof(T);
         var attr = type.GetCustomAttribute<ExoEventAttribute>();
 
-        if (attr != null && !string.IsNullOrWhiteSpace(attr.Name))
+        if (attr != null)
         {
-            EventName = attr.Name;
+            EventName = !string.IsNullOrWhiteSpace(attr.Name) ? attr.Name : ExoNaming.ToSnakeCase(type.Name);
             DefaultTopic = attr.Topic;
         }
         else

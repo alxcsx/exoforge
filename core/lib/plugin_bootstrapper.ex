@@ -178,6 +178,12 @@ defmodule Exoforge.PluginBootstrapper do
     stop_child_supervisor(plugin_sup_name)
   end
 
+  defp terminate_plugin_processes(%Manifest{type: :native} = manifest) do
+    mod = if is_atom(manifest.entry_point) and manifest.entry_point != nil, do: manifest.entry_point, else: manifest.id
+    sup_name = Module.concat([Exoforge, Plugins, mod, Supervisor])
+    stop_child_supervisor(sup_name)
+  end
+
   defp terminate_plugin_processes(_), do: :ok
 
   defp stop_child_supervisor(sup_name) do

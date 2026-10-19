@@ -122,7 +122,7 @@ public class ExoWebhookAttribute : Attribute
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method | AttributeTargets.Event | AttributeTargets.Struct, Inherited = false, AllowMultiple = true)]
 public class ExoEventAttribute : Attribute
 {
-    public string Name { get; }
+    public string? Name { get; }
     public string? Topic { get; set; }
     public string Scope { get; set; } = "global";
     public Type? PayloadType { get; set; }
@@ -133,9 +133,9 @@ public class ExoEventAttribute : Attribute
     /// </summary>
     public string? Service { get; set; }
 
-    public ExoEventAttribute(string name, Type? payloadType = null)
+    public ExoEventAttribute(string? name = null, Type? payloadType = null)
     {
-        Name = name ?? throw new ArgumentNullException(nameof(name));
+        Name = name;
         PayloadType = payloadType;
     }
 }

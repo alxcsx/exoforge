@@ -87,7 +87,7 @@ namespace SnakeGame
                         Debug.Log($"[SnakeRemoteConfig] Loaded apple color: {appleColorHex}");
                     }
 
-                    // 1. Fetch Addressables Manifest by tag "latest" via typesafe generated stub
+                    // 1. Fetch Addressables Manifest by tag "latest" via typesafe generated stub (for logging/introspection)
                     try
                     {
                         var manifest = await client.UnityAddressables().GetManifestAsync("latest");
@@ -96,16 +96,6 @@ namespace SnakeGame
                             string mVer = manifest.Version ?? "";
                             string mTag = manifest.Tag ?? "";
                             Debug.Log($"[SnakeRemoteConfig] Fetched Addressables manifest for tag '{mTag}' (version {mVer})");
-
-                            if (string.IsNullOrEmpty(bgAddressable) && manifest.Assets.ValueKind == JsonValueKind.Array && manifest.Assets.GetArrayLength() > 0)
-                            {
-                                var firstAsset = manifest.Assets[0];
-                                if (firstAsset.TryGetProperty("address", out var firstAddr))
-                                {
-                                    bgAddressable = firstAddr.GetString() ?? "";
-                                    Debug.Log($"[SnakeRemoteConfig] Resolved background address from 'latest' manifest: '{bgAddressable}'");
-                                }
-                            }
                         }
                     }
                     catch (Exception mEx)
@@ -113,9 +103,12 @@ namespace SnakeGame
                         Debug.LogWarning($"[SnakeRemoteConfig] Addressables get_manifest (tag=latest) error: {mEx.Message}");
                     }
 
-                    // 2. Try Addressables Background Reference (True Addressables runtime)
+                    // 2. Try Addressables Background Reference if explicitly configured
                     bool addressableLoaded = false;
-                    if (!string.IsNullOrEmpty(bgAddressable))
+                    bool hasAddressable = !string.IsNullOrWhiteSpace(bgAddressable) &&
+                                          !string.Equals(bgAddressable, "none", StringComparison.OrdinalIgnoreCase);
+
+                    if (hasAddressable)
                     {
                         Sprite? sprite = null;
                         try
@@ -174,7 +167,7 @@ namespace SnakeGame
                         }
                     }
 
-                    // 2. Fallback to File Bucket background if not loaded via Addressables
+                    // 3. Fallback to File Bucket background if not loaded via Addressables
                     if (!addressableLoaded && !string.IsNullOrEmpty(bgFileId))
                     {
                         try
@@ -190,6 +183,7 @@ namespace SnakeGame
                                         new Rect(0, 0, texture.width, texture.height),
                                         new Vector2(0.5f, 0.5f));
                                     boardView?.SetBackgroundSprite(sprite);
+                                    addressableLoaded = true;
                                 }
                             }
 
@@ -199,6 +193,13 @@ namespace SnakeGame
                         {
                             Debug.LogWarning($"[SnakeRemoteConfig] Could not load background image: {bgEx.Message}");
                         }
+                    }
+
+                    // 4. If no background asset is loaded, clear background to use solid black background
+                    if (!addressableLoaded)
+                    {
+                        boardView?.SetBackgroundSprite(null);
+                        Debug.Log("[SnakeRemoteConfig] No background image configured; using black background.");
                     }
                 }
                 Debug.Log("[SnakeRemoteConfig] Config loaded successfully");

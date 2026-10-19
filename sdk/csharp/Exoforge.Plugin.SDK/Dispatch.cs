@@ -49,12 +49,13 @@ public static class ExoDispatch
     public static T Convert<T>(JsonElement element)
     {
         Type target = typeof(T);
+        Type underlying = Nullable.GetUnderlyingType(target) ?? target;
 
-        if (target == typeof(int)) return (T)(object)element.GetInt32();
-        if (target == typeof(long)) return (T)(object)element.GetInt64();
-        if (target == typeof(double)) return (T)(object)element.GetDouble();
-        if (target == typeof(float)) return (T)(object)(float)element.GetDouble();
-        if (target == typeof(bool)) return (T)(object)element.GetBoolean();
+        if (underlying == typeof(int)) return (T)(object)element.GetInt32();
+        if (underlying == typeof(long)) return (T)(object)element.GetInt64();
+        if (underlying == typeof(double)) return (T)(object)element.GetDouble();
+        if (underlying == typeof(float)) return (T)(object)(float)element.GetDouble();
+        if (underlying == typeof(bool)) return (T)(object)element.GetBoolean();
         if (target == typeof(string)) return (T)(object)(element.GetString() ?? "");
         if (target == typeof(JsonElement)) return (T)(object)element.Clone();
 
