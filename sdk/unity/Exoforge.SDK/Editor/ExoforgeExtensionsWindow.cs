@@ -1922,14 +1922,14 @@ namespace Exoforge.Unity.Editor
                                 var root = doc.RootElement.Clone();
                                 manifests[name] = root;
 
-                                if (root.TryGetProperty("version", out var v) && !string.IsNullOrWhiteSpace(v.GetString())) version = v.GetString()!;
-                                if (root.TryGetProperty("type", out var t) && !string.IsNullOrWhiteSpace(t.GetString())) type = t.GetString()!;
-                                if (root.TryGetProperty("category", out var c) && !string.IsNullOrWhiteSpace(c.GetString())) category = c.GetString()!;
-                                if (root.TryGetProperty("title", out var tit) && !string.IsNullOrWhiteSpace(tit.GetString())) title = tit.GetString()!;
-                                else if (root.TryGetProperty("dashboard_view", out var dvTit) && dvTit.TryGetProperty("title", out var dvt) && !string.IsNullOrWhiteSpace(dvt.GetString())) title = dvt.GetString()!;
+                                if (root.TryGetProperty("version", out var v) && v.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(v.GetString())) version = v.GetString()!;
+                                if (root.TryGetProperty("type", out var t) && t.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(t.GetString())) type = t.GetString()!;
+                                if (root.TryGetProperty("category", out var c) && c.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(c.GetString())) category = c.GetString()!;
+                                if (root.TryGetProperty("title", out var tit) && tit.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(tit.GetString())) title = tit.GetString()!;
+                                else if (root.TryGetProperty("dashboard_view", out var dvTit) && dvTit.ValueKind == JsonValueKind.Object && dvTit.TryGetProperty("title", out var dvt) && dvt.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(dvt.GetString())) title = dvt.GetString()!;
 
-                                if (root.TryGetProperty("icon", out var ic) && !string.IsNullOrWhiteSpace(ic.GetString())) icon = ic.GetString()!;
-                                else if (root.TryGetProperty("dashboard_view", out var dvIc) && dvIc.TryGetProperty("icon", out var dvi) && !string.IsNullOrWhiteSpace(dvi.GetString())) icon = dvi.GetString()!;
+                                if (root.TryGetProperty("icon", out var ic) && ic.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(ic.GetString())) icon = ic.GetString()!;
+                                else if (root.TryGetProperty("dashboard_view", out var dvIc) && dvIc.ValueKind == JsonValueKind.Object && dvIc.TryGetProperty("icon", out var dvi) && dvi.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(dvi.GetString())) icon = dvi.GetString()!;
                             }
                             catch { }
                         }
@@ -1986,26 +1986,30 @@ namespace Exoforge.Unity.Editor
 
                                 manifests[pid] = p.Clone();
 
-                                string pTitle = p.TryGetProperty("title", out var tit) ? tit.GetString() ?? pid : pid;
-                                if ((string.IsNullOrEmpty(pTitle) || pTitle == pid) && p.TryGetProperty("dashboard_view", out var dvT) && dvT.TryGetProperty("title", out var dvt))
+                                string pTitle = p.TryGetProperty("title", out var tit) && tit.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(tit.GetString())
+                                    ? tit.GetString()!
+                                    : pid;
+                                if ((string.IsNullOrEmpty(pTitle) || pTitle == pid) && p.TryGetProperty("dashboard_view", out var dvT) && dvT.ValueKind == JsonValueKind.Object && dvT.TryGetProperty("title", out var dvt) && dvt.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(dvt.GetString()))
                                 {
-                                    pTitle = dvt.GetString() ?? pTitle;
+                                    pTitle = dvt.GetString()!;
                                 }
 
-                                string pIcon = p.TryGetProperty("icon", out var ic) ? ic.GetString() ?? "🧩" : "🧩";
-                                if (pIcon == "🧩" && p.TryGetProperty("dashboard_view", out var dvI) && dvI.TryGetProperty("icon", out var dvi))
+                                string pIcon = p.TryGetProperty("icon", out var ic) && ic.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(ic.GetString())
+                                    ? ic.GetString()!
+                                    : "🧩";
+                                if (pIcon == "🧩" && p.TryGetProperty("dashboard_view", out var dvI) && dvI.ValueKind == JsonValueKind.Object && dvI.TryGetProperty("icon", out var dvi) && dvi.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(dvi.GetString()))
                                 {
-                                    pIcon = dvi.GetString() ?? pIcon;
+                                    pIcon = dvi.GetString()!;
                                 }
 
                                 var existing = list.FirstOrDefault(item => string.Equals(item.Id, pid, StringComparison.OrdinalIgnoreCase));
                                 if (existing != null)
                                 {
                                     existing.IsDeployed = true;
-                                    if (p.TryGetProperty("version", out var v)) existing.Version = v.GetString() ?? existing.Version;
-                                    if (p.TryGetProperty("category", out var c)) existing.Category = c.GetString() ?? existing.Category;
+                                    if (p.TryGetProperty("version", out var v) && v.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(v.GetString())) existing.Version = v.GetString()!;
+                                    if (p.TryGetProperty("category", out var c) && c.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(c.GetString())) existing.Category = c.GetString()!;
                                     if (pTitle != pid && !string.IsNullOrEmpty(pTitle) && (existing.Title == existing.Name || string.IsNullOrEmpty(existing.Title))) existing.Title = pTitle;
-                                    if (pIcon != "🧩" && !string.IsNullOrEmpty(pIcon) && existing.Icon == "🧩") existing.Icon = pIcon;
+                                    if (pIcon != "🧩" && !string.IsNullOrEmpty(pIcon) && (existing.Icon == "🧩" || string.IsNullOrEmpty(existing.Icon))) existing.Icon = pIcon;
                                 }
                                 else
                                 {

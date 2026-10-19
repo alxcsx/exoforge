@@ -531,23 +531,35 @@ public class ExoDeployer
         }
 
         if (parsed is not JsonObject root || root["export"] is not JsonObject export) return clusterJson;
-        if (export["plugins"] is not JsonArray plugins) return clusterJson;
+        JsonArray? plugins = export["plugins"] as JsonArray;
+        JsonArray? extensions = export["extensions"] as JsonArray;
+        if (plugins is null && extensions is null) return clusterJson;
 
         bool changed = false;
 
         foreach (var (id, local) in LocalContracts())
         {
-            JsonNode? existing = plugins.FirstOrDefault(p => p != null && string.Equals(PluginId(p), id, StringComparison.Ordinal));
-            int index = existing is null ? -1 : plugins.IndexOf(existing);
+            if (plugins is not null)
+            {
+                JsonNode? existing = plugins.FirstOrDefault(p => p != null && string.Equals(PluginId(p), id, StringComparison.Ordinal));
+                int index = existing is null ? -1 : plugins.IndexOf(existing);
 
-            // Cloned: a parsed node belongs to the document it came from, and assigning it into a
-            // second one throws "the node already has a parent".
-            JsonNode detached = local.DeepClone();
+                JsonNode detached = local.DeepClone();
+                if (index >= 0) plugins[index] = detached;
+                else plugins.Add(detached);
+                changed = true;
+            }
 
-            if (index >= 0) plugins[index] = detached;
-            else plugins.Add(detached);
+            if (extensions is not null)
+            {
+                JsonNode? existing = extensions.FirstOrDefault(p => p != null && string.Equals(PluginId(p), id, StringComparison.Ordinal));
+                int index = existing is null ? -1 : extensions.IndexOf(existing);
 
-            changed = true;
+                JsonNode detached = local.DeepClone();
+                if (index >= 0) extensions[index] = detached;
+                else extensions.Add(detached);
+                changed = true;
+            }
         }
 
         return changed ? root.ToJsonString() : clusterJson;
@@ -654,13 +666,17 @@ public class ExoDeployer
 
         var export = new JsonObject
         {
-            ["export"] = new JsonObject { ["plugins"] = new JsonArray(plugin) }
+            ["export"] = new JsonObject
+            {
+                ["plugins"] = new JsonArray(plugin),
+                ["extensions"] = new JsonArray(plugin.DeepClone())
+            }
         };
 
         return export.ToJsonString();
     }
 
-    private const string EmptyExport = "{\"export\":{\"plugins\":[]}}";
+    private const string EmptyExport = "{\"export\":{\"plugins\":[],\"extensions\":[]}}";
     private string ContractsCachePath => Path.Combine(_workspace.RootPath, ".contracts_cache.json");
 
     private void TryCacheContracts(string exportJson)

@@ -40,6 +40,15 @@ defmodule Mix.Tasks.Compile.ExoforgeManifest do
 
     user_manifest = entrypoint_mod.manifest_overrides() || %{}
     merged_attrs = Map.merge(system_defaults, user_manifest)
+    dv = Map.get(merged_attrs, :dashboard_view)
+    dv_title = is_map(dv) && (Map.get(dv, :title) || Map.get(dv, "title"))
+    dv_icon = is_map(dv) && (Map.get(dv, :icon) || Map.get(dv, "icon"))
+
+    merged_attrs =
+      merged_attrs
+      |> Map.update(:title, dv_title, &(&1 || dv_title))
+      |> Map.update(:icon, dv_icon, &(&1 || dv_icon))
+
     manifest = struct!(Manifest, merged_attrs)
     manifest_map = Map.from_struct(manifest)
 

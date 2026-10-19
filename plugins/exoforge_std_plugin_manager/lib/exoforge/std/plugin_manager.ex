@@ -13,6 +13,8 @@ defmodule Exoforge.Std.PluginManager do
 
   @manifest %{
     dependencies: [],
+    title: "Extension Manager",
+    icon: "📦",
     category: "Management",
     system: true,
     dashboard_view: %{
@@ -33,9 +35,17 @@ defmodule Exoforge.Std.PluginManager do
 
     extensions =
       Enum.map(manifests, fn m ->
+        dv = m.dashboard_view
+        dv_title = is_map(dv) && (Map.get(dv, :title) || Map.get(dv, "title"))
+        dv_icon = is_map(dv) && (Map.get(dv, :icon) || Map.get(dv, "icon"))
+        title = m.title || dv_title || to_string(m.name || m.id)
+        icon = m.icon || dv_icon || "🧩"
+
         %{
           "id" => to_string(m.id),
           "name" => to_string(m.name),
+          "title" => title,
+          "icon" => icon,
           "version" => to_string(m.version),
           "type" => to_string(m.type),
           "entry_point" => to_string(m.entry_point),
@@ -43,6 +53,7 @@ defmodule Exoforge.Std.PluginManager do
           "provides" => Enum.map(m.provides || [], &PluginRegistry.service_alias_or_module/1),
           "dependencies" => Enum.map(m.dependencies || [], &PluginRegistry.service_alias_or_module/1),
           "services" => PluginRegistry.sanitize_for_json(m.services || []),
+          "dashboard_view" => dv,
           "physical_path" => m.physical_path
         }
       end)
@@ -72,16 +83,25 @@ defmodule Exoforge.Std.PluginManager do
         m ->
           size_bytes = calculate_plugin_size(m)
 
+          dv = m.dashboard_view
+          dv_title = is_map(dv) && (Map.get(dv, :title) || Map.get(dv, "title"))
+          dv_icon = is_map(dv) && (Map.get(dv, :icon) || Map.get(dv, "icon"))
+          title = m.title || dv_title || to_string(m.name || m.id)
+          icon = m.icon || dv_icon || "🧩"
+
           plugin_data = %{
             "id" => to_string(m.id),
             "name" => to_string(m.name),
+            "title" => title,
+            "icon" => icon,
             "version" => to_string(m.version),
             "type" => to_string(m.type),
+            "category" => m.category || "Extension",
             "entry_point" => to_string(m.entry_point),
             "provides" => Enum.map(m.provides || [], &PluginRegistry.service_alias_or_module/1),
             "dependencies" => Enum.map(m.dependencies || [], &PluginRegistry.service_alias_or_module/1),
             "services" => PluginRegistry.sanitize_for_json(m.services || []),
-            "dashboard_view" => m.dashboard_view,
+            "dashboard_view" => dv,
             "physical_path" => m.physical_path,
             "size_bytes" => size_bytes
           }
@@ -273,14 +293,21 @@ defmodule Exoforge.Std.PluginManager do
         clean_provides = Enum.map(m.provides || [], &PluginRegistry.clean_service_name/1)
         clean_deps = Enum.map(m.dependencies || [], &PluginRegistry.clean_service_name/1)
 
+        dv = m.dashboard_view
+        dv_title = is_map(dv) && (Map.get(dv, :title) || Map.get(dv, "title"))
+        dv_icon = is_map(dv) && (Map.get(dv, :icon) || Map.get(dv, "icon"))
+        title = m.title || dv_title || to_string(m.name || m.id)
+        icon = m.icon || dv_icon || "🧩"
+
         %{
           "id" => to_string(m.id),
           "name" => to_string(m.name),
           "version" => to_string(m.version),
           "type" => to_string(m.type),
           "category" => m.category || "Extension",
-          "title" => m.title,
-          "icon" => m.icon,
+          "title" => title,
+          "icon" => icon,
+          "dashboard_view" => dv,
           "system" => m.system || false,
           "provides" => clean_provides,
           "dependencies" => clean_deps,

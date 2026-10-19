@@ -37,14 +37,32 @@ defmodule Exoforge.Std.PluginManagerTest do
   end
 
   describe "Plugin Manager Service Actions" do
-    test "list_plugins returns all registered plugins and count" do
+    test "list_plugins returns all registered plugins and count with icon and title" do
       assert {:ok, result} =
                ActionDispatcher.dispatch(:plugin_manager, :list_plugins, %{}, caller_scopes: ["studio"])
 
       assert is_list(result.plugins)
       assert result.count >= 2
       assert Enum.any?(result.plugins, &(&1["id"] == "test_game_plugin"))
-      assert Enum.any?(result.plugins, &(&1["id"] == "exoforge_std_plugin_manager"))
+      
+      pm = Enum.find(result.plugins, &(&1["id"] == "exoforge_std_plugin_manager"))
+      assert pm != nil
+      assert pm["icon"] == "📦"
+      assert pm["title"] == "Extension Manager"
+    end
+
+    test "export_plugin_info returns plugins and extensions with icon and title" do
+      assert {:ok, result} =
+               ActionDispatcher.dispatch(:plugin_manager, :export_plugin_info, %{}, caller_scopes: ["studio"])
+
+      assert is_map(result.export)
+      assert is_list(result.export["plugins"])
+      assert is_list(result.export["extensions"])
+      
+      pm = Enum.find(result.export["extensions"], &(&1["id"] == "exoforge_std_plugin_manager"))
+      assert pm != nil
+      assert pm["icon"] == "📦"
+      assert pm["title"] == "Extension Manager"
     end
 
     test "get_plugin returns metadata for known plugin" do

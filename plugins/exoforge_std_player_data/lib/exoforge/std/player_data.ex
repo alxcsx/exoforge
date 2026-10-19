@@ -10,6 +10,8 @@ defmodule Exoforge.Std.PlayerData do
 
   @manifest %{
     dependencies: [Exoforge.Std.Services.Database],
+    title: "Player Data",
+    icon: "👤",
     category: "Data",
     dashboard_view: %{id: :player_data, title: "Players", icon: "👤"},
     ui_hooks: %{

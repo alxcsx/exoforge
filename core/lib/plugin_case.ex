@@ -44,19 +44,32 @@ defmodule Exoforge.PluginCase do
   def register_plugin(entry_point, opts \\ []) do
     id = Keyword.get(opts, :id) || derive_id(entry_point)
 
-    manifest =
-      struct!(
-        %Manifest{
-          id: id,
-          name: to_string(id),
-          version: "0.1.0",
-          entry_point: entry_point,
-          provides: [],
-          dependencies: []
-        },
-        opts
-      )
+    overrides =
+      if is_atom(entry_point) and Code.ensure_loaded?(entry_point) and function_exported?(entry_point, :manifest_overrides, 0) do
+        entry_point.manifest_overrides() || %{}
+      else
+        %{}
+      end
 
+    dv = Map.get(overrides, :dashboard_view)
+    dv_title = is_map(dv) && (Map.get(dv, :title) || Map.get(dv, "title"))
+    dv_icon = is_map(dv) && (Map.get(dv, :icon) || Map.get(dv, "icon"))
+
+    base = %{
+      id: id,
+      name: to_string(id),
+      version: "0.1.0",
+      entry_point: entry_point,
+      title: dv_title,
+      icon: dv_icon,
+      provides: [],
+      dependencies: []
+    }
+
+    merged = Map.merge(base, overrides)
+    merged = Enum.reduce(opts, merged, fn {k, v}, acc -> Map.put(acc, k, v) end)
+
+    manifest = struct!(Manifest, merged)
     PluginRegistry.register(manifest)
   end
 

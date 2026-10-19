@@ -284,18 +284,18 @@ public partial class ExoforgeControlCenter : EditorWindow
             {
                 foreach (var plugin in _remotePlugins)
                 {
-                    string id = plugin.TryGetProperty("id", out var idProp) ? idProp.ToString() : "?";
-                    string version = plugin.TryGetProperty("version", out var vProp) ? vProp.ToString() : "";
-                    string icon = plugin.TryGetProperty("icon", out var icProp) ? icProp.ToString() : "🧩";
-                    if (icon == "🧩" && plugin.TryGetProperty("dashboard_view", out var dv) && dv.TryGetProperty("icon", out var dvIcon))
-                    {
-                        icon = dvIcon.GetString() ?? icon;
-                    }
-                    string title = plugin.TryGetProperty("title", out var tProp) ? tProp.ToString() : id;
-                    if ((string.IsNullOrEmpty(title) || title == id) && plugin.TryGetProperty("dashboard_view", out var dv2) && dv2.TryGetProperty("title", out var dvTitle))
-                    {
-                        title = dvTitle.GetString() ?? title;
-                    }
+                    string id = plugin.TryGetProperty("id", out var idProp) && idProp.ValueKind == JsonValueKind.String ? idProp.GetString() ?? "?" : "?";
+                    string version = plugin.TryGetProperty("version", out var vProp) && vProp.ValueKind == JsonValueKind.String ? vProp.GetString() ?? "" : "";
+                    string icon = plugin.TryGetProperty("icon", out var icProp) && icProp.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(icProp.GetString())
+                        ? icProp.GetString()!
+                        : (plugin.TryGetProperty("dashboard_view", out var dv) && dv.ValueKind == JsonValueKind.Object && dv.TryGetProperty("icon", out var dvIcon) && dvIcon.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(dvIcon.GetString())
+                            ? dvIcon.GetString()!
+                            : "🧩");
+                    string title = plugin.TryGetProperty("title", out var tProp) && tProp.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(tProp.GetString())
+                        ? tProp.GetString()!
+                        : (plugin.TryGetProperty("dashboard_view", out var dv2) && dv2.ValueKind == JsonValueKind.Object && dv2.TryGetProperty("title", out var dvTitle) && dvTitle.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(dvTitle.GetString())
+                            ? dvTitle.GetString()!
+                            : id);
 
                     var origRemBg = GUI.backgroundColor;
                     GUI.backgroundColor = ExoforgeUIStyle.ImguiCardBg;
@@ -307,8 +307,9 @@ public partial class ExoforgeControlCenter : EditorWindow
                     GUILayout.Label(icon, remIconStyle, GUILayout.Width(30), GUILayout.Height(30));
 
                     EditorGUILayout.BeginVertical();
-                    EditorGUILayout.LabelField(id, EditorStyles.boldLabel);
-                    EditorGUILayout.LabelField($"REMOTE • {version}", EditorStyles.miniLabel);
+                    EditorGUILayout.LabelField(title, EditorStyles.boldLabel);
+                    string remSub = (title != id && !string.IsNullOrEmpty(title)) ? $"{id} • REMOTE • {version}" : $"REMOTE • {version}";
+                    EditorGUILayout.LabelField(remSub, EditorStyles.miniLabel);
                     EditorGUILayout.EndVertical();
 
                     if (GUILayout.Button(

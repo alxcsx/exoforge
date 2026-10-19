@@ -67,6 +67,11 @@ defmodule Exoforge.Std.Dashboard.Extensions do
       # are classified as having visual controls / dashboard views.
       has_custom = not is_nil(dashboard_view)
 
+      dv_title = is_map(dashboard_view) && (dashboard_view[:title] || dashboard_view["title"])
+      dv_icon = is_map(dashboard_view) && (dashboard_view[:icon] || dashboard_view["icon"])
+      title = Map.get(manifest, :title) || dv_title || to_string(manifest.name || manifest.id)
+      icon = Map.get(manifest, :icon) || dv_icon || "🧩"
+
       %{
         id: manifest.id,
         name: manifest.name,
@@ -85,8 +90,8 @@ defmodule Exoforge.Std.Dashboard.Extensions do
         events_count: length(all_events),
         resources_count: length(all_resources),
         dashboard_view: dashboard_view,
-        title: Map.get(manifest, :title),
-        icon: Map.get(manifest, :icon),
+        title: title,
+        icon: icon,
         has_custom_view: has_custom,
         has_visual_controls: has_custom,
         has_dashboard_view: has_custom

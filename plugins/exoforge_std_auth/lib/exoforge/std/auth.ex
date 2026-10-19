@@ -9,6 +9,8 @@ defmodule Exoforge.Std.Auth do
   @manifest %{
     system: true,
     dependencies: [Exoforge.Std.Services.Database, Exoforge.Std.Services.PlayerData],
+    title: "Users & Auth",
+    icon: "🛡️",
     category: "Identity",
     dashboard_view: %{
       id: :auth,

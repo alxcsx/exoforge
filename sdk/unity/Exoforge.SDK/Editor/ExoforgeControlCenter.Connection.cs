@@ -600,20 +600,20 @@ public partial class ExoforgeControlCenter : EditorWindow
                     var json = File.ReadAllText(manifestPath);
                     using var doc = JsonDocument.Parse(json);
                     var root = doc.RootElement;
-                    if (root.TryGetProperty("icon", out var ic) && !string.IsNullOrWhiteSpace(ic.GetString()))
+                    if (root.TryGetProperty("icon", out var ic) && ic.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(ic.GetString()))
                     {
                         icon = ic.GetString()!;
                     }
-                    else if (root.TryGetProperty("dashboard_view", out var dv) && dv.TryGetProperty("icon", out var dvIcon) && !string.IsNullOrWhiteSpace(dvIcon.GetString()))
+                    else if (root.TryGetProperty("dashboard_view", out var dv) && dv.ValueKind == JsonValueKind.Object && dv.TryGetProperty("icon", out var dvIcon) && dvIcon.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(dvIcon.GetString()))
                     {
                         icon = dvIcon.GetString()!;
                     }
 
-                    if (root.TryGetProperty("title", out var tit) && !string.IsNullOrWhiteSpace(tit.GetString()))
+                    if (root.TryGetProperty("title", out var tit) && tit.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(tit.GetString()))
                     {
                         title = tit.GetString()!;
                     }
-                    else if (root.TryGetProperty("dashboard_view", out var dv2) && dv2.TryGetProperty("title", out var dvTitle) && !string.IsNullOrWhiteSpace(dvTitle.GetString()))
+                    else if (root.TryGetProperty("dashboard_view", out var dv2) && dv2.ValueKind == JsonValueKind.Object && dv2.TryGetProperty("title", out var dvTitle) && dvTitle.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(dvTitle.GetString()))
                     {
                         title = dvTitle.GetString()!;
                     }

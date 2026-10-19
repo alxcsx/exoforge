@@ -10,6 +10,8 @@ defmodule Exoforge.Std.Database do
   @manifest %{
     category: "Storage",
     system: true,
+    title: "Database Engine",
+    icon: "🗄️",
     dashboard_view: nil,
     ui_hooks: %{
       settings: [

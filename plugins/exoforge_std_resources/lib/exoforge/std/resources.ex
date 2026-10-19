@@ -29,6 +29,8 @@ defmodule Exoforge.Std.Resources do
 
   @manifest %{
     dependencies: [Exoforge.Std.Services.Database],
+    title: "Resource Store",
+    icon: "🗄️",
     category: "Storage",
     system: true,
     dashboard_view: %{id: :resources, title: "Resource Store", icon: "🗄️"}

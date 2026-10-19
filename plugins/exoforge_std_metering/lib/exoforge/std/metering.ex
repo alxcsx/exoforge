@@ -17,6 +17,8 @@ defmodule Exoforge.Std.Metering do
   @manifest %{
     system: true,
     dependencies: [Exoforge.Std.Services.Database],
+    title: "Usage & Metering",
+    icon: "📊",
     category: "Operations",
     # The Studio's generic extension view renders the `usage` action from this; without it the
     # plugin is invisible in the dashboard and the CLI is the only surface.
