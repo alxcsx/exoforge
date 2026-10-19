@@ -543,11 +543,13 @@ defmodule Exoforge.Std.PluginManager do
     norm = Path.expand(dir_path)
     root_extensions = Path.expand("extensions")
     root_plugins = Path.expand("plugins")
+    root_extensions_csharp = Path.expand("extensions_csharp")
     root_csharp = Path.expand("plugins_csharp")
     root_uploaded = Path.expand(Application.get_env(:exoforge_std_plugin_manager, :upload_dir, "priv/data/uploaded_plugins"))
 
     if (String.starts_with?(norm, root_extensions) and norm != root_extensions) or
          (String.starts_with?(norm, root_plugins) and norm != root_plugins) or
+         (String.starts_with?(norm, root_extensions_csharp) and norm != root_extensions_csharp) or
          (String.starts_with?(norm, root_csharp) and norm != root_csharp) or
          (String.starts_with?(norm, root_uploaded) and norm != root_uploaded) do
       File.rm_rf(norm)

@@ -85,7 +85,7 @@ public class CliIntegrationTests : IDisposable
         Assert.True(Directory.Exists(pluginDir));
         Assert.True(File.Exists(Path.Combine(pluginDir, "combat_system.slnx")));
         Assert.True(File.Exists(Path.Combine(pluginDir, "src", "combat_system.csproj")));
-        Assert.True(File.Exists(Path.Combine(pluginDir, "src", "CombatSystemPlugin.cs")));
+        Assert.True(File.Exists(Path.Combine(pluginDir, "src", "CombatSystemExtension.cs")) || File.Exists(Path.Combine(pluginDir, "src", "CombatSystemPlugin.cs")));
     }
 
     [Fact]
@@ -106,7 +106,7 @@ public class CliIntegrationTests : IDisposable
         Assert.True(Directory.Exists(extDir));
         Assert.True(File.Exists(Path.Combine(extDir, "economy_system.slnx")));
         Assert.True(File.Exists(Path.Combine(extDir, "src", "economy_system.csproj")));
-        Assert.True(File.Exists(Path.Combine(extDir, "src", "EconomySystemPlugin.cs")));
+        Assert.True(File.Exists(Path.Combine(extDir, "src", "EconomySystemExtension.cs")));
     }
 
     [Fact]

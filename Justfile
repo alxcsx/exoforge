@@ -45,8 +45,9 @@ clean-build:
 	MSBUILDDISABLENODEREUSE=1 dotnet run --project "$work/sdk/csharp/Exoforge.CLI" -- extension build snake_leaderboard --dir "$work/sdk/unity/sample_unity/Exoforge"
 	# Every runtime the kernel can host, not just the one. This path was only reachable through
 	# recipes needing Docker or a live server, so it rotted.
-	echo "[clean-build] building the sample plugin"
-	MSBUILDDISABLENODEREUSE=1 dotnet run --project "$work/sdk/csharp/Exoforge.CLI" -- extension build sample_plugin --dir "$work/plugins_csharp"
+	echo "[clean-build] building the sample extension"
+	ext_csharp=$([ -d "$work/extensions_csharp" ] && echo "$work/extensions_csharp" || echo "$work/plugins_csharp")
+	MSBUILDDISABLENODEREUSE=1 dotnet run --project "$work/sdk/csharp/Exoforge.CLI" -- extension build sample_plugin --dir "$ext_csharp"
 	test -f "$work/sdk/unity/sample_unity/Exoforge/extensions/snake_leaderboard/manifest.json"
 	echo "[clean-build] OK: the tree builds from a clean checkout"
 
@@ -122,21 +123,21 @@ benchmark:
 
 # ---- Build & Release ----
 
-# Build the sample extension/plugin. The native runner looks for the binary beside the manifest.
-build-extensions: build-plugins
-
-build-plugins:
+# Build the sample extension. The native runner looks for the binary beside the manifest.
+build-extensions:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	plugin=plugins_csharp/sample_plugin
+	ext_dir=$([ -d extensions_csharp/sample_plugin ] && echo "extensions_csharp/sample_plugin" || echo "plugins_csharp/sample_plugin")
 	rid=$(dotnet --info | awk '/RID:/ {print $2; exit}')
-	dotnet publish "$plugin/sample_plugin.csproj" -c Release -r "$rid" -v q --nologo
-	# Replaced, not overwritten: a server running the plugin holds the binary open, and writing over a
+	dotnet publish "$ext_dir/sample_plugin.csproj" -c Release -r "$rid" -v q --nologo
+	# Replaced, not overwritten: a server running the extension holds the binary open, and writing over a
 	# busy file fails with "Text file busy".
-	cp "$plugin/bin/Release/net10.0/$rid/publish/sample_plugin" "$plugin/sample_plugin.new"
-	chmod +x "$plugin/sample_plugin.new"
-	mv -f "$plugin/sample_plugin.new" "$plugin/sample_plugin"
-	echo "[build-plugins] $plugin/sample_plugin"
+	cp "$ext_dir/bin/Release/net10.0/$rid/publish/sample_plugin" "$ext_dir/sample_plugin.new"
+	chmod +x "$ext_dir/sample_plugin.new"
+	mv -f "$ext_dir/sample_plugin.new" "$ext_dir/sample_plugin"
+	echo "[build-extensions] $ext_dir/sample_plugin"
+
+build-plugins: build-extensions
 
 # Run backend in production mode (foreground)
 prod: build-plugins

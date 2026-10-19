@@ -837,17 +837,17 @@ public partial class ExoforgeControlCenter : EditorWindow
                 ? Path.Combine(root, "Editor", "Plugins", "NuGet~")
                 : null;
 
-            string dir = ExoScaffolder.ScaffoldPlugin(Workspace.PluginsPath, _newPluginName, template: template, feed: feed);
-            string pluginFile = Path.Combine(dir, "src", ExoScaffolder.ClassNameFor(_newPluginName) + "Plugin.cs");
+            string dir = ExoScaffolder.ScaffoldExtension(Workspace.ExtensionsPath, _newPluginName, template: template, feed: feed);
+            string extFile = Path.Combine(dir, "src", ExoScaffolder.ClassNameFor(_newPluginName) + "Extension.cs");
 
             RefreshLocalPlugins();
-            ShowStatus($"✓ Scaffolded '{ExoScaffolder.NormalizePluginName(_newPluginName)}' — edit {pluginFile}, then Build & Deploy.", MessageType.Info);
+            ShowStatus($"✓ Scaffolded '{ExoScaffolder.NormalizeExtensionName(_newPluginName)}' — edit {extFile}, then Build & Deploy.", MessageType.Info);
 
             // Land the developer on the file they need to edit rather than just telling them it exists.
-            if (File.Exists(pluginFile))
+            if (File.Exists(extFile))
             {
                 var asset = UnityEditor.AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(
-                    "Assets" + pluginFile.Replace(Application.dataPath, ""));
+                    "Assets" + extFile.Replace(Application.dataPath, ""));
 
                 if (asset != null) UnityEditor.AssetDatabase.OpenAsset(asset);
             }

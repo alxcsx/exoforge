@@ -22,26 +22,30 @@ public static class ExoScaffolder
     public static readonly string[] Templates = { "standard" };
 
     public static string ScaffoldExtension(string extensionsDirectory, string rawName, string template = "standard", string? feed = null) =>
-        ScaffoldPlugin(extensionsDirectory, rawName, template, feed);
+        Scaffold(extensionsDirectory, rawName, isExtension: true, template: template, feed: feed);
 
-    public static string ScaffoldPlugin(string pluginsDirectory, string rawName, string template = "standard", string? feed = null)
+    public static string ScaffoldPlugin(string pluginsDirectory, string rawName, string template = "standard", string? feed = null) =>
+        Scaffold(pluginsDirectory, rawName, isExtension: false, template: template, feed: feed);
+
+    private static string Scaffold(string targetDirectory, string rawName, bool isExtension, string template = "standard", string? feed = null)
     {
         string cleanName = NormalizeName(rawName);
         string className = ToPascalCase(cleanName);
-        string targetDir = Path.Combine(pluginsDirectory, cleanName);
+        string targetDir = Path.Combine(targetDirectory, cleanName);
         string srcDir = Path.Combine(targetDir, "src");
 
         Directory.CreateDirectory(srcDir);
 
+        string suffix = isExtension ? "Extension" : "Plugin";
         File.WriteAllText(Path.Combine(srcDir, $"{cleanName}.csproj"), GenerateCsproj());
-        File.WriteAllText(Path.Combine(srcDir, $"{className}Plugin.cs"), GeneratePluginCode(cleanName, className, template));
+        File.WriteAllText(Path.Combine(srcDir, $"{className}{suffix}.cs"), GenerateCode(cleanName, className, isExtension, template));
         File.WriteAllText(Path.Combine(targetDir, $"{cleanName}.slnx"), GenerateSolution(cleanName));
-        File.WriteAllText(Path.Combine(targetDir, "README.md"), GenerateReadme(cleanName, className));
+        File.WriteAllText(Path.Combine(targetDir, "README.md"), GenerateReadme(cleanName, className, isExtension));
 
         // The staged native binary and the local build counter are build artifacts.
         File.WriteAllText(Path.Combine(targetDir, ".gitignore"), "/.exoforge/\n/.buildcount\n/manifest.json\n");
 
-        RegisterLocalFeed(pluginsDirectory, feed);
+        RegisterLocalFeed(targetDirectory, feed);
 
         return targetDir;
     }
@@ -116,13 +120,13 @@ public static class ExoScaffolder
     <OutputType>Exe</OutputType>
 
     <!--
-      An Exoforge plugin. The package below brings the SDK, the generator and the manifest plumbing
+      An Exoforge extension. The package below brings the SDK, the generator and the manifest plumbing
       together, which is why nothing else is here: no path into a checkout, and nothing to adjust
-      for where the plugin happens to be built.
+      for where the extension happens to be built.
     -->
-    <ExoforgePlugin>true</ExoforgePlugin>
+    <ExoforgeExtension>true</ExoforgeExtension>
 
-    <!-- A native plugin is a process. Building it through the CLI overrides the build stamp. -->
+    <!-- A native extension is a process. Building it through the CLI overrides the build stamp. -->
     <ExoforgePluginType>native</ExoforgePluginType>
   </PropertyGroup>
 
@@ -132,31 +136,36 @@ public static class ExoScaffolder
 </Project>
 ";
 
-    private static string GenerateReadme(string cleanName, string className) => $"""
-    # {cleanName}
+    private static string GenerateReadme(string cleanName, string className, bool isExtension = true)
+    {
+        string term = isExtension ? "extension" : "plugin";
+        string suffix = isExtension ? "Extension" : "Plugin";
+        return $"""
+        # {cleanName}
 
-    An Exoforge plugin. Actions are declared with attributes and discovered at build time.
+        An Exoforge {term}. Actions are declared with attributes and discovered at build time.
 
-    ## Layout
+        ## Layout
 
-    | Path | What it is |
-    | :--- | :--- |
-    | `src/{className}Plugin.cs` | the plugin: `[ExoAction]` methods are what callers invoke |
-    | `src/Generated/` | typed service stubs and the JSON context (`exo plugin stubs {cleanName}`) |
-    | `manifest.json` | generated from the attributes; do not edit |
-    | `{cleanName}` | the staged native binary; generated |
+        | Path | What it is |
+        | :--- | :--- |
+        | `src/{className}{suffix}.cs` | the {term}: `[ExoAction]` methods are what callers invoke |
+        | `src/Generated/` | typed service stubs and the JSON context (`exo {term} stubs {cleanName}`) |
+        | `manifest.json` | generated from the attributes; do not edit |
+        | `{cleanName}` | the staged native binary; generated |
 
-    ## Working on it
+        ## Working on it
 
-    ```bash
-    exo plugin build {cleanName}     # compile
-    exo plugin push  {cleanName}     # build, deploy, verify
-    exo plugin dev   {cleanName}     # redeploy on every save
-    exo plugin logs  {cleanName}     # what the plugin just did
-    ```
+        ```bash
+        exo {term} build {cleanName}     # compile
+        exo {term} push  {cleanName}     # build, deploy, verify
+        exo {term} dev   {cleanName}     # redeploy on every save
+        exo {term} logs  {cleanName}     # what the {term} just did
+        ```
 
-    In Unity: **Tools ▸ Exoforge ▸ Exoforge Studio**, then the Plugins tab.
-    """;
+        In Unity: **Tools ▸ Exoforge ▸ Control Center**, then the Extensions tab.
+        """;
+    }
 
     private static string GenerateSolution(string cleanName) => $"""
 <Solution>
@@ -164,7 +173,13 @@ public static class ExoScaffolder
 </Solution>
 """;
 
-    private static string GeneratePluginCode(string serviceName, string className, string template)
+    public static string GeneratePluginCode(string serviceName, string className, string template) =>
+        GenerateCode(serviceName, className, isExtension: false, template: template);
+
+    public static string GenerateExtensionCode(string serviceName, string className, string template) =>
+        GenerateCode(serviceName, className, isExtension: true, template: template);
+
+    private static string GenerateCode(string serviceName, string className, bool isExtension, string template)
     {
         string kind = template.ToLowerInvariant();
 
@@ -174,19 +189,26 @@ public static class ExoScaffolder
                 $"Unknown template '{template}'. Available templates: standard.", nameof(template));
         }
 
-        return StandardTemplate(serviceName, className);
+        return StandardTemplate(serviceName, className, isExtension);
     }
 
-    private static string StandardTemplate(string serviceName, string className) => $$"""
+    private static string StandardTemplate(string serviceName, string className, bool isExtension = true)
+    {
+        string ns = isExtension ? "Exoforge.Extensions" : "Exoforge.Plugins";
+        string term = isExtension ? "extension" : "plugin";
+        string attr = isExtension ? "ExoExtension" : "ExoService";
+        string suffix = isExtension ? "Extension" : "Plugin";
+
+        return $$"""
 using Exoforge.Plugin.SDK;
 
-namespace Exoforge.Plugins;
+namespace {{ns}};
 
-// Native Exoforge plugin: attributes declare the contract, the host injects capabilities,
-// and `exo plugin build` produces the framework-dependent plugin binary.
-[ExoService("{{serviceName}}", Version = "0.1.0", Resources = new[] { typeof({{className}}Item) },
+// Native Exoforge {{term}}: attributes declare the contract, the host injects capabilities,
+// and `exo {{term}} build` produces the framework-dependent {{term}} binary.
+[{{attr}}("{{serviceName}}", Version = "0.1.0", Resources = new[] { typeof({{className}}Item) },
     Category = "Game", Title = "{{className}}", Icon = "🧩")]
-public class {{className}}Plugin
+public class {{className}}{{suffix}}
 {
     [Inject("database")]
     public IDatabase? Database { get; set; }
@@ -222,6 +244,7 @@ public record {{className}}Item
     public string Status { get; init; } = "active";
 }
 """;
+    }
 
     private static string ToPascalCase(string text)
     {

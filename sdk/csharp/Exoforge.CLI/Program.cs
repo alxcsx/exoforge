@@ -311,14 +311,14 @@ public static class Program
             Console.WriteLine($"[Exoforge] '{raw}' will be created as '{id}' (plugin ids are lower_snake_case).");
         }
 
-        string created = ExoScaffolder.ScaffoldPlugin(ws.PluginsPath, raw, template: template);
+        string created = ExoScaffolder.ScaffoldExtension(ws.ExtensionsPath, raw, template: template);
 
-        Success($"[Exoforge] Scaffolded C# plugin '{id}' ({template}) at:\n  {created}");
+        Success($"[Exoforge] Scaffolded C# extension '{id}' ({template}) at:\n  {created}");
         Console.WriteLine();
         Console.WriteLine("Next:");
-        Console.WriteLine($"  1. Edit  {Path.Combine(created, "src", ExoScaffolder.ClassNameFor(id) + "Plugin.cs")}");
-        Console.WriteLine($"  2. Build  exo plugin build {id}");
-        Console.WriteLine($"  3. Deploy exo plugin push {id}");
+        Console.WriteLine($"  1. Edit  {Path.Combine(created, "src", ExoScaffolder.ClassNameFor(id) + "Extension.cs")}");
+        Console.WriteLine($"  2. Build  exo extension build {id}");
+        Console.WriteLine($"  3. Deploy exo extension push {id}");
         return 0;
     }
 

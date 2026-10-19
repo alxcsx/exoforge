@@ -12,7 +12,7 @@
       Directory.Build.targets supplies the SDK, the generator and the manifest plumbing, so nothing
       here names a path to another project.
     -->
-    <ExoforgePlugin>true</ExoforgePlugin>
+    <ExoforgeExtension>true</ExoforgeExtension>
 
     <!-- The manifest lives at the project root, beside the published binary, which is where the
          runner looks for it. -->

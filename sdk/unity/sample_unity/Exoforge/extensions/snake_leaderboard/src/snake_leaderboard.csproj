@@ -12,7 +12,7 @@
       generator and the manifest plumbing, so this project builds from a feed wherever it is put -
       including with no Exoforge checkout anywhere near it, which is the point of the sample.
     -->
-    <ExoforgePlugin>true</ExoforgePlugin>
+    <ExoforgeExtension>true</ExoforgeExtension>
 
     <!-- A native plugin is a process. Building it through the CLI overrides the build stamp. -->
     <ExoforgePluginType>native</ExoforgePluginType>

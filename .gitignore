@@ -57,7 +57,9 @@ priv/data/
 .buildcount
 .exoforge/
 
-# A plugin's built binary, staged beside its manifest the way a workspace stages it into .exoforge/.
+# An extension's built binary, staged beside its manifest the way a workspace stages it into .exoforge/.
+extensions_csharp/*/sample_plugin
+extensions_csharp/*/*.wasm
 plugins_csharp/*/sample_plugin
 plugins_csharp/*/*.wasm
 
@@ -65,6 +67,7 @@ plugins_csharp/*/*.wasm
 # Not `manifest.json` unqualified: a Unity project's Packages/manifest.json is source.
 sdk/unity/sample_unity/Exoforge/extensions/*/manifest.json
 sdk/unity/sample_unity/Exoforge/plugins/*/manifest.json
+extensions_csharp/*/manifest.json
 plugins_csharp/*/manifest.json
 
 # === Environment & Secrets ===
