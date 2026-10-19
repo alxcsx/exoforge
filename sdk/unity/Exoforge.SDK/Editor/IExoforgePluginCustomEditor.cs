@@ -61,4 +61,38 @@ namespace Exoforge.Unity.Editor
         /// </summary>
         void OnGUI(ExoforgePluginContext context);
     }
+
+    /// <summary>
+    /// Context passed to custom extension editor extensions when rendering their custom editor GUI.
+    /// Standardized alias for <see cref="ExoforgePluginContext"/>.
+    /// </summary>
+    public sealed class ExoforgeExtensionContext
+    {
+        public string ExtensionId => _inner.PluginId;
+        public string PluginId => _inner.PluginId;
+        public ExoClient? Client => _inner.Client;
+        public bool IsConnected => _inner.IsConnected;
+        public string ActiveHttpUrl => _inner.ActiveHttpUrl;
+        public ExoWorkspace? Workspace => _inner.Workspace;
+        public Action Repaint => _inner.Repaint;
+        public Action<string, MessageType> ShowStatus => _inner.ShowStatus;
+
+        private readonly ExoforgePluginContext _inner;
+
+        public ExoforgeExtensionContext(ExoforgePluginContext inner)
+        {
+            _inner = inner;
+        }
+
+        public static implicit operator ExoforgePluginContext(ExoforgeExtensionContext ctx) => ctx._inner;
+    }
+
+    /// <summary>
+    /// Interface for engine-specific editor UI extensions provided by extensions or companion packages.
+    /// Standardized alias for <see cref="IExoforgePluginCustomEditor"/>.
+    /// </summary>
+    public interface IExoforgeExtensionCustomEditor : IExoforgePluginCustomEditor
+    {
+        string ExtensionId => PluginId;
+    }
 }
