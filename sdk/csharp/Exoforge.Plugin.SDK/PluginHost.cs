@@ -673,3 +673,42 @@ public static class PluginHost
         }
     }
 }
+
+/// <summary>
+/// Runs a C# extension as a native host process.
+/// Standardized alias for <see cref="PluginHost"/>.
+/// </summary>
+public static class ExtensionHost
+{
+    public static void Run<[DynamicallyAccessedMembers(
+        DynamicallyAccessedMemberTypes.PublicMethods |
+        DynamicallyAccessedMemberTypes.NonPublicMethods |
+        DynamicallyAccessedMemberTypes.PublicProperties |
+        DynamicallyAccessedMemberTypes.NonPublicProperties |
+        DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] TExtension>()
+        where TExtension : class, new()
+        => PluginHost.Run<TExtension>();
+
+    public static void Run<[DynamicallyAccessedMembers(
+        DynamicallyAccessedMemberTypes.PublicMethods |
+        DynamicallyAccessedMemberTypes.NonPublicMethods |
+        DynamicallyAccessedMemberTypes.PublicProperties |
+        DynamicallyAccessedMemberTypes.NonPublicProperties |
+        DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] TExtension, TContext>()
+        where TExtension : class, new()
+        where TContext : JsonSerializerContext, new()
+        => PluginHost.Run<TExtension, TContext>();
+
+    public static void Run<[DynamicallyAccessedMembers(
+        DynamicallyAccessedMemberTypes.PublicProperties |
+        DynamicallyAccessedMemberTypes.NonPublicProperties |
+        DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] TExtension, TContext, TDispatch>()
+        where TExtension : class, new()
+        where TContext : JsonSerializerContext, new()
+        where TDispatch : IExoforgeDispatch, new()
+        => PluginHost.Run<TExtension, TContext, TDispatch>();
+
+    public static int RunInstance(object instance) => PluginHost.RunInstance(instance);
+
+    public static int RunInstance(object instance, IExoforgeDispatch? dispatch) => PluginHost.RunInstance(instance, dispatch);
+}

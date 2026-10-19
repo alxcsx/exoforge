@@ -30,6 +30,16 @@ public class ExoServiceAttribute : Attribute
 }
 
 /// <summary>
+/// Declares an extension service contract provided by the extension.
+/// Standardized alias for <see cref="ExoServiceAttribute"/>.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Interface, Inherited = false, AllowMultiple = true)]
+public class ExoExtensionAttribute : ExoServiceAttribute
+{
+    public ExoExtensionAttribute(string name) : base(name) { }
+}
+
+/// <summary>
 /// Execution mode for plugin actions.
 /// </summary>
 public enum ActionMode

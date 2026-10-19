@@ -49,7 +49,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         EditorGUILayout.BeginVertical();
         var mainTitleStyle = new GUIStyle(EditorStyles.boldLabel) { fontSize = 14 };
         EditorGUILayout.LabelField("Create New Extension", mainTitleStyle);
-        EditorGUILayout.LabelField("Scaffold a new first-party C# plugin module directly into your workspace.", EditorStyles.miniLabel);
+        EditorGUILayout.LabelField("Scaffold a new first-party C# extension module directly into your workspace.", EditorStyles.miniLabel);
         EditorGUILayout.EndVertical();
 
         var prevBg = GUI.backgroundColor;
@@ -239,9 +239,9 @@ public partial class ExoforgeControlCenter : EditorWindow
                 }
 
                 // 4. Secondary actions: Inspect, Folder
-                if (GUILayout.Button(new GUIContent("Inspect ↗", "Inspect and manage this plugin in the Exoforge Plugins window"), EditorStyles.miniButton, GUILayout.Width(75), GUILayout.Height(24)))
+                if (GUILayout.Button(new GUIContent("Inspect ↗", "Inspect and manage this extension in the Exoforge Extensions window"), EditorStyles.miniButton, GUILayout.Width(75), GUILayout.Height(24)))
                 {
-                    ExoforgePluginsWindow.OpenPlugin(plugin.Name);
+                    ExoforgeExtensionsWindow.OpenExtension(plugin.Name);
                 }
 
                 if (GUILayout.Button("📁 Folder", EditorStyles.miniButton, GUILayout.Width(65), GUILayout.Height(24)))
@@ -257,12 +257,12 @@ public partial class ExoforgeControlCenter : EditorWindow
         EditorGUILayout.EndVertical();
 
         EditorGUILayout.Space(10);
-        _showRemotePlugins = EditorGUILayout.Foldout(_showRemotePlugins, $"Advanced: Cluster Remote Plugins ({_remotePlugins.Count})", true);
+        _showRemotePlugins = EditorGUILayout.Foldout(_showRemotePlugins, $"Advanced: Cluster Remote Extensions ({_remotePlugins.Count})", true);
         if (_showRemotePlugins)
         {
             EditorGUI.indentLevel++;
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField($"Active Remote Plugins ({_remotePlugins.Count})", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField($"Active Remote Extensions ({_remotePlugins.Count})", EditorStyles.boldLabel);
             using (new EditorGUI.DisabledScope(!_isConnected))
             {
                 if (GUILayout.Button("Refresh Remote", EditorStyles.miniButton, GUILayout.Width(100)))
@@ -275,7 +275,7 @@ public partial class ExoforgeControlCenter : EditorWindow
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             if (_remotePlugins.Count == 0)
             {
-                EditorGUILayout.LabelField(_isConnected ? "No active remote plugins." : "Connect to view remote plugins.", EditorStyles.miniLabel);
+                EditorGUILayout.LabelField(_isConnected ? "No active remote extensions." : "Connect to view remote extensions.", EditorStyles.miniLabel);
             }
             else
             {
@@ -297,18 +297,18 @@ public partial class ExoforgeControlCenter : EditorWindow
                     EditorGUILayout.EndVertical();
 
                     if (GUILayout.Button(
-                            new GUIContent("Inspect ↗", "Inspect this plugin in the Exoforge Plugins window"),
+                            new GUIContent("Inspect ↗", "Inspect this extension in the Exoforge Extensions window"),
                             EditorStyles.miniButton, GUILayout.Width(75), GUILayout.Height(24)))
                     {
-                        ExoforgePluginsWindow.OpenPlugin(id);
+                        ExoforgeExtensionsWindow.OpenExtension(id);
                     }
                     using (new EditorGUI.DisabledScope(!_isConnected))
                     {
                         if (GUILayout.Button("Remove", EditorStyles.miniButton, GUILayout.Width(65), GUILayout.Height(24)))
                         {
                             bool confirmed = EditorUtility.DisplayDialog(
-                                "Remove plugin",
-                                $"Remove '{id}' from the cluster?\n\nIts files stay on the server; the plugin stops running.",
+                                "Remove extension",
+                                $"Remove '{id}' from the cluster?\n\nIts files stay on the server; the extension stops running.",
                                 "Remove", "Cancel");
 
                             if (confirmed)
