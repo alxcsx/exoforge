@@ -22,7 +22,7 @@ public partial class ExoforgeControlCenter : EditorWindow
     // Tab 4: Plugins
     // =========================================================================
 
-    private void DrawPlugins()
+    private void DrawExtensions()
     {
         _pluginsScroll = EditorGUILayout.BeginScrollView(_pluginsScroll);
 
@@ -623,5 +623,7 @@ public partial class ExoforgeControlCenter : EditorWindow
 
         Repaint();
     }
+
+    private void DrawPlugins() => DrawExtensions();
 }
 }

@@ -26,7 +26,7 @@ namespace Exoforge.Unity.Editor
 /// </summary>
 public partial class ExoforgeControlCenter : EditorWindow
 {
-    private enum Tab { Plugins, Metrics, LiveEvents, Settings }
+    private enum Tab { Extensions, Metrics, LiveEvents, Settings, Plugins = Extensions }
 
     // Per-editor-session flag: auto-connect on editor start, but not on every script reload.
     private const string AutoConnectSessionKey = "Exoforge_AutoConnected";
@@ -38,7 +38,7 @@ public partial class ExoforgeControlCenter : EditorWindow
     /// </summary>
     private static readonly (Tab Id, string Label)[] Tabs =
     {
-        (Tab.Plugins, "Extensions"),
+        (Tab.Extensions, "Extensions"),
         (Tab.Metrics, "Metrics"),
         (Tab.LiveEvents, "Event Stream"),
         (Tab.Settings, "Settings"),
@@ -200,7 +200,7 @@ public partial class ExoforgeControlCenter : EditorWindow
     private bool _showBuildLog;
     private Vector2 _buildLogScroll;
 
-    private Tab _currentTab = Tab.Plugins;
+    private Tab _currentTab = Tab.Extensions;
     private Vector2 _mainScroll;
     private Vector2 _settingsScroll;
 
@@ -493,9 +493,9 @@ public partial class ExoforgeControlCenter : EditorWindow
 
             switch (_currentTab)
             {
-                case Tab.Plugins:
+                case Tab.Extensions:
                     if (_localPlugins.Count == 0) RefreshLocalPlugins();
-                    DrawPlugins();
+                    DrawExtensions();
                     break;
                 case Tab.Metrics: DrawOverview(); break;
                 case Tab.LiveEvents: DrawLiveEvents(); break;
@@ -729,7 +729,7 @@ public partial class ExoforgeControlCenter : EditorWindow
 
         var tabDefs = new (Tab Id, string Icon, string Label)[]
         {
-            (Tab.Plugins, "🔌", "Extensions"),
+            (Tab.Extensions, "🔌", "Extensions"),
             (Tab.Metrics, "📊", "Metrics"),
             (Tab.LiveEvents, "📡", "Event Stream"),
             (Tab.Settings, "⚙️", "Settings")
@@ -853,7 +853,7 @@ public partial class ExoforgeControlCenter : EditorWindow
             }
 
             _newPluginName = "";
-            _currentTab = Tab.Plugins;
+            _currentTab = Tab.Extensions;
         }
         catch (Exception ex)
         {

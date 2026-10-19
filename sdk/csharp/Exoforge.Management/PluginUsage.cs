@@ -47,8 +47,8 @@ public sealed class PluginUsageReport
         var plugins = new List<PluginUsage>();
 
         if (root.ValueKind == JsonValueKind.Object &&
-            root.TryGetProperty("plugins", out var array) &&
-            array.ValueKind == JsonValueKind.Array)
+            ((root.TryGetProperty("extensions", out var array) || root.TryGetProperty("plugins", out array)) &&
+             array.ValueKind == JsonValueKind.Array))
         {
             foreach (var element in array.EnumerateArray())
             {
@@ -67,7 +67,8 @@ public sealed class PluginUsageReport
     private static PluginUsage ParsePlugin(JsonElement element)
     {
         JsonElement counters = element.ValueKind == JsonValueKind.Object &&
-                               element.TryGetProperty("plugin", out var nested) &&
+                               (element.TryGetProperty("extension", out var nested) ||
+                                element.TryGetProperty("plugin", out nested)) &&
                                nested.ValueKind == JsonValueKind.Object
             ? nested
             : default;
@@ -93,9 +94,12 @@ public sealed class PluginUsageReport
             }
         }
 
+        string id = String(element, "extension_id");
+        if (string.IsNullOrEmpty(id)) id = String(element, "plugin_id");
+
         return new PluginUsage
         {
-            PluginId = String(element, "plugin_id"),
+            PluginId = id,
             Starts = Long(counters, "starts"),
             Restarts = Long(counters, "restarts"),
             Events = Long(counters, "events"),
@@ -120,4 +124,95 @@ public sealed class PluginUsageReport
         value.TryGetInt64(out long parsed)
             ? parsed
             : 0;
+}
+
+/// <summary>
+/// Usage persisted for one extension.
+/// </summary>
+public sealed class ExtensionUsage
+{
+    public string ExtensionId { get; set; } = "";
+    public string PluginId { get => ExtensionId; set => ExtensionId = value; }
+    public long Starts { get; set; }
+    public long Restarts { get; set; }
+    public long Events { get; set; }
+    public long HostCalls { get; set; }
+    public long CpuMs { get; set; }
+    public long PeakRssKb { get; set; }
+    public long UptimeMs { get; set; }
+    public IReadOnlyList<ExtensionActionUsage> Actions { get; set; } = new List<ExtensionActionUsage>();
+
+    public static implicit operator ExtensionUsage(PluginUsage p)
+    {
+        var actions = new List<ExtensionActionUsage>();
+        foreach (var a in p.Actions)
+        {
+            actions.Add(new ExtensionActionUsage
+            {
+                Action = a.Action,
+                Invocations = a.Invocations,
+                Errors = a.Errors,
+                WallUs = a.WallUs,
+                AvgWallUs = a.AvgWallUs,
+                BytesIn = a.BytesIn,
+                BytesOut = a.BytesOut,
+            });
+        }
+        return new ExtensionUsage
+        {
+            ExtensionId = p.PluginId,
+            Starts = p.Starts,
+            Restarts = p.Restarts,
+            Events = p.Events,
+            HostCalls = p.HostCalls,
+            CpuMs = p.CpuMs,
+            PeakRssKb = p.PeakRssKb,
+            UptimeMs = p.UptimeMs,
+            Actions = actions
+        };
+    }
+}
+
+/// <summary>One action's share of an extension's usage.</summary>
+public sealed class ExtensionActionUsage
+{
+    public string Action { get; set; } = "";
+    public long Invocations { get; set; }
+    public long Errors { get; set; }
+    public long WallUs { get; set; }
+    public long AvgWallUs { get; set; }
+    public long BytesIn { get; set; }
+    public long BytesOut { get; set; }
+}
+
+/// <summary>
+/// Persisted usage report for extensions.
+/// </summary>
+public sealed class ExtensionUsageReport
+{
+    public string TitleId { get; set; } = "";
+    public string StudioId { get; set; } = "";
+    public IReadOnlyList<ExtensionUsage> Extensions { get; set; } = new List<ExtensionUsage>();
+    public IReadOnlyList<ExtensionUsage> Plugins => Extensions;
+
+    public static ExtensionUsageReport Parse(JsonElement root)
+    {
+        var legacy = PluginUsageReport.Parse(root);
+        return (ExtensionUsageReport)legacy;
+    }
+
+    public static implicit operator ExtensionUsageReport(PluginUsageReport r)
+    {
+        var list = new List<ExtensionUsage>();
+        foreach (var p in r.Plugins)
+        {
+            list.Add((ExtensionUsage)p);
+        }
+        return new ExtensionUsageReport
+        {
+            TitleId = r.TitleId,
+            StudioId = r.StudioId,
+            Extensions = list
+        };
+    }
 }

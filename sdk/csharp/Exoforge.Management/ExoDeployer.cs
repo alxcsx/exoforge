@@ -187,6 +187,20 @@ public class ExoDeployer
     }
 
     /// <summary>
+    /// Whether the cluster actually has an extension after a deploy, and at which version.
+    /// </summary>
+    public async Task<ExtensionDeploymentStatus> VerifyExtensionAsync(
+        string extensionName,
+        string? expectedVersion = null,
+        string? environmentName = null,
+        ExoClient? existingClient = null,
+        CancellationToken cancellationToken = default)
+    {
+        var status = await VerifyPluginAsync(extensionName, expectedVersion, environmentName, existingClient, cancellationToken).ConfigureAwait(false);
+        return (ExtensionDeploymentStatus)status;
+    }
+
+    /// <summary>
     /// Re-boots an installed plugin from the files already on the cluster. No rebuild, no re-upload.
     /// </summary>
     public async Task<JsonElement> ReloadPluginAsync(
@@ -211,6 +225,16 @@ public class ExoDeployer
             }
         }
     }
+
+    /// <summary>
+    /// Re-boots an installed extension from the files already on the cluster.
+    /// </summary>
+    public Task<JsonElement> ReloadExtensionAsync(
+        string extensionName,
+        string? environmentName = null,
+        ExoClient? existingClient = null,
+        CancellationToken cancellationToken = default) =>
+        ReloadPluginAsync(extensionName, environmentName, existingClient, cancellationToken);
 
     /// <summary>
     /// Recent log lines the plugin emitted. Without this a plugin author has no way to see their own
@@ -261,6 +285,22 @@ public class ExoDeployer
     }
 
     /// <summary>
+    /// Recent log lines the extension emitted.
+    /// </summary>
+    public async Task<List<ExtensionLogLine>> GetExtensionLogsAsync(
+        string extensionName,
+        int limit = 100,
+        string? environmentName = null,
+        ExoClient? existingClient = null,
+        CancellationToken cancellationToken = default)
+    {
+        var lines = await GetPluginLogsAsync(extensionName, limit, environmentName, existingClient, cancellationToken).ConfigureAwait(false);
+        var extLines = new List<ExtensionLogLine>(lines.Count);
+        foreach (var l in lines) extLines.Add((ExtensionLogLine)l);
+        return extLines;
+    }
+
+    /// <summary>
     /// Persisted usage for one plugin or the whole title: calls by action, wall time, bytes, CPU
     /// and peak RSS. <paramref name="since"/> is Unix seconds; null means everything recorded.
     /// </summary>
@@ -298,6 +338,20 @@ public class ExoDeployer
         }
     }
 
+    /// <summary>
+    /// Persisted usage for one extension or the whole title.
+    /// </summary>
+    public async Task<ExtensionUsageReport> GetExtensionUsageAsync(
+        string? extensionName = null,
+        long? since = null,
+        string? environmentName = null,
+        ExoClient? existingClient = null,
+        CancellationToken cancellationToken = default)
+    {
+        var report = await GetPluginUsageAsync(extensionName, since, environmentName, existingClient, cancellationToken).ConfigureAwait(false);
+        return (ExtensionUsageReport)report;
+    }
+
     private static string? ReadString(JsonElement root, string outer, string inner)
     {
         if (root.ValueKind != JsonValueKind.Object) return null;
@@ -330,6 +384,14 @@ public class ExoDeployer
             }
         }
     }
+
+    public Task<string> RemoveExtensionAsync(
+        string extensionId,
+        string? environmentName = null,
+        bool deleteFiles = false,
+        ExoClient? existingClient = null,
+        CancellationToken cancellationToken = default) =>
+        RemovePluginAsync(extensionId, environmentName, existingClient, deleteFiles, cancellationToken);
 
     /// <summary>Fetches the raw contract export (what <c>plugin_manager.export_plugin_info</c> returns).</summary>
     public async Task<string> GetContractsExportJsonAsync(
@@ -769,12 +831,12 @@ public class ExoDeployer
 
     // -- Build --
 
-    public ExoPluginBuild BuildExtension(
+    public ExoExtensionBuild BuildExtension(
         string extensionName,
         string? rid = null,
         string dotnetPath = "dotnet",
         Action<string>? log = null) =>
-        BuildPlugin(extensionName, rid, dotnetPath, log);
+        ExoExtensionBuild.FromPluginBuild(BuildPlugin(extensionName, rid, dotnetPath, log));
 
     /// <summary>
     /// Builds a local plugin in the workspace with <c>dotnet publish</c>: a framework-dependent
@@ -1313,6 +1375,9 @@ public class ExoDeployer
         return pluginName.Trim().ToLowerInvariant().Replace("-", "_").Replace(" ", "_");
     }
 
+    /// <summary>Turns any user-supplied name into the lower_snake_case id Exoforge uses.</summary>
+    public static string NormalizeExtensionName(string extensionName) => NormalizePluginName(extensionName);
+
     [DllImport("libc", SetLastError = true)]
     private static extern int chmod(string pathname, uint mode);
 
@@ -1330,6 +1395,34 @@ public class ExoDeployer
             // best effort
         }
     }
+}
+
+/// <summary>One log line an extension emitted, as served by <c>extension_manager.logs</c>.</summary>
+public sealed class ExtensionLogLine
+{
+    public ExtensionLogLine(long at, string levelName, string message)
+    {
+        At = at;
+        LevelName = levelName;
+        Message = message;
+    }
+
+    /// <summary>Unix milliseconds, as recorded by the cluster.</summary>
+    public long At { get; }
+
+    /// <summary>debug | info | warning | error.</summary>
+    public string LevelName { get; }
+
+    public string Message { get; }
+
+    /// <summary>Local time for display.</summary>
+    public DateTime LocalTime => DateTimeOffset.FromUnixTimeMilliseconds(At).LocalDateTime;
+
+    public static implicit operator ExtensionLogLine(PluginLogLine l) =>
+        new ExtensionLogLine(l.At, l.LevelName, l.Message);
+
+    public static implicit operator PluginLogLine(ExtensionLogLine l) =>
+        new PluginLogLine(l.At, l.LevelName, l.Message);
 }
 
 /// <summary>One log line a plugin emitted, as served by <c>plugin_manager.logs</c>.</summary>
@@ -1352,6 +1445,36 @@ public sealed class PluginLogLine
 
     /// <summary>Local time for display.</summary>
     public DateTime LocalTime => DateTimeOffset.FromUnixTimeMilliseconds(At).LocalDateTime;
+}
+
+/// <summary>
+/// Whether the cluster actually has an extension after a deploy, and at which version.
+/// </summary>
+public sealed class ExtensionDeploymentStatus
+{
+    public ExtensionDeploymentStatus(bool isDeployed, string? version, string? type, string detail)
+    {
+        IsDeployed = isDeployed;
+        Version = version;
+        Type = type;
+        Detail = detail;
+    }
+
+    public bool IsDeployed { get; }
+    public string? Version { get; }
+    public string? Type { get; }
+
+    /// <summary>Human-readable outcome, e.g. <c>loaded</c> or why it is not.</summary>
+    public string Detail { get; }
+
+    /// <summary>True when the extension is loaded and at the expected version.</summary>
+    public bool IsHealthy => IsDeployed && Detail == "loaded";
+
+    public static implicit operator ExtensionDeploymentStatus(PluginDeploymentStatus s) =>
+        new ExtensionDeploymentStatus(s.IsDeployed, s.Version, s.Type, s.Detail);
+
+    public static implicit operator PluginDeploymentStatus(ExtensionDeploymentStatus s) =>
+        new PluginDeploymentStatus(s.IsDeployed, s.Version, s.Type, s.Detail);
 }
 
 /// <summary>
@@ -1379,6 +1502,20 @@ public sealed class PluginDeploymentStatus
 
     /// <summary>True when the plugin is loaded and at the expected version.</summary>
     public bool IsHealthy => IsDeployed && Detail == "loaded";
+}
+
+/// <summary>Result of <see cref="ExoDeployer.BuildExtension"/>.</summary>
+public class ExoExtensionBuild : ExoPluginBuild
+{
+    public ExoExtensionBuild(string name, string extensionType, string binaryPath, string manifestPath, string output)
+        : base(name, extensionType, binaryPath, manifestPath, output)
+    {
+    }
+
+    public string ExtensionType => PluginType;
+
+    public static ExoExtensionBuild FromPluginBuild(ExoPluginBuild b) =>
+        new ExoExtensionBuild(b.Name, b.PluginType, b.BinaryPath, b.ManifestPath, b.Output);
 }
 
 /// <summary>Result of <see cref="ExoDeployer.BuildPlugin"/>.</summary>

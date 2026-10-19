@@ -45,6 +45,9 @@ defmodule Exoforge.PluginBootstrapper do
     initialize_and_register(manifest)
   end
 
+  @doc "Boots and registers an individual manifest directly."
+  def boot_extension(%Manifest{} = manifest), do: boot_plugin(manifest)
+
   @doc "Unloads a plugin from registry and runners."
   def unload_plugin(plugin_id) do
     manifest =
@@ -57,6 +60,9 @@ defmodule Exoforge.PluginBootstrapper do
 
     PluginRegistry.unregister(plugin_id)
   end
+
+  @doc "Unloads an extension from registry and runners."
+  def unload_extension(extension_id), do: unload_plugin(extension_id)
 
   def run(driver, path) do
     manifests = driver.load_plugins(path) |> sort!()
