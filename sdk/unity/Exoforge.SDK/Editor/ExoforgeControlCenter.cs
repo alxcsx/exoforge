@@ -228,6 +228,78 @@ public partial class ExoforgeControlCenter : EditorWindow
         string Icon = "🧩",
         string Title = "");
 
+    /// <summary>
+    /// Extracts metadata (icon, title, category, version) directly from [ExoService] or [ExoExtension]
+    /// attributes in the extension's C# source files. This ensures icons and titles match developer code
+    /// even before the extension is compiled or when manifest.json only carries dashboard_view.
+    /// </summary>
+    internal static bool TryExtractAttributeMetadata(
+        string extensionDir,
+        out string? title,
+        out string? icon,
+        out string? category,
+        out string? version)
+    {
+        title = null;
+        icon = null;
+        category = null;
+        version = null;
+
+        if (string.IsNullOrEmpty(extensionDir) || !Directory.Exists(extensionDir)) return false;
+
+        try
+        {
+            var csFiles = Directory.GetFiles(extensionDir, "*.cs", SearchOption.AllDirectories)
+                .Where(p => !p.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar) &&
+                            !p.Contains(Path.DirectorySeparatorChar + "bin" + Path.DirectorySeparatorChar) &&
+                            !p.Contains(Path.DirectorySeparatorChar + ".exoforge" + Path.DirectorySeparatorChar));
+
+            var attrRegex = new System.Text.RegularExpressions.Regex(
+                @"\[(?:ExoService|ExoExtension)\s*\(([\s\S]*?)\)\]",
+                System.Text.RegularExpressions.RegexOptions.Compiled);
+            var iconRegex = new System.Text.RegularExpressions.Regex(
+                @"Icon\s*=\s*[@$]?""([^""]+)""",
+                System.Text.RegularExpressions.RegexOptions.Compiled);
+            var titleRegex = new System.Text.RegularExpressions.Regex(
+                @"Title\s*=\s*[@$]?""([^""]+)""",
+                System.Text.RegularExpressions.RegexOptions.Compiled);
+            var catRegex = new System.Text.RegularExpressions.Regex(
+                @"Category\s*=\s*[@$]?""([^""]+)""",
+                System.Text.RegularExpressions.RegexOptions.Compiled);
+            var verRegex = new System.Text.RegularExpressions.Regex(
+                @"Version\s*=\s*[@$]?""([^""]+)""",
+                System.Text.RegularExpressions.RegexOptions.Compiled);
+
+            foreach (var file in csFiles)
+            {
+                string content = File.ReadAllText(file);
+                var matches = attrRegex.Matches(content);
+                foreach (System.Text.RegularExpressions.Match match in matches)
+                {
+                    if (!match.Success) continue;
+                    string args = match.Groups[1].Value;
+
+                    var im = iconRegex.Match(args);
+                    if (im.Success && string.IsNullOrEmpty(icon)) icon = im.Groups[1].Value;
+
+                    var tm = titleRegex.Match(args);
+                    if (tm.Success && string.IsNullOrEmpty(title)) title = tm.Groups[1].Value;
+
+                    var cm = catRegex.Match(args);
+                    if (cm.Success && string.IsNullOrEmpty(category)) category = cm.Groups[1].Value;
+
+                    var vm = verRegex.Match(args);
+                    if (vm.Success && string.IsNullOrEmpty(version)) version = vm.Groups[1].Value;
+
+                    if (!string.IsNullOrEmpty(icon)) return true;
+                }
+            }
+        }
+        catch { }
+
+        return !string.IsNullOrEmpty(icon) || !string.IsNullOrEmpty(title);
+    }
+
     [MenuItem("Tools/Exoforge/Exoforge Studio", false, 100)]
     [MenuItem("Window/Exoforge/Exoforge Studio", false, 2000)]
     public static void ShowWindow()

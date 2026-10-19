@@ -599,10 +599,32 @@ public partial class ExoforgeControlCenter : EditorWindow
                 {
                     var json = File.ReadAllText(manifestPath);
                     using var doc = JsonDocument.Parse(json);
-                    if (doc.RootElement.TryGetProperty("icon", out var ic)) icon = ic.GetString() ?? icon;
-                    if (doc.RootElement.TryGetProperty("title", out var tit)) title = tit.GetString() ?? title;
+                    var root = doc.RootElement;
+                    if (root.TryGetProperty("icon", out var ic) && !string.IsNullOrWhiteSpace(ic.GetString()))
+                    {
+                        icon = ic.GetString()!;
+                    }
+                    else if (root.TryGetProperty("dashboard_view", out var dv) && dv.TryGetProperty("icon", out var dvIcon) && !string.IsNullOrWhiteSpace(dvIcon.GetString()))
+                    {
+                        icon = dvIcon.GetString()!;
+                    }
+
+                    if (root.TryGetProperty("title", out var tit) && !string.IsNullOrWhiteSpace(tit.GetString()))
+                    {
+                        title = tit.GetString()!;
+                    }
+                    else if (root.TryGetProperty("dashboard_view", out var dv2) && dv2.TryGetProperty("title", out var dvTitle) && !string.IsNullOrWhiteSpace(dvTitle.GetString()))
+                    {
+                        title = dvTitle.GetString()!;
+                    }
                 }
                 catch { }
+            }
+
+            if (TryExtractAttributeMetadata(dir, out var attrTitle, out var attrIcon, out _, out _))
+            {
+                if (!string.IsNullOrWhiteSpace(attrIcon)) icon = attrIcon!;
+                if (!string.IsNullOrWhiteSpace(attrTitle) && (title == name || string.IsNullOrEmpty(title))) title = attrTitle!;
             }
 
             _localPlugins.Add(new LocalPluginInfo(name, dir, pluginType, isBuilt, canBuild, binaryPath, size, modified, version, icon, title));

@@ -1922,13 +1922,24 @@ namespace Exoforge.Unity.Editor
                                 var root = doc.RootElement.Clone();
                                 manifests[name] = root;
 
-                                if (root.TryGetProperty("version", out var v)) version = v.GetString() ?? version;
-                                if (root.TryGetProperty("type", out var t)) type = t.GetString() ?? type;
-                                if (root.TryGetProperty("category", out var c)) category = c.GetString() ?? category;
-                                if (root.TryGetProperty("title", out var tit)) title = tit.GetString() ?? title;
-                                if (root.TryGetProperty("icon", out var ic)) icon = ic.GetString() ?? icon;
+                                if (root.TryGetProperty("version", out var v) && !string.IsNullOrWhiteSpace(v.GetString())) version = v.GetString()!;
+                                if (root.TryGetProperty("type", out var t) && !string.IsNullOrWhiteSpace(t.GetString())) type = t.GetString()!;
+                                if (root.TryGetProperty("category", out var c) && !string.IsNullOrWhiteSpace(c.GetString())) category = c.GetString()!;
+                                if (root.TryGetProperty("title", out var tit) && !string.IsNullOrWhiteSpace(tit.GetString())) title = tit.GetString()!;
+                                else if (root.TryGetProperty("dashboard_view", out var dvTit) && dvTit.TryGetProperty("title", out var dvt) && !string.IsNullOrWhiteSpace(dvt.GetString())) title = dvt.GetString()!;
+
+                                if (root.TryGetProperty("icon", out var ic) && !string.IsNullOrWhiteSpace(ic.GetString())) icon = ic.GetString()!;
+                                else if (root.TryGetProperty("dashboard_view", out var dvIc) && dvIc.TryGetProperty("icon", out var dvi) && !string.IsNullOrWhiteSpace(dvi.GetString())) icon = dvi.GetString()!;
                             }
                             catch { }
+                        }
+
+                        if (ExoforgeControlCenter.TryExtractAttributeMetadata(dir, out var attrTitle, out var attrIcon, out var attrCategory, out var attrVersion))
+                        {
+                            if (!string.IsNullOrWhiteSpace(attrIcon)) icon = attrIcon!;
+                            if (!string.IsNullOrWhiteSpace(attrTitle) && (title == name || string.IsNullOrEmpty(title))) title = attrTitle!;
+                            if (!string.IsNullOrWhiteSpace(attrCategory) && category == "Extension") category = attrCategory!;
+                            if (!string.IsNullOrWhiteSpace(attrVersion) && version == "1.0.0") version = attrVersion!;
                         }
 
                         string stagedBin = ExoDeployer.StagedBinary(dir, name);
@@ -1975,14 +1986,26 @@ namespace Exoforge.Unity.Editor
 
                                 manifests[pid] = p.Clone();
 
+                                string pTitle = p.TryGetProperty("title", out var tit) ? tit.GetString() ?? pid : pid;
+                                if ((string.IsNullOrEmpty(pTitle) || pTitle == pid) && p.TryGetProperty("dashboard_view", out var dvT) && dvT.TryGetProperty("title", out var dvt))
+                                {
+                                    pTitle = dvt.GetString() ?? pTitle;
+                                }
+
+                                string pIcon = p.TryGetProperty("icon", out var ic) ? ic.GetString() ?? "🧩" : "🧩";
+                                if (pIcon == "🧩" && p.TryGetProperty("dashboard_view", out var dvI) && dvI.TryGetProperty("icon", out var dvi))
+                                {
+                                    pIcon = dvi.GetString() ?? pIcon;
+                                }
+
                                 var existing = list.FirstOrDefault(item => string.Equals(item.Id, pid, StringComparison.OrdinalIgnoreCase));
                                 if (existing != null)
                                 {
                                     existing.IsDeployed = true;
                                     if (p.TryGetProperty("version", out var v)) existing.Version = v.GetString() ?? existing.Version;
                                     if (p.TryGetProperty("category", out var c)) existing.Category = c.GetString() ?? existing.Category;
-                                    if (p.TryGetProperty("title", out var tit)) existing.Title = tit.GetString() ?? existing.Title;
-                                    if (p.TryGetProperty("icon", out var ic)) existing.Icon = ic.GetString() ?? existing.Icon;
+                                    if (pTitle != pid && !string.IsNullOrEmpty(pTitle) && (existing.Title == existing.Name || string.IsNullOrEmpty(existing.Title))) existing.Title = pTitle;
+                                    if (pIcon != "🧩" && !string.IsNullOrEmpty(pIcon) && existing.Icon == "🧩") existing.Icon = pIcon;
                                 }
                                 else
                                 {
@@ -1993,8 +2016,8 @@ namespace Exoforge.Unity.Editor
                                         Version = p.TryGetProperty("version", out var v) ? v.GetString() ?? "1.0.0" : "1.0.0",
                                         Type = p.TryGetProperty("type", out var t) ? t.GetString() ?? "elixir" : "elixir",
                                         Category = p.TryGetProperty("category", out var c) ? c.GetString() ?? "Extension" : "Extension",
-                                        Title = p.TryGetProperty("title", out var tit) ? tit.GetString() ?? pid : pid,
-                                        Icon = p.TryGetProperty("icon", out var ic) ? ic.GetString() ?? "🧩" : "🧩",
+                                        Title = pTitle,
+                                        Icon = pIcon,
                                         IsLocal = false,
                                         IsDeployed = true
                                     });

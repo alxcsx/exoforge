@@ -112,15 +112,18 @@ internal static class ManifestEmitter
         sb.Append($"  \"provides\": {Atoms(provides)},\n");
 
         if (!string.IsNullOrEmpty(category)) sb.Append($"  \"category\": {Str(category!)},\n");
+        if (!string.IsNullOrEmpty(title)) sb.Append($"  \"title\": {Str(title!)},\n");
+        if (!string.IsNullOrEmpty(icon)) sb.Append($"  \"icon\": {Str(icon!)},\n");
         if (system) sb.Append("  \"system\": true,\n");
 
-        if (!string.IsNullOrEmpty(title))
+        if (!string.IsNullOrEmpty(title) || !string.IsNullOrEmpty(icon))
         {
             var primary = services.FirstOrDefault();
             string extra = "";
             if (!string.IsNullOrEmpty(primary?.DashboardElement)) extra += $", \"element\": {Str(primary!.DashboardElement!)}";
             if (!string.IsNullOrEmpty(primary?.DashboardEntry)) extra += $", \"entry\": {Str(primary!.DashboardEntry!)}";
-            sb.Append($"  \"dashboard_view\": {{\"id\": {Str(id)}, \"title\": {Str(title!)}, \"icon\": {Str(icon ?? "")}{extra}}},\n");
+            string viewTitle = !string.IsNullOrEmpty(title) ? title! : id;
+            sb.Append($"  \"dashboard_view\": {{\"id\": {Str(id)}, \"title\": {Str(viewTitle)}, \"icon\": {Str(icon ?? "")}{extra}}},\n");
         }
 
         if (inputTypes != null && inputTypes.Any())

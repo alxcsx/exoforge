@@ -622,6 +622,15 @@ public class ExoDeployer
             ["services"] = manifest["services"]?.DeepClone()
         };
 
+        if (manifest["title"] is JsonNode tit) plugin["title"] = tit.DeepClone();
+        else if (manifest["dashboard_view"]?["title"] is JsonNode dvt) plugin["title"] = dvt.DeepClone();
+
+        if (manifest["icon"] is JsonNode ic) plugin["icon"] = ic.DeepClone();
+        else if (manifest["dashboard_view"]?["icon"] is JsonNode dvi) plugin["icon"] = dvi.DeepClone();
+
+        if (manifest["dashboard_view"] is JsonNode dv) plugin["dashboard_view"] = dv.DeepClone();
+        if (manifest["category"] is JsonNode cat) plugin["category"] = cat.DeepClone();
+
         if (manifest["input_types"] is JsonNode it) plugin["input_types"] = it.DeepClone();
 
         // A resource's C# record is `record` in the manifest, because `type` is an atom everywhere

@@ -53,6 +53,10 @@ defmodule Exoforge.Drivers.Loaders.ManifestLoader do
 
     manifest_version = Version.parse!(manifest_map.version)
 
+    dv = Map.get(manifest_map, :dashboard_view)
+    dv_title = is_map(dv) && (Map.get(dv, :title) || Map.get(dv, "title"))
+    dv_icon = is_map(dv) && (Map.get(dv, :icon) || Map.get(dv, "icon"))
+
     final_map =
       manifest_map
       # An Elixir plugin's entry point is a module and a native one's is a file, so this is
@@ -61,6 +65,8 @@ defmodule Exoforge.Drivers.Loaders.ManifestLoader do
       # The file does not carry a name: it is the id, and two fields for one value is one to
       # disagree with.
       |> Map.put_new(:name, to_string(manifest_map.id))
+      |> Map.put_new(:title, dv_title)
+      |> Map.put_new(:icon, dv_icon)
       |> Map.put(:version, manifest_version)
       |> Map.put(:physical_path, Path.dirname(file_path))
 
