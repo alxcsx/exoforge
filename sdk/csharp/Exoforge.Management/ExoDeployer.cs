@@ -335,7 +335,9 @@ public class ExoDeployer
         {
             var export = await client.SendActionAsync<JsonElement>(
                 "plugin_manager", "export_plugin_info", null, cancellationToken: cancellationToken).ConfigureAwait(false);
-            return export.GetRawText();
+            string raw = export.GetRawText();
+            TryCacheContracts(raw);
+            return raw;
         }
         finally
         {
@@ -364,11 +366,9 @@ public class ExoDeployer
         }
         catch (Exception ex) when (existingClient == null)
         {
-            // No cluster to ask. Every plugin that has been built still has its contracts on disk,
-            // which is the point: stubs for a plugin that is built but not deployed. Anything that was
-            // neither built nor deployed simply will not appear.
-            emit?.Invoke($"[stubs] no cluster ({ex.Message}) - generating from local contracts only");
-            exportJson = "{\"export\":{\"plugins\":[]}}";
+            // No cluster to ask. Try cached cluster export first, then fallback to local contracts only.
+            exportJson = LoadCachedOrEmptyContracts();
+            emit?.Invoke($"[stubs] no cluster ({ex.Message}) - generating from {(File.Exists(ContractsCachePath) ? "cached" : "local")} contracts");
         }
 
         string merged = MergeLocalContracts(exportJson);
@@ -576,6 +576,36 @@ public class ExoDeployer
     }
 
     private const string EmptyExport = "{\"export\":{\"plugins\":[]}}";
+    private string ContractsCachePath => Path.Combine(_workspace.RootPath, ".contracts_cache.json");
+
+    private void TryCacheContracts(string exportJson)
+    {
+        try
+        {
+            File.WriteAllText(ContractsCachePath, exportJson);
+        }
+        catch
+        {
+            // Non-fatal if cache cannot be written
+        }
+    }
+
+    private string LoadCachedOrEmptyContracts()
+    {
+        try
+        {
+            if (File.Exists(ContractsCachePath))
+            {
+                return File.ReadAllText(ContractsCachePath);
+            }
+        }
+        catch
+        {
+            // Non-fatal if cache cannot be read
+        }
+
+        return EmptyExport;
+    }
 
     private static string? PluginId(JsonNode plugin)
     {
@@ -634,7 +664,17 @@ public class ExoDeployer
         if (!Directory.Exists(pluginsDir)) return outputs;
 
         // One export for all plugins.
-        string exportJson = await GetContractsExportJsonAsync(environmentName, existingClient, cancellationToken).ConfigureAwait(false);
+        string exportJson;
+        try
+        {
+            exportJson = await GetContractsExportJsonAsync(environmentName, existingClient, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception) when (existingClient == null)
+        {
+            exportJson = LoadCachedOrEmptyContracts();
+        }
+
+        string merged = MergeLocalContracts(exportJson);
 
         foreach (string dir in Directory.GetDirectories(pluginsDir))
         {
@@ -642,7 +682,7 @@ public class ExoDeployer
             if (FindPluginCsproj(dir, name) == null) continue;
 
             string output = Path.Combine(dir, "src", "Generated", "PluginServices.g.cs");
-            ExoCodeGenerator.GeneratePluginStubsToFile(exportJson, output, services: ReadManifestDependencies(dir));
+            ExoCodeGenerator.GeneratePluginStubsToFile(merged, output, services: ReadManifestDependencies(dir));
             outputs.Add(output);
         }
 
@@ -653,26 +693,37 @@ public class ExoDeployer
         string? environmentName = null,
         string? outputPathOverride = null,
         ExoClient? existingClient = null,
+        Action<string>? emit = null,
         CancellationToken cancellationToken = default)
     {
-        var client = existingClient ?? await CreateConnectedClientAsync(environmentName, cancellationToken).ConfigureAwait(false);
-        try
+        string exportJson;
+        if (existingClient != null)
         {
-            var exportResult = await client.SendActionAsync<JsonElement>("plugin_manager", "export_plugin_info", null, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-            string rawJson = MergeLocalContracts(exportResult.GetRawText());
-            string targetPath = outputPathOverride ?? _workspace.GeneratedPath;
-            ExoCodeGenerator.GenerateToFile(rawJson, targetPath, _workspace.Config.Codegen.Namespace);
-
-            return 1;
+            var exportResult = await existingClient.SendActionAsync<JsonElement>("plugin_manager", "export_plugin_info", null, cancellationToken: cancellationToken).ConfigureAwait(false);
+            exportJson = exportResult.GetRawText();
+            TryCacheContracts(exportJson);
         }
-        finally
+        else
         {
-            if (existingClient == null)
+            try
             {
-                client.Dispose();
+                using var client = await CreateConnectedClientAsync(environmentName, cancellationToken).ConfigureAwait(false);
+                var exportResult = await client.SendActionAsync<JsonElement>("plugin_manager", "export_plugin_info", null, cancellationToken: cancellationToken).ConfigureAwait(false);
+                exportJson = exportResult.GetRawText();
+                TryCacheContracts(exportJson);
+            }
+            catch (Exception ex)
+            {
+                emit?.Invoke($"[sync] no cluster ({ex.Message}) - falling back to cached/local contracts");
+                exportJson = LoadCachedOrEmptyContracts();
             }
         }
+
+        string rawJson = MergeLocalContracts(exportJson);
+        string targetPath = outputPathOverride ?? _workspace.GeneratedPath;
+        bool changed = ExoCodeGenerator.GenerateToFile(rawJson, targetPath, _workspace.Config.Codegen.Namespace);
+
+        return changed ? 1 : 0;
     }
 
     public async Task<JsonElement> GetSystemStatusAsync(
@@ -738,11 +789,14 @@ public class ExoDeployer
             try
             {
                 var deps = ReadManifestDependencies(pluginDir);
-                string contractsJson = MergeLocalContracts("{\"export\":{\"plugins\":[]}}");
-                var missing = MissingServices(contractsJson, deps);
-                if (missing.Count == 0)
+                if (deps is { Count: > 0 })
                 {
-                    ExoCodeGenerator.GeneratePluginStubsToFile(contractsJson, stubsFile, services: deps, pluginId: cleanName);
+                    string contractsJson = MergeLocalContracts("{\"export\":{\"plugins\":[]}}");
+                    var missing = MissingServices(contractsJson, deps);
+                    if (missing.Count == 0)
+                    {
+                        ExoCodeGenerator.GeneratePluginStubsToFile(contractsJson, stubsFile, services: deps, pluginId: cleanName);
+                    }
                 }
             }
             catch

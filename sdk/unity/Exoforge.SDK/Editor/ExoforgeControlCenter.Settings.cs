@@ -24,6 +24,8 @@ public partial class ExoforgeControlCenter : EditorWindow
 
     private void DrawSettings()
     {
+        _settingsScroll = EditorGUILayout.BeginScrollView(_settingsScroll);
+
         EditorGUILayout.LabelField("Workspace & Codegen Paths", EditorStyles.boldLabel);
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
 
@@ -46,7 +48,25 @@ public partial class ExoforgeControlCenter : EditorWindow
                 }
             }
         }
+        if (GUILayout.Button("📁 Reveal", GUILayout.Width(65)))
+        {
+            EditorUtility.RevealInFinder(Workspace.RootPath);
+        }
         EditorGUILayout.EndHorizontal();
+
+        bool wsExists = ExoWorkspace.Exists(Workspace.RootPath);
+        if (!wsExists)
+        {
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.HelpBox($"Workspace not initialized at: {Workspace.RootPath}", MessageType.Warning);
+            if (GUILayout.Button("Initialize Workspace", GUILayout.Width(140)))
+            {
+                ExoWorkspace.Initialize(Workspace.RootPath);
+                _workspaceLoadedFrom = "";
+                ShowStatus($"Initialized workspace at {Workspace.RootPath}", MessageType.Info);
+            }
+            EditorGUILayout.EndHorizontal();
+        }
 
         // Generated Script Path
         EditorGUILayout.BeginHorizontal();
@@ -235,13 +255,28 @@ public partial class ExoforgeControlCenter : EditorWindow
         EditorGUILayout.LabelField($"Studio Token: {ExoTokenStore.StudioToken}", EditorStyles.miniLabel);
         EditorGUILayout.LabelField($"Studio Player ID: {ExoTokenStore.StudioPlayerId}", EditorStyles.miniLabel);
         EditorGUILayout.LabelField($"Scopes: {ExoTokenStore.StudioScopes}", EditorStyles.miniLabel);
-
         EditorGUILayout.Space(4);
         if (GUILayout.Button("Purge All Saved Credentials (EditorPrefs & PlayerPrefs)"))
         {
             _ = LogOutAsync();
         }
         EditorGUILayout.EndVertical();
+
+        EditorGUILayout.Space(8);
+
+        // Developer Tools & API Documentation
+        EditorGUILayout.LabelField("Developer Tools & Documentation", EditorStyles.boldLabel);
+        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+        using (new EditorGUI.DisabledScope(string.IsNullOrEmpty(ActiveHttpUrl)))
+        {
+            if (GUILayout.Button("📖 Open Swagger REST API Docs ↗", GUILayout.Height(26)))
+            {
+                Application.OpenURL(new Uri(new Uri(ActiveHttpUrl), "/swagger").ToString());
+            }
+        }
+        EditorGUILayout.EndVertical();
+
+        EditorGUILayout.EndScrollView();
     }
 }
 }

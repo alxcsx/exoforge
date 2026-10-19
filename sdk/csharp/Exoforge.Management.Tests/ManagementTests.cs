@@ -101,6 +101,47 @@ public class ManagementTests : IDisposable
     }
 
     [Fact]
+    public void CodeGenerator_GenerateToFile_Skips_Write_If_Content_Unchanged()
+    {
+        string outputPath = Path.Combine(_tempDir, "GeneratedClient.cs");
+        string contract = """
+        {"export":{"plugins":[{"id":"echo","version":"1.0.0","services":[{"name":"echo","actions":[{"name":"ping","params":{"msg":"string"},"returns":"string"}]}]}]}}
+        """;
+
+        // First generation writes the file
+        bool firstResult = ExoCodeGenerator.GenerateToFile(contract, outputPath);
+        Assert.True(firstResult);
+        Assert.True(File.Exists(outputPath));
+        DateTime firstWriteTime = File.GetLastWriteTimeUtc(outputPath);
+
+        // Second generation with same contract skips write
+        bool secondResult = ExoCodeGenerator.GenerateToFile(contract, outputPath);
+        Assert.False(secondResult);
+        Assert.Equal(firstWriteTime, File.GetLastWriteTimeUtc(outputPath));
+    }
+
+    [Fact]
+    public async Task SyncContracts_Falls_Back_To_Local_Contracts_When_Cluster_Offline()
+    {
+        var ws = ExoWorkspace.Initialize(_tempDir, "OfflineGameProject");
+        var deployer = new ExoDeployer(ws);
+
+        WriteManifest(ws.PluginsPath, "player_stats", """
+        {"id":"player_stats","version":"1.0.0","type":"native","services":[{"name":"player_stats","actions":[{"name":"get_stats","returns":"integer"}]}]}
+        """);
+
+        string outputPath = Path.Combine(_tempDir, "ExoforgeServices.g.cs");
+
+        // Sync with no cluster running should not throw; it should fall back to local manifests
+        int changed = await deployer.SyncContractsAsync(outputPathOverride: outputPath);
+
+        Assert.Equal(1, changed);
+        Assert.True(File.Exists(outputPath));
+        string generatedCode = File.ReadAllText(outputPath);
+        Assert.Contains("PlayerStatsServiceClient", generatedCode);
+    }
+
+    [Fact]
     public void Scaffolder_Creates_Complete_Plugin_Boilerplate()
     {
         var ws = ExoWorkspace.Initialize(_tempDir, "TestGameProject");

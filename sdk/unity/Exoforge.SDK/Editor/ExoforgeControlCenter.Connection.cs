@@ -31,6 +31,7 @@ public partial class ExoforgeControlCenter : EditorWindow
             using var testClient = new ExoClient();
             await testClient.ConnectAsync(new Uri(ActiveWsUrl));
             sw.Stop();
+            _connectionLatency = $"{sw.ElapsedMilliseconds} ms";
             ShowStatus($"Server reachable at {ActiveWsUrl} in {sw.ElapsedMilliseconds} ms.", MessageType.Info);
             await testClient.DisconnectAsync();
         }
@@ -286,31 +287,27 @@ public partial class ExoforgeControlCenter : EditorWindow
         }
     }
 
-    private async Task LogInAsync()
+    public static async Task<bool> LogInSharedAsync(string email, string password)
     {
-        if (string.IsNullOrWhiteSpace(_loginEmail) || string.IsNullOrEmpty(_loginPassword))
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrEmpty(password))
         {
-            ShowStatus("Enter an email and password to log in.", MessageType.Error);
-            Repaint();
-            return;
+            Instance?.ShowStatus("Enter an email and password to log in.", MessageType.Error);
+            Instance?.Repaint();
+            return false;
         }
 
         try
         {
-            // Over HTTP, with no socket: signing in no longer pretends to be "guest" to get a
-            // connection to sign in over (M33 Fix 14).
-            string httpUrl = ActiveHttpUrl;
-
+            string httpUrl = ActiveHttpEndpoint;
             if (string.IsNullOrEmpty(httpUrl))
             {
-                ShowStatus("This environment declares no http_url; add one to exoforge.json to sign in with email/password.", MessageType.Error);
-                Repaint();
-                return;
+                Instance?.ShowStatus("This environment declares no http_url; add one to exoforge.json to sign in with email/password.", MessageType.Error);
+                Instance?.Repaint();
+                return false;
             }
 
             using var loginClient = new ExoClient { HttpBaseUri = new Uri(httpUrl) };
-
-            var data = await loginClient.SendActionAsync<JsonElement>("auth", "login", new { email = _loginEmail, password = _loginPassword }, ExoTransportPreference.Http);
+            var data = await loginClient.SendActionAsync<JsonElement>("auth", "login", new { email, password }, ExoTransportPreference.Http);
             string token = data.TryGetProperty("token", out var tProp) ? tProp.GetString() ?? "" : "";
             string playerId = data.TryGetProperty("player_id", out var pProp) ? pProp.GetString() ?? "" : "";
 
@@ -325,36 +322,53 @@ public partial class ExoforgeControlCenter : EditorWindow
 
             if (string.IsNullOrEmpty(token))
             {
-                ShowStatus("Login failed: the server returned no token.", MessageType.Error);
-                Repaint();
-                return;
+                Instance?.ShowStatus("Login failed: the server returned no token.", MessageType.Error);
+                Instance?.Repaint();
+                return false;
             }
 
             ExoTokenStore.SaveStudioSession(token, playerId, scopes);
+            ExoforgeEditorConfig.LastLoginEmail = email;
+            ExoforgeEditorConfig.LastLoginPassword = password;
+            Instance?.ShowStatus($"Successfully logged in as {playerId}.", MessageType.Info);
 
-            // Keep the dev login for the next editor start
-            ExoforgeEditorConfig.LastLoginEmail = _loginEmail;
-            ExoforgeEditorConfig.LastLoginPassword = _loginPassword;
-            ShowStatus($"Successfully logged in as {playerId}.", MessageType.Info);
-
-            await ConnectAsync(token);
+            if (Instance != null)
+            {
+                await Instance.ConnectAsync(token);
+            }
+            return true;
         }
         catch (Exception ex)
         {
-            ShowStatus($"Login failed: {ex.Message}", MessageType.Error);
+            Instance?.ShowStatus($"Login failed: {ex.Message}", MessageType.Error);
+            return false;
         }
-
-        Repaint();
+        finally
+        {
+            Instance?.Repaint();
+            ExoforgePluginsWindow.Instance?.Repaint();
+        }
     }
 
-    private async Task LogOutAsync()
+    public static async Task LogOutSharedAsync()
     {
         ExoTokenStore.ClearStudioSession();
         ExoTokenStore.Clear();
         ExoforgeEditorConfig.LastLoginPassword = string.Empty;
-        await DisconnectAsync();
-        ShowStatus("Logged out and cleared the stored session.", MessageType.Info);
-        Repaint();
+        await DisconnectSharedAsync();
+        Instance?.ShowStatus("Logged out and cleared the stored session.", MessageType.Info);
+        Instance?.Repaint();
+        ExoforgePluginsWindow.Instance?.Repaint();
+    }
+
+    private async Task LogInAsync()
+    {
+        await LogInSharedAsync(_loginEmail, _loginPassword);
+    }
+
+    private async Task LogOutAsync()
+    {
+        await LogOutSharedAsync();
     }
 
     // Serialized on a background thread; only drawn on the main thread.
@@ -576,7 +590,22 @@ public partial class ExoforgeControlCenter : EditorWindow
                 modified = version == null || !version.EndsWith("." + fingerprint, StringComparison.Ordinal);
             }
 
-            _localPlugins.Add(new LocalPluginInfo(name, dir, pluginType, isBuilt, canBuild, binaryPath, size, modified, version));
+            string icon = "🧩";
+            string title = name;
+            string manifestPath = Path.Combine(dir, "manifest.json");
+            if (File.Exists(manifestPath))
+            {
+                try
+                {
+                    var json = File.ReadAllText(manifestPath);
+                    using var doc = JsonDocument.Parse(json);
+                    if (doc.RootElement.TryGetProperty("icon", out var ic)) icon = ic.GetString() ?? icon;
+                    if (doc.RootElement.TryGetProperty("title", out var tit)) title = tit.GetString() ?? title;
+                }
+                catch { }
+            }
+
+            _localPlugins.Add(new LocalPluginInfo(name, dir, pluginType, isBuilt, canBuild, binaryPath, size, modified, version, icon, title));
         }
     }
 

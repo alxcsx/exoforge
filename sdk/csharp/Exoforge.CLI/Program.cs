@@ -172,9 +172,16 @@ public static class Program
         var ws = ExoWorkspace.Load(dir);
         var deployer = new ExoDeployer(ws);
 
-        Console.WriteLine("[Exoforge] Synchronizing backend contracts from cluster...");
-        await deployer.SyncContractsAsync(cli.Value("env"), outPath).ConfigureAwait(false);
-        Success($"[Exoforge] Generated strongly-typed C# client bindings at:\n  {outPath ?? ws.GeneratedPath}");
+        Console.WriteLine("[Exoforge] Synchronizing backend contracts (cluster / workspace cache)...");
+        int changed = await deployer.SyncContractsAsync(cli.Value("env"), outPath, emit: msg => Console.WriteLine($"[Exoforge] {msg}")).ConfigureAwait(false);
+        if (changed > 0)
+        {
+            Success($"[Exoforge] Updated strongly-typed C# client bindings at:\n  {outPath ?? ws.GeneratedPath}");
+        }
+        else
+        {
+            Success($"[Exoforge] C# client bindings are already up-to-date at:\n  {outPath ?? ws.GeneratedPath}");
+        }
         return 0;
     }
 

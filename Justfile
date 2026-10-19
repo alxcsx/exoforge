@@ -229,6 +229,11 @@ unity-sync: build-unity-sdk
 	find "$dest" -type d \( -name bin -o -name obj \) -prune -exec rm -rf {} +
 	echo "[unity-sync] package placed in {{SAMPLE}}/Packages/com.exoforge.sdk"
 
+# Generate strongly-typed Unity C# client bindings (offline from workspace contracts or online from cluster)
+gen-client:
+	dotnet run --project sdk/csharp/Exoforge.CLI -- sync --dir sdk/unity/sample_unity/Exoforge
+
+
 # Rebuild and re-place the package whenever the SDK changes. For editing the package or the C#
 # libraries: nothing to remember to run, and Unity reimports on its own when the files change.
 watch-unity:
@@ -339,6 +344,7 @@ build-unity-sdk root=".":
 	set -euo pipefail
 	root="${1:-.}"
 	out="$root/sdk/csharp"
+	mkdir -p "$root/dist/nuget"
 
 	# Where each library lands is decided by the staging hook in Directory.Build.targets, by project
 	# name, so this is only a build and the copies happen on the way past. Release, because the

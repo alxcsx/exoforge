@@ -110,7 +110,7 @@ public static class ExoCodeGenerator
         return Generate(services, targetNamespace);
     }
 
-    public static void GenerateToFile(string json, string outputPath, string targetNamespace = "Exoforge.Client")
+    public static bool GenerateToFile(string json, string outputPath, string targetNamespace = "Exoforge.Client")
     {
         string code = GenerateFromExportJson(json, targetNamespace);
         string? dir = Path.GetDirectoryName(outputPath);
@@ -118,7 +118,18 @@ public static class ExoCodeGenerator
         {
             Directory.CreateDirectory(dir);
         }
+
+        if (File.Exists(outputPath))
+        {
+            string existing = File.ReadAllText(outputPath);
+            if (string.Equals(existing, code, StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
         File.WriteAllText(outputPath, code);
+        return true;
     }
 
     private static List<ServiceContractModel> ParseServices(JsonElement root)
@@ -447,7 +458,7 @@ public static class ExoCodeGenerator
         return result;
     }
 
-    public static void GeneratePluginStubsToFile(
+    public static bool GeneratePluginStubsToFile(
         string json,
         string outputPath,
         string targetNamespace = "Exoforge.Plugins.Generated",
@@ -461,7 +472,17 @@ public static class ExoCodeGenerator
             Directory.CreateDirectory(dir);
         }
 
+        if (File.Exists(outputPath))
+        {
+            string existing = File.ReadAllText(outputPath);
+            if (string.Equals(existing, code, StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
         File.WriteAllText(outputPath, code);
+        return true;
     }
 
     public static string GeneratePluginStubs(

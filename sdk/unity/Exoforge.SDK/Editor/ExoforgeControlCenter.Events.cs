@@ -104,9 +104,8 @@ public partial class ExoforgeControlCenter : EditorWindow
 
             if (GUILayout.Button("Send to Sandbox", EditorStyles.miniButton, GUILayout.Width(110)))
             {
-                _sandboxPayload = _selectedEvent.RawJson;
-                _currentTab = Tab.ActionSandbox;
-                ShowStatus("Loaded event payload into Action Sandbox.", MessageType.Info);
+                ExoforgePluginsWindow.OpenSandbox(payload: _selectedEvent.RawJson);
+                ShowStatus("Opened event payload in Plugins Action Sandbox.", MessageType.Info);
             }
         }
         EditorGUILayout.EndHorizontal();
