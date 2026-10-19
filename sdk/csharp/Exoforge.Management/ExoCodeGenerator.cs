@@ -142,9 +142,13 @@ public static class ExoCodeGenerator
             pluginsElement = exportProp;
         }
 
-        if (pluginsElement.TryGetProperty("plugins", out var pluginsArray) && pluginsArray.ValueKind == JsonValueKind.Array)
+        bool hasExtensions = pluginsElement.TryGetProperty("extensions", out var extensionsArray) && extensionsArray.ValueKind == JsonValueKind.Array;
+        bool hasPlugins = pluginsElement.TryGetProperty("plugins", out var pluginsArray) && pluginsArray.ValueKind == JsonValueKind.Array;
+        var arrayToEnumerate = hasExtensions ? extensionsArray : (hasPlugins ? pluginsArray : default);
+
+        if (arrayToEnumerate.ValueKind == JsonValueKind.Array)
         {
-            foreach (var plugin in pluginsArray.EnumerateArray())
+            foreach (var plugin in arrayToEnumerate.EnumerateArray())
             {
                 var inputs = new List<(string PascalName, string Id)>();
                 if (plugin.TryGetProperty("input_types", out var inputTypes) && inputTypes.ValueKind == JsonValueKind.Object)

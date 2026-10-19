@@ -164,7 +164,7 @@ namespace Exoforge.Unity.Editor
             if (_pathHintLabel != null)
             {
                 _pathHintLabel.text = isValid
-                    ? $"Target path: plugins/{clean}/"
+                    ? $"Target path: extensions/{clean}/"
                     : "Names are converted to lower_snake_case (e.g. guild_system, snake_game).";
                 _pathHintLabel.style.color = isValid ? ExoforgeUIStyle.TextSecondary : ExoforgeUIStyle.TextMuted;
             }
@@ -185,7 +185,7 @@ namespace Exoforge.Unity.Editor
                     ? ExoScaffolder.Templates[_templateIndex]
                     : ExoScaffolder.Templates[0];
 
-                ExoScaffolder.ScaffoldPlugin(ws.PluginsPath, normalized, template: template);
+                ExoScaffolder.ScaffoldExtension(ws.ExtensionsPath, normalized, template: template);
                 Close();
                 _onCreated?.Invoke();
             }

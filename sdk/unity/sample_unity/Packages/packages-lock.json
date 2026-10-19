@@ -1,7 +1,7 @@
 {
   "dependencies": {
     "com.exoforge.plugins.unity-addressables": {
-      "version": "file:../Exoforge/plugins/unity_addressables/unity",
+      "version": "file:../Exoforge/extensions/unity_addressables/unity",
       "depth": 0,
       "source": "local",
       "dependencies": {

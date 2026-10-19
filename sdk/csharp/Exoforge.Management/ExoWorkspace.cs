@@ -28,8 +28,22 @@ public class ExoProjectConfig
     [JsonPropertyName("codegen")]
     public ExoCodegenConfig Codegen { get; set; } = new();
 
+    [JsonPropertyName("extensions_dir")]
+    public string ExtensionsDir
+    {
+        get => _extensionsDir ?? _pluginsDir ?? "extensions";
+        set => _extensionsDir = value;
+    }
+    private string? _extensionsDir;
+
     [JsonPropertyName("plugins_dir")]
-    public string PluginsDir { get; set; } = "plugins";
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? PluginsDir
+    {
+        get => _pluginsDir ?? _extensionsDir;
+        set => _pluginsDir = value;
+    }
+    private string? _pluginsDir;
 }
 
 public class ExoEnvironmentConfig
@@ -61,7 +75,21 @@ public class ExoWorkspace
     public string ConfigPath { get; }
     public ExoProjectConfig Config { get; private set; }
 
-    public string PluginsPath => ResolveWorkspacePath(Config.PluginsDir);
+    public string ExtensionsPath
+    {
+        get
+        {
+            string resolved = ResolveWorkspacePath(Config.ExtensionsDir);
+            if (!Directory.Exists(resolved))
+            {
+                string legacy = ResolveWorkspacePath("plugins");
+                if (Directory.Exists(legacy)) return legacy;
+            }
+            return resolved;
+        }
+    }
+
+    public string PluginsPath => ExtensionsPath;
     public string GeneratedPath => ResolveWorkspacePath(Config.Codegen.OutputPath);
 
     private string ResolveWorkspacePath(string path)
@@ -164,7 +192,7 @@ public class ExoWorkspace
         Directory.CreateDirectory(fullRoot);
         ws.Save();
 
-        Directory.CreateDirectory(ws.PluginsPath);
+        Directory.CreateDirectory(ws.ExtensionsPath);
         string genDir = Path.GetDirectoryName(ws.GeneratedPath)!;
         if (!string.IsNullOrEmpty(genDir))
         {

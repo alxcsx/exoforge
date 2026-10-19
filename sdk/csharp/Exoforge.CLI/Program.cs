@@ -37,8 +37,9 @@ public static class Program
                 case "init":
                     return HandleInit(cli);
 
+                case "extension":
                 case "plugin":
-                    return await HandlePluginAsync(cli).ConfigureAwait(false);
+                    return await HandleExtensionAsync(cli).ConfigureAwait(false);
 
                 case "sync":
                 case "gen":
@@ -73,46 +74,48 @@ public static class Program
         Usage: exo <command> [options]
 
         Commands:
-          init                     Initialize the workspace and exoforge.json
-          plugin <subcommand>      Create, build, deploy and inspect plugins
-          sync                     Download live contracts and generate the typed C# client
-          status                   Inspect live cluster health and metrics
+          init                       Initialize the workspace and exoforge.json
+          extension <subcommand>     Create, build, deploy and inspect extensions (alias: plugin)
+          sync                       Download live contracts and generate the typed C# client
+          status                     Inspect live cluster health and metrics
 
         Options:
-          --dir <path>             Workspace root (defaults to the current directory)
-          --env <environment>      Target environment from exoforge.json (default: 'local')
-          --json                   Machine-readable output (plugin list, logs, status)
-          -h, --help               Help for a command, e.g. `exo plugin push --help`
+          --dir <path>               Workspace root (defaults to the current directory)
+          --env <environment>        Target environment from exoforge.json (default: 'local')
+          --json                     Machine-readable output (extension list, logs, status)
+          -h, --help                 Help for a command, e.g. `exo extension push --help`
 
-        Run `exo plugin --help` for the plugin subcommands.
+        Run `exo extension --help` for the extension subcommands.
         """);
     }
 
-    private static void PrintPluginUsage()
+    private static void PrintExtensionUsage()
     {
         Console.WriteLine("""
-        Usage: exo plugin <subcommand> [name] [options]
+        Usage: exo extension <subcommand> [name] [options]
 
         Subcommands:
-          new <name>       Scaffold a C# plugin project
-          build <name>     Compile the plugin (framework-dependent .NET)
-          push <name>      Build, deploy, and verify the plugin on the live cluster
+          new <name>       Scaffold a C# extension project
+          build <name>     Compile the extension (framework-dependent .NET)
+          push <name>      Build, deploy, and verify the extension on the live cluster
           dev <name>       Watch sources and re-deploy on every change
-          reload <name>    Re-boot an installed plugin without re-uploading it
-          logs <name>      Show recent log lines the plugin emitted
-          usage [name]     Show metered usage (calls, CPU, memory) for a plugin or the title
-          stubs <name>     Generate typed service stubs from the contracts this plugin calls
-          list             List installed plugins
-          remove <id>      Remove a plugin from the cluster
+          reload <name>    Re-boot an installed extension without re-uploading it
+          logs <name>      Show recent log lines the extension emitted
+          usage [name]     Show metered usage (calls, CPU, memory) for an extension or the title
+          stubs <name>     Generate typed service stubs from the contracts this extension calls
+          list             List installed extensions
+          remove <id>      Remove an extension from the cluster
 
         Common options:
           --dir <path>     Workspace root (defaults to the current directory)
           --env <name>     Target environment
           --json           Machine-readable output
 
-        Run `exo plugin <subcommand> --help` for the options of one subcommand.
+        Run `exo extension <subcommand> --help` for the options of one subcommand.
         """);
     }
+
+    private static void PrintPluginUsage() => PrintExtensionUsage();
 
     // ---- init / sync / status ----------------------------------------------------------
 
@@ -123,7 +126,7 @@ public static class Program
             Console.WriteLine("""
             Usage: exo init [--dir <path>] [--name <project_name>]
 
-            Creates exoforge.json and the plugins/ directory.
+            Creates exoforge.json and the extensions/ directory.
             """);
             return 0;
         }
@@ -134,10 +137,10 @@ public static class Program
         var ws = ExoWorkspace.Initialize(dir, name);
         Success($"[Exoforge] Initialized workspace at {ws.RootPath}");
         Console.WriteLine($"  Config:     {ws.ConfigPath}");
-        Console.WriteLine($"  Plugins:    {ws.PluginsPath}");
+        Console.WriteLine($"  Extensions: {ws.ExtensionsPath}");
         Console.WriteLine($"  Client Gen: {ws.GeneratedPath}");
         Console.WriteLine();
-        Console.WriteLine("Next: exo plugin new <name>");
+        Console.WriteLine("Next: exo extension new <name>");
         return 0;
     }
 
@@ -208,7 +211,9 @@ public static class Program
 
     // ---- plugin ------------------------------------------------------------------------
 
-    private static async Task<int> HandlePluginAsync(CliArgs cli)
+    private static Task<int> HandlePluginAsync(CliArgs cli) => HandleExtensionAsync(cli);
+
+    private static async Task<int> HandleExtensionAsync(CliArgs cli)
     {
         if (cli.WantsHelp && cli.Positional.Count == 0)
         {

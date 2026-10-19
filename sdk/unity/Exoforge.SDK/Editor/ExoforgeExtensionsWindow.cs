@@ -18,9 +18,9 @@ namespace Exoforge.Unity.Editor
     /// Provides deep plugin lifecycle management (scaffold, build, deploy, stubs, logs)
     /// and first-class live cluster Resource management (query, inspect, insert, update, delete).
     /// </summary>
-    public class ExoforgePluginsWindow : EditorWindow
+    public class ExoforgeExtensionsWindow : EditorWindow
     {
-        public static ExoforgePluginsWindow? Instance { get; private set; }
+        public static ExoforgeExtensionsWindow? Instance { get; private set; }
 
         private string _searchFilter = "";
         private string? _selectedPluginId;
@@ -85,18 +85,23 @@ namespace Exoforge.Unity.Editor
             public long BinarySizeBytes { get; set; }
         }
 
-        [MenuItem("Tools/Exoforge/Plugins", false, 101)]
-        [MenuItem("Window/Exoforge/Plugins", false, 2001)]
+        [MenuItem("Tools/Exoforge/Extensions", false, 101)]
+        [MenuItem("Window/Exoforge/Extensions", false, 2001)]
+        [MenuItem("Tools/Exoforge/Plugins", false, 102)]
+        [MenuItem("Window/Exoforge/Plugins", false, 2002)]
         public static void ShowWindow()
         {
-            var window = GetWindow<ExoforgePluginsWindow>("Exoforge Plugins");
+            var window = GetWindow<ExoforgeExtensionsWindow>("Exoforge Extensions");
             window.minSize = new Vector2(800, 520);
             window.Show();
         }
 
+        public static void OpenExtension(string extensionId, bool preferCustomEditor = true) =>
+            OpenPlugin(extensionId, preferCustomEditor);
+
         public static void OpenPlugin(string pluginId, bool preferCustomEditor = true)
         {
-            var window = GetWindow<ExoforgePluginsWindow>("Exoforge Plugins");
+            var window = GetWindow<ExoforgeExtensionsWindow>("Exoforge Extensions");
             window.minSize = new Vector2(800, 520);
             window._selectedPluginId = pluginId;
             var hooks = GetCustomEditorsForPlugin(pluginId);
@@ -115,7 +120,7 @@ namespace Exoforge.Unity.Editor
 
         public static void OpenSandbox(string? pluginId = null, string? actionName = null, string? payload = null)
         {
-            var window = GetWindow<ExoforgePluginsWindow>("Exoforge Plugins");
+            var window = GetWindow<ExoforgeExtensionsWindow>("Exoforge Extensions");
             window.minSize = new Vector2(800, 520);
             if (!string.IsNullOrEmpty(pluginId))
             {
@@ -2594,5 +2599,10 @@ namespace Exoforge.Unity.Editor
             "map" or "object" => new Dictionary<string, object?>(),
             _ => ""
         };
+    }
+
+    [Obsolete("Use ExoforgeExtensionsWindow instead.")]
+    public class ExoforgePluginsWindow : ExoforgeExtensionsWindow
+    {
     }
 }

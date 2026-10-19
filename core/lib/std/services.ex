@@ -493,6 +493,80 @@ defmodule Exoforge.Std.Services do
     end
   end
 
+  defservice extension_manager do
+    @moduledoc "Lifecycle, deployment, and inspection of Exoforge extensions."
+
+    @doc "Lists all registered extensions with their metadata and contracts."
+    action :list_extensions do
+      scope("studio")
+      returns(extensions: [:map], count: :integer)
+    end
+
+    @doc "Retrieves details and contract metadata for a single extension."
+    action :get_extension do
+      scope("studio")
+      params(id: :string)
+      returns(extension: :map)
+      errors([:not_found])
+    end
+
+    @doc "Retrieves runtime node health, memory, and cluster stats."
+    action :get_system_info do
+      scope("studio")
+      returns(system: :map)
+    end
+
+    @doc "Uploads and installs a new extension binary."
+    action :upload_extension do
+      scope("admin")
+
+      params(
+        name: :string,
+        binary: :term,
+        manifest: [type: :term, optional: true]
+      )
+
+      returns(extension_id: :string, status: :string)
+      errors([:invalid_package, :write_failed])
+    end
+
+    @doc "Removes an installed extension."
+    action :remove_extension do
+      scope("admin")
+      params(id: :string)
+      returns(status: :string)
+      errors([:not_found])
+    end
+
+    @doc "Triggers a system re-index and reload of all extensions."
+    action :restart_system do
+      scope("admin")
+      returns(status: :string, extensions_count: :integer)
+    end
+
+    @doc "Returns the most recent log lines an extension emitted."
+    action :logs do
+      scope("studio")
+      params(id: :string, limit: [type: :integer, optional: true])
+      returns(extension_id: :string, lines: [:map], count: :integer)
+      errors([:not_found])
+    end
+
+    @doc "Re-boots an installed extension from its staged files, without re-uploading it."
+    action :reload_extension do
+      scope("admin")
+      params(id: :string)
+      returns(extension_id: :string, status: :string)
+      errors([:not_found])
+    end
+
+    @doc "Exports the complete catalog of extensions and contracts for external tools (CLI/Unity)."
+    action :export_extension_info do
+      scope("studio")
+      returns(export: :map)
+    end
+  end
+
   defservice resource_store do
     @moduledoc "Schema-driven persistence for declared resources."
 

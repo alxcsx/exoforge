@@ -58,7 +58,7 @@ public class CliIntegrationTests : IDisposable
         Assert.Equal(0, code);
         Assert.True(ExoWorkspace.Exists(_tempDir));
         Assert.True(File.Exists(Path.Combine(_tempDir, "exoforge.json")));
-        Assert.True(Directory.Exists(Path.Combine(_tempDir, "plugins")));
+        Assert.True(Directory.Exists(Path.Combine(_tempDir, "extensions")) || Directory.Exists(Path.Combine(_tempDir, "plugins")));
 
         string configJson = File.ReadAllText(Path.Combine(_tempDir, "exoforge.json"));
         Assert.Contains("MyAwesomeGame", configJson);
@@ -80,11 +80,33 @@ public class CliIntegrationTests : IDisposable
 
         Assert.Equal(0, code);
 
-        string pluginDir = Path.Combine(_tempDir, "plugins", "combat_system");
+        var ws = ExoWorkspace.Load(_tempDir);
+        string pluginDir = Path.Combine(ws.ExtensionsPath, "combat_system");
         Assert.True(Directory.Exists(pluginDir));
         Assert.True(File.Exists(Path.Combine(pluginDir, "combat_system.slnx")));
         Assert.True(File.Exists(Path.Combine(pluginDir, "src", "combat_system.csproj")));
         Assert.True(File.Exists(Path.Combine(pluginDir, "src", "CombatSystemPlugin.cs")));
+    }
+
+    [Fact]
+    public async Task Cli_Extension_New_Scaffolds_Extension_Directory_And_Files()
+    {
+        await Exoforge.CLI.Program.Main(new[] { "init", "--dir", _tempDir, "--name", "Game" });
+
+        int code = await Exoforge.CLI.Program.Main(new[]
+        {
+            "extension", "new", "economy_system",
+            "--dir", _tempDir
+        });
+
+        Assert.Equal(0, code);
+
+        var ws = ExoWorkspace.Load(_tempDir);
+        string extDir = Path.Combine(ws.ExtensionsPath, "economy_system");
+        Assert.True(Directory.Exists(extDir));
+        Assert.True(File.Exists(Path.Combine(extDir, "economy_system.slnx")));
+        Assert.True(File.Exists(Path.Combine(extDir, "src", "economy_system.csproj")));
+        Assert.True(File.Exists(Path.Combine(extDir, "src", "EconomySystemPlugin.cs")));
     }
 
     [Fact]

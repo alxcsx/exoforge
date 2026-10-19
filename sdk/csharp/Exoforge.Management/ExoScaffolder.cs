@@ -21,6 +21,9 @@ public static class ExoScaffolder
     /// <summary>Templates a caller may ask for. Keep in step with <see cref="GeneratePluginCode"/>.</summary>
     public static readonly string[] Templates = { "standard" };
 
+    public static string ScaffoldExtension(string extensionsDirectory, string rawName, string template = "standard", string? feed = null) =>
+        ScaffoldPlugin(extensionsDirectory, rawName, template, feed);
+
     public static string ScaffoldPlugin(string pluginsDirectory, string rawName, string template = "standard", string? feed = null)
     {
         string cleanName = NormalizeName(rawName);
@@ -42,6 +45,9 @@ public static class ExoScaffolder
 
         return targetDir;
     }
+
+    /// <summary>The extension id a raw name will become. Shared with the CLI so it can say so up front.</summary>
+    public static string NormalizeExtensionName(string rawName) => NormalizePluginName(rawName);
 
     /// <summary>The plugin id a raw name will become. Shared with the CLI so it can say so up front.</summary>
     public static string NormalizePluginName(string rawName) =>

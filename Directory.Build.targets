@@ -19,17 +19,17 @@
     <ExoforgeInRepo Condition="Exists('$(ExoforgeCSharpSdk)/Exoforge.Plugin.SDK/Exoforge.Plugin.SDK.csproj')">true</ExoforgeInRepo>
   </PropertyGroup>
 
-  <ItemGroup Condition="'$(ExoforgePlugin)' == 'true' and '$(ExoforgeInRepo)' == 'true'">
-    <!-- Source wins over the feed: a plugin in this repository builds against what is here, not
-         against the last thing that was packed. Removing rather than conditioning means the plugin's
+  <ItemGroup Condition="('$(ExoforgeExtension)' == 'true' or '$(ExoforgePlugin)' == 'true') and '$(ExoforgeInRepo)' == 'true'">
+    <!-- Source wins over the feed: an extension in this repository builds against what is here, not
+         against the last thing that was packed. Removing rather than conditioning means the extension's
          project file reads the same inside the repository and out. -->
     <PackageReference Remove="Exoforge.Plugin.SDK" />
 
     <!--
-      A plugin's deployment properties say how the plugin is published, not how the SDK and the
+      An extension's deployment properties say how the extension is published, not how the SDK and the
       generator it references are built. Left to flow as global properties, `dotnet build
       -p:PublishAot=true` fails first in the netstandard SDK project with NETSDK1207 - before the
-      plugin's own guard can say what is actually wrong, which is the one thing it exists for.
+      extension's own guard can say what is actually wrong, which is the one thing it exists for.
     -->
     <ProjectReference Include="$(ExoforgeCSharpSdk)/Exoforge.Plugin.SDK/Exoforge.Plugin.SDK.csproj"
                       GlobalPropertiesToRemove="PublishAot;PublishTrimmed;SelfContained;PublishSingleFile;PublishReadyToRun;RollForward" />
@@ -39,18 +39,18 @@
                       GlobalPropertiesToRemove="PublishAot;PublishTrimmed;SelfContained;PublishSingleFile;PublishReadyToRun;RollForward" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(ExoforgePlugin)' == 'true' and '$(ExoforgeInRepo)' != 'true'">
+  <ItemGroup Condition="('$(ExoforgeExtension)' == 'true' or '$(ExoforgePlugin)' == 'true') and '$(ExoforgeInRepo)' != 'true'">
     <!-- One reference: the package carries the generator too, in its analyzers folder. -->
     <PackageReference Include="Exoforge.Plugin.SDK" Version="$(ExoforgePluginSdkVersion)" />
   </ItemGroup>
 
   <!--
     The manifest plumbing is identical in here and out there, so it lives in one file: the package's
-    own targets, which NuGet imports for a consumer and this imports for a plugin built in the
+    own targets, which NuGet imports for a consumer and this imports for an extension built in the
     repository. Two copies is two things to keep in step.
   -->
   <Import Project="$(ExoforgeCSharpSdk)/Exoforge.Plugin.SDK/build/Exoforge.Plugin.SDK.targets"
-          Condition="'$(ExoforgePlugin)' == 'true' and '$(ExoforgeInRepo)' == 'true'" />
+          Condition="('$(ExoforgeExtension)' == 'true' or '$(ExoforgePlugin)' == 'true') and '$(ExoforgeInRepo)' == 'true'" />
 
   <!-- ===== Staging for the Unity package ===== -->
 

@@ -50,6 +50,13 @@ public class ExoDeployer
         return client;
     }
 
+    public Task<string> UploadExtensionAsync(
+        string extensionName,
+        string? environmentName = null,
+        ExoClient? existingClient = null,
+        CancellationToken cancellationToken = default) =>
+        UploadPluginAsync(extensionName, environmentName, existingClient, cancellationToken);
+
     public async Task<string> UploadPluginAsync(
         string pluginName,
         string? environmentName = null,
@@ -57,7 +64,7 @@ public class ExoDeployer
         CancellationToken cancellationToken = default)
     {
         string cleanName = pluginName.Trim().ToLowerInvariant().Replace("-", "_");
-        string pluginDir = Path.Combine(_workspace.PluginsPath, cleanName);
+        string pluginDir = Path.Combine(_workspace.ExtensionsPath, cleanName);
 
         // One compiled kind: the native binary the runner spawns. A runtime that is not a process -
         // one hosted in-process, say - adds a branch here and a runner in the kernel.
@@ -348,7 +355,14 @@ public class ExoDeployer
         }
     }
 
-    /// <summary>Fetches the contracts and writes typed stubs into the plugin's <c>src/Generated</c> folder.</summary>
+    public Task<string> GenerateExtensionStubsAsync(
+        string extensionName,
+        ExoClient? existingClient = null,
+        Action<string>? emit = null,
+        CancellationToken cancellationToken = default) =>
+        GeneratePluginStubsAsync(extensionName, existingClient, emit, cancellationToken);
+
+    /// <summary>Fetches the contracts and writes typed stubs into the extension's <c>src/Generated</c> folder.</summary>
     public async Task<string> GeneratePluginStubsAsync(
         string pluginName,
         ExoClient? existingClient = null,
@@ -356,7 +370,7 @@ public class ExoDeployer
         CancellationToken cancellationToken = default)
     {
         string cleanName = NormalizePluginName(pluginName);
-        string pluginDir = Path.Combine(_workspace.PluginsPath, cleanName);
+        string pluginDir = Path.Combine(_workspace.ExtensionsPath, cleanName);
         string output = Path.Combine(pluginDir, "src", "Generated", "PluginServices.g.cs");
         string exportJson;
 
@@ -652,6 +666,12 @@ public class ExoDeployer
         }
     }
 
+    public Task<List<string>> GenerateAllExtensionStubsAsync(
+        string? environmentName = null,
+        ExoClient? existingClient = null,
+        CancellationToken cancellationToken = default) =>
+        GenerateAllPluginStubsAsync(environmentName, existingClient, cancellationToken);
+
     /// <summary>Generates typed stubs for every plugin in the workspace that has a project.</summary>
     public async Task<List<string>> GenerateAllPluginStubsAsync(
         string? environmentName = null,
@@ -659,7 +679,7 @@ public class ExoDeployer
         CancellationToken cancellationToken = default)
     {
         var outputs = new List<string>();
-        string pluginsDir = _workspace.PluginsPath;
+        string pluginsDir = _workspace.ExtensionsPath;
 
         if (!Directory.Exists(pluginsDir)) return outputs;
 
@@ -734,6 +754,11 @@ public class ExoDeployer
         return await client.SendActionAsync<JsonElement>("plugin_manager", "get_system_info", null, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
+    public Task<JsonElement> ListExtensionsAsync(
+        string? environmentName = null,
+        CancellationToken cancellationToken = default) =>
+        ListPluginsAsync(environmentName, cancellationToken);
+
     public async Task<JsonElement> ListPluginsAsync(
         string? environmentName = null,
         CancellationToken cancellationToken = default)
@@ -743,6 +768,13 @@ public class ExoDeployer
     }
 
     // -- Build --
+
+    public ExoPluginBuild BuildExtension(
+        string extensionName,
+        string? rid = null,
+        string dotnetPath = "dotnet",
+        Action<string>? log = null) =>
+        BuildPlugin(extensionName, rid, dotnetPath, log);
 
     /// <summary>
     /// Builds a local plugin in the workspace with <c>dotnet publish</c>: a framework-dependent
@@ -756,7 +788,7 @@ public class ExoDeployer
         Action<string>? log = null)
     {
         string cleanName = NormalizePluginName(pluginName);
-        string pluginDir = Path.Combine(_workspace.PluginsPath, cleanName);
+        string pluginDir = Path.Combine(_workspace.ExtensionsPath, cleanName);
 
         if (!Directory.Exists(pluginDir))
         {

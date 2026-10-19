@@ -41,13 +41,13 @@ clean-build:
 
 	echo "[clean-build] building the SDK from a cold tree"
 	MSBUILDDISABLENODEREUSE=1 dotnet build "$work/sdk/csharp/Exoforge.CLI" --nologo -v q
-	echo "[clean-build] building a plugin"
-	MSBUILDDISABLENODEREUSE=1 dotnet run --project "$work/sdk/csharp/Exoforge.CLI" -- plugin build snake_leaderboard --dir "$work/sdk/unity/sample_unity/Exoforge"
+	echo "[clean-build] building an extension"
+	MSBUILDDISABLENODEREUSE=1 dotnet run --project "$work/sdk/csharp/Exoforge.CLI" -- extension build snake_leaderboard --dir "$work/sdk/unity/sample_unity/Exoforge"
 	# Every runtime the kernel can host, not just the one. This path was only reachable through
 	# recipes needing Docker or a live server, so it rotted.
 	echo "[clean-build] building the sample plugin"
-	MSBUILDDISABLENODEREUSE=1 dotnet run --project "$work/sdk/csharp/Exoforge.CLI" -- plugin build sample_plugin --dir "$work/plugins_csharp"
-	test -f "$work/sdk/unity/sample_unity/Exoforge/plugins/snake_leaderboard/manifest.json"
+	MSBUILDDISABLENODEREUSE=1 dotnet run --project "$work/sdk/csharp/Exoforge.CLI" -- extension build sample_plugin --dir "$work/plugins_csharp"
+	test -f "$work/sdk/unity/sample_unity/Exoforge/extensions/snake_leaderboard/manifest.json"
 	echo "[clean-build] OK: the tree builds from a clean checkout"
 
 
@@ -120,8 +120,9 @@ benchmark:
 
 # ---- Build & Release ----
 
-# Build the sample plugin. The native runner looks for the binary beside the manifest, so the publish
-# output is copied there - which is what `exo plugin build` stages into .exoforge/ for a workspace.
+# Build the sample extension/plugin. The native runner looks for the binary beside the manifest.
+build-extensions: build-plugins
+
 build-plugins:
 	#!/usr/bin/env bash
 	set -euo pipefail

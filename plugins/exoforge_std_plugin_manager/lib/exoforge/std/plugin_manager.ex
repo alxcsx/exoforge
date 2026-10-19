@@ -5,7 +5,7 @@ defmodule Exoforge.Std.PluginManager do
   hot-loading of Elixir and native C# plugins, lifecycle restarts,
   and CLI/SDK synchronization.
   """
-  use Exoforge.Plugin, provides: [:plugin_manager]
+  use Exoforge.Plugin, provides: [:extension_manager]
 
   alias Exoforge.PluginRegistry
   alias Exoforge.PluginBootstrapper
@@ -28,10 +28,10 @@ defmodule Exoforge.Std.PluginManager do
   ## ---- SERVICE ACTIONS ----
 
   @impl true
-  defaction list_plugins, scope: Exoforge.Auth.Roles.studio() do
+  defaction list_extensions, scope: Exoforge.Auth.Roles.studio() do
     manifests = PluginRegistry.all_manifests()
 
-    plugins =
+    extensions =
       Enum.map(manifests, fn m ->
         %{
           "id" => to_string(m.id),
@@ -48,11 +48,15 @@ defmodule Exoforge.Std.PluginManager do
       end)
       |> Enum.sort_by(& &1["id"])
 
-    {:ok, %{plugins: plugins, count: length(plugins)}}
+    {:ok, %{extensions: extensions, plugins: extensions, count: length(extensions)}}
+  end
+
+  defaction list_plugins, scope: Exoforge.Auth.Roles.studio() do
+    list_extensions()
   end
 
   @impl true
-  defaction get_plugin(payload), scope: Exoforge.Auth.Roles.studio() do
+  defaction get_extension(payload), scope: Exoforge.Auth.Roles.studio() do
     id_str = Map.get(payload, :id) || Map.get(payload, "id")
 
     if is_nil(id_str) or id_str == "" do
@@ -82,14 +86,19 @@ defmodule Exoforge.Std.PluginManager do
             "size_bytes" => size_bytes
           }
 
-          {:ok, %{plugin: plugin_data}}
+          {:ok, %{extension: plugin_data, plugin: plugin_data}}
       end
     end
+  end
+
+  defaction get_plugin(payload), scope: Exoforge.Auth.Roles.studio() do
+    get_extension(payload)
   end
 
   @impl true
   defaction get_system_info, scope: Exoforge.Auth.Roles.studio() do
     mem_total = :erlang.memory(:total)
+    count = length(PluginRegistry.all_manifests())
 
     info = %{
       "node" => to_string(node()),
@@ -99,7 +108,8 @@ defmodule Exoforge.Std.PluginManager do
       "process_count" => :erlang.system_info(:process_count),
       "elixir_version" => System.version(),
       "otp_release" => System.otp_release(),
-      "plugins_count" => length(PluginRegistry.all_manifests()),
+      "plugins_count" => count,
+      "extensions_count" => count,
       # The tenant this instance is: what usage records are stamped with, and what a deploy to this
       # instance is a deploy to. Named here so `exo status` answers "which title am I hitting?".
       "title_id" => Exoforge.Metering.title_id(),
@@ -110,7 +120,66 @@ defmodule Exoforge.Std.PluginManager do
   end
 
   @impl true
+  defaction upload_extension(payload), scope: Exoforge.Auth.Roles.admin() do
+    upload_extension_internal(payload)
+  end
+
   defaction upload_plugin(payload), scope: Exoforge.Auth.Roles.admin() do
+    upload_extension_internal(payload)
+  end
+
+  @impl true
+  defaction remove_extension(payload), scope: Exoforge.Auth.Roles.admin() do
+    remove_extension_internal(payload)
+  end
+
+  defaction remove_plugin(payload), scope: Exoforge.Auth.Roles.admin() do
+    remove_extension_internal(payload)
+  end
+
+  @impl true
+  defaction restart_system, scope: Exoforge.Auth.Roles.admin() do
+    PluginBootstrapper.reload_all()
+    count = length(PluginRegistry.all_manifests())
+    {:ok, %{status: "restarted", plugins_count: count, extensions_count: count}}
+  end
+
+  @impl true
+  defaction logs(payload), scope: Exoforge.Auth.Roles.studio() do
+    id_str = Map.get(payload, :id) || Map.get(payload, "id")
+    limit = Map.get(payload, :limit) || Map.get(payload, "limit") || 100
+
+    case find_manifest(id_str) do
+      nil ->
+        {:error, :not_found}
+
+      m ->
+        lines = Exoforge.PluginLogs.list(m.id, limit)
+        {:ok, %{extension_id: to_string(m.id), plugin_id: to_string(m.id), lines: lines, count: length(lines)}}
+    end
+  end
+
+  @impl true
+  defaction reload_extension(payload), scope: Exoforge.Auth.Roles.admin() do
+    reload_extension_internal(payload)
+  end
+
+  defaction reload_plugin(payload), scope: Exoforge.Auth.Roles.admin() do
+    reload_extension_internal(payload)
+  end
+
+  @impl true
+  defaction export_extension_info, scope: Exoforge.Auth.Roles.studio() do
+    export_info_internal()
+  end
+
+  defaction export_plugin_info, scope: Exoforge.Auth.Roles.studio() do
+    export_info_internal()
+  end
+
+  ## ---- PRIVATE HELPERS ----
+
+  defp upload_extension_internal(payload) do
     name_str = Map.get(payload, :name) || Map.get(payload, "name")
     raw_binary = Map.get(payload, :binary) || Map.get(payload, "binary")
 
@@ -143,8 +212,7 @@ defmodule Exoforge.Std.PluginManager do
     end
   end
 
-  @impl true
-  defaction remove_plugin(payload), scope: Exoforge.Auth.Roles.admin() do
+  defp remove_extension_internal(payload) do
     id_str = Map.get(payload, :id) || Map.get(payload, "id")
     delete_files = Map.get(payload, :delete_files) || Map.get(payload, "delete_files") || false
 
@@ -176,35 +244,12 @@ defmodule Exoforge.Std.PluginManager do
             clean_delete_directory(m.physical_path)
           end
 
-          {:ok, %{status: "removed", id: to_string(m.id), type: to_string(m.type)}}
+          {:ok, %{status: "removed", id: to_string(m.id), extension_id: to_string(m.id), plugin_id: to_string(m.id), type: to_string(m.type)}}
       end
     end
   end
 
-  @impl true
-  defaction restart_system, scope: Exoforge.Auth.Roles.admin() do
-    PluginBootstrapper.reload_all()
-    count = length(PluginRegistry.all_manifests())
-    {:ok, %{status: "restarted", plugins_count: count}}
-  end
-
-  @impl true
-  defaction logs(payload), scope: Exoforge.Auth.Roles.studio() do
-    id_str = Map.get(payload, :id) || Map.get(payload, "id")
-    limit = Map.get(payload, :limit) || Map.get(payload, "limit") || 100
-
-    case find_manifest(id_str) do
-      nil ->
-        {:error, :not_found}
-
-      m ->
-        lines = Exoforge.PluginLogs.list(m.id, limit)
-        {:ok, %{plugin_id: to_string(m.id), lines: lines, count: length(lines)}}
-    end
-  end
-
-  @impl true
-  defaction reload_plugin(payload), scope: Exoforge.Auth.Roles.admin() do
+  defp reload_extension_internal(payload) do
     id_str = Map.get(payload, :id) || Map.get(payload, "id")
 
     case find_manifest(id_str) do
@@ -216,12 +261,11 @@ defmodule Exoforge.Std.PluginManager do
         PluginBootstrapper.unload_plugin(m.id)
 
         {:ok, %{status: status}} = load_and_boot_plugin(m.physical_path, to_string(m.id), m.type)
-        {:ok, %{plugin_id: to_string(m.id), status: status}}
+        {:ok, %{extension_id: to_string(m.id), plugin_id: to_string(m.id), status: status}}
     end
   end
 
-  @impl true
-  defaction export_plugin_info, scope: Exoforge.Auth.Roles.studio() do
+  defp export_info_internal do
     manifests = PluginRegistry.all_manifests()
 
     exported =
@@ -251,7 +295,9 @@ defmodule Exoforge.Std.PluginManager do
          "cluster" => to_string(node()),
          "timestamp" => System.system_time(:second),
          "plugins_count" => length(exported),
-         "plugins" => exported
+         "extensions_count" => length(exported),
+         "plugins" => exported,
+         "extensions" => exported
        }
      }}
   end
@@ -411,13 +457,13 @@ defmodule Exoforge.Std.PluginManager do
 
         if Process.whereis(Exoforge.PluginSupervisor) != nil do
           PluginBootstrapper.boot_plugin(loaded_manifest)
-          {:ok, %{plugin_id: clean_name, type: to_string(type), status: "installed"}}
+          {:ok, %{extension_id: clean_name, plugin_id: clean_name, type: to_string(type), status: "installed"}}
         else
-          {:ok, %{plugin_id: clean_name, type: to_string(type), status: "installed"}}
+          {:ok, %{extension_id: clean_name, plugin_id: clean_name, type: to_string(type), status: "installed"}}
         end
 
       _ ->
-        {:ok, %{plugin_id: clean_name, type: to_string(type), status: "saved_pending_restart"}}
+        {:ok, %{extension_id: clean_name, plugin_id: clean_name, type: to_string(type), status: "saved_pending_restart"}}
     end
   end
 
@@ -495,11 +541,13 @@ defmodule Exoforge.Std.PluginManager do
 
   defp clean_delete_directory(dir_path) do
     norm = Path.expand(dir_path)
+    root_extensions = Path.expand("extensions")
     root_plugins = Path.expand("plugins")
     root_csharp = Path.expand("plugins_csharp")
     root_uploaded = Path.expand(Application.get_env(:exoforge_std_plugin_manager, :upload_dir, "priv/data/uploaded_plugins"))
 
-    if (String.starts_with?(norm, root_plugins) and norm != root_plugins) or
+    if (String.starts_with?(norm, root_extensions) and norm != root_extensions) or
+         (String.starts_with?(norm, root_plugins) and norm != root_plugins) or
          (String.starts_with?(norm, root_csharp) and norm != root_csharp) or
          (String.starts_with?(norm, root_uploaded) and norm != root_uploaded) do
       File.rm_rf(norm)

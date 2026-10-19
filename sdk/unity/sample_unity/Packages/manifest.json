@@ -55,6 +55,6 @@
     "com.unity.modules.video": "1.0.0",
     "com.unity.modules.wind": "1.0.0",
     "com.unity.modules.xr": "1.0.0",
-    "com.exoforge.plugins.unity-addressables": "file:../Exoforge/plugins/unity_addressables/unity"
+    "com.exoforge.plugins.unity-addressables": "file:../Exoforge/extensions/unity_addressables/unity"
   }
 }

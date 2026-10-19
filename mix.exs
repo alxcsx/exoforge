@@ -25,7 +25,7 @@ defmodule Exoforge.Project do
   defp extra_applications(:dev), do: [:logger, :wx, :observer, :runtime_tools]
   defp extra_applications(_), do: [:logger]
 
-  defp deps(_env), do: base_deps() ++ module_deps()
+  defp deps(_env), do: base_deps() ++ extension_deps()
 
   defp base_deps do
     [
@@ -36,13 +36,14 @@ defmodule Exoforge.Project do
     ]
   end
 
-  defp module_deps do
-    Path.wildcard("plugins/*")
+  defp extension_deps do
+    (Path.wildcard("extensions/*") ++ Path.wildcard("plugins/*"))
     |> Enum.filter(&File.dir?/1)
     |> Enum.map(fn path ->
       app_name = Path.basename(path) |> String.to_atom()
       {app_name, path: path}
     end)
+    |> Enum.uniq_by(fn {app_name, _} -> app_name end)
   end
 
   defp aliases do

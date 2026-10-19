@@ -21,7 +21,7 @@ defmodule Exoforge.Std.PluginManagerTest do
       name: "ExoforgeStdPluginManager",
       version: Version.parse!("0.1.0"),
       type: :elixir,
-      provides: [:plugin_manager]
+      provides: [:extension_manager, :plugin_manager]
     )
 
     on_exit(fn ->
@@ -223,6 +223,46 @@ defmodule Exoforge.Std.PluginManagerTest do
                  %{name: "foo", binary: "bar"},
                  caller_scopes: ["player"]
                )
+    end
+  end
+
+  describe "Extension Manager Service Actions (Standardized)" do
+    test "list_extensions returns all registered extensions and count" do
+      assert {:ok, result} =
+               ActionDispatcher.dispatch(:extension_manager, :list_extensions, %{}, caller_scopes: ["studio"])
+
+      assert is_list(result.extensions)
+      assert result.count >= 2
+      assert Enum.any?(result.extensions, &(&1["id"] == "test_game_plugin"))
+      assert Enum.any?(result.extensions, &(&1["id"] == "exoforge_std_plugin_manager"))
+    end
+
+    test "get_extension returns metadata for known extension" do
+      assert {:ok, result} =
+               ActionDispatcher.dispatch(
+                 :extension_manager,
+                 :get_extension,
+                 %{id: "test_game_plugin"},
+                 caller_scopes: ["studio"]
+               )
+
+      assert result.extension["id"] == "test_game_plugin"
+      assert result.extension["name"] == "TestGamePlugin"
+    end
+
+    test "export_extension_info exports extensions list" do
+      assert {:ok, result} =
+               ActionDispatcher.dispatch(
+                 :extension_manager,
+                 :export_extension_info,
+                 %{},
+                 caller_scopes: ["studio"]
+               )
+
+      assert is_map(result.export)
+      assert is_list(result.export["extensions"])
+      assert is_list(result.export["plugins"])
+      assert result.export["extensions_count"] >= 2
     end
   end
 end

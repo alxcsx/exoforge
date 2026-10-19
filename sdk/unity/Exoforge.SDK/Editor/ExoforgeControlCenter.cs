@@ -658,8 +658,8 @@ public partial class ExoforgeControlCenter : EditorWindow
         var syncBtn = ExoforgeUIStyle.CreateModernButton("🔄 Sync Client", () => _ = SyncAndGenerateClientAsync(), height: 26);
         actionsGroup.Add(syncBtn);
 
-        var pluginsBtn = ExoforgeUIStyle.CreateModernButton("🔌 Plugins", () => ExoforgePluginsWindow.ShowWindow(), height: 26);
-        actionsGroup.Add(pluginsBtn);
+        var extensionsBtn = ExoforgeUIStyle.CreateModernButton("🔌 Extensions", () => ExoforgeExtensionsWindow.ShowWindow(), height: 26);
+        actionsGroup.Add(extensionsBtn);
 
         var studioBtn = ExoforgeUIStyle.CreateModernButton("🌐 Web Studio ↗", () =>
         {

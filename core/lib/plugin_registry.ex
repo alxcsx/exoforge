@@ -390,11 +390,36 @@ defmodule Exoforge.PluginRegistry do
     clean = clean_service_name(str)
     shorthand = Module.concat([Exoforge, Std, Services, Macro.camelize(clean)])
 
-    [service, str, clean, shorthand] |> Enum.uniq()
+    keys = [service, str, clean, shorthand]
+
+    keys =
+      cond do
+        clean in ["extension_manager", "plugin_manager"] ->
+          keys ++
+            [:extension_manager, "extension_manager", Exoforge.Std.Services.ExtensionManager,
+             :plugin_manager, "plugin_manager", Exoforge.Std.Services.PluginManager]
+
+        true ->
+          keys
+      end
+
+    Enum.uniq(keys)
   end
 
   def service_keys(service) when is_binary(service) do
-    [service, clean_service_name(service)] |> Enum.uniq()
+    clean = clean_service_name(service)
+    keys = [service, clean]
+
+    keys =
+      cond do
+        clean in ["extension_manager", "plugin_manager"] ->
+          keys ++ ["extension_manager", "plugin_manager", ":extension_manager", ":plugin_manager"]
+
+        true ->
+          keys
+      end
+
+    Enum.uniq(keys)
   end
 
   def service_keys(other), do: [other]

@@ -117,9 +117,9 @@ public partial class ExoforgeControlCenter : EditorWindow
             _ = RefreshPluginsAsync();
         }
 
-        if (GUILayout.Button("🔌 Open Plugins Studio ↗", EditorStyles.miniButton, GUILayout.Width(150)))
+        if (GUILayout.Button("🔌 Open Extensions Studio ↗", EditorStyles.miniButton, GUILayout.Width(160)))
         {
-            ExoforgePluginsWindow.ShowWindow();
+            ExoforgeExtensionsWindow.ShowWindow();
         }
         EditorGUILayout.EndHorizontal();
 

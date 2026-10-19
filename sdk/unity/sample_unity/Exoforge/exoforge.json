@@ -12,5 +12,5 @@
     "output_path": "Assets/Exoforge/Generated/ExoforgeServices.g.cs",
     "namespace": "Exoforge.Client"
   },
-  "plugins_dir": "plugins"
+  "extensions_dir": "extensions"
 }
