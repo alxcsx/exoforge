@@ -276,13 +276,13 @@ namespace Exoforge.Unity.Editor
             logo.style.marginRight = 6;
             brandContainer.Add(logo);
 
-            var pluginsBadge = ExoforgeUIStyle.CreatePill("PLUGINS & RESOURCES", Color.white, ExoforgeUIStyle.BrandPurple, 9);
+            var pluginsBadge = ExoforgeUIStyle.CreatePill("EXTENSIONS & RESOURCES", Color.white, ExoforgeUIStyle.BrandPurple, 9);
             brandContainer.Add(pluginsBadge);
 
             var divider = new VisualElement();
             divider.style.width = 1;
             divider.style.height = 18;
-            divider.style.backgroundColor = new Color(1f, 1f, 1f, 0.18f);
+            divider.style.backgroundColor = ExoforgeUIStyle.DividerHeader;
             divider.style.marginLeft = 10;
             divider.style.marginRight = 6;
             brandContainer.Add(divider);
@@ -302,15 +302,15 @@ namespace Exoforge.Unity.Editor
             _connectionPill = new VisualElement();
             _connectionPill.style.flexDirection = FlexDirection.Row;
             _connectionPill.style.alignItems = Align.Center;
-            _connectionPill.style.backgroundColor = new Color(0f, 0f, 0f, 0.35f);
+            _connectionPill.style.backgroundColor = ExoforgeUIStyle.BgHeaderCapsule;
             _connectionPill.style.borderTopWidth = 1;
             _connectionPill.style.borderBottomWidth = 1;
             _connectionPill.style.borderLeftWidth = 1;
             _connectionPill.style.borderRightWidth = 1;
-            _connectionPill.style.borderTopColor = new Color(1f, 1f, 1f, 0.12f);
-            _connectionPill.style.borderBottomColor = new Color(1f, 1f, 1f, 0.12f);
-            _connectionPill.style.borderLeftColor = new Color(1f, 1f, 1f, 0.12f);
-            _connectionPill.style.borderRightColor = new Color(1f, 1f, 1f, 0.12f);
+            _connectionPill.style.borderTopColor = ExoforgeUIStyle.BorderHeaderCapsule;
+            _connectionPill.style.borderBottomColor = ExoforgeUIStyle.BorderHeaderCapsule;
+            _connectionPill.style.borderLeftColor = ExoforgeUIStyle.BorderHeaderCapsule;
+            _connectionPill.style.borderRightColor = ExoforgeUIStyle.BorderHeaderCapsule;
             _connectionPill.style.borderTopLeftRadius = 14;
             _connectionPill.style.borderTopRightRadius = 14;
             _connectionPill.style.borderBottomLeftRadius = 14;
@@ -326,7 +326,7 @@ namespace Exoforge.Unity.Editor
 
             _connectionStatusLabel = new Label(IsConnected ? "Online" : (ExoforgeControlCenter.IsConnecting ? "Connecting..." : "Offline"));
             _connectionStatusLabel.style.fontSize = 11;
-            _connectionStatusLabel.style.color = ExoforgeUIStyle.TextPrimary;
+            _connectionStatusLabel.style.color = ExoforgeUIStyle.TextHeaderPrimary;
             _connectionPill.Add(_connectionStatusLabel);
 
             statusContainer.Add(_connectionPill);
@@ -339,9 +339,10 @@ namespace Exoforge.Unity.Editor
                     else await ExoforgeControlCenter.ConnectSharedAsync();
                     RebuildUI();
                 },
-                bg: IsConnected ? new Color(1f, 1f, 1f, 0.08f) : ExoforgeUIStyle.BrandPurple,
+                bg: IsConnected ? ExoforgeUIStyle.BgHeaderBtn : ExoforgeUIStyle.BrandPurple,
                 textCol: Color.white,
-                height: 28);
+                height: 28,
+                isHeader: true);
             statusContainer.Add(_connectBtn);
 
             masthead.Add(statusContainer);
@@ -352,7 +353,7 @@ namespace Exoforge.Unity.Editor
             toolbar.style.height = 38;
             toolbar.style.backgroundColor = ExoforgeUIStyle.BgHeader;
             toolbar.style.borderTopWidth = 1;
-            toolbar.style.borderTopColor = new Color(1f, 1f, 1f, 0.06f);
+            toolbar.style.borderTopColor = ExoforgeUIStyle.DividerHeader;
             toolbar.style.flexDirection = FlexDirection.Row;
             toolbar.style.alignItems = Align.Center;
             toolbar.style.justifyContent = Justify.SpaceBetween;
@@ -368,7 +369,7 @@ namespace Exoforge.Unity.Editor
 
             var catalogChip = new Label("● Workspace Catalog & Stored Schemas");
             catalogChip.style.fontSize = 11;
-            catalogChip.style.color = ExoforgeUIStyle.TextMuted;
+            catalogChip.style.color = ExoforgeUIStyle.TextHeaderMuted;
             leftTools.Add(catalogChip);
 
             toolbar.Add(leftTools);
@@ -380,7 +381,7 @@ namespace Exoforge.Unity.Editor
             actionsGroup.style.flexShrink = 0;
 
             var scaffoldBtn = ExoforgeUIStyle.CreateModernButton(
-                "➕ Scaffold Plugin",
+                "➕ Scaffold Extension",
                 () => ExoforgeScaffoldModal.Open(onCreated: () =>
                 {
                     InvalidateHooksCache();
@@ -389,13 +390,15 @@ namespace Exoforge.Unity.Editor
                 }),
                 bg: ExoforgeUIStyle.BrandPurple,
                 textCol: Color.white,
-                height: 26);
+                height: 26,
+                isHeader: true);
             actionsGroup.Add(scaffoldBtn);
 
             var authBtn = ExoforgeUIStyle.CreateModernButton(
                 "👤 Account",
                 () => ExoforgeAccountModal.Open(),
-                height: 26);
+                height: 26,
+                isHeader: true);
             actionsGroup.Add(authBtn);
 
             var refreshBtn = ExoforgeUIStyle.CreateModernButton(
@@ -405,13 +408,15 @@ namespace Exoforge.Unity.Editor
                     InvalidateHooksCache();
                     _ = RefreshPluginsDataAsync();
                 },
-                height: 26);
+                height: 26,
+                isHeader: true);
             actionsGroup.Add(refreshBtn);
 
             var studioBtn = ExoforgeUIStyle.CreateModernButton(
                 "⚡ Studio Window ↗",
                 () => ExoforgeControlCenter.ShowWindow(),
-                height: 26);
+                height: 26,
+                isHeader: true);
             actionsGroup.Add(studioBtn);
 
             toolbar.Add(actionsGroup);
@@ -458,8 +463,9 @@ namespace Exoforge.Unity.Editor
             {
                 _connectionDot.style.backgroundColor = IsConnected ? ExoforgeUIStyle.AccentGreen : ExoforgeUIStyle.AccentGray;
                 _connectionStatusLabel.text = IsConnected ? "Online" : (ExoforgeControlCenter.IsConnecting ? "Connecting..." : "Offline");
+                _connectionStatusLabel.style.color = ExoforgeUIStyle.TextHeaderPrimary;
                 _connectBtn.text = IsConnected ? "Disconnect" : "⚡ Connect";
-                _connectBtn.style.backgroundColor = IsConnected ? new Color(1f, 1f, 1f, 0.08f) : ExoforgeUIStyle.BrandPurple;
+                _connectBtn.style.backgroundColor = IsConnected ? ExoforgeUIStyle.BgHeaderBtn : ExoforgeUIStyle.BrandPurple;
             }
 
             if (_envBadge != null)
@@ -679,7 +685,7 @@ namespace Exoforge.Unity.Editor
                 { text = tabs[i] };
 
                 tabBtn.style.backgroundColor = isTabActive ? ExoforgeUIStyle.BrandPurpleGlow : Color.clear;
-                tabBtn.style.color = isTabActive ? ExoforgeUIStyle.BrandPurpleLight : ExoforgeUIStyle.TextSecondary;
+                tabBtn.style.color = isTabActive ? ExoforgeUIStyle.BrandPurpleActive : ExoforgeUIStyle.TextSecondary;
                 tabBtn.style.borderTopWidth = 0;
                 tabBtn.style.borderBottomWidth = isTabActive ? 2 : 0;
                 tabBtn.style.borderLeftWidth = 0;
@@ -799,7 +805,7 @@ namespace Exoforge.Unity.Editor
                 var forceBuildBtn = ExoforgeUIStyle.CreateModernButton("⚡ Force Build", async () =>
                 {
                     await ForceBuildPluginAsync(plugin);
-                }, bg: new Color(1f, 1f, 1f, 0.08f), textCol: ExoforgeUIStyle.TextPrimary);
+                });
                 forceBuildBtn.tooltip = "Escape hatch: Force rebuild this plugin from source ignoring cached artifacts";
                 top.Add(forceBuildBtn);
 
@@ -860,7 +866,7 @@ namespace Exoforge.Unity.Editor
                 logsBox.style.paddingRight = 10;
                 logsBox.style.paddingTop = 8;
                 logsBox.style.paddingBottom = 8;
-                logsBox.style.backgroundColor = new Color(0.12f, 0.12f, 0.15f);
+                logsBox.style.backgroundColor = ExoforgeUIStyle.BgInput;
                 logsBox.style.borderTopWidth = 1;
                 logsBox.style.borderTopColor = ExoforgeUIStyle.BorderSubtle;
                 logsBox.style.borderTopLeftRadius = 4;

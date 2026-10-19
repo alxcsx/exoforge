@@ -37,7 +37,7 @@ public partial class ExoforgeControlCenter : EditorWindow
 
         // --- 1. SCAFFOLD NEW EXTENSION BUTTON ---
         var origBoxBg = GUI.backgroundColor;
-        GUI.backgroundColor = new Color(0.28f, 0.18f, 0.48f, 0.6f);
+        GUI.backgroundColor = ExoforgeUIStyle.ImguiHeroBoxBg;
         EditorGUILayout.BeginVertical(GUI.skin.box);
         GUI.backgroundColor = origBoxBg;
         EditorGUILayout.Space(2);
@@ -134,7 +134,10 @@ public partial class ExoforgeControlCenter : EditorWindow
         {
             foreach (var plugin in _localPlugins)
             {
+                var origCardBg = GUI.backgroundColor;
+                GUI.backgroundColor = ExoforgeUIStyle.ImguiCardBg;
                 EditorGUILayout.BeginVertical(GUI.skin.box);
+                GUI.backgroundColor = origCardBg;
                 EditorGUILayout.Space(3);
 
                 EditorGUILayout.BeginHorizontal();
@@ -172,28 +175,28 @@ public partial class ExoforgeControlCenter : EditorWindow
                 if (failed)
                 {
                     var prev = GUI.color;
-                    GUI.color = new Color(0.95f, 0.35f, 0.35f);
+                    GUI.color = ExoforgeUIStyle.AccentRed;
                     EditorGUILayout.LabelField("✗ Build Error", EditorStyles.miniBoldLabel, GUILayout.Width(90));
                     GUI.color = prev;
                 }
                 else if (!plugin.IsBuilt)
                 {
                     var prev = GUI.color;
-                    GUI.color = new Color(0.95f, 0.65f, 0.2f);
+                    GUI.color = ExoforgeUIStyle.AccentOrange;
                     EditorGUILayout.LabelField("○ Not built", EditorStyles.miniLabel, GUILayout.Width(80));
                     GUI.color = prev;
                 }
                 else if (plugin.Modified)
                 {
                     var prev = GUI.color;
-                    GUI.color = new Color(0.95f, 0.7f, 0.2f);
+                    GUI.color = ExoforgeUIStyle.AccentOrange;
                     EditorGUILayout.LabelField("● Modified", EditorStyles.miniBoldLabel, GUILayout.Width(80));
                     GUI.color = prev;
                 }
                 else
                 {
                     var prev = GUI.color;
-                    GUI.color = new Color(0.3f, 0.9f, 0.45f);
+                    GUI.color = ExoforgeUIStyle.AccentGreen;
                     EditorGUILayout.LabelField("✓ Ready", EditorStyles.miniBoldLabel, GUILayout.Width(80));
                     GUI.color = prev;
                 }
@@ -285,7 +288,10 @@ public partial class ExoforgeControlCenter : EditorWindow
                     string version = plugin.TryGetProperty("version", out var vProp) ? vProp.ToString() : "";
                     string icon = plugin.TryGetProperty("icon", out var icProp) ? icProp.ToString() : "🧩";
 
+                    var origRemBg = GUI.backgroundColor;
+                    GUI.backgroundColor = ExoforgeUIStyle.ImguiCardBg;
                     EditorGUILayout.BeginVertical(GUI.skin.box);
+                    GUI.backgroundColor = origRemBg;
                     EditorGUILayout.BeginHorizontal();
 
                     var remIconStyle = new GUIStyle(EditorStyles.label) { fontSize = 20, alignment = TextAnchor.MiddleCenter };

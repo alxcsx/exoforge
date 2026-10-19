@@ -83,7 +83,10 @@ public partial class ExoforgeControlCenter : EditorWindow
 
     private static void DrawMetricPill(string label, string val)
     {
+        var origBg = GUI.backgroundColor;
+        GUI.backgroundColor = ExoforgeUIStyle.ImguiCardBg;
         EditorGUILayout.BeginVertical(GUI.skin.box);
+        GUI.backgroundColor = origBg;
         EditorGUILayout.LabelField(label, EditorStyles.miniLabel);
         EditorGUILayout.LabelField(val, EditorStyles.boldLabel);
         EditorGUILayout.EndVertical();

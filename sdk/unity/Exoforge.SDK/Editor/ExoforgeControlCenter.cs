@@ -564,15 +564,15 @@ public partial class ExoforgeControlCenter : EditorWindow
         var statusCapsule = new VisualElement();
         statusCapsule.style.flexDirection = FlexDirection.Row;
         statusCapsule.style.alignItems = Align.Center;
-        statusCapsule.style.backgroundColor = new Color(0f, 0f, 0f, 0.35f);
+        statusCapsule.style.backgroundColor = ExoforgeUIStyle.BgHeaderCapsule;
         statusCapsule.style.borderTopWidth = 1;
         statusCapsule.style.borderBottomWidth = 1;
         statusCapsule.style.borderLeftWidth = 1;
         statusCapsule.style.borderRightWidth = 1;
-        statusCapsule.style.borderTopColor = new Color(1f, 1f, 1f, 0.12f);
-        statusCapsule.style.borderBottomColor = new Color(1f, 1f, 1f, 0.12f);
-        statusCapsule.style.borderLeftColor = new Color(1f, 1f, 1f, 0.12f);
-        statusCapsule.style.borderRightColor = new Color(1f, 1f, 1f, 0.12f);
+        statusCapsule.style.borderTopColor = ExoforgeUIStyle.BorderHeaderCapsule;
+        statusCapsule.style.borderBottomColor = ExoforgeUIStyle.BorderHeaderCapsule;
+        statusCapsule.style.borderLeftColor = ExoforgeUIStyle.BorderHeaderCapsule;
+        statusCapsule.style.borderRightColor = ExoforgeUIStyle.BorderHeaderCapsule;
         statusCapsule.style.borderTopLeftRadius = 14;
         statusCapsule.style.borderTopRightRadius = 14;
         statusCapsule.style.borderBottomLeftRadius = 14;
@@ -590,7 +590,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         string statusText = _isConnected ? $"Online ({_connectionStatus})" : (_isConnecting ? "Connecting..." : "Offline");
         _connectionText = new Label(statusText);
         _connectionText.style.fontSize = 11;
-        _connectionText.style.color = ExoforgeUIStyle.TextPrimary;
+        _connectionText.style.color = ExoforgeUIStyle.TextHeaderPrimary;
         statusCapsule.Add(_connectionText);
 
         _latencyPill = new Label(!string.IsNullOrEmpty(_connectionLatency) ? $" • {_connectionLatency}" : "");
@@ -607,9 +607,10 @@ public partial class ExoforgeControlCenter : EditorWindow
                 if (_isConnected) _ = DisconnectAsync();
                 else _ = ConnectAsync();
             },
-            bg: _isConnected ? new Color(1f, 1f, 1f, 0.08f) : ExoforgeUIStyle.BrandPurple,
+            bg: _isConnected ? ExoforgeUIStyle.BgHeaderBtn : ExoforgeUIStyle.BrandPurple,
             textCol: Color.white,
-            height: 28);
+            height: 28,
+            isHeader: true);
         statusContainer.Add(_connectBtn);
 
         masthead.Add(statusContainer);
@@ -620,7 +621,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         toolbar.style.height = 38;
         toolbar.style.backgroundColor = ExoforgeUIStyle.BgHeader;
         toolbar.style.borderTopWidth = 1;
-        toolbar.style.borderTopColor = new Color(1f, 1f, 1f, 0.06f);
+        toolbar.style.borderTopColor = ExoforgeUIStyle.DividerHeader;
         toolbar.style.flexDirection = FlexDirection.Row;
         toolbar.style.alignItems = Align.Center;
         toolbar.style.justifyContent = Justify.SpaceBetween;
@@ -637,11 +638,11 @@ public partial class ExoforgeControlCenter : EditorWindow
         string wsUrl = ActiveWsUrl;
         _endpointLabel = new Label(!string.IsNullOrEmpty(wsUrl) ? $"WS: {wsUrl}" : "No WS endpoint");
         _endpointLabel.style.fontSize = 10;
-        _endpointLabel.style.color = ExoforgeUIStyle.TextMuted;
+        _endpointLabel.style.color = ExoforgeUIStyle.TextHeaderMuted;
         _endpointLabel.style.marginRight = 8;
         leftTools.Add(_endpointLabel);
 
-        var pingBtn = ExoforgeUIStyle.CreateModernButton("🏓 Ping", () => _ = PingClusterAsync(), height: 22);
+        var pingBtn = ExoforgeUIStyle.CreateModernButton("🏓 Ping", () => _ = PingClusterAsync(), height: 22, isHeader: true);
         pingBtn.style.paddingLeft = 8;
         pingBtn.style.paddingRight = 8;
         pingBtn.style.fontSize = 10;
@@ -655,23 +656,23 @@ public partial class ExoforgeControlCenter : EditorWindow
         actionsGroup.style.alignItems = Align.Center;
         actionsGroup.style.flexShrink = 0;
 
-        var syncBtn = ExoforgeUIStyle.CreateModernButton("🔄 Sync Client", () => _ = SyncAndGenerateClientAsync(), height: 26);
+        var syncBtn = ExoforgeUIStyle.CreateModernButton("🔄 Sync Client", () => _ = SyncAndGenerateClientAsync(), height: 26, isHeader: true);
         actionsGroup.Add(syncBtn);
 
-        var extensionsBtn = ExoforgeUIStyle.CreateModernButton("🔌 Extensions", () => ExoforgeExtensionsWindow.ShowWindow(), height: 26);
+        var extensionsBtn = ExoforgeUIStyle.CreateModernButton("🔌 Extensions", () => ExoforgeExtensionsWindow.ShowWindow(), height: 26, isHeader: true);
         actionsGroup.Add(extensionsBtn);
 
         var studioBtn = ExoforgeUIStyle.CreateModernButton("🌐 Web Studio ↗", () =>
         {
             string url = ActiveHttpEndpoint;
             if (!string.IsNullOrEmpty(url)) Application.OpenURL(url);
-        }, height: 26);
+        }, height: 26, isHeader: true);
         actionsGroup.Add(studioBtn);
 
         var authBtn = ExoforgeUIStyle.CreateModernButton("👤 Account", () =>
         {
             ExoforgeAccountModal.Open();
-        }, height: 26);
+        }, height: 26, isHeader: true);
         actionsGroup.Add(authBtn);
 
         toolbar.Add(actionsGroup);
@@ -754,7 +755,7 @@ public partial class ExoforgeControlCenter : EditorWindow
             btn.style.borderRightWidth = 0;
             btn.style.borderBottomColor = isActive ? ExoforgeUIStyle.BrandPurple : Color.clear;
             btn.style.backgroundColor = isActive ? ExoforgeUIStyle.BrandPurpleGlow : Color.clear;
-            btn.style.color = isActive ? ExoforgeUIStyle.BrandPurpleLight : ExoforgeUIStyle.TextSecondary;
+            btn.style.color = isActive ? ExoforgeUIStyle.BrandPurpleActive : ExoforgeUIStyle.TextSecondary;
             btn.style.unityFontStyleAndWeight = isActive ? FontStyle.Bold : FontStyle.Normal;
             btn.style.borderTopLeftRadius = 6;
             btn.style.borderTopRightRadius = 6;
@@ -782,7 +783,7 @@ public partial class ExoforgeControlCenter : EditorWindow
                 btn.style.borderBottomWidth = isActive ? 2 : 0;
                 btn.style.borderBottomColor = isActive ? ExoforgeUIStyle.BrandPurple : Color.clear;
                 btn.style.backgroundColor = isActive ? ExoforgeUIStyle.BrandPurpleGlow : Color.clear;
-                btn.style.color = isActive ? ExoforgeUIStyle.BrandPurpleLight : ExoforgeUIStyle.TextSecondary;
+                btn.style.color = isActive ? ExoforgeUIStyle.BrandPurpleActive : ExoforgeUIStyle.TextSecondary;
                 btn.style.unityFontStyleAndWeight = isActive ? FontStyle.Bold : FontStyle.Normal;
             }
         }
@@ -796,6 +797,7 @@ public partial class ExoforgeControlCenter : EditorWindow
             _connectionDot.style.backgroundColor = dotColor;
             _connectionText.text = _isConnected ? $"Online ({_connectionStatus})" : (_isConnecting ? "Connecting..." : "Offline");
             _connectBtn.text = _isConnected ? "Disconnect" : (_isConnecting ? "Retry" : "⚡ Connect");
+            _connectBtn.style.backgroundColor = _isConnected ? ExoforgeUIStyle.BgHeaderBtn : ExoforgeUIStyle.BrandPurple;
         }
 
         if (_envBadge != null)
