@@ -1,7 +1,7 @@
 {
   "id": "snake_config",
   "type": "native",
-  "version": "1.0.0+9.d16c2505",
+  "version": "1.0.0+10.e5d4cdcd",
   "context": "global",
   "entry_point": "snake_config",
   "dependencies": ["unity_addressables"],

@@ -711,21 +711,6 @@ public static class ExoCodeGenerator
         sb.AppendLine("}");
         sb.AppendLine();
 
-        if (customInputs is { Count: > 0 })
-        {
-            sb.AppendLine("namespace Exoforge.Plugin.SDK");
-            sb.AppendLine("{");
-            sb.AppendLine("    public static partial class ExoInput");
-            sb.AppendLine("    {");
-            foreach (var (pascal, id) in customInputs)
-            {
-                sb.AppendLine($"        public const string {pascal} = \"{id}\";");
-            }
-            sb.AppendLine("    }");
-            sb.AppendLine("}");
-            sb.AppendLine();
-        }
-
         sb.AppendLine("namespace Exoforge.Plugin.SDK");
         sb.AppendLine("{");
         sb.AppendLine("    public static class ExoServices");

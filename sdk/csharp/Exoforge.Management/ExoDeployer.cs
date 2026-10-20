@@ -843,7 +843,7 @@ public class ExoDeployer
             if (FindPluginCsproj(dir, name) == null) continue;
 
             string output = Path.Combine(dir, "src", "Generated", "PluginServices.g.cs");
-            ExoCodeGenerator.GeneratePluginStubsToFile(merged, output, services: ReadManifestDependencies(dir));
+            ExoCodeGenerator.GeneratePluginStubsToFile(merged, output, services: ReadManifestDependencies(dir), pluginId: name);
             outputs.Add(output);
         }
 
@@ -962,7 +962,11 @@ public class ExoDeployer
             try
             {
                 string contractsJson = MergeLocalContracts(LoadCachedOrEmptyContracts());
-                ExoCodeGenerator.GeneratePluginStubsToFile(contractsJson, stubsFile, services: null, pluginId: cleanName);
+                var deps = ReadManifestDependencies(pluginDir);
+                var targetServices = deps is { Count: > 0 }
+                    ? (IEnumerable<string>)deps
+                    : AvailableServices(contractsJson).Where(s => !string.Equals(s, cleanName, StringComparison.OrdinalIgnoreCase));
+                ExoCodeGenerator.GeneratePluginStubsToFile(contractsJson, stubsFile, services: targetServices, pluginId: cleanName);
             }
             catch
             {

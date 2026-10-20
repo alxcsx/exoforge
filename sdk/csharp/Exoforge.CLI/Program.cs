@@ -669,10 +669,11 @@ public static class Program
         string pluginDir = Path.Combine(ws.PluginsPath, name);
         string stubsOut = cli.Value("out") ?? Path.Combine(pluginDir, "src", "Generated", "PluginServices.g.cs");
 
+        var deps = ExoDeployer.ReadManifestDependencies(pluginDir);
         string? servicesOption = cli.Value("services");
         IEnumerable<string>? services = servicesOption != null
             ? servicesOption.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            : ExoDeployer.AvailableServices(exportJson).Where(s => !string.Equals(s, name, StringComparison.OrdinalIgnoreCase)).ToList();
+            : (deps is { Count: > 0 } ? deps : ExoDeployer.AvailableServices(exportJson).Where(s => !string.Equals(s, name, StringComparison.OrdinalIgnoreCase)).ToList());
 
         var missing = ExoDeployer.MissingServices(exportJson, services);
 
