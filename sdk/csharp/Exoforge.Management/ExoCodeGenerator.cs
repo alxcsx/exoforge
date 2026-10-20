@@ -1067,6 +1067,7 @@ public static class ExoCodeGenerator
             foreach (var service in services.EnumerateArray())
             {
                 CollectNamed(service, "resources", "type", types);
+                CollectNamed(service, "resources", "record", types);
                 CollectNamed(service, "events", "payload_type", types);
                 CollectNamed(service, "actions", "returns_type", types);
             }

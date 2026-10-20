@@ -445,8 +445,8 @@ namespace Exoforge.Plugins.Generated
     [JsonSerializable(typeof(UnityAddressablesUploadBundleResponse))]
     [JsonSerializable(typeof(UnityAddressablesUploadPreviewRequest))]
     [JsonSerializable(typeof(UnityAddressablesUploadPreviewResponse))]
-    [JsonSerializable(typeof(global::Exoforge.Plugins.SnakeConfig.SnakeConfigRecord))]
-    [JsonSerializable(typeof(global::Exoforge.Plugins.SnakeConfig.SnakeConfigData))]
+    [JsonSerializable(typeof(global::Exoforge.Plugins.SnakeConfig.SnakeConfigSchema))]
+    [JsonSerializable(typeof(global::Exoforge.Plugins.SnakeConfig.SnakeConfigDto))]
     public partial class GeneratedServicesJsonContext : JsonSerializerContext
     {
     }

@@ -1140,7 +1140,7 @@ public class SamplePluginValueChangedEvent
 }
 
 /// <summary>Response model for snake_config.get_config action.</summary>
-public class SnakeConfigData
+public class SnakeConfigDto
 {
     [JsonPropertyName("snake_color")]
     public string SnakeColor { get; set; } = default!;
@@ -2802,13 +2802,13 @@ public class SnakeConfigServiceClient
     }
 
     /// <summary>Executes get_config action.</summary>
-    public Task<SnakeConfigData> GetConfigAsync(CancellationToken cancellationToken = default)
+    public Task<SnakeConfigDto> GetConfigAsync(CancellationToken cancellationToken = default)
     {
-        return _client.SendActionAsync<SnakeConfigData>("snake_config", "get_config", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+        return _client.SendActionAsync<SnakeConfigDto>("snake_config", "get_config", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
     /// <summary>Executes update_config action with typed arguments.</summary>
-    public Task<SnakeConfigData> UpdateConfigAsync(string snakeColor, string appleColor, long applePoints, string backgroundFileId, string backgroundAddressable, CancellationToken cancellationToken = default)
+    public Task<SnakeConfigDto> UpdateConfigAsync(string snakeColor, string appleColor, long applePoints, string backgroundFileId, string backgroundAddressable, CancellationToken cancellationToken = default)
     {
         var req = new SnakeConfigUpdateConfigRequest
         {
@@ -2822,9 +2822,9 @@ public class SnakeConfigServiceClient
     }
 
     /// <summary>Executes update_config action with a typed request DTO.</summary>
-    public Task<SnakeConfigData> UpdateConfigAsync(SnakeConfigUpdateConfigRequest request, CancellationToken cancellationToken = default)
+    public Task<SnakeConfigDto> UpdateConfigAsync(SnakeConfigUpdateConfigRequest request, CancellationToken cancellationToken = default)
     {
-        return _client.SendActionAsync<SnakeConfigData>("snake_config", "update_config", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+        return _client.SendActionAsync<SnakeConfigDto>("snake_config", "update_config", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
 }

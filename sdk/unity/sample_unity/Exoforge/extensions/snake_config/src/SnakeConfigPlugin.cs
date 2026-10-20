@@ -18,37 +18,37 @@ public class SnakeConfigPlugin
     public IUnityAddressablesService? Addressables { get; set; }
 
     [ExoAction]
-    public SnakeConfigData GetConfig()
+    public SnakeConfigDto GetConfig()
     {
-        var record = Database?.First<SnakeConfigRecord>();
-        if (record == null)
+        var schema = Database?.First<SnakeConfigSchema>();
+        if (schema == null)
         {
-            record = new SnakeConfigRecord();
-            Database?.Put(record);
+            schema = new SnakeConfigSchema();
+            Database?.Put(schema);
         }
-        return new SnakeConfigData(record);
+        return new SnakeConfigDto(schema);
     }
 
     [ExoAction]
-    public SnakeConfigData UpdateConfig(
+    public SnakeConfigDto UpdateConfig(
         string? snakeColor,
         string? appleColor,
         int? applePoints,
         string? backgroundFileId,
         string? backgroundAddressable)
     {
-        var current = Database?.First<SnakeConfigRecord>() ?? new SnakeConfigRecord();
+        var current = Database?.First<SnakeConfigSchema>() ?? new SnakeConfigSchema();
         var updated = current.With(snakeColor, appleColor, applePoints, backgroundFileId, backgroundAddressable);
 
         Database?.Put(updated);
         Logger?.Info($"[snake_config] Updated config: points={updated.ApplePoints}, snake={updated.SnakeColor}");
 
-        return new SnakeConfigData(updated);
+        return new SnakeConfigDto(updated);
     }
 }
 
 [ExoSingletonResource("snake_config", PrimaryKey = "key")]
-public record SnakeConfigRecord
+public record SnakeConfigSchema
 {
     [ExoColumn(Label = "Key")]
     public string Key { get; init; } = "active_config";
@@ -71,7 +71,7 @@ public record SnakeConfigRecord
     [ExoColumn(Label = "Updated At")]
     public long UpdatedAt { get; init; }
 
-    public SnakeConfigRecord With(string? snake, string? apple, int? points, string? fileId, string? addressable) => this with
+    public SnakeConfigSchema With(string? snake, string? apple, int? points, string? fileId, string? addressable) => this with
     {
         SnakeColor = !string.IsNullOrEmpty(snake) ? snake : SnakeColor,
         AppleColor = !string.IsNullOrEmpty(apple) ? apple : AppleColor,
@@ -83,7 +83,7 @@ public record SnakeConfigRecord
 }
 
 // DTO
-public record SnakeConfigData(
+public record SnakeConfigDto(
     string SnakeColor = "#3DD157",
     string AppleColor = "#FF525C",
     int ApplePoints = 10,
@@ -91,13 +91,13 @@ public record SnakeConfigData(
     string BackgroundAddressable = "Background_CyberGrid"
 )
 {
-    public SnakeConfigData(SnakeConfigRecord record)
+    public SnakeConfigDto(SnakeConfigSchema schema)
         : this(
-            record.SnakeColor,
-            record.AppleColor,
-            record.ApplePoints,
-            record.BackgroundFileId,
-            record.BackgroundAddressable)
+            schema.SnakeColor,
+            schema.AppleColor,
+            schema.ApplePoints,
+            schema.BackgroundFileId,
+            schema.BackgroundAddressable)
     {
     }
 }

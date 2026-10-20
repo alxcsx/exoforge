@@ -15,7 +15,7 @@ namespace SnakeGame
 
         public bool IsLoaded { get; private set; }
         public string Status { get; private set; } = "not loaded";
-        public SnakeConfigData? ConfigData { get; private set; }
+        public SnakeConfigDto? ConfigData { get; private set; }
 
         private void Awake()
         {

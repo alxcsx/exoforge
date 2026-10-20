@@ -1,7 +1,7 @@
 {
   "id": "snake_config",
   "type": "native",
-  "version": "1.0.0+3.fcb4f6a1",
+  "version": "1.0.0+4.d9d0bdd1",
   "context": "global",
   "entry_point": "snake_config",
   "dependencies": ["database", "unity_addressables"],
@@ -14,13 +14,13 @@
     {
       "name": "snake_config",
       "actions": [
-        {"name": "get_config", "mode": "sync", "scope": "global", "transport": "auto", "arity": 0, "params": {}, "returns": {"snake_color": "string", "apple_color": "string", "apple_points": "integer", "background_file_id": "string", "background_addressable": "string"}, "returns_list": false, "returns_type": "global::Exoforge.Plugins.SnakeConfig.SnakeConfigData"},
-        {"name": "update_config", "mode": "sync", "scope": "global", "transport": "auto", "arity": 5, "params": {"snake_color": "string", "apple_color": "string", "apple_points": "integer", "background_file_id": "string", "background_addressable": "string"}, "returns": {"snake_color": "string", "apple_color": "string", "apple_points": "integer", "background_file_id": "string", "background_addressable": "string"}, "returns_list": false, "returns_type": "global::Exoforge.Plugins.SnakeConfig.SnakeConfigData"}
+        {"name": "get_config", "mode": "sync", "scope": "global", "transport": "auto", "arity": 0, "params": {}, "returns": {"snake_color": "string", "apple_color": "string", "apple_points": "integer", "background_file_id": "string", "background_addressable": "string"}, "returns_list": false, "returns_type": "global::Exoforge.Plugins.SnakeConfig.SnakeConfigDto"},
+        {"name": "update_config", "mode": "sync", "scope": "global", "transport": "auto", "arity": 5, "params": {"snake_color": "string", "apple_color": "string", "apple_points": "integer", "background_file_id": "string", "background_addressable": "string"}, "returns": {"snake_color": "string", "apple_color": "string", "apple_points": "integer", "background_file_id": "string", "background_addressable": "string"}, "returns_list": false, "returns_type": "global::Exoforge.Plugins.SnakeConfig.SnakeConfigDto"}
       ],
       "events": [
       ],
       "resources": [
-        {"name": "snake_config", "primary_key": "key", "record": "global::Exoforge.Plugins.SnakeConfig.SnakeConfigRecord", "singleton": true, "kind": "singleton", "source": {"table": "snake_config"}, "drawer": ["overview", "attributes"], "actions": ["get_config", "update_config"], "columns": [{"name": "key", "type": "string", "label": "Key", "sortable": false, "filterable": false, "badge": false, "default": "active_config"}, {"name": "snake_color", "type": "string", "label": "Snake Color", "sortable": false, "filterable": false, "badge": false, "input": "color", "default": "#3DD157"}, {"name": "apple_color", "type": "string", "label": "Apple Color", "sortable": false, "filterable": false, "badge": false, "input": "color", "default": "#FF525C"}, {"name": "apple_points", "type": "integer", "label": "Apple Points", "sortable": false, "filterable": false, "badge": false, "default": "10"}, {"name": "background_file_id", "type": "string", "label": "Background File ID", "sortable": false, "filterable": false, "badge": false, "role": "file_reference", "bucket": "snake_assets", "default": ""}, {"name": "background_addressable", "type": "string", "label": "Background Addressable", "sortable": false, "filterable": false, "badge": false, "input": "addressable_ref", "default": "Background_CyberGrid"}, {"name": "updated_at", "type": "integer", "label": "Updated At", "sortable": false, "filterable": false, "badge": false}]}
+        {"name": "snake_config", "primary_key": "key", "record": "global::Exoforge.Plugins.SnakeConfig.SnakeConfigSchema", "singleton": true, "kind": "singleton", "source": {"table": "snake_config"}, "drawer": ["overview", "attributes"], "actions": ["get_config", "update_config"], "columns": [{"name": "key", "type": "string", "label": "Key", "sortable": false, "filterable": false, "badge": false, "default": "active_config"}, {"name": "snake_color", "type": "string", "label": "Snake Color", "sortable": false, "filterable": false, "badge": false, "input": "color", "default": "#3DD157"}, {"name": "apple_color", "type": "string", "label": "Apple Color", "sortable": false, "filterable": false, "badge": false, "input": "color", "default": "#FF525C"}, {"name": "apple_points", "type": "integer", "label": "Apple Points", "sortable": false, "filterable": false, "badge": false, "default": "10"}, {"name": "background_file_id", "type": "string", "label": "Background File ID", "sortable": false, "filterable": false, "badge": false, "role": "file_reference", "bucket": "snake_assets", "default": ""}, {"name": "background_addressable", "type": "string", "label": "Background Addressable", "sortable": false, "filterable": false, "badge": false, "input": "addressable_ref", "default": "Background_CyberGrid"}, {"name": "updated_at", "type": "integer", "label": "Updated At", "sortable": false, "filterable": false, "badge": false}]}
       ]
     }
   ]
