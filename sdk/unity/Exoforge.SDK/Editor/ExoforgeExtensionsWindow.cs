@@ -250,7 +250,9 @@ namespace Exoforge.Unity.Editor
             var leftPane = BuildSidebarCatalog();
             _detailContainer = new VisualElement();
             _detailContainer.style.flexGrow = 1;
+            _detailContainer.style.flexShrink = 1;
             _detailContainer.style.flexDirection = FlexDirection.Column;
+            _detailContainer.style.overflow = Overflow.Hidden;
             _detailContainer.Add(BuildDetailPane());
 
             split.Add(leftPane);
@@ -385,6 +387,16 @@ namespace Exoforge.Unity.Editor
 
             statusContainer.Add(_connectionPill);
 
+            var authBtn = ExoforgeUIStyle.CreateModernButton(
+                "👤 Account",
+                () => ExoforgeAccountModal.Open(),
+                bg: ExoforgeUIStyle.BgHeaderBtn,
+                textCol: ExoforgeUIStyle.TextHeaderPrimary,
+                height: 28,
+                isHeader: true);
+            authBtn.style.marginRight = 6;
+            statusContainer.Add(authBtn);
+
             _connectBtn = ExoforgeUIStyle.CreateModernButton(
                 IsConnected ? "Disconnect" : "⚡ Connect",
                 async () =>
@@ -447,13 +459,6 @@ namespace Exoforge.Unity.Editor
                 height: 26,
                 isHeader: true);
             actionsGroup.Add(scaffoldBtn);
-
-            var authBtn = ExoforgeUIStyle.CreateModernButton(
-                "👤 Account",
-                () => ExoforgeAccountModal.Open(),
-                height: 26,
-                isHeader: true);
-            actionsGroup.Add(authBtn);
 
             var refreshBtn = ExoforgeUIStyle.CreateModernButton(
                 "🔄 Refresh",
@@ -855,6 +860,8 @@ namespace Exoforge.Unity.Editor
             var detail = new VisualElement();
             detail.style.flexDirection = FlexDirection.Column;
             detail.style.flexGrow = 1;
+            detail.style.flexShrink = 1;
+            detail.style.overflow = Overflow.Hidden;
             detail.style.backgroundColor = ExoforgeUIStyle.BgWindow;
             detail.style.paddingLeft = 14;
             detail.style.paddingRight = 14;
@@ -888,8 +895,10 @@ namespace Exoforge.Unity.Editor
 
             var tabStrip = new VisualElement();
             tabStrip.style.flexDirection = FlexDirection.Row;
-            tabStrip.style.marginTop = 10;
-            tabStrip.style.marginBottom = 10;
+            tabStrip.style.flexGrow = 0;
+            tabStrip.style.flexShrink = 0;
+            tabStrip.style.marginTop = 8;
+            tabStrip.style.marginBottom = 8;
             tabStrip.style.borderBottomWidth = 1;
             tabStrip.style.borderBottomColor = ExoforgeUIStyle.BorderSubtle;
             tabStrip.style.paddingBottom = 4;
@@ -930,6 +939,8 @@ namespace Exoforge.Unity.Editor
             // 3. Tab Contents
             var contentContainer = new VisualElement();
             contentContainer.style.flexGrow = 1;
+            contentContainer.style.flexShrink = 1;
+            contentContainer.style.overflow = Overflow.Hidden;
 
             if (_selectedDetailTab == 0)
             {
@@ -986,16 +997,21 @@ namespace Exoforge.Unity.Editor
         {
             var hero = new VisualElement();
             ExoforgeUIStyle.ApplyCard(hero);
+            hero.style.flexGrow = 0;
+            hero.style.flexShrink = 0;
             hero.style.backgroundColor = ExoforgeUIStyle.BgPanel;
             hero.style.paddingLeft = 14;
             hero.style.paddingRight = 14;
-            hero.style.paddingTop = 12;
-            hero.style.paddingBottom = 12;
+            hero.style.paddingTop = 10;
+            hero.style.paddingBottom = 10;
+            hero.style.marginBottom = 6;
 
             // Row 1: Identity & Primary Status/Action
             var top = new VisualElement();
             top.style.flexDirection = FlexDirection.Row;
             top.style.alignItems = Align.Center;
+            top.style.flexGrow = 0;
+            top.style.flexShrink = 0;
 
             var icon = new Label(plugin.Icon);
             icon.style.fontSize = 28;
@@ -1077,12 +1093,12 @@ namespace Exoforge.Unity.Editor
             toolbar.style.flexDirection = FlexDirection.Row;
             toolbar.style.flexWrap = Wrap.Wrap;
             toolbar.style.alignItems = Align.Center;
-            toolbar.style.marginTop = 10;
+            toolbar.style.marginTop = 8;
             toolbar.style.paddingTop = 8;
             toolbar.style.borderTopWidth = 1;
             toolbar.style.borderTopColor = ExoforgeUIStyle.BorderSubtle;
-
-            if (plugin.IsLocal && plugin.Type == "native")
+            toolbar.style.flexGrow = 0;
+            toolbar.style.flexShrink = 0;
             {
                 var forceBuildBtn = ExoforgeUIStyle.CreateModernButton("⚡ Force Build", async () =>
                 {
@@ -2350,7 +2366,7 @@ namespace Exoforge.Unity.Editor
                     }
                 }
 
-                _plugins = list.OrderBy(p => p.Name).ToList();
+                _plugins = list.OrderBy(p => p.Category).ThenBy(p => p.Name).ToList();
                 _pluginManifests = manifests;
 
                 if (string.IsNullOrEmpty(_selectedPluginId) && _plugins.Count > 0)

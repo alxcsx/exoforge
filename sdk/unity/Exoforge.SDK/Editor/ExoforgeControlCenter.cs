@@ -672,6 +672,13 @@ public partial class ExoforgeControlCenter : EditorWindow
 
         statusContainer.Add(statusCapsule);
 
+        var authBtn = ExoforgeUIStyle.CreateModernButton("👤 Account", () =>
+        {
+            ExoforgeAccountModal.Open();
+        }, bg: ExoforgeUIStyle.BgHeaderBtn, textCol: ExoforgeUIStyle.TextHeaderPrimary, height: 28, isHeader: true);
+        authBtn.style.marginRight = 6;
+        statusContainer.Add(authBtn);
+
         _connectBtn = ExoforgeUIStyle.CreateModernButton(
             _isConnected ? "Disconnect" : (_isConnecting ? "Retry" : "⚡ Connect"),
             () =>
@@ -740,12 +747,6 @@ public partial class ExoforgeControlCenter : EditorWindow
             if (!string.IsNullOrEmpty(url)) Application.OpenURL(url);
         }, height: 26, isHeader: true);
         actionsGroup.Add(studioBtn);
-
-        var authBtn = ExoforgeUIStyle.CreateModernButton("👤 Account", () =>
-        {
-            ExoforgeAccountModal.Open();
-        }, height: 26, isHeader: true);
-        actionsGroup.Add(authBtn);
 
         toolbar.Add(actionsGroup);
         header.Add(toolbar);
