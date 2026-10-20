@@ -14,14 +14,14 @@ public class SamplePlugin
     {
         int newValue = amount > 0 ? amount : 1;
 
-        Exo.Database.Put(new Counter(counterId, newValue));
-        await Exo.Events.EmitAsync(new CounterChanged(counterId, newValue, amount));
+        ExoServices.Database.Put(new Counter(counterId, newValue));
+        await ExoServices.Events.EmitAsync(new CounterChanged(counterId, newValue, amount));
 
         return newValue;
     }
 
     [ExoAction("injected")]
-    public string Injected() => $"database={Exo.Database is not null} events={Exo.Events is not null}";
+    public string Injected() => $"database={ExoServices.Database is not null} events={ExoServices.Events is not null}";
 
     [ExoAction("echo")]
     public int Echo(int value) => value;

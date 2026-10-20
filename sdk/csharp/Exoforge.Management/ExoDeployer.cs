@@ -424,9 +424,17 @@ public class ExoDeployer
         CancellationToken cancellationToken = default) =>
         GeneratePluginStubsAsync(extensionName, existingClient, emit, cancellationToken);
 
+    public Task<string> GeneratePluginStubsAsync(
+        string pluginName,
+        ExoClient? existingClient,
+        Action<string>? emit = null,
+        CancellationToken cancellationToken = default) =>
+        GeneratePluginStubsAsync(pluginName, services: null, existingClient, emit, cancellationToken);
+
     /// <summary>Fetches the contracts and writes typed stubs into the extension's <c>src/Generated</c> folder.</summary>
     public async Task<string> GeneratePluginStubsAsync(
         string pluginName,
+        IEnumerable<string>? services = null,
         ExoClient? existingClient = null,
         Action<string>? emit = null,
         CancellationToken cancellationToken = default)
@@ -448,8 +456,15 @@ public class ExoDeployer
         }
 
         string merged = MergeLocalContracts(exportJson);
-        var services = ReadManifestDependencies(pluginDir);
-        var missing = MissingServices(merged, services);
+        var targetServices = services?.ToList();
+        if (targetServices == null)
+        {
+            targetServices = AvailableServices(merged)
+                .Where(s => !string.Equals(s, cleanName, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+
+        var missing = MissingServices(merged, targetServices);
 
         if (missing.Count > 0)
         {
@@ -459,8 +474,47 @@ public class ExoDeployer
                 "provides them.");
         }
 
-        ExoCodeGenerator.GeneratePluginStubsToFile(merged, output, services: services, pluginId: cleanName);
+        ExoCodeGenerator.GeneratePluginStubsToFile(merged, output, services: targetServices, pluginId: cleanName);
         return output;
+    }
+
+    public static List<string> AvailableServices(string exportJson)
+    {
+        var available = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            var parsed = JsonNode.Parse(exportJson);
+            var exportNode = parsed?["export"] ?? parsed;
+            var plugins = exportNode?["plugins"] as JsonArray ?? exportNode?["extensions"] as JsonArray;
+
+            if (plugins != null)
+            {
+                foreach (JsonNode? plugin in plugins)
+                {
+                    if (plugin is null) continue;
+
+                    if (PluginId(plugin) is { Length: > 0 } pid) available.Add(pid);
+                    if (plugin["provides"] is JsonArray provides)
+                    {
+                        foreach (var p in provides) if (p?.GetValue<string>() is { Length: > 0 } pv) available.Add(pv);
+                    }
+
+                    if (plugin["services"] is JsonArray declared)
+                    {
+                        foreach (JsonNode? service in declared)
+                        {
+                            if (service?["name"]?.GetValue<string>() is { Length: > 0 } name) available.Add(name);
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
+        {
+        }
+
+        return available.ToList();
     }
 
     /// <summary>
@@ -901,22 +955,14 @@ public class ExoDeployer
         // in a manifest cannot be correlated with the builds that produced them.
         int buildNumber = PeekBuildNumber(pluginDir);
         string buildStamp = $"{buildNumber}.{fingerprint}";
-        // Refresh stubs from local contracts before compiling if stubs file exists
+        // Refresh stubs from contracts before compiling if stubs file exists
         string stubsFile = Path.Combine(pluginDir, "src", "Generated", "PluginServices.g.cs");
         if (File.Exists(stubsFile))
         {
             try
             {
-                var deps = ReadManifestDependencies(pluginDir);
-                if (deps is { Count: > 0 })
-                {
-                    string contractsJson = MergeLocalContracts("{\"export\":{\"plugins\":[]}}");
-                    var missing = MissingServices(contractsJson, deps);
-                    if (missing.Count == 0)
-                    {
-                        ExoCodeGenerator.GeneratePluginStubsToFile(contractsJson, stubsFile, services: deps, pluginId: cleanName);
-                    }
-                }
+                string contractsJson = MergeLocalContracts(LoadCachedOrEmptyContracts());
+                ExoCodeGenerator.GeneratePluginStubsToFile(contractsJson, stubsFile, services: null, pluginId: cleanName);
             }
             catch
             {

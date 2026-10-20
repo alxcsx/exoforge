@@ -672,7 +672,7 @@ public static class Program
         string? servicesOption = cli.Value("services");
         IEnumerable<string>? services = servicesOption != null
             ? servicesOption.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            : ExoDeployer.ReadManifestDependencies(pluginDir);
+            : ExoDeployer.AvailableServices(exportJson).Where(s => !string.Equals(s, name, StringComparison.OrdinalIgnoreCase)).ToList();
 
         var missing = ExoDeployer.MissingServices(exportJson, services);
 

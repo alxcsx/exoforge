@@ -174,9 +174,9 @@ public class ManagementTests : IDisposable
         Assert.Contains("[ExoAction]", serviceText);
         Assert.Contains("[ExoResource(\"guild_system_items\"", serviceText);
 
-        // Static holder Exo is used for ambient context (Database, Logger, etc.), and the entry point, the dispatch table and the JSON context are
+        // Static holder ExoServices is used for ambient context (Database, Logger, etc.), and the entry point, the dispatch table and the JSON context are
         // all generated - the scaffold writes none of them.
-        Assert.Contains("Exo.Logger.Info", serviceText);
+        Assert.Contains("ExoServices.Logger.Info", serviceText);
         Assert.DoesNotContain("public static void Main", serviceText);
         Assert.DoesNotContain("JsonContext", serviceText);
         Assert.False(File.Exists(Path.Combine(createdDir, "src", "GuildSystemJsonContext.cs")));

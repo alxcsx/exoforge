@@ -43,7 +43,7 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
 
 namespace Exoforge.Plugin.SDK
 {
-    public static class Exo
+    public static class ExoServices
     {
         private static global::Exoforge.Plugin.SDK.IDatabase? _databaseOverride;
         private static global::Exoforge.Plugin.SDK.ILogger? _loggerOverride;
@@ -88,14 +88,24 @@ namespace Exoforge.Plugin.SDK
         }
     }
 
+    public static class Exo
+    {
+        public static global::Exoforge.Plugin.SDK.IPluginContext Context => global::Exoforge.Plugin.SDK.ExoServices.Context;
+        public static global::Exoforge.Plugin.SDK.IDatabase Database { get => global::Exoforge.Plugin.SDK.ExoServices.Database; set => global::Exoforge.Plugin.SDK.ExoServices.Database = value; }
+        public static global::Exoforge.Plugin.SDK.ILogger Logger { get => global::Exoforge.Plugin.SDK.ExoServices.Logger; set => global::Exoforge.Plugin.SDK.ExoServices.Logger = value; }
+        public static global::Exoforge.Plugin.SDK.IEventDispatcher Events { get => global::Exoforge.Plugin.SDK.ExoServices.Events; set => global::Exoforge.Plugin.SDK.ExoServices.Events = value; }
+        public static global::Exoforge.Plugin.SDK.IActionDispatcher Actions { get => global::Exoforge.Plugin.SDK.ExoServices.Actions; set => global::Exoforge.Plugin.SDK.ExoServices.Actions = value; }
+        public static void Reset() => global::Exoforge.Plugin.SDK.ExoServices.Reset();
+    }
+
     public static class Exoforge
     {
-        public static global::Exoforge.Plugin.SDK.IPluginContext Context => global::Exoforge.Plugin.SDK.Exo.Context;
-        public static global::Exoforge.Plugin.SDK.IDatabase Database { get => global::Exoforge.Plugin.SDK.Exo.Database; set => global::Exoforge.Plugin.SDK.Exo.Database = value; }
-        public static global::Exoforge.Plugin.SDK.ILogger Logger { get => global::Exoforge.Plugin.SDK.Exo.Logger; set => global::Exoforge.Plugin.SDK.Exo.Logger = value; }
-        public static global::Exoforge.Plugin.SDK.IEventDispatcher Events { get => global::Exoforge.Plugin.SDK.Exo.Events; set => global::Exoforge.Plugin.SDK.Exo.Events = value; }
-        public static global::Exoforge.Plugin.SDK.IActionDispatcher Actions { get => global::Exoforge.Plugin.SDK.Exo.Actions; set => global::Exoforge.Plugin.SDK.Exo.Actions = value; }
-        public static void Reset() => global::Exoforge.Plugin.SDK.Exo.Reset();
+        public static global::Exoforge.Plugin.SDK.IPluginContext Context => global::Exoforge.Plugin.SDK.ExoServices.Context;
+        public static global::Exoforge.Plugin.SDK.IDatabase Database { get => global::Exoforge.Plugin.SDK.ExoServices.Database; set => global::Exoforge.Plugin.SDK.ExoServices.Database = value; }
+        public static global::Exoforge.Plugin.SDK.ILogger Logger { get => global::Exoforge.Plugin.SDK.ExoServices.Logger; set => global::Exoforge.Plugin.SDK.ExoServices.Logger = value; }
+        public static global::Exoforge.Plugin.SDK.IEventDispatcher Events { get => global::Exoforge.Plugin.SDK.ExoServices.Events; set => global::Exoforge.Plugin.SDK.ExoServices.Events = value; }
+        public static global::Exoforge.Plugin.SDK.IActionDispatcher Actions { get => global::Exoforge.Plugin.SDK.ExoServices.Actions; set => global::Exoforge.Plugin.SDK.ExoServices.Actions = value; }
+        public static void Reset() => global::Exoforge.Plugin.SDK.ExoServices.Reset();
     }
 }
 """;
@@ -139,7 +149,9 @@ namespace Exoforge.Plugin.SDK
             Option(provider.GlobalOptions, "build_property.DesignTimeBuild") == "true"));
 
         var hasExo = context.CompilationProvider.Select(static (compilation, _) =>
-            compilation.GetTypeByMetadataName("Exoforge.Plugin.SDK.Exo") != null
+            compilation.GetTypeByMetadataName("Exoforge.Plugin.SDK.ExoServices") != null
+            || compilation.GetTypeByMetadataName("Exoforge.Plugin.SDK.Exo") != null
+            || compilation.GetSymbolsWithName("ExoServices", SymbolFilter.Type).Any()
             || compilation.GetSymbolsWithName("Exo", SymbolFilter.Type).Any());
 
         context.RegisterSourceOutput(hasExo, static (spc, hasExoDefined) =>
@@ -409,26 +421,32 @@ namespace Exoforge.Plugin.SDK
             }
         }
 
-        // Detect dependencies referenced via static holder: Exo.<Service>, Exoforge.<Service>, or I<Service>Service
+        // Detect dependencies referenced via static holder: ExoServices.<Service>, Exo.<Service>, Exoforge.<Service>, or I<Service>Service
         var visitedTrees = new HashSet<SyntaxTree>();
-        foreach (var syntaxRef in root.DeclaringSyntaxReferences)
+        foreach (var syntaxTree in compilation.SyntaxTrees)
         {
-            if (!visitedTrees.Add(syntaxRef.SyntaxTree)) continue;
-            var fileRoot = syntaxRef.SyntaxTree.GetRoot(ct);
+            if (!visitedTrees.Add(syntaxTree)) continue;
+            string fileName = Path.GetFileName(syntaxTree.FilePath);
+            if (fileName.Equals("PluginServices.g.cs", StringComparison.OrdinalIgnoreCase)
+                || fileName.EndsWith(".g.cs", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+            var fileRoot = syntaxTree.GetRoot(ct);
             foreach (var memberAccess in fileRoot.DescendantNodes().OfType<MemberAccessExpressionSyntax>())
             {
                 string exprText = memberAccess.Expression.ToString();
-                if (exprText is "Exo" or "Exoforge"
-                    or "Exo.Services" or "Exoforge.Services"
-                    or "global::Exo" or "global::Exoforge"
-                    or "global::Exo.Services" or "global::Exoforge.Services"
-                    or "global::Exoforge.Plugin.SDK.Exo" or "global::Exoforge.Plugin.SDK.Exoforge"
-                    or "global::Exoforge.Plugin.SDK.Exo.Services" or "global::Exoforge.Plugin.SDK.Exoforge.Services"
-                    or "Exoforge.Plugin.SDK.Exo" or "Exoforge.Plugin.SDK.Exoforge"
-                    or "Exoforge.Plugin.SDK.Exo.Services" or "Exoforge.Plugin.SDK.Exoforge.Services")
+                if (exprText is "ExoServices" or "Exo" or "Exoforge"
+                    or "ExoServices.Services" or "Exo.Services" or "Exoforge.Services"
+                    or "global::ExoServices" or "global::Exo" or "global::Exoforge"
+                    or "global::ExoServices.Services" or "global::Exo.Services" or "global::Exoforge.Services"
+                    or "global::Exoforge.Plugin.SDK.ExoServices" or "global::Exoforge.Plugin.SDK.Exo" or "global::Exoforge.Plugin.SDK.Exoforge"
+                    or "global::Exoforge.Plugin.SDK.ExoServices.Services" or "global::Exoforge.Plugin.SDK.Exo.Services" or "global::Exoforge.Plugin.SDK.Exoforge.Services"
+                    or "Exoforge.Plugin.SDK.ExoServices" or "Exoforge.Plugin.SDK.Exo" or "Exoforge.Plugin.SDK.Exoforge"
+                    or "Exoforge.Plugin.SDK.ExoServices.Services" or "Exoforge.Plugin.SDK.Exo.Services" or "Exoforge.Plugin.SDK.Exoforge.Services")
                 {
                     string propName = memberAccess.Name.Identifier.Text;
-                    if (propName is "Logger" or "Events" or "Actions" or "Context" or "Reset" or "Services")
+                    if (propName is "Database" or "Logger" or "Events" or "Actions" or "Context" or "Reset" or "Services")
                     {
                         continue;
                     }
@@ -447,6 +465,62 @@ namespace Exoforge.Plugin.SDK
                 else if (exprText.StartsWith("I", StringComparison.Ordinal) && exprText.EndsWith("Service", StringComparison.Ordinal) && exprText.Length > 8)
                 {
                     string svc = exprText.Substring(1, exprText.Length - 8);
+                    if (svc is not ("ActionDispatcher" or "EventDispatcher" or "Database" or "Logger" or "PluginContext"))
+                    {
+                        string dep = ToSnakeCase(svc);
+                        if (!string.IsNullOrEmpty(dep) && !dependencies.Contains(dep))
+                        {
+                            dependencies.Add(dep);
+                        }
+                    }
+                }
+                else if (exprText.EndsWith("Inputs", StringComparison.Ordinal) && exprText.Length > 6)
+                {
+                    string svc = exprText.Substring(0, exprText.Length - 6);
+                    int lastDot = svc.LastIndexOf('.');
+                    if (lastDot >= 0) svc = svc.Substring(lastDot + 1);
+                    if (svc != "Exo")
+                    {
+                        string dep = ToSnakeCase(svc);
+                        if (!string.IsNullOrEmpty(dep) && !dependencies.Contains(dep))
+                        {
+                            dependencies.Add(dep);
+                        }
+                    }
+                }
+                else if (exprText is "ExoInput" or "Exoforge.Plugin.SDK.ExoInput" or "global::Exoforge.Plugin.SDK.ExoInput")
+                {
+                    string inputName = memberAccess.Name.Identifier.Text;
+                    if (inputName is not ("Text" or "Color" or "Date" or "Time" or "DateTimeLocal" or "Textarea" or "Email" or "Url" or "Tel" or "Password" or "Number" or "Checkbox" or "Radio" or "File" or "Hidden" or "Month" or "Week" or "Search" or "Image" or "Range"))
+                    {
+                        // Custom input constant like AddressableRef -> infer from prefix or referenced contracts
+                        string inputSnake = ToSnakeCase(inputName);
+                        if (inputSnake.StartsWith("addressable"))
+                        {
+                            if (!dependencies.Contains("unity_addressables")) dependencies.Add("unity_addressables");
+                        }
+                    }
+                }
+            }
+
+            foreach (var identifier in fileRoot.DescendantNodes().OfType<IdentifierNameSyntax>())
+            {
+                string idText = identifier.Identifier.Text;
+                if (idText.StartsWith("I", StringComparison.Ordinal) && idText.EndsWith("Service", StringComparison.Ordinal) && idText.Length > 8)
+                {
+                    string svc = idText.Substring(1, idText.Length - 8);
+                    if (svc is not ("ActionDispatcher" or "EventDispatcher" or "Database" or "Logger" or "PluginContext"))
+                    {
+                        string dep = ToSnakeCase(svc);
+                        if (!string.IsNullOrEmpty(dep) && !dependencies.Contains(dep))
+                        {
+                            dependencies.Add(dep);
+                        }
+                    }
+                }
+                else if (idText.EndsWith("Inputs", StringComparison.Ordinal) && idText.Length > 6 && idText != "ExoInputs")
+                {
+                    string svc = idText.Substring(0, idText.Length - 6);
                     string dep = ToSnakeCase(svc);
                     if (!string.IsNullOrEmpty(dep) && !dependencies.Contains(dep))
                     {

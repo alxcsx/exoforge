@@ -48,8 +48,8 @@ public class UnityAddressablesPluginTests
     public void EmptyByDefault_WhenDatabaseEmpty()
     {
         var db = new TestDatabase();
-        Exo.Reset();
-        Exo.Database = db;
+        ExoServices.Reset();
+        ExoServices.Database = db;
         var plugin = new UnityAddressablesPlugin();
 
         var stats = plugin.GetStats();
@@ -69,8 +69,8 @@ public class UnityAddressablesPluginTests
     public void PublishRelease_AddsReleaseAndAssets_AndGetManifestWorks()
     {
         var db = new TestDatabase();
-        Exo.Reset();
-        Exo.Database = db;
+        ExoServices.Reset();
+        ExoServices.Database = db;
         var plugin = new UnityAddressablesPlugin();
 
         var publishedAssets = new List<AddressableAssetDto>
@@ -129,8 +129,8 @@ public class UnityAddressablesPluginTests
     public void PromoteRelease_UpdatesBadge()
     {
         var db = new TestDatabase();
-        Exo.Reset();
-        Exo.Database = db;
+        ExoServices.Reset();
+        ExoServices.Database = db;
         var plugin = new UnityAddressablesPlugin();
 
         plugin.PublishRelease("1.0.0", "latest", "hash1", null, new List<AddressableAssetDto>());
@@ -205,9 +205,9 @@ public class UnityAddressablesPluginTests
     {
         var db = new TestDatabase();
         var actions = new TestActionDispatcher();
-        Exo.Reset();
-        Exo.Database = db;
-        Exo.Actions = actions;
+        ExoServices.Reset();
+        ExoServices.Database = db;
+        ExoServices.Actions = actions;
         var plugin = new UnityAddressablesPlugin();
 
         byte[] fakeData = System.Text.Encoding.UTF8.GetBytes("BUNDLE_DATA");
@@ -224,9 +224,9 @@ public class UnityAddressablesPluginTests
     {
         var db = new TestDatabase();
         var fileBucket = new TestFileBucketService();
-        Exo.Reset();
-        Exo.Database = db;
-        Exo.FileBucket = fileBucket;
+        ExoServices.Reset();
+        ExoServices.Database = db;
+        ExoServices.FileBucket = fileBucket;
         var plugin = new UnityAddressablesPlugin();
 
         byte[] fakeData = System.Text.Encoding.UTF8.GetBytes("BUNDLE_DATA");
@@ -247,9 +247,9 @@ public class UnityAddressablesPluginTests
     {
         var db = new TestDatabase();
         var fileBucket = new TestFileBucketService();
-        Exo.Reset();
-        Exo.Database = db;
-        Exo.FileBucket = fileBucket;
+        ExoServices.Reset();
+        ExoServices.Database = db;
+        ExoServices.FileBucket = fileBucket;
         var plugin = new UnityAddressablesPlugin();
 
         db.Put(UnityAddressablesPlugin.AssetsTable, "Cube_Asset", new AddressableAssetRecord

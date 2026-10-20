@@ -789,12 +789,13 @@ namespace Exoforge.Unity.Editor
                 iconLabel.style.marginRight = 6;
                 topRow.Add(iconLabel);
 
-                var nameLabel = new Label(p.Name);
+                var nameLabel = new Label(!string.IsNullOrEmpty(p.Title) ? p.Title : p.Name);
                 nameLabel.name = "PluginCardName";
                 nameLabel.style.fontSize = 12;
                 nameLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
                 nameLabel.style.color = isSelected ? ExoforgeUIStyle.TextPrimary : ExoforgeUIStyle.TextSecondary;
                 nameLabel.style.flexGrow = 1;
+                nameLabel.style.whiteSpace = WhiteSpace.Normal;
                 topRow.Add(nameLabel);
 
                 var verBadge = ExoforgeUIStyle.CreatePill($"v{p.Version}", ExoforgeUIStyle.TextSecondary, ExoforgeUIStyle.BgWindow, 9);
@@ -804,6 +805,7 @@ namespace Exoforge.Unity.Editor
                 // Bottom row: Origin pill, Runtime type, and Status badges
                 var bottomRow = new VisualElement();
                 bottomRow.style.flexDirection = FlexDirection.Row;
+                bottomRow.style.flexWrap = Wrap.Wrap;
                 bottomRow.style.alignItems = Align.Center;
                 bottomRow.style.marginTop = 4;
 
@@ -985,27 +987,37 @@ namespace Exoforge.Unity.Editor
             var hero = new VisualElement();
             ExoforgeUIStyle.ApplyCard(hero);
             hero.style.backgroundColor = ExoforgeUIStyle.BgPanel;
+            hero.style.paddingLeft = 14;
+            hero.style.paddingRight = 14;
+            hero.style.paddingTop = 12;
+            hero.style.paddingBottom = 12;
 
-            // Top Row: Icon, Title, ID, Version, Type
+            // Row 1: Identity & Primary Status/Action
             var top = new VisualElement();
             top.style.flexDirection = FlexDirection.Row;
             top.style.alignItems = Align.Center;
 
             var icon = new Label(plugin.Icon);
-            icon.style.fontSize = 24;
-            icon.style.marginRight = 10;
+            icon.style.fontSize = 28;
+            icon.style.marginRight = 12;
             top.Add(icon);
 
             var titleCol = new VisualElement();
-            var title = new Label(plugin.Title);
+            titleCol.style.flexGrow = 1;
+            titleCol.style.flexShrink = 1;
+
+            var title = new Label(!string.IsNullOrEmpty(plugin.Title) ? plugin.Title : plugin.Name);
             title.style.fontSize = 16;
             title.style.unityFontStyleAndWeight = FontStyle.Bold;
             title.style.color = ExoforgeUIStyle.TextPrimary;
+            title.style.whiteSpace = WhiteSpace.Normal;
             titleCol.Add(title);
 
             var subRow = new VisualElement();
             subRow.style.flexDirection = FlexDirection.Row;
             subRow.style.alignItems = Align.Center;
+            subRow.style.flexWrap = Wrap.Wrap;
+            subRow.style.marginTop = 3;
 
             var sub = new Label($"{plugin.Id}  •  v{plugin.Version}  •  {plugin.Category}");
             sub.style.fontSize = 11;
@@ -1018,49 +1030,82 @@ namespace Exoforge.Unity.Editor
             originPill.style.marginLeft = 6;
             subRow.Add(originPill);
 
+            if (plugin.IsDeployed)
+            {
+                var depPill = ExoforgeUIStyle.CreatePill("● Deployed", ExoforgeUIStyle.AccentGreen, ExoforgeUIStyle.AccentGreenBg, 9);
+                depPill.style.marginLeft = 4;
+                subRow.Add(depPill);
+            }
+            else if (plugin.IsLocal && plugin.IsBuilt)
+            {
+                var builtPill = ExoforgeUIStyle.CreatePill("● Built", ExoforgeUIStyle.AccentBlue, ExoforgeUIStyle.AccentBlueBg, 9);
+                builtPill.style.marginLeft = 4;
+                subRow.Add(builtPill);
+            }
+
             titleCol.Add(subRow);
             top.Add(titleCol);
 
-            var spacer = new VisualElement();
-            spacer.style.flexGrow = 1;
-            top.Add(spacer);
+            // Primary CTAs on top right
+            var topCta = new VisualElement();
+            topCta.style.flexDirection = FlexDirection.Row;
+            topCta.style.alignItems = Align.Center;
 
-            // Lifecycle Action Buttons
             if (plugin.IsLocal && plugin.Type == "native")
             {
                 var buildBtn = ExoforgeUIStyle.CreateModernButton("⚡ Build", async () =>
                 {
                     await BuildPluginAsync(plugin);
-                }, bg: ExoforgeUIStyle.AccentBlueBg, textCol: ExoforgeUIStyle.AccentBlue);
-                top.Add(buildBtn);
-
-                var forceBuildBtn = ExoforgeUIStyle.CreateModernButton("⚡ Force Build", async () =>
-                {
-                    await ForceBuildPluginAsync(plugin);
-                });
-                forceBuildBtn.tooltip = "Escape hatch: Force rebuild this plugin from source ignoring cached artifacts";
-                top.Add(forceBuildBtn);
+                }, bg: ExoforgeUIStyle.AccentBlueBg, textCol: ExoforgeUIStyle.AccentBlue, height: 26);
+                topCta.Add(buildBtn);
 
                 if (IsConnected)
                 {
                     var deployBtn = ExoforgeUIStyle.CreateModernButton("🚀 Deploy", async () =>
                     {
                         await DeployPluginAsync(plugin);
-                    }, bg: ExoforgeUIStyle.AccentGreenBg, textCol: ExoforgeUIStyle.AccentGreen);
-                    top.Add(deployBtn);
+                    }, bg: ExoforgeUIStyle.AccentGreenBg, textCol: ExoforgeUIStyle.AccentGreen, height: 26);
+                    deployBtn.style.marginLeft = 6;
+                    topCta.Add(deployBtn);
                 }
+            }
+            top.Add(topCta);
+            hero.Add(top);
+
+            // Row 2: Secondary Action Toolbar
+            var toolbar = new VisualElement();
+            toolbar.style.flexDirection = FlexDirection.Row;
+            toolbar.style.flexWrap = Wrap.Wrap;
+            toolbar.style.alignItems = Align.Center;
+            toolbar.style.marginTop = 10;
+            toolbar.style.paddingTop = 8;
+            toolbar.style.borderTopWidth = 1;
+            toolbar.style.borderTopColor = ExoforgeUIStyle.BorderSubtle;
+
+            if (plugin.IsLocal && plugin.Type == "native")
+            {
+                var forceBuildBtn = ExoforgeUIStyle.CreateModernButton("⚡ Force Build", async () =>
+                {
+                    await ForceBuildPluginAsync(plugin);
+                }, height: 22);
+                forceBuildBtn.tooltip = "Force rebuild this plugin from source ignoring cached artifacts";
+                forceBuildBtn.style.marginRight = 6;
+                toolbar.Add(forceBuildBtn);
 
                 var stubsBtn = ExoforgeUIStyle.CreateModernButton("📝 Stubs", async () =>
                 {
                     await GenerateStubsAsync(plugin);
-                });
-                top.Add(stubsBtn);
+                }, height: 22);
+                stubsBtn.tooltip = "Generate typed C# stubs and client capabilities for this extension";
+                stubsBtn.style.marginRight = 6;
+                toolbar.Add(stubsBtn);
 
                 var folderBtn = ExoforgeUIStyle.CreateModernButton("📁 Folder", () =>
                 {
                     EditorUtility.RevealInFinder(plugin.LocalDirectory);
-                });
-                top.Add(folderBtn);
+                }, height: 22);
+                folderBtn.style.marginRight = 6;
+                toolbar.Add(folderBtn);
             }
 
             if (IsConnected)
@@ -1077,18 +1122,19 @@ namespace Exoforge.Unity.Editor
                         await FetchPluginLogsAsync(plugin.Name);
                         RebuildUI();
                     }
-                });
+                }, height: 22);
                 logsBtn.tooltip = "View live runtime logs emitted by this plugin on the cluster";
-                top.Add(logsBtn);
+                logsBtn.style.marginRight = 6;
+                toolbar.Add(logsBtn);
 
                 var studioBtn = ExoforgeUIStyle.CreateModernButton("🌐 Studio Tab", () =>
                 {
                     Application.OpenURL($"{GetHttpUrl()}/tab/{plugin.Id}");
-                });
-                top.Add(studioBtn);
+                }, height: 22);
+                toolbar.Add(studioBtn);
             }
 
-            hero.Add(top);
+            hero.Add(toolbar);
 
             if (_showPluginLogs && string.Equals(_pluginLogsFor, plugin.Name, StringComparison.OrdinalIgnoreCase))
             {
@@ -2132,74 +2178,89 @@ namespace Exoforge.Unity.Editor
                 var ws = ExoWorkspace.Load(wsPath);
 
                 // 1. Scan Local Workspace Plugins
+                var scannedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var extensionDirs = new List<string>();
+                if (Directory.Exists(ws.ExtensionsPath))
+                {
+                    foreach (var dir in Directory.GetDirectories(ws.ExtensionsPath))
+                    {
+                        if (scannedPaths.Add(dir)) extensionDirs.Add(dir);
+                    }
+                }
                 if (Directory.Exists(ws.PluginsPath))
                 {
                     foreach (var dir in Directory.GetDirectories(ws.PluginsPath))
                     {
-                        string name = Path.GetFileName(dir);
-                        string manifestPath = Path.Combine(dir, "manifest.json");
-
-                        string title = name;
-                        string category = "Extension";
-                        string icon = "🧩";
-                        string version = "1.0.0";
-                        string type = "native";
-
-                        if (File.Exists(manifestPath))
-                        {
-                            try
-                            {
-                                var json = File.ReadAllText(manifestPath);
-                                var doc = JsonDocument.Parse(json);
-                                var root = doc.RootElement.Clone();
-                                manifests[name] = root;
-
-                                if (root.TryGetProperty("version", out var v) && v.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(v.GetString())) version = v.GetString()!;
-                                if (root.TryGetProperty("type", out var t) && t.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(t.GetString())) type = t.GetString()!;
-                                if (root.TryGetProperty("category", out var c) && c.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(c.GetString())) category = c.GetString()!;
-                                if (root.TryGetProperty("title", out var tit) && tit.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(tit.GetString())) title = tit.GetString()!;
-                                else if (root.TryGetProperty("dashboard_view", out var dvTit) && dvTit.ValueKind == JsonValueKind.Object && dvTit.TryGetProperty("title", out var dvt) && dvt.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(dvt.GetString())) title = dvt.GetString()!;
-
-                                if (root.TryGetProperty("icon", out var ic) && ic.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(ic.GetString())) icon = ic.GetString()!;
-                                else if (root.TryGetProperty("dashboard_view", out var dvIc) && dvIc.ValueKind == JsonValueKind.Object && dvIc.TryGetProperty("icon", out var dvi) && dvi.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(dvi.GetString())) icon = dvi.GetString()!;
-                            }
-                            catch { }
-                        }
-
-                        if (ExoforgeControlCenter.TryExtractAttributeMetadata(dir, out var attrTitle, out var attrIcon, out var attrCategory, out var attrVersion))
-                        {
-                            if (!string.IsNullOrWhiteSpace(attrIcon)) icon = attrIcon!;
-                            if (!string.IsNullOrWhiteSpace(attrTitle) && (title == name || string.IsNullOrEmpty(title))) title = attrTitle!;
-                            if (!string.IsNullOrWhiteSpace(attrCategory) && category == "Extension") category = attrCategory!;
-                            if (!string.IsNullOrWhiteSpace(attrVersion) && version == "1.0.0") version = attrVersion!;
-                        }
-
-                        string stagedBin = ExoDeployer.StagedBinary(dir, name);
-                        bool isBuilt = !string.IsNullOrEmpty(stagedBin) && File.Exists(stagedBin);
-
-                        bool modified = false;
-                        if (isBuilt)
-                        {
-                            string? builtVer = ExoDeployer.ReadManifestVersion(dir);
-                            string fingerprint = ExoDeployer.ComputeSourceFingerprint(dir);
-                            modified = builtVer == null || !builtVer.EndsWith("." + fingerprint, StringComparison.Ordinal);
-                        }
-
-                        list.Add(new PluginCardModel
-                        {
-                            Id = name,
-                            Name = name,
-                            Version = version,
-                            Type = type,
-                            Category = category,
-                            Title = title,
-                            Icon = icon,
-                            IsLocal = true,
-                            IsBuilt = isBuilt,
-                            Modified = modified,
-                            LocalDirectory = dir
-                        });
+                        if (scannedPaths.Add(dir)) extensionDirs.Add(dir);
                     }
+                }
+
+                foreach (var dir in extensionDirs)
+                {
+                    string name = Path.GetFileName(dir);
+                    string manifestPath = Path.Combine(dir, "manifest.json");
+
+                    string title = name;
+                    string category = "Extension";
+                    string icon = "🧩";
+                    string version = "1.0.0";
+                    string type = "native";
+
+                    if (File.Exists(manifestPath))
+                    {
+                        try
+                        {
+                            var json = File.ReadAllText(manifestPath);
+                            var doc = JsonDocument.Parse(json);
+                            var root = doc.RootElement.Clone();
+                            manifests[name] = root;
+
+                            if (root.TryGetProperty("version", out var v) && v.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(v.GetString())) version = v.GetString()!;
+                            if (root.TryGetProperty("type", out var t) && t.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(t.GetString())) type = t.GetString()!;
+                            if (root.TryGetProperty("category", out var c) && c.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(c.GetString())) category = c.GetString()!;
+                            if (root.TryGetProperty("title", out var tit) && tit.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(tit.GetString())) title = tit.GetString()!;
+                            else if (root.TryGetProperty("dashboard_view", out var dvTit) && dvTit.ValueKind == JsonValueKind.Object && dvTit.TryGetProperty("title", out var dvt) && dvt.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(dvt.GetString())) title = dvt.GetString()!;
+
+                            if (root.TryGetProperty("icon", out var ic) && ic.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(ic.GetString())) icon = ic.GetString()!;
+                            else if (root.TryGetProperty("dashboard_view", out var dvIc) && dvIc.ValueKind == JsonValueKind.Object && dvIc.TryGetProperty("icon", out var dvi) && dvi.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(dvi.GetString())) icon = dvi.GetString()!;
+                        }
+                        catch { }
+                    }
+
+                    if (ExoforgeControlCenter.TryExtractAttributeMetadata(dir, out var attrTitle, out var attrIcon, out var attrCategory, out var attrVersion))
+                    {
+                        if (!string.IsNullOrWhiteSpace(attrIcon)) icon = attrIcon!;
+                        if (!string.IsNullOrWhiteSpace(attrTitle) && (title == name || string.IsNullOrEmpty(title))) title = attrTitle!;
+                        if (!string.IsNullOrWhiteSpace(attrCategory) && category == "Extension") category = attrCategory!;
+                        if (!string.IsNullOrWhiteSpace(attrVersion) && version == "1.0.0") version = attrVersion!;
+                    }
+
+                    string stagedBin = ExoDeployer.StagedBinary(dir, name);
+                    bool isBuilt = !string.IsNullOrEmpty(stagedBin) && File.Exists(stagedBin);
+
+                    bool modified = false;
+                    if (isBuilt)
+                    {
+                        string? builtVer = ExoDeployer.ReadManifestVersion(dir);
+                        string fingerprint = ExoDeployer.ComputeSourceFingerprint(dir);
+                        modified = builtVer == null || !builtVer.EndsWith("." + fingerprint, StringComparison.Ordinal);
+                    }
+
+                    string displayTitle = !string.IsNullOrWhiteSpace(title) ? title : name;
+                    list.Add(new PluginCardModel
+                    {
+                        Id = name,
+                        Name = displayTitle,
+                        Version = version,
+                        Type = type,
+                        Category = category,
+                        Title = displayTitle,
+                        Icon = icon,
+                        IsLocal = true,
+                        IsBuilt = isBuilt,
+                        Modified = modified,
+                        LocalDirectory = dir
+                    });
                 }
 
                 // 2. Query Cluster Manifest Export
@@ -2209,9 +2270,31 @@ namespace Exoforge.Unity.Editor
                     try
                     {
                         var exportRes = await client.SendActionAsync<JsonElement>("plugin_manager", "export_plugin_info", null);
-                        if (exportRes.TryGetProperty("export", out var exp) && exp.TryGetProperty("plugins", out var pluginsArr))
+                        var clusterItems = new List<JsonElement>();
+                        if (exportRes.TryGetProperty("export", out var exp))
                         {
-                            foreach (var p in pluginsArr.EnumerateArray())
+                            if (exp.TryGetProperty("plugins", out var pArr) && pArr.ValueKind == JsonValueKind.Array)
+                            {
+                                foreach (var p in pArr.EnumerateArray()) clusterItems.Add(p);
+                            }
+                            if (exp.TryGetProperty("extensions", out var eArr) && eArr.ValueKind == JsonValueKind.Array)
+                            {
+                                foreach (var e in eArr.EnumerateArray()) clusterItems.Add(e);
+                            }
+                        }
+                        else if (exportRes.ValueKind == JsonValueKind.Object)
+                        {
+                            if (exportRes.TryGetProperty("plugins", out var pArr) && pArr.ValueKind == JsonValueKind.Array)
+                            {
+                                foreach (var p in pArr.EnumerateArray()) clusterItems.Add(p);
+                            }
+                            if (exportRes.TryGetProperty("extensions", out var eArr) && eArr.ValueKind == JsonValueKind.Array)
+                            {
+                                foreach (var e in eArr.EnumerateArray()) clusterItems.Add(e);
+                            }
+                        }
+
+                        foreach (var p in clusterItems)
                             {
                                 string pid = p.TryGetProperty("id", out var idProp) ? idProp.GetString() ?? "" : "";
                                 if (string.IsNullOrEmpty(pid)) continue;
@@ -2807,6 +2890,11 @@ namespace Exoforge.Unity.Editor
             var result = new List<JsonElement>();
             if (manifest.ValueKind != JsonValueKind.Object) return result;
 
+            if (manifest.TryGetProperty("resources", out var directArr) && directArr.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var r in directArr.EnumerateArray()) result.Add(r);
+            }
+
             if (manifest.TryGetProperty("services", out var servicesArr) && servicesArr.ValueKind == JsonValueKind.Array)
             {
                 foreach (var s in servicesArr.EnumerateArray())
@@ -2824,6 +2912,16 @@ namespace Exoforge.Unity.Editor
         {
             var result = new List<JsonElement>();
             if (manifest.ValueKind != JsonValueKind.Object) return result;
+
+            if (manifest.TryGetProperty("actions", out var directArr) && directArr.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var a in directArr.EnumerateArray())
+                {
+                    bool isHook = IsWebhookAction(a);
+                    if (isWebhookOnly && isHook) result.Add(a);
+                    else if (!isWebhookOnly && !isHook) result.Add(a);
+                }
+            }
 
             if (manifest.TryGetProperty("services", out var servicesArr) && servicesArr.ValueKind == JsonValueKind.Array)
             {
@@ -2847,6 +2945,11 @@ namespace Exoforge.Unity.Editor
         {
             var result = new List<JsonElement>();
             if (manifest.ValueKind != JsonValueKind.Object) return result;
+
+            if (manifest.TryGetProperty("events", out var directArr) && directArr.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var e in directArr.EnumerateArray()) result.Add(e);
+            }
 
             if (manifest.TryGetProperty("services", out var servicesArr) && servicesArr.ValueKind == JsonValueKind.Array)
             {

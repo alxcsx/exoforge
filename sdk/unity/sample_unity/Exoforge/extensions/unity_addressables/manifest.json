@@ -1,10 +1,10 @@
 {
   "id": "unity_addressables",
   "type": "native",
-  "version": "1.0.0+4.e1498970",
+  "version": "1.0.0+7.671d4eb3",
   "context": "global",
   "entry_point": "unity_addressables",
-  "dependencies": ["database", "file_bucket"],
+  "dependencies": ["file_bucket"],
   "provides": ["unity_addressables"],
   "category": "Game Content",
   "title": "Unity Addressables",

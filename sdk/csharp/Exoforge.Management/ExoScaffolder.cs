@@ -213,7 +213,7 @@ public class {{className}}{{suffix}}
     [ExoAction]
     public int Ping()
     {
-        Exo.Logger.Info("[{{serviceName}}] ping");
+        ExoServices.Logger.Info("[{{serviceName}}] ping");
         return 42;
     }
 

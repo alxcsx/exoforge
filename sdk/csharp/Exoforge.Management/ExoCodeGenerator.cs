@@ -507,6 +507,8 @@ public static class ExoCodeGenerator
         sb.AppendLine();
         sb.AppendLine("#nullable enable");
         sb.AppendLine();
+        sb.AppendLine("using System;");
+        sb.AppendLine("using System.Collections.Generic;");
         sb.AppendLine("using System.Text.Json;");
         sb.AppendLine("using System.Text.Json.Serialization;");
         sb.AppendLine("using System.Threading.Tasks;");
@@ -658,9 +660,11 @@ public static class ExoCodeGenerator
                 string reqName = $"{svcPascal}{actPascal}Request";
                 string respType = ReturnTypeName(svcPascal, act);
                 string declaration = respType == "JsonElement" ? "JsonElement" : respType + "?";
+                bool isValueType = respType is "int" or "long" or "bool" or "float" or "double" or "byte" or "short" or "uint" or "ulong" or "sbyte" or "ushort" or "decimal";
+                string callType = isValueType ? respType + "?" : respType;
 
                 sb.AppendLine($"        public Task<{declaration}> {actPascal}Async({reqName} request)");
-                sb.AppendLine($"            => _dispatcher.CallActionAsync<{respType}>(\"{svc.Name}\", \"{act.Name}\", request);");
+                sb.AppendLine($"            => _dispatcher.CallActionAsync<{callType}>(\"{svc.Name}\", \"{act.Name}\", request);");
                 sb.AppendLine();
 
                 if (act.Params.Count == 0)
@@ -706,9 +710,25 @@ public static class ExoCodeGenerator
         sb.AppendLine();
         sb.AppendLine("}");
         sb.AppendLine();
+
+        if (customInputs is { Count: > 0 })
+        {
+            sb.AppendLine("namespace Exoforge.Plugin.SDK");
+            sb.AppendLine("{");
+            sb.AppendLine("    public static partial class ExoInput");
+            sb.AppendLine("    {");
+            foreach (var (pascal, id) in customInputs)
+            {
+                sb.AppendLine($"        public const string {pascal} = \"{id}\";");
+            }
+            sb.AppendLine("    }");
+            sb.AppendLine("}");
+            sb.AppendLine();
+        }
+
         sb.AppendLine("namespace Exoforge.Plugin.SDK");
         sb.AppendLine("{");
-        sb.AppendLine("    public static class Exo");
+        sb.AppendLine("    public static class ExoServices");
         sb.AppendLine("    {");
         sb.AppendLine("        private static IDatabase? _databaseOverride;");
         sb.AppendLine("        private static ILogger? _loggerOverride;");
@@ -788,42 +808,42 @@ public static class ExoCodeGenerator
         sb.AppendLine("        }");
         sb.AppendLine("    }");
         sb.AppendLine();
-        sb.AppendLine("    public static class Exoforge");
+        sb.AppendLine("    public static class Exo");
         sb.AppendLine("    {");
         sb.AppendLine("        public static IDatabase Database");
         sb.AppendLine("        {");
-        sb.AppendLine("            get => Exo.Database;");
-        sb.AppendLine("            set => Exo.Database = value;");
+        sb.AppendLine("            get => ExoServices.Database;");
+        sb.AppendLine("            set => ExoServices.Database = value;");
         sb.AppendLine("        }");
         sb.AppendLine();
         sb.AppendLine("        public static ILogger Logger");
         sb.AppendLine("        {");
-        sb.AppendLine("            get => Exo.Logger;");
-        sb.AppendLine("            set => Exo.Logger = value;");
+        sb.AppendLine("            get => ExoServices.Logger;");
+        sb.AppendLine("            set => ExoServices.Logger = value;");
         sb.AppendLine("        }");
         sb.AppendLine();
         sb.AppendLine("        public static IEventDispatcher Events");
         sb.AppendLine("        {");
-        sb.AppendLine("            get => Exo.Events;");
-        sb.AppendLine("            set => Exo.Events = value;");
+        sb.AppendLine("            get => ExoServices.Events;");
+        sb.AppendLine("            set => ExoServices.Events = value;");
         sb.AppendLine("        }");
         sb.AppendLine();
         sb.AppendLine("        public static IActionDispatcher Actions");
         sb.AppendLine("        {");
-        sb.AppendLine("            get => Exo.Actions;");
-        sb.AppendLine("            set => Exo.Actions = value;");
+        sb.AppendLine("            get => ExoServices.Actions;");
+        sb.AppendLine("            set => ExoServices.Actions = value;");
         sb.AppendLine("        }");
         sb.AppendLine();
         sb.AppendLine("        public static IPluginContext Context");
         sb.AppendLine("        {");
-        sb.AppendLine("            get => Exo.Context;");
-        sb.AppendLine("            set => Exo.Context = value;");
+        sb.AppendLine("            get => ExoServices.Context;");
+        sb.AppendLine("            set => ExoServices.Context = value;");
         sb.AppendLine("        }");
         sb.AppendLine();
         sb.AppendLine($"        public static global::{targetNamespace}.ExoforgePluginServices Services");
         sb.AppendLine("        {");
-        sb.AppendLine("            get => Exo.Services;");
-        sb.AppendLine("            set => Exo.Services = value;");
+        sb.AppendLine("            get => ExoServices.Services;");
+        sb.AppendLine("            set => ExoServices.Services = value;");
         sb.AppendLine("        }");
         sb.AppendLine();
         foreach (var svc in serviceList)
@@ -832,17 +852,74 @@ public static class ExoCodeGenerator
             string svcPascal = ToPascalCase(svc.Name);
             sb.AppendLine($"        public static global::{targetNamespace}.I{svcPascal}Service {svcPascal}");
             sb.AppendLine("        {");
-            sb.AppendLine($"            get => Exo.{svcPascal};");
-            sb.AppendLine($"            set => Exo.{svcPascal} = value;");
+            sb.AppendLine($"            get => ExoServices.{svcPascal};");
+            sb.AppendLine($"            set => ExoServices.{svcPascal} = value;");
             sb.AppendLine("        }");
             sb.AppendLine($"        public static global::{targetNamespace}.I{svcPascal}Service {svcPascal}Service");
             sb.AppendLine("        {");
-            sb.AppendLine($"            get => Exo.{svcPascal};");
-            sb.AppendLine($"            set => Exo.{svcPascal} = value;");
+            sb.AppendLine($"            get => ExoServices.{svcPascal};");
+            sb.AppendLine($"            set => ExoServices.{svcPascal} = value;");
             sb.AppendLine("        }");
             sb.AppendLine();
         }
-        sb.AppendLine("        public static void Reset() => Exo.Reset();");
+        sb.AppendLine("        public static void Reset() => ExoServices.Reset();");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+        sb.AppendLine("    public static class Exoforge");
+        sb.AppendLine("    {");
+        sb.AppendLine("        public static IDatabase Database");
+        sb.AppendLine("        {");
+        sb.AppendLine("            get => ExoServices.Database;");
+        sb.AppendLine("            set => ExoServices.Database = value;");
+        sb.AppendLine("        }");
+        sb.AppendLine();
+        sb.AppendLine("        public static ILogger Logger");
+        sb.AppendLine("        {");
+        sb.AppendLine("            get => ExoServices.Logger;");
+        sb.AppendLine("            set => ExoServices.Logger = value;");
+        sb.AppendLine("        }");
+        sb.AppendLine();
+        sb.AppendLine("        public static IEventDispatcher Events");
+        sb.AppendLine("        {");
+        sb.AppendLine("            get => ExoServices.Events;");
+        sb.AppendLine("            set => ExoServices.Events = value;");
+        sb.AppendLine("        }");
+        sb.AppendLine();
+        sb.AppendLine("        public static IActionDispatcher Actions");
+        sb.AppendLine("        {");
+        sb.AppendLine("            get => ExoServices.Actions;");
+        sb.AppendLine("            set => ExoServices.Actions = value;");
+        sb.AppendLine("        }");
+        sb.AppendLine();
+        sb.AppendLine("        public static IPluginContext Context");
+        sb.AppendLine("        {");
+        sb.AppendLine("            get => ExoServices.Context;");
+        sb.AppendLine("            set => ExoServices.Context = value;");
+        sb.AppendLine("        }");
+        sb.AppendLine();
+        sb.AppendLine($"        public static global::{targetNamespace}.ExoforgePluginServices Services");
+        sb.AppendLine("        {");
+        sb.AppendLine("            get => ExoServices.Services;");
+        sb.AppendLine("            set => ExoServices.Services = value;");
+        sb.AppendLine("        }");
+        sb.AppendLine();
+        foreach (var svc in serviceList)
+        {
+            if (svc.Name.Equals("database", StringComparison.OrdinalIgnoreCase)) continue;
+            string svcPascal = ToPascalCase(svc.Name);
+            sb.AppendLine($"        public static global::{targetNamespace}.I{svcPascal}Service {svcPascal}");
+            sb.AppendLine("        {");
+            sb.AppendLine($"            get => ExoServices.{svcPascal};");
+            sb.AppendLine($"            set => ExoServices.{svcPascal} = value;");
+            sb.AppendLine("        }");
+            sb.AppendLine($"        public static global::{targetNamespace}.I{svcPascal}Service {svcPascal}Service");
+            sb.AppendLine("        {");
+            sb.AppendLine($"            get => ExoServices.{svcPascal};");
+            sb.AppendLine($"            set => ExoServices.{svcPascal} = value;");
+            sb.AppendLine("        }");
+            sb.AppendLine();
+        }
+        sb.AppendLine("        public static void Reset() => ExoServices.Reset();");
         sb.AppendLine("    }");
         sb.AppendLine("}");
         sb.AppendLine();

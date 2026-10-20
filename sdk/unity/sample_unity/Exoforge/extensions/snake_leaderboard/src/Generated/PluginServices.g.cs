@@ -5,6 +5,8 @@
 
 #nullable enable
 
+using System;
+using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
@@ -12,6 +14,371 @@ using Exoforge.Plugin.SDK;
 
 namespace Exoforge.Plugins.Generated
 {
+    public class AuthAuthenticateRequest
+    {
+        [JsonPropertyName("token")]
+        public string Token { get; set; } = default!;
+    }
+
+    public class AuthAuthenticateResponse
+    {
+        [JsonPropertyName("scopes")]
+        public JsonElement Scopes { get; set; } = default!;
+        [JsonPropertyName("player_id")]
+        public string PlayerId { get; set; } = default!;
+    }
+
+    public class AuthLoginRequest
+    {
+        [JsonPropertyName("email")]
+        public string Email { get; set; } = default!;
+        [JsonPropertyName("password")]
+        public string Password { get; set; } = default!;
+    }
+
+    public class AuthLoginResponse
+    {
+        [JsonPropertyName("token")]
+        public string Token { get; set; } = default!;
+        [JsonPropertyName("scopes")]
+        public JsonElement Scopes { get; set; } = default!;
+        [JsonPropertyName("player_id")]
+        public string PlayerId { get; set; } = default!;
+    }
+
+    public class AuthVerifyScopeRequest
+    {
+        [JsonPropertyName("user_id")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement UserId { get; set; } = default!;
+        [JsonPropertyName("player_id")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement PlayerId { get; set; } = default!;
+        [JsonPropertyName("required_scope")]
+        public string RequiredScope { get; set; } = default!;
+    }
+
+    public class AuthVerifyScopeResponse
+    {
+        [JsonPropertyName("authorized")]
+        public bool Authorized { get; set; } = default!;
+    }
+
+    public class AuthRegisterRequest
+    {
+        [JsonPropertyName("name")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Name { get; set; } = default!;
+        [JsonPropertyName("user_id")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement UserId { get; set; } = default!;
+        [JsonPropertyName("email")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Email { get; set; } = default!;
+        [JsonPropertyName("password")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Password { get; set; } = default!;
+        [JsonPropertyName("scopes")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Scopes { get; set; } = default!;
+        [JsonPropertyName("player_id")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement PlayerId { get; set; } = default!;
+    }
+
+    public class AuthRegisterResponse
+    {
+        [JsonPropertyName("token")]
+        public string Token { get; set; } = default!;
+        [JsonPropertyName("user_id")]
+        public string UserId { get; set; } = default!;
+        [JsonPropertyName("scopes")]
+        public JsonElement Scopes { get; set; } = default!;
+        [JsonPropertyName("player")]
+        public JsonElement Player { get; set; } = default!;
+        [JsonPropertyName("player_id")]
+        public string PlayerId { get; set; } = default!;
+    }
+
+    public class AuthCreatePlayerRequest
+    {
+        [JsonPropertyName("name")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Name { get; set; } = default!;
+        [JsonPropertyName("user_id")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement UserId { get; set; } = default!;
+        [JsonPropertyName("email")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Email { get; set; } = default!;
+        [JsonPropertyName("password")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Password { get; set; } = default!;
+        [JsonPropertyName("scopes")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Scopes { get; set; } = default!;
+        [JsonPropertyName("player_id")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement PlayerId { get; set; } = default!;
+    }
+
+    public class AuthCreatePlayerResponse
+    {
+        [JsonPropertyName("token")]
+        public string Token { get; set; } = default!;
+        [JsonPropertyName("user_id")]
+        public string UserId { get; set; } = default!;
+        [JsonPropertyName("scopes")]
+        public JsonElement Scopes { get; set; } = default!;
+        [JsonPropertyName("player")]
+        public JsonElement Player { get; set; } = default!;
+        [JsonPropertyName("player_id")]
+        public string PlayerId { get; set; } = default!;
+    }
+
+    public class AuthAnonymousRequest
+    {
+        [JsonPropertyName("name")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Name { get; set; } = default!;
+        [JsonPropertyName("player_id")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement PlayerId { get; set; } = default!;
+    }
+
+    public class AuthAnonymousResponse
+    {
+        [JsonPropertyName("token")]
+        public string Token { get; set; } = default!;
+        [JsonPropertyName("scopes")]
+        public JsonElement Scopes { get; set; } = default!;
+        [JsonPropertyName("player_id")]
+        public string PlayerId { get; set; } = default!;
+    }
+
+    public class AuthSetDisplayNameRequest
+    {
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = default!;
+        [JsonPropertyName("player_id")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement PlayerId { get; set; } = default!;
+    }
+
+    public class AuthSetDisplayNameResponse
+    {
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = default!;
+        [JsonPropertyName("player_id")]
+        public string PlayerId { get; set; } = default!;
+    }
+
+    public class AuthIssueTokenRequest
+    {
+        [JsonPropertyName("user_id")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement UserId { get; set; } = default!;
+        [JsonPropertyName("scopes")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Scopes { get; set; } = default!;
+        [JsonPropertyName("player_id")]
+        public string PlayerId { get; set; } = default!;
+    }
+
+    public class AuthIssueTokenResponse
+    {
+        [JsonPropertyName("token")]
+        public string Token { get; set; } = default!;
+        [JsonPropertyName("user_id")]
+        public string UserId { get; set; } = default!;
+        [JsonPropertyName("player_id")]
+        public string PlayerId { get; set; } = default!;
+    }
+
+    public class AuthListUsersRequest
+    {
+        [JsonPropertyName("limit")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Limit { get; set; } = default!;
+        [JsonPropertyName("query")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Query { get; set; } = default!;
+    }
+
+    public class AuthListUsersResponse
+    {
+        [JsonPropertyName("count")]
+        public long Count { get; set; } = default!;
+        [JsonPropertyName("users")]
+        public JsonElement Users { get; set; } = default!;
+    }
+
+    public class AuthResetPasswordRequest
+    {
+        [JsonPropertyName("user_id")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement UserId { get; set; } = default!;
+        [JsonPropertyName("password")]
+        public string Password { get; set; } = default!;
+        [JsonPropertyName("player_id")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement PlayerId { get; set; } = default!;
+    }
+
+    public class AuthResetPasswordResponse
+    {
+        [JsonPropertyName("status")]
+        public string Status { get; set; } = default!;
+        [JsonPropertyName("user_id")]
+        public string UserId { get; set; } = default!;
+        [JsonPropertyName("player_id")]
+        public string PlayerId { get; set; } = default!;
+    }
+
+    public class AuthUpdateUserRolesRequest
+    {
+        [JsonPropertyName("user_id")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement UserId { get; set; } = default!;
+        [JsonPropertyName("role")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Role { get; set; } = default!;
+        [JsonPropertyName("scopes")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Scopes { get; set; } = default!;
+        [JsonPropertyName("player_id")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement PlayerId { get; set; } = default!;
+    }
+
+    public class AuthUpdateUserRolesResponse
+    {
+        [JsonPropertyName("user_id")]
+        public string UserId { get; set; } = default!;
+        [JsonPropertyName("scopes")]
+        public JsonElement Scopes { get; set; } = default!;
+        [JsonPropertyName("player_id")]
+        public string PlayerId { get; set; } = default!;
+    }
+
+    public class AuthDeleteUserRequest
+    {
+        [JsonPropertyName("user_id")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement UserId { get; set; } = default!;
+        [JsonPropertyName("player_id")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement PlayerId { get; set; } = default!;
+    }
+
+    public class AuthDeleteUserResponse
+    {
+        [JsonPropertyName("status")]
+        public string Status { get; set; } = default!;
+        [JsonPropertyName("user_id")]
+        public string UserId { get; set; } = default!;
+        [JsonPropertyName("player_id")]
+        public string PlayerId { get; set; } = default!;
+    }
+
+    public class AuthPurgeDisposableRequest
+    {
+        [JsonPropertyName("dry_run")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement DryRun { get; set; } = default!;
+    }
+
+    public class AuthPurgeDisposableResponse
+    {
+        [JsonPropertyName("purged")]
+        public long Purged { get; set; } = default!;
+        [JsonPropertyName("dry_run")]
+        public bool DryRun { get; set; } = default!;
+    }
+
+    public class DashboardStudioPreference
+    {
+        [JsonPropertyName("player_id")]
+        public string PlayerId { get; set; } = default!;
+        [JsonPropertyName("data")]
+        public string Data { get; set; } = default!;
+    }
+
+    public class DashboardGetDashboardMountRequest
+    {
+        [JsonPropertyName("view_id")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement ViewId { get; set; } = default!;
+    }
+
+    public class DashboardGetDashboardMountResponse
+    {
+        [JsonPropertyName("mount")]
+        public JsonElement Mount { get; set; } = default!;
+    }
+
+    public class DashboardGetDashboardDataRequest
+    {
+        [JsonPropertyName("view_id")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement ViewId { get; set; } = default!;
+    }
+
+    public class DashboardGetDashboardDataResponse
+    {
+        [JsonPropertyName("data")]
+        public JsonElement Data { get; set; } = default!;
+    }
+
+    public class DashboardViewResolveViewRequest
+    {
+        [JsonPropertyName("id")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Id { get; set; } = default!;
+    }
+
+    public class DashboardViewResolveViewResponse
+    {
+        [JsonPropertyName("module")]
+        public JsonElement Module { get; set; } = default!;
+    }
+
+    public class DashboardViewListViewsRequest
+    {
+    }
+
+    public class DashboardViewListViewsResponse
+    {
+        [JsonPropertyName("views")]
+        public JsonElement Views { get; set; } = default!;
+    }
+
+    public class DashboardViewGetDashboardMountRequest
+    {
+        [JsonPropertyName("view_id")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement ViewId { get; set; } = default!;
+    }
+
+    public class DashboardViewGetDashboardMountResponse
+    {
+        [JsonPropertyName("mount")]
+        public JsonElement Mount { get; set; } = default!;
+    }
+
+    public class DashboardViewGetDashboardDataRequest
+    {
+        [JsonPropertyName("view_id")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement ViewId { get; set; } = default!;
+    }
+
+    public class DashboardViewGetDashboardDataResponse
+    {
+        [JsonPropertyName("data")]
+        public JsonElement Data { get; set; } = default!;
+    }
+
     public class DatabaseExecuteRequest
     {
         [JsonPropertyName("arguments")]
@@ -43,6 +410,328 @@ namespace Exoforge.Plugins.Generated
     {
         [JsonPropertyName("columns")]
         public JsonElement Columns { get; set; } = default!;
+    }
+
+    public class ExtensionManagerListExtensionsRequest
+    {
+    }
+
+    public class ExtensionManagerListExtensionsResponse
+    {
+        [JsonPropertyName("count")]
+        public long Count { get; set; } = default!;
+        [JsonPropertyName("extensions")]
+        public JsonElement Extensions { get; set; } = default!;
+    }
+
+    public class ExtensionManagerGetExtensionRequest
+    {
+        [JsonPropertyName("id")]
+        public string Id { get; set; } = default!;
+    }
+
+    public class ExtensionManagerGetExtensionResponse
+    {
+        [JsonPropertyName("extension")]
+        public JsonElement Extension { get; set; } = default!;
+    }
+
+    public class ExtensionManagerGetSystemInfoRequest
+    {
+    }
+
+    public class ExtensionManagerGetSystemInfoResponse
+    {
+        [JsonPropertyName("system")]
+        public JsonElement System { get; set; } = default!;
+    }
+
+    public class ExtensionManagerUploadExtensionRequest
+    {
+        [JsonPropertyName("binary")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Binary { get; set; } = default!;
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = default!;
+        [JsonPropertyName("manifest")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Manifest { get; set; } = default!;
+    }
+
+    public class ExtensionManagerUploadExtensionResponse
+    {
+        [JsonPropertyName("status")]
+        public string Status { get; set; } = default!;
+        [JsonPropertyName("extension_id")]
+        public string ExtensionId { get; set; } = default!;
+    }
+
+    public class ExtensionManagerRemoveExtensionRequest
+    {
+        [JsonPropertyName("id")]
+        public string Id { get; set; } = default!;
+    }
+
+    public class ExtensionManagerRemoveExtensionResponse
+    {
+        [JsonPropertyName("status")]
+        public string Status { get; set; } = default!;
+    }
+
+    public class ExtensionManagerRestartSystemRequest
+    {
+    }
+
+    public class ExtensionManagerRestartSystemResponse
+    {
+        [JsonPropertyName("status")]
+        public string Status { get; set; } = default!;
+        [JsonPropertyName("extensions_count")]
+        public long ExtensionsCount { get; set; } = default!;
+    }
+
+    public class ExtensionManagerLogsRequest
+    {
+        [JsonPropertyName("id")]
+        public string Id { get; set; } = default!;
+        [JsonPropertyName("limit")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Limit { get; set; } = default!;
+    }
+
+    public class ExtensionManagerLogsResponse
+    {
+        [JsonPropertyName("count")]
+        public long Count { get; set; } = default!;
+        [JsonPropertyName("lines")]
+        public JsonElement Lines { get; set; } = default!;
+        [JsonPropertyName("extension_id")]
+        public string ExtensionId { get; set; } = default!;
+    }
+
+    public class ExtensionManagerReloadExtensionRequest
+    {
+        [JsonPropertyName("id")]
+        public string Id { get; set; } = default!;
+    }
+
+    public class ExtensionManagerReloadExtensionResponse
+    {
+        [JsonPropertyName("status")]
+        public string Status { get; set; } = default!;
+        [JsonPropertyName("extension_id")]
+        public string ExtensionId { get; set; } = default!;
+    }
+
+    public class ExtensionManagerExportExtensionInfoRequest
+    {
+    }
+
+    public class ExtensionManagerExportExtensionInfoResponse
+    {
+        [JsonPropertyName("export")]
+        public JsonElement Export { get; set; } = default!;
+    }
+
+    public class FileBucketUploadFileRequest
+    {
+        [JsonPropertyName("filename")]
+        public string Filename { get; set; } = default!;
+        [JsonPropertyName("path")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Path { get; set; } = default!;
+        [JsonPropertyName("metadata")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Metadata { get; set; } = default!;
+        [JsonPropertyName("content")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Content { get; set; } = default!;
+        [JsonPropertyName("content_type")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement ContentType { get; set; } = default!;
+        [JsonPropertyName("bucket")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Bucket { get; set; } = default!;
+    }
+
+    public class FileBucketUploadFileResponse
+    {
+        [JsonPropertyName("file")]
+        public JsonElement File { get; set; } = default!;
+    }
+
+    public class FileBucketGetFileInfoRequest
+    {
+        [JsonPropertyName("id")]
+        public string Id { get; set; } = default!;
+        [JsonPropertyName("bucket")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Bucket { get; set; } = default!;
+    }
+
+    public class FileBucketGetFileInfoResponse
+    {
+        [JsonPropertyName("file")]
+        public JsonElement File { get; set; } = default!;
+    }
+
+    public class FileBucketReadFileRequest
+    {
+        [JsonPropertyName("id")]
+        public string Id { get; set; } = default!;
+        [JsonPropertyName("bucket")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Bucket { get; set; } = default!;
+    }
+
+    public class FileBucketReadFileResponse
+    {
+        [JsonPropertyName("file")]
+        public JsonElement File { get; set; } = default!;
+        [JsonPropertyName("content")]
+        public JsonElement Content { get; set; } = default!;
+    }
+
+    public class FileBucketListFilesRequest
+    {
+        [JsonPropertyName("offset")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Offset { get; set; } = default!;
+        [JsonPropertyName("limit")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Limit { get; set; } = default!;
+        [JsonPropertyName("bucket")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Bucket { get; set; } = default!;
+    }
+
+    public class FileBucketListFilesResponse
+    {
+        [JsonPropertyName("count")]
+        public long Count { get; set; } = default!;
+        [JsonPropertyName("files")]
+        public JsonElement Files { get; set; } = default!;
+    }
+
+    public class FileBucketListBucketsRequest
+    {
+    }
+
+    public class FileBucketListBucketsResponse
+    {
+        [JsonPropertyName("buckets")]
+        public JsonElement Buckets { get; set; } = default!;
+    }
+
+    public class FileBucketUpdateFileRequest
+    {
+        [JsonPropertyName("id")]
+        public string Id { get; set; } = default!;
+        [JsonPropertyName("filename")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Filename { get; set; } = default!;
+        [JsonPropertyName("metadata")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Metadata { get; set; } = default!;
+        [JsonPropertyName("content")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Content { get; set; } = default!;
+        [JsonPropertyName("content_type")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement ContentType { get; set; } = default!;
+        [JsonPropertyName("bucket")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Bucket { get; set; } = default!;
+    }
+
+    public class FileBucketUpdateFileResponse
+    {
+        [JsonPropertyName("file")]
+        public JsonElement File { get; set; } = default!;
+    }
+
+    public class FileBucketDeleteFileRequest
+    {
+        [JsonPropertyName("id")]
+        public string Id { get; set; } = default!;
+        [JsonPropertyName("bucket")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Bucket { get; set; } = default!;
+    }
+
+    public class FileBucketDeleteFileResponse
+    {
+        [JsonPropertyName("deleted")]
+        public bool Deleted { get; set; } = default!;
+    }
+
+    public class HttpStatusRequest
+    {
+    }
+
+    public class HttpStatusResponse
+    {
+        [JsonPropertyName("port")]
+        public long Port { get; set; } = default!;
+        [JsonPropertyName("status")]
+        public string Status { get; set; } = default!;
+    }
+
+    public class LldbConnectionConfigRequest
+    {
+        [JsonPropertyName("namespace")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Namespace { get; set; } = default!;
+    }
+
+    public class LldbConnectionConfigResponse
+    {
+        [JsonPropertyName("driver")]
+        public JsonElement Driver { get; set; } = default!;
+        [JsonPropertyName("url")]
+        public string Url { get; set; } = default!;
+        [JsonPropertyName("pool_size")]
+        public long PoolSize { get; set; } = default!;
+    }
+
+    public class LldbHealthCheckRequest
+    {
+    }
+
+    public class LldbHealthCheckResponse
+    {
+        [JsonPropertyName("status")]
+        public string Status { get; set; } = default!;
+    }
+
+    public class LldbConnectionLostEvent
+    {
+        [JsonPropertyName("reason")]
+        public string Reason { get; set; } = default!;
+        [JsonPropertyName("timestamp")]
+        public long Timestamp { get; set; } = default!;
+    }
+
+    public class MeteringUsageRequest
+    {
+        [JsonPropertyName("since")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Since { get; set; } = default!;
+        [JsonPropertyName("plugin_id")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement PluginId { get; set; } = default!;
+    }
+
+    public class MeteringUsageResponse
+    {
+        [JsonPropertyName("title_id")]
+        public string TitleId { get; set; } = default!;
+        [JsonPropertyName("studio_id")]
+        public string StudioId { get; set; } = default!;
+        [JsonPropertyName("plugins")]
+        public JsonElement Plugins { get; set; } = default!;
+        [JsonPropertyName("totals")]
+        public JsonElement Totals { get; set; } = default!;
     }
 
     public class PlayerDataPlayer
@@ -231,6 +920,697 @@ namespace Exoforge.Plugins.Generated
         public string PlayerId { get; set; } = default!;
     }
 
+    public class ResourceStoreMigrateRequest
+    {
+        [JsonPropertyName("resource")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Resource { get; set; } = default!;
+    }
+
+    public class ResourceStoreMigrateResponse
+    {
+        [JsonPropertyName("migrated")]
+        public long Migrated { get; set; } = default!;
+    }
+
+    public class ResourceStoreListRequest
+    {
+        [JsonPropertyName("offset")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Offset { get; set; } = default!;
+        [JsonPropertyName("sort")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Sort { get; set; } = default!;
+        [JsonPropertyName("search")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Search { get; set; } = default!;
+        [JsonPropertyName("filter")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Filter { get; set; } = default!;
+        [JsonPropertyName("limit")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Limit { get; set; } = default!;
+        [JsonPropertyName("resource")]
+        public string Resource { get; set; } = default!;
+    }
+
+    public class ResourceStoreListResponse
+    {
+        [JsonPropertyName("total")]
+        public long Total { get; set; } = default!;
+        [JsonPropertyName("rows")]
+        public JsonElement Rows { get; set; } = default!;
+    }
+
+    public class ResourceStoreGetRequest
+    {
+        [JsonPropertyName("id")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Id { get; set; } = default!;
+        [JsonPropertyName("resource")]
+        public string Resource { get; set; } = default!;
+    }
+
+    public class ResourceStoreGetResponse
+    {
+        [JsonPropertyName("row")]
+        public JsonElement Row { get; set; } = default!;
+    }
+
+    public class ResourceStoreCreateRequest
+    {
+        [JsonPropertyName("attributes")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Attributes { get; set; } = default!;
+        [JsonPropertyName("resource")]
+        public string Resource { get; set; } = default!;
+    }
+
+    public class ResourceStoreCreateResponse
+    {
+        [JsonPropertyName("row")]
+        public JsonElement Row { get; set; } = default!;
+    }
+
+    public class ResourceStoreUpdateRequest
+    {
+        [JsonPropertyName("attributes")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Attributes { get; set; } = default!;
+        [JsonPropertyName("id")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Id { get; set; } = default!;
+        [JsonPropertyName("resource")]
+        public string Resource { get; set; } = default!;
+    }
+
+    public class ResourceStoreUpdateResponse
+    {
+        [JsonPropertyName("row")]
+        public JsonElement Row { get; set; } = default!;
+    }
+
+    public class ResourceStoreDeleteRequest
+    {
+        [JsonPropertyName("id")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Id { get; set; } = default!;
+        [JsonPropertyName("resource")]
+        public string Resource { get; set; } = default!;
+    }
+
+    public class ResourceStoreDeleteResponse
+    {
+        [JsonPropertyName("deleted")]
+        public bool Deleted { get; set; } = default!;
+    }
+
+    public class ResourceStoreUpsertRequest
+    {
+        [JsonPropertyName("attributes")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Attributes { get; set; } = default!;
+        [JsonPropertyName("resource")]
+        public string Resource { get; set; } = default!;
+    }
+
+    public class ResourceStoreUpsertResponse
+    {
+        [JsonPropertyName("row")]
+        public JsonElement Row { get; set; } = default!;
+    }
+
+    public class ResourceStoreClearRequest
+    {
+        [JsonPropertyName("resource")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Resource { get; set; } = default!;
+    }
+
+    public class ResourceStoreClearResponse
+    {
+        [JsonPropertyName("cleared")]
+        public long Cleared { get; set; } = default!;
+    }
+
+    public class SamplePluginCounter
+    {
+        [JsonPropertyName("counter_id")]
+        public long CounterId { get; set; } = default!;
+        [JsonPropertyName("value")]
+        public long Value { get; set; } = default!;
+        [JsonPropertyName("status")]
+        public string Status { get; set; } = default!;
+    }
+
+    public class SamplePluginPingRequest
+    {
+    }
+
+    public class SamplePluginIncrementRequest
+    {
+        [JsonPropertyName("amount")]
+        public long Amount { get; set; } = default!;
+        [JsonPropertyName("counter_id")]
+        public long CounterId { get; set; } = default!;
+    }
+
+    public class SamplePluginInjectedRequest
+    {
+    }
+
+    public class SamplePluginEchoRequest
+    {
+        [JsonPropertyName("value")]
+        public long Value { get; set; } = default!;
+    }
+
+    public class SamplePluginValueChangedEvent
+    {
+        [JsonPropertyName("new_value")]
+        public long NewValue { get; set; } = default!;
+        [JsonPropertyName("delta")]
+        public long Delta { get; set; } = default!;
+        [JsonPropertyName("counter_id")]
+        public long CounterId { get; set; } = default!;
+    }
+
+    public class SnakeConfigSnakeConfig
+    {
+        [JsonPropertyName("key")]
+        public string Key { get; set; } = default!;
+        [JsonPropertyName("snake_color")]
+        public string SnakeColor { get; set; } = default!;
+        [JsonPropertyName("apple_color")]
+        public string AppleColor { get; set; } = default!;
+        [JsonPropertyName("apple_points")]
+        public long ApplePoints { get; set; } = default!;
+        [JsonPropertyName("background_file_id")]
+        public string BackgroundFileId { get; set; } = default!;
+        [JsonPropertyName("background_addressable")]
+        public string BackgroundAddressable { get; set; } = default!;
+        [JsonPropertyName("updated_at")]
+        public long UpdatedAt { get; set; } = default!;
+    }
+
+    public class SnakeConfigGetConfigRequest
+    {
+    }
+
+    public class SnakeConfigDto
+    {
+        [JsonPropertyName("snake_color")]
+        public string SnakeColor { get; set; } = default!;
+        [JsonPropertyName("apple_color")]
+        public string AppleColor { get; set; } = default!;
+        [JsonPropertyName("apple_points")]
+        public long ApplePoints { get; set; } = default!;
+        [JsonPropertyName("background_file_id")]
+        public string BackgroundFileId { get; set; } = default!;
+        [JsonPropertyName("background_addressable")]
+        public string BackgroundAddressable { get; set; } = default!;
+    }
+
+    public class SnakeConfigUpdateConfigRequest
+    {
+        [JsonPropertyName("snake_color")]
+        public string SnakeColor { get; set; } = default!;
+        [JsonPropertyName("apple_color")]
+        public string AppleColor { get; set; } = default!;
+        [JsonPropertyName("apple_points")]
+        public long ApplePoints { get; set; } = default!;
+        [JsonPropertyName("background_file_id")]
+        public string BackgroundFileId { get; set; } = default!;
+        [JsonPropertyName("background_addressable")]
+        public string BackgroundAddressable { get; set; } = default!;
+    }
+
+    public class TesteTesteItem
+    {
+        [JsonPropertyName("id")]
+        public string Id { get; set; } = default!;
+        [JsonPropertyName("owner_id")]
+        public string OwnerId { get; set; } = default!;
+        [JsonPropertyName("quantity")]
+        public long Quantity { get; set; } = default!;
+        [JsonPropertyName("status")]
+        public string Status { get; set; } = default!;
+    }
+
+    public class TestePingRequest
+    {
+    }
+
+    public class TesteEchoRequest
+    {
+        [JsonPropertyName("value")]
+        public long Value { get; set; } = default!;
+    }
+
+    public class UnityAddressablesAddressableAsset
+    {
+        [JsonPropertyName("address")]
+        public string Address { get; set; } = default!;
+        [JsonPropertyName("release_version")]
+        public string ReleaseVersion { get; set; } = default!;
+        [JsonPropertyName("asset_path")]
+        public string AssetPath { get; set; } = default!;
+        [JsonPropertyName("group_name")]
+        public string GroupName { get; set; } = default!;
+        [JsonPropertyName("labels")]
+        public string Labels { get; set; } = default!;
+        [JsonPropertyName("bundle_name")]
+        public string BundleName { get; set; } = default!;
+        [JsonPropertyName("file_size")]
+        public long FileSize { get; set; } = default!;
+        [JsonPropertyName("hash")]
+        public string Hash { get; set; } = default!;
+        [JsonPropertyName("preview_url")]
+        public string PreviewUrl { get; set; } = default!;
+        [JsonPropertyName("status")]
+        public string Status { get; set; } = default!;
+        [JsonPropertyName("updated_at")]
+        public long UpdatedAt { get; set; } = default!;
+    }
+
+    public class UnityAddressablesAddressableRelease
+    {
+        [JsonPropertyName("build_number")]
+        public long BuildNumber { get; set; } = default!;
+        [JsonPropertyName("version")]
+        public string Version { get; set; } = default!;
+        [JsonPropertyName("uploader")]
+        public string Uploader { get; set; } = default!;
+        [JsonPropertyName("badge")]
+        public string Badge { get; set; } = default!;
+        [JsonPropertyName("badges")]
+        public JsonElement Badges { get; set; } = default!;
+        [JsonPropertyName("catalog_hash")]
+        public string CatalogHash { get; set; } = default!;
+        [JsonPropertyName("catalog_json")]
+        public string CatalogJson { get; set; } = default!;
+        [JsonPropertyName("bundle_count")]
+        public long BundleCount { get; set; } = default!;
+        [JsonPropertyName("total_size")]
+        public long TotalSize { get; set; } = default!;
+        [JsonPropertyName("created_at")]
+        public long CreatedAt { get; set; } = default!;
+    }
+
+    public class UnityAddressablesGetStatsRequest
+    {
+    }
+
+    public class AddressablesStats
+    {
+        [JsonPropertyName("total_assets")]
+        public long TotalAssets { get; set; } = default!;
+        [JsonPropertyName("total_bundles")]
+        public long TotalBundles { get; set; } = default!;
+        [JsonPropertyName("total_size_bytes")]
+        public long TotalSizeBytes { get; set; } = default!;
+        [JsonPropertyName("active_badge")]
+        public string ActiveBadge { get; set; } = default!;
+        [JsonPropertyName("active_badges")]
+        public JsonElement ActiveBadges { get; set; } = default!;
+        [JsonPropertyName("active_version")]
+        public string ActiveVersion { get; set; } = default!;
+        [JsonPropertyName("active_build_number")]
+        public long ActiveBuildNumber { get; set; } = default!;
+    }
+
+    public class UnityAddressablesListAssetsRequest
+    {
+        [JsonPropertyName("group")]
+        public string Group { get; set; } = default!;
+        [JsonPropertyName("label")]
+        public string Label { get; set; } = default!;
+        [JsonPropertyName("search")]
+        public string Search { get; set; } = default!;
+        [JsonPropertyName("tag")]
+        public string Tag { get; set; } = default!;
+    }
+
+    public class AddressableAssetRecord
+    {
+        [JsonPropertyName("address")]
+        public string Address { get; set; } = default!;
+        [JsonPropertyName("release_version")]
+        public string ReleaseVersion { get; set; } = default!;
+        [JsonPropertyName("asset_path")]
+        public string AssetPath { get; set; } = default!;
+        [JsonPropertyName("group_name")]
+        public string GroupName { get; set; } = default!;
+        [JsonPropertyName("labels")]
+        public string Labels { get; set; } = default!;
+        [JsonPropertyName("bundle_name")]
+        public string BundleName { get; set; } = default!;
+        [JsonPropertyName("file_size")]
+        public long FileSize { get; set; } = default!;
+        [JsonPropertyName("hash")]
+        public string Hash { get; set; } = default!;
+        [JsonPropertyName("preview_url")]
+        public string PreviewUrl { get; set; } = default!;
+        [JsonPropertyName("status")]
+        public string Status { get; set; } = default!;
+        [JsonPropertyName("updated_at")]
+        public long UpdatedAt { get; set; } = default!;
+    }
+
+    public class UnityAddressablesGetAssetRequest
+    {
+        [JsonPropertyName("address")]
+        public string Address { get; set; } = default!;
+    }
+
+    public class UnityAddressablesListReleasesRequest
+    {
+    }
+
+    public class AddressableReleaseRecord
+    {
+        [JsonPropertyName("build_number")]
+        public long BuildNumber { get; set; } = default!;
+        [JsonPropertyName("version")]
+        public string Version { get; set; } = default!;
+        [JsonPropertyName("uploader")]
+        public string Uploader { get; set; } = default!;
+        [JsonPropertyName("badge")]
+        public string Badge { get; set; } = default!;
+        [JsonPropertyName("badges")]
+        public JsonElement Badges { get; set; } = default!;
+        [JsonPropertyName("catalog_hash")]
+        public string CatalogHash { get; set; } = default!;
+        [JsonPropertyName("catalog_json")]
+        public string CatalogJson { get; set; } = default!;
+        [JsonPropertyName("bundle_count")]
+        public long BundleCount { get; set; } = default!;
+        [JsonPropertyName("total_size")]
+        public long TotalSize { get; set; } = default!;
+        [JsonPropertyName("created_at")]
+        public long CreatedAt { get; set; } = default!;
+    }
+
+    public class UnityAddressablesGetManifestRequest
+    {
+        [JsonPropertyName("tag")]
+        public string Tag { get; set; } = default!;
+    }
+
+    public class AddressablesManifestDto
+    {
+        [JsonPropertyName("version")]
+        public string Version { get; set; } = default!;
+        [JsonPropertyName("tag")]
+        public string Tag { get; set; } = default!;
+        [JsonPropertyName("catalog_hash")]
+        public string CatalogHash { get; set; } = default!;
+        [JsonPropertyName("catalog_json")]
+        public string CatalogJson { get; set; } = default!;
+        [JsonPropertyName("remote_load_path")]
+        public string RemoteLoadPath { get; set; } = default!;
+        [JsonPropertyName("assets")]
+        public JsonElement Assets { get; set; } = default!;
+    }
+
+    public class UnityAddressablesPublishReleaseRequest
+    {
+        [JsonPropertyName("version")]
+        public string Version { get; set; } = default!;
+        [JsonPropertyName("badge")]
+        public string Badge { get; set; } = default!;
+        [JsonPropertyName("catalog_hash")]
+        public string CatalogHash { get; set; } = default!;
+        [JsonPropertyName("catalog_json")]
+        public string CatalogJson { get; set; } = default!;
+        [JsonPropertyName("assets")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Assets { get; set; } = default!;
+        [JsonPropertyName("uploader")]
+        public string Uploader { get; set; } = default!;
+        [JsonPropertyName("badges")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Badges { get; set; } = default!;
+    }
+
+    public class UnityAddressablesPublishReleaseResponse
+    {
+        [JsonPropertyName("is_success")]
+        public bool IsSuccess { get; set; } = default!;
+        [JsonPropertyName("is_error")]
+        public bool IsError { get; set; } = default!;
+        [JsonPropertyName("value")]
+        public JsonElement Value { get; set; } = default!;
+        [JsonPropertyName("error")]
+        public string Error { get; set; } = default!;
+    }
+
+    public class UnityAddressablesPromoteReleaseRequest
+    {
+        [JsonPropertyName("version")]
+        public string Version { get; set; } = default!;
+        [JsonPropertyName("target_badge")]
+        public string TargetBadge { get; set; } = default!;
+    }
+
+    public class UnityAddressablesPromoteReleaseResponse
+    {
+        [JsonPropertyName("is_success")]
+        public bool IsSuccess { get; set; } = default!;
+        [JsonPropertyName("is_error")]
+        public bool IsError { get; set; } = default!;
+        [JsonPropertyName("value")]
+        public JsonElement Value { get; set; } = default!;
+        [JsonPropertyName("error")]
+        public string Error { get; set; } = default!;
+    }
+
+    public class UnityAddressablesUploadBundleRequest
+    {
+        [JsonPropertyName("filename")]
+        public string Filename { get; set; } = default!;
+        [JsonPropertyName("base64_data")]
+        public string Base64Data { get; set; } = default!;
+        [JsonPropertyName("subfolder")]
+        public string Subfolder { get; set; } = default!;
+    }
+
+    public class UnityAddressablesUploadBundleResponse
+    {
+        [JsonPropertyName("is_success")]
+        public bool IsSuccess { get; set; } = default!;
+        [JsonPropertyName("is_error")]
+        public bool IsError { get; set; } = default!;
+        [JsonPropertyName("value")]
+        public string Value { get; set; } = default!;
+        [JsonPropertyName("error")]
+        public string Error { get; set; } = default!;
+    }
+
+    public class UnityAddressablesUploadPreviewRequest
+    {
+        [JsonPropertyName("address")]
+        public string Address { get; set; } = default!;
+        [JsonPropertyName("base64_image")]
+        public string Base64Image { get; set; } = default!;
+    }
+
+    public class UnityAddressablesUploadPreviewResponse
+    {
+        [JsonPropertyName("is_success")]
+        public bool IsSuccess { get; set; } = default!;
+        [JsonPropertyName("is_error")]
+        public bool IsError { get; set; } = default!;
+        [JsonPropertyName("value")]
+        public string Value { get; set; } = default!;
+        [JsonPropertyName("error")]
+        public string Error { get; set; } = default!;
+    }
+
+    public class WsBroadcastRequest
+    {
+        [JsonPropertyName("topic")]
+        public string Topic { get; set; } = default!;
+        [JsonPropertyName("event")]
+        public string Event { get; set; } = default!;
+        [JsonPropertyName("payload")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement Payload { get; set; } = default!;
+    }
+
+    public class WsBroadcastResponse
+    {
+        [JsonPropertyName("status")]
+        public string Status { get; set; } = default!;
+    }
+
+    public class WsConnectionCountRequest
+    {
+    }
+
+    public class WsConnectionCountResponse
+    {
+        [JsonPropertyName("count")]
+        public long Count { get; set; } = default!;
+    }
+
+    /// <summary>Contract of the 'auth' service, as the plugin providing it declares it.</summary>
+    public interface IAuthService
+    {
+        [ExoAction("authenticate", Scope = "global")]
+        Task<AuthAuthenticateResponse?> AuthenticateAsync(AuthAuthenticateRequest request);
+
+        [ExoAction("login", Scope = "global")]
+        Task<AuthLoginResponse?> LoginAsync(AuthLoginRequest request);
+
+        [ExoAction("verify_scope", Scope = "global")]
+        Task<AuthVerifyScopeResponse?> VerifyScopeAsync(AuthVerifyScopeRequest request);
+
+        [ExoAction("register", Scope = "global")]
+        Task<AuthRegisterResponse?> RegisterAsync(AuthRegisterRequest request);
+
+        [ExoAction("create_player", Scope = "global")]
+        Task<AuthCreatePlayerResponse?> CreatePlayerAsync(AuthCreatePlayerRequest request);
+
+        [ExoAction("anonymous", Scope = "global")]
+        Task<AuthAnonymousResponse?> AnonymousAsync(AuthAnonymousRequest request);
+
+        [ExoAction("set_display_name", Scope = "global")]
+        Task<AuthSetDisplayNameResponse?> SetDisplayNameAsync(AuthSetDisplayNameRequest request);
+
+        [ExoAction("issue_token", Scope = "admin")]
+        Task<AuthIssueTokenResponse?> IssueTokenAsync(AuthIssueTokenRequest request);
+
+        [ExoAction("list_users", Scope = "studio")]
+        Task<AuthListUsersResponse?> ListUsersAsync(AuthListUsersRequest request);
+
+        [ExoAction("reset_password", Scope = "admin")]
+        Task<AuthResetPasswordResponse?> ResetPasswordAsync(AuthResetPasswordRequest request);
+
+        [ExoAction("update_user_roles", Scope = "admin")]
+        Task<AuthUpdateUserRolesResponse?> UpdateUserRolesAsync(AuthUpdateUserRolesRequest request);
+
+        [ExoAction("delete_user", Scope = "admin")]
+        Task<AuthDeleteUserResponse?> DeleteUserAsync(AuthDeleteUserRequest request);
+
+        [ExoAction("purge_disposable", Scope = "global")]
+        Task<AuthPurgeDisposableResponse?> PurgeDisposableAsync(AuthPurgeDisposableRequest request);
+
+    }
+
+    public sealed class AuthServiceClient : IAuthService
+    {
+        private readonly IActionDispatcher _dispatcher;
+
+        public AuthServiceClient(IActionDispatcher dispatcher) => _dispatcher = dispatcher;
+
+        public Task<AuthAuthenticateResponse?> AuthenticateAsync(AuthAuthenticateRequest request)
+            => _dispatcher.CallActionAsync<AuthAuthenticateResponse>("auth", "authenticate", request);
+
+        public Task<AuthLoginResponse?> LoginAsync(AuthLoginRequest request)
+            => _dispatcher.CallActionAsync<AuthLoginResponse>("auth", "login", request);
+
+        public Task<AuthVerifyScopeResponse?> VerifyScopeAsync(AuthVerifyScopeRequest request)
+            => _dispatcher.CallActionAsync<AuthVerifyScopeResponse>("auth", "verify_scope", request);
+
+        public Task<AuthRegisterResponse?> RegisterAsync(AuthRegisterRequest request)
+            => _dispatcher.CallActionAsync<AuthRegisterResponse>("auth", "register", request);
+
+        public Task<AuthCreatePlayerResponse?> CreatePlayerAsync(AuthCreatePlayerRequest request)
+            => _dispatcher.CallActionAsync<AuthCreatePlayerResponse>("auth", "create_player", request);
+
+        public Task<AuthAnonymousResponse?> AnonymousAsync(AuthAnonymousRequest request)
+            => _dispatcher.CallActionAsync<AuthAnonymousResponse>("auth", "anonymous", request);
+
+        public Task<AuthSetDisplayNameResponse?> SetDisplayNameAsync(AuthSetDisplayNameRequest request)
+            => _dispatcher.CallActionAsync<AuthSetDisplayNameResponse>("auth", "set_display_name", request);
+
+        public Task<AuthIssueTokenResponse?> IssueTokenAsync(AuthIssueTokenRequest request)
+            => _dispatcher.CallActionAsync<AuthIssueTokenResponse>("auth", "issue_token", request);
+
+        public Task<AuthListUsersResponse?> ListUsersAsync(AuthListUsersRequest request)
+            => _dispatcher.CallActionAsync<AuthListUsersResponse>("auth", "list_users", request);
+
+        public Task<AuthResetPasswordResponse?> ResetPasswordAsync(AuthResetPasswordRequest request)
+            => _dispatcher.CallActionAsync<AuthResetPasswordResponse>("auth", "reset_password", request);
+
+        public Task<AuthUpdateUserRolesResponse?> UpdateUserRolesAsync(AuthUpdateUserRolesRequest request)
+            => _dispatcher.CallActionAsync<AuthUpdateUserRolesResponse>("auth", "update_user_roles", request);
+
+        public Task<AuthDeleteUserResponse?> DeleteUserAsync(AuthDeleteUserRequest request)
+            => _dispatcher.CallActionAsync<AuthDeleteUserResponse>("auth", "delete_user", request);
+
+        public Task<AuthPurgeDisposableResponse?> PurgeDisposableAsync(AuthPurgeDisposableRequest request)
+            => _dispatcher.CallActionAsync<AuthPurgeDisposableResponse>("auth", "purge_disposable", request);
+
+    }
+
+    /// <summary>Contract of the 'dashboard' service, as the plugin providing it declares it.</summary>
+    public interface IDashboardService
+    {
+        [ExoAction("get_dashboard_mount", Scope = "server")]
+        Task<DashboardGetDashboardMountResponse?> GetDashboardMountAsync(DashboardGetDashboardMountRequest request);
+
+        [ExoAction("get_dashboard_data", Scope = "server")]
+        Task<DashboardGetDashboardDataResponse?> GetDashboardDataAsync(DashboardGetDashboardDataRequest request);
+
+    }
+
+    public sealed class DashboardServiceClient : IDashboardService
+    {
+        private readonly IActionDispatcher _dispatcher;
+
+        public DashboardServiceClient(IActionDispatcher dispatcher) => _dispatcher = dispatcher;
+
+        public Task<DashboardGetDashboardMountResponse?> GetDashboardMountAsync(DashboardGetDashboardMountRequest request)
+            => _dispatcher.CallActionAsync<DashboardGetDashboardMountResponse>("dashboard", "get_dashboard_mount", request);
+
+        public Task<DashboardGetDashboardDataResponse?> GetDashboardDataAsync(DashboardGetDashboardDataRequest request)
+            => _dispatcher.CallActionAsync<DashboardGetDashboardDataResponse>("dashboard", "get_dashboard_data", request);
+
+    }
+
+    /// <summary>Contract of the 'dashboard_view' service, as the plugin providing it declares it.</summary>
+    public interface IDashboardViewService
+    {
+        [ExoAction("resolve_view", Scope = "server")]
+        Task<DashboardViewResolveViewResponse?> ResolveViewAsync(DashboardViewResolveViewRequest request);
+
+        [ExoAction("list_views", Scope = "server")]
+        Task<DashboardViewListViewsResponse?> ListViewsAsync(DashboardViewListViewsRequest request);
+        Task<DashboardViewListViewsResponse?> ListViewsAsync();
+
+        [ExoAction("get_dashboard_mount", Scope = "server")]
+        Task<DashboardViewGetDashboardMountResponse?> GetDashboardMountAsync(DashboardViewGetDashboardMountRequest request);
+
+        [ExoAction("get_dashboard_data", Scope = "server")]
+        Task<DashboardViewGetDashboardDataResponse?> GetDashboardDataAsync(DashboardViewGetDashboardDataRequest request);
+
+    }
+
+    public sealed class DashboardViewServiceClient : IDashboardViewService
+    {
+        private readonly IActionDispatcher _dispatcher;
+
+        public DashboardViewServiceClient(IActionDispatcher dispatcher) => _dispatcher = dispatcher;
+
+        public Task<DashboardViewResolveViewResponse?> ResolveViewAsync(DashboardViewResolveViewRequest request)
+            => _dispatcher.CallActionAsync<DashboardViewResolveViewResponse>("dashboard_view", "resolve_view", request);
+
+        public Task<DashboardViewListViewsResponse?> ListViewsAsync(DashboardViewListViewsRequest request)
+            => _dispatcher.CallActionAsync<DashboardViewListViewsResponse>("dashboard_view", "list_views", request);
+
+        public Task<DashboardViewListViewsResponse?> ListViewsAsync()
+            => ListViewsAsync(new DashboardViewListViewsRequest());
+
+        public Task<DashboardViewGetDashboardMountResponse?> GetDashboardMountAsync(DashboardViewGetDashboardMountRequest request)
+            => _dispatcher.CallActionAsync<DashboardViewGetDashboardMountResponse>("dashboard_view", "get_dashboard_mount", request);
+
+        public Task<DashboardViewGetDashboardDataResponse?> GetDashboardDataAsync(DashboardViewGetDashboardDataRequest request)
+            => _dispatcher.CallActionAsync<DashboardViewGetDashboardDataResponse>("dashboard_view", "get_dashboard_data", request);
+
+    }
+
     /// <summary>Contract of the 'database' service, as the plugin providing it declares it.</summary>
     public interface IDatabaseService
     {
@@ -253,6 +1633,219 @@ namespace Exoforge.Plugins.Generated
 
         public Task<DatabaseTableColumnsResponse?> TableColumnsAsync(DatabaseTableColumnsRequest request)
             => _dispatcher.CallActionAsync<DatabaseTableColumnsResponse>("database", "table_columns", request);
+
+    }
+
+    /// <summary>Contract of the 'extension_manager' service, as the plugin providing it declares it.</summary>
+    public interface IExtensionManagerService
+    {
+        [ExoAction("list_extensions", Scope = "studio")]
+        Task<ExtensionManagerListExtensionsResponse?> ListExtensionsAsync(ExtensionManagerListExtensionsRequest request);
+        Task<ExtensionManagerListExtensionsResponse?> ListExtensionsAsync();
+
+        [ExoAction("get_extension", Scope = "studio")]
+        Task<ExtensionManagerGetExtensionResponse?> GetExtensionAsync(ExtensionManagerGetExtensionRequest request);
+
+        [ExoAction("get_system_info", Scope = "studio")]
+        Task<ExtensionManagerGetSystemInfoResponse?> GetSystemInfoAsync(ExtensionManagerGetSystemInfoRequest request);
+        Task<ExtensionManagerGetSystemInfoResponse?> GetSystemInfoAsync();
+
+        [ExoAction("upload_extension", Scope = "admin")]
+        Task<ExtensionManagerUploadExtensionResponse?> UploadExtensionAsync(ExtensionManagerUploadExtensionRequest request);
+
+        [ExoAction("remove_extension", Scope = "admin")]
+        Task<ExtensionManagerRemoveExtensionResponse?> RemoveExtensionAsync(ExtensionManagerRemoveExtensionRequest request);
+
+        [ExoAction("restart_system", Scope = "admin")]
+        Task<ExtensionManagerRestartSystemResponse?> RestartSystemAsync(ExtensionManagerRestartSystemRequest request);
+        Task<ExtensionManagerRestartSystemResponse?> RestartSystemAsync();
+
+        [ExoAction("logs", Scope = "studio")]
+        Task<ExtensionManagerLogsResponse?> LogsAsync(ExtensionManagerLogsRequest request);
+
+        [ExoAction("reload_extension", Scope = "admin")]
+        Task<ExtensionManagerReloadExtensionResponse?> ReloadExtensionAsync(ExtensionManagerReloadExtensionRequest request);
+
+        [ExoAction("export_extension_info", Scope = "studio")]
+        Task<ExtensionManagerExportExtensionInfoResponse?> ExportExtensionInfoAsync(ExtensionManagerExportExtensionInfoRequest request);
+        Task<ExtensionManagerExportExtensionInfoResponse?> ExportExtensionInfoAsync();
+
+    }
+
+    public sealed class ExtensionManagerServiceClient : IExtensionManagerService
+    {
+        private readonly IActionDispatcher _dispatcher;
+
+        public ExtensionManagerServiceClient(IActionDispatcher dispatcher) => _dispatcher = dispatcher;
+
+        public Task<ExtensionManagerListExtensionsResponse?> ListExtensionsAsync(ExtensionManagerListExtensionsRequest request)
+            => _dispatcher.CallActionAsync<ExtensionManagerListExtensionsResponse>("extension_manager", "list_extensions", request);
+
+        public Task<ExtensionManagerListExtensionsResponse?> ListExtensionsAsync()
+            => ListExtensionsAsync(new ExtensionManagerListExtensionsRequest());
+
+        public Task<ExtensionManagerGetExtensionResponse?> GetExtensionAsync(ExtensionManagerGetExtensionRequest request)
+            => _dispatcher.CallActionAsync<ExtensionManagerGetExtensionResponse>("extension_manager", "get_extension", request);
+
+        public Task<ExtensionManagerGetSystemInfoResponse?> GetSystemInfoAsync(ExtensionManagerGetSystemInfoRequest request)
+            => _dispatcher.CallActionAsync<ExtensionManagerGetSystemInfoResponse>("extension_manager", "get_system_info", request);
+
+        public Task<ExtensionManagerGetSystemInfoResponse?> GetSystemInfoAsync()
+            => GetSystemInfoAsync(new ExtensionManagerGetSystemInfoRequest());
+
+        public Task<ExtensionManagerUploadExtensionResponse?> UploadExtensionAsync(ExtensionManagerUploadExtensionRequest request)
+            => _dispatcher.CallActionAsync<ExtensionManagerUploadExtensionResponse>("extension_manager", "upload_extension", request);
+
+        public Task<ExtensionManagerRemoveExtensionResponse?> RemoveExtensionAsync(ExtensionManagerRemoveExtensionRequest request)
+            => _dispatcher.CallActionAsync<ExtensionManagerRemoveExtensionResponse>("extension_manager", "remove_extension", request);
+
+        public Task<ExtensionManagerRestartSystemResponse?> RestartSystemAsync(ExtensionManagerRestartSystemRequest request)
+            => _dispatcher.CallActionAsync<ExtensionManagerRestartSystemResponse>("extension_manager", "restart_system", request);
+
+        public Task<ExtensionManagerRestartSystemResponse?> RestartSystemAsync()
+            => RestartSystemAsync(new ExtensionManagerRestartSystemRequest());
+
+        public Task<ExtensionManagerLogsResponse?> LogsAsync(ExtensionManagerLogsRequest request)
+            => _dispatcher.CallActionAsync<ExtensionManagerLogsResponse>("extension_manager", "logs", request);
+
+        public Task<ExtensionManagerReloadExtensionResponse?> ReloadExtensionAsync(ExtensionManagerReloadExtensionRequest request)
+            => _dispatcher.CallActionAsync<ExtensionManagerReloadExtensionResponse>("extension_manager", "reload_extension", request);
+
+        public Task<ExtensionManagerExportExtensionInfoResponse?> ExportExtensionInfoAsync(ExtensionManagerExportExtensionInfoRequest request)
+            => _dispatcher.CallActionAsync<ExtensionManagerExportExtensionInfoResponse>("extension_manager", "export_extension_info", request);
+
+        public Task<ExtensionManagerExportExtensionInfoResponse?> ExportExtensionInfoAsync()
+            => ExportExtensionInfoAsync(new ExtensionManagerExportExtensionInfoRequest());
+
+    }
+
+    /// <summary>Contract of the 'file_bucket' service, as the plugin providing it declares it.</summary>
+    public interface IFileBucketService
+    {
+        [ExoAction("upload_file", Scope = "server")]
+        Task<FileBucketUploadFileResponse?> UploadFileAsync(FileBucketUploadFileRequest request);
+
+        [ExoAction("get_file_info", Scope = "server")]
+        Task<FileBucketGetFileInfoResponse?> GetFileInfoAsync(FileBucketGetFileInfoRequest request);
+
+        [ExoAction("read_file", Scope = "server")]
+        Task<FileBucketReadFileResponse?> ReadFileAsync(FileBucketReadFileRequest request);
+
+        [ExoAction("list_files", Scope = "server")]
+        Task<FileBucketListFilesResponse?> ListFilesAsync(FileBucketListFilesRequest request);
+
+        [ExoAction("list_buckets", Scope = "server")]
+        Task<FileBucketListBucketsResponse?> ListBucketsAsync(FileBucketListBucketsRequest request);
+        Task<FileBucketListBucketsResponse?> ListBucketsAsync();
+
+        [ExoAction("update_file", Scope = "server")]
+        Task<FileBucketUpdateFileResponse?> UpdateFileAsync(FileBucketUpdateFileRequest request);
+
+        [ExoAction("delete_file", Scope = "server")]
+        Task<FileBucketDeleteFileResponse?> DeleteFileAsync(FileBucketDeleteFileRequest request);
+
+    }
+
+    public sealed class FileBucketServiceClient : IFileBucketService
+    {
+        private readonly IActionDispatcher _dispatcher;
+
+        public FileBucketServiceClient(IActionDispatcher dispatcher) => _dispatcher = dispatcher;
+
+        public Task<FileBucketUploadFileResponse?> UploadFileAsync(FileBucketUploadFileRequest request)
+            => _dispatcher.CallActionAsync<FileBucketUploadFileResponse>("file_bucket", "upload_file", request);
+
+        public Task<FileBucketGetFileInfoResponse?> GetFileInfoAsync(FileBucketGetFileInfoRequest request)
+            => _dispatcher.CallActionAsync<FileBucketGetFileInfoResponse>("file_bucket", "get_file_info", request);
+
+        public Task<FileBucketReadFileResponse?> ReadFileAsync(FileBucketReadFileRequest request)
+            => _dispatcher.CallActionAsync<FileBucketReadFileResponse>("file_bucket", "read_file", request);
+
+        public Task<FileBucketListFilesResponse?> ListFilesAsync(FileBucketListFilesRequest request)
+            => _dispatcher.CallActionAsync<FileBucketListFilesResponse>("file_bucket", "list_files", request);
+
+        public Task<FileBucketListBucketsResponse?> ListBucketsAsync(FileBucketListBucketsRequest request)
+            => _dispatcher.CallActionAsync<FileBucketListBucketsResponse>("file_bucket", "list_buckets", request);
+
+        public Task<FileBucketListBucketsResponse?> ListBucketsAsync()
+            => ListBucketsAsync(new FileBucketListBucketsRequest());
+
+        public Task<FileBucketUpdateFileResponse?> UpdateFileAsync(FileBucketUpdateFileRequest request)
+            => _dispatcher.CallActionAsync<FileBucketUpdateFileResponse>("file_bucket", "update_file", request);
+
+        public Task<FileBucketDeleteFileResponse?> DeleteFileAsync(FileBucketDeleteFileRequest request)
+            => _dispatcher.CallActionAsync<FileBucketDeleteFileResponse>("file_bucket", "delete_file", request);
+
+    }
+
+    /// <summary>Contract of the 'http' service, as the plugin providing it declares it.</summary>
+    public interface IHttpService
+    {
+        [ExoAction("status", Scope = "global")]
+        Task<HttpStatusResponse?> StatusAsync(HttpStatusRequest request);
+        Task<HttpStatusResponse?> StatusAsync();
+
+    }
+
+    public sealed class HttpServiceClient : IHttpService
+    {
+        private readonly IActionDispatcher _dispatcher;
+
+        public HttpServiceClient(IActionDispatcher dispatcher) => _dispatcher = dispatcher;
+
+        public Task<HttpStatusResponse?> StatusAsync(HttpStatusRequest request)
+            => _dispatcher.CallActionAsync<HttpStatusResponse>("http", "status", request);
+
+        public Task<HttpStatusResponse?> StatusAsync()
+            => StatusAsync(new HttpStatusRequest());
+
+    }
+
+    /// <summary>Contract of the 'lldb' service, as the plugin providing it declares it.</summary>
+    public interface ILldbService
+    {
+        [ExoAction("connection_config", Scope = "server")]
+        Task<LldbConnectionConfigResponse?> ConnectionConfigAsync(LldbConnectionConfigRequest request);
+
+        [ExoAction("health_check", Scope = "global")]
+        Task<LldbHealthCheckResponse?> HealthCheckAsync(LldbHealthCheckRequest request);
+        Task<LldbHealthCheckResponse?> HealthCheckAsync();
+
+    }
+
+    public sealed class LldbServiceClient : ILldbService
+    {
+        private readonly IActionDispatcher _dispatcher;
+
+        public LldbServiceClient(IActionDispatcher dispatcher) => _dispatcher = dispatcher;
+
+        public Task<LldbConnectionConfigResponse?> ConnectionConfigAsync(LldbConnectionConfigRequest request)
+            => _dispatcher.CallActionAsync<LldbConnectionConfigResponse>("lldb", "connection_config", request);
+
+        public Task<LldbHealthCheckResponse?> HealthCheckAsync(LldbHealthCheckRequest request)
+            => _dispatcher.CallActionAsync<LldbHealthCheckResponse>("lldb", "health_check", request);
+
+        public Task<LldbHealthCheckResponse?> HealthCheckAsync()
+            => HealthCheckAsync(new LldbHealthCheckRequest());
+
+    }
+
+    /// <summary>Contract of the 'metering' service, as the plugin providing it declares it.</summary>
+    public interface IMeteringService
+    {
+        [ExoAction("usage", Scope = "studio")]
+        Task<MeteringUsageResponse?> UsageAsync(MeteringUsageRequest request);
+
+    }
+
+    public sealed class MeteringServiceClient : IMeteringService
+    {
+        private readonly IActionDispatcher _dispatcher;
+
+        public MeteringServiceClient(IActionDispatcher dispatcher) => _dispatcher = dispatcher;
+
+        public Task<MeteringUsageResponse?> UsageAsync(MeteringUsageRequest request)
+            => _dispatcher.CallActionAsync<MeteringUsageResponse>("metering", "usage", request);
 
     }
 
@@ -329,23 +1922,336 @@ namespace Exoforge.Plugins.Generated
 
     }
 
+    /// <summary>Contract of the 'resource_store' service, as the plugin providing it declares it.</summary>
+    public interface IResourceStoreService
+    {
+        [ExoAction("migrate", Scope = "global")]
+        Task<ResourceStoreMigrateResponse?> MigrateAsync(ResourceStoreMigrateRequest request);
+
+        [ExoAction("list", Scope = "global")]
+        Task<ResourceStoreListResponse?> ListAsync(ResourceStoreListRequest request);
+
+        [ExoAction("get", Scope = "global")]
+        Task<ResourceStoreGetResponse?> GetAsync(ResourceStoreGetRequest request);
+
+        [ExoAction("create", Scope = "global")]
+        Task<ResourceStoreCreateResponse?> CreateAsync(ResourceStoreCreateRequest request);
+
+        [ExoAction("update", Scope = "global")]
+        Task<ResourceStoreUpdateResponse?> UpdateAsync(ResourceStoreUpdateRequest request);
+
+        [ExoAction("delete", Scope = "global")]
+        Task<ResourceStoreDeleteResponse?> DeleteAsync(ResourceStoreDeleteRequest request);
+
+        [ExoAction("upsert", Scope = "global")]
+        Task<ResourceStoreUpsertResponse?> UpsertAsync(ResourceStoreUpsertRequest request);
+
+        [ExoAction("clear", Scope = "global")]
+        Task<ResourceStoreClearResponse?> ClearAsync(ResourceStoreClearRequest request);
+
+    }
+
+    public sealed class ResourceStoreServiceClient : IResourceStoreService
+    {
+        private readonly IActionDispatcher _dispatcher;
+
+        public ResourceStoreServiceClient(IActionDispatcher dispatcher) => _dispatcher = dispatcher;
+
+        public Task<ResourceStoreMigrateResponse?> MigrateAsync(ResourceStoreMigrateRequest request)
+            => _dispatcher.CallActionAsync<ResourceStoreMigrateResponse>("resource_store", "migrate", request);
+
+        public Task<ResourceStoreListResponse?> ListAsync(ResourceStoreListRequest request)
+            => _dispatcher.CallActionAsync<ResourceStoreListResponse>("resource_store", "list", request);
+
+        public Task<ResourceStoreGetResponse?> GetAsync(ResourceStoreGetRequest request)
+            => _dispatcher.CallActionAsync<ResourceStoreGetResponse>("resource_store", "get", request);
+
+        public Task<ResourceStoreCreateResponse?> CreateAsync(ResourceStoreCreateRequest request)
+            => _dispatcher.CallActionAsync<ResourceStoreCreateResponse>("resource_store", "create", request);
+
+        public Task<ResourceStoreUpdateResponse?> UpdateAsync(ResourceStoreUpdateRequest request)
+            => _dispatcher.CallActionAsync<ResourceStoreUpdateResponse>("resource_store", "update", request);
+
+        public Task<ResourceStoreDeleteResponse?> DeleteAsync(ResourceStoreDeleteRequest request)
+            => _dispatcher.CallActionAsync<ResourceStoreDeleteResponse>("resource_store", "delete", request);
+
+        public Task<ResourceStoreUpsertResponse?> UpsertAsync(ResourceStoreUpsertRequest request)
+            => _dispatcher.CallActionAsync<ResourceStoreUpsertResponse>("resource_store", "upsert", request);
+
+        public Task<ResourceStoreClearResponse?> ClearAsync(ResourceStoreClearRequest request)
+            => _dispatcher.CallActionAsync<ResourceStoreClearResponse>("resource_store", "clear", request);
+
+    }
+
+    /// <summary>Contract of the 'sample_plugin' service, as the plugin providing it declares it.</summary>
+    public interface ISamplePluginService
+    {
+        [ExoAction("ping", Scope = "global")]
+        Task<long?> PingAsync(SamplePluginPingRequest request);
+        Task<long?> PingAsync();
+
+        [ExoAction("increment", Scope = "global")]
+        Task<long?> IncrementAsync(SamplePluginIncrementRequest request);
+
+        [ExoAction("injected", Scope = "global")]
+        Task<string?> InjectedAsync(SamplePluginInjectedRequest request);
+        Task<string?> InjectedAsync();
+
+        [ExoAction("echo", Scope = "global")]
+        Task<long?> EchoAsync(SamplePluginEchoRequest request);
+
+    }
+
+    public sealed class SamplePluginServiceClient : ISamplePluginService
+    {
+        private readonly IActionDispatcher _dispatcher;
+
+        public SamplePluginServiceClient(IActionDispatcher dispatcher) => _dispatcher = dispatcher;
+
+        public Task<long?> PingAsync(SamplePluginPingRequest request)
+            => _dispatcher.CallActionAsync<long?>("sample_plugin", "ping", request);
+
+        public Task<long?> PingAsync()
+            => PingAsync(new SamplePluginPingRequest());
+
+        public Task<long?> IncrementAsync(SamplePluginIncrementRequest request)
+            => _dispatcher.CallActionAsync<long?>("sample_plugin", "increment", request);
+
+        public Task<string?> InjectedAsync(SamplePluginInjectedRequest request)
+            => _dispatcher.CallActionAsync<string>("sample_plugin", "injected", request);
+
+        public Task<string?> InjectedAsync()
+            => InjectedAsync(new SamplePluginInjectedRequest());
+
+        public Task<long?> EchoAsync(SamplePluginEchoRequest request)
+            => _dispatcher.CallActionAsync<long?>("sample_plugin", "echo", request);
+
+    }
+
+    /// <summary>Contract of the 'snake_config' service, as the plugin providing it declares it.</summary>
+    public interface ISnakeConfigService
+    {
+        [ExoAction("get_config", Scope = "global")]
+        Task<SnakeConfigDto?> GetConfigAsync(SnakeConfigGetConfigRequest request);
+        Task<SnakeConfigDto?> GetConfigAsync();
+
+        [ExoAction("update_config", Scope = "global")]
+        Task<SnakeConfigDto?> UpdateConfigAsync(SnakeConfigUpdateConfigRequest request);
+
+    }
+
+    public sealed class SnakeConfigServiceClient : ISnakeConfigService
+    {
+        private readonly IActionDispatcher _dispatcher;
+
+        public SnakeConfigServiceClient(IActionDispatcher dispatcher) => _dispatcher = dispatcher;
+
+        public Task<SnakeConfigDto?> GetConfigAsync(SnakeConfigGetConfigRequest request)
+            => _dispatcher.CallActionAsync<SnakeConfigDto>("snake_config", "get_config", request);
+
+        public Task<SnakeConfigDto?> GetConfigAsync()
+            => GetConfigAsync(new SnakeConfigGetConfigRequest());
+
+        public Task<SnakeConfigDto?> UpdateConfigAsync(SnakeConfigUpdateConfigRequest request)
+            => _dispatcher.CallActionAsync<SnakeConfigDto>("snake_config", "update_config", request);
+
+    }
+
+    /// <summary>Contract of the 'teste' service, as the plugin providing it declares it.</summary>
+    public interface ITesteService
+    {
+        [ExoAction("ping", Scope = "global")]
+        Task<long?> PingAsync(TestePingRequest request);
+        Task<long?> PingAsync();
+
+        [ExoAction("echo", Scope = "global")]
+        Task<long?> EchoAsync(TesteEchoRequest request);
+
+    }
+
+    public sealed class TesteServiceClient : ITesteService
+    {
+        private readonly IActionDispatcher _dispatcher;
+
+        public TesteServiceClient(IActionDispatcher dispatcher) => _dispatcher = dispatcher;
+
+        public Task<long?> PingAsync(TestePingRequest request)
+            => _dispatcher.CallActionAsync<long?>("teste", "ping", request);
+
+        public Task<long?> PingAsync()
+            => PingAsync(new TestePingRequest());
+
+        public Task<long?> EchoAsync(TesteEchoRequest request)
+            => _dispatcher.CallActionAsync<long?>("teste", "echo", request);
+
+    }
+
+    /// <summary>Contract of the 'unity_addressables' service, as the plugin providing it declares it.</summary>
+    public interface IUnityAddressablesService
+    {
+        // Custom dashboard input types provided by this service:
+        public const string AddressableRef = "addressable_ref";
+
+        [ExoAction("get_stats", Scope = "global")]
+        Task<AddressablesStats?> GetStatsAsync(UnityAddressablesGetStatsRequest request);
+        Task<AddressablesStats?> GetStatsAsync();
+
+        [ExoAction("list_assets", Scope = "global")]
+        Task<List<AddressableAssetRecord>?> ListAssetsAsync(UnityAddressablesListAssetsRequest request);
+
+        [ExoAction("get_asset", Scope = "global")]
+        Task<AddressableAssetRecord?> GetAssetAsync(UnityAddressablesGetAssetRequest request);
+
+        [ExoAction("list_releases", Scope = "global")]
+        Task<List<AddressableReleaseRecord>?> ListReleasesAsync(UnityAddressablesListReleasesRequest request);
+        Task<List<AddressableReleaseRecord>?> ListReleasesAsync();
+
+        [ExoAction("get_manifest", Scope = "global")]
+        Task<AddressablesManifestDto?> GetManifestAsync(UnityAddressablesGetManifestRequest request);
+
+        [ExoAction("publish_release", Scope = "global")]
+        Task<UnityAddressablesPublishReleaseResponse?> PublishReleaseAsync(UnityAddressablesPublishReleaseRequest request);
+
+        [ExoAction("promote_release", Scope = "global")]
+        Task<UnityAddressablesPromoteReleaseResponse?> PromoteReleaseAsync(UnityAddressablesPromoteReleaseRequest request);
+
+        [ExoAction("upload_bundle", Scope = "global")]
+        Task<UnityAddressablesUploadBundleResponse?> UploadBundleAsync(UnityAddressablesUploadBundleRequest request);
+
+        [ExoAction("upload_preview", Scope = "global")]
+        Task<UnityAddressablesUploadPreviewResponse?> UploadPreviewAsync(UnityAddressablesUploadPreviewRequest request);
+
+    }
+
+    public sealed class UnityAddressablesServiceClient : IUnityAddressablesService
+    {
+        private readonly IActionDispatcher _dispatcher;
+
+        public UnityAddressablesServiceClient(IActionDispatcher dispatcher) => _dispatcher = dispatcher;
+
+        public Task<AddressablesStats?> GetStatsAsync(UnityAddressablesGetStatsRequest request)
+            => _dispatcher.CallActionAsync<AddressablesStats>("unity_addressables", "get_stats", request);
+
+        public Task<AddressablesStats?> GetStatsAsync()
+            => GetStatsAsync(new UnityAddressablesGetStatsRequest());
+
+        public Task<List<AddressableAssetRecord>?> ListAssetsAsync(UnityAddressablesListAssetsRequest request)
+            => _dispatcher.CallActionAsync<List<AddressableAssetRecord>>("unity_addressables", "list_assets", request);
+
+        public Task<AddressableAssetRecord?> GetAssetAsync(UnityAddressablesGetAssetRequest request)
+            => _dispatcher.CallActionAsync<AddressableAssetRecord>("unity_addressables", "get_asset", request);
+
+        public Task<List<AddressableReleaseRecord>?> ListReleasesAsync(UnityAddressablesListReleasesRequest request)
+            => _dispatcher.CallActionAsync<List<AddressableReleaseRecord>>("unity_addressables", "list_releases", request);
+
+        public Task<List<AddressableReleaseRecord>?> ListReleasesAsync()
+            => ListReleasesAsync(new UnityAddressablesListReleasesRequest());
+
+        public Task<AddressablesManifestDto?> GetManifestAsync(UnityAddressablesGetManifestRequest request)
+            => _dispatcher.CallActionAsync<AddressablesManifestDto>("unity_addressables", "get_manifest", request);
+
+        public Task<UnityAddressablesPublishReleaseResponse?> PublishReleaseAsync(UnityAddressablesPublishReleaseRequest request)
+            => _dispatcher.CallActionAsync<UnityAddressablesPublishReleaseResponse>("unity_addressables", "publish_release", request);
+
+        public Task<UnityAddressablesPromoteReleaseResponse?> PromoteReleaseAsync(UnityAddressablesPromoteReleaseRequest request)
+            => _dispatcher.CallActionAsync<UnityAddressablesPromoteReleaseResponse>("unity_addressables", "promote_release", request);
+
+        public Task<UnityAddressablesUploadBundleResponse?> UploadBundleAsync(UnityAddressablesUploadBundleRequest request)
+            => _dispatcher.CallActionAsync<UnityAddressablesUploadBundleResponse>("unity_addressables", "upload_bundle", request);
+
+        public Task<UnityAddressablesUploadPreviewResponse?> UploadPreviewAsync(UnityAddressablesUploadPreviewRequest request)
+            => _dispatcher.CallActionAsync<UnityAddressablesUploadPreviewResponse>("unity_addressables", "upload_preview", request);
+
+    }
+
+    /// <summary>Custom dashboard input types provided by 'unity_addressables'.</summary>
+    public static class UnityAddressablesInputs
+    {
+        public const string AddressableRef = "addressable_ref";
+    }
+
+    /// <summary>Contract of the 'ws' service, as the plugin providing it declares it.</summary>
+    public interface IWsService
+    {
+        [ExoAction("broadcast", Scope = "global")]
+        Task<WsBroadcastResponse?> BroadcastAsync(WsBroadcastRequest request);
+
+        [ExoAction("connection_count", Scope = "global")]
+        Task<WsConnectionCountResponse?> ConnectionCountAsync(WsConnectionCountRequest request);
+        Task<WsConnectionCountResponse?> ConnectionCountAsync();
+
+    }
+
+    public sealed class WsServiceClient : IWsService
+    {
+        private readonly IActionDispatcher _dispatcher;
+
+        public WsServiceClient(IActionDispatcher dispatcher) => _dispatcher = dispatcher;
+
+        public Task<WsBroadcastResponse?> BroadcastAsync(WsBroadcastRequest request)
+            => _dispatcher.CallActionAsync<WsBroadcastResponse>("ws", "broadcast", request);
+
+        public Task<WsConnectionCountResponse?> ConnectionCountAsync(WsConnectionCountRequest request)
+            => _dispatcher.CallActionAsync<WsConnectionCountResponse>("ws", "connection_count", request);
+
+        public Task<WsConnectionCountResponse?> ConnectionCountAsync()
+            => ConnectionCountAsync(new WsConnectionCountRequest());
+
+    }
+
     public sealed class ExoforgePluginServices
     {
         private readonly IActionDispatcher _dispatcher;
 
         public ExoforgePluginServices(IActionDispatcher dispatcher) => _dispatcher = dispatcher;
 
+        private AuthServiceClient? _auth;
+        public AuthServiceClient Auth => _auth ??= new AuthServiceClient(_dispatcher);
+        private DashboardServiceClient? _dashboard;
+        public DashboardServiceClient Dashboard => _dashboard ??= new DashboardServiceClient(_dispatcher);
+        private DashboardViewServiceClient? _dashboard_view;
+        public DashboardViewServiceClient DashboardView => _dashboard_view ??= new DashboardViewServiceClient(_dispatcher);
         private DatabaseServiceClient? _database;
         public DatabaseServiceClient Database => _database ??= new DatabaseServiceClient(_dispatcher);
+        private ExtensionManagerServiceClient? _extension_manager;
+        public ExtensionManagerServiceClient ExtensionManager => _extension_manager ??= new ExtensionManagerServiceClient(_dispatcher);
+        private FileBucketServiceClient? _file_bucket;
+        public FileBucketServiceClient FileBucket => _file_bucket ??= new FileBucketServiceClient(_dispatcher);
+        private HttpServiceClient? _http;
+        public HttpServiceClient Http => _http ??= new HttpServiceClient(_dispatcher);
+        private LldbServiceClient? _lldb;
+        public LldbServiceClient Lldb => _lldb ??= new LldbServiceClient(_dispatcher);
+        private MeteringServiceClient? _metering;
+        public MeteringServiceClient Metering => _metering ??= new MeteringServiceClient(_dispatcher);
         private PlayerDataServiceClient? _player_data;
         public PlayerDataServiceClient PlayerData => _player_data ??= new PlayerDataServiceClient(_dispatcher);
+        private ResourceStoreServiceClient? _resource_store;
+        public ResourceStoreServiceClient ResourceStore => _resource_store ??= new ResourceStoreServiceClient(_dispatcher);
+        private SamplePluginServiceClient? _sample_plugin;
+        public SamplePluginServiceClient SamplePlugin => _sample_plugin ??= new SamplePluginServiceClient(_dispatcher);
+        private SnakeConfigServiceClient? _snake_config;
+        public SnakeConfigServiceClient SnakeConfig => _snake_config ??= new SnakeConfigServiceClient(_dispatcher);
+        private TesteServiceClient? _teste;
+        public TesteServiceClient Teste => _teste ??= new TesteServiceClient(_dispatcher);
+        private UnityAddressablesServiceClient? _unity_addressables;
+        public UnityAddressablesServiceClient UnityAddressables => _unity_addressables ??= new UnityAddressablesServiceClient(_dispatcher);
+        private WsServiceClient? _ws;
+        public WsServiceClient Ws => _ws ??= new WsServiceClient(_dispatcher);
     }
 
 }
 
 namespace Exoforge.Plugin.SDK
 {
-    public static class Exo
+    public static partial class ExoInput
+    {
+        public const string AddressableRef = "addressable_ref";
+    }
+}
+
+namespace Exoforge.Plugin.SDK
+{
+    public static class ExoServices
     {
         private static IDatabase? _databaseOverride;
         private static ILogger? _loggerOverride;
@@ -390,6 +2296,102 @@ namespace Exoforge.Plugin.SDK
             set => _services = value;
         }
 
+        private static global::Exoforge.Plugins.Generated.IAuthService? _authOverride;
+        public static global::Exoforge.Plugins.Generated.IAuthService Auth
+        {
+            get => _authOverride ?? Services.Auth;
+            set => _authOverride = value;
+        }
+        public static global::Exoforge.Plugins.Generated.IAuthService AuthService
+        {
+            get => Auth;
+            set => Auth = value;
+        }
+
+        private static global::Exoforge.Plugins.Generated.IDashboardService? _dashboardOverride;
+        public static global::Exoforge.Plugins.Generated.IDashboardService Dashboard
+        {
+            get => _dashboardOverride ?? Services.Dashboard;
+            set => _dashboardOverride = value;
+        }
+        public static global::Exoforge.Plugins.Generated.IDashboardService DashboardService
+        {
+            get => Dashboard;
+            set => Dashboard = value;
+        }
+
+        private static global::Exoforge.Plugins.Generated.IDashboardViewService? _dashboard_viewOverride;
+        public static global::Exoforge.Plugins.Generated.IDashboardViewService DashboardView
+        {
+            get => _dashboard_viewOverride ?? Services.DashboardView;
+            set => _dashboard_viewOverride = value;
+        }
+        public static global::Exoforge.Plugins.Generated.IDashboardViewService DashboardViewService
+        {
+            get => DashboardView;
+            set => DashboardView = value;
+        }
+
+        private static global::Exoforge.Plugins.Generated.IExtensionManagerService? _extension_managerOverride;
+        public static global::Exoforge.Plugins.Generated.IExtensionManagerService ExtensionManager
+        {
+            get => _extension_managerOverride ?? Services.ExtensionManager;
+            set => _extension_managerOverride = value;
+        }
+        public static global::Exoforge.Plugins.Generated.IExtensionManagerService ExtensionManagerService
+        {
+            get => ExtensionManager;
+            set => ExtensionManager = value;
+        }
+
+        private static global::Exoforge.Plugins.Generated.IFileBucketService? _file_bucketOverride;
+        public static global::Exoforge.Plugins.Generated.IFileBucketService FileBucket
+        {
+            get => _file_bucketOverride ?? Services.FileBucket;
+            set => _file_bucketOverride = value;
+        }
+        public static global::Exoforge.Plugins.Generated.IFileBucketService FileBucketService
+        {
+            get => FileBucket;
+            set => FileBucket = value;
+        }
+
+        private static global::Exoforge.Plugins.Generated.IHttpService? _httpOverride;
+        public static global::Exoforge.Plugins.Generated.IHttpService Http
+        {
+            get => _httpOverride ?? Services.Http;
+            set => _httpOverride = value;
+        }
+        public static global::Exoforge.Plugins.Generated.IHttpService HttpService
+        {
+            get => Http;
+            set => Http = value;
+        }
+
+        private static global::Exoforge.Plugins.Generated.ILldbService? _lldbOverride;
+        public static global::Exoforge.Plugins.Generated.ILldbService Lldb
+        {
+            get => _lldbOverride ?? Services.Lldb;
+            set => _lldbOverride = value;
+        }
+        public static global::Exoforge.Plugins.Generated.ILldbService LldbService
+        {
+            get => Lldb;
+            set => Lldb = value;
+        }
+
+        private static global::Exoforge.Plugins.Generated.IMeteringService? _meteringOverride;
+        public static global::Exoforge.Plugins.Generated.IMeteringService Metering
+        {
+            get => _meteringOverride ?? Services.Metering;
+            set => _meteringOverride = value;
+        }
+        public static global::Exoforge.Plugins.Generated.IMeteringService MeteringService
+        {
+            get => Metering;
+            set => Metering = value;
+        }
+
         private static global::Exoforge.Plugins.Generated.IPlayerDataService? _player_dataOverride;
         public static global::Exoforge.Plugins.Generated.IPlayerDataService PlayerData
         {
@@ -402,6 +2404,78 @@ namespace Exoforge.Plugin.SDK
             set => PlayerData = value;
         }
 
+        private static global::Exoforge.Plugins.Generated.IResourceStoreService? _resource_storeOverride;
+        public static global::Exoforge.Plugins.Generated.IResourceStoreService ResourceStore
+        {
+            get => _resource_storeOverride ?? Services.ResourceStore;
+            set => _resource_storeOverride = value;
+        }
+        public static global::Exoforge.Plugins.Generated.IResourceStoreService ResourceStoreService
+        {
+            get => ResourceStore;
+            set => ResourceStore = value;
+        }
+
+        private static global::Exoforge.Plugins.Generated.ISamplePluginService? _sample_pluginOverride;
+        public static global::Exoforge.Plugins.Generated.ISamplePluginService SamplePlugin
+        {
+            get => _sample_pluginOverride ?? Services.SamplePlugin;
+            set => _sample_pluginOverride = value;
+        }
+        public static global::Exoforge.Plugins.Generated.ISamplePluginService SamplePluginService
+        {
+            get => SamplePlugin;
+            set => SamplePlugin = value;
+        }
+
+        private static global::Exoforge.Plugins.Generated.ISnakeConfigService? _snake_configOverride;
+        public static global::Exoforge.Plugins.Generated.ISnakeConfigService SnakeConfig
+        {
+            get => _snake_configOverride ?? Services.SnakeConfig;
+            set => _snake_configOverride = value;
+        }
+        public static global::Exoforge.Plugins.Generated.ISnakeConfigService SnakeConfigService
+        {
+            get => SnakeConfig;
+            set => SnakeConfig = value;
+        }
+
+        private static global::Exoforge.Plugins.Generated.ITesteService? _testeOverride;
+        public static global::Exoforge.Plugins.Generated.ITesteService Teste
+        {
+            get => _testeOverride ?? Services.Teste;
+            set => _testeOverride = value;
+        }
+        public static global::Exoforge.Plugins.Generated.ITesteService TesteService
+        {
+            get => Teste;
+            set => Teste = value;
+        }
+
+        private static global::Exoforge.Plugins.Generated.IUnityAddressablesService? _unity_addressablesOverride;
+        public static global::Exoforge.Plugins.Generated.IUnityAddressablesService UnityAddressables
+        {
+            get => _unity_addressablesOverride ?? Services.UnityAddressables;
+            set => _unity_addressablesOverride = value;
+        }
+        public static global::Exoforge.Plugins.Generated.IUnityAddressablesService UnityAddressablesService
+        {
+            get => UnityAddressables;
+            set => UnityAddressables = value;
+        }
+
+        private static global::Exoforge.Plugins.Generated.IWsService? _wsOverride;
+        public static global::Exoforge.Plugins.Generated.IWsService Ws
+        {
+            get => _wsOverride ?? Services.Ws;
+            set => _wsOverride = value;
+        }
+        public static global::Exoforge.Plugins.Generated.IWsService WsService
+        {
+            get => Ws;
+            set => Ws = value;
+        }
+
         public static void Reset()
         {
             _databaseOverride = null;
@@ -410,70 +2484,524 @@ namespace Exoforge.Plugin.SDK
             _actionsOverride = null;
             _contextOverride = null;
             _services = null;
+            _authOverride = null;
+            _dashboardOverride = null;
+            _dashboard_viewOverride = null;
+            _extension_managerOverride = null;
+            _file_bucketOverride = null;
+            _httpOverride = null;
+            _lldbOverride = null;
+            _meteringOverride = null;
             _player_dataOverride = null;
+            _resource_storeOverride = null;
+            _sample_pluginOverride = null;
+            _snake_configOverride = null;
+            _testeOverride = null;
+            _unity_addressablesOverride = null;
+            _wsOverride = null;
         }
+    }
+
+    public static class Exo
+    {
+        public static IDatabase Database
+        {
+            get => ExoServices.Database;
+            set => ExoServices.Database = value;
+        }
+
+        public static ILogger Logger
+        {
+            get => ExoServices.Logger;
+            set => ExoServices.Logger = value;
+        }
+
+        public static IEventDispatcher Events
+        {
+            get => ExoServices.Events;
+            set => ExoServices.Events = value;
+        }
+
+        public static IActionDispatcher Actions
+        {
+            get => ExoServices.Actions;
+            set => ExoServices.Actions = value;
+        }
+
+        public static IPluginContext Context
+        {
+            get => ExoServices.Context;
+            set => ExoServices.Context = value;
+        }
+
+        public static global::Exoforge.Plugins.Generated.ExoforgePluginServices Services
+        {
+            get => ExoServices.Services;
+            set => ExoServices.Services = value;
+        }
+
+        public static global::Exoforge.Plugins.Generated.IAuthService Auth
+        {
+            get => ExoServices.Auth;
+            set => ExoServices.Auth = value;
+        }
+        public static global::Exoforge.Plugins.Generated.IAuthService AuthService
+        {
+            get => ExoServices.Auth;
+            set => ExoServices.Auth = value;
+        }
+
+        public static global::Exoforge.Plugins.Generated.IDashboardService Dashboard
+        {
+            get => ExoServices.Dashboard;
+            set => ExoServices.Dashboard = value;
+        }
+        public static global::Exoforge.Plugins.Generated.IDashboardService DashboardService
+        {
+            get => ExoServices.Dashboard;
+            set => ExoServices.Dashboard = value;
+        }
+
+        public static global::Exoforge.Plugins.Generated.IDashboardViewService DashboardView
+        {
+            get => ExoServices.DashboardView;
+            set => ExoServices.DashboardView = value;
+        }
+        public static global::Exoforge.Plugins.Generated.IDashboardViewService DashboardViewService
+        {
+            get => ExoServices.DashboardView;
+            set => ExoServices.DashboardView = value;
+        }
+
+        public static global::Exoforge.Plugins.Generated.IExtensionManagerService ExtensionManager
+        {
+            get => ExoServices.ExtensionManager;
+            set => ExoServices.ExtensionManager = value;
+        }
+        public static global::Exoforge.Plugins.Generated.IExtensionManagerService ExtensionManagerService
+        {
+            get => ExoServices.ExtensionManager;
+            set => ExoServices.ExtensionManager = value;
+        }
+
+        public static global::Exoforge.Plugins.Generated.IFileBucketService FileBucket
+        {
+            get => ExoServices.FileBucket;
+            set => ExoServices.FileBucket = value;
+        }
+        public static global::Exoforge.Plugins.Generated.IFileBucketService FileBucketService
+        {
+            get => ExoServices.FileBucket;
+            set => ExoServices.FileBucket = value;
+        }
+
+        public static global::Exoforge.Plugins.Generated.IHttpService Http
+        {
+            get => ExoServices.Http;
+            set => ExoServices.Http = value;
+        }
+        public static global::Exoforge.Plugins.Generated.IHttpService HttpService
+        {
+            get => ExoServices.Http;
+            set => ExoServices.Http = value;
+        }
+
+        public static global::Exoforge.Plugins.Generated.ILldbService Lldb
+        {
+            get => ExoServices.Lldb;
+            set => ExoServices.Lldb = value;
+        }
+        public static global::Exoforge.Plugins.Generated.ILldbService LldbService
+        {
+            get => ExoServices.Lldb;
+            set => ExoServices.Lldb = value;
+        }
+
+        public static global::Exoforge.Plugins.Generated.IMeteringService Metering
+        {
+            get => ExoServices.Metering;
+            set => ExoServices.Metering = value;
+        }
+        public static global::Exoforge.Plugins.Generated.IMeteringService MeteringService
+        {
+            get => ExoServices.Metering;
+            set => ExoServices.Metering = value;
+        }
+
+        public static global::Exoforge.Plugins.Generated.IPlayerDataService PlayerData
+        {
+            get => ExoServices.PlayerData;
+            set => ExoServices.PlayerData = value;
+        }
+        public static global::Exoforge.Plugins.Generated.IPlayerDataService PlayerDataService
+        {
+            get => ExoServices.PlayerData;
+            set => ExoServices.PlayerData = value;
+        }
+
+        public static global::Exoforge.Plugins.Generated.IResourceStoreService ResourceStore
+        {
+            get => ExoServices.ResourceStore;
+            set => ExoServices.ResourceStore = value;
+        }
+        public static global::Exoforge.Plugins.Generated.IResourceStoreService ResourceStoreService
+        {
+            get => ExoServices.ResourceStore;
+            set => ExoServices.ResourceStore = value;
+        }
+
+        public static global::Exoforge.Plugins.Generated.ISamplePluginService SamplePlugin
+        {
+            get => ExoServices.SamplePlugin;
+            set => ExoServices.SamplePlugin = value;
+        }
+        public static global::Exoforge.Plugins.Generated.ISamplePluginService SamplePluginService
+        {
+            get => ExoServices.SamplePlugin;
+            set => ExoServices.SamplePlugin = value;
+        }
+
+        public static global::Exoforge.Plugins.Generated.ISnakeConfigService SnakeConfig
+        {
+            get => ExoServices.SnakeConfig;
+            set => ExoServices.SnakeConfig = value;
+        }
+        public static global::Exoforge.Plugins.Generated.ISnakeConfigService SnakeConfigService
+        {
+            get => ExoServices.SnakeConfig;
+            set => ExoServices.SnakeConfig = value;
+        }
+
+        public static global::Exoforge.Plugins.Generated.ITesteService Teste
+        {
+            get => ExoServices.Teste;
+            set => ExoServices.Teste = value;
+        }
+        public static global::Exoforge.Plugins.Generated.ITesteService TesteService
+        {
+            get => ExoServices.Teste;
+            set => ExoServices.Teste = value;
+        }
+
+        public static global::Exoforge.Plugins.Generated.IUnityAddressablesService UnityAddressables
+        {
+            get => ExoServices.UnityAddressables;
+            set => ExoServices.UnityAddressables = value;
+        }
+        public static global::Exoforge.Plugins.Generated.IUnityAddressablesService UnityAddressablesService
+        {
+            get => ExoServices.UnityAddressables;
+            set => ExoServices.UnityAddressables = value;
+        }
+
+        public static global::Exoforge.Plugins.Generated.IWsService Ws
+        {
+            get => ExoServices.Ws;
+            set => ExoServices.Ws = value;
+        }
+        public static global::Exoforge.Plugins.Generated.IWsService WsService
+        {
+            get => ExoServices.Ws;
+            set => ExoServices.Ws = value;
+        }
+
+        public static void Reset() => ExoServices.Reset();
     }
 
     public static class Exoforge
     {
         public static IDatabase Database
         {
-            get => Exo.Database;
-            set => Exo.Database = value;
+            get => ExoServices.Database;
+            set => ExoServices.Database = value;
         }
 
         public static ILogger Logger
         {
-            get => Exo.Logger;
-            set => Exo.Logger = value;
+            get => ExoServices.Logger;
+            set => ExoServices.Logger = value;
         }
 
         public static IEventDispatcher Events
         {
-            get => Exo.Events;
-            set => Exo.Events = value;
+            get => ExoServices.Events;
+            set => ExoServices.Events = value;
         }
 
         public static IActionDispatcher Actions
         {
-            get => Exo.Actions;
-            set => Exo.Actions = value;
+            get => ExoServices.Actions;
+            set => ExoServices.Actions = value;
         }
 
         public static IPluginContext Context
         {
-            get => Exo.Context;
-            set => Exo.Context = value;
+            get => ExoServices.Context;
+            set => ExoServices.Context = value;
         }
 
         public static global::Exoforge.Plugins.Generated.ExoforgePluginServices Services
         {
-            get => Exo.Services;
-            set => Exo.Services = value;
+            get => ExoServices.Services;
+            set => ExoServices.Services = value;
+        }
+
+        public static global::Exoforge.Plugins.Generated.IAuthService Auth
+        {
+            get => ExoServices.Auth;
+            set => ExoServices.Auth = value;
+        }
+        public static global::Exoforge.Plugins.Generated.IAuthService AuthService
+        {
+            get => ExoServices.Auth;
+            set => ExoServices.Auth = value;
+        }
+
+        public static global::Exoforge.Plugins.Generated.IDashboardService Dashboard
+        {
+            get => ExoServices.Dashboard;
+            set => ExoServices.Dashboard = value;
+        }
+        public static global::Exoforge.Plugins.Generated.IDashboardService DashboardService
+        {
+            get => ExoServices.Dashboard;
+            set => ExoServices.Dashboard = value;
+        }
+
+        public static global::Exoforge.Plugins.Generated.IDashboardViewService DashboardView
+        {
+            get => ExoServices.DashboardView;
+            set => ExoServices.DashboardView = value;
+        }
+        public static global::Exoforge.Plugins.Generated.IDashboardViewService DashboardViewService
+        {
+            get => ExoServices.DashboardView;
+            set => ExoServices.DashboardView = value;
+        }
+
+        public static global::Exoforge.Plugins.Generated.IExtensionManagerService ExtensionManager
+        {
+            get => ExoServices.ExtensionManager;
+            set => ExoServices.ExtensionManager = value;
+        }
+        public static global::Exoforge.Plugins.Generated.IExtensionManagerService ExtensionManagerService
+        {
+            get => ExoServices.ExtensionManager;
+            set => ExoServices.ExtensionManager = value;
+        }
+
+        public static global::Exoforge.Plugins.Generated.IFileBucketService FileBucket
+        {
+            get => ExoServices.FileBucket;
+            set => ExoServices.FileBucket = value;
+        }
+        public static global::Exoforge.Plugins.Generated.IFileBucketService FileBucketService
+        {
+            get => ExoServices.FileBucket;
+            set => ExoServices.FileBucket = value;
+        }
+
+        public static global::Exoforge.Plugins.Generated.IHttpService Http
+        {
+            get => ExoServices.Http;
+            set => ExoServices.Http = value;
+        }
+        public static global::Exoforge.Plugins.Generated.IHttpService HttpService
+        {
+            get => ExoServices.Http;
+            set => ExoServices.Http = value;
+        }
+
+        public static global::Exoforge.Plugins.Generated.ILldbService Lldb
+        {
+            get => ExoServices.Lldb;
+            set => ExoServices.Lldb = value;
+        }
+        public static global::Exoforge.Plugins.Generated.ILldbService LldbService
+        {
+            get => ExoServices.Lldb;
+            set => ExoServices.Lldb = value;
+        }
+
+        public static global::Exoforge.Plugins.Generated.IMeteringService Metering
+        {
+            get => ExoServices.Metering;
+            set => ExoServices.Metering = value;
+        }
+        public static global::Exoforge.Plugins.Generated.IMeteringService MeteringService
+        {
+            get => ExoServices.Metering;
+            set => ExoServices.Metering = value;
         }
 
         public static global::Exoforge.Plugins.Generated.IPlayerDataService PlayerData
         {
-            get => Exo.PlayerData;
-            set => Exo.PlayerData = value;
+            get => ExoServices.PlayerData;
+            set => ExoServices.PlayerData = value;
         }
         public static global::Exoforge.Plugins.Generated.IPlayerDataService PlayerDataService
         {
-            get => Exo.PlayerData;
-            set => Exo.PlayerData = value;
+            get => ExoServices.PlayerData;
+            set => ExoServices.PlayerData = value;
         }
 
-        public static void Reset() => Exo.Reset();
+        public static global::Exoforge.Plugins.Generated.IResourceStoreService ResourceStore
+        {
+            get => ExoServices.ResourceStore;
+            set => ExoServices.ResourceStore = value;
+        }
+        public static global::Exoforge.Plugins.Generated.IResourceStoreService ResourceStoreService
+        {
+            get => ExoServices.ResourceStore;
+            set => ExoServices.ResourceStore = value;
+        }
+
+        public static global::Exoforge.Plugins.Generated.ISamplePluginService SamplePlugin
+        {
+            get => ExoServices.SamplePlugin;
+            set => ExoServices.SamplePlugin = value;
+        }
+        public static global::Exoforge.Plugins.Generated.ISamplePluginService SamplePluginService
+        {
+            get => ExoServices.SamplePlugin;
+            set => ExoServices.SamplePlugin = value;
+        }
+
+        public static global::Exoforge.Plugins.Generated.ISnakeConfigService SnakeConfig
+        {
+            get => ExoServices.SnakeConfig;
+            set => ExoServices.SnakeConfig = value;
+        }
+        public static global::Exoforge.Plugins.Generated.ISnakeConfigService SnakeConfigService
+        {
+            get => ExoServices.SnakeConfig;
+            set => ExoServices.SnakeConfig = value;
+        }
+
+        public static global::Exoforge.Plugins.Generated.ITesteService Teste
+        {
+            get => ExoServices.Teste;
+            set => ExoServices.Teste = value;
+        }
+        public static global::Exoforge.Plugins.Generated.ITesteService TesteService
+        {
+            get => ExoServices.Teste;
+            set => ExoServices.Teste = value;
+        }
+
+        public static global::Exoforge.Plugins.Generated.IUnityAddressablesService UnityAddressables
+        {
+            get => ExoServices.UnityAddressables;
+            set => ExoServices.UnityAddressables = value;
+        }
+        public static global::Exoforge.Plugins.Generated.IUnityAddressablesService UnityAddressablesService
+        {
+            get => ExoServices.UnityAddressables;
+            set => ExoServices.UnityAddressables = value;
+        }
+
+        public static global::Exoforge.Plugins.Generated.IWsService Ws
+        {
+            get => ExoServices.Ws;
+            set => ExoServices.Ws = value;
+        }
+        public static global::Exoforge.Plugins.Generated.IWsService WsService
+        {
+            get => ExoServices.Ws;
+            set => ExoServices.Ws = value;
+        }
+
+        public static void Reset() => ExoServices.Reset();
     }
 }
 
 namespace Exoforge.Plugins.Generated
 {
     [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
+    [JsonSerializable(typeof(AuthAuthenticateRequest))]
+    [JsonSerializable(typeof(AuthAuthenticateResponse))]
+    [JsonSerializable(typeof(AuthLoginRequest))]
+    [JsonSerializable(typeof(AuthLoginResponse))]
+    [JsonSerializable(typeof(AuthVerifyScopeRequest))]
+    [JsonSerializable(typeof(AuthVerifyScopeResponse))]
+    [JsonSerializable(typeof(AuthRegisterRequest))]
+    [JsonSerializable(typeof(AuthRegisterResponse))]
+    [JsonSerializable(typeof(AuthCreatePlayerRequest))]
+    [JsonSerializable(typeof(AuthCreatePlayerResponse))]
+    [JsonSerializable(typeof(AuthAnonymousRequest))]
+    [JsonSerializable(typeof(AuthAnonymousResponse))]
+    [JsonSerializable(typeof(AuthSetDisplayNameRequest))]
+    [JsonSerializable(typeof(AuthSetDisplayNameResponse))]
+    [JsonSerializable(typeof(AuthIssueTokenRequest))]
+    [JsonSerializable(typeof(AuthIssueTokenResponse))]
+    [JsonSerializable(typeof(AuthListUsersRequest))]
+    [JsonSerializable(typeof(AuthListUsersResponse))]
+    [JsonSerializable(typeof(AuthResetPasswordRequest))]
+    [JsonSerializable(typeof(AuthResetPasswordResponse))]
+    [JsonSerializable(typeof(AuthUpdateUserRolesRequest))]
+    [JsonSerializable(typeof(AuthUpdateUserRolesResponse))]
+    [JsonSerializable(typeof(AuthDeleteUserRequest))]
+    [JsonSerializable(typeof(AuthDeleteUserResponse))]
+    [JsonSerializable(typeof(AuthPurgeDisposableRequest))]
+    [JsonSerializable(typeof(AuthPurgeDisposableResponse))]
+    [JsonSerializable(typeof(DashboardStudioPreference))]
+    [JsonSerializable(typeof(DashboardGetDashboardMountRequest))]
+    [JsonSerializable(typeof(DashboardGetDashboardMountResponse))]
+    [JsonSerializable(typeof(DashboardGetDashboardDataRequest))]
+    [JsonSerializable(typeof(DashboardGetDashboardDataResponse))]
+    [JsonSerializable(typeof(DashboardViewResolveViewRequest))]
+    [JsonSerializable(typeof(DashboardViewResolveViewResponse))]
+    [JsonSerializable(typeof(DashboardViewListViewsRequest))]
+    [JsonSerializable(typeof(DashboardViewListViewsResponse))]
+    [JsonSerializable(typeof(DashboardViewGetDashboardMountRequest))]
+    [JsonSerializable(typeof(DashboardViewGetDashboardMountResponse))]
+    [JsonSerializable(typeof(DashboardViewGetDashboardDataRequest))]
+    [JsonSerializable(typeof(DashboardViewGetDashboardDataResponse))]
     [JsonSerializable(typeof(DatabaseExecuteRequest))]
     [JsonSerializable(typeof(DatabaseExecuteResponse))]
     [JsonSerializable(typeof(DatabaseTableColumnsRequest))]
     [JsonSerializable(typeof(DatabaseTableColumnsResponse))]
+    [JsonSerializable(typeof(ExtensionManagerListExtensionsRequest))]
+    [JsonSerializable(typeof(ExtensionManagerListExtensionsResponse))]
+    [JsonSerializable(typeof(ExtensionManagerGetExtensionRequest))]
+    [JsonSerializable(typeof(ExtensionManagerGetExtensionResponse))]
+    [JsonSerializable(typeof(ExtensionManagerGetSystemInfoRequest))]
+    [JsonSerializable(typeof(ExtensionManagerGetSystemInfoResponse))]
+    [JsonSerializable(typeof(ExtensionManagerUploadExtensionRequest))]
+    [JsonSerializable(typeof(ExtensionManagerUploadExtensionResponse))]
+    [JsonSerializable(typeof(ExtensionManagerRemoveExtensionRequest))]
+    [JsonSerializable(typeof(ExtensionManagerRemoveExtensionResponse))]
+    [JsonSerializable(typeof(ExtensionManagerRestartSystemRequest))]
+    [JsonSerializable(typeof(ExtensionManagerRestartSystemResponse))]
+    [JsonSerializable(typeof(ExtensionManagerLogsRequest))]
+    [JsonSerializable(typeof(ExtensionManagerLogsResponse))]
+    [JsonSerializable(typeof(ExtensionManagerReloadExtensionRequest))]
+    [JsonSerializable(typeof(ExtensionManagerReloadExtensionResponse))]
+    [JsonSerializable(typeof(ExtensionManagerExportExtensionInfoRequest))]
+    [JsonSerializable(typeof(ExtensionManagerExportExtensionInfoResponse))]
+    [JsonSerializable(typeof(FileBucketUploadFileRequest))]
+    [JsonSerializable(typeof(FileBucketUploadFileResponse))]
+    [JsonSerializable(typeof(FileBucketGetFileInfoRequest))]
+    [JsonSerializable(typeof(FileBucketGetFileInfoResponse))]
+    [JsonSerializable(typeof(FileBucketReadFileRequest))]
+    [JsonSerializable(typeof(FileBucketReadFileResponse))]
+    [JsonSerializable(typeof(FileBucketListFilesRequest))]
+    [JsonSerializable(typeof(FileBucketListFilesResponse))]
+    [JsonSerializable(typeof(FileBucketListBucketsRequest))]
+    [JsonSerializable(typeof(FileBucketListBucketsResponse))]
+    [JsonSerializable(typeof(FileBucketUpdateFileRequest))]
+    [JsonSerializable(typeof(FileBucketUpdateFileResponse))]
+    [JsonSerializable(typeof(FileBucketDeleteFileRequest))]
+    [JsonSerializable(typeof(FileBucketDeleteFileResponse))]
+    [JsonSerializable(typeof(HttpStatusRequest))]
+    [JsonSerializable(typeof(HttpStatusResponse))]
+    [JsonSerializable(typeof(LldbConnectionConfigRequest))]
+    [JsonSerializable(typeof(LldbConnectionConfigResponse))]
+    [JsonSerializable(typeof(LldbHealthCheckRequest))]
+    [JsonSerializable(typeof(LldbHealthCheckResponse))]
+    [JsonSerializable(typeof(LldbConnectionLostEvent))]
+    [JsonSerializable(typeof(MeteringUsageRequest))]
+    [JsonSerializable(typeof(MeteringUsageResponse))]
     [JsonSerializable(typeof(PlayerDataPlayer))]
     [JsonSerializable(typeof(PlayerDataGetPlayerRequest))]
     [JsonSerializable(typeof(PlayerDataGetPlayerResponse))]
@@ -497,6 +3025,58 @@ namespace Exoforge.Plugins.Generated
     [JsonSerializable(typeof(PlayerDataGetAllDataResponse))]
     [JsonSerializable(typeof(PlayerDataPlayerCreatedEvent))]
     [JsonSerializable(typeof(PlayerDataPlayerDeletedEvent))]
+    [JsonSerializable(typeof(ResourceStoreMigrateRequest))]
+    [JsonSerializable(typeof(ResourceStoreMigrateResponse))]
+    [JsonSerializable(typeof(ResourceStoreListRequest))]
+    [JsonSerializable(typeof(ResourceStoreListResponse))]
+    [JsonSerializable(typeof(ResourceStoreGetRequest))]
+    [JsonSerializable(typeof(ResourceStoreGetResponse))]
+    [JsonSerializable(typeof(ResourceStoreCreateRequest))]
+    [JsonSerializable(typeof(ResourceStoreCreateResponse))]
+    [JsonSerializable(typeof(ResourceStoreUpdateRequest))]
+    [JsonSerializable(typeof(ResourceStoreUpdateResponse))]
+    [JsonSerializable(typeof(ResourceStoreDeleteRequest))]
+    [JsonSerializable(typeof(ResourceStoreDeleteResponse))]
+    [JsonSerializable(typeof(ResourceStoreUpsertRequest))]
+    [JsonSerializable(typeof(ResourceStoreUpsertResponse))]
+    [JsonSerializable(typeof(ResourceStoreClearRequest))]
+    [JsonSerializable(typeof(ResourceStoreClearResponse))]
+    [JsonSerializable(typeof(SamplePluginCounter))]
+    [JsonSerializable(typeof(SamplePluginPingRequest))]
+    [JsonSerializable(typeof(SamplePluginIncrementRequest))]
+    [JsonSerializable(typeof(SamplePluginInjectedRequest))]
+    [JsonSerializable(typeof(SamplePluginEchoRequest))]
+    [JsonSerializable(typeof(SamplePluginValueChangedEvent))]
+    [JsonSerializable(typeof(SnakeConfigSnakeConfig))]
+    [JsonSerializable(typeof(SnakeConfigGetConfigRequest))]
+    [JsonSerializable(typeof(SnakeConfigDto))]
+    [JsonSerializable(typeof(SnakeConfigUpdateConfigRequest))]
+    [JsonSerializable(typeof(TesteTesteItem))]
+    [JsonSerializable(typeof(TestePingRequest))]
+    [JsonSerializable(typeof(TesteEchoRequest))]
+    [JsonSerializable(typeof(UnityAddressablesAddressableAsset))]
+    [JsonSerializable(typeof(UnityAddressablesAddressableRelease))]
+    [JsonSerializable(typeof(UnityAddressablesGetStatsRequest))]
+    [JsonSerializable(typeof(AddressablesStats))]
+    [JsonSerializable(typeof(UnityAddressablesListAssetsRequest))]
+    [JsonSerializable(typeof(AddressableAssetRecord))]
+    [JsonSerializable(typeof(UnityAddressablesGetAssetRequest))]
+    [JsonSerializable(typeof(UnityAddressablesListReleasesRequest))]
+    [JsonSerializable(typeof(AddressableReleaseRecord))]
+    [JsonSerializable(typeof(UnityAddressablesGetManifestRequest))]
+    [JsonSerializable(typeof(AddressablesManifestDto))]
+    [JsonSerializable(typeof(UnityAddressablesPublishReleaseRequest))]
+    [JsonSerializable(typeof(UnityAddressablesPublishReleaseResponse))]
+    [JsonSerializable(typeof(UnityAddressablesPromoteReleaseRequest))]
+    [JsonSerializable(typeof(UnityAddressablesPromoteReleaseResponse))]
+    [JsonSerializable(typeof(UnityAddressablesUploadBundleRequest))]
+    [JsonSerializable(typeof(UnityAddressablesUploadBundleResponse))]
+    [JsonSerializable(typeof(UnityAddressablesUploadPreviewRequest))]
+    [JsonSerializable(typeof(UnityAddressablesUploadPreviewResponse))]
+    [JsonSerializable(typeof(WsBroadcastRequest))]
+    [JsonSerializable(typeof(WsBroadcastResponse))]
+    [JsonSerializable(typeof(WsConnectionCountRequest))]
+    [JsonSerializable(typeof(WsConnectionCountResponse))]
     [JsonSerializable(typeof(global::Exoforge.Plugins.SnakeLeaderboard.SnakeScoreRecord))]
     [JsonSerializable(typeof(global::Exoforge.Plugins.SnakeLeaderboard.SnakeScoreSubmitted))]
     [JsonSerializable(typeof(global::Exoforge.Plugins.SnakeLeaderboard.SnakeLeaderboardEntry))]
@@ -511,10 +3091,38 @@ namespace Exoforge.Plugins.Generated
         {
             PluginJson.AddContext(GeneratedServicesJsonContext.Default);
             PluginServiceRegistry.Register(d => new ExoforgePluginServices(d));
+            PluginServiceRegistry.Register<IAuthService>(d => new AuthServiceClient(d));
+            PluginServiceRegistry.Register(d => new AuthServiceClient(d));
+            PluginServiceRegistry.Register<IDashboardService>(d => new DashboardServiceClient(d));
+            PluginServiceRegistry.Register(d => new DashboardServiceClient(d));
+            PluginServiceRegistry.Register<IDashboardViewService>(d => new DashboardViewServiceClient(d));
+            PluginServiceRegistry.Register(d => new DashboardViewServiceClient(d));
             PluginServiceRegistry.Register<IDatabaseService>(d => new DatabaseServiceClient(d));
             PluginServiceRegistry.Register(d => new DatabaseServiceClient(d));
+            PluginServiceRegistry.Register<IExtensionManagerService>(d => new ExtensionManagerServiceClient(d));
+            PluginServiceRegistry.Register(d => new ExtensionManagerServiceClient(d));
+            PluginServiceRegistry.Register<IFileBucketService>(d => new FileBucketServiceClient(d));
+            PluginServiceRegistry.Register(d => new FileBucketServiceClient(d));
+            PluginServiceRegistry.Register<IHttpService>(d => new HttpServiceClient(d));
+            PluginServiceRegistry.Register(d => new HttpServiceClient(d));
+            PluginServiceRegistry.Register<ILldbService>(d => new LldbServiceClient(d));
+            PluginServiceRegistry.Register(d => new LldbServiceClient(d));
+            PluginServiceRegistry.Register<IMeteringService>(d => new MeteringServiceClient(d));
+            PluginServiceRegistry.Register(d => new MeteringServiceClient(d));
             PluginServiceRegistry.Register<IPlayerDataService>(d => new PlayerDataServiceClient(d));
             PluginServiceRegistry.Register(d => new PlayerDataServiceClient(d));
+            PluginServiceRegistry.Register<IResourceStoreService>(d => new ResourceStoreServiceClient(d));
+            PluginServiceRegistry.Register(d => new ResourceStoreServiceClient(d));
+            PluginServiceRegistry.Register<ISamplePluginService>(d => new SamplePluginServiceClient(d));
+            PluginServiceRegistry.Register(d => new SamplePluginServiceClient(d));
+            PluginServiceRegistry.Register<ISnakeConfigService>(d => new SnakeConfigServiceClient(d));
+            PluginServiceRegistry.Register(d => new SnakeConfigServiceClient(d));
+            PluginServiceRegistry.Register<ITesteService>(d => new TesteServiceClient(d));
+            PluginServiceRegistry.Register(d => new TesteServiceClient(d));
+            PluginServiceRegistry.Register<IUnityAddressablesService>(d => new UnityAddressablesServiceClient(d));
+            PluginServiceRegistry.Register(d => new UnityAddressablesServiceClient(d));
+            PluginServiceRegistry.Register<IWsService>(d => new WsServiceClient(d));
+            PluginServiceRegistry.Register(d => new WsServiceClient(d));
         }
     }
 }

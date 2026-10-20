@@ -14,7 +14,7 @@ public class SnakeLeaderboardPlugin
     [ExoAction]
     public async Task<int> SubmitScore(string playerId, string name, int score, int snakeLength)
     {
-        var existing = Exo.Database.Get<SnakeScoreRecord>(playerId);
+        var existing = ExoServices.Database.Get<SnakeScoreRecord>(playerId);
         bool improved = existing is null || existing.Score < score;
         long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
@@ -22,11 +22,11 @@ public class SnakeLeaderboardPlugin
             ? existing
             : new SnakeScoreRecord(playerId, Math.Max(score, existing?.Score ?? 0), improved ? snakeLength : existing?.SnakeLength ?? snakeLength, now);
 
-        Exo.Database.Put(best);
-        Exo.Logger.Info($"[snake_leaderboard] {playerId} best {best.Score}");
+        ExoServices.Database.Put(best);
+        ExoServices.Logger.Info($"[snake_leaderboard] {playerId} best {best.Score}");
 
         var submittedName = string.IsNullOrEmpty(name) ? playerId : name;
-        await Exo.Events.EmitAsync(new SnakeScoreSubmitted(playerId, submittedName, score, snakeLength, improved));
+        await ExoServices.Events.EmitAsync(new SnakeScoreSubmitted(playerId, submittedName, score, snakeLength, improved));
 
         return best.Score;
     }
@@ -34,7 +34,7 @@ public class SnakeLeaderboardPlugin
     [ExoAction]
     public async Task<List<SnakeLeaderboardEntry>> GetLeaderboard(int limit)
     {
-        var scores = Exo.Database.All<SnakeScoreRecord>().OrderByDescending(s => s.Score).Take(limit > 0 ? limit : 10);
+        var scores = ExoServices.Database.All<SnakeScoreRecord>().OrderByDescending(s => s.Score).Take(limit > 0 ? limit : 10);
         var entries = new List<SnakeLeaderboardEntry>();
 
         foreach (var score in scores)
@@ -49,7 +49,7 @@ public class SnakeLeaderboardPlugin
     {
         try
         {
-            var response = await Exo.PlayerData.GetPlayerAsync(new PlayerDataGetPlayerRequest { PlayerId = playerId });
+            var response = await ExoServices.PlayerData.GetPlayerAsync(new PlayerDataGetPlayerRequest { PlayerId = playerId });
             return string.IsNullOrEmpty(response?.Player?.Name) ? playerId : response!.Player!.Name!;
         }
         catch

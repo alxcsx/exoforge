@@ -11,11 +11,11 @@ public class SnakeConfigPlugin
     [ExoAction]
     public SnakeConfigDto GetConfig()
     {
-        var schema = Exo.Database.First<SnakeConfigSchema>();
+        var schema = ExoServices.Database.First<SnakeConfigSchema>();
         if (schema == null)
         {
             schema = new SnakeConfigSchema();
-            Exo.Database.Put(schema);
+            ExoServices.Database.Put(schema);
         }
         return new SnakeConfigDto(schema);
     }
@@ -28,11 +28,11 @@ public class SnakeConfigPlugin
         string? backgroundFileId,
         string? backgroundAddressable)
     {
-        var current = Exo.Database.First<SnakeConfigSchema>() ?? new SnakeConfigSchema();
+        var current = ExoServices.Database.First<SnakeConfigSchema>() ?? new SnakeConfigSchema();
         var updated = current.With(snakeColor, appleColor, applePoints, backgroundFileId, backgroundAddressable);
 
-        Exo.Database.Put(updated);
-        Exo.Logger.Info($"[snake_config] Updated config: points={updated.ApplePoints}, snake={updated.SnakeColor}");
+        ExoServices.Database.Put(updated);
+        ExoServices.Logger.Info($"[snake_config] Updated config: points={updated.ApplePoints}, snake={updated.SnakeColor}");
 
         return new SnakeConfigDto(updated);
     }

@@ -256,7 +256,7 @@ public class ExoColumnAttribute : Attribute
 /// <summary>
 /// Built-in standard dashboard input widget types for <see cref="ExoColumnAttribute.InputType"/>.
 /// </summary>
-public static class ExoInput
+public static partial class ExoInput
 {
     public const string Text = "text";
     public const string Color = "color";

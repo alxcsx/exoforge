@@ -574,12 +574,12 @@ public class FileBucketUploadFileRequest
     [JsonPropertyName("content")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Content { get; set; } = default!;
-    [JsonPropertyName("bucket")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    public JsonElement Bucket { get; set; } = default!;
     [JsonPropertyName("content_type")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement ContentType { get; set; } = default!;
+    [JsonPropertyName("bucket")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public JsonElement Bucket { get; set; } = default!;
 }
 
 /// <summary>Response model for file_bucket.upload_file action.</summary>
@@ -669,12 +669,12 @@ public class FileBucketUpdateFileRequest
     [JsonPropertyName("content")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Content { get; set; } = default!;
-    [JsonPropertyName("bucket")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    public JsonElement Bucket { get; set; } = default!;
     [JsonPropertyName("content_type")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement ContentType { get; set; } = default!;
+    [JsonPropertyName("bucket")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public JsonElement Bucket { get; set; } = default!;
 }
 
 /// <summary>Response model for file_bucket.update_file action.</summary>
@@ -987,12 +987,12 @@ public class ResourceStoreListRequest
     [JsonPropertyName("sort")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Sort { get; set; } = default!;
-    [JsonPropertyName("filter")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    public JsonElement Filter { get; set; } = default!;
     [JsonPropertyName("search")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Search { get; set; } = default!;
+    [JsonPropertyName("filter")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public JsonElement Filter { get; set; } = default!;
     [JsonPropertyName("limit")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Limit { get; set; } = default!;
@@ -1446,13 +1446,13 @@ public class UnityAddressablesUploadPreviewResponse
 /// <summary>Request payload for ws.broadcast action.</summary>
 public class WsBroadcastRequest
 {
-    [JsonPropertyName("payload")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    public JsonElement Payload { get; set; } = default!;
     [JsonPropertyName("topic")]
     public string Topic { get; set; } = default!;
     [JsonPropertyName("event")]
     public string Event { get; set; } = default!;
+    [JsonPropertyName("payload")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public JsonElement Payload { get; set; } = default!;
 }
 
 /// <summary>Response model for ws.broadcast action.</summary>
@@ -2145,7 +2145,7 @@ public class FileBucketServiceClient
     }
 
     /// <summary>Stores a file in a specified bucket from raw binary, base64 content, or disk path.</summary>
-    public Task<FileBucketUploadFileResponse> UploadFileAsync(string filename, JsonElement path, JsonElement metadata, JsonElement content, JsonElement bucket, JsonElement contentType, CancellationToken cancellationToken = default)
+    public Task<FileBucketUploadFileResponse> UploadFileAsync(string filename, JsonElement path, JsonElement metadata, JsonElement content, JsonElement contentType, JsonElement bucket, CancellationToken cancellationToken = default)
     {
         var req = new FileBucketUploadFileRequest
         {
@@ -2153,8 +2153,8 @@ public class FileBucketServiceClient
             Path = path,
             Metadata = metadata,
             Content = content,
-            Bucket = bucket,
             ContentType = contentType,
+            Bucket = bucket,
         };
         return UploadFileAsync(req, cancellationToken);
     }
@@ -2224,7 +2224,7 @@ public class FileBucketServiceClient
     }
 
     /// <summary>Modifies an existing file's name, metadata, or content.</summary>
-    public Task<FileBucketUpdateFileResponse> UpdateFileAsync(string id, JsonElement filename, JsonElement metadata, JsonElement content, JsonElement bucket, JsonElement contentType, CancellationToken cancellationToken = default)
+    public Task<FileBucketUpdateFileResponse> UpdateFileAsync(string id, JsonElement filename, JsonElement metadata, JsonElement content, JsonElement contentType, JsonElement bucket, CancellationToken cancellationToken = default)
     {
         var req = new FileBucketUpdateFileRequest
         {
@@ -2232,8 +2232,8 @@ public class FileBucketServiceClient
             Filename = filename,
             Metadata = metadata,
             Content = content,
-            Bucket = bucket,
             ContentType = contentType,
+            Bucket = bucket,
         };
         return UpdateFileAsync(req, cancellationToken);
     }
@@ -2593,14 +2593,14 @@ public class ResourceStoreServiceClient
     }
 
     /// <summary>Lists rows for a resource with filtering, sorting, and pagination.</summary>
-    public Task<ResourceStoreListResponse> ListAsync(JsonElement offset, JsonElement sort, JsonElement filter, JsonElement search, JsonElement limit, string resource, CancellationToken cancellationToken = default)
+    public Task<ResourceStoreListResponse> ListAsync(JsonElement offset, JsonElement sort, JsonElement search, JsonElement filter, JsonElement limit, string resource, CancellationToken cancellationToken = default)
     {
         var req = new ResourceStoreListRequest
         {
             Offset = offset,
             Sort = sort,
-            Filter = filter,
             Search = search,
+            Filter = filter,
             Limit = limit,
             Resource = resource,
         };
@@ -3087,13 +3087,13 @@ public class WsServiceClient
     }
 
     /// <summary>Broadcasts a frame to an active WebSocket topic.</summary>
-    public Task<WsBroadcastResponse> BroadcastAsync(JsonElement payload, string topic, string @event, CancellationToken cancellationToken = default)
+    public Task<WsBroadcastResponse> BroadcastAsync(string topic, string @event, JsonElement payload, CancellationToken cancellationToken = default)
     {
         var req = new WsBroadcastRequest
         {
-            Payload = payload,
             Topic = topic,
             Event = @event,
+            Payload = payload,
         };
         return BroadcastAsync(req, cancellationToken);
     }
