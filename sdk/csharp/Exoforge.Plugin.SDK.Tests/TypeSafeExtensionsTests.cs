@@ -28,6 +28,14 @@ public record TestProduct
     public decimal Price { get; init; }
 }
 
+// Test singleton entity
+[ExoSingletonResource("game_config")]
+public record TestGameConfig
+{
+    public string Theme { get; init; } = "dark";
+    public int MaxPlayers { get; init; } = 4;
+}
+
 // Test event with [ExoEvent]
 [ExoEvent("player_scored", Topic = "gameplay:events")]
 public record PlayerScoredEvent(string PlayerId, int Score);
@@ -175,6 +183,45 @@ public class TypeSafeExtensionsTests
 
         table.Delete(prod);
         Assert.Null(table.Get(99));
+    }
+
+    [Fact]
+    public void DatabaseExtensions_SingletonFirstAndPut_AbstractsTableAndKey()
+    {
+        var db = new MockDatabase();
+        var config = new TestGameConfig { Theme = "neon", MaxPlayers = 8 };
+
+        // Table name and key are fully abstracted
+        db.Put(config);
+
+        Assert.True(db.Storage.ContainsKey(("game_config", "singleton")));
+        var retrieved = db.First<TestGameConfig>();
+        Assert.NotNull(retrieved);
+        Assert.Equal("neon", retrieved!.Theme);
+        Assert.Equal(8, retrieved!.MaxPlayers);
+
+        // Get<T>() without key acts as First<T>()
+        var alias = db.Get<TestGameConfig>();
+        Assert.NotNull(alias);
+        Assert.Equal("neon", alias!.Theme);
+
+        var table = db.Table<TestGameConfig>();
+        Assert.Equal("neon", table.First()?.Theme);
+    }
+
+    [Fact]
+    public void DatabaseExtensions_PutWithExplicitKey_AbstractsTableName()
+    {
+        var db = new MockDatabase();
+        var score = new TestScore { PlayerId = "p_10", Score = 500 };
+
+        // Put with explicit key but no table name
+        db.Put("p_10", score);
+
+        Assert.True(db.Storage.ContainsKey(("custom_scores", "p_10")));
+        var retrieved = db.Get<TestScore>("p_10");
+        Assert.NotNull(retrieved);
+        Assert.Equal(500, retrieved!.Score);
     }
 
     [Fact]

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using Exoforge.Plugin.SDK;
 using Exoforge.Plugins.Generated;
@@ -12,8 +11,6 @@ namespace Exoforge.Plugins.SnakeLeaderboard;
     Category = "Game", Title = "Snake Leaderboard", Icon = "🏆")]
 public class SnakeLeaderboardPlugin
 {
-    private const string Table = "snake_scores";
-
     [Inject] public IDatabase? Database { get; set; }
     [Inject] public IPlayerDataService? PlayerData { get; set; }
     [Inject] public IEventDispatcher? Events { get; set; }
@@ -22,7 +19,7 @@ public class SnakeLeaderboardPlugin
     [ExoAction]
     public async Task<int> SubmitScore(string playerId, string name, int score, int snakeLength)
     {
-        var existing = Database!.Get<SnakeScoreRecord>(Table, playerId);
+        var existing = Database!.Get<SnakeScoreRecord>(playerId);
         bool improved = existing is null || existing.Score < score;
         long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
@@ -30,7 +27,7 @@ public class SnakeLeaderboardPlugin
             ? existing
             : new SnakeScoreRecord(playerId, Math.Max(score, existing?.Score ?? 0), improved ? snakeLength : existing?.SnakeLength ?? snakeLength, now);
 
-        Database.Put(Table, playerId, best);
+        Database!.Put(best);
         Logger?.Info($"[snake_leaderboard] {playerId} best {best.Score}");
 
         var submittedName = string.IsNullOrEmpty(name) ? playerId : name;
@@ -42,7 +39,7 @@ public class SnakeLeaderboardPlugin
     [ExoAction]
     public async Task<List<SnakeLeaderboardEntry>> GetLeaderboard(int limit)
     {
-        var scores = Database!.All<SnakeScoreRecord>(Table).OrderByDescending(s => s.Score).Take(limit > 0 ? limit : 10);
+        var scores = Database!.All<SnakeScoreRecord>().OrderByDescending(s => s.Score).Take(limit > 0 ? limit : 10);
         var entries = new List<SnakeLeaderboardEntry>();
 
         foreach (var score in scores)
@@ -64,10 +61,10 @@ public class SnakeLeaderboardPlugin
 
 [ExoResource("snake_scores", PrimaryKey = "player_id", DrawerTabs = new[] { "overview", "attributes" })]
 public record SnakeScoreRecord(
-    [property: JsonPropertyName("player_id"), ExoColumn(Label = "Player ID", Sortable = true, Filterable = true, Role = "user_id")] string PlayerId = "",
-    [property: JsonPropertyName("score"), ExoColumn(Label = "High Score", Sortable = true)] int Score = 0,
-    [property: JsonPropertyName("snake_length"), ExoColumn(Label = "Max Length", Sortable = true)] int SnakeLength = 0,
-    [property: JsonPropertyName("updated_at"), ExoColumn(Label = "Updated", Sortable = true)] long UpdatedAt = 0
+    [property: ExoColumn(Label = "Player ID", Sortable = true, Filterable = true, Role = "user_id")] string PlayerId = "",
+    [property: ExoColumn(Label = "High Score", Sortable = true)] int Score = 0,
+    [property: ExoColumn(Label = "Max Length", Sortable = true)] int SnakeLength = 0,
+    [property: ExoColumn(Label = "Updated", Sortable = true)] long UpdatedAt = 0
 )
 {
     public SnakeLeaderboardEntry ToEntry(string name) => new(PlayerId, name, Score, SnakeLength, UpdatedAt);
@@ -75,18 +72,18 @@ public record SnakeScoreRecord(
 
 // DTOs
 public record SnakeLeaderboardEntry(
-    [property: JsonPropertyName("player_id")] string PlayerId = "",
-    [property: JsonPropertyName("name")] string Name = "",
-    [property: JsonPropertyName("score")] int Score = 0,
-    [property: JsonPropertyName("snake_length")] int SnakeLength = 0,
-    [property: JsonPropertyName("updated_at")] long UpdatedAt = 0
+    string PlayerId = "",
+    string Name = "",
+    int Score = 0,
+    int SnakeLength = 0,
+    long UpdatedAt = 0
 );
 
 [ExoEvent("score_submitted", Topic = "snake:leaderboard")]
 public record SnakeScoreSubmitted(
-    [property: JsonPropertyName("player_id")] string PlayerId = "",
-    [property: JsonPropertyName("name")] string Name = "",
-    [property: JsonPropertyName("score")] int Score = 0,
-    [property: JsonPropertyName("snake_length")] int SnakeLength = 0,
-    [property: JsonPropertyName("improved")] bool Improved = false
+    string PlayerId = "",
+    string Name = "",
+    int Score = 0,
+    int SnakeLength = 0,
+    bool Improved = false
 );

@@ -6,8 +6,6 @@ namespace Exoforge.Plugins.SamplePlugin;
 [ExoService("sample_plugin", Version = "1.0.0", Resources = new[] { typeof(Counter) }, Category = "Utility", Title = "Sample Plugin", Icon = "🔧")]
 public class SamplePlugin
 {
-    private const string Table = "counters";
-
     [Inject]
     public IDatabase? Database { get; set; }
 
@@ -22,7 +20,7 @@ public class SamplePlugin
     {
         int newValue = amount > 0 ? amount : 1;
 
-        Database!.Put(Table, counterId.ToString(), new Counter(counterId, newValue));
+        Database!.Put(new Counter(counterId, newValue));
         await Events!.EmitAsync(new CounterChanged(counterId, newValue, amount));
 
         return newValue;

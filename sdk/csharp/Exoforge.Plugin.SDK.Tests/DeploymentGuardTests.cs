@@ -99,8 +99,7 @@ public class DeploymentGuardTests
                 throw new TimeoutException("The published plugin did not exit, so it did not refuse the missing runtime.");
             }
 
-            await Task.WhenAll(stdout, stderr);
-            string message = stderr.Result + stdout.Result;
+            string message = (await stderr) + (await stdout);
 
             Assert.NotEqual(0, process.ExitCode);
             Assert.Contains("Microsoft.NETCore.App", message);
