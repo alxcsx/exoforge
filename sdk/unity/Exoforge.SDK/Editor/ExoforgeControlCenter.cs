@@ -212,6 +212,8 @@ public partial class ExoforgeControlCenter : EditorWindow
     private Label? _endpointLabel;
     private Label? _latencyPill;
     private Button? _connectBtn;
+    private Button? _syncBtn;
+    private Button? _studioBtn;
     private VisualElement? _tabContentArea;
     private List<Button> _tabButtons = new();
 
@@ -350,11 +352,18 @@ public partial class ExoforgeControlCenter : EditorWindow
         {
             try
             {
+                string wsPath = ExoforgeEditorConfig.GetAbsoluteWorkspacePath();
+                if (!ExoWorkspace.Exists(wsPath))
+                {
+                    // Project has not initialized Exoforge yet; do not pollute Assets/ or attempt network sync.
+                    return;
+                }
+
                 string outputPath = ExoforgeEditorConfig.GetAbsoluteGeneratedScriptPath();
                 if (!File.Exists(outputPath) || new FileInfo(outputPath).Length == 0)
                 {
                     UnityEngine.Debug.Log("[Exoforge] Missing client bindings detected. Auto-generating baseline C# client from workspace...");
-                    var ws = ExoWorkspace.Load(ExoforgeEditorConfig.GetAbsoluteWorkspacePath());
+                    var ws = ExoWorkspace.Load(wsPath);
                     var deployer = new ExoDeployer(ws);
                     await deployer.SyncContractsAsync(outputPathOverride: outputPath);
                     ExoforgeRuntimeConfigGenerator.Generate();
@@ -735,18 +744,18 @@ public partial class ExoforgeControlCenter : EditorWindow
         actionsGroup.style.alignItems = Align.Center;
         actionsGroup.style.flexShrink = 0;
 
-        var syncBtn = ExoforgeUIStyle.CreateModernButton("🔄 Sync Client", () => _ = SyncAndGenerateClientAsync(), height: 26, isHeader: true);
-        actionsGroup.Add(syncBtn);
+        _syncBtn = ExoforgeUIStyle.CreateModernButton("🔄 Sync Client", () => _ = SyncAndGenerateClientAsync(), height: 26, isHeader: true);
+        actionsGroup.Add(_syncBtn);
 
         var extensionsBtn = ExoforgeUIStyle.CreateModernButton("🔌 Extensions", () => ExoforgeExtensionsWindow.ShowWindow(), height: 26, isHeader: true);
         actionsGroup.Add(extensionsBtn);
 
-        var studioBtn = ExoforgeUIStyle.CreateModernButton("🌐 Web Studio ↗", () =>
+        _studioBtn = ExoforgeUIStyle.CreateModernButton("🌐 Web Studio ↗", () =>
         {
             string url = ActiveHttpEndpoint;
             if (!string.IsNullOrEmpty(url)) Application.OpenURL(url);
         }, height: 26, isHeader: true);
-        actionsGroup.Add(studioBtn);
+        actionsGroup.Add(_studioBtn);
 
         toolbar.Add(actionsGroup);
         header.Add(toolbar);
@@ -777,6 +786,10 @@ public partial class ExoforgeControlCenter : EditorWindow
         }
 
         menu.AddSeparator("");
+        menu.AddItem(new GUIContent("➕ Add New Environment..."), false, () =>
+        {
+            ExoforgeEnvironmentModal.Open(Repaint);
+        });
         menu.AddItem(new GUIContent("⚙ Configure Environments in Settings..."), false, () =>
         {
             _currentTab = Tab.Settings;
@@ -811,7 +824,6 @@ public partial class ExoforgeControlCenter : EditorWindow
 
         foreach (var def in tabDefs)
         {
-            bool isActive = _currentTab == def.Id;
             var btn = new Button(() =>
             {
                 _currentTab = def.Id;
@@ -823,13 +835,8 @@ public partial class ExoforgeControlCenter : EditorWindow
             btn.userData = def.Id;
             btn.style.height = 26;
             btn.style.borderTopWidth = 0;
-            btn.style.borderBottomWidth = isActive ? 2 : 0;
             btn.style.borderLeftWidth = 0;
             btn.style.borderRightWidth = 0;
-            btn.style.borderBottomColor = isActive ? ExoforgeUIStyle.BrandPurple : Color.clear;
-            btn.style.backgroundColor = isActive ? ExoforgeUIStyle.BrandPurpleGlow : Color.clear;
-            btn.style.color = isActive ? ExoforgeUIStyle.BrandPurpleActive : ExoforgeUIStyle.TextSecondary;
-            btn.style.unityFontStyleAndWeight = isActive ? FontStyle.Bold : FontStyle.Normal;
             btn.style.borderTopLeftRadius = 6;
             btn.style.borderTopRightRadius = 6;
             btn.style.borderBottomLeftRadius = 0;
@@ -843,27 +850,64 @@ public partial class ExoforgeControlCenter : EditorWindow
             strip.Add(btn);
         }
 
+        UpdateTabButtonStyles();
         return strip;
     }
 
     private void UpdateTabButtonStyles()
     {
+        bool canReach = CanReachCluster;
+
+        // Auto-switch away from cluster-only tabs when offline
+        if (!canReach && (_currentTab == Tab.Metrics || _currentTab == Tab.LiveEvents))
+        {
+            _currentTab = Tab.Extensions;
+        }
+
         foreach (var btn in _tabButtons)
         {
             if (btn.userData is Tab tabId)
             {
+                bool isClusterTab = tabId == Tab.Metrics || tabId == Tab.LiveEvents;
+                bool isEnabled = !isClusterTab || canReach;
                 bool isActive = _currentTab == tabId;
+
+                btn.SetEnabled(isEnabled);
+                btn.tooltip = isClusterTab && !canReach
+                    ? $"{btn.text} is disabled while offline — connect to cluster to access."
+                    : "";
+
                 btn.style.borderBottomWidth = isActive ? 2 : 0;
                 btn.style.borderBottomColor = isActive ? ExoforgeUIStyle.BrandPurple : Color.clear;
                 btn.style.backgroundColor = isActive ? ExoforgeUIStyle.BrandPurpleGlow : Color.clear;
-                btn.style.color = isActive ? ExoforgeUIStyle.BrandPurpleActive : ExoforgeUIStyle.TextSecondary;
+                btn.style.color = !isEnabled
+                    ? ExoforgeUIStyle.TextMuted
+                    : (isActive ? ExoforgeUIStyle.BrandPurpleActive : ExoforgeUIStyle.TextSecondary);
                 btn.style.unityFontStyleAndWeight = isActive ? FontStyle.Bold : FontStyle.Normal;
+                btn.style.opacity = isEnabled ? 1.0f : 0.40f;
             }
         }
     }
 
     private void UpdateModernHeaderUI()
     {
+        UpdateTabButtonStyles();
+
+        if (_syncBtn != null)
+        {
+            _syncBtn.SetEnabled(_isConnected);
+            _syncBtn.style.opacity = _isConnected ? 1.0f : 0.40f;
+            _syncBtn.tooltip = _isConnected ? "" : "Syncing contracts requires an active cluster connection.";
+        }
+
+        if (_studioBtn != null)
+        {
+            bool canOpen = _isConnected && !string.IsNullOrEmpty(ActiveHttpEndpoint);
+            _studioBtn.SetEnabled(canOpen);
+            _studioBtn.style.opacity = canOpen ? 1.0f : 0.40f;
+            _studioBtn.tooltip = canOpen ? "" : "Web Studio requires an active cluster connection.";
+        }
+
         if (_connectionDot != null && _connectionText != null && _connectBtn != null)
         {
             Color dotColor = _isConnected ? ExoforgeUIStyle.AccentGreen : (_isConnecting ? ExoforgeUIStyle.AccentOrange : ExoforgeUIStyle.AccentGray);
@@ -1053,21 +1097,36 @@ public partial class ExoforgeControlCenter : EditorWindow
     {
         if (CanReachCluster) return false;
 
-        EditorGUILayout.Space(4);
-        EditorGUILayout.HelpBox(
-            _isConnecting
-                ? "Connecting to the cluster…"
-                : "Not connected — sign in to use this tab.",
-            _isConnecting ? MessageType.Info : MessageType.Warning);
+        var origBg = GUI.backgroundColor;
+        GUI.backgroundColor = new Color(1.0f, 0.88f, 0.60f);
+        EditorGUILayout.BeginVertical(GUI.skin.box);
+        GUI.backgroundColor = origBg;
+        EditorGUILayout.Space(6);
 
-        using (new EditorGUI.DisabledScope(_isConnecting))
+        EditorGUILayout.BeginHorizontal();
+        var iconStyle = new GUIStyle(EditorStyles.label) { fontSize = 28, alignment = TextAnchor.MiddleCenter };
+        GUILayout.Label(_isConnecting ? "🔄" : "⚠️", iconStyle, GUILayout.Width(46), GUILayout.Height(46));
+
+        EditorGUILayout.BeginVertical();
+        var titleStyle = new GUIStyle(EditorStyles.boldLabel)
         {
-            if (GUILayout.Button(_isConnecting ? "Connecting…" : "Sign in", GUILayout.Height(26)))
-            {
-                _showAuthFoldout = true;
-                Repaint();
-            }
-        }
+            fontSize = 15,
+            normal = { textColor = new Color(0.85f, 0.40f, 0.0f) }
+        };
+        EditorGUILayout.LabelField(_isConnecting ? "Connecting to Cluster…" : "CLUSTER OFFLINE — TAB UNAVAILABLE", titleStyle);
+
+        var descStyle = new GUIStyle(EditorStyles.wordWrappedLabel)
+        {
+            fontSize = 12,
+            normal = { textColor = ExoforgeUIStyle.TextPrimary }
+        };
+        EditorGUILayout.LabelField("This tab requires an active connection to the cluster. Connect to view metrics and live telemetry.", descStyle);
+        EditorGUILayout.EndVertical();
+
+        EditorGUILayout.EndHorizontal();
+        EditorGUILayout.Space(6);
+        EditorGUILayout.EndVertical();
+        EditorGUILayout.Space(6);
 
         return true;
     }

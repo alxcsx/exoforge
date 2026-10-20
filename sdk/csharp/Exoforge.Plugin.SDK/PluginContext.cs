@@ -21,6 +21,8 @@ public class HostPluginContext : IPluginContext
     public IEventDispatcher Events { get; }
     public IActionDispatcher Actions { get; }
     public ILogger Logger { get; }
+    public string? CallerPlayerId { get; private set; }
+    public IReadOnlyList<string> CallerScopes { get; private set; } = Array.Empty<string>();
 
     public HostPluginContext(string pluginId)
     {
@@ -31,12 +33,30 @@ public class HostPluginContext : IPluginContext
         Logger = new HostLogger();
     }
 
+    public void UpdateCaller(string? playerId, IReadOnlyList<string>? scopes)
+    {
+        CallerPlayerId = playerId;
+        CallerScopes = scopes ?? Array.Empty<string>();
+    }
+
     /// <summary>
-    /// Configures the ambient <c>Exo</c> context for the plugin.
+    /// Configures the ambient <c>Exo</c> context and injects capabilities into matching properties on <paramref name="target"/>.
     /// </summary>
     public static void Wire(object target, IPluginContext context)
     {
         if (context != null) PluginHost.CurrentContext = context;
+        if (target == null || context == null) return;
+
+        const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+        foreach (var prop in target.GetType().GetProperties(flags))
+        {
+            if (!prop.CanWrite) continue;
+            if (prop.PropertyType == typeof(IDatabase)) prop.SetValue(target, context.Database);
+            else if (prop.PropertyType == typeof(ILogger)) prop.SetValue(target, context.Logger);
+            else if (prop.PropertyType == typeof(IEventDispatcher)) prop.SetValue(target, context.Events);
+            else if (prop.PropertyType == typeof(IActionDispatcher)) prop.SetValue(target, context.Actions);
+            else if (prop.PropertyType == typeof(IPluginContext)) prop.SetValue(target, context);
+        }
     }
 }
 

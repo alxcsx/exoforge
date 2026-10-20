@@ -62,7 +62,6 @@
   <PropertyGroup>
     <ExoforgeStageDir Condition="'$(MSBuildProjectName)' == 'Exoforge.Client'">$(ExoforgeUnityPackage)/Runtime/Plugins</ExoforgeStageDir>
     <ExoforgeStageDir Condition="'$(MSBuildProjectName)' == 'Exoforge.Management'">$(ExoforgeUnityPackage)/Editor/Plugins</ExoforgeStageDir>
-    <ExoforgeStageDir Condition="'$(MSBuildProjectName)' == 'Exoforge.Plugin.Generator'">$(ExoforgeUnityPackage)/Editor/Plugins/Tools~/Exoforge.Plugin.Generator</ExoforgeStageDir>
   </PropertyGroup>
 
   <!--
@@ -84,6 +83,12 @@
       <ExoforgeStagedFile Include="$(TargetPath)" />
       <ExoforgeStagedFile Include="$(TargetDir)$(TargetName).pdb"
                           Condition="Exists('$(TargetDir)$(TargetName).pdb')" />
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(MSBuildProjectName)' == 'Exoforge.Client'">
+      <ExoforgeStagedFile Include="$(TargetDir)System.Text.Json.dll" Condition="Exists('$(TargetDir)System.Text.Json.dll')" />
+      <ExoforgeStagedFile Include="$(TargetDir)System.Text.Encodings.Web.dll" Condition="Exists('$(TargetDir)System.Text.Encodings.Web.dll')" />
+      <ExoforgeStagedFile Include="$(TargetDir)Microsoft.Bcl.AsyncInterfaces.dll" Condition="Exists('$(TargetDir)Microsoft.Bcl.AsyncInterfaces.dll')" />
     </ItemGroup>
 
     <Copy SourceFiles="@(ExoforgeStagedFile)"

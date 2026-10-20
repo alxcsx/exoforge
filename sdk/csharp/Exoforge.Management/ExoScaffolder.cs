@@ -70,32 +70,140 @@ public static class ExoScaffolder
     public const string FeedEnvVar = "EXOFORGE_FEED";
 
     /// <summary>
-    /// Points the workspace at a local feed, once, when one is configured.
-    ///
-    /// The project a plugin gets still names only the package. Where that package comes from is a
-    /// property of the workspace, not of the plugin, which is why the reference in the project file
-    /// reads the same whether the feed is a directory on this machine or a real one.
+    /// Minimum supported .NET major version for Exoforge extensions.
     /// </summary>
-    private static void RegisterLocalFeed(string pluginsDirectory, string? explicitFeed)
+    public const int MinimumMajorDotnetVersion = 9;
+
+    /// <summary>
+    /// Resolves the default local NuGet package feed for Exoforge SDK packages.
+    /// Checks explicit feed, EXOFORGE_FEED environment variable, and the bundled NuGet~ package directory.
+    /// </summary>
+    public static string? ResolveDefaultFeed(string? explicitFeed = null)
     {
-        string? feed = explicitFeed ?? Environment.GetEnvironmentVariable(FeedEnvVar);
+        if (!string.IsNullOrEmpty(explicitFeed) && Directory.Exists(explicitFeed))
+            return Path.GetFullPath(explicitFeed);
 
+        string? envFeed = Environment.GetEnvironmentVariable(FeedEnvVar);
+        if (!string.IsNullOrEmpty(envFeed) && Directory.Exists(envFeed))
+            return Path.GetFullPath(envFeed);
+
+        // Check adjacent NuGet~ folder next to Exoforge.Management.dll (when inside Editor/Plugins)
+        string? asmDir = Path.GetDirectoryName(typeof(ExoScaffolder).Assembly.Location);
+        if (!string.IsNullOrEmpty(asmDir))
+        {
+            string adjacent = Path.Combine(asmDir, "NuGet~");
+            if (Directory.Exists(adjacent)) return Path.GetFullPath(adjacent);
+
+            // When loaded from <ProjectRoot>/Library/ScriptAssemblies inside Unity Editor,
+            // check <ProjectRoot>/Packages/com.exoforge.sdk/Editor/Plugins/NuGet~ and Library/PackageCache
+            string projectRoot = Path.GetFullPath(Path.Combine(asmDir, "..", ".."));
+            string embeddedPkg = Path.Combine(projectRoot, "Packages", "com.exoforge.sdk", "Editor", "Plugins", "NuGet~");
+            if (Directory.Exists(embeddedPkg)) return Path.GetFullPath(embeddedPkg);
+
+            string pkgCache = Path.Combine(projectRoot, "Library", "PackageCache");
+            if (Directory.Exists(pkgCache))
+            {
+                try
+                {
+                    foreach (string dir in Directory.GetDirectories(pkgCache, "com.exoforge.sdk*"))
+                    {
+                        string cachedNuget = Path.Combine(dir, "Editor", "Plugins", "NuGet~");
+                        if (Directory.Exists(cachedNuget)) return Path.GetFullPath(cachedNuget);
+                    }
+                }
+                catch
+                {
+                    // Ignore package cache read errors
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Detects the highest installed .NET SDK major version with a minimum floor of 9.
+    /// </summary>
+    public static int DetectHighestInstalledSdkMajor(string dotnetPath = "dotnet")
+    {
+        try
+        {
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = ExoDeployer.ResolveDotnetPath(dotnetPath),
+                Arguments = "--list-sdks",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            using var proc = System.Diagnostics.Process.Start(psi);
+            if (proc != null)
+            {
+                string output = proc.StandardOutput.ReadToEnd();
+                proc.WaitForExit(3000);
+                int highest = 0;
+                foreach (string line in output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    int dot = line.IndexOf('.');
+                    if (dot > 0 && int.TryParse(line.Substring(0, dot).Trim(), out int major))
+                    {
+                        if (major > highest) highest = major;
+                    }
+                }
+                if (highest >= MinimumMajorDotnetVersion) return highest;
+            }
+        }
+        catch
+        {
+            // Fall back to runtime version or floor
+        }
+
+        return Math.Max(MinimumMajorDotnetVersion, Environment.Version.Major);
+    }
+
+    /// <summary>
+    /// Resolves the default TargetFramework moniker for scaffolded extensions, targeting the latest
+    /// installed .NET SDK with a minimum of net9.0.
+    /// </summary>
+    public static string DetectTargetFramework(string dotnetPath = "dotnet")
+    {
+        int major = DetectHighestInstalledSdkMajor(dotnetPath);
+        return $"net{major}.0";
+    }
+
+    /// <summary>
+    /// Ensures nuget.config exists in the workspace root, pointing to the local feed if resolved.
+    /// </summary>
+    public static void EnsureLocalFeed(string workspaceRoot, string? explicitFeed = null)
+    {
+        string nugetConfig = Path.Combine(workspaceRoot, "nuget.config");
+        if (File.Exists(nugetConfig)) return;
+
+        string? feed = ResolveDefaultFeed(explicitFeed);
         if (string.IsNullOrEmpty(feed) || !Directory.Exists(feed)) return;
-
-        string? workspace = Path.GetDirectoryName(Path.GetFullPath(pluginsDirectory));
-        if (workspace is null) return;
 
         string config =
             "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" +
             "<configuration>\n" +
-            "  <!-- Written by `exo plugin new` from " + FeedEnvVar + ". Local packages, so a plugin -->\n" +
-            "  <!-- builds without one being published anywhere. -->\n" +
+            "  <!-- Local packages feed for Exoforge extensions -->\n" +
             "  <packageSources>\n" +
             "    <add key=\"exoforge\" value=\"" + feed + "\" />\n" +
             "  </packageSources>\n" +
             "</configuration>\n";
 
-        File.WriteAllText(Path.Combine(workspace, "nuget.config"), config);
+        File.WriteAllText(nugetConfig, config);
+    }
+
+    /// <summary>
+    /// Points the workspace at a local feed, once, when one is configured.
+    /// </summary>
+    private static void RegisterLocalFeed(string pluginsDirectory, string? explicitFeed)
+    {
+        string? workspace = Path.GetDirectoryName(Path.GetFullPath(pluginsDirectory));
+        if (workspace is null) return;
+
+        EnsureLocalFeed(workspace, explicitFeed);
     }
 
     /// <summary>
@@ -110,10 +218,10 @@ public static class ExoScaffolder
     /// <summary>Version of <see cref="SdkPackageId"/> a scaffolded plugin references.</summary>
     public const string SdkPackageVersion = "0.1.0";
 
-    private static string GenerateCsproj() => $@"
+    public static string GenerateCsproj(string? targetFramework = null) => $@"
 <Project Sdk=""Microsoft.NET.Sdk"">
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>{targetFramework ?? DetectTargetFramework()}</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>

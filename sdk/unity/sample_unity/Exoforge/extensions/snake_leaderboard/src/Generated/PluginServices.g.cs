@@ -14,273 +14,12 @@ using Exoforge.Plugin.SDK;
 
 namespace Exoforge.Plugins.Generated
 {
-    public class PlayerDataPlayer
-    {
-        [JsonPropertyName("player_id")]
-        public string PlayerId { get; set; } = default!;
-        [JsonPropertyName("user_id")]
-        public string UserId { get; set; } = default!;
-        [JsonPropertyName("name")]
-        public string Name { get; set; } = default!;
-        [JsonPropertyName("level")]
-        public long Level { get; set; } = default!;
-        [JsonPropertyName("status")]
-        public string Status { get; set; } = default!;
-    }
-
-    public class PlayerDataGetPlayerRequest
-    {
-        [JsonPropertyName("player_id")]
-        public string PlayerId { get; set; } = default!;
-    }
-
-    public class PlayerDataGetPlayerResponse
-    {
-        [JsonPropertyName("player")]
-        public PlayerDataPlayer Player { get; set; } = default!;
-    }
-
-    public class PlayerDataCreatePlayerRequest
-    {
-        [JsonPropertyName("profile")]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-        public JsonElement Profile { get; set; } = default!;
-        [JsonPropertyName("user_id")]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-        public JsonElement UserId { get; set; } = default!;
-        [JsonPropertyName("player_id")]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-        public JsonElement PlayerId { get; set; } = default!;
-    }
-
-    public class PlayerDataCreatePlayerResponse
-    {
-        [JsonPropertyName("player")]
-        public PlayerDataPlayer Player { get; set; } = default!;
-    }
-
-    public class PlayerDataDeletePlayerRequest
-    {
-        [JsonPropertyName("player_id")]
-        public string PlayerId { get; set; } = default!;
-    }
-
-    public class PlayerDataDeletePlayerResponse
-    {
-        [JsonPropertyName("status")]
-        public string Status { get; set; } = default!;
-        [JsonPropertyName("player_id")]
-        public string PlayerId { get; set; } = default!;
-    }
-
-    public class PlayerDataRetainPlayerRequest
-    {
-        [JsonPropertyName("player_id")]
-        public string PlayerId { get; set; } = default!;
-    }
-
-    public class PlayerDataRetainPlayerResponse
-    {
-        [JsonPropertyName("status")]
-        public string Status { get; set; } = default!;
-        [JsonPropertyName("player_id")]
-        public string PlayerId { get; set; } = default!;
-    }
-
-    public class PlayerDataListPlayersRequest
-    {
-        [JsonPropertyName("filter")]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-        public JsonElement Filter { get; set; } = default!;
-        [JsonPropertyName("limit")]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-        public JsonElement Limit { get; set; } = default!;
-        [JsonPropertyName("user_id")]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-        public JsonElement UserId { get; set; } = default!;
-    }
-
-    public class PlayerDataListPlayersResponse
-    {
-        [JsonPropertyName("players")]
-        public PlayerDataPlayer Players { get; set; } = default!;
-    }
-
-    public class PlayerDataUpdatePlayerRequest
-    {
-        [JsonPropertyName("data")]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-        public JsonElement Data { get; set; } = default!;
-        [JsonPropertyName("player_id")]
-        public string PlayerId { get; set; } = default!;
-    }
-
-    public class PlayerDataUpdatePlayerResponse
-    {
-        [JsonPropertyName("player")]
-        public PlayerDataPlayer Player { get; set; } = default!;
-    }
-
-    public class PlayerDataGetDataRequest
-    {
-        [JsonPropertyName("key")]
-        public string Key { get; set; } = default!;
-        [JsonPropertyName("player_id")]
-        public string PlayerId { get; set; } = default!;
-    }
-
-    public class PlayerDataGetDataResponse
-    {
-        [JsonPropertyName("value")]
-        public JsonElement Value { get; set; } = default!;
-        [JsonPropertyName("key")]
-        public string Key { get; set; } = default!;
-    }
-
-    public class PlayerDataSetDataRequest
-    {
-        [JsonPropertyName("value")]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-        public JsonElement Value { get; set; } = default!;
-        [JsonPropertyName("key")]
-        public string Key { get; set; } = default!;
-        [JsonPropertyName("player_id")]
-        public string PlayerId { get; set; } = default!;
-    }
-
-    public class PlayerDataSetDataResponse
-    {
-        [JsonPropertyName("value")]
-        public JsonElement Value { get; set; } = default!;
-        [JsonPropertyName("key")]
-        public string Key { get; set; } = default!;
-    }
-
-    public class PlayerDataDeleteDataRequest
-    {
-        [JsonPropertyName("key")]
-        public string Key { get; set; } = default!;
-        [JsonPropertyName("player_id")]
-        public string PlayerId { get; set; } = default!;
-    }
-
-    public class PlayerDataDeleteDataResponse
-    {
-        [JsonPropertyName("status")]
-        public string Status { get; set; } = default!;
-        [JsonPropertyName("key")]
-        public string Key { get; set; } = default!;
-    }
-
-    public class PlayerDataGetAllDataRequest
-    {
-        [JsonPropertyName("player_id")]
-        public string PlayerId { get; set; } = default!;
-    }
-
-    public class PlayerDataGetAllDataResponse
-    {
-        [JsonPropertyName("data")]
-        public JsonElement Data { get; set; } = default!;
-    }
-
-    public class PlayerDataPlayerCreatedEvent
-    {
-        [JsonPropertyName("timestamp")]
-        public long Timestamp { get; set; } = default!;
-        [JsonPropertyName("player_id")]
-        public string PlayerId { get; set; } = default!;
-    }
-
-    public class PlayerDataPlayerDeletedEvent
-    {
-        [JsonPropertyName("timestamp")]
-        public long Timestamp { get; set; } = default!;
-        [JsonPropertyName("player_id")]
-        public string PlayerId { get; set; } = default!;
-    }
-
-    /// <summary>Contract of the 'player_data' service, as the plugin providing it declares it.</summary>
-    public interface IPlayerDataService
-    {
-        [ExoAction("get_player", Scope = "global")]
-        Task<PlayerDataGetPlayerResponse?> GetPlayerAsync(PlayerDataGetPlayerRequest request);
-
-        [ExoAction("create_player", Scope = "global")]
-        Task<PlayerDataCreatePlayerResponse?> CreatePlayerAsync(PlayerDataCreatePlayerRequest request);
-
-        [ExoAction("delete_player", Scope = "admin")]
-        Task<PlayerDataDeletePlayerResponse?> DeletePlayerAsync(PlayerDataDeletePlayerRequest request);
-
-        [ExoAction("retain_player", Scope = "admin")]
-        Task<PlayerDataRetainPlayerResponse?> RetainPlayerAsync(PlayerDataRetainPlayerRequest request);
-
-        [ExoAction("list_players", Scope = "studio")]
-        Task<PlayerDataListPlayersResponse?> ListPlayersAsync(PlayerDataListPlayersRequest request);
-
-        [ExoAction("update_player", Scope = "global")]
-        Task<PlayerDataUpdatePlayerResponse?> UpdatePlayerAsync(PlayerDataUpdatePlayerRequest request);
-
-        [ExoAction("get_data", Scope = "global")]
-        Task<PlayerDataGetDataResponse?> GetDataAsync(PlayerDataGetDataRequest request);
-
-        [ExoAction("set_data", Scope = "global")]
-        Task<PlayerDataSetDataResponse?> SetDataAsync(PlayerDataSetDataRequest request);
-
-        [ExoAction("delete_data", Scope = "global")]
-        Task<PlayerDataDeleteDataResponse?> DeleteDataAsync(PlayerDataDeleteDataRequest request);
-
-        [ExoAction("get_all_data", Scope = "global")]
-        Task<PlayerDataGetAllDataResponse?> GetAllDataAsync(PlayerDataGetAllDataRequest request);
-
-    }
-
-    public sealed class PlayerDataServiceClient : IPlayerDataService
-    {
-        private readonly IActionDispatcher _dispatcher;
-
-        public PlayerDataServiceClient(IActionDispatcher dispatcher) => _dispatcher = dispatcher;
-
-        public Task<PlayerDataGetPlayerResponse?> GetPlayerAsync(PlayerDataGetPlayerRequest request)
-            => _dispatcher.CallActionAsync<PlayerDataGetPlayerResponse>("player_data", "get_player", request);
-
-        public Task<PlayerDataCreatePlayerResponse?> CreatePlayerAsync(PlayerDataCreatePlayerRequest request)
-            => _dispatcher.CallActionAsync<PlayerDataCreatePlayerResponse>("player_data", "create_player", request);
-
-        public Task<PlayerDataDeletePlayerResponse?> DeletePlayerAsync(PlayerDataDeletePlayerRequest request)
-            => _dispatcher.CallActionAsync<PlayerDataDeletePlayerResponse>("player_data", "delete_player", request);
-
-        public Task<PlayerDataRetainPlayerResponse?> RetainPlayerAsync(PlayerDataRetainPlayerRequest request)
-            => _dispatcher.CallActionAsync<PlayerDataRetainPlayerResponse>("player_data", "retain_player", request);
-
-        public Task<PlayerDataListPlayersResponse?> ListPlayersAsync(PlayerDataListPlayersRequest request)
-            => _dispatcher.CallActionAsync<PlayerDataListPlayersResponse>("player_data", "list_players", request);
-
-        public Task<PlayerDataUpdatePlayerResponse?> UpdatePlayerAsync(PlayerDataUpdatePlayerRequest request)
-            => _dispatcher.CallActionAsync<PlayerDataUpdatePlayerResponse>("player_data", "update_player", request);
-
-        public Task<PlayerDataGetDataResponse?> GetDataAsync(PlayerDataGetDataRequest request)
-            => _dispatcher.CallActionAsync<PlayerDataGetDataResponse>("player_data", "get_data", request);
-
-        public Task<PlayerDataSetDataResponse?> SetDataAsync(PlayerDataSetDataRequest request)
-            => _dispatcher.CallActionAsync<PlayerDataSetDataResponse>("player_data", "set_data", request);
-
-        public Task<PlayerDataDeleteDataResponse?> DeleteDataAsync(PlayerDataDeleteDataRequest request)
-            => _dispatcher.CallActionAsync<PlayerDataDeleteDataResponse>("player_data", "delete_data", request);
-
-        public Task<PlayerDataGetAllDataResponse?> GetAllDataAsync(PlayerDataGetAllDataRequest request)
-            => _dispatcher.CallActionAsync<PlayerDataGetAllDataResponse>("player_data", "get_all_data", request);
-
-    }
-
     public sealed class ExoforgePluginServices
     {
         private readonly IActionDispatcher _dispatcher;
 
         public ExoforgePluginServices(IActionDispatcher dispatcher) => _dispatcher = dispatcher;
 
-        private PlayerDataServiceClient? _player_data;
-        public PlayerDataServiceClient PlayerData => _player_data ??= new PlayerDataServiceClient(_dispatcher);
     }
 
 }
@@ -332,18 +71,6 @@ namespace Exoforge.Plugin.SDK
             set => _services = value;
         }
 
-        private static global::Exoforge.Plugins.Generated.IPlayerDataService? _player_dataOverride;
-        public static global::Exoforge.Plugins.Generated.IPlayerDataService PlayerData
-        {
-            get => _player_dataOverride ?? Services.PlayerData;
-            set => _player_dataOverride = value;
-        }
-        public static global::Exoforge.Plugins.Generated.IPlayerDataService PlayerDataService
-        {
-            get => PlayerData;
-            set => PlayerData = value;
-        }
-
         public static void Reset()
         {
             _databaseOverride = null;
@@ -352,7 +79,6 @@ namespace Exoforge.Plugin.SDK
             _actionsOverride = null;
             _contextOverride = null;
             _services = null;
-            _player_dataOverride = null;
         }
     }
 
@@ -392,17 +118,6 @@ namespace Exoforge.Plugin.SDK
         {
             get => ExoServices.Services;
             set => ExoServices.Services = value;
-        }
-
-        public static global::Exoforge.Plugins.Generated.IPlayerDataService PlayerData
-        {
-            get => ExoServices.PlayerData;
-            set => ExoServices.PlayerData = value;
-        }
-        public static global::Exoforge.Plugins.Generated.IPlayerDataService PlayerDataService
-        {
-            get => ExoServices.PlayerData;
-            set => ExoServices.PlayerData = value;
         }
 
         public static void Reset() => ExoServices.Reset();
@@ -446,17 +161,6 @@ namespace Exoforge.Plugin.SDK
             set => ExoServices.Services = value;
         }
 
-        public static global::Exoforge.Plugins.Generated.IPlayerDataService PlayerData
-        {
-            get => ExoServices.PlayerData;
-            set => ExoServices.PlayerData = value;
-        }
-        public static global::Exoforge.Plugins.Generated.IPlayerDataService PlayerDataService
-        {
-            get => ExoServices.PlayerData;
-            set => ExoServices.PlayerData = value;
-        }
-
         public static void Reset() => ExoServices.Reset();
     }
 }
@@ -464,29 +168,6 @@ namespace Exoforge.Plugin.SDK
 namespace Exoforge.Plugins.Generated
 {
     [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
-    [JsonSerializable(typeof(PlayerDataPlayer))]
-    [JsonSerializable(typeof(PlayerDataGetPlayerRequest))]
-    [JsonSerializable(typeof(PlayerDataGetPlayerResponse))]
-    [JsonSerializable(typeof(PlayerDataCreatePlayerRequest))]
-    [JsonSerializable(typeof(PlayerDataCreatePlayerResponse))]
-    [JsonSerializable(typeof(PlayerDataDeletePlayerRequest))]
-    [JsonSerializable(typeof(PlayerDataDeletePlayerResponse))]
-    [JsonSerializable(typeof(PlayerDataRetainPlayerRequest))]
-    [JsonSerializable(typeof(PlayerDataRetainPlayerResponse))]
-    [JsonSerializable(typeof(PlayerDataListPlayersRequest))]
-    [JsonSerializable(typeof(PlayerDataListPlayersResponse))]
-    [JsonSerializable(typeof(PlayerDataUpdatePlayerRequest))]
-    [JsonSerializable(typeof(PlayerDataUpdatePlayerResponse))]
-    [JsonSerializable(typeof(PlayerDataGetDataRequest))]
-    [JsonSerializable(typeof(PlayerDataGetDataResponse))]
-    [JsonSerializable(typeof(PlayerDataSetDataRequest))]
-    [JsonSerializable(typeof(PlayerDataSetDataResponse))]
-    [JsonSerializable(typeof(PlayerDataDeleteDataRequest))]
-    [JsonSerializable(typeof(PlayerDataDeleteDataResponse))]
-    [JsonSerializable(typeof(PlayerDataGetAllDataRequest))]
-    [JsonSerializable(typeof(PlayerDataGetAllDataResponse))]
-    [JsonSerializable(typeof(PlayerDataPlayerCreatedEvent))]
-    [JsonSerializable(typeof(PlayerDataPlayerDeletedEvent))]
     [JsonSerializable(typeof(global::Exoforge.Plugins.SnakeLeaderboard.SnakeScoreRecord))]
     [JsonSerializable(typeof(global::Exoforge.Plugins.SnakeLeaderboard.SnakeScoreSubmitted))]
     [JsonSerializable(typeof(global::Exoforge.Plugins.SnakeLeaderboard.SnakeLeaderboardEntry))]
@@ -501,8 +182,6 @@ namespace Exoforge.Plugins.Generated
         {
             PluginJson.AddContext(GeneratedServicesJsonContext.Default);
             PluginServiceRegistry.Register(d => new ExoforgePluginServices(d));
-            PluginServiceRegistry.Register<IPlayerDataService>(d => new PlayerDataServiceClient(d));
-            PluginServiceRegistry.Register(d => new PlayerDataServiceClient(d));
         }
     }
 }

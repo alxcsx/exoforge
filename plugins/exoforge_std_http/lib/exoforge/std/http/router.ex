@@ -326,18 +326,30 @@ defmodule Exoforge.Std.Http.Router do
 
   defp with_identity(raw_payload, auth_info) when is_map(raw_payload) do
     # The authenticated identity wins: a body naming another player must not reach the action as
-    # that player. A caller with no player yet - the public account-creating actions - keeps what
-    # it sent.
+    # that player, UNLESS the caller has staff/admin scope and specified an explicit target player_id.
+    has_explicit_target =
+      (Map.has_key?(raw_payload, "player_id") and raw_payload["player_id"] not in [nil, ""]) or
+        (Map.has_key?(raw_payload, :player_id) and raw_payload[:player_id] not in [nil, ""])
+
     raw_payload
     |> Map.put("_auth", auth_info)
     |> then(fn payload ->
-      if auth_info.player_id in [nil, ""],
-        do: payload,
-        else: Map.put(payload, "player_id", auth_info.player_id)
+      if has_explicit_target and staff_scope?(auth_info) do
+        payload
+      else
+        if auth_info.player_id in [nil, ""],
+          do: payload,
+          else: Map.put(payload, "player_id", auth_info.player_id)
+      end
     end)
   end
 
   defp with_identity(raw_payload, _auth_info), do: raw_payload
+
+  defp staff_scope?(auth_info) do
+    scopes = Map.get(auth_info, :scopes) || Map.get(auth_info, "scopes") || []
+    Enum.any?(scopes, &(&1 in [:admin, "admin", :studio, "studio"]))
+  end
 
   defp handle_file_upload(conn, auth_info) do
     # Support multipart file upload as well as JSON body

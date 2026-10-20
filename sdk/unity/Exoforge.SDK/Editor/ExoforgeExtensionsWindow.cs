@@ -88,6 +88,7 @@ namespace Exoforge.Unity.Editor
             public bool IsDeployed { get; set; }
             public bool IsBuilt { get; set; }
             public bool Modified { get; set; }
+            public bool HasBuildError { get; set; }
             public string LocalDirectory { get; set; } = "";
             public long BinarySizeBytes { get; set; }
         }
@@ -520,6 +521,10 @@ namespace Exoforge.Unity.Editor
             }
 
             menu.AddSeparator("");
+            menu.AddItem(new GUIContent("➕ Add New Environment..."), false, () =>
+            {
+                ExoforgeEnvironmentModal.Open(RebuildUI);
+            });
             menu.AddItem(new GUIContent("⚡ Open Exoforge Studio Settings..."), false, () =>
             {
                 ExoforgeControlCenter.ShowWindow();
@@ -829,7 +834,11 @@ namespace Exoforge.Unity.Editor
                 var runtimeBg = p.Type == "native" ? ExoforgeUIStyle.BgCard : ExoforgeUIStyle.AccentPurpleBg;
                 bottomRow.Add(ExoforgeUIStyle.CreatePill(runtimeText, runtimeColor, runtimeBg, 9));
 
-                if (p.IsDeployed)
+                if (p.HasBuildError)
+                {
+                    bottomRow.Add(ExoforgeUIStyle.CreatePill("✗ Build Failed", ExoforgeUIStyle.AccentRed, ExoforgeUIStyle.AccentRedBg, 9));
+                }
+                else if (p.IsDeployed)
                 {
                     bottomRow.Add(ExoforgeUIStyle.CreatePill("Deployed", ExoforgeUIStyle.AccentGreen, ExoforgeUIStyle.AccentGreenBg, 9));
                 }
@@ -1046,7 +1055,13 @@ namespace Exoforge.Unity.Editor
             originPill.style.marginLeft = 6;
             subRow.Add(originPill);
 
-            if (plugin.IsDeployed)
+            if (plugin.HasBuildError)
+            {
+                var errPill = ExoforgeUIStyle.CreatePill("✗ Build Failed", ExoforgeUIStyle.AccentRed, ExoforgeUIStyle.AccentRedBg, 9);
+                errPill.style.marginLeft = 4;
+                subRow.Add(errPill);
+            }
+            else if (plugin.IsDeployed)
             {
                 var depPill = ExoforgeUIStyle.CreatePill("● Deployed", ExoforgeUIStyle.AccentGreen, ExoforgeUIStyle.AccentGreenBg, 9);
                 depPill.style.marginLeft = 4;
@@ -2176,9 +2191,18 @@ namespace Exoforge.Unity.Editor
         private static bool IsConnected => ExoforgeControlCenter.IsClusterConnected;
         private static string GetHttpUrl() => ExoforgeControlCenter.ActiveHttpEndpoint;
 
-        private void ShowStatus(string msg)
+        private void ShowStatus(string msg, bool isWarningOrError = false)
         {
-            _statusMessage = msg;
+            if (isWarningOrError)
+            {
+                _statusMessage = msg;
+                UnityEngine.Debug.LogWarning($"[Exoforge] {msg}");
+            }
+            else
+            {
+                _statusMessage = "";
+                UnityEngine.Debug.Log($"[Exoforge] {msg}");
+            }
             RebuildUI();
         }
 
@@ -2263,10 +2287,11 @@ namespace Exoforge.Unity.Editor
                     }
 
                     string displayTitle = !string.IsNullOrWhiteSpace(title) ? title : name;
+                    bool hasBuildError = SessionState.GetString($"Exoforge_BuildFailed_{name}", "").Length > 0;
                     list.Add(new PluginCardModel
                     {
                         Id = name,
-                        Name = displayTitle,
+                        Name = name,
                         Version = version,
                         Type = type,
                         Category = category,
@@ -2275,6 +2300,7 @@ namespace Exoforge.Unity.Editor
                         IsLocal = true,
                         IsBuilt = isBuilt,
                         Modified = modified,
+                        HasBuildError = hasBuildError,
                         LocalDirectory = dir
                     });
                 }
@@ -2624,23 +2650,30 @@ namespace Exoforge.Unity.Editor
         {
             if (_isBuilding) return;
 
+            string targetName = !string.IsNullOrEmpty(plugin.Id) ? plugin.Id : plugin.Name;
             _isBuilding = true;
-            _buildLog = $"Building {plugin.Name}...\n";
-            ShowStatus($"Building '{plugin.Name}'…");
+            _buildLog = $"Building {targetName}...\n";
+            ShowStatus($"Building '{targetName}'… (see Build Log)");
 
             try
             {
                 var ws = ExoWorkspace.Load(ExoforgeEditorConfig.GetAbsoluteWorkspacePath());
                 var deployer = new ExoDeployer(ws);
-                var build = await deployer.BuildPluginAsync(plugin.Name, null, ExoforgeEditorConfig.DotnetPath, s => _buildLog += s + "\n");
+                var build = await deployer.BuildPluginAsync(targetName, null, ExoforgeEditorConfig.DotnetPath, s => _buildLog += s + "\n");
                 _buildLog = build.Output;
-                ShowStatus($"✓ Successfully built '{plugin.Name}'.");
+                SessionState.EraseString($"Exoforge_BuildFailed_{targetName}");
+                ShowStatus($"✓ Successfully built '{targetName}'.");
                 await RefreshPluginsDataAsync();
             }
             catch (Exception ex)
             {
-                _buildLog = ex.ToString();
-                ShowStatus($"Build failed for '{plugin.Name}': {ex.Message}");
+                string errorDetails = ex is InvalidOperationException ? ex.Message : ex.ToString();
+                _buildLog = errorDetails;
+                SessionState.SetString($"Exoforge_BuildFailed_{targetName}", errorDetails);
+
+                UnityEngine.Debug.LogError($"[Exoforge] Build failed for extension '{targetName}':\n{errorDetails}");
+                ShowStatus($"Build failed for '{targetName}' — see Unity Console or Build Log.");
+                await RefreshPluginsDataAsync();
             }
             finally
             {

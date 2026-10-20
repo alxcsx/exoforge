@@ -24,6 +24,7 @@ namespace Exoforge.Plugin.Generator;
 public sealed class ExoforgePluginGenerator : IIncrementalGenerator
 {
     private const string ServiceAttribute = "Exoforge.Plugin.SDK.ExoServiceAttribute";
+    private const string ExtensionAttribute = "Exoforge.Plugin.SDK.ExoExtensionAttribute";
     private const string ResourceAttribute = "Exoforge.Plugin.SDK.ExoResourceAttribute";
     private const string SingletonResourceAttribute = "Exoforge.Plugin.SDK.ExoSingletonResourceAttribute";
     private const string ActionAttribute = "Exoforge.Plugin.SDK.ExoActionAttribute";
@@ -128,7 +129,7 @@ namespace Exoforge.Plugin.SDK
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        var services = context.SyntaxProvider
+        var servicesFromService = context.SyntaxProvider
             .ForAttributeWithMetadataName(
                 ServiceAttribute,
                 predicate: static (node, _) => node is ClassDeclarationSyntax or InterfaceDeclarationSyntax,
@@ -136,6 +137,33 @@ namespace Exoforge.Plugin.SDK
             .Where(static e => e is not null)
             .Select(static (e, _) => e!)
             .Collect();
+
+        var servicesFromExtension = context.SyntaxProvider
+            .ForAttributeWithMetadataName(
+                ExtensionAttribute,
+                predicate: static (node, _) => node is ClassDeclarationSyntax or InterfaceDeclarationSyntax,
+                transform: static (ctx, ct) => ExtractService(ctx, ct))
+            .Where(static e => e is not null)
+            .Select(static (e, _) => e!)
+            .Collect();
+
+        var services = servicesFromService.Combine(servicesFromExtension).Select(static (pair, _) =>
+        {
+            var (s1, s2) = pair;
+            var builder = ImmutableArray.CreateBuilder<ServiceEmit>();
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var s in s1)
+            {
+                if (seen.Add(s.RootClass + ":" + s.ServiceName))
+                    builder.Add(s);
+            }
+            foreach (var s in s2)
+            {
+                if (seen.Add(s.RootClass + ":" + s.ServiceName))
+                    builder.Add(s);
+            }
+            return builder.ToImmutable();
+        });
 
         // Contracts declared in a referenced assembly - a shared contracts project - are invisible to
         // ForAttributeWithMetadataName, which only walks this compilation's syntax.
@@ -221,8 +249,15 @@ namespace Exoforge.Plugin.SDK
 
     // ---- service extraction ----
 
-    private static ServiceEmit? ExtractService(GeneratorAttributeSyntaxContext ctx, CancellationToken ct) =>
-        Extract(ctx.TargetSymbol as INamedTypeSymbol, ctx.Attributes, ctx.SemanticModel.Compilation, ct);
+    private static ServiceEmit? ExtractService(GeneratorAttributeSyntaxContext ctx, CancellationToken ct)
+    {
+        var targetSymbol = ctx.TargetSymbol as INamedTypeSymbol;
+        if (targetSymbol == null) return null;
+        var attrs = targetSymbol.GetAttributes()
+            .Where(IsServiceAttribute)
+            .ToImmutableArray();
+        return Extract(targetSymbol, attrs, ctx.SemanticModel.Compilation, ct);
+    }
 
     /// <summary>
     /// Builds one service declaration. The declaration may come from this compilation or from a
@@ -379,7 +414,7 @@ namespace Exoforge.Plugin.SDK
         foreach (var candidate in AllTypes(compilation.Assembly.GlobalNamespace))
         {
             if (SymbolEqualityComparer.Default.Equals(candidate, declared)) continue;
-            if (candidate.GetAttributes().Any(a => IsAttribute(a, ServiceAttribute))) continue;
+            if (candidate.GetAttributes().Any(IsServiceAttribute)) continue;
 
             var resAttr = FindResourceAttribute(candidate.GetAttributes());
             if (resAttr is not null)
@@ -611,7 +646,7 @@ namespace Exoforge.Plugin.SDK
                 if (type.TypeKind != TypeKind.Interface) continue;
 
                 var attrs = type.GetAttributes()
-                    .Where(a => IsAttribute(a, ServiceAttribute))
+                    .Where(IsServiceAttribute)
                     .ToImmutableArray();
 
                 if (attrs.IsDefaultOrEmpty) continue;
@@ -1239,7 +1274,7 @@ namespace Exoforge.Generated
             return null;
         }
 
-        var serviceAttr = FindAttribute(type.GetAttributes(), ServiceAttribute);
+        var serviceAttr = FindServiceAttribute(type.GetAttributes());
         if (serviceAttr != null)
         {
             string? name = PositionalString(serviceAttr, 0) ?? NamedString(serviceAttr, "Name");
@@ -1280,6 +1315,11 @@ namespace Exoforge.Generated
         return attr.AttributeClass?.ToDisplayString() == metadataName;
     }
 
+    private static bool IsServiceAttribute(AttributeData attr)
+    {
+        return IsAttribute(attr, ServiceAttribute) || IsAttribute(attr, ExtensionAttribute);
+    }
+
     private static bool IsResourceAttribute(AttributeData attr)
     {
         return IsAttribute(attr, ResourceAttribute) || IsAttribute(attr, SingletonResourceAttribute);
@@ -1293,6 +1333,11 @@ namespace Exoforge.Generated
     private static AttributeData? FindAttribute(IEnumerable<AttributeData> attributes, string metadataName)
     {
         return attributes.FirstOrDefault(a => IsAttribute(a, metadataName));
+    }
+
+    private static AttributeData? FindServiceAttribute(IEnumerable<AttributeData> attributes)
+    {
+        return attributes.FirstOrDefault(IsServiceAttribute);
     }
 
     private static AttributeData? FindResourceAttribute(IEnumerable<AttributeData> attributes)

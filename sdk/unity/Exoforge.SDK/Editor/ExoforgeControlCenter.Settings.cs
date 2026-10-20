@@ -190,27 +190,12 @@ public partial class ExoforgeControlCenter : EditorWindow
 
         EditorGUILayout.Space(4);
 
-        EditorGUILayout.BeginHorizontal();
         string currentStudioToken = ExoTokenStore.StudioToken;
         string newToken = EditorGUILayout.TextField("Bearer Token", currentStudioToken);
         if (newToken != currentStudioToken)
         {
             ExoTokenStore.SaveStudioSession(newToken);
         }
-
-        foreach (var (label, token) in ExoforgeEditorConfig.TokenPresets)
-        {
-            if (GUILayout.Button(label, EditorStyles.miniButton, GUILayout.Width(45)))
-            {
-                ExoTokenStore.SaveStudioSession(token);
-                ShowStatus($"Switched token to '{token}'.", MessageType.Info);
-                if (_isConnected)
-                {
-                    _ = ConnectAsync();
-                }
-            }
-        }
-        EditorGUILayout.EndHorizontal();
         EditorGUILayout.EndVertical();
 
         EditorGUILayout.Space(8);
@@ -232,7 +217,13 @@ public partial class ExoforgeControlCenter : EditorWindow
         EditorGUILayout.Space(8);
 
         // Configured Environments
+        EditorGUILayout.BeginHorizontal();
         EditorGUILayout.LabelField("Configured Environments", EditorStyles.boldLabel);
+        if (GUILayout.Button("➕ New Environment", EditorStyles.miniButton, GUILayout.Width(135)))
+        {
+            ExoforgeEnvironmentModal.Open(Repaint);
+        }
+        EditorGUILayout.EndHorizontal();
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
         foreach (var env in GetConfiguredEnvironments())
         {

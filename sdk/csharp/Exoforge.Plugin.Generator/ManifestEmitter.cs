@@ -150,6 +150,9 @@ internal static class ManifestEmitter
 
             sb.Append("    {\n");
             sb.Append($"      \"name\": {Str(service.Name)},\n");
+            if (!string.IsNullOrEmpty(service.Category)) sb.Append($"      \"category\": {Str(service.Category!)},\n");
+            if (!string.IsNullOrEmpty(service.Title)) sb.Append($"      \"title\": {Str(service.Title!)},\n");
+            if (!string.IsNullOrEmpty(service.Icon)) sb.Append($"      \"icon\": {Str(service.Icon!)},\n");
             sb.Append("      \"actions\": [\n");
 
             for (int i = 0; i < service.Actions.Count; i++)

@@ -184,6 +184,7 @@ public static class PluginHost
         var pluginType = instance.GetType();
 
         CurrentContext = new HostPluginContext(ResolvePluginId(pluginType));
+        HostPluginContext.Wire(instance, CurrentContext);
 
         // A generated table needs no reflection. The reflection path stays as the fallback for a
         // plugin that has not been through the generator - including this SDK's own tests.
@@ -401,30 +402,63 @@ public static class PluginHost
             action = root.TryGetProperty("action", out var actionProp) ? actionProp.GetString() ?? "" : "";
 
             var payload = root.TryGetProperty("payload", out var payloadProp) ? payloadProp : default;
-            object? result;
 
-            if (_dispatch != null)
+            string? callerPlayerId = null;
+            List<string>? callerScopes = null;
+
+            if (payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty("_auth", out var authElem) && authElem.ValueKind == JsonValueKind.Object)
             {
-                if (!_dispatch.TryInvoke(instance!, action, payload, out result))
+                if (authElem.TryGetProperty("player_id", out var pidElem) && pidElem.ValueKind == JsonValueKind.String)
                 {
-                    Write($"{{\"type\":\"action_result\",\"id\":{id},\"status\":\"error\",\"error\":\"unknown_action\"}}");
-                    return;
+                    callerPlayerId = pidElem.GetString();
+                }
+                if (authElem.TryGetProperty("scopes", out var scopesElem) && scopesElem.ValueKind == JsonValueKind.Array)
+                {
+                    callerScopes = new List<string>();
+                    foreach (var sc in scopesElem.EnumerateArray())
+                    {
+                        if (sc.ValueKind == JsonValueKind.String && sc.GetString() is { Length: > 0 } scopeStr)
+                        {
+                            callerScopes.Add(scopeStr);
+                        }
+                    }
                 }
             }
-            else
+
+            var hostCtx = CurrentContext as HostPluginContext;
+            hostCtx?.UpdateCaller(callerPlayerId, callerScopes);
+
+            try
             {
-                if (actions == null || !actions.TryGetValue(action, out var entry))
+                object? result;
+
+                if (_dispatch != null)
                 {
-                    Write($"{{\"type\":\"action_result\",\"id\":{id},\"status\":\"error\",\"error\":\"unknown_action\"}}");
-                    return;
+                    if (!_dispatch.TryInvoke(instance!, action, payload, out result))
+                    {
+                        Write($"{{\"type\":\"action_result\",\"id\":{id},\"status\":\"error\",\"error\":\"unknown_action\"}}");
+                        return;
+                    }
+                }
+                else
+                {
+                    if (actions == null || !actions.TryGetValue(action, out var entry))
+                    {
+                        Write($"{{\"type\":\"action_result\",\"id\":{id},\"status\":\"error\",\"error\":\"unknown_action\"}}");
+                        return;
+                    }
+
+                    result = entry.Method.Invoke(instance, BindArguments(entry.Params, payload));
                 }
 
-                result = entry.Method.Invoke(instance, BindArguments(entry.Params, payload));
+                result = AwaitResult(result);
+
+                Write($"{{\"type\":\"action_result\",\"id\":{id},\"status\":\"ok\",\"data\":{ToJson(result)}}}");
             }
-
-            result = AwaitResult(result);
-
-            Write($"{{\"type\":\"action_result\",\"id\":{id},\"status\":\"ok\",\"data\":{ToJson(result)}}}");
+            finally
+            {
+                hostCtx?.UpdateCaller(null, null);
+            }
         }
         catch (Exception ex)
         {

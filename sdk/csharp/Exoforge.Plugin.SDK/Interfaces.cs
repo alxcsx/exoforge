@@ -13,6 +13,8 @@ public interface IPluginContext
     IEventDispatcher Events { get; }
     IActionDispatcher Actions { get; }
     ILogger Logger { get; }
+    string? CallerPlayerId { get; }
+    IReadOnlyList<string> CallerScopes { get; }
 }
 
 /// <summary>

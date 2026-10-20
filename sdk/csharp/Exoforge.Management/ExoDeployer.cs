@@ -541,7 +541,10 @@ public class ExoDeployer
 
         try
         {
-            if (JsonNode.Parse(exportJson)?["export"]?["plugins"] is JsonArray plugins)
+            var root = JsonNode.Parse(exportJson);
+            var export = root?["export"] ?? root;
+            var plugins = (export?["extensions"] as JsonArray) ?? (export?["plugins"] as JsonArray);
+            if (plugins is not null)
             {
                 foreach (JsonNode? plugin in plugins)
                 {
@@ -851,7 +854,7 @@ public class ExoDeployer
             if (FindPluginCsproj(dir, name) == null) continue;
 
             string output = Path.Combine(dir, "src", "Generated", "PluginServices.g.cs");
-            ExoCodeGenerator.GeneratePluginStubsToFile(merged, output, services: ReadManifestDependencies(dir), pluginId: name);
+            ExoCodeGenerator.GeneratePluginStubsToFile(merged, output, services: ReadManifestDependencies(dir), pluginId: name, codeSearchRoot: dir, log: null);
             outputs.Add(output);
         }
 
@@ -890,7 +893,7 @@ public class ExoDeployer
 
         string rawJson = MergeLocalContracts(exportJson);
         string targetPath = outputPathOverride ?? _workspace.GeneratedPath;
-        bool changed = ExoCodeGenerator.GenerateToFile(rawJson, targetPath, _workspace.Config.Codegen.Namespace);
+        bool changed = ExoCodeGenerator.GenerateToFile(rawJson, targetPath, _workspace.Config.Codegen.Namespace, codeSearchRoot: _workspace.RootPath, log: emit);
 
         return changed ? 1 : 0;
     }
@@ -974,7 +977,7 @@ public class ExoDeployer
                 var targetServices = deps is { Count: > 0 }
                     ? (IEnumerable<string>)deps
                     : AvailableServices(contractsJson).Where(s => !string.Equals(s, cleanName, StringComparison.OrdinalIgnoreCase));
-                ExoCodeGenerator.GeneratePluginStubsToFile(contractsJson, stubsFile, services: targetServices, pluginId: cleanName);
+                ExoCodeGenerator.GeneratePluginStubsToFile(contractsJson, stubsFile, services: targetServices, pluginId: cleanName, codeSearchRoot: pluginDir, log: Emit);
             }
             catch
             {
@@ -1006,8 +1009,35 @@ public class ExoDeployer
 
     private string PublishNative(string csproj, string pluginDir, string cleanName, string? rid, string dotnetPath, string buildStamp, Action<string> emit)
     {
+        ExoScaffolder.EnsureLocalFeed(_workspace.RootPath);
+
         string targetRid = string.IsNullOrWhiteSpace(rid) ? HostRuntimeIdentifier() : rid!;
         string manifest = Path.Combine(pluginDir, "manifest.json");
+
+        string tfmArg = "";
+        try
+        {
+            string csprojText = File.ReadAllText(csproj);
+            int tfmStart = csprojText.IndexOf("<TargetFramework>net", StringComparison.OrdinalIgnoreCase);
+            if (tfmStart >= 0)
+            {
+                int numStart = tfmStart + "<TargetFramework>net".Length;
+                int dot = csprojText.IndexOf('.', numStart);
+                if (dot > numStart && int.TryParse(csprojText.Substring(numStart, dot - numStart), out int projMajor))
+                {
+                    int highestInstalled = ExoScaffolder.DetectHighestInstalledSdkMajor(dotnetPath);
+                    if (projMajor > highestInstalled && highestInstalled >= ExoScaffolder.MinimumMajorDotnetVersion)
+                    {
+                        tfmArg = $" -p:TargetFramework=net{highestInstalled}.0";
+                        emit($"[build] Project targets net{projMajor}.0 but highest installed SDK is net{highestInstalled}.0; targeting net{highestInstalled}.0");
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // Best effort
+        }
 
         // The manifest is written by Exoforge.Plugin.Generator during this same compile, so the
         // version stamped into it always describes the binary just produced. There is no second pass
@@ -1018,7 +1048,7 @@ public class ExoDeployer
         emit($"[build] dotnet publish -c Release -r {targetRid}");
         RunProcess(
             dotnetPath,
-            $"publish \"{RelativeTo(pluginDir, csproj)}\" -c Release -r {targetRid} " +
+            $"publish \"{RelativeTo(pluginDir, csproj)}\" -c Release -r {targetRid}{tfmArg} " +
             $"-p:ExoforgePluginType=native -p:ExoforgeBuildStamp={buildStamp} " +
             // Absolute: a relative path is resolved by whoever consumes it, and the compiler runs
             // from its own directory rather than this one.
@@ -1228,7 +1258,7 @@ public class ExoDeployer
          (path.Length > 1 && path[1] == Path.VolumeSeparatorChar));
 
     /// <summary>How long a single build step may run before it is killed.</summary>
-    private static readonly TimeSpan ProcessTimeout = TimeSpan.FromMinutes(10);
+    public static TimeSpan ProcessTimeout { get; set; } = TimeSpan.FromMinutes(5);
 
     private static void RunProcess(string fileName, string arguments, string workingDirectory, Action<string> emit)
     {

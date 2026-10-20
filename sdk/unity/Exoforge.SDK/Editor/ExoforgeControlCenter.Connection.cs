@@ -631,10 +631,25 @@ public partial class ExoforgeControlCenter : EditorWindow
         }
     }
 
-    private void ShowStatus(string message, MessageType type)
+    public void ShowStatus(string message, MessageType type = MessageType.Info)
     {
-        _statusMessage = message;
-        _statusMessageType = type;
+        switch (type)
+        {
+            case MessageType.Error:
+                UnityEngine.Debug.LogError($"[Exoforge] {message}");
+                _statusMessage = message;
+                _statusMessageType = type;
+                break;
+            case MessageType.Warning:
+                UnityEngine.Debug.LogWarning($"[Exoforge] {message}");
+                _statusMessage = message;
+                _statusMessageType = type;
+                break;
+            default:
+                UnityEngine.Debug.Log($"[Exoforge] {message}");
+                _statusMessage = "";
+                break;
+        }
     }
 }
 }

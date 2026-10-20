@@ -16,6 +16,7 @@ obj/
 dist/
 
 # === Development Environment & IDEs ===
+.DS_Store
 .pi/
 .elixir_ls/
 .lexical/

@@ -41,14 +41,14 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
         
         sup_name = Module.concat([Exoforge, Plugins, module_name(manifest), Supervisor])
 
-        pool_size = Application.get_env(:exoforge, :native_plugin_pool_size, max(2, min(8, System.schedulers_online())))
+        pool_size = Application.get_env(:exoforge, :native_plugin_pool_size, 1)
 
         children = Enum.map(1..pool_size, fn idx ->
           runner_name = via_name(manifest.id, idx)
           %{
             id: {__MODULE__, idx},
             restart: :transient,
-            start: {__MODULE__, :start_link, [{updated_manifest, binary_path, runner_name}]}
+            start: {__MODULE__, :start_link, [{updated_manifest, binary_path, runner_name, idx, PluginProtocol.handshake_timeout_ms()}]}
           }
         end)
 
@@ -71,18 +71,20 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
   end
 
   def start_link({%Manifest{} = manifest, binary_path, name}) do
-    start_link({manifest, binary_path, name, PluginProtocol.handshake_timeout_ms()})
+    start_link({manifest, binary_path, name, 1, PluginProtocol.handshake_timeout_ms()})
   end
 
-  def start_link({%Manifest{} = manifest, binary_path, name, handshake_timeout_ms}) do
-    GenServer.start_link(__MODULE__, {manifest, binary_path, handshake_timeout_ms}, name: name)
+  def start_link({%Manifest{} = manifest, binary_path, name, handshake_timeout_ms}) when is_integer(handshake_timeout_ms) do
+    start_link({manifest, binary_path, name, 1, handshake_timeout_ms})
+  end
+
+  def start_link({%Manifest{} = manifest, binary_path, name, idx, handshake_timeout_ms}) do
+    GenServer.start_link(__MODULE__, {manifest, binary_path, idx, handshake_timeout_ms}, name: name)
   end
 
   @doc "Forwards an inbound BEAM event to the plugin process as an `event` frame."
   def dispatch_event(plugin_id, event_key, payload, _context) do
-    pool_size = Application.get_env(:exoforge, :native_plugin_pool_size, max(2, min(8, System.schedulers_online())))
-    idx = :erlang.phash2(make_ref(), pool_size) + 1
-    case WorkerRegistry.lookup(plugin_id, {@runner_key, idx}) do
+    case WorkerRegistry.lookup(plugin_id, {@runner_key, 1}) do
       {:ok, pid} ->
         send(pid, {:forward_event, event_key, payload})
         :ok
@@ -103,7 +105,7 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
 
   @doc "Executes an action on a running native plugin."
   def execute_action(plugin_id, action, payload, timeout \\ 5000) do
-    pool_size = Application.get_env(:exoforge, :native_plugin_pool_size, max(2, min(8, System.schedulers_online())))
+    pool_size = Application.get_env(:exoforge, :native_plugin_pool_size, 1)
     idx = :erlang.phash2(make_ref(), pool_size) + 1
     case WorkerRegistry.lookup(plugin_id, {@runner_key, idx}) do
       {:ok, pid} ->
@@ -120,8 +122,12 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
   end
 
   @impl true
-  def init({manifest, binary_path, handshake_timeout_ms}) do
-    Logger.debug("[NativePluginRunner] Starting native plugin #{manifest.id} from #{binary_path}")
+  def init({manifest, binary_path, handshake_timeout_ms}) when is_integer(handshake_timeout_ms) do
+    init({manifest, binary_path, 1, handshake_timeout_ms})
+  end
+
+  def init({manifest, binary_path, idx, handshake_timeout_ms}) do
+    Logger.debug("[NativePluginRunner] Starting native plugin #{manifest.id} (worker #{idx}) from #{binary_path}")
 
     port =
       Port.open({:spawn_executable, binary_path}, [
@@ -131,19 +137,20 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
         :hide
       ])
 
-    # Subscribe to the events this plugin declared so the host can forward them. The declared
-    # topic matters: EventDispatcher keys subscriptions by {event, topic}.
-    Enum.each(declared_events(manifest), fn
-      {event, topic} when is_binary(topic) and topic != "" -> EventDispatcher.subscribe(event, topic: topic)
-      {event, _topic} -> EventDispatcher.subscribe(event)
-    end)
+    # Only worker 1 subscribes to events and records start metrics to prevent duplicate broadcasts/metering
+    if idx == 1 do
+      Enum.each(declared_events(manifest), fn
+        {event, topic} when is_binary(topic) and topic != "" -> EventDispatcher.subscribe(event, topic: topic)
+        {event, _topic} -> EventDispatcher.subscribe(event)
+      end)
+
+      # Metering is on from the first start: the first start is the uptime origin, later ones are restarts.
+      Exoforge.Metering.record_start(manifest.id)
+    end
 
     Port.command(port, PluginProtocol.hello_frame() <> "\n")
     handshake_timer = Process.send_after(self(), :handshake_timeout, handshake_timeout_ms)
 
-    # Metering is on from the first start: the first start is the uptime origin, later ones are
-    # restarts.
-    Exoforge.Metering.record_start(manifest.id)
     schedule_os_sample()
 
     {:ok,
@@ -154,7 +161,8 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
        pending: %{},
        seq: 0,
        handshake: nil,
-       handshake_timer: handshake_timer
+       handshake_timer: handshake_timer,
+       worker_idx: idx
      }}
   end
 
@@ -489,28 +497,49 @@ defmodule Exoforge.Drivers.Runtime.NativePluginRunner do
     Enum.any?(owned, &(Manifest.service_name(&1) == svc))
   end
 
-  # Key-value helpers exposed by the :database plugin.
-  # Resolved dynamically so the kernel never links against a plugin module.
+  # Key-value helpers exposed by the :database service contract.
+  # Uses ActionDispatcher so the kernel never couples to a plugin module.
   defp db_put(manifest, table, key, value) do
-    case db_call(:put, [manifest.id, table, key, value]) do
+    case ActionDispatcher.dispatch(:database, :execute, %{
+           plugin: manifest.id,
+           operation: %{action: :put, table: table, id: key, data: value}
+         }) do
       {:ok, _} -> true
       _ -> false
     end
   end
 
-  defp db_get(manifest, table, key), do: db_call(:get, [manifest.id, table, key])
+  defp db_get(manifest, table, key) do
+    case ActionDispatcher.dispatch(:database, :execute, %{
+           plugin: manifest.id,
+           operation: %{action: :get, table: table, id: key}
+         }) do
+      {:ok, %{rows: [record]}} -> {:ok, record}
+      {:ok, %{"rows" => [record]}} -> {:ok, record}
+      _ -> {:error, :not_found}
+    end
+  end
 
-  defp db_all(manifest, table), do: db_call(:all, [manifest.id, table])
+  defp db_all(manifest, table) do
+    case ActionDispatcher.dispatch(:database, :execute, %{
+           plugin: manifest.id,
+           operation: %{action: :all, table: table}
+         }) do
+      {:ok, %{rows: rows}} when is_list(rows) -> {:ok, rows}
+      {:ok, %{"rows" => rows}} when is_list(rows) -> {:ok, rows}
+      {:ok, rows} when is_list(rows) -> {:ok, rows}
+      error -> error
+    end
+  end
 
   defp db_delete(manifest, table, key) do
-    case db_call(:delete, [manifest.id, table, key]) do
+    case ActionDispatcher.dispatch(:database, :execute, %{
+           plugin: manifest.id,
+           operation: %{action: :delete, table: table, id: key}
+         }) do
       {:ok, _} -> true
       _ -> false
     end
-  end
-
-  defp db_call(fun, args) do
-    apply(Module.concat([Exoforge, Std, Database]), fun, args)
   end
 
   # -- Helpers --

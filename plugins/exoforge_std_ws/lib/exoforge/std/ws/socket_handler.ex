@@ -310,6 +310,38 @@ defmodule Exoforge.Std.Ws.SocketHandler do
           state
         )
 
+      {:error, :service_not_found} ->
+        Logger.warning("[WS:Action] #{service}.#{action} by #{auth.player_id} -> service_not_found (#{latency_us}µs)")
+
+        reply(
+          %{
+            type: @frame_action_result,
+            id: req_id,
+            status: @status_error,
+            error: %{
+              code: "service_not_found",
+              message: "Service '#{service}' was not found on the remote server. Ensure the extension providing '#{service}' is deployed and running."
+            }
+          },
+          state
+        )
+
+      {:error, {:action_not_found, missing_action}} ->
+        Logger.warning("[WS:Action] #{service}.#{action} by #{auth.player_id} -> action_not_found (#{latency_us}µs)")
+
+        reply(
+          %{
+            type: @frame_action_result,
+            id: req_id,
+            status: @status_error,
+            error: %{
+              code: "action_not_found",
+              message: "Action '#{missing_action}' was not found on service '#{service}'."
+            }
+          },
+          state
+        )
+
       {:error, reason} ->
         Logger.warning("[WS:Action] #{service}.#{action} by #{auth.player_id} -> error: #{inspect(reason)} (#{latency_us}µs)")
 
@@ -328,9 +360,24 @@ defmodule Exoforge.Std.Ws.SocketHandler do
     end
   end
 
-  defp stamp_player_id(payload, %{player_id: player_id}) when player_id in [nil, ""], do: payload
-  defp stamp_player_id(payload, %{player_id: player_id}), do: Map.put(payload, "player_id", player_id)
+  defp stamp_player_id(payload, %{player_id: player_id} = auth) do
+    has_explicit_target =
+      (Map.has_key?(payload, "player_id") and payload["player_id"] not in [nil, ""]) or
+        (Map.has_key?(payload, :player_id) and payload[:player_id] not in [nil, ""])
+
+    if has_explicit_target and staff_scope?(auth) do
+      payload
+    else
+      if player_id in [nil, ""], do: payload, else: Map.put(payload, "player_id", player_id)
+    end
+  end
+
   defp stamp_player_id(payload, _auth), do: payload
+
+  defp staff_scope?(auth) do
+    scopes = Map.get(auth, :scopes) || Map.get(auth, "scopes") || []
+    Enum.any?(scopes, &(&1 in [:admin, "admin", :studio, "studio"]))
+  end
 
   defp reply(data, state) do
     case Jason.encode(data) do

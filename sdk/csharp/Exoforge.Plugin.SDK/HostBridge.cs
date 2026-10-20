@@ -1,23 +1,17 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.InteropServices;
-using System.Text;
 using System.Text.Json;
 
 namespace Exoforge.Plugin.SDK;
 
 /// <summary>
 /// Low-level bridge between a plugin and its host: routes capability calls through the transport
-/// <see cref="PluginHost"/> installs, with the P/Invoke imports below as the fallback for a runner
-/// that hosts the plugin in-process.
+/// <see cref="PluginHost"/> installs.
 /// </summary>
 public static class HostBridge
 {
-    private const int BufferSize = 65536;
-
-    // When set, host calls go through the process transport instead of the in-process `env` imports.
-    // PluginHost.Run<T>() installs one for native plugins.
+    // When set, host calls go through the process transport. PluginHost.Run<T>() installs one for native plugins.
     private static IPluginTransport? _transport;
 
     /// <summary>Routes host calls through a process transport (native plugins). Pass <c>null</c> to reset.</summary>
@@ -74,145 +68,37 @@ public static class HostBridge
         _ => PluginJson.Serialize(payload)
     };
 
-    [DllImport("env", EntryPoint = "host_clock_now")]
-    private static extern long NativeHostClockNow();
-
-    [DllImport("env", EntryPoint = "host_emit_event")]
-    private static extern int NativeHostEmitEvent(
-        byte[] topic, int topicLen,
-        byte[] evt, int evtLen,
-        byte[] payload, int payloadLen);
-
-    [DllImport("env", EntryPoint = "host_call_action")]
-    private static extern int NativeHostCallAction(
-        byte[] service, int serviceLen,
-        byte[] action, int actionLen,
-        byte[] payload, int payloadLen);
-
-    [DllImport("env", EntryPoint = "host_call_action_json")]
-    private static extern int NativeHostCallActionJson(
-        byte[] service, int serviceLen,
-        byte[] action, int actionLen,
-        byte[] payload, int payloadLen,
-        byte[] outBuf, int outMaxLen);
-
-    [DllImport("env", EntryPoint = "host_log")]
-    private static extern int NativeHostLog(int level, byte[] msg, int msgLen);
-
-    [DllImport("env", EntryPoint = "host_db_get")]
-    private static extern int NativeHostDbGet(
-        byte[] table, int tableLen,
-        byte[] key, int keyLen,
-        byte[] outBuf, int outMaxLen);
-
-    [DllImport("env", EntryPoint = "host_db_put")]
-    private static extern int NativeHostDbPut(
-        byte[] table, int tableLen,
-        byte[] key, int keyLen,
-        byte[] val, int valLen);
-
-    [DllImport("env", EntryPoint = "host_db_delete")]
-    private static extern int NativeHostDbDelete(
-        byte[] table, int tableLen,
-        byte[] key, int keyLen);
-
     /// <summary>
     /// Returns the current BEAM cluster time in milliseconds.
     /// </summary>
     public static long ClockNow()
     {
-        if (_transport != null) return _transport.ClockNow();
-
-        try
-        {
-            return NativeHostClockNow();
-        }
-        catch
-        {
-            return DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        }
+        return _transport != null ? _transport.ClockNow() : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
     }
 
     /// <summary>
-    /// Broadcasts an event to the Exoforge Kernel EventDispatcher via host import.
+    /// Broadcasts an event to the Exoforge Kernel EventDispatcher via host transport.
     /// </summary>
     public static bool EmitEvent(string topic, string eventName, object payload)
     {
-        string json = ToJson(payload);
-
-        if (_transport != null) return _transport.EmitEvent(topic ?? "", eventName ?? "", json);
-
-        try
-        {
-            byte[] topicBytes = Encoding.UTF8.GetBytes(topic ?? "");
-            byte[] evtBytes = Encoding.UTF8.GetBytes(eventName ?? "");
-            byte[] payloadBytes = Encoding.UTF8.GetBytes(json);
-
-            return NativeHostEmitEvent(
-                topicBytes, topicBytes.Length,
-                evtBytes, evtBytes.Length,
-                payloadBytes, payloadBytes.Length) == 0;
-        }
-        catch
-        {
-            return false;
-        }
+        return _transport?.EmitEvent(topic ?? "", eventName ?? "", ToJson(payload)) ?? false;
     }
 
     /// <summary>
-    /// Calls another service's action through the Exoforge ActionDispatcher host import.
+    /// Calls another service's action through the Exoforge ActionDispatcher.
     /// </summary>
     public static bool CallAction(string service, string action, object payload)
     {
-        if (_transport != null) return _transport.CallAction(service ?? "", action ?? "", ToJson(payload)) != null;
-
-        try
-        {
-            byte[] svcBytes = Encoding.UTF8.GetBytes(service ?? "");
-            byte[] actBytes = Encoding.UTF8.GetBytes(action ?? "");
-            byte[] payloadBytes = Encoding.UTF8.GetBytes(ToJson(payload));
-
-            return NativeHostCallAction(
-                svcBytes, svcBytes.Length,
-                actBytes, actBytes.Length,
-                payloadBytes, payloadBytes.Length) == 0;
-        }
-        catch
-        {
-            return false;
-        }
+        return _transport?.CallAction(service ?? "", action ?? "", ToJson(payload)) != null;
     }
 
     /// <summary>
     /// Calls another service's action and returns the raw JSON response, or <c>null</c> when the
-    /// call could not be made. Works over the process transport and over the in-process import when
-    /// no transport is installed.
+    /// call could not be made.
     /// </summary>
     public static string? CallActionRaw(string service, string action, object payload)
     {
-        if (_transport != null) return _transport.CallAction(service ?? "", action ?? "", ToJson(payload));
-
-        try
-        {
-            byte[] svcBytes = Encoding.UTF8.GetBytes(service ?? "");
-            byte[] actBytes = Encoding.UTF8.GetBytes(action ?? "");
-            byte[] payloadBytes = Encoding.UTF8.GetBytes(ToJson(payload));
-            byte[] outBuf = new byte[BufferSize];
-
-            int bytesRead = NativeHostCallActionJson(
-                svcBytes, svcBytes.Length,
-                actBytes, actBytes.Length,
-                payloadBytes, payloadBytes.Length,
-                outBuf, outBuf.Length);
-
-            if (bytesRead <= 0) return null;
-
-            return Encoding.UTF8.GetString(outBuf, 0, bytesRead);
-        }
-        catch
-        {
-            return null;
-        }
+        return _transport?.CallAction(service ?? "", action ?? "", ToJson(payload));
     }
 
     /// <summary>
@@ -222,6 +108,31 @@ public static class HostBridge
     {
         string? raw = CallActionRaw(service, action, payload);
         if (raw == null) return default;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(raw);
+            if (doc.RootElement.ValueKind == JsonValueKind.Object &&
+                doc.RootElement.TryGetProperty("error", out var errProp) &&
+                errProp.ValueKind == JsonValueKind.String)
+            {
+                string err = errProp.GetString() ?? "";
+                if (err is ":service_not_found" or "service_not_found")
+                {
+                    throw new InvalidOperationException(
+                        $"Service '{service}' (called via '{service}.{action}') was not found on the server. Ensure the extension providing '{service}' is deployed and running.");
+                }
+                if (err == "service_not_declared")
+                {
+                    throw new InvalidOperationException(
+                        $"Service '{service}' is not declared in this extension's dependencies. Add '{service}' to your extension dependencies and regenerate stubs.");
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // Ignore non-JSON
+        }
 
         if (typeof(TResponse) == typeof(string)) return (TResponse)(object)raw;
         if (typeof(TResponse) == typeof(JsonElement)) return (TResponse)(object)JsonDocument.Parse(raw).RootElement.Clone();
@@ -235,21 +146,7 @@ public static class HostBridge
     /// </summary>
     public static void Log(int level, string message)
     {
-        if (_transport != null)
-        {
-            _transport.Log(level, message ?? "");
-            return;
-        }
-
-        try
-        {
-            byte[] msgBytes = Encoding.UTF8.GetBytes(message ?? "");
-            NativeHostLog(level, msgBytes, msgBytes.Length);
-        }
-        catch
-        {
-            // Silently ignore if running outside WASI host
-        }
+        _transport?.Log(level, message ?? "");
     }
 
     public static void LogInfo(string message) => Log(1, message);
@@ -261,23 +158,7 @@ public static class HostBridge
     /// </summary>
     public static string? DbGet(string table, string key)
     {
-        if (_transport != null) return _transport.DbGet(table ?? "", key ?? "");
-
-        try
-        {
-            byte[] tblBytes = Encoding.UTF8.GetBytes(table ?? "");
-            byte[] keyBytes = Encoding.UTF8.GetBytes(key ?? "");
-            byte[] outBuf = new byte[BufferSize];
-
-            int bytesRead = NativeHostDbGet(tblBytes, tblBytes.Length, keyBytes, keyBytes.Length, outBuf, outBuf.Length);
-            if (bytesRead <= 0) return null;
-
-            return Encoding.UTF8.GetString(outBuf, 0, bytesRead);
-        }
-        catch
-        {
-            return null;
-        }
+        return _transport?.DbGet(table ?? "", key ?? "");
     }
 
     /// <summary>
@@ -285,28 +166,12 @@ public static class HostBridge
     /// </summary>
     public static bool DbPut(string table, string key, object value)
     {
-        if (_transport != null)
-        {
-            return _transport.DbPut(table ?? "", key ?? "", ToJson(value));
-        }
-
-        try
-        {
-            byte[] tblBytes = Encoding.UTF8.GetBytes(table ?? "");
-            byte[] keyBytes = Encoding.UTF8.GetBytes(key ?? "");
-            byte[] valBytes = Encoding.UTF8.GetBytes(ToJson(value));
-
-            return NativeHostDbPut(tblBytes, tblBytes.Length, keyBytes, keyBytes.Length, valBytes, valBytes.Length) == 0;
-        }
-        catch
-        {
-            return false;
-        }
+        return _transport?.DbPut(table ?? "", key ?? "", ToJson(value)) ?? false;
     }
 
     /// <summary>
     /// Reads every record in a table from the plugin's isolated multi-tenant database,
-    /// as a JSON array. Native plugins only.
+    /// as a JSON array.
     /// </summary>
     public static string? DbAll(string table) => _transport?.DbAll(table ?? "");
 
@@ -315,18 +180,6 @@ public static class HostBridge
     /// </summary>
     public static bool DbDelete(string table, string key)
     {
-        if (_transport != null) return _transport.DbDelete(table ?? "", key ?? "");
-
-        try
-        {
-            byte[] tblBytes = Encoding.UTF8.GetBytes(table ?? "");
-            byte[] keyBytes = Encoding.UTF8.GetBytes(key ?? "");
-
-            return NativeHostDbDelete(tblBytes, tblBytes.Length, keyBytes, keyBytes.Length) == 0;
-        }
-        catch
-        {
-            return false;
-        }
+        return _transport?.DbDelete(table ?? "", key ?? "") ?? false;
     }
 }

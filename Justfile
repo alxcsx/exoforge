@@ -357,12 +357,14 @@ build-unity-sdk root=".":
 	dotnet build "$out/Exoforge.Client" -c Release --nologo -v q
 	dotnet build "$out/Exoforge.Management" -c Release --nologo -v q
 
-	# The generator ships inside the package too, under Editor/Plugins/Tools~. It has to live under a
-	# `~` folder: Unity would otherwise load it as one of its own assemblies, and it references
-	# Roslyn.
-	dotnet build "$out/Exoforge.Plugin.Generator" -c Release --nologo -v q
+	# Pack the Plugin SDK (which bundles Exoforge.Plugin.Generator as an analyzer)
+	# into both dist/nuget (standalone bundle) and Editor/Plugins/NuGet~ (embedded in Unity SDK).
+	dotnet pack "$out/Exoforge.Plugin.SDK" -c Release -o "$root/dist/nuget" --nologo -v q
+	rm -rf "$root/sdk/unity/Exoforge.SDK/Editor/Plugins/Tools~"
+	mkdir -p "$root/sdk/unity/Exoforge.SDK/Editor/Plugins/NuGet~"
+	cp "$root/dist/nuget/"*.nupkg "$root/sdk/unity/Exoforge.SDK/Editor/Plugins/NuGet~/"
 
-	echo "[build-unity-sdk] sdk/unity/Exoforge.SDK Runtime/Plugins + Editor/Plugins staged"
+	echo "[build-unity-sdk] sdk/unity/Exoforge.SDK Runtime/Plugins + Editor/Plugins + NuGet~ staged"
 
 
 # Pack the plugin SDK into the local feed. The package carries the attributes a plugin compiles

@@ -110,14 +110,190 @@ public static class ExoCodeGenerator
         return Generate(services, targetNamespace);
     }
 
-    public static bool GenerateToFile(string json, string outputPath, string targetNamespace = "Exoforge.Client")
+    public const string ContractMetadataPrefix = "// @exoforge-contract: ";
+
+    public static List<ServiceContractModel> ReadEmbeddedContracts(string existingFilePath)
     {
-        string code = GenerateFromExportJson(json, targetNamespace);
+        var list = new List<ServiceContractModel>();
+        if (!File.Exists(existingFilePath)) return list;
+
+        foreach (string line in File.ReadLines(existingFilePath))
+        {
+            if (line.StartsWith(ContractMetadataPrefix, StringComparison.Ordinal))
+            {
+                string json = line.Substring(ContractMetadataPrefix.Length).Trim();
+                try
+                {
+                    var model = JsonSerializer.Deserialize<ServiceContractModel>(json);
+                    if (model != null && !string.IsNullOrEmpty(model.Name))
+                        list.Add(model);
+                }
+                catch
+                {
+                    // Ignore malformed metadata lines
+                }
+            }
+        }
+        return list;
+    }
+
+    public static bool IsServiceReferencedInCode(ServiceContractModel svc, string searchRoot, string generatedFilePath)
+    {
+        if (string.IsNullOrEmpty(searchRoot) || !Directory.Exists(searchRoot)) return false;
+
+        string svcPascal = ToPascalCase(svc.Name);
+        string fullGenerated = Path.GetFullPath(generatedFilePath);
+
+        var tokens = new List<string>
+        {
+            $"{svcPascal}ServiceClient",
+            $"I{svcPascal}Service",
+            $".{svcPascal}(",
+            $".{svcPascal};",
+            $".{svcPascal}.",
+            $"Exo.{svcPascal}",
+            $"ExoServices.{svcPascal}",
+            $"Exoforge.{svcPascal}"
+        };
+
+        foreach (var act in svc.Actions)
+        {
+            string actPascal = ToPascalCase(act.Name);
+            tokens.Add($"{svcPascal}{actPascal}Request");
+            tokens.Add(ResponseModelName(svcPascal, act));
+        }
+
+        foreach (var evt in svc.Events)
+        {
+            tokens.Add($"{svcPascal}{ToPascalCase(evt.Name)}Event");
+        }
+
+        try
+        {
+            foreach (string file in Directory.EnumerateFiles(searchRoot, "*.cs", SearchOption.AllDirectories))
+            {
+                if (string.Equals(Path.GetFullPath(file), fullGenerated, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                string norm = file.Replace('\\', '/');
+                if (norm.Contains("/obj/") || norm.Contains("/bin/") || norm.Contains("/Library/") || norm.Contains("/Temp/"))
+                    continue;
+
+                string content;
+                try { content = File.ReadAllText(file); }
+                catch { continue; }
+
+                foreach (string token in tokens)
+                {
+                    if (content.IndexOf(token, StringComparison.Ordinal) >= 0)
+                        return true;
+                }
+            }
+        }
+        catch
+        {
+            // Ignore scan errors
+        }
+
+        return false;
+    }
+
+    private static string? InferSearchRoot(string outputPath)
+    {
+        try
+        {
+            string full = Path.GetFullPath(outputPath);
+            string? dir = Path.GetDirectoryName(full);
+            while (dir != null)
+            {
+                if (string.Equals(Path.GetFileName(dir), "Assets", StringComparison.OrdinalIgnoreCase))
+                {
+                    return dir;
+                }
+                if (File.Exists(Path.Combine(dir, "exoforge.json")))
+                {
+                    return dir;
+                }
+                dir = Path.GetDirectoryName(dir);
+            }
+            return Path.GetDirectoryName(full);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static void EnsureGeneratedAsmdef(string outputFilePath, string targetNamespace)
+    {
+        string? dir = Path.GetDirectoryName(Path.GetFullPath(outputFilePath));
+        if (string.IsNullOrEmpty(dir)) return;
+
+        string normalized = dir.Replace('\\', '/');
+        string asmdefPath = Path.Combine(dir, "Exoforge.Generated.asmdef");
+        if (!normalized.Contains("/Assets/") && !File.Exists(asmdefPath)) return;
+
+        string asmdefJson =
+            "{\n" +
+            "    \"name\": \"Exoforge.Generated\",\n" +
+            $"    \"rootNamespace\": \"{targetNamespace}\",\n" +
+            "    \"references\": [],\n" +
+            "    \"includePlatforms\": [],\n" +
+            "    \"excludePlatforms\": [],\n" +
+            "    \"allowUnsafeCode\": false,\n" +
+            "    \"overrideReferences\": false,\n" +
+            "    \"precompiledReferences\": [],\n" +
+            "    \"autoReferenced\": true,\n" +
+            "    \"defineConstraints\": [],\n" +
+            "    \"versionDefines\": [],\n" +
+            "    \"noEngineReferences\": true\n" +
+            "}\n";
+
+        if (!File.Exists(asmdefPath) || File.ReadAllText(asmdefPath) != asmdefJson)
+        {
+            File.WriteAllText(asmdefPath, asmdefJson, new UTF8Encoding(false));
+        }
+    }
+
+    public static bool GenerateToFile(
+        string json,
+        string outputPath,
+        string targetNamespace = "Exoforge.Client",
+        string? codeSearchRoot = null,
+        Action<string>? log = null)
+    {
+        using var doc = JsonDocument.Parse(json);
+        var services = ParseServices(doc.RootElement);
+
+        var previous = ReadEmbeddedContracts(outputPath);
+        if (previous.Count > 0)
+        {
+            string searchRoot = codeSearchRoot ?? InferSearchRoot(outputPath) ?? "";
+            var currentNames = new HashSet<string>(services.Select(s => s.Name), StringComparer.OrdinalIgnoreCase);
+
+            foreach (var prevSvc in previous)
+            {
+                if (!currentNames.Contains(prevSvc.Name))
+                {
+                    if (services.Count == 0 || IsServiceReferencedInCode(prevSvc, searchRoot, outputPath))
+                    {
+                        services.Add(prevSvc);
+                        currentNames.Add(prevSvc.Name);
+                        log?.Invoke($"[codegen] Preserved stub for '{prevSvc.Name}' (referenced in code, not present on remote).");
+                    }
+                }
+            }
+            services = services.OrderBy(s => s.Name, StringComparer.Ordinal).ToList();
+        }
+
+        string code = Generate(services, targetNamespace);
         string? dir = Path.GetDirectoryName(outputPath);
         if (!string.IsNullOrEmpty(dir))
         {
             Directory.CreateDirectory(dir);
         }
+
+        EnsureGeneratedAsmdef(outputPath, targetNamespace);
 
         if (File.Exists(outputPath))
         {
@@ -403,11 +579,14 @@ public static class ExoCodeGenerator
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         JsonElement pluginsElem;
-        if (root.TryGetProperty("export", out var export) && export.TryGetProperty("plugins", out var p1) && p1.ValueKind == JsonValueKind.Array)
+        if (root.TryGetProperty("export", out var export) &&
+            ((export.TryGetProperty("extensions", out var p1) && p1.ValueKind == JsonValueKind.Array) ||
+             (export.TryGetProperty("plugins", out p1) && p1.ValueKind == JsonValueKind.Array)))
         {
             pluginsElem = p1;
         }
-        else if (root.TryGetProperty("plugins", out var p2) && p2.ValueKind == JsonValueKind.Array)
+        else if ((root.TryGetProperty("extensions", out var p2) && p2.ValueKind == JsonValueKind.Array) ||
+                 (root.TryGetProperty("plugins", out p2) && p2.ValueKind == JsonValueKind.Array))
         {
             pluginsElem = p2;
         }
@@ -467,9 +646,54 @@ public static class ExoCodeGenerator
         string outputPath,
         string targetNamespace = "Exoforge.Plugins.Generated",
         IEnumerable<string>? services = null,
-        string? pluginId = null)
+        string? pluginId = null,
+        string? codeSearchRoot = null,
+        Action<string>? log = null)
     {
-        string code = GeneratePluginStubs(json, targetNamespace, services, pluginId);
+        using var doc = JsonDocument.Parse(json);
+        var parsed = ParseServices(doc.RootElement);
+
+        if (services != null)
+        {
+            var wanted = new HashSet<string>(
+                services.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()),
+                StringComparer.OrdinalIgnoreCase);
+
+            parsed = parsed.Where(s => wanted.Contains(s.Name)).ToList();
+        }
+
+        var previous = ReadEmbeddedContracts(outputPath);
+        if (previous.Count > 0)
+        {
+            string searchRoot = codeSearchRoot ?? Path.GetDirectoryName(Path.GetDirectoryName(outputPath)) ?? "";
+            var currentNames = new HashSet<string>(parsed.Select(s => s.Name), StringComparer.OrdinalIgnoreCase);
+            var wanted = services != null
+                ? new HashSet<string>(services.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()), StringComparer.OrdinalIgnoreCase)
+                : null;
+
+            foreach (var prevSvc in previous)
+            {
+                if (!currentNames.Contains(prevSvc.Name))
+                {
+                    bool isWanted = wanted != null && wanted.Contains(prevSvc.Name);
+                    if (parsed.Count == 0 || isWanted || IsServiceReferencedInCode(prevSvc, searchRoot, outputPath))
+                    {
+                        parsed.Add(prevSvc);
+                        currentNames.Add(prevSvc.Name);
+                        log?.Invoke($"[codegen] Preserved stub for '{prevSvc.Name}' in plugin stubs.");
+                    }
+                }
+            }
+            parsed = parsed.OrderBy(s => s.Name, StringComparer.Ordinal).ToList();
+        }
+
+        var customInputs = ExtractCustomInputTypes(doc.RootElement, services);
+        string code = GeneratePluginStubs(
+            parsed,
+            targetNamespace,
+            pluginId is null ? null : OwnJsonTypes(doc.RootElement, pluginId),
+            customInputs);
+
         string? dir = Path.GetDirectoryName(outputPath);
         if (!string.IsNullOrEmpty(dir))
         {
@@ -517,6 +741,24 @@ public static class ExoCodeGenerator
         sb.AppendLine($"namespace {targetNamespace}");
         sb.AppendLine("{");
 
+        var actionRespNames = new Dictionary<ActionContractModel, string>();
+        var emittedModelSignatures = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var svc in serviceList)
+        {
+            string svcPascal = ToPascalCase(svc.Name);
+            foreach (var act in svc.Actions)
+            {
+                if (act.ReturnFields.Count > 0)
+                {
+                    string respName = ResolveResponseModelName(svcPascal, act, emittedModelSignatures);
+                    actionRespNames[act] = respName;
+                    string sig = string.Join("|", act.ReturnFields.Select(f => $"{f.Name}:{f.Type}"));
+                    emittedModelSignatures[respName] = sig;
+                }
+            }
+        }
+
         // Models
         foreach (var svc in serviceList)
         {
@@ -529,10 +771,12 @@ public static class ExoCodeGenerator
 
                 sb.AppendLine($"    public class {typeName}");
                 sb.AppendLine("    {");
+                var usedProps = new HashSet<string>(StringComparer.Ordinal);
                 foreach (var col in res.Columns)
                 {
+                    string propName = SafePropertyName(col.Name, typeName, usedProps);
                     sb.AppendLine($"        [JsonPropertyName(\"{col.Name}\")]");
-                    sb.AppendLine($"        public {MapTypeToCSharp(col.Type)} {ToPascalCase(col.Name)} {{ get; set; }} = default!;");
+                    sb.AppendLine($"        public {MapTypeToCSharp(col.Type)} {propName} {{ get; set; }} = default!;");
                 }
                 sb.AppendLine("    }");
                 sb.AppendLine();
@@ -546,22 +790,24 @@ public static class ExoCodeGenerator
 
                 sb.AppendLine($"    public class {reqName}");
                 sb.AppendLine("    {");
+                var usedReqProps = new HashSet<string>(StringComparer.Ordinal);
                 foreach (var p in act.Params)
                 {
                     string propType = MapTypeToCSharp(p.Type);
+                    string propName = SafePropertyName(p.Name, reqName, usedReqProps);
                     sb.AppendLine($"        [JsonPropertyName(\"{p.Name}\")]");
                     if (p.Optional || propType == "JsonElement")
                     {
                         sb.AppendLine("        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]");
                     }
-                    sb.AppendLine($"        public {propType} {ToPascalCase(p.Name)} {{ get; set; }} = default!;");
+                    sb.AppendLine($"        public {propType} {propName} {{ get; set; }} = default!;");
                 }
                 sb.AppendLine("    }");
                 sb.AppendLine();
 
                 if (act.ReturnFields.Count > 0)
                 {
-                    string respName = ResponseModelName(svcPascal, act);
+                    string respName = actionRespNames[act];
 
                     if (!emittedModels.Add(respName))
                     {
@@ -572,10 +818,12 @@ public static class ExoCodeGenerator
 
                     sb.AppendLine($"    public class {respName}");
                     sb.AppendLine("    {");
+                    var usedRespProps = new HashSet<string>(StringComparer.Ordinal);
                     foreach (var f in act.ReturnFields)
                     {
+                        string propName = SafePropertyName(f.Name, respName, usedRespProps);
                         sb.AppendLine($"        [JsonPropertyName(\"{f.Name}\")]");
-                        sb.AppendLine($"        public {MapReturnFieldType(svc, f)} {ToPascalCase(f.Name)} {{ get; set; }} = default!;");
+                        sb.AppendLine($"        public {MapReturnFieldType(svc, f)} {propName} {{ get; set; }} = default!;");
                     }
                     sb.AppendLine("    }");
                     sb.AppendLine();
@@ -589,10 +837,12 @@ public static class ExoCodeGenerator
 
                 sb.AppendLine($"    public class {evtName}");
                 sb.AppendLine("    {");
+                var usedProps = new HashSet<string>(StringComparer.Ordinal);
                 foreach (var f in evt.PayloadFields)
                 {
+                    string propName = SafePropertyName(f.Name, evtName, usedProps);
                     sb.AppendLine($"        [JsonPropertyName(\"{f.Name}\")]");
-                    sb.AppendLine($"        public {MapTypeToCSharp(f.Type)} {ToPascalCase(f.Name)} {{ get; set; }} = default!;");
+                    sb.AppendLine($"        public {MapTypeToCSharp(f.Type)} {propName} {{ get; set; }} = default!;");
                 }
                 sb.AppendLine("    }");
                 sb.AppendLine();
@@ -629,7 +879,8 @@ public static class ExoCodeGenerator
             {
                 string actPascal = ToPascalCase(act.Name);
                 string reqName = $"{svcPascal}{actPascal}Request";
-                string respType = ReturnTypeName(svcPascal, act);
+                string? respName = actionRespNames.TryGetValue(act, out var arName) ? arName : null;
+                string respType = ReturnTypeName(svcPascal, act, respName);
                 string declaration = respType == "JsonElement" ? "JsonElement" : respType + "?";
                 string scope = string.IsNullOrEmpty(act.Scope) ? "" : $", Scope = \"{act.Scope}\"";
 
@@ -658,7 +909,8 @@ public static class ExoCodeGenerator
             {
                 string actPascal = ToPascalCase(act.Name);
                 string reqName = $"{svcPascal}{actPascal}Request";
-                string respType = ReturnTypeName(svcPascal, act);
+                string? respName = actionRespNames.TryGetValue(act, out var arName) ? arName : null;
+                string respType = ReturnTypeName(svcPascal, act, respName);
                 string declaration = respType == "JsonElement" ? "JsonElement" : respType + "?";
                 bool isValueType = respType is "int" or "long" or "bool" or "float" or "double" or "byte" or "short" or "uint" or "ulong" or "sbyte" or "ushort" or "decimal";
                 string callType = isValueType ? respType + "?" : respType;
@@ -978,8 +1230,26 @@ public static class ExoCodeGenerator
 
     public static string Generate(IEnumerable<ServiceContractModel> services, string targetNamespace = "Exoforge.Client")
     {
+        var serviceList = services.ToList();
         var sb = new StringBuilder();
         var emittedModels = new HashSet<string>(StringComparer.Ordinal);
+        var actionRespNames = new Dictionary<ActionContractModel, string>();
+        var emittedModelSignatures = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var svc in serviceList)
+        {
+            string svcPascal = ToPascalCase(svc.Name);
+            foreach (var act in svc.Actions)
+            {
+                if (act.ReturnFields.Count > 0)
+                {
+                    string respName = ResolveResponseModelName(svcPascal, act, emittedModelSignatures);
+                    actionRespNames[act] = respName;
+                    string sig = string.Join("|", act.ReturnFields.Select(f => $"{f.Name}:{f.Type}"));
+                    emittedModelSignatures[respName] = sig;
+                }
+            }
+        }
 
         sb.AppendLine("// <auto-generated>");
         sb.AppendLine("//     This code was generated by Exoforge C# Management Engine.");
@@ -999,7 +1269,7 @@ public static class ExoCodeGenerator
         sb.AppendLine("{");
 
         // 1. Strongly-typed Models (Requests, Responses, Events)
-        foreach (var svc in services)
+        foreach (var svc in serviceList)
         {
             string svcPascal = ToPascalCase(svc.Name);
 
@@ -1010,12 +1280,14 @@ public static class ExoCodeGenerator
 
                 if (act.Params.Count > 0)
                 {
+                    string reqName = $"{svcPascal}{actPascal}Request";
                     sb.AppendLine($"/// <summary>Request payload for {svc.Name}.{act.Name} action.</summary>");
-                    sb.AppendLine($"public class {svcPascal}{actPascal}Request");
+                    sb.AppendLine($"public class {reqName}");
                     sb.AppendLine("{");
+                    var usedProps = new HashSet<string>(StringComparer.Ordinal);
                     foreach (var p in act.Params)
                     {
-                        string propName = ToPascalCase(p.Name);
+                        string propName = SafePropertyName(p.Name, reqName, usedProps);
                         string csType = MapTypeToCSharp(p.Type);
                         sb.AppendLine($"    [JsonPropertyName(\"{p.Name}\")]");
                         if (p.Optional || csType == "JsonElement")
@@ -1030,16 +1302,17 @@ public static class ExoCodeGenerator
 
                 if (act.ReturnFields.Count > 0)
                 {
-                    string respName = ResponseModelName(svcPascal, act);
+                    string respName = actionRespNames[act];
 
                     if (emittedModels.Add(respName))
                     {
                         sb.AppendLine($"/// <summary>Response model for {svc.Name}.{act.Name} action.</summary>");
                         sb.AppendLine($"public class {respName}");
                         sb.AppendLine("{");
+                        var usedProps = new HashSet<string>(StringComparer.Ordinal);
                         foreach (var r in act.ReturnFields)
                         {
-                            string propName = ToPascalCase(r.Name);
+                            string propName = SafePropertyName(r.Name, respName, usedProps);
                             string csType = MapTypeToCSharp(r.Type);
                             sb.AppendLine($"    [JsonPropertyName(\"{r.Name}\")]");
                             sb.AppendLine($"    public {csType} {propName} {{ get; set; }} = default!;");
@@ -1054,14 +1327,16 @@ public static class ExoCodeGenerator
             foreach (var evt in svc.Events)
             {
                 string evtPascal = ToPascalCase(evt.Name);
+                string evtName = $"{svcPascal}{evtPascal}Event";
                 sb.AppendLine($"/// <summary>Event payload for {evt.Topic ?? svc.Name} -> {evt.Name}.</summary>");
-                sb.AppendLine($"public class {svcPascal}{evtPascal}Event");
+                sb.AppendLine($"public class {evtName}");
                 sb.AppendLine("{");
                 if (evt.PayloadFields.Count > 0)
                 {
+                    var usedProps = new HashSet<string>(StringComparer.Ordinal);
                     foreach (var f in evt.PayloadFields)
                     {
-                        string propName = ToPascalCase(f.Name);
+                        string propName = SafePropertyName(f.Name, evtName, usedProps);
                         string csType = MapTypeToCSharp(f.Type);
                         sb.AppendLine($"    [JsonPropertyName(\"{f.Name}\")]");
                         sb.AppendLine($"    public {csType} {propName} {{ get; set; }} = default!;");
@@ -1089,7 +1364,7 @@ public static class ExoCodeGenerator
         sb.AppendLine("        _hubs.GetValue(client, c => new ExoforgeServicesHub(c));");
         sb.AppendLine();
 
-        foreach (var svc in services)
+        foreach (var svc in serviceList)
         {
             string pascalName = ToPascalCase(svc.Name);
             sb.AppendLine($"    /// <summary>Access the {pascalName} service contract.</summary>");
@@ -1114,10 +1389,10 @@ public static class ExoCodeGenerator
         sb.AppendLine("    }");
         sb.AppendLine();
 
-        foreach (var svc in services)
+        foreach (var svc in serviceList)
         {
             string pascalName = ToPascalCase(svc.Name);
-            string fieldName = $"_{svc.Name.ToLowerInvariant().Replace("-", "_")}";
+            string fieldName = SanitizeFieldName(svc.Name);
             sb.AppendLine($"    private {pascalName}ServiceClient? {fieldName};");
             sb.AppendLine($"    public {pascalName}ServiceClient {pascalName} => {fieldName} ??= new {pascalName}ServiceClient(_client);");
             sb.AppendLine();
@@ -1126,7 +1401,7 @@ public static class ExoCodeGenerator
         sb.AppendLine();
 
         // 4. Service Clients
-        foreach (var svc in services)
+        foreach (var svc in serviceList)
         {
             string svcPascal = ToPascalCase(svc.Name);
             sb.AppendLine($"/// <summary>Client interface for the {svc.Name} service.</summary>");
@@ -1191,17 +1466,25 @@ public static class ExoCodeGenerator
                 };
 
                 bool hasParams = act.Params.Count > 0;
-                string returnType = ReturnTypeName(svcPascal, act);
+                string? respName = actionRespNames.TryGetValue(act, out var arName) ? arName : null;
+                string returnType = ReturnTypeName(svcPascal, act, respName);
 
                 // Overload 1: Strongly-typed parameter arguments
                 if (hasParams)
                 {
-                    var paramDefs = act.Params.Select(p =>
+                    var usedParams = new HashSet<string>(StringComparer.Ordinal);
+                    var usedReqProps = new HashSet<string>(StringComparer.Ordinal);
+                    var paramDefs = new List<string>();
+                    var assignments = new List<(string Prop, string Param)>();
+
+                    foreach (var p in act.Params)
                     {
                         string csType = MapTypeToCSharp(p.Type);
-                        string paramName = EscapeIdentifier(ToCamelCase(p.Name));
-                        return $"{csType} {paramName}";
-                    });
+                        string propName = SafePropertyName(p.Name, $"{svcPascal}{actPascal}Request", usedReqProps);
+                        string paramName = EscapeIdentifier(SafeParamName(p.Name, usedParams));
+                        paramDefs.Add($"{csType} {paramName}");
+                        assignments.Add((propName, paramName));
+                    }
                     string paramSignature = string.Join(", ", paramDefs);
 
                     sb.AppendLine($"    /// <summary>{XmlDoc(act.Doc, $"Executes {act.Name} action with typed arguments.")}</summary>");
@@ -1209,10 +1492,8 @@ public static class ExoCodeGenerator
                     sb.AppendLine("    {");
                     sb.AppendLine($"        var req = new {svcPascal}{actPascal}Request");
                     sb.AppendLine("        {");
-                    foreach (var p in act.Params)
+                    foreach (var (propName, paramName) in assignments)
                     {
-                        string propName = ToPascalCase(p.Name);
-                        string paramName = EscapeIdentifier(ToCamelCase(p.Name));
                         sb.AppendLine($"            {propName} = {paramName},");
                     }
                     sb.AppendLine("        };");
@@ -1245,6 +1526,13 @@ public static class ExoCodeGenerator
         }
 
         sb.AppendLine("}");
+        sb.AppendLine();
+
+        foreach (var svc in serviceList)
+        {
+            string serialized = JsonSerializer.Serialize(svc);
+            sb.AppendLine($"{ContractMetadataPrefix}{serialized}");
+        }
 
         return sb.ToString();
     }
@@ -1258,7 +1546,7 @@ public static class ExoCodeGenerator
         var types = new List<string>();
         JsonElement export = root.TryGetProperty("export", out var exportProp) ? exportProp : root;
 
-        if (!export.TryGetProperty("plugins", out var plugins) || plugins.ValueKind != JsonValueKind.Array)
+        if ((!export.TryGetProperty("extensions", out var plugins) && !export.TryGetProperty("plugins", out plugins)) || plugins.ValueKind != JsonValueKind.Array)
         {
             return types;
         }
@@ -1314,13 +1602,29 @@ public static class ExoCodeGenerator
         return lastDot >= 0 ? name.Substring(lastDot + 1) : name;
     }
 
-    private static string ReturnTypeName(string svcPascal, ActionContractModel act)
+    private static string ResolveResponseModelName(
+        string svcPascal,
+        ActionContractModel act,
+        Dictionary<string, string> emittedSignatures)
+    {
+        string baseName = ResponseModelName(svcPascal, act);
+        string sig = string.Join("|", act.ReturnFields.Select(f => $"{f.Name}:{f.Type}"));
+
+        if (emittedSignatures.TryGetValue(baseName, out var existingSig) && existingSig != sig)
+        {
+            return $"{svcPascal}{baseName}";
+        }
+
+        return baseName;
+    }
+
+    private static string ReturnTypeName(string svcPascal, ActionContractModel act, string? explicitResponseModelName = null)
     {
         string element;
 
         if (act.ReturnFields.Count > 0)
         {
-            element = ResponseModelName(svcPascal, act);
+            element = explicitResponseModelName ?? ResponseModelName(svcPascal, act);
         }
         else if (!string.IsNullOrEmpty(act.ReturnType) && act.ReturnType != "ok")
         {
@@ -1353,29 +1657,96 @@ public static class ExoCodeGenerator
         };
     }
 
-    private static string ToPascalCase(string text)
+    public static string ToPascalCase(string text)
     {
-        if (string.IsNullOrEmpty(text)) return text;
-        string[] parts = text.Split(new[] { '_', '-' }, StringSplitOptions.RemoveEmptyEntries);
-        for (int i = 0; i < parts.Length; i++)
+        if (string.IsNullOrEmpty(text)) return "Unnamed";
+
+        var sb = new StringBuilder();
+        bool newWord = true;
+
+        foreach (char c in text)
         {
-            if (parts[i].Length > 0)
+            if (char.IsLetterOrDigit(c))
             {
-                parts[i] = char.ToUpperInvariant(parts[i][0]) + parts[i].Substring(1);
+                if (newWord)
+                {
+                    sb.Append(char.ToUpperInvariant(c));
+                    newWord = false;
+                }
+                else
+                {
+                    sb.Append(c);
+                }
+            }
+            else
+            {
+                newWord = true;
             }
         }
-        return string.Join("", parts);
+
+        string result = sb.ToString();
+        if (result.Length == 0) return "Unnamed";
+        if (char.IsDigit(result[0])) return "_" + result;
+        return result;
     }
 
-    private static string ToCamelCase(string text)
+    public static string ToCamelCase(string text)
     {
         string pascal = ToPascalCase(text);
         if (string.IsNullOrEmpty(pascal)) return pascal;
+        if (pascal.Length > 1 && pascal.StartsWith("_", StringComparison.Ordinal))
+        {
+            return "_" + char.ToLowerInvariant(pascal[1]) + pascal.Substring(2);
+        }
         return char.ToLowerInvariant(pascal[0]) + pascal.Substring(1);
     }
 
     private static string EscapeIdentifier(string name)
     {
         return CsharpKeywords.Contains(name) ? $"@{name}" : name;
+    }
+
+    private static string SanitizeFieldName(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return "_unnamed";
+        var sb = new StringBuilder("_");
+        foreach (char c in text)
+        {
+            if (char.IsLetterOrDigit(c)) sb.Append(char.ToLowerInvariant(c));
+            else sb.Append('_');
+        }
+        return sb.ToString();
+    }
+
+    private static string SafePropertyName(string rawName, string enclosingTypeName, HashSet<string> usedNames)
+    {
+        string propName = ToPascalCase(rawName);
+        if (string.Equals(propName, enclosingTypeName, StringComparison.Ordinal))
+        {
+            propName += "Value";
+        }
+
+        string candidate = propName;
+        int suffix = 2;
+        while (!usedNames.Add(candidate))
+        {
+            candidate = $"{propName}{suffix++}";
+        }
+        return candidate;
+    }
+
+    private static string SafeParamName(string rawName, HashSet<string> usedNames)
+    {
+        string param = ToCamelCase(rawName);
+        if (string.IsNullOrEmpty(param)) param = "arg";
+        if (char.IsDigit(param[0])) param = "_" + param;
+
+        string candidate = param;
+        int suffix = 2;
+        while (!usedNames.Add(candidate))
+        {
+            candidate = $"{param}{suffix++}";
+        }
+        return candidate;
     }
 }

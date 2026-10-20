@@ -4,6 +4,7 @@
   "displayName": "Exoforge Unity SDK",
   "description": "High-performance Unity client SDK for the Exoforge game backend platform.",
   "unity": "2022.3",
+  "dependencies": {},
   "keywords": [
     "exoforge",
     "backend",

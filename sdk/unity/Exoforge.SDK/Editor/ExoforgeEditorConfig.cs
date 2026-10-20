@@ -317,22 +317,40 @@ public static class ExoforgeEditorConfig
     }
 
     /// <summary>
-    /// The source generator shipped inside this SDK, or null when it is missing. A plugin build
-    /// needs it: it writes the manifest and the entry point during the plugin's own compile.
+    /// Path to the offline NuGet package feed bundled inside this SDK package (Editor/Plugins/NuGet~).
+    /// </summary>
+    public static string? BundledFeedPath
+    {
+        get
+        {
+            string? root = PackageRoot;
+            if (string.IsNullOrEmpty(root)) return null;
+            string candidate = Path.Combine(root!, "Editor", "Plugins", "NuGet~");
+            return Directory.Exists(candidate) ? candidate : null;
+        }
+    }
+
+    /// <summary>
+    /// The source generator or SDK package shipped inside this SDK, or null when it is missing.
     /// </summary>
     public static string? GeneratorPath
     {
         get
         {
-            string? root = PackageRoot;
+            string? feed = BundledFeedPath;
+            if (feed != null)
+            {
+                string[] nupkgs = Directory.GetFiles(feed, "Exoforge.Plugin.SDK.*.nupkg");
+                if (nupkgs.Length > 0) return nupkgs[0];
+            }
 
+            string? root = PackageRoot;
             if (string.IsNullOrEmpty(root))
             {
                 return null;
             }
 
-            // Tools~ because Unity ignores a folder ending in ~: the analyzer references Roslyn and
-            // must not be loaded as one of the editor's own assemblies.
+            // Tools~ fallback
             string candidate = Path.Combine(
                 root!, "Editor", "Plugins", "Tools~", "Exoforge.Plugin.Generator", "Exoforge.Plugin.Generator.dll");
 

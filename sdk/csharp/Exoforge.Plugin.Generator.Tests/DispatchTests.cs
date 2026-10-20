@@ -29,6 +29,7 @@ public interface IContractPing
 /// </summary>
 [ExoService("dispatch_sample", Version = "2.0.0", Category = "Test", Title = "Dispatch Sample", Icon = "🧪")]
 [ExoService("dispatch_admin", Category = "Test", Title = "Dispatch Admin", Icon = "🛠️")]
+[ExoExtension("dispatch_extension", Category = "Test", Title = "Dispatch Extension", Icon = "🧩")]
 public partial class DispatchSamplePlugin : IContractPing, ISharedContract
 {
     public int LastLeft { get; private set; }
@@ -359,5 +360,14 @@ public class DispatchTests
         Assert.Equal("string", evt!["payload"]!["reason"]?.GetValue<string>());
         Assert.Equal("integer", evt!["payload"]!["code"]?.GetValue<string>());
         Assert.Equal("global::Exoforge.Plugin.Generator.Tests.TypeLevelEvent", evt!["payload_type"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void Manifest_Includes_ExoExtension_Declared_Services()
+    {
+        JsonNode manifest = Manifest();
+        var svc = Service(manifest, "dispatch_extension");
+        Assert.NotNull(svc);
+        Assert.Equal("Dispatch Extension", svc!["title"]?.GetValue<string>());
     }
 }

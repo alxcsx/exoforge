@@ -11,43 +11,10 @@ namespace Exoforge.Plugin.SDK.Tests;
 
 public class UnityAddressablesPluginTests
 {
-    private class TestDatabase : IDatabase
-    {
-        public readonly Dictionary<(string table, string key), object> Storage = new();
-
-        public T? Get<T>(string table, string key)
-        {
-            if (Storage.TryGetValue((table, key), out var val))
-            {
-                return (T)val;
-            }
-            return default;
-        }
-
-        public IReadOnlyList<T> All<T>(string table)
-        {
-            return Storage.Where(kvp => kvp.Key.table == table).Select(kvp => (T)kvp.Value).ToList();
-        }
-
-        public void Put<T>(string table, string key, T value)
-        {
-            Storage[(table, key)] = value!;
-        }
-
-        public void Delete(string table, string key)
-        {
-            Storage.Remove((table, key));
-        }
-
-        public IReadOnlyList<T> Query<T>(string sql, params object?[] args) => All<T>("");
-        public T? QuerySingle<T>(string sql, params object?[] args) => default;
-        public int Execute(string sql, params object?[] args) => 0;
-    }
-
     [Fact]
     public void EmptyByDefault_WhenDatabaseEmpty()
     {
-        var db = new TestDatabase();
+        var db = new InMemoryDatabase();
         ExoServices.Reset();
         ExoServices.Database = db;
         var plugin = new UnityAddressablesPlugin();
@@ -68,7 +35,7 @@ public class UnityAddressablesPluginTests
     [Fact]
     public void PublishRelease_AddsReleaseAndAssets_AndGetManifestWorks()
     {
-        var db = new TestDatabase();
+        var db = new InMemoryDatabase();
         ExoServices.Reset();
         ExoServices.Database = db;
         var plugin = new UnityAddressablesPlugin();
@@ -128,7 +95,7 @@ public class UnityAddressablesPluginTests
     [Fact]
     public void PromoteRelease_UpdatesBadge()
     {
-        var db = new TestDatabase();
+        var db = new InMemoryDatabase();
         ExoServices.Reset();
         ExoServices.Database = db;
         var plugin = new UnityAddressablesPlugin();
@@ -203,7 +170,7 @@ public class UnityAddressablesPluginTests
     [Fact]
     public void UploadBundle_UsesActionDispatcherFallback_WhenFileBucketNull()
     {
-        var db = new TestDatabase();
+        var db = new InMemoryDatabase();
         var actions = new TestActionDispatcher();
         ExoServices.Reset();
         ExoServices.Database = db;
@@ -222,7 +189,7 @@ public class UnityAddressablesPluginTests
     [Fact]
     public void UploadBundle_UsesFileBucketStub_WithAddressablesBucketAndTag()
     {
-        var db = new TestDatabase();
+        var db = new InMemoryDatabase();
         var fileBucket = new TestFileBucketService();
         ExoServices.Reset();
         ExoServices.Database = db;
@@ -245,7 +212,7 @@ public class UnityAddressablesPluginTests
     [Fact]
     public void UploadPreview_UsesFileBucketStub_AndUpdatesAssetRecord()
     {
-        var db = new TestDatabase();
+        var db = new InMemoryDatabase();
         var fileBucket = new TestFileBucketService();
         ExoServices.Reset();
         ExoServices.Database = db;

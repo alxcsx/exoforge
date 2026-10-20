@@ -257,4 +257,57 @@ public class TransportTests
             ExoTransport.KeepAliveInterval = original;
         }
     }
+
+    [Fact]
+    public async Task Unsubscribing_an_event_stops_delivering_frames()
+    {
+        await using var server = StubWebSocketServer.Start();
+        using var client = NewClient();
+
+        await client.ConnectAsync(server.Uri);
+
+        int count1 = 0;
+        int count2 = 0;
+
+        void Handler1(ExoEventFrame f) => count1++;
+        client.OnEvent("ping", Handler1);
+        using (client.OnEvent("ping", _ => count2++))
+        {
+            await server.SendAsync("{\"type\":\"event\",\"event\":\"ping\",\"topic\":\"t\",\"payload\":{}}");
+            await PumpUntil(() => count1 == 1 && count2 == 1, client, TimeSpan.FromSeconds(5));
+            Assert.Equal(1, count1);
+            Assert.Equal(1, count2);
+        }
+
+        client.OffEvent("ping", Handler1);
+
+        await server.SendAsync("{\"type\":\"event\",\"event\":\"ping\",\"topic\":\"t\",\"payload\":{}}");
+        await Task.Delay(100);
+        client.Dispatcher.Update();
+
+        Assert.Equal(1, count1);
+        Assert.Equal(1, count2);
+    }
+
+    [Fact]
+    public async Task Cancelling_an_action_cleans_up_pending_requests()
+    {
+        await using var server = StubWebSocketServer.Start();
+        using var client = NewClient();
+
+        await client.ConnectAsync(server.Uri);
+
+        using var cts = new CancellationTokenSource();
+        var call = client.SendActionAsync<JsonElement>("demo", "slow_op", new { }, ExoTransportPreference.WebSocket, TimeSpan.FromSeconds(10), cts.Token);
+
+        string frame = await server.NextReceivedAsync(TimeSpan.FromSeconds(5));
+        Assert.Contains("slow_op", frame);
+
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            await PumpAsync(call, client, TimeSpan.FromSeconds(1));
+        });
+    }
 }

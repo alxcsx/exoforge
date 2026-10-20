@@ -233,14 +233,11 @@ public class ExoClient : IDisposable
         var tcs = new TaskCompletionSource<ExoActionResult>(TaskCreationOptions.RunContinuationsAsynchronously);
         _pendingActions[reqId] = tcs;
 
-        string json = JsonSerializer.Serialize(request);
-        await _transport.SendAsync(json, cancellationToken).ConfigureAwait(false);
-
         TimeSpan effectiveTimeout = timeout ?? DefaultTimeout;
         using var timeoutCts = new CancellationTokenSource(effectiveTimeout);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
 
-        linkedCts.Token.Register(() =>
+        using var reg = linkedCts.Token.Register(() =>
         {
             if (_pendingActions.TryRemove(reqId, out var removedTcs))
             {
@@ -255,16 +252,30 @@ public class ExoClient : IDisposable
             }
         });
 
-        ExoActionResult result = await tcs.Task.ConfigureAwait(false);
-
-        if (!result.IsSuccess)
+        try
         {
-            string errCode = result.Error?.Code ?? "unknown_error";
-            string errMsg = result.Error?.Message ?? "Action failed on server";
-            throw new ExoActionException(errCode, errMsg);
-        }
+            string json = JsonSerializer.Serialize(request);
+            await _transport.SendAsync(json, linkedCts.Token).ConfigureAwait(false);
 
-        return DeserializeResult<TResult>(result.Data);
+            ExoActionResult result = await tcs.Task.ConfigureAwait(false);
+
+            if (!result.IsSuccess)
+            {
+                string errCode = result.Error?.Code ?? "unknown_error";
+                string errMsg = result.Error?.Message ?? "Action failed on server";
+                throw CreateActionException(service, action, errCode, errMsg);
+            }
+
+            return DeserializeResult<TResult>(result.Data);
+        }
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+        {
+            throw new TimeoutException($"Action '{service}.{action}' timed out after {effectiveTimeout.TotalSeconds}s.");
+        }
+        finally
+        {
+            _pendingActions.TryRemove(reqId, out _);
+        }
     }
 
     private async Task<TResult> SendActionHttpAsync<TResult>(
@@ -325,11 +336,30 @@ public class ExoClient : IDisposable
                     if (errProp.TryGetProperty("message", out var mProp)) errMsg = mProp.GetString() ?? errMsg;
                 }
             }
-            throw new ExoActionException(errCode, errMsg);
+            throw CreateActionException(service, action, errCode, errMsg);
         }
 
         JsonElement dataElement = root.TryGetProperty("data", out var dProp) ? dProp.Clone() : root.Clone();
         return DeserializeResult<TResult>(dataElement);
+    }
+
+    private static ExoActionException CreateActionException(string service, string action, string errCode, string errMsg)
+    {
+        if (errCode == "service_not_found" || errMsg == "service_not_found" || errMsg == ":service_not_found")
+        {
+            return new ExoActionException(
+                "service_not_found",
+                $"Service '{service}' (called via '{service}.{action}') was not found on the remote server. Ensure the extension providing '{service}' is deployed and running.");
+        }
+
+        if (errCode == "action_not_found" || errMsg == "action_not_found" || errMsg.StartsWith("{:action_not_found", StringComparison.Ordinal))
+        {
+            return new ExoActionException(
+                "action_not_found",
+                $"Action '{action}' was not found on remote service '{service}'. Ensure the deployed version of '{service}' matches your generated client stubs.");
+        }
+
+        return new ExoActionException(errCode, errMsg);
     }
 
     private static TResult DeserializeResult<TResult>(JsonElement data)
@@ -400,8 +430,9 @@ public class ExoClient : IDisposable
     /// <summary>
     /// Registers a handler for a broadcast event by event name.
     /// Callbacks are dispatched safely on the main thread via ExoDispatcher.
+    /// Returns an <see cref="IDisposable"/> token that unregisters the handler when disposed.
     /// </summary>
-    public void OnEvent(string eventName, Action<ExoEventFrame> handler)
+    public IDisposable OnEvent(string eventName, Action<ExoEventFrame> handler)
     {
         string key = eventName.ToLowerInvariant();
         _eventHandlers.AddOrUpdate(
@@ -415,12 +446,15 @@ public class ExoClient : IDisposable
                 }
                 return list;
             });
+
+        return new EventSubscriptionToken(() => OffEvent(eventName, handler));
     }
 
     /// <summary>
     /// Registers a handler for a broadcast event scoped to a specific topic.
+    /// Returns an <see cref="IDisposable"/> token that unregisters the handler when disposed.
     /// </summary>
-    public void OnEvent(string topic, string eventName, Action<ExoEventFrame> handler)
+    public IDisposable OnEvent(string topic, string eventName, Action<ExoEventFrame> handler)
     {
         string key = $"{topic}:{eventName}".ToLowerInvariant();
         _eventHandlers.AddOrUpdate(
@@ -434,6 +468,54 @@ public class ExoClient : IDisposable
                 }
                 return list;
             });
+
+        return new EventSubscriptionToken(() => OffEvent(topic, eventName, handler));
+    }
+
+    /// <summary>
+    /// Unregisters an event handler for a broadcast event by event name.
+    /// </summary>
+    public void OffEvent(string eventName, Action<ExoEventFrame> handler)
+    {
+        string key = eventName.ToLowerInvariant();
+        if (_eventHandlers.TryGetValue(key, out var list))
+        {
+            lock (list)
+            {
+                list.Remove(handler);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Unregisters an event handler for a broadcast event scoped to a specific topic.
+    /// </summary>
+    public void OffEvent(string topic, string eventName, Action<ExoEventFrame> handler)
+    {
+        string key = $"{topic}:{eventName}".ToLowerInvariant();
+        if (_eventHandlers.TryGetValue(key, out var list))
+        {
+            lock (list)
+            {
+                list.Remove(handler);
+            }
+        }
+    }
+
+    private sealed class EventSubscriptionToken : IDisposable
+    {
+        private Action? _unsubscribe;
+
+        public EventSubscriptionToken(Action unsubscribe)
+        {
+            _unsubscribe = unsubscribe;
+        }
+
+        public void Dispose()
+        {
+            var unsub = System.Threading.Interlocked.Exchange(ref _unsubscribe, null);
+            unsub?.Invoke();
+        }
     }
 
     private void HandleMessageReceived(string json)
