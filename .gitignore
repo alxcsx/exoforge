@@ -47,6 +47,7 @@ sdk/unity/sample_unity/Packages/com.exoforge.sdk/
 # === Test & Coverage Reports ===
 .htmlcov/
 log/*.log
+.contracts_cache.json
 
 # === ExoForge Engine Specifics ===
 priv/data/
