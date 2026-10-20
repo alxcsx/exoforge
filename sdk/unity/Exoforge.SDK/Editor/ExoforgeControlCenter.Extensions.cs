@@ -259,6 +259,18 @@ public partial class ExoforgeControlCenter : EditorWindow
         }
         EditorGUILayout.EndVertical();
 
+        if (!string.IsNullOrEmpty(_buildLog))
+        {
+            EditorGUILayout.Space(6);
+            _showBuildLog = EditorGUILayout.Foldout(_showBuildLog, "Build Log", true);
+            if (_showBuildLog)
+            {
+                _buildLogScroll = EditorGUILayout.BeginScrollView(_buildLogScroll, GUILayout.Height(120));
+                EditorGUILayout.TextArea(_buildLog, EditorStyles.textArea);
+                EditorGUILayout.EndScrollView();
+            }
+        }
+
         EditorGUILayout.Space(10);
         _showRemotePlugins = EditorGUILayout.Foldout(_showRemotePlugins, $"Advanced: Cluster Remote Extensions ({_remotePlugins.Count})", true);
         if (_showRemotePlugins)
@@ -338,17 +350,6 @@ public partial class ExoforgeControlCenter : EditorWindow
                 }
             }
             EditorGUILayout.EndVertical();
-
-            if (!string.IsNullOrEmpty(_buildLog))
-            {
-                _showBuildLog = EditorGUILayout.Foldout(_showBuildLog, "Build Log", true);
-                if (_showBuildLog)
-                {
-                    _buildLogScroll = EditorGUILayout.BeginScrollView(_buildLogScroll, GUILayout.Height(120));
-                    EditorGUILayout.TextArea(_buildLog, EditorStyles.textArea);
-                    EditorGUILayout.EndScrollView();
-                }
-            }
             EditorGUI.indentLevel--;
         }
 

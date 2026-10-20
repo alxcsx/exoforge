@@ -1,12 +1,14 @@
 {
   "id": "unity_addressables",
   "type": "native",
-  "version": "1.0.0+2.25b94675",
+  "version": "1.0.0+1.6596ef21",
   "context": "global",
   "entry_point": "unity_addressables",
   "dependencies": ["database", "file_bucket"],
   "provides": ["unity_addressables"],
   "category": "Game Content",
+  "title": "Unity Addressables",
+  "icon": "📦",
   "dashboard_view": {"id": "unity_addressables", "title": "Unity Addressables", "icon": "📦", "element": "exo-unity-addressables", "entry": "addressables-studio.js"},
   "input_types": {
     "addressable_ref": {"element": "exo-addressable-input", "entry": "addressable-input.js"}

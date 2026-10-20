@@ -1,12 +1,14 @@
 {
   "id": "snake_config",
   "type": "native",
-  "version": "1.0.0+2.0da26f60",
+  "version": "1.0.0+1.2b9bfc07",
   "context": "global",
   "entry_point": "snake_config",
   "dependencies": ["database", "unity_addressables"],
   "provides": ["snake_config"],
   "category": "Game",
+  "title": "Snake Configuration",
+  "icon": "⚙️",
   "dashboard_view": {"id": "snake_config", "title": "Snake Configuration", "icon": "⚙️"},
   "services": [
     {
