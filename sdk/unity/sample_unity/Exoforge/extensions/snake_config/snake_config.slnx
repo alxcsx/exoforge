@@ -1,3 +1,5 @@
 <Solution>
+  <Project Path="../../../../../csharp/Exoforge.Plugin.Generator/Exoforge.Plugin.Generator.csproj" />
+  <Project Path="../../../../../csharp/Exoforge.Plugin.SDK/Exoforge.Plugin.SDK.csproj" />
   <Project Path="src/snake_config.csproj" />
 </Solution>

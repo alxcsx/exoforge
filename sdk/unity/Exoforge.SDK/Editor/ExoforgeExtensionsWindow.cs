@@ -22,6 +22,13 @@ namespace Exoforge.Unity.Editor
     {
         public static ExoforgeExtensionsWindow? Instance { get; private set; }
 
+        public enum ScopeFilter { All, Workspace, Remote }
+        private ScopeFilter _currentScopeFilter = ScopeFilter.All;
+        private float _sidebarScrollY = 0f;
+        private readonly Dictionary<string, VisualElement> _pluginCardElements = new(StringComparer.OrdinalIgnoreCase);
+        private VisualElement? _filterStripContainer;
+        private ScrollView? _sidebarScrollView;
+
         private string _searchFilter = "";
         private string? _selectedPluginId;
         private int _selectedDetailTab = 0; // 0: Overview, 1: Resources, 2: Actions, 3: Events, 4: Webhooks, 5+: Custom
@@ -194,7 +201,14 @@ namespace Exoforge.Unity.Editor
         public void RebuildUI()
         {
             if (_root == null) return;
+
+            if (_sidebarScrollView != null)
+            {
+                _sidebarScrollY = _sidebarScrollView.scrollOffset.y;
+            }
+
             _root.Clear();
+            _pluginCardElements.Clear();
 
             // 1. Top Header Toolbar
             _root.Add(BuildHeaderToolbar());
@@ -234,12 +248,52 @@ namespace Exoforge.Unity.Editor
             split.style.flexGrow = 1;
 
             var leftPane = BuildSidebarCatalog();
-            var rightPane = BuildDetailPane();
+            _detailContainer = new VisualElement();
+            _detailContainer.style.flexGrow = 1;
+            _detailContainer.style.flexDirection = FlexDirection.Column;
+            _detailContainer.Add(BuildDetailPane());
 
             split.Add(leftPane);
-            split.Add(rightPane);
+            split.Add(_detailContainer);
 
             _root.Add(split);
+        }
+
+        public void RebuildDetailPaneOnly()
+        {
+            if (_detailContainer == null)
+            {
+                RebuildUI();
+                return;
+            }
+
+            _detailContainer.Clear();
+            _detailContainer.Add(BuildDetailPane());
+        }
+
+        public void SelectPlugin(string pluginId)
+        {
+            _selectedPluginId = pluginId;
+            _selectedDetailTab = 0;
+            _selectedResourceName = null;
+            _selectedResourceRow = null;
+
+            UpdateCardHighlights();
+            RebuildDetailPaneOnly();
+        }
+
+        private void UpdateCardHighlights()
+        {
+            foreach (var kvp in _pluginCardElements)
+            {
+                bool isSelected = string.Equals(kvp.Key, _selectedPluginId, StringComparison.OrdinalIgnoreCase);
+                ExoforgeUIStyle.ApplyCard(kvp.Value, isSelected);
+                var nameLabel = kvp.Value.Q<Label>("PluginCardName");
+                if (nameLabel != null)
+                {
+                    nameLabel.style.color = isSelected ? ExoforgeUIStyle.TextPrimary : ExoforgeUIStyle.TextSecondary;
+                }
+            }
         }
 
         // =========================================================================
@@ -412,6 +466,18 @@ namespace Exoforge.Unity.Editor
                 isHeader: true);
             actionsGroup.Add(refreshBtn);
 
+            if (IsConnected)
+            {
+                var buildDeployAllBtn = ExoforgeUIStyle.CreateModernButton(
+                    "🚀 Build & Deploy All",
+                    async () => await BuildAndDeployAllAsync(),
+                    bg: ExoforgeUIStyle.AccentGreenBg,
+                    textCol: ExoforgeUIStyle.AccentGreen,
+                    height: 26,
+                    isHeader: true);
+                actionsGroup.Add(buildDeployAllBtn);
+            }
+
             var studioBtn = ExoforgeUIStyle.CreateModernButton(
                 "⚡ Studio Window ↗",
                 () => ExoforgeControlCenter.ShowWindow(),
@@ -491,45 +557,191 @@ namespace Exoforge.Unity.Editor
             container.style.paddingTop = 8;
             container.style.paddingBottom = 8;
 
-            // Search Box
+            // Search Box - compact and cleanly proportioned
             var searchField = new ToolbarSearchField();
             searchField.value = _searchFilter;
-            searchField.RegisterValueChangedCallback(evt =>
-            {
-                _searchFilter = evt.newValue;
-                PopulatePluginList(container.Q<ScrollView>("PluginListScroll"));
-            });
-            container.Add(searchField);
+            searchField.style.height = 20;
+            searchField.style.maxHeight = 20;
+            searchField.style.minHeight = 20;
+            searchField.style.fontSize = 11;
+            searchField.style.marginTop = 2;
+            searchField.style.marginBottom = 4;
+            searchField.style.marginLeft = 0;
+            searchField.style.marginRight = 0;
+            searchField.style.flexShrink = 0;
 
-            var divider = ExoforgeUIStyle.CreateDivider(6);
-            container.Add(divider);
+            var textInput = searchField.Q(className: "unity-toolbar-search-field__input");
+            if (textInput != null)
+            {
+                textInput.style.fontSize = 11;
+                textInput.style.height = 18;
+                textInput.style.minHeight = 18;
+                textInput.style.paddingTop = 1;
+                textInput.style.paddingBottom = 1;
+            }
 
             // Scrollable List of Plugin Cards
             var scroll = new ScrollView(ScrollViewMode.Vertical);
             scroll.name = "PluginListScroll";
             scroll.style.flexGrow = 1;
+            _sidebarScrollView = scroll;
+
+            searchField.RegisterValueChangedCallback(evt =>
+            {
+                _searchFilter = evt.newValue;
+                PopulatePluginList(scroll);
+            });
+            container.Add(searchField);
+
+            // Scope Filter Strip (All, Workspace, Remote)
+            _filterStripContainer = BuildScopeFilterStrip(scroll);
+            container.Add(_filterStripContainer);
+
+            var divider = ExoforgeUIStyle.CreateDivider(6);
+            container.Add(divider);
+
             container.Add(scroll);
 
             PopulatePluginList(scroll);
 
+            if (_sidebarScrollY > 0)
+            {
+                scroll.schedule.Execute(() =>
+                {
+                    scroll.scrollOffset = new Vector2(0, _sidebarScrollY);
+                });
+            }
+
             return container;
+        }
+
+        private VisualElement BuildScopeFilterStrip(ScrollView scroll)
+        {
+            var strip = new VisualElement();
+            strip.style.flexDirection = FlexDirection.Row;
+            strip.style.marginTop = 2;
+            strip.style.marginBottom = 4;
+            strip.style.alignItems = Align.Center;
+
+            int total = _plugins.Count;
+            int wsCount = _plugins.Count(p => p.IsLocal);
+            int remoteCount = _plugins.Count(p => !p.IsLocal);
+
+            var allBtn = CreateFilterTabButton($"All ({total})", _currentScopeFilter == ScopeFilter.All, () =>
+            {
+                _currentScopeFilter = ScopeFilter.All;
+                UpdateScopeFilterButtonStates(strip);
+                PopulatePluginList(scroll);
+            });
+            var wsBtn = CreateFilterTabButton($"Workspace ({wsCount})", _currentScopeFilter == ScopeFilter.Workspace, () =>
+            {
+                _currentScopeFilter = ScopeFilter.Workspace;
+                UpdateScopeFilterButtonStates(strip);
+                PopulatePluginList(scroll);
+            });
+            var remoteBtn = CreateFilterTabButton($"Remote ({remoteCount})", _currentScopeFilter == ScopeFilter.Remote, () =>
+            {
+                _currentScopeFilter = ScopeFilter.Remote;
+                UpdateScopeFilterButtonStates(strip);
+                PopulatePluginList(scroll);
+            });
+
+            strip.Add(allBtn);
+            strip.Add(wsBtn);
+            strip.Add(remoteBtn);
+
+            return strip;
+        }
+
+        private Button CreateFilterTabButton(string label, bool isActive, Action onClick)
+        {
+            var btn = new Button(onClick) { text = label };
+            btn.style.fontSize = 10;
+            btn.style.flexGrow = 1;
+            btn.style.height = 20;
+            btn.style.maxHeight = 20;
+            btn.style.minHeight = 20;
+            btn.style.borderTopWidth = 1;
+            btn.style.borderBottomWidth = 1;
+            btn.style.borderLeftWidth = 1;
+            btn.style.borderRightWidth = 1;
+            btn.style.borderTopLeftRadius = 4;
+            btn.style.borderTopRightRadius = 4;
+            btn.style.borderBottomLeftRadius = 4;
+            btn.style.borderBottomRightRadius = 4;
+            btn.style.marginLeft = 2;
+            btn.style.marginRight = 2;
+            btn.style.paddingLeft = 2;
+            btn.style.paddingRight = 2;
+            btn.style.paddingTop = 1;
+            btn.style.paddingBottom = 1;
+
+            ApplyFilterButtonActiveStyle(btn, isActive);
+            return btn;
+        }
+
+        private void ApplyFilterButtonActiveStyle(Button btn, bool isActive)
+        {
+            if (isActive)
+            {
+                btn.style.backgroundColor = ExoforgeUIStyle.BrandPurple;
+                btn.style.borderTopColor = ExoforgeUIStyle.BrandPurpleActive;
+                btn.style.borderBottomColor = ExoforgeUIStyle.BrandPurpleActive;
+                btn.style.borderLeftColor = ExoforgeUIStyle.BrandPurpleActive;
+                btn.style.borderRightColor = ExoforgeUIStyle.BrandPurpleActive;
+                btn.style.color = Color.white;
+                btn.style.unityFontStyleAndWeight = FontStyle.Bold;
+            }
+            else
+            {
+                btn.style.backgroundColor = ExoforgeUIStyle.BgCard;
+                btn.style.borderTopColor = ExoforgeUIStyle.BorderSubtle;
+                btn.style.borderBottomColor = ExoforgeUIStyle.BorderSubtle;
+                btn.style.borderLeftColor = ExoforgeUIStyle.BorderSubtle;
+                btn.style.borderRightColor = ExoforgeUIStyle.BorderSubtle;
+                btn.style.color = ExoforgeUIStyle.TextSecondary;
+                btn.style.unityFontStyleAndWeight = FontStyle.Normal;
+            }
+        }
+
+        private void UpdateScopeFilterButtonStates(VisualElement strip)
+        {
+            if (strip.childCount >= 3)
+            {
+                if (strip[0] is Button b0) ApplyFilterButtonActiveStyle(b0, _currentScopeFilter == ScopeFilter.All);
+                if (strip[1] is Button b1) ApplyFilterButtonActiveStyle(b1, _currentScopeFilter == ScopeFilter.Workspace);
+                if (strip[2] is Button b2) ApplyFilterButtonActiveStyle(b2, _currentScopeFilter == ScopeFilter.Remote);
+            }
         }
 
         private void PopulatePluginList(ScrollView? scroll)
         {
             if (scroll == null) return;
             scroll.Clear();
+            _pluginCardElements.Clear();
 
             var filtered = _plugins
-                .Where(p => string.IsNullOrWhiteSpace(_searchFilter) ||
-                            p.Name.Contains(_searchFilter, StringComparison.OrdinalIgnoreCase) ||
-                            p.Title.Contains(_searchFilter, StringComparison.OrdinalIgnoreCase) ||
-                            p.Category.Contains(_searchFilter, StringComparison.OrdinalIgnoreCase))
+                .Where(p =>
+                {
+                    if (_currentScopeFilter == ScopeFilter.Workspace && !p.IsLocal) return false;
+                    if (_currentScopeFilter == ScopeFilter.Remote && p.IsLocal) return false;
+
+                    if (string.IsNullOrWhiteSpace(_searchFilter)) return true;
+                    return p.Name.Contains(_searchFilter, StringComparison.OrdinalIgnoreCase) ||
+                           p.Title.Contains(_searchFilter, StringComparison.OrdinalIgnoreCase) ||
+                           p.Category.Contains(_searchFilter, StringComparison.OrdinalIgnoreCase);
+                })
                 .ToList();
 
             if (filtered.Count == 0)
             {
-                var emptyLabel = new Label("No plugins match your filter.");
+                string emptyMsg = _currentScopeFilter switch
+                {
+                    ScopeFilter.Workspace => "No workspace extensions found.",
+                    ScopeFilter.Remote => "No remote cluster extensions found.",
+                    _ => "No extensions match your filter."
+                };
+                var emptyLabel = new Label(emptyMsg);
                 emptyLabel.style.color = ExoforgeUIStyle.TextMuted;
                 emptyLabel.style.fontSize = 11;
                 emptyLabel.style.paddingTop = 16;
@@ -559,15 +771,12 @@ namespace Exoforge.Unity.Editor
                 var card = new VisualElement();
                 ExoforgeUIStyle.ApplyCard(card, isSelected);
                 card.style.cursor = StyleKeyword.Auto;
+                _pluginCardElements[p.Id] = card;
 
-                // Card Click Selection
+                // Card Click Selection: Preserve sidebar scroll and smoothly update selection
                 card.RegisterCallback<ClickEvent>(evt =>
                 {
-                    _selectedPluginId = p.Id;
-                    _selectedDetailTab = 0;
-                    _selectedResourceName = null;
-                    _selectedResourceRow = null;
-                    RebuildUI();
+                    SelectPlugin(p.Id);
                 });
 
                 // Top row: Icon, Name, Version
@@ -581,6 +790,7 @@ namespace Exoforge.Unity.Editor
                 topRow.Add(iconLabel);
 
                 var nameLabel = new Label(p.Name);
+                nameLabel.name = "PluginCardName";
                 nameLabel.style.fontSize = 12;
                 nameLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
                 nameLabel.style.color = isSelected ? ExoforgeUIStyle.TextPrimary : ExoforgeUIStyle.TextSecondary;
@@ -591,15 +801,25 @@ namespace Exoforge.Unity.Editor
                 topRow.Add(verBadge);
                 card.Add(topRow);
 
-                // Bottom row: Badges (Runtime type & status)
+                // Bottom row: Origin pill, Runtime type, and Status badges
                 var bottomRow = new VisualElement();
                 bottomRow.style.flexDirection = FlexDirection.Row;
                 bottomRow.style.alignItems = Align.Center;
                 bottomRow.style.marginTop = 4;
 
+                // Scope Origin Pill (Workspace vs Remote)
+                if (p.IsLocal)
+                {
+                    bottomRow.Add(ExoforgeUIStyle.CreatePill("Workspace", ExoforgeUIStyle.AccentBlue, ExoforgeUIStyle.AccentBlueBg, 9));
+                }
+                else
+                {
+                    bottomRow.Add(ExoforgeUIStyle.CreatePill("Remote", ExoforgeUIStyle.BrandPurpleLight, ExoforgeUIStyle.AccentPurpleBg, 9));
+                }
+
                 string runtimeText = p.Type == "native" ? ".NET" : "Elixir";
-                var runtimeColor = p.Type == "native" ? ExoforgeUIStyle.AccentBlue : ExoforgeUIStyle.AccentPurple;
-                var runtimeBg = p.Type == "native" ? ExoforgeUIStyle.AccentBlueBg : ExoforgeUIStyle.AccentPurpleBg;
+                var runtimeColor = p.Type == "native" ? ExoforgeUIStyle.TextSecondary : ExoforgeUIStyle.AccentPurple;
+                var runtimeBg = p.Type == "native" ? ExoforgeUIStyle.BgCard : ExoforgeUIStyle.AccentPurpleBg;
                 bottomRow.Add(ExoforgeUIStyle.CreatePill(runtimeText, runtimeColor, runtimeBg, 9));
 
                 if (p.IsDeployed)
@@ -680,7 +900,7 @@ namespace Exoforge.Unity.Editor
                 var tabBtn = new Button(() =>
                 {
                     _selectedDetailTab = tabIndex;
-                    RebuildUI();
+                    RebuildDetailPaneOnly();
                 })
                 { text = tabs[i] };
 
@@ -783,10 +1003,22 @@ namespace Exoforge.Unity.Editor
             title.style.color = ExoforgeUIStyle.TextPrimary;
             titleCol.Add(title);
 
+            var subRow = new VisualElement();
+            subRow.style.flexDirection = FlexDirection.Row;
+            subRow.style.alignItems = Align.Center;
+
             var sub = new Label($"{plugin.Id}  •  v{plugin.Version}  •  {plugin.Category}");
             sub.style.fontSize = 11;
             sub.style.color = ExoforgeUIStyle.TextSecondary;
-            titleCol.Add(sub);
+            subRow.Add(sub);
+
+            var originPill = plugin.IsLocal
+                ? ExoforgeUIStyle.CreatePill("📁 Workspace Extension", ExoforgeUIStyle.AccentBlue, ExoforgeUIStyle.AccentBlueBg, 9)
+                : ExoforgeUIStyle.CreatePill("☁ Remote Extension", ExoforgeUIStyle.BrandPurpleLight, ExoforgeUIStyle.AccentPurpleBg, 9);
+            originPill.style.marginLeft = 6;
+            subRow.Add(originPill);
+
+            titleCol.Add(subRow);
             top.Add(titleCol);
 
             var spacer = new VisualElement();
@@ -889,14 +1121,14 @@ namespace Exoforge.Unity.Editor
                 var refreshLogsBtn = ExoforgeUIStyle.CreateModernButton("🔄 Refresh", async () =>
                 {
                     await FetchPluginLogsAsync(plugin.Name);
-                    RebuildUI();
+                    RebuildDetailPaneOnly();
                 }, height: 22);
                 logsHeader.Add(refreshLogsBtn);
 
                 var closeLogsBtn = ExoforgeUIStyle.CreateModernButton("✕", () =>
                 {
                     _showPluginLogs = false;
-                    RebuildUI();
+                    RebuildDetailPaneOnly();
                 }, height: 22);
                 closeLogsBtn.style.marginLeft = 6;
                 logsHeader.Add(closeLogsBtn);
@@ -1097,7 +1329,7 @@ namespace Exoforge.Unity.Editor
                 _selectedResourceRow = null;
                 _showAddRecordForm = false;
                 if (IsConnected) _ = FetchLiveResourceDataAsync(_selectedResourceName);
-                else RebuildUI();
+                else RebuildDetailPaneOnly();
             });
             resToolbar.Add(dropdown);
 
@@ -1108,7 +1340,7 @@ namespace Exoforge.Unity.Editor
             // Mode Toggle: Live Data Explorer vs Schema Definition
             var dataToggleBtn = ExoforgeUIStyle.CreateModernButton(
                 "📊 Live Data",
-                () => { _resourceSchemaViewMode = false; RebuildUI(); },
+                () => { _resourceSchemaViewMode = false; RebuildDetailPaneOnly(); },
                 bg: !_resourceSchemaViewMode ? ExoforgeUIStyle.AccentBlueBg : null,
                 textCol: !_resourceSchemaViewMode ? ExoforgeUIStyle.AccentBlue : null,
                 height: 22);
@@ -1116,7 +1348,7 @@ namespace Exoforge.Unity.Editor
 
             var schemaToggleBtn = ExoforgeUIStyle.CreateModernButton(
                 "📐 Schema",
-                () => { _resourceSchemaViewMode = true; RebuildUI(); },
+                () => { _resourceSchemaViewMode = true; RebuildDetailPaneOnly(); },
                 bg: _resourceSchemaViewMode ? ExoforgeUIStyle.AccentBlueBg : null,
                 textCol: !_resourceSchemaViewMode ? null : ExoforgeUIStyle.AccentBlue,
                 height: 22);
@@ -1308,7 +1540,7 @@ namespace Exoforge.Unity.Editor
                     {
                         _showAddRecordForm = !_showAddRecordForm;
                         _newRecordValues.Clear();
-                        RebuildUI();
+                        RebuildDetailPaneOnly();
                     },
                     bg: _showAddRecordForm ? ExoforgeUIStyle.AccentOrangeBg : ExoforgeUIStyle.AccentGreenBg,
                     textCol: _showAddRecordForm ? ExoforgeUIStyle.AccentOrange : ExoforgeUIStyle.AccentGreen,
@@ -1429,7 +1661,7 @@ namespace Exoforge.Unity.Editor
                             _editFieldValues[prop.Name] = prop.Value.ToString();
                         }
                     }
-                    RebuildUI();
+                    RebuildDetailPaneOnly();
                 });
 
                 foreach (var col in cols)
@@ -1640,7 +1872,7 @@ namespace Exoforge.Unity.Editor
                     _sandboxSelectedAction = name;
                     _sandboxResult = "";
                     _sandboxLatency = "";
-                    RebuildUI();
+                    RebuildDetailPaneOnly();
                 });
 
                 var row = new VisualElement();
@@ -1696,7 +1928,7 @@ namespace Exoforge.Unity.Editor
                 {
                     using var doc = JsonDocument.Parse(_sandboxPayload);
                     _sandboxPayload = JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions { WriteIndented = true });
-                    RebuildUI();
+                    RebuildDetailPaneOnly();
                 }
                 catch { }
             }, height: 20);
@@ -1708,7 +1940,7 @@ namespace Exoforge.Unity.Editor
             var templateBtn = ExoforgeUIStyle.CreateModernButton("Load Template", () =>
             {
                 _sandboxPayload = GenerateSamplePayload(manifest, _sandboxSelectedAction);
-                RebuildUI();
+                RebuildDetailPaneOnly();
             }, height: 20);
             templateBtn.style.fontSize = 10;
             templateBtn.style.paddingLeft = 6;
@@ -2235,12 +2467,12 @@ namespace Exoforge.Unity.Editor
             if (client == null || !client.IsConnected)
             {
                 _sandboxResult = "Error: Not connected to cluster.";
-                RebuildUI();
+                RebuildDetailPaneOnly();
                 return;
             }
 
             _isInvokingAction = true;
-            RebuildUI();
+            RebuildDetailPaneOnly();
 
             var sw = System.Diagnostics.Stopwatch.StartNew();
             try
@@ -2267,7 +2499,7 @@ namespace Exoforge.Unity.Editor
             finally
             {
                 _isInvokingAction = false;
-                RebuildUI();
+                RebuildDetailPaneOnly();
             }
         }
 
@@ -2317,6 +2549,48 @@ namespace Exoforge.Unity.Editor
                 _isBuilding = false;
                 RebuildUI();
             }
+        }
+
+        private async Task BuildAndDeployAllAsync()
+        {
+            if (!IsConnected)
+            {
+                ShowStatus("Cannot deploy: not connected to cluster.");
+                return;
+            }
+
+            var wsPlugins = _plugins.Where(p => p.IsLocal && p.Type == "native").ToList();
+            if (wsPlugins.Count == 0)
+            {
+                ShowStatus("No buildable workspace extensions found.");
+                return;
+            }
+
+            ShowStatus($"Building {wsPlugins.Count} workspace extension(s)…");
+            foreach (var p in wsPlugins)
+            {
+                await BuildPluginAsync(p);
+            }
+
+            ShowStatus($"Deploying {wsPlugins.Count} workspace extension(s) to cluster…");
+            int success = 0;
+            var ws = ExoWorkspace.Load(ExoforgeEditorConfig.GetAbsoluteWorkspacePath());
+            var deployer = new ExoDeployer(ws);
+            foreach (var p in wsPlugins)
+            {
+                try
+                {
+                    await deployer.UploadPluginAsync(p.Name, existingClient: GetClient());
+                    success++;
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"[Exoforge] Failed to deploy '{p.Name}': {ex.Message}");
+                }
+            }
+
+            ShowStatus($"✓ Successfully built and deployed {success}/{wsPlugins.Count} extension(s).");
+            await RefreshPluginsDataAsync();
         }
 
         private async Task DeployPluginAsync(PluginCardModel plugin)

@@ -409,11 +409,13 @@ namespace Exoforge.Plugin.SDK
             }
         }
 
-        // Detect dependencies referenced via static holder: Exo.<Service> or Exoforge.<Service>
+        // Detect dependencies referenced via static holder: Exo.<Service>, Exoforge.<Service>, or I<Service>Service
+        var visitedTrees = new HashSet<SyntaxTree>();
         foreach (var syntaxRef in root.DeclaringSyntaxReferences)
         {
-            var syntax = syntaxRef.GetSyntax(ct);
-            foreach (var memberAccess in syntax.DescendantNodes().OfType<MemberAccessExpressionSyntax>())
+            if (!visitedTrees.Add(syntaxRef.SyntaxTree)) continue;
+            var fileRoot = syntaxRef.SyntaxTree.GetRoot(ct);
+            foreach (var memberAccess in fileRoot.DescendantNodes().OfType<MemberAccessExpressionSyntax>())
             {
                 string exprText = memberAccess.Expression.ToString();
                 if (exprText is "Exo" or "Exoforge"
@@ -437,6 +439,15 @@ namespace Exoforge.Plugin.SDK
                     }
 
                     string dep = ToSnakeCase(propName);
+                    if (!string.IsNullOrEmpty(dep) && !dependencies.Contains(dep))
+                    {
+                        dependencies.Add(dep);
+                    }
+                }
+                else if (exprText.StartsWith("I", StringComparison.Ordinal) && exprText.EndsWith("Service", StringComparison.Ordinal) && exprText.Length > 8)
+                {
+                    string svc = exprText.Substring(1, exprText.Length - 8);
+                    string dep = ToSnakeCase(svc);
                     if (!string.IsNullOrEmpty(dep) && !dependencies.Contains(dep))
                     {
                         dependencies.Add(dep);

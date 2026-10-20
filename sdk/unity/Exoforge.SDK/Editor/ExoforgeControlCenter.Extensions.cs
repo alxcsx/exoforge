@@ -107,6 +107,14 @@ public partial class ExoforgeControlCenter : EditorWindow
         var secTitleStyle = new GUIStyle(EditorStyles.boldLabel) { fontSize = 13 };
         EditorGUILayout.LabelField($"Workspace Extensions ({_localPlugins.Count})", secTitleStyle);
 
+        using (new EditorGUI.DisabledScope(_isBuilding || !_isConnected || _localPlugins.Count == 0))
+        {
+            if (GUILayout.Button(new GUIContent("🚀 Build & Deploy All", "Build all workspace extensions and deploy them to the cluster"), EditorStyles.miniButton, GUILayout.Width(135)))
+            {
+                _ = BuildAndDeployAllAsync();
+            }
+        }
+
         if (GUILayout.Button(new GUIContent("⬇ Refresh Dependencies", "Generate type stubs for all extensions in the workspace"), EditorStyles.miniButton, GUILayout.Width(145)))
         {
             _ = GenerateAllStubsAsync();
@@ -418,6 +426,31 @@ public partial class ExoforgeControlCenter : EditorWindow
         }
 
         ShowStatus($"✓ Built {targets.Count} plugin(s).", MessageType.Info);
+    }
+
+    private async Task BuildAndDeployAllAsync()
+    {
+        if (_isBuilding) return;
+        if (!_isConnected)
+        {
+            ShowStatus("Cannot deploy: not connected to cluster.", MessageType.Warning);
+            return;
+        }
+
+        var targets = _localPlugins.Where(p => p.CanBuild).ToList();
+        if (targets.Count == 0)
+        {
+            ShowStatus("No buildable workspace extensions found.", MessageType.Warning);
+            return;
+        }
+
+        ShowStatus($"Building all ({targets.Count}) workspace extension(s)…", MessageType.Info);
+        foreach (var plugin in targets)
+        {
+            await BuildPluginAsync(plugin, thenDeploy: false);
+        }
+
+        await DeployAllAsync();
     }
 
     private async Task DeployAllAsync()
