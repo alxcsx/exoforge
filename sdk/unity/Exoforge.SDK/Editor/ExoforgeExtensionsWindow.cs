@@ -2359,7 +2359,6 @@ namespace Exoforge.Unity.Editor
                                 }
                             }
                         }
-                    }
                     catch (Exception ex)
                     {
                         Debug.LogWarning($"[Exoforge Plugins] Failed to fetch cluster manifest export: {ex.Message}");

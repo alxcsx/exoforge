@@ -424,17 +424,25 @@ public class ExoDeployer
         CancellationToken cancellationToken = default) =>
         GeneratePluginStubsAsync(extensionName, existingClient, emit, cancellationToken);
 
-    public Task<string> GeneratePluginStubsAsync(
-        string pluginName,
-        ExoClient? existingClient,
+    public Task<string> GenerateExtensionStubsAsync(
+        string extensionName,
+        IEnumerable<string>? services,
+        ExoClient? existingClient = null,
         Action<string>? emit = null,
         CancellationToken cancellationToken = default) =>
-        GeneratePluginStubsAsync(pluginName, services: null, existingClient, emit, cancellationToken);
+        GeneratePluginStubsAsync(extensionName, services, existingClient, emit, cancellationToken);
+
+    public Task<string> GeneratePluginStubsAsync(
+        string pluginName,
+        ExoClient? existingClient = null,
+        Action<string>? emit = null,
+        CancellationToken cancellationToken = default) =>
+        GeneratePluginStubsAsync(pluginName, services: null, existingClient: existingClient, emit: emit, cancellationToken: cancellationToken);
 
     /// <summary>Fetches the contracts and writes typed stubs into the extension's <c>src/Generated</c> folder.</summary>
     public async Task<string> GeneratePluginStubsAsync(
         string pluginName,
-        IEnumerable<string>? services = null,
+        IEnumerable<string>? services,
         ExoClient? existingClient = null,
         Action<string>? emit = null,
         CancellationToken cancellationToken = default)
