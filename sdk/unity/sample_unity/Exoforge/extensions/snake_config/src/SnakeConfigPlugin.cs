@@ -26,7 +26,7 @@ public class SnakeConfigPlugin
             record = new SnakeConfigRecord();
             Database?.Put(record);
         }
-        return record.ToData();
+        return new SnakeConfigData(record);
     }
 
     [ExoAction]
@@ -43,7 +43,7 @@ public class SnakeConfigPlugin
         Database?.Put(updated);
         Logger?.Info($"[snake_config] Updated config: points={updated.ApplePoints}, snake={updated.SnakeColor}");
 
-        return updated.ToData();
+        return new SnakeConfigData(updated);
     }
 }
 
@@ -71,8 +71,6 @@ public record SnakeConfigRecord
     [ExoColumn(Label = "Updated At")]
     public long UpdatedAt { get; init; }
 
-    public SnakeConfigData ToData() => new(SnakeColor, AppleColor, ApplePoints, BackgroundFileId, BackgroundAddressable);
-
     public SnakeConfigRecord With(string? snake, string? apple, int? points, string? fileId, string? addressable) => this with
     {
         SnakeColor = !string.IsNullOrEmpty(snake) ? snake : SnakeColor,
@@ -91,4 +89,15 @@ public record SnakeConfigData(
     int ApplePoints = 10,
     string BackgroundFileId = "",
     string BackgroundAddressable = "Background_CyberGrid"
-);
+)
+{
+    public SnakeConfigData(SnakeConfigRecord record)
+        : this(
+            record.SnakeColor,
+            record.AppleColor,
+            record.ApplePoints,
+            record.BackgroundFileId,
+            record.BackgroundAddressable)
+    {
+    }
+}
