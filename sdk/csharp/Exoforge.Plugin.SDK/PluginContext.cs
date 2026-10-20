@@ -32,47 +32,11 @@ public class HostPluginContext : IPluginContext
     }
 
     /// <summary>
-    /// Inspects plugin object properties and injects services decorated with [Inject].
-    /// Handles both instance and static members, so plain plugin classes get their dependencies too.
+    /// Configures the ambient <c>Exo</c> context for the plugin.
     /// </summary>
-    // The generated entry point roots the plugin type's properties with [DynamicDependency], which is
-    // what keeps this reflection safe. The annotation that used to sit on `target` did nothing - the
-    // attribute applies only to a `Type` or a `string`, so on an instance it was invalid and the ILC
-    // said so on every plugin build (IL2098). Removing it changes no behaviour, only the noise.
-    [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "The generated entry point roots the plugin type's properties with [DynamicDependency].")]
     public static void Wire(object target, IPluginContext context)
     {
-        if (target == null || context == null) return;
-
-        var type = target.GetType();
-        var props = type.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
-
-
-        foreach (var prop in props)
-        {
-            var inject = prop.GetCustomAttribute<InjectAttribute>();
-            if (inject == null || !prop.CanWrite) continue;
-
-            object? value =
-                prop.PropertyType == typeof(IDatabase) ? context.Database :
-                prop.PropertyType == typeof(IEventDispatcher) ? context.Events :
-                prop.PropertyType == typeof(IActionDispatcher) ? context.Actions :
-                prop.PropertyType == typeof(ILogger) ? context.Logger :
-                prop.PropertyType == typeof(IPluginContext) ? context :
-                null;
-
-            // Generated service clients are registered by their module initializer; inject them too,
-            // so plugin code only ever deals with services.
-            if (value == null)
-            {
-                PluginServiceRegistry.TryCreate(prop.PropertyType, context.Actions, out value);
-            }
-
-            if (value == null) continue;
-
-            if (prop.GetMethod?.IsStatic == true) prop.SetValue(null, value);
-            else prop.SetValue(target, value);
-        }
+        if (context != null) PluginHost.CurrentContext = context;
     }
 }
 

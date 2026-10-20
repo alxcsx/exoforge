@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Exoforge.Plugin.SDK;
+using Exoforge.Plugins.Generated;
 using Exoforge.Plugins.UnityAddressables;
 using Xunit;
 
@@ -46,7 +48,9 @@ public class UnityAddressablesPluginTests
     public void EmptyByDefault_WhenDatabaseEmpty()
     {
         var db = new TestDatabase();
-        var plugin = new UnityAddressablesPlugin { Database = db };
+        Exo.Reset();
+        Exo.Database = db;
+        var plugin = new UnityAddressablesPlugin();
 
         var stats = plugin.GetStats();
 
@@ -65,7 +69,9 @@ public class UnityAddressablesPluginTests
     public void PublishRelease_AddsReleaseAndAssets_AndGetManifestWorks()
     {
         var db = new TestDatabase();
-        var plugin = new UnityAddressablesPlugin { Database = db };
+        Exo.Reset();
+        Exo.Database = db;
+        var plugin = new UnityAddressablesPlugin();
 
         var publishedAssets = new List<AddressableAssetDto>
         {
@@ -93,7 +99,8 @@ public class UnityAddressablesPluginTests
 
         var pubResult = plugin.PublishRelease("1.0.0", "latest", "catalog_hash_123", "{\"catalog\":true}", publishedAssets);
         Assert.True(pubResult.IsSuccess);
-        Assert.Equal("1.0.0", pubResult.Value.Version);
+        Assert.NotNull(pubResult.Value);
+        Assert.Equal("1.0.0", pubResult.Value!.Version);
         Assert.Equal("latest", pubResult.Value.Badge);
 
         var stats = plugin.GetStats();
@@ -122,14 +129,17 @@ public class UnityAddressablesPluginTests
     public void PromoteRelease_UpdatesBadge()
     {
         var db = new TestDatabase();
-        var plugin = new UnityAddressablesPlugin { Database = db };
+        Exo.Reset();
+        Exo.Database = db;
+        var plugin = new UnityAddressablesPlugin();
 
         plugin.PublishRelease("1.0.0", "latest", "hash1", null, new List<AddressableAssetDto>());
 
         var promoResult = plugin.PromoteRelease("1.0.0", "production");
 
         Assert.True(promoResult.IsSuccess);
-        Assert.Equal("production", promoResult.Value.Badge);
+        Assert.NotNull(promoResult.Value);
+        Assert.Equal("production", promoResult.Value!.Badge);
 
         var stats = plugin.GetStats();
         Assert.Equal("production", stats.ActiveBadge);
@@ -160,11 +170,11 @@ public class UnityAddressablesPluginTests
         }
     }
 
-    private class TestFileBucketService : Exoforge.Plugins.Generated.IFileBucketService
+    private class TestFileBucketService : IFileBucketService
     {
-        public Exoforge.Plugins.Generated.FileBucketUploadFileRequest? LastRequest { get; private set; }
+        public FileBucketUploadFileRequest? LastRequest { get; private set; }
 
-        public Task<Exoforge.Plugins.Generated.FileBucketUploadFileResponse?> UploadFileAsync(Exoforge.Plugins.Generated.FileBucketUploadFileRequest request)
+        public Task<FileBucketUploadFileResponse?> UploadFileAsync(FileBucketUploadFileRequest request)
         {
             LastRequest = request;
             var fileJson = System.Text.Json.JsonSerializer.SerializeToElement(new
@@ -175,19 +185,19 @@ public class UnityAddressablesPluginTests
                 url = $"/api/files/addressables/fl_preview123/{request.Filename}"
             });
 
-            return Task.FromResult<Exoforge.Plugins.Generated.FileBucketUploadFileResponse?>(new Exoforge.Plugins.Generated.FileBucketUploadFileResponse
+            return Task.FromResult<FileBucketUploadFileResponse?>(new FileBucketUploadFileResponse
             {
                 File = fileJson
             });
         }
 
-        public Task<Exoforge.Plugins.Generated.FileBucketGetFileInfoResponse?> GetFileInfoAsync(Exoforge.Plugins.Generated.FileBucketGetFileInfoRequest request) => Task.FromResult<Exoforge.Plugins.Generated.FileBucketGetFileInfoResponse?>(null);
-        public Task<Exoforge.Plugins.Generated.FileBucketReadFileResponse?> ReadFileAsync(Exoforge.Plugins.Generated.FileBucketReadFileRequest request) => Task.FromResult<Exoforge.Plugins.Generated.FileBucketReadFileResponse?>(null);
-        public Task<Exoforge.Plugins.Generated.FileBucketListFilesResponse?> ListFilesAsync(Exoforge.Plugins.Generated.FileBucketListFilesRequest request) => Task.FromResult<Exoforge.Plugins.Generated.FileBucketListFilesResponse?>(null);
-        public Task<Exoforge.Plugins.Generated.FileBucketListBucketsResponse?> ListBucketsAsync(Exoforge.Plugins.Generated.FileBucketListBucketsRequest request) => Task.FromResult<Exoforge.Plugins.Generated.FileBucketListBucketsResponse?>(null);
-        public Task<Exoforge.Plugins.Generated.FileBucketListBucketsResponse?> ListBucketsAsync() => Task.FromResult<Exoforge.Plugins.Generated.FileBucketListBucketsResponse?>(null);
-        public Task<Exoforge.Plugins.Generated.FileBucketUpdateFileResponse?> UpdateFileAsync(Exoforge.Plugins.Generated.FileBucketUpdateFileRequest request) => Task.FromResult<Exoforge.Plugins.Generated.FileBucketUpdateFileResponse?>(null);
-        public Task<Exoforge.Plugins.Generated.FileBucketDeleteFileResponse?> DeleteFileAsync(Exoforge.Plugins.Generated.FileBucketDeleteFileRequest request) => Task.FromResult<Exoforge.Plugins.Generated.FileBucketDeleteFileResponse?>(null);
+        public Task<FileBucketGetFileInfoResponse?> GetFileInfoAsync(FileBucketGetFileInfoRequest request) => Task.FromResult<FileBucketGetFileInfoResponse?>(null);
+        public Task<FileBucketReadFileResponse?> ReadFileAsync(FileBucketReadFileRequest request) => Task.FromResult<FileBucketReadFileResponse?>(null);
+        public Task<FileBucketListFilesResponse?> ListFilesAsync(FileBucketListFilesRequest request) => Task.FromResult<FileBucketListFilesResponse?>(null);
+        public Task<FileBucketListBucketsResponse?> ListBucketsAsync(FileBucketListBucketsRequest request) => Task.FromResult<FileBucketListBucketsResponse?>(null);
+        public Task<FileBucketListBucketsResponse?> ListBucketsAsync() => Task.FromResult<FileBucketListBucketsResponse?>(null);
+        public Task<FileBucketUpdateFileResponse?> UpdateFileAsync(FileBucketUpdateFileRequest request) => Task.FromResult<FileBucketUpdateFileResponse?>(null);
+        public Task<FileBucketDeleteFileResponse?> DeleteFileAsync(FileBucketDeleteFileRequest request) => Task.FromResult<FileBucketDeleteFileResponse?>(null);
     }
 
     [Fact]
@@ -195,7 +205,10 @@ public class UnityAddressablesPluginTests
     {
         var db = new TestDatabase();
         var actions = new TestActionDispatcher();
-        var plugin = new UnityAddressablesPlugin { Database = db, Actions = actions };
+        Exo.Reset();
+        Exo.Database = db;
+        Exo.Actions = actions;
+        var plugin = new UnityAddressablesPlugin();
 
         byte[] fakeData = System.Text.Encoding.UTF8.GetBytes("BUNDLE_DATA");
         string base64 = Convert.ToBase64String(fakeData);
@@ -211,7 +224,10 @@ public class UnityAddressablesPluginTests
     {
         var db = new TestDatabase();
         var fileBucket = new TestFileBucketService();
-        var plugin = new UnityAddressablesPlugin { Database = db, FileBucket = fileBucket };
+        Exo.Reset();
+        Exo.Database = db;
+        Exo.FileBucket = fileBucket;
+        var plugin = new UnityAddressablesPlugin();
 
         byte[] fakeData = System.Text.Encoding.UTF8.GetBytes("BUNDLE_DATA");
         string base64 = Convert.ToBase64String(fakeData);
@@ -231,7 +247,10 @@ public class UnityAddressablesPluginTests
     {
         var db = new TestDatabase();
         var fileBucket = new TestFileBucketService();
-        var plugin = new UnityAddressablesPlugin { Database = db, FileBucket = fileBucket };
+        Exo.Reset();
+        Exo.Database = db;
+        Exo.FileBucket = fileBucket;
+        var plugin = new UnityAddressablesPlugin();
 
         db.Put(UnityAddressablesPlugin.AssetsTable, "Cube_Asset", new AddressableAssetRecord
         {

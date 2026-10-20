@@ -210,16 +210,10 @@ namespace {{ns}};
     Category = "Game", Title = "{{className}}", Icon = "🧩")]
 public class {{className}}{{suffix}}
 {
-    [Inject("database")]
-    public IDatabase? Database { get; set; }
-
-    [Inject]
-    public ILogger? Logger { get; set; }
-
     [ExoAction]
     public int Ping()
     {
-        Logger?.Info("[{{serviceName}}] ping");
+        Exo.Logger.Info("[{{serviceName}}] ping");
         return 42;
     }
 

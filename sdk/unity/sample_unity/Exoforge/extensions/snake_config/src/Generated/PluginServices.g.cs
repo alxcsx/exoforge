@@ -15,10 +15,12 @@ namespace Exoforge.Plugins.Generated
     public class DatabaseExecuteRequest
     {
         [JsonPropertyName("arguments")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public JsonElement Arguments { get; set; } = default!;
         [JsonPropertyName("operation")]
         public string Operation { get; set; } = default!;
         [JsonPropertyName("plugin")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public JsonElement Plugin { get; set; } = default!;
     }
 
@@ -33,6 +35,7 @@ namespace Exoforge.Plugins.Generated
         [JsonPropertyName("table")]
         public string Table { get; set; } = default!;
         [JsonPropertyName("plugin")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public JsonElement Plugin { get; set; } = default!;
     }
 
@@ -219,10 +222,12 @@ namespace Exoforge.Plugins.Generated
         [JsonPropertyName("catalog_json")]
         public string CatalogJson { get; set; } = default!;
         [JsonPropertyName("assets")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public JsonElement Assets { get; set; } = default!;
         [JsonPropertyName("uploader")]
         public string Uploader { get; set; } = default!;
         [JsonPropertyName("badges")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public JsonElement Badges { get; set; } = default!;
     }
 
@@ -421,6 +426,134 @@ namespace Exoforge.Plugins.Generated
         public UnityAddressablesServiceClient UnityAddressables => _unity_addressables ??= new UnityAddressablesServiceClient(_dispatcher);
     }
 
+}
+
+namespace Exoforge.Plugin.SDK
+{
+    public static class Exo
+    {
+        private static IDatabase? _databaseOverride;
+        private static ILogger? _loggerOverride;
+        private static IEventDispatcher? _eventsOverride;
+        private static IActionDispatcher? _actionsOverride;
+        private static IPluginContext? _contextOverride;
+
+        public static IDatabase Database
+        {
+            get => _databaseOverride ?? Context.Database;
+            set => _databaseOverride = value;
+        }
+
+        public static ILogger Logger
+        {
+            get => _loggerOverride ?? Context.Logger;
+            set => _loggerOverride = value;
+        }
+
+        public static IEventDispatcher Events
+        {
+            get => _eventsOverride ?? Context.Events;
+            set => _eventsOverride = value;
+        }
+
+        public static IActionDispatcher Actions
+        {
+            get => _actionsOverride ?? Context.Actions;
+            set => _actionsOverride = value;
+        }
+
+        public static IPluginContext Context
+        {
+            get => _contextOverride ?? PluginHost.CurrentContext;
+            set => _contextOverride = value;
+        }
+
+        private static global::Exoforge.Plugins.Generated.ExoforgePluginServices? _services;
+        public static global::Exoforge.Plugins.Generated.ExoforgePluginServices Services
+        {
+            get => _services ??= new global::Exoforge.Plugins.Generated.ExoforgePluginServices(Actions);
+            set => _services = value;
+        }
+
+        private static global::Exoforge.Plugins.Generated.IUnityAddressablesService? _unity_addressablesOverride;
+        public static global::Exoforge.Plugins.Generated.IUnityAddressablesService UnityAddressables
+        {
+            get => _unity_addressablesOverride ?? Services.UnityAddressables;
+            set => _unity_addressablesOverride = value;
+        }
+        public static global::Exoforge.Plugins.Generated.IUnityAddressablesService UnityAddressablesService
+        {
+            get => UnityAddressables;
+            set => UnityAddressables = value;
+        }
+
+        public static void Reset()
+        {
+            _databaseOverride = null;
+            _loggerOverride = null;
+            _eventsOverride = null;
+            _actionsOverride = null;
+            _contextOverride = null;
+            _services = null;
+            _unity_addressablesOverride = null;
+        }
+    }
+
+    public static class Exoforge
+    {
+        public static IDatabase Database
+        {
+            get => Exo.Database;
+            set => Exo.Database = value;
+        }
+
+        public static ILogger Logger
+        {
+            get => Exo.Logger;
+            set => Exo.Logger = value;
+        }
+
+        public static IEventDispatcher Events
+        {
+            get => Exo.Events;
+            set => Exo.Events = value;
+        }
+
+        public static IActionDispatcher Actions
+        {
+            get => Exo.Actions;
+            set => Exo.Actions = value;
+        }
+
+        public static IPluginContext Context
+        {
+            get => Exo.Context;
+            set => Exo.Context = value;
+        }
+
+        public static global::Exoforge.Plugins.Generated.ExoforgePluginServices Services
+        {
+            get => Exo.Services;
+            set => Exo.Services = value;
+        }
+
+        public static global::Exoforge.Plugins.Generated.IUnityAddressablesService UnityAddressables
+        {
+            get => Exo.UnityAddressables;
+            set => Exo.UnityAddressables = value;
+        }
+        public static global::Exoforge.Plugins.Generated.IUnityAddressablesService UnityAddressablesService
+        {
+            get => Exo.UnityAddressables;
+            set => Exo.UnityAddressables = value;
+        }
+
+        public static void Reset() => Exo.Reset();
+    }
+}
+
+namespace Exoforge.Plugins.Generated
+{
     [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
     [JsonSerializable(typeof(DatabaseExecuteRequest))]
     [JsonSerializable(typeof(DatabaseExecuteResponse))]

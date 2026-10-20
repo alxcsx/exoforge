@@ -1,7 +1,7 @@
 {
   "id": "unity_addressables",
   "type": "native",
-  "version": "1.0.0+2.92a769ad",
+  "version": "1.0.0+3.e1498970",
   "context": "global",
   "entry_point": "unity_addressables",
   "dependencies": ["database", "file_bucket"],

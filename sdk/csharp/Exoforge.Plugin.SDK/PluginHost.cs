@@ -63,6 +63,14 @@ public static class PluginHost
     private static object? _instance;
     private static MethodInfo? _eventHandler;
     private static IExoforgeDispatch? _dispatch;
+    private static IPluginContext? _currentContext;
+
+    /// <summary>The ambient plugin context for the currently executing plugin.</summary>
+    public static IPluginContext CurrentContext
+    {
+        get => _currentContext ?? HostPluginContext.Default;
+        set => _currentContext = value;
+    }
 
     /// <summary>Runs <typeparamref name="T"/> until stdin closes.</summary>
     /// <remarks>
@@ -175,8 +183,7 @@ public static class PluginHost
         _dispatch = dispatch;
         var pluginType = instance.GetType();
 
-        // Wire [Inject] dependencies (including static properties on plain plugin classes).
-        HostPluginContext.Wire(instance, new HostPluginContext(ResolvePluginId(pluginType)));
+        CurrentContext = new HostPluginContext(ResolvePluginId(pluginType));
 
         // A generated table needs no reflection. The reflection path stays as the fallback for a
         // plugin that has not been through the generator - including this SDK's own tests.

@@ -17,23 +17,11 @@ public class UnityAddressablesPlugin
     public const string AssetsTable = "addressable_assets";
     public const string ReleasesTable = "addressable_releases";
 
-    [Inject("database")]
-    public IDatabase? Database { get; set; }
-
-    [Inject]
-    public IActionDispatcher? Actions { get; set; }
-
-    [Inject]
-    public ILogger? Logger { get; set; }
-
-    [Inject("file_bucket")]
-    public IFileBucketService? FileBucket { get; set; }
-
     [ExoAction]
     public AddressablesStats GetStats()
     {
-        var assets = Database?.All<AddressableAssetRecord>() ?? Array.Empty<AddressableAssetRecord>();
-        var releases = Database?.All<AddressableReleaseRecord>() ?? Array.Empty<AddressableReleaseRecord>();
+        var assets = Exo.Database.All<AddressableAssetRecord>() ?? Array.Empty<AddressableAssetRecord>();
+        var releases = Exo.Database.All<AddressableReleaseRecord>() ?? Array.Empty<AddressableReleaseRecord>();
 
         var latestRelease = releases.OrderByDescending(r => r.BuildNumber).ThenByDescending(r => r.CreatedAt).FirstOrDefault();
         var bundles = assets.Select(a => a.BundleName).Where(b => !string.IsNullOrEmpty(b)).Distinct().Count();
@@ -54,7 +42,7 @@ public class UnityAddressablesPlugin
     [ExoAction]
     public List<AddressableAssetRecord> ListAssets(string? group = null, string? label = null, string? search = null, string? tag = null)
     {
-        var assets = Database?.All<AddressableAssetRecord>() ?? Array.Empty<AddressableAssetRecord>();
+        var assets = Exo.Database.All<AddressableAssetRecord>() ?? Array.Empty<AddressableAssetRecord>();
 
         var query = assets.AsEnumerable();
 
@@ -89,20 +77,20 @@ public class UnityAddressablesPlugin
     public AddressableAssetRecord? GetAsset(string address)
     {
         if (string.IsNullOrEmpty(address)) return null;
-        return Database?.Get<AddressableAssetRecord>(address);
+        return Exo.Database.Get<AddressableAssetRecord>(address);
     }
 
     [ExoAction]
     public List<AddressableReleaseRecord> ListReleases()
     {
-        var releases = Database?.All<AddressableReleaseRecord>() ?? Array.Empty<AddressableReleaseRecord>();
+        var releases = Exo.Database.All<AddressableReleaseRecord>() ?? Array.Empty<AddressableReleaseRecord>();
         return releases.OrderByDescending(r => r.BuildNumber).ThenByDescending(r => r.CreatedAt).ToList();
     }
 
     [ExoAction]
     public AddressablesManifestDto? GetManifest(string tag = "latest")
     {
-        var releases = Database?.All<AddressableReleaseRecord>() ?? Array.Empty<AddressableReleaseRecord>();
+        var releases = Exo.Database.All<AddressableReleaseRecord>() ?? Array.Empty<AddressableReleaseRecord>();
         var targetBadge = string.IsNullOrWhiteSpace(tag) ? "latest" : tag.Trim().ToLowerInvariant();
 
         var release = releases.FirstOrDefault(r => r.Badges != null && r.Badges.Any(b => b.ToLowerInvariant() == targetBadge))
@@ -111,7 +99,7 @@ public class UnityAddressablesPlugin
 
         if (release == null) return null;
 
-        var allAssets = Database?.All<AddressableAssetRecord>() ?? Array.Empty<AddressableAssetRecord>();
+        var allAssets = Exo.Database.All<AddressableAssetRecord>() ?? Array.Empty<AddressableAssetRecord>();
         var assets = allAssets.OrderBy(a => a.Address).ToList();
 
         if (releases.Count > 1)
@@ -141,7 +129,7 @@ public class UnityAddressablesPlugin
         string? uploader = null,
         List<string>? badges = null)
     {
-        var existingReleases = Database?.All<AddressableReleaseRecord>() ?? Array.Empty<AddressableReleaseRecord>();
+        var existingReleases = Exo.Database.All<AddressableReleaseRecord>() ?? Array.Empty<AddressableReleaseRecord>();
 
         // 1. Incremental Counter: compute next build number automatically
         int nextBuildNumber = 1;
@@ -191,7 +179,7 @@ public class UnityAddressablesPlugin
                 if (!oldBadges.SequenceEqual(oldRel.Badges ?? new List<string> { oldRel.Badge }))
                 {
                     var updatedOld = oldRel with { Badges = oldBadges, Badge = oldBadges[0] };
-                    Database?.Put(updatedOld);
+                    Exo.Database.Put(updatedOld);
                 }
             }
         }
@@ -231,7 +219,7 @@ public class UnityAddressablesPlugin
                 UpdatedAt = now
             };
 
-            Database?.Put(record);
+            Exo.Database.Put(record);
             totalSize += dto.FileSize;
             if (!string.IsNullOrEmpty(dto.BundleName))
             {
@@ -253,8 +241,8 @@ public class UnityAddressablesPlugin
             CreatedAt = now
         };
 
-        Database?.Put(release);
-        Logger?.Info($"[unity_addressables] Published build #{nextBuildNumber} (v{resolvedVersion}) by {safeUploader} with badges: {string.Join(", ", badgeList)} ({assetList.Count} assets)");
+        Exo.Database.Put(release);
+        Exo.Logger.Info($"[unity_addressables] Published build #{nextBuildNumber} (v{resolvedVersion}) by {safeUploader} with badges: {string.Join(", ", badgeList)} ({assetList.Count} assets)");
 
         return Result<AddressableReleaseRecord>.Ok(release);
     }
@@ -267,7 +255,7 @@ public class UnityAddressablesPlugin
             return Result<AddressableReleaseRecord>.Fail("Version and target badge are required");
         }
 
-        var releases = Database?.All<AddressableReleaseRecord>() ?? Array.Empty<AddressableReleaseRecord>();
+        var releases = Exo.Database.All<AddressableReleaseRecord>() ?? Array.Empty<AddressableReleaseRecord>();
         var existing = releases.FirstOrDefault(r => r.Version == version || r.BuildNumber.ToString() == version);
         if (existing == null)
         {
@@ -292,7 +280,7 @@ public class UnityAddressablesPlugin
                     .ToList();
                 if (otherBadges.Count == 0) otherBadges.Add("archived");
                 var updatedOther = other with { Badges = otherBadges, Badge = otherBadges[0] };
-                Database?.Put(updatedOther);
+                Exo.Database.Put(updatedOther);
             }
         }
 
@@ -300,8 +288,8 @@ public class UnityAddressablesPlugin
         var mergedBadges = incomingBadges.Concat(currentBadges).Distinct().ToList();
 
         var updated = existing with { Badges = mergedBadges, Badge = mergedBadges[0] };
-        Database?.Put(updated);
-        Logger?.Info($"[unity_addressables] Promoted Build #{existing.BuildNumber} (v{existing.Version}) with badges: {string.Join(", ", mergedBadges)}");
+        Exo.Database.Put(updated);
+        Exo.Logger.Info($"[unity_addressables] Promoted Build #{existing.BuildNumber} (v{existing.Version}) with badges: {string.Join(", ", mergedBadges)}");
 
         return Result<AddressableReleaseRecord>.Ok(updated);
     }
@@ -324,50 +312,29 @@ public class UnityAddressablesPlugin
                 subfolder = subfolder ?? "bundles"
             };
 
-            if (FileBucket != null)
+            var req = new FileBucketUploadFileRequest
             {
-                var req = new FileBucketUploadFileRequest
-                {
-                    Bucket = JsonSerializer.SerializeToElement("addressables"),
-                    Filename = cleanName,
-                    Content = JsonSerializer.SerializeToElement(base64Data),
-                    Metadata = JsonSerializer.SerializeToElement(metadata)
-                };
+                Bucket = JsonSerializer.SerializeToElement("addressables"),
+                Filename = cleanName,
+                Content = JsonSerializer.SerializeToElement(base64Data),
+                Metadata = JsonSerializer.SerializeToElement(metadata)
+            };
 
-                var res = FileBucket.UploadFileAsync(req).GetAwaiter().GetResult();
-                if (res?.File.ValueKind == JsonValueKind.Object && res.File.TryGetProperty("url", out var urlProp))
-                {
-                    string fileUrl = urlProp.GetString() ?? "";
-                    Logger?.Info($"[unity_addressables] Uploaded bundle {cleanName} to file_bucket ({fileUrl})");
-                    return Result<string>.Ok(fileUrl);
-                }
-            }
-            else if (Actions != null)
+            var res = Exo.FileBucket.UploadFileAsync(req).GetAwaiter().GetResult();
+            if (res?.File.ValueKind == JsonValueKind.Object && res.File.TryGetProperty("url", out var urlProp))
             {
-                var payload = new
-                {
-                    bucket = "addressables",
-                    filename = cleanName,
-                    content = base64Data,
-                    metadata
-                };
-
-                var res = Actions.CallAction<JsonElement>("file_bucket", "upload_file", payload);
-                if (res.ValueKind == JsonValueKind.Object && res.TryGetProperty("file", out var fileObj) && fileObj.TryGetProperty("url", out var urlProp))
-                {
-                    string fileUrl = urlProp.GetString() ?? "";
-                    Logger?.Info($"[unity_addressables] Uploaded bundle {cleanName} to file_bucket ({fileUrl})");
-                    return Result<string>.Ok(fileUrl);
-                }
+                string fileUrl = urlProp.GetString() ?? "";
+                Exo.Logger.Info($"[unity_addressables] Uploaded bundle {cleanName} to file_bucket ({fileUrl})");
+                return Result<string>.Ok(fileUrl);
             }
 
             string relativeUrl = $"/api/files/addressables/{cleanName}";
-            Logger?.Info($"[unity_addressables] Uploaded bundle {cleanName} to file_bucket");
+            Exo.Logger.Info($"[unity_addressables] Uploaded bundle {cleanName} to file_bucket");
             return Result<string>.Ok(relativeUrl);
         }
         catch (Exception ex)
         {
-            Logger?.Error($"[unity_addressables] Failed to upload bundle: {ex.Message}");
+            Exo.Logger.Error($"[unity_addressables] Failed to upload bundle: {ex.Message}");
             return Result<string>.Fail(ex.Message);
         }
     }
@@ -384,10 +351,10 @@ public class UnityAddressablesPlugin
         if (!saveRes.IsSuccess) return saveRes;
 
         string url = saveRes.Value ?? "";
-        var existing = Database?.Get<AddressableAssetRecord>(address);
+        var existing = Exo.Database.Get<AddressableAssetRecord>(address);
         if (existing != null)
         {
-            Database?.Put(existing with { PreviewUrl = url, UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() });
+            Exo.Database.Put(existing with { PreviewUrl = url, UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() });
         }
 
         return Result<string>.Ok(url);
@@ -410,41 +377,20 @@ public class UnityAddressablesPlugin
                 address
             };
 
-            if (FileBucket != null)
+            var req = new FileBucketUploadFileRequest
             {
-                var req = new FileBucketUploadFileRequest
-                {
-                    Bucket = JsonSerializer.SerializeToElement("addressables"),
-                    Filename = safeName,
-                    Content = JsonSerializer.SerializeToElement(raw),
-                    ContentType = JsonSerializer.SerializeToElement("image/png"),
-                    Metadata = JsonSerializer.SerializeToElement(metadata)
-                };
+                Bucket = JsonSerializer.SerializeToElement("addressables"),
+                Filename = safeName,
+                Content = JsonSerializer.SerializeToElement(raw),
+                ContentType = JsonSerializer.SerializeToElement("image/png"),
+                Metadata = JsonSerializer.SerializeToElement(metadata)
+            };
 
-                var res = FileBucket.UploadFileAsync(req).GetAwaiter().GetResult();
-                if (res?.File.ValueKind == JsonValueKind.Object && res.File.TryGetProperty("url", out var urlProp))
-                {
-                    string fileUrl = urlProp.GetString() ?? "";
-                    return Result<string>.Ok(fileUrl);
-                }
-            }
-            else if (Actions != null)
+            var res = Exo.FileBucket.UploadFileAsync(req).GetAwaiter().GetResult();
+            if (res?.File.ValueKind == JsonValueKind.Object && res.File.TryGetProperty("url", out var urlProp))
             {
-                var payload = new
-                {
-                    bucket = "addressables",
-                    filename = safeName,
-                    content = raw,
-                    content_type = "image/png",
-                    metadata
-                };
-
-                var res = Actions.CallAction<JsonElement>("file_bucket", "upload_file", payload);
-                if (res.ValueKind == JsonValueKind.Object && res.TryGetProperty("file", out var fileObj) && fileObj.TryGetProperty("url", out var urlProp))
-                {
-                    string fileUrl = urlProp.GetString() ?? "";
-                    return Result<string>.Ok(fileUrl);
-                }
+                string fileUrl = urlProp.GetString() ?? "";
+                return Result<string>.Ok(fileUrl);
             }
 
             return Result<string>.Ok($"/api/files/addressables/{safeName}");

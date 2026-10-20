@@ -345,19 +345,6 @@ public class ExoFileReferenceAttribute : Attribute
     }
 }
 
-/// <summary>
-/// Marks a dependency to be injected into the plugin by the Exoforge container.
-/// </summary>
-[AttributeUsage(AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Parameter, Inherited = false, AllowMultiple = false)]
-public class InjectAttribute : Attribute
-{
-    public string? ServiceName { get; }
-
-    public InjectAttribute(string? serviceName = null)
-    {
-        ServiceName = serviceName;
-    }
-}
 
 /// <summary>
 /// Registers a custom Studio form input widget provided by this plugin.

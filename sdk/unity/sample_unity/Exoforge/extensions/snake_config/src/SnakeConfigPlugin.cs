@@ -8,23 +8,14 @@ namespace Exoforge.Plugins.SnakeConfig;
     Category = "Game", Title = "Snake Configuration", Icon = "⚙️")]
 public class SnakeConfigPlugin
 {
-    [Inject]
-    public IDatabase? Database { get; set; }
-
-    [Inject]
-    public ILogger? Logger { get; set; }
-
-    [Inject]
-    public IUnityAddressablesService? Addressables { get; set; }
-
     [ExoAction]
     public SnakeConfigDto GetConfig()
     {
-        var schema = Database?.First<SnakeConfigSchema>();
+        var schema = Exo.Database.First<SnakeConfigSchema>();
         if (schema == null)
         {
             schema = new SnakeConfigSchema();
-            Database?.Put(schema);
+            Exo.Database.Put(schema);
         }
         return new SnakeConfigDto(schema);
     }
@@ -37,11 +28,11 @@ public class SnakeConfigPlugin
         string? backgroundFileId,
         string? backgroundAddressable)
     {
-        var current = Database?.First<SnakeConfigSchema>() ?? new SnakeConfigSchema();
+        var current = Exo.Database.First<SnakeConfigSchema>() ?? new SnakeConfigSchema();
         var updated = current.With(snakeColor, appleColor, applePoints, backgroundFileId, backgroundAddressable);
 
-        Database?.Put(updated);
-        Logger?.Info($"[snake_config] Updated config: points={updated.ApplePoints}, snake={updated.SnakeColor}");
+        Exo.Database.Put(updated);
+        Exo.Logger.Info($"[snake_config] Updated config: points={updated.ApplePoints}, snake={updated.SnakeColor}");
 
         return new SnakeConfigDto(updated);
     }

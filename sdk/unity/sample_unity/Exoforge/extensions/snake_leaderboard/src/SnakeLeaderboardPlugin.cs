@@ -11,15 +11,10 @@ namespace Exoforge.Plugins.SnakeLeaderboard;
     Category = "Game", Title = "Snake Leaderboard", Icon = "🏆")]
 public class SnakeLeaderboardPlugin
 {
-    [Inject] public IDatabase? Database { get; set; }
-    [Inject] public IPlayerDataService? PlayerData { get; set; }
-    [Inject] public IEventDispatcher? Events { get; set; }
-    [Inject] public ILogger? Logger { get; set; }
-
     [ExoAction]
     public async Task<int> SubmitScore(string playerId, string name, int score, int snakeLength)
     {
-        var existing = Database!.Get<SnakeScoreRecord>(playerId);
+        var existing = Exo.Database.Get<SnakeScoreRecord>(playerId);
         bool improved = existing is null || existing.Score < score;
         long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
@@ -27,11 +22,11 @@ public class SnakeLeaderboardPlugin
             ? existing
             : new SnakeScoreRecord(playerId, Math.Max(score, existing?.Score ?? 0), improved ? snakeLength : existing?.SnakeLength ?? snakeLength, now);
 
-        Database!.Put(best);
-        Logger?.Info($"[snake_leaderboard] {playerId} best {best.Score}");
+        Exo.Database.Put(best);
+        Exo.Logger.Info($"[snake_leaderboard] {playerId} best {best.Score}");
 
         var submittedName = string.IsNullOrEmpty(name) ? playerId : name;
-        await Events!.EmitAsync(new SnakeScoreSubmitted(playerId, submittedName, score, snakeLength, improved));
+        await Exo.Events.EmitAsync(new SnakeScoreSubmitted(playerId, submittedName, score, snakeLength, improved));
 
         return best.Score;
     }
@@ -39,7 +34,7 @@ public class SnakeLeaderboardPlugin
     [ExoAction]
     public async Task<List<SnakeLeaderboardEntry>> GetLeaderboard(int limit)
     {
-        var scores = Database!.All<SnakeScoreRecord>().OrderByDescending(s => s.Score).Take(limit > 0 ? limit : 10);
+        var scores = Exo.Database.All<SnakeScoreRecord>().OrderByDescending(s => s.Score).Take(limit > 0 ? limit : 10);
         var entries = new List<SnakeLeaderboardEntry>();
 
         foreach (var score in scores)
@@ -52,10 +47,15 @@ public class SnakeLeaderboardPlugin
 
     private async Task<string> DisplayNameAsync(string playerId)
     {
-        if (PlayerData is null) return playerId;
-
-        var response = await PlayerData.GetPlayerAsync(new PlayerDataGetPlayerRequest { PlayerId = playerId });
-        return string.IsNullOrEmpty(response?.Player?.Name) ? playerId : response!.Player!.Name!;
+        try
+        {
+            var response = await Exo.PlayerData.GetPlayerAsync(new PlayerDataGetPlayerRequest { PlayerId = playerId });
+            return string.IsNullOrEmpty(response?.Player?.Name) ? playerId : response!.Player!.Name!;
+        }
+        catch
+        {
+            return playerId;
+        }
     }
 }
 

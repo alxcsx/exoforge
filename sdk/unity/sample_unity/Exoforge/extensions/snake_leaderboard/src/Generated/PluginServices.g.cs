@@ -15,10 +15,12 @@ namespace Exoforge.Plugins.Generated
     public class DatabaseExecuteRequest
     {
         [JsonPropertyName("arguments")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public JsonElement Arguments { get; set; } = default!;
         [JsonPropertyName("operation")]
         public string Operation { get; set; } = default!;
         [JsonPropertyName("plugin")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public JsonElement Plugin { get; set; } = default!;
     }
 
@@ -33,6 +35,7 @@ namespace Exoforge.Plugins.Generated
         [JsonPropertyName("table")]
         public string Table { get; set; } = default!;
         [JsonPropertyName("plugin")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public JsonElement Plugin { get; set; } = default!;
     }
 
@@ -71,10 +74,13 @@ namespace Exoforge.Plugins.Generated
     public class PlayerDataCreatePlayerRequest
     {
         [JsonPropertyName("profile")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public JsonElement Profile { get; set; } = default!;
         [JsonPropertyName("user_id")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public JsonElement UserId { get; set; } = default!;
         [JsonPropertyName("player_id")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public JsonElement PlayerId { get; set; } = default!;
     }
 
@@ -115,10 +121,13 @@ namespace Exoforge.Plugins.Generated
     public class PlayerDataListPlayersRequest
     {
         [JsonPropertyName("filter")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public JsonElement Filter { get; set; } = default!;
         [JsonPropertyName("limit")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public JsonElement Limit { get; set; } = default!;
         [JsonPropertyName("user_id")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public JsonElement UserId { get; set; } = default!;
     }
 
@@ -131,6 +140,7 @@ namespace Exoforge.Plugins.Generated
     public class PlayerDataUpdatePlayerRequest
     {
         [JsonPropertyName("data")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public JsonElement Data { get; set; } = default!;
         [JsonPropertyName("player_id")]
         public string PlayerId { get; set; } = default!;
@@ -161,6 +171,7 @@ namespace Exoforge.Plugins.Generated
     public class PlayerDataSetDataRequest
     {
         [JsonPropertyName("value")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public JsonElement Value { get; set; } = default!;
         [JsonPropertyName("key")]
         public string Key { get; set; } = default!;
@@ -330,6 +341,134 @@ namespace Exoforge.Plugins.Generated
         public PlayerDataServiceClient PlayerData => _player_data ??= new PlayerDataServiceClient(_dispatcher);
     }
 
+}
+
+namespace Exoforge.Plugin.SDK
+{
+    public static class Exo
+    {
+        private static IDatabase? _databaseOverride;
+        private static ILogger? _loggerOverride;
+        private static IEventDispatcher? _eventsOverride;
+        private static IActionDispatcher? _actionsOverride;
+        private static IPluginContext? _contextOverride;
+
+        public static IDatabase Database
+        {
+            get => _databaseOverride ?? Context.Database;
+            set => _databaseOverride = value;
+        }
+
+        public static ILogger Logger
+        {
+            get => _loggerOverride ?? Context.Logger;
+            set => _loggerOverride = value;
+        }
+
+        public static IEventDispatcher Events
+        {
+            get => _eventsOverride ?? Context.Events;
+            set => _eventsOverride = value;
+        }
+
+        public static IActionDispatcher Actions
+        {
+            get => _actionsOverride ?? Context.Actions;
+            set => _actionsOverride = value;
+        }
+
+        public static IPluginContext Context
+        {
+            get => _contextOverride ?? PluginHost.CurrentContext;
+            set => _contextOverride = value;
+        }
+
+        private static global::Exoforge.Plugins.Generated.ExoforgePluginServices? _services;
+        public static global::Exoforge.Plugins.Generated.ExoforgePluginServices Services
+        {
+            get => _services ??= new global::Exoforge.Plugins.Generated.ExoforgePluginServices(Actions);
+            set => _services = value;
+        }
+
+        private static global::Exoforge.Plugins.Generated.IPlayerDataService? _player_dataOverride;
+        public static global::Exoforge.Plugins.Generated.IPlayerDataService PlayerData
+        {
+            get => _player_dataOverride ?? Services.PlayerData;
+            set => _player_dataOverride = value;
+        }
+        public static global::Exoforge.Plugins.Generated.IPlayerDataService PlayerDataService
+        {
+            get => PlayerData;
+            set => PlayerData = value;
+        }
+
+        public static void Reset()
+        {
+            _databaseOverride = null;
+            _loggerOverride = null;
+            _eventsOverride = null;
+            _actionsOverride = null;
+            _contextOverride = null;
+            _services = null;
+            _player_dataOverride = null;
+        }
+    }
+
+    public static class Exoforge
+    {
+        public static IDatabase Database
+        {
+            get => Exo.Database;
+            set => Exo.Database = value;
+        }
+
+        public static ILogger Logger
+        {
+            get => Exo.Logger;
+            set => Exo.Logger = value;
+        }
+
+        public static IEventDispatcher Events
+        {
+            get => Exo.Events;
+            set => Exo.Events = value;
+        }
+
+        public static IActionDispatcher Actions
+        {
+            get => Exo.Actions;
+            set => Exo.Actions = value;
+        }
+
+        public static IPluginContext Context
+        {
+            get => Exo.Context;
+            set => Exo.Context = value;
+        }
+
+        public static global::Exoforge.Plugins.Generated.ExoforgePluginServices Services
+        {
+            get => Exo.Services;
+            set => Exo.Services = value;
+        }
+
+        public static global::Exoforge.Plugins.Generated.IPlayerDataService PlayerData
+        {
+            get => Exo.PlayerData;
+            set => Exo.PlayerData = value;
+        }
+        public static global::Exoforge.Plugins.Generated.IPlayerDataService PlayerDataService
+        {
+            get => Exo.PlayerData;
+            set => Exo.PlayerData = value;
+        }
+
+        public static void Reset() => Exo.Reset();
+    }
+}
+
+namespace Exoforge.Plugins.Generated
+{
     [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
     [JsonSerializable(typeof(DatabaseExecuteRequest))]
     [JsonSerializable(typeof(DatabaseExecuteResponse))]
@@ -358,6 +497,9 @@ namespace Exoforge.Plugins.Generated
     [JsonSerializable(typeof(PlayerDataGetAllDataResponse))]
     [JsonSerializable(typeof(PlayerDataPlayerCreatedEvent))]
     [JsonSerializable(typeof(PlayerDataPlayerDeletedEvent))]
+    [JsonSerializable(typeof(global::Exoforge.Plugins.SnakeLeaderboard.SnakeScoreRecord))]
+    [JsonSerializable(typeof(global::Exoforge.Plugins.SnakeLeaderboard.SnakeScoreSubmitted))]
+    [JsonSerializable(typeof(global::Exoforge.Plugins.SnakeLeaderboard.SnakeLeaderboardEntry))]
     public partial class GeneratedServicesJsonContext : JsonSerializerContext
     {
     }

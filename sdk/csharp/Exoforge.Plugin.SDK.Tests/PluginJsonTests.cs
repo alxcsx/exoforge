@@ -102,15 +102,6 @@ internal partial class OtherJsonContext : JsonSerializerContext
 {
 }
 
-public class StaticInjectedPlugin
-{
-    [Inject("database")]
-    public static IDatabase? Database { get; set; }
-
-    [Inject]
-    public static ILogger? Logger { get; set; }
-}
-
 public class PluginJsonTests
 {
     [Fact]
@@ -175,15 +166,13 @@ public class PluginJsonTests
     }
 
     [Fact]
-    public void Wire_InjectsStaticCapabilities()
+    public void Wire_SetsAmbientContext()
     {
         var context = new HostPluginContext("static_plugin");
-        StaticInjectedPlugin.Database = null;
-        StaticInjectedPlugin.Logger = null;
+        HostPluginContext.Wire(new object(), context);
 
-        HostPluginContext.Wire(new StaticInjectedPlugin(), context);
-
-        Assert.Same(context.Database, StaticInjectedPlugin.Database);
-        Assert.Same(context.Logger, StaticInjectedPlugin.Logger);
+        Assert.Same(context, PluginHost.CurrentContext);
+        Assert.Same(context.Database, PluginHost.CurrentContext.Database);
+        Assert.Same(context.Logger, PluginHost.CurrentContext.Logger);
     }
 }

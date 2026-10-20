@@ -10,7 +10,6 @@ namespace Exoforge.Plugin.SDK.Tests;
 [ExoResource("counters", PrimaryKey = "counter_id", DrawerTabs = new[] { "overview", "attributes", "events" })]
 public class SamplePluginPlugin
 {
-    [Inject("database")]
     public IDatabase? CustomDb { get; set; }
 
     [ExoAction("ping", Mode = ActionMode.Sync)]
@@ -53,12 +52,6 @@ public record PlayerRecord(
     [property: ExoColumn(Badge = true)]
     string Status = "active"
 );
-
-public class ServiceClientConsumer
-{
-    [Inject]
-    public static InjectedServiceClient? Client { get; set; }
-}
 
 /// <summary>Stand-in for a generated service client (same (IActionDispatcher) constructor shape).</summary>
 public class InjectedServiceClient
@@ -233,17 +226,16 @@ public class PluginSdkTests
     }
 
     [Fact]
-    public void Wire_InjectsRegisteredServiceClients()
+    public void PluginServiceRegistry_ResolvesRegisteredServiceClients()
     {
         PluginServiceRegistry.Register(d => new InjectedServiceClient(d));
 
         var context = new HostPluginContext("svc_plugin");
-        ServiceClientConsumer.Client = null;
+        bool created = PluginServiceRegistry.TryCreate(typeof(InjectedServiceClient), context.Actions, out var client);
 
-        HostPluginContext.Wire(new ServiceClientConsumer(), context);
-
-        Assert.NotNull(ServiceClientConsumer.Client);
-        Assert.Same(context.Actions, ServiceClientConsumer.Client!.Dispatcher);
+        Assert.True(created);
+        Assert.NotNull(client);
+        Assert.Same(context.Actions, ((InjectedServiceClient)client!).Dispatcher);
     }
 
     /// <summary>Captures the action call and returns a canned reply, so the SQL runner is testable off-host.</summary>
