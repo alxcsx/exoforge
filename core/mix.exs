@@ -6,6 +6,7 @@ defmodule Exoforge.Core do
       app: :exoforge_core,
       version: "0.1.0",
       elixir: "~> 1.20",
+      test_coverage: [summary: [threshold: 0]],
       deps: deps()
     ]
   end

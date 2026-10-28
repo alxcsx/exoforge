@@ -1,0 +1,160 @@
+name: CI / CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - staging
+      - projetao_mvp
+  pull_request:
+    branches:
+      - main
+      - staging
+      - projetao_mvp
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-csharp:
+    name: Fast Test - C# SDKs & Tooling
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'Directory.Build.targets') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Run C# Unit Tests
+        run: |
+          echo "::group::Exoforge.Client.Tests"
+          dotnet test sdk/csharp/Exoforge.Client.Tests --filter "FullyQualifiedName!~VerticalSliceIntegrationTests"
+          echo "::endgroup::"
+
+          echo "::group::Exoforge.Plugin.SDK.Tests"
+          dotnet test sdk/csharp/Exoforge.Plugin.SDK.Tests --filter "Category!=SlowIntegration"
+          echo "::endgroup::"
+
+          echo "::group::Exoforge.Plugin.Generator.Tests"
+          dotnet test sdk/csharp/Exoforge.Plugin.Generator.Tests
+          echo "::endgroup::"
+
+          echo "::group::Exoforge.Management.Tests"
+          dotnet test sdk/csharp/Exoforge.Management.Tests
+          echo "::endgroup::"
+
+      - name: Validate Sample Extension Compilation
+        run: |
+          dotnet build extensions_csharp/sample_plugin/sample_plugin.csproj --nologo -v q
+
+  test-elixir:
+    name: Fast Test - Elixir Core & Plugins Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Cache Mix & Build
+        uses: actions/cache@v4
+        with:
+          path: |
+            _deps
+            _build
+          key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-
+
+      - name: Run Core & Plugin Tests with Coverage in Container
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:/app" \
+            -w /app \
+            elixir:1.20-otp-29-alpine sh -c "
+              set -euo pipefail
+              apk add --no-cache build-base git curl libstdc++ ncurses-libs icu-libs
+              mix local.hex --force
+              mix local.rebar --force
+
+              echo '::group::Core Kernel Tests & Coverage'
+              cd /app/core
+              mix deps.get
+              mix test --cover --export-coverage default
+              echo '::endgroup::'
+
+              echo '::group::Standard Plugin Tests & Coverage'
+              for dir in /app/plugins/*/; do
+                if [ -d \"\$dir\" ] && [ -f \"\$dir/mix.exs\" ]; then
+                  echo \"== Testing \$dir\"
+                  (cd \"\$dir\" && mix deps.get && mix test --cover --export-coverage default)
+                fi
+              done
+              echo '::endgroup::'
+            "
+
+  deploy-staging:
+    name: Build & Deploy to Staging VPS
+    needs: [test-csharp, test-elixir]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/projetao_mvp')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry (GHCR)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker image
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=staging
+            type=sha,format=short
+
+      - name: Build and push Docker image with layer caching
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Dispatch Deploy Trigger to Arch Linux VPS Webhook
+        run: |
+          if [ -n "${{ secrets.STAGING_DEPLOY_WEBHOOK_URL }}" ]; then
+            echo "Dispatching deployment trigger to staging VPS..."
+            curl -fsSL -X POST "${{ secrets.STAGING_DEPLOY_WEBHOOK_URL }}" \
+              -H "Content-Type: application/json" \
+              -H "X-Hub-Signature: ${{ secrets.STAGING_DEPLOY_WEBHOOK_SECRET }}" \
+              -d "{\"ref\":\"${{ github.ref }}\",\"sha\":\"${{ github.sha }}\",\"image\":\"ghcr.io/${{ github.repository }}:staging\"}"
+            echo "Deployment webhook triggered successfully."
+          else
+            echo "Notice: STAGING_DEPLOY_WEBHOOK_URL secret not configured. Skipping webhook trigger."
+          fi
