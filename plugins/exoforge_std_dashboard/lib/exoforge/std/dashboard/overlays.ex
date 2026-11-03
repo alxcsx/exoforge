@@ -523,6 +523,15 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   <span>🌐</span>
                   <span>Environments</span>
                 </button>
+                <button
+                  type="button"
+                  phx-click="set_settings_tab"
+                  phx-value-tab="sdks"
+                  class={"w-full text-left px-2.5 py-2 rounded-xl font-bold flex items-center gap-2 transition-all #{if @settings_tab == "sdks", do: "bg-white text-primary-700 shadow-sm border border-gray-200/80", else: "text-gray-600 hover:text-gray-900 hover:bg-white/60"}"}
+                >
+                  <span>📦</span>
+                  <span>Client SDKs</span>
+                </button>
               </div>
             </div>
 
@@ -706,8 +715,70 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             </div>
           <% end %>
 
+          <%= if @settings_tab == "sdks" do %>
+            <% sdk_files =
+                 case Exoforge.ActionDispatcher.dispatch(:file_bucket, :list_files, %{"bucket" => "sdk"}) do
+                   {:ok, %{files: files}} when is_list(files) -> files
+                   _ -> []
+                 end %>
+            <div class="space-y-4">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h4 class="text-sm font-bold text-gray-900 flex items-center gap-2">
+                    <span>📦</span>
+                    <span>Engine &amp; Client SDK Packages</span>
+                  </h4>
+                  <p class="text-xs text-gray-500 mt-0.5">Served from the <code class="font-mono text-primary-700">sdk</code> File Bucket for Unity Package Manager (UPM) and game engines.</p>
+                </div>
+                <button
+                  type="button"
+                  phx-click="switch_tab"
+                  phx-value-tab="file_bucket"
+                  class="px-2.5 py-1.5 text-xs font-bold text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-200 rounded-lg transition-colors"
+                >
+                  Open File Bucket &rarr;
+                </button>
+              </div>
+
+              <%= if sdk_files == [] do %>
+                <div class="bg-gray-50 p-6 rounded-xl border border-gray-200/80 text-center space-y-2">
+                  <p class="font-bold text-gray-800">No SDK packages in the <code class="font-mono">sdk</code> bucket yet</p>
+                  <p class="text-[11px] text-gray-500">Run <code class="font-mono bg-white px-1.5 py-0.5 rounded border">just pack-unity</code> or upload an engine archive to the <code class="font-mono">sdk</code> bucket in File Bucket.</p>
+                </div>
+              <% else %>
+                <div class="space-y-2.5">
+                  <%= for file <- sdk_files do %>
+                    <% engine = get_in(file, ["metadata", "engine"]) || "unity" %>
+                    <div class="p-3.5 bg-gray-50 rounded-xl border border-gray-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div class="space-y-1 min-w-0">
+                        <div class="flex items-center gap-2">
+                          <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-primary-100 text-primary-800 border border-primary-200 font-mono">
+                            <%= engine %>
+                          </span>
+                          <span class="font-bold text-gray-900 font-mono truncate"><%= file["filename"] %></span>
+                        </div>
+                        <p class="text-[11px] text-gray-500 font-mono truncate">
+                          URL: <code class="text-gray-700 select-all">/api/files/sdk/<%= engine %></code> &bull; <code class="text-gray-700 select-all"><%= file["url"] %></code>
+                        </p>
+                      </div>
+                      <div class="flex items-center gap-2 shrink-0">
+                        <a
+                          href={file["url"]}
+                          download={file["filename"]}
+                          class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg transition-colors"
+                        >
+                          ⬇️ Download
+                        </a>
+                      </div>
+                    </div>
+                  <% end %>
+                </div>
+              <% end %>
+            </div>
+          <% end %>
+
           <!-- Dynamic Plugin Settings Tab Fallback -->
-          <%= if @settings_tab not in ["project", "environments", "database", "auth"] do %>
+          <%= if @settings_tab not in ["project", "environments", "sdks", "database", "auth"] do %>
             <% active_hook = Enum.find(@settings_hooks, fn h -> to_string(h.id) == @settings_tab end) %>
             <%= if active_hook do %>
               <%= cond do %>

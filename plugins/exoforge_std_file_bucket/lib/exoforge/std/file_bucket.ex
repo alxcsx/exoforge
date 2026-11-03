@@ -25,6 +25,7 @@ defmodule Exoforge.Std.FileBucket do
     ensure_meta_table()
     ensure_storage_dir()
     sync_disk_to_meta()
+    seed_sdk_packages()
     :ok
   end
 
@@ -347,6 +348,58 @@ defmodule Exoforge.Std.FileBucket do
     File.mkdir_p(storage_base_dir())
   end
 
+  defp seed_sdk_packages do
+    sdk_dir = Application.get_env(:exoforge_std_file_bucket, :sdk_dist_dir, "dist")
+
+    if File.dir?(sdk_dir) do
+      Path.wildcard(Path.join(sdk_dir, "*.{tgz,tar.gz,zip,unitypackage}"))
+      |> Enum.each(&seed_sdk_file/1)
+    end
+  end
+
+  defp seed_sdk_file(path) do
+    filename = Path.basename(path)
+    engine = infer_sdk_engine(filename)
+    meta = %{"engine" => engine, "tag" => "sdk"}
+
+    case lookup_by_filename("sdk", filename) do
+      nil ->
+        case File.read(path) do
+          {:ok, bin} ->
+            _ = store_binary("sdk", filename, bin, detect_content_type(filename), meta)
+
+          _ ->
+            :ok
+        end
+
+      existing ->
+        stat = File.stat!(path)
+
+        if existing["size_bytes"] != stat.size do
+          _ =
+            update_file(%{
+              "id" => existing["id"],
+              "bucket" => "sdk",
+              "filename" => filename,
+              "content" => File.read!(path),
+              "metadata" => meta
+            })
+        end
+    end
+  rescue
+    _ -> :ok
+  end
+
+  defp infer_sdk_engine(filename) do
+    down = String.downcase(filename)
+
+    cond do
+      String.contains?(down, "godot") -> "godot"
+      String.contains?(down, "unreal") -> "unreal"
+      true -> "unity"
+    end
+  end
+
   defp ensure_meta_table do
     if :ets.whereis(@meta_table) == :undefined do
       :ets.new(@meta_table, [:set, :public, :named_table, read_concurrency: true])
@@ -399,13 +452,17 @@ defmodule Exoforge.Std.FileBucket do
   defp lookup_by_filename(bucket, filename) do
     ensure_meta_table()
     clean_name = Path.basename(to_string(filename))
+    q = String.downcase(clean_name)
 
     :ets.tab2list(@meta_table)
     |> Enum.find_value(fn {{b, _id}, rec} ->
-      if (is_nil(bucket) or b == bucket) and (rec["filename"] == clean_name or rec["filename"] == to_string(filename)) do
-        rec
-      else
-        nil
+      if is_nil(bucket) or b == bucket do
+        fname = to_string(rec["filename"] || "")
+        engine = get_in(rec, ["metadata", "engine"]) |> to_string() |> String.downcase()
+
+        if fname == clean_name or fname == to_string(filename) or (engine != "" and engine == q) do
+          rec
+        end
       end
     end)
   end
@@ -544,6 +601,8 @@ defmodule Exoforge.Std.FileBucket do
       ".csv" -> "text/csv"
       ".pdf" -> "application/pdf"
       ".zip" -> "application/zip"
+      ".tgz" -> "application/gzip"
+      ".gz" -> "application/gzip"
       ".mp3" -> "audio/mpeg"
       ".wav" -> "audio/wav"
       ".ogg" -> "audio/ogg"
