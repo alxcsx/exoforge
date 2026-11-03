@@ -249,6 +249,10 @@ public partial class ExoforgeControlCenter : EditorWindow
         _isConnected = false;
         _isConnecting = false;
         _connectionStatus = "Disconnected";
+        RemoteSdkVersion = null;
+        RemoteSdkPackageUrl = null;
+        RemoteSdkPackageFilename = null;
+        SdkStatus = SdkCompatibilityStatus.Unknown;
         Repaint();
         ExoforgePluginsWindow.Instance?.Repaint();
     }
@@ -439,6 +443,38 @@ public partial class ExoforgeControlCenter : EditorWindow
         {
             UnityEngine.Debug.LogWarning($"[Exoforge] Failed to get system info: {ex.Message}");
         }
+
+        // 2b. Remote SDK Package Metadata from File Bucket
+        try
+        {
+            var sdkReq = new Dictionary<string, object>
+            {
+                ["bucket"] = "sdk",
+                ["id"] = "unity"
+            };
+            var sdkResp = await _editorClient.SendActionAsync<JsonElement>("file_bucket", "get_file_info", sdkReq);
+            if (sdkResp.ValueKind == JsonValueKind.Object && sdkResp.TryGetProperty("file", out var fileEl))
+            {
+                RemoteSdkPackageFilename = fileEl.TryGetProperty("filename", out var fn) ? fn.GetString() : null;
+                RemoteSdkPackageUrl = fileEl.TryGetProperty("url", out var u) ? u.GetString() : null;
+                if (fileEl.TryGetProperty("metadata", out var meta) && meta.TryGetProperty("version", out var verProp))
+                {
+                    RemoteSdkVersion = verProp.GetString();
+                }
+                else if (!string.IsNullOrEmpty(RemoteSdkPackageFilename))
+                {
+                    var m = System.Text.RegularExpressions.Regex.Match(RemoteSdkPackageFilename, @"-(\d+\.\d+\.\d+[^.]*)");
+                    if (m.Success) RemoteSdkVersion = m.Groups[1].Value;
+                }
+            }
+        }
+        catch
+        {
+            // SDK bucket or package not seeded yet
+        }
+
+        RemoteSdkVersion ??= (RemoteVersion != "—" ? RemoteVersion : null);
+        SdkStatus = ExoforgePackageVersion.Compare(RemoteSdkVersion ?? RemoteVersion, RemoteCommitHash);
 
         // 3. Service Catalog Export
         try
@@ -631,6 +667,50 @@ public partial class ExoforgeControlCenter : EditorWindow
             }
 
             _localPlugins.Add(new LocalPluginInfo(name, dir, pluginType, isBuilt, canBuild, binaryPath, size, modified, version, icon, title));
+        }
+    }
+
+    /// <summary>Downloads or saves the latest SDK package archive from the connected cluster.</summary>
+    public static async Task DownloadOrUpdateSdkAsync()
+    {
+        string host = ActiveHttpUrl;
+        if (string.IsNullOrEmpty(host)) host = "http://localhost:4005";
+
+        string targetUrl = !string.IsNullOrEmpty(RemoteSdkPackageUrl)
+            ? $"{host.TrimEnd('/')}{RemoteSdkPackageUrl}"
+            : $"{host.TrimEnd('/')}/api/files/sdk/unity";
+
+        string filename = RemoteSdkPackageFilename ?? $"com.exoforge.sdk-{RemoteSdkVersion ?? "latest"}.tgz";
+
+        bool download = EditorUtility.DisplayDialog(
+            "Exoforge Unity SDK Package",
+            $"An SDK package is hosted on the cluster:\n• File: {filename}\n• Remote Version: {RemoteSdkVersion ?? RemoteVersion}\n• Local Version: {ExoforgePackageVersion.SdkVersion}\n\nChoose an option to install or download:",
+            "Download .tgz",
+            "Open Download in Browser"
+        );
+
+        if (!download)
+        {
+            Application.OpenURL(targetUrl);
+            return;
+        }
+
+        string savePath = EditorUtility.SaveFilePanel("Save Exoforge SDK Package", "", filename, "tgz");
+        if (string.IsNullOrEmpty(savePath)) return;
+
+        EditorUtility.DisplayProgressBar("Exoforge SDK", "Downloading package archive from cluster...", 0.4f);
+        try
+        {
+            using var http = new System.Net.Http.HttpClient();
+            var bytes = await http.GetByteArrayAsync(targetUrl);
+            await File.WriteAllBytesAsync(savePath, bytes);
+            EditorUtility.ClearProgressBar();
+            EditorUtility.DisplayDialog("Exoforge SDK", $"Package archive saved successfully to:\n{savePath}\n\nTo apply in Unity: Window ▸ Package Manager ▸ '+' ▸ Add package from tarball...", "OK");
+        }
+        catch (Exception ex)
+        {
+            EditorUtility.ClearProgressBar();
+            EditorUtility.DisplayDialog("Download Failed", $"Failed to download package from {targetUrl}:\n\n{ex.Message}", "OK");
         }
     }
 

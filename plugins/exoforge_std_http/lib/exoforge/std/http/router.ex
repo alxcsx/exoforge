@@ -390,15 +390,23 @@ defmodule Exoforge.Std.Http.Router do
     end
   end
 
-  defp serve_file(conn, bucket, id, _filename) do
+  defp serve_file(conn, bucket, id, filename) do
     case ActionDispatcher.dispatch(:file_bucket, :get_file_info, %{"bucket" => bucket, "id" => id}) do
       {:ok, %{file: file}} ->
-        disk_path = file["disk_path"] || file[:disk_path]
+        raw_path = file["disk_path"] || file[:disk_path]
+        disk_path = if raw_path, do: Path.expand(raw_path), else: nil
         content_type = file["content_type"] || file[:content_type] || "application/octet-stream"
+        fname = filename || file["filename"] || (disk_path && Path.basename(disk_path)) || "file"
+
+        disposition =
+          if String.starts_with?(content_type, "image/"),
+            do: ~s(inline; filename="#{fname}"),
+            else: ~s(attachment; filename="#{fname}")
 
         if disk_path && File.exists?(disk_path) do
           conn
           |> put_resp_header("content-type", content_type)
+          |> put_resp_header("content-disposition", disposition)
           |> put_resp_header("cache-control", "public, max-age=86400")
           |> send_file(200, disk_path)
         else

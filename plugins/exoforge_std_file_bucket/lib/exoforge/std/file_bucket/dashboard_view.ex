@@ -920,6 +920,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
                 <a
                   href={@selected_file["url"]}
                   download={@selected_file["filename"]}
+                  target="_blank"
                   class="flex-1 py-2 text-center text-xs font-bold text-gray-800 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl transition-colors shadow-2xs"
                 >
                   ⬇️ Download

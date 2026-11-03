@@ -304,3 +304,4 @@ Gameplay must not hold a client, an endpoint, or a token. It publishes hooks (e.
    end-to-end integration is written here and run there, not locally.
 3. **Honor the Rule**: Everything above the kernel is a plugin.
 4. **Shortest working diff wins**: Do not create speculative configuration, wrapper classes with one implementation, or premature abstractions.
+5. **SDK Version Bumping**: Any changes to the Unity SDK or its bundled client libraries (`sdk/unity/Exoforge.SDK/` or `sdk/csharp/`) **must bump the version** in both [`sdk/unity/Exoforge.SDK/package.json`](sdk/unity/Exoforge.SDK/package.json) and [`ExoforgePackageVersion.cs`](sdk/unity/Exoforge.SDK/Editor/ExoforgePackageVersion.cs). This prevents stale package cache collisions in UPM (`Library/PackageCache/`), guarantees clean tarball releases via `just pack-unity`, and ensures cluster-to-editor update detection works reliably.

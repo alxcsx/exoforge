@@ -4,13 +4,21 @@ using System.IO;
 
 namespace Exoforge.Unity.Editor
 {
+    public enum SdkCompatibilityStatus
+    {
+        Unknown,
+        UpToDate,
+        UpdateAvailable,
+        Ahead
+    }
+
     /// <summary>
     /// Package version and build information (version, git hash, build date)
     /// for the Exoforge Unity SDK.
     /// </summary>
     public static class ExoforgePackageVersion
     {
-        public const string SdkVersion = "0.1.0";
+        public const string SdkVersion = "0.1.1";
         public const string DefaultBuildHash = "35630a3";
         public const string DefaultBuildDate = "2026-11-03 10:07";
 
@@ -37,6 +45,49 @@ namespace Exoforge.Unity.Editor
         }
 
         public static string Formatted => $"v{SdkVersion} (#{BuildHash})";
+
+        /// <summary>Compares the local SDK version against a remote version string and commit hash.</summary>
+        public static SdkCompatibilityStatus Compare(string? remoteVersion, string? remoteHash = null)
+        {
+            if (string.IsNullOrWhiteSpace(remoteVersion) || remoteVersion == "—")
+                return SdkCompatibilityStatus.Unknown;
+
+            string cleanRemote = CleanSemVer(remoteVersion);
+            string cleanLocal = CleanSemVer(SdkVersion);
+
+            if (System.Version.TryParse(cleanRemote, out var rVer) &&
+                System.Version.TryParse(cleanLocal, out var lVer))
+            {
+                if (rVer > lVer) return SdkCompatibilityStatus.UpdateAvailable;
+                if (rVer < lVer) return SdkCompatibilityStatus.Ahead;
+
+                if (!string.IsNullOrEmpty(remoteHash) && remoteHash != "dev" &&
+                    !string.IsNullOrEmpty(BuildHash) && BuildHash != "dev" &&
+                    !string.Equals(remoteHash, BuildHash, StringComparison.OrdinalIgnoreCase))
+                {
+                    return SdkCompatibilityStatus.UpdateAvailable;
+                }
+
+                return SdkCompatibilityStatus.UpToDate;
+            }
+
+            if (string.Equals(remoteVersion.Trim(), SdkVersion.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                return SdkCompatibilityStatus.UpToDate;
+            }
+
+            return SdkCompatibilityStatus.UpdateAvailable;
+        }
+
+        private static string CleanSemVer(string v)
+        {
+            v = v.Trim().TrimStart('v', 'V');
+            int dash = v.IndexOf('-');
+            if (dash > 0) v = v[..dash];
+            int plus = v.IndexOf('+');
+            if (plus > 0) v = v[..plus];
+            return v;
+        }
 
         private static void ResolveBuildInfo()
         {

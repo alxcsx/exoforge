@@ -64,6 +64,10 @@ defmodule Exoforge.Std.FileBucket do
     bucket = payload[:bucket] || payload["bucket"]
     sanitized = if is_binary(bucket) and bucket != "", do: sanitize_bucket(bucket), else: nil
 
+    if is_nil(sanitized) or sanitized == "sdk" do
+      seed_sdk_packages()
+    end
+
     case lookup_file(sanitized, id) do
       nil -> {:error, :not_found}
       file -> {:ok, %{file: file}}
@@ -76,18 +80,23 @@ defmodule Exoforge.Std.FileBucket do
     bucket = payload[:bucket] || payload["bucket"]
     sanitized = if is_binary(bucket) and bucket != "", do: sanitize_bucket(bucket), else: nil
 
+    if is_nil(sanitized) or sanitized == "sdk" do
+      seed_sdk_packages()
+    end
+
     case lookup_file(sanitized, id) do
       nil ->
         {:error, :not_found}
 
       file ->
-        disk_path = file["disk_path"] || file[:disk_path]
+        raw_path = file["disk_path"] || file[:disk_path]
+        disk_path = if raw_path, do: Path.expand(raw_path), else: nil
 
-        case File.read(disk_path) do
+        case disk_path && File.read(disk_path) do
           {:ok, binary} ->
             {:ok, %{content: binary, file: file}}
 
-          {:error, _} ->
+          _ ->
             {:error, :read_failed}
         end
     end
@@ -99,6 +108,10 @@ defmodule Exoforge.Std.FileBucket do
     limit = Map.get(payload, :limit, Map.get(payload, "limit", 100))
     offset = Map.get(payload, :offset, Map.get(payload, "offset", 0))
     search = Map.get(payload, :search, Map.get(payload, "search", ""))
+
+    if is_nil(raw_bucket) or raw_bucket in ["", "all", :all, "sdk"] do
+      seed_sdk_packages()
+    end
 
     all_files =
       cond do
@@ -360,7 +373,8 @@ defmodule Exoforge.Std.FileBucket do
   defp seed_sdk_file(path) do
     filename = Path.basename(path)
     engine = infer_sdk_engine(filename)
-    meta = %{"engine" => engine, "tag" => "sdk"}
+    version = infer_sdk_version(filename)
+    meta = %{"engine" => engine, "tag" => "sdk", "version" => version}
 
     case lookup_by_filename("sdk", filename) do
       nil ->
@@ -374,8 +388,9 @@ defmodule Exoforge.Std.FileBucket do
 
       existing ->
         stat = File.stat!(path)
+        existing_ver = get_in(existing, ["metadata", "version"])
 
-        if existing["size_bytes"] != stat.size do
+        if existing["size_bytes"] != stat.size or existing_ver != version do
           _ =
             update_file(%{
               "id" => existing["id"],
@@ -388,6 +403,13 @@ defmodule Exoforge.Std.FileBucket do
     end
   rescue
     _ -> :ok
+  end
+
+  defp infer_sdk_version(filename) do
+    case Regex.run(~r/-((\d+\.\d+\.\d+[^\.]*))(?:\.tgz|\.tar\.gz|\.zip|\.unitypackage)/, filename) do
+      [_, ver] -> ver
+      _ -> "0.1.0"
+    end
   end
 
   defp infer_sdk_engine(filename) do

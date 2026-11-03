@@ -147,6 +147,10 @@ public partial class ExoforgeControlCenter : EditorWindow
     public static string RemoteVersion { get; internal set; } = "—";
     public static string RemoteCommitHash { get; internal set; } = "—";
     public static string RemoteBuildDate { get; internal set; } = "—";
+    public static string? RemoteSdkVersion { get; internal set; }
+    public static string? RemoteSdkPackageUrl { get; internal set; }
+    public static string? RemoteSdkPackageFilename { get; internal set; }
+    public static SdkCompatibilityStatus SdkStatus { get; internal set; } = SdkCompatibilityStatus.Unknown;
 
     /// <summary>One action from the live contract export, with the params needed to build a payload.</summary>
     private sealed record ActionSpec(string Name, Dictionary<string, JsonElement> Params);

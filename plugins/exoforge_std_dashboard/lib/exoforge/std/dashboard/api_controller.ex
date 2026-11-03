@@ -354,12 +354,20 @@ defmodule Exoforge.Std.Dashboard.ApiController do
 
     case ActionDispatcher.dispatch(:file_bucket, :get_file_info, payload) do
       {:ok, %{file: file}} ->
-        disk_path = file["disk_path"] || file[:disk_path]
+        raw_path = file["disk_path"] || file[:disk_path]
+        disk_path = if raw_path, do: Path.expand(raw_path), else: nil
         content_type = file["content_type"] || file[:content_type] || "application/octet-stream"
+        filename = params["filename"] || file["filename"] || (disk_path && Path.basename(disk_path)) || "file"
+
+        disposition =
+          if String.starts_with?(content_type, "image/"),
+            do: ~s(inline; filename="#{filename}"),
+            else: ~s(attachment; filename="#{filename}")
 
         if disk_path && File.exists?(disk_path) do
           conn
           |> put_resp_header("content-type", content_type)
+          |> put_resp_header("content-disposition", disposition)
           |> put_resp_header("cache-control", "public, max-age=86400")
           |> send_file(200, disk_path)
         else

@@ -58,7 +58,7 @@ defmodule Exoforge.Std.Dashboard.LoginController do
         .error { background:#fef2f2; border:1px solid #fecaca; color:#b91c1c; border-radius:8px; padding:.6rem .8rem; font-size:.85rem; margin-bottom:1rem; }
       </style>
     </head>
-    <body class="min-h-screen bg-[#f3f4f6] flex items-center justify-center p-4">
+    <body class="min-h-screen bg-[#f3f4f6] flex flex-col items-center justify-center p-4">
       <div class="w-full max-w-sm bg-white rounded-2xl shadow-[0_20px_40px_-15px_rgba(0,0,0,0.12)] border border-gray-200 p-8">
         <div class="flex items-center gap-2 mb-6">
           <span class="text-2xl font-extrabold tracking-tight" style="color:#7c3aed">EXO</span>
@@ -85,6 +85,10 @@ defmodule Exoforge.Std.Dashboard.LoginController do
           </button>
         </form>
       </div>
+
+      <footer class="mt-6 text-center text-[11px] text-gray-400 font-mono">
+        Exoforge v#{Exoforge.BuildInfo.version()} (#{Exoforge.BuildInfo.commit_hash()})
+      </footer>
     </body>
     </html>
     """

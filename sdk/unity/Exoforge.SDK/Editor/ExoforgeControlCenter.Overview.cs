@@ -53,9 +53,14 @@ public partial class ExoforgeControlCenter : EditorWindow
 
         EditorGUILayout.EndVertical();
 
+        EditorGUILayout.Space(6);
+
+        // 2. SDK Version & Compatibility Card
+        DrawSdkVersionCard();
+
         EditorGUILayout.Space(8);
 
-        // 2. Cluster Operations & Developer Tools Card
+        // 3. Cluster Operations & Developer Tools Card
         EditorGUILayout.LabelField("Cluster Operations & Dashboard", EditorStyles.boldLabel);
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
 
@@ -97,6 +102,65 @@ public partial class ExoforgeControlCenter : EditorWindow
         GUI.backgroundColor = origBg;
         EditorGUILayout.LabelField(label, EditorStyles.miniLabel);
         EditorGUILayout.LabelField(val, EditorStyles.boldLabel);
+        EditorGUILayout.EndVertical();
+    }
+
+    private void DrawSdkVersionCard()
+    {
+        EditorGUILayout.LabelField("SDK Version & Compatibility", EditorStyles.boldLabel);
+        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+
+        EditorGUILayout.BeginHorizontal();
+        EditorGUILayout.LabelField("Local Unity SDK:", EditorStyles.miniLabel, GUILayout.Width(130));
+        EditorGUILayout.LabelField($"v{ExoforgePackageVersion.SdkVersion} (#{ExoforgePackageVersion.BuildHash})", EditorStyles.boldLabel);
+        EditorGUILayout.EndHorizontal();
+
+        EditorGUILayout.BeginHorizontal();
+        EditorGUILayout.LabelField("Cluster Engine:", EditorStyles.miniLabel, GUILayout.Width(130));
+        EditorGUILayout.LabelField(RemoteVersion != "—" ? $"v{RemoteVersion} (#{RemoteCommitHash})" : "Offline", EditorStyles.label);
+        EditorGUILayout.EndHorizontal();
+
+        if (!string.IsNullOrEmpty(RemoteSdkVersion) && RemoteSdkVersion != "—")
+        {
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField("Cluster SDK Package:", EditorStyles.miniLabel, GUILayout.Width(130));
+            string packageLabel = $"v{RemoteSdkVersion}" + (RemoteSdkPackageFilename != null ? $" ({RemoteSdkPackageFilename})" : "");
+            EditorGUILayout.LabelField(packageLabel, EditorStyles.label);
+            EditorGUILayout.EndHorizontal();
+        }
+
+        EditorGUILayout.Space(4);
+
+        if (!_isConnected)
+        {
+            EditorGUILayout.HelpBox("Connect to cluster to verify SDK version compatibility and available updates.", MessageType.None);
+        }
+        else
+        {
+            switch (SdkStatus)
+            {
+                case SdkCompatibilityStatus.UpToDate:
+                    EditorGUILayout.HelpBox($"✓ Unity SDK is up to date and matches the connected cluster.", MessageType.Info);
+                    break;
+
+                case SdkCompatibilityStatus.UpdateAvailable:
+                    EditorGUILayout.HelpBox($"⚠️ An SDK update is available on the cluster (Cluster: v{RemoteSdkVersion ?? RemoteVersion}, Installed: v{ExoforgePackageVersion.SdkVersion}).", MessageType.Warning);
+                    if (GUILayout.Button("⬇️ Download / Update SDK from Cluster", GUILayout.Height(24)))
+                    {
+                        _ = DownloadOrUpdateSdkAsync();
+                    }
+                    break;
+
+                case SdkCompatibilityStatus.Ahead:
+                    EditorGUILayout.HelpBox($"ℹ️ Installed SDK (v{ExoforgePackageVersion.SdkVersion}) is newer than the connected cluster (v{RemoteVersion}).", MessageType.Info);
+                    break;
+
+                default:
+                    EditorGUILayout.HelpBox("SDK version verified.", MessageType.Info);
+                    break;
+            }
+        }
+
         EditorGUILayout.EndVertical();
     }
 }

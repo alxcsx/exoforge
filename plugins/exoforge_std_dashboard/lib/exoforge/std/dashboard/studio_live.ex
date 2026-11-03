@@ -940,14 +940,6 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                     <option value="Staging" selected={@current_env == "Staging"}>STAGING</option>
                   </select>
                 </form>
-                <span class="text-gray-300">•</span>
-                <span
-                  class="inline-flex items-center gap-1 font-mono text-[9px] font-bold text-gray-400 bg-gray-100 hover:bg-gray-200/80 px-1.5 py-0.5 rounded border border-gray-200/80 transition-colors cursor-default"
-                  title={"Cluster Version: v" <> to_string(@build_version) <> "\nCommit Hash: " <> to_string(@build_hash) <> "\nBuild Date: " <> to_string(@build_date)}
-                >
-                  <span class="text-gray-700">v<%= @build_version %></span>
-                  <span class="text-gray-400 font-mono">(<%= @build_hash %>)</span>
-                </span>
               </div>
             </div>
           </div>
@@ -1309,6 +1301,11 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
           <% end %>
         <% end %>
       </main>
+
+      <!-- Dashboard Footer -->
+      <footer class="mt-auto py-4 px-4 sm:px-6 lg:px-8 border-t border-gray-200/60 text-center text-[11px] text-gray-400 font-mono">
+        Exoforge v<%= @build_version %> (<%= @build_hash %>)
+      </footer>
 
       <!-- Command Palette Modal (Cmd+K) -->
       <.command_palette

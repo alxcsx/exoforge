@@ -129,6 +129,7 @@ defmodule Exoforge.DashboardTest do
       assert conn.status == 200
       refute conn.resp_body =~ "Quick Dev Sign-In"
       refute conn.resp_body =~ "dev_admin"
+      assert conn.resp_body =~ "Exoforge v" <> Exoforge.BuildInfo.version()
     end
 
     test "GET / renders the dashboard with a session" do

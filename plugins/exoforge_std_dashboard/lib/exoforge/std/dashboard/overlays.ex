@@ -778,6 +778,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                         <a
                           href={file["url"]}
                           download={file["filename"]}
+                          target="_blank"
                           class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg transition-colors"
                         >
                           ⬇️ Download
@@ -1015,6 +1016,10 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             </button>
           </div>
         </form>
+
+        <div class="pt-2 text-center text-[10px] text-gray-400 font-mono">
+          Exoforge v<%= Exoforge.BuildInfo.version() %> (<%= Exoforge.BuildInfo.commit_hash() %>)
+        </div>
       </div>
     </.modal>
     """
