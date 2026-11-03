@@ -41,6 +41,14 @@ public partial class ExoforgeControlCenter : EditorWindow
         EditorGUILayout.BeginHorizontal();
         DrawMetricPill("Plugins", _pluginsCount.ToString());
         DrawMetricPill("Status", _isConnected ? "HEALTHY" : "OFFLINE");
+        DrawMetricPill("Unity SDK", $"v{ExoforgePackageVersion.SdkVersion} (#{ExoforgePackageVersion.BuildHash})");
+        EditorGUILayout.EndHorizontal();
+
+        EditorGUILayout.Space(2);
+
+        EditorGUILayout.BeginHorizontal();
+        DrawMetricPill("Cluster Version", RemoteVersion != "—" ? $"v{RemoteVersion} (#{RemoteCommitHash})" : "—");
+        DrawMetricPill("Cluster Built", RemoteBuildDate);
         EditorGUILayout.EndHorizontal();
 
         EditorGUILayout.EndVertical();

@@ -50,7 +50,11 @@ defmodule Exoforge.DashboardTest do
     test "GET /health returns 200 ok" do
       conn = conn(:get, "/health") |> Router.call(@opts)
       assert conn.status == 200
-      assert Jason.decode!(conn.resp_body) == %{"status" => "ok"}
+      body = Jason.decode!(conn.resp_body)
+      assert body["status"] == "ok"
+      assert is_binary(body["version"])
+      assert is_binary(body["commit_hash"])
+      assert is_binary(body["build_date"])
     end
 
     test "GET / renders HTML dashboard" do

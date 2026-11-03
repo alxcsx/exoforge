@@ -128,6 +128,9 @@ defmodule Exoforge.Std.PluginManager do
       "process_count" => :erlang.system_info(:process_count),
       "elixir_version" => System.version(),
       "otp_release" => System.otp_release(),
+      "version" => Exoforge.BuildInfo.version(),
+      "commit_hash" => Exoforge.BuildInfo.commit_hash(),
+      "build_date" => Exoforge.BuildInfo.build_date(),
       "plugins_count" => count,
       "extensions_count" => count,
       # The tenant this instance is: what usage records are stamped with, and what a deploy to this

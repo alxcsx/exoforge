@@ -191,6 +191,9 @@ defmodule Exoforge.Std.Dashboard.Router do
     %{
       status: "running",
       kernel: "Exoforge Core",
+      version: Exoforge.BuildInfo.version(),
+      commit_hash: Exoforge.BuildInfo.commit_hash(),
+      build_date: Exoforge.BuildInfo.build_date(),
       plugins_count: length(plugins),
       plugins: plugins,
       extensions: extensions,

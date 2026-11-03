@@ -91,6 +91,9 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
        current_env: "Live",
        max_pinned: @max_pinned,
        overview: overview,
+       build_version: overview[:version] || Exoforge.BuildInfo.version(),
+       build_hash: overview[:commit_hash] || Exoforge.BuildInfo.commit_hash(),
+       build_date: overview[:build_date] || Exoforge.BuildInfo.build_date(),
        player_id: player_id,
        user_id: player_id,
        authenticated: authenticated?,
@@ -937,6 +940,14 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                     <option value="Staging" selected={@current_env == "Staging"}>STAGING</option>
                   </select>
                 </form>
+                <span class="text-gray-300">•</span>
+                <span
+                  class="inline-flex items-center gap-1 font-mono text-[9px] font-bold text-gray-400 bg-gray-100 hover:bg-gray-200/80 px-1.5 py-0.5 rounded border border-gray-200/80 transition-colors cursor-default"
+                  title={"Cluster Version: v" <> to_string(@build_version) <> "\nCommit Hash: " <> to_string(@build_hash) <> "\nBuild Date: " <> to_string(@build_date)}
+                >
+                  <span class="text-gray-700">v<%= @build_version %></span>
+                  <span class="text-gray-400 font-mono">(<%= @build_hash %>)</span>
+                </span>
               </div>
             </div>
           </div>

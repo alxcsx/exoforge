@@ -563,8 +563,9 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             </div>
           </div>
 
-          <div class="pt-3 border-t border-gray-200/60 px-2 text-[10px] text-gray-400">
-            <span>Node: </span><span class="font-mono text-gray-600"><%= @node_name %></span>
+          <div class="pt-3 border-t border-gray-200/60 px-2 text-[10px] text-gray-400 space-y-0.5">
+            <div><span>Node: </span><span class="font-mono text-gray-600"><%= @node_name %></span></div>
+            <div><span>Cluster: </span><span class="font-mono text-gray-600">v<%= @overview[:version] || "1.0.0" %> (<%= @overview[:commit_hash] || "dev" %>)</span></div>
           </div>
         </div>
 
@@ -589,9 +590,21 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   <label class="block font-bold text-gray-700 mb-1">Project Title</label>
                   <input type="text" value={@project_name} readonly class="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg font-mono text-xs" />
                 </div>
-                <div class="grid grid-cols-2 gap-3 pt-2">
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
                   <div class="p-2.5 bg-white border border-gray-200 rounded-lg">
-                    <span class="text-[10px] font-bold text-gray-400 uppercase">Registered Extensions</span>
+                    <span class="text-[10px] font-bold text-gray-400 uppercase">Version</span>
+                    <p class="text-sm font-bold text-gray-800 font-mono mt-0.5">v<%= @overview[:version] || "1.0.0" %></p>
+                  </div>
+                  <div class="p-2.5 bg-white border border-gray-200 rounded-lg">
+                    <span class="text-[10px] font-bold text-gray-400 uppercase">Commit Hash</span>
+                    <p class="text-sm font-bold text-primary-700 font-mono mt-0.5" title={@overview[:commit_hash]}><%= @overview[:commit_hash] || "dev" %></p>
+                  </div>
+                  <div class="p-2.5 bg-white border border-gray-200 rounded-lg">
+                    <span class="text-[10px] font-bold text-gray-400 uppercase">Build Date</span>
+                    <p class="text-xs font-bold text-gray-800 font-mono mt-1" title={@overview[:build_date]}><%= @overview[:build_date] || "—" %></p>
+                  </div>
+                  <div class="p-2.5 bg-white border border-gray-200 rounded-lg">
+                    <span class="text-[10px] font-bold text-gray-400 uppercase">Extensions</span>
                     <p class="text-sm font-bold text-gray-800 font-mono mt-0.5"><%= length(@overview.extensions) %></p>
                   </div>
                 </div>

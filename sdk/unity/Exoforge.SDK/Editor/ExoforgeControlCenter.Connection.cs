@@ -419,6 +419,9 @@ public partial class ExoforgeControlCenter : EditorWindow
             {
                 _nodeName = sys.TryGetProperty("node", out var n) ? n.GetString() ?? "—" : "—";
                 _memoryMb = sys.TryGetProperty("memory_mb", out var m) ? $"{m.GetRawText()} MB" : "—";
+                RemoteVersion = sys.TryGetProperty("version", out var v) ? v.GetString() ?? "—" : "—";
+                RemoteCommitHash = sys.TryGetProperty("commit_hash", out var h) ? h.GetString() ?? "—" : "—";
+                RemoteBuildDate = sys.TryGetProperty("build_date", out var d) ? d.GetString() ?? "—" : "—";
                 if (sys.TryGetProperty("plugins_count", out var pc))
                 {
                     _pluginsCount = pc.GetInt32();

@@ -144,6 +144,9 @@ public partial class ExoforgeControlCenter : EditorWindow
     private string _uptime = "—";
     private string _memoryMb = "—";
     private int _pluginsCount;
+    public static string RemoteVersion { get; internal set; } = "—";
+    public static string RemoteCommitHash { get; internal set; } = "—";
+    public static string RemoteBuildDate { get; internal set; } = "—";
 
     /// <summary>One action from the live contract export, with the params needed to build a payload.</summary>
     private sealed record ActionSpec(string Name, Dictionary<string, JsonElement> Params);
@@ -621,6 +624,16 @@ public partial class ExoforgeControlCenter : EditorWindow
 
         var studioBadge = ExoforgeUIStyle.CreatePill("STUDIO", Color.white, ExoforgeUIStyle.BrandPurple, 9);
         brandContainer.Add(studioBadge);
+
+        var versionPill = ExoforgeUIStyle.CreatePill(
+            ExoforgePackageVersion.Formatted,
+            new Color(0.9f, 0.9f, 0.95f),
+            new Color(0f, 0f, 0f, 0.35f),
+            9
+        );
+        versionPill.tooltip = $"Exoforge Unity SDK: v{ExoforgePackageVersion.SdkVersion}\nCommit: {ExoforgePackageVersion.BuildHash}\nBuild Date: {ExoforgePackageVersion.BuildDate}" +
+            (_isConnected && RemoteVersion != "—" ? $"\n\nConnected Cluster:\nv{RemoteVersion} ({RemoteCommitHash})\nBuilt: {RemoteBuildDate}" : "");
+        brandContainer.Add(versionPill);
 
         var divider = new VisualElement();
         divider.style.width = 1;

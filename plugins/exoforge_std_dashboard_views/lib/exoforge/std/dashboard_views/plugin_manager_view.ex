@@ -507,16 +507,19 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
           <p class="text-[11px] text-gray-400 mt-1 font-medium">Distributed node uptime</p>
         </div>
 
-        <!-- 4. Stateful Actors & Engine -->
+        <!-- 4. Version & Engine -->
         <div class="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm">
           <div class="flex items-center justify-between mb-2">
-            <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">OTP Release</span>
+            <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Cluster Build</span>
             <span class="text-lg">⚙️</span>
           </div>
           <div class="flex items-baseline gap-2">
-            <span class="text-2xl font-black text-gray-900"><%= @otp_release %></span>
+            <span class="text-xl font-black font-mono text-gray-900">v<%= Map.get(@system_info, "version", "1.0.0") %></span>
+            <span class="text-xs font-bold font-mono px-1.5 py-0.5 rounded-md bg-purple-50 text-purple-700" title={Map.get(@system_info, "build_date", "")}>
+              #<%= Map.get(@system_info, "commit_hash", "dev") %>
+            </span>
           </div>
-          <p class="text-[11px] text-gray-400 mt-1 font-medium">Distributed virtual actors</p>
+          <p class="text-[11px] text-gray-400 mt-1 font-medium">OTP <%= @otp_release %> &bull; Built <%= Map.get(@system_info, "build_date", "—") %></p>
         </div>
       </div>
 

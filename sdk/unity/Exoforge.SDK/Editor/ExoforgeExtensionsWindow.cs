@@ -336,6 +336,16 @@ namespace Exoforge.Unity.Editor
             var pluginsBadge = ExoforgeUIStyle.CreatePill("EXTENSIONS & RESOURCES", Color.white, ExoforgeUIStyle.BrandPurple, 9);
             brandContainer.Add(pluginsBadge);
 
+            var versionPill = ExoforgeUIStyle.CreatePill(
+                ExoforgePackageVersion.Formatted,
+                new Color(0.9f, 0.9f, 0.95f),
+                new Color(0f, 0f, 0f, 0.35f),
+                9
+            );
+            versionPill.tooltip = $"Exoforge Unity SDK: v{ExoforgePackageVersion.SdkVersion}\nCommit: {ExoforgePackageVersion.BuildHash}\nBuild Date: {ExoforgePackageVersion.BuildDate}" +
+                (IsConnected && ExoforgeControlCenter.RemoteVersion != "—" ? $"\n\nConnected Cluster:\nv{ExoforgeControlCenter.RemoteVersion} ({ExoforgeControlCenter.RemoteCommitHash})\nBuilt: {ExoforgeControlCenter.RemoteBuildDate}" : "");
+            brandContainer.Add(versionPill);
+
             var divider = new VisualElement();
             divider.style.width = 1;
             divider.style.height = 18;

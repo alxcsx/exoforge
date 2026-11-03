@@ -9,7 +9,12 @@ defmodule Exoforge.Std.Dashboard.ApiController do
   alias Exoforge.DrawerRegistry
 
   def health(conn, _params) do
-    json(conn, %{status: "ok"})
+    json(conn, %{
+      status: "ok",
+      version: Exoforge.BuildInfo.version(),
+      commit_hash: Exoforge.BuildInfo.commit_hash(),
+      build_date: Exoforge.BuildInfo.build_date()
+    })
   end
 
   def login(conn, params) do
