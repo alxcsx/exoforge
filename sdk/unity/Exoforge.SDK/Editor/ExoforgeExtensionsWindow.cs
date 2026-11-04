@@ -494,6 +494,20 @@ namespace Exoforge.Unity.Editor
                 actionsGroup.Add(buildDeployAllBtn);
             }
 
+            var autoStubsToggle = new Toggle("Auto-stubs on rebuild")
+            {
+                value = ExoforgeEditorConfig.AutoGenerateStubsOnBuild,
+                tooltip = "Automatically regenerate typed C# plugin stubs after compiling or rebuilding an extension"
+            };
+            autoStubsToggle.style.marginLeft = 8;
+            autoStubsToggle.style.marginRight = 8;
+            autoStubsToggle.style.alignSelf = Align.Center;
+            autoStubsToggle.RegisterValueChangedCallback(evt =>
+            {
+                ExoforgeEditorConfig.AutoGenerateStubsOnBuild = evt.newValue;
+            });
+            actionsGroup.Add(autoStubsToggle);
+
             var studioBtn = ExoforgeUIStyle.CreateModernButton(
                 "⚡ Studio Window ↗",
                 () => ExoforgeControlCenter.ShowWindow(),
@@ -1140,6 +1154,14 @@ namespace Exoforge.Unity.Editor
                 stubsBtn.tooltip = "Generate typed C# stubs and client capabilities for this extension";
                 stubsBtn.style.marginRight = 6;
                 toolbar.Add(stubsBtn);
+
+                var editBtn = ExoforgeUIStyle.CreateModernButton("✏️ Edit", () =>
+                {
+                    ExoforgeControlCenter.OpenExtensionInEditor(plugin.LocalDirectory);
+                }, height: 22);
+                editBtn.tooltip = "Open this extension folder and main source file in the code editor";
+                editBtn.style.marginRight = 6;
+                toolbar.Add(editBtn);
 
                 var folderBtn = ExoforgeUIStyle.CreateModernButton("📁 Folder", () =>
                 {
@@ -2673,6 +2695,19 @@ namespace Exoforge.Unity.Editor
                 _buildLog = build.Output;
                 SessionState.EraseString($"Exoforge_BuildFailed_{targetName}");
                 ShowStatus($"✓ Successfully built '{targetName}'.");
+
+                if (ExoforgeEditorConfig.AutoGenerateStubsOnBuild)
+                {
+                    try
+                    {
+                        await GenerateStubsAsync(plugin);
+                    }
+                    catch (Exception ex)
+                    {
+                        UnityEngine.Debug.LogWarning($"[Exoforge] Auto-generation of stubs for '{targetName}' skipped: {ex.Message}");
+                    }
+                }
+
                 await RefreshPluginsDataAsync();
             }
             catch (Exception ex)

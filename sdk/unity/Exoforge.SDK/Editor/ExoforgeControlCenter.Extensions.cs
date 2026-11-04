@@ -164,6 +164,18 @@ public partial class ExoforgeControlCenter : EditorWindow
         }
         EditorGUILayout.EndHorizontal();
 
+        EditorGUILayout.BeginHorizontal();
+        GUILayout.FlexibleSpace();
+        bool autoStubs = EditorGUILayout.ToggleLeft(
+            new GUIContent("Auto-generate stubs on rebuild", "Automatically regenerate typed C# plugin stubs after compiling or rebuilding an extension"),
+            ExoforgeEditorConfig.AutoGenerateStubsOnBuild,
+            GUILayout.Width(220));
+        if (autoStubs != ExoforgeEditorConfig.AutoGenerateStubsOnBuild)
+        {
+            ExoforgeEditorConfig.AutoGenerateStubsOnBuild = autoStubs;
+        }
+        EditorGUILayout.EndHorizontal();
+
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
         if (_localPlugins.Count == 0)
         {
@@ -303,10 +315,15 @@ public partial class ExoforgeControlCenter : EditorWindow
                     }
                 }
 
-                // 4. Secondary actions: Inspect, Folder
+                // 4. Secondary actions: Inspect, Edit, Folder
                 if (GUILayout.Button(new GUIContent("Inspect ↗", "Inspect and manage this extension in the Exoforge Extensions window"), EditorStyles.miniButton, GUILayout.Width(75), GUILayout.Height(24)))
                 {
                     ExoforgeExtensionsWindow.OpenExtension(plugin.Name);
+                }
+
+                if (GUILayout.Button(new GUIContent("✏️ Edit", "Open this extension folder and main source file in the code editor"), EditorStyles.miniButton, GUILayout.Width(60), GUILayout.Height(24)))
+                {
+                    OpenExtensionInEditor(plugin.Directory);
                 }
 
                 if (GUILayout.Button("📁 Folder", EditorStyles.miniButton, GUILayout.Width(65), GUILayout.Height(24)))
@@ -614,6 +631,18 @@ public partial class ExoforgeControlCenter : EditorWindow
             ShowStatus($"✓ Built '{plugin.Name}' ({build.PluginType}).", MessageType.Info);
             RefreshLocalPlugins();
 
+            if (ExoforgeEditorConfig.AutoGenerateStubsOnBuild)
+            {
+                try
+                {
+                    await GenerateStubsAsync(plugin);
+                }
+                catch (Exception ex)
+                {
+                    UnityEngine.Debug.LogWarning($"[Exoforge] Auto-generation of stubs for '{plugin.Name}' skipped: {ex.Message}");
+                }
+            }
+
             if (thenDeploy)
             {
                 await DeployPluginAsync(plugin);
@@ -745,5 +774,99 @@ public partial class ExoforgeControlCenter : EditorWindow
     }
 
     private void DrawPlugins() => DrawExtensions();
+
+    /// <summary>
+    /// Locates the primary C# source file of an extension (e.g. [Name]Extension.cs or [Name]Plugin.cs).
+    /// </summary>
+    public static string? FindExtensionMainFile(string extensionDir)
+    {
+        if (string.IsNullOrEmpty(extensionDir) || !Directory.Exists(extensionDir)) return null;
+
+        string srcDir = Path.Combine(extensionDir, "src");
+        if (!Directory.Exists(srcDir)) srcDir = extensionDir;
+
+        string name = Path.GetFileName(extensionDir);
+        string className = ExoScaffolder.ClassNameFor(name);
+
+        string candidate = Path.Combine(srcDir, $"{className}Extension.cs");
+        if (File.Exists(candidate)) return candidate;
+
+        candidate = Path.Combine(srcDir, $"{className}Plugin.cs");
+        if (File.Exists(candidate)) return candidate;
+
+        string[] matches = Directory.GetFiles(srcDir, "*Extension.cs", SearchOption.AllDirectories);
+        if (matches.Length > 0) return matches[0];
+
+        matches = Directory.GetFiles(srcDir, "*Plugin.cs", SearchOption.AllDirectories);
+        if (matches.Length > 0) return matches[0];
+
+        matches = Directory.GetFiles(srcDir, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains("Generated") && !f.Contains(".g.cs") && !f.Contains("obj") && !f.Contains("bin"))
+            .ToArray();
+        if (matches.Length > 0) return matches[0];
+
+        string[] slnx = Directory.GetFiles(extensionDir, "*.slnx");
+        if (slnx.Length > 0) return slnx[0];
+
+        string[] csproj = Directory.GetFiles(extensionDir, "*.csproj", SearchOption.AllDirectories);
+        if (csproj.Length > 0) return csproj[0];
+
+        return null;
+    }
+
+    /// <summary>
+    /// Opens the extension folder and main source file in the code editor.
+    /// </summary>
+    public static void OpenExtensionInEditor(string extensionDir)
+    {
+        if (string.IsNullOrEmpty(extensionDir) || !Directory.Exists(extensionDir)) return;
+
+        string? mainFile = FindExtensionMainFile(extensionDir);
+        string targetPath = mainFile ?? extensionDir;
+
+        // Try launching VS Code if available with folder + file (opens folder in explorer and file in active tab)
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = "code",
+                Arguments = !string.IsNullOrEmpty(mainFile)
+                    ? $"\"{extensionDir}\" \"{mainFile}\""
+                    : $"\"{extensionDir}\"",
+                UseShellExecute = true,
+                CreateNoWindow = true
+            };
+            using var proc = Process.Start(psi);
+            if (proc != null) return;
+        }
+        catch { }
+
+        // Fallback 1: Unity external script editor
+        if (File.Exists(targetPath))
+        {
+            try
+            {
+                if (UnityEditorInternal.InternalEditorUtility.OpenFileAtLineExternal(targetPath, 1))
+                {
+                    return;
+                }
+            }
+            catch { }
+        }
+
+        // Fallback 2: AssetDatabase if within Assets
+        if (targetPath.StartsWith(Application.dataPath, StringComparison.OrdinalIgnoreCase))
+        {
+            string rel = "Assets" + targetPath.Substring(Application.dataPath.Length).Replace('\\', '/');
+            var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(rel);
+            if (asset != null && AssetDatabase.OpenAsset(asset))
+            {
+                return;
+            }
+        }
+
+        // Fallback 3: System default editor
+        EditorUtility.OpenWithDefaultApp(targetPath);
+    }
 }
 }

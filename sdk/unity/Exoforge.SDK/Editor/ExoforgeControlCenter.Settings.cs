@@ -105,6 +105,11 @@ public partial class ExoforgeControlCenter : EditorWindow
             $"Resolved: {ExoDeployer.ResolveDotnetPath(ExoforgeEditorConfig.DotnetPath)}",
             EditorStyles.miniLabel);
 
+        EditorGUILayout.Space(4);
+        ExoforgeEditorConfig.AutoGenerateStubsOnBuild = EditorGUILayout.Toggle(
+            new GUIContent("Auto-Generate Stubs on Build", "Automatically regenerate typed C# plugin stubs after compiling or rebuilding an extension"),
+            ExoforgeEditorConfig.AutoGenerateStubsOnBuild);
+
         EditorGUILayout.EndVertical();
 
         EditorGUILayout.Space(8);

@@ -333,16 +333,16 @@ public class {{className}}{{suffix}}
 [ExoResource("{{serviceName}}_items", PrimaryKey = "id", DrawerTabs = new[] { "overview", "attributes" })]
 public record {{className}}Item
 {
-    [ExoColumn(Label = "Id", Sortable = true, Filterable = true)]
+    [ExoColumn(Sortable = true, Filterable = true)]
     public string Id { get; init; } = "";
 
-    [ExoColumn(Label = "Owner", Sortable = true, Filterable = true)]
+    [ExoColumn(Sortable = true, Filterable = true)]
     public string OwnerId { get; init; } = "";
 
-    [ExoColumn(Label = "Quantity", Sortable = true)]
+    [ExoColumn(Sortable = true)]
     public int Quantity { get; init; }
 
-    [ExoColumn(Label = "Status", Badge = true)]
+    [ExoColumn(Badge = true)]
     public string Status { get; init; } = "active";
 }
 """;
