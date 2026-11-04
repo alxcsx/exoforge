@@ -396,8 +396,13 @@ public static class Program
         string pluginDir = Path.Combine(ws.PluginsPath, ExoScaffolder.NormalizePluginName(name));
         if (!Directory.Exists(pluginDir))
         {
-            Error($"Plugin directory not found: {pluginDir}");
-            return 1;
+            string directDir = Path.Combine(ws.RootPath, ExoScaffolder.NormalizePluginName(name));
+            if (Directory.Exists(directDir)) pluginDir = directDir;
+            else
+            {
+                Error($"Plugin directory not found: {pluginDir}");
+                return 1;
+            }
         }
 
         int first = await BuildThenPushAsync(deployer, ws, name, rid, env, verify: true).ConfigureAwait(false);

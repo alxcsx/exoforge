@@ -944,7 +944,15 @@ public class ExoDeployer
 
         if (!Directory.Exists(pluginDir))
         {
-            throw new DirectoryNotFoundException($"Plugin directory not found: {pluginDir}");
+            string directDir = Path.Combine(_workspace.RootPath, cleanName);
+            if (Directory.Exists(directDir))
+            {
+                pluginDir = directDir;
+            }
+            else
+            {
+                throw new DirectoryNotFoundException($"Plugin directory not found: {pluginDir}");
+            }
         }
 
         var output = new StringBuilder();
@@ -966,18 +974,29 @@ public class ExoDeployer
         // in a manifest cannot be correlated with the builds that produced them.
         int buildNumber = PeekBuildNumber(pluginDir);
         string buildStamp = $"{buildNumber}.{fingerprint}";
-        // Refresh stubs from contracts before compiling if stubs file exists
+        // Refresh stubs from contracts before compiling if stubs file exists and cached contracts are available
         string stubsFile = Path.Combine(pluginDir, "src", "Generated", "PluginServices.g.cs");
         if (File.Exists(stubsFile))
         {
             try
             {
-                string contractsJson = MergeLocalContracts(LoadCachedOrEmptyContracts());
-                var deps = ReadManifestDependencies(pluginDir);
-                var targetServices = deps is { Count: > 0 }
-                    ? (IEnumerable<string>)deps
-                    : AvailableServices(contractsJson).Where(s => !string.Equals(s, cleanName, StringComparison.OrdinalIgnoreCase));
-                ExoCodeGenerator.GeneratePluginStubsToFile(contractsJson, stubsFile, services: targetServices, pluginId: cleanName, codeSearchRoot: pluginDir, log: Emit);
+                string cachedContracts = LoadCachedOrEmptyContracts();
+                if (!string.IsNullOrWhiteSpace(cachedContracts) && cachedContracts.Trim() != "{}")
+                {
+                    string contractsJson = MergeLocalContracts(cachedContracts);
+                    var available = AvailableServices(contractsJson).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    var deps = ReadManifestDependencies(pluginDir);
+
+                    if (deps is { Count: > 0 } && !deps.Any(d => available.Contains(d)))
+                    {
+                        // Contracts for declared dependencies cannot be resolved offline/unconnected; preserve existing stubs
+                        Emit($"[build] Contracts for dependencies ({string.Join(", ", deps)}) not in offline cache; preserving existing stubs.");
+                    }
+                    else if (deps is { Count: > 0 })
+                    {
+                        ExoCodeGenerator.GeneratePluginStubsToFile(contractsJson, stubsFile, services: deps, pluginId: cleanName, codeSearchRoot: pluginDir, log: Emit);
+                    }
+                }
             }
             catch
             {

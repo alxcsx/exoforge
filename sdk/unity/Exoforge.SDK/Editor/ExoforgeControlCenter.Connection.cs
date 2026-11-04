@@ -673,7 +673,7 @@ public partial class ExoforgeControlCenter : EditorWindow
     /// <summary>Downloads or saves the latest SDK package archive from the connected cluster.</summary>
     public static async Task DownloadOrUpdateSdkAsync()
     {
-        string host = ActiveHttpUrl;
+        string host = ActiveHttpEndpoint;
         if (string.IsNullOrEmpty(host)) host = "http://localhost:4005";
 
         string targetUrl = !string.IsNullOrEmpty(RemoteSdkPackageUrl)
