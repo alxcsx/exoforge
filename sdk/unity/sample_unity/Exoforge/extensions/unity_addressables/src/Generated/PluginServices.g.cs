@@ -27,12 +27,12 @@ namespace Exoforge.Plugins.Generated
         [JsonPropertyName("content")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public JsonElement Content { get; set; } = default!;
-        [JsonPropertyName("content_type")]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-        public JsonElement ContentType { get; set; } = default!;
         [JsonPropertyName("bucket")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public JsonElement Bucket { get; set; } = default!;
+        [JsonPropertyName("content_type")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement ContentType { get; set; } = default!;
     }
 
     public class FileBucketUploadFileResponse
@@ -117,12 +117,12 @@ namespace Exoforge.Plugins.Generated
         [JsonPropertyName("content")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public JsonElement Content { get; set; } = default!;
-        [JsonPropertyName("content_type")]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-        public JsonElement ContentType { get; set; } = default!;
         [JsonPropertyName("bucket")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public JsonElement Bucket { get; set; } = default!;
+        [JsonPropertyName("content_type")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public JsonElement ContentType { get; set; } = default!;
     }
 
     public class FileBucketUpdateFileResponse
