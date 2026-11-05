@@ -353,7 +353,7 @@ defmodule Exoforge.Std.Dashboard.InputTypes do
   defp render_custom_element(assigns, spec) do
     entry = spec[:entry] || spec["entry"]
     plugin_id = spec[:plugin_id] || spec["plugin_id"]
-    entry_url = if entry, do: "/api/plugins/#{plugin_id}/assets/#{entry}?v=#{System.system_time(:second)}"
+    entry_url = if entry, do: "/_studio/plugins/#{plugin_id}/assets/#{entry}?v=#{System.system_time(:second)}"
 
     assigns =
       assigns

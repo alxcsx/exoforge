@@ -129,7 +129,8 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
        events_paused: false,
        event_filter_topic: "",
        extensions_search: "",
-       extensions_category: "all"
+       extensions_category: "all",
+       cors_config: fetch_cors_config()
      )}
   end
 
@@ -412,7 +413,24 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
   def handle_event("open_settings", _params, socket) do
     hooks = Exoforge.UIHookRegistry.list_hooks(:settings)
-    {:noreply, assign(socket, settings_open: true, settings_hooks: hooks)}
+    cors = fetch_cors_config()
+    {:noreply, assign(socket, settings_open: true, settings_hooks: hooks, cors_config: cors)}
+  end
+
+  def handle_event("save_cors_settings", params, socket) do
+    allow_creds = Map.get(params, "allow_credentials") in [true, "true", "on", "1"]
+    clean_params = Map.put(params, "allow_credentials", allow_creds)
+
+    case ActionDispatcher.dispatch(:http, :set_cors_config, clean_params, caller_scopes: socket.assigns.current_scopes) do
+      {:ok, updated} ->
+        {:noreply,
+         socket
+         |> assign(cors_config: updated)
+         |> show_toast(:info, "✓ CORS policy updated and applied to HTTP ingress.")}
+
+      {:error, reason} ->
+        {:noreply, show_toast(socket, :error, "Failed to update CORS policy: #{inspect(reason)}")}
+    end
   end
 
   def handle_event("close_settings", _params, socket) do
@@ -567,6 +585,20 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     end
   end
 
+  def handle_event("studio_dispatch", %{"service" => service, "action" => action} = params, socket) do
+    payload = Map.get(params, "payload") || %{}
+    scopes = socket.assigns.current_scopes
+
+    result =
+      case ActionDispatcher.dispatch(service, action, payload, caller_scopes: scopes) do
+        {:ok, data} -> %{"status" => "ok", "data" => data}
+        :ok -> %{"status" => "ok"}
+        {:error, reason} -> %{"status" => "error", "error" => inspect(reason)}
+      end
+
+    {:reply, result, socket}
+  end
+
   # ---- LIVE CLUSTER EVENT STREAM DOCK ----
 
   def handle_event("toggle_event_dock", _params, socket) do
@@ -598,6 +630,15 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
     EventDispatcher.broadcast(:studio_telemetry, payload, topic: "studio")
     {:noreply, show_toast(socket, :info, "Simulated telemetry event ##{ping_id} broadcasted!")}
+  end
+
+  defp fetch_cors_config do
+    case ActionDispatcher.dispatch(:http, :get_cors_config, %{}) do
+      {:ok, cfg} when is_map(cfg) -> cfg
+      _ -> %{"mode" => "relaxed", "allowed_origins" => "*", "allow_credentials" => true}
+    end
+  rescue
+    _ -> %{"mode" => "relaxed", "allowed_origins" => "*", "allow_credentials" => true}
   end
 
   # ---- REAL-TIME EVENT STREAM FROM BEAM EventDispatcher ----
@@ -1324,6 +1365,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         studio_name={@studio_name}
         settings_tab={@settings_tab}
         settings_hooks={@settings_hooks}
+        cors_config={@cors_config}
         environments={@environments}
         current_env={@current_env}
         overview={@overview}

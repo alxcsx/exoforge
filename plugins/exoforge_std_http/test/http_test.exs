@@ -362,4 +362,75 @@ defmodule Exoforge.HttpTest do
       File.rm(tmp_path)
     end
   end
+
+  describe "CORS configuration and preflight" do
+    test "returns 204 on OPTIONS preflight with CORS headers" do
+      conn =
+        conn(:options, "/api/status")
+        |> put_req_header("origin", "https://game.example.com")
+        |> put_req_header("access-control-request-method", "POST")
+        |> put_req_header("access-control-request-headers", "authorization,content-type")
+        |> Router.call(@opts)
+
+      assert conn.status == 204
+      headers = Map.new(conn.resp_headers)
+      assert headers["access-control-allow-origin"] == "https://game.example.com"
+      assert headers["access-control-allow-credentials"] == "true"
+      assert headers["access-control-allow-methods"] =~ "POST"
+    end
+
+    test "attaches CORS headers to normal GET responses" do
+      conn =
+        conn(:get, "/api/status")
+        |> put_req_header("authorization", "Bearer dev:admin")
+        |> put_req_header("origin", "https://game.example.com")
+        |> Router.call(@opts)
+
+      assert conn.status == 200
+      headers = Map.new(conn.resp_headers)
+      assert headers["access-control-allow-origin"] == "https://game.example.com"
+    end
+
+    test "get_cors_config and set_cors_config dynamically update CORS behavior" do
+      {:ok, initial_config} = Http.get_cors_config()
+      assert is_map(initial_config)
+      assert initial_config["mode"] == "relaxed"
+
+      # Update to whitelist mode
+      {:ok, updated} =
+        Http.set_cors_config(%{
+          "mode" => "whitelist",
+          "allowed_origins" => ["https://allowed.example.com"],
+          "allow_credentials" => true
+        })
+
+      assert updated["mode"] == "whitelist"
+      assert updated["allowed_origins"] == "https://allowed.example.com"
+
+      # Allowed origin should get headers
+      allowed_conn =
+        conn(:options, "/api/status")
+        |> put_req_header("origin", "https://allowed.example.com")
+        |> Router.call(@opts)
+
+      allowed_headers = Map.new(allowed_conn.resp_headers)
+      assert allowed_headers["access-control-allow-origin"] == "https://allowed.example.com"
+
+      # Disallowed origin should NOT get access-control-allow-origin header
+      disallowed_conn =
+        conn(:options, "/api/status")
+        |> put_req_header("origin", "https://evil.example.com")
+        |> Router.call(@opts)
+
+      disallowed_headers = Map.new(disallowed_conn.resp_headers)
+      refute Map.has_key?(disallowed_headers, "access-control-allow-origin")
+
+      # Restore to relaxed mode
+      {:ok, _} =
+        Http.set_cors_config(%{
+          "mode" => "relaxed",
+          "allow_credentials" => true
+        })
+    end
+  end
 end

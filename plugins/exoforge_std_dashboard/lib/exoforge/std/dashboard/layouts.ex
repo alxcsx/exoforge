@@ -91,6 +91,16 @@ defmodule Exoforge.Std.Dashboard.Layouts do
               const csrfToken = metaEl ? metaEl.getAttribute("content") : "";
 
               const Hooks = {
+                StudioDispatcher: {
+                  mounted() {
+                    window._studioDispatcher = this;
+                  },
+                  destroyed() {
+                    if (window._studioDispatcher === this) {
+                      window._studioDispatcher = null;
+                    }
+                  }
+                },
                 MicrofrontendLoader: {
                   mounted() {
                     this.load();
@@ -138,15 +148,33 @@ defmodule Exoforge.Std.Dashboard.Layouts do
               window.Exoforge = {
                 httpBaseUri: "/api",
                 dispatch: async function(service, action, payload = {}) {
+                  // 1. Primary: If LiveView WebSocket is connected, push over the socket (0 HTTP roundtrips)
+                  if (window._studioDispatcher && window.liveSocket && window.liveSocket.isConnected()) {
+                    return new Promise((resolve) => {
+                      window._studioDispatcher.pushEvent("studio_dispatch", { service, action, payload }, (reply) => {
+                        resolve(reply);
+                      });
+                    });
+                  }
+
+                  // 2. Fallback: If socket is disconnected or unavailable, fall back to standard HTTP REST
                   const csrf = metaEl ? metaEl.getAttribute("content") : "";
-                  const resp = await fetch("/api/dispatch", {
+                  const cookieMatch = document.cookie.match(/(?:^|;\s*)exo_auth_token=([^;]+)/);
+                  const token = cookieMatch ? decodeURIComponent(cookieMatch[1].trim()) : "";
+
+                  const headers = {
+                    "content-type": "application/json",
+                    "x-csrf-token": csrf
+                  };
+                  if (token) {
+                    headers["authorization"] = "Bearer " + token;
+                  }
+
+                  const resp = await fetch(`/api/${encodeURIComponent(service)}/${encodeURIComponent(action)}`, {
                     method: "POST",
                     credentials: "same-origin",
-                    headers: {
-                      "content-type": "application/json",
-                      "x-csrf-token": csrf
-                    },
-                    body: JSON.stringify({ service, action, payload })
+                    headers: headers,
+                    body: JSON.stringify(payload)
                   });
                   return await resp.json();
                 },
@@ -179,7 +207,7 @@ defmodule Exoforge.Std.Dashboard.Layouts do
 
   def app(assigns) do
     ~H"""
-    <main>
+    <main id="studio-main" phx-hook="StudioDispatcher">
       <%= @inner_content %>
     </main>
     """

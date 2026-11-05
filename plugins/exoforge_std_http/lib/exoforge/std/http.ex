@@ -12,8 +12,23 @@ defmodule Exoforge.Std.Http do
     icon: "🌐",
     category: "Ingress",
     system: true,
-    dashboard_view: nil
+    dashboard_view: nil,
+    ui_hooks: %{
+      settings: [
+        %{
+          id: :http,
+          title: "HTTP & CORS",
+          icon: "🌐",
+          order: 28
+        }
+      ]
+    }
   }
+
+  def on_init(_manifest) do
+    Exoforge.Std.Http.Cors.init()
+    :ok
+  end
 
   def children do
     port = Exoforge.Endpoints.http_port()
@@ -26,5 +41,13 @@ defmodule Exoforge.Std.Http do
   @impl true
   defaction status() do
     {:ok, %{status: "ok", port: Exoforge.Endpoints.http_port()}}
+  end
+
+  defaction get_cors_config() do
+    {:ok, Exoforge.Std.Http.Cors.get_config()}
+  end
+
+  defaction set_cors_config(payload), scope: Exoforge.Auth.Roles.studio() do
+    Exoforge.Std.Http.Cors.set_config(payload)
   end
 end

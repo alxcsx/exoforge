@@ -481,6 +481,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
   attr(:studio_name, :string, default: "Exoforge Studio")
   attr(:settings_tab, :string, default: "project")
   attr(:settings_hooks, :list, default: [])
+  attr(:cors_config, :map, default: %{})
   attr(:environments, :list, default: [])
   attr(:current_env, :string, default: "dev")
   attr(:overview, :map, default: %{extensions: []})
@@ -791,8 +792,111 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             </div>
           <% end %>
 
+          <%= if @settings_tab == "http" do %>
+            <% mode = @cors_config["mode"] || "relaxed" %>
+            <% origins = @cors_config["allowed_origins"] || "*" %>
+            <% allow_creds = @cors_config["allow_credentials"] != false %>
+            <div class="space-y-4">
+              <div>
+                <h4 class="text-sm font-bold text-gray-900 flex items-center gap-2">
+                  <span>🌐</span>
+                  <span>HTTP Ingress &amp; CORS Policy</span>
+                </h4>
+                <p class="text-xs text-gray-500 mt-0.5">Control Cross-Origin Resource Sharing (CORS) for Unity WebGL, browser clients, and external web APIs.</p>
+              </div>
+
+              <form phx-submit="save_cors_settings" class="space-y-4">
+                <div class="bg-gray-50 p-4 rounded-xl border border-gray-200/80 space-y-3">
+                  <span class="font-bold text-gray-800 text-xs uppercase tracking-wider">CORS Access Policy</span>
+
+                  <div class="grid grid-cols-1 md:grid-cols-3 gap-2.5 pt-1">
+                    <!-- Relaxed Mode -->
+                    <label class={"relative flex flex-col p-3 rounded-xl border cursor-pointer transition-all #{if mode == "relaxed", do: "bg-purple-50/60 border-purple-300 ring-1 ring-purple-400", else: "bg-white border-gray-200 hover:border-gray-300"}"}>
+                      <div class="flex items-center gap-2">
+                        <input type="radio" name="mode" value="relaxed" checked={mode == "relaxed"} class="text-purple-600 focus:ring-purple-500" />
+                        <span class="font-bold text-gray-900 text-xs">Relaxed (Wildcard)</span>
+                      </div>
+                      <p class="text-[11px] text-gray-500 mt-1.5 leading-snug">
+                        Accepts requests from any origin. Recommended for <strong>Unity WebGL builds</strong>, itch.io, and external web dev.
+                      </p>
+                    </label>
+
+                    <!-- Whitelist Mode -->
+                    <label class={"relative flex flex-col p-3 rounded-xl border cursor-pointer transition-all #{if mode == "whitelist", do: "bg-purple-50/60 border-purple-300 ring-1 ring-purple-400", else: "bg-white border-gray-200 hover:border-gray-300"}"}>
+                      <div class="flex items-center gap-2">
+                        <input type="radio" name="mode" value="whitelist" checked={mode == "whitelist"} class="text-purple-600 focus:ring-purple-500" />
+                        <span class="font-bold text-gray-900 text-xs">Allowed Origins</span>
+                      </div>
+                      <p class="text-[11px] text-gray-500 mt-1.5 leading-snug">
+                        Restricts cross-origin requests to explicitly allowed domains.
+                      </p>
+                    </label>
+
+                    <!-- Strict Mode -->
+                    <label class={"relative flex flex-col p-3 rounded-xl border cursor-pointer transition-all #{if mode == "strict", do: "bg-purple-50/60 border-purple-300 ring-1 ring-purple-400", else: "bg-white border-gray-200 hover:border-gray-300"}"}>
+                      <div class="flex items-center gap-2">
+                        <input type="radio" name="mode" value="strict" checked={mode == "strict"} class="text-purple-600 focus:ring-purple-500" />
+                        <span class="font-bold text-gray-900 text-xs">Strict (Disabled)</span>
+                      </div>
+                      <p class="text-[11px] text-gray-500 mt-1.5 leading-snug">
+                        Blocks all cross-origin requests. Only same-origin calls are permitted.
+                      </p>
+                    </label>
+                  </div>
+
+                  <!-- Whitelist Origin Field -->
+                  <div class="pt-2">
+                    <label class="block font-bold text-gray-700 text-xs mb-1">
+                      Allowed Origins (Comma-separated)
+                    </label>
+                    <input
+                      type="text"
+                      name="allowed_origins"
+                      value={origins}
+                      placeholder="e.g. https://mygame.com, https://play.itch.io, http://localhost:3000"
+                      class="w-full text-xs px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 font-mono"
+                    />
+                    <p class="text-[11px] text-gray-500 mt-1">Leave as <code>*</code> to permit all origins when in Relaxed mode.</p>
+                  </div>
+
+                  <!-- Credentials Checkbox -->
+                  <div class="pt-2 border-t border-gray-200/60">
+                    <label class="flex items-start gap-2.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        name="allow_credentials"
+                        value="true"
+                        checked={allow_creds}
+                        class="mt-0.5 rounded text-purple-600 focus:ring-purple-500 border-gray-300"
+                      />
+                      <div>
+                        <span class="font-bold text-gray-800 text-xs">Allow Credentials &amp; Auth Headers</span>
+                        <p class="text-[11px] text-gray-500 mt-0.5">
+                          Enables <code class="font-mono text-purple-700">Access-Control-Allow-Credentials: true</code> so browser clients can transmit cookies and Authorization tokens cross-origin.
+                        </p>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="flex justify-between items-center pt-2">
+                  <span class="text-[11px] text-gray-500">
+                    HTTP Listener: Port <strong>{Exoforge.Endpoints.http_port()}</strong> • Preflight: <strong>204 No Content</strong>
+                  </span>
+                  <button
+                    type="submit"
+                    class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-xl transition-all shadow-sm hover:shadow flex items-center gap-1.5"
+                  >
+                    <span>💾</span>
+                    <span>Save CORS Policy</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          <% end %>
+
           <!-- Dynamic Plugin Settings Tab Fallback -->
-          <%= if @settings_tab not in ["project", "environments", "sdks", "database", "auth"] do %>
+          <%= if @settings_tab not in ["project", "environments", "sdks", "database", "auth", "http"] do %>
             <% active_hook = Enum.find(@settings_hooks, fn h -> to_string(h.id) == @settings_tab end) %>
             <%= if active_hook do %>
               <%= cond do %>

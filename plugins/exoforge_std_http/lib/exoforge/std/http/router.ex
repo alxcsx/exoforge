@@ -10,6 +10,7 @@ defmodule Exoforge.Std.Http.Router do
   alias Exoforge.ActionDispatcher
 
   plug(Plug.Logger)
+  plug(:handle_cors)
   plug(:match)
 
   plug(Plug.Parsers,
@@ -22,6 +23,19 @@ defmodule Exoforge.Std.Http.Router do
 
   plug(:authorize_ingress)
   plug(:dispatch)
+
+  defp handle_cors(conn, _opts) do
+    headers = Exoforge.Std.Http.Cors.cors_headers(conn)
+    conn = Enum.reduce(headers, conn, fn {k, v}, acc -> Plug.Conn.put_resp_header(acc, k, v) end)
+
+    if conn.method == "OPTIONS" do
+      conn
+      |> Plug.Conn.send_resp(204, "")
+      |> Plug.Conn.halt()
+    else
+      conn
+    end
+  end
 
   get "/" do
     send_landing(conn)

@@ -20,7 +20,7 @@ defmodule Exoforge.Std.Dashboard.Microfrontend do
     entry = spec[:entry] || spec["entry"]
     plugin_id = spec[:plugin_id] || spec["plugin_id"]
 
-    entry_url = if entry, do: "/api/plugins/#{plugin_id}/assets/#{entry}?v=#{System.system_time(:second)}"
+    entry_url = if entry, do: "/_studio/plugins/#{plugin_id}/assets/#{entry}?v=#{System.system_time(:second)}"
 
     assigns =
       assigns
@@ -49,7 +49,7 @@ defmodule Exoforge.Std.Dashboard.Microfrontend do
 
         <% @type == "iframe" and @entry != nil -> %>
           <iframe
-            src={"/api/plugins/#{@plugin_id}/assets/#{@entry}"}
+            src={"/_studio/plugins/#{@plugin_id}/assets/#{@entry}"}
             class="w-full h-full min-h-[400px] border-0 rounded-xl"
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
           >

@@ -127,6 +127,20 @@ defmodule Exoforge.Std.Dashboard.ResourceLive do
     {:noreply, assign(socket, export_modal_open: false)}
   end
 
+  def handle_event("studio_dispatch", %{"service" => service, "action" => action} = params, socket) do
+    payload = Map.get(params, "payload") || %{}
+    scopes = socket.assigns[:current_scopes] || [Exoforge.Auth.Roles.studio()]
+
+    result =
+      case Exoforge.ActionDispatcher.dispatch(service, action, payload, caller_scopes: scopes) do
+        {:ok, data} -> %{"status" => "ok", "data" => data}
+        :ok -> %{"status" => "ok"}
+        {:error, reason} -> %{"status" => "error", "error" => inspect(reason)}
+      end
+
+    {:reply, result, socket}
+  end
+
   defp fetch_resource_rows(resource_name) do
     Exoforge.PluginRegistry.fetch_resource_rows(resource_name)
   end
