@@ -12,6 +12,7 @@ namespace Exoforge.Unity.Editor
     /// </summary>
     public sealed class ExoforgeEnvironmentModal : EditorWindow
     {
+        private string _baseUrl = "localhost";
         private string _envName = "";
         private string _wsUrl = "ws://localhost:4000/ws";
         private string _httpUrl = "http://localhost:4001";
@@ -25,12 +26,19 @@ namespace Exoforge.Unity.Editor
         {
             EditorApplication.delayCall += () =>
             {
+                var existing = Resources.FindObjectsOfTypeAll<ExoforgeEnvironmentModal>();
+                if (existing.Length > 0)
+                {
+                    existing[0].Focus();
+                    return;
+                }
+
                 var window = CreateInstance<ExoforgeEnvironmentModal>();
                 window.titleContent = new GUIContent("New Environment");
                 window._onCreated = onCreated;
 
-                const float width = 450;
-                const float height = 310;
+                const float width = 460;
+                const float height = 350;
                 window.minSize = new Vector2(width, height);
                 window.maxSize = new Vector2(width, height);
 
@@ -101,6 +109,11 @@ namespace Exoforge.Unity.Editor
             root.Add(div);
 
             // 2. Input Fields
+            var baseField = new TextField("Cluster Base URL") { value = _baseUrl };
+            baseField.tooltip = "Enter the cluster hostname or URL (e.g. exof1.alexcs.me or localhost). Endpoints are inferred automatically.";
+            baseField.style.marginBottom = 6;
+            root.Add(baseField);
+
             var nameField = new TextField("Environment Name");
             nameField.style.marginBottom = 6;
             nameField.RegisterValueChangedCallback(evt =>
@@ -127,6 +140,32 @@ namespace Exoforge.Unity.Editor
                 ValidateInputs();
             });
             root.Add(httpField);
+
+            baseField.RegisterValueChangedCallback(evt =>
+            {
+                _baseUrl = evt.newValue ?? "";
+                ExoforgeEditorConfig.DeriveEndpoints(_baseUrl, out _wsUrl, out _httpUrl);
+                wsField.SetValueWithoutNotify(_wsUrl);
+                httpField.SetValueWithoutNotify(_httpUrl);
+
+                if (string.IsNullOrWhiteSpace(_envName) && !string.IsNullOrWhiteSpace(_baseUrl))
+                {
+                    string suggested = _baseUrl.Trim().TrimEnd('/');
+                    if (suggested.Contains("://")) suggested = suggested.Substring(suggested.IndexOf("://", StringComparison.Ordinal) + 3);
+                    int slash = suggested.IndexOf('/');
+                    if (slash > 0) suggested = suggested.Substring(0, slash);
+                    int colon = suggested.IndexOf(':');
+                    if (colon > 0) suggested = suggested.Substring(0, colon);
+                    int dot = suggested.IndexOf('.');
+                    if (dot > 0) suggested = suggested.Substring(0, dot);
+                    if (suggested != "localhost" && suggested != "127")
+                    {
+                        _envName = suggested.ToLowerInvariant();
+                        nameField.SetValueWithoutNotify(_envName);
+                    }
+                }
+                ValidateInputs();
+            });
 
             var tokenField = new TextField("Bearer Token") { value = _token };
             tokenField.style.marginBottom = 8;

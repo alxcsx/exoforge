@@ -143,12 +143,27 @@ public partial class ExoforgeControlCenter : EditorWindow
             : null;
 
         string currentWs = activeEnvConfig?.WsUrl ?? ActiveWsUrl;
-        string newWs = EditorGUILayout.TextField("WebSocket URL", currentWs);
-
         string currentHttp = activeEnvConfig?.HttpUrl ?? ActiveHttpUrl;
-        string newHttp = EditorGUILayout.TextField("HTTP REST URL", currentHttp);
 
-        if (activeEnvConfig != null && (newWs != currentWs || newHttp != currentHttp))
+        string currentBase = ExoforgeEditorConfig.DeriveBaseUrl(currentWs, currentHttp);
+        EditorGUI.BeginChangeCheck();
+        string newBase = EditorGUILayout.TextField("Cluster Base URL", currentBase);
+        if (EditorGUI.EndChangeCheck() && !string.IsNullOrWhiteSpace(newBase) && newBase != currentBase)
+        {
+            ExoforgeEditorConfig.DeriveEndpoints(newBase, out var derivedWs, out var derivedHttp);
+            if (activeEnvConfig != null)
+            {
+                activeEnvConfig.WsUrl = derivedWs;
+                activeEnvConfig.HttpUrl = derivedHttp;
+                currentWs = derivedWs;
+                currentHttp = derivedHttp;
+            }
+        }
+
+        string newWs = EditorGUILayout.TextField("WebSocket URL", activeEnvConfig?.WsUrl ?? currentWs);
+        string newHttp = EditorGUILayout.TextField("HTTP REST URL", activeEnvConfig?.HttpUrl ?? currentHttp);
+
+        if (activeEnvConfig != null && (newWs != (activeEnvConfig?.WsUrl ?? currentWs) || newHttp != (activeEnvConfig?.HttpUrl ?? currentHttp)))
         {
             activeEnvConfig.WsUrl = newWs;
             activeEnvConfig.HttpUrl = newHttp;

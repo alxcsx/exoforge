@@ -76,6 +76,26 @@ public partial class ExoforgeControlCenter : EditorWindow
         }
     }
 
+    public static string ActiveWsEndpoint
+    {
+        get
+        {
+            if (Instance != null && !string.IsNullOrEmpty(Instance.ActiveWsUrl))
+            {
+                return Instance.ActiveWsUrl;
+            }
+            try
+            {
+                var env = ExoWorkspace.Load(ExoforgeEditorConfig.GetAbsoluteWorkspacePath())?.GetActiveEnvironment();
+                return env?.WsUrl ?? "ws://localhost:4000/ws";
+            }
+            catch
+            {
+                return "ws://localhost:4000/ws";
+            }
+        }
+    }
+
     // Connection & Client
     private ExoWorkspace? _workspace;
     private string _workspaceLoadedFrom = "";
@@ -384,6 +404,76 @@ public partial class ExoforgeControlCenter : EditorWindow
         };
     }
 
+    [InitializeOnLoadMethod]
+    private static void AutoCheckInitialSetupAndAuth()
+    {
+        EditorApplication.delayCall += () =>
+        {
+            if (Application.isBatchMode) return;
+
+            if (EditorApplication.isCompiling || EditorApplication.isUpdating)
+            {
+                EditorApplication.delayCall += AutoCheckInitialSetupAndAuth;
+                return;
+            }
+
+            // Check if first install or unconfigured workspace
+            if (!ExoforgeEditorConfig.HasCompletedInitialSetup)
+            {
+                string wsPath = ExoforgeEditorConfig.GetAbsoluteWorkspacePath();
+                if (ExoWorkspace.Exists(wsPath))
+                {
+                    try
+                    {
+                        var ws = ExoWorkspace.Load(wsPath);
+                        if (ws?.Config?.Environments != null && ws.Config.Environments.Count > 0)
+                        {
+                            ExoforgeEditorConfig.HasCompletedInitialSetup = true;
+                        }
+                    }
+                    catch { }
+                }
+            }
+
+            if (!ExoforgeEditorConfig.HasCompletedInitialSetup)
+            {
+                ExoforgeSetupModal.Open(onCompleted: () =>
+                {
+                    CheckAuthAndPromptLogin();
+                });
+                return;
+            }
+
+            CheckAuthAndPromptLogin();
+        };
+    }
+
+    /// <summary>
+    /// If no studio user session is defined or the session token is invalid, pops up the login screen.
+    /// </summary>
+    public static async void CheckAuthAndPromptLogin()
+    {
+        if (Application.isBatchMode) return;
+
+        string token = ExoTokenStore.StudioToken;
+        string playerId = ExoTokenStore.StudioPlayerId;
+
+        // 1. If no user is defined, popup login screen immediately
+        if (string.IsNullOrEmpty(token) || string.IsNullOrEmpty(playerId))
+        {
+            ExoforgeAccountModal.Open();
+            return;
+        }
+
+        // 2. If user/token exists, validate with cluster
+        bool isValid = await ValidateTokenWithClusterAsync(token);
+        if (!isValid)
+        {
+            ExoTokenStore.ClearStudioSession();
+            ExoforgeAccountModal.Open();
+        }
+    }
+
     [MenuItem("Tools/Exoforge/Reset Anonymous Player Session", false, 200)]
     [MenuItem("Window/Exoforge/Reset Anonymous Player Session", false, 2001)]
     public static void ResetAnonymousPlayerSession()
@@ -452,10 +542,10 @@ public partial class ExoforgeControlCenter : EditorWindow
             ? ExoTokenStore.StudioToken
             : ExoTokenStore.Token;
 
-        if (string.IsNullOrWhiteSpace(token))
+        if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(ExoTokenStore.StudioPlayerId))
         {
-            _showAuthFoldout = true;
-            ShowStatus("No saved credentials — sign in below, or set a bearer token in Settings.", MessageType.Warning);
+            ShowStatus("No active studio user defined — please sign in.", MessageType.Warning);
+            ExoforgeAccountModal.Open();
             return;
         }
 

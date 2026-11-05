@@ -54,6 +54,30 @@ public static class ExoforgeEditorConfig
     private static string AutoGenerateStubsOnBuildKey => Scoped("Exoforge_AutoGenerateStubsOnBuild");
     private static string LoginEmailKey => Scoped("Exoforge_LoginEmail");
     private static string LoginPasswordKey => Scoped("Exoforge_LoginPassword");
+    private static string InitialSetupCompletedKey => Scoped("Exoforge_InitialSetupCompleted");
+
+    /// <summary>
+    /// Whether initial cluster setup has been completed (prompting for Base URL on first install).
+    /// </summary>
+    public static bool HasCompletedInitialSetup
+    {
+        get
+        {
+#if UNITY_EDITOR
+            return EditorPrefs.GetBool(InitialSetupCompletedKey, false);
+#else
+            return _fallbackInitialSetupCompleted;
+#endif
+        }
+        set
+        {
+#if UNITY_EDITOR
+            EditorPrefs.SetBool(InitialSetupCompletedKey, value);
+#else
+            _fallbackInitialSetupCompleted = value;
+#endif
+        }
+    }
 
     public const string DefaultLoginEmail = "dev@exoforge.game";
     public const string DefaultWorkspaceRelPath = "Exoforge";
@@ -73,12 +97,113 @@ public static class ExoforgeEditorConfig
         return Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.IsLoopback;
     }
 
+    /// <summary>
+    /// Infers WebSocket and HTTP REST endpoints from a single Base URL or hostname (e.g. "exof1.alexcs.me" or "localhost").
+    /// </summary>
+    public static void DeriveEndpoints(string? input, out string wsUrl, out string httpUrl)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            wsUrl = "ws://localhost:4000/ws";
+            httpUrl = "http://localhost:4001";
+            return;
+        }
+
+        string trimmed = input.Trim().TrimEnd('/');
+        string raw = trimmed;
+
+        bool hasExplicitScheme = raw.Contains("://");
+        string scheme = "";
+        if (hasExplicitScheme)
+        {
+            int idx = raw.IndexOf("://", StringComparison.Ordinal);
+            scheme = raw.Substring(0, idx).ToLowerInvariant();
+            raw = raw.Substring(idx + 3);
+        }
+
+        bool isLoopback = raw.StartsWith("localhost", StringComparison.OrdinalIgnoreCase) ||
+                          raw.StartsWith("127.0.0.1", StringComparison.OrdinalIgnoreCase) ||
+                          raw.StartsWith("[::1]", StringComparison.OrdinalIgnoreCase);
+
+        if (string.IsNullOrEmpty(scheme))
+        {
+            scheme = isLoopback ? "http" : "https";
+        }
+
+        bool isSecure = scheme.Equals("https", StringComparison.OrdinalIgnoreCase) ||
+                        scheme.Equals("wss", StringComparison.OrdinalIgnoreCase);
+
+        string httpScheme = isSecure ? "https" : "http";
+        string wsScheme = isSecure ? "wss" : "ws";
+
+        if (!Uri.TryCreate($"{httpScheme}://{raw}", UriKind.Absolute, out var uri))
+        {
+            wsUrl = $"{(isSecure ? "wss" : "ws")}://{trimmed}/ws";
+            httpUrl = $"{(isSecure ? "https" : "http")}://{trimmed}";
+            return;
+        }
+
+        string host = uri.Host;
+        int port = uri.Port;
+        string path = uri.AbsolutePath.TrimEnd('/');
+        if (path.EndsWith("/ws", StringComparison.OrdinalIgnoreCase))
+        {
+            path = path.Substring(0, path.Length - 3).TrimEnd('/');
+        }
+        if (path.EndsWith("/api", StringComparison.OrdinalIgnoreCase))
+        {
+            path = path.Substring(0, path.Length - 4).TrimEnd('/');
+        }
+
+        if (isLoopback)
+        {
+            int wsPort = (port == 4001) ? 4000 : (uri.IsDefaultPort ? 4000 : port);
+            int httpPort = (port == 4000) ? 4001 : (uri.IsDefaultPort ? 4001 : port);
+
+            wsUrl = $"{wsScheme}://{host}:{wsPort}{path}/ws";
+            httpUrl = $"{httpScheme}://{host}:{httpPort}{path}";
+            return;
+        }
+
+        string portPart = uri.IsDefaultPort ? "" : $":{port}";
+        httpUrl = $"{httpScheme}://{host}{portPart}{path}";
+        wsUrl = $"{wsScheme}://{host}{portPart}{path}/ws";
+    }
+
+    /// <summary>
+    /// Infers the cluster Base URL from existing HTTP or WebSocket endpoints.
+    /// </summary>
+    public static string DeriveBaseUrl(string? wsUrl, string? httpUrl)
+    {
+        string candidate = !string.IsNullOrWhiteSpace(httpUrl) ? httpUrl! : (wsUrl ?? "");
+        if (string.IsNullOrWhiteSpace(candidate)) return "localhost";
+
+        if (Uri.TryCreate(candidate, UriKind.Absolute, out var uri))
+        {
+            if (uri.IsLoopback) return "localhost";
+            string portPart = uri.IsDefaultPort ? "" : $":{uri.Port}";
+            string path = uri.AbsolutePath.TrimEnd('/');
+            if (path.EndsWith("/ws", StringComparison.OrdinalIgnoreCase))
+            {
+                path = path.Substring(0, path.Length - 3).TrimEnd('/');
+            }
+            if (path.EndsWith("/api", StringComparison.OrdinalIgnoreCase))
+            {
+                path = path.Substring(0, path.Length - 4).TrimEnd('/');
+            }
+            return $"{uri.Host}{portPart}{path}";
+        }
+
+        return candidate;
+    }
+
 #if !UNITY_EDITOR
     private static string _fallbackSelectedEnvironment = "local";
     private static string _fallbackWorkspacePath = DefaultWorkspaceRelPath;
     private static string _fallbackGeneratedPath = DefaultGeneratedScriptRelPath;
     private static string _fallbackLastSyncTime = "";
     private static bool _fallbackAutoGenerateStubsOnBuild = true;
+    private static bool _fallbackInitialSetupCompleted = false;
     private static string _fallbackDotnetPath = "dotnet";
     private static string _fallbackLoginEmail = DefaultLoginEmail;
     private static string _fallbackLoginPassword = "";

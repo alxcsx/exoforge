@@ -25,6 +25,13 @@ namespace Exoforge.Unity.Editor
         {
             EditorApplication.delayCall += () =>
             {
+                var existing = Resources.FindObjectsOfTypeAll<ExoforgeAccountModal>();
+                if (existing.Length > 0)
+                {
+                    existing[0].Focus();
+                    return;
+                }
+
                 var window = CreateInstance<ExoforgeAccountModal>();
                 window.titleContent = new GUIContent("Account & Session");
 
@@ -206,6 +213,11 @@ namespace Exoforge.Unity.Editor
                         UpdateSessionState();
                         _statusMessageLabel.text = "✓ Successfully authenticated.";
                         _statusMessageLabel.style.color = ExoforgeUIStyle.AccentGreen;
+                        EditorApplication.delayCall += async () =>
+                        {
+                            await System.Threading.Tasks.Task.Delay(600);
+                            try { Close(); } catch { }
+                        };
                     }
                     else
                     {

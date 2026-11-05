@@ -70,6 +70,7 @@ public partial class ExoforgeControlCenter : EditorWindow
             _isConnecting = false;
             _connectionStatus = "No token";
             ShowStatus("A bearer token is required. Enter one above (e.g. 'dev:developer') or sign in.", MessageType.Error);
+            ExoforgeAccountModal.Open();
             Repaint();
             return;
         }
@@ -106,6 +107,7 @@ public partial class ExoforgeControlCenter : EditorWindow
                     await _editorClient.DisconnectAsync();
                     _editorClient.Dispose();
                     _editorClient = null;
+                    ExoforgeAccountModal.Open();
                     return;
                 }
 
@@ -128,6 +130,8 @@ public partial class ExoforgeControlCenter : EditorWindow
                 SessionState.SetBool(WasConnectedSessionKey, false);
                 _connectionStatus = "Auth failed";
                 ShowStatus($"Authentication failed: {auth.Error}", MessageType.Error);
+                ExoTokenStore.ClearStudioSession();
+                ExoforgeAccountModal.Open();
             }
         }
         catch (OperationCanceledException)
@@ -145,6 +149,8 @@ public partial class ExoforgeControlCenter : EditorWindow
                 $"Auth rejected: {ex.Message}\n" +
                 "Tip: 'dev:developer' works in dev mode. For production, sign in with email/password.",
                 MessageType.Error);
+            ExoTokenStore.ClearStudioSession();
+            ExoforgeAccountModal.Open();
         }
         catch (Exception ex)
         {
@@ -363,6 +369,69 @@ public partial class ExoforgeControlCenter : EditorWindow
         Instance?.ShowStatus("Logged out and cleared the stored session.", MessageType.Info);
         Instance?.Repaint();
         ExoforgePluginsWindow.Instance?.Repaint();
+    }
+
+    /// <summary>
+    /// Checks whether the specified token is valid against the cluster (via HTTP or WebSocket).
+    /// Returns false if rejected by cluster auth; returns true if valid or if cluster is unreachable offline.
+    /// </summary>
+    public static async Task<bool> ValidateTokenWithClusterAsync(string token)
+    {
+        if (string.IsNullOrWhiteSpace(token)) return false;
+
+        string httpUrl = ActiveHttpEndpoint;
+        string wsUrl = ActiveWsEndpoint;
+
+        if (!string.IsNullOrEmpty(httpUrl))
+        {
+            try
+            {
+                using var cts = new System.Threading.CancellationTokenSource(2500);
+                using var client = new ExoClient { HttpBaseUri = new Uri(httpUrl) };
+                var res = await client.SendActionAsync<JsonElement>(
+                    "auth", "authenticate", new { token }, ExoTransportPreference.Http, cts.Token);
+
+                if (res.TryGetProperty("player_id", out _) || res.TryGetProperty("user_id", out _))
+                {
+                    return true;
+                }
+                return false;
+            }
+            catch (ExoActionException ex)
+            {
+                UnityEngine.Debug.LogWarning($"[Exoforge] Stored session rejected by cluster: {ex.Message}");
+                return false;
+            }
+            catch (Exception)
+            {
+                // Cluster unreachable or request timed out; try WS below
+            }
+        }
+
+        if (!string.IsNullOrEmpty(wsUrl))
+        {
+            try
+            {
+                using var cts = new System.Threading.CancellationTokenSource(2500);
+                using var wsClient = new ExoClient();
+                await wsClient.ConnectAsync(new Uri(wsUrl), cts.Token);
+                var auth = await wsClient.AuthenticateAsync(token, timeout: TimeSpan.FromSeconds(2.5), cancellationToken: cts.Token);
+                await wsClient.DisconnectAsync();
+                return auth.IsSuccess;
+            }
+            catch (ExoActionException ex)
+            {
+                UnityEngine.Debug.LogWarning($"[Exoforge] Stored session rejected by cluster: {ex.Message}");
+                return false;
+            }
+            catch (Exception)
+            {
+                // Cluster is offline/unreachable; do not invalidate offline session
+                return true;
+            }
+        }
+
+        return true;
     }
 
     private async Task LogInAsync()

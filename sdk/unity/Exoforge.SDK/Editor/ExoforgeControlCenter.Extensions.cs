@@ -824,16 +824,16 @@ public partial class ExoforgeControlCenter : EditorWindow
         string? mainFile = FindExtensionMainFile(extensionDir);
         string targetPath = mainFile ?? extensionDir;
 
-        // Try launching VS Code if available with folder + file (opens folder in explorer and file in active tab)
+        // Try launching VS Code if available with folder and navigate to main file in the same window
         try
         {
             var psi = new ProcessStartInfo
             {
-                FileName = "code",
+                FileName = Application.platform == RuntimePlatform.WindowsEditor ? "code.cmd" : "code",
                 Arguments = !string.IsNullOrEmpty(mainFile)
-                    ? $"\"{extensionDir}\" \"{mainFile}\""
+                    ? $"\"{extensionDir}\" -g \"{mainFile}:1\""
                     : $"\"{extensionDir}\"",
-                UseShellExecute = true,
+                UseShellExecute = false,
                 CreateNoWindow = true
             };
             using var proc = Process.Start(psi);
