@@ -486,6 +486,9 @@ defmodule Exoforge.Std.Dashboard.Overlays do
   attr(:current_env, :string, default: "dev")
   attr(:overview, :map, default: %{extensions: []})
   attr(:node_name, :string, default: "")
+  attr(:activity_events, :list, default: [])
+  attr(:events_paused, :boolean, default: false)
+  attr(:event_filter_topic, :string, default: "")
   attr(:on_close, :string, default: "close_settings")
 
   def project_settings_modal(assigns) do
@@ -532,6 +535,15 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                 >
                   <span>🌓</span>
                   <span>Visual Settings</span>
+                </button>
+                <button
+                  type="button"
+                  phx-click="set_settings_tab"
+                  phx-value-tab="console"
+                  class={"w-full text-left px-2.5 py-2 rounded-xl font-bold flex items-center gap-2 transition-all #{if @settings_tab == "console", do: "bg-white text-primary-700 shadow-sm border border-gray-200/80", else: "text-gray-600 hover:text-gray-900 hover:bg-white/60"}"}
+                >
+                  <span>📟</span>
+                  <span>Console</span>
                 </button>
               </div>
             </div>
@@ -777,6 +789,90 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                     </button>
                   </div>
                 </div>
+              </div>
+            </div>
+          <% end %>
+
+          <%= if @settings_tab == "console" do %>
+            <div class="space-y-4">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h4 class="text-sm font-bold text-gray-900 flex items-center gap-2">
+                    <span>📟</span>
+                    <span>Cluster Event Stream &amp; Console</span>
+                  </h4>
+                  <p class="text-xs text-gray-500 mt-0.5">Real-time cluster event stream via <code class="font-mono text-primary-600">EventDispatcher</code> &amp; <code class="font-mono text-primary-600">:pg</code></p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="px-2 py-0.5 rounded-full bg-gray-100 font-mono font-bold text-[10px] text-gray-600 border border-gray-200">
+                    <%= length(@activity_events) %> captured
+                  </span>
+                  <%= if @events_paused do %>
+                    <span class="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 text-[10px] font-bold border border-amber-200">
+                      STREAM PAUSED
+                    </span>
+                  <% end %>
+                </div>
+              </div>
+
+              <!-- Console Controls Toolbar -->
+              <div class="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-gray-50 rounded-xl border border-gray-200/80 text-xs">
+                <form id="settings_console_filter_form" phx-change="filter_event_dock" class="m-0">
+                  <input
+                    type="text"
+                    name="topic"
+                    value={@event_filter_topic}
+                    placeholder="Filter event or payload..."
+                    class="px-2.5 py-1 bg-white border border-gray-300 rounded-lg text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-primary-500 w-44 sm:w-56 font-mono"
+                  />
+                </form>
+
+                <div class="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    phx-click="toggle_event_pause"
+                    class={"px-2.5 py-1 rounded-lg font-bold text-xs flex items-center gap-1 transition-colors #{if @events_paused, do: "bg-emerald-600 hover:bg-emerald-500 text-white", else: "bg-white hover:bg-gray-100 text-gray-700 border border-gray-200"}"}
+                  >
+                    <%= if @events_paused, do: "▶ Resume", else: "⏸ Pause" %>
+                  </button>
+
+                  <button
+                    type="button"
+                    phx-click="clear_events"
+                    class="px-2.5 py-1 bg-white hover:bg-gray-100 text-gray-600 border border-gray-200 rounded-lg font-bold text-xs transition-colors"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+
+              <!-- Console Terminal Window -->
+              <div class="bg-gray-950 rounded-xl p-3.5 border border-gray-800 text-gray-100 max-h-72 overflow-y-auto space-y-2 font-mono text-xs custom-scrollbar">
+                <%= if Enum.empty?(@activity_events) do %>
+                  <div class="py-8 flex flex-col items-center justify-center text-center space-y-1.5">
+                    <span class="text-xl">📡</span>
+                    <p class="text-xs text-gray-400 font-sans">Waiting for live cluster events on <code class="text-primary-400">EventDispatcher</code> bus...</p>
+                    <p class="text-[11px] text-gray-500 font-sans">Click "⚡ Simulate Event" above or dispatch an action to test.</p>
+                  </div>
+                <% else %>
+                  <%= for ev <- @activity_events do %>
+                    <div class="p-2.5 bg-gray-900/90 rounded-lg border border-gray-800/80 flex flex-col gap-1.5">
+                      <div class="flex items-center justify-between text-[11px]">
+                        <div class="flex items-center gap-2">
+                          <span class="px-2 py-0.5 rounded bg-primary-950 text-primary-300 font-bold border border-primary-800/60 font-mono">
+                            <%= ev.event %>
+                          </span>
+                          <span class="text-gray-500 text-[10px]"><%= ev.time %></span>
+                          <%= if Map.get(ev, :context) do %>
+                            <span class="text-gray-600 text-[10px] hidden sm:inline">ctx: <%= inspect(ev.context) %></span>
+                          <% end %>
+                        </div>
+                        <span class="text-[10px] text-gray-500 font-mono">#<%= ev.id %></span>
+                      </div>
+                      <pre class="text-[10px] text-emerald-400 overflow-x-auto p-2 bg-black/60 rounded border border-gray-800/60 font-mono"><%= Jason.encode!(ev.payload, pretty: true) %></pre>
+                    </div>
+                  <% end %>
+                <% end %>
               </div>
             </div>
           <% end %>
@@ -1227,6 +1323,482 @@ defmodule Exoforge.Std.Dashboard.Overlays do
         </div>
       </div>
     </.modal>
+    """
+  end
+
+  @doc """
+  Renders the action invocations & telemetry details modal (expand mode for Overview graphs).
+  Includes the expanded high-resolution multi-line SVG chart and detailed per-action metrics table.
+  """
+  attr(:open, :boolean, default: false)
+  attr(:mode, :string, default: "actions")
+  attr(:search, :string, default: "")
+  attr(:filter_tab, :string, default: "all")
+  attr(:catalog, :list, default: [])
+  attr(:telemetry, :map, default: %{})
+  attr(:on_close, :string, default: "close_actions_detail_modal")
+  attr(:on_search, :string, default: "search_actions_detail")
+  attr(:on_filter_tab, :string, default: "filter_actions_detail_tab")
+  attr(:on_run_action, :string, default: "open_action_modal")
+  attr(:on_switch_mode, :string, default: "open_actions_detail_modal")
+
+  def actions_detail_modal(assigns) do
+    if not assigns.open do
+      ~H"""
+      """
+    else
+      telemetry = assigns[:telemetry] || %{}
+      catalog = assigns[:catalog] || []
+
+      # Flatten catalog into a list of {svc, act, key}
+      all_items =
+        for svc <- catalog, act <- (svc.actions || []) do
+          key = "#{svc.name}.#{act.name}"
+          invocations = Map.get(telemetry[:action_invocations] || %{}, key, 0)
+          errors = Map.get(telemetry[:action_errors] || %{}, key, 0)
+
+          err_rate =
+            if invocations > 0 do
+              Float.round(errors / invocations * 100, 1)
+            else
+              0.0
+            end
+
+          %{
+            service: svc,
+            action: act,
+            key: key,
+            invocations: invocations,
+            errors: errors,
+            error_rate: err_rate
+          }
+        end
+
+      q = String.downcase(String.trim(assigns.search || ""))
+
+      filtered =
+        all_items
+        |> Enum.filter(fn item ->
+          if q == "" do
+            true
+          else
+            String.contains?(String.downcase(item.key), q) or
+              String.contains?(String.downcase(to_string(item.service.name)), q) or
+              String.contains?(String.downcase(to_string(item.action.name)), q)
+          end
+        end)
+        |> Enum.filter(fn item ->
+          case assigns.filter_tab do
+            "active" -> item.invocations > 0
+            "errors_only" -> item.errors > 0
+            _ -> true
+          end
+        end)
+        |> Enum.sort_by(
+          fn item ->
+            if assigns.mode == "errors" do
+              {-item.errors, -item.invocations, item.key}
+            else
+              {-item.invocations, -item.errors, item.key}
+            end
+          end
+        )
+
+      is_error_mode = assigns.mode == "errors"
+      chart_series =
+        if is_error_mode do
+          Enum.filter(telemetry[:error_series] || [], &(&1.latest_count > 0))
+        else
+          telemetry[:action_series] || []
+        end
+
+      chart_max =
+        if is_error_mode do
+          telemetry[:error_max_val] || 10
+        else
+          telemetry[:action_max_val] || 10
+        end
+
+      # Expanded 760px wide chart coordinates
+      expanded_x_coords = [60, 188, 316, 444, 572, 700]
+
+      expanded_series =
+        Enum.map(chart_series, fn s ->
+          dots_list = Map.get(s, :dots, [])
+          pts =
+            for {x, d} <- Enum.zip(expanded_x_coords, dots_list) do
+              count = Map.get(d, :count, 0)
+              y = 135 - round(count / max(chart_max, 1) * 105)
+              {x, max(25, min(135, y))}
+            end
+
+          poly_str = Enum.map_join(pts, " ", fn {x, y} -> "#{x},#{y}" end)
+          dots = Enum.map(pts, fn {x, y} -> %{x: x, y: y} end)
+          Map.merge(s, %{expanded_points: poly_str, expanded_dots: dots})
+        end)
+
+      assigns =
+        assigns
+        |> assign(:items, filtered)
+        |> assign(:total_count, length(all_items))
+        |> assign(:is_error_mode, is_error_mode)
+        |> assign(:chart_max, chart_max)
+        |> assign(:expanded_x_coords, expanded_x_coords)
+        |> assign(:expanded_series, expanded_series)
+
+      ~H"""
+      <div id="actions_detail_modal" class="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
+        <div class="min-h-screen px-4 text-center flex items-center justify-center py-8">
+          <!-- Backdrop -->
+          <div
+            class="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity cursor-pointer"
+            phx-click={@on_close}
+          ></div>
+
+          <!-- Dialog Box -->
+          <div class="relative bg-white dark:bg-gray-900 rounded-2xl max-w-4xl w-full p-6 text-left shadow-2xl border border-gray-200 z-10 animate-fade-in space-y-4">
+            <!-- Modal Header with Mode Switcher -->
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-gray-100 gap-3">
+              <div>
+                <h3 class="font-bold text-gray-900 text-base flex items-center gap-2">
+                  <span><%= if @is_error_mode, do: "⚠️", else: "📈" %></span>
+                  <span><%= if @is_error_mode, do: "Action Exceptions & Error Breakdown", else: "Action Invocations & Telemetry Details" %></span>
+                </h3>
+                <p class="text-xs text-gray-500 mt-0.5">
+                  <%= if @is_error_mode, do: "Expanded error spikes, failure rates, and execution triggers.", else: "Expanded throughput graph and deep telemetry across all monitored cluster actions." %>
+                </p>
+              </div>
+
+              <div class="flex items-center gap-2">
+                <!-- Mode Toggle Pills -->
+                <div class="flex items-center p-1 bg-gray-100 rounded-xl text-xs">
+                  <button
+                    type="button"
+                    phx-click={@on_switch_mode}
+                    phx-value-mode="actions"
+                    class={"px-2.5 py-1 rounded-lg font-bold transition-all flex items-center gap-1 #{if not @is_error_mode, do: "bg-white text-primary-700 shadow-xs", else: "text-gray-500 hover:text-gray-900"}"}
+                  >
+                    <span>📈 Throughput</span>
+                  </button>
+                  <button
+                    type="button"
+                    phx-click={@on_switch_mode}
+                    phx-value-mode="errors"
+                    class={"px-2.5 py-1 rounded-lg font-bold transition-all flex items-center gap-1 #{if @is_error_mode, do: "bg-white text-red-700 shadow-xs", else: "text-gray-500 hover:text-gray-900"}"}
+                  >
+                    <span>⚠️ Errors</span>
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  phx-click={@on_close}
+                  class="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center transition-colors text-xs font-bold"
+                  title="Close Modal (Esc)"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <!-- EXPANDED HIGH-RESOLUTION SVG GRAPH -->
+            <div class="p-3 bg-gray-50/70 rounded-xl border border-gray-200/80 space-y-2">
+              <div class="flex items-center justify-between text-xs">
+                <span class="font-bold text-gray-700 uppercase tracking-wider text-[10px]">
+                  <%= if @is_error_mode, do: "Expanded Error Spikes (Last 25 Minutes)", else: "Expanded Action Throughput (Last 25 Minutes)" %>
+                </span>
+                <span class="font-mono text-[11px] text-gray-500">
+                  Peak: <strong class="text-gray-900"><%= @chart_max %></strong> <%= if @is_error_mode, do: "errors/interval", else: "calls/interval" %>
+                </span>
+              </div>
+
+              <div class="w-full bg-white rounded-xl p-2.5 border border-gray-200/90 shadow-2xs overflow-hidden">
+                <svg viewBox="0 0 760 160" class="w-full h-44 overflow-visible">
+                  <!-- Grid horizontal lines & Y-axis labels -->
+                  <line x1="50" y1="25" x2="730" y2="25" stroke="#f1f5f9" stroke-width="1" stroke-dasharray="3 3" />
+                  <text x="44" y="28" text-anchor="end" font-size="10" font-family="monospace" fill="#94a3b8"><%= @chart_max %></text>
+
+                  <line x1="50" y1="80" x2="730" y2="80" stroke="#f1f5f9" stroke-width="1" stroke-dasharray="3 3" />
+                  <text x="44" y="83" text-anchor="end" font-size="10" font-family="monospace" fill="#94a3b8"><%= round(@chart_max / 2) %></text>
+
+                  <line x1="50" y1="135" x2="730" y2="135" stroke="#e2e8f0" stroke-width="1.5" />
+                  <text x="44" y="138" text-anchor="end" font-size="10" font-family="monospace" fill="#94a3b8">0</text>
+
+                  <!-- X-axis ticks & Time labels -->
+                  <%= for {lbl, x} <- Enum.zip(@telemetry.time_labels, @expanded_x_coords) do %>
+                    <line x1={x} y1="135" x2={x} y2="140" stroke="#cbd5e1" stroke-width="1" />
+                    <text x={x} y="152" text-anchor="middle" font-size="10" font-family="monospace" fill="#94a3b8"><%= lbl %></text>
+                  <% end %>
+
+                  <!-- Multi-line series with high-resolution coordinates -->
+                  <%= for s <- @expanded_series do %>
+                    <polyline
+                      fill="none"
+                      stroke={s.color}
+                      stroke-width="2.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      points={s.expanded_points}
+                    />
+                    <%= for d <- s.expanded_dots do %>
+                      <circle cx={d.x} cy={d.y} r="3.5" fill={s.color} stroke="#ffffff" stroke-width="1.5" />
+                    <% end %>
+                  <% end %>
+                </svg>
+              </div>
+
+              <!-- Expanded Color Legend -->
+              <%= if @expanded_series != [] do %>
+                <div class="flex flex-wrap items-center gap-x-4 gap-y-1.5 pt-1 text-[11px]">
+                  <%= for s <- @expanded_series do %>
+                    <div class="flex items-center gap-1.5">
+                      <span class="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs" style={"background-color: #{s.color}"}></span>
+                      <span class="font-mono text-gray-800 font-semibold"><%= s.id %></span>
+                      <span class="text-gray-400 font-mono text-[10px]">(<%= s.latest_count %> <%= if @is_error_mode, do: "errors", else: "calls" %>)</span>
+                    </div>
+                  <% end %>
+                </div>
+              <% else %>
+                <div class="flex items-center gap-2 pt-1 text-xs text-emerald-600 font-semibold">
+                  <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  <span>Zero errors detected across all monitored actions.</span>
+                </div>
+              <% end %>
+            </div>
+
+            <!-- Controls: Search and Filter Tabs -->
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 text-xs">
+              <div class="flex items-center gap-1.5 p-1 bg-gray-100 rounded-xl">
+                <button
+                  type="button"
+                  phx-click={@on_filter_tab}
+                  phx-value-tab="all"
+                  class={"px-3 py-1.5 rounded-lg font-bold text-xs transition-colors #{if @filter_tab == "all", do: "bg-white text-gray-900 shadow-xs", else: "text-gray-500 hover:text-gray-900"}"}
+                >
+                  All (<%= @total_count %>)
+                </button>
+                <button
+                  type="button"
+                  phx-click={@on_filter_tab}
+                  phx-value-tab="active"
+                  class={"px-3 py-1.5 rounded-lg font-bold text-xs transition-colors #{if @filter_tab == "active", do: "bg-white text-emerald-700 shadow-xs", else: "text-gray-500 hover:text-gray-900"}"}
+                >
+                  Active Traffic
+                </button>
+                <button
+                  type="button"
+                  phx-click={@on_filter_tab}
+                  phx-value-tab="errors_only"
+                  class={"px-3 py-1.5 rounded-lg font-bold text-xs transition-colors #{if @filter_tab == "errors_only", do: "bg-white text-red-700 shadow-xs", else: "text-gray-500 hover:text-gray-900"}"}
+                >
+                  With Errors
+                </button>
+              </div>
+
+              <form id="actions_detail_search_form" phx-change={@on_search} class="m-0">
+                <input
+                  type="text"
+                  name="query"
+                  value={@search}
+                  placeholder="Filter actions by name or service..."
+                  class="w-full sm:w-64 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-xs placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-primary-500 font-mono"
+                />
+              </form>
+            </div>
+
+            <!-- Actions Table -->
+            <div class="max-h-72 overflow-y-auto border border-gray-200 rounded-xl custom-scrollbar text-xs">
+              <%= if Enum.empty?(@items) do %>
+                <div class="p-8 text-center text-gray-400">
+                  <p>No actions match your search or filter.</p>
+                </div>
+              <% else %>
+                <table class="w-full text-left border-collapse">
+                  <thead class="bg-gray-50 sticky top-0 border-b border-gray-200 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                    <tr>
+                      <th class="py-2.5 px-3">Service &amp; Action</th>
+                      <th class="py-2.5 px-3">Scope / Transport</th>
+                      <th class="py-2.5 px-3 text-right">Invocations</th>
+                      <th class="py-2.5 px-3 text-right">Errors</th>
+                      <th class="py-2.5 px-3 text-right">Error Rate</th>
+                      <th class="py-2.5 px-3 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-100 text-xs">
+                    <%= for item <- @items do %>
+                      <tr class="hover:bg-gray-50/80 transition-colors">
+                        <td class="py-2.5 px-3">
+                          <div class="flex items-center gap-2">
+                            <span class="w-6 h-6 rounded-md bg-purple-50 text-purple-700 flex items-center justify-center text-xs shrink-0">
+                              <%= item.service.icon || "⚡" %>
+                            </span>
+                            <div class="min-w-0">
+                              <span class="font-bold text-gray-900 font-mono block truncate"><%= item.key %></span>
+                              <span class="text-[10px] text-gray-400 block"><%= item.service.title || item.service.name %></span>
+                            </div>
+                          </div>
+                        </td>
+                        <td class="py-2.5 px-3">
+                          <div class="flex items-center gap-1.5">
+                            <span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-gray-100 text-gray-600">
+                              <%= item.action.scope || "guest" %>
+                            </span>
+                            <span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-gray-100 text-gray-600">
+                              <%= item.action.transport || "auto" %>
+                            </span>
+                          </div>
+                        </td>
+                        <td class="py-2.5 px-3 text-right font-mono font-bold text-gray-800">
+                          <%= item.invocations %>
+                        </td>
+                        <td class={"py-2.5 px-3 text-right font-mono font-bold #{if item.errors > 0, do: "text-red-600", else: "text-gray-400"}"}>
+                          <%= item.errors %>
+                        </td>
+                        <td class="py-2.5 px-3 text-right font-mono text-[11px]">
+                          <%= if item.error_rate > 0 do %>
+                            <span class="text-red-600 font-bold"><%= item.error_rate %>%</span>
+                          <% else %>
+                            <span class="text-emerald-600">0%</span>
+                          <% end %>
+                        </td>
+                        <td class="py-2.5 px-3 text-right">
+                          <button
+                            type="button"
+                            phx-click={@on_run_action}
+                            phx-value-service={to_string(item.service.name)}
+                            phx-value-action={to_string(item.action.name)}
+                            class="px-2.5 py-1 text-[11px] font-bold text-primary-700 bg-primary-50 hover:bg-primary-100 rounded-lg transition-colors inline-flex items-center gap-1 shadow-2xs"
+                          >
+                            <span>⚡ Run</span>
+                          </button>
+                        </td>
+                      </tr>
+                    <% end %>
+                  </tbody>
+                </table>
+              <% end %>
+            </div>
+          </div>
+        </div>
+      </div>
+      """
+    end
+  end
+
+  @doc """
+  Renders the full cluster events history modal ("More" button on Latest Dispatched Events).
+  """
+  attr(:open, :boolean, default: false)
+  attr(:events, :list, default: [])
+  attr(:paused, :boolean, default: false)
+  attr(:filter_topic, :string, default: "")
+  attr(:on_close, :string, default: "close_events_modal")
+  attr(:on_pause, :string, default: "toggle_event_pause")
+  attr(:on_clear, :string, default: "clear_events")
+  attr(:on_filter, :string, default: "filter_event_dock")
+  attr(:on_simulate, :string, default: "simulate_test_event")
+
+  def events_modal(assigns) do
+    ~H"""
+    <%= if @open do %>
+      <div id="events_history_modal" class="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
+        <div class="min-h-screen px-4 text-center flex items-center justify-center py-8">
+          <!-- Backdrop -->
+          <div
+            class="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
+            phx-click={@on_close}
+          ></div>
+
+          <!-- Dialog Box -->
+          <div class="relative bg-white rounded-2xl max-w-3xl w-full p-6 text-left shadow-2xl border border-gray-200 z-10 animate-fade-in space-y-4">
+            <div class="flex items-center justify-between pb-3 border-b border-gray-100">
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center font-bold text-sm">
+                  📡
+                </div>
+                <div>
+                  <h3 class="font-bold text-gray-900 text-base">Cluster Event Stream &amp; History</h3>
+                  <p class="text-xs text-gray-500">Live pub/sub stream captured across all nodes via EventDispatcher (:pg)</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="px-2 py-0.5 rounded-full bg-gray-100 font-mono font-bold text-[10px] text-gray-600 border border-gray-200">
+                  <%= length(@events) %> captured
+                </span>
+                <button
+                  type="button"
+                  phx-click={@on_close}
+                  class="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center transition-colors text-xs font-bold"
+                  title="Close Modal (Esc)"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <!-- Controls Toolbar -->
+            <div class="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-gray-50 rounded-xl border border-gray-200/80 text-xs">
+              <form id="events_modal_filter_form" phx-change={@on_filter} class="m-0">
+                <input
+                  type="text"
+                  name="topic"
+                  value={@filter_topic}
+                  placeholder="Filter event or payload..."
+                  class="px-2.5 py-1 bg-white border border-gray-300 rounded-lg text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-primary-500 w-44 sm:w-64 font-mono"
+                />
+              </form>
+
+              <div class="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  phx-click={@on_pause}
+                  class={"px-2.5 py-1 rounded-lg font-bold text-xs flex items-center gap-1 transition-colors #{if @paused, do: "bg-emerald-600 hover:bg-emerald-500 text-white", else: "bg-white hover:bg-gray-100 text-gray-700 border border-gray-200"}"}
+                >
+                  <%= if @paused, do: "▶ Resume", else: "⏸ Pause" %>
+                </button>
+
+                <button
+                  type="button"
+                  phx-click={@on_clear}
+                  class="px-2.5 py-1 bg-white hover:bg-gray-100 text-gray-600 border border-gray-200 rounded-lg font-bold text-xs transition-colors"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+
+            <!-- Events List Window -->
+            <div class="bg-gray-950 rounded-xl p-3.5 border border-gray-800 text-gray-100 max-h-96 overflow-y-auto space-y-2 font-mono text-xs custom-scrollbar">
+              <%= if Enum.empty?(@events) do %>
+                <div class="py-10 flex flex-col items-center justify-center text-center space-y-1.5">
+                  <span class="text-2xl">📡</span>
+                  <p class="text-xs text-gray-400 font-sans">No cluster events captured yet.</p>
+                  <p class="text-[11px] text-gray-500 font-sans">Dispatch an action, log in, or upload a file to see live events stream in real time.</p>
+                </div>
+              <% else %>
+                <%= for ev <- @events do %>
+                  <div class="p-2.5 bg-gray-900/90 rounded-lg border border-gray-800/80 flex flex-col gap-1.5 hover:border-gray-700 transition-colors">
+                    <div class="flex items-center justify-between text-[11px]">
+                      <div class="flex items-center gap-2">
+                        <span class="px-2 py-0.5 rounded bg-primary-950 text-primary-300 font-bold border border-primary-800/60 font-mono">
+                          <%= ev.event %>
+                        </span>
+                        <span class="text-gray-500 text-[10px]"><%= ev.time %></span>
+                        <%= if Map.get(ev, :context) do %>
+                          <span class="text-gray-600 text-[10px] hidden sm:inline">ctx: <%= inspect(ev.context) %></span>
+                        <% end %>
+                      </div>
+                      <span class="text-[10px] text-gray-500 font-mono">#<%= ev.id %></span>
+                    </div>
+                    <pre class="text-[10px] text-emerald-400 overflow-x-auto p-2 bg-black/60 rounded border border-gray-800/60 font-mono"><%= Jason.encode!(ev.payload, pretty: true) %></pre>
+                  </div>
+                <% end %>
+              <% end %>
+            </div>
+          </div>
+        </div>
+      </div>
+    <% end %>
     """
   end
 

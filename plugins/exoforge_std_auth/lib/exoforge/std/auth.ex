@@ -186,6 +186,7 @@ defmodule Exoforge.Std.Auth do
 
           case generate_and_store_token(@admin_id, [Roles.admin()]) do
             {:ok, token} ->
+              Exoforge.EventDispatcher.broadcast(:"auth.login", %{player_id: @admin_id, role: "admin"}, topic: "auth")
               {:ok, %{player_id: @admin_id, token: token, scopes: [Roles.admin()], role: role([Roles.admin()])}}
 
             error ->
@@ -215,6 +216,7 @@ defmodule Exoforge.Std.Auth do
 
               case generate_and_store_token(player_id, scopes) do
                 {:ok, token} ->
+                  Exoforge.EventDispatcher.broadcast(:"auth.login", %{player_id: player_id, role: to_string(role(scopes))}, topic: "auth")
                   {:ok, %{player_id: player_id, token: token, scopes: scopes, role: role(scopes)}}
 
                 error ->
@@ -316,7 +318,9 @@ defmodule Exoforge.Std.Auth do
           # A returning device, still passwordless: reissue its token.
           true ->
             case anonymous_token(player_id) do
-              {:ok, result} -> {:ok, Map.put(result, :name, player_name(player_id))}
+              {:ok, result} ->
+                Exoforge.EventDispatcher.broadcast(:"auth.anonymous", %{player_id: player_id}, topic: "auth")
+                {:ok, Map.put(result, :name, player_name(player_id))}
               error -> error
             end
         end
@@ -752,6 +756,7 @@ defmodule Exoforge.Std.Auth do
   defp register_unnamed(payload) do
     case do_register_player(payload, allow_empty_name: true) do
       {:ok, %{player: profile} = result} ->
+        Exoforge.EventDispatcher.broadcast(:"auth.anonymous", %{player_id: result.player_id}, topic: "auth")
         {:ok, Map.put(result, :name, Map.get(profile, "name") || "")}
 
       error ->
@@ -844,6 +849,7 @@ defmodule Exoforge.Std.Auth do
             {:error, reason}
 
           _ ->
+            Exoforge.EventDispatcher.broadcast(:"auth.register", %{player_id: user_id, email: email, role: to_string(role(scopes))}, topic: "auth")
             {:ok, %{user_id: user_id, player_id: user_id, token: token, scopes: scopes, player: profile}}
         end
 

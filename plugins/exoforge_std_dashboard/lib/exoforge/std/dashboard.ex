@@ -27,6 +27,7 @@ defmodule Exoforge.Std.Dashboard do
 
     [
       {Phoenix.PubSub, name: Exoforge.Std.Dashboard.PubSub},
+      Exoforge.Std.Dashboard.RecentEvents,
       Exoforge.Std.Dashboard.Endpoint
     ]
   end

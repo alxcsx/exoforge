@@ -299,6 +299,11 @@ defmodule Exoforge.Std.FileBucket do
         _ = File.rm(disk_path)
         _ = File.rm(disk_path <> ".meta.json")
         delete_meta(file_bucket, id)
+        Exoforge.EventDispatcher.broadcast(:"file_bucket.file_deleted", %{
+          bucket: file_bucket,
+          id: id,
+          filename: file["filename"]
+        }, topic: "file_bucket")
         {:ok, %{deleted: true}}
     end
   end
@@ -348,6 +353,12 @@ defmodule Exoforge.Std.FileBucket do
 
       save_meta(bucket, id, file_record)
       write_meta_sidecar(disk_path, file_record)
+      Exoforge.EventDispatcher.broadcast(:"file_bucket.file_uploaded", %{
+        bucket: bucket,
+        filename: clean_filename,
+        size_bytes: size_bytes,
+        url: file_record["url"]
+      }, topic: "file_bucket")
       {:ok, %{file: file_record}}
     else
       _ -> {:error, :write_failed}

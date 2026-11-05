@@ -59,6 +59,9 @@ defmodule Exoforge.Std.Dashboard.ApiController do
   end
 
   def logout(conn, _params) do
+    pid = get_session(conn, "admin_player_id") || "admin"
+    Exoforge.EventDispatcher.broadcast(:"auth.logout", %{player_id: pid}, topic: "auth")
+
     conn
     |> clear_session()
     |> put_session("logged_out", true)

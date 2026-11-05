@@ -46,6 +46,9 @@ defmodule Exoforge.DashboardLiveViewTest do
       start_supervised!(Endpoint)
     end
 
+    Exoforge.Std.Dashboard.RecentEvents.init_table()
+    Exoforge.Std.Dashboard.RecentEvents.clear()
+
     PluginRegistry.register(%Exoforge.Domain.Manifest{
       id: :exoforge_std_database,
       name: "exoforge_std_database",
@@ -472,7 +475,7 @@ defmodule Exoforge.DashboardLiveViewTest do
         })
 
       {:ok, view, _html} = live(conn, "/")
-      html = render_click(view, "switch_tab", %{"tab" => "row_form_ext"})
+      _html = render_click(view, "switch_tab", %{"tab" => "row_form_ext"})
 
       # The form is the schema: both declared columns, and the key marked as one.
       html = view |> element("button[phx-click=new_resource]") |> render_click()
@@ -516,7 +519,7 @@ defmodule Exoforge.DashboardLiveViewTest do
       html = view |> element("button[phx-click=edit_resource]") |> render_click()
       assert html =~ "Edit"
 
-      html =
+      _html =
         view
         |> element("form[phx-submit=submit_resource_form]")
         |> render_submit(%{"values" => %{"id" => "g1", "player_id" => "p2"}})
@@ -904,11 +907,24 @@ defmodule Exoforge.DashboardLiveViewTest do
       assert visual_html =~ "Toggle Theme"
       _ = render_click(view, "close_settings", %{})
 
-      # Extensions Registry renders technical badges outside the fold, unfolded system plugins, and clickable cards
+      # Extensions Registry renders technical badges, table for system extensions, and clickable cards
       ext_html = render_click(view, "switch_tab", %{"tab" => "apps"})
-      assert ext_html =~ "Technical Specs"
-      assert ext_html =~ "System Plugins &amp; Headless Services"
+      refute ext_html =~ "Technical Specs"
+      assert ext_html =~ "System Extensions &amp; Headless Services"
+      assert ext_html =~ "<table"
       assert ext_html =~ ~s(phx-click="switch_tab")
+
+      # Test pinning an extension from the registry
+      pin_html = render_click(view, "pin_extension", %{"id" => "exoforge_std_auth"})
+      assert pin_html =~ "Pinned"
+
+      # Test inspecting an extension
+      inspect_html = render_click(view, "inspect_extension", %{"id" => "exoforge_std_auth"})
+      assert inspect_html =~ "exoforge_std_auth"
+
+      # Test unpinning
+      unpin_html = render_click(view, "unpin_extension", %{"id" => "exoforge_std_auth"})
+      assert unpin_html =~ "Pin"
     end
 
     test "overview 4-slot grid supports slot rearrangement, SDK modal popup, and faulty extension warnings" do
@@ -949,23 +965,57 @@ defmodule Exoforge.DashboardLiveViewTest do
         end
       end)
 
+      admin_id = "grid_test_admin_#{System.unique_integer([:positive])}"
+
       conn =
         build_conn()
         |> Plug.Test.init_test_session(%{
-          "admin_player_id" => "grid_test_admin",
+          "admin_player_id" => admin_id,
           "admin_scopes" => ["admin"]
         })
 
       {:ok, view, html} = live(conn, "/")
 
+      # Verify Project Overview title and no subtitle
+      assert html =~ "Project Overview"
+      refute html =~ "Cluster Overview"
+
       # Verify 4-slot grid elements and dynamic widget
       assert html =~ ~s(id="slot-event_graph")
       assert html =~ ~s(id="slot-error_graph")
       assert html =~ ~s(id="slot-server_state")
-      assert html =~ ~s(id="slot-extension_health")
       assert html =~ ~s(id="slot-download_sdk")
+      assert html =~ ~s(id="slot-extension_health")
       assert html =~ "Economy Money Graph"
       assert html =~ "Infinite loop / log flood detected"
+
+      # Verify download sdk and health items switched places (download_sdk before extension_health)
+      {sdk_pos, _} = :binary.match(html, ~s(id="slot-download_sdk"))
+      {health_pos, _} = :binary.match(html, ~s(id="slot-extension_health"))
+      assert sdk_pos < health_pos
+
+      # When not in edit mode, size badges (2×2, 1×1) and movement arrows are hidden
+      assert html =~ "Edit Grid Order"
+      refute html =~ "Reset Grid Order"
+      refute html =~ "2×2"
+
+      # Multi-line time series SVG graphs (X axis time, Y axis count)
+      assert html =~ "polyline"
+      assert html =~ "-25m"
+      assert html =~ "Now"
+      refute html =~ "Open Console"
+
+      # Console is available in Settings modal only
+      render_click(view, "open_settings", %{})
+      console_html = render_click(view, "set_settings_tab", %{"tab" => "console"})
+      assert console_html =~ "Cluster Event Stream &amp; Console"
+      render_click(view, "close_settings", %{})
+
+      # Enable edit mode: size badges, movement arrows, and done editing appear
+      edit_html = render_click(view, "toggle_grid_edit_mode", %{})
+      assert edit_html =~ "Done Editing"
+      assert edit_html =~ "2×2"
+      assert edit_html =~ "move_overview_slot"
 
       # Rearrange slot: move event_graph right (after error_graph)
       reordered_html =
@@ -975,15 +1025,53 @@ defmodule Exoforge.DashboardLiveViewTest do
       {ev_pos, _} = :binary.match(reordered_html, ~s(id="slot-event_graph"))
       assert err_pos < ev_pos
 
-      saved_order = Exoforge.Std.Dashboard.Preferences.overview_order("grid_test_admin")
+      saved_order = Exoforge.Std.Dashboard.Preferences.overview_order(admin_id)
       assert Enum.at(saved_order, 0) == "error_graph"
       assert Enum.at(saved_order, 1) == "event_graph"
+
+      # Reset button is now visible in edit mode because order is modified
+      assert reordered_html =~ "Reset Grid Order"
 
       # Open SDK Download Modal from Overview tab
       sdk_html = render_click(view, "open_sdk_modal", %{})
       assert sdk_html =~ "Download Engine &amp; Client SDKs"
       assert sdk_html =~ "Installation Instructions"
       assert sdk_html =~ "Unity Package Manager (UPM)"
+
+      # Verify 0 error labels are hidden from Error Graph
+      assert html =~ "Zero errors detected across all monitored actions"
+      refute html =~ "(0 errors)"
+
+      # Broadcast a cluster event to verify live event feed update
+      refute html =~ "Emit Test Event"
+      ev_item = Exoforge.Std.Dashboard.RecentEvents.record("auth.login", %{player_id: "user_42"})
+      send(view.pid, {:studio_event, ev_item})
+      feed_html = render(view)
+      assert feed_html =~ "auth.login"
+      assert feed_html =~ "Latest Dispatched Event"
+      assert feed_html =~ "More"
+
+      # Open Events History Modal via "More" button
+      events_modal_html = render_click(view, "open_events_modal", %{})
+      assert events_modal_html =~ "Cluster Event Stream &amp; History"
+      assert events_modal_html =~ "auth.login"
+      render_click(view, "close_events_modal", %{})
+
+      # Open Actions Detail Modal via graph Expand button (includes expanded graph + table)
+      detail_html = render_click(view, "open_actions_detail_modal", %{"mode" => "actions"})
+      assert detail_html =~ "Action Invocations &amp; Telemetry Details"
+      assert detail_html =~ "Expanded Action Throughput"
+      assert detail_html =~ "Filter actions by name or service..."
+      assert detail_html =~ "Active Traffic"
+
+      # Open Error Breakdown mode
+      err_detail_html = render_click(view, "open_actions_detail_modal", %{"mode" => "errors"})
+      assert err_detail_html =~ "Action Exceptions &amp; Error Breakdown"
+      assert err_detail_html =~ "Expanded Error Spikes"
+
+      # Close detail modal
+      closed_html = render_click(view, "close_actions_detail_modal", %{})
+      refute closed_html =~ "Action Exceptions &amp; Error Breakdown"
     end
 
     test "CORS access policy controller updates highlight and disables allowed_origins when relaxed or strict" do
