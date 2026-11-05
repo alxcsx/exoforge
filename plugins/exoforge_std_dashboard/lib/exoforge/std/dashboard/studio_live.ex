@@ -6,7 +6,6 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   """
   use Phoenix.LiveView
   require Logger
-  import Exoforge.Std.Dashboard.Components
   import Exoforge.Std.Dashboard.Overlays
   alias Exoforge.ActionDispatcher
   alias Exoforge.EventDispatcher
@@ -103,6 +102,8 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
        user_role: user_role,
        auth_token: auth_token,
        pinned_extensions: Exoforge.Std.Dashboard.Preferences.pinned(player_id),
+       overview_grid_order: Exoforge.Std.Dashboard.Preferences.overview_order(player_id),
+       sdk_modal_open: false,
        visualizable_extensions: visualizable_extensions,
        cmd_palette_open: false,
        cmd_query: "",
@@ -316,6 +317,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
          assign(socket,
            cmd_palette_open: false,
            settings_open: false,
+           sdk_modal_open: false,
            action_modal_open: false,
            app_drawer_open: false
          )}
@@ -417,6 +419,27 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     {:noreply, assign(socket, settings_open: true, settings_hooks: hooks, cors_config: cors)}
   end
 
+  def handle_event("change_cors_settings", params, socket) do
+    current = socket.assigns.cors_config || %{}
+    mode = Map.get(params, "mode") || Map.get(current, "mode", "relaxed")
+    origins = Map.get(params, "allowed_origins") || Map.get(current, "allowed_origins", "*")
+
+    allow_creds =
+      if Map.has_key?(params, "allow_credentials") do
+        Map.get(params, "allow_credentials") in [true, "true", "on", "1"]
+      else
+        false
+      end
+
+    updated =
+      current
+      |> Map.put("mode", mode)
+      |> Map.put("allowed_origins", origins)
+      |> Map.put("allow_credentials", allow_creds)
+
+    {:noreply, assign(socket, cors_config: updated)}
+  end
+
   def handle_event("save_cors_settings", params, socket) do
     allow_creds = Map.get(params, "allow_credentials") in [true, "true", "on", "1"]
     clean_params = Map.put(params, "allow_credentials", allow_creds)
@@ -431,6 +454,56 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       {:error, reason} ->
         {:noreply, show_toast(socket, :error, "Failed to update CORS policy: #{inspect(reason)}")}
     end
+  end
+
+  def handle_event("open_sdk_modal", _params, socket) do
+    {:noreply, assign(socket, :sdk_modal_open, true)}
+  end
+
+  def handle_event("close_sdk_modal", _params, socket) do
+    {:noreply,
+     socket
+     |> push_event("close-popup", %{})
+     |> assign(:sdk_modal_open, false)}
+  end
+
+  def handle_event("move_overview_slot", %{"id" => slot_id, "dir" => dir}, socket) do
+    widgets = Exoforge.UIHookRegistry.list_hooks(:overview_widget)
+    current_ids = resolve_overview_slot_ids(widgets, socket.assigns.overview_grid_order)
+    idx = Enum.find_index(current_ids, &(&1 == slot_id))
+
+    target_idx =
+      cond do
+        is_nil(idx) -> nil
+        dir in ["prev", "left", "up"] and idx > 0 -> idx - 1
+        dir in ["next", "right", "down"] and idx < length(current_ids) - 1 -> idx + 1
+        true -> nil
+      end
+
+    if target_idx do
+      other_id = Enum.at(current_ids, target_idx)
+
+      new_order =
+        current_ids
+        |> List.replace_at(idx, other_id)
+        |> List.replace_at(target_idx, slot_id)
+
+      Exoforge.Std.Dashboard.Preferences.put_overview_order(socket.assigns.player_id, new_order)
+      {:noreply, assign(socket, :overview_grid_order, new_order)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_event("reorder_overview_grid", %{"order" => order}, socket) when is_list(order) do
+    clean_order = Enum.map(order, &to_string/1)
+    Exoforge.Std.Dashboard.Preferences.put_overview_order(socket.assigns.player_id, clean_order)
+    {:noreply, assign(socket, :overview_grid_order, clean_order)}
+  end
+
+  def handle_event("reset_overview_grid", _params, socket) do
+    Exoforge.Std.Dashboard.Preferences.put_overview_order(socket.assigns.player_id, [])
+    {:noreply, assign(socket, :overview_grid_order, [])}
   end
 
   def handle_event("close_settings", _params, socket) do
@@ -692,6 +765,10 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
             name: to_string(m.name),
             version: to_string(m.version),
             type: to_string(m.type),
+            status: Map.get(m, :status, :online),
+            restarts: Map.get(m, :restarts, 0),
+            infinite_loop: Map.get(m, :infinite_loop, false),
+            crashed_recently: Map.get(m, :crashed_recently, false),
             provides: Enum.map(m.provides || [], &PluginRegistry.service_alias_or_module/1),
             dependencies: Enum.map(m.dependencies || [], &PluginRegistry.service_alias_or_module/1)
           }
@@ -725,6 +802,9 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
     %{
       kernel: "Exoforge Core",
+      version: Exoforge.BuildInfo.version(),
+      commit_hash: Exoforge.BuildInfo.commit_hash(),
+      build_date: Exoforge.BuildInfo.build_date(),
       plugins: plugins,
       plugins_count: length(plugins),
       extensions: extensions,
@@ -874,62 +954,143 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     end
   end
 
-  defp fetch_overview_metrics(overview, total_actions) do
-    default_metrics = [
-      %{
-        id: :active_extensions,
-        title: "Active Extensions",
-        value: "#{to_string(overview.plugins_count)} Online",
-        icon: "🧩",
-        delta: "Active",
-        delta_positive: true,
-        subtitle: "Game Services & Integrations",
-        order: 10
-      },
-      %{
-        id: :declared_resources,
-        title: "Declared Resources",
-        value: to_string(overview.resources_count),
-        icon: "📦",
-        delta: "Synced",
-        delta_positive: true,
-        subtitle: "Schemas & Tables",
-        order: 20
-      },
-      %{
-        id: :callable_actions,
-        title: "Callable Actions",
-        value: to_string(total_actions),
-        icon: "⚡",
-        delta: "Available",
-        delta_positive: true,
-        subtitle: "Game Actions & Operations",
-        order: 30
-      },
-      %{
-        id: :cluster_status,
-        title: "Cluster Status",
-        value: "Healthy",
-        icon: "🟢",
-        delta: "Online",
-        delta_positive: true,
-        subtitle: "Sub-ms Response Time",
-        order: 40
-      }
-    ]
+  @builtin_overview_slots [
+    "event_graph",
+    "error_graph",
+    "server_state",
+    "extension_health",
+    "download_sdk"
+  ]
 
-    hook_metrics = Exoforge.UIHookRegistry.list_hooks(:overview_metric)
+  defp resolve_overview_slot_ids(overview_widgets, saved_order) do
+    widget_ids = Enum.map(overview_widgets, fn w -> "widget:#{w.id}" end)
+    default_ids = @builtin_overview_slots ++ widget_ids
+    kept = Enum.filter(saved_order || [], &(&1 in default_ids))
+    missing = Enum.reject(default_ids, &(&1 in kept))
+    kept ++ missing
+  end
 
-    (default_metrics ++ hook_metrics)
-    |> Enum.sort_by(&Map.get(&1, :order, 100))
+  defp fetch_telemetry_summary(overview, activity_events) do
+    snapshot =
+      try do
+        Exoforge.Metering.snapshot()
+      rescue
+        _ -> %{actions: [], plugins: []}
+      end
+
+    metered_actions = Map.get(snapshot, :actions, [])
+    metered_plugins = Map.get(snapshot, :plugins, [])
+
+    log_rates =
+      try do
+        :ets.tab2list(:exo_plugin_log_rate)
+        |> Map.new(fn {pid, _win, count} -> {to_string(pid), count} end)
+      rescue
+        _ -> %{}
+      end
+
+    restarts_by_id =
+      Map.new(metered_plugins, fn p ->
+        {to_string(p.plugin_id), Map.get(p, :restarts, 0)}
+      end)
+
+    errors_by_plugin =
+      Enum.group_by(metered_actions, &to_string(&1.plugin_id))
+      |> Map.new(fn {pid, acts} ->
+        {pid, Enum.sum(Enum.map(acts, &Map.get(&1, :errors, 0)))}
+      end)
+
+    faulty_extensions =
+      Enum.flat_map(overview.plugins, fn p ->
+        pid = to_string(p.id)
+        restarts = max(Map.get(p, :restarts, 0), Map.get(restarts_by_id, pid, 0))
+        log_rate = Map.get(log_rates, pid, 0)
+        infinite_loop? = Map.get(p, :infinite_loop, false) == true or log_rate >= 100
+        crashed? = Map.get(p, :crashed_recently, false) == true or restarts > 0 or Map.get(p, :status) in [:faulty, "faulty", :crashed, "crashed"]
+
+        cond do
+          infinite_loop? ->
+            [%{id: pid, name: humanize_plugin_name(p), reason: "Infinite loop / log flood detected (#{max(log_rate, 100)} logs/s)"}]
+
+          crashed? ->
+            [%{id: pid, name: humanize_plugin_name(p), reason: "Crashed recently (#{max(restarts, 1)} restart(s))"}]
+
+          true ->
+            []
+        end
+      end)
+
+    total_invocations =
+      Enum.sum(Enum.map(metered_actions, &Map.get(&1, :invocations, 0))) + length(activity_events)
+
+    total_errors =
+      Enum.sum(Enum.map(metered_actions, &Map.get(&1, :errors, 0))) + length(faulty_extensions)
+
+    top_services =
+      metered_actions
+      |> Enum.group_by(&to_string(&1.service))
+      |> Enum.map(fn {svc, acts} ->
+        {svc,
+         Enum.sum(Enum.map(acts, &Map.get(&1, :invocations, 0))),
+         Enum.sum(Enum.map(acts, &Map.get(&1, :errors, 0)))}
+      end)
+      |> Enum.sort_by(fn {_svc, inv, _err} -> -inv end)
+      |> Enum.take(6)
+
+    event_bars =
+      if top_services != [] do
+        max_inv = Enum.max([1 | Enum.map(top_services, &elem(&1, 1))])
+
+        Enum.map(top_services, fn {svc, inv, _err} ->
+          %{label: svc, count: inv, pct: max(round(inv / max_inv * 100), 12)}
+        end)
+      else
+        [
+          %{label: "auth", count: max(length(activity_events), 1), pct: 48},
+          %{label: "http", count: 2, pct: 64},
+          %{label: "ws", count: 1, pct: 36},
+          %{label: "studio", count: length(activity_events), pct: 78},
+          %{label: "db", count: overview.resources_count, pct: 52},
+          %{label: "plugins", count: overview.plugins_count, pct: 85}
+        ]
+      end
+
+    error_bars =
+      if top_services != [] do
+        max_err = Enum.max([1 | Enum.map(top_services, &elem(&1, 2))])
+
+        Enum.map(top_services, fn {svc, _inv, err} ->
+          %{label: svc, count: err, pct: if(err > 0, do: max(round(err / max_err * 100), 18), else: 8)}
+        end)
+      else
+        Enum.take(overview.plugins, 6)
+        |> Enum.map(fn p ->
+          err = Map.get(errors_by_plugin, to_string(p.id), 0)
+          %{label: String.replace_prefix(to_string(p.id), "exoforge_std_", ""), count: err, pct: if(err > 0, do: 75, else: 8)}
+        end)
+      end
+
+    online_count = max(overview.plugins_count - length(faulty_extensions), 0)
+
+    %{
+      total_invocations: total_invocations,
+      total_errors: total_errors,
+      event_bars: event_bars,
+      error_bars: error_bars,
+      online_count: online_count,
+      faulty_count: length(faulty_extensions),
+      faulty_extensions: faulty_extensions
+    }
   end
 
   defp widget_width_class(widget) do
-    case Map.get(widget, :width) do
-      :one_third -> "lg:col-span-1"
-      :half -> "lg:col-span-2"
-      :two_thirds -> "lg:col-span-2"
-      _ -> "lg:col-span-3"
+    case Map.get(widget, :slot_size) || Map.get(widget, :grid_span) || Map.get(widget, :width) do
+      s when s in ["1x1", :quarter, :one_fourth, :one_third] -> "lg:col-span-1"
+      s when s in ["2x1", :half, :two_thirds] -> "lg:col-span-2"
+      "2x2" -> "lg:col-span-2 lg:row-span-2"
+      "3x1" -> "lg:col-span-3"
+      s when s in ["4x1", :full] -> "lg:col-span-4"
+      _ -> "lg:col-span-2"
     end
   end
 
@@ -940,14 +1101,18 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     total_actions =
       Enum.sum(Enum.map(assigns.action_catalog, fn svc -> length(svc.actions) end))
 
-    overview_metrics = fetch_overview_metrics(assigns.overview, total_actions)
     overview_widgets = Exoforge.UIHookRegistry.list_hooks(:overview_widget)
+    overview_slot_ids = resolve_overview_slot_ids(overview_widgets, assigns.overview_grid_order)
+    telemetry = fetch_telemetry_summary(assigns.overview, assigns.activity_events)
+    widgets_by_slot = Map.new(overview_widgets, fn w -> {"widget:#{w.id}", w} end)
 
     assigns =
       assigns
       |> assign(:total_actions, total_actions)
-      |> assign(:overview_metrics, overview_metrics)
       |> assign(:overview_widgets, overview_widgets)
+      |> assign(:overview_slot_ids, overview_slot_ids)
+      |> assign(:widgets_by_slot, widgets_by_slot)
+      |> assign(:telemetry, telemetry)
 
     ~H"""
     <div class="min-h-screen flex flex-col" phx-window-keydown="handle_key">
@@ -1099,15 +1264,6 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
             <button
               type="button"
-              onclick="window.ExoforgeTheme && window.ExoforgeTheme.toggle()"
-              class="w-9 h-9 rounded-xl bg-gray-100 hover:bg-gray-200/80 text-gray-600 flex items-center justify-center transition-colors text-sm border border-gray-200/60"
-              title="Toggle Dark / Light Theme"
-            >
-              🌓
-            </button>
-
-            <button
-              type="button"
               phx-click="open_settings"
               class="w-9 h-9 rounded-xl bg-gray-100 hover:bg-gray-200/80 text-gray-600 flex items-center justify-center transition-colors text-sm border border-gray-200/60"
               title="Project Settings"
@@ -1174,136 +1330,443 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
           </div>
         <% end %>
 
-        <!-- OVERVIEW TAB: Platform & Kernel Metrics -->
+        <!-- OVERVIEW TAB: 4-Slot Rearrangeable Grid -->
         <%= if @current_tab == :overview do %>
-          <!-- METRIC CARDS ROW -->
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <%= for metric <- @overview_metrics do %>
-              <.metric_card
-                title={metric.title}
-                value={metric.value}
-                icon={Map.get(metric, :icon)}
-                delta={Map.get(metric, :delta, "Active")}
-                delta_positive={Map.get(metric, :delta_positive, true)}
-                subtitle={Map.get(metric, :subtitle, "")}
-              />
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <h2 class="text-base font-extrabold text-gray-900 tracking-tight">Cluster Overview</h2>
+              <p class="text-xs text-gray-500">Live telemetry, extension health watchdog, SDK distribution, and dynamic extension widgets. Use the slot arrows to rearrange the grid.</p>
+            </div>
+            <%= if @overview_grid_order != [] do %>
+              <button
+                type="button"
+                phx-click="reset_overview_grid"
+                class="px-2.5 py-1.5 text-[11px] font-bold text-gray-600 hover:text-gray-900 bg-white hover:bg-gray-50 border border-gray-200 rounded-xl transition-colors"
+              >
+                ↺ Reset Grid Order
+              </button>
             <% end %>
           </div>
 
-          <!-- EXTENSIONS & RECENT TELEMETRY ROW -->
-          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <!-- Installed Extensions List -->
-            <div class="lg:col-span-2 bg-white p-6 rounded-2xl border border-gray-200 shadow-card space-y-4">
-              <div class="flex items-center justify-between">
-                <div>
-                  <h3 class="font-bold text-gray-900 text-sm">Live Game Features &amp; Capability Modules</h3>
-                  <p class="text-xs text-gray-400 mt-0.5">Active services powering gameplay, combat, auth, and backend logic</p>
-                </div>
-                <button
-                  phx-click="switch_tab"
-                  phx-value-tab="apps"
-                  class="text-xs font-bold text-primary-600 hover:text-primary-700"
-                >
-                  View All &rarr;
-                </button>
-              </div>
-
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <%= for ext <- @overview.plugins do %>
-                  <div class="p-3.5 rounded-xl border border-gray-100 hover:border-primary-200 bg-gray-50/50 hover:bg-white transition-all space-y-2">
-                    <div class="flex items-center justify-between gap-2">
-                      <div class="flex items-center gap-2.5 min-w-0">
-                        <span class="w-8 h-8 rounded-lg bg-purple-50 text-purple-700 flex items-center justify-center text-base shrink-0">
-                          <%= ExtensionPresenter.icon(ext) %>
-                        </span>
-                        <span class="text-xs font-bold text-gray-800 truncate"><%= humanize_plugin_name(ext) %></span>
+          <div id="overview-bento-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 auto-rows-min">
+            <%= for {slot_id, idx} <- Enum.with_index(@overview_slot_ids) do %>
+              <%= case slot_id do %>
+                <% "event_graph" -> %>
+                  <!-- 2x2 EVENT GRAPH -->
+                  <div
+                    id="slot-event_graph"
+                    data-slot-id="event_graph"
+                    data-slot-span="2x2"
+                    class="lg:col-span-2 lg:row-span-2 bg-white p-6 rounded-2xl border border-gray-200 shadow-card flex flex-col justify-between space-y-5"
+                  >
+                    <div class="flex items-start justify-between gap-3">
+                      <div>
+                        <div class="flex items-center gap-2">
+                          <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                          <h3 class="font-bold text-gray-900 text-sm">Event &amp; Action Throughput</h3>
+                          <span class="px-2 py-0.5 text-[10px] font-mono font-bold bg-purple-50 text-purple-700 rounded-md border border-purple-200">2×2</span>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-0.5">Real-time EventDispatcher pub/sub and service invocations</p>
                       </div>
-                      <span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0" title="Online"></span>
-                    </div>
-                    <details class="exo-fold">
-                      <summary>
-                        <span>Technical Info</span>
-                        <span class="exo-chevron">▸</span>
-                      </summary>
-                      <div class="exo-fold-body space-y-1">
-                        <span class="block text-[10px] text-gray-400 font-mono"><%= ext.id %></span>
-                        <p class="text-[11px] text-gray-500">
-                          Provides: <code class="text-primary-700 font-semibold"><%= Enum.join(ext.provides, ", ") %></code>
-                        </p>
+                      <div class="flex items-center gap-1">
+                        <button
+                          type="button"
+                          phx-click="toggle_event_dock"
+                          class="px-2.5 py-1 text-[11px] font-bold text-primary-600 hover:text-primary-700 bg-primary-50/70 hover:bg-primary-100 rounded-lg transition-colors mr-1"
+                        >
+                          Open Console &rarr;
+                        </button>
+                        <button
+                          type="button"
+                          phx-click="move_overview_slot"
+                          phx-value-id="event_graph"
+                          phx-value-dir="prev"
+                          disabled={idx == 0}
+                          title="Move slot left"
+                          class="w-6 h-6 rounded-lg border border-gray-200 text-gray-400 hover:text-gray-700 hover:bg-gray-50 disabled:opacity-30 flex items-center justify-center text-xs"
+                        >
+                          &larr;
+                        </button>
+                        <button
+                          type="button"
+                          phx-click="move_overview_slot"
+                          phx-value-id="event_graph"
+                          phx-value-dir="next"
+                          disabled={idx == length(@overview_slot_ids) - 1}
+                          title="Move slot right"
+                          class="w-6 h-6 rounded-lg border border-gray-200 text-gray-400 hover:text-gray-700 hover:bg-gray-50 disabled:opacity-30 flex items-center justify-center text-xs"
+                        >
+                          &rarr;
+                        </button>
                       </div>
-                    </details>
-                  </div>
-                <% end %>
-              </div>
-            </div>
-
-            <!-- Live Event Stream Feed -->
-            <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow-card space-y-4">
-              <div class="flex items-center justify-between">
-                <div>
-                  <h3 class="font-bold text-gray-900 text-sm">Real-Time Event Stream</h3>
-                  <p class="text-xs text-gray-400 mt-0.5">Pushed directly via EventDispatcher</p>
-                </div>
-                <button
-                  type="button"
-                  phx-click="toggle_event_dock"
-                  class="text-xs font-bold text-primary-600 hover:text-primary-700 flex items-center gap-1.5 transition-colors"
-                >
-                  <span class={"w-2 h-2 rounded-full #{if @events_paused, do: "bg-amber-400", else: "bg-emerald-500 animate-pulse"}"}></span>
-                  <span>Open Console &rarr;</span>
-                </button>
-              </div>
-
-              <div class="space-y-2 max-h-80 overflow-y-auto custom-scrollbar">
-                <%= for ev <- @activity_events do %>
-                  <details class="exo-fold p-2.5 bg-gray-50/70 border border-gray-100 rounded-xl text-xs">
-                    <summary class="flex items-center justify-between w-full">
-                      <span class="flex items-center gap-1.5 font-mono font-bold text-primary-700">
-                        <span>📡</span>
-                        <span><%= ev.event %></span>
-                      </span>
-                      <span class="flex items-center gap-1.5 text-[10px] text-gray-400">
-                        <span><%= ev.time %></span>
-                        <span class="exo-chevron">▸</span>
-                      </span>
-                    </summary>
-                    <div class="exo-fold-body">
-                      <pre class="text-[10px] text-gray-600 font-mono overflow-x-auto"><%= Jason.encode!(ev.payload) %></pre>
                     </div>
-                  </details>
-                <% end %>
-              </div>
-            </div>
-          </div>
 
-          <!-- DYNAMIC OVERVIEW WIDGET HOOKS (Contributed by Plugins) -->
-          <%= if @overview_widgets != [] do %>
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <%= for widget <- @overview_widgets do %>
-                <div class={"bg-white p-6 rounded-2xl border border-gray-200 shadow-card space-y-4 #{widget_width_class(widget)}"}>
-                  <div class="flex items-center justify-between">
-                    <div>
-                      <h3 class="font-bold text-gray-900 text-sm flex items-center gap-2">
-                        <%= if Map.get(widget, :icon) do %>
-                          <span><%= widget.icon %></span>
-                        <% end %>
-                        <span><%= widget.title %></span>
-                      </h3>
-                      <%= if Map.get(widget, :subtitle) do %>
-                        <p class="text-xs text-gray-400 mt-0.5"><%= widget.subtitle %></p>
+                    <div class="flex items-baseline gap-3">
+                      <span class="text-3xl font-black text-gray-900 tracking-tight"><%= @telemetry.total_invocations %></span>
+                      <span class="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+                        <%= length(@activity_events) %> live stream events
+                      </span>
+                    </div>
+
+                    <!-- Bar Chart Visualization -->
+                    <div class="h-36 flex items-end gap-3 pt-4 px-2 border-b border-gray-100">
+                      <%= for bar <- @telemetry.event_bars do %>
+                        <div class="flex-1 flex flex-col items-center gap-1.5 h-full justify-end group">
+                          <span class="text-[10px] font-mono font-bold text-gray-500"><%= bar.count %></span>
+                          <div class="w-full bg-purple-100 rounded-t-lg relative overflow-hidden" style={"height: #{bar.pct}%"}>
+                            <div class=" inset-0 bg-gradient-to-t from-purple-600 to-indigo-500 w-full h-full opacity-85 group-hover:opacity-100 transition-opacity"></div>
+                          </div>
+                          <span class="text-[10px] font-mono text-gray-500 truncate max-w-full"><%= bar.label %></span>
+                        </div>
                       <% end %>
                     </div>
-                    <span class="text-[10px] font-mono text-gray-400"><%= Map.get(widget, :plugin_id, "") %></span>
+
+                    <!-- Recent Events Mini-Feed -->
+                    <div class="space-y-1.5">
+                      <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Latest Dispatched Events</div>
+                      <%= for ev <- Enum.take(@activity_events, 2) do %>
+                        <div class="flex items-center justify-between px-3 py-1.5 rounded-lg bg-gray-50 border border-gray-100 text-xs">
+                          <span class="font-mono font-bold text-primary-700 truncate">📡 <%= ev.event %></span>
+                          <span class="text-[10px] text-gray-400 font-mono shrink-0"><%= ev.time %></span>
+                        </div>
+                      <% end %>
+                    </div>
                   </div>
 
-                  <Exoforge.Std.Dashboard.Microfrontend.render_widget
-                    spec={widget}
-                    context={%{overview: @overview}}
-                  />
-                </div>
+                <% "error_graph" -> %>
+                  <!-- 2x2 ERROR GRAPH -->
+                  <div
+                    id="slot-error_graph"
+                    data-slot-id="error_graph"
+                    data-slot-span="2x2"
+                    class="lg:col-span-2 lg:row-span-2 bg-white p-6 rounded-2xl border border-gray-200 shadow-card flex flex-col justify-between space-y-5"
+                  >
+                    <div class="flex items-start justify-between gap-3">
+                      <div>
+                        <div class="flex items-center gap-2">
+                          <span class={"w-2.5 h-2.5 rounded-full #{if @telemetry.total_errors > 0, do: "bg-red-500 animate-ping", else: "bg-emerald-500"}"}></span>
+                          <h3 class="font-bold text-gray-900 text-sm">Error &amp; Exception Graph</h3>
+                          <span class="px-2 py-0.5 text-[10px] font-mono font-bold bg-gray-100 text-gray-600 rounded-md border border-gray-200">2×2</span>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-0.5">Action dispatch failures, crashes, and rate-limit spikes by service</p>
+                      </div>
+                      <div class="flex items-center gap-1">
+                        <button
+                          type="button"
+                          phx-click="move_overview_slot"
+                          phx-value-id="error_graph"
+                          phx-value-dir="prev"
+                          disabled={idx == 0}
+                          title="Move slot left"
+                          class="w-6 h-6 rounded-lg border border-gray-200 text-gray-400 hover:text-gray-700 hover:bg-gray-50 disabled:opacity-30 flex items-center justify-center text-xs"
+                        >
+                          &larr;
+                        </button>
+                        <button
+                          type="button"
+                          phx-click="move_overview_slot"
+                          phx-value-id="error_graph"
+                          phx-value-dir="next"
+                          disabled={idx == length(@overview_slot_ids) - 1}
+                          title="Move slot right"
+                          class="w-6 h-6 rounded-lg border border-gray-200 text-gray-400 hover:text-gray-700 hover:bg-gray-50 disabled:opacity-30 flex items-center justify-center text-xs"
+                        >
+                          &rarr;
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="flex items-baseline gap-3">
+                      <span class={"text-3xl font-black tracking-tight #{if @telemetry.total_errors > 0, do: "text-red-600", else: "text-gray-900"}"}>
+                        <%= @telemetry.total_errors %>
+                      </span>
+                      <span class={"text-xs font-semibold px-2 py-0.5 rounded-full #{if @telemetry.total_errors > 0, do: "bg-red-50 text-red-700", else: "bg-emerald-50 text-emerald-700"}"}>
+                        <%= if @telemetry.total_errors > 0, do: "Errors detected", else: "0% error rate" %>
+                      </span>
+                    </div>
+
+                    <!-- Error Bar Chart -->
+                    <div class="h-36 flex items-end gap-3 pt-4 px-2 border-b border-gray-100">
+                      <%= for bar <- @telemetry.error_bars do %>
+                        <div class="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
+                          <span class={"text-[10px] font-mono font-bold #{if bar.count > 0, do: "text-red-600", else: "text-gray-400"}"}><%= bar.count %></span>
+                          <div
+                            class={"w-full rounded-t-lg transition-all #{if bar.count > 0, do: "bg-gradient-to-t from-red-600 to-amber-500", else: "bg-gray-100"}"}
+                            style={"height: #{bar.pct}%"}
+                          >
+                          </div>
+                          <span class="text-[10px] font-mono text-gray-500 truncate max-w-full"><%= bar.label %></span>
+                        </div>
+                      <% end %>
+                    </div>
+
+                    <div class="px-3 py-2 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-between text-xs">
+                      <span class="text-gray-500">Monitored Callable Actions</span>
+                      <span class="font-mono font-bold text-gray-800"><%= @total_actions %> actions across <%= @overview.plugins_count %> plugins</span>
+                    </div>
+                  </div>
+
+                <% "server_state" -> %>
+                  <!-- 1x1 SERVER STATE INDICATOR -->
+                  <div
+                    id="slot-server_state"
+                    data-slot-id="server_state"
+                    data-slot-span="1x1"
+                    class="lg:col-span-1 bg-white p-5 rounded-2xl border border-gray-200 shadow-card flex flex-col justify-between space-y-4"
+                  >
+                    <div class="flex items-start justify-between gap-2">
+                      <div class="flex items-center gap-2">
+                        <span class="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-sm font-bold border border-emerald-200">
+                          🟢
+                        </span>
+                        <div>
+                          <h3 class="font-bold text-gray-900 text-xs uppercase tracking-wider">Server State</h3>
+                          <span class="text-[10px] font-mono text-gray-400">1×1 Indicator</span>
+                        </div>
+                      </div>
+                      <div class="flex items-center gap-1">
+                        <button
+                          type="button"
+                          phx-click="move_overview_slot"
+                          phx-value-id="server_state"
+                          phx-value-dir="prev"
+                          disabled={idx == 0}
+                          title="Move slot left"
+                          class="w-6 h-6 rounded-lg border border-gray-200 text-gray-400 hover:text-gray-700 hover:bg-gray-50 disabled:opacity-30 flex items-center justify-center text-xs"
+                        >
+                          &larr;
+                        </button>
+                        <button
+                          type="button"
+                          phx-click="move_overview_slot"
+                          phx-value-id="server_state"
+                          phx-value-dir="next"
+                          disabled={idx == length(@overview_slot_ids) - 1}
+                          title="Move slot right"
+                          class="w-6 h-6 rounded-lg border border-gray-200 text-gray-400 hover:text-gray-700 hover:bg-gray-50 disabled:opacity-30 flex items-center justify-center text-xs"
+                        >
+                          &rarr;
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div class="flex items-center gap-2">
+                        <span class="text-2xl font-black text-gray-900">Healthy</span>
+                        <span class="px-2 py-0.5 text-[10px] font-bold bg-emerald-50 text-emerald-700 rounded-full border border-emerald-200">ONLINE</span>
+                      </div>
+                      <p class="text-[11px] text-gray-500 font-mono truncate mt-1" title={to_string(node())}>
+                        Node: <%= to_string(node()) %>
+                      </p>
+                    </div>
+
+                    <div class="pt-2 border-t border-gray-100 flex items-center justify-between text-[11px] text-gray-500">
+                      <span>Resources: <strong class="text-gray-800"><%= @overview.resources_count %></strong></span>
+                      <span>Env: <strong class="text-primary-700 uppercase"><%= @current_env %></strong></span>
+                    </div>
+                  </div>
+
+                <% "extension_health" -> %>
+                  <!-- 2x1 ONLINE / FAULTY EXTENSION COUNTER -->
+                  <div
+                    id="slot-extension_health"
+                    data-slot-id="extension_health"
+                    data-slot-span="2x1"
+                    class={"lg:col-span-2 bg-white p-5 rounded-2xl border shadow-card flex flex-col justify-between space-y-4 #{if @telemetry.faulty_count > 0, do: "border-amber-300", else: "border-gray-200"}"}
+                  >
+                    <div class="flex items-start justify-between gap-2">
+                      <div>
+                        <div class="flex items-center gap-2">
+                          <h3 class="font-bold text-gray-900 text-sm">Online / Faulty Extensions</h3>
+                          <span class="px-2 py-0.5 text-[10px] font-mono font-bold bg-gray-100 text-gray-600 rounded-md border border-gray-200">2×1</span>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-0.5">Monitors extension processes for recent crashes or infinite loops</p>
+                      </div>
+                      <div class="flex items-center gap-1">
+                        <button
+                          type="button"
+                          phx-click="switch_tab"
+                          phx-value-tab="apps"
+                          class="px-2.5 py-1 text-[11px] font-bold text-primary-600 hover:text-primary-700 bg-primary-50/70 hover:bg-primary-100 rounded-lg transition-colors mr-1"
+                        >
+                          Manage &rarr;
+                        </button>
+                        <button
+                          type="button"
+                          phx-click="move_overview_slot"
+                          phx-value-id="extension_health"
+                          phx-value-dir="prev"
+                          disabled={idx == 0}
+                          title="Move slot left"
+                          class="w-6 h-6 rounded-lg border border-gray-200 text-gray-400 hover:text-gray-700 hover:bg-gray-50 disabled:opacity-30 flex items-center justify-center text-xs"
+                        >
+                          &larr;
+                        </button>
+                        <button
+                          type="button"
+                          phx-click="move_overview_slot"
+                          phx-value-id="extension_health"
+                          phx-value-dir="next"
+                          disabled={idx == length(@overview_slot_ids) - 1}
+                          title="Move slot right"
+                          class="w-6 h-6 rounded-lg border border-gray-200 text-gray-400 hover:text-gray-700 hover:bg-gray-50 disabled:opacity-30 flex items-center justify-center text-xs"
+                        >
+                          &rarr;
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                      <div class="p-3 rounded-xl bg-emerald-50/80 border border-emerald-200 flex items-center justify-between">
+                        <div>
+                          <span class="block text-[10px] font-bold uppercase tracking-wider text-emerald-700">Online</span>
+                          <span class="text-2xl font-black text-emerald-800"><%= @telemetry.online_count %></span>
+                        </div>
+                        <span class="text-lg">🧩</span>
+                      </div>
+
+                      <div class={"p-3 rounded-xl border flex items-center justify-between #{if @telemetry.faulty_count > 0, do: "bg-red-50 border-red-300", else: "bg-gray-50 border-gray-200"}"}>
+                        <div>
+                          <span class={"block text-[10px] font-bold uppercase tracking-wider #{if @telemetry.faulty_count > 0, do: "text-red-700", else: "text-gray-500"}"}>Faulty / Loop</span>
+                          <span class={"text-2xl font-black #{if @telemetry.faulty_count > 0, do: "text-red-700", else: "text-gray-800"}"}><%= @telemetry.faulty_count %></span>
+                        </div>
+                        <span class="text-lg"><%= if @telemetry.faulty_count > 0, do: "⚠️", else: "✓" %></span>
+                      </div>
+                    </div>
+
+                    <%= if @telemetry.faulty_extensions != [] do %>
+                      <div class="space-y-1.5">
+                        <%= for f <- @telemetry.faulty_extensions do %>
+                          <div class="px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-center justify-between gap-2">
+                            <span class="font-bold truncate">⚠️ <%= f.name %></span>
+                            <span class="font-mono text-[11px] text-amber-800 shrink-0"><%= f.reason %></span>
+                          </div>
+                        <% end %>
+                      </div>
+                    <% else %>
+                      <div class="text-[11px] text-gray-500 flex items-center gap-1.5">
+                        <span class="text-emerald-600 font-bold">✓</span>
+                        <span>No infinite loops or recent extension crashes detected.</span>
+                      </div>
+                    <% end %>
+                  </div>
+
+                <% "download_sdk" -> %>
+                  <!-- 1x1 HIGHLIGHTED DOWNLOAD SDK BUTTON -->
+                  <div
+                    id="slot-download_sdk"
+                    data-slot-id="download_sdk"
+                    data-slot-span="1x1"
+                    class="lg:col-span-1 bg-gradient-to-br from-purple-600 to-indigo-700 text-white p-5 rounded-2xl border border-purple-500 shadow-lg flex flex-col justify-between space-y-4"
+                  >
+                    <div class="flex items-start justify-between gap-2">
+                      <div class="flex items-center gap-2">
+                        <span class="w-8 h-8 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center text-base">
+                          📦
+                        </span>
+                        <div>
+                          <h3 class="font-bold text-white text-xs uppercase tracking-wider">Client SDKs</h3>
+                          <span class="text-[10px] font-mono text-purple-200">1×1 Action</span>
+                        </div>
+                      </div>
+                      <div class="flex items-center gap-1">
+                        <button
+                          type="button"
+                          phx-click="move_overview_slot"
+                          phx-value-id="download_sdk"
+                          phx-value-dir="prev"
+                          disabled={idx == 0}
+                          title="Move slot left"
+                          class="w-6 h-6 rounded-lg border border-white/20 text-white/80 hover:text-white hover:bg-white/10 disabled:opacity-30 flex items-center justify-center text-xs"
+                        >
+                          &larr;
+                        </button>
+                        <button
+                          type="button"
+                          phx-click="move_overview_slot"
+                          phx-value-id="download_sdk"
+                          phx-value-dir="next"
+                          disabled={idx == length(@overview_slot_ids) - 1}
+                          title="Move slot right"
+                          class="w-6 h-6 rounded-lg border border-white/20 text-white/80 hover:text-white hover:bg-white/10 disabled:opacity-30 flex items-center justify-center text-xs"
+                        >
+                          &rarr;
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <p class="text-sm font-extrabold text-white leading-snug">Unity &amp; C# SDK Packages</p>
+                      <p class="text-[11px] text-purple-100 mt-1">Download client libraries, UPM tarballs, and setup guides.</p>
+                    </div>
+
+                    <button
+                      type="button"
+                      phx-click="open_sdk_modal"
+                      class="w-full py-2.5 px-4 rounded-xl bg-white text-purple-700 hover:bg-purple-50 font-black text-xs shadow-sm transition-all flex items-center justify-center gap-2"
+                    >
+                      <span>⬇ Download SDK</span>
+                    </button>
+                  </div>
+
+                <% "widget:" <> _ -> %>
+                  <% widget = Map.get(@widgets_by_slot, slot_id) %>
+                  <%= if widget do %>
+                    <div
+                      id={"slot-#{slot_id}"}
+                      data-slot-id={slot_id}
+                      class={"bg-white p-6 rounded-2xl border border-gray-200 shadow-card space-y-4 #{widget_width_class(widget)}"}
+                    >
+                      <div class="flex items-center justify-between gap-2">
+                        <div>
+                          <h3 class="font-bold text-gray-900 text-sm flex items-center gap-2">
+                            <%= if Map.get(widget, :icon) do %>
+                              <span><%= widget.icon %></span>
+                            <% end %>
+                            <span><%= widget.title %></span>
+                          </h3>
+                          <%= if Map.get(widget, :subtitle) do %>
+                            <p class="text-xs text-gray-400 mt-0.5"><%= widget.subtitle %></p>
+                          <% end %>
+                        </div>
+                        <div class="flex items-center gap-1">
+                          <span class="text-[10px] font-mono text-gray-400 mr-1"><%= Map.get(widget, :plugin_id, "") %></span>
+                          <button
+                            type="button"
+                            phx-click="move_overview_slot"
+                            phx-value-id={slot_id}
+                            phx-value-dir="prev"
+                            disabled={idx == 0}
+                            title="Move slot left"
+                            class="w-6 h-6 rounded-lg border border-gray-200 text-gray-400 hover:text-gray-700 hover:bg-gray-50 disabled:opacity-30 flex items-center justify-center text-xs"
+                          >
+                            &larr;
+                          </button>
+                          <button
+                            type="button"
+                            phx-click="move_overview_slot"
+                            phx-value-id={slot_id}
+                            phx-value-dir="next"
+                            disabled={idx == length(@overview_slot_ids) - 1}
+                            title="Move slot right"
+                            class="w-6 h-6 rounded-lg border border-gray-200 text-gray-400 hover:text-gray-700 hover:bg-gray-50 disabled:opacity-30 flex items-center justify-center text-xs"
+                          >
+                            &rarr;
+                          </button>
+                        </div>
+                      </div>
+
+                      <Exoforge.Std.Dashboard.Microfrontend.render_widget
+                        spec={widget}
+                        context={%{overview: @overview}}
+                      />
+                    </div>
+                  <% end %>
+
+                <% _ -> %>
               <% end %>
-            </div>
-          <% end %>
+            <% end %>
+          </div>
         <% end %>
 
         <!-- EXTENSIONS REGISTRY TAB -->
@@ -1434,6 +1897,12 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         on_select_action="select_action_name"
         on_change_form="change_action_form"
         on_dispatch="dispatch_action"
+      />
+
+      <!-- Client SDK Download Modal -->
+      <.sdk_download_modal
+        open={@sdk_modal_open}
+        on_close="close_sdk_modal"
       />
 
       <!-- Live Cluster Event Stream Dock -->

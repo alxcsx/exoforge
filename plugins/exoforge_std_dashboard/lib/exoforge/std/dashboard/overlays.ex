@@ -527,11 +527,11 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                 <button
                   type="button"
                   phx-click="set_settings_tab"
-                  phx-value-tab="sdks"
-                  class={"w-full text-left px-2.5 py-2 rounded-xl font-bold flex items-center gap-2 transition-all #{if @settings_tab == "sdks", do: "bg-white text-primary-700 shadow-sm border border-gray-200/80", else: "text-gray-600 hover:text-gray-900 hover:bg-white/60"}"}
+                  phx-value-tab="visual"
+                  class={"w-full text-left px-2.5 py-2 rounded-xl font-bold flex items-center gap-2 transition-all #{if @settings_tab == "visual", do: "bg-white text-primary-700 shadow-sm border border-gray-200/80", else: "text-gray-600 hover:text-gray-900 hover:bg-white/60"}"}
                 >
-                  <span>📦</span>
-                  <span>Client SDKs</span>
+                  <span>🌓</span>
+                  <span>Visual Settings</span>
                 </button>
               </div>
             </div>
@@ -565,13 +565,15 @@ defmodule Exoforge.Std.Dashboard.Overlays do
           </div>
 
           <div class="pt-3 border-t border-gray-200/60 px-2 text-[10px] text-gray-400 space-y-0.5">
-            <div><span>Node: </span><span class="font-mono text-gray-600"><%= @node_name %></span></div>
-            <div><span>Cluster: </span><span class="font-mono text-gray-600">v<%= @overview[:version] || "1.0.0" %> (<%= @overview[:commit_hash] || "dev" %>)</span></div>
+            <div class="truncate"><span>Node: </span><span class="font-mono text-gray-600"><%= @node_name %></span></div>
+            <div class="truncate" title={@overview[:commit_hash]}>
+              <span>Cluster: </span><span class="font-mono text-gray-600">v<%= @overview[:version] || "1.0.0" %> (<%= String.slice(to_string(@overview[:commit_hash] || "dev"), 0, 7) %>)</span>
+            </div>
           </div>
         </div>
 
         <!-- Right Content Pane -->
-        <div class="flex-1 p-6 space-y-4 overflow-y-auto">
+        <div class="flex-1 p-6 space-y-4 overflow-y-auto min-w-0">
           <%= if @settings_tab == "project" do %>
             <div class="space-y-4">
               <div>
@@ -592,21 +594,23 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   <input type="text" value={@project_name} readonly class="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg font-mono text-xs" />
                 </div>
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
-                  <div class="p-2.5 bg-white border border-gray-200 rounded-lg">
-                    <span class="text-[10px] font-bold text-gray-400 uppercase">Version</span>
-                    <p class="text-sm font-bold text-gray-800 font-mono mt-0.5">v<%= @overview[:version] || "1.0.0" %></p>
+                  <div class="p-2.5 bg-white border border-gray-200 rounded-lg min-w-0">
+                    <span class="text-[10px] font-bold text-gray-400 uppercase block">Version</span>
+                    <p class="text-sm font-bold text-gray-800 font-mono mt-0.5 truncate">v<%= @overview[:version] || "1.0.0" %></p>
                   </div>
-                  <div class="p-2.5 bg-white border border-gray-200 rounded-lg">
-                    <span class="text-[10px] font-bold text-gray-400 uppercase">Commit Hash</span>
-                    <p class="text-sm font-bold text-primary-700 font-mono mt-0.5" title={@overview[:commit_hash]}><%= @overview[:commit_hash] || "dev" %></p>
+                  <div class="p-2.5 bg-white border border-gray-200 rounded-lg min-w-0 overflow-hidden">
+                    <span class="text-[10px] font-bold text-gray-400 uppercase block">Commit Hash</span>
+                    <p class="text-sm font-bold text-primary-700 font-mono mt-0.5 truncate" title={@overview[:commit_hash]}>
+                      <%= String.slice(to_string(@overview[:commit_hash] || "dev"), 0, 7) %>
+                    </p>
                   </div>
-                  <div class="p-2.5 bg-white border border-gray-200 rounded-lg">
-                    <span class="text-[10px] font-bold text-gray-400 uppercase">Build Date</span>
-                    <p class="text-xs font-bold text-gray-800 font-mono mt-1" title={@overview[:build_date]}><%= @overview[:build_date] || "—" %></p>
+                  <div class="p-2.5 bg-white border border-gray-200 rounded-lg min-w-0">
+                    <span class="text-[10px] font-bold text-gray-400 uppercase block">Build Date</span>
+                    <p class="text-xs font-bold text-gray-800 font-mono mt-1 truncate" title={@overview[:build_date]}><%= @overview[:build_date] || "—" %></p>
                   </div>
-                  <div class="p-2.5 bg-white border border-gray-200 rounded-lg">
-                    <span class="text-[10px] font-bold text-gray-400 uppercase">Extensions</span>
-                    <p class="text-sm font-bold text-gray-800 font-mono mt-0.5"><%= length(@overview.extensions) %></p>
+                  <div class="p-2.5 bg-white border border-gray-200 rounded-lg min-w-0">
+                    <span class="text-[10px] font-bold text-gray-400 uppercase block">Extensions</span>
+                    <p class="text-sm font-bold text-gray-800 font-mono mt-0.5 truncate"><%= length(@overview.extensions) %></p>
                   </div>
                 </div>
               </div>
@@ -729,73 +733,58 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             </div>
           <% end %>
 
-          <%= if @settings_tab == "sdks" do %>
-            <% sdk_files =
-                 case Exoforge.ActionDispatcher.dispatch(:file_bucket, :list_files, %{"bucket" => "sdk"}) do
-                   {:ok, %{files: files}} when is_list(files) -> files
-                   _ -> []
-                 end %>
+          <%= if @settings_tab == "visual" do %>
             <div class="space-y-4">
-              <div class="flex items-center justify-between">
-                <div>
-                  <h4 class="text-sm font-bold text-gray-900 flex items-center gap-2">
-                    <span>📦</span>
-                    <span>Engine &amp; Client SDK Packages</span>
-                  </h4>
-                  <p class="text-xs text-gray-500 mt-0.5">Served from the <code class="font-mono text-primary-700">sdk</code> File Bucket for Unity Package Manager (UPM) and game engines.</p>
-                </div>
-                <button
-                  type="button"
-                  phx-click="switch_tab"
-                  phx-value-tab="file_bucket"
-                  class="px-2.5 py-1.5 text-xs font-bold text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-200 rounded-lg transition-colors"
-                >
-                  Open File Bucket &rarr;
-                </button>
+              <div>
+                <h4 class="text-sm font-bold text-gray-900 flex items-center gap-2">
+                  <span>🌓</span>
+                  <span>Visual Settings &amp; Theme</span>
+                </h4>
+                <p class="text-xs text-gray-500 mt-0.5">Configure the Studio interface appearance and color scheme.</p>
               </div>
 
-              <%= if sdk_files == [] do %>
-                <div class="bg-gray-50 p-6 rounded-xl border border-gray-200/80 text-center space-y-2">
-                  <p class="font-bold text-gray-800">No SDK packages in the <code class="font-mono">sdk</code> bucket yet</p>
-                  <p class="text-[11px] text-gray-500">Run <code class="font-mono bg-white px-1.5 py-0.5 rounded border">just pack-unity</code> or upload an engine archive to the <code class="font-mono">sdk</code> bucket in File Bucket.</p>
+              <div class="space-y-3 bg-gray-50 p-4 rounded-xl border border-gray-200/80">
+                <div class="flex items-center justify-between p-3.5 bg-white border border-gray-200 rounded-xl">
+                  <div>
+                    <span class="font-bold text-gray-800 block">Studio Color Theme</span>
+                    <p class="text-[11px] text-gray-500 mt-0.5">Switch between Unity-inspired Dark Mode and Daylight Mode.</p>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onclick="window.ExoforgeTheme && window.ExoforgeTheme.set('dark')"
+                      class="px-3 py-1.5 rounded-lg font-bold text-xs bg-gray-900 text-white hover:bg-gray-800 border border-gray-700 transition-colors flex items-center gap-1.5"
+                    >
+                      <span>🌙</span>
+                      <span>Dark</span>
+                    </button>
+                    <button
+                      type="button"
+                      onclick="window.ExoforgeTheme && window.ExoforgeTheme.set('light')"
+                      class="px-3 py-1.5 rounded-lg font-bold text-xs bg-white text-gray-800 hover:bg-gray-100 border border-gray-300 transition-colors flex items-center gap-1.5"
+                    >
+                      <span>☀️</span>
+                      <span>Light</span>
+                    </button>
+                    <button
+                      type="button"
+                      onclick="window.ExoforgeTheme && window.ExoforgeTheme.toggle()"
+                      title="Toggle Dark / Light Theme"
+                      class="px-3 py-1.5 rounded-lg font-bold text-xs bg-primary-600 hover:bg-primary-700 text-white transition-colors flex items-center gap-1.5"
+                    >
+                      <span>🌓</span>
+                      <span>Toggle Theme</span>
+                    </button>
+                  </div>
                 </div>
-              <% else %>
-                <div class="space-y-2.5">
-                  <%= for file <- sdk_files do %>
-                    <% engine = get_in(file, ["metadata", "engine"]) || "unity" %>
-                    <div class="p-3.5 bg-gray-50 rounded-xl border border-gray-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div class="space-y-1 min-w-0">
-                        <div class="flex items-center gap-2">
-                          <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-primary-100 text-primary-800 border border-primary-200 font-mono">
-                            <%= engine %>
-                          </span>
-                          <span class="font-bold text-gray-900 font-mono truncate"><%= file["filename"] %></span>
-                        </div>
-                        <p class="text-[11px] text-gray-500 font-mono truncate">
-                          URL: <code class="text-gray-700 select-all">/api/files/sdk/<%= engine %></code> &bull; <code class="text-gray-700 select-all"><%= file["url"] %></code>
-                        </p>
-                      </div>
-                      <div class="flex items-center gap-2 shrink-0">
-                        <a
-                          href={file["url"]}
-                          download={file["filename"]}
-                          target="_blank"
-                          class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg transition-colors"
-                        >
-                          ⬇️ Download
-                        </a>
-                      </div>
-                    </div>
-                  <% end %>
-                </div>
-              <% end %>
+              </div>
             </div>
           <% end %>
 
-          <%= if @settings_tab == "http" do %>
-            <% mode = @cors_config["mode"] || "relaxed" %>
-            <% origins = @cors_config["allowed_origins"] || "*" %>
-            <% allow_creds = @cors_config["allow_credentials"] != false %>
+          <%= if @settings_tab in ["http", "cors"] do %>
+            <% mode = to_string(@cors_config["mode"] || @cors_config[:mode] || "relaxed") %>
+            <% origins = to_string(@cors_config["allowed_origins"] || @cors_config[:allowed_origins] || "*") %>
+            <% allow_creds = Map.get(@cors_config, "allow_credentials", Map.get(@cors_config, :allow_credentials, true)) != false %>
             <div class="space-y-4">
               <div>
                 <h4 class="text-sm font-bold text-gray-900 flex items-center gap-2">
@@ -805,16 +794,16 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                 <p class="text-xs text-gray-500 mt-0.5">Control Cross-Origin Resource Sharing (CORS) for Unity WebGL, browser clients, and external web APIs.</p>
               </div>
 
-              <form phx-submit="save_cors_settings" class="space-y-4">
+              <form id="cors_settings_form" phx-change="change_cors_settings" phx-submit="save_cors_settings" class="space-y-4">
                 <div class="bg-gray-50 p-4 rounded-xl border border-gray-200/80 space-y-3">
                   <span class="font-bold text-gray-800 text-xs uppercase tracking-wider">CORS Access Policy</span>
 
                   <div class="grid grid-cols-1 md:grid-cols-3 gap-2.5 pt-1">
                     <!-- Relaxed Mode -->
-                    <label class={"relative flex flex-col p-3 rounded-xl border cursor-pointer transition-all #{if mode == "relaxed", do: "bg-purple-50/60 border-purple-300 ring-1 ring-purple-400", else: "bg-white border-gray-200 hover:border-gray-300"}"}>
+                    <label id="cors-policy-relaxed" class={"relative flex flex-col p-3 rounded-xl border cursor-pointer transition-all #{if mode == "relaxed", do: "bg-purple-50 border-purple-500 ring-2 ring-purple-500 shadow-xs", else: "bg-white border-gray-200 hover:border-gray-300 opacity-80 hover:opacity-100"}"}>
                       <div class="flex items-center gap-2">
                         <input type="radio" name="mode" value="relaxed" checked={mode == "relaxed"} class="text-purple-600 focus:ring-purple-500" />
-                        <span class="font-bold text-gray-900 text-xs">Relaxed (Wildcard)</span>
+                        <span class={"font-bold text-xs #{if mode == "relaxed", do: "text-purple-700", else: "text-gray-900"}"}>Relaxed (Wildcard)</span>
                       </div>
                       <p class="text-[11px] text-gray-500 mt-1.5 leading-snug">
                         Accepts requests from any origin. Recommended for <strong>Unity WebGL builds</strong>, itch.io, and external web dev.
@@ -822,10 +811,10 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                     </label>
 
                     <!-- Whitelist Mode -->
-                    <label class={"relative flex flex-col p-3 rounded-xl border cursor-pointer transition-all #{if mode == "whitelist", do: "bg-purple-50/60 border-purple-300 ring-1 ring-purple-400", else: "bg-white border-gray-200 hover:border-gray-300"}"}>
+                    <label id="cors-policy-whitelist" class={"relative flex flex-col p-3 rounded-xl border cursor-pointer transition-all #{if mode == "whitelist", do: "bg-purple-50 border-purple-500 ring-2 ring-purple-500 shadow-xs", else: "bg-white border-gray-200 hover:border-gray-300 opacity-80 hover:opacity-100"}"}>
                       <div class="flex items-center gap-2">
                         <input type="radio" name="mode" value="whitelist" checked={mode == "whitelist"} class="text-purple-600 focus:ring-purple-500" />
-                        <span class="font-bold text-gray-900 text-xs">Allowed Origins</span>
+                        <span class={"font-bold text-xs #{if mode == "whitelist", do: "text-purple-700", else: "text-gray-900"}"}>Allowed Origins</span>
                       </div>
                       <p class="text-[11px] text-gray-500 mt-1.5 leading-snug">
                         Restricts cross-origin requests to explicitly allowed domains.
@@ -833,10 +822,10 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                     </label>
 
                     <!-- Strict Mode -->
-                    <label class={"relative flex flex-col p-3 rounded-xl border cursor-pointer transition-all #{if mode == "strict", do: "bg-purple-50/60 border-purple-300 ring-1 ring-purple-400", else: "bg-white border-gray-200 hover:border-gray-300"}"}>
+                    <label id="cors-policy-strict" class={"relative flex flex-col p-3 rounded-xl border cursor-pointer transition-all #{if mode == "strict", do: "bg-purple-50 border-purple-500 ring-2 ring-purple-500 shadow-xs", else: "bg-white border-gray-200 hover:border-gray-300 opacity-80 hover:opacity-100"}"}>
                       <div class="flex items-center gap-2">
                         <input type="radio" name="mode" value="strict" checked={mode == "strict"} class="text-purple-600 focus:ring-purple-500" />
-                        <span class="font-bold text-gray-900 text-xs">Strict (Disabled)</span>
+                        <span class={"font-bold text-xs #{if mode == "strict", do: "text-purple-700", else: "text-gray-900"}"}>Strict (Disabled)</span>
                       </div>
                       <p class="text-[11px] text-gray-500 mt-1.5 leading-snug">
                         Blocks all cross-origin requests. Only same-origin calls are permitted.
@@ -853,10 +842,17 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                       type="text"
                       name="allowed_origins"
                       value={origins}
+                      disabled={mode in ["strict", "relaxed"]}
                       placeholder="e.g. https://mygame.com, https://play.itch.io, http://localhost:3000"
-                      class="w-full text-xs px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 font-mono"
+                      class={"w-full text-xs px-3 py-2 border rounded-lg font-mono transition-opacity #{if mode in ["strict", "relaxed"], do: "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed opacity-60", else: "bg-white border-gray-300 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"}"}
                     />
-                    <p class="text-[11px] text-gray-500 mt-1">Leave as <code>*</code> to permit all origins when in Relaxed mode.</p>
+                    <p class="text-[11px] text-gray-500 mt-1">
+                      <%= if mode in ["strict", "relaxed"] do %>
+                        Select <strong>Allowed Origins</strong> mode above to edit custom origin domains.
+                      <% else %>
+                        Specify comma-separated origin URLs allowed to access HTTP endpoints.
+                      <% end %>
+                    </p>
                   </div>
 
                   <!-- Credentials Checkbox -->
@@ -896,7 +892,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
           <% end %>
 
           <!-- Dynamic Plugin Settings Tab Fallback -->
-          <%= if @settings_tab not in ["project", "environments", "sdks", "database", "auth", "http"] do %>
+          <%= if @settings_tab not in ["project", "environments", "visual", "database", "auth", "http"] do %>
             <% active_hook = Enum.find(@settings_hooks, fn h -> to_string(h.id) == @settings_tab end) %>
             <%= if active_hook do %>
               <%= cond do %>
@@ -1123,6 +1119,111 @@ defmodule Exoforge.Std.Dashboard.Overlays do
 
         <div class="pt-2 text-center text-[10px] text-gray-400 font-mono">
           Exoforge v<%= Exoforge.BuildInfo.version() %> (<%= Exoforge.BuildInfo.commit_hash() %>)
+        </div>
+      </div>
+    </.modal>
+    """
+  end
+
+  @doc """
+  Renders the Download SDK modal with available SDK packages and installation instructions.
+  """
+  attr(:open, :boolean, default: false)
+  attr(:on_close, :string, default: "close_sdk_modal")
+
+  def sdk_download_modal(assigns) do
+    sdk_files =
+      if assigns.open do
+        case Exoforge.ActionDispatcher.dispatch(:file_bucket, :list_files, %{"bucket" => "sdk"}) do
+          {:ok, %{files: files}} when is_list(files) -> files
+          _ -> []
+        end
+      else
+        []
+      end
+
+    assigns = assign(assigns, :sdk_files, sdk_files)
+
+    ~H"""
+    <.modal
+      id="sdk_download_modal"
+      open={@open}
+      max_width="max-w-2xl"
+      title="Download Engine & Client SDKs"
+      subtitle="Connect Unity or custom C# game clients to this Exoforge cluster."
+      on_close={@on_close}
+    >
+      <div class="space-y-4 text-xs">
+        <div class="space-y-2.5">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-gray-800 uppercase tracking-wider text-[11px]">Available SDK Packages (<%= length(@sdk_files) %>)</span>
+            <button
+              type="button"
+              phx-click="switch_tab"
+              phx-value-tab="file_bucket"
+              class="text-[11px] font-bold text-primary-600 hover:text-primary-700"
+            >
+              Open File Bucket &rarr;
+            </button>
+          </div>
+
+          <%= if @sdk_files == [] do %>
+            <div class="bg-gray-50 p-5 rounded-xl border border-gray-200/80 text-center space-y-1.5">
+              <p class="font-bold text-gray-800">No SDK packages in the <code class="font-mono">sdk</code> bucket yet</p>
+              <p class="text-[11px] text-gray-500">
+                Run <code class="font-mono bg-white px-1.5 py-0.5 rounded border">just pack-unity</code> or upload an engine archive to the <code class="font-mono">sdk</code> bucket.
+              </p>
+            </div>
+          <% else %>
+            <div class="space-y-2 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
+              <%= for file <- @sdk_files do %>
+                <% engine = get_in(file, ["metadata", "engine"]) || "unity" %>
+                <div class="p-3.5 bg-gray-50 rounded-xl border border-gray-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div class="space-y-1 min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-primary-100 text-primary-800 border border-primary-200 font-mono">
+                        <%= engine %>
+                      </span>
+                      <span class="font-bold text-gray-900 font-mono truncate"><%= file["filename"] %></span>
+                    </div>
+                    <p class="text-[11px] text-gray-500 font-mono truncate">
+                      URL: <code class="text-gray-700 select-all">/api/files/sdk/<%= engine %></code> &bull; <code class="text-gray-700 select-all"><%= file["url"] %></code>
+                    </p>
+                  </div>
+                  <div class="flex items-center gap-2 shrink-0">
+                    <a
+                      href={file["url"]}
+                      download={file["filename"]}
+                      target="_blank"
+                      class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg transition-colors"
+                    >
+                      ⬇️ Download
+                    </a>
+                  </div>
+                </div>
+              <% end %>
+            </div>
+          <% end %>
+        </div>
+
+        <!-- Installation Instructions -->
+        <div class="p-4 bg-gray-50 rounded-xl border border-gray-200/80 space-y-3">
+          <span class="font-bold text-gray-800 uppercase tracking-wider text-[11px] block">Installation Instructions</span>
+
+          <div class="space-y-2 text-[11px] text-gray-600">
+            <div>
+              <span class="font-bold text-gray-800">1. Unity Package Manager (UPM)</span>
+              <p class="mt-0.5">Download the <code class="font-mono text-primary-700">com.exoforge.sdk-*.tgz</code> tarball above, then in Unity open <strong>Window &rarr; Package Manager &rarr; + &rarr; Add package from tarball...</strong> and select the downloaded file.</p>
+            </div>
+            <div>
+              <span class="font-bold text-gray-800">2. Configure Cluster Endpoint &amp; Generate Stubs</span>
+              <p class="mt-0.5">Open <strong>Exoforge &rarr; Studio</strong> in the Unity Editor toolbar, point the cluster URL to this server, and click <strong>Sync &amp; Generate Stubs</strong>.</p>
+            </div>
+            <div>
+              <span class="font-bold text-gray-800">3. Quick Connect in C#</span>
+              <pre class="mt-1 p-2.5 bg-gray-900 text-emerald-300 rounded-lg font-mono text-[10px] overflow-x-auto"><%= "var session = await ExoforgeSDK.Auth.LoginAnonymously();\nawait ExoforgeSDK.ConnectAsync();" %></pre>
+            </div>
+          </div>
         </div>
       </div>
     </.modal>

@@ -250,6 +250,11 @@ html:not(.light) .border-violet-300 {
   border-color: rgba(139, 92, 246, 0.35) !important;
 }
 
+html:not(.light) .border-purple-500 {
+  border-color: #a855f7 !important;
+  box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.25) !important;
+}
+
 html:not(.light) .bg-emerald-50,
 html:not(.light) .bg-emerald-50\/80,
 html:not(.light) .bg-emerald-100 {

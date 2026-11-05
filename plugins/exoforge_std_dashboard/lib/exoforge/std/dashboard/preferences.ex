@@ -12,17 +12,10 @@ defmodule Exoforge.Std.Dashboard.Preferences do
 
   @doc "Returns the pinned extension ids for an account."
   def pinned(player_id) when is_binary(player_id) and player_id != "" do
-    case store(:get, %{resource: @resource, id: player_id}) do
-      {:ok, %{row: row}} ->
-        raw = Map.get(row, "data") || Map.get(row, :data) || "[]"
-
-        case Jason.decode(raw) do
-          {:ok, list} when is_list(list) -> Enum.map(list, &to_string/1)
-          _ -> []
-        end
-
-      _ ->
-        []
+    case fetch_prefs(player_id) do
+      %{"pinned" => list} when is_list(list) -> Enum.map(list, &to_string/1)
+      list when is_list(list) -> Enum.map(list, &to_string/1)
+      _ -> []
     end
   end
 
@@ -31,18 +24,66 @@ defmodule Exoforge.Std.Dashboard.Preferences do
   @doc "Persists the pinned extension ids for an account."
   def put_pinned(player_id, pinned)
       when is_binary(player_id) and player_id != "" and is_list(pinned) do
-    # The result is returned rather than dropped. Discarding it meant a write that failed - a table
-    # with no unique key, say - looked exactly like one that worked.
+    prefs =
+      case fetch_prefs(player_id) do
+        %{} = map -> Map.put(map, "pinned", Enum.map(pinned, &to_string/1))
+        _ -> Enum.map(pinned, &to_string/1)
+      end
+
+    save_prefs(player_id, prefs)
+  end
+
+  def put_pinned(_player_id, _pinned), do: :ok
+
+  @doc "Returns the overview grid slot order for an account."
+  def overview_order(player_id) when is_binary(player_id) and player_id != "" do
+    case fetch_prefs(player_id) do
+      %{"overview_order" => list} when is_list(list) -> Enum.map(list, &to_string/1)
+      _ -> []
+    end
+  end
+
+  def overview_order(_player_id), do: []
+
+  @doc "Persists the overview grid slot order for an account."
+  def put_overview_order(player_id, order)
+      when is_binary(player_id) and player_id != "" and is_list(order) do
+    current =
+      case fetch_prefs(player_id) do
+        %{} = map -> map
+        list when is_list(list) -> %{"pinned" => Enum.map(list, &to_string/1)}
+        _ -> %{}
+      end
+
+    save_prefs(player_id, Map.put(current, "overview_order", Enum.map(order, &to_string/1)))
+  end
+
+  def put_overview_order(_player_id, _order), do: :ok
+
+  defp fetch_prefs(player_id) do
+    case store(:get, %{resource: @resource, id: player_id}) do
+      {:ok, %{row: row}} ->
+        raw = Map.get(row, "data") || Map.get(row, :data) || "[]"
+
+        case Jason.decode(raw) do
+          {:ok, decoded} -> decoded
+          _ -> []
+        end
+
+      _ ->
+        []
+    end
+  end
+
+  defp save_prefs(player_id, data) do
     store(:upsert, %{
       resource: @resource,
       attributes: %{
         "player_id" => player_id,
-        "data" => Jason.encode!(Enum.map(pinned, &to_string/1))
+        "data" => Jason.encode!(data)
       }
     })
   end
-
-  def put_pinned(_player_id, _pinned), do: :ok
 
   defp store(action, payload), do: ActionDispatcher.dispatch(:resource_store, action, payload)
 end

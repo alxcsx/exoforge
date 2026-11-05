@@ -68,7 +68,8 @@ defmodule Exoforge.DashboardTest do
 
       assert conn.status == 200
       assert String.contains?(conn.resp_body, "EXOFORGE")
-      assert String.contains?(conn.resp_body, "exoforge_std_database")
+      assert String.contains?(conn.resp_body, "Cluster Overview")
+      assert String.contains?(conn.resp_body, "Online / Faulty Extensions")
     end
 
     test "GET / redirects unauthenticated browsers to /login" do

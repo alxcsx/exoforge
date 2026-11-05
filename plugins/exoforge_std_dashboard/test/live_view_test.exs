@@ -271,11 +271,11 @@ defmodule Exoforge.DashboardLiveViewTest do
 
       assert html =~ "EXOFORGE"
       assert html =~ "Overview"
-      assert html =~ "Active Extensions"
-      assert html =~ "Declared Resources"
-      assert html =~ "Callable Actions"
-      assert html =~ "Cluster Status"
-      assert html =~ "Live Game Features"
+      assert html =~ "Event &amp; Action Throughput"
+      assert html =~ "Error &amp; Exception Graph"
+      assert html =~ "Server State"
+      assert html =~ "Online / Faulty Extensions"
+      assert html =~ "Download SDK"
 
       # Start from a clean pinned list (other tests may have pinned up to @max_pinned).
       for id <- Exoforge.Std.Dashboard.Preferences.pinned("admin") do
@@ -872,7 +872,7 @@ defmodule Exoforge.DashboardLiveViewTest do
       assert_patched(view, "/")
     end
 
-    test "renders dark-by-default theme engine, favicon, theme toggle, and progressive disclosure folds" do
+    test "renders dark-by-default theme engine, favicon, visual settings theme toggle, and unfolded system plugins" do
       conn =
         build_conn()
         |> Plug.Test.init_test_session(%{
@@ -889,15 +889,137 @@ defmodule Exoforge.DashboardLiveViewTest do
       assert page_html =~ ~s(href="/favicon.svg")
       assert page_html =~ ~s(href="/favicon.ico")
 
-      # LiveView renders theme toggle and collapsible technical folds
+      # Header no longer has the theme toggle button; it lives in Settings -> Visual Settings
       {:ok, view, html} = live(conn)
-      assert html =~ "Toggle Dark / Light Theme"
-      assert html =~ ~s(class="exo-fold)
+      refute html =~ "Toggle Dark / Light Theme"
 
-      # Extensions Registry uses exo-fold for technical specs and system plugins
+      settings_html = render_click(view, "open_settings", %{})
+      assert settings_html =~ "Visual Settings"
+      refute settings_html =~ ~s(phx-value-tab="sdks")
+      assert settings_html =~ "Commit Hash"
+      assert settings_html =~ Exoforge.BuildInfo.version()
+
+      visual_html = render_click(view, "set_settings_tab", %{"tab" => "visual"})
+      assert visual_html =~ "Studio Color Theme"
+      assert visual_html =~ "Toggle Theme"
+      _ = render_click(view, "close_settings", %{})
+
+      # Extensions Registry renders technical badges outside the fold, unfolded system plugins, and clickable cards
       ext_html = render_click(view, "switch_tab", %{"tab" => "apps"})
       assert ext_html =~ "Technical Specs"
       assert ext_html =~ "System Plugins &amp; Headless Services"
+      assert ext_html =~ ~s(phx-click="switch_tab")
+    end
+
+    test "overview 4-slot grid supports slot rearrangement, SDK modal popup, and faulty extension warnings" do
+      # Register a faulty plugin with infinite_loop flag and a dynamic overview widget
+      :ets.insert(:exo_plugins_mem, {
+        :looping_economy_ext,
+        %{
+          id: :looping_economy_ext,
+          name: "Looping Economy Extension",
+          version: "1.0.0",
+          type: :native,
+          infinite_loop: true,
+          provides: [:economy],
+          dependencies: [],
+          resources: [],
+          events: [],
+          ui_hooks: %{
+            overview_widget: [
+              %{
+                id: "economy_money_graph",
+                title: "Economy Money Graph",
+                subtitle: "Live gold sink/faucet balance",
+                icon: "💰",
+                slot_size: "2x1",
+                type: :stat_list,
+                items: [%{label: "Gold Minted", value: "12,400"}]
+              }
+            ]
+          }
+        }
+      })
+
+      on_exit(fn ->
+        try do
+          :ets.delete(:exo_plugins_mem, :looping_economy_ext)
+        rescue
+          _ -> :ok
+        end
+      end)
+
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{
+          "admin_player_id" => "grid_test_admin",
+          "admin_scopes" => ["admin"]
+        })
+
+      {:ok, view, html} = live(conn, "/")
+
+      # Verify 4-slot grid elements and dynamic widget
+      assert html =~ ~s(id="slot-event_graph")
+      assert html =~ ~s(id="slot-error_graph")
+      assert html =~ ~s(id="slot-server_state")
+      assert html =~ ~s(id="slot-extension_health")
+      assert html =~ ~s(id="slot-download_sdk")
+      assert html =~ "Economy Money Graph"
+      assert html =~ "Infinite loop / log flood detected"
+
+      # Rearrange slot: move event_graph right (after error_graph)
+      reordered_html =
+        render_click(view, "move_overview_slot", %{"id" => "event_graph", "dir" => "next"})
+
+      {err_pos, _} = :binary.match(reordered_html, ~s(id="slot-error_graph"))
+      {ev_pos, _} = :binary.match(reordered_html, ~s(id="slot-event_graph"))
+      assert err_pos < ev_pos
+
+      saved_order = Exoforge.Std.Dashboard.Preferences.overview_order("grid_test_admin")
+      assert Enum.at(saved_order, 0) == "error_graph"
+      assert Enum.at(saved_order, 1) == "event_graph"
+
+      # Open SDK Download Modal from Overview tab
+      sdk_html = render_click(view, "open_sdk_modal", %{})
+      assert sdk_html =~ "Download Engine &amp; Client SDKs"
+      assert sdk_html =~ "Installation Instructions"
+      assert sdk_html =~ "Unity Package Manager (UPM)"
+    end
+
+    test "CORS access policy controller updates highlight and disables allowed_origins when relaxed or strict" do
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{
+          "admin_player_id" => "admin",
+          "admin_scopes" => ["admin"]
+        })
+
+      {:ok, view, _html} = live(conn, "/")
+      _ = render_click(view, "open_settings", %{})
+      cors_html = render_click(view, "set_settings_tab", %{"tab" => "cors"})
+
+      # Default mode is relaxed: allowed_origins input should be disabled
+      assert cors_html =~ ~s(id="cors-policy-relaxed")
+      assert cors_html =~ ~s(disabled)
+
+      # Switch to whitelist: allowed_origins input is enabled (not disabled)
+      whitelist_html =
+        render_change(view, "change_cors_settings", %{
+          "mode" => "whitelist",
+          "allowed_origins" => "https://game.example.com"
+        })
+
+      assert whitelist_html =~ "https://game.example.com"
+      refute whitelist_html =~ ~r/<input[^>]*name="allowed_origins"[^>]*disabled/
+
+      # Switch to strict: allowed_origins input is disabled again
+      strict_html =
+        render_change(view, "change_cors_settings", %{
+          "mode" => "strict",
+          "allowed_origins" => "https://game.example.com"
+        })
+
+      assert strict_html =~ ~r/<input[^>]*name="allowed_origins"[^>]*disabled/
     end
   end
 end
