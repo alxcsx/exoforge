@@ -871,5 +871,33 @@ defmodule Exoforge.DashboardLiveViewTest do
       render_click(view, "switch_tab", %{"tab" => "overview"})
       assert_patched(view, "/")
     end
+
+    test "renders dark-by-default theme engine, favicon, theme toggle, and progressive disclosure folds" do
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{
+          "admin_player_id" => "admin",
+          "admin_scopes" => ["admin"]
+        })
+
+      conn = get(conn, "/")
+      page_html = html_response(conn, 200)
+
+      # Default dark mode class on <html> and synchronous theme boot script
+      assert page_html =~ ~s(<html lang="en" class="dark">)
+      assert page_html =~ "window.ExoforgeTheme"
+      assert page_html =~ ~s(href="/favicon.svg")
+      assert page_html =~ ~s(href="/favicon.ico")
+
+      # LiveView renders theme toggle and collapsible technical folds
+      {:ok, view, html} = live(conn)
+      assert html =~ "Toggle Dark / Light Theme"
+      assert html =~ ~s(class="exo-fold)
+
+      # Extensions Registry uses exo-fold for technical specs and system plugins
+      ext_html = render_click(view, "switch_tab", %{"tab" => "apps"})
+      assert ext_html =~ "Technical Specs"
+      assert ext_html =~ "System Plugins &amp; Headless Services"
+    end
   end
 end

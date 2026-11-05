@@ -6,49 +6,82 @@ defmodule Exoforge.Std.Dashboard.Components do
   use Phoenix.Component
 
   @doc """
-  Renders a top metric card with value, delta change, and iconography.
+  Renders a compact, icon-forward status card with title, value, and optional badge.
   """
   attr(:title, :string, required: true)
   attr(:value, :string, required: true)
   attr(:delta, :string, default: nil)
   attr(:delta_positive, :boolean, default: true)
   attr(:subtitle, :string, default: nil)
+  attr(:icon, :string, default: nil)
   attr(:icon_svg, :string, default: nil)
   slot(:inner_block)
 
   def metric_card(assigns) do
     ~H"""
-    <div class="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-card hover:shadow-md transition-shadow">
-      <div class="flex items-center justify-between mb-2">
-        <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider"><%= @title %></span>
-        <div class="w-8 h-8 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center">
-          <%= if @icon_svg do %>
+    <div
+      class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-card hover:border-purple-300 transition-all flex items-center gap-3.5"
+      title={@subtitle}
+    >
+      <div class="w-11 h-11 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center shrink-0 text-lg border border-primary-200">
+        <%= cond do %>
+          <% @icon_svg -> %>
             <%= Phoenix.HTML.raw(Exoforge.Std.Dashboard.IconSanitizer.sanitize(@icon_svg)) %>
-          <% else %>
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <% @icon -> %>
+            <span><%= @icon %></span>
+          <% true -> %>
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
             </svg>
-          <% end %>
-        </div>
-      </div>
-      <div class="flex items-baseline gap-2">
-        <span class="text-2xl font-black text-gray-900 tracking-tight"><%= @value %></span>
-        <%= if @delta do %>
-          <span class={"text-xs font-bold px-1.5 py-0.5 rounded-md #{if @delta_positive, do: "bg-emerald-50 text-emerald-700", else: "bg-red-50 text-red-700"}"}>
-            <%= @delta %>
-          </span>
         <% end %>
       </div>
-      <%= if @subtitle do %>
-        <p class="text-[11px] text-gray-400 mt-1 font-medium"><%= @subtitle %></p>
-      <% end %>
-      <%= render_slot(@inner_block) %>
+      <div class="min-w-0 flex-1">
+        <div class="flex items-center justify-between gap-2">
+          <span class="text-[11px] font-bold text-gray-500 uppercase tracking-wider truncate"><%= @title %></span>
+          <%= if @delta do %>
+            <span class={"text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 border #{if @delta_positive, do: "bg-emerald-50 text-emerald-700 border-emerald-200", else: "bg-red-50 text-red-700 border-red-200"}"}>
+              <%= @delta %>
+            </span>
+          <% end %>
+        </div>
+        <div class="text-lg font-extrabold text-gray-900 tracking-tight truncate mt-0.5"><%= @value %></div>
+        <%= render_slot(@inner_block) %>
+      </div>
     </div>
     """
   end
 
   @doc """
-  Renders a status badge with matching color scheme.
+  Renders a progressive-disclosure collapsible fold for technical metadata and diagnostics.
+  """
+  attr(:title, :string, default: "Technical Details")
+  attr(:icon, :string, default: "⚙️")
+  attr(:badge, :string, default: nil)
+  attr(:open, :boolean, default: false)
+  slot(:inner_block, required: true)
+
+  def tech_fold(assigns) do
+    ~H"""
+    <details class="exo-fold" open={@open}>
+      <summary>
+        <span class="flex items-center gap-1.5">
+          <span><%= @icon %></span>
+          <span><%= @title %></span>
+          <%= if @badge do %>
+            <span class="px-1.5 py-0.2 rounded-full bg-gray-100 text-gray-600 font-mono text-[10px]"><%= @badge %></span>
+          <% end %>
+        </span>
+        <span class="exo-fold-chevron">▶</span>
+      </summary>
+      <div class="exo-fold-body">
+        <%= render_slot(@inner_block) %>
+      </div>
+    </details>
+    """
+  end
+
+  @doc """
+  Renders astatus badge with matching color scheme.
   """
   attr(:status, :string, default: "active")
   attr(:label, :string, default: nil)
@@ -177,7 +210,7 @@ defmodule Exoforge.Std.Dashboard.Components do
       <div class="fixed inset-0 z-50 overflow-hidden" role="dialog" aria-modal="true">
         <!-- Backdrop -->
         <div
-          class="fixed inset-0 bg-gray-900/40 backdrop-blur-sm transition-opacity animate-fade-in"
+          class="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity animate-fade-in"
           phx-click={@on_close}
         ></div>
 
@@ -305,12 +338,12 @@ defmodule Exoforge.Std.Dashboard.Components do
         <div class="min-h-screen px-4 text-center flex items-center justify-center">
           <!-- Backdrop -->
           <div
-            class="fixed inset-0 bg-gray-900/40 backdrop-blur-sm transition-opacity"
+            class="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
             phx-click={@on_close}
           ></div>
 
           <!-- Dialog Box -->
-          <div class={"relative bg-white rounded-2xl #{@max_width} w-full p-6 text-left shadow-2xl border border-gray-100 z-10 animate-fade-in"}>
+          <div class={"relative bg-white rounded-2xl #{@max_width} w-full p-6 text-left shadow-2xl border border-gray-200 z-10 animate-fade-in"}>
             <div class="flex items-center justify-between pb-3 border-b border-gray-100">
               <div>
                 <h3 class="font-bold text-gray-900 text-base"><%= @title %></h3>
@@ -364,7 +397,7 @@ defmodule Exoforge.Std.Dashboard.Components do
     ~H"""
     <%= if @open do %>
       <div
-        class="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+        class="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
         role="dialog"
         aria-modal="true"
       >

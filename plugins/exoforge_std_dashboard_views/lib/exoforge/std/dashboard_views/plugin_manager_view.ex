@@ -463,63 +463,65 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
       <% end %>
 
       <!-- Metric Cards Grid -->
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-5">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <!-- 1. Installed Plugins -->
-        <div class="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm">
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Installed Plugins</span>
-            <span class="text-lg">📦</span>
+        <div class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title="Modular service extensions">
+          <div class="w-11 h-11 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center text-xl shrink-0">
+            📦
           </div>
-          <div class="flex items-baseline gap-2">
-            <span class="text-2xl font-black text-gray-900"><%= @total_plugins %></span>
-            <span class="text-xs font-bold px-1.5 py-0.5 rounded-md bg-violet-50 text-violet-700">
-              Active Extensions
-            </span>
+          <div class="min-w-0 flex-1">
+            <div class="text-xs font-semibold text-gray-500 truncate">Installed Plugins</div>
+            <div class="flex items-center gap-2 mt-0.5">
+              <span class="text-xl font-black text-gray-900"><%= @total_plugins %></span>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-50 text-violet-700">Active</span>
+            </div>
           </div>
-          <p class="text-[11px] text-gray-400 mt-1 font-medium">Modular service extensions</p>
         </div>
 
         <!-- 2. BEAM Memory & Processes -->
-        <div class="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm">
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">BEAM Memory &amp; Load</span>
-            <span class="text-lg">⚡</span>
+        <div class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title="Erlang memory allocated">
+          <div class="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl shrink-0">
+            ⚡
           </div>
-          <div class="flex items-baseline gap-2">
-            <span class="text-2xl font-black text-gray-900"><%= @memory_mb %> MB</span>
-            <span class="text-xs font-bold px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700">
-              <%= Map.get(@system_info, "process_count", "—") %> procs
-            </span>
+          <div class="min-w-0 flex-1">
+            <div class="text-xs font-semibold text-gray-500 truncate">BEAM Memory &amp; Load</div>
+            <div class="flex items-center gap-2 mt-0.5">
+              <span class="text-xl font-black text-gray-900"><%= @memory_mb %> MB</span>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">
+                <%= Map.get(@system_info, "process_count", "—") %> procs
+              </span>
+            </div>
           </div>
-          <p class="text-[11px] text-gray-400 mt-1 font-medium">Erlang memory allocated</p>
         </div>
 
         <!-- 3. Cluster Node & Uptime -->
-        <div class="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm">
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Cluster Node</span>
-            <span class="text-lg">🌐</span>
+        <div class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title={"Node: #{@node_name}"}>
+          <div class="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl shrink-0">
+            🌐
           </div>
-          <div class="flex items-baseline gap-2">
-            <span class="text-sm font-black font-mono text-gray-900 truncate max-w-[140px]" title={@node_name}><%= @node_name %></span>
-            <span class="text-xs font-bold px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-700"><%= @uptime %></span>
+          <div class="min-w-0 flex-1">
+            <div class="text-xs font-semibold text-gray-500 truncate">Cluster Node</div>
+            <div class="flex items-center gap-2 mt-0.5">
+              <span class="text-sm font-black font-mono text-gray-900 truncate max-w-[120px]"><%= @node_name %></span>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700"><%= @uptime %></span>
+            </div>
           </div>
-          <p class="text-[11px] text-gray-400 mt-1 font-medium">Distributed node uptime</p>
         </div>
 
         <!-- 4. Version & Engine -->
-        <div class="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm">
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Cluster Build</span>
-            <span class="text-lg">⚙️</span>
+        <div class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title={"OTP #{@otp_release} • Built #{Map.get(@system_info, "build_date", "—")}"}>
+          <div class="w-11 h-11 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center text-xl shrink-0">
+            ⚙️
           </div>
-          <div class="flex items-baseline gap-2">
-            <span class="text-xl font-black font-mono text-gray-900">v<%= Map.get(@system_info, "version", "1.0.0") %></span>
-            <span class="text-xs font-bold font-mono px-1.5 py-0.5 rounded-md bg-purple-50 text-purple-700" title={Map.get(@system_info, "build_date", "")}>
-              #<%= Map.get(@system_info, "commit_hash", "dev") %>
-            </span>
+          <div class="min-w-0 flex-1">
+            <div class="text-xs font-semibold text-gray-500 truncate">Cluster Build</div>
+            <div class="flex items-center gap-2 mt-0.5">
+              <span class="text-lg font-black font-mono text-gray-900">v<%= Map.get(@system_info, "version", "1.0.0") %></span>
+              <span class="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-purple-50 text-purple-700">
+                #<%= Map.get(@system_info, "commit_hash", "dev") %>
+              </span>
+            </div>
           </div>
-          <p class="text-[11px] text-gray-400 mt-1 font-medium">OTP <%= @otp_release %> &bull; Built <%= Map.get(@system_info, "build_date", "—") %></p>
         </div>
       </div>
 
@@ -629,7 +631,7 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
                     </td>
 
                     <td class="py-3 px-4 text-right">
-                      <div class="flex items-center justify-end gap-2">
+                      <div class="flex items-center justify-end gap-1.5">
                         <button
                           phx-click="open_focus"
                           phx-value-kind="plugin"
@@ -640,16 +642,24 @@ defmodule Exoforge.Std.DashboardViews.PluginManagerView do
                           Inspect
                         </button>
 
-                        <button
-                            phx-click="remove_plugin"
-                            phx-value-id={plugin["id"]}
-                            phx-target={@myself}
-                            data-confirm={"Are you sure you want to unload plugin #{plugin["id"]}?"}
-                            title="Unload and remove plugin from cluster"
-                            class="px-2.5 py-1 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-colors"
-                          >
-                            Remove
-                          </button>
+                        <details class="exo-menu">
+                          <summary class="px-2 py-1 text-xs font-bold text-gray-500 hover:text-gray-800 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg cursor-pointer">
+                            ⋯
+                          </summary>
+                          <div class="exo-menu-panel">
+                            <button
+                              type="button"
+                              phx-click="remove_plugin"
+                              phx-value-id={plugin["id"]}
+                              phx-target={@myself}
+                              data-confirm={"Are you sure you want to unload plugin #{plugin["id"]}?"}
+                              title="Unload and remove plugin from cluster"
+                              class="exo-menu-item exo-menu-danger"
+                            >
+                              <span>🗑</span> <span>Remove</span>
+                            </button>
+                          </div>
+                        </details>
                       </div>
                     </td>
                   </tr>

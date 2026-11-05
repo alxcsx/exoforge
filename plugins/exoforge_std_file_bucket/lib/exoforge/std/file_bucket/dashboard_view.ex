@@ -838,80 +838,99 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
 
                 <!-- Properties Details -->
                 <div class="space-y-3">
-                  <div>
-                    <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Filename</span>
-                    <p class="text-sm font-bold text-gray-900 break-all"><%= @selected_file["filename"] %></p>
-                  </div>
-
-                  <!-- File ID with Quick Copy -->
-                  <div>
-                    <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400">File Reference ID</span>
-                    <div class="flex items-center gap-2 mt-1">
-                      <code class="px-2.5 py-1 text-xs font-mono font-bold bg-violet-50 text-violet-700 rounded-lg border border-violet-100 select-all">
-                        <%= @selected_file["id"] %>
-                      </code>
-                      <button
-                        onclick={"navigator.clipboard.writeText('#{@selected_file["id"]}');"}
-                        class="text-xs px-2 py-1 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg font-semibold text-gray-600 transition-colors shadow-2xs"
-                        title="Copy ID"
-                      >
-                        📋 Copy
-                      </button>
-                    </div>
-                    <p class="text-[10px] text-gray-400 mt-1">Use this ID on any resource column tagged as <span class="font-mono text-gray-600">file_reference</span></p>
-                  </div>
-
-                  <div class="grid grid-cols-2 gap-3 pt-2 border-t border-gray-100">
+                  <div class="flex items-start justify-between gap-2">
                     <div>
-                      <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Bucket</span>
-                      <p class="text-xs font-semibold text-gray-800"><%= @selected_file["bucket"] %></p>
+                      <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Filename</span>
+                      <p class="text-sm font-bold text-gray-900 break-all"><%= @selected_file["filename"] %></p>
                     </div>
-                    <div>
-                      <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Size</span>
-                      <p class="text-xs font-semibold text-gray-800"><%= format_bytes(@selected_file["size_bytes"]) %></p>
-                    </div>
-                    <div>
-                      <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Content Type</span>
-                      <p class="text-xs font-mono text-gray-700 truncate" title={@selected_file["content_type"]}><%= @selected_file["content_type"] %></p>
-                    </div>
-                    <div>
-                      <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400">SHA-256</span>
-                      <p class="text-xs font-mono text-gray-500 truncate" title={@selected_file["sha256"]}><%= String.slice(to_string(@selected_file["sha256"] || ""), 0, 12) %>...</p>
+                    <div class="flex items-center gap-1.5 shrink-0">
+                      <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-100">
+                        <%= @selected_file["bucket"] %>
+                      </span>
+                      <span class="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                        <%= format_bytes(@selected_file["size_bytes"]) %>
+                      </span>
                     </div>
                   </div>
 
-                  <%= if is_map(@selected_file["metadata"]) and map_size(@selected_file["metadata"]) > 0 do %>
-                    <div class="pt-2 border-t border-gray-100">
-                      <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Metadata & Tags</span>
-                      <div class="flex flex-wrap gap-1 mt-1">
-                        <%= for {k, v} <- @selected_file["metadata"] do %>
-                          <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono bg-violet-50 text-violet-700 rounded-md border border-violet-100">
-                            <span class="text-gray-400"><%= k %>:</span> <%= to_string(v) %>
-                          </span>
-                        <% end %>
+                  <!-- Technical Metadata Fold -->
+                  <details class="exo-fold pt-1 border-t border-gray-100">
+                    <summary>
+                      <span>Technical Properties &amp; Reference ID</span>
+                      <span class="exo-chevron">▸</span>
+                    </summary>
+                    <div class="exo-fold-body space-y-3 pt-2">
+                      <!-- File ID with Quick Copy -->
+                      <div>
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400">File Reference ID</span>
+                        <div class="flex items-center gap-2 mt-1">
+                          <code class="px-2.5 py-1 text-xs font-mono font-bold bg-violet-50 text-violet-700 rounded-lg border border-violet-100 select-all">
+                            <%= @selected_file["id"] %>
+                          </code>
+                          <button
+                            onclick={"navigator.clipboard.writeText('#{@selected_file["id"]}');"}
+                            class="text-xs px-2 py-1 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg font-semibold text-gray-600 transition-colors shadow-2xs"
+                            title="Copy ID"
+                          >
+                            📋 Copy
+                          </button>
+                        </div>
+                        <p class="text-[10px] text-gray-400 mt-1">Use this ID on any resource column tagged as <span class="font-mono text-gray-600">file_reference</span></p>
+                      </div>
+
+                      <div class="grid grid-cols-2 gap-3 pt-2 border-t border-gray-100">
+                        <div>
+                          <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Bucket</span>
+                          <p class="text-xs font-semibold text-gray-800"><%= @selected_file["bucket"] %></p>
+                        </div>
+                        <div>
+                          <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Size</span>
+                          <p class="text-xs font-semibold text-gray-800"><%= format_bytes(@selected_file["size_bytes"]) %></p>
+                        </div>
+                        <div>
+                          <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Content Type</span>
+                          <p class="text-xs font-mono text-gray-700 truncate" title={@selected_file["content_type"]}><%= @selected_file["content_type"] %></p>
+                        </div>
+                        <div>
+                          <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400">SHA-256</span>
+                          <p class="text-xs font-mono text-gray-500 truncate" title={@selected_file["sha256"]}><%= String.slice(to_string(@selected_file["sha256"] || ""), 0, 12) %>...</p>
+                        </div>
+                      </div>
+
+                      <%= if is_map(@selected_file["metadata"]) and map_size(@selected_file["metadata"]) > 0 do %>
+                        <div class="pt-2 border-t border-gray-100">
+                          <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Metadata & Tags</span>
+                          <div class="flex flex-wrap gap-1 mt-1">
+                            <%= for {k, v} <- @selected_file["metadata"] do %>
+                              <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono bg-violet-50 text-violet-700 rounded-md border border-violet-100">
+                                <span class="text-gray-400"><%= k %>:</span> <%= to_string(v) %>
+                              </span>
+                            <% end %>
+                          </div>
+                        </div>
+                      <% end %>
+
+                      <!-- API URL -->
+                      <div class="pt-2 border-t border-gray-100">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Public HTTP URL</span>
+                        <div class="flex items-center gap-2 mt-1">
+                          <input
+                            type="text"
+                            readonly
+                            value={@selected_file["url"]}
+                            class="w-full text-xs font-mono bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1 text-gray-600 select-all"
+                          />
+                          <a
+                            href={@selected_file["url"]}
+                            target="_blank"
+                            class="px-2.5 py-1 text-xs font-bold text-violet-700 bg-violet-50 hover:bg-violet-100 rounded-lg border border-violet-100 shrink-0"
+                          >
+                            ↗ Open
+                          </a>
+                        </div>
                       </div>
                     </div>
-                  <% end %>
-
-                  <!-- API URL -->
-                  <div class="pt-2 border-t border-gray-100">
-                    <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Public HTTP URL</span>
-                    <div class="flex items-center gap-2 mt-1">
-                      <input
-                        type="text"
-                        readonly
-                        value={@selected_file["url"]}
-                        class="w-full text-xs font-mono bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1 text-gray-600 select-all"
-                      />
-                      <a
-                        href={@selected_file["url"]}
-                        target="_blank"
-                        class="px-2.5 py-1 text-xs font-bold text-violet-700 bg-violet-50 hover:bg-violet-100 rounded-lg border border-violet-100 shrink-0"
-                      >
-                        ↗ Open
-                      </a>
-                    </div>
-                  </div>
+                  </details>
                 </div>
               </div>
 

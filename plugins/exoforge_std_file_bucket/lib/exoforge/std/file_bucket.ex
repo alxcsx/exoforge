@@ -23,6 +23,7 @@ defmodule Exoforge.Std.FileBucket do
 
   def on_init(_manifest) do
     ensure_meta_table()
+    :ets.delete_all_objects(@meta_table)
     ensure_storage_dir()
     sync_disk_to_meta()
     seed_sdk_packages()

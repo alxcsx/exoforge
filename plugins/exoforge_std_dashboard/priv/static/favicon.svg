@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="exoGrad" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#8b5cf6"/>
+      <stop offset="50%" stop-color="#6d28d9"/>
+      <stop offset="100%" stop-color="#4c1d95"/>
+    </linearGradient>
+    <linearGradient id="exoAccent" x1="12" y1="12" x2="52" y2="52" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#ddd6fe"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="56" height="56" rx="14" fill="url(#exoGrad)"/>
+  <rect x="5" y="5" width="54" height="54" rx="13" stroke="#ffffff" stroke-opacity="0.18" stroke-width="2"/>
+  <!-- Stylized E + Forge spark -->
+  <path d="M18 19H36V25H25V29.5H34V35H25V39.5H36V45.5H18V19Z" fill="url(#exoAccent)"/>
+  <path d="M40 19H50L44.5 29.5H50L38.5 46L41.5 34H37L40 19Z" fill="#a7f3d0"/>
+</svg>

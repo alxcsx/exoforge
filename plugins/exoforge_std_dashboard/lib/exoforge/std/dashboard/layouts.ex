@@ -1,19 +1,36 @@
 defmodule Exoforge.Std.Dashboard.Layouts do
   @moduledoc """
   Root and application layout components for the Exoforge Game Producer & Designer Studio.
-  Design tokens for the Exoforge Studio shell.
+  Design tokens and Dark/Light theme engine for the Exoforge Studio shell.
   """
   use Phoenix.Component
 
   def root(assigns) do
     ~H"""
     <!DOCTYPE html>
-    <html lang="en">
+    <html lang="en" class="dark">
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta name="csrf-token" content={Plug.CSRFProtection.get_csrf_token()} />
         <title>EXOFORGE - Game Producer & Designer Studio</title>
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <link rel="alternate icon" href="/favicon.ico" />
+        <script>
+          (function() {
+            try {
+              var saved = localStorage.getItem('exo_theme') || 'dark';
+              var root = document.documentElement;
+              if (saved === 'light') {
+                root.classList.remove('dark');
+                root.classList.add('light');
+              } else {
+                root.classList.remove('light');
+                root.classList.add('dark');
+              }
+            } catch (e) {}
+          })();
+        </script>
         <link rel="stylesheet" href="/vendor/exoforge-studio.css">
         <!-- Tailwind CSS, vendored locally: instant load, no network dependency, and no
              third-party script the page does not control (M33 Fix 36) -->
@@ -21,6 +38,7 @@ defmodule Exoforge.Std.Dashboard.Layouts do
         <script>
           if (typeof tailwind !== 'undefined') {
             tailwind.config = {
+              darkMode: 'class',
               theme: {
                 extend: {
                   colors: {
@@ -44,7 +62,7 @@ defmodule Exoforge.Std.Dashboard.Layouts do
                   },
                   boxShadow: {
                     'mac': '0 20px 40px -15px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.06)',
-                    'card': '0 2px 10px -2px rgba(0, 0, 0, 0.04), 0 1px 4px -1px rgba(0, 0, 0, 0.03)'
+                    'card': 'var(--exo-shadow-card)'
                   }
                 }
               }
@@ -72,10 +90,10 @@ defmodule Exoforge.Std.Dashboard.Layouts do
             height: 5px;
           }
           .custom-scrollbar::-webkit-scrollbar-track {
-            background: rgba(243, 244, 246, 0.5);
+            background: transparent;
           }
           .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: #c4b5fd;
+            background: rgba(139, 92, 246, 0.35);
             border-radius: 9999px;
           }
           .prof-tab-btn { justify-content: flex-start; text-align: left; }
@@ -85,6 +103,37 @@ defmodule Exoforge.Std.Dashboard.Layouts do
         <script defer src="/vendor/phoenix.js"></script>
         <script defer src="/vendor/phoenix_live_view.js"></script>
         <script>
+          window.ExoforgeTheme = {
+            get: function() {
+              try {
+                return localStorage.getItem('exo_theme') || 'dark';
+              } catch (e) {
+                return 'dark';
+              }
+            },
+            set: function(mode) {
+              var next = mode === 'light' ? 'light' : 'dark';
+              try { localStorage.setItem('exo_theme', next); } catch (e) {}
+              var root = document.documentElement;
+              root.classList.remove('dark', 'light');
+              root.classList.add(next);
+              window.dispatchEvent(new CustomEvent('exoforge:theme', { detail: { theme: next } }));
+              return next;
+            },
+            toggle: function() {
+              var current = document.documentElement.classList.contains('light') ? 'light' : 'dark';
+              return this.set(current === 'dark' ? 'light' : 'dark');
+            }
+          };
+
+          document.addEventListener("click", function(e) {
+            document.querySelectorAll("details.exo-menu[open]").forEach(function(menu) {
+              if (!menu.contains(e.target)) {
+                menu.removeAttribute("open");
+              }
+            });
+          });
+
           document.addEventListener("DOMContentLoaded", function() {
             if (window.LiveView && window.Phoenix) {
               const metaEl = document.querySelector("meta[name='csrf-token']");
@@ -147,6 +196,7 @@ defmodule Exoforge.Std.Dashboard.Layouts do
 
               window.Exoforge = {
                 httpBaseUri: "/api",
+                theme: window.ExoforgeTheme,
                 dispatch: async function(service, action, payload = {}) {
                   // 1. Primary: If LiveView WebSocket is connected, push over the socket (0 HTTP roundtrips)
                   if (window._studioDispatcher && window.liveSocket && window.liveSocket.isConnected()) {

@@ -880,6 +880,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         id: :active_extensions,
         title: "Active Extensions",
         value: "#{to_string(overview.plugins_count)} Online",
+        icon: "🧩",
         delta: "Active",
         delta_positive: true,
         subtitle: "Game Services & Integrations",
@@ -889,6 +890,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         id: :declared_resources,
         title: "Declared Resources",
         value: to_string(overview.resources_count),
+        icon: "📦",
         delta: "Synced",
         delta_positive: true,
         subtitle: "Schemas & Tables",
@@ -898,6 +900,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         id: :callable_actions,
         title: "Callable Actions",
         value: to_string(total_actions),
+        icon: "⚡",
         delta: "Available",
         delta_positive: true,
         subtitle: "Game Actions & Operations",
@@ -907,6 +910,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         id: :cluster_status,
         title: "Cluster Status",
         value: "Healthy",
+        icon: "🟢",
         delta: "Online",
         delta_positive: true,
         subtitle: "Sub-ms Response Time",
@@ -952,9 +956,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-y-2 gap-x-4">
           <!-- Brand & Environment Switcher -->
           <div class="flex items-center gap-2.5 flex-shrink-0">
-            <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-primary-600 to-primary-700 text-white font-black text-xs flex items-center justify-center shadow-xs">
-              EF
-            </div>
+            <img src="/favicon.svg" alt="Exoforge" class="w-8 h-8 rounded-xl shadow-xs" />
             <div>
               <div class="flex items-center">
                 <span class="font-black text-gray-900 tracking-tight text-lg leading-none flex items-center">
@@ -1097,6 +1099,15 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
             <button
               type="button"
+              onclick="window.ExoforgeTheme && window.ExoforgeTheme.toggle()"
+              class="w-9 h-9 rounded-xl bg-gray-100 hover:bg-gray-200/80 text-gray-600 flex items-center justify-center transition-colors text-sm border border-gray-200/60"
+              title="Toggle Dark / Light Theme"
+            >
+              🌓
+            </button>
+
+            <button
+              type="button"
               phx-click="open_settings"
               class="w-9 h-9 rounded-xl bg-gray-100 hover:bg-gray-200/80 text-gray-600 flex items-center justify-center transition-colors text-sm border border-gray-200/60"
               title="Project Settings"
@@ -1171,6 +1182,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
               <.metric_card
                 title={metric.title}
                 value={metric.value}
+                icon={Map.get(metric, :icon)}
                 delta={Map.get(metric, :delta, "Active")}
                 delta_positive={Map.get(metric, :delta_positive, true)}
                 subtitle={Map.get(metric, :subtitle, "")}
@@ -1199,15 +1211,27 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <%= for ext <- @overview.plugins do %>
                   <div class="p-3.5 rounded-xl border border-gray-100 hover:border-primary-200 bg-gray-50/50 hover:bg-white transition-all space-y-2">
-                    <div class="flex items-center justify-between">
-                      <div>
-                        <span class="text-xs font-bold text-gray-800"><%= humanize_plugin_name(ext) %></span>
-                        <span class="block text-[10px] text-gray-400 font-mono"><%= ext.id %></span>
+                    <div class="flex items-center justify-between gap-2">
+                      <div class="flex items-center gap-2.5 min-w-0">
+                        <span class="w-8 h-8 rounded-lg bg-purple-50 text-purple-700 flex items-center justify-center text-base shrink-0">
+                          <%= ExtensionPresenter.icon(ext) %>
+                        </span>
+                        <span class="text-xs font-bold text-gray-800 truncate"><%= humanize_plugin_name(ext) %></span>
                       </div>
+                      <span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0" title="Online"></span>
                     </div>
-                    <p class="text-[11px] text-gray-500">
-                      Provides: <code class="text-primary-700 font-semibold"><%= Enum.join(ext.provides, ", ") %></code>
-                    </p>
+                    <details class="exo-fold">
+                      <summary>
+                        <span>Technical Info</span>
+                        <span class="exo-chevron">▸</span>
+                      </summary>
+                      <div class="exo-fold-body space-y-1">
+                        <span class="block text-[10px] text-gray-400 font-mono"><%= ext.id %></span>
+                        <p class="text-[11px] text-gray-500">
+                          Provides: <code class="text-primary-700 font-semibold"><%= Enum.join(ext.provides, ", ") %></code>
+                        </p>
+                      </div>
+                    </details>
                   </div>
                 <% end %>
               </div>
@@ -1232,13 +1256,21 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
               <div class="space-y-2 max-h-80 overflow-y-auto custom-scrollbar">
                 <%= for ev <- @activity_events do %>
-                  <div class="p-2.5 bg-gray-50/70 border border-gray-100 rounded-xl text-xs space-y-1">
-                    <div class="flex items-center justify-between">
-                      <span class="font-mono font-bold text-primary-700"><%= ev.event %></span>
-                      <span class="text-[10px] text-gray-400"><%= ev.time %></span>
+                  <details class="exo-fold p-2.5 bg-gray-50/70 border border-gray-100 rounded-xl text-xs">
+                    <summary class="flex items-center justify-between w-full">
+                      <span class="flex items-center gap-1.5 font-mono font-bold text-primary-700">
+                        <span>📡</span>
+                        <span><%= ev.event %></span>
+                      </span>
+                      <span class="flex items-center gap-1.5 text-[10px] text-gray-400">
+                        <span><%= ev.time %></span>
+                        <span class="exo-chevron">▸</span>
+                      </span>
+                    </summary>
+                    <div class="exo-fold-body">
+                      <pre class="text-[10px] text-gray-600 font-mono overflow-x-auto"><%= Jason.encode!(ev.payload) %></pre>
                     </div>
-                    <pre class="text-[10px] text-gray-600 font-mono overflow-x-auto"><%= Jason.encode!(ev.payload) %></pre>
-                  </div>
+                  </details>
                 <% end %>
               </div>
             </div>

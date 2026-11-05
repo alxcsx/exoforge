@@ -41,46 +41,84 @@ defmodule Exoforge.Std.Dashboard.LoginController do
     # The error travels in the URL; it never travels into the HTML unescaped (M33 Fix 25).
     error_html =
       if error,
-        do: ~s(<div class="error">#{Plug.HTML.html_escape(to_string(error))}</div>),
+        do: ~s(<div class="error p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-semibold mb-4">#{Plug.HTML.html_escape(to_string(error))}</div>),
         else: ""
 
     """
     <!DOCTYPE html>
-    <html lang="en">
+    <html lang="en" class="dark">
     <head>
       <meta charset="utf-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       <title>EXOFORGE - Sign in</title>
+      <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+      <link rel="alternate icon" href="/favicon.ico" />
+      <script>
+        (function() {
+          try {
+            var saved = localStorage.getItem('exo_theme') || 'dark';
+            var root = document.documentElement;
+            if (saved === 'light') {
+              root.classList.remove('dark');
+              root.classList.add('light');
+            } else {
+              root.classList.remove('light');
+              root.classList.add('dark');
+            }
+          } catch (e) {}
+        })();
+        function toggleLoginTheme() {
+          var root = document.documentElement;
+          var next = root.classList.contains('light') ? 'dark' : 'light';
+          root.classList.remove('dark', 'light');
+          root.classList.add(next);
+          try { localStorage.setItem('exo_theme', next); } catch (e) {}
+        }
+      </script>
+      <link rel="stylesheet" href="/vendor/exoforge-studio.css" />
       <script src="/vendor/tailwind.js"></script>
       <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
         body { font-family: 'Inter', sans-serif; }
-        .error { background:#fef2f2; border:1px solid #fecaca; color:#b91c1c; border-radius:8px; padding:.6rem .8rem; font-size:.85rem; margin-bottom:1rem; }
       </style>
     </head>
-    <body class="min-h-screen bg-[#f3f4f6] flex flex-col items-center justify-center p-4">
-      <div class="w-full max-w-sm bg-white rounded-2xl shadow-[0_20px_40px_-15px_rgba(0,0,0,0.12)] border border-gray-200 p-8">
-        <div class="flex items-center gap-2 mb-6">
-          <span class="text-2xl font-extrabold tracking-tight" style="color:#7c3aed">EXO</span>
-          <span class="text-2xl font-extrabold tracking-tight text-gray-900">FORGE</span>
+    <body class="min-h-screen bg-[#f3f4f6] flex flex-col items-center justify-center p-4 relative">
+      <button
+        type="button"
+        onclick="toggleLoginTheme()"
+        class="fixed top-4 right-4 w-9 h-9 rounded-xl bg-white border border-gray-200 text-gray-600 hover:text-gray-900 flex items-center justify-center shadow-sm transition-colors"
+        title="Toggle Dark / Light Theme"
+      >
+        🌓
+      </button>
+
+      <div class="w-full max-w-sm bg-white rounded-2xl shadow-card border border-gray-200 p-8">
+        <div class="flex items-center gap-3 mb-6">
+          <img src="/favicon.svg" alt="Exoforge" class="w-9 h-9 rounded-xl shadow-sm" />
+          <div class="flex items-center">
+            <span class="text-2xl font-extrabold tracking-tight text-purple-600">EXO</span>
+            <span class="text-2xl font-extrabold tracking-tight text-gray-900">FORGE</span>
+          </div>
         </div>
-        <h1 class="text-lg font-semibold text-gray-900 mb-1">Sign in to the Studio</h1>
-        <p class="text-sm text-gray-500 mb-6">An account is required to continue.</p>
+        <h1 class="text-lg font-bold text-gray-900 mb-1">Sign in to the Studio</h1>
+        <p class="text-xs text-gray-500 mb-6">Enter your studio credentials to continue.</p>
         #{error_html}
         <form action="/login" method="post" class="space-y-4">
           <input type="hidden" name="_csrf_token" value="#{csrf}" />
           <div>
-            <label class="block text-xs font-medium text-gray-600 mb-1" for="email">Email / Account ID</label>
+            <label class="block text-xs font-bold text-gray-600 mb-1.5" for="email">Email / Account ID</label>
             <input id="email" name="email" type="text" required autocomplete="username"
-                   class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" />
+                   placeholder="admin@exoforge.local"
+                   class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 focus:outline-none focus:border-purple-500" />
           </div>
           <div>
-            <label class="block text-xs font-medium text-gray-600 mb-1" for="password">Password</label>
+            <label class="block text-xs font-bold text-gray-600 mb-1.5" for="password">Password</label>
             <input id="password" name="password" type="password" required autocomplete="current-password"
-                   class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" />
+                   placeholder="••••••••"
+                   class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 focus:outline-none focus:border-purple-500" />
           </div>
           <button type="submit"
-                  class="w-full rounded-lg bg-[#7c3aed] hover:bg-[#6d28d9] text-white text-sm font-semibold py-2.5 transition-colors">
+                  class="w-full rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold py-2.5 transition-colors shadow-sm">
             Sign in
           </button>
         </form>

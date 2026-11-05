@@ -445,36 +445,42 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
 
       <!-- Top Stats & Header -->
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div class="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
-          <div>
-            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Registered Players</p>
-            <p class="text-2xl font-bold text-gray-900 mt-1"><%= length(@players) %></p>
-            <p class="text-[11px] text-gray-400 mt-0.5"><%= @valid_count %> Active • <%= @retained_count %> Retained</p>
-          </div>
-          <div class="w-10 h-10 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center text-lg">
+        <div class="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-3.5" title={"#{@valid_count} Active • #{@retained_count} Retained"}>
+          <div class="w-11 h-11 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center text-xl shrink-0">
             👥
           </div>
+          <div class="min-w-0 flex-1">
+            <p class="text-xs font-semibold text-gray-500 truncate">Registered Players</p>
+            <div class="flex items-center gap-2 mt-0.5">
+              <span class="text-xl font-black text-gray-900"><%= length(@players) %></span>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-50 text-violet-700"><%= @valid_count %> Active</span>
+            </div>
+          </div>
         </div>
 
-        <div class="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
-          <div>
-            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">User Linked Accounts</p>
-            <p class="text-2xl font-bold text-emerald-600 mt-1"><%= @valid_count %></p>
-            <p class="text-[11px] text-gray-400 mt-0.5">Authorised client ingress active</p>
-          </div>
-          <div class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-lg">
+        <div class="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-3.5" title="Authorised client ingress active">
+          <div class="w-11 h-11 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-xl shrink-0">
             🔐
           </div>
+          <div class="min-w-0 flex-1">
+            <p class="text-xs font-semibold text-gray-500 truncate">User Linked Accounts</p>
+            <div class="flex items-center gap-2 mt-0.5">
+              <span class="text-xl font-black text-emerald-600"><%= @valid_count %></span>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">Linked</span>
+            </div>
+          </div>
         </div>
 
-        <div class="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
-          <div>
-            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">GDPR &amp; Retained Data</p>
-            <p class="text-2xl font-bold text-amber-600 mt-1"><%= @retained_count %></p>
-            <p class="text-[11px] text-gray-400 mt-0.5">Telemetry kept, user unlinked</p>
-          </div>
-          <div class="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-lg">
+        <div class="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-3.5" title="Telemetry kept, user unlinked">
+          <div class="w-11 h-11 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-xl shrink-0">
             📁
+          </div>
+          <div class="min-w-0 flex-1">
+            <p class="text-xs font-semibold text-gray-500 truncate">GDPR &amp; Retained Data</p>
+            <div class="flex items-center gap-2 mt-0.5">
+              <span class="text-xl font-black text-amber-600"><%= @retained_count %></span>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">Retained</span>
+            </div>
           </div>
         </div>
       </div>
@@ -611,7 +617,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
                   </div>
                 </div>
 
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-1.5">
                   <button
                     phx-click="open_focus"
                     phx-value-kind="player"
@@ -620,30 +626,38 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
                   >
                     Inspect Profile &amp; KV
                   </button>
-                  <%= if is_linked do %>
-                    <button
-                      phx-click="retain_player"
-                      phx-value-id={pid}
-                      phx-target={@myself}
-                      data-confirm={"Unlink user account and retain player '#{pid}' for telemetry data retention?"}
-                      class="px-2.5 py-1.5 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors border border-amber-200"
-                      title="Unlink User & Retain Telemetry"
-                    >
-                      Retain
-                    </button>
-                  <% end %>
-                  <button
-                    phx-click="delete_player"
-                    phx-value-id={pid}
-                    phx-target={@myself}
-                    data-confirm={"Hard delete player '#{pid}' completely from database?"}
-                    class="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                    title="Hard Delete"
-                  >
-                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
+
+                  <details class="exo-menu">
+                    <summary class="px-2 py-1.5 text-xs font-bold text-gray-500 hover:text-gray-800 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg cursor-pointer">
+                      ⋯
+                    </summary>
+                    <div class="exo-menu-panel">
+                      <%= if is_linked do %>
+                        <button
+                          type="button"
+                          phx-click="retain_player"
+                          phx-value-id={pid}
+                          phx-target={@myself}
+                          data-confirm={"Unlink user account and retain player '#{pid}' for telemetry data retention?"}
+                          class="exo-menu-item"
+                          title="Unlink User & Retain Telemetry"
+                        >
+                          <span>📁</span> <span>Retain</span>
+                        </button>
+                      <% end %>
+                      <button
+                        type="button"
+                        phx-click="delete_player"
+                        phx-value-id={pid}
+                        phx-target={@myself}
+                        data-confirm={"Hard delete player '#{pid}' completely from database?"}
+                        class="exo-menu-item exo-menu-danger"
+                        title="Hard Delete"
+                      >
+                        <span>🗑</span> <span>Hard Delete</span>
+                      </button>
+                    </div>
+                  </details>
                 </div>
               </div>
             <% end %>

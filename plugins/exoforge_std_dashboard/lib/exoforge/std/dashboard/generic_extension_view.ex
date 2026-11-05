@@ -944,12 +944,20 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                 <%= @extension.type %>
               </span>
             </div>
-            <p class="text-xs text-gray-500 mt-1">
-              Provides: <code class="text-purple-700 font-bold"><%= Enum.join(@extension.provides, ", ") %></code>
-              <%= if @extension.dependencies != [] do %>
-                • Depends on: <code class="text-gray-600"><%= Enum.join(@extension.dependencies, ", ") %></code>
-              <% end %>
-            </p>
+            <details class="exo-fold mt-1">
+              <summary>
+                <span>Service Topology</span>
+                <span class="exo-chevron">▸</span>
+              </summary>
+              <div class="exo-fold-body">
+                <p class="text-xs text-gray-500">
+                  Provides: <code class="text-purple-700 font-bold"><%= Enum.join(@extension.provides, ", ") %></code>
+                  <%= if @extension.dependencies != [] do %>
+                    • Depends on: <code class="text-gray-600"><%= Enum.join(@extension.dependencies, ", ") %></code>
+                  <% end %>
+                </p>
+              </div>
+            </details>
           </div>
         </div>
 
@@ -1024,8 +1032,8 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                       ⚡
                     </span>
                     <div>
-                      <h4 class="font-mono font-bold text-gray-900 text-sm"><%= act[:name] %></h4>
-                      <span class="text-[11px] text-gray-400">Service: <code class="text-purple-700 font-semibold"><%= act[:service] %></code></span>
+                      <h4 class="font-bold text-gray-900 text-sm"><%= Phoenix.Naming.humanize(to_string(act[:name])) %></h4>
+                      <span class="text-[11px] font-mono text-gray-400"><%= act[:name] %></span>
                     </div>
                   </div>
                   <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-gray-100 text-gray-700">
@@ -1093,15 +1101,24 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                     </div>
                   <% end %>
 
-                  <!-- Scope Gating (display only, M33 Fix 27) -->
-                  <div>
-                    <div class="flex items-center justify-between mb-1">
-                      <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Caller Scopes</label>
+                  <!-- Technical Context & Scope Gating (tucked inside fold) -->
+                  <details class="exo-fold">
+                    <summary>
+                      <span>Technical Context &amp; Scopes</span>
+                      <span class="exo-chevron">▸</span>
+                    </summary>
+                    <div class="exo-fold-body space-y-2">
+                      <div class="text-[11px] text-gray-400">
+                        Service: <code class="text-purple-700 font-semibold"><%= act[:service] %></code>
+                      </div>
+                      <div>
+                        <label class="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Caller Scopes</label>
+                        <div class="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 font-mono text-gray-500">
+                          <%= Enum.join(@current_scopes || [], ", ") %>
+                        </div>
+                      </div>
                     </div>
-                    <div class="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 font-mono text-gray-500">
-                      <%= Enum.join(@current_scopes || [], ", ") %>
-                    </div>
-                  </div>
+                  </details>
 
                   <!-- Run Button -->
                   <div class="pt-2 flex items-center justify-between">
@@ -1170,7 +1187,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
             </div>
 
             <%= if not singleton_resource?(assigns) do %>
-              <div class="flex items-center gap-3">
+              <div class="flex items-center gap-2">
                 <input
                   type="text"
                   placeholder="Search rows..."
@@ -1184,24 +1201,6 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
 
                 <button
                   type="button"
-                  phx-click="export_csv"
-                  phx-target={@myself}
-                  class="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 shadow-xs flex items-center gap-1"
-                >
-                  <span>⬇ CSV</span>
-                </button>
-
-                <button
-                  type="button"
-                  phx-click="export_json"
-                  phx-target={@myself}
-                  class="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 shadow-xs flex items-center gap-1"
-                >
-                  <span>⬇ JSON</span>
-                </button>
-
-                <button
-                  type="button"
                   phx-click="new_resource"
                   phx-target={@myself}
                   class="px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl hover:bg-emerald-100 shadow-xs flex items-center gap-1"
@@ -1209,15 +1208,38 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                   <span>＋ New</span>
                 </button>
 
-                <button
-                  type="button"
-                  phx-click="delete_resource"
-                  phx-target={@myself}
-                  data-confirm={"Delete all data for resource '#{@selected_resource_name}'? This cannot be undone."}
-                  class="px-3 py-1.5 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-xl hover:bg-red-100 shadow-xs flex items-center gap-1"
-                >
-                  <span>🗑 Delete</span>
-                </button>
+                <details class="exo-menu">
+                  <summary class="px-2.5 py-1.5 text-xs font-bold text-gray-600 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl cursor-pointer">
+                    ⋯
+                  </summary>
+                  <div class="exo-menu-panel">
+                    <button
+                      type="button"
+                      phx-click="export_csv"
+                      phx-target={@myself}
+                      class="exo-menu-item"
+                    >
+                      <span>⬇</span> <span>Export CSV</span>
+                    </button>
+                    <button
+                      type="button"
+                      phx-click="export_json"
+                      phx-target={@myself}
+                      class="exo-menu-item"
+                    >
+                      <span>⬇</span> <span>Export JSON</span>
+                    </button>
+                    <button
+                      type="button"
+                      phx-click="delete_resource"
+                      phx-target={@myself}
+                      data-confirm={"Delete all data for resource '#{@selected_resource_name}'? This cannot be undone."}
+                      class="exo-menu-item exo-menu-danger"
+                    >
+                      <span>🗑</span> <span>Clear Resource</span>
+                    </button>
+                  </div>
+                </details>
               </div>
             <% else %>
               <div class="flex items-center gap-2">

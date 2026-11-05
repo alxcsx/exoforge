@@ -543,53 +543,57 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
       <% end %>
 
       <!-- Metric Cards Grid -->
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-5">
-        <div class="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm">
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Registered Accounts</span>
-            <span class="text-lg">👥</span>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title="Distinct identity profiles">
+          <div class="w-11 h-11 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center text-xl shrink-0">
+            👥
           </div>
-          <div class="flex items-baseline gap-2">
-            <span class="text-2xl font-black text-gray-900"><%= @total_users %></span>
-            <span class="text-xs font-bold px-1.5 py-0.5 rounded-md bg-purple-50 text-purple-700">Auth DB</span>
+          <div class="min-w-0 flex-1">
+            <div class="text-xs font-semibold text-gray-500 truncate">Registered Accounts</div>
+            <div class="flex items-center gap-2 mt-0.5">
+              <span class="text-xl font-black text-gray-900"><%= @total_users %></span>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700">Auth DB</span>
+            </div>
           </div>
-          <p class="text-[11px] text-gray-400 mt-1 font-medium">Distinct identity profiles</p>
         </div>
 
-        <div class="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm">
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Active Tokens</span>
-            <span class="text-lg">🎟️</span>
+        <div class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title="Active bearer tokens">
+          <div class="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl shrink-0">
+            🎟️
           </div>
-          <div class="flex items-baseline gap-2">
-            <span class="text-2xl font-black text-gray-900"><%= @total_tokens %></span>
-            <span class="text-xs font-bold px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700">In Pool</span>
+          <div class="min-w-0 flex-1">
+            <div class="text-xs font-semibold text-gray-500 truncate">Active Tokens</div>
+            <div class="flex items-center gap-2 mt-0.5">
+              <span class="text-xl font-black text-gray-900"><%= @total_tokens %></span>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">In Pool</span>
+            </div>
           </div>
-          <p class="text-[11px] text-gray-400 mt-1 font-medium">Active bearer tokens</p>
         </div>
 
-        <div class="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm">
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Admin Roles</span>
-            <span class="text-lg">👑</span>
+        <div class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title="Admin & superuser scopes">
+          <div class="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-xl shrink-0">
+            👑
           </div>
-          <div class="flex items-baseline gap-2">
-            <span class="text-2xl font-black text-gray-900"><%= @admin_count %></span>
-            <span class="text-xs font-bold px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-700">Elevated</span>
+          <div class="min-w-0 flex-1">
+            <div class="text-xs font-semibold text-gray-500 truncate">Admin Roles</div>
+            <div class="flex items-center gap-2 mt-0.5">
+              <span class="text-xl font-black text-gray-900"><%= @admin_count %></span>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">Elevated</span>
+            </div>
           </div>
-          <p class="text-[11px] text-gray-400 mt-1 font-medium">Admin & superuser scopes</p>
         </div>
 
-        <div class="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm">
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Player Scopes</span>
-            <span class="text-lg">🎮</span>
+        <div class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title="Verified gameplay accounts">
+          <div class="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl shrink-0">
+            🎮
           </div>
-          <div class="flex items-baseline gap-2">
-            <span class="text-2xl font-black text-gray-900"><%= @player_count %></span>
-            <span class="text-xs font-bold px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-700">Standard</span>
+          <div class="min-w-0 flex-1">
+            <div class="text-xs font-semibold text-gray-500 truncate">Player Scopes</div>
+            <div class="flex items-center gap-2 mt-0.5">
+              <span class="text-xl font-black text-gray-900"><%= @player_count %></span>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">Standard</span>
+            </div>
           </div>
-          <p class="text-[11px] text-gray-400 mt-1 font-medium">Verified gameplay accounts</p>
         </div>
       </div>
 
@@ -670,23 +674,28 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                   <% is_protected = user["is_protected"] == true %>
                   <tr class="hover:bg-purple-50/30 transition-colors group">
                     <td class="py-3.5 px-4">
-                      <div class="flex flex-col">
-                        <div class="flex items-center gap-2">
-                          <span class="font-bold text-gray-900"><%= user["name"] || user["email"] || user["user_id"] || user["player_id"] %></span>
-                          <%= if is_protected do %>
-                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300" title="Created via environment variables. Cannot be modified or deleted via UI.">
-                              🔒 Env Admin
-                            </span>
-                          <% end %>
-                          <button
-                            phx-click={Phoenix.LiveView.JS.dispatch("exoforge:clip", detail: %{text: user["user_id"] || user["player_id"]})}
-                            title="Copy User ID"
-                            class="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-purple-600 transition-opacity text-xs"
-                          >
-                            📋
-                          </button>
+                      <div class="flex items-center gap-3">
+                        <div class="w-9 h-9 rounded-xl bg-purple-50 text-purple-700 font-bold text-xs flex items-center justify-center shrink-0 border border-purple-100">
+                          <%= String.slice(to_string(user["name"] || user["email"] || user["player_id"]), 0, 2) |> String.upcase() %>
                         </div>
-                        <span class="text-xs text-gray-500 font-medium mt-0.5"><%= user["email"] || user["user_id"] || user["player_id"] %></span>
+                        <div class="flex flex-col">
+                          <div class="flex items-center gap-2">
+                            <span class="font-bold text-gray-900"><%= user["name"] || user["email"] || user["user_id"] || user["player_id"] %></span>
+                            <%= if is_protected do %>
+                              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300" title="Created via environment variables. Cannot be modified or deleted via UI.">
+                                🔒 Env Admin
+                              </span>
+                            <% end %>
+                            <button
+                              phx-click={Phoenix.LiveView.JS.dispatch("exoforge:clip", detail: %{text: user["user_id"] || user["player_id"]})}
+                              title="Copy User ID"
+                              class="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-purple-600 transition-opacity text-xs"
+                            >
+                              📋
+                            </button>
+                          </div>
+                          <span class="text-xs text-gray-500 font-medium mt-0.5"><%= user["email"] || user["user_id"] || user["player_id"] %></span>
+                        </div>
                       </div>
                     </td>
                     <td class="py-3.5 px-4">
@@ -719,59 +728,70 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                     <td class="py-3.5 px-4 text-right">
                       <div class="flex items-center justify-end gap-1.5">
                         <button
-                          phx-click="issue_token"
-                          phx-value-player_id={user["player_id"]}
-                          phx-target={@myself}
-                          title="Issue new bearer token"
-                          class="px-2 py-1 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition-colors"
-                        >
-                          + Token
-                        </button>
-
-                        <%= if is_protected do %>
-                          <span class="text-[11px] text-gray-400 font-medium px-2 italic" title="System admin managed exclusively via environment variables">
-                            Protected
-                          </span>
-                        <% else %>
-                          <button
-                            phx-click="open_roles_modal"
-                            phx-value-player_id={user["player_id"]}
-                            phx-target={@myself}
-                            title="Edit user scopes and roles"
-                            class="px-2 py-1 text-xs font-semibold text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors"
-                          >
-                            Roles
-                          </button>
-                          <button
-                            phx-click="open_reset_password_modal"
-                            phx-value-player_id={user["player_id"]}
-                            phx-target={@myself}
-                            title="Set or reset account password"
-                            class="px-2 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors"
-                          >
-                            Reset PW
-                          </button>
-                          <button
-                            phx-click="delete_user"
-                            phx-value-player_id={user["player_id"]}
-                            phx-target={@myself}
-                            data-confirm={"Are you sure you want to permanently delete user account '#{user["name"] || user["player_id"]}'?"}
-                            title="Delete user account"
-                            class="px-2 py-1 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-colors"
-                          >
-                            Delete
-                          </button>
-                        <% end %>
-
-                        <button
                           phx-click="open_focus"
                           phx-value-kind="user"
                           phx-value-id={user["player_id"]}
                           title="View tokens & details"
-                          class="px-2 py-1 text-xs font-semibold text-gray-600 hover:text-gray-900 border border-transparent hover:border-gray-200 rounded-lg transition-colors"
+                          class="px-2.5 py-1 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition-colors"
                         >
                           Inspect
                         </button>
+
+                        <details class="exo-menu">
+                          <summary class="px-2 py-1 text-xs font-bold text-gray-500 hover:text-gray-800 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg cursor-pointer">
+                            ⋯
+                          </summary>
+                          <div class="exo-menu-panel">
+                            <button
+                              type="button"
+                              phx-click="issue_token"
+                              phx-value-player_id={user["player_id"]}
+                              phx-target={@myself}
+                              title="Issue new bearer token"
+                              class="exo-menu-item"
+                            >
+                              <span>🎟️</span> <span>+ Token</span>
+                            </button>
+
+                            <%= if is_protected do %>
+                              <div class="px-3 py-1.5 text-[11px] text-gray-400 italic">
+                                🔒 Protected Env Admin
+                              </div>
+                            <% else %>
+                              <button
+                                type="button"
+                                phx-click="open_roles_modal"
+                                phx-value-player_id={user["player_id"]}
+                                phx-target={@myself}
+                                title="Edit user scopes and roles"
+                                class="exo-menu-item"
+                              >
+                                <span>🛡️</span> <span>Roles</span>
+                              </button>
+                              <button
+                                type="button"
+                                phx-click="open_reset_password_modal"
+                                phx-value-player_id={user["player_id"]}
+                                phx-target={@myself}
+                                title="Set or reset account password"
+                                class="exo-menu-item"
+                              >
+                                <span>🔑</span> <span>Reset PW</span>
+                              </button>
+                              <button
+                                type="button"
+                                phx-click="delete_user"
+                                phx-value-player_id={user["player_id"]}
+                                phx-target={@myself}
+                                data-confirm={"Are you sure you want to permanently delete user account '#{user["name"] || user["player_id"]}'?"}
+                                title="Delete user account"
+                                class="exo-menu-item exo-menu-danger"
+                              >
+                                <span>🗑</span> <span>Delete</span>
+                              </button>
+                            <% end %>
+                          </div>
+                        </details>
                       </div>
                     </td>
                   </tr>

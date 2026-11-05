@@ -171,7 +171,8 @@ defmodule Exoforge.Std.FileBucketTest do
     assert by_name["filename"] == "scene_all_123.bundle"
   end
 
-  test "seeds SDK archives from dist into sdk bucket and resolves by engine alias", %{storage_dir: _} do
+  test "seeds SDK archives from dist into sdk bucket and resolves by engine alias", %{storage_dir: storage_dir} do
+    File.rm_rf!(Path.join(storage_dir, "sdk"))
     dist_dir = "priv/data/test_dist_#{System.unique_integer([:positive])}"
     File.mkdir_p!(dist_dir)
     on_exit(fn -> File.rm_rf(dist_dir) end)

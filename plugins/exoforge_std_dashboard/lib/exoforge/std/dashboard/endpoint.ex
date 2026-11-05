@@ -40,7 +40,7 @@ defmodule Exoforge.Std.Dashboard.Endpoint do
     at: "/",
     from: :exoforge_std_dashboard,
     gzip: false,
-    only: ~w(vendor favicon.ico)
+    only: ~w(vendor favicon.ico favicon.svg)
   )
 
   plug(Plug.RequestId)
