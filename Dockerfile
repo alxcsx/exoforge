@@ -34,11 +34,11 @@ WORKDIR /build
 RUN mix local.hex --force && \
     mix local.rebar --force
 
-# Copy project definition, core, plugins, and configs
+# Copy project definition, core, extensions, and configs
 COPY mix.exs mix.lock* ./
 COPY config/ config/
 COPY core/ core/
-COPY plugins/ plugins/
+COPY extensions/ extensions/
 COPY extensions_csharp/ extensions_csharp/
 COPY lib/ lib/
 
@@ -97,8 +97,8 @@ COPY --from=builder --chown=exoforge:exoforge /build/_build/prod/rel/exoforge ./
 # the application root in `_build/prod/lib/<name>/manifest.json` - so a release drops every standard
 # plugin's manifest, and scanning the release's own lib finds directories with nothing in them. The
 # build tree has both, unversioned, which is the layout the loader expects and the one `upload_plugin`
-# writes. Copied to `plugins/`, which is a scan path already, so this needs no config.
-COPY --from=builder --chown=exoforge:exoforge /build/_build/prod/lib ./plugins
+# writes. Copied to `extensions/`, which is a scan path already, so this needs no config.
+COPY --from=builder --chown=exoforge:exoforge /build/_build/prod/lib ./extensions
 
 USER exoforge
 

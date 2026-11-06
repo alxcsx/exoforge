@@ -12,4 +12,4 @@ data:
   GATEWAY_PORT: "4000"
   HTTP_PORT: "4001"
   PHX_HOST: "localhost"
-  PLUGINS_PATH: "/app/plugins_elixir"
+  EXTENSIONS_PATH: "/app/extensions"
