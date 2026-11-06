@@ -107,6 +107,8 @@ defmodule Exoforge.Std.Dashboard.ActionForms do
   defp normalize_service(svc) do
     %{
       name: PluginRegistry.clean_service_name(svc[:name] || svc["name"]),
+      title: svc[:title] || svc["title"] || nil,
+      icon: svc[:icon] || svc["icon"] || nil,
       actions: Enum.map(actions_of(svc), &normalize_action/1)
     }
   end
@@ -116,6 +118,8 @@ defmodule Exoforge.Std.Dashboard.ActionForms do
       name: to_string(act[:name] || act["name"]),
       doc: act[:doc] || act["doc"] || "No description provided.",
       mode: to_string(act[:mode] || act["mode"] || "sync"),
+      scope: to_string(act[:scope] || act["scope"] || "guest"),
+      transport: to_string(act[:transport] || act["transport"] || "auto"),
       params: Extensions.normalize_action_params(act[:params] || act["params"] || [])
     }
   end

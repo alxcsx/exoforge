@@ -53,6 +53,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         Phoenix.PubSub.subscribe(Exoforge.Std.Dashboard.PubSub, "studio_events")
         EventDispatcher.subscribe(:all, topic: :global)
         EventDispatcher.subscribe(:all, topic: "studio")
+        :timer.send_interval(5000, self(), :refresh_telemetry)
       rescue
         _ -> :ok
       end
@@ -89,6 +90,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     default_action = if default_service, do: List.first(default_service.actions), else: nil
     default_action_name = if default_action, do: default_action.name, else: nil
     default_params = ActionForms.default_params(default_action)
+    telemetry = fetch_telemetry_summary(overview, initial_events)
 
     {:ok,
      assign(socket,
@@ -100,6 +102,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
        current_env: "Live",
        max_pinned: @max_pinned,
        overview: overview,
+       telemetry: telemetry,
        build_version: overview[:version] || Exoforge.BuildInfo.version(),
        build_hash: overview[:commit_hash] || Exoforge.BuildInfo.commit_hash(),
        build_date: overview[:build_date] || Exoforge.BuildInfo.build_date(),
@@ -610,7 +613,8 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
      |> assign(action_modal_open: false, action_result: nil)}
   end
 
-  def handle_event("open_actions_detail_modal", %{"mode" => mode}, socket) do
+  def handle_event("open_actions_detail_modal", params, socket) do
+    mode = (is_map(params) && Map.get(params, "mode")) || "actions"
     tab = if mode == "errors", do: "errors_only", else: "all"
 
     {:noreply,
@@ -798,8 +802,14 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       end
 
     filtered = filter_activity_events(new_events, socket.assigns.event_filter_topic)
+    telemetry = fetch_telemetry_summary(socket.assigns.overview, new_events)
 
-    {:noreply, assign(socket, activity_events: new_events, filtered_activity_events: filtered)}
+    {:noreply,
+     assign(socket,
+       activity_events: new_events,
+       filtered_activity_events: filtered,
+       telemetry: telemetry
+     )}
   end
 
   def handle_info({:exo_event, event_key, payload, context}, socket) do
@@ -813,8 +823,20 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       end
 
     filtered = filter_activity_events(new_events, socket.assigns.event_filter_topic)
+    telemetry = fetch_telemetry_summary(socket.assigns.overview, new_events)
 
-    {:noreply, assign(socket, activity_events: new_events, filtered_activity_events: filtered)}
+    {:noreply,
+     assign(socket,
+       activity_events: new_events,
+       filtered_activity_events: filtered,
+       telemetry: telemetry
+     )}
+  end
+
+  def handle_info(:refresh_telemetry, socket) do
+    overview = fetch_overview()
+    telemetry = fetch_telemetry_summary(overview, socket.assigns.activity_events)
+    {:noreply, assign(socket, overview: overview, telemetry: telemetry)}
   end
 
   def handle_info({:clear_toast, kind}, socket) do
@@ -1073,11 +1095,6 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         {to_string(p.plugin_id), Map.get(p, :restarts, 0)}
       end)
 
-    errors_by_plugin =
-      Enum.group_by(metered_actions, &to_string(&1.plugin_id))
-      |> Map.new(fn {pid, acts} ->
-        {pid, Enum.sum(Enum.map(acts, &Map.get(&1, :errors, 0)))}
-      end)
 
     faulty_extensions =
       Enum.flat_map(overview.plugins, fn p ->
@@ -1105,50 +1122,6 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     total_errors =
       Enum.sum(Enum.map(metered_actions, &Map.get(&1, :errors, 0))) + length(faulty_extensions)
 
-    top_services =
-      metered_actions
-      |> Enum.group_by(&to_string(&1.service))
-      |> Enum.map(fn {svc, acts} ->
-        {svc,
-         Enum.sum(Enum.map(acts, &Map.get(&1, :invocations, 0))),
-         Enum.sum(Enum.map(acts, &Map.get(&1, :errors, 0)))}
-      end)
-      |> Enum.sort_by(fn {_svc, inv, _err} -> -inv end)
-      |> Enum.take(6)
-
-    event_bars =
-      if top_services != [] do
-        max_inv = Enum.max([1 | Enum.map(top_services, &elem(&1, 1))])
-
-        Enum.map(top_services, fn {svc, inv, _err} ->
-          %{label: svc, count: inv, pct: max(round(inv / max_inv * 100), 12)}
-        end)
-      else
-        [
-          %{label: "auth", count: max(length(activity_events), 1), pct: 48},
-          %{label: "http", count: 2, pct: 64},
-          %{label: "ws", count: 1, pct: 36},
-          %{label: "studio", count: length(activity_events), pct: 78},
-          %{label: "db", count: overview.resources_count, pct: 52},
-          %{label: "plugins", count: overview.plugins_count, pct: 85}
-        ]
-      end
-
-    error_bars =
-      if top_services != [] do
-        max_err = Enum.max([1 | Enum.map(top_services, &elem(&1, 2))])
-
-        Enum.map(top_services, fn {svc, _inv, err} ->
-          %{label: svc, count: err, pct: if(err > 0, do: max(round(err / max_err * 100), 18), else: 8)}
-        end)
-      else
-        Enum.take(overview.plugins, 6)
-        |> Enum.map(fn p ->
-          err = Map.get(errors_by_plugin, to_string(p.id), 0)
-          %{label: String.replace_prefix(to_string(p.id), "exoforge_std_", ""), count: err, pct: if(err > 0, do: 75, else: 8)}
-        end)
-      end
-
     online_count = max(overview.plugins_count - length(faulty_extensions), 0)
 
     # Time-series multi-line layout (time on X, count on Y, distinct line per action ID)
@@ -1168,56 +1141,67 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       |> Enum.sort_by(fn {_id, inv, _err} -> -inv end)
       |> Enum.take(5)
 
-    actions_to_plot =
-      if action_entries != [] do
-        action_entries
+    actions_to_plot = action_entries
+
+    action_max_val =
+      if actions_to_plot != [] do
+        Enum.max([10 | Enum.map(actions_to_plot, &elem(&1, 1))])
+      else
+        10
+      end
+
+    action_series =
+      if actions_to_plot != [] do
+        actions_to_plot
+        |> Enum.with_index()
+        |> Enum.map(fn {{act_id, inv, _err}, idx} ->
+          color = Enum.at(action_colors, rem(idx, length(action_colors)))
+          factor = 1.0 - idx * 0.12
+
+          counts = [
+            max(round(inv * 0.25 * factor), 0),
+            max(round(inv * 0.40 * factor), 0),
+            max(round(inv * 0.55 * factor), 0),
+            max(round(inv * 0.70 * factor), 0),
+            max(round(inv * 0.85 * factor), 0),
+            inv
+          ]
+
+          dots =
+            Enum.zip(x_coords, counts)
+            |> Enum.map(fn {x, c} ->
+              y = 125 - round(c / max(action_max_val, 1) * 95)
+              %{x: x, y: y, count: c}
+            end)
+
+          points = Enum.map_join(dots, " ", fn d -> "#{d.x},#{d.y}" end)
+
+          %{
+            id: act_id,
+            color: color,
+            points: points,
+            dots: dots,
+            latest_count: inv
+          }
+        end)
       else
         [
-          {"auth.login_anonymous", max(length(activity_events), 4), 0},
-          {"auth.set_display_name", 2, 0},
-          {"player_data.get_profile", 3, 0},
-          {"ws.dispatch_action", 1, 0},
-          {"dashboard.heartbeat", 5, 0}
+          %{
+            id: "idle",
+            color: "#94a3b8",
+            points: "40,125 128,125 216,125 304,125 392,125 480,125",
+            dots: Enum.map(x_coords, &%{x: &1, y: 125, count: 0}),
+            latest_count: 0
+          }
         ]
       end
 
-    action_max_val = Enum.max([10 | Enum.map(actions_to_plot, &elem(&1, 1))])
-
-    action_series =
-      actions_to_plot
-      |> Enum.with_index()
-      |> Enum.map(fn {{act_id, inv, _err}, idx} ->
-        color = Enum.at(action_colors, rem(idx, length(action_colors)))
-        factor = 1.0 - idx * 0.12
-
-        counts = [
-          max(round(inv * 0.25 * factor), 0),
-          max(round(inv * 0.40 * factor), 0),
-          max(round(inv * 0.55 * factor), 0),
-          max(round(inv * 0.70 * factor), 0),
-          max(round(inv * 0.85 * factor), 0),
-          inv
-        ]
-
-        dots =
-          Enum.zip(x_coords, counts)
-          |> Enum.map(fn {x, c} ->
-            y = 125 - round(c / action_max_val * 95)
-            %{x: x, y: y, count: c}
-          end)
-
-        points = Enum.map_join(dots, " ", fn d -> "#{d.x},#{d.y}" end)
-
-        %{
-          id: act_id,
-          color: color,
-          points: points,
-          dots: dots,
-          latest_count: inv
-        }
-      end)
-
-    error_max_val = Enum.max([5, total_errors | Enum.map(actions_to_plot, &elem(&1, 2))])
+    error_max_val =
+      if actions_to_plot != [] do
+        Enum.max([5, total_errors | Enum.map(actions_to_plot, &elem(&1, 2))])
+      else
+        5
+      end
 
     error_series =
       actions_to_plot
@@ -1242,7 +1226,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         dots =
           Enum.zip(x_coords, counts)
           |> Enum.map(fn {x, c} ->
-            y = 125 - round(c / error_max_val * 95)
+            y = 125 - round(c / max(error_max_val, 1) * 95)
             %{x: x, y: y, count: c}
           end)
 
@@ -1270,8 +1254,6 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     %{
       total_invocations: total_invocations,
       total_errors: total_errors,
-      event_bars: event_bars,
-      error_bars: error_bars,
       action_series: action_series,
       action_max_val: action_max_val,
       error_series: error_series,
@@ -1306,7 +1288,6 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
     overview_widgets = Exoforge.UIHookRegistry.list_hooks(:overview_widget)
     overview_slot_ids = resolve_overview_slot_ids(overview_widgets, assigns.overview_grid_order)
-    telemetry = fetch_telemetry_summary(assigns.overview, assigns.activity_events)
     widgets_by_slot = Map.new(overview_widgets, fn w -> {"widget:#{w.id}", w} end)
 
     assigns =
@@ -1315,7 +1296,6 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       |> assign(:overview_widgets, overview_widgets)
       |> assign(:overview_slot_ids, overview_slot_ids)
       |> assign(:widgets_by_slot, widgets_by_slot)
-      |> assign(:telemetry, telemetry)
 
     ~H"""
     <div class="min-h-screen flex flex-col" phx-window-keydown="handle_key">
@@ -1340,46 +1320,38 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                   <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                   <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
                 </span>
-                <form id="env_switcher_form" phx-change="switch_env" class="m-0 inline-block">
-                  <select
-                    name="env"
-                    class="bg-transparent text-[9px] font-bold text-gray-400 hover:text-gray-800 border-none rounded py-0 pl-0 pr-1.5 focus:ring-0 cursor-pointer font-mono uppercase tracking-wider leading-none"
-                    title="Switch Active Environment"
-                  >
-                    <option value="Live" selected={@current_env == "Live"}>LIVE</option>
-                    <option value="Dev" selected={@current_env == "Dev"}>DEV</option>
-                    <option value="Staging" selected={@current_env == "Staging"}>STAGING</option>
-                  </select>
-                </form>
+                <span class="text-[10px] font-mono font-bold text-gray-500 uppercase tracking-wider"><%= String.upcase(@current_env) %></span>
               </div>
             </div>
           </div>
 
           <!-- Top Navigation Bar: 1. Overview, 2. Extensions, 3. Pinned Items (wraps to 2nd line if needed, up to @max_pinned) -->
           <nav class="flex-1 min-w-0 mx-2 flex flex-wrap items-center gap-1 bg-gray-100/90 p-1 rounded-xl border border-gray-200/80 shadow-inner">
-            <!-- 1. Overview Tab -->
+            <!-- 1. Overview Tab (Icon only + tooltip/aria) -->
             <button
               phx-click="switch_tab"
               phx-value-tab="overview"
-              class={"px-2.5 py-1.5 text-xs rounded-lg transition-all font-bold flex items-center gap-1.5 whitespace-nowrap flex-shrink-0 #{if @current_tab == :overview, do: "bg-white text-primary-700 shadow-sm", else: "text-gray-600 hover:text-gray-900"}"}
+              aria-label="Overview"
+              title="Overview"
+              class={"p-1.5 text-xs rounded-lg transition-all font-bold flex items-center justify-center flex-shrink-0 #{if @current_tab == :overview, do: "bg-white text-primary-700 shadow-sm", else: "text-gray-600 hover:text-gray-900"}"}
             >
-              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
               </svg>
-              <span>Overview</span>
             </button>
 
-            <!-- 2. Extensions Menu Tab -->
+            <!-- 2. Extensions Menu Tab (Icon only + badge + tooltip/aria) -->
             <button
               phx-click="switch_tab"
               phx-value-tab="apps"
-              class={"px-2.5 py-1.5 text-xs rounded-lg transition-all font-bold flex items-center gap-1.5 whitespace-nowrap flex-shrink-0 #{if @current_tab == :apps, do: "bg-white text-primary-700 shadow-sm", else: "text-gray-600 hover:text-gray-900"}"}
+              aria-label="Extensions"
+              title={"Extensions (#{@overview.plugins_count})"}
+              class={"p-1.5 text-xs rounded-lg transition-all font-bold flex items-center justify-center gap-1 flex-shrink-0 #{if @current_tab == :apps, do: "bg-white text-primary-700 shadow-sm", else: "text-gray-600 hover:text-gray-900"}"}
             >
-              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
               </svg>
-              <span>Extensions</span>
-              <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-primary-100 text-primary-800 font-black">
+              <span class="text-[9px] px-1 py-0.2 rounded-full bg-primary-100 text-primary-800 font-black">
                 <%= @overview.plugins_count %>
               </span>
             </button>
@@ -1447,6 +1419,20 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                   >
                     ✕
                   </button>
+                </div>
+              <% end %>
+            <% end %>
+
+            <!-- 3c. Active Unpinned Extension Breadcrumb -->
+            <%= if to_string(@current_tab) not in ["overview", "apps"] and to_string(@current_tab) not in @pinned_extensions do %>
+              <% active_unpinned = Enum.find(@overview.extensions, fn e -> to_string(e.id) == to_string(@current_tab) end) %>
+              <%= if active_unpinned do %>
+                <% title = tab_short_name(active_unpinned) %>
+                <% icon = if is_map(active_unpinned.dashboard_view) and active_unpinned.dashboard_view[:icon], do: active_unpinned.dashboard_view[:icon], else: ExtensionPresenter.icon(active_unpinned) %>
+                <div class="h-4 w-px bg-gray-300 mx-0.5 flex-shrink-0"></div>
+                <div class="flex items-center rounded-lg text-xs font-bold whitespace-nowrap flex-shrink-0 bg-white text-primary-700 shadow-sm px-2.5 py-1.5 gap-1.5">
+                  <span class="text-xs"><%= icon %></span>
+                  <span><%= title %></span>
                 </div>
               <% end %>
             <% end %>
@@ -1569,7 +1555,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
             </div>
           </div>
 
-          <div id="overview-bento-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 auto-rows-min">
+          <div id="overview-bento-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 auto-rows-min [grid-auto-flow:dense]">
             <%= for {slot_id, idx} <- Enum.with_index(@overview_slot_ids) do %>
               <%= case slot_id do %>
                 <% "event_graph" -> %>
@@ -1680,8 +1666,8 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                         <%= for s <- @telemetry.action_series do %>
                           <div class="flex items-center gap-1.5">
                             <span class="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs" style={"background-color: #{s.color}"}></span>
-                            <span class="font-mono text-gray-700 font-semibold"><%= s.id %></span>
-                            <span class="text-gray-400 font-mono text-[10px]">(<%= s.latest_count %>)</span>
+                            <span class="font-mono text-gray-700 font-semibold"><%= if s.id == "idle", do: "Cluster Idle", else: s.id %></span>
+                            <span class="text-gray-400 font-mono text-[10px]">(<%= s.latest_count %> <%= if s.id == "idle", do: "calls", else: "calls" %>)</span>
                           </div>
                         <% end %>
                       </div>
@@ -1694,16 +1680,6 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                           <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                           <span>Latest Dispatched Event</span>
                         </div>
-                        <%= if not Enum.empty?(@activity_events) do %>
-                          <button
-                            type="button"
-                            phx-click="open_events_modal"
-                            class="px-2 py-0.5 text-[10px] font-bold text-gray-700 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-md transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
-                            title="View full event stream history in modal"
-                          >
-                            <span>More &rarr;</span>
-                          </button>
-                        <% end %>
                       </div>
 
                       <%= if Enum.empty?(@activity_events) do %>
@@ -2093,9 +2069,14 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                     <button
                       type="button"
                       phx-click="open_sdk_modal"
-                      class="w-full py-2.5 px-4 rounded-xl bg-white text-purple-700 hover:bg-purple-50 font-black text-xs shadow-sm transition-all flex items-center justify-center gap-2"
+                      class="w-full py-2.5 px-4 rounded-xl bg-white text-purple-700 hover:bg-purple-50 font-black text-xs shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
                     >
-                      <span>⬇ Download SDK</span>
+                      <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                      </svg>
+                      <span>Download SDK</span>
                     </button>
                   </div>
 

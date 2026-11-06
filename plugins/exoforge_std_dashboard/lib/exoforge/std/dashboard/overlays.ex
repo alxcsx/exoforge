@@ -1291,9 +1291,14 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                       href={file["url"]}
                       download={file["filename"]}
                       target="_blank"
-                      class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg transition-colors"
+                      class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg transition-colors flex items-center gap-1.5"
                     >
-                      ⬇️ Download
+                      <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                      </svg>
+                      <span>Download</span>
                     </a>
                   </div>
                 </div>
@@ -1352,8 +1357,10 @@ defmodule Exoforge.Std.Dashboard.Overlays do
 
       # Flatten catalog into a list of {svc, act, key}
       all_items =
-        for svc <- catalog, act <- (svc.actions || []) do
-          key = "#{svc.name}.#{act.name}"
+        for svc <- catalog, act <- (Map.get(svc, :actions) || Map.get(svc, "actions") || []) do
+          svc_name = to_string(Map.get(svc, :name) || Map.get(svc, "name") || "")
+          act_name = to_string(Map.get(act, :name) || Map.get(act, "name") || "")
+          key = "#{svc_name}.#{act_name}"
           invocations = Map.get(telemetry[:action_invocations] || %{}, key, 0)
           errors = Map.get(telemetry[:action_errors] || %{}, key, 0)
 
@@ -1382,9 +1389,11 @@ defmodule Exoforge.Std.Dashboard.Overlays do
           if q == "" do
             true
           else
+            svc_name = to_string(Map.get(item.service, :name) || Map.get(item.service, "name") || "")
+            act_name = to_string(Map.get(item.action, :name) || Map.get(item.action, "name") || "")
             String.contains?(String.downcase(item.key), q) or
-              String.contains?(String.downcase(to_string(item.service.name)), q) or
-              String.contains?(String.downcase(to_string(item.action.name)), q)
+              String.contains?(String.downcase(svc_name), q) or
+              String.contains?(String.downcase(act_name), q)
           end
         end)
         |> Enum.filter(fn item ->
@@ -1407,7 +1416,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
       is_error_mode = assigns.mode == "errors"
       chart_series =
         if is_error_mode do
-          Enum.filter(telemetry[:error_series] || [], &(&1.latest_count > 0))
+          Enum.filter(telemetry[:error_series] || [], &((&1[:latest_count] || 0) > 0))
         else
           telemetry[:action_series] || []
         end
@@ -1525,7 +1534,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   <text x="44" y="138" text-anchor="end" font-size="10" font-family="monospace" fill="#94a3b8">0</text>
 
                   <!-- X-axis ticks & Time labels -->
-                  <%= for {lbl, x} <- Enum.zip(@telemetry.time_labels, @expanded_x_coords) do %>
+                  <%= for {lbl, x} <- Enum.zip(Map.get(@telemetry, :time_labels, []), @expanded_x_coords) do %>
                     <line x1={x} y1="135" x2={x} y2="140" stroke="#cbd5e1" stroke-width="1" />
                     <text x={x} y="152" text-anchor="middle" font-size="10" font-family="monospace" fill="#94a3b8"><%= lbl %></text>
                   <% end %>
@@ -1534,14 +1543,14 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   <%= for s <- @expanded_series do %>
                     <polyline
                       fill="none"
-                      stroke={s.color}
+                      stroke={Map.get(s, :color, "#8b5cf6")}
                       stroke-width="2.5"
                       stroke-linecap="round"
                       stroke-linejoin="round"
                       points={s.expanded_points}
                     />
                     <%= for d <- s.expanded_dots do %>
-                      <circle cx={d.x} cy={d.y} r="3.5" fill={s.color} stroke="#ffffff" stroke-width="1.5" />
+                      <circle cx={d.x} cy={d.y} r="3.5" fill={Map.get(s, :color, "#8b5cf6")} stroke="#ffffff" stroke-width="1.5" />
                     <% end %>
                   <% end %>
                 </svg>
@@ -1552,9 +1561,9 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                 <div class="flex flex-wrap items-center gap-x-4 gap-y-1.5 pt-1 text-[11px]">
                   <%= for s <- @expanded_series do %>
                     <div class="flex items-center gap-1.5">
-                      <span class="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs" style={"background-color: #{s.color}"}></span>
-                      <span class="font-mono text-gray-800 font-semibold"><%= s.id %></span>
-                      <span class="text-gray-400 font-mono text-[10px]">(<%= s.latest_count %> <%= if @is_error_mode, do: "errors", else: "calls" %>)</span>
+                      <span class="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs" style={"background-color: #{Map.get(s, :color, "#8b5cf6")}"}></span>
+                      <span class="font-mono text-gray-800 font-semibold"><%= if s[:id] == "idle", do: "Cluster Idle", else: s[:id] %></span>
+                      <span class="text-gray-400 font-mono text-[10px]">(<%= s[:latest_count] %> <%= if @is_error_mode, do: "errors", else: "calls" %>)</span>
                     </div>
                   <% end %>
                 </div>
@@ -1630,21 +1639,21 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                         <td class="py-2.5 px-3">
                           <div class="flex items-center gap-2">
                             <span class="w-6 h-6 rounded-md bg-purple-50 text-purple-700 flex items-center justify-center text-xs shrink-0">
-                              <%= item.service.icon || "⚡" %>
+                              <%= Map.get(item.service, :icon) || "⚡" %>
                             </span>
                             <div class="min-w-0">
                               <span class="font-bold text-gray-900 font-mono block truncate"><%= item.key %></span>
-                              <span class="text-[10px] text-gray-400 block"><%= item.service.title || item.service.name %></span>
+                              <span class="text-[10px] text-gray-400 block"><%= Map.get(item.service, :title) || Map.get(item.service, :name, "") %></span>
                             </div>
                           </div>
                         </td>
                         <td class="py-2.5 px-3">
                           <div class="flex items-center gap-1.5">
                             <span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-gray-100 text-gray-600">
-                              <%= item.action.scope || "guest" %>
+                              <%= Map.get(item.action, :scope) || "guest" %>
                             </span>
                             <span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-gray-100 text-gray-600">
-                              <%= item.action.transport || "auto" %>
+                              <%= Map.get(item.action, :transport) || "auto" %>
                             </span>
                           </div>
                         </td>
@@ -1665,8 +1674,8 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                           <button
                             type="button"
                             phx-click={@on_run_action}
-                            phx-value-service={to_string(item.service.name)}
-                            phx-value-action={to_string(item.action.name)}
+                            phx-value-service={to_string(Map.get(item.service, :name, ""))}
+                            phx-value-action={to_string(Map.get(item.action, :name, ""))}
                             class="px-2.5 py-1 text-[11px] font-bold text-primary-700 bg-primary-50 hover:bg-primary-100 rounded-lg transition-colors inline-flex items-center gap-1 shadow-2xs"
                           >
                             <span>⚡ Run</span>
