@@ -51,6 +51,15 @@ public partial class ExoforgeControlCenter : EditorWindow
         DrawMetricPill("Cluster Built", RemoteBuildDate);
         EditorGUILayout.EndHorizontal();
 
+        if (_isConnected && RemoteProjectName != "—")
+        {
+            EditorGUILayout.Space(2);
+            EditorGUILayout.BeginHorizontal();
+            DrawMetricPill("Studio", RemoteStudioName);
+            DrawMetricPill("Project", RemoteProjectName);
+            EditorGUILayout.EndHorizontal();
+        }
+
         EditorGUILayout.EndVertical();
 
         EditorGUILayout.Space(6);

@@ -11,7 +11,7 @@ defmodule Exoforge.Std.Dashboard do
     dependencies: [Exoforge.Std.Services.Database, Exoforge.Std.Services.ResourceStore],
     title: "Exoforge Dashboard",
     icon: "🎛️",
-    category: "Studio"
+    category: "System"
   }
 
   def children do
@@ -38,6 +38,8 @@ defmodule Exoforge.Std.Dashboard do
         resource: "studio_preference"
       })
 
+    _ = Exoforge.Std.Dashboard.ProjectMetadata.init()
+
     :ok
   end
 
@@ -51,5 +53,18 @@ defmodule Exoforge.Std.Dashboard do
   defaction get_dashboard_data(_payload) do
     data = Exoforge.Std.Dashboard.Router.build_overview_data()
     {:ok, %{data: data}}
+  end
+
+  @impl true
+  defaction get_project_metadata, scope: Exoforge.Auth.Roles.studio() do
+    {:ok, Exoforge.Std.Dashboard.ProjectMetadata.get()}
+  end
+
+  @impl true
+  defaction update_project_metadata(payload), scope: Exoforge.Auth.Roles.admin() do
+    case Exoforge.Std.Dashboard.ProjectMetadata.put(payload) do
+      {:ok, meta} -> {:ok, %{metadata: meta}}
+      err -> err
+    end
   end
 end

@@ -53,6 +53,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         Phoenix.PubSub.subscribe(Exoforge.Std.Dashboard.PubSub, "studio_events")
         EventDispatcher.subscribe(:all, topic: :global)
         EventDispatcher.subscribe(:all, topic: "studio")
+        EventDispatcher.subscribe(:all, topic: "system")
         :timer.send_interval(5000, self(), :refresh_telemetry)
       rescue
         _ -> :ok
@@ -61,6 +62,9 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
     overview = fetch_overview()
     action_catalog = ActionForms.catalog()
+    project_metadata = Exoforge.Std.Dashboard.ProjectMetadata.get()
+    project_name = project_metadata["project_name"] || "Exoforge Cluster"
+    studio_name = project_metadata["studio_name"] || "Exoforge Studio"
 
     # Discover extensions that declare a dashboard visualization or visual controls
     visualizable_extensions =
@@ -96,10 +100,9 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
      assign(socket,
        current_tab: :overview,
        focus: nil,
-       project_name: "Exoforge Cluster",
-       studio_name: "Exoforge Dashboard",
-       environments: ["Live", "Dev", "Staging"],
-       current_env: "Live",
+       project_name: project_name,
+       studio_name: studio_name,
+       project_metadata: project_metadata,
        max_pinned: @max_pinned,
        overview: overview,
        telemetry: telemetry,
@@ -257,13 +260,6 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   def handle_event("switch_tab", %{"tab" => tab_str}, socket) do
     target_tab = resolve_tab(tab_str, socket.assigns.overview.extensions)
     {:noreply, push_patch(socket, to: tab_path(target_tab))}
-  end
-
-  def handle_event("switch_env", %{"env" => env}, socket) do
-    {:noreply,
-     socket
-     |> assign(:current_env, env)
-     |> show_toast(:info, "Switched active environment to #{env}")}
   end
 
   def handle_event("pin_extension", %{"id" => ext_id_str}, socket) do
@@ -474,6 +470,39 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       {:error, reason} ->
         {:noreply, show_toast(socket, :error, "Failed to update CORS policy: #{inspect(reason)}")}
     end
+  end
+
+  def handle_event("save_project_metadata", params, socket) do
+    custom =
+      case params["custom_json"] do
+        str when is_binary(str) and str != "" ->
+          case Jason.decode(str) do
+            {:ok, decoded} when is_map(decoded) -> decoded
+            _ -> socket.assigns.project_metadata["custom"] || %{}
+          end
+
+        _ ->
+          socket.assigns.project_metadata["custom"] || %{}
+      end
+
+    metadata_attrs = %{
+      "project_name" => params["project_name"],
+      "studio_name" => params["studio_name"],
+      "description" => params["description"],
+      "website_url" => params["website_url"],
+      "custom" => custom
+    }
+
+    {:ok, updated} = Exoforge.Std.Dashboard.ProjectMetadata.put(metadata_attrs)
+
+    {:noreply,
+     socket
+     |> assign(
+       project_name: updated["project_name"],
+       studio_name: updated["studio_name"],
+       project_metadata: updated
+     )
+     |> show_toast(:info, "✓ Project metadata saved successfully.")}
   end
 
   def handle_event("open_sdk_modal", _params, socket) do
@@ -824,6 +853,20 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
     filtered = filter_activity_events(new_events, socket.assigns.event_filter_topic)
     telemetry = fetch_telemetry_summary(socket.assigns.overview, new_events)
+
+    event_str = to_string(event_key)
+    meta = (is_map(payload) && (payload[:metadata] || payload["metadata"])) || nil
+
+    socket =
+      if event_str in ["project.metadata_updated", "system.project_metadata_updated"] and is_map(meta) do
+        assign(socket,
+          project_name: meta["project_name"] || meta[:project_name] || socket.assigns.project_name,
+          studio_name: meta["studio_name"] || meta[:studio_name] || socket.assigns.studio_name,
+          project_metadata: meta
+        )
+      else
+        socket
+      end
 
     {:noreply,
      assign(socket,
@@ -1315,18 +1358,12 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                 <span class="font-bold text-gray-700 max-w-[120px] truncate"><%= @project_name %></span>
                 <span class="text-gray-300">/</span>
                 <span class="text-gray-500 font-medium truncate"><%= @studio_name %></span>
-                <span class="text-gray-300">•</span>
-                <span class="relative flex h-1.5 w-1.5">
-                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
-                </span>
-                <span class="text-[10px] font-mono font-bold text-gray-500 uppercase tracking-wider"><%= String.upcase(@current_env) %></span>
               </div>
             </div>
           </div>
 
           <!-- Top Navigation Bar: 1. Overview, 2. Extensions, 3. Pinned Items (wraps to 2nd line if needed, up to @max_pinned) -->
-          <nav class="flex-1 min-w-0 mx-2 flex flex-wrap items-center gap-1 bg-gray-100/90 p-1 rounded-xl border border-gray-200/80 shadow-inner">
+          <nav class="flex-1 min-w-0 mx-1 flex flex-wrap items-center gap-0.5 bg-gray-100/90 p-0.5 rounded-xl border border-gray-200/80 shadow-inner">
             <!-- 1. Overview Tab (Icon only + tooltip/aria) -->
             <button
               phx-click="switch_tab"
@@ -1358,7 +1395,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
             <!-- Separator between main tabs and pinned items -->
             <%= if length(@pinned_extensions) > 0 do %>
-              <div class="h-4 w-px bg-gray-300 mx-0.5 flex-shrink-0"></div>
+              <div class="h-4 w-px bg-gray-300/80 mx-0.5 flex-shrink-0"></div>
             <% end %>
 
             <!-- 3a. Pinned dropdown (small screens) -->
@@ -1367,7 +1404,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                 <button
                   type="button"
                   phx-click="toggle_pinned_menu"
-                  class="px-2.5 py-1.5 text-xs rounded-lg font-bold flex items-center gap-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-200/50"
+                  class="px-2 py-1 text-xs rounded-lg font-bold flex items-center justify-center gap-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-200/50"
                 >
                   <span>Pinned</span>
                   <span class="text-[10px] px-1.5 rounded-full bg-gray-200 text-gray-700"><%= length(@pinned_extensions) %></span>
@@ -1382,7 +1419,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                           type="button"
                           phx-click="switch_tab"
                           phx-value-tab={ext_id}
-                          class={"w-full text-left px-2.5 py-2 rounded-lg text-xs font-bold flex items-center gap-2 #{if to_string(@current_tab) == ext_id, do: "bg-primary-50 text-primary-700", else: "text-gray-700 hover:bg-gray-100"}"}
+                          class={"w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 #{if to_string(@current_tab) == ext_id, do: "bg-primary-50 text-primary-700", else: "text-gray-700 hover:bg-gray-100"}"}
                         >
                           <span><%= if is_map(pext.dashboard_view) and pext.dashboard_view[:icon], do: pext.dashboard_view[:icon], else: ExtensionPresenter.icon(pext) %></span>
                           <span class="truncate"><%= tab_short_name(pext) %></span>
@@ -1401,21 +1438,21 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                 <% title = tab_short_name(ext) %>
                 <% icon = if is_map(ext.dashboard_view) and ext.dashboard_view[:icon], do: ext.dashboard_view[:icon], else: ExtensionPresenter.icon(ext) %>
                 <% is_active = to_string(@current_tab) == ext_id %>
-                <div class={"group relative hidden md:flex items-center rounded-lg transition-all text-xs font-bold whitespace-nowrap flex-shrink-0 #{if is_active, do: "bg-white text-primary-700 shadow-sm", else: "text-gray-600 hover:text-gray-900 hover:bg-gray-200/50"}"}>
+                <div class={"group relative hidden md:inline-flex items-center justify-center rounded-lg transition-all text-xs font-bold whitespace-nowrap flex-shrink-0 #{if is_active, do: "bg-white text-primary-700 shadow-sm", else: "text-gray-600 hover:text-gray-900 hover:bg-gray-200/50"}"}>
                   <button
                     phx-click="switch_tab"
                     phx-value-tab={ext_id}
-                    class="px-2.5 py-1.5 flex items-center gap-1.5"
+                    class="px-2.5 py-1 flex items-center justify-center gap-1 group-hover:pr-5 transition-all"
                   >
-                    <span class="text-xs"><%= icon %></span>
-                    <span><%= title %></span>
+                    <span class="text-xs leading-none"><%= icon %></span>
+                    <span class="leading-none"><%= title %></span>
                   </button>
                   <button
                     type="button"
                     phx-click="unpin_extension"
                     phx-value-id={ext_id}
                     title={"Unpin #{title} from top bar"}
-                    class="pr-1.5 pl-0.5 text-gray-400 hover:text-red-500 font-bold text-[10px] transition-opacity opacity-0 group-hover:opacity-100"
+                    class="absolute right-1 text-gray-400 hover:text-red-500 font-bold text-[10px] transition-opacity opacity-0 group-hover:opacity-100 p-0.5 flex items-center justify-center"
                   >
                     ✕
                   </button>
@@ -1429,10 +1466,10 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
               <%= if active_unpinned do %>
                 <% title = tab_short_name(active_unpinned) %>
                 <% icon = if is_map(active_unpinned.dashboard_view) and active_unpinned.dashboard_view[:icon], do: active_unpinned.dashboard_view[:icon], else: ExtensionPresenter.icon(active_unpinned) %>
-                <div class="h-4 w-px bg-gray-300 mx-0.5 flex-shrink-0"></div>
-                <div class="flex items-center rounded-lg text-xs font-bold whitespace-nowrap flex-shrink-0 bg-white text-primary-700 shadow-sm px-2.5 py-1.5 gap-1.5">
-                  <span class="text-xs"><%= icon %></span>
-                  <span><%= title %></span>
+                <div class="h-4 w-px bg-gray-300/80 mx-0.5 flex-shrink-0"></div>
+                <div class="flex items-center justify-center rounded-lg text-xs font-bold whitespace-nowrap flex-shrink-0 bg-white text-primary-700 shadow-sm px-2.5 py-1 gap-1">
+                  <span class="text-xs leading-none"><%= icon %></span>
+                  <span class="leading-none"><%= title %></span>
                 </div>
               <% end %>
             <% end %>
@@ -1521,9 +1558,12 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
         <!-- OVERVIEW TAB: 4-Slot Rearrangeable Grid -->
         <%= if @current_tab == :overview do %>
-          <div class="flex items-center justify-between gap-2">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-gray-200/90 shadow-sm">
             <div>
-              <h2 class="text-base font-extrabold text-gray-900 tracking-tight">Project Overview</h2>
+              <h2 class="text-xl font-bold text-gray-900 flex items-center gap-2">
+                <span>📊</span>
+                <span>Project Overview</span>
+              </h2>
             </div>
             <div class="flex items-center gap-2">
               <%= if @grid_edit_mode do %>
@@ -1547,7 +1587,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                 <button
                   type="button"
                   phx-click="toggle_grid_edit_mode"
-                  class="px-3 py-1.5 text-xs font-bold text-gray-700 hover:text-gray-900 bg-white hover:bg-gray-50 border border-gray-200 rounded-xl transition-colors shadow-xs flex items-center gap-1.5"
+                  class="px-3 py-1.5 text-xs font-bold text-gray-700 hover:text-gray-900 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl transition-colors shadow-xs flex items-center gap-1.5"
                 >
                   <span>✎ Edit Grid Order</span>
                 </button>
@@ -1918,7 +1958,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
                     <div class="pt-2 border-t border-gray-100 flex items-center justify-between text-[11px] text-gray-500">
                       <span>Resources: <strong class="text-gray-800"><%= @overview.resources_count %></strong></span>
-                      <span>Env: <strong class="text-primary-700 uppercase"><%= @current_env %></strong></span>
+                      <span>Plugins: <strong class="text-primary-700"><%= @overview.plugins_count %></strong></span>
                     </div>
                   </div>
 
@@ -1945,7 +1985,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                           type="button"
                           phx-click="switch_tab"
                           phx-value-tab="apps"
-                          class="px-2.5 py-1 text-[11px] font-bold text-primary-600 hover:text-primary-700 bg-primary-50/70 hover:bg-primary-100 rounded-lg transition-colors"
+                          class="px-2.5 py-1 text-[11px] font-bold text-primary-700 hover:text-primary-800 bg-primary-50 hover:bg-primary-100 rounded-lg transition-colors"
                         >
                           Manage &rarr;
                         </button>
@@ -2234,11 +2274,10 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         open={@settings_open}
         project_name={@project_name}
         studio_name={@studio_name}
+        project_metadata={@project_metadata}
         settings_tab={@settings_tab}
         settings_hooks={@settings_hooks}
         cors_config={@cors_config}
-        environments={@environments}
-        current_env={@current_env}
         overview={@overview}
         node_name={to_string(node())}
         activity_events={@filtered_activity_events}

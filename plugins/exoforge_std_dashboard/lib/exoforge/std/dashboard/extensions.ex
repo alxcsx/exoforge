@@ -9,6 +9,7 @@ defmodule Exoforge.Std.Dashboard.Extensions do
   """
 
   alias Exoforge.PluginRegistry
+  alias Exoforge.Std.Dashboard.ExtensionPresenter
 
   @doc "Returns structured extensions summary for the Producer Studio dashboard."
   def dashboard_extensions do
@@ -20,7 +21,7 @@ defmodule Exoforge.Std.Dashboard.Extensions do
 
       services = Enum.map(PluginRegistry.manifest_services(manifest), &normalize_service_metadata/1)
 
-      category = Map.get(manifest, :category) || "Extension"
+      category = ExtensionPresenter.normalize_category(Map.get(manifest, :category))
 
       dashboard_view =
         cond do
@@ -70,7 +71,13 @@ defmodule Exoforge.Std.Dashboard.Extensions do
       dv_title = is_map(dashboard_view) && (dashboard_view[:title] || dashboard_view["title"])
       dv_icon = is_map(dashboard_view) && (dashboard_view[:icon] || dashboard_view["icon"])
       title = Map.get(manifest, :title) || dv_title || to_string(manifest.name || manifest.id)
-      icon = Map.get(manifest, :icon) || dv_icon || "🧩"
+      raw_icon = Map.get(manifest, :icon) || dv_icon
+      icon =
+        if is_binary(raw_icon) and raw_icon not in ["", "🧩"] do
+          raw_icon
+        else
+          ExtensionPresenter.default_icon_for(%{id: manifest.id, category: category})
+        end
 
       %{
         id: manifest.id,

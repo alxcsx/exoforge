@@ -26,6 +26,52 @@ public partial class ExoforgeControlCenter : EditorWindow
     {
         _settingsScroll = EditorGUILayout.BeginScrollView(_settingsScroll);
 
+        // Project & Studio Identity
+        EditorGUILayout.LabelField("Project & Studio Identity", EditorStyles.boldLabel);
+        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+
+        if (Workspace?.Config != null)
+        {
+            Workspace.Config.StudioName = EditorGUILayout.TextField("Studio Name", Workspace.Config.StudioName);
+            Workspace.Config.ProjectName = EditorGUILayout.TextField("Project Title", Workspace.Config.ProjectName);
+            Workspace.Config.Description = EditorGUILayout.TextField("Description", Workspace.Config.Description ?? "");
+
+            EditorGUILayout.Space(2);
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("Save to exoforge.json", EditorStyles.miniButton))
+            {
+                Workspace.Save();
+                ExoforgeRuntimeConfigGenerator.Generate();
+                ShowStatus("✓ Saved project metadata to exoforge.json.", MessageType.Info);
+            }
+
+            using (new EditorGUI.DisabledScope(!_isConnected))
+            {
+                if (GUILayout.Button("Push to Cluster", EditorStyles.miniButton, GUILayout.Width(115)))
+                {
+                    _ = PushProjectMetadataToClusterAsync();
+                }
+                if (GUILayout.Button("Pull from Cluster", EditorStyles.miniButton, GUILayout.Width(120)))
+                {
+                    PullProjectMetadataFromCluster();
+                }
+            }
+            EditorGUILayout.EndHorizontal();
+
+            if (_isConnected && RemoteProjectName != "—")
+            {
+                EditorGUILayout.LabelField($"Cluster Identity: {RemoteStudioName} / {RemoteProjectName}", EditorStyles.miniLabel);
+            }
+        }
+        else
+        {
+            EditorGUILayout.HelpBox("Workspace config not loaded.", MessageType.Info);
+        }
+
+        EditorGUILayout.EndVertical();
+
+        EditorGUILayout.Space(8);
+
         EditorGUILayout.LabelField("Workspace & Codegen Paths", EditorStyles.boldLabel);
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
 
@@ -288,6 +334,43 @@ public partial class ExoforgeControlCenter : EditorWindow
         EditorGUILayout.EndVertical();
 
         EditorGUILayout.EndScrollView();
+    }
+
+    private async Task PushProjectMetadataToClusterAsync()
+    {
+        if (_editorClient == null || !_isConnected || Workspace?.Config == null) return;
+        try
+        {
+            var payload = new Dictionary<string, object>
+            {
+                ["project_name"] = Workspace.Config.ProjectName,
+                ["studio_name"] = Workspace.Config.StudioName,
+                ["description"] = Workspace.Config.Description ?? ""
+            };
+            await _editorClient.SendActionAsync<JsonElement>("dashboard", "update_project_metadata", payload);
+            RemoteProjectName = Workspace.Config.ProjectName;
+            RemoteStudioName = Workspace.Config.StudioName;
+            RemoteDescription = Workspace.Config.Description ?? "";
+            ShowStatus("✓ Pushed project metadata to cluster.", MessageType.Info);
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Failed to push project metadata: {ex.Message}", MessageType.Error);
+        }
+        Repaint();
+    }
+
+    private void PullProjectMetadataFromCluster()
+    {
+        if (Workspace?.Config == null) return;
+        if (RemoteProjectName != "—") Workspace.Config.ProjectName = RemoteProjectName;
+        if (RemoteStudioName != "—") Workspace.Config.StudioName = RemoteStudioName;
+        if (!string.IsNullOrEmpty(RemoteDescription)) Workspace.Config.Description = RemoteDescription;
+        if (!string.IsNullOrEmpty(RemoteWebsiteUrl)) Workspace.Config.WebsiteUrl = RemoteWebsiteUrl;
+        Workspace.Save();
+        ExoforgeRuntimeConfigGenerator.Generate();
+        ShowStatus("✓ Pulled project metadata from cluster and saved to exoforge.json.", MessageType.Info);
+        Repaint();
     }
 }
 }

@@ -31,9 +31,94 @@ defmodule Exoforge.Std.Dashboard.ExtensionPresenter do
     end
   end
 
-  @doc "Icon for an extension map, or the default puzzle piece."
-  def icon(%{} = ext), do: dashboard_view(ext, :icon) || Map.get(ext, :icon) || "🧩"
-  def icon(_), do: "🧩"
+  @known_icons %{
+    "auth" => "🛡️",
+    "exoforge_std_auth" => "🛡️",
+    "player_data" => "👤",
+    "exoforge_std_player_data" => "👤",
+    "database" => "🗄️",
+    "exoforge_std_database" => "🗄️",
+    "resources" => "🗃️",
+    "resource_store" => "🗃️",
+    "exoforge_std_resources" => "🗃️",
+    "file_bucket" => "📁",
+    "exoforge_std_file_bucket" => "📁",
+    "ws" => "⚡",
+    "exoforge_std_ws" => "⚡",
+    "http" => "🌐",
+    "exoforge_std_http" => "🌐",
+    "plugin_manager" => "⚙️",
+    "exoforge_std_plugin_manager" => "⚙️",
+    "metering" => "📈",
+    "exoforge_std_metering" => "📈",
+    "dashboard" => "🎛️",
+    "exoforge_std_dashboard" => "🎛️",
+    "dashboard_views" => "🎨",
+    "exoforge_std_dashboard_views" => "🎨"
+  }
+
+  @categories [
+    {"all", "All Extensions", "🌐"},
+    {"gameplay", "Gameplay", "🎮"},
+    {"players", "Players", "👤"},
+    {"storage", "Storage", "🗄️"},
+    {"network", "Network", "🔌"},
+    {"system", "System", "⚙️"}
+  ]
+
+  @doc "Standardized taxonomy of extension categories."
+  def standard_categories, do: @categories
+
+  @doc "Normalizes any raw or legacy category string into the standard taxonomy."
+  def normalize_category(category) do
+    case String.downcase(to_string(category || "")) do
+      cat when cat in ["gameplay", "game", "combat", "sandbox"] -> "Gameplay"
+      cat when cat in ["players", "player", "player_data", "identity", "auth", "data", "users"] -> "Players"
+      cat when cat in ["storage", "database", "resource_store", "resources", "file_bucket", "files", "store"] -> "Storage"
+      cat when cat in ["network", "networking", "ingress", "gateway", "http", "ws", "websocket", "api"] -> "Network"
+      cat when cat in ["system", "management", "operations", "metering", "studio", "tools", "core", "views"] -> "System"
+      "" -> "Gameplay"
+      other -> String.capitalize(other)
+    end
+  end
+
+  @doc "Returns the standardized category emoji icon."
+  def category_icon(category) do
+    case normalize_category(category) do
+      "Gameplay" -> "🎮"
+      "Players" -> "👤"
+      "Storage" -> "🗄️"
+      "Network" -> "🔌"
+      "System" -> "⚙️"
+      _ -> "🧩"
+    end
+  end
+
+  @doc "Default icon for an extension based on its id or category."
+  def default_icon_for(%{} = ext) do
+    id = to_string(Map.get(ext, :id) || Map.get(ext, :name) || "")
+    clean_id = id |> String.replace_prefix("exoforge_std_", "") |> String.downcase()
+    category = Map.get(ext, :category)
+
+    Map.get(@known_icons, id) ||
+      Map.get(@known_icons, clean_id) ||
+      (category && category_icon(category)) ||
+      "🎮"
+  end
+
+  def default_icon_for(id_or_name) do
+    str = to_string(id_or_name || "")
+    clean = str |> String.replace_prefix("exoforge_std_", "") |> String.downcase()
+    Map.get(@known_icons, str) || Map.get(@known_icons, clean) || "🎮"
+  end
+
+  @doc "Icon for an extension map, or the standardized default."
+  def icon(%{} = ext) do
+    raw = dashboard_view(ext, :icon) || Map.get(ext, :icon)
+    if is_binary(raw) and raw not in ["", "🧩"], do: raw, else: default_icon_for(ext)
+  end
+
+  def icon(id_or_name), do: default_icon_for(id_or_name)
 
   defp dashboard_view(ext, key) do
     case Map.get(ext, :dashboard_view) do

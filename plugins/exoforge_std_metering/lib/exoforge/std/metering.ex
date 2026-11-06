@@ -18,11 +18,11 @@ defmodule Exoforge.Std.Metering do
     system: true,
     dependencies: [Exoforge.Std.Services.Database],
     title: "Usage & Metering",
-    icon: "📊",
-    category: "Operations",
+    icon: "📈",
+    category: "System",
     # The Studio's generic extension view renders the `usage` action from this; without it the
     # plugin is invisible in the dashboard and the CLI is the only surface.
-    dashboard_view: %{id: :metering, title: "Usage", icon: "📊"}
+    dashboard_view: %{id: :metering, title: "Usage", icon: "📈"}
   }
 
   alias Exoforge.ActionDispatcher

@@ -30,10 +30,10 @@ defmodule Exoforge.Std.Resources do
   @manifest %{
     dependencies: [Exoforge.Std.Services.Database],
     title: "Resource Store",
-    icon: "🗄️",
+    icon: "🗃️",
     category: "Storage",
     system: true,
-    dashboard_view: %{id: :resources, title: "Resource Store", icon: "🗄️"}
+    dashboard_view: %{id: :resources, title: "Resource Store", icon: "🗃️"}
   }
 
   @cache :exo_resource_migrated

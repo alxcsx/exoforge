@@ -11,6 +11,20 @@ public class ExoProjectConfig
     [JsonPropertyName("project_name")]
     public string ProjectName { get; set; } = "ExoforgeProject";
 
+    [JsonPropertyName("studio_name")]
+    public string StudioName { get; set; } = "Exoforge Studio";
+
+    [JsonPropertyName("description")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Description { get; set; }
+
+    [JsonPropertyName("website_url")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? WebsiteUrl { get; set; }
+
+    [JsonPropertyName("custom_metadata")]
+    public Dictionary<string, string> CustomMetadata { get; set; } = new();
+
     [JsonPropertyName("default_environment")]
     public string DefaultEnvironment { get; set; } = "local";
 

@@ -207,6 +207,10 @@ html:not(.light) .divide-gray-200 > :not([hidden]) ~ :not([hidden]) {
 
 /* Pastel Tinted Badges & Accents in Dark Mode */
 html:not(.light) .bg-primary-50,
+html:not(.light) .bg-primary-50\/40,
+html:not(.light) .bg-primary-50\/50,
+html:not(.light) .bg-primary-50\/60,
+html:not(.light) .bg-primary-50\/70,
 html:not(.light) .bg-primary-100,
 html:not(.light) .bg-purple-50,
 html:not(.light) .bg-purple-50\/60,
@@ -216,14 +220,17 @@ html:not(.light) .bg-violet-50\/50,
 html:not(.light) .bg-violet-50\/60,
 html:not(.light) .bg-violet-50\/70,
 html:not(.light) .bg-violet-100 {
-  background-color: rgba(139, 92, 246, 0.15) !important;
+  background-color: rgba(139, 92, 246, 0.18) !important;
 }
 
 html:not(.light) .hover\:bg-purple-50\/30:hover,
 html:not(.light) .hover\:bg-violet-50\/20:hover,
 html:not(.light) .hover\:bg-violet-50\/40:hover,
-html:not(.light) .hover\:bg-primary-50\/70:hover {
-  background-color: rgba(139, 92, 246, 0.1) !important;
+html:not(.light) .hover\:bg-primary-50:hover,
+html:not(.light) .hover\:bg-primary-50\/40:hover,
+html:not(.light) .hover\:bg-primary-50\/70:hover,
+html:not(.light) .hover\:bg-primary-100:hover {
+  background-color: rgba(139, 92, 246, 0.28) !important;
 }
 
 html:not(.light) .text-primary-600,
@@ -240,7 +247,9 @@ html:not(.light) .text-violet-950 {
   color: #c4b5fd !important;
 }
 
+html:not(.light) .border-primary-100,
 html:not(.light) .border-primary-200,
+html:not(.light) .border-primary-300,
 html:not(.light) .border-purple-100,
 html:not(.light) .border-purple-200,
 html:not(.light) .border-purple-300,

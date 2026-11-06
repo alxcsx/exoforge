@@ -12,7 +12,7 @@ defmodule Exoforge.Std.PlayerData do
     dependencies: [Exoforge.Std.Services.Database],
     title: "Player Data",
     icon: "👤",
-    category: "Data",
+    category: "Players",
     dashboard_view: %{id: :player_data, title: "Players", icon: "👤"},
     ui_hooks: %{
       player_inspect: [

@@ -11,7 +11,7 @@ defmodule Exoforge.Std.Auth do
     dependencies: [Exoforge.Std.Services.Database, Exoforge.Std.Services.PlayerData],
     title: "Users & Auth",
     icon: "🛡️",
-    category: "Identity",
+    category: "Players",
     dashboard_view: %{
       id: :auth,
       title: "Users & Auth",

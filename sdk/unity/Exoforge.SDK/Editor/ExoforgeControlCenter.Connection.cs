@@ -447,6 +447,22 @@ public partial class ExoforgeControlCenter : EditorWindow
     // Serialized on a background thread; only drawn on the main thread.
     private void HandleIncomingEvent(ExoEventFrame evt)
     {
+        if (evt.Event == "project.metadata_updated" || evt.Event == "project_metadata_updated")
+        {
+            try
+            {
+                if (evt.Payload.TryGetProperty("metadata", out var meta))
+                {
+                    if (meta.TryGetProperty("project_name", out var pn)) RemoteProjectName = pn.GetString() ?? RemoteProjectName;
+                    if (meta.TryGetProperty("studio_name", out var sn)) RemoteStudioName = sn.GetString() ?? RemoteStudioName;
+                    if (meta.TryGetProperty("description", out var desc)) RemoteDescription = desc.GetString() ?? "";
+                    if (meta.TryGetProperty("website_url", out var url)) RemoteWebsiteUrl = url.GetString() ?? "";
+                    EditorApplication.delayCall += Repaint;
+                }
+            }
+            catch { }
+        }
+
         if (_eventPaused) return;
 
         string raw;
@@ -495,6 +511,8 @@ public partial class ExoforgeControlCenter : EditorWindow
                 RemoteVersion = sys.TryGetProperty("version", out var v) ? v.GetString() ?? "—" : "—";
                 RemoteCommitHash = sys.TryGetProperty("commit_hash", out var h) ? h.GetString() ?? "—" : "—";
                 RemoteBuildDate = sys.TryGetProperty("build_date", out var d) ? d.GetString() ?? "—" : "—";
+                RemoteProjectName = sys.TryGetProperty("project_name", out var pn) ? pn.GetString() ?? "—" : "—";
+                RemoteStudioName = sys.TryGetProperty("studio_name", out var sn) ? sn.GetString() ?? "—" : "—";
                 if (sys.TryGetProperty("plugins_count", out var pc))
                 {
                     _pluginsCount = pc.GetInt32();
@@ -544,6 +562,24 @@ public partial class ExoforgeControlCenter : EditorWindow
 
         RemoteSdkVersion ??= (RemoteVersion != "—" ? RemoteVersion : null);
         SdkStatus = ExoforgePackageVersion.Compare(RemoteSdkVersion ?? RemoteVersion, RemoteCommitHash);
+
+        // 2c. Dashboard Project Metadata
+        try
+        {
+            var metaResp = await _editorClient.SendActionAsync<JsonElement>("dashboard", "get_project_metadata", null);
+            if (metaResp.ValueKind == JsonValueKind.Object)
+            {
+                if (metaResp.TryGetProperty("project_name", out var pProp)) RemoteProjectName = pProp.GetString() ?? RemoteProjectName;
+                if (metaResp.TryGetProperty("studio_name", out var sProp)) RemoteStudioName = sProp.GetString() ?? RemoteStudioName;
+                if (metaResp.TryGetProperty("description", out var dProp)) RemoteDescription = dProp.GetString() ?? "";
+                if (metaResp.TryGetProperty("website_url", out var wProp)) RemoteWebsiteUrl = wProp.GetString() ?? "";
+                updated = true;
+            }
+        }
+        catch
+        {
+            // Optional dashboard metadata
+        }
 
         // 3. Service Catalog Export
         try

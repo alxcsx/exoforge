@@ -12,30 +12,25 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
 
   defp custom_ui?(ext), do: ext[:custom_view_module] != nil || ExtensionPresenter.view_module(ext) != nil
 
-  # Category pills are derived from extension metadata; only the icon is presentation.
+  # Category pills are standardized and derived from extension metadata.
   defp extension_categories(extensions) do
-    categories =
-      extensions
-      |> Enum.map(&(&1[:category] || "Extension"))
-      |> Enum.uniq()
-      |> Enum.sort()
+    all_cat = [{"all", "All Extensions", "🌐", length(extensions)}]
+    standard_order = ["Gameplay", "Players", "Storage", "Network", "System"]
 
-    [{"all", "All Extensions", "🌐"}] ++
-      Enum.map(categories, fn cat ->
-        {String.downcase(to_string(cat)), to_string(cat), category_icon(cat)}
+    pills =
+      Enum.map(standard_order, fn cat_name ->
+        count =
+          Enum.count(extensions, fn ext ->
+            ExtensionPresenter.normalize_category(ext[:category]) == cat_name
+          end)
+
+        id = String.downcase(cat_name)
+        icon = ExtensionPresenter.category_icon(cat_name)
+        {id, cat_name, icon, count}
       end)
-  end
+      |> Enum.filter(fn {_id, _name, _icon, count} -> count > 0 end)
 
-  defp category_icon(category) do
-    case String.downcase(to_string(category)) do
-      "storage" -> "🗄️"
-      "ingress" -> "🔌"
-      "identity" -> "🔐"
-      "liveops" -> "🎯"
-      "gameplay" -> "⚔️"
-      "studio" -> "📊"
-      _ -> "🧩"
-    end
+    all_cat ++ pills
   end
 
   attr(:ext, :map, required: true)
@@ -55,7 +50,7 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
         <div class="flex items-start justify-between gap-2">
           <div class="flex items-center gap-3 min-w-0">
             <span class="w-10 h-10 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center text-xl shadow-xs shrink-0 group-hover:bg-primary-100 group-hover:scale-105 transition-all">
-              <%= (is_map(@ext.dashboard_view) && @ext.dashboard_view[:icon]) || ExtensionPresenter.icon(@ext) %>
+              <%= ExtensionPresenter.icon(@ext) %>
             </span>
             <div class="min-w-0">
               <h4 class="font-bold text-gray-900 text-sm tracking-tight group-hover:text-primary-700 transition-colors flex items-center gap-1.5 truncate">
@@ -65,7 +60,7 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
                 <% end %>
               </h4>
               <span class="text-[11px] font-medium text-gray-400 block truncate">
-                <%= @ext[:category] || "Extension" %> • v<%= to_string(@ext.version) %>
+                <%= ExtensionPresenter.normalize_category(@ext[:category]) %> • v<%= to_string(@ext.version) %>
               </span>
             </div>
           </div>
@@ -166,7 +161,9 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
       cat_match =
         case category do
           "all" -> true
-          cat -> String.downcase(to_string(ext[:category] || "")) == String.downcase(cat)
+          cat ->
+            ExtensionPresenter.normalize_category(ext[:category]) ==
+              ExtensionPresenter.normalize_category(cat)
         end
 
       query_match =
@@ -217,11 +214,8 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
               <div>
                 <h3 class="text-xl font-bold text-gray-900 flex items-center gap-2">
                   <span>🧩</span>
-                  <span>Feature &amp; Capability Extensions Registry</span>
+                  <span>Extension Registry</span>
                 </h3>
-                <p class="text-xs text-gray-500 mt-1">
-                  Installed extensions providing live gameplay actions, state schemas, and APIs.
-                </p>
               </div>
 
               <!-- Live Search Bar -->
@@ -245,20 +239,19 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
 
             <!-- Category Filter Pills -->
             <div class="flex items-center gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
-              <%= for {cat_id, label, icon} <- extension_categories(@extensions) do %>
+              <%= for {cat_id, label, icon, count} <- extension_categories(@extensions) do %>
+                <% is_active = @category == cat_id or (@category != "all" and ExtensionPresenter.normalize_category(@category) == label) %>
                 <button
                   type="button"
                   phx-click="filter_extension_category"
                   phx-value-category={cat_id}
-                  class={"px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap #{if @category == cat_id, do: "bg-primary-600 text-white shadow-sm", else: "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200/80"}"}
+                  class={"px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap #{if is_active, do: "bg-primary-600 text-white shadow-sm", else: "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200/80"}"}
                 >
                   <span><%= icon %></span>
                   <span><%= label %></span>
-                  <%= if cat_id == "all" do %>
-                    <span class={"text-[10px] px-1.5 py-0.2 rounded-full font-mono #{if @category == cat_id, do: "bg-white/20 text-white", else: "bg-gray-100 text-gray-600"}"}>
-                      <%= length(@extensions) %>
-                    </span>
-                  <% end %>
+                  <span class={"text-[10px] px-1.5 py-0.2 rounded-full font-mono #{if is_active, do: "bg-white/20 text-white", else: "bg-gray-100 text-gray-600"}"}>
+                    <%= count %>
+                  </span>
                 </button>
               <% end %>
             </div>
@@ -340,7 +333,7 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
                               <td class="py-3 px-4">
                                 <div class="flex items-center gap-2.5">
                                   <span class="w-8 h-8 rounded-lg bg-gray-100 text-gray-700 flex items-center justify-center text-sm font-bold shrink-0 group-hover:bg-primary-100 group-hover:text-primary-700 transition-colors">
-                                    <%= (is_map(ext.dashboard_view) && ext.dashboard_view[:icon]) || ExtensionPresenter.icon(ext) %>
+                                    <%= ExtensionPresenter.icon(ext) %>
                                   </span>
                                   <div class="min-w-0">
                                     <div class="font-bold text-gray-900 group-hover:text-primary-700 transition-colors flex items-center gap-1.5">
@@ -353,7 +346,7 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
                               </td>
                               <td class="py-3 px-4">
                                 <span class="text-[11px] font-medium text-gray-600 bg-gray-100/80 px-2 py-0.5 rounded-md">
-                                  <%= ext[:category] || "System" %>
+                                  <%= ExtensionPresenter.normalize_category(ext[:category]) %>
                                 </span>
                               </td>
                               <td class="py-3 px-4 text-gray-500 font-mono text-[11px]">

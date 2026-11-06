@@ -164,6 +164,10 @@ public partial class ExoforgeControlCenter : EditorWindow
     private string _uptime = "—";
     private string _memoryMb = "—";
     private int _pluginsCount;
+    public static string RemoteProjectName { get; internal set; } = "—";
+    public static string RemoteStudioName { get; internal set; } = "—";
+    public static string RemoteDescription { get; internal set; } = "";
+    public static string RemoteWebsiteUrl { get; internal set; } = "";
     public static string RemoteVersion { get; internal set; } = "—";
     public static string RemoteCommitHash { get; internal set; } = "—";
     public static string RemoteBuildDate { get; internal set; } = "—";

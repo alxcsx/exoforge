@@ -5,14 +5,14 @@
       <stop offset="50%" stop-color="#6d28d9"/>
       <stop offset="100%" stop-color="#4c1d95"/>
     </linearGradient>
-    <linearGradient id="exoAccent" x1="12" y1="12" x2="52" y2="52" gradientUnits="userSpaceOnUse">
+    <linearGradient id="exoAccent" x1="15" y1="18" x2="49" y2="46" gradientUnits="userSpaceOnUse">
       <stop offset="0%" stop-color="#ffffff"/>
-      <stop offset="100%" stop-color="#ddd6fe"/>
+      <stop offset="100%" stop-color="#ede9fe"/>
     </linearGradient>
   </defs>
   <rect x="4" y="4" width="56" height="56" rx="14" fill="url(#exoGrad)"/>
   <rect x="5" y="5" width="54" height="54" rx="13" stroke="#ffffff" stroke-opacity="0.18" stroke-width="2"/>
-  <!-- Stylized E + Forge spark -->
-  <path d="M18 19H36V25H25V29.5H34V35H25V39.5H36V45.5H18V19Z" fill="url(#exoAccent)"/>
-  <path d="M40 19H50L44.5 29.5H50L38.5 46L41.5 34H37L40 19Z" fill="#a7f3d0"/>
+  <!-- EF Monogram Logo -->
+  <path d="M15 18H31V23.5H20.5V29.5H29V34.5H20.5V40.5H31V46H15V18Z" fill="url(#exoAccent)"/>
+  <path d="M35 18H49V23.5H40.5V29.5H47V34.5H40.5V46H35V18Z" fill="url(#exoAccent)"/>
 </svg>

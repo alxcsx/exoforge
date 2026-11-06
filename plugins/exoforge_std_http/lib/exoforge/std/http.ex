@@ -10,7 +10,7 @@ defmodule Exoforge.Std.Http do
     dependencies: [Exoforge.Std.Services.Auth],
     title: "HTTP Ingress",
     icon: "🌐",
-    category: "Ingress",
+    category: "Network",
     system: true,
     dashboard_view: nil,
     ui_hooks: %{

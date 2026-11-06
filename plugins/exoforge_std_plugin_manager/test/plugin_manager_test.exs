@@ -47,7 +47,7 @@ defmodule Exoforge.Std.PluginManagerTest do
       
       pm = Enum.find(result.plugins, &(&1["id"] == "exoforge_std_plugin_manager"))
       assert pm != nil
-      assert pm["icon"] == "📦"
+      assert pm["icon"] == "⚙️"
       assert pm["title"] == "Extension Manager"
     end
 
@@ -61,7 +61,7 @@ defmodule Exoforge.Std.PluginManagerTest do
       
       pm = Enum.find(result.export["extensions"], &(&1["id"] == "exoforge_std_plugin_manager"))
       assert pm != nil
-      assert pm["icon"] == "📦"
+      assert pm["icon"] == "⚙️"
       assert pm["title"] == "Extension Manager"
     end
 
@@ -103,6 +103,8 @@ defmodule Exoforge.Std.PluginManagerTest do
       assert is_binary(sys["otp_release"])
       assert is_binary(sys["title_id"])
       assert is_binary(sys["studio_id"])
+      assert is_binary(sys["project_name"])
+      assert is_binary(sys["studio_name"])
     end
 
     test "export_plugin_info produces a complete bundle for external SDKs and CLI" do

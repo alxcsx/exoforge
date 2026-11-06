@@ -651,7 +651,7 @@ defmodule Exoforge.DashboardLiveViewTest do
 
       # Switch to extensions tab
       html = render_click(view, "switch_tab", %{"tab" => "apps"})
-      assert html =~ "Extensions Registry"
+      assert html =~ "Extension Registry"
       assert html =~ "combat_plugin"
       assert html =~ "exoforge_std_ws"
 
@@ -683,14 +683,15 @@ defmodule Exoforge.DashboardLiveViewTest do
 
     test "toast notices auto-dismiss" do
       session = %{"admin_player_id" => "toast_user", "admin_scopes" => ["admin"]}
+      Exoforge.Std.Dashboard.Preferences.put_pinned("toast_user", [])
       conn = build_conn() |> Plug.Test.init_test_session(session)
       {:ok, view, _html} = live(conn, "/")
 
-      html = render_change(view, "switch_env", %{"env" => "Dev"})
-      assert html =~ "Switched active environment to Dev"
+      html = render_click(view, "pin_extension", %{"id" => "exoforge_std_ws"})
+      assert html =~ "Pinned exoforge_std_ws to top navigation bar."
 
       send(view.pid, {:clear_toast, :info})
-      refute render(view) =~ "Switched active environment to Dev"
+      refute render(view) =~ "Pinned exoforge_std_ws to top navigation bar."
     end
 
     test "pinned extensions persist across remounts" do
@@ -755,27 +756,6 @@ defmodule Exoforge.DashboardLiveViewTest do
       # 2. Trigger Escape keydown event to close modal
       html = render_hook(view, "handle_key", %{"key" => "Escape"})
       refute html =~ "Search plugins, resources, players, actions... (Cmd+K)"
-    end
-
-    test "quick environment switcher updates environment badge and state" do
-      conn =
-        build_conn()
-        |> Plug.Test.init_test_session(%{
-          "admin_player_id" => "admin",
-          "admin_scopes" => ["admin"]
-        })
-
-      {:ok, view, _html} = live(conn, "/")
-
-      # Switch environment to Dev
-      html = render_change(view, "switch_env", %{"env" => "Dev"})
-      assert html =~ "Switched active environment to Dev"
-      assert html =~ "DEV"
-
-      # Switch environment to Staging
-      html = render_change(view, "switch_env", %{"env" => "Staging"})
-      assert html =~ "Switched active environment to Staging"
-      assert html =~ "STAGING"
     end
 
     test "topbar navigation orders overview first, extensions second, and enforces pin limit" do
@@ -859,7 +839,7 @@ defmodule Exoforge.DashboardLiveViewTest do
 
       # Direct load of /extensions
       {:ok, _view, html} = live(conn, "/extensions")
-      assert html =~ "Extensions Registry"
+      assert html =~ "Extension Registry"
 
       # Direct deep-link to /tab/player_data
       {:ok, view, html} = live(conn, "/tab/player_data")
@@ -1108,6 +1088,52 @@ defmodule Exoforge.DashboardLiveViewTest do
         })
 
       assert strict_html =~ ~r/<input[^>]*name="allowed_origins"[^>]*disabled/
+    end
+
+    test "project metadata persists via ProjectMetadata and updates live through settings modal" do
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{
+          "admin_player_id" => "admin",
+          "admin_scopes" => ["admin"]
+        })
+
+      {:ok, view, _html} = live(conn, "/")
+
+      # Check initial get
+      initial_meta = Exoforge.Std.Dashboard.ProjectMetadata.get()
+      assert is_binary(initial_meta["project_name"])
+      assert is_binary(initial_meta["studio_name"])
+
+      # Open settings modal
+      _ = render_click(view, "open_settings", %{})
+
+      # Submit project metadata form
+      save_html =
+        render_submit(view, "save_project_metadata", %{
+          "project_name" => "Cyber Arena 2099",
+          "studio_name" => "RetroForge Labs",
+          "description" => "Next-gen competitive arena",
+          "website_url" => "https://retroforge.dev",
+          "custom_json" => Jason.encode!(%{"genre" => "cyberpunk", "region" => "eu-central"})
+        })
+
+      assert save_html =~ "Cyber Arena 2099"
+      assert save_html =~ "RetroForge Labs"
+      assert save_html =~ "Project metadata saved successfully."
+
+      # Verify persistence in ProjectMetadata module
+      persisted = Exoforge.Std.Dashboard.ProjectMetadata.get()
+      assert persisted["project_name"] == "Cyber Arena 2099"
+      assert persisted["studio_name"] == "RetroForge Labs"
+      assert persisted["description"] == "Next-gen competitive arena"
+      assert persisted["website_url"] == "https://retroforge.dev"
+      assert persisted["custom"]["genre"] == "cyberpunk"
+      assert persisted["custom"]["region"] == "eu-central"
+
+      # Verify Application env sync
+      assert Exoforge.Metering.project_name() == "Cyber Arena 2099"
+      assert Exoforge.Metering.studio_name() == "RetroForge Labs"
     end
   end
 end

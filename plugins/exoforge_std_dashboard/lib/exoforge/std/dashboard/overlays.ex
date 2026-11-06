@@ -479,11 +479,10 @@ defmodule Exoforge.Std.Dashboard.Overlays do
   attr(:open, :boolean, default: false)
   attr(:project_name, :string, default: "Exoforge")
   attr(:studio_name, :string, default: "Exoforge Studio")
+  attr(:project_metadata, :map, default: %{})
   attr(:settings_tab, :string, default: "project")
   attr(:settings_hooks, :list, default: [])
   attr(:cors_config, :map, default: %{})
-  attr(:environments, :list, default: [])
-  attr(:current_env, :string, default: "dev")
   attr(:overview, :map, default: %{extensions: []})
   attr(:node_name, :string, default: "")
   attr(:activity_events, :list, default: [])
@@ -517,15 +516,6 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                 >
                   <span>⚙️</span>
                   <span>Metadata</span>
-                </button>
-                <button
-                  type="button"
-                  phx-click="set_settings_tab"
-                  phx-value-tab="environments"
-                  class={"w-full text-left px-2.5 py-2 rounded-xl font-bold flex items-center gap-2 transition-all #{if @settings_tab == "environments", do: "bg-white text-primary-700 shadow-sm border border-gray-200/80", else: "text-gray-600 hover:text-gray-900 hover:bg-white/60"}"}
-                >
-                  <span>🌐</span>
-                  <span>Environments</span>
                 </button>
                 <button
                   type="button"
@@ -587,25 +577,100 @@ defmodule Exoforge.Std.Dashboard.Overlays do
         <!-- Right Content Pane -->
         <div class="flex-1 p-6 space-y-4 overflow-y-auto min-w-0">
           <%= if @settings_tab == "project" do %>
+            <% meta = @project_metadata || %{} %>
+            <% desc = to_string(meta["description"] || meta[:description] || "") %>
+            <% url = to_string(meta["website_url"] || meta[:website_url] || "") %>
+            <% custom = meta["custom"] || meta[:custom] || %{} %>
+            <% custom_json = (if is_map(custom) and map_size(custom) > 0, do: Jason.encode!(custom, pretty: true), else: "") %>
             <div class="space-y-4">
-              <div>
-                <h4 class="text-sm font-bold text-gray-900 flex items-center gap-2">
-                  <span>⚙️</span>
-                  <span>Project &amp; Cluster Metadata</span>
-                </h4>
-                <p class="text-xs text-gray-500 mt-0.5">Global configuration and runtime identifiers.</p>
+              <div class="flex items-center justify-between">
+                <div>
+                  <h4 class="text-sm font-bold text-gray-900 flex items-center gap-2">
+                    <span>⚙️</span>
+                    <span>Project &amp; Cluster Metadata</span>
+                  </h4>
+                  <p class="text-xs text-gray-500 mt-0.5">Global configuration, studio identity, and runtime telemetry.</p>
+                </div>
+                <span class="px-2.5 py-1 text-[10px] font-bold rounded-full bg-primary-50 text-primary-700 border border-primary-200">
+                  Cluster-wide
+                </span>
               </div>
 
-              <div class="space-y-3 bg-gray-50 p-4 rounded-xl border border-gray-200/80">
-                <div>
-                  <label class="block font-bold text-gray-700 mb-1">Studio Name</label>
-                  <input type="text" value={@studio_name} readonly class="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg font-mono text-xs" />
+              <form id="project_metadata_form" phx-submit="save_project_metadata" class="space-y-4">
+                <div class="space-y-3 bg-gray-50 p-4 rounded-xl border border-gray-200/80">
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label class="block font-bold text-gray-700 mb-1">Studio Name</label>
+                      <input
+                        type="text"
+                        name="studio_name"
+                        value={@studio_name}
+                        placeholder="e.g. Acme Game Studio"
+                        class="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label class="block font-bold text-gray-700 mb-1">Project Title</label>
+                      <input
+                        type="text"
+                        name="project_name"
+                        value={@project_name}
+                        placeholder="e.g. Cyber Snake Arena"
+                        class="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label class="block font-bold text-gray-700 mb-1">Description</label>
+                    <input
+                      type="text"
+                      name="description"
+                      value={desc}
+                      placeholder="e.g. Multiplayer competitive arcade backend"
+                      class="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                    />
+                  </div>
+
+                  <div>
+                    <label class="block font-bold text-gray-700 mb-1">Website / Docs URL</label>
+                    <input
+                      type="text"
+                      name="website_url"
+                      value={url}
+                      placeholder="e.g. https://mygame.com or https://docs.mygame.com"
+                      class="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-mono focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                    />
+                  </div>
+
+                  <div>
+                    <div class="flex items-center justify-between mb-1">
+                      <label class="block font-bold text-gray-700">Custom Metadata (JSON)</label>
+                      <span class="text-[10px] text-gray-400">Extensible key-value properties</span>
+                    </div>
+                    <textarea
+                      name="custom_json"
+                      rows="3"
+                      placeholder='{"genre": "arcade", "region": "us-east", "discord": "https://..."}'
+                      class="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-mono focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                    ><%= custom_json %></textarea>
+                  </div>
+
+                  <div class="flex justify-end pt-1">
+                    <button
+                      type="submit"
+                      class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-xl transition-all shadow-sm hover:shadow flex items-center gap-1.5"
+                    >
+                      <span>💾</span>
+                      <span>Save Metadata</span>
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <label class="block font-bold text-gray-700 mb-1">Project Title</label>
-                  <input type="text" value={@project_name} readonly class="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg font-mono text-xs" />
-                </div>
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+              </form>
+
+              <div class="space-y-2 bg-gray-50/70 p-4 rounded-xl border border-gray-200/80">
+                <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Runtime Identifiers</span>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
                   <div class="p-2.5 bg-white border border-gray-200 rounded-lg min-w-0">
                     <span class="text-[10px] font-bold text-gray-400 uppercase block">Version</span>
                     <p class="text-sm font-bold text-gray-800 font-mono mt-0.5 truncate">v<%= @overview[:version] || "1.0.0" %></p>
@@ -624,36 +689,6 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                     <span class="text-[10px] font-bold text-gray-400 uppercase block">Extensions</span>
                     <p class="text-sm font-bold text-gray-800 font-mono mt-0.5 truncate"><%= length(@overview.extensions) %></p>
                   </div>
-                </div>
-              </div>
-            </div>
-          <% end %>
-
-          <%= if @settings_tab == "environments" do %>
-            <div class="space-y-4">
-              <div>
-                <h4 class="text-sm font-bold text-gray-900 flex items-center gap-2">
-                  <span>🌐</span>
-                  <span>Cluster Environments</span>
-                </h4>
-                <p class="text-xs text-gray-500 mt-0.5">Switch active cluster deployment environment profile.</p>
-              </div>
-
-              <div class="space-y-3 bg-gray-50 p-4 rounded-xl border border-gray-200/80">
-                <p class="text-gray-600 font-medium">Select active environment profile:</p>
-                <div class="flex flex-wrap gap-2">
-                  <%= for env <- @environments do %>
-                    <button
-                      phx-click="switch_env"
-                      phx-value-env={env}
-                      class={"px-4 py-2 rounded-xl font-bold border transition-all #{if @current_env == env, do: "bg-emerald-500 text-white border-emerald-600 shadow-sm", else: "bg-white text-gray-700 border-gray-200 hover:bg-gray-100"}"}
-                    >
-                      <%= env %>
-                    </button>
-                  <% end %>
-                </div>
-                <div class="pt-2 text-[11px] text-gray-500">
-                  Current active environment: <strong class="text-emerald-700"><%= @current_env %></strong>
                 </div>
               </div>
             </div>
@@ -988,7 +1023,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
           <% end %>
 
           <!-- Dynamic Plugin Settings Tab Fallback -->
-          <%= if @settings_tab not in ["project", "environments", "visual", "database", "auth", "http"] do %>
+          <%= if @settings_tab not in ["project", "visual", "database", "auth", "http"] do %>
             <% active_hook = Enum.find(@settings_hooks, fn h -> to_string(h.id) == @settings_tab end) %>
             <%= if active_hook do %>
               <%= cond do %>

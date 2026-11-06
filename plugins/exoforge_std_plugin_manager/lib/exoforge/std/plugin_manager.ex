@@ -14,13 +14,13 @@ defmodule Exoforge.Std.PluginManager do
   @manifest %{
     dependencies: [],
     title: "Extension Manager",
-    icon: "📦",
-    category: "Management",
+    icon: "⚙️",
+    category: "System",
     system: true,
     dashboard_view: %{
       id: :plugin_manager,
       title: "Plugin Manager",
-      icon: "📦"
+      icon: "⚙️"
     }
   }
 
@@ -136,7 +136,9 @@ defmodule Exoforge.Std.PluginManager do
       # The tenant this instance is: what usage records are stamped with, and what a deploy to this
       # instance is a deploy to. Named here so `exo status` answers "which title am I hitting?".
       "title_id" => Exoforge.Metering.title_id(),
-      "studio_id" => Exoforge.Metering.studio_id()
+      "studio_id" => Exoforge.Metering.studio_id(),
+      "project_name" => Exoforge.Metering.project_name(),
+      "studio_name" => Exoforge.Metering.studio_name()
     }
 
     {:ok, %{system: info}}

@@ -87,6 +87,12 @@ defmodule Exoforge.Metering do
   @doc "The studio the title rolls up to."
   def studio_id, do: Keyword.get(instance(), :studio_id, "local")
 
+  @doc "Human-readable project title."
+  def project_name, do: Keyword.get(instance(), :project_name, "Exoforge Cluster")
+
+  @doc "Human-readable studio name."
+  def studio_name, do: Keyword.get(instance(), :studio_name, "Exoforge Studio")
+
   # -- internals --
 
   defp instance, do: Application.get_env(:exoforge, :instance, [])

@@ -11,7 +11,7 @@ defmodule Exoforge.Std.DashboardViews do
     dependencies: [Exoforge.Std.Services.Dashboard],
     title: "Studio Views",
     icon: "🎨",
-    category: "Studio",
+    category: "System",
     dashboard_view: nil
   }
 

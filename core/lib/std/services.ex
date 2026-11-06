@@ -86,6 +86,38 @@ defmodule Exoforge.Std.Services do
       returns(data: :map)
       scope(:server)
     end
+
+    @doc "Retrieves global project metadata."
+    action :get_project_metadata do
+      returns(
+        project_name: :string,
+        studio_name: :string,
+        description: :string,
+        website_url: :string,
+        custom: :map,
+        updated_at: :integer
+      )
+      scope(:studio)
+    end
+
+    @doc "Updates global project metadata."
+    action :update_project_metadata do
+      params(
+        project_name: [type: :string, optional: true],
+        studio_name: [type: :string, optional: true],
+        description: [type: :string, optional: true],
+        website_url: [type: :string, optional: true],
+        custom: [type: :map, optional: true]
+      )
+      returns(metadata: :map)
+      scope(:admin)
+    end
+
+    @doc "Broadcast when project metadata is updated."
+    event :project_metadata_updated do
+      payload(metadata: :map)
+      scope(:server)
+    end
   end
 
   defservice dashboard_view do

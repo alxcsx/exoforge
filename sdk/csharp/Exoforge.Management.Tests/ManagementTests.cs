@@ -49,6 +49,27 @@ public class ManagementTests : IDisposable
         // Verify reloading workspace from disk
         var loaded = ExoWorkspace.Load(_tempDir);
         Assert.Equal("TestGameProject", loaded.Config.ProjectName);
+        Assert.Equal("Exoforge Studio", loaded.Config.StudioName);
+    }
+
+    [Fact]
+    public void Workspace_ProjectMetadata_Roundtrips_Successfully()
+    {
+        var ws = ExoWorkspace.Initialize(_tempDir, "CyberArena");
+        ws.Config.StudioName = "PixelStorm";
+        ws.Config.Description = "Cyberpunk arcade backend";
+        ws.Config.WebsiteUrl = "https://pixelstorm.io";
+        ws.Config.CustomMetadata["genre"] = "arcade";
+        ws.Config.CustomMetadata["target_region"] = "us-west";
+        ws.Save();
+
+        var loaded = ExoWorkspace.Load(_tempDir);
+        Assert.Equal("CyberArena", loaded.Config.ProjectName);
+        Assert.Equal("PixelStorm", loaded.Config.StudioName);
+        Assert.Equal("Cyberpunk arcade backend", loaded.Config.Description);
+        Assert.Equal("https://pixelstorm.io", loaded.Config.WebsiteUrl);
+        Assert.Equal("arcade", loaded.Config.CustomMetadata["genre"]);
+        Assert.Equal("us-west", loaded.Config.CustomMetadata["target_region"]);
     }
 
     /// <summary>
