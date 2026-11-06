@@ -180,12 +180,12 @@ public class VerticalSliceIntegrationTests
         int ping = await client.SendActionAsync<int>("sample_plugin", "ping", Array.Empty<int>());
         Assert.Equal(42, ping);
 
-        var plugins = await client.SendActionAsync<JsonElement>("plugin_manager", "list_plugins", null);
-        Assert.Equal(JsonValueKind.Object, plugins.ValueKind);
-        Assert.True(plugins.TryGetProperty("plugins", out var arr));
+        var extensions = await client.SendActionAsync<JsonElement>("extension_manager", "list_extensions", null);
+        Assert.Equal(JsonValueKind.Object, extensions.ValueKind);
+        Assert.True(extensions.TryGetProperty("extensions", out var arr));
         Assert.Equal(JsonValueKind.Array, arr.ValueKind);
 
-        var sysInfo = await client.SendActionAsync<JsonElement>("plugin_manager", "get_system_info", null);
+        var sysInfo = await client.SendActionAsync<JsonElement>("extension_manager", "get_system_info", null);
         Assert.Equal(JsonValueKind.Object, sysInfo.ValueKind);
         Assert.True(sysInfo.TryGetProperty("system", out var sys));
 

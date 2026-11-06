@@ -40,6 +40,19 @@ namespace Exoforge.Client.Unity
         /// <summary>Player sign-in.</summary>
         public static ExoforgeAuth Auth => _auth ??= new ExoforgeAuth();
 
+        /// <summary>Task that completes when the client has established connection and authenticated.</summary>
+        public static Task Ready => Behaviour.ReadyTask;
+
+        /// <summary>Current cluster connection state.</summary>
+        public static ExoforgeConnectionState State => Behaviour.CurrentState;
+
+        /// <summary>Event that fires on connection state transitions.</summary>
+        public static event Action<ExoforgeConnectionState>? StateChanged
+        {
+            add => ExoforgeManager.OnStateChanged += value;
+            remove => ExoforgeManager.OnStateChanged -= value;
+        }
+
         /// <summary>
         /// The client. Usable with or without a socket: an action over HTTP needs no connection.
         /// Use it with the generated service extensions
@@ -98,6 +111,46 @@ namespace Exoforge.Client.Unity
 
             var host = new GameObject("[ExoforgeSDK]");
             return host.AddComponent<ExoforgeManager>();
+        }
+    }
+
+    /// <summary>
+    /// Modern static entry point for Exoforge gameplay code.
+    ///
+    /// <code>
+    /// await Exoforge.Ready;
+    /// var response = await Exoforge.Client.DailyRewards().ClaimDailyRewardAsync(new() { Level = 1 });
+    /// if (response.Success)
+    /// {
+    ///     Debug.Log($"Claimed {response.Reward.Amount} {response.Reward.Kind}!");
+    /// }
+    /// </code>
+    /// </summary>
+    public static class Exoforge
+    {
+        /// <summary>Task that completes when Exoforge is connected and authenticated.</summary>
+        public static Task Ready => ExoforgeSDK.Ready;
+
+        /// <summary>Current cluster connection state.</summary>
+        public static ExoforgeConnectionState State => ExoforgeSDK.State;
+
+        /// <summary>The active client for invoking extension actions.</summary>
+        public static ExoClient Client => ExoforgeSDK.Client;
+
+        /// <summary>Player and session authentication facade.</summary>
+        public static ExoforgeAuth Auth => ExoforgeSDK.Auth;
+
+        /// <summary>Connects to the cluster (idempotent) and returns the client.</summary>
+        public static Task<ExoClient> ConnectAsync() => ExoforgeSDK.ConnectAsync();
+
+        /// <summary>Closes the socket and releases realtime resources.</summary>
+        public static Task DisconnectAsync() => ExoforgeSDK.DisconnectAsync();
+
+        /// <summary>Event that fires on connection state transitions.</summary>
+        public static event Action<ExoforgeConnectionState>? StateChanged
+        {
+            add => ExoforgeSDK.StateChanged += value;
+            remove => ExoforgeSDK.StateChanged -= value;
         }
     }
 }

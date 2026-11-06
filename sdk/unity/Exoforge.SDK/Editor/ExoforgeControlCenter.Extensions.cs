@@ -9,6 +9,7 @@ using Exoforge.Client;
 using Exoforge.Management;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace Exoforge.Unity.Editor
 {
@@ -19,7 +20,368 @@ namespace Exoforge.Unity.Editor
 public partial class ExoforgeControlCenter : EditorWindow
 {
     // =========================================================================
-    // Tab 4: Plugins
+    // UI Toolkit Modern Studio Cockpit (Phase 2)
+    // =========================================================================
+
+    public VisualElement BuildExtensionsTabToolkit()
+    {
+        if (_localPlugins.Count == 0) RefreshLocalPlugins();
+
+        var container = new VisualElement();
+        container.style.flexDirection = FlexDirection.Column;
+        container.style.flexGrow = 1;
+
+        // 1. BaaS Offline Warning Banner
+        if (!CanReachCluster)
+        {
+            var warningCard = new VisualElement();
+            warningCard.style.backgroundColor = new Color(0.18f, 0.14f, 0.08f);
+            warningCard.style.borderTopWidth = 1;
+            warningCard.style.borderBottomWidth = 1;
+            warningCard.style.borderLeftWidth = 1;
+            warningCard.style.borderRightWidth = 1;
+            warningCard.style.borderTopColor = ExoforgeUIStyle.AccentOrange;
+            warningCard.style.borderBottomColor = ExoforgeUIStyle.AccentOrange;
+            warningCard.style.borderLeftColor = ExoforgeUIStyle.AccentOrange;
+            warningCard.style.borderRightColor = ExoforgeUIStyle.AccentOrange;
+            warningCard.style.borderTopLeftRadius = 8;
+            warningCard.style.borderTopRightRadius = 8;
+            warningCard.style.borderBottomLeftRadius = 8;
+            warningCard.style.borderBottomRightRadius = 8;
+            warningCard.style.paddingLeft = 14;
+            warningCard.style.paddingRight = 14;
+            warningCard.style.paddingTop = 10;
+            warningCard.style.paddingBottom = 10;
+            warningCard.style.marginBottom = 10;
+
+            var warnHeader = new VisualElement();
+            warnHeader.style.flexDirection = FlexDirection.Row;
+            warnHeader.style.alignItems = Align.Center;
+            warnHeader.style.marginBottom = 4;
+
+            var warnIcon = new Label(_isConnecting ? "🔄" : "⚠️");
+            warnIcon.style.fontSize = 18;
+            warnIcon.style.marginRight = 8;
+            warnHeader.Add(warnIcon);
+
+            var warnTitle = new Label(_isConnecting ? "CONNECTING TO CLUSTER..." : "CLUSTER OFFLINE — LOCAL MODE ACTIVE");
+            warnTitle.style.fontSize = 13;
+            warnTitle.style.unityFontStyleAndWeight = FontStyle.Bold;
+            warnTitle.style.color = _isConnecting ? ExoforgeUIStyle.AccentBlue : ExoforgeUIStyle.AccentOrange;
+            warnHeader.Add(warnTitle);
+            warningCard.Add(warnHeader);
+
+            var warnDesc = new Label(
+                _isConnecting
+                    ? $"Connecting to cluster at {ActiveWsUrl}… Metrics, event streaming, and remote synchronization will unlock once connected."
+                    : $"Exoforge is a BaaS system. The editor is not connected to {ActiveWsUrl}. Developing and editing extensions is available locally, but deploying, streaming logs, metrics, and live events require an online cluster.");
+            warnDesc.style.fontSize = 11;
+            warnDesc.style.color = ExoforgeUIStyle.TextPrimary;
+            warnDesc.style.whiteSpace = WhiteSpace.Normal;
+            warningCard.Add(warnDesc);
+
+            container.Add(warningCard);
+        }
+
+        // 2. Action Strip (New Extension + Unity Client Sync)
+        var actionStrip = new VisualElement();
+        actionStrip.style.flexDirection = FlexDirection.Row;
+        actionStrip.style.alignItems = Align.Center;
+        actionStrip.style.justifyContent = Justify.SpaceBetween;
+        actionStrip.style.backgroundColor = ExoforgeUIStyle.BgCard;
+        actionStrip.style.paddingLeft = 12;
+        actionStrip.style.paddingRight = 12;
+        actionStrip.style.paddingTop = 8;
+        actionStrip.style.paddingBottom = 8;
+        actionStrip.style.borderTopLeftRadius = 8;
+        actionStrip.style.borderTopRightRadius = 8;
+        actionStrip.style.borderBottomLeftRadius = 8;
+        actionStrip.style.borderBottomRightRadius = 8;
+        actionStrip.style.marginBottom = 12;
+
+        var leftActions = new VisualElement();
+        leftActions.style.flexDirection = FlexDirection.Row;
+        leftActions.style.alignItems = Align.Center;
+
+        var newExtBtn = ExoforgeUIStyle.CreateModernButton("⚡ New Extension...", () =>
+        {
+            ExoforgeScaffoldModal.Open(onCreatedWithId: id =>
+            {
+                RefreshLocalPlugins();
+                _ = RefreshPluginsAsync();
+                ShowStatus($"✓ Extension '{id}' scaffolded successfully.", MessageType.Info);
+                RefreshTabContent();
+            });
+        }, bg: ExoforgeUIStyle.BrandPurple, textCol: Color.white, height: 28);
+        newExtBtn.style.marginRight = 10;
+        leftActions.Add(newExtBtn);
+
+        string lastSync = !string.IsNullOrEmpty(ExoforgeEditorConfig.LastSyncTime)
+            ? ExoforgeEditorConfig.LastSyncTime
+            : "Not yet generated";
+        var syncLabel = new Label($"Client stubs: {lastSync}");
+        syncLabel.style.fontSize = 11;
+        syncLabel.style.color = ExoforgeUIStyle.TextMuted;
+        syncLabel.style.marginRight = 8;
+        leftActions.Add(syncLabel);
+
+        var syncBtn = ExoforgeUIStyle.CreateModernButton("⚡ Regenerate Client", async () =>
+        {
+            await SyncAndGenerateClientAsync();
+            RefreshTabContent();
+        }, height: 26);
+        leftActions.Add(syncBtn);
+
+        actionStrip.Add(leftActions);
+
+        var rightActions = new VisualElement();
+        rightActions.style.flexDirection = FlexDirection.Row;
+        rightActions.style.alignItems = Align.Center;
+
+        var buildAllBtn = ExoforgeUIStyle.CreateModernButton("🚀 Build & Deploy All", async () =>
+        {
+            await BuildAndDeployAllAsync();
+            RefreshTabContent();
+        }, height: 26);
+        buildAllBtn.SetEnabled(CanReachCluster && _localPlugins.Count > 0 && !_isBuilding);
+        buildAllBtn.style.marginRight = 6;
+        rightActions.Add(buildAllBtn);
+
+        var refreshBtn = ExoforgeUIStyle.CreateModernButton("🔄 Refresh", async () =>
+        {
+            await RefreshPluginsAsync();
+            RefreshTabContent();
+        }, height: 26);
+        rightActions.Add(refreshBtn);
+
+        actionStrip.Add(rightActions);
+        container.Add(actionStrip);
+
+        // 3. ScrollView of Extensions Cards
+        var scroll = new ScrollView();
+        scroll.style.flexGrow = 1;
+
+        if (_localPlugins.Count == 0)
+        {
+            var emptyBox = new VisualElement();
+            emptyBox.style.alignItems = Align.Center;
+            emptyBox.style.justifyContent = Justify.Center;
+            emptyBox.style.paddingTop = 40;
+            emptyBox.style.paddingBottom = 40;
+
+            var emptyIcon = new Label("🧩");
+            emptyIcon.style.fontSize = 32;
+            emptyIcon.style.marginBottom = 8;
+            emptyBox.Add(emptyIcon);
+
+            var emptyTitle = new Label("No extensions found in workspace");
+            emptyTitle.style.fontSize = 14;
+            emptyTitle.style.unityFontStyleAndWeight = FontStyle.Bold;
+            emptyTitle.style.color = ExoforgeUIStyle.TextPrimary;
+            emptyTitle.style.marginBottom = 4;
+            emptyBox.Add(emptyTitle);
+
+            var emptySub = new Label("Click '+ New Extension' above to scaffold your first C# server extension.");
+            emptySub.style.fontSize = 11;
+            emptySub.style.color = ExoforgeUIStyle.TextMuted;
+            emptyBox.Add(emptySub);
+
+            scroll.Add(emptyBox);
+        }
+        else
+        {
+            foreach (var plugin in _localPlugins)
+            {
+                scroll.Add(BuildExtensionCardToolkit(plugin));
+            }
+        }
+
+        container.Add(scroll);
+        return container;
+    }
+
+    private VisualElement BuildExtensionCardToolkit(LocalPluginInfo plugin)
+    {
+        string buildError = SessionState.GetString(BuildFailureKey(plugin.Name), "");
+        bool failed = buildError.Length > 0;
+        string? deployedVersion = RemotePluginVersion(plugin.Name);
+        bool notDeployed = _isConnected && plugin.IsBuilt && !plugin.Modified && deployedVersion != plugin.Version;
+
+        var card = new VisualElement();
+        card.style.backgroundColor = failed ? new Color(0.22f, 0.12f, 0.12f) : ExoforgeUIStyle.BgCard;
+        card.style.borderTopWidth = 1;
+        card.style.borderBottomWidth = 1;
+        card.style.borderLeftWidth = 1;
+        card.style.borderRightWidth = 1;
+        card.style.borderTopColor = failed ? ExoforgeUIStyle.AccentRed : ExoforgeUIStyle.BorderSubtle;
+        card.style.borderBottomColor = failed ? ExoforgeUIStyle.AccentRed : ExoforgeUIStyle.BorderSubtle;
+        card.style.borderLeftColor = failed ? ExoforgeUIStyle.AccentRed : ExoforgeUIStyle.BorderSubtle;
+        card.style.borderRightColor = failed ? ExoforgeUIStyle.AccentRed : ExoforgeUIStyle.BorderSubtle;
+        card.style.borderTopLeftRadius = 8;
+        card.style.borderTopRightRadius = 8;
+        card.style.borderBottomLeftRadius = 8;
+        card.style.borderBottomRightRadius = 8;
+        card.style.paddingLeft = 14;
+        card.style.paddingRight = 14;
+        card.style.paddingTop = 10;
+        card.style.paddingBottom = 10;
+        card.style.marginBottom = 8;
+
+        // Row 1: Header (Icon, Title, Details, Status Pill)
+        var row1 = new VisualElement();
+        row1.style.flexDirection = FlexDirection.Row;
+        row1.style.alignItems = Align.Center;
+        row1.style.justifyContent = Justify.SpaceBetween;
+        row1.style.marginBottom = 10;
+
+        var headerLeft = new VisualElement();
+        headerLeft.style.flexDirection = FlexDirection.Row;
+        headerLeft.style.alignItems = Align.Center;
+
+        var iconLabel = new Label(plugin.Icon);
+        iconLabel.style.fontSize = 24;
+        iconLabel.style.marginRight = 10;
+        headerLeft.Add(iconLabel);
+
+        var titleCol = new VisualElement();
+        string displayTitle = !string.IsNullOrEmpty(plugin.Title) && plugin.Title != plugin.Name
+            ? $"{plugin.Title} ({plugin.Name})"
+            : plugin.Name;
+        var titleLabel = new Label(displayTitle);
+        titleLabel.style.fontSize = 13;
+        titleLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+        titleLabel.style.color = ExoforgeUIStyle.TextPrimary;
+        titleCol.Add(titleLabel);
+
+        string tag = BuildTag(plugin.Version);
+        string sizeStr = plugin.BinarySizeBytes > 0 ? $"{plugin.BinarySizeBytes / 1024} KB" : "";
+        string subText = $"{plugin.PluginType.ToUpperInvariant()} • v{plugin.Version ?? "1.0.0"} {tag} {(sizeStr != "" ? "• " + sizeStr : "")}";
+        var subLabel = new Label(subText);
+        subLabel.style.fontSize = 10;
+        subLabel.style.color = ExoforgeUIStyle.TextMuted;
+        titleCol.Add(subLabel);
+        headerLeft.Add(titleCol);
+        row1.Add(headerLeft);
+
+        // Status Pill on the right
+        VisualElement statusPill;
+        if (failed)
+        {
+            statusPill = ExoforgeUIStyle.CreatePill("✗ Build Failed", Color.white, ExoforgeUIStyle.AccentRed, 10);
+            statusPill.tooltip = buildError;
+        }
+        else if (!plugin.IsBuilt)
+        {
+            statusPill = ExoforgeUIStyle.CreatePill("○ Not Built", ExoforgeUIStyle.TextMuted, ExoforgeUIStyle.AccentGrayBg, 10);
+        }
+        else if (plugin.Modified)
+        {
+            statusPill = ExoforgeUIStyle.CreatePill("● Modified", Color.white, ExoforgeUIStyle.AccentOrange, 10);
+        }
+        else if (notDeployed)
+        {
+            statusPill = ExoforgeUIStyle.CreatePill("● Built (Needs Deploy)", Color.white, ExoforgeUIStyle.AccentBlue, 10);
+        }
+        else if (!_isConnected)
+        {
+            statusPill = ExoforgeUIStyle.CreatePill("Built (Offline)", ExoforgeUIStyle.TextSecondary, ExoforgeUIStyle.AccentGrayBg, 10);
+        }
+        else
+        {
+            statusPill = ExoforgeUIStyle.CreatePill("✓ Deployed", Color.white, ExoforgeUIStyle.AccentGreen, 10);
+        }
+        row1.Add(statusPill);
+        card.Add(row1);
+
+        // Row 2: Action Buttons
+        var row2 = new VisualElement();
+        row2.style.flexDirection = FlexDirection.Row;
+        row2.style.alignItems = Align.Center;
+        row2.style.justifyContent = Justify.SpaceBetween;
+
+        var leftButtons = new VisualElement();
+        leftButtons.style.flexDirection = FlexDirection.Row;
+        leftButtons.style.alignItems = Align.Center;
+
+        // Primary Action
+        if (!plugin.IsBuilt || failed)
+        {
+            var buildBtn = ExoforgeUIStyle.CreateModernButton("🔨 Build", async () =>
+            {
+                await BuildPluginAsync(plugin, false);
+                RefreshTabContent();
+            }, bg: ExoforgeUIStyle.BrandPurple, textCol: Color.white, height: 26);
+            buildBtn.style.marginRight = 6;
+            leftButtons.Add(buildBtn);
+        }
+        else if (plugin.Modified)
+        {
+            var buildDeployBtn = ExoforgeUIStyle.CreateModernButton("🚀 Build & Deploy", async () =>
+            {
+                await BuildPluginAsync(plugin, thenDeploy: true);
+                RefreshTabContent();
+            }, bg: ExoforgeUIStyle.BrandPurple, textCol: Color.white, height: 26);
+            buildDeployBtn.SetEnabled(CanReachCluster);
+            buildDeployBtn.style.marginRight = 6;
+            leftButtons.Add(buildDeployBtn);
+        }
+        else if (notDeployed)
+        {
+            var deployBtn = ExoforgeUIStyle.CreateModernButton("🚀 Deploy", async () =>
+            {
+                await DeployPluginAsync(plugin);
+                RefreshTabContent();
+            }, bg: ExoforgeUIStyle.AccentGreen, textCol: Color.white, height: 26);
+            deployBtn.SetEnabled(CanReachCluster);
+            deployBtn.style.marginRight = 6;
+            leftButtons.Add(deployBtn);
+        }
+        else
+        {
+            var redeployBtn = ExoforgeUIStyle.CreateModernButton("Re-Deploy", async () =>
+            {
+                await DeployPluginAsync(plugin);
+                RefreshTabContent();
+            }, height: 26);
+            redeployBtn.SetEnabled(CanReachCluster);
+            redeployBtn.style.marginRight = 6;
+            leftButtons.Add(redeployBtn);
+        }
+
+        var openSrcBtn = ExoforgeUIStyle.CreateModernButton("✏️ Edit", () =>
+        {
+            OpenExtensionInEditor(plugin.Directory);
+        }, height: 26);
+        openSrcBtn.style.marginRight = 6;
+        leftButtons.Add(openSrcBtn);
+
+        var folderBtn = ExoforgeUIStyle.CreateModernButton("📁 Folder", () =>
+        {
+            EditorUtility.RevealInFinder(plugin.Directory);
+        }, height: 26);
+        folderBtn.style.marginRight = 6;
+        leftButtons.Add(folderBtn);
+
+        row2.Add(leftButtons);
+
+        var rightButtons = new VisualElement();
+        rightButtons.style.flexDirection = FlexDirection.Row;
+        rightButtons.style.alignItems = Align.Center;
+
+        var inspectBtn = ExoforgeUIStyle.CreateModernButton("Inspect ↗", () =>
+        {
+            ExoforgeExtensionsWindow.OpenExtension(plugin.Name);
+        }, height: 26);
+        rightButtons.Add(inspectBtn);
+
+        row2.Add(rightButtons);
+        card.Add(row2);
+
+        return card;
+    }
+
+    // =========================================================================
+    // Legacy IMGUI fallback
     // =========================================================================
 
     private void DrawExtensions()

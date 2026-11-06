@@ -656,7 +656,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         // 2. Modern Tab Strip
         _root.Add(BuildModernTabStrip());
 
-        // 3. Tab Content Area (hosting active tab via IMGUIContainer)
+        // 3. Tab Content Area
         _tabContentArea = new VisualElement();
         _tabContentArea.style.flexGrow = 1;
         _tabContentArea.style.paddingLeft = 8;
@@ -664,30 +664,40 @@ public partial class ExoforgeControlCenter : EditorWindow
         _tabContentArea.style.paddingTop = 6;
         _tabContentArea.style.paddingBottom = 8;
 
-        var imgui = new IMGUIContainer(() =>
-        {
-            DrawHeader();
-
-            if (!string.IsNullOrEmpty(_statusMessage))
-            {
-                DrawStatusBanner();
-            }
-
-            switch (_currentTab)
-            {
-                case Tab.Extensions:
-                    if (_localPlugins.Count == 0) RefreshLocalPlugins();
-                    DrawExtensions();
-                    break;
-                case Tab.Metrics: DrawOverview(); break;
-                case Tab.LiveEvents: DrawLiveEvents(); break;
-                case Tab.Settings: DrawSettings(); break;
-            }
-        });
-        imgui.style.flexGrow = 1;
-        _tabContentArea.Add(imgui);
-
+        RefreshTabContent();
         _root.Add(_tabContentArea);
+    }
+
+    public void RefreshTabContent()
+    {
+        if (_tabContentArea == null) return;
+        _tabContentArea.Clear();
+
+        if (_currentTab == Tab.Extensions)
+        {
+            _tabContentArea.Add(BuildExtensionsTabToolkit());
+        }
+        else
+        {
+            var imgui = new IMGUIContainer(() =>
+            {
+                DrawHeader();
+
+                if (!string.IsNullOrEmpty(_statusMessage))
+                {
+                    DrawStatusBanner();
+                }
+
+                switch (_currentTab)
+                {
+                    case Tab.Metrics: DrawOverview(); break;
+                    case Tab.LiveEvents: DrawLiveEvents(); break;
+                    case Tab.Settings: DrawSettings(); break;
+                }
+            });
+            imgui.style.flexGrow = 1;
+            _tabContentArea.Add(imgui);
+        }
     }
 
     private VisualElement BuildModernHeader()
@@ -939,6 +949,7 @@ public partial class ExoforgeControlCenter : EditorWindow
             {
                 _currentTab = def.Id;
                 UpdateTabButtonStyles();
+                RefreshTabContent();
                 Repaint();
             })
             { text = $"{def.Icon} {def.Label}" };
@@ -1312,7 +1323,7 @@ public partial class ExoforgeControlCenter : EditorWindow
 
         try
         {
-            await _editorClient.SendActionAsync<JsonElement>("plugin_manager", "restart_system", null);
+            await _editorClient.SendActionAsync<JsonElement>("extension_manager", "restart_system", null);
             ShowStatus("Server supervision restarted successfully.", MessageType.Info);
             await RefreshRemoteInfoAsync();
         }

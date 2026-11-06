@@ -2,7 +2,7 @@ defmodule Exoforge.Std.DashboardViews do
   @moduledoc """
   Standard Dashboard Views plugin for Exoforge.
   Provides the :dashboard_view contract, implementing specialized Producer Studio
-  visual controls for core services (player_data, plugin_manager, auth)
+  visual controls for core services (player_data, extension_manager, auth)
   strictly via service contracts without depending on concrete plugin implementations.
   """
   use Exoforge.Extension, provides: [:dashboard_view]

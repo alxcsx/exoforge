@@ -483,11 +483,15 @@ public partial class ExoforgeControlCenter : EditorWindow
 
         bool updated = false;
 
-        // 1. Remote Plugins
+        // 1. Remote Extensions
         try
         {
-            var plugins = await _editorClient.SendActionAsync<JsonElement>("plugin_manager", "list_plugins", null);
-            if (plugins.ValueKind == JsonValueKind.Object && plugins.TryGetProperty("plugins", out var arr) && arr.ValueKind == JsonValueKind.Array)
+            var plugins = await _editorClient.SendActionAsync<JsonElement>("extension_manager", "list_extensions", null);
+            JsonElement arr = default;
+            bool hasList = plugins.ValueKind == JsonValueKind.Object &&
+                (plugins.TryGetProperty("extensions", out arr) || plugins.TryGetProperty("plugins", out arr)) &&
+                arr.ValueKind == JsonValueKind.Array;
+            if (hasList)
             {
                 _remotePlugins = arr.EnumerateArray().Select(x => x.Clone()).ToList();
                 _pluginsCount = _remotePlugins.Count;
@@ -496,14 +500,14 @@ public partial class ExoforgeControlCenter : EditorWindow
         }
         catch (Exception ex)
         {
-            UnityEngine.Debug.LogWarning($"[Exoforge] Failed to list remote plugins: {ex.Message}");
-            ShowStatus($"Failed to list remote plugins: {ex.Message}", MessageType.Error);
+            UnityEngine.Debug.LogWarning($"[Exoforge] Failed to list remote extensions: {ex.Message}");
+            ShowStatus($"Failed to list remote extensions: {ex.Message}", MessageType.Error);
         }
 
         // 2. Cluster Telemetry
         try
         {
-            var info = await _editorClient.SendActionAsync<JsonElement>("plugin_manager", "get_system_info", null);
+            var info = await _editorClient.SendActionAsync<JsonElement>("extension_manager", "get_system_info", null);
             if (info.ValueKind == JsonValueKind.Object && info.TryGetProperty("system", out var sys))
             {
                 _nodeName = sys.TryGetProperty("node", out var n) ? n.GetString() ?? "—" : "—";
@@ -513,7 +517,11 @@ public partial class ExoforgeControlCenter : EditorWindow
                 RemoteBuildDate = sys.TryGetProperty("build_date", out var d) ? d.GetString() ?? "—" : "—";
                 RemoteProjectName = sys.TryGetProperty("project_name", out var pn) ? pn.GetString() ?? "—" : "—";
                 RemoteStudioName = sys.TryGetProperty("studio_name", out var sn) ? sn.GetString() ?? "—" : "—";
-                if (sys.TryGetProperty("plugins_count", out var pc))
+                if (sys.TryGetProperty("extensions_count", out var ec))
+                {
+                    _pluginsCount = ec.GetInt32();
+                }
+                else if (sys.TryGetProperty("plugins_count", out var pc))
                 {
                     _pluginsCount = pc.GetInt32();
                 }
@@ -584,7 +592,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         // 3. Service Catalog Export
         try
         {
-            var export = await _editorClient.SendActionAsync<JsonElement>("plugin_manager", "export_plugin_info", null);
+            var export = await _editorClient.SendActionAsync<JsonElement>("extension_manager", "export_extension_info", null);
             ParseServiceCatalog(export);
             updated = true;
         }
@@ -595,7 +603,7 @@ public partial class ExoforgeControlCenter : EditorWindow
 
         if (updated)
         {
-            ShowStatus($"✓ Plugins & telemetry updated: {_remotePlugins.Count} remote plugins, cluster node: {_nodeName}.", MessageType.Info);
+            ShowStatus($"✓ Extensions & telemetry updated: {_remotePlugins.Count} remote extensions, cluster node: {_nodeName}.", MessageType.Info);
         }
 
         Repaint();
@@ -610,14 +618,20 @@ public partial class ExoforgeControlCenter : EditorWindow
         }
         else
         {
-            ShowStatus($"✓ Local plugins refreshed ({_localPlugins.Count} found). Connect to cluster to refresh remote plugins.", MessageType.Info);
+            ShowStatus($"✓ Local extensions refreshed ({_localPlugins.Count} found). Connect to cluster to refresh remote extensions.", MessageType.Info);
             Repaint();
         }
     }
 
     private void ParseServiceCatalog(JsonElement export)
     {
-        if (!export.TryGetProperty("export", out var root) || !root.TryGetProperty("plugins", out var pluginsArr))
+        if (!export.TryGetProperty("export", out var root))
+            return;
+
+        JsonElement pluginsArr = default;
+        bool hasItems = (root.TryGetProperty("extensions", out pluginsArr) || root.TryGetProperty("plugins", out pluginsArr)) &&
+            pluginsArr.ValueKind == JsonValueKind.Array;
+        if (!hasItems)
             return;
 
         // Replace, don't merge: the export is the whole truth, so a plugin that was removed must

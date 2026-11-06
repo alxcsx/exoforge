@@ -54,8 +54,10 @@ public class AuthLoginResponse
 public class AuthVerifyScopeRequest
 {
     [JsonPropertyName("user_id")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement UserId { get; set; } = default!;
     [JsonPropertyName("player_id")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement PlayerId { get; set; } = default!;
     [JsonPropertyName("required_scope")]
     public string RequiredScope { get; set; } = default!;
@@ -72,16 +74,22 @@ public class AuthVerifyScopeResponse
 public class AuthRegisterRequest
 {
     [JsonPropertyName("name")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Name { get; set; } = default!;
     [JsonPropertyName("user_id")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement UserId { get; set; } = default!;
     [JsonPropertyName("email")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Email { get; set; } = default!;
     [JsonPropertyName("password")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Password { get; set; } = default!;
     [JsonPropertyName("scopes")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Scopes { get; set; } = default!;
     [JsonPropertyName("player_id")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement PlayerId { get; set; } = default!;
 }
 
@@ -104,16 +112,22 @@ public class AuthRegisterResponse
 public class AuthCreatePlayerRequest
 {
     [JsonPropertyName("name")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Name { get; set; } = default!;
     [JsonPropertyName("user_id")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement UserId { get; set; } = default!;
     [JsonPropertyName("email")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Email { get; set; } = default!;
     [JsonPropertyName("password")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Password { get; set; } = default!;
     [JsonPropertyName("scopes")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Scopes { get; set; } = default!;
     [JsonPropertyName("player_id")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement PlayerId { get; set; } = default!;
 }
 
@@ -136,8 +150,10 @@ public class AuthCreatePlayerResponse
 public class AuthAnonymousRequest
 {
     [JsonPropertyName("name")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Name { get; set; } = default!;
     [JsonPropertyName("player_id")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement PlayerId { get; set; } = default!;
 }
 
@@ -158,6 +174,7 @@ public class AuthSetDisplayNameRequest
     [JsonPropertyName("name")]
     public string Name { get; set; } = default!;
     [JsonPropertyName("player_id")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement PlayerId { get; set; } = default!;
 }
 
@@ -174,8 +191,10 @@ public class AuthSetDisplayNameResponse
 public class AuthIssueTokenRequest
 {
     [JsonPropertyName("user_id")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement UserId { get; set; } = default!;
     [JsonPropertyName("scopes")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Scopes { get; set; } = default!;
     [JsonPropertyName("player_id")]
     public string PlayerId { get; set; } = default!;
@@ -195,7 +214,11 @@ public class AuthIssueTokenResponse
 /// <summary>Request payload for auth.list_users action.</summary>
 public class AuthListUsersRequest
 {
+    [JsonPropertyName("limit")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public JsonElement Limit { get; set; } = default!;
     [JsonPropertyName("query")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Query { get; set; } = default!;
 }
 
@@ -212,10 +235,12 @@ public class AuthListUsersResponse
 public class AuthResetPasswordRequest
 {
     [JsonPropertyName("user_id")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement UserId { get; set; } = default!;
     [JsonPropertyName("password")]
     public string Password { get; set; } = default!;
     [JsonPropertyName("player_id")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement PlayerId { get; set; } = default!;
 }
 
@@ -234,12 +259,16 @@ public class AuthResetPasswordResponse
 public class AuthUpdateUserRolesRequest
 {
     [JsonPropertyName("user_id")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement UserId { get; set; } = default!;
     [JsonPropertyName("role")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Role { get; set; } = default!;
     [JsonPropertyName("scopes")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Scopes { get; set; } = default!;
     [JsonPropertyName("player_id")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement PlayerId { get; set; } = default!;
 }
 
@@ -258,8 +287,10 @@ public class AuthUpdateUserRolesResponse
 public class AuthDeleteUserRequest
 {
     [JsonPropertyName("user_id")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement UserId { get; set; } = default!;
     [JsonPropertyName("player_id")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement PlayerId { get; set; } = default!;
 }
 
@@ -278,6 +309,7 @@ public class AuthDeleteUserResponse
 public class AuthPurgeDisposableRequest
 {
     [JsonPropertyName("dry_run")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement DryRun { get; set; } = default!;
 }
 
@@ -290,17 +322,11 @@ public class AuthPurgeDisposableResponse
     public bool DryRun { get; set; } = default!;
 }
 
-/// <summary>Request payload for background_change.echo action.</summary>
-public class BackgroundChangeEchoRequest
-{
-    [JsonPropertyName("value")]
-    public long Value { get; set; } = default!;
-}
-
 /// <summary>Request payload for dashboard.get_dashboard_mount action.</summary>
 public class DashboardGetDashboardMountRequest
 {
     [JsonPropertyName("view_id")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement ViewId { get; set; } = default!;
 }
 
@@ -315,6 +341,7 @@ public class DashboardGetDashboardMountResponse
 public class DashboardGetDashboardDataRequest
 {
     [JsonPropertyName("view_id")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement ViewId { get; set; } = default!;
 }
 
@@ -329,6 +356,7 @@ public class DashboardGetDashboardDataResponse
 public class DashboardViewResolveViewRequest
 {
     [JsonPropertyName("id")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Id { get; set; } = default!;
 }
 
@@ -350,6 +378,7 @@ public class DashboardViewListViewsResponse
 public class DashboardViewGetDashboardMountRequest
 {
     [JsonPropertyName("view_id")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement ViewId { get; set; } = default!;
 }
 
@@ -364,6 +393,7 @@ public class DashboardViewGetDashboardMountResponse
 public class DashboardViewGetDashboardDataRequest
 {
     [JsonPropertyName("view_id")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement ViewId { get; set; } = default!;
 }
 
@@ -378,10 +408,12 @@ public class DashboardViewGetDashboardDataResponse
 public class DatabaseExecuteRequest
 {
     [JsonPropertyName("arguments")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Arguments { get; set; } = default!;
     [JsonPropertyName("operation")]
     public string Operation { get; set; } = default!;
     [JsonPropertyName("plugin")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Plugin { get; set; } = default!;
 }
 
@@ -390,6 +422,283 @@ public class DatabaseExecuteResponse
 {
     [JsonPropertyName("rows")]
     public JsonElement Rows { get; set; } = default!;
+}
+
+/// <summary>Request payload for database.table_columns action.</summary>
+public class DatabaseTableColumnsRequest
+{
+    [JsonPropertyName("table")]
+    public string Table { get; set; } = default!;
+    [JsonPropertyName("plugin")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public JsonElement Plugin { get; set; } = default!;
+}
+
+/// <summary>Response model for database.table_columns action.</summary>
+public class DatabaseTableColumnsResponse
+{
+    [JsonPropertyName("columns")]
+    public JsonElement Columns { get; set; } = default!;
+}
+
+/// <summary>Response model for extension_manager.list_extensions action.</summary>
+public class ExtensionManagerListExtensionsResponse
+{
+    [JsonPropertyName("count")]
+    public long Count { get; set; } = default!;
+    [JsonPropertyName("extensions")]
+    public JsonElement Extensions { get; set; } = default!;
+}
+
+/// <summary>Request payload for extension_manager.get_extension action.</summary>
+public class ExtensionManagerGetExtensionRequest
+{
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = default!;
+}
+
+/// <summary>Response model for extension_manager.get_extension action.</summary>
+public class ExtensionManagerGetExtensionResponse
+{
+    [JsonPropertyName("extension")]
+    public JsonElement Extension { get; set; } = default!;
+}
+
+/// <summary>Response model for extension_manager.get_system_info action.</summary>
+public class ExtensionManagerGetSystemInfoResponse
+{
+    [JsonPropertyName("system")]
+    public JsonElement System { get; set; } = default!;
+}
+
+/// <summary>Request payload for extension_manager.upload_extension action.</summary>
+public class ExtensionManagerUploadExtensionRequest
+{
+    [JsonPropertyName("binary")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public JsonElement Binary { get; set; } = default!;
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = default!;
+    [JsonPropertyName("manifest")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public JsonElement Manifest { get; set; } = default!;
+}
+
+/// <summary>Response model for extension_manager.upload_extension action.</summary>
+public class ExtensionManagerUploadExtensionResponse
+{
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = default!;
+    [JsonPropertyName("extension_id")]
+    public string ExtensionId { get; set; } = default!;
+}
+
+/// <summary>Request payload for extension_manager.remove_extension action.</summary>
+public class ExtensionManagerRemoveExtensionRequest
+{
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = default!;
+}
+
+/// <summary>Response model for extension_manager.remove_extension action.</summary>
+public class ExtensionManagerRemoveExtensionResponse
+{
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = default!;
+}
+
+/// <summary>Response model for extension_manager.restart_system action.</summary>
+public class ExtensionManagerRestartSystemResponse
+{
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = default!;
+    [JsonPropertyName("extensions_count")]
+    public long ExtensionsCount { get; set; } = default!;
+}
+
+/// <summary>Request payload for extension_manager.logs action.</summary>
+public class ExtensionManagerLogsRequest
+{
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = default!;
+    [JsonPropertyName("limit")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public JsonElement Limit { get; set; } = default!;
+}
+
+/// <summary>Response model for extension_manager.logs action.</summary>
+public class ExtensionManagerLogsResponse
+{
+    [JsonPropertyName("count")]
+    public long Count { get; set; } = default!;
+    [JsonPropertyName("lines")]
+    public JsonElement Lines { get; set; } = default!;
+    [JsonPropertyName("extension_id")]
+    public string ExtensionId { get; set; } = default!;
+}
+
+/// <summary>Request payload for extension_manager.reload_extension action.</summary>
+public class ExtensionManagerReloadExtensionRequest
+{
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = default!;
+}
+
+/// <summary>Response model for extension_manager.reload_extension action.</summary>
+public class ExtensionManagerReloadExtensionResponse
+{
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = default!;
+    [JsonPropertyName("extension_id")]
+    public string ExtensionId { get; set; } = default!;
+}
+
+/// <summary>Response model for extension_manager.export_extension_info action.</summary>
+public class ExtensionManagerExportExtensionInfoResponse
+{
+    [JsonPropertyName("export")]
+    public JsonElement Export { get; set; } = default!;
+}
+
+/// <summary>Request payload for file_bucket.upload_file action.</summary>
+public class FileBucketUploadFileRequest
+{
+    [JsonPropertyName("filename")]
+    public string Filename { get; set; } = default!;
+    [JsonPropertyName("path")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public JsonElement Path { get; set; } = default!;
+    [JsonPropertyName("metadata")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public JsonElement Metadata { get; set; } = default!;
+    [JsonPropertyName("content")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public JsonElement Content { get; set; } = default!;
+    [JsonPropertyName("content_type")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public JsonElement ContentType { get; set; } = default!;
+    [JsonPropertyName("bucket")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public JsonElement Bucket { get; set; } = default!;
+}
+
+/// <summary>Response model for file_bucket.upload_file action.</summary>
+public class FileBucketUploadFileResponse
+{
+    [JsonPropertyName("file")]
+    public JsonElement File { get; set; } = default!;
+}
+
+/// <summary>Request payload for file_bucket.get_file_info action.</summary>
+public class FileBucketGetFileInfoRequest
+{
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = default!;
+    [JsonPropertyName("bucket")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public JsonElement Bucket { get; set; } = default!;
+}
+
+/// <summary>Response model for file_bucket.get_file_info action.</summary>
+public class FileBucketGetFileInfoResponse
+{
+    [JsonPropertyName("file")]
+    public JsonElement File { get; set; } = default!;
+}
+
+/// <summary>Request payload for file_bucket.read_file action.</summary>
+public class FileBucketReadFileRequest
+{
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = default!;
+    [JsonPropertyName("bucket")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public JsonElement Bucket { get; set; } = default!;
+}
+
+/// <summary>Response model for file_bucket.read_file action.</summary>
+public class FileBucketReadFileResponse
+{
+    [JsonPropertyName("file")]
+    public JsonElement File { get; set; } = default!;
+    [JsonPropertyName("content")]
+    public JsonElement Content { get; set; } = default!;
+}
+
+/// <summary>Request payload for file_bucket.list_files action.</summary>
+public class FileBucketListFilesRequest
+{
+    [JsonPropertyName("offset")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public JsonElement Offset { get; set; } = default!;
+    [JsonPropertyName("limit")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public JsonElement Limit { get; set; } = default!;
+    [JsonPropertyName("bucket")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public JsonElement Bucket { get; set; } = default!;
+}
+
+/// <summary>Response model for file_bucket.list_files action.</summary>
+public class FileBucketListFilesResponse
+{
+    [JsonPropertyName("count")]
+    public long Count { get; set; } = default!;
+    [JsonPropertyName("files")]
+    public JsonElement Files { get; set; } = default!;
+}
+
+/// <summary>Response model for file_bucket.list_buckets action.</summary>
+public class FileBucketListBucketsResponse
+{
+    [JsonPropertyName("buckets")]
+    public JsonElement Buckets { get; set; } = default!;
+}
+
+/// <summary>Request payload for file_bucket.update_file action.</summary>
+public class FileBucketUpdateFileRequest
+{
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = default!;
+    [JsonPropertyName("filename")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public JsonElement Filename { get; set; } = default!;
+    [JsonPropertyName("metadata")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public JsonElement Metadata { get; set; } = default!;
+    [JsonPropertyName("content")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public JsonElement Content { get; set; } = default!;
+    [JsonPropertyName("content_type")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public JsonElement ContentType { get; set; } = default!;
+    [JsonPropertyName("bucket")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public JsonElement Bucket { get; set; } = default!;
+}
+
+/// <summary>Response model for file_bucket.update_file action.</summary>
+public class FileBucketUpdateFileResponse
+{
+    [JsonPropertyName("file")]
+    public JsonElement File { get; set; } = default!;
+}
+
+/// <summary>Request payload for file_bucket.delete_file action.</summary>
+public class FileBucketDeleteFileRequest
+{
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = default!;
+    [JsonPropertyName("bucket")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public JsonElement Bucket { get; set; } = default!;
+}
+
+/// <summary>Response model for file_bucket.delete_file action.</summary>
+public class FileBucketDeleteFileResponse
+{
+    [JsonPropertyName("deleted")]
+    public bool Deleted { get; set; } = default!;
 }
 
 /// <summary>Response model for http.status action.</summary>
@@ -405,6 +714,7 @@ public class HttpStatusResponse
 public class LldbConnectionConfigRequest
 {
     [JsonPropertyName("namespace")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Namespace { get; set; } = default!;
 }
 
@@ -435,6 +745,30 @@ public class LldbConnectionLostEvent
     public long Timestamp { get; set; } = default!;
 }
 
+/// <summary>Request payload for metering.usage action.</summary>
+public class MeteringUsageRequest
+{
+    [JsonPropertyName("since")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public JsonElement Since { get; set; } = default!;
+    [JsonPropertyName("plugin_id")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public JsonElement PluginId { get; set; } = default!;
+}
+
+/// <summary>Response model for metering.usage action.</summary>
+public class MeteringUsageResponse
+{
+    [JsonPropertyName("title_id")]
+    public string TitleId { get; set; } = default!;
+    [JsonPropertyName("studio_id")]
+    public string StudioId { get; set; } = default!;
+    [JsonPropertyName("plugins")]
+    public JsonElement Plugins { get; set; } = default!;
+    [JsonPropertyName("totals")]
+    public JsonElement Totals { get; set; } = default!;
+}
+
 /// <summary>Request payload for player_data.get_player action.</summary>
 public class PlayerDataGetPlayerRequest
 {
@@ -453,10 +787,13 @@ public class PlayerDataGetPlayerResponse
 public class PlayerDataCreatePlayerRequest
 {
     [JsonPropertyName("profile")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Profile { get; set; } = default!;
     [JsonPropertyName("user_id")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement UserId { get; set; } = default!;
     [JsonPropertyName("player_id")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement PlayerId { get; set; } = default!;
 }
 
@@ -503,7 +840,14 @@ public class PlayerDataRetainPlayerResponse
 public class PlayerDataListPlayersRequest
 {
     [JsonPropertyName("filter")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Filter { get; set; } = default!;
+    [JsonPropertyName("limit")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public JsonElement Limit { get; set; } = default!;
+    [JsonPropertyName("user_id")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public JsonElement UserId { get; set; } = default!;
 }
 
 /// <summary>Response model for player_data.list_players action.</summary>
@@ -517,6 +861,7 @@ public class PlayerDataListPlayersResponse
 public class PlayerDataUpdatePlayerRequest
 {
     [JsonPropertyName("data")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Data { get; set; } = default!;
     [JsonPropertyName("player_id")]
     public string PlayerId { get; set; } = default!;
@@ -551,6 +896,7 @@ public class PlayerDataGetDataResponse
 public class PlayerDataSetDataRequest
 {
     [JsonPropertyName("value")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Value { get; set; } = default!;
     [JsonPropertyName("key")]
     public string Key { get; set; } = default!;
@@ -617,126 +963,11 @@ public class PlayerDataPlayerDeletedEvent
     public string PlayerId { get; set; } = default!;
 }
 
-/// <summary>Response model for plugin_manager.list_plugins action.</summary>
-public class PluginManagerListPluginsResponse
-{
-    [JsonPropertyName("count")]
-    public long Count { get; set; } = default!;
-    [JsonPropertyName("plugins")]
-    public JsonElement Plugins { get; set; } = default!;
-}
-
-/// <summary>Request payload for plugin_manager.get_plugin action.</summary>
-public class PluginManagerGetPluginRequest
-{
-    [JsonPropertyName("id")]
-    public string Id { get; set; } = default!;
-}
-
-/// <summary>Response model for plugin_manager.get_plugin action.</summary>
-public class PluginManagerGetPluginResponse
-{
-    [JsonPropertyName("plugin")]
-    public JsonElement Plugin { get; set; } = default!;
-}
-
-/// <summary>Response model for plugin_manager.get_system_info action.</summary>
-public class PluginManagerGetSystemInfoResponse
-{
-    [JsonPropertyName("system")]
-    public JsonElement System { get; set; } = default!;
-}
-
-/// <summary>Request payload for plugin_manager.upload_plugin action.</summary>
-public class PluginManagerUploadPluginRequest
-{
-    [JsonPropertyName("binary")]
-    public JsonElement Binary { get; set; } = default!;
-    [JsonPropertyName("name")]
-    public string Name { get; set; } = default!;
-    [JsonPropertyName("manifest")]
-    public JsonElement Manifest { get; set; } = default!;
-}
-
-/// <summary>Response model for plugin_manager.upload_plugin action.</summary>
-public class PluginManagerUploadPluginResponse
-{
-    [JsonPropertyName("status")]
-    public string Status { get; set; } = default!;
-    [JsonPropertyName("plugin_id")]
-    public string PluginId { get; set; } = default!;
-}
-
-/// <summary>Request payload for plugin_manager.remove_plugin action.</summary>
-public class PluginManagerRemovePluginRequest
-{
-    [JsonPropertyName("id")]
-    public string Id { get; set; } = default!;
-}
-
-/// <summary>Response model for plugin_manager.remove_plugin action.</summary>
-public class PluginManagerRemovePluginResponse
-{
-    [JsonPropertyName("status")]
-    public string Status { get; set; } = default!;
-}
-
-/// <summary>Response model for plugin_manager.restart_system action.</summary>
-public class PluginManagerRestartSystemResponse
-{
-    [JsonPropertyName("status")]
-    public string Status { get; set; } = default!;
-    [JsonPropertyName("plugins_count")]
-    public long PluginsCount { get; set; } = default!;
-}
-
-/// <summary>Request payload for plugin_manager.logs action.</summary>
-public class PluginManagerLogsRequest
-{
-    [JsonPropertyName("id")]
-    public string Id { get; set; } = default!;
-    [JsonPropertyName("limit")]
-    public JsonElement Limit { get; set; } = default!;
-}
-
-/// <summary>Response model for plugin_manager.logs action.</summary>
-public class PluginManagerLogsResponse
-{
-    [JsonPropertyName("count")]
-    public long Count { get; set; } = default!;
-    [JsonPropertyName("lines")]
-    public JsonElement Lines { get; set; } = default!;
-    [JsonPropertyName("plugin_id")]
-    public string PluginId { get; set; } = default!;
-}
-
-/// <summary>Request payload for plugin_manager.reload_plugin action.</summary>
-public class PluginManagerReloadPluginRequest
-{
-    [JsonPropertyName("id")]
-    public string Id { get; set; } = default!;
-}
-
-/// <summary>Response model for plugin_manager.reload_plugin action.</summary>
-public class PluginManagerReloadPluginResponse
-{
-    [JsonPropertyName("status")]
-    public string Status { get; set; } = default!;
-    [JsonPropertyName("plugin_id")]
-    public string PluginId { get; set; } = default!;
-}
-
-/// <summary>Response model for plugin_manager.export_plugin_info action.</summary>
-public class PluginManagerExportPluginInfoResponse
-{
-    [JsonPropertyName("export")]
-    public JsonElement Export { get; set; } = default!;
-}
-
 /// <summary>Request payload for resource_store.migrate action.</summary>
 public class ResourceStoreMigrateRequest
 {
     [JsonPropertyName("resource")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Resource { get; set; } = default!;
 }
 
@@ -751,14 +982,19 @@ public class ResourceStoreMigrateResponse
 public class ResourceStoreListRequest
 {
     [JsonPropertyName("offset")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Offset { get; set; } = default!;
     [JsonPropertyName("sort")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Sort { get; set; } = default!;
     [JsonPropertyName("search")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Search { get; set; } = default!;
     [JsonPropertyName("filter")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Filter { get; set; } = default!;
     [JsonPropertyName("limit")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Limit { get; set; } = default!;
     [JsonPropertyName("resource")]
     public string Resource { get; set; } = default!;
@@ -777,6 +1013,7 @@ public class ResourceStoreListResponse
 public class ResourceStoreGetRequest
 {
     [JsonPropertyName("id")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Id { get; set; } = default!;
     [JsonPropertyName("resource")]
     public string Resource { get; set; } = default!;
@@ -793,6 +1030,7 @@ public class ResourceStoreGetResponse
 public class ResourceStoreCreateRequest
 {
     [JsonPropertyName("attributes")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Attributes { get; set; } = default!;
     [JsonPropertyName("resource")]
     public string Resource { get; set; } = default!;
@@ -809,8 +1047,10 @@ public class ResourceStoreCreateResponse
 public class ResourceStoreUpdateRequest
 {
     [JsonPropertyName("attributes")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Attributes { get; set; } = default!;
     [JsonPropertyName("id")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Id { get; set; } = default!;
     [JsonPropertyName("resource")]
     public string Resource { get; set; } = default!;
@@ -827,6 +1067,7 @@ public class ResourceStoreUpdateResponse
 public class ResourceStoreDeleteRequest
 {
     [JsonPropertyName("id")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Id { get; set; } = default!;
     [JsonPropertyName("resource")]
     public string Resource { get; set; } = default!;
@@ -843,6 +1084,7 @@ public class ResourceStoreDeleteResponse
 public class ResourceStoreUpsertRequest
 {
     [JsonPropertyName("attributes")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Attributes { get; set; } = default!;
     [JsonPropertyName("resource")]
     public string Resource { get; set; } = default!;
@@ -859,6 +1101,7 @@ public class ResourceStoreUpsertResponse
 public class ResourceStoreClearRequest
 {
     [JsonPropertyName("resource")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Resource { get; set; } = default!;
 }
 
@@ -894,6 +1137,36 @@ public class SamplePluginValueChangedEvent
     public long Delta { get; set; } = default!;
     [JsonPropertyName("counter_id")]
     public long CounterId { get; set; } = default!;
+}
+
+/// <summary>Response model for snake_config.get_config action.</summary>
+public class SnakeConfigDto
+{
+    [JsonPropertyName("snake_color")]
+    public string SnakeColor { get; set; } = default!;
+    [JsonPropertyName("apple_color")]
+    public string AppleColor { get; set; } = default!;
+    [JsonPropertyName("apple_points")]
+    public long ApplePoints { get; set; } = default!;
+    [JsonPropertyName("background_file_id")]
+    public string BackgroundFileId { get; set; } = default!;
+    [JsonPropertyName("background_addressable")]
+    public string BackgroundAddressable { get; set; } = default!;
+}
+
+/// <summary>Request payload for snake_config.update_config action.</summary>
+public class SnakeConfigUpdateConfigRequest
+{
+    [JsonPropertyName("snake_color")]
+    public string SnakeColor { get; set; } = default!;
+    [JsonPropertyName("apple_color")]
+    public string AppleColor { get; set; } = default!;
+    [JsonPropertyName("apple_points")]
+    public long ApplePoints { get; set; } = default!;
+    [JsonPropertyName("background_file_id")]
+    public string BackgroundFileId { get; set; } = default!;
+    [JsonPropertyName("background_addressable")]
+    public string BackgroundAddressable { get; set; } = default!;
 }
 
 /// <summary>Request payload for snake_leaderboard.submit_score action.</summary>
@@ -946,6 +1219,230 @@ public class SnakeLeaderboardScoreSubmittedEvent
     public bool Improved { get; set; } = default!;
 }
 
+/// <summary>Request payload for teste.echo action.</summary>
+public class TesteEchoRequest
+{
+    [JsonPropertyName("value")]
+    public long Value { get; set; } = default!;
+}
+
+/// <summary>Response model for unity_addressables.get_stats action.</summary>
+public class AddressablesStats
+{
+    [JsonPropertyName("total_assets")]
+    public long TotalAssets { get; set; } = default!;
+    [JsonPropertyName("total_bundles")]
+    public long TotalBundles { get; set; } = default!;
+    [JsonPropertyName("total_size_bytes")]
+    public long TotalSizeBytes { get; set; } = default!;
+    [JsonPropertyName("active_badge")]
+    public string ActiveBadge { get; set; } = default!;
+    [JsonPropertyName("active_badges")]
+    public JsonElement ActiveBadges { get; set; } = default!;
+    [JsonPropertyName("active_version")]
+    public string ActiveVersion { get; set; } = default!;
+    [JsonPropertyName("active_build_number")]
+    public long ActiveBuildNumber { get; set; } = default!;
+}
+
+/// <summary>Request payload for unity_addressables.list_assets action.</summary>
+public class UnityAddressablesListAssetsRequest
+{
+    [JsonPropertyName("group")]
+    public string Group { get; set; } = default!;
+    [JsonPropertyName("label")]
+    public string Label { get; set; } = default!;
+    [JsonPropertyName("search")]
+    public string Search { get; set; } = default!;
+    [JsonPropertyName("tag")]
+    public string Tag { get; set; } = default!;
+}
+
+/// <summary>Response model for unity_addressables.list_assets action.</summary>
+public class AddressableAssetRecord
+{
+    [JsonPropertyName("address")]
+    public string Address { get; set; } = default!;
+    [JsonPropertyName("release_version")]
+    public string ReleaseVersion { get; set; } = default!;
+    [JsonPropertyName("asset_path")]
+    public string AssetPath { get; set; } = default!;
+    [JsonPropertyName("group_name")]
+    public string GroupName { get; set; } = default!;
+    [JsonPropertyName("labels")]
+    public string Labels { get; set; } = default!;
+    [JsonPropertyName("bundle_name")]
+    public string BundleName { get; set; } = default!;
+    [JsonPropertyName("file_size")]
+    public long FileSize { get; set; } = default!;
+    [JsonPropertyName("hash")]
+    public string Hash { get; set; } = default!;
+    [JsonPropertyName("preview_url")]
+    public string PreviewUrl { get; set; } = default!;
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = default!;
+    [JsonPropertyName("updated_at")]
+    public long UpdatedAt { get; set; } = default!;
+}
+
+/// <summary>Request payload for unity_addressables.get_asset action.</summary>
+public class UnityAddressablesGetAssetRequest
+{
+    [JsonPropertyName("address")]
+    public string Address { get; set; } = default!;
+}
+
+/// <summary>Response model for unity_addressables.list_releases action.</summary>
+public class AddressableReleaseRecord
+{
+    [JsonPropertyName("build_number")]
+    public long BuildNumber { get; set; } = default!;
+    [JsonPropertyName("version")]
+    public string Version { get; set; } = default!;
+    [JsonPropertyName("uploader")]
+    public string Uploader { get; set; } = default!;
+    [JsonPropertyName("badge")]
+    public string Badge { get; set; } = default!;
+    [JsonPropertyName("badges")]
+    public JsonElement Badges { get; set; } = default!;
+    [JsonPropertyName("catalog_hash")]
+    public string CatalogHash { get; set; } = default!;
+    [JsonPropertyName("catalog_json")]
+    public string CatalogJson { get; set; } = default!;
+    [JsonPropertyName("bundle_count")]
+    public long BundleCount { get; set; } = default!;
+    [JsonPropertyName("total_size")]
+    public long TotalSize { get; set; } = default!;
+    [JsonPropertyName("created_at")]
+    public long CreatedAt { get; set; } = default!;
+}
+
+/// <summary>Request payload for unity_addressables.get_manifest action.</summary>
+public class UnityAddressablesGetManifestRequest
+{
+    [JsonPropertyName("tag")]
+    public string Tag { get; set; } = default!;
+}
+
+/// <summary>Response model for unity_addressables.get_manifest action.</summary>
+public class AddressablesManifestDto
+{
+    [JsonPropertyName("version")]
+    public string Version { get; set; } = default!;
+    [JsonPropertyName("tag")]
+    public string Tag { get; set; } = default!;
+    [JsonPropertyName("catalog_hash")]
+    public string CatalogHash { get; set; } = default!;
+    [JsonPropertyName("catalog_json")]
+    public string CatalogJson { get; set; } = default!;
+    [JsonPropertyName("remote_load_path")]
+    public string RemoteLoadPath { get; set; } = default!;
+    [JsonPropertyName("assets")]
+    public JsonElement Assets { get; set; } = default!;
+}
+
+/// <summary>Request payload for unity_addressables.publish_release action.</summary>
+public class UnityAddressablesPublishReleaseRequest
+{
+    [JsonPropertyName("version")]
+    public string Version { get; set; } = default!;
+    [JsonPropertyName("badge")]
+    public string Badge { get; set; } = default!;
+    [JsonPropertyName("catalog_hash")]
+    public string CatalogHash { get; set; } = default!;
+    [JsonPropertyName("catalog_json")]
+    public string CatalogJson { get; set; } = default!;
+    [JsonPropertyName("assets")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public JsonElement Assets { get; set; } = default!;
+    [JsonPropertyName("uploader")]
+    public string Uploader { get; set; } = default!;
+    [JsonPropertyName("badges")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public JsonElement Badges { get; set; } = default!;
+}
+
+/// <summary>Response model for unity_addressables.publish_release action.</summary>
+public class UnityAddressablesPublishReleaseResponse
+{
+    [JsonPropertyName("is_success")]
+    public bool IsSuccess { get; set; } = default!;
+    [JsonPropertyName("is_error")]
+    public bool IsError { get; set; } = default!;
+    [JsonPropertyName("value")]
+    public JsonElement Value { get; set; } = default!;
+    [JsonPropertyName("error")]
+    public string Error { get; set; } = default!;
+}
+
+/// <summary>Request payload for unity_addressables.promote_release action.</summary>
+public class UnityAddressablesPromoteReleaseRequest
+{
+    [JsonPropertyName("version")]
+    public string Version { get; set; } = default!;
+    [JsonPropertyName("target_badge")]
+    public string TargetBadge { get; set; } = default!;
+}
+
+/// <summary>Response model for unity_addressables.promote_release action.</summary>
+public class UnityAddressablesPromoteReleaseResponse
+{
+    [JsonPropertyName("is_success")]
+    public bool IsSuccess { get; set; } = default!;
+    [JsonPropertyName("is_error")]
+    public bool IsError { get; set; } = default!;
+    [JsonPropertyName("value")]
+    public JsonElement Value { get; set; } = default!;
+    [JsonPropertyName("error")]
+    public string Error { get; set; } = default!;
+}
+
+/// <summary>Request payload for unity_addressables.upload_bundle action.</summary>
+public class UnityAddressablesUploadBundleRequest
+{
+    [JsonPropertyName("filename")]
+    public string Filename { get; set; } = default!;
+    [JsonPropertyName("base64_data")]
+    public string Base64Data { get; set; } = default!;
+    [JsonPropertyName("subfolder")]
+    public string Subfolder { get; set; } = default!;
+}
+
+/// <summary>Response model for unity_addressables.upload_bundle action.</summary>
+public class UnityAddressablesUploadBundleResponse
+{
+    [JsonPropertyName("is_success")]
+    public bool IsSuccess { get; set; } = default!;
+    [JsonPropertyName("is_error")]
+    public bool IsError { get; set; } = default!;
+    [JsonPropertyName("value")]
+    public string Value { get; set; } = default!;
+    [JsonPropertyName("error")]
+    public string Error { get; set; } = default!;
+}
+
+/// <summary>Request payload for unity_addressables.upload_preview action.</summary>
+public class UnityAddressablesUploadPreviewRequest
+{
+    [JsonPropertyName("address")]
+    public string Address { get; set; } = default!;
+    [JsonPropertyName("base64_image")]
+    public string Base64Image { get; set; } = default!;
+}
+
+/// <summary>Response model for unity_addressables.upload_preview action.</summary>
+public class UnityAddressablesUploadPreviewResponse
+{
+    [JsonPropertyName("is_success")]
+    public bool IsSuccess { get; set; } = default!;
+    [JsonPropertyName("is_error")]
+    public bool IsError { get; set; } = default!;
+    [JsonPropertyName("value")]
+    public string Value { get; set; } = default!;
+    [JsonPropertyName("error")]
+    public string Error { get; set; } = default!;
+}
+
 /// <summary>Request payload for ws.broadcast action.</summary>
 public class WsBroadcastRequest
 {
@@ -954,6 +1451,7 @@ public class WsBroadcastRequest
     [JsonPropertyName("event")]
     public string Event { get; set; } = default!;
     [JsonPropertyName("payload")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public JsonElement Payload { get; set; } = default!;
 }
 
@@ -985,10 +1483,6 @@ public static class ExoClientGeneratedExtensions
     public static AuthServiceClient Auth(this ExoClient client) =>
         client.Services().Auth;
 
-    /// <summary>Access the BackgroundChange service contract.</summary>
-    public static BackgroundChangeServiceClient BackgroundChange(this ExoClient client) =>
-        client.Services().BackgroundChange;
-
     /// <summary>Access the Dashboard service contract.</summary>
     public static DashboardServiceClient Dashboard(this ExoClient client) =>
         client.Services().Dashboard;
@@ -1001,6 +1495,14 @@ public static class ExoClientGeneratedExtensions
     public static DatabaseServiceClient Database(this ExoClient client) =>
         client.Services().Database;
 
+    /// <summary>Access the ExtensionManager service contract.</summary>
+    public static ExtensionManagerServiceClient ExtensionManager(this ExoClient client) =>
+        client.Services().ExtensionManager;
+
+    /// <summary>Access the FileBucket service contract.</summary>
+    public static FileBucketServiceClient FileBucket(this ExoClient client) =>
+        client.Services().FileBucket;
+
     /// <summary>Access the Http service contract.</summary>
     public static HttpServiceClient Http(this ExoClient client) =>
         client.Services().Http;
@@ -1009,13 +1511,13 @@ public static class ExoClientGeneratedExtensions
     public static LldbServiceClient Lldb(this ExoClient client) =>
         client.Services().Lldb;
 
+    /// <summary>Access the Metering service contract.</summary>
+    public static MeteringServiceClient Metering(this ExoClient client) =>
+        client.Services().Metering;
+
     /// <summary>Access the PlayerData service contract.</summary>
     public static PlayerDataServiceClient PlayerData(this ExoClient client) =>
         client.Services().PlayerData;
-
-    /// <summary>Access the PluginManager service contract.</summary>
-    public static PluginManagerServiceClient PluginManager(this ExoClient client) =>
-        client.Services().PluginManager;
 
     /// <summary>Access the ResourceStore service contract.</summary>
     public static ResourceStoreServiceClient ResourceStore(this ExoClient client) =>
@@ -1025,9 +1527,21 @@ public static class ExoClientGeneratedExtensions
     public static SamplePluginServiceClient SamplePlugin(this ExoClient client) =>
         client.Services().SamplePlugin;
 
+    /// <summary>Access the SnakeConfig service contract.</summary>
+    public static SnakeConfigServiceClient SnakeConfig(this ExoClient client) =>
+        client.Services().SnakeConfig;
+
     /// <summary>Access the SnakeLeaderboard service contract.</summary>
     public static SnakeLeaderboardServiceClient SnakeLeaderboard(this ExoClient client) =>
         client.Services().SnakeLeaderboard;
+
+    /// <summary>Access the Teste service contract.</summary>
+    public static TesteServiceClient Teste(this ExoClient client) =>
+        client.Services().Teste;
+
+    /// <summary>Access the UnityAddressables service contract.</summary>
+    public static UnityAddressablesServiceClient UnityAddressables(this ExoClient client) =>
+        client.Services().UnityAddressables;
 
     /// <summary>Access the Ws service contract.</summary>
     public static WsServiceClient Ws(this ExoClient client) =>
@@ -1050,9 +1564,6 @@ public class ExoforgeServicesHub
     private AuthServiceClient? _auth;
     public AuthServiceClient Auth => _auth ??= new AuthServiceClient(_client);
 
-    private BackgroundChangeServiceClient? _background_change;
-    public BackgroundChangeServiceClient BackgroundChange => _background_change ??= new BackgroundChangeServiceClient(_client);
-
     private DashboardServiceClient? _dashboard;
     public DashboardServiceClient Dashboard => _dashboard ??= new DashboardServiceClient(_client);
 
@@ -1062,17 +1573,23 @@ public class ExoforgeServicesHub
     private DatabaseServiceClient? _database;
     public DatabaseServiceClient Database => _database ??= new DatabaseServiceClient(_client);
 
+    private ExtensionManagerServiceClient? _extension_manager;
+    public ExtensionManagerServiceClient ExtensionManager => _extension_manager ??= new ExtensionManagerServiceClient(_client);
+
+    private FileBucketServiceClient? _file_bucket;
+    public FileBucketServiceClient FileBucket => _file_bucket ??= new FileBucketServiceClient(_client);
+
     private HttpServiceClient? _http;
     public HttpServiceClient Http => _http ??= new HttpServiceClient(_client);
 
     private LldbServiceClient? _lldb;
     public LldbServiceClient Lldb => _lldb ??= new LldbServiceClient(_client);
 
+    private MeteringServiceClient? _metering;
+    public MeteringServiceClient Metering => _metering ??= new MeteringServiceClient(_client);
+
     private PlayerDataServiceClient? _player_data;
     public PlayerDataServiceClient PlayerData => _player_data ??= new PlayerDataServiceClient(_client);
-
-    private PluginManagerServiceClient? _plugin_manager;
-    public PluginManagerServiceClient PluginManager => _plugin_manager ??= new PluginManagerServiceClient(_client);
 
     private ResourceStoreServiceClient? _resource_store;
     public ResourceStoreServiceClient ResourceStore => _resource_store ??= new ResourceStoreServiceClient(_client);
@@ -1080,8 +1597,17 @@ public class ExoforgeServicesHub
     private SamplePluginServiceClient? _sample_plugin;
     public SamplePluginServiceClient SamplePlugin => _sample_plugin ??= new SamplePluginServiceClient(_client);
 
+    private SnakeConfigServiceClient? _snake_config;
+    public SnakeConfigServiceClient SnakeConfig => _snake_config ??= new SnakeConfigServiceClient(_client);
+
     private SnakeLeaderboardServiceClient? _snake_leaderboard;
     public SnakeLeaderboardServiceClient SnakeLeaderboard => _snake_leaderboard ??= new SnakeLeaderboardServiceClient(_client);
+
+    private TesteServiceClient? _teste;
+    public TesteServiceClient Teste => _teste ??= new TesteServiceClient(_client);
+
+    private UnityAddressablesServiceClient? _unity_addressables;
+    public UnityAddressablesServiceClient UnityAddressables => _unity_addressables ??= new UnityAddressablesServiceClient(_client);
 
     private WsServiceClient? _ws;
     public WsServiceClient Ws => _ws ??= new WsServiceClient(_client);
@@ -1244,10 +1770,11 @@ public class AuthServiceClient
     }
 
     /// <summary>Lists all registered user accounts and their assigned authorization scopes.</summary>
-    public Task<AuthListUsersResponse> ListUsersAsync(JsonElement query, CancellationToken cancellationToken = default)
+    public Task<AuthListUsersResponse> ListUsersAsync(JsonElement limit, JsonElement query, CancellationToken cancellationToken = default)
     {
         var req = new AuthListUsersRequest
         {
+            Limit = limit,
             Query = query,
         };
         return ListUsersAsync(req, cancellationToken);
@@ -1327,40 +1854,6 @@ public class AuthServiceClient
     public Task<AuthPurgeDisposableResponse> PurgeDisposableAsync(AuthPurgeDisposableRequest request, CancellationToken cancellationToken = default)
     {
         return _client.SendActionAsync<AuthPurgeDisposableResponse>("auth", "purge_disposable", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-}
-
-/// <summary>Client interface for the background_change service.</summary>
-public class BackgroundChangeServiceClient
-{
-    private readonly ExoClient _client;
-
-    public BackgroundChangeServiceClient(ExoClient client)
-    {
-        _client = client ?? throw new ArgumentNullException(nameof(client));
-    }
-
-    /// <summary>Executes get_color action.</summary>
-    public Task<string> GetColorAsync(CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<string>("background_change", "get_color", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Executes echo action with typed arguments.</summary>
-    public Task<long> EchoAsync(long value, CancellationToken cancellationToken = default)
-    {
-        var req = new BackgroundChangeEchoRequest
-        {
-            Value = value,
-        };
-        return EchoAsync(req, cancellationToken);
-    }
-
-    /// <summary>Executes echo action with a typed request DTO.</summary>
-    public Task<long> EchoAsync(BackgroundChangeEchoRequest request, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<long>("background_change", "echo", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
 }
@@ -1503,6 +1996,271 @@ public class DatabaseServiceClient
         return _client.SendActionAsync<DatabaseExecuteResponse>("database", "execute", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
+    /// <summary>Lists the columns of a table in a plugin's isolated database (M33 Fix 9).</summary>
+    public Task<DatabaseTableColumnsResponse> TableColumnsAsync(string table, JsonElement plugin, CancellationToken cancellationToken = default)
+    {
+        var req = new DatabaseTableColumnsRequest
+        {
+            Table = table,
+            Plugin = plugin,
+        };
+        return TableColumnsAsync(req, cancellationToken);
+    }
+
+    /// <summary>Lists the columns of a table in a plugin's isolated database (M33 Fix 9).</summary>
+    public Task<DatabaseTableColumnsResponse> TableColumnsAsync(DatabaseTableColumnsRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<DatabaseTableColumnsResponse>("database", "table_columns", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+}
+
+/// <summary>Client interface for the extension_manager service.</summary>
+public class ExtensionManagerServiceClient
+{
+    private readonly ExoClient _client;
+
+    public ExtensionManagerServiceClient(ExoClient client)
+    {
+        _client = client ?? throw new ArgumentNullException(nameof(client));
+    }
+
+    /// <summary>Lists all registered extensions with their metadata and contracts.</summary>
+    public Task<ExtensionManagerListExtensionsResponse> ListExtensionsAsync(CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<ExtensionManagerListExtensionsResponse>("extension_manager", "list_extensions", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Retrieves details and contract metadata for a single extension.</summary>
+    public Task<ExtensionManagerGetExtensionResponse> GetExtensionAsync(string id, CancellationToken cancellationToken = default)
+    {
+        var req = new ExtensionManagerGetExtensionRequest
+        {
+            Id = id,
+        };
+        return GetExtensionAsync(req, cancellationToken);
+    }
+
+    /// <summary>Retrieves details and contract metadata for a single extension.</summary>
+    public Task<ExtensionManagerGetExtensionResponse> GetExtensionAsync(ExtensionManagerGetExtensionRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<ExtensionManagerGetExtensionResponse>("extension_manager", "get_extension", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Retrieves runtime node health, memory, and cluster stats.</summary>
+    public Task<ExtensionManagerGetSystemInfoResponse> GetSystemInfoAsync(CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<ExtensionManagerGetSystemInfoResponse>("extension_manager", "get_system_info", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Uploads and installs a new extension binary.</summary>
+    public Task<ExtensionManagerUploadExtensionResponse> UploadExtensionAsync(JsonElement binary, string name, JsonElement manifest, CancellationToken cancellationToken = default)
+    {
+        var req = new ExtensionManagerUploadExtensionRequest
+        {
+            Binary = binary,
+            Name = name,
+            Manifest = manifest,
+        };
+        return UploadExtensionAsync(req, cancellationToken);
+    }
+
+    /// <summary>Uploads and installs a new extension binary.</summary>
+    public Task<ExtensionManagerUploadExtensionResponse> UploadExtensionAsync(ExtensionManagerUploadExtensionRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<ExtensionManagerUploadExtensionResponse>("extension_manager", "upload_extension", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Removes an installed extension.</summary>
+    public Task<ExtensionManagerRemoveExtensionResponse> RemoveExtensionAsync(string id, CancellationToken cancellationToken = default)
+    {
+        var req = new ExtensionManagerRemoveExtensionRequest
+        {
+            Id = id,
+        };
+        return RemoveExtensionAsync(req, cancellationToken);
+    }
+
+    /// <summary>Removes an installed extension.</summary>
+    public Task<ExtensionManagerRemoveExtensionResponse> RemoveExtensionAsync(ExtensionManagerRemoveExtensionRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<ExtensionManagerRemoveExtensionResponse>("extension_manager", "remove_extension", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Triggers a system re-index and reload of all extensions.</summary>
+    public Task<ExtensionManagerRestartSystemResponse> RestartSystemAsync(CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<ExtensionManagerRestartSystemResponse>("extension_manager", "restart_system", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Returns the most recent log lines an extension emitted.</summary>
+    public Task<ExtensionManagerLogsResponse> LogsAsync(string id, JsonElement limit, CancellationToken cancellationToken = default)
+    {
+        var req = new ExtensionManagerLogsRequest
+        {
+            Id = id,
+            Limit = limit,
+        };
+        return LogsAsync(req, cancellationToken);
+    }
+
+    /// <summary>Returns the most recent log lines an extension emitted.</summary>
+    public Task<ExtensionManagerLogsResponse> LogsAsync(ExtensionManagerLogsRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<ExtensionManagerLogsResponse>("extension_manager", "logs", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Re-boots an installed extension from its staged files, without re-uploading it.</summary>
+    public Task<ExtensionManagerReloadExtensionResponse> ReloadExtensionAsync(string id, CancellationToken cancellationToken = default)
+    {
+        var req = new ExtensionManagerReloadExtensionRequest
+        {
+            Id = id,
+        };
+        return ReloadExtensionAsync(req, cancellationToken);
+    }
+
+    /// <summary>Re-boots an installed extension from its staged files, without re-uploading it.</summary>
+    public Task<ExtensionManagerReloadExtensionResponse> ReloadExtensionAsync(ExtensionManagerReloadExtensionRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<ExtensionManagerReloadExtensionResponse>("extension_manager", "reload_extension", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Exports the complete catalog of extensions and contracts for external tools (CLI/Unity).</summary>
+    public Task<ExtensionManagerExportExtensionInfoResponse> ExportExtensionInfoAsync(CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<ExtensionManagerExportExtensionInfoResponse>("extension_manager", "export_extension_info", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+}
+
+/// <summary>Client interface for the file_bucket service.</summary>
+public class FileBucketServiceClient
+{
+    private readonly ExoClient _client;
+
+    public FileBucketServiceClient(ExoClient client)
+    {
+        _client = client ?? throw new ArgumentNullException(nameof(client));
+    }
+
+    /// <summary>Stores a file in a specified bucket from raw binary, base64 content, or disk path.</summary>
+    public Task<FileBucketUploadFileResponse> UploadFileAsync(string filename, JsonElement path, JsonElement metadata, JsonElement content, JsonElement contentType, JsonElement bucket, CancellationToken cancellationToken = default)
+    {
+        var req = new FileBucketUploadFileRequest
+        {
+            Filename = filename,
+            Path = path,
+            Metadata = metadata,
+            Content = content,
+            ContentType = contentType,
+            Bucket = bucket,
+        };
+        return UploadFileAsync(req, cancellationToken);
+    }
+
+    /// <summary>Stores a file in a specified bucket from raw binary, base64 content, or disk path.</summary>
+    public Task<FileBucketUploadFileResponse> UploadFileAsync(FileBucketUploadFileRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<FileBucketUploadFileResponse>("file_bucket", "upload_file", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Retrieves metadata and local storage path for a file.</summary>
+    public Task<FileBucketGetFileInfoResponse> GetFileInfoAsync(string id, JsonElement bucket, CancellationToken cancellationToken = default)
+    {
+        var req = new FileBucketGetFileInfoRequest
+        {
+            Id = id,
+            Bucket = bucket,
+        };
+        return GetFileInfoAsync(req, cancellationToken);
+    }
+
+    /// <summary>Retrieves metadata and local storage path for a file.</summary>
+    public Task<FileBucketGetFileInfoResponse> GetFileInfoAsync(FileBucketGetFileInfoRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<FileBucketGetFileInfoResponse>("file_bucket", "get_file_info", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Reads raw binary content of a file.</summary>
+    public Task<FileBucketReadFileResponse> ReadFileAsync(string id, JsonElement bucket, CancellationToken cancellationToken = default)
+    {
+        var req = new FileBucketReadFileRequest
+        {
+            Id = id,
+            Bucket = bucket,
+        };
+        return ReadFileAsync(req, cancellationToken);
+    }
+
+    /// <summary>Reads raw binary content of a file.</summary>
+    public Task<FileBucketReadFileResponse> ReadFileAsync(FileBucketReadFileRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<FileBucketReadFileResponse>("file_bucket", "read_file", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Lists stored files within a bucket or across all buckets.</summary>
+    public Task<FileBucketListFilesResponse> ListFilesAsync(JsonElement offset, JsonElement limit, JsonElement bucket, CancellationToken cancellationToken = default)
+    {
+        var req = new FileBucketListFilesRequest
+        {
+            Offset = offset,
+            Limit = limit,
+            Bucket = bucket,
+        };
+        return ListFilesAsync(req, cancellationToken);
+    }
+
+    /// <summary>Lists stored files within a bucket or across all buckets.</summary>
+    public Task<FileBucketListFilesResponse> ListFilesAsync(FileBucketListFilesRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<FileBucketListFilesResponse>("file_bucket", "list_files", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Lists all existing storage buckets.</summary>
+    public Task<FileBucketListBucketsResponse> ListBucketsAsync(CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<FileBucketListBucketsResponse>("file_bucket", "list_buckets", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Modifies an existing file's name, metadata, or content.</summary>
+    public Task<FileBucketUpdateFileResponse> UpdateFileAsync(string id, JsonElement filename, JsonElement metadata, JsonElement content, JsonElement contentType, JsonElement bucket, CancellationToken cancellationToken = default)
+    {
+        var req = new FileBucketUpdateFileRequest
+        {
+            Id = id,
+            Filename = filename,
+            Metadata = metadata,
+            Content = content,
+            ContentType = contentType,
+            Bucket = bucket,
+        };
+        return UpdateFileAsync(req, cancellationToken);
+    }
+
+    /// <summary>Modifies an existing file's name, metadata, or content.</summary>
+    public Task<FileBucketUpdateFileResponse> UpdateFileAsync(FileBucketUpdateFileRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<FileBucketUpdateFileResponse>("file_bucket", "update_file", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Deletes a stored file.</summary>
+    public Task<FileBucketDeleteFileResponse> DeleteFileAsync(string id, JsonElement bucket, CancellationToken cancellationToken = default)
+    {
+        var req = new FileBucketDeleteFileRequest
+        {
+            Id = id,
+            Bucket = bucket,
+        };
+        return DeleteFileAsync(req, cancellationToken);
+    }
+
+    /// <summary>Deletes a stored file.</summary>
+    public Task<FileBucketDeleteFileResponse> DeleteFileAsync(FileBucketDeleteFileRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<FileBucketDeleteFileResponse>("file_bucket", "delete_file", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
 }
 
 /// <summary>Client interface for the http service.</summary>
@@ -1570,6 +2328,35 @@ public class LldbServiceClient
     public Task<LldbHealthCheckResponse> HealthCheckAsync(CancellationToken cancellationToken = default)
     {
         return _client.SendActionAsync<LldbHealthCheckResponse>("lldb", "health_check", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+}
+
+/// <summary>Client interface for the metering service.</summary>
+public class MeteringServiceClient
+{
+    private readonly ExoClient _client;
+
+    public MeteringServiceClient(ExoClient client)
+    {
+        _client = client ?? throw new ArgumentNullException(nameof(client));
+    }
+
+    /// <summary>Rolls up persisted usage per plugin and action for this title.</summary>
+    public Task<MeteringUsageResponse> UsageAsync(JsonElement since, JsonElement pluginId, CancellationToken cancellationToken = default)
+    {
+        var req = new MeteringUsageRequest
+        {
+            Since = since,
+            PluginId = pluginId,
+        };
+        return UsageAsync(req, cancellationToken);
+    }
+
+    /// <summary>Rolls up persisted usage per plugin and action for this title.</summary>
+    public Task<MeteringUsageResponse> UsageAsync(MeteringUsageRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<MeteringUsageResponse>("metering", "usage", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
 }
@@ -1675,11 +2462,13 @@ public class PlayerDataServiceClient
     }
 
     /// <summary>Lists all registered player profiles with optional filtering (all, valid, orphaned).</summary>
-    public Task<PlayerDataListPlayersResponse> ListPlayersAsync(JsonElement filter, CancellationToken cancellationToken = default)
+    public Task<PlayerDataListPlayersResponse> ListPlayersAsync(JsonElement filter, JsonElement limit, JsonElement userId, CancellationToken cancellationToken = default)
     {
         var req = new PlayerDataListPlayersRequest
         {
             Filter = filter,
+            Limit = limit,
+            UserId = userId,
         };
         return ListPlayersAsync(req, cancellationToken);
     }
@@ -1773,125 +2562,6 @@ public class PlayerDataServiceClient
     public Task<PlayerDataGetAllDataResponse> GetAllDataAsync(PlayerDataGetAllDataRequest request, CancellationToken cancellationToken = default)
     {
         return _client.SendActionAsync<PlayerDataGetAllDataResponse>("player_data", "get_all_data", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-}
-
-/// <summary>Client interface for the plugin_manager service.</summary>
-public class PluginManagerServiceClient
-{
-    private readonly ExoClient _client;
-
-    public PluginManagerServiceClient(ExoClient client)
-    {
-        _client = client ?? throw new ArgumentNullException(nameof(client));
-    }
-
-    /// <summary>Lists all registered plugins with their metadata and contracts.</summary>
-    public Task<PluginManagerListPluginsResponse> ListPluginsAsync(CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<PluginManagerListPluginsResponse>("plugin_manager", "list_plugins", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Retrieves details and contract metadata for a single plugin.</summary>
-    public Task<PluginManagerGetPluginResponse> GetPluginAsync(string id, CancellationToken cancellationToken = default)
-    {
-        var req = new PluginManagerGetPluginRequest
-        {
-            Id = id,
-        };
-        return GetPluginAsync(req, cancellationToken);
-    }
-
-    /// <summary>Retrieves details and contract metadata for a single plugin.</summary>
-    public Task<PluginManagerGetPluginResponse> GetPluginAsync(PluginManagerGetPluginRequest request, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<PluginManagerGetPluginResponse>("plugin_manager", "get_plugin", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Retrieves runtime node health, memory, and cluster stats.</summary>
-    public Task<PluginManagerGetSystemInfoResponse> GetSystemInfoAsync(CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<PluginManagerGetSystemInfoResponse>("plugin_manager", "get_system_info", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Uploads and installs a new plugin binary.</summary>
-    public Task<PluginManagerUploadPluginResponse> UploadPluginAsync(JsonElement binary, string name, JsonElement manifest, CancellationToken cancellationToken = default)
-    {
-        var req = new PluginManagerUploadPluginRequest
-        {
-            Binary = binary,
-            Name = name,
-            Manifest = manifest,
-        };
-        return UploadPluginAsync(req, cancellationToken);
-    }
-
-    /// <summary>Uploads and installs a new plugin binary.</summary>
-    public Task<PluginManagerUploadPluginResponse> UploadPluginAsync(PluginManagerUploadPluginRequest request, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<PluginManagerUploadPluginResponse>("plugin_manager", "upload_plugin", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Removes an installed plugin.</summary>
-    public Task<PluginManagerRemovePluginResponse> RemovePluginAsync(string id, CancellationToken cancellationToken = default)
-    {
-        var req = new PluginManagerRemovePluginRequest
-        {
-            Id = id,
-        };
-        return RemovePluginAsync(req, cancellationToken);
-    }
-
-    /// <summary>Removes an installed plugin.</summary>
-    public Task<PluginManagerRemovePluginResponse> RemovePluginAsync(PluginManagerRemovePluginRequest request, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<PluginManagerRemovePluginResponse>("plugin_manager", "remove_plugin", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Triggers a system re-index and reload of all plugins.</summary>
-    public Task<PluginManagerRestartSystemResponse> RestartSystemAsync(CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<PluginManagerRestartSystemResponse>("plugin_manager", "restart_system", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Returns the most recent log lines a plugin emitted. Plugin output otherwise only reaches the server's Logger, which a developer working in Unity cannot see. Lines are held in memory and capped, so this is "what did my plugin just do?".</summary>
-    public Task<PluginManagerLogsResponse> LogsAsync(string id, JsonElement limit, CancellationToken cancellationToken = default)
-    {
-        var req = new PluginManagerLogsRequest
-        {
-            Id = id,
-            Limit = limit,
-        };
-        return LogsAsync(req, cancellationToken);
-    }
-
-    /// <summary>Returns the most recent log lines a plugin emitted. Plugin output otherwise only reaches the server's Logger, which a developer working in Unity cannot see. Lines are held in memory and capped, so this is "what did my plugin just do?".</summary>
-    public Task<PluginManagerLogsResponse> LogsAsync(PluginManagerLogsRequest request, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<PluginManagerLogsResponse>("plugin_manager", "logs", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Re-boots an installed plugin from its staged files, without re-uploading it.</summary>
-    public Task<PluginManagerReloadPluginResponse> ReloadPluginAsync(string id, CancellationToken cancellationToken = default)
-    {
-        var req = new PluginManagerReloadPluginRequest
-        {
-            Id = id,
-        };
-        return ReloadPluginAsync(req, cancellationToken);
-    }
-
-    /// <summary>Re-boots an installed plugin from its staged files, without re-uploading it.</summary>
-    public Task<PluginManagerReloadPluginResponse> ReloadPluginAsync(PluginManagerReloadPluginRequest request, CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<PluginManagerReloadPluginResponse>("plugin_manager", "reload_plugin", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
-    }
-
-    /// <summary>Exports the complete catalog of plugins and contracts for external tools (CLI/Unity).</summary>
-    public Task<PluginManagerExportPluginInfoResponse> ExportPluginInfoAsync(CancellationToken cancellationToken = default)
-    {
-        return _client.SendActionAsync<PluginManagerExportPluginInfoResponse>("plugin_manager", "export_plugin_info", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
 }
@@ -2121,6 +2791,44 @@ public class SamplePluginServiceClient
 
 }
 
+/// <summary>Client interface for the snake_config service.</summary>
+public class SnakeConfigServiceClient
+{
+    private readonly ExoClient _client;
+
+    public SnakeConfigServiceClient(ExoClient client)
+    {
+        _client = client ?? throw new ArgumentNullException(nameof(client));
+    }
+
+    /// <summary>Executes get_config action.</summary>
+    public Task<SnakeConfigDto> GetConfigAsync(CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<SnakeConfigDto>("snake_config", "get_config", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Executes update_config action with typed arguments.</summary>
+    public Task<SnakeConfigDto> UpdateConfigAsync(string snakeColor, string appleColor, long applePoints, string backgroundFileId, string backgroundAddressable, CancellationToken cancellationToken = default)
+    {
+        var req = new SnakeConfigUpdateConfigRequest
+        {
+            SnakeColor = snakeColor,
+            AppleColor = appleColor,
+            ApplePoints = applePoints,
+            BackgroundFileId = backgroundFileId,
+            BackgroundAddressable = backgroundAddressable,
+        };
+        return UpdateConfigAsync(req, cancellationToken);
+    }
+
+    /// <summary>Executes update_config action with a typed request DTO.</summary>
+    public Task<SnakeConfigDto> UpdateConfigAsync(SnakeConfigUpdateConfigRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<SnakeConfigDto>("snake_config", "update_config", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+}
+
 /// <summary>Client interface for the snake_leaderboard service.</summary>
 public class SnakeLeaderboardServiceClient
 {
@@ -2181,6 +2889,189 @@ public class SnakeLeaderboardServiceClient
     public Task<List<SnakeLeaderboardEntry>> GetLeaderboardAsync(SnakeLeaderboardGetLeaderboardRequest request, CancellationToken cancellationToken = default)
     {
         return _client.SendActionAsync<List<SnakeLeaderboardEntry>>("snake_leaderboard", "get_leaderboard", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+}
+
+/// <summary>Client interface for the teste service.</summary>
+public class TesteServiceClient
+{
+    private readonly ExoClient _client;
+
+    public TesteServiceClient(ExoClient client)
+    {
+        _client = client ?? throw new ArgumentNullException(nameof(client));
+    }
+
+    /// <summary>Executes ping action.</summary>
+    public Task<long> PingAsync(CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<long>("teste", "ping", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Executes echo action with typed arguments.</summary>
+    public Task<long> EchoAsync(long value, CancellationToken cancellationToken = default)
+    {
+        var req = new TesteEchoRequest
+        {
+            Value = value,
+        };
+        return EchoAsync(req, cancellationToken);
+    }
+
+    /// <summary>Executes echo action with a typed request DTO.</summary>
+    public Task<long> EchoAsync(TesteEchoRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<long>("teste", "echo", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+}
+
+/// <summary>Client interface for the unity_addressables service.</summary>
+public class UnityAddressablesServiceClient
+{
+    private readonly ExoClient _client;
+
+    public UnityAddressablesServiceClient(ExoClient client)
+    {
+        _client = client ?? throw new ArgumentNullException(nameof(client));
+    }
+
+    /// <summary>Executes get_stats action.</summary>
+    public Task<AddressablesStats> GetStatsAsync(CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<AddressablesStats>("unity_addressables", "get_stats", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Executes list_assets action with typed arguments.</summary>
+    public Task<List<AddressableAssetRecord>> ListAssetsAsync(string group, string label, string search, string tag, CancellationToken cancellationToken = default)
+    {
+        var req = new UnityAddressablesListAssetsRequest
+        {
+            Group = group,
+            Label = label,
+            Search = search,
+            Tag = tag,
+        };
+        return ListAssetsAsync(req, cancellationToken);
+    }
+
+    /// <summary>Executes list_assets action with a typed request DTO.</summary>
+    public Task<List<AddressableAssetRecord>> ListAssetsAsync(UnityAddressablesListAssetsRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<List<AddressableAssetRecord>>("unity_addressables", "list_assets", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Executes get_asset action with typed arguments.</summary>
+    public Task<AddressableAssetRecord> GetAssetAsync(string address, CancellationToken cancellationToken = default)
+    {
+        var req = new UnityAddressablesGetAssetRequest
+        {
+            Address = address,
+        };
+        return GetAssetAsync(req, cancellationToken);
+    }
+
+    /// <summary>Executes get_asset action with a typed request DTO.</summary>
+    public Task<AddressableAssetRecord> GetAssetAsync(UnityAddressablesGetAssetRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<AddressableAssetRecord>("unity_addressables", "get_asset", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Executes list_releases action.</summary>
+    public Task<List<AddressableReleaseRecord>> ListReleasesAsync(CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<List<AddressableReleaseRecord>>("unity_addressables", "list_releases", null, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Executes get_manifest action with typed arguments.</summary>
+    public Task<AddressablesManifestDto> GetManifestAsync(string tag, CancellationToken cancellationToken = default)
+    {
+        var req = new UnityAddressablesGetManifestRequest
+        {
+            Tag = tag,
+        };
+        return GetManifestAsync(req, cancellationToken);
+    }
+
+    /// <summary>Executes get_manifest action with a typed request DTO.</summary>
+    public Task<AddressablesManifestDto> GetManifestAsync(UnityAddressablesGetManifestRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<AddressablesManifestDto>("unity_addressables", "get_manifest", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Executes publish_release action with typed arguments.</summary>
+    public Task<UnityAddressablesPublishReleaseResponse> PublishReleaseAsync(string version, string badge, string catalogHash, string catalogJson, JsonElement assets, string uploader, JsonElement badges, CancellationToken cancellationToken = default)
+    {
+        var req = new UnityAddressablesPublishReleaseRequest
+        {
+            Version = version,
+            Badge = badge,
+            CatalogHash = catalogHash,
+            CatalogJson = catalogJson,
+            Assets = assets,
+            Uploader = uploader,
+            Badges = badges,
+        };
+        return PublishReleaseAsync(req, cancellationToken);
+    }
+
+    /// <summary>Executes publish_release action with a typed request DTO.</summary>
+    public Task<UnityAddressablesPublishReleaseResponse> PublishReleaseAsync(UnityAddressablesPublishReleaseRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<UnityAddressablesPublishReleaseResponse>("unity_addressables", "publish_release", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Executes promote_release action with typed arguments.</summary>
+    public Task<UnityAddressablesPromoteReleaseResponse> PromoteReleaseAsync(string version, string targetBadge, CancellationToken cancellationToken = default)
+    {
+        var req = new UnityAddressablesPromoteReleaseRequest
+        {
+            Version = version,
+            TargetBadge = targetBadge,
+        };
+        return PromoteReleaseAsync(req, cancellationToken);
+    }
+
+    /// <summary>Executes promote_release action with a typed request DTO.</summary>
+    public Task<UnityAddressablesPromoteReleaseResponse> PromoteReleaseAsync(UnityAddressablesPromoteReleaseRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<UnityAddressablesPromoteReleaseResponse>("unity_addressables", "promote_release", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Executes upload_bundle action with typed arguments.</summary>
+    public Task<UnityAddressablesUploadBundleResponse> UploadBundleAsync(string filename, string base64Data, string subfolder, CancellationToken cancellationToken = default)
+    {
+        var req = new UnityAddressablesUploadBundleRequest
+        {
+            Filename = filename,
+            Base64Data = base64Data,
+            Subfolder = subfolder,
+        };
+        return UploadBundleAsync(req, cancellationToken);
+    }
+
+    /// <summary>Executes upload_bundle action with a typed request DTO.</summary>
+    public Task<UnityAddressablesUploadBundleResponse> UploadBundleAsync(UnityAddressablesUploadBundleRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<UnityAddressablesUploadBundleResponse>("unity_addressables", "upload_bundle", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Executes upload_preview action with typed arguments.</summary>
+    public Task<UnityAddressablesUploadPreviewResponse> UploadPreviewAsync(string address, string base64Image, CancellationToken cancellationToken = default)
+    {
+        var req = new UnityAddressablesUploadPreviewRequest
+        {
+            Address = address,
+            Base64Image = base64Image,
+        };
+        return UploadPreviewAsync(req, cancellationToken);
+    }
+
+    /// <summary>Executes upload_preview action with a typed request DTO.</summary>
+    public Task<UnityAddressablesUploadPreviewResponse> UploadPreviewAsync(UnityAddressablesUploadPreviewRequest request, CancellationToken cancellationToken = default)
+    {
+        return _client.SendActionAsync<UnityAddressablesUploadPreviewResponse>("unity_addressables", "upload_preview", request, ExoTransportPreference.Auto, cancellationToken: cancellationToken);
     }
 
 }

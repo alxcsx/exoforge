@@ -19,7 +19,7 @@ namespace Exoforge.Management;
 public static class ExoScaffolder
 {
     /// <summary>Templates a caller may ask for. Keep in step with <see cref="GeneratePluginCode"/>.</summary>
-    public static readonly string[] Templates = { "standard" };
+    public static readonly string[] Templates = { "standard", "basic", "persistent", "config", "events" };
 
     public static string ScaffoldExtension(string extensionsDirectory, string rawName, string template = "standard", string? feed = null) =>
         Scaffold(extensionsDirectory, rawName, isExtension: true, template: template, feed: feed);
@@ -40,7 +40,6 @@ public static class ExoScaffolder
         File.WriteAllText(Path.Combine(srcDir, $"{cleanName}.csproj"), GenerateCsproj());
         File.WriteAllText(Path.Combine(srcDir, $"{className}{suffix}.cs"), GenerateCode(cleanName, className, isExtension, template));
         File.WriteAllText(Path.Combine(targetDir, $"{cleanName}.slnx"), GenerateSolution(cleanName));
-        File.WriteAllText(Path.Combine(targetDir, "README.md"), GenerateReadme(cleanName, className, isExtension));
 
         // The staged native binary and the local build counter are build artifacts.
         File.WriteAllText(Path.Combine(targetDir, ".gitignore"), "/.exoforge/\n/.buildcount\n/manifest.json\n");
@@ -291,32 +290,32 @@ public static class ExoScaffolder
     {
         string kind = template.ToLowerInvariant();
 
-        if (kind is not ("standard" or ""))
+        if (!isExtension && kind is "standard" or "")
         {
-            throw new ArgumentException(
-                $"Unknown template '{template}'. Available templates: standard.", nameof(template));
+            return LegacyStandardTemplate(serviceName, className);
         }
 
-        return StandardTemplate(serviceName, className, isExtension);
+        return kind switch
+        {
+            "standard" or "basic" or "" => BasicTemplate(serviceName, className, isExtension),
+            "persistent" => PersistentTemplate(serviceName, className, isExtension),
+            "config" => ConfigTemplate(serviceName, className, isExtension),
+            "events" => EventsTemplate(serviceName, className, isExtension),
+            _ => throw new ArgumentException(
+                $"Unknown template '{template}'. Available templates: basic, standard, persistent, config, events.", nameof(template))
+        };
     }
 
-    private static string StandardTemplate(string serviceName, string className, bool isExtension = true)
+    private static string LegacyStandardTemplate(string serviceName, string className)
     {
-        string ns = isExtension ? "Exoforge.Extensions" : "Exoforge.Plugins";
-        string term = isExtension ? "extension" : "plugin";
-        string attr = isExtension ? "ExoExtension" : "ExoService";
-        string suffix = isExtension ? "Extension" : "Plugin";
-
         return $$"""
 using Exoforge.Plugin.SDK;
 
-namespace {{ns}};
+namespace Exoforge.Plugins;
 
-// Native Exoforge {{term}}: attributes declare the contract, the host injects capabilities,
-// and `exo {{term}} build` produces the framework-dependent {{term}} binary.
-[{{attr}}("{{serviceName}}", Version = "0.1.0", Resources = new[] { typeof({{className}}Item) },
+[ExoService("{{serviceName}}", Version = "0.1.0", Resources = new[] { typeof({{className}}Item) },
     Category = "Game", Title = "{{className}}", Icon = "🧩")]
-public class {{className}}{{suffix}}
+public class {{className}}Plugin
 {
     [ExoAction]
     public int Ping()
@@ -329,7 +328,6 @@ public class {{className}}{{suffix}}
     public int Echo(int value) => value;
 }
 
-// Row stored in the plugin's isolated database.
 [ExoResource("{{serviceName}}_items", PrimaryKey = "id", DrawerTabs = new[] { "overview", "attributes" })]
 public record {{className}}Item
 {
@@ -344,6 +342,140 @@ public record {{className}}Item
 
     [ExoColumn(Badge = true)]
     public string Status { get; init; } = "active";
+}
+""";
+    }
+
+    private static string BasicTemplate(string serviceName, string className, bool isExtension = true)
+    {
+        string ns = isExtension ? "Exoforge.Extensions" : "Exoforge.Plugins";
+        string attr = isExtension ? "ExoExtension" : "ExoService";
+        string suffix = isExtension ? "Extension" : "Plugin";
+
+        return $$"""
+using System;
+using Exoforge.Plugin.SDK;
+
+namespace {{ns}};
+
+[{{attr}}("{{serviceName}}", Version = "0.1.0")]
+public class {{className}}{{suffix}}
+{
+    [ExoAction]
+    public {{className}}ClaimResponse ClaimDailyReward(int level)
+    {
+        var playerId = ExoServices.Context.CallerPlayerId!;
+        var today = DateTime.UtcNow.ToString("yyyy-MM-dd");
+
+        // Check player data: has the player already claimed today?
+        var status = ExoServices.Database.Get<{{className}}PlayerStatus>("daily_claims", playerId);
+        if (status != null && status.LastClaimDate == today)
+        {
+            return new {{className}}ClaimResponse(
+                Success: false,
+                Message: "Daily reward already claimed today. Come back tomorrow!",
+                Reward: null
+            );
+        }
+
+        // Grant reward and record claim in player data
+        var reward = new {{className}}Reward("coins", 100 + (level * 10));
+        ExoServices.Database.Put("daily_claims", playerId, new {{className}}PlayerStatus(playerId, today, reward.Amount));
+
+        return new {{className}}ClaimResponse(
+            Success: true,
+            Message: "Daily reward claimed successfully!",
+            Reward: reward
+        );
+    }
+}
+
+public record {{className}}ClaimResponse(
+    bool Success,
+    string Message,
+    {{className}}Reward? Reward = null
+);
+
+public record {{className}}Reward(string Kind, int Amount);
+
+public record {{className}}PlayerStatus(string PlayerId, string LastClaimDate, int LastAmount);
+""";
+    }
+
+    private static string PersistentTemplate(string serviceName, string className, bool isExtension = true)
+    {
+        string ns = isExtension ? "Exoforge.Extensions" : "Exoforge.Plugins";
+        string attr = isExtension ? "ExoExtension" : "ExoService";
+        string suffix = isExtension ? "Extension" : "Plugin";
+
+        return $$"""
+using System.Threading.Tasks;
+using Exoforge.Plugin.SDK;
+
+namespace {{ns}};
+
+[{{attr}}("{{serviceName}}", Version = "0.1.0", Resources = new[] { typeof({{className}}Item) })]
+public class {{className}}{{suffix}}
+{
+    [ExoAction]
+    public async Task<{{className}}Item?> GetItemAsync(string id) =>
+        await Exo.Database.FirstAsync<{{className}}Item>("id = @id", new { id });
+}
+
+[ExoResource("{{serviceName}}_items", PrimaryKey = "id")]
+public record {{className}}Item
+{
+    [ExoColumn(Sortable = true, Filterable = true)]
+    public string Id { get; init; } = "";
+
+    [ExoColumn(Sortable = true)]
+    public int Quantity { get; init; }
+}
+""";
+    }
+
+    private static string ConfigTemplate(string serviceName, string className, bool isExtension = true)
+    {
+        string ns = isExtension ? "Exoforge.Extensions" : "Exoforge.Plugins";
+        string attr = isExtension ? "ExoExtension" : "ExoService";
+        string suffix = isExtension ? "Extension" : "Plugin";
+
+        return $$"""
+using Exoforge.Plugin.SDK;
+
+namespace {{ns}};
+
+[{{attr}}("{{serviceName}}", Version = "0.1.0")]
+public class {{className}}{{suffix}}
+{
+    [ExoAction]
+    public string GetConfig(string key) =>
+        key == "difficulty" ? "normal" : "default";
+}
+""";
+    }
+
+    private static string EventsTemplate(string serviceName, string className, bool isExtension = true)
+    {
+        string ns = isExtension ? "Exoforge.Extensions" : "Exoforge.Plugins";
+        string attr = isExtension ? "ExoExtension" : "ExoService";
+        string suffix = isExtension ? "Extension" : "Plugin";
+
+        return $$"""
+using System;
+using System.Threading.Tasks;
+using Exoforge.Plugin.SDK;
+
+namespace {{ns}};
+
+[{{attr}}("{{serviceName}}", Version = "0.1.0")]
+public class {{className}}{{suffix}}
+{
+    [ExoAction]
+    public async Task EmitGreetingAsync(string name)
+    {
+        await Exo.Events.PublishAsync("{{serviceName}}:greeted", new { name, timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds() });
+    }
 }
 """;
     }

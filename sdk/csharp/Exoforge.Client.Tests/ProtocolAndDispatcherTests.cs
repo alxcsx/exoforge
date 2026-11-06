@@ -92,12 +92,12 @@ public class ProtocolAndDispatcherTests
         Assert.NotNull(client.Http());
         Assert.NotNull(client.Ws());
         Assert.NotNull(client.Database());
-        Assert.NotNull(client.PluginManager());
+        Assert.NotNull(client.ExtensionManager());
 
         // Same client yields same cached service instance
         Assert.Same(client.SamplePlugin(), client.SamplePlugin());
         Assert.Same(client.PlayerData(), client.PlayerData());
-        Assert.Same(client.PluginManager(), client.PluginManager());
+        Assert.Same(client.ExtensionManager(), client.ExtensionManager());
     }
 
     [Fact]

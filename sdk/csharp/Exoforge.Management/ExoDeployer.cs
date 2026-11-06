@@ -118,7 +118,7 @@ public class ExoDeployer
                 files = filesPayload
             };
 
-            var result = await client.SendActionAsync<JsonElement>("plugin_manager", "upload_plugin", payload, ExoTransportPreference.Http, cancellationToken: cancellationToken).ConfigureAwait(false);
+            var result = await client.SendActionAsync<JsonElement>("extension_manager", "upload_extension", payload, ExoTransportPreference.Http, cancellationToken: cancellationToken).ConfigureAwait(false);
             return result.ToString();
         }
         finally
@@ -153,15 +153,15 @@ public class ExoDeployer
             try
             {
                 result = await client.SendActionAsync<JsonElement>(
-                    "plugin_manager", "get_plugin", new { id = cleanName }, cancellationToken: cancellationToken).ConfigureAwait(false);
+                    "extension_manager", "get_extension", new { id = cleanName }, cancellationToken: cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
                 return new PluginDeploymentStatus(false, null, null, $"cluster does not have '{cleanName}': {ex.Message}");
             }
 
-            string? version = ReadString(result, "plugin", "version");
-            string? type = ReadString(result, "plugin", "type");
+            string? version = ReadString(result, "extension", "version") ?? ReadString(result, "plugin", "version");
+            string? type = ReadString(result, "extension", "type") ?? ReadString(result, "plugin", "type");
 
             if (version == null)
             {
@@ -215,7 +215,7 @@ public class ExoDeployer
         try
         {
             return await client.SendActionAsync<JsonElement>(
-                "plugin_manager", "reload_plugin", new { id = cleanName }, cancellationToken: cancellationToken).ConfigureAwait(false);
+                "extension_manager", "reload_extension", new { id = cleanName }, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -253,7 +253,7 @@ public class ExoDeployer
         try
         {
             var result = await client.SendActionAsync<JsonElement>(
-                "plugin_manager",
+                "extension_manager",
                 "logs",
                 new { id = cleanName, limit },
                 cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -370,8 +370,8 @@ public class ExoDeployer
         try
         {
             var result = await client.SendActionAsync<JsonElement>(
-                "plugin_manager",
-                "remove_plugin",
+                "extension_manager",
+                "remove_extension",
                 new { id = pluginId, delete_files = deleteFiles },
                 cancellationToken: cancellationToken).ConfigureAwait(false);
             return result.ToString();
@@ -393,7 +393,7 @@ public class ExoDeployer
         CancellationToken cancellationToken = default) =>
         RemovePluginAsync(extensionId, environmentName, existingClient, deleteFiles, cancellationToken);
 
-    /// <summary>Fetches the raw contract export (what <c>plugin_manager.export_plugin_info</c> returns).</summary>
+    /// <summary>Fetches the raw contract export (what <c>extension_manager.export_extension_info</c> returns).</summary>
     public async Task<string> GetContractsExportJsonAsync(
         string? environmentName = null,
         ExoClient? existingClient = null,
@@ -403,7 +403,7 @@ public class ExoDeployer
         try
         {
             var export = await client.SendActionAsync<JsonElement>(
-                "plugin_manager", "export_plugin_info", null, cancellationToken: cancellationToken).ConfigureAwait(false);
+                "extension_manager", "export_extension_info", null, cancellationToken: cancellationToken).ConfigureAwait(false);
             string raw = export.GetRawText();
             TryCacheContracts(raw);
             return raw;
@@ -871,7 +871,7 @@ public class ExoDeployer
         string exportJson;
         if (existingClient != null)
         {
-            var exportResult = await existingClient.SendActionAsync<JsonElement>("plugin_manager", "export_plugin_info", null, cancellationToken: cancellationToken).ConfigureAwait(false);
+            var exportResult = await existingClient.SendActionAsync<JsonElement>("extension_manager", "export_extension_info", null, cancellationToken: cancellationToken).ConfigureAwait(false);
             exportJson = exportResult.GetRawText();
             TryCacheContracts(exportJson);
         }
@@ -880,7 +880,7 @@ public class ExoDeployer
             try
             {
                 using var client = await CreateConnectedClientAsync(environmentName, cancellationToken).ConfigureAwait(false);
-                var exportResult = await client.SendActionAsync<JsonElement>("plugin_manager", "export_plugin_info", null, cancellationToken: cancellationToken).ConfigureAwait(false);
+                var exportResult = await client.SendActionAsync<JsonElement>("extension_manager", "export_extension_info", null, cancellationToken: cancellationToken).ConfigureAwait(false);
                 exportJson = exportResult.GetRawText();
                 TryCacheContracts(exportJson);
             }
@@ -903,7 +903,7 @@ public class ExoDeployer
         CancellationToken cancellationToken = default)
     {
         using var client = await CreateConnectedClientAsync(environmentName, cancellationToken).ConfigureAwait(false);
-        return await client.SendActionAsync<JsonElement>("plugin_manager", "get_system_info", null, cancellationToken: cancellationToken).ConfigureAwait(false);
+        return await client.SendActionAsync<JsonElement>("extension_manager", "get_system_info", null, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     public Task<JsonElement> ListExtensionsAsync(
@@ -916,7 +916,7 @@ public class ExoDeployer
         CancellationToken cancellationToken = default)
     {
         using var client = await CreateConnectedClientAsync(environmentName, cancellationToken).ConfigureAwait(false);
-        return await client.SendActionAsync<JsonElement>("plugin_manager", "list_plugins", null, cancellationToken: cancellationToken).ConfigureAwait(false);
+        return await client.SendActionAsync<JsonElement>("extension_manager", "list_extensions", null, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     // -- Build --
@@ -1557,7 +1557,7 @@ public sealed class ExtensionLogLine
         new PluginLogLine(l.At, l.LevelName, l.Message);
 }
 
-/// <summary>One log line a plugin emitted, as served by <c>plugin_manager.logs</c>.</summary>
+/// <summary>One log line an extension emitted, as served by <c>extension_manager.logs</c>.</summary>
 public sealed class PluginLogLine
 {
     public PluginLogLine(long at, string levelName, string message)

@@ -16,16 +16,26 @@ namespace Exoforge.Unity.Editor
     {
         private string _pluginName = "";
         private int _templateIndex = 0;
+        private Action<string>? _onCreatedWithId;
         private Action? _onCreated;
         private Label? _pathHintLabel;
         private Button? _createBtn;
 
-        public static void Open(Action? onCreated = null)
+        private static readonly (string Label, string Id)[] AvailableTemplates =
+        {
+            ("Basic Service (Single Action)", "basic"),
+            ("Persistent Data (Resource & DB)", "persistent"),
+            ("Config & State (Key-Value Store)", "config"),
+            ("Event Producer (PubSub Events)", "events")
+        };
+
+        public static void Open(Action<string>? onCreatedWithId = null, Action? onCreated = null)
         {
             EditorApplication.delayCall += () =>
             {
                 var window = CreateInstance<ExoforgeScaffoldModal>();
                 window.titleContent = new GUIContent("New Extension");
+                window._onCreatedWithId = onCreatedWithId;
                 window._onCreated = onCreated;
 
                 const float width = 450;
@@ -110,7 +120,7 @@ namespace Exoforge.Unity.Editor
             root.Add(nameField);
 
             // 3. Template Dropdown
-            var templateDropdown = new DropdownField("Template", ExoScaffolder.Templates.ToList(), _templateIndex);
+            var templateDropdown = new DropdownField("Template", AvailableTemplates.Select(t => t.Label).ToList(), _templateIndex);
             templateDropdown.style.marginBottom = 6;
             templateDropdown.RegisterValueChangedCallback(evt =>
             {
@@ -181,12 +191,13 @@ namespace Exoforge.Unity.Editor
                 string wsPath = ExoforgeEditorConfig.GetAbsoluteWorkspacePath();
                 var ws = ExoWorkspace.Load(wsPath);
                 string normalized = ExoScaffolder.NormalizePluginName(_pluginName);
-                string template = (_templateIndex >= 0 && _templateIndex < ExoScaffolder.Templates.Length)
-                    ? ExoScaffolder.Templates[_templateIndex]
-                    : ExoScaffolder.Templates[0];
+                string template = (_templateIndex >= 0 && _templateIndex < AvailableTemplates.Length)
+                    ? AvailableTemplates[_templateIndex].Id
+                    : "basic";
 
                 ExoScaffolder.ScaffoldExtension(ws.ExtensionsPath, normalized, template: template);
                 Close();
+                _onCreatedWithId?.Invoke(normalized);
                 _onCreated?.Invoke();
             }
             catch (Exception ex)

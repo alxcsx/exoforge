@@ -5,6 +5,16 @@ using UnityEngine;
 
 namespace Exoforge.Client.Unity
 {
+    /// <summary>
+    /// Lifecycle connection state for the Exoforge client.
+    /// </summary>
+    public enum ExoforgeConnectionState
+    {
+        Disconnected,
+        Connecting,
+        Connected,
+        Authenticated
+    }
 
     /// <summary>
     /// Unity entry point for Exoforge. Owns the <see cref="ExoClient"/> lifecycle, resolves
@@ -99,6 +109,25 @@ namespace Exoforge.Client.Unity
                 }
 
                 return _client;
+            }
+        }
+
+        /// <summary>Event that fires on client connection state transitions.</summary>
+        public static event Action<ExoforgeConnectionState>? OnStateChanged;
+
+        private TaskCompletionSource<bool> _readyTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        /// <summary>Task that completes when Exoforge has connected and authenticated.</summary>
+        public Task ReadyTask => _readyTcs.Task;
+
+        /// <summary>Current connection state.</summary>
+        public ExoforgeConnectionState CurrentState
+        {
+            get
+            {
+                if (_client == null || !_client.IsConnected) return ExoforgeConnectionState.Disconnected;
+                if (_client.IsAuthenticated) return ExoforgeConnectionState.Authenticated;
+                return ExoforgeConnectionState.Connected;
             }
         }
 
@@ -418,7 +447,9 @@ namespace Exoforge.Client.Unity
                     _client = CreateClient();
                 }
 
+                OnStateChanged?.Invoke(ExoforgeConnectionState.Connecting);
                 await Client!.ConnectAsync(new Uri(targetUrl));
+                OnStateChanged?.Invoke(ExoforgeConnectionState.Connected);
 
                 if (!string.IsNullOrEmpty(targetToken))
                 {
@@ -434,15 +465,19 @@ namespace Exoforge.Client.Unity
                             ExoTokenStore.SaveSession(targetToken, auth.PlayerId, auth.Scopes);
                         }
                         Debug.Log($"[Exoforge] Connected and authenticated as {auth.PlayerId} ({cfg?.Environment ?? "?"})");
+                        OnStateChanged?.Invoke(ExoforgeConnectionState.Authenticated);
+                        _readyTcs.TrySetResult(true);
                     }
                     else
                     {
                         Debug.LogWarning($"[Exoforge] Connected, but authentication failed: {auth.Error}");
+                        _readyTcs.TrySetResult(true);
                     }
                 }
                 else
                 {
                     Debug.Log($"[Exoforge] Connected to {targetUrl} (unauthenticated)");
+                    _readyTcs.TrySetResult(true);
                 }
 
                 _reconnectAttempt = 0;
@@ -501,7 +536,15 @@ namespace Exoforge.Client.Unity
             }
         }
 
-        private void OnClientDisconnected(Exception? error) => StartReconnecting();
+        private void OnClientDisconnected(Exception? error)
+        {
+            if (_readyTcs.Task.IsCompleted)
+            {
+                _readyTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            }
+            OnStateChanged?.Invoke(ExoforgeConnectionState.Disconnected);
+            StartReconnecting();
+        }
 
         private void StartReconnecting()
         {

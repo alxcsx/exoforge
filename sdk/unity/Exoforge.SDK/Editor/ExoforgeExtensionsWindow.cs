@@ -2343,7 +2343,7 @@ namespace Exoforge.Unity.Editor
                 {
                     try
                     {
-                        var exportRes = await client.SendActionAsync<JsonElement>("plugin_manager", "export_plugin_info", null);
+                        var exportRes = await client.SendActionAsync<JsonElement>("extension_manager", "export_extension_info", null);
                         var clusterItems = new List<JsonElement>();
                         if (exportRes.TryGetProperty("export", out var exp))
                         {
