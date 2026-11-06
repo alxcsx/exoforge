@@ -138,9 +138,8 @@ public partial class ExoforgeControlCenter : EditorWindow
                 _isConnected = false;
                 SessionState.SetBool(WasConnectedSessionKey, false);
                 _connectionStatus = "Auth failed";
-                ShowStatus($"Authentication failed: {auth.Error}", MessageType.Error);
+                ShowStatus($"Authentication failed: {auth.Error}. Sign in using the Account button.", MessageType.Error);
                 ExoTokenStore.ClearStudioSession();
-                ExoforgeAccountModal.Open();
             }
         }
         catch (OperationCanceledException)
@@ -154,12 +153,8 @@ public partial class ExoforgeControlCenter : EditorWindow
             _rawConnected = false;
             SessionState.SetBool(WasConnectedSessionKey, false);
             _connectionStatus = "Auth rejected";
-            ShowStatus(
-                $"Auth rejected: {ex.Message}\n" +
-                "Tip: 'dev:developer' works in dev mode. For production, sign in with email/password.",
-                MessageType.Error);
+            ShowStatus($"Auth rejected: {ex.Message}. Sign in using the Account button.", MessageType.Error);
             ExoTokenStore.ClearStudioSession();
-            ExoforgeAccountModal.Open();
         }
         catch (Exception ex)
         {

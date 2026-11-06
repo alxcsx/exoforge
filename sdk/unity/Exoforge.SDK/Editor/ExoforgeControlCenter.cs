@@ -368,16 +368,14 @@ public partial class ExoforgeControlCenter : EditorWindow
         return !string.IsNullOrEmpty(icon) || !string.IsNullOrEmpty(title);
     }
 
-    [MenuItem("Tools/Exoforge/Exoforge Studio", false, 100)]
-    [MenuItem("Window/Exoforge/Exoforge Studio", false, 2000)]
+    [MenuItem("Exoforge/Studio", false, 1)]
     public static void ShowWindow()
     {
         var window = GetWindow<ExoforgeControlCenter>("Exoforge Studio");
         window.minSize = new Vector2(480, 560);
     }
 
-    [MenuItem("Tools/Exoforge/Repair & Regenerate Client", false, 110)]
-    [MenuItem("Window/Exoforge/Repair & Regenerate Client", false, 2005)]
+    [MenuItem("Exoforge/Repair & Regenerate Client", false, 21)]
     public static async void RepairAndRegenerateClientMenu()
     {
         EditorUtility.DisplayProgressBar("Exoforge Repair", "Repairing C# client bindings and runtime configuration...", 0.3f);
@@ -503,8 +501,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         }
     }
 
-    [MenuItem("Tools/Exoforge/Reset Anonymous Player Session", false, 200)]
-    [MenuItem("Window/Exoforge/Reset Anonymous Player Session", false, 2001)]
+    [MenuItem("Exoforge/Sessions/Reset Anonymous Player Session", false, 50)]
     public static void ResetAnonymousPlayerSession()
     {
         PlayerPrefs.DeleteKey("Exoforge.Token");
@@ -516,8 +513,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         UnityEngine.Debug.Log("[Exoforge] Cleared anonymous player session and generated a new unique device identifier.");
     }
 
-    [MenuItem("Tools/Exoforge/Clear All Sessions (Player & Studio)", false, 201)]
-    [MenuItem("Window/Exoforge/Clear All Sessions (Player & Studio)", false, 2002)]
+    [MenuItem("Exoforge/Sessions/Clear All Sessions (Player & Studio)", false, 51)]
     public static void ClearAllSessions()
     {
         ResetAnonymousPlayerSession();
@@ -567,14 +563,15 @@ public partial class ExoforgeControlCenter : EditorWindow
 
     private void TryAutoConnect()
     {
+        if (IsSetupRequired) return;
+
         string token = !string.IsNullOrWhiteSpace(ExoTokenStore.StudioToken)
             ? ExoTokenStore.StudioToken
             : ExoTokenStore.Token;
 
         if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(ExoTokenStore.StudioPlayerId))
         {
-            ShowStatus("No active studio user defined — please sign in.", MessageType.Warning);
-            ExoforgeAccountModal.Open();
+            ShowStatus("No active session defined. Use the Account button above to sign in.", MessageType.Info);
             return;
         }
 
@@ -743,7 +740,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         title.style.marginBottom = 8;
         card.Add(title);
 
-        var desc = new Label("This Unity project has not connected to an Exoforge cluster yet. Complete the quick onboarding setup to connect to your cluster (local Docker or remote VPS), verify .NET SDK, and unlock extension development.");
+        var desc = new Label("Connect this project to your Exoforge server to start managing extensions, deployment, and live events.");
         desc.style.fontSize = 12;
         desc.style.color = ExoforgeUIStyle.TextSecondary;
         desc.style.whiteSpace = WhiteSpace.Normal;
@@ -751,7 +748,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         desc.style.marginBottom = 20;
         card.Add(desc);
 
-        var launchBtn = ExoforgeUIStyle.CreateModernButton("🚀 Launch Setup Wizard", () =>
+        var launchBtn = ExoforgeUIStyle.CreateModernButton("🚀 Set Up Exoforge Project", () =>
         {
             ExoforgeSetupModal.Open(onCompleted: () =>
             {

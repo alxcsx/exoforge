@@ -15,7 +15,7 @@ public static class ExoforgeSceneSetup
     private const string PrefabName = "Exoforge";
     private const string PrefabAssetName = "Exoforge.prefab";
 
-    [MenuItem("Tools/Exoforge/Add Exoforge to Scene", false, 104)]
+    [MenuItem("Exoforge/Add Exoforge to Scene", false, 20)]
     public static void AddToScene()
     {
         var prefab = FindPrefab();

@@ -34,13 +34,6 @@ namespace Exoforge.Unity.Editor
         private Label? _stepProgressLabel;
         private Label? _statusLabel;
 
-        [MenuItem("Tools/Exoforge/Setup Wizard...", false, 10)]
-        [MenuItem("Window/Exoforge/Setup Wizard...", false, 10)]
-        public static void OpenMenu()
-        {
-            Open();
-        }
-
         public static void Open(Action? onCompleted = null)
         {
             EditorApplication.delayCall += () =>
@@ -178,7 +171,7 @@ namespace Exoforge.Unity.Editor
         {
             if (_stepProgressLabel != null) _stepProgressLabel.text = "Step 1 of 5: Connect to Instance";
 
-            var desc = new Label("Enter your Exoforge server URL. For local development with Docker, keep localhost.");
+            var desc = new Label("Enter your Exoforge server address (keep localhost for a local dev server).");
             desc.style.fontSize = 11;
             desc.style.color = ExoforgeUIStyle.TextSecondary;
             desc.style.marginBottom = 12;
@@ -398,14 +391,17 @@ namespace Exoforge.Unity.Editor
         }
 
         // =========================================================================
-        // Step 3: Project Readiness
+        // Step 3: Project Setup
         // =========================================================================
         private void RenderStep3Project()
         {
-            if (_stepProgressLabel != null) _stepProgressLabel.text = "Step 3 of 5: Project Readiness";
+            if (_stepProgressLabel != null) _stepProgressLabel.text = "Step 3 of 5: Project Setup";
 
-            int sdkMajor = ExoScaffolder.DetectHighestInstalledSdkMajor("dotnet");
-            bool dotnetReady = sdkMajor >= ExoScaffolder.MinimumMajorDotnetVersion;
+            var desc = new Label("Initialize your local project workspace and runtime configurations.");
+            desc.style.fontSize = 11;
+            desc.style.color = ExoforgeUIStyle.TextSecondary;
+            desc.style.marginBottom = 12;
+            _stepContainer!.Add(desc);
 
             var statusCard = new VisualElement();
             statusCard.style.backgroundColor = ExoforgeUIStyle.BgCard;
@@ -419,13 +415,11 @@ namespace Exoforge.Unity.Editor
             statusCard.style.borderBottomRightRadius = 6;
             statusCard.style.marginBottom = 12;
 
-            var dotnetRow = new Label(dotnetReady
-                ? $"✓ .NET SDK {sdkMajor}.0 installed (Minimum .NET 9 required)"
-                : $"⚠️ .NET SDK >= 9.0 not detected. Installed: {sdkMajor}.0. Extensions require .NET 9+ to compile.");
-            dotnetRow.style.fontSize = 11;
-            dotnetRow.style.color = dotnetReady ? ExoforgeUIStyle.AccentGreen : ExoforgeUIStyle.AccentOrange;
-            dotnetRow.style.marginBottom = 6;
-            statusCard.Add(dotnetRow);
+            var readyRow = new Label("✓ Project workspace ready to configure");
+            readyRow.style.fontSize = 11;
+            readyRow.style.color = ExoforgeUIStyle.AccentGreen;
+            readyRow.style.marginBottom = 6;
+            statusCard.Add(readyRow);
 
             var wsRow = new Label("• Workspace directory: Exoforge/");
             wsRow.style.fontSize = 11;

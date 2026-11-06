@@ -11,10 +11,10 @@ Install Package ──▶ Connect & Auth ──▶ Scaffold Extension ──▶ 
 ```
 
 ### 1. Connect & Configure
-Open **Tools ▸ Exoforge ▸ Exoforge Studio** or let the **Exoforge Setup Wizard** run on package import:
-- Set your Instance URL (`localhost` for local Docker daemon or cloud URL).
-- Sign in with developer credentials or email/password.
-- Ensure the active scene contains an `ExoforgeManager` (**Tools ▸ Exoforge ▸ Add Exoforge to Scene**).
+Open **Exoforge ▸ Studio**:
+- Connect to your server instance.
+- Sign in with your staff account credentials.
+- Ensure the active scene contains an `ExoforgeManager` (**Exoforge ▸ Add Exoforge to Scene**).
 
 ### 2. Create Your First Extension
 In **Exoforge Studio**, click **⚡ New Extension...**:
@@ -76,12 +76,12 @@ public class DailyRewardsController : MonoBehaviour
 
 ## 🧭 The Two Unity Surfaces
 
-- **Exoforge Studio** (**Tools ▸ Exoforge ▸ Exoforge Studio**):
-  - Daily developer cockpit.
+- **Exoforge Studio** (**Exoforge ▸ Studio**):
+  - Daily cockpit.
   - Connection status, cluster ping, player session.
   - Extension cards with 1-click Build & Deploy.
   - Client stub generation status.
-- **Extensions Debugger** (**Tools ▸ Exoforge ▸ Extensions**):
+- **Extensions Debugger** (**Exoforge ▸ Extensions & Resources**):
   - Deep diagnostic inspector.
   - Raw contracts & manifest schemas.
   - Resource table explorer (query, insert, update, delete).

@@ -93,8 +93,7 @@ namespace Exoforge.Unity.Editor
             public long BinarySizeBytes { get; set; }
         }
 
-        [MenuItem("Tools/Exoforge/Extensions", false, 101)]
-        [MenuItem("Window/Exoforge/Extensions", false, 2001)]
+        [MenuItem("Exoforge/Extensions & Resources", false, 2)]
         public static void ShowWindow()
         {
             var window = GetWindow<ExoforgeExtensionsWindow>("Exoforge Extensions");
@@ -303,14 +302,14 @@ namespace Exoforge.Unity.Editor
             icon.style.marginBottom = 10;
             card.Add(icon);
 
-            var title = new Label("Project Setup Required");
+            var title = new Label("Exoforge Setup Required");
             title.style.fontSize = 17;
             title.style.unityFontStyleAndWeight = FontStyle.Bold;
             title.style.color = ExoforgeUIStyle.TextPrimary;
             title.style.marginBottom = 8;
             card.Add(title);
 
-            var desc = new Label("Extensions management, compilation, and scaffolding are locked until initial Exoforge setup is completed.");
+            var desc = new Label("Connect this project to your Exoforge server to start creating and managing extensions.");
             desc.style.fontSize = 12;
             desc.style.color = ExoforgeUIStyle.TextSecondary;
             desc.style.whiteSpace = WhiteSpace.Normal;
@@ -318,7 +317,7 @@ namespace Exoforge.Unity.Editor
             desc.style.marginBottom = 20;
             card.Add(desc);
 
-            var launchBtn = ExoforgeUIStyle.CreateModernButton("🚀 Open Setup Wizard", () =>
+            var launchBtn = ExoforgeUIStyle.CreateModernButton("🚀 Set Up Exoforge Project", () =>
             {
                 ExoforgeSetupModal.Open(onCompleted: () =>
                 {
