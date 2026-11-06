@@ -1416,6 +1416,24 @@ defmodule Exoforge.Std.Dashboard.Overlays do
           }
         end
 
+      known_keys = MapSet.new(Enum.map(all_items, & &1.key))
+
+      stream_event_items =
+        for {key, count} <- (telemetry[:action_invocations] || %{}),
+            count > 0,
+            not MapSet.member?(known_keys, key) do
+          %{
+            service: %{name: "Event Bus", icon: "📡"},
+            action: %{name: key, title: key},
+            key: key,
+            invocations: count,
+            errors: Map.get(telemetry[:action_errors] || %{}, key, 0),
+            error_rate: 0.0
+          }
+        end
+
+      all_items = all_items ++ stream_event_items
+
       q = String.downcase(String.trim(assigns.search || ""))
 
       filtered =
