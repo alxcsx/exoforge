@@ -6,7 +6,7 @@ defmodule Exoforge.Domain.Manifest do
   @enforce_keys [:id, :name, :version, :entry_point]
 
   @doc """
-  Whether a plugin may call a service: it must declare it as a dependency or provide it.
+  Whether an extension may call a service: it must declare it as a dependency or provide it.
 
   Every runtime gates `call_action` on this, from the same implementation: it lives here because
   two runners once disagreed about it, which is not the kind of difference two implementations
@@ -49,7 +49,7 @@ defmodule Exoforge.Domain.Manifest do
     title: nil,
     icon: nil,
     ui_hooks: %{},
-    # Custom Studio input widgets a plugin contributes, keyed by id. A spec is data
+    # Custom Studio input widgets an extension contributes, keyed by id. A spec is data
     # (renderable by any dashboard) or a module implementing the Dashboard.Input behaviour.
     input_types: %{},
     category: "Extension",

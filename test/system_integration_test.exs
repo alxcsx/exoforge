@@ -3,51 +3,51 @@ defmodule Exoforge.SystemIntegrationTest do
 
   alias Exoforge.ActionDispatcher
   alias Exoforge.EventDispatcher
-  alias Exoforge.PluginRegistry
-  alias Exoforge.PluginBootstrapper
+  alias Exoforge.ExtensionRegistry
+  alias Exoforge.ExtensionBootstrapper
 
   setup_all do
-    # Boot the full kernel with all plugins in topological dependency order
-    PluginBootstrapper.boot()
+    # Boot the full kernel with all extensions in topological dependency order
+    ExtensionBootstrapper.boot()
     :ok
   end
 
-  describe "Kernel Boot and Plugin Discovery" do
-    test "loads all standard plugins and the sample plugin" do
-      database = PluginRegistry.fetch_service(:database)
+  describe "Kernel Boot and Extension Discovery" do
+    test "loads all standard extensions and the sample extension" do
+      database = ExtensionRegistry.fetch_service(:database)
       assert database != nil
       assert database.id == :exoforge_std_database
 
-      auth = PluginRegistry.fetch_service(:auth)
+      auth = ExtensionRegistry.fetch_service(:auth)
       assert auth != nil
       assert auth.id == :exoforge_std_auth
 
-      player_data = PluginRegistry.fetch_service(:player_data)
+      player_data = ExtensionRegistry.fetch_service(:player_data)
       assert player_data != nil
       assert player_data.id == :exoforge_std_player_data
 
-      http = PluginRegistry.fetch_service(:http)
+      http = ExtensionRegistry.fetch_service(:http)
       assert http != nil
       assert http.id == :exoforge_std_http
 
-      ws = PluginRegistry.fetch_service(:ws)
+      ws = ExtensionRegistry.fetch_service(:ws)
       assert ws != nil
       assert ws.id == :exoforge_std_ws
 
-      dashboard = PluginRegistry.fetch_service(:dashboard)
+      dashboard = ExtensionRegistry.fetch_service(:dashboard)
       assert dashboard != nil
       assert dashboard.id == :exoforge_std_dashboard
 
-      dashboard_views = PluginRegistry.fetch_service(:dashboard_view)
+      dashboard_views = ExtensionRegistry.fetch_service(:dashboard_view)
       assert dashboard_views != nil
       assert dashboard_views.id == :exoforge_std_dashboard_views
 
-      # A native plugin: the kernel runs the binary as a process, so the manifest names it and there
+      # A native extension: the kernel runs the binary as a process, so the manifest names it and there
       # is no Elixir module behind it. `just test-system` builds it first.
-      sample_plugin = PluginRegistry.fetch_service(:sample_plugin)
+      sample_plugin = ExtensionRegistry.fetch_service(:sample_plugin)
 
       assert sample_plugin != nil,
-             "the sample plugin is not loaded - build it with `just build-plugins`"
+             "the sample extension is not loaded - build it with `just build-extensions`"
 
       assert sample_plugin.type == :native
 
@@ -56,7 +56,7 @@ defmodule Exoforge.SystemIntegrationTest do
       assert is_atom(sample_plugin.entry_point)
 
       # Verify counters resource is discovered with columns derived from C# attributes
-      counters = Enum.find(PluginRegistry.all_resources(), fn r -> r.resource.name == :counters end)
+      counters = Enum.find(ExtensionRegistry.all_resources(), fn r -> r.resource.name == :counters end)
       assert counters != nil
       assert counters.plugin_id == :sample_plugin
       assert Enum.any?(counters.resource.columns, fn c -> c.name == :counter_id end)
@@ -137,7 +137,7 @@ defmodule Exoforge.SystemIntegrationTest do
       assert {:ok, %{data: overview}} =
                ActionDispatcher.dispatch(:dashboard, :get_dashboard_data, %{view_id: :main})
 
-      assert overview.plugins_count >= 6
+      assert overview.extensions_count >= 6
       assert overview.status == "running"
 
       # 7. Verify dynamic view resolution via dashboard_view

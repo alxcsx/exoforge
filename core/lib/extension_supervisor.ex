@@ -1,7 +1,15 @@
 defmodule Exoforge.ExtensionSupervisor do
   @moduledoc """
-  Extension supervisor delegating to PluginSupervisor.
+  Dynamic supervisor for supervised extension processes.
   """
+  use DynamicSupervisor
 
-  defdelegate start_link(init_arg \\ []), to: Exoforge.PluginSupervisor
+  def start_link(_opts \\ []) do
+    DynamicSupervisor.start_link(__MODULE__, :ok, name: __MODULE__)
+  end
+
+  @impl true
+  def init(:ok) do
+    DynamicSupervisor.init(strategy: :one_for_one)
+  end
 end

@@ -22,7 +22,9 @@ defmodule Mix.Tasks.Compile.ExoforgeManifest do
       path |> Path.basename(".beam") |> String.to_atom()
     end)
     |> Enum.find(fn module ->
-      Code.ensure_loaded?(module) and function_exported?(module, :__exoforge_plugin__?, 0)
+      Code.ensure_loaded?(module) and
+        (function_exported?(module, :__exoforge_extension__?, 0) or
+           function_exported?(module, :__exoforge_plugin__?, 0))
     end)
   end
 
@@ -62,7 +64,7 @@ defmodule Mix.Tasks.Compile.ExoforgeManifest do
     json_content =
       manifest_map
       |> Map.drop([:physical_path, :name])
-      |> Exoforge.PluginRegistry.sanitize_for_json()
+      |> Exoforge.ExtensionRegistry.sanitize_for_json()
       |> Jason.encode!(pretty: true)
 
     out_dir = Mix.Project.app_path()

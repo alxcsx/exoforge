@@ -46,33 +46,33 @@ clean-build:
 	# Every runtime the kernel can host, not just the one. This path was only reachable through
 	# recipes needing Docker or a live server, so it rotted.
 	echo "[clean-build] building the sample extension"
-	ext_csharp=$([ -d "$work/extensions_csharp" ] && echo "$work/extensions_csharp" || echo "$work/plugins_csharp")
+	ext_csharp="$work/extensions_csharp"
 	MSBUILDDISABLENODEREUSE=1 dotnet run --project "$work/sdk/csharp/Exoforge.CLI" -- extension build sample_plugin --dir "$ext_csharp"
 	test -f "$work/sdk/unity/sample_unity/Exoforge/extensions/snake_leaderboard/manifest.json"
 	echo "[clean-build] OK: the tree builds from a clean checkout"
 
 
-# Run all test suites across Core, Plugins, System, and C# SDK
-test: test-core test-plugins test-system test-sdk
+# Run all test suites across Core, Extensions, System, and C# SDK
+test: test-core test-extensions test-system test-sdk
 
 # Test Exoforge core kernel
 test-core:
 	(cd core && mix test)
 
-# Test every standard plugin. Each is its own Mix project with its own deps directory, and only the
-# root's are fetched by a checkout: without `mix deps.get` here the first plugin dies with "Unchecked
+# Test every standard extension. Each is its own Mix project with its own deps directory, and only the
+# root's are fetched by a checkout: without `mix deps.get` here the first extension dies with "Unchecked
 # dependencies for environment test" and the other seven never run.
-test-plugins:
+test-extensions:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	for dir in extensions/*/ plugins/*/; do
+	for dir in extensions/*/; do
 		[ -d "$dir" ] && [ -f "$dir/mix.exs" ] || continue
 		echo "== $dir"
 		(cd "$dir" && mix deps.get >/dev/null && mix test)
 	done
 
 # Test root system integration
-test-system: build-plugins
+test-system: build-extensions
 	mix test
 
 # Test C# SDKs (Client, Plugin SDK, Generator & Management Engine)
@@ -92,11 +92,11 @@ test-sdk:
 	done
 	# A plugin's assembly is compiled to a process the server runs, so compiling the sample is the
 	# check that the generator and the SDK still agree about what a plugin is.
-	sample_proj=$([ -f extensions_csharp/sample_plugin/sample_plugin.csproj ] && echo "extensions_csharp/sample_plugin/sample_plugin.csproj" || echo "plugins_csharp/sample_plugin/sample_plugin.csproj")
+	sample_proj="extensions_csharp/sample_plugin/sample_plugin.csproj"
 	dotnet build "$sample_proj" -v q --nologo
 
 # Run live end-to-end integration test (Client -> WS :4000 -> native plugin -> Event -> Client)
-test-e2e: build-plugins
+test-e2e: build-extensions
 	#!/usr/bin/env bash
 	set -euo pipefail
 	pkill -f beam.smp 2>/dev/null || true
@@ -128,7 +128,7 @@ benchmark:
 build-extensions:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	ext_dir=$([ -d extensions_csharp/sample_plugin ] && echo "extensions_csharp/sample_plugin" || echo "plugins_csharp/sample_plugin")
+	ext_dir="extensions_csharp/sample_plugin"
 	rid=$(dotnet --info | awk '/RID:/ {print $2; exit}')
 	dotnet publish "$ext_dir/sample_plugin.csproj" -c Release -r "$rid" -v q --nologo
 	# Replaced, not overwritten: a server running the extension holds the binary open, and writing over a
@@ -138,17 +138,15 @@ build-extensions:
 	mv -f "$ext_dir/sample_plugin.new" "$ext_dir/sample_plugin"
 	echo "[build-extensions] $ext_dir/sample_plugin"
 
-build-plugins: build-extensions
-
 # Run backend in production mode (foreground)
-prod: build-plugins
+prod: build-extensions
 	# Local prod-mode run: opt in to SQLite explicitly (real deploys must set DATABASE_URL).
 	SECRET_KEY_BASE="${SECRET_KEY_BASE:-$(mix phx.gen.secret)}" \
 	LIVEVIEW_SIGNING_SALT="${LIVEVIEW_SIGNING_SALT:-exoforge_local_prod_liveview_salt}" \
 	EXOFORGE_ALLOW_SQLITE_FALLBACK=true MIX_ENV=prod mix run --no-halt
 
 # Assemble standalone OTP production release
-release: build-plugins
+release: build-extensions
 	MIX_ENV=prod mix release --overwrite
 
 # Run standalone production release (daemon)
@@ -166,11 +164,11 @@ stop-release:
 # ---- Containers & Kubernetes ----
 
 # Build production container image
-docker-build: build-plugins
+docker-build: build-extensions
 	{{container_engine}} build -t exoforge:latest .
 
 # Run full stack with PostgreSQL using Compose
-compose-up: build-plugins
+compose-up: build-extensions
 	{{compose_cmd}} up -d --build
 
 # Follow Compose logs

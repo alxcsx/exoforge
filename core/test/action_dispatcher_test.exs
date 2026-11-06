@@ -3,7 +3,7 @@ defmodule Exoforge.ActionDispatcherTest do
 
   alias Exoforge.ActionDispatcher
   alias Exoforge.Domain.Manifest
-  alias Exoforge.PluginRegistry
+  alias Exoforge.ExtensionRegistry
 
   defmodule TestService do
     import Exoforge.Contracts.Service
@@ -37,7 +37,7 @@ defmodule Exoforge.ActionDispatcherTest do
   end
 
   defmodule TestPlugin do
-    use Exoforge.Plugin, provides: [Exoforge.ActionDispatcherTest.TestService.Math]
+    use Exoforge.Extension, provides: [Exoforge.ActionDispatcherTest.TestService.Math]
 
     @impl true
     defaction add(payload) do
@@ -63,7 +63,7 @@ defmodule Exoforge.ActionDispatcherTest do
   end
 
   setup do
-    start_supervised!(PluginRegistry)
+    start_supervised!(ExtensionRegistry)
     :ok
   end
 
@@ -77,7 +77,7 @@ defmodule Exoforge.ActionDispatcherTest do
     assert {:ok, %{sum: 7}} = ActionDispatcher.dispatch(TestPlugin, :add, %{a: 3, b: 4})
   end
 
-  test "dispatches action by contract module via PluginRegistry" do
+  test "dispatches action by contract module via ExtensionRegistry" do
     manifest = %Manifest{
       id: :math_plugin,
       name: "math_plugin",
@@ -86,7 +86,7 @@ defmodule Exoforge.ActionDispatcherTest do
       provides: [TestService.Math]
     }
 
-    assert :ok = PluginRegistry.register(manifest)
+    assert :ok = ExtensionRegistry.register(manifest)
 
     # Dispatching to the contract module TestService.Math
     assert {:ok, %{sum: 12}} = ActionDispatcher.dispatch(TestService.Math, :add, %{a: 5, b: 7})

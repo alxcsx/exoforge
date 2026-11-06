@@ -6,7 +6,7 @@ A 2D Snake game that shows the whole Exoforge loop end to end: sign a player in,
 and keep the high score on the server so the leaderboard is **shared between every player**.
 
 The game itself is a normal Unity project. Everything Exoforge-specific is either a thin
-controller, the workspace folder, or the server plugin.
+controller, the workspace folder, or the server extension.
 
 ---
 
@@ -28,14 +28,20 @@ So: the *name* and the *high score* live on the server; the *game loop* lives in
 sample_unity/
 ├── Assets/
 │   ├── SnakeGame/
+│   │   ├── SnakeBoardView.cs        board texture rendering & background textures
 │   │   ├── SnakeGameController.cs   the game loop; raises RunEnded(score, length). No rendering.
 │   │   ├── SnakeGameView.cs         board + HUD + name prompt + leaderboard panel (IMGUI)
-│   │   ├── SnakeLeaderboard.cs      the ONLY file that talks to Exoforge
-│   │   └── SnakePlayerController.cs stage 1+2 sign-in, gates gameplay until named
+│   │   ├── SnakeLeaderboard.cs      bridge talking to Exoforge leaderboard extension
+│   │   ├── SnakePlayerController.cs stage 1+2 sign-in, gates gameplay until named
+│   │   └── SnakeRemoteConfig.cs     remote config listener fetching singleton game settings
 │   ├── Exoforge/Generated/
-│   │   └── ExoforgeServices.g.cs    GENERATED — do not hand-edit
+│   │   ├── ExoforgeServices.g.cs    GENERATED — do not hand-edit
+│   │   └── Exoforge.Generated.asmdef GENERATED — isolates compilation graph
 │   ├── Resources/exoforge.json      workspace config linked for runtime (generated)
-│   ├── Scenes/SampleScene.unity     built from code, not hand-edited
+│   ├── Scenes/
+│   │   ├── SnakeGame_Exoforge.unity complete online game scene (leaderboard, config, assets)
+│   │   ├── SnakeGame_Offline.unity  standalone offline game scene
+│   │   └── SampleScene.unity        built from code, not hand-edited
 │   ├── Editor/
 │   │   ├── ExoforgeSampleSetup.cs   builds the scene (idempotent, CLI-driven)
 │   │   └── ExoforgeSampleCheck.cs   headless self-check
@@ -43,15 +49,10 @@ sample_unity/
 │
 ├── Exoforge/                        the Exoforge workspace (OUTSIDE Assets/)
 │   ├── exoforge.json                environments + codegen paths
-│   └── extensions/snake_leaderboard/ the server extension (a dotnet project)
-│       ├── snake_leaderboard.slnx     the extension's own solution
-│       ├── src/
-│       │   ├── snake_leaderboard.csproj
-│       │   ├── SnakeScore.cs          stored row + leaderboard entry records
-│       │   ├── SnakeLeaderboardPlugin.cs  the actions (talk to IDatabase directly)
-│       │   └── Generated/PluginServices.g.cs  typed player_data stubs (generated)
-│       ├── snake_leaderboard          built extension binary (generated, git-ignored)
-│       └── manifest.json               GENERATED from the C# attributes
+│   └── extensions/                  server extensions (dotnet projects)
+│       ├── snake_leaderboard/       leaderboard extension (submit_score, get_leaderboard)
+│       ├── snake_config/            singleton remote config extension (snake_config)
+│       └── unity_addressables/      addressables bucket sync extension
 ├── Packages/
 │   ├── manifest.json                registry packages only — no path leaves this project
 │   └── com.exoforge.sdk/            the SDK, PLACED here by `just unity-sync` (git-ignored)
@@ -62,7 +63,7 @@ sample_unity/
 someone who has the Exoforge repository nowhere near them, so the SDK is copied in rather than
 referenced by path, and `Packages/` is the whole of what the project depends on.
 
-**Why the workspace is outside `Assets/`:** plugin sources are ordinary `dotnet` projects
+**Why the workspace is outside `Assets/`:** extension sources are ordinary `dotnet` projects
 (`net10.0`, framework-dependent .NET). Keeping them out of `Assets/` means Unity never imports,
 compiles, or adds `.meta` files to them, and they can use any .NET/C# version. Only two things must
 live under `Assets/`: the **generated client** and the **runtime config**.
@@ -126,34 +127,36 @@ Input uses the **Input System package** (`Keyboard.current`) — this project is
 
 ## 5. The server side
 
-`snake_leaderboard` is a **native C# plugin**. It is the only server code:
+The sample includes three native C# extensions demonstrating core platform capabilities:
 
-| Action | Params | Behaviour |
-| :--- | :--- | :--- |
-| `submit_score` | `player_id, name, score, snake_length` | stores the run, keeps the player's **best** score, returns it. `name` is accepted for wire compatibility but ignored |
-| `get_leaderboard` | `limit` | returns the top-`limit` rows, highest score first, with each player's **current** display name |
+1. **`snake_leaderboard`**: Shared competitive ranking:
+   - `submit_score` (`player_id, name, score, snake_length`): stores the run, keeps the player's **best** score, returns it.
+   - `get_leaderboard` (`limit`): returns the top-`limit` rows, highest score first, with each player's **current** display name joined at query time via `player_data`.
+   - Uses `Exo.Database` under the `snake_scores` resource table.
 
-Rows live in the plugin's isolated database (through the injected `IDatabase`) under the `snake_scores`
-resource, so the Studio also shows a table. The leaderboard is therefore **shared state**: every
-player reads and writes the same ranking.
+2. **`snake_config`**: Remote game configuration:
+   - Manages singleton resource settings via `[ExoSingletonResource]` (`SnakeConfigSchema` / `SnakeConfigDto`).
+   - Supports live parameter updates (speed, grid size, game rules) from Studio or code without client rebuilds.
+
+3. **`unity_addressables`**: Dynamic asset distribution:
+   - Integrates with `exoforge_std_file_bucket` for remote bundle delivery and content updates.
+
+Rows live in each extension's isolated database namespace. The leaderboard is shared state: every player reads and writes the same ranking.
 
 **The display name is not stored.** `get_leaderboard` joins each row with the `player_data` profile
 (`player_data.get_player`) at read time, so renaming a player updates the board immediately and no
 stale name can survive. `submit_score` therefore takes a `name` only for wire compatibility.
 
 The typed `player_data` call comes from `src/Generated/PluginServices.g.cs`, generated from the
-cluster contracts with `exo plugin stubs snake_leaderboard`. Only the services listed in the plugin's
+cluster contracts with `exo extension stubs snake_leaderboard`. Only the services listed in the extension's
 `manifest.json` dependencies are generated (override with `--services a,b`), so the file stays small.
 The stubs depend only on the service contract (`PlayerDataServiceClient`,
 `PlayerDataGetPlayerRequest/Response`, `PlayerDataPlayer`) — never on the Elixir `PlayerData` module.
-The host injects the client directly (`[Inject("player_data")] PlayerDataServiceClient PlayerData`),
-so plugin code never touches `IActionDispatcher`.
+Capabilities are accessed directly via static holder `Exo` or injected via `[Inject("player_data")] PlayerDataServiceClient PlayerData`.
 
 `player_id` is taken from the caller's identity, so a client can only submit its own score.
 
-`SnakeLeaderboard` is the bridge: it listens for `SnakeGameController.RunEnded`, submits the score,
-and refreshes the ranking. Gameplay never holds a client or a token — delete that one component and
-Snake still runs.
+`SnakeLeaderboard` and `SnakeRemoteConfig` are the client bridges: they listen for gameplay events and bind to `ExoforgeSDK.Client`. Gameplay never holds a client or a token — delete those components and Snake still runs offline.
 
 ---
 
@@ -196,15 +199,15 @@ git update-index --skip-worktree sdk/unity/sample_unity/Packages/{manifest,packa
 Run `--no-skip-worktree` on the same paths before committing a real package change, or the change
 will not show up in `git status`.
 
-Deploy the plugin and regenerate the client:
+Deploy the extension and regenerate the client:
 
 ```bash
-# Option A — Unity Editor: Tools ▸ Exoforge ▸ Exoforge Studio ▸ Plugins ▸ Build & Deploy
+# Option A — Unity Editor: Tools ▸ Exoforge ▸ Exoforge Studio ▸ Extensions ▸ Build & Deploy
 
 # Option B — CLI. The `exo` CLI is not installed on PATH — run it from the repo:
 CLI="dotnet run --project <repo>/sdk/csharp/Exoforge.CLI --"
 
-$CLI plugin push snake_leaderboard      # build + deploy to the running cluster
+$CLI extension push snake_leaderboard   # build + deploy to the running cluster
 $CLI sync                               # regenerate Assets/Exoforge/Generated/ExoforgeServices.g.cs
 ```
 

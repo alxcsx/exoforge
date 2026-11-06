@@ -3,12 +3,12 @@ defmodule Exoforge.UIHookRegistryTest do
 
   alias Exoforge.UIHookRegistry
   alias Exoforge.DrawerRegistry
-  alias Exoforge.PluginRegistry
+  alias Exoforge.ExtensionRegistry
   alias Exoforge.Domain.Manifest
 
   setup do
-    unless Process.whereis(PluginRegistry), do: start_supervised!(PluginRegistry)
-    PluginRegistry.initialize_ets()
+    unless Process.whereis(ExtensionRegistry), do: start_supervised!(ExtensionRegistry)
+    ExtensionRegistry.initialize_ets()
     :ok
   end
 
@@ -37,7 +37,7 @@ defmodule Exoforge.UIHookRegistryTest do
       }
     }
 
-    assert :ok = PluginRegistry.register(manifest)
+    assert :ok = ExtensionRegistry.register(manifest)
 
     settings = UIHookRegistry.list_hooks(:settings)
     assert Enum.map(settings, & &1.id) == [:early_settings, :my_settings]
@@ -56,7 +56,7 @@ defmodule Exoforge.UIHookRegistryTest do
              &(&1.role == "user_id" and &1.target == "exoforge_std_auth" and &1.focus == "user")
            )
 
-    assert :ok = PluginRegistry.unregister(:my_extension)
+    assert :ok = ExtensionRegistry.unregister(:my_extension)
     refute Enum.any?(UIHookRegistry.list_hooks(:settings), &(&1.id == :my_settings))
     refute Enum.any?(UIHookRegistry.list_hooks(:player_inspect), &(&1.id == :my_player_hook))
     refute Enum.any?(UIHookRegistry.list_hooks(:user_inspect), &(&1.id == :my_user_hook))
@@ -84,7 +84,7 @@ defmodule Exoforge.UIHookRegistryTest do
       provides: [TestInventoryService.InventoryDash]
     }
 
-    assert :ok = PluginRegistry.register(manifest)
+    assert :ok = ExtensionRegistry.register(manifest)
 
     tabs = DrawerRegistry.list_tabs(:dash_items)
     assert Enum.map(tabs, & &1.id) == [:overview, :attributes, :transactions]

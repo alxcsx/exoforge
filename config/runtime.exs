@@ -60,13 +60,11 @@ if config_env() == :prod do
 
   scan_paths =
     [
-      System.get_env("EXTENSIONS_PATH") || System.get_env("PLUGINS_PATH") || "extensions",
-      "plugins",
+      System.get_env("EXTENSIONS_PATH") || "extensions",
       "_build/prod/lib",
       release_lib,
       "extensions_csharp",
-      "plugins_csharp",
-      "priv/data/uploaded_plugins"
+      "priv/data/uploaded_extensions"
     ]
     |> Enum.uniq()
 

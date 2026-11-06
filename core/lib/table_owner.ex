@@ -26,7 +26,7 @@ defmodule Exoforge.TableOwner do
 
   @impl true
   def init(:ok) do
-    Exoforge.PluginLogs.init_table()
+    Exoforge.ExtensionLogs.init_table()
     Exoforge.Metering.init_table()
     {:ok, nil}
   end

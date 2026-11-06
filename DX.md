@@ -1,13 +1,13 @@
-# DX Backlog — Plugin Authoring, Upload & Management
+# DX Backlog — Extension Authoring, Upload & Management
 
 > **Status**: the review is closed. Every item it found is fixed and in `git log` — the checklist at
 > the bottom records what was covered — and what is still open is below.
 >
-> Scope: the `exo` CLI, the C# Management library, the Unity Editor Studio, and the Plugin SDK —
-> everything a game developer touches when creating, uploading and managing a plugin.
+> Scope: the `exo` CLI, the C# Management library, the Unity Editor Studio, and the Extension SDK —
+> everything a game developer touches when creating, uploading and managing an extension.
 
 The audience for all of this is a **game developer in Unity** who has never seen Elixir. They
-should be able to scaffold a plugin, build it, deploy it, and see it working — without reading the
+should be able to scaffold an extension, build it, deploy it, and see it working — without reading the
 server source, and without opening a terminal if they don't want to.
 
 ---

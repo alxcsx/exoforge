@@ -7,10 +7,9 @@ config :exoforge,
 config :exoforge, :module_loader,
   driver: Exoforge.Drivers.Loaders.ManifestLoader,
   scan_path: [
-    System.get_env("EXTENSIONS_PATH") || System.get_env("PLUGINS_PATH") || "_build/prod/lib",
+    System.get_env("EXTENSIONS_PATH") || "_build/prod/lib",
     "extensions_csharp",
-    "plugins_csharp",
-    "priv/data/uploaded_plugins"
+    "priv/data/uploaded_extensions"
   ]
 
 config :exoforge_std_dashboard, Exoforge.Std.Dashboard.Endpoint,

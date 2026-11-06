@@ -1,6 +1,6 @@
 defmodule Exoforge.ActionDispatcher do
   require Logger
-  alias Exoforge.PluginRegistry
+  alias Exoforge.ExtensionRegistry
   alias Exoforge.Domain.Manifest
 
   @doc """
@@ -62,19 +62,19 @@ defmodule Exoforge.ActionDispatcher do
       apply(mod, :__execute_action__, [action, payload])
     rescue
       e in MatchError ->
-        {:error, {:plugin_error, "Invalid function call: #{Exception.message(e)}"}}
+        {:error, {:extension_error, "Invalid function call: #{Exception.message(e)}"}}
 
       _e in FunctionClauseError ->
-        {:error, {:plugin_error, "No matching clause found"}}
+        {:error, {:extension_error, "No matching clause found"}}
 
       e in ArgumentError ->
-        {:error, {:plugin_error, "Invalid arguments: #{Exception.message(e)}"}}
+        {:error, {:extension_error, "Invalid arguments: #{Exception.message(e)}"}}
 
       e ->
         {:error, {:framework_error, Exception.message(e)}}
     catch
       :exit, reason ->
-        {:error, {:plugin_exited, reason}}
+        {:error, {:extension_exited, reason}}
     end
   end
 
@@ -83,17 +83,17 @@ defmodule Exoforge.ActionDispatcher do
   defp resolve_module(%Manifest{entry_point: mod}, ctx, depth), do: resolve_module(mod, ctx, depth)
 
   defp resolve_module(mod_str, ctx, depth) when is_binary(mod_str) do
-    case PluginRegistry.fetch_service(mod_str, ctx) || PluginRegistry.fetch_manifest(mod_str) do
+    case ExtensionRegistry.fetch_service(mod_str, ctx) || ExtensionRegistry.fetch_manifest(mod_str) do
       nil -> nil
       manifest -> resolve_module(manifest, ctx, depth + 1)
     end
   end
 
   defp resolve_module(mod, ctx, depth) when is_atom(mod) do
-    if function_exported?(mod, :__exoforge_plugin__?, 0) do
+    if function_exported?(mod, :__exoforge_extension__?, 0) do
       mod
     else
-      case PluginRegistry.fetch_service(mod, ctx) || PluginRegistry.fetch_manifest(mod) do
+      case ExtensionRegistry.fetch_service(mod, ctx) || ExtensionRegistry.fetch_manifest(mod) do
         nil ->
           nil
 

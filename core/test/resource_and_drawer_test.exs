@@ -1,7 +1,7 @@
 defmodule Exoforge.ResourceAndDrawerTest do
   use ExUnit.Case, async: false
 
-  alias Exoforge.PluginRegistry
+  alias Exoforge.ExtensionRegistry
   alias Exoforge.Domain.Manifest
 
   defmodule ResourceTestService do
@@ -28,8 +28,8 @@ defmodule Exoforge.ResourceAndDrawerTest do
   end
 
   setup do
-    unless Process.whereis(PluginRegistry), do: start_supervised!(PluginRegistry)
-    PluginRegistry.initialize_ets()
+    unless Process.whereis(ExtensionRegistry), do: start_supervised!(ExtensionRegistry)
+    ExtensionRegistry.initialize_ets()
     :ok
   end
 
@@ -57,7 +57,7 @@ defmodule Exoforge.ResourceAndDrawerTest do
     assert rarity_col.badge == true
   end
 
-  test "PluginRegistry discovers resources across plugins" do
+  test "ExtensionRegistry discovers resources across extensions" do
     manifest = %Manifest{
       id: :inventory_plugin,
       name: "inventory_plugin",
@@ -66,17 +66,17 @@ defmodule Exoforge.ResourceAndDrawerTest do
       provides: [ResourceTestService.Inventory]
     }
 
-    assert :ok = PluginRegistry.register(manifest)
+    assert :ok = ExtensionRegistry.register(manifest)
 
-    resources = PluginRegistry.all_resources()
+    resources = ExtensionRegistry.all_resources()
     assert length(resources) >= 1
     assert Enum.any?(resources, fn r -> r.resource.name == :items and r.plugin_id == :inventory_plugin end)
 
-    assert {:ok, found} = PluginRegistry.fetch_resource(:items)
+    assert {:ok, found} = ExtensionRegistry.fetch_resource(:items)
     assert found.plugin_id == :inventory_plugin
     assert found.resource.primary_key == :item_id
 
-    assert {:error, :not_found} = PluginRegistry.fetch_resource(:non_existent)
+    assert {:error, :not_found} = ExtensionRegistry.fetch_resource(:non_existent)
   end
 
   test "standard services contain declared resources" do

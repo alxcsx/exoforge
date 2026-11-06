@@ -2,15 +2,15 @@ defmodule Exoforge.Drivers.Loaders.ManifestLoader do
   alias Exoforge.Domain.Manifest
   require Logger
 
-  def load_plugins(nil), do: raise("Modules dir not found. Please set :scan_path in your config")
+  def load_extensions(nil), do: raise("Modules dir not found. Please set :scan_path in your config")
 
-  def load_plugins(paths) when is_list(paths) do
+  def load_extensions(paths) when is_list(paths) do
     paths
-    |> Enum.flat_map(&load_plugins/1)
+    |> Enum.flat_map(&load_extensions/1)
     |> Enum.uniq_by(& &1.id)
   end
 
-  def load_plugins(path) when is_binary(path) do
+  def load_extensions(path) when is_binary(path) do
     Logger.info("[ManifestLoader] Loading modules from #{path}")
 
     files =

@@ -4,7 +4,7 @@ defmodule Exoforge.DrawerRegistry do
 
   Merges hooks declared for a resource with the tabs a resource declares via
   `drawer([...])` metadata, sorted ascending by order. Binary resource names are
-  resolved through `Exoforge.PluginRegistry` (never `String.to_atom/1`), so an
+  resolved through `Exoforge.ExtensionRegistry` (never `String.to_atom/1`), so an
   unknown name from a URL cannot grow the atom table.
   """
   alias Exoforge.UIHookRegistry
@@ -15,7 +15,7 @@ defmodule Exoforge.DrawerRegistry do
   end
 
   def list_tabs(resource) when is_binary(resource) do
-    case Exoforge.PluginRegistry.fetch_resource(resource) do
+    case Exoforge.ExtensionRegistry.fetch_resource(resource) do
       {:ok, %{resource: %{name: name}}} -> do_list_tabs(name)
       _ -> []
     end
@@ -36,7 +36,7 @@ defmodule Exoforge.DrawerRegistry do
   end
 
   defp declared_tab_ids(resource) do
-    case Exoforge.PluginRegistry.fetch_resource(resource) do
+    case Exoforge.ExtensionRegistry.fetch_resource(resource) do
       {:ok, %{resource: %{drawer: tabs}}} when is_list(tabs) -> tabs
       _ -> []
     end

@@ -38,7 +38,6 @@ public static class Program
                     return HandleInit(cli);
 
                 case "extension":
-                case "plugin":
                     return await HandleExtensionAsync(cli).ConfigureAwait(false);
 
                 case "sync":
@@ -75,7 +74,7 @@ public static class Program
 
         Commands:
           init                       Initialize the workspace and exoforge.json
-          extension <subcommand>     Create, build, deploy and inspect extensions (alias: plugin)
+          extension <subcommand>     Create, build, deploy and inspect extensions
           sync                       Download live contracts and generate the typed C# client
           status                     Inspect live cluster health and metrics
 
@@ -114,8 +113,6 @@ public static class Program
         Run `exo extension <subcommand> --help` for the options of one subcommand.
         """);
     }
-
-    private static void PrintPluginUsage() => PrintExtensionUsage();
 
     // ---- init / sync / status ----------------------------------------------------------
 
@@ -209,79 +206,76 @@ public static class Program
         return 0;
     }
 
-    // ---- plugin ------------------------------------------------------------------------
-
-    private static Task<int> HandlePluginAsync(CliArgs cli) => HandleExtensionAsync(cli);
+    // ---- extension ---------------------------------------------------------------------
 
     private static async Task<int> HandleExtensionAsync(CliArgs cli)
     {
         if (cli.WantsHelp && cli.Positional.Count == 0)
         {
-            PrintPluginUsage();
+            PrintExtensionUsage();
             return 0;
         }
 
         if (cli.Positional.Count == 0)
         {
-            Error("Missing plugin subcommand.");
+            Error("Missing extension subcommand.");
             Console.WriteLine();
-            PrintPluginUsage();
+            PrintExtensionUsage();
             return 1;
         }
 
         string sub = cli.Positional[0].ToLowerInvariant();
 
-        // Everything after the subcommand, so `exo plugin push foo --rid x` parses the same as
-        // `exo plugin push --rid x foo`.
+        // Everything after the subcommand, so `exo extension push foo --rid x` parses the same as
+        // `exo extension push --rid x foo`.
         var rest = CliArgs.From(cli.Positional.Skip(1).ToList(), cli);
 
         switch (sub)
         {
             case "new":
-                return HandlePluginNew(rest);
+                return HandleExtensionNew(rest);
 
             case "build":
-                return HandlePluginBuild(rest);
+                return HandleExtensionBuild(rest);
 
             case "push":
-                return await HandlePluginPushAsync(rest).ConfigureAwait(false);
+                return await HandleExtensionPushAsync(rest).ConfigureAwait(false);
 
             case "dev":
-                return await HandlePluginDevAsync(rest).ConfigureAwait(false);
+                return await HandleExtensionDevAsync(rest).ConfigureAwait(false);
 
             case "reload":
-                return await HandlePluginReloadAsync(rest).ConfigureAwait(false);
+                return await HandleExtensionReloadAsync(rest).ConfigureAwait(false);
 
             case "logs":
-                return await HandlePluginLogsAsync(rest).ConfigureAwait(false);
+                return await HandleExtensionLogsAsync(rest).ConfigureAwait(false);
 
             case "usage":
-                return await HandlePluginUsageAsync(rest).ConfigureAwait(false);
+                return await HandleExtensionUsageAsync(rest).ConfigureAwait(false);
 
             case "stubs":
-                return await HandlePluginStubsAsync(rest).ConfigureAwait(false);
+                return await HandleExtensionStubsAsync(rest).ConfigureAwait(false);
 
             case "list":
-                return await HandlePluginListAsync(rest).ConfigureAwait(false);
+                return await HandleExtensionListAsync(rest).ConfigureAwait(false);
 
             case "remove":
-                return await HandlePluginRemoveAsync(rest).ConfigureAwait(false);
+                return await HandleExtensionRemoveAsync(rest).ConfigureAwait(false);
 
             default:
-                Error($"Unknown plugin subcommand: {sub}");
+                Error($"Unknown extension subcommand: {sub}");
                 Console.WriteLine();
-                PrintPluginUsage();
+                PrintExtensionUsage();
                 return 1;
         }
     }
 
-    private static int HandlePluginNew(CliArgs cli)
+    private static int HandleExtensionNew(CliArgs cli)
     {
         if (cli.WantsHelp)
         {
             Console.WriteLine("""
             Usage: exo extension new <name> [--template standard] [--dir <path>]
-                   (alias: exo plugin new)
 
             Scaffolds extensions/<name>/ with a src/ project, a solution, and a .gitignore. The project
             references the Exoforge.Plugin.SDK package, so it builds wherever it is put; run
@@ -294,7 +288,7 @@ public static class Program
 
         if (cli.Positional.Count == 0)
         {
-            return Missing("plugin name", "exo plugin new <name>");
+            return Missing("extension name", "exo extension new <name>");
         }
 
         string raw = cli.Positional[0];
@@ -302,13 +296,11 @@ public static class Program
 
         var ws = ExoWorkspace.Load(cli.Value("dir") ?? Directory.GetCurrentDirectory());
 
-        // Say what the plugin id will be: the name is normalised, and silently renaming someone's
-        // input is how you end up with a plugin nobody can find.
-        string id = ExoScaffolder.NormalizePluginName(raw);
+        string id = ExoScaffolder.NormalizeExtensionName(raw);
 
         if (!string.Equals(raw, id, StringComparison.Ordinal))
         {
-            Console.WriteLine($"[Exoforge] '{raw}' will be created as '{id}' (plugin ids are lower_snake_case).");
+            Console.WriteLine($"[Exoforge] '{raw}' will be created as '{id}' (extension ids are lower_snake_case).");
         }
 
         string created = ExoScaffolder.ScaffoldExtension(ws.ExtensionsPath, raw, template: template);
@@ -322,12 +314,12 @@ public static class Program
         return 0;
     }
 
-    private static int HandlePluginBuild(CliArgs cli)
+    private static int HandleExtensionBuild(CliArgs cli)
     {
         if (cli.WantsHelp)
         {
             Console.WriteLine("""
-            Usage: exo plugin build <name> [--rid <rid>] [--dir <path>]
+            Usage: exo extension build <name> [--rid <rid>] [--dir <path>]
 
               --rid <rid>   Target runtime, e.g. linux-x64 (default: this machine)
             """);
@@ -336,19 +328,19 @@ public static class Program
 
         if (cli.Positional.Count == 0)
         {
-            return Missing("plugin name", "exo plugin build <name>");
+            return Missing("extension name", "exo extension build <name>");
         }
 
         var ws = ExoWorkspace.Load(cli.Value("dir") ?? Directory.GetCurrentDirectory());
         return Build(ws, cli.Positional[0], cli.Value("rid"));
     }
 
-    private static async Task<int> HandlePluginPushAsync(CliArgs cli)
+    private static async Task<int> HandleExtensionPushAsync(CliArgs cli)
     {
         if (cli.WantsHelp)
         {
             Console.WriteLine("""
-            Usage: exo plugin push <name> [--rid <rid>] [--env <name>] [--dir <path>] [--no-verify]
+            Usage: exo extension push <name> [--rid <rid>] [--env <name>] [--dir <path>] [--no-verify]
 
             Builds, uploads, and then confirms the cluster is actually running the new build.
             """);
@@ -357,7 +349,7 @@ public static class Program
 
         if (cli.Positional.Count == 0)
         {
-            return Missing("plugin name", "exo plugin push <name>");
+            return Missing("extension name", "exo extension push <name>");
         }
 
         string name = cli.Positional[0];
@@ -369,14 +361,14 @@ public static class Program
             .ConfigureAwait(false);
     }
 
-    private static async Task<int> HandlePluginDevAsync(CliArgs cli)
+    private static async Task<int> HandleExtensionDevAsync(CliArgs cli)
     {
         if (cli.WantsHelp)
         {
             Console.WriteLine("""
-            Usage: exo plugin dev <name> [--rid <rid>] [--env <name>] [--dir <path>]
+            Usage: exo extension dev <name> [--rid <rid>] [--env <name>] [--dir <path>]
 
-            Builds, deploys, then watches the plugin's sources and repeats on every change.
+            Builds, deploys, then watches the extension's sources and repeats on every change.
             Stop with Ctrl-C.
             """);
             return 0;
@@ -384,7 +376,7 @@ public static class Program
 
         if (cli.Positional.Count == 0)
         {
-            return Missing("plugin name", "exo plugin dev <name>");
+            return Missing("extension name", "exo extension dev <name>");
         }
 
         string name = cli.Positional[0];
@@ -393,14 +385,14 @@ public static class Program
         string? env = cli.Value("env");
         string? rid = cli.Value("rid");
 
-        string pluginDir = Path.Combine(ws.PluginsPath, ExoScaffolder.NormalizePluginName(name));
-        if (!Directory.Exists(pluginDir))
+        string extensionDir = Path.Combine(ws.ExtensionsPath, ExoScaffolder.NormalizeExtensionName(name));
+        if (!Directory.Exists(extensionDir))
         {
-            string directDir = Path.Combine(ws.RootPath, ExoScaffolder.NormalizePluginName(name));
-            if (Directory.Exists(directDir)) pluginDir = directDir;
+            string directDir = Path.Combine(ws.RootPath, ExoScaffolder.NormalizeExtensionName(name));
+            if (Directory.Exists(directDir)) extensionDir = directDir;
             else
             {
-                Error($"Plugin directory not found: {pluginDir}");
+                Error($"Extension directory not found: {extensionDir}");
                 return 1;
             }
         }
@@ -414,14 +406,14 @@ public static class Program
         // Poll the source fingerprint rather than using FileSystemWatcher: it is the same hash the
         // build stamp uses, so "changed" means exactly "the build stamp would change", and it
         // behaves identically on every platform and filesystem.
-        string last = ExoDeployer.ComputeSourceFingerprint(pluginDir);
-        Console.WriteLine($"[Exoforge] Watching {pluginDir} (fingerprint {last}). Ctrl-C to stop.");
+        string last = ExoDeployer.ComputeSourceFingerprint(extensionDir);
+        Console.WriteLine($"[Exoforge] Watching {extensionDir} (fingerprint {last}). Ctrl-C to stop.");
 
         while (true)
         {
             Thread.Sleep(1000);
 
-            string current = ExoDeployer.ComputeSourceFingerprint(pluginDir);
+            string current = ExoDeployer.ComputeSourceFingerprint(extensionDir);
             if (current == last) continue;
 
             last = current;
@@ -437,25 +429,25 @@ public static class Program
         }
     }
 
-    private static async Task<int> HandlePluginReloadAsync(CliArgs cli)
+    private static async Task<int> HandleExtensionReloadAsync(CliArgs cli)
     {
         if (cli.WantsHelp)
         {
             Console.WriteLine("""
-            Usage: exo plugin reload <name> [--env <name>] [--dir <path>]
+            Usage: exo extension reload <name> [--env <name>] [--dir <path>]
 
-            Re-boots an installed plugin from the files already on the cluster — no rebuild,
-            no re-upload. Use it after changing plugin config, or to recover a plugin that died.
+            Re-boots an installed extension from the files already on the cluster — no rebuild,
+            no re-upload. Use it after changing extension config, or to recover an extension that died.
             """);
             return 0;
         }
 
         if (cli.Positional.Count == 0)
         {
-            return Missing("plugin name", "exo plugin reload <name>");
+            return Missing("extension name", "exo extension reload <name>");
         }
 
-        string name = ExoScaffolder.NormalizePluginName(cli.Positional[0]);
+        string name = ExoScaffolder.NormalizeExtensionName(cli.Positional[0]);
         var ws = ExoWorkspace.Load(cli.Value("dir") ?? Directory.GetCurrentDirectory());
         var deployer = new ExoDeployer(ws);
 
@@ -482,37 +474,37 @@ public static class Program
         return 0;
     }
 
-    private static async Task<int> HandlePluginLogsAsync(CliArgs cli)
+    private static async Task<int> HandleExtensionLogsAsync(CliArgs cli)
     {
         if (cli.WantsHelp)
         {
             Console.WriteLine("""
-            Usage: exo plugin logs <name> [--limit <n>] [--follow] [--json] [--env <name>]
+            Usage: exo extension logs <name> [--limit <n>] [--follow] [--json] [--env <name>]
 
               --limit <n>   How many recent lines to show (default 100)
               --follow      Keep printing new lines until Ctrl-C
 
-            Lines are held in memory on the cluster and capped per plugin, so this is
-            "what did my plugin just do?" rather than a permanent log store.
+            Lines are held in memory on the cluster and capped per extension, so this is
+            "what did my extension just do?" rather than a permanent log store.
             """);
             return 0;
         }
 
         if (cli.Positional.Count == 0)
         {
-            return Missing("plugin name", "exo plugin logs <name>");
+            return Missing("extension name", "exo extension logs <name>");
         }
 
-        string name = ExoScaffolder.NormalizePluginName(cli.Positional[0]);
+        string name = ExoScaffolder.NormalizeExtensionName(cli.Positional[0]);
         var ws = ExoWorkspace.Load(cli.Value("dir") ?? Directory.GetCurrentDirectory());
         var deployer = new ExoDeployer(ws);
         string? env = cli.Value("env");
         int limit = cli.IntValue("limit", 100);
 
-        List<PluginLogLine> lines;
+        List<ExtensionLogLine> lines;
         try
         {
-            lines = await deployer.GetPluginLogsAsync(name, limit, env).ConfigureAwait(false);
+            lines = await deployer.GetExtensionLogsAsync(name, limit, env).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -561,14 +553,14 @@ public static class Program
         }
     }
 
-    private static async Task<int> HandlePluginUsageAsync(CliArgs cli)
+    private static async Task<int> HandleExtensionUsageAsync(CliArgs cli)
     {
         if (cli.WantsHelp)
         {
             Console.WriteLine("""
-            Usage: exo plugin usage [name] [--since <unix-seconds>] [--json] [--env <name>]
+            Usage: exo extension usage [name] [--since <unix-seconds>] [--json] [--env <name>]
 
-              Without a name, every plugin the instance has metered.
+              Without a name, every extension the instance has metered.
               --since <n>   Only usage recorded at or after this Unix time.
 
             Counts, durations, bytes, CPU and peak RSS. Never payloads, and never player data.
@@ -577,7 +569,7 @@ public static class Program
         }
 
         string? name = cli.Positional.Count > 0
-            ? ExoScaffolder.NormalizePluginName(cli.Positional[0])
+            ? ExoScaffolder.NormalizeExtensionName(cli.Positional[0])
             : null;
 
         long? since = null;
@@ -618,18 +610,18 @@ public static class Program
         return 0;
     }
 
-    private static async Task<int> HandlePluginStubsAsync(CliArgs cli)
+    private static async Task<int> HandleExtensionStubsAsync(CliArgs cli)
     {
         if (cli.WantsHelp)
         {
             Console.WriteLine("""
-            Usage: exo plugin stubs <name> [--services a,b] [--out <path>] [--file <export.json>]
+            Usage: exo extension stubs <name> [--services a,b] [--out <path>] [--file <export.json>]
 
-            Reads the cluster's contracts, and lays this workspace's own built plugins over them, so a
-            plugin that is built but not deployed still produces stubs. Without a cluster it uses what
+            Reads the cluster's contracts, and lays this workspace's own built extensions over them, so an
+            extension that is built but not deployed still produces stubs. Without a cluster it uses what
             has been built locally.
 
-            Generates typed stubs for the contracts this plugin calls, so plugin code does not
+            Generates typed stubs for the contracts this extension calls, so extension code does not
             hand-roll service and action names.
             """);
             return 0;
@@ -637,10 +629,10 @@ public static class Program
 
         if (cli.Positional.Count == 0)
         {
-            return Missing("plugin name", "exo plugin stubs <name>");
+            return Missing("extension name", "exo extension stubs <name>");
         }
 
-        string name = ExoScaffolder.NormalizePluginName(cli.Positional[0]);
+        string name = ExoScaffolder.NormalizeExtensionName(cli.Positional[0]);
         var ws = ExoWorkspace.Load(cli.Value("dir") ?? Directory.GetCurrentDirectory());
         var deployer = new ExoDeployer(ws);
 
@@ -659,22 +651,22 @@ public static class Program
             }
             catch (Exception ex)
             {
-                // No cluster to ask. Every plugin that has been built has its contracts on disk beside
-                // its manifest, which is the point: stubs for a plugin that is built but not deployed.
+                // No cluster to ask. Every extension that has been built has its contracts on disk beside
+                // its manifest, which is the point: stubs for an extension that is built but not deployed.
                 // Services that were neither built here nor deployed are simply absent.
                 Console.WriteLine($"[Exoforge] No cluster ({ex.Message}) — generating from local contracts only.");
-                exportJson = "{\"export\":{\"plugins\":[]}}";
+                exportJson = "{\"export\":{\"extensions\":[]}}";
             }
         }
 
-        // Local contracts win over the cluster's, so a plugin that is being edited generates stubs for
+        // Local contracts win over the cluster's, so an extension that is being edited generates stubs for
         // what it is now rather than for what was last deployed.
         exportJson = deployer.MergeLocalContracts(exportJson);
 
-        string pluginDir = Path.Combine(ws.PluginsPath, name);
-        string stubsOut = cli.Value("out") ?? Path.Combine(pluginDir, "src", "Generated", "PluginServices.g.cs");
+        string extensionDir = Path.Combine(ws.ExtensionsPath, name);
+        string stubsOut = cli.Value("out") ?? Path.Combine(extensionDir, "src", "Generated", "PluginServices.g.cs");
 
-        var deps = ExoDeployer.ReadManifestDependencies(pluginDir);
+        var deps = ExoDeployer.ReadManifestDependencies(extensionDir);
         string? servicesOption = cli.Value("services");
         IEnumerable<string>? services = servicesOption != null
             ? servicesOption.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
@@ -684,20 +676,20 @@ public static class Program
 
         if (missing.Count > 0)
         {
-            Error($"[Exoforge] No contracts for: {string.Join(", ", missing)}. Nothing was written — {stubsOut} still holds the last stubs that were generated. Start the cluster (`just dev`), or build the plugin that provides them.");
+            Error($"[Exoforge] No contracts for: {string.Join(", ", missing)}. Nothing was written — {stubsOut} still holds the last stubs that were generated. Start the cluster (`just dev`), or build the extension that provides them.");
             return 1;
         }
 
         ExoCodeGenerator.GeneratePluginStubsToFile(exportJson, stubsOut, services: services, pluginId: name);
-        Success($"[Exoforge] Generated typed plugin service stubs:\n  {stubsOut}");
+        Success($"[Exoforge] Generated typed extension service stubs:\n  {stubsOut}");
         return 0;
     }
 
-    private static async Task<int> HandlePluginListAsync(CliArgs cli)
+    private static async Task<int> HandleExtensionListAsync(CliArgs cli)
     {
         if (cli.WantsHelp)
         {
-            Console.WriteLine("Usage: exo plugin list [--json] [--env <name>] [--dir <path>]");
+            Console.WriteLine("Usage: exo extension list [--json] [--env <name>] [--dir <path>]");
             return 0;
         }
 
@@ -706,35 +698,35 @@ public static class Program
 
         if (!cli.Json)
         {
-            Console.WriteLine("[Exoforge] Fetching installed plugins from live cluster...");
+            Console.WriteLine("[Exoforge] Fetching installed extensions from live cluster...");
         }
 
-        var result = await deployer.ListPluginsAsync(cli.Value("env")).ConfigureAwait(false);
+        var result = await deployer.ListExtensionsAsync(cli.Value("env")).ConfigureAwait(false);
         Console.WriteLine(PrettyJson(result));
         return 0;
     }
 
-    private static async Task<int> HandlePluginRemoveAsync(CliArgs cli)
+    private static async Task<int> HandleExtensionRemoveAsync(CliArgs cli)
     {
         if (cli.WantsHelp)
         {
             Console.WriteLine("""
-            Usage: exo plugin remove <id> [--yes] [--delete-files] [--env <name>] [--dir <path>]
+            Usage: exo extension remove <id> [--yes] [--delete-files] [--env <name>] [--dir <path>]
 
               --yes             Skip the confirmation prompt (required when not interactive)
-              --delete-files    Also delete the plugin's staged files on the cluster
+              --delete-files    Also delete the extension's staged files on the cluster
             """);
             return 0;
         }
 
         if (cli.Positional.Count == 0)
         {
-            return Missing("plugin id", "exo plugin remove <id>");
+            return Missing("extension id", "exo extension remove <id>");
         }
 
         string id = cli.Positional[0];
 
-        // Removing a plugin from a running cluster is not undoable by re-running a command.
+        // Removing an extension from a running cluster is not undoable by re-running a command.
         if (!cli.Has("yes"))
         {
             if (Console.IsInputRedirected)
@@ -743,7 +735,7 @@ public static class Program
                 return 1;
             }
 
-            Console.Write($"[Exoforge] Remove plugin '{id}' from the cluster? [y/N] ");
+            Console.Write($"[Exoforge] Remove extension '{id}' from the cluster? [y/N] ");
             string? answer = Console.ReadLine();
 
             if (!string.Equals(answer?.Trim(), "y", StringComparison.OrdinalIgnoreCase) &&
@@ -760,7 +752,7 @@ public static class Program
         await deployer.RemovePluginAsync(id, cli.Value("env"), deleteFiles: cli.Has("delete-files"))
             .ConfigureAwait(false);
 
-        Success($"[Exoforge] Removed plugin '{id}' from the cluster.");
+        Success($"[Exoforge] Removed extension '{id}' from the cluster.");
         return 0;
     }
 
@@ -784,12 +776,12 @@ public static class Program
             return 1;
         }
 
-        string cleanName = ExoScaffolder.NormalizePluginName(name);
-        string pluginDir = Path.Combine(ws.PluginsPath, cleanName);
-        string? builtVersion = ExoDeployer.ReadManifestVersion(pluginDir);
+        string cleanName = ExoScaffolder.NormalizeExtensionName(name);
+        string extensionDir = Path.Combine(ws.ExtensionsPath, cleanName);
+        string? builtVersion = ExoDeployer.ReadManifestVersion(extensionDir);
 
-        Console.WriteLine($"[Exoforge] Uploading plugin '{cleanName}' to live cluster...");
-        string result = await deployer.UploadPluginAsync(cleanName, env).ConfigureAwait(false);
+        Console.WriteLine($"[Exoforge] Uploading extension '{cleanName}' to live cluster...");
+        string result = await deployer.UploadExtensionAsync(cleanName, env).ConfigureAwait(false);
         Success($"[Exoforge] Deployed '{cleanName}'.");
         Console.WriteLine($"  Server Response: {result}");
 
@@ -799,7 +791,7 @@ public static class Program
         }
 
         // "installed" only means the files landed. Confirm the cluster is running the new build.
-        var status = await deployer.VerifyPluginAsync(cleanName, builtVersion, env).ConfigureAwait(false);
+        var status = await deployer.VerifyExtensionAsync(cleanName, builtVersion, env).ConfigureAwait(false);
 
         if (status.IsHealthy)
         {
@@ -808,7 +800,7 @@ public static class Program
         }
 
         Error($"[Exoforge] Deployed, but the cluster does not look healthy: {status.Detail}");
-        Console.WriteLine($"  Check `exo plugin logs {cleanName}`.");
+        Console.WriteLine($"  Check `exo extension logs {cleanName}`.");
         return 1;
     }
 
@@ -816,8 +808,8 @@ public static class Program
     {
         try
         {
-            var build = new ExoDeployer(ws).BuildPlugin(rawName, ridOverride, log: Console.WriteLine);
-            Success($"[Exoforge] Build complete for plugin '{build.Name}' ({build.PluginType}).");
+            var build = new ExoDeployer(ws).BuildExtension(rawName, ridOverride, log: Console.WriteLine);
+            Success($"[Exoforge] Build complete for extension '{build.Name}' ({build.ExtensionType}).");
             return 0;
         }
         catch (Exception ex)
@@ -876,11 +868,11 @@ public static class Program
         : bytes < 1024 * 1024 ? $"{bytes / 1024.0:0.#}KB"
         : $"{bytes / (1024.0 * 1024.0):0.#}MB";
 
-    private static void PrintLogLines(List<PluginLogLine> lines)
+    private static void PrintLogLines(List<ExtensionLogLine> lines)
     {
         if (lines.Count == 0)
         {
-            Console.WriteLine("(no log lines recorded — the plugin may not have run yet)");
+            Console.WriteLine("(no log lines recorded — the extension may not have run yet)");
             return;
         }
 
@@ -890,7 +882,7 @@ public static class Program
         }
     }
 
-    private static void PrintLogLine(PluginLogLine line)
+    private static void PrintLogLine(ExtensionLogLine line)
     {
         var previous = Console.ForegroundColor;
         Console.ForegroundColor = line.LevelName switch
@@ -926,7 +918,7 @@ public static class Program
 
         if (message.Contains(":not_found"))
         {
-            return "The cluster does not know that plugin. Check `exo plugin list`, or deploy it with `exo plugin push <name>`.";
+            return "The cluster does not know that extension. Check `exo extension list`, or deploy it with `exo extension push <name>`.";
         }
 
         if (message.Contains(":forbidden_scope") || message.Contains(":unauthorized"))

@@ -1,25 +1,25 @@
 # Exoforge
 
 > **The High-Performance, Modular Game Backend Platform & LiveOps Engine.**  
-> Built on Erlang/BEAM, with native C# plugins and Unity integration.
+> Built on Erlang/BEAM, with native C# extensions and Unity integration.
 
-[![Build Status](https://img.shields.io/badge/tests-347%20passing-brightgreen)](Justfile)
+[![Build Status](https://img.shields.io/badge/tests-439%20passing-brightgreen)](Justfile)
 [![E2E Vertical Slice](https://img.shields.io/badge/E2E%20Slice-verified%20live-blue)](sdk/csharp/Exoforge.Client.Tests/VerticalSliceIntegrationTests.cs)
 [![Event Fanout](https://img.shields.io/badge/event%20fanout-0.07%20ms%20to%2050%20subs-purple)](test/cluster_benchmark_test.exs)
-[![Unity SDK](https://img.shields.io/badge/Unity%20SDK-UPM%20Ready-black)](sdk/unity/Exoforge.SDK)
+[![Unity SDK](https://img.shields.io/badge/Unity%20SDK-v0.1.6%20UPM%20Ready-black)](sdk/unity/Exoforge.SDK)
 
 ---
 
 ## What is Exoforge?
 
-Exoforge is an open, high-density game backend and LiveOps platform. It combines the distributed actor concurrency of the Erlang/BEAM virtual machine with supervised, framework-dependent C# plugin processes to run authoritative game logic without external cache layers or heavy microservice sprawl.
+Exoforge is an open, high-density game backend and LiveOps platform. It combines the distributed actor concurrency of the Erlang/BEAM virtual machine with supervised, framework-dependent C# extension processes to run authoritative game logic without external cache layers or heavy microservice sprawl.
 
 ### What it is for
 
 - **Authoritative Gameplay Logic**: Run combat calculations, inventory reconciliation, loot tables, and economy logic on the server, in C# running on the .NET runtime the instance carries.
 - **Zero-Downtime LiveOps**: Update drop rates, rebalance gameplay numbers, and deploy new game rules dynamically without rebuilding game clients or awaiting app store approvals.
-- **Stateful Plugins, Not a Framework**: A plugin *is* the actor — a supervised, long-lived process holding its own state, free to spawn a worker per matchmaking queue, game room, or chat channel. There is no grain API to learn and nothing to adopt.
-- **Unified Game Services**: Provides out-of-the-box identity, isolated multi-tenant databases, real-time WebSocket pub/sub, dynamic REST APIs, and a LiveView designer studio.
+- **Stateful Extensions, Not a Framework**: An extension *is* the actor — a supervised, long-lived process holding its own state, free to spawn a worker per matchmaking queue, game room, or chat channel. There is no grain API to learn and nothing to adopt.
+- **Unified Game Services**: Provides out-of-the-box identity, isolated databases, real-time WebSocket pub/sub, dynamic REST APIs, and a LiveView designer studio.
 
 ---
 
@@ -28,16 +28,16 @@ Exoforge is an open, high-density game backend and LiveOps platform. It combines
 ```
 +--------------------------------------------------------------------------+
 |                  GAME PRODUCER & DESIGNER STUDIO (:4005)                 |
-|             (LiveView Dashboard, Actor Inspector, Plugin Manager)        |
+|            (LiveView Dashboard, Actor Inspector, Extension Manager)       |
 +--------------------------------------------------------------------------+
 |      REST INGRESS (:4001)         |        WEBSOCKET INGRESS (:4000)     |
 |   (Dynamic OpenAPI Routes)        |   (Real-time JSON Protocol)          |
 +-----------------------------------+--------------------------------------+
-|                     NATIVE C# PLUGINS (.NET)                             |
+|                     NATIVE C# EXTENSIONS (.NET)                          |
 |          authoritative combat • inventory • liveops • matchmaking        |
 +--------------------------------------------------------------------------+
 |                     STANDARD EXTENSION SERVICES                          |
-|         :auth  •  :player_data  •  :database  •  :plugin_manager         |
+| :auth • :player_data • :database • :extension_manager • :file_bucket • ...|
 +--------------------------------------------------------------------------+
 |                      EXOFORGE KERNEL (OTP Core)                          |
 |   Registry  •  Dispatcher  •  Supervisor  •  Event Bus                   |
@@ -46,58 +46,58 @@ Exoforge is an open, high-density game backend and LiveOps platform. It combines
 
 ### Deployments
 
-Exoforge runs as an **instance**. A developer does not run the kernel; they point their tools at one.
+Exoforge runs as an **instance** hosting a single title. A developer does not run the kernel; they point their tools at one.
 
 ```
    instance  (yours, or one you are given)      developer's machine
    ───────────────────────────────────────     ──────────────────────────
-   kernel  •  standard plugins                  Unity  •  com.exoforge.sdk
-   database  •  LiveView Studio                 Exoforge/plugins/*   (theirs)
+   kernel  •  standard extensions               Unity  •  com.exoforge.sdk
+   database  •  LiveView Studio                 Exoforge/extensions/* (theirs)
    :4000 ws  •  :4001 rest  •  :4005 studio            │
         ▲                                              │  build, deploy, stubs
         └───────────────  wss:// + https://  ──────────┘
 ```
 
-The standard plugins are **builtin and server-side**. They are not installed on the developer's
+The standard extensions are **builtin and server-side**. They are not installed on the developer's
 machine and their contracts arrive over the wire; a team that wants its own can remove or replace
 any of them.
 
 Two audiences, two UIs, one instance: the **Unity editor window** is for developers, so they never
-leave Unity while building a plugin, and the **LiveView Studio** is for designers and producers —
+leave Unity while building an extension, and the **LiveView Studio** is for designers and producers —
 though developers use it too for visualisation and integration work.
 
 ### Architectural Doctrine
 
-> **The Rule**: Everything above the kernel is a plugin.  
-> **The Exception**: The kernel itself is not a plugin.
+> **The Rule**: Everything above the kernel is an extension.  
+> **The Exception**: The kernel itself is not an extension.
 
 The kernel is minimal and deterministic, containing only:
-- **`PluginRegistry`**: In-memory ETS catalog of service manifests and resources.
+- **`ExtensionRegistry`**: In-memory ETS catalog of service manifests and resources.
 - **`ActionDispatcher`**: Authorization scope checks and service action routing.
 - **`EventDispatcher`**: Real-time pub/sub bus with pattern matching and Registry fanout.
 - **`WorkerRegistry`**: Named singleton process locator.
-- **`PluginSupervisor` & `PluginBootstrapper`**: Topological DAG ordering and process lifecycle.
-- **Plugin Drivers**: Native Elixir (`ElixirPluginRunner`) and native C# (`NativePluginRunner`).
+- **`ExtensionSupervisor` & `ExtensionBootstrapper`**: Topological DAG ordering and process lifecycle.
+- **Extension Drivers**: Native Elixir (`ElixirExtensionRunner`) and native C# (`NativeExtensionRunner`).
 
-All networking, storage, authentication, and game domains exist as swappable plugins.
+All networking, storage, authentication, and game domains exist as swappable extensions.
 
 ---
 
-## Standard Plugins
+## Standard Extensions
 
-| Plugin | Port / Role | Provides | Purpose |
+| Extension | Port / Role | Provides | Purpose |
 | :--- | :--- | :--- | :--- |
-| `exoforge_std_database` | Storage | `:database`, `:lldb` | Per-plugin schema isolation with PostgreSQL and SQLite adapters. |
+| `exoforge_std_database` | Storage | `:database`, `:lldb` | Schema-isolated storage with PostgreSQL and SQLite adapters. |
 | `exoforge_std_auth` | Identity | `:auth` | Session verification, bearer token issuance, and RBAC scope validation. |
 | `exoforge_std_player_data` | Profiles | `:player_data` | Canonical player profile persistence, schemas, and lifecycle events. |
 | `exoforge_std_http` | REST (:4001) | `:http` | Dynamic OpenAPI endpoints generated directly from service contracts. |
 | `exoforge_std_ws` | Realtime (:4000) | `:ws` | Low-latency JSON WebSocket framing for actions and event pub/sub. |
-| `exoforge_std_dashboard` | Studio (:4005) | `:dashboard` | Game Producer & Designer Studio (LiveView UI, actor inspector, plugin management). |
-| `exoforge_std_plugin_manager` | Lifecycle | `:plugin_manager` | Runtime plugin lifecycle, hot binary uploads, and manifest exports. |
+| `exoforge_std_dashboard` | Studio (:4005) | `:dashboard` | Game Producer & Designer Studio (LiveView UI, actor inspector, extension management). |
+| `exoforge_std_extension_manager` | Lifecycle | `:extension_manager` | Runtime extension lifecycle, hot binary uploads, and manifest exports. |
 | `exoforge_std_resources` | Store | `:resource_store` | Schema-driven resource tables and generic CRUD over the `:database` contract. |
 | `exoforge_std_file_bucket` | Storage / CDN | `:file_bucket` | Pluggable binary/blob asset storage with tags, metadata, and HTTP file routes. |
 | `exoforge_std_dashboard_views` | Studio Views | `:dashboard_view` | View modules for the Studio's core extensions. |
-| `exoforge_std_metering` | Operations | `:metering` | Usage metering: calls, wall time, bytes, CPU and RSS, persisted per title. |
+| `exoforge_std_metering` | Operations | `:metering` | Usage metering: calls, wall time, bytes, CPU and RSS, persisted on instance. |
 
 ---
 
@@ -150,14 +150,14 @@ var result = await client.SendActionAsync<CombatResult>("combat", "attack", new 
 });
 ```
 
-### 4. Native C# Plugin Architecture
+### 4. Native C# Extension Architecture
 
-C# plugins are framework-dependent, headless .NET binaries executed under supervision by the OTP kernel via `NativePluginRunner` with newline-delimited JSON stdio framing:
+C# extensions are framework-dependent, headless .NET binaries executed under supervision by the OTP kernel via `NativeExtensionRunner` with newline-delimited JSON stdio framing:
 
-- **Implicit Dependency Injection**: Declare `[Inject]` on capabilities like `IDatabase`, `ILogger`, `IEventDispatcher`, or typed service interfaces (`IFileBucketService`, `IUnityAddressablesService`).
-- **Singleton Resources**: Declare `[ExoSingletonResource]` for game configuration and single-record settings.
+- **Static Capability Access & Tree-Shaking**: Access kernel capabilities directly via static holder `Exo` (e.g., `Exo.Database`, `Exo.Log`, `Exo.Events`, `Exo.Services`) or via backward-compatible `[Inject]` on `IDatabase`, `ILogger`, `IEventDispatcher`, and typed service interfaces (`IFileBucketService`, `IUnityAddressablesService`).
+- **Singleton Resources**: Declare `[ExoSingletonResource]` for game configuration and single-record settings with `First<T>()` query helpers.
 - **Type-Safe Dashboard Inputs**: Standard dashboard inputs (`ExoInput.Color`, `ExoInput.Date`, `ExoInput.Select`) and custom provider inputs (e.g., `AddressableRef`) with microfrontend support.
-- **Microfrontends & UI Hooks**: Plugins bundle pre-compiled JS/HTML Web Components under `assets/` to inject custom LiveView tabs and input editors without modifying kernel UI templates.
+- **Microfrontends & UI Hooks**: Extensions bundle pre-compiled JS/HTML Web Components under `assets/` to inject custom LiveView tabs and input editors without modifying kernel UI templates.
 - **Deterministic Action Results**: Return `Result<T>` (`Result<T>.Ok()` / `Result<T>.Fail()`) for standardized error propagation and error boundaries.
 
 ---
@@ -172,7 +172,7 @@ Benchmarked on commodity single-node hardware (Apple Silicon / Linux x86_64):
 | **Actor Latency** | **2.4 µs** (0.0024 ms) | In-memory distributed actor round-trip |
 | **Actor Activation** | **0.024 ms / entity** | Instant on-demand actor state hydration |
 | **Cluster Fanout** | **0.15 ms** | 50 concurrent subscribers per broadcast |
-| **Test Suite** | **266 Elixir + 81 C# passing** | Core, the 10 standard plugins, system integration, and the C# SDKs; 6 more in the live E2E slice |
+| **Test Suite** | **318 Elixir + 121 C# passing** | Core, the 11 standard extensions, system integration, and C# SDKs; 6 more in the live E2E slice |
 
 ---
 
@@ -181,12 +181,12 @@ Benchmarked on commodity single-node hardware (Apple Silicon / Linux x86_64):
 ### Using Exoforge
 
 You need an instance and the Unity package. The package is distributed as a tarball
-(`dist/com.exoforge.sdk-*.tgz`) and carries everything a plugin build needs, the plugin SDK
+(`dist/com.exoforge.sdk-*.tgz`) and carries everything an extension build needs, the extension SDK
 included — nothing here requires a clone of this repository.
 
 1. **Package Manager ▸ + ▸ Add package from tarball**, and pick the `.tgz`.
 2. **Tools ▸ Exoforge ▸ Exoforge Studio**, and point it at your instance in the Settings tab.
-3. **Plugins ▸ Scaffold**, then **Build & Deploy**.
+3. **Extensions ▸ Scaffold**, then **Build & Deploy**.
 
 The sample project ships with the package and is the reference for the whole loop.
 
@@ -196,10 +196,10 @@ Prerequisites: [Elixir 1.20+ & Erlang/OTP 29+](https://elixir-lang.org) (or via 
 the [.NET 10.0 SDK](https://dotnet.microsoft.com), and
 [Just](https://github.com/casey/just).
 ```bash
-# Run all tests (Core, Plugins, System, C# SDKs)
+# Run all tests (Core, Extensions, System, C# SDKs)
 just test
 
-# Run live end-to-end integration test (Client -> WS -> Plugin -> Event -> Client)
+# Run live end-to-end integration test (Client -> WS -> Extension -> Event -> Client)
 just test-e2e
 
 # Start the local development server (WS :4000, REST :4001, Studio :4005)
@@ -211,15 +211,12 @@ just pack-unity
 
 ### Deployment
 ```bash
-# Docker Compose (PostgreSQL + Exoforge Backend)
+# Docker Compose (PostgreSQL + Exoforge Backend + Caddy TLS Reverse Proxy)
 just compose-up
 
 # Standalone OTP Release
 just release
 just run-release
-
-# Kubernetes (via Kustomize)
-just k8s-deploy
 ```
 
 ---
@@ -230,7 +227,7 @@ just k8s-deploy
 ├── core/                         # Exoforge OTP Kernel
 │   ├── lib/                      # Dispatcher, Registry, Supervisors
 │   └── test/                     # Kernel unit & benchmark tests
-├── plugins/                      # Standard Elixir Plugins
+├── extensions/                   # Standard Elixir Extensions
 │   ├── exoforge_std_auth/        # Authentication & RBAC scopes
 │   ├── exoforge_std_database/    # PostgreSQL & SQLite storage adapters
 │   ├── exoforge_std_player_data/ # Player profile management
@@ -241,18 +238,18 @@ just k8s-deploy
 │   ├── exoforge_std_resources/   # Schema-driven resource tables
 │   ├── exoforge_std_file_bucket/ # Binary asset and file storage service
 │   ├── exoforge_std_metering/    # Usage metering, persisted per title
-│   └── exoforge_std_plugin_manager/ # Runtime plugin lifecycle & upload
-├── extensions_csharp/           # Sample C# extensions (legacy alias: plugins_csharp)
+│   └── exoforge_std_extension_manager/ # Runtime extension lifecycle & upload
+├── extensions_csharp/           # Sample C# extensions
 │   └── sample_plugin/            # The reference extension, and the E2E test subject
 ├── sdk/
 │   ├── csharp/                   # Pure C# SDKs & Tooling
 │   │   ├── Exoforge.Client/      # Runtime client library (.NET Standard 2.1)
-│   │   ├── Exoforge.Plugin.SDK/  # Attributes and interfaces for C# plugins
+│   │   ├── Exoforge.Plugin.SDK/  # Attributes and interfaces for C# extensions
 │   │   ├── Exoforge.Management/  # Workspace, scaffolding, and code generation engine
 │   │   └── Exoforge.CLI/         # `exo` command-line executable
 │   └── unity/
 │       └── Exoforge.SDK/         # Unity Package Manager (UPM) package
-├── deploy/                       # Kubernetes manifests & Docker configurations
+├── deploy/                       # Docker Compose, Caddyfile & VPS deployment guide
 ├── Agents.MD                     # Architectural rules & manual
 └── Justfile                      # Central automation recipes
 ```

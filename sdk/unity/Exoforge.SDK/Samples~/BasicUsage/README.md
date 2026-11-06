@@ -4,7 +4,7 @@ Minimal integration sample.
 
 ## Setup
 
-1. `Tools ▸ Exoforge ▸ Exoforge Studio` → **Plugins ▸ Initialize Workspace** (creates `Exoforge/exoforge.json`).
+1. `Tools ▸ Exoforge ▸ Exoforge Studio` → **Extensions ▸ Initialize Workspace** (or click Initialize on the first-import setup modal).
 2. **Exoforge Studio ▸ Settings ▸ Generate / Relink Runtime Config** (links the workspace config into `Resources/exoforge.json`).
 3. `Tools ▸ Exoforge ▸ Add Exoforge to Scene` (drops the standard **Exoforge** prefab).
 4. Attach `BasicUsageController` to any GameObject and press Play.
@@ -18,4 +18,4 @@ session calls in it.
 
 This sample calls `SendActionAsync` directly so it compiles without code generation.
 Run **Exoforge Studio ▸ Overview ▸ Sync Contracts & Generate C# Client** to generate the
-strongly-typed client, then use `client.SamplePlugin().IncrementAsync(...)` instead.
+strongly-typed client, then use `client.SampleService().IncrementAsync(...)` instead.

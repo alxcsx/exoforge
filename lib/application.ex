@@ -20,15 +20,15 @@ defmodule Exoforge.Application do
           %{id: :exo_cluster_pg, start: {:pg, :start_link, [:exo_cluster_pg]}},
           Exoforge.EventDispatcher,
           Exoforge.WorkerRegistry,
-          Exoforge.PluginRegistry,
-          Exoforge.PluginSupervisor
+          Exoforge.ExtensionRegistry,
+          Exoforge.ExtensionSupervisor
         ]
 
     opts = [strategy: :one_for_one, name: Exoforge.Supervisor]
 
     with {:ok, pid} <- Supervisor.start_link(children, opts) do
       # raises on missing deps / dependency cycles -> app fails to start loudly
-      Exoforge.PluginBootstrapper.boot()
+      Exoforge.ExtensionBootstrapper.boot()
       {:ok, pid}
     end
   end

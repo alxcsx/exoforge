@@ -38,7 +38,7 @@ defmodule Exoforge.Project do
   end
 
   defp extension_deps do
-    (Path.wildcard("extensions/*") ++ Path.wildcard("plugins/*"))
+    Path.wildcard("extensions/*")
     |> Enum.filter(&File.dir?/1)
     |> Enum.map(fn path ->
       app_name = Path.basename(path) |> String.to_atom()

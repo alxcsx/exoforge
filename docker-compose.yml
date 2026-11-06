@@ -41,7 +41,7 @@ services:
       DASHBOARD_PORT: "4005"
       GATEWAY_PORT: "4000"
       HTTP_PORT: "4001"
-      PLUGINS_PATH: "/app/plugins_elixir"
+      EXTENSIONS_PATH: "/app/extensions"
       EXOFORGE_ADMIN_EMAIL: ${EXOFORGE_ADMIN_EMAIL:-admin}
       EXOFORGE_ADMIN_PASSWORD: ${EXOFORGE_ADMIN_PASSWORD:-admin}
     ports:
@@ -50,7 +50,7 @@ services:
       - "4001:4001" # REST API Ingress
     volumes:
       - exoforge_extensions:/app/extensions
-      - exoforge_uploads:/app/priv/data/uploaded_plugins
+      - exoforge_uploads:/app/priv/data/uploaded_extensions
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:4005/health || exit 1"]
       interval: 5s

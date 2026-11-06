@@ -1,10 +1,10 @@
 defmodule Exoforge.UIHookRegistry do
   @moduledoc """
-  Read-only registry of UI hooks declared by plugins in their manifest.
+  Read-only registry of UI hooks declared by extensions in their manifest.
 
-  Plugins contribute dashboard, settings, and inspector UI through the `ui_hooks`
-  map on their manifest. Hooks are resolved live from `Exoforge.PluginRegistry`,
-  so unloading a plugin removes its hooks with no extra bookkeeping.
+  Extensions contribute dashboard, settings, and inspector UI through the `ui_hooks`
+  map on their manifest. Hooks are resolved live from `Exoforge.ExtensionRegistry`,
+  so unloading an extension removes its hooks with no extra bookkeeping.
 
   Hook points:
     * `:overview_metric` - KPI cards on the Overview tab.
@@ -22,7 +22,7 @@ defmodule Exoforge.UIHookRegistry do
   def list_hooks(hook_point) do
     target = to_string(hook_point)
 
-    Exoforge.PluginRegistry.all_manifests()
+    Exoforge.ExtensionRegistry.all_manifests()
     |> Enum.flat_map(fn manifest ->
       manifest
       |> Map.get(:ui_hooks, %{})

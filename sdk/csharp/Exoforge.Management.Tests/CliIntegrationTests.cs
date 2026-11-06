@@ -65,27 +65,18 @@ public class CliIntegrationTests : IDisposable
     }
 
     [Fact]
-    public async Task Cli_Plugin_New_Scaffolds_Plugin_Directory_And_Files()
+    public async Task Cli_Legacy_Plugin_Command_Is_Rejected()
     {
-        // First init workspace
         await Exoforge.CLI.Program.Main(new[] { "init", "--dir", _tempDir, "--name", "Game" });
 
-        // The temp workspace has no repository above it, which is exactly the case a scaffolded
-        // plugin has to work in: the project it writes references the package, not a checkout.
+        // `plugin` command was bulldoze-removed in favor of `extension`
         int code = await Exoforge.CLI.Program.Main(new[]
         {
             "plugin", "new", "combat_system",
             "--dir", _tempDir
         });
 
-        Assert.Equal(0, code);
-
-        var ws = ExoWorkspace.Load(_tempDir);
-        string pluginDir = Path.Combine(ws.ExtensionsPath, "combat_system");
-        Assert.True(Directory.Exists(pluginDir));
-        Assert.True(File.Exists(Path.Combine(pluginDir, "combat_system.slnx")));
-        Assert.True(File.Exists(Path.Combine(pluginDir, "src", "combat_system.csproj")));
-        Assert.True(File.Exists(Path.Combine(pluginDir, "src", "CombatSystemExtension.cs")) || File.Exists(Path.Combine(pluginDir, "src", "CombatSystemPlugin.cs")));
+        Assert.Equal(1, code);
     }
 
     [Fact]

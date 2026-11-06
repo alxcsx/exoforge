@@ -1,13 +1,14 @@
 # Exoforge Architecture & Plan (`plan.md`)
 
-> **Status**: Kernel, 10 standard plugins, C# Client SDK, C# Plugin SDK, C# Management Engine (`exo`
-> CLI), Unity SDK (`com.exoforge.sdk`), Producer Studio, clustering and Kubernetes manifests are
-> **complete** — **286 Elixir + 91 C# = 377 tests passing**, plus a live E2E vertical slice of 6 tests
+> **Status**: Kernel, 11 standard extensions, C# Client SDK, C# Extension SDK, C# Management Engine (`exo`
+> CLI), Unity SDK (`com.exoforge.sdk` v0.1.6), Producer Studio, clustering, CI/CD pipeline, and Arch Linux staging deploy are
+> **complete** — **318 Elixir + 121 C# = 439 tests passing**, plus a live E2E vertical slice of 6 tests
 > against a running server.
+> **MVP Status**: Phase 0 (ADR 001 Architecture Decision Record) & Phase 1 (Extension Terminology Bulldozer) **Completed**.
 > **Benchmark**: 0.07 ms fanout to 50 event subscribers over `:pg`.
 
 Completed work is not kept here. It is in `git log`, which is the record that does not drift; this
-file is the invariants and what is next. Milestone identifiers (**M1**…**M33**) are historical and are
+file is the invariants and what is next. Milestone identifiers (**M1**…**M36**) are historical and are
 referenced from `Agents.MD`, `DX.md` and commit messages, so they stay in the table below and nowhere
 else.
 
@@ -15,21 +16,21 @@ else.
 
 ## 1. Ground Truth & Invariants
 
-**The Rule**: everything above the kernel is a plugin.
-**The Exception**: the kernel is not — `PluginRegistry`, `ActionDispatcher`, `EventDispatcher`,
-`WorkerRegistry`, `PluginSupervisor`, `PluginBootstrapper`.
+**The Rule**: everything above the kernel is an extension.
+**The Exception**: the kernel is not — `ExtensionRegistry`, `ActionDispatcher`, `EventDispatcher`,
+`WorkerRegistry`, `ExtensionSupervisor`, `ExtensionBootstrapper`.
 
-- **Service atoms, never module names.** Plugins depend on `:database`, `:auth`, `:player_data`.
+- **Service atoms, never module names.** Extensions depend on `:database`, `:auth`, `:player_data`.
   Swapping PostgreSQL for SQLite changes no consumer.
 - **Pure C# outside Mix.** Game developers have no Elixir toolchain. Workspace init, scaffolding,
   codegen and deploy are pure C# (`netstandard2.1`).
 - **The Unity package is the unit of distribution.** It ships into projects with no Exoforge checkout
   anywhere near them, so it must work exactly as it is shipped.
 - **The instance is the unit of deployment.** A developer has Unity, the package and their own
-  plugins; the kernel and the standard plugins run somewhere else and are reached over the wire.
+  extensions; the kernel and the standard extensions run somewhere else and are reached over the wire.
   Anything that assumes a checkout — a `_build` path, a `just` recipe, a sibling directory — is a
   tool for this repository's own team, not for a user.
-- **No engine SDK owns engine-agnostic code.** The C# client and the plugin tooling belong to the
+- **No engine SDK owns engine-agnostic code.** The C# client and the extension tooling belong to the
   dotnet side; each engine ships them as a compiled assembly. Adding an engine adds a bucket that
   ships those libraries, not one that reimplements them.
 - **A project names no other project's path.** Where a build input comes from is a property of the
@@ -41,7 +42,7 @@ database ──▶ auth ──▶ player_data
                ├──▶ http (:4001)
                ├──▶ ws   (:4000)
 database ──────┴──▶ dashboard (:4005)
-plugin_manager ───▶ (independent root)
+extension_manager ─▶ (independent root)
 ```
 
 ---
@@ -54,21 +55,24 @@ plugin_manager ───▶ (independent root)
 | **M7–M13** | Producer Studio (LiveView, `:4005`), Horde delta-CRDT virtual actors, `:pg` event fanout, cluster benchmark, Kubernetes manifests |
 | **M14–M17** | `Cmd+K` palette, actor passivation, typed resources (`[ExoResource]`), dynamic action forms, C# client generation |
 | **M18** | Zero compiler warnings, WebSocket `AuthenticateAsync`, green E2E slice |
-| **M19** | `exoforge_std_plugin_manager`: hot plugin upload, runtime reload, manifest export |
-| **M20** | C# Management engine + `exo` CLI — `init`, `plugin new\|build\|push\|dev\|reload\|logs\|stubs\|list\|remove`, `sync`, `status`. `push` verifies the deployed version; `dev` redeploys on save; `logs` reads back plugin output |
+| **M19** | `exoforge_std_extension_manager`: hot extension upload, runtime reload, manifest export |
+| **M20** | C# Management engine + `exo` CLI — `init`, `extension new\|build\|push\|dev\|reload\|logs\|stubs\|list\|remove`, `sync`, `status`. `push` verifies the deployed version; `dev` redeploys on save; `logs` reads back extension output |
 | **M21** | Unity SDK `com.exoforge.sdk` — one game-facing entry point (`ExoforgeSDK.Auth`/`.Client`/`.ConnectAsync`), device-keyed two-stage anonymous sign-in, prefab created on demand, `Samples~/BasicUsage` |
-| **M22** | Control Center window — cluster ping, environment switcher, event monitor, action sandbox, plugin scaffold/build/deploy/logs, typed codegen. Split across `ExoforgeControlCenter*.cs` partials; `just pack-unity` builds the tarball |
+| **M22** | Control Center window — cluster ping, environment switcher, event monitor, action sandbox, extension scaffold/build/deploy/logs, typed codegen. Split across `ExoforgeControlCenter*.cs` partials; `just pack-unity` builds the tarball |
 | **M23** | SQLite local mode — `Exoforge.Std.Database.Adapters.Sqlite` + `:sqlite` driver, no PostgreSQL daemon needed |
-| **M24** | Plugin Tooling DX ([`DX.md`](DX.md)) — 21 fixes across plugin creation, upload and management |
+| **M24** | Extension Tooling DX ([`DX.md`](DX.md)) — 21 fixes across extension creation, upload and management |
 | **M25** | LiveOps *(withdrawn)* — time windows, schedule timeline and calendar view removed; game rules belong in the game, not the platform |
-| **M26** | `Exoforge.Plugin.Generator` — a Roslyn source generator replaces the out-of-process `ManifestGen` tool. The manifest, the entry point, the action/event dispatch table and the contract interfaces come from the plugin's own compile, so every build shares one pipeline, the host no longer reflects over a generated plugin's methods, and a C# plugin declares services on a class or on a contract interface in its own assembly |
+| **M26** | `Exoforge.Plugin.Generator` — a Roslyn source generator replaces the out-of-process `ManifestGen` tool. The manifest, the entry point, the action/event dispatch table and the contract interfaces come from the extension's own compile, so every build shares one pipeline, the host no longer reflects over a generated extension's methods, and a C# extension declares services on a class or on a contract interface in its own assembly |
 | **M27** | Self-Contained Unity Package — no symlink leaves the package, no path is resolved by walking out of it, and nothing in package code names this repository's layout |
 | **M28** | SDK Runtime Hardening — four correctness bugs and six DX problems on the game-facing path, each with a test that fails when the fix is reverted |
-| **M29** | Engine-Agnostic C# Core — the C# client and plugin tooling moved out of the Unity package, which now contains only Unity-specific code and ships the libraries as binaries |
+| **M29** | Engine-Agnostic C# Core — the C# client and extension tooling moved out of the Unity package, which now contains only Unity-specific code and ships the libraries as binaries |
 | **M30** | Duplication and Build-Step Cleanup — one code generator, one manifest path, no second implementation of anything |
-| **M31** | Dev Hooks and the Plugin Feed — `Directory.Build.targets` supplies a plugin's SDK, generator and manifest plumbing from a single opt-in, the Unity package stages its own libraries by building, and `Exoforge.Plugin.SDK` packs into a feed a plugin outside this repository builds against |
-| **M32** | Framework-Dependent Plugins and Usage Metering — AOT dropped for IL on a runtime in the image (reflections serialises without generated help), deployment defaults + `EXOFORGE001/2` guards, protocol handshake, `kill -9` isolation as a real test, PDBs shipped; per-plugin usage counters (`Exoforge.Metering`), `exoforge_std_metering` persisting deltas with the `title_id`/`studio_id` shape, rollups and `exo plugin usage` |
+| **M31** | Dev Hooks and the Extension Feed — `Directory.Build.targets` supplies an extension's SDK, generator and manifest plumbing from a single opt-in, the Unity package stages its own libraries by building, and `Exoforge.Plugin.SDK` packs into a feed an extension outside this repository builds against |
+| **M32** | Framework-Dependent Extensions and Usage Metering — AOT dropped for IL on a runtime in the image (reflections serialises without generated help), deployment defaults + `EXOFORGE001/2` guards, protocol handshake, `kill -9` isolation as a real test, PDBs shipped; per-extension usage counters (`Exoforge.Metering`), `exoforge_std_metering` persisting deltas with the `title_id`/`studio_id` shape, rollups and `exo extension usage` |
 | **M33** | Full-Stack Security & Hardening — the whole-repo audit's 36 fixes: kernel auth/ingress (scope clamp, takeover guard, staff-gated user management, dev-prefix gate, WS identity spoofing), C# host frame buffering, database provisioning once + pooled PostgreSQL + `table_columns` + positional-arg rejection, metering flush batching, async guard tests, event dedup; Unity SDK staff-only editor with zero guest access, crash-free background reconnect/teardown, sanitized build config; dashboard XSS, session-staff enforcement, verified-scope dispatch, HttpOnly cookies, prod secrets |
+| **M34** | Extension Terminology, Static Holder `Exo` & C# Toolbox Hardening — `[ExoExtension]`, `ExtensionHost`, static capability holder `Exo` (`Exo.Database`, `Exo.Log`, `Exo.Events`, `Exo.Services`) with tree-shaking, singleton resources (`[ExoSingletonResource]`, `First<T>`), deterministic `Result<T>`; offline packaging (`just pack-sdk` / `just pack-unity`, embedded `NuGet~` feed, pre-packed `System.Text.Json`), dynamic `.NET 9+` TFM detection, `Exoforge.Generated.asmdef` isolation, active in-use stub preservation during sync, collision hardening in `ExoCodeGenerator`, and normalized `service_not_found` diagnostics |
+| **M35** | Studio LiveView Overhaul, Project Metadata & Staging CI/CD — Theme engine (dark/light mode contrast), telemetry rendering optimization, throughput graph, deterministic action colors, event deduplication, persistent cluster events; project metadata persistence (`ProjectMetadata`, title/studio settings modal, Unity SDK sync); dynamic CORS policy and WebSocket studio dispatch; SDK bucket downloads; GitHub Actions CI/CD with volume persistence; Arch Linux staging guide (`deploy/STAGING_DEPLOY.md`) and deployment automation |
+| **M36** | ADR 001 & Extension Terminology Bulldozer — Recorded ADR 001 (Unity-first, single-title, native extensions, immutable deployment, VPS containers). Bulldozed all platform code from "plugin" to "extension", renamed `plugins/` → `extensions/`, purged fallback wrappers (`plugins_csharp`, `PLUGINS_PATH`, `plugin_manager`), and standardized kernel registries and drivers |
 
 ---
 
@@ -459,76 +463,157 @@ of scripts, handlers, URL attributes and dangerous elements before `raw` — a b
 icons come from plugins the operator deployed (Fix 35). The `document.write` CDN fallback is gone,
 plus the same CDN script in the login page it was missed in (Fix 36).
 
-**Counts**: 286 Elixir + 91 C# = 377 passing, plus the live E2E vertical slice (6 tests, CI).
+**Counts at M33 close**: 286 Elixir + 91 C# = 377 passing, plus the live E2E vertical slice (6 tests, CI).
 
 ---
 
-## 6. Out of Scope for the MVP
+## 6. M34: Extension Standard, Static Holder `Exo` & C# Toolbox Hardening — *Landed*
 
-Not planned. Recorded so they stop reappearing as "next":
+Landed across commit `ede9f54` and subsequent refactoring iterations. Detailed specs live in [`UNITY_TOOLBOX_PLAN.md`](UNITY_TOOLBOX_PLAN.md).
 
-- **Unreal Engine SDK (`ExoforgeUE`)** — a second engine client. M29/M30 already did the work that
-  would make this cheap (engine SDKs ship the dotnetSDK binaries), but nothing needs it yet.
-- **Clustered matchmaking / lobby** — matchmaking by MMR and latency.
-- **Non-standard plugin runtimes** — anything beyond native (framework-dependent .NET) and Elixir. A
-  sandboxed runtime is the obvious next one, and it is a runner rather than a rewrite.
+- **Extension Terminology & Static Capabilities**:
+  - Replaced `[Inject]` with direct static holder `Exo` (e.g. `Exo.Database`, `Exo.Log`, `Exo.Events`, `Exo.Services`) enabling clean tree-shaking and eliminating verbose injection attributes, with full backward compatibility preserved.
+  - Standardized terminology end-to-end: `[ExoExtension]`, `ExtensionHost`, `IExoforgeExtensionCustomEditor`, `ExoforgeExtensionContext`, and CLI `exo extension` commands (with backward-compatible `plugin` aliases).
+  - Added `[ExoSingletonResource]` for game configuration records, coupled with `First<T>()` query abstractions to eliminate boilerplate JSON serialization clutter.
+  - Introduced `Result<T>` (`Result<T>.Ok()` / `Result<T>.Fail()`) for deterministic error boundaries and propagation.
+
+- **Offline Self-Contained Unity Packaging**:
+  - `build-unity-sdk` / `just pack-unity` embeds `Exoforge.Plugin.SDK.<version>.nupkg` into `sdk/unity/Exoforge.SDK/Editor/Plugins/NuGet~/` so any external Unity project has the offline extension SDK without publishing to public feeds.
+  - `ExoScaffolder` and `ExoDeployer` automatically resolve the embedded `NuGet~` feed when operating outside the monorepo.
+  - Pre-packed `System.Text.Json.dll`, `System.Text.Encodings.Web.dll`, and `Microsoft.Bcl.AsyncInterfaces.dll` into `Runtime/Plugins/` without BCL collisions.
+
+- **Dynamic .NET 9+ TFM Detection & Multi-Target Resilience**:
+  - Scaffolding targets the latest installed .NET SDK (minimum `net9.0`).
+  - `ExoDeployer.PublishNative` detects machine TFM mismatches and passes `-p:TargetFramework=<installedTfm>` dynamically so builds succeed without editing project files.
+
+- **Unity Compilation Graph Optimization (`.asmdef`)**:
+  - `ExoCodeGenerator.GenerateToFile` automatically generates/maintains `Exoforge.Generated.asmdef` inside Unity `Assets/` trees with `"noEngineReferences": true`.
+  - Compiles cleanly in parallel via Unity's Bee build graph without triggering recompilations of `Assembly-CSharp` or `Exoforge.SDK`.
+
+- **Stub Preservation & Diagnostic Normalization**:
+  - Embeds compact `// @exoforge-contract: <json>` metadata in generated stubs.
+  - Scans active non-generated code during contract sync to retain in-use stubs even when syncing against remote environments missing those services.
+  - Normalized `service_not_found` / `action_not_found` across WebSocket (`socket_handler.ex`), HTTP (`router.ex`), and client transports (`ExoClient.cs`, `HostBridge.cs`) with actionable diagnostics.
+
+- **Generator Collision Hardening**:
+  - Sanitized wire identifiers in `ToPascalCase`, `ToCamelCase`, and `SanitizeFieldName`.
+  - Guarded against CS0542 enclosing class name collisions (`SafePropertyName`) and CS0102 duplicate properties.
+  - Disambiguated cross-service model collisions for identically named return records.
 
 ---
 
-## 7. Naming
+## 7. M35: Web Studio Overhaul, Project Metadata Persistence & Staging CI/CD — *Landed*
+
+Landed across commits `cf1c1ef`, `da9859b`, `1e9c78d`, `6500fbb`, and `edc727f`.
+
+- **Web Dashboard & LiveView UX Overhaul**:
+  - Dark and light theme engine with high-contrast accessibility across all tabs, cards, inputs, and modals.
+  - Overview grid and extension cards with progressive disclosure foldouts, extension action buttons, and icons.
+  - Telemetry rendering optimizations, elimination of layout flicker, toast progress countdowns, and throughput modals.
+  - Deterministic action coloring, event deduplication, real-time stream throughput graphing, and persistent cluster events.
+  - Configurable dynamic CORS policy and WebSocket studio dispatch (Option B).
+  - SDK package downloads served directly from `exoforge_std_file_bucket` (`/api/files/sdk/...`).
+
+- **Project Metadata Persistence & Unity SDK Sync**:
+  - Created `Exoforge.Std.Dashboard.ProjectMetadata` persisting project settings (`title`, `studio`, `title_id`, `studio_id`, visual settings, tags) to disk.
+  - Interactive Project Settings modal form in Studio.
+  - Bi-directional sync with Unity SDK (`ExoWorkspace` / `ExoforgeControlCenter.Settings.cs`).
+  - Unity SDK bumped to version `0.1.6`, exposing build hash, build date, and version in footers with automatic update detection.
+
+- **Staging Deployment & CI/CD Pipeline**:
+  - Automated GitHub Actions CI/CD workflow (`.github/workflows/ci-cd.yml`) with automated testing and volume persistence.
+  - Complete Arch Linux VPS staging deployment guide (`deploy/STAGING_DEPLOY.md`) and deployment maintenance script (`deploy/update-staging.sh`).
+
+**Current Counts**: 318 Elixir + 121 C# = 439 passing, plus the live E2E vertical slice (6 tests, CI).
+
+---
+
+## 8. Out of Scope for the MVP
+
+Not planned for MVP. Recorded in ADR 001 so they stop reappearing as "next":
+
+- **Multi-tenancy / multi-title per instance**: One Exoforge instance hosts strictly one title. Dedicated instances per title and environment (`dev`, `staging`, `prod`). Multi-title schema keys (`title_id`, `studio_id`) are purged in Phase 6.
+- **Custom package manager / lockfile**: Developers add extensions by copying/unzipping folders into `Exoforge/extensions/<name>/` or via Git submodules. No `exoforge.lock` or custom CLI download engine.
+- **Kubernetes**: Production is orchestrated via pinned Docker Compose / Podman on Linux VPS with Caddy TLS reverse-proxy. No K8s cluster maintenance overhead.
+- **Unreal Engine SDK (`ExoforgeUE`)**: A second engine client. M29/M30 already made this cheap (engine SDKs ship the dotnetSDK binaries), but deferred until MVP is delivered.
+- **Clustered matchmaking / lobby**: Matchmaking by MMR and latency.
+- **Non-standard extension runtimes**: Anything beyond native (framework-dependent .NET) and Elixir.
+
+---
+
+## 9. Naming & Distribution
 
 Three buckets, one rule: **no engine SDK owns engine-agnostic code.**
 
 | Bucket | Is | Holds |
 | :--- | :--- | :--- |
 | **Exo** | language-agnostic deploy & management | the CLI. Deploys C# and Elixir alike; carries no build logic of its own |
-| **dotnetSDK** | C#-specific | plugin authoring (`Exoforge.Plugin.SDK`), manifest gen, build and codegen tooling, the C# client |
+| **dotnetSDK** | C#-specific | extension authoring (`Exoforge.Plugin.SDK`), manifest gen, build and codegen tooling, the C# client |
 | **unitySDK** | Unity-specific | the UPM package: Unity runtime wrappers, editor tooling, and the dotnetSDK assemblies as binaries |
 
 Adding an engine means adding a fourth bucket that ships the same two libraries — not a fourth
 implementation of them.
 
-
 ---
 
-## 8. External Integrations (M34)
+## 10. Exoforge MVP Execution Roadmap
 
-Planned DX improvements for integrating Exoforge with external systems:
+See full specification in [`docs/adr/001-mvp-architecture.md`](docs/adr/001-mvp-architecture.md) and [`exoforge_mvp_execution_plan.md`](brain/exoforge_mvp_execution_plan.md).
 
-1. **Inbound Webhooks:** Add a raw HTTP ingress route (e.g., `ANY /api/webhook/:service/:action`) to `exoforge_std_http` that bypasses `Plug.Parsers`. This will forward the raw HTTP body and headers to the C# plugin so it can validate HMAC signatures (e.g., Stripe, Discord).
-2. **Outbound REST & SDK Dependencies:** C# plugins already compile as framework-dependent natives using `dotnet publish -c Release -p:PublishSingleFile=true`. Developers can natively use `HttpClient` and add any NuGet package (e.g. `dotnet add package Stripe.net`). The pipeline bundles all dependencies automatically. Zero extra work required.
-### First-Class Webhooks Plan
+```mermaid
+flowchart TD
+    P0["Phase 0: ADR & Invariants (Done)"] --> P1["Phase 1: Terminology Bulldozer (Done)"]
+    P1 --> P2["Phase 2: Unity Workspace Standardization (Active)"]
+    P2 --> P3["Phase 3: Source & Artifact Schema"]
+    P3 --> P4["Phase 4: Atomic Extension Lifecycle"]
+    P4 --> P5["Phase 5: Control Center UX & CLI Layer"]
+    P4 --> P6["Phase 6: Single-Title & VPS Container Deploy"]
+    P5 --> P7["Phase 7: Studio LiveView Decomposition"]
+    P6 --> P8["Phase 8: Fast PR / Gated Release CI"]
+```
 
-1. **C# SDK DSL (`Exoforge.Plugin.SDK/Attributes.cs`)**
-   Add a new `[ExoWebhook]` attribute:
-   ```csharp
-   [AttributeUsage(AttributeTargets.Method)]
-   public class ExoWebhookAttribute : Attribute
-   {
-       public string Path { get; set; }
-       public string Method { get; set; } = "POST";
-       public bool RequiresSignature { get; set; }
-       public string SignatureHeader { get; set; }
-   }
-   ```
-   Methods decorated with this take a standard request shape:
-   `public WebhookResponse HandleStripe([Inject] WebhookRequest req)`
+### Current Status of Phases
 
-2. **Manifest Generator (`Exoforge.Plugin.Generator`)**
-   Update the generator to parse `[ExoWebhook]` and emit a `"webhooks": [...]` array under each service in `manifest.json`, alongside `"actions"` and `"events"`.
+- [x] **Phase 0 — ADR 001 Architecture Decision Record**
+  Locked baseline: Unity-first, single-title per instance, native C# extensions, immutable deployed artifacts, VPS containers. Preserved `Assets/Exoforge/Generated/` for client bindings, preserved `manifest.json`.
 
-3. **HTTP Gateway Ingress (`plugins/exoforge_std_http/router.ex`)**
-   Add `match "/webhook/:plugin/:name"` *before* the generic JSON parsers.
-   Use a custom `Plug.Conn.read_body` to extract the raw text and HTTP headers. 
-   Wrap them into a standard map: `%{method: "POST", body: raw_body, headers: headers}` and dispatch it to the plugin's webhook action.
+- [x] **Phase 1 — Bulldoze Terminology to "Extension"**
+  Complete breaking refactor across first-party code:
+  - Renamed `plugins/` → `extensions/` for built-in Elixir extensions.
+  - Standardized kernel: `ExtensionRegistry`, `ExtensionSupervisor`, `ExtensionBootstrapper`, `ElixirExtensionRunner`, `NativeExtensionRunner`, `ExtensionProtocol`, `ExtensionProxy`.
+  - Deleted compatibility wrappers and fallback paths (`plugins_csharp`, `PLUGINS_PATH`, `build-plugins`, `test-plugins`, `plugin_manager`).
+  - Updated CLI verbs to `exo extension <cmd>`.
+  - All 439 tests passing cleanly across core, extensions, system, and SDKs.
 
-4. **Kernel Registration**
-   Update `Exoforge.ActionDispatcher` or the Plugin Manager to recognize the `"webhooks"` array from the manifest so the router can discover and validate valid webhook paths dynamically.
+- [ ] **Phase 2 — Standardize Unity Project Workspace (Active)**
+  - Enforce standard Unity-first workspace outside `Assets/`: `MyUnityGame/Exoforge/` (`exoforge.json`, `extensions/<id>/`, `.exoforge/build/`).
+  - Preserved bindings path in `Assets/Exoforge/Generated/` (`ExoforgeServices.g.cs` + `Exoforge.Generated.asmdef`).
+  - Standardize CLI `--dir <UnityProject>/Exoforge` argument resolution.
 
-### 5. Elixir DSL (`Exoforge.Plugin`)
-   Add a `defwebhook` macro to the Elixir DSL alongside `defaction` and `defevent`. This macro will allow Elixir plugins to cleanly define webhooks with pattern matching and built-in payload/header mapping.
-   ```elixir
-   defwebhook stripe_webhook(payload, headers) do
-     # validate signature and handle raw payload here
-   end
-   ```
+- [ ] **Phase 3 — Extension Source & Build Artifact Formats**
+  - Source layout: `Exoforge/extensions/<id>/` (`manifest.json`, `src/`, `assets/`, `.slnx`).
+  - Build artifact: `.exoforge/build/<id>/<build-id>/` (`manifest.json`, single-file binary, `manifest.fingerprint`, `assets/`).
+  - Recorded source SHA-256 fingerprint, build timestamp, target RID.
+
+- [ ] **Phase 4 — Atomic Extension Lifecycle Engine**
+  - Implement staging directory (`/var/lib/exoforge/staged/<id>_<build-id>/`).
+  - Protocol handshake validation, capability verification, process spawn & health probe before activation.
+  - Atomic symlink switch to active artifact directory; retain previous artifact for 1-click rollback.
+  - Server instances boot only from active artifacts and built-in release extensions; no scanning developer workspaces.
+
+- [ ] **Phase 5 — Unity Control Center UX & CLI Integration**
+  - Extensions page with project extensions, third-party extensions, deployed status cards.
+  - Status indicators: Source (`Clean` / `Modified`), Build (`Current` / `Needs build`), Deployment (`Active` / `Needs deploy`).
+  - Structured `--json` CLI output for headless Unity invocation.
+
+- [ ] **Phase 6 — Single-Title Server & VPS Immutable Container Deployment**
+  - Purge `title_id` and `studio_id` scaffolding from DB schemas, ETS tables, and routes.
+  - Single-title branding and RBAC (`admin > staff > player > guest`).
+  - VPS container stack: Pinned Docker Compose + PostgreSQL 16 + Caddy TLS reverse proxy.
+
+- [ ] **Phase 7 — Studio LiveView Decomposition**
+  - Decompose `studio_live.ex` into modular LiveComponents (`ResourceBrowserComponent`, `ActionConsoleComponent`, `TelemetryDockComponent`, `ExtensionCatalogComponent`, `ProjectSettingsModal`).
+
+- [ ] **Phase 8 — Testing Pipeline & Release Gates**
+  - Fast PR checks (< 90s): Elixir core & extension tests, C# SDK unit tests, Unity headless check.
+  - Gated release suite: Docker Compose cold boot, live E2E vertical slices, cluster benchmark SLA check.

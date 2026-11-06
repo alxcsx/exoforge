@@ -80,7 +80,7 @@ WORKDIR /app
 
 # Non-root user for security (essential for Kubernetes runAsNonRoot)
 RUN addgroup -S exoforge && adduser -S exoforge -G exoforge && \
-    mkdir -p /app/plugins /app/plugins_csharp /app/extensions /app/extensions_csharp && \
+    mkdir -p /app/extensions /app/extensions_csharp && \
     chown -R exoforge:exoforge /app
 
 # Copy assembled OTP release
