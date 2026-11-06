@@ -35,6 +35,13 @@ namespace Exoforge.Unity.Editor
         private Label? _stepProgressLabel;
         private Label? _statusLabel;
 
+        [MenuItem("Tools/Exoforge/Setup Wizard...", false, 10)]
+        [MenuItem("Window/Exoforge/Setup Wizard...", false, 10)]
+        public static void OpenMenu()
+        {
+            Open();
+        }
+
         public static void Open(Action? onCompleted = null)
         {
             EditorApplication.delayCall += () =>
@@ -213,7 +220,14 @@ namespace Exoforge.Unity.Editor
                 ExoforgeEditorConfig.DeriveEndpoints(_baseUrl, out _wsUrl, out _httpUrl);
                 wsLabel.text = $"• WebSocket: {_wsUrl}";
                 httpLabel.text = $"• HTTP REST: {_httpUrl}";
-                _envName = ExoforgeEditorConfig.IsLocalUrl(_wsUrl) ? "local" : "production";
+                bool isLocal = ExoforgeEditorConfig.IsLocalUrl(_wsUrl);
+                _envName = isLocal ? "local" : "production";
+                _useDevBypass = isLocal;
+                if (!isLocal && (_email == "admin@exoforge.local" || string.IsNullOrEmpty(_email)))
+                {
+                    _email = "admin";
+                    _password = "";
+                }
             };
 
             baseField.RegisterValueChangedCallback(_ => updateDerived());
@@ -275,6 +289,7 @@ namespace Exoforge.Unity.Editor
             var nextBtn = ExoforgeUIStyle.CreateModernButton("Next: Sign In ➔", () =>
             {
                 _isOfflineMode = false;
+                SaveWorkspaceEnvironment();
                 _currentStep = 2;
                 RenderCurrentStep();
             }, bg: ExoforgeUIStyle.BrandPurple, textCol: Color.white, height: 28);
@@ -301,7 +316,7 @@ namespace Exoforge.Unity.Editor
             _stepContainer.Add(devBypassToggle);
 
             var credBox = new VisualElement();
-            var emailField = new TextField("Email") { value = _email };
+            var emailField = new TextField("Email / Username") { value = _email };
             emailField.style.marginBottom = 6;
             credBox.Add(emailField);
 
@@ -344,6 +359,7 @@ namespace Exoforge.Unity.Editor
                 if (_useDevBypass)
                 {
                     ExoTokenStore.SaveStudioSession("dev:developer", "developer", new[] { "admin", "studio", "player" });
+                    SaveWorkspaceEnvironment();
                     _statusLabel.SetText("✓ Signed in using local developer credentials.");
                     _statusLabel.style.color = ExoforgeUIStyle.AccentGreen;
                     _currentStep = 3;
@@ -353,9 +369,15 @@ namespace Exoforge.Unity.Editor
                 {
                     _email = emailField.value?.Trim() ?? "";
                     _password = passField.value ?? "";
-                    bool ok = await ExoforgeControlCenter.LogInSharedAsync(_email, _password);
+                    var (ok, msg) = await ExoforgeControlCenter.LogInSharedWithResultAsync(
+                        _email,
+                        _password,
+                        httpUrlOverride: _httpUrl,
+                        wsUrlOverride: _wsUrl);
+
                     if (ok)
                     {
+                        SaveWorkspaceEnvironment();
                         _statusLabel.SetText("✓ Authentication successful.");
                         _statusLabel.style.color = ExoforgeUIStyle.AccentGreen;
                         _currentStep = 3;
@@ -363,7 +385,7 @@ namespace Exoforge.Unity.Editor
                     }
                     else
                     {
-                        _statusLabel.SetText("Authentication failed. Check credentials or enable Developer mode.");
+                        _statusLabel.SetText($"Authentication failed: {msg}");
                         _statusLabel.style.color = ExoforgeUIStyle.AccentOrange;
                     }
                 }
@@ -371,6 +393,37 @@ namespace Exoforge.Unity.Editor
             btnRow.Add(nextBtn);
 
             _stepContainer.Add(btnRow);
+        }
+
+        private void SaveWorkspaceEnvironment()
+        {
+            try
+            {
+                string wsPath = ExoforgeEditorConfig.GetAbsoluteWorkspacePath();
+                if (!ExoWorkspace.Exists(wsPath))
+                {
+                    ExoWorkspace.Initialize(wsPath);
+                }
+
+                var ws = ExoWorkspace.Load(wsPath);
+                string defaultToken = _useDevBypass ? "dev:developer" : ExoTokenStore.StudioToken;
+                ws.Config.Environments[_envName] = new ExoEnvironmentConfig
+                {
+                    WsUrl = _wsUrl,
+                    HttpUrl = _httpUrl,
+                    Token = defaultToken
+                };
+                ws.Config.DefaultEnvironment = _envName;
+                ws.Save();
+
+                ExoforgeEditorConfig.SelectedEnvironment = _envName;
+                ExoforgeControlCenter.InvalidateWorkspaceShared();
+                ExoforgeRuntimeConfigGenerator.Generate();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[Exoforge] Failed to save workspace environment: {ex.Message}");
+            }
         }
 
         // =========================================================================
@@ -418,35 +471,9 @@ namespace Exoforge.Unity.Editor
 
             var prepBtn = ExoforgeUIStyle.CreateModernButton("⚙️ Initialize Workspace & Configs", () =>
             {
-                try
-                {
-                    string wsPath = ExoforgeEditorConfig.GetAbsoluteWorkspacePath();
-                    if (!ExoWorkspace.Exists(wsPath))
-                    {
-                        ExoWorkspace.Initialize(wsPath);
-                    }
-
-                    var ws = ExoWorkspace.Load(wsPath);
-                    string defaultToken = _useDevBypass ? "dev:developer" : ExoTokenStore.StudioToken;
-                    ws.Config.Environments[_envName] = new ExoEnvironmentConfig
-                    {
-                        WsUrl = _wsUrl,
-                        HttpUrl = _httpUrl,
-                        Token = defaultToken
-                    };
-                    ws.Save();
-
-                    ExoforgeEditorConfig.SelectedEnvironment = _envName;
-                    ExoforgeRuntimeConfigGenerator.Generate();
-
-                    _statusLabel?.SetText("✓ Workspace initialized and runtime config generated.");
-                    _statusLabel!.style.color = ExoforgeUIStyle.AccentGreen;
-                }
-                catch (Exception ex)
-                {
-                    _statusLabel?.SetText($"Error initializing workspace: {ex.Message}");
-                    _statusLabel!.style.color = ExoforgeUIStyle.AccentOrange;
-                }
+                SaveWorkspaceEnvironment();
+                _statusLabel?.SetText("✓ Workspace initialized and runtime config generated.");
+                _statusLabel!.style.color = ExoforgeUIStyle.AccentGreen;
             }, height: 28);
             prepBtn.style.marginBottom = 12;
             _stepContainer.Add(prepBtn);
@@ -469,25 +496,7 @@ namespace Exoforge.Unity.Editor
 
             var nextBtn = ExoforgeUIStyle.CreateModernButton("Next: Scene Setup ➔", () =>
             {
-                // Auto-init on next if not done
-                try
-                {
-                    string wsPath = ExoforgeEditorConfig.GetAbsoluteWorkspacePath();
-                    if (!ExoWorkspace.Exists(wsPath)) ExoWorkspace.Initialize(wsPath);
-                    var ws = ExoWorkspace.Load(wsPath);
-                    string defaultToken = _useDevBypass ? "dev:developer" : ExoTokenStore.StudioToken;
-                    ws.Config.Environments[_envName] = new ExoEnvironmentConfig
-                    {
-                        WsUrl = _wsUrl,
-                        HttpUrl = _httpUrl,
-                        Token = defaultToken
-                    };
-                    ws.Save();
-                    ExoforgeEditorConfig.SelectedEnvironment = _envName;
-                    ExoforgeRuntimeConfigGenerator.Generate();
-                }
-                catch { }
-
+                SaveWorkspaceEnvironment();
                 _currentStep = 4;
                 RenderCurrentStep();
             }, bg: ExoforgeUIStyle.BrandPurple, textCol: Color.white, height: 28);
@@ -627,6 +636,14 @@ namespace Exoforge.Unity.Editor
                 ExoforgeControlCenter.ShowWindow();
             }, height: 28);
             _stepContainer.Add(openStudioBtn);
+        }
+
+        private void OnDestroy()
+        {
+            if (_currentStep == 5)
+            {
+                _onCompleted?.Invoke();
+            }
         }
     }
 }

@@ -212,6 +212,12 @@ namespace Exoforge.Unity.Editor
             // 1. Top Header Toolbar
             _root.Add(BuildHeaderToolbar());
 
+            if (ExoforgeControlCenter.IsSetupRequired)
+            {
+                _root.Add(BuildSetupRequiredBlocker());
+                return;
+            }
+
             // 2. Status Banner (if any)
             if (!string.IsNullOrEmpty(_statusMessage))
             {
@@ -258,6 +264,77 @@ namespace Exoforge.Unity.Editor
             split.Add(_detailContainer);
 
             _root.Add(split);
+        }
+
+        private VisualElement BuildSetupRequiredBlocker()
+        {
+            var container = new VisualElement();
+            container.style.flexGrow = 1;
+            container.style.alignItems = Align.Center;
+            container.style.justifyContent = Justify.Center;
+            container.style.paddingLeft = 24;
+            container.style.paddingRight = 24;
+            container.style.paddingTop = 24;
+            container.style.paddingBottom = 24;
+
+            var card = new VisualElement();
+            card.style.backgroundColor = ExoforgeUIStyle.BgCard;
+            card.style.borderTopWidth = 1;
+            card.style.borderBottomWidth = 1;
+            card.style.borderLeftWidth = 1;
+            card.style.borderRightWidth = 1;
+            card.style.borderTopColor = ExoforgeUIStyle.BrandPurpleBorder;
+            card.style.borderBottomColor = ExoforgeUIStyle.BrandPurpleBorder;
+            card.style.borderLeftColor = ExoforgeUIStyle.BrandPurpleBorder;
+            card.style.borderRightColor = ExoforgeUIStyle.BrandPurpleBorder;
+            card.style.borderTopLeftRadius = 10;
+            card.style.borderTopRightRadius = 10;
+            card.style.borderBottomLeftRadius = 10;
+            card.style.borderBottomRightRadius = 10;
+            card.style.paddingLeft = 28;
+            card.style.paddingRight = 28;
+            card.style.paddingTop = 24;
+            card.style.paddingBottom = 24;
+            card.style.maxWidth = 520;
+            card.style.alignItems = Align.Center;
+
+            var icon = new Label("🔒");
+            icon.style.fontSize = 36;
+            icon.style.marginBottom = 10;
+            card.Add(icon);
+
+            var title = new Label("Project Setup Required");
+            title.style.fontSize = 17;
+            title.style.unityFontStyleAndWeight = FontStyle.Bold;
+            title.style.color = ExoforgeUIStyle.TextPrimary;
+            title.style.marginBottom = 8;
+            card.Add(title);
+
+            var desc = new Label("Extensions management, compilation, and scaffolding are locked until initial Exoforge setup is completed.");
+            desc.style.fontSize = 12;
+            desc.style.color = ExoforgeUIStyle.TextSecondary;
+            desc.style.whiteSpace = WhiteSpace.Normal;
+            desc.style.unityTextAlign = TextAnchor.MiddleCenter;
+            desc.style.marginBottom = 20;
+            card.Add(desc);
+
+            var launchBtn = ExoforgeUIStyle.CreateModernButton("🚀 Open Setup Wizard", () =>
+            {
+                ExoforgeSetupModal.Open(onCompleted: () =>
+                {
+                    ExoforgeControlCenter.InvalidateWorkspaceShared();
+                    ExoforgeControlCenter.Instance?.RebuildStudioUI();
+                    RebuildUI();
+                });
+            }, bg: ExoforgeUIStyle.BrandPurple, textCol: Color.white, height: 34);
+            launchBtn.style.paddingLeft = 24;
+            launchBtn.style.paddingRight = 24;
+            launchBtn.style.unityFontStyleAndWeight = FontStyle.Bold;
+            launchBtn.style.fontSize = 13;
+            card.Add(launchBtn);
+
+            container.Add(card);
+            return container;
         }
 
         public void RebuildDetailPaneOnly()
@@ -422,6 +499,13 @@ namespace Exoforge.Unity.Editor
 
             masthead.Add(statusContainer);
             header.Add(masthead);
+
+            if (ExoforgeControlCenter.IsSetupRequired)
+            {
+                authBtn.SetEnabled(false);
+                _connectBtn.SetEnabled(false);
+                return header;
+            }
 
             // --- ROW 2: SUB-HEADER TOOLBAR (Height: 38px) ---
             var toolbar = new VisualElement();

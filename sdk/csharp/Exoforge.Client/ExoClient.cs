@@ -114,6 +114,10 @@ public class ExoClient : IDisposable
         _dispatcher = dispatcher ?? new ExoDispatcher();
         _transport = new ExoTransport();
         _httpClient = httpClient ?? new HttpClient();
+        if (_httpClient.DefaultRequestHeaders.UserAgent.Count == 0)
+        {
+            _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Exoforge-Client/0.1.8");
+        }
         HttpBaseUri = httpBaseUri;
 
         _transport.OnConnected += HandleConnected;

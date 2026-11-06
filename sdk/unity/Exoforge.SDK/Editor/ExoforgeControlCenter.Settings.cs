@@ -255,6 +255,16 @@ public partial class ExoforgeControlCenter : EditorWindow
         EditorGUILayout.EndHorizontal();
 
         EditorGUILayout.Space(4);
+        if (GUILayout.Button("🚀 Re-Run Setup Wizard..."))
+        {
+            ExoforgeSetupModal.Open(onCompleted: () =>
+            {
+                InvalidateWorkspace();
+                RebuildStudioUI();
+            });
+        }
+
+        EditorGUILayout.Space(4);
 
         string currentStudioToken = ExoTokenStore.StudioToken;
         string newToken = EditorGUILayout.TextField("Bearer Token", currentStudioToken);

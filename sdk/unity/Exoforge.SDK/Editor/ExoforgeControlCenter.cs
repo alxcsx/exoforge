@@ -121,6 +121,41 @@ public partial class ExoforgeControlCenter : EditorWindow
             return _workspace;
         }
     }
+
+    public void InvalidateWorkspace()
+    {
+        _workspace = null;
+        _workspaceLoadedFrom = null;
+    }
+
+    public static void InvalidateWorkspaceShared()
+    {
+        if (Instance != null)
+        {
+            Instance.InvalidateWorkspace();
+        }
+    }
+
+    public static bool IsSetupRequired
+    {
+        get
+        {
+            string wsPath = ExoforgeEditorConfig.GetAbsoluteWorkspacePath();
+            if (ExoWorkspace.Exists(wsPath))
+            {
+                try
+                {
+                    var ws = ExoWorkspace.Load(wsPath);
+                    if (ws?.Config?.Environments != null && ws.Config.Environments.Count > 0)
+                    {
+                        return false;
+                    }
+                }
+                catch { }
+            }
+            return !ExoforgeEditorConfig.HasCompletedInitialSetup;
+        }
+    }
     [NonSerialized] private static bool s_rawConnected;
     private static bool _rawConnected
     {
@@ -439,21 +474,14 @@ public partial class ExoforgeControlCenter : EditorWindow
                 }
             }
 
-            if (!ExoforgeEditorConfig.HasCompletedInitialSetup)
-            {
-                ExoforgeSetupModal.Open(onCompleted: () =>
-                {
-                    CheckAuthAndPromptLogin();
-                });
-                return;
-            }
-
+            // Do not pop up modal automatically: the Studio and Extensions windows
+            // present a non-intrusive setup blocker card with a launch button whenever opened.
             CheckAuthAndPromptLogin();
         };
     }
 
     /// <summary>
-    /// If no studio user session is defined or the session token is invalid, pops up the login screen.
+    /// Checks session validity in the background without aggressive popups.
     /// </summary>
     public static async void CheckAuthAndPromptLogin()
     {
@@ -462,19 +490,16 @@ public partial class ExoforgeControlCenter : EditorWindow
         string token = ExoTokenStore.StudioToken;
         string playerId = ExoTokenStore.StudioPlayerId;
 
-        // 1. If no user is defined, popup login screen immediately
         if (string.IsNullOrEmpty(token) || string.IsNullOrEmpty(playerId))
         {
-            ExoforgeAccountModal.Open();
             return;
         }
 
-        // 2. If user/token exists, validate with cluster
+        // Validate with cluster silently in background
         bool isValid = await ValidateTokenWithClusterAsync(token);
         if (!isValid)
         {
             ExoTokenStore.ClearStudioSession();
-            ExoforgeAccountModal.Open();
         }
     }
 
@@ -653,6 +678,12 @@ public partial class ExoforgeControlCenter : EditorWindow
         // 1. Top Modern Header Bar
         _root.Add(BuildModernHeader());
 
+        if (IsSetupRequired)
+        {
+            _root.Add(BuildSetupRequiredBlocker());
+            return;
+        }
+
         // 2. Modern Tab Strip
         _root.Add(BuildModernTabStrip());
 
@@ -666,6 +697,77 @@ public partial class ExoforgeControlCenter : EditorWindow
 
         RefreshTabContent();
         _root.Add(_tabContentArea);
+    }
+
+    private VisualElement BuildSetupRequiredBlocker()
+    {
+        var container = new VisualElement();
+        container.style.flexGrow = 1;
+        container.style.alignItems = Align.Center;
+        container.style.justifyContent = Justify.Center;
+        container.style.paddingLeft = 24;
+        container.style.paddingRight = 24;
+        container.style.paddingTop = 24;
+        container.style.paddingBottom = 24;
+
+        var card = new VisualElement();
+        card.style.backgroundColor = ExoforgeUIStyle.BgCard;
+        card.style.borderTopWidth = 1;
+        card.style.borderBottomWidth = 1;
+        card.style.borderLeftWidth = 1;
+        card.style.borderRightWidth = 1;
+        card.style.borderTopColor = ExoforgeUIStyle.BrandPurpleBorder;
+        card.style.borderBottomColor = ExoforgeUIStyle.BrandPurpleBorder;
+        card.style.borderLeftColor = ExoforgeUIStyle.BrandPurpleBorder;
+        card.style.borderRightColor = ExoforgeUIStyle.BrandPurpleBorder;
+        card.style.borderTopLeftRadius = 10;
+        card.style.borderTopRightRadius = 10;
+        card.style.borderBottomLeftRadius = 10;
+        card.style.borderBottomRightRadius = 10;
+        card.style.paddingLeft = 28;
+        card.style.paddingRight = 28;
+        card.style.paddingTop = 24;
+        card.style.paddingBottom = 24;
+        card.style.maxWidth = 520;
+        card.style.alignItems = Align.Center;
+
+        var icon = new Label("🚀");
+        icon.style.fontSize = 36;
+        icon.style.marginBottom = 10;
+        card.Add(icon);
+
+        var title = new Label("Exoforge Setup Required");
+        title.style.fontSize = 17;
+        title.style.unityFontStyleAndWeight = FontStyle.Bold;
+        title.style.color = ExoforgeUIStyle.TextPrimary;
+        title.style.marginBottom = 8;
+        card.Add(title);
+
+        var desc = new Label("This Unity project has not connected to an Exoforge cluster yet. Complete the quick onboarding setup to connect to your cluster (local Docker or remote VPS), verify .NET SDK, and unlock extension development.");
+        desc.style.fontSize = 12;
+        desc.style.color = ExoforgeUIStyle.TextSecondary;
+        desc.style.whiteSpace = WhiteSpace.Normal;
+        desc.style.unityTextAlign = TextAnchor.MiddleCenter;
+        desc.style.marginBottom = 20;
+        card.Add(desc);
+
+        var launchBtn = ExoforgeUIStyle.CreateModernButton("🚀 Launch Setup Wizard", () =>
+        {
+            ExoforgeSetupModal.Open(onCompleted: () =>
+            {
+                InvalidateWorkspace();
+                RebuildStudioUI();
+                ExoforgeExtensionsWindow.Instance?.RebuildUI();
+            });
+        }, bg: ExoforgeUIStyle.BrandPurple, textCol: Color.white, height: 34);
+        launchBtn.style.paddingLeft = 24;
+        launchBtn.style.paddingRight = 24;
+        launchBtn.style.unityFontStyleAndWeight = FontStyle.Bold;
+        launchBtn.style.fontSize = 13;
+        card.Add(launchBtn);
+
+        container.Add(card);
+        return container;
     }
 
     public void RefreshTabContent()
@@ -824,6 +926,13 @@ public partial class ExoforgeControlCenter : EditorWindow
 
         masthead.Add(statusContainer);
         header.Add(masthead);
+
+        if (IsSetupRequired)
+        {
+            authBtn.SetEnabled(false);
+            _connectBtn.SetEnabled(false);
+            return header;
+        }
 
         // --- ROW 2: SUB-HEADER TOOLBAR (Height: 38px) ---
         var toolbar = new VisualElement();

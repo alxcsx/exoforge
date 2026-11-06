@@ -207,7 +207,7 @@ namespace Exoforge.Unity.Editor
                     _statusMessageLabel.text = "Signing in...";
                     _statusMessageLabel.style.color = ExoforgeUIStyle.AccentBlue;
 
-                    bool ok = await ExoforgeControlCenter.LogInSharedAsync(_email, _password);
+                    var (ok, msg) = await ExoforgeControlCenter.LogInSharedWithResultAsync(_email, _password);
                     if (ok)
                     {
                         UpdateSessionState();
@@ -221,7 +221,7 @@ namespace Exoforge.Unity.Editor
                     }
                     else
                     {
-                        _statusMessageLabel.text = "Sign in failed. Check credentials or connection.";
+                        _statusMessageLabel.text = $"Sign in failed: {msg}";
                         _statusMessageLabel.style.color = ExoforgeUIStyle.AccentOrange;
                     }
                     _loginBtn?.SetEnabled(true);

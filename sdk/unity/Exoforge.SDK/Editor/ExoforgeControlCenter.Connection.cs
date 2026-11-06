@@ -42,7 +42,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         Repaint();
     }
 
-    private async Task ConnectAsync(string? tokenOverride = null)
+    private async Task ConnectAsync(string? tokenOverride = null, string? wsUrlOverride = null)
     {
         try
         {
@@ -70,7 +70,17 @@ public partial class ExoforgeControlCenter : EditorWindow
             _isConnecting = false;
             _connectionStatus = "No token";
             ShowStatus("A bearer token is required. Enter one above (e.g. 'dev:developer') or sign in.", MessageType.Error);
-            ExoforgeAccountModal.Open();
+            Repaint();
+            return;
+        }
+
+        string targetWs = !string.IsNullOrWhiteSpace(wsUrlOverride) ? wsUrlOverride : ActiveWsUrl;
+        if (string.IsNullOrEmpty(targetWs))
+        {
+            _isConnected = false;
+            _isConnecting = false;
+            _connectionStatus = "No WS endpoint";
+            ShowStatus("No WebSocket endpoint declared in current environment.", MessageType.Error);
             Repaint();
             return;
         }
@@ -86,7 +96,7 @@ public partial class ExoforgeControlCenter : EditorWindow
             _editorClient.OnAnyEvent += HandleIncomingEvent;
             _editorClient.OnDisconnected += HandleClientDisconnected;
 
-            await _editorClient.ConnectAsync(new Uri(ActiveWsUrl), cts.Token);
+            await _editorClient.ConnectAsync(new Uri(targetWs), cts.Token);
 
             var auth = await _editorClient.AuthenticateAsync(targetToken, cancellationToken: cts.Token);
             if (auth.IsSuccess)
@@ -107,7 +117,6 @@ public partial class ExoforgeControlCenter : EditorWindow
                     await _editorClient.DisconnectAsync();
                     _editorClient.Dispose();
                     _editorClient = null;
-                    ExoforgeAccountModal.Open();
                     return;
                 }
 
@@ -297,23 +306,35 @@ public partial class ExoforgeControlCenter : EditorWindow
         }
     }
 
-    public static async Task<bool> LogInSharedAsync(string email, string password)
+    public static async Task<bool> LogInSharedAsync(string email, string password, string? httpUrlOverride = null, string? wsUrlOverride = null)
+    {
+        var (ok, _) = await LogInSharedWithResultAsync(email, password, httpUrlOverride, wsUrlOverride);
+        return ok;
+    }
+
+    public static async Task<(bool success, string message)> LogInSharedWithResultAsync(
+        string email,
+        string password,
+        string? httpUrlOverride = null,
+        string? wsUrlOverride = null)
     {
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrEmpty(password))
         {
-            Instance?.ShowStatus("Enter an email and password to log in.", MessageType.Error);
+            string msg = "Enter an email and password to log in.";
+            Instance?.ShowStatus(msg, MessageType.Error);
             Instance?.Repaint();
-            return false;
+            return (false, msg);
         }
 
         try
         {
-            string httpUrl = ActiveHttpEndpoint;
+            string httpUrl = !string.IsNullOrWhiteSpace(httpUrlOverride) ? httpUrlOverride : ActiveHttpEndpoint;
             if (string.IsNullOrEmpty(httpUrl))
             {
-                Instance?.ShowStatus("This environment declares no http_url; add one to exoforge.json to sign in with email/password.", MessageType.Error);
+                string msg = "This environment declares no http_url; add one to exoforge.json to sign in with email/password.";
+                Instance?.ShowStatus(msg, MessageType.Error);
                 Instance?.Repaint();
-                return false;
+                return (false, msg);
             }
 
             using var loginClient = new ExoClient { HttpBaseUri = new Uri(httpUrl) };
@@ -332,30 +353,34 @@ public partial class ExoforgeControlCenter : EditorWindow
 
             if (string.IsNullOrEmpty(token))
             {
-                Instance?.ShowStatus("Login failed: the server returned no token.", MessageType.Error);
+                string msg = "Login failed: the server returned no token.";
+                Instance?.ShowStatus(msg, MessageType.Error);
                 Instance?.Repaint();
-                return false;
+                return (false, msg);
             }
 
             ExoTokenStore.SaveStudioSession(token, playerId, scopes);
             ExoforgeEditorConfig.LastLoginEmail = email;
             ExoforgeEditorConfig.LastLoginPassword = password;
-            Instance?.ShowStatus($"Successfully logged in as {playerId}.", MessageType.Info);
+            string successMsg = $"Successfully logged in as {playerId}.";
+            Instance?.ShowStatus(successMsg, MessageType.Info);
 
             if (Instance != null)
             {
-                await Instance.ConnectAsync(token);
+                await Instance.ConnectAsync(token, wsUrlOverride);
             }
-            return true;
+            return (true, successMsg);
         }
         catch (Exception ex)
         {
-            Instance?.ShowStatus($"Login failed: {ex.Message}", MessageType.Error);
-            return false;
+            string msg = $"Login failed: {ex.Message}";
+            Instance?.ShowStatus(msg, MessageType.Error);
+            return (false, msg);
         }
         finally
         {
             Instance?.Repaint();
+            ExoforgeExtensionsWindow.Instance?.Repaint();
             ExoforgePluginsWindow.Instance?.Repaint();
         }
     }
