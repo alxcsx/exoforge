@@ -196,8 +196,211 @@ public partial class ExoforgeControlCenter : EditorWindow
             }
         }
 
+        // 4. Remote / Immutable Extensions Section
+        scroll.Add(BuildRemoteExtensionsSectionToolkit());
+
         container.Add(scroll);
         return container;
+    }
+
+    private VisualElement BuildRemoteExtensionsSectionToolkit()
+    {
+        var section = new VisualElement();
+        section.style.marginTop = 16;
+        section.style.marginBottom = 20;
+
+        var headerRow = new VisualElement();
+        headerRow.style.flexDirection = FlexDirection.Row;
+        headerRow.style.alignItems = Align.Center;
+        headerRow.style.justifyContent = Justify.SpaceBetween;
+        headerRow.style.marginBottom = 8;
+
+        var titleRow = new VisualElement();
+        titleRow.style.flexDirection = FlexDirection.Row;
+        titleRow.style.alignItems = Align.Center;
+
+        var secTitle = new Label("🔒 Remote / Immutable Extensions");
+        secTitle.style.fontSize = 13;
+        secTitle.style.unityFontStyleAndWeight = FontStyle.Bold;
+        secTitle.style.color = ExoforgeUIStyle.TextPrimary;
+        titleRow.Add(secTitle);
+
+        var countBadge = ExoforgeUIStyle.CreatePill(
+            $"{_remotePlugins.Count}",
+            ExoforgeUIStyle.AccentBlue,
+            new Color(0.12f, 0.16f, 0.24f));
+        countBadge.style.marginLeft = 8;
+        titleRow.Add(countBadge);
+
+        headerRow.Add(titleRow);
+
+        var refreshRemoteBtn = ExoforgeUIStyle.CreateModernButton("🔄 Refresh Remote", async () =>
+        {
+            await RefreshPluginsAsync();
+            RefreshTabContent();
+        }, height: 24);
+        refreshRemoteBtn.SetEnabled(CanReachCluster);
+        headerRow.Add(refreshRemoteBtn);
+
+        section.Add(headerRow);
+
+        var descLabel = new Label("Pre-installed and remote server extensions running on the connected cluster (read-only / immutable).");
+        descLabel.style.fontSize = 11;
+        descLabel.style.color = ExoforgeUIStyle.TextMuted;
+        descLabel.style.marginBottom = 10;
+        section.Add(descLabel);
+
+        if (!CanReachCluster)
+        {
+            var offlineBox = new VisualElement();
+            offlineBox.style.backgroundColor = ExoforgeUIStyle.BgCard;
+            offlineBox.style.paddingLeft = 14;
+            offlineBox.style.paddingRight = 14;
+            offlineBox.style.paddingTop = 12;
+            offlineBox.style.paddingBottom = 12;
+            offlineBox.style.borderTopLeftRadius = 6;
+            offlineBox.style.borderTopRightRadius = 6;
+            offlineBox.style.borderBottomLeftRadius = 6;
+            offlineBox.style.borderBottomRightRadius = 6;
+            offlineBox.style.borderTopWidth = 1;
+            offlineBox.style.borderBottomWidth = 1;
+            offlineBox.style.borderLeftWidth = 1;
+            offlineBox.style.borderRightWidth = 1;
+            offlineBox.style.borderTopColor = ExoforgeUIStyle.BorderSubtle;
+            offlineBox.style.borderBottomColor = ExoforgeUIStyle.BorderSubtle;
+            offlineBox.style.borderLeftColor = ExoforgeUIStyle.BorderSubtle;
+            offlineBox.style.borderRightColor = ExoforgeUIStyle.BorderSubtle;
+
+            var offMsg = new Label("Connect to the cluster to view active remote and immutable extensions.");
+            offMsg.style.fontSize = 11;
+            offMsg.style.color = ExoforgeUIStyle.TextSecondary;
+            offlineBox.Add(offMsg);
+
+            section.Add(offlineBox);
+            return section;
+        }
+
+        if (_remotePlugins.Count == 0)
+        {
+            var emptyBox = new VisualElement();
+            emptyBox.style.backgroundColor = ExoforgeUIStyle.BgCard;
+            emptyBox.style.paddingLeft = 14;
+            emptyBox.style.paddingRight = 14;
+            emptyBox.style.paddingTop = 12;
+            emptyBox.style.paddingBottom = 12;
+            emptyBox.style.borderTopLeftRadius = 6;
+            emptyBox.style.borderTopRightRadius = 6;
+            emptyBox.style.borderBottomLeftRadius = 6;
+            emptyBox.style.borderBottomRightRadius = 6;
+
+            var emptyMsg = new Label("No remote extensions reported by the cluster.");
+            emptyMsg.style.fontSize = 11;
+            emptyMsg.style.color = ExoforgeUIStyle.TextSecondary;
+            emptyBox.Add(emptyMsg);
+
+            section.Add(emptyBox);
+            return section;
+        }
+
+        foreach (var plugin in _remotePlugins)
+        {
+            section.Add(BuildRemoteExtensionCardToolkit(plugin));
+        }
+
+        return section;
+    }
+
+    private VisualElement BuildRemoteExtensionCardToolkit(JsonElement plugin)
+    {
+        string id = plugin.TryGetProperty("id", out var idProp) && idProp.ValueKind == JsonValueKind.String ? idProp.GetString() ?? "?" : "?";
+        string version = plugin.TryGetProperty("version", out var vProp) && vProp.ValueKind == JsonValueKind.String ? vProp.GetString() ?? "" : "";
+        string icon = plugin.TryGetProperty("icon", out var icProp) && icProp.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(icProp.GetString())
+            ? icProp.GetString()!
+            : (plugin.TryGetProperty("dashboard_view", out var dv) && dv.ValueKind == JsonValueKind.Object && dv.TryGetProperty("icon", out var dvIcon) && dvIcon.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(dvIcon.GetString())
+                ? dvIcon.GetString()!
+                : "🧩");
+        string title = plugin.TryGetProperty("title", out var tProp) && tProp.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(tProp.GetString())
+            ? tProp.GetString()!
+            : (plugin.TryGetProperty("dashboard_view", out var dv2) && dv2.ValueKind == JsonValueKind.Object && dv2.TryGetProperty("title", out var dvTitle) && dvTitle.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(dvTitle.GetString())
+                ? dvTitle.GetString()!
+                : id);
+
+        var card = new VisualElement();
+        card.style.backgroundColor = ExoforgeUIStyle.BgCard;
+        card.style.borderTopWidth = 1;
+        card.style.borderBottomWidth = 1;
+        card.style.borderLeftWidth = 1;
+        card.style.borderRightWidth = 1;
+        card.style.borderTopColor = ExoforgeUIStyle.BorderSubtle;
+        card.style.borderBottomColor = ExoforgeUIStyle.BorderSubtle;
+        card.style.borderLeftColor = ExoforgeUIStyle.BorderSubtle;
+        card.style.borderRightColor = ExoforgeUIStyle.BorderSubtle;
+        card.style.borderTopLeftRadius = 8;
+        card.style.borderTopRightRadius = 8;
+        card.style.borderBottomLeftRadius = 8;
+        card.style.borderBottomRightRadius = 8;
+        card.style.paddingLeft = 14;
+        card.style.paddingRight = 14;
+        card.style.paddingTop = 10;
+        card.style.paddingBottom = 10;
+        card.style.marginBottom = 6;
+
+        var row = new VisualElement();
+        row.style.flexDirection = FlexDirection.Row;
+        row.style.alignItems = Align.Center;
+        row.style.justifyContent = Justify.SpaceBetween;
+
+        var left = new VisualElement();
+        left.style.flexDirection = FlexDirection.Row;
+        left.style.alignItems = Align.Center;
+
+        var iconLabel = new Label(icon);
+        iconLabel.style.fontSize = 22;
+        iconLabel.style.marginRight = 10;
+        left.Add(iconLabel);
+
+        var titleCol = new VisualElement();
+        var titleRow = new VisualElement();
+        titleRow.style.flexDirection = FlexDirection.Row;
+        titleRow.style.alignItems = Align.Center;
+
+        var nameLabel = new Label(title);
+        nameLabel.style.fontSize = 13;
+        nameLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+        nameLabel.style.color = ExoforgeUIStyle.TextPrimary;
+        titleRow.Add(nameLabel);
+
+        var immutableBadge = ExoforgeUIStyle.CreatePill("🔒 Remote / Immutable", new Color(0.6f, 0.6f, 0.7f), new Color(0.15f, 0.15f, 0.2f));
+        immutableBadge.style.marginLeft = 8;
+        titleRow.Add(immutableBadge);
+
+        titleCol.Add(titleRow);
+
+        string meta = (title != id && !string.IsNullOrEmpty(title))
+            ? $"{id} • v{version}"
+            : $"v{version}";
+        var metaLabel = new Label(meta);
+        metaLabel.style.fontSize = 10;
+        metaLabel.style.color = ExoforgeUIStyle.TextMuted;
+        titleCol.Add(metaLabel);
+
+        left.Add(titleCol);
+        row.Add(left);
+
+        var right = new VisualElement();
+        right.style.flexDirection = FlexDirection.Row;
+        right.style.alignItems = Align.Center;
+
+        var inspectBtn = ExoforgeUIStyle.CreateModernButton("Inspect ↗", () =>
+        {
+            ExoforgeExtensionsWindow.OpenExtension(id);
+        }, height: 24);
+        right.Add(inspectBtn);
+
+        row.Add(right);
+        card.Add(row);
+
+        return card;
     }
 
     private VisualElement BuildExtensionCardToolkit(LocalPluginInfo plugin)

@@ -454,6 +454,9 @@ public partial class ExoforgeControlCenter : EditorWindow
                 return;
             }
 
+            // Always ensure workspace and runtime configs exist regardless of auth/onboarding stage
+            EnsureWorkspaceAndConfigsInitialized();
+
             // Check if first install or unconfigured workspace
             if (!ExoforgeEditorConfig.HasCompletedInitialSetup)
             {
@@ -476,6 +479,47 @@ public partial class ExoforgeControlCenter : EditorWindow
             // present a non-intrusive setup blocker card with a launch button whenever opened.
             CheckAuthAndPromptLogin();
         };
+    }
+
+    /// <summary>
+    /// Ensures the Exoforge workspace directory and runtime config (Assets/Resources/exoforge.json)
+    /// exist regardless of onboarding progress so developers never hit missing path or runtime errors.
+    /// </summary>
+    public static void EnsureWorkspaceAndConfigsInitialized()
+    {
+        try
+        {
+            string wsPath = ExoforgeEditorConfig.GetAbsoluteWorkspacePath();
+            if (!ExoWorkspace.Exists(wsPath))
+            {
+                ExoWorkspace.Initialize(wsPath);
+            }
+
+            var ws = ExoWorkspace.Load(wsPath);
+            string selectedEnv = ExoforgeEditorConfig.SelectedEnvironment;
+            if (ws.Config.Environments == null || ws.Config.Environments.Count == 0)
+            {
+                ws.Config.Environments ??= new();
+                ws.Config.Environments["local"] = new ExoEnvironmentConfig
+                {
+                    WsUrl = "ws://localhost:4000/ws",
+                    HttpUrl = "http://localhost:4001",
+                    Token = !string.IsNullOrEmpty(ExoTokenStore.Token) ? ExoTokenStore.Token : "dev:developer"
+                };
+                ws.Config.DefaultEnvironment = "local";
+                ws.Save();
+            }
+
+            string rtPath = Path.GetFullPath(ExoforgeRuntimeConfigGenerator.OutputPath);
+            if (!File.Exists(rtPath))
+            {
+                ExoforgeRuntimeConfigGenerator.Generate();
+            }
+        }
+        catch (Exception ex)
+        {
+            UnityEngine.Debug.LogWarning($"[Exoforge] Ensure workspace & config initialization deferred: {ex.Message}");
+        }
     }
 
     /// <summary>

@@ -26,8 +26,8 @@ namespace Exoforge.Unity.Editor
         private string _httpUrl = "http://localhost:4001";
         private bool _isOfflineMode = false;
 
-        private string _email = !string.IsNullOrEmpty(ExoforgeEditorConfig.LastLoginEmail) ? ExoforgeEditorConfig.LastLoginEmail : "admin";
-        private string _password = !string.IsNullOrEmpty(ExoforgeEditorConfig.LastLoginPassword) ? ExoforgeEditorConfig.LastLoginPassword : "";
+        private string _email = "admin";
+        private string _password = "";
 
         private Action? _onCompleted;
         private VisualElement? _stepContainer;
@@ -66,6 +66,18 @@ namespace Exoforge.Unity.Editor
                 window.ShowUtility();
                 window.Focus();
             };
+        }
+
+        private void OnEnable()
+        {
+            if (!string.IsNullOrEmpty(ExoforgeEditorConfig.LastLoginEmail))
+            {
+                _email = ExoforgeEditorConfig.LastLoginEmail;
+            }
+            if (!string.IsNullOrEmpty(ExoforgeEditorConfig.LastLoginPassword))
+            {
+                _password = ExoforgeEditorConfig.LastLoginPassword;
+            }
         }
 
         private void CreateGUI()
@@ -396,6 +408,9 @@ namespace Exoforge.Unity.Editor
         private void RenderStep3Project()
         {
             if (_stepProgressLabel != null) _stepProgressLabel.text = "Step 3 of 5: Project Setup";
+
+            // Workspace & config are always guaranteed to be initialized
+            SaveWorkspaceEnvironment();
 
             var desc = new Label("Initialize your local project workspace and runtime configurations.");
             desc.style.fontSize = 11;

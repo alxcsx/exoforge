@@ -24,6 +24,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        COMMIT_SHA: ${COMMIT_SHA:-}
+        EXOFORGE_VERSION: ${EXOFORGE_VERSION:-}
     image: exoforge:latest
     container_name: exoforge_backend
     restart: unless-stopped

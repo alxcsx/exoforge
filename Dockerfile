@@ -42,6 +42,12 @@ COPY extensions/ extensions/
 COPY extensions_csharp/ extensions_csharp/
 COPY lib/ lib/
 
+# Git commit SHA and version passed as build arguments for BuildInfo
+ARG COMMIT_SHA=""
+ARG EXOFORGE_VERSION=""
+ENV COMMIT_SHA=${COMMIT_SHA} \
+    EXOFORGE_VERSION=${EXOFORGE_VERSION}
+
 # Fetch and compile dependencies, generate plugin manifests, and assemble OTP release
 RUN mix deps.get --only ${MIX_ENV} && \
     mix deps.compile && \

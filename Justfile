@@ -165,7 +165,7 @@ stop-release:
 
 # Build production container image
 docker-build: build-extensions
-	{{container_engine}} build -t exoforge:latest .
+	{{container_engine}} build --build-arg COMMIT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "dev") -t exoforge:latest .
 
 # Run full stack with PostgreSQL using Compose
 compose-up: build-extensions
