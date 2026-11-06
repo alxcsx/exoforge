@@ -375,6 +375,13 @@ public partial class ExoforgeControlCenter : EditorWindow
         window.minSize = new Vector2(480, 560);
     }
 
+    [MenuItem("Exoforge/Quickstart Guide ↗", false, 30)]
+    public static void OpenQuickstartGuide()
+    {
+        string url = ActiveHttpEndpoint;
+        if (!string.IsNullOrEmpty(url)) Application.OpenURL($"{url.TrimEnd('/')}/guide");
+    }
+
     [MenuItem("Exoforge/Repair & Regenerate Client", false, 21)]
     public static async void RepairAndRegenerateClientMenu()
     {
@@ -1027,6 +1034,13 @@ public partial class ExoforgeControlCenter : EditorWindow
             if (!string.IsNullOrEmpty(url)) Application.OpenURL(url);
         }, height: 26, isHeader: true);
         actionsGroup.Add(_studioBtn);
+
+        var guideBtn = ExoforgeUIStyle.CreateModernButton("📖 Guide ↗", () =>
+        {
+            string url = ActiveHttpEndpoint;
+            if (!string.IsNullOrEmpty(url)) Application.OpenURL($"{url.TrimEnd('/')}/guide");
+        }, height: 26, isHeader: true);
+        actionsGroup.Add(guideBtn);
 
         toolbar.Add(actionsGroup);
         header.Add(toolbar);

@@ -26,6 +26,20 @@ public partial class ExoforgeControlCenter : EditorWindow
     {
         _mainScroll = EditorGUILayout.BeginScrollView(_mainScroll);
 
+        // 0. Quickstart Banner
+        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+        EditorGUILayout.LabelField("⚡ Quickstart: Extension ➔ Stubs ➔ Gameplay Flow", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("1. Connect & Auth ➔ 2. Scaffold Extension ➔ 3. Build & Deploy ➔ 4. Sync Client ➔ 5. Call typed stubs", EditorStyles.wordWrappedMiniLabel);
+        EditorGUILayout.Space(2);
+        if (GUILayout.Button("📖 Open Quickstart Guide & API Reference ↗", GUILayout.Height(22)))
+        {
+            string url = ActiveHttpUrl;
+            if (!string.IsNullOrEmpty(url)) Application.OpenURL($"{url.TrimEnd('/')}/guide");
+        }
+        EditorGUILayout.EndVertical();
+
+        EditorGUILayout.Space(6);
+
         // 1. Cluster Telemetry Card
         EditorGUILayout.LabelField("Cluster Telemetry & Node Health", EditorStyles.boldLabel);
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
@@ -88,6 +102,13 @@ public partial class ExoforgeControlCenter : EditorWindow
             if (GUILayout.Button("🌐 Open Web Dashboard ↗", GUILayout.Height(26)))
             {
                 Application.OpenURL(DashboardUrl());
+            }
+
+            EditorGUILayout.Space(2);
+
+            if (GUILayout.Button("📖 Open Quickstart Guide ↗", GUILayout.Height(26)))
+            {
+                Application.OpenURL(DashboardUrl().TrimEnd('/') + "/guide");
             }
         }
 

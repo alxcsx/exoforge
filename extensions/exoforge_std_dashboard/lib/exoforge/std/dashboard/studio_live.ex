@@ -164,6 +164,9 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         live_action == :apps or tab_param in ["apps", "extensions"] ->
           :apps
 
+        live_action in [:guide, :docs] or tab_param in ["guide", "docs"] ->
+          :guide
+
         (live_action == :index or is_nil(live_action)) and tab_param in ["overview", nil, ""] ->
           :overview
 
@@ -191,6 +194,10 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   defp resolve_tab("apps", _extensions), do: :apps
   defp resolve_tab(:apps, _extensions), do: :apps
   defp resolve_tab("extensions", _extensions), do: :apps
+  defp resolve_tab("guide", _extensions), do: :guide
+  defp resolve_tab(:guide, _extensions), do: :guide
+  defp resolve_tab("docs", _extensions), do: :guide
+  defp resolve_tab(:docs, _extensions), do: :guide
 
   defp resolve_tab(param, extensions) do
     str = to_string(param)
@@ -246,6 +253,10 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   defp tab_path(:overview), do: "/"
   defp tab_path("apps"), do: "/tab/apps"
   defp tab_path(:apps), do: "/tab/apps"
+  defp tab_path("guide"), do: "/guide"
+  defp tab_path(:guide), do: "/guide"
+  defp tab_path("docs"), do: "/guide"
+  defp tab_path(:docs), do: "/guide"
 
   defp tab_path(tab) when is_atom(tab) or is_binary(tab) do
     "/tab/#{tab}"
@@ -1409,6 +1420,20 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
               </span>
             </button>
 
+            <!-- 3. Quickstart & API Guide Tab -->
+            <button
+              phx-click="switch_tab"
+              phx-value-tab="guide"
+              aria-label="Quickstart Guide"
+              title="Quickstart Guide & API Reference"
+              class={"px-2 py-1 text-xs rounded-lg transition-all font-bold flex items-center justify-center gap-1.5 flex-shrink-0 #{if @current_tab == :guide, do: "bg-white text-primary-700 shadow-sm", else: "text-gray-600 hover:text-gray-900"}"}
+            >
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+              </svg>
+              <span class="hidden sm:inline">Guide</span>
+            </button>
+
             <!-- Separator between main tabs and pinned items -->
             <%= if length(@pinned_extensions) > 0 do %>
               <div class="h-4 w-px bg-gray-300/80 mx-0.5 flex-shrink-0"></div>
@@ -1477,7 +1502,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
             <% end %>
 
             <!-- 3c. Active Unpinned Extension Breadcrumb -->
-            <%= if to_string(@current_tab) not in ["overview", "apps"] and to_string(@current_tab) not in @pinned_extensions do %>
+            <%= if to_string(@current_tab) not in ["overview", "apps", "guide", "docs"] and to_string(@current_tab) not in @pinned_extensions do %>
               <% active_unpinned = Enum.find(@overview.extensions, fn e -> to_string(e.id) == to_string(@current_tab) end) %>
               <%= if active_unpinned do %>
                 <% title = tab_short_name(active_unpinned) %>
@@ -1613,6 +1638,28 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                 </button>
               <% end %>
             </div>
+          </div>
+
+          <!-- Welcome Quickstart Banner -->
+          <div class="bg-gradient-to-r from-primary-950 via-primary-900 to-indigo-950 rounded-2xl p-5 text-white shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 border border-primary-500/30">
+            <div class="space-y-1">
+              <div class="flex items-center gap-2">
+                <span class="text-[10px] px-2 py-0.5 rounded-full bg-primary-500/30 text-primary-200 border border-primary-400/30 font-bold uppercase tracking-wider">Quickstart Flow</span>
+                <span class="font-bold text-sm">New to Exoforge? Complete Developer Guide &amp; API Reference</span>
+              </div>
+              <p class="text-xs text-primary-200/90">
+                Learn the 5-step flow: Connect &amp; Auth ➔ Scaffold Extension ➔ Hot-Deploy ➔ Sync Stubs ➔ Call from Unity.
+              </p>
+            </div>
+            <button
+              type="button"
+              phx-click="switch_tab"
+              phx-value-tab="guide"
+              class="px-4 py-2 bg-white text-primary-900 hover:bg-primary-50 font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5 whitespace-nowrap self-start md:self-auto shrink-0"
+            >
+              <span>📖 Open Quickstart Guide</span>
+              <span>→</span>
+            </button>
           </div>
 
           <div id="overview-bento-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 auto-rows-min [grid-auto-flow:dense]">
@@ -2216,8 +2263,18 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
           />
         <% end %>
 
+        <!-- GUIDE TAB -->
+        <%= if @current_tab == :guide do %>
+          <Exoforge.Std.Dashboard.Guide.view
+            action_catalog={@action_catalog}
+            extensions={@overview.extensions}
+            project_name={@project_name}
+            studio_name={@studio_name}
+          />
+        <% end %>
+
         <!-- DYNAMIC EXTENSION VIEW MOUNT -->
-        <%= if to_string(@current_tab) not in ["overview", "apps"] do %>
+        <%= if to_string(@current_tab) not in ["overview", "apps", "guide", "docs"] do %>
           <% current_tab_str = to_string(@current_tab) %>
           <% active_ext =
                Enum.find(@overview.extensions, fn e ->

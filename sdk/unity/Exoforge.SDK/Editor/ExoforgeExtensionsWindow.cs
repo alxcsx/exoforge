@@ -596,6 +596,17 @@ namespace Exoforge.Unity.Editor
                 isHeader: true);
             actionsGroup.Add(studioBtn);
 
+            var guideBtn = ExoforgeUIStyle.CreateModernButton(
+                "📖 Guide ↗",
+                () =>
+                {
+                    string url = ExoforgeControlCenter.ActiveHttpEndpoint;
+                    if (!string.IsNullOrEmpty(url)) Application.OpenURL($"{url.TrimEnd('/')}/guide");
+                },
+                height: 26,
+                isHeader: true);
+            actionsGroup.Add(guideBtn);
+
             toolbar.Add(actionsGroup);
             header.Add(toolbar);
 
