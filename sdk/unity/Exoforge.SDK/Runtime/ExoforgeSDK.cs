@@ -43,6 +43,23 @@ namespace Exoforge.Client.Unity
         /// <summary>Task that completes when the client has established connection and authenticated.</summary>
         public static Task Ready => Behaviour.ReadyTask;
 
+        /// <summary>True once the client has connected and authenticated.</summary>
+        public static bool IsReady => Behaviour.IsReady;
+
+        /// <summary>Event that fires when Exoforge is connected and ready to send actions.</summary>
+        public static event Action? OnReady
+        {
+            add
+            {
+                if (IsReady)
+                {
+                    value?.Invoke();
+                }
+                ExoforgeManager.OnReady += value;
+            }
+            remove => ExoforgeManager.OnReady -= value;
+        }
+
         /// <summary>Current cluster connection state.</summary>
         public static ExoforgeConnectionState State => Behaviour.CurrentState;
 
@@ -130,6 +147,16 @@ namespace Exoforge.Client.Unity
     {
         /// <summary>Task that completes when Exoforge is connected and authenticated.</summary>
         public static Task Ready => ExoforgeSDK.Ready;
+
+        /// <summary>True once Exoforge has connected and authenticated.</summary>
+        public static bool IsReady => ExoforgeSDK.IsReady;
+
+        /// <summary>Event that fires when Exoforge is connected and ready to send actions.</summary>
+        public static event Action? OnReady
+        {
+            add => ExoforgeSDK.OnReady += value;
+            remove => ExoforgeSDK.OnReady -= value;
+        }
 
         /// <summary>Current cluster connection state.</summary>
         public static ExoforgeConnectionState State => ExoforgeSDK.State;

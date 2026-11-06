@@ -150,7 +150,14 @@ defmodule Exoforge.Std.Dashboard.Extensions do
               _ -> false
             end
 
-          %{name: to_string(k), type: type, optional: !!optional, input: input_override(v)}
+          doc =
+            case v do
+              m when is_map(m) -> Map.get(m, :doc) || Map.get(m, "doc") || Map.get(m, :description) || Map.get(m, "description")
+              l when is_list(l) -> Keyword.get(l, :doc) || Keyword.get(l, :description)
+              _ -> nil
+            end
+
+          %{name: to_string(k), type: type, optional: !!optional, input: input_override(v), doc: doc}
         end)
 
       is_list(params) and Keyword.keyword?(params) ->
@@ -171,7 +178,14 @@ defmodule Exoforge.Std.Dashboard.Extensions do
               _ -> false
             end
 
-          %{name: to_string(k), type: type, optional: !!optional, input: input_override(v)}
+          doc =
+            case v do
+              m when is_map(m) -> Map.get(m, :doc) || Map.get(m, "doc") || Map.get(m, :description) || Map.get(m, "description")
+              l when is_list(l) -> Keyword.get(l, :doc) || Keyword.get(l, :description)
+              _ -> nil
+            end
+
+          %{name: to_string(k), type: type, optional: !!optional, input: input_override(v), doc: doc}
         end)
 
       is_list(params) ->
@@ -193,22 +207,31 @@ defmodule Exoforge.Std.Dashboard.Extensions do
                 _ -> false
               end
 
-            %{name: to_string(k), type: type, optional: !!optional}
+            doc =
+              case v do
+                m when is_map(m) -> Map.get(m, :doc) || Map.get(m, "doc") || Map.get(m, :description) || Map.get(m, "description")
+                l when is_list(l) -> Keyword.get(l, :doc) || Keyword.get(l, :description)
+                _ -> nil
+              end
+
+            %{name: to_string(k), type: type, optional: !!optional, doc: doc}
 
           item when is_map(item) ->
             name = Map.get(item, :name) || Map.get(item, "name") || "param"
             type = Map.get(item, :type) || Map.get(item, "type") || :string
             optional = Map.get(item, :optional, false) || Map.get(item, "optional", false)
+            doc = Map.get(item, :doc) || Map.get(item, "doc") || Map.get(item, :description) || Map.get(item, "description")
 
             %{
               name: to_string(name),
               type: safe_type(type),
               optional: !!optional,
-              input: Map.get(item, :input) || Map.get(item, "input")
+              input: Map.get(item, :input) || Map.get(item, "input"),
+              doc: doc
             }
 
           other ->
-            %{name: to_string(other), type: :string, optional: false}
+            %{name: to_string(other), type: :string, optional: false, doc: nil}
         end)
 
       true ->

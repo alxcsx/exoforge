@@ -1501,11 +1501,53 @@ public static class ExoCodeGenerator
                     sb.AppendLine("    }");
                     sb.AppendLine();
 
+                    // Callback overload 1 (Unity-friendly)
+                    string callbackParams = $"{paramSignature}, Action<{returnType}> onComplete, Action<ExoActionException>? onError = null";
+                    string callArgs = string.Join(", ", assignments.Select(a => a.Item2));
+                    sb.AppendLine($"    /// <summary>{XmlDoc(act.Doc, $"Executes {act.Name} action with callbacks on the Unity main thread.")}</summary>");
+                    sb.AppendLine($"    public void {actPascal}({callbackParams})");
+                    sb.AppendLine("    {");
+                    sb.AppendLine($"        _ = {actPascal}Async({callArgs}).ContinueWith(t =>");
+                    sb.AppendLine("        {");
+                    sb.AppendLine("            if (t.IsFaulted)");
+                    sb.AppendLine("            {");
+                    sb.AppendLine("                var ex = t.Exception?.InnerException as ExoActionException ?? new ExoActionException(\"action_failed\", t.Exception?.InnerException?.Message ?? \"Action failed\");");
+                    sb.AppendLine("                _client.Dispatcher.Post(() => onError?.Invoke(ex));");
+                    sb.AppendLine("            }");
+                    sb.AppendLine("            else");
+                    sb.AppendLine("            {");
+                    sb.AppendLine("                var res = t.Result;");
+                    sb.AppendLine("                _client.Dispatcher.Post(() => onComplete?.Invoke(res));");
+                    sb.AppendLine("            }");
+                    sb.AppendLine("        });");
+                    sb.AppendLine("    }");
+                    sb.AppendLine();
+
                     // Overload 2: Strongly-typed Request DTO
                     sb.AppendLine($"    /// <summary>{XmlDoc(act.Doc, $"Executes {act.Name} action with a typed request DTO.")}</summary>");
                     sb.AppendLine($"    public Task<{returnType}> {actPascal}Async({svcPascal}{actPascal}Request request, CancellationToken cancellationToken = default)");
                     sb.AppendLine("    {");
                     sb.AppendLine($"        return _client.SendActionAsync<{returnType}>(\"{svc.Name}\", \"{act.Name}\", request, {transportPref}, cancellationToken: cancellationToken);");
+                    sb.AppendLine("    }");
+                    sb.AppendLine();
+
+                    // Callback overload 2: Strongly-typed Request DTO with callback
+                    sb.AppendLine($"    /// <summary>{XmlDoc(act.Doc, $"Executes {act.Name} action with a typed request DTO and callbacks.")}</summary>");
+                    sb.AppendLine($"    public void {actPascal}({svcPascal}{actPascal}Request request, Action<{returnType}> onComplete, Action<ExoActionException>? onError = null)");
+                    sb.AppendLine("    {");
+                    sb.AppendLine($"        _ = {actPascal}Async(request).ContinueWith(t =>");
+                    sb.AppendLine("        {");
+                    sb.AppendLine("            if (t.IsFaulted)");
+                    sb.AppendLine("            {");
+                    sb.AppendLine("                var ex = t.Exception?.InnerException as ExoActionException ?? new ExoActionException(\"action_failed\", t.Exception?.InnerException?.Message ?? \"Action failed\");");
+                    sb.AppendLine("                _client.Dispatcher.Post(() => onError?.Invoke(ex));");
+                    sb.AppendLine("            }");
+                    sb.AppendLine("            else");
+                    sb.AppendLine("            {");
+                    sb.AppendLine("                var res = t.Result;");
+                    sb.AppendLine("                _client.Dispatcher.Post(() => onComplete?.Invoke(res));");
+                    sb.AppendLine("            }");
+                    sb.AppendLine("        });");
                     sb.AppendLine("    }");
                     sb.AppendLine();
                 }
@@ -1516,6 +1558,25 @@ public static class ExoCodeGenerator
                     sb.AppendLine($"    public Task<{returnType}> {actPascal}Async(CancellationToken cancellationToken = default)");
                     sb.AppendLine("    {");
                     sb.AppendLine($"        return _client.SendActionAsync<{returnType}>(\"{svc.Name}\", \"{act.Name}\", null, {transportPref}, cancellationToken: cancellationToken);");
+                    sb.AppendLine("    }");
+                    sb.AppendLine();
+
+                    sb.AppendLine($"    /// <summary>{XmlDoc(act.Doc, $"Executes {act.Name} action with callbacks on the Unity main thread.")}</summary>");
+                    sb.AppendLine($"    public void {actPascal}(Action<{returnType}> onComplete, Action<ExoActionException>? onError = null)");
+                    sb.AppendLine("    {");
+                    sb.AppendLine($"        _ = {actPascal}Async().ContinueWith(t =>");
+                    sb.AppendLine("        {");
+                    sb.AppendLine("            if (t.IsFaulted)");
+                    sb.AppendLine("            {");
+                    sb.AppendLine("                var ex = t.Exception?.InnerException as ExoActionException ?? new ExoActionException(\"action_failed\", t.Exception?.InnerException?.Message ?? \"Action failed\");");
+                    sb.AppendLine("                _client.Dispatcher.Post(() => onError?.Invoke(ex));");
+                    sb.AppendLine("            }");
+                    sb.AppendLine("            else");
+                    sb.AppendLine("            {");
+                    sb.AppendLine("                var res = t.Result;");
+                    sb.AppendLine("                _client.Dispatcher.Post(() => onComplete?.Invoke(res));");
+                    sb.AppendLine("            }");
+                    sb.AppendLine("        });");
                     sb.AppendLine("    }");
                     sb.AppendLine();
                 }

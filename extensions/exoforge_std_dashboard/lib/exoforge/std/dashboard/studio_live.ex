@@ -128,6 +128,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
        settings_open: false,
        settings_tab: "project",
        settings_hooks: Exoforge.UIHookRegistry.list_hooks(:settings),
+       guide_subpage: "flow",
        inspecting_extension: nil,
        app_drawer_open: false,
        activity_events: initial_events,
@@ -578,6 +579,30 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     {:noreply, assign(socket, :grid_edit_mode, !socket.assigns.grid_edit_mode)}
   end
 
+  def handle_event("remove_overview_slot", %{"id" => slot_id}, socket) do
+    widgets = Exoforge.UIHookRegistry.list_hooks(:overview_widget)
+    current_ids = resolve_overview_slot_ids(widgets, socket.assigns.overview_grid_order)
+    new_order = List.delete(current_ids, slot_id)
+
+    Exoforge.Std.Dashboard.Preferences.put_overview_order(socket.assigns.player_id, new_order)
+    {:noreply,
+     socket
+     |> assign(:overview_grid_order, new_order)
+     |> show_toast(:info, "Removed #{slot_title(slot_id)} from overview grid.")}
+  end
+
+  def handle_event("add_overview_slot", %{"id" => slot_id}, socket) do
+    widgets = Exoforge.UIHookRegistry.list_hooks(:overview_widget)
+    current_ids = resolve_overview_slot_ids(widgets, socket.assigns.overview_grid_order)
+    new_order = if slot_id in current_ids, do: current_ids, else: current_ids ++ [slot_id]
+
+    Exoforge.Std.Dashboard.Preferences.put_overview_order(socket.assigns.player_id, new_order)
+    {:noreply,
+     socket
+     |> assign(:overview_grid_order, new_order)
+     |> show_toast(:info, "Added #{slot_title(slot_id)} to overview grid.")}
+  end
+
   def handle_event("close_settings", _params, socket) do
     {:noreply,
      socket
@@ -587,6 +612,17 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
   def handle_event("set_settings_tab", %{"tab" => tab}, socket) do
     {:noreply, assign(socket, :settings_tab, tab)}
+  end
+
+  def handle_event("open_guide_from_settings", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:settings_open, false)
+     |> push_patch(to: "/guide")}
+  end
+
+  def handle_event("set_guide_subpage", %{"subpage" => subpage}, socket) do
+    {:noreply, assign(socket, :guide_subpage, subpage)}
   end
 
   def handle_event("inspect_extension", %{"id" => id}, socket) do
@@ -1118,6 +1154,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   end
 
   @builtin_overview_slots [
+    "quickstart",
     "event_graph",
     "error_graph",
     "server_state",
@@ -1125,12 +1162,35 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     "extension_health"
   ]
 
+  defp slot_title("quickstart"), do: "Quickstart Guide (1×4)"
+  defp slot_title("event_graph"), do: "Event & Action Throughput (2×2)"
+  defp slot_title("error_graph"), do: "Error & Health Rate (2×1)"
+  defp slot_title("server_state"), do: "Cluster State (1×1)"
+  defp slot_title("download_sdk"), do: "Unity SDK Distribution (1×1)"
+  defp slot_title("extension_health"), do: "Extension Health & Telemetry (2×1)"
+  defp slot_title("widget:" <> id), do: "Widget: #{id}"
+  defp slot_title(other), do: to_string(other)
+
   defp resolve_overview_slot_ids(overview_widgets, saved_order) do
     widget_ids = Enum.map(overview_widgets, fn w -> "widget:#{w.id}" end)
-    default_ids = @builtin_overview_slots ++ widget_ids
-    kept = Enum.filter(saved_order || [], &(&1 in default_ids))
-    missing = Enum.reject(default_ids, &(&1 in kept))
-    kept ++ missing
+    all_possible = @builtin_overview_slots ++ widget_ids
+
+    case saved_order do
+      nil ->
+        all_possible
+
+      [] ->
+        all_possible
+
+      list when is_list(list) ->
+        Enum.filter(list, &(&1 in all_possible))
+    end
+  end
+
+  defp available_unadded_slots(overview_widgets, active_slot_ids) do
+    widget_ids = Enum.map(overview_widgets, fn w -> "widget:#{w.id}" end)
+    all_possible = @builtin_overview_slots ++ widget_ids
+    Enum.reject(all_possible, &(&1 in active_slot_ids))
   end
 
   defp fetch_telemetry_summary(overview, _activity_events) do
@@ -1358,6 +1418,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
     overview_widgets = Exoforge.UIHookRegistry.list_hooks(:overview_widget)
     overview_slot_ids = resolve_overview_slot_ids(overview_widgets, assigns.overview_grid_order)
+    unadded_slots = available_unadded_slots(overview_widgets, overview_slot_ids)
     widgets_by_slot = Map.new(overview_widgets, fn w -> {"widget:#{w.id}", w} end)
 
     assigns =
@@ -1365,6 +1426,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       |> assign(:total_actions, total_actions)
       |> assign(:overview_widgets, overview_widgets)
       |> assign(:overview_slot_ids, overview_slot_ids)
+      |> assign(:unadded_slots, unadded_slots)
       |> assign(:widgets_by_slot, widgets_by_slot)
 
     ~H"""
@@ -1418,20 +1480,6 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
               <span class="text-[9px] px-1 py-0.2 rounded-full bg-primary-100 text-primary-800 font-black">
                 <%= @overview.plugins_count %>
               </span>
-            </button>
-
-            <!-- 3. Quickstart & API Guide Tab -->
-            <button
-              phx-click="switch_tab"
-              phx-value-tab="guide"
-              aria-label="Quickstart Guide"
-              title="Quickstart Guide & API Reference"
-              class={"px-2 py-1 text-xs rounded-lg transition-all font-bold flex items-center justify-center gap-1.5 flex-shrink-0 #{if @current_tab == :guide, do: "bg-white text-primary-700 shadow-sm", else: "text-gray-600 hover:text-gray-900"}"}
-            >
-              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-              </svg>
-              <span class="hidden sm:inline">Guide</span>
             </button>
 
             <!-- Separator between main tabs and pinned items -->
@@ -1610,15 +1658,31 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                 <span>Project Overview</span>
               </h2>
             </div>
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 flex-wrap">
               <%= if @grid_edit_mode do %>
+                <%= if @unadded_slots != [] do %>
+                  <div class="flex items-center gap-1.5 flex-wrap">
+                    <%= for missing_id <- @unadded_slots do %>
+                      <button
+                        type="button"
+                        phx-click="add_overview_slot"
+                        phx-value-id={missing_id}
+                        class="px-2.5 py-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl transition-colors shadow-xs flex items-center gap-1"
+                        title={"Add #{slot_title(missing_id)} back to grid"}
+                      >
+                        <span>+ Add</span>
+                        <span><%= slot_title(missing_id) %></span>
+                      </button>
+                    <% end %>
+                  </div>
+                <% end %>
                 <%= if @overview_grid_order != [] do %>
                   <button
                     type="button"
                     phx-click="reset_overview_grid"
                     class="px-2.5 py-1.5 text-[11px] font-bold text-gray-600 hover:text-red-600 bg-white hover:bg-red-50 border border-gray-200 rounded-xl transition-colors shadow-xs"
                   >
-                    ↺ Reset Grid Order
+                    ↺ Reset Grid
                   </button>
                 <% end %>
                 <button
@@ -1640,31 +1704,78 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
             </div>
           </div>
 
-          <!-- Welcome Quickstart Banner -->
-          <div class="bg-gradient-to-r from-primary-950 via-primary-900 to-indigo-950 rounded-2xl p-5 text-white shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 border border-primary-500/30">
-            <div class="space-y-1">
-              <div class="flex items-center gap-2">
-                <span class="text-[10px] px-2 py-0.5 rounded-full bg-primary-500/30 text-primary-200 border border-primary-400/30 font-bold uppercase tracking-wider">Quickstart Flow</span>
-                <span class="font-bold text-sm">New to Exoforge? Complete Developer Guide &amp; API Reference</span>
-              </div>
-              <p class="text-xs text-primary-200/90">
-                Learn the 5-step flow: Connect &amp; Auth ➔ Scaffold Extension ➔ Hot-Deploy ➔ Sync Stubs ➔ Call from Unity.
-              </p>
-            </div>
-            <button
-              type="button"
-              phx-click="switch_tab"
-              phx-value-tab="guide"
-              class="px-4 py-2 bg-white text-primary-900 hover:bg-primary-50 font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5 whitespace-nowrap self-start md:self-auto shrink-0"
-            >
-              <span>📖 Open Quickstart Guide</span>
-              <span>→</span>
-            </button>
-          </div>
-
           <div id="overview-bento-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 auto-rows-min [grid-auto-flow:dense]">
             <%= for {slot_id, idx} <- Enum.with_index(@overview_slot_ids) do %>
               <%= case slot_id do %>
+                <% "quickstart" -> %>
+                  <!-- 1x4 QUICKSTART GUIDE BANNER (GRID ELEMENT) -->
+                  <div
+                    id="slot-quickstart"
+                    data-slot-id="quickstart"
+                    data-slot-span="1x4"
+                    class={"col-span-1 md:col-span-2 lg:col-span-4 bg-gradient-to-r from-primary-950 via-primary-900 to-indigo-950 rounded-2xl p-6 text-white shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 border #{if @grid_edit_mode, do: "border-primary-400 ring-2 ring-primary-500/20", else: "border-primary-500/30"}"}
+                  >
+                    <div class="space-y-1.5 flex-1 min-w-0">
+                      <div class="flex items-center gap-2">
+                        <span class="text-[10px] px-2 py-0.5 rounded-full bg-primary-500/30 text-primary-200 border border-primary-400/30 font-bold uppercase tracking-wider">Quickstart Flow</span>
+                        <span class="font-bold text-sm">New to Exoforge? Complete Developer Guide &amp; API Reference</span>
+                        <%= if @grid_edit_mode do %>
+                          <span class="px-2 py-0.5 text-[10px] font-mono font-bold bg-white/20 text-white rounded-md border border-white/20">1×4</span>
+                        <% end %>
+                      </div>
+                      <p class="text-xs text-primary-200/90 leading-relaxed max-w-2xl">
+                        Master the complete development flow: Connect &amp; Auth ➔ Scaffold Extension ➔ Hot-Deploy ➔ Sync Stubs ➔ Call from Unity.
+                      </p>
+                    </div>
+
+                    <div class="flex items-center gap-2 self-start md:self-auto shrink-0">
+                      <%= if @grid_edit_mode do %>
+                        <div class="flex items-center gap-1 bg-white/10 p-1 rounded-xl border border-white/10 mr-2">
+                          <button
+                            type="button"
+                            phx-click="move_overview_slot"
+                            phx-value-id="quickstart"
+                            phx-value-dir="prev"
+                            disabled={idx == 0}
+                            title="Move slot left"
+                            class="w-6 h-6 rounded-lg border border-white/20 text-white hover:bg-white/20 disabled:opacity-30 flex items-center justify-center text-xs"
+                          >
+                            &larr;
+                          </button>
+                          <button
+                            type="button"
+                            phx-click="move_overview_slot"
+                            phx-value-id="quickstart"
+                            phx-value-dir="next"
+                            disabled={idx == length(@overview_slot_ids) - 1}
+                            title="Move slot right"
+                            class="w-6 h-6 rounded-lg border border-white/20 text-white hover:bg-white/20 disabled:opacity-30 flex items-center justify-center text-xs"
+                          >
+                            &rarr;
+                          </button>
+                          <button
+                            type="button"
+                            phx-click="remove_overview_slot"
+                            phx-value-id="quickstart"
+                            title="Remove Quickstart from grid"
+                            class="w-6 h-6 rounded-lg border border-red-400 text-red-200 hover:text-white hover:bg-red-600 flex items-center justify-center text-xs font-bold transition-colors"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      <% end %>
+
+                      <button
+                        type="button"
+                        phx-click="switch_tab"
+                        phx-value-tab="guide"
+                        class="px-4 py-2 bg-white text-primary-900 hover:bg-primary-50 font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5 whitespace-nowrap"
+                      >
+                        <span>📖 Open Quickstart Guide</span>
+                        <span>→</span>
+                      </button>
+                    </div>
+                  </div>
                 <% "event_graph" -> %>
                   <!-- 2x2 EVENT & ACTION GRAPH -->
                   <div
@@ -1718,6 +1829,15 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                               class="w-6 h-6 rounded-lg border border-gray-200 text-gray-500 hover:text-gray-900 hover:bg-gray-100 disabled:opacity-30 flex items-center justify-center text-xs"
                             >
                               &rarr;
+                            </button>
+                            <button
+                              type="button"
+                              phx-click="remove_overview_slot"
+                              phx-value-id="event_graph"
+                              title="Remove card from grid"
+                              class="w-6 h-6 rounded-lg border border-red-200 text-red-500 hover:text-white hover:bg-red-600 flex items-center justify-center text-xs font-bold transition-colors"
+                            >
+                              ✕
                             </button>
                           </div>
                         <% end %>
@@ -1877,6 +1997,15 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                             >
                               &rarr;
                             </button>
+                            <button
+                              type="button"
+                              phx-click="remove_overview_slot"
+                              phx-value-id="error_graph"
+                              title="Remove card from grid"
+                              class="w-6 h-6 rounded-lg border border-red-200 text-red-500 hover:text-white hover:bg-red-600 flex items-center justify-center text-xs font-bold transition-colors"
+                            >
+                              ✕
+                            </button>
                           </div>
                         <% end %>
                       </div>
@@ -2010,6 +2139,15 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                           >
                             &rarr;
                           </button>
+                          <button
+                            type="button"
+                            phx-click="remove_overview_slot"
+                            phx-value-id="server_state"
+                            title="Remove card from grid"
+                            class="w-6 h-6 rounded-lg border border-red-200 text-red-500 hover:text-white hover:bg-red-600 flex items-center justify-center text-xs font-bold transition-colors"
+                          >
+                            ✕
+                          </button>
                         </div>
                       <% end %>
                     </div>
@@ -2080,6 +2218,15 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                               class="w-6 h-6 rounded-lg border border-gray-200 text-gray-500 hover:text-gray-900 hover:bg-gray-100 disabled:opacity-30 flex items-center justify-center text-xs"
                             >
                               &rarr;
+                            </button>
+                            <button
+                              type="button"
+                              phx-click="remove_overview_slot"
+                              phx-value-id="extension_health"
+                              title="Remove card from grid"
+                              class="w-6 h-6 rounded-lg border border-red-200 text-red-500 hover:text-white hover:bg-red-600 flex items-center justify-center text-xs font-bold transition-colors"
+                            >
+                              ✕
                             </button>
                           </div>
                         <% end %>
@@ -2165,6 +2312,15 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                           >
                             &rarr;
                           </button>
+                          <button
+                            type="button"
+                            phx-click="remove_overview_slot"
+                            phx-value-id="download_sdk"
+                            title="Remove card from grid"
+                            class="w-6 h-6 rounded-lg border border-red-300 text-red-200 hover:text-white hover:bg-red-600 flex items-center justify-center text-xs font-bold transition-colors"
+                          >
+                            ✕
+                          </button>
                         </div>
                       <% end %>
                     </div>
@@ -2236,6 +2392,15 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                             >
                               &rarr;
                             </button>
+                            <button
+                              type="button"
+                              phx-click="remove_overview_slot"
+                              phx-value-id={slot_id}
+                              title="Remove card from grid"
+                              class="w-6 h-6 rounded-lg border border-red-200 text-red-500 hover:text-white hover:bg-red-600 flex items-center justify-center text-xs font-bold transition-colors"
+                            >
+                              ✕
+                            </button>
                           <% end %>
                         </div>
                       </div>
@@ -2270,6 +2435,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
             extensions={@overview.extensions}
             project_name={@project_name}
             studio_name={@studio_name}
+            subpage={@guide_subpage}
           />
         <% end %>
 

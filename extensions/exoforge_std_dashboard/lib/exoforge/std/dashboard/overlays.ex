@@ -566,10 +566,21 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             </div>
           </div>
 
-          <div class="pt-3 border-t border-gray-200/60 px-2 text-[10px] text-gray-400 space-y-0.5">
+          <div class="pt-3 border-t border-gray-200/60 px-2 text-[10px] text-gray-400 space-y-1">
             <div class="truncate"><span>Node: </span><span class="font-mono text-gray-600"><%= @node_name %></span></div>
             <div class="truncate" title={@overview[:commit_hash]}>
               <span>Cluster: </span><span class="font-mono text-gray-600">v<%= @overview[:version] || "1.0.0" %> (<%= String.slice(to_string(@overview[:commit_hash] || "dev"), 0, 7) %>)</span>
+            </div>
+            <div class="pt-1.5">
+              <button
+                type="button"
+                phx-click="open_guide_from_settings"
+                class="w-full px-2.5 py-1.5 rounded-xl bg-white hover:bg-primary-50 text-gray-700 hover:text-primary-700 font-bold flex items-center justify-center gap-1.5 text-xs transition-colors border border-gray-200/80 shadow-2xs"
+                title="Developer Quickstart & API Guide"
+              >
+                <span>📖</span>
+                <span>Developer Guide</span>
+              </button>
             </div>
           </div>
         </div>

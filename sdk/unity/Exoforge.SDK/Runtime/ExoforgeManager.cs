@@ -115,6 +115,9 @@ namespace Exoforge.Client.Unity
         /// <summary>Event that fires on client connection state transitions.</summary>
         public static event Action<ExoforgeConnectionState>? OnStateChanged;
 
+        /// <summary>Event that fires when Exoforge is connected and ready to send actions.</summary>
+        public static event Action? OnReady;
+
         private TaskCompletionSource<bool> _readyTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         /// <summary>Task that completes when Exoforge has connected and authenticated.</summary>
@@ -467,17 +470,20 @@ namespace Exoforge.Client.Unity
                         Debug.Log($"[Exoforge] Connected and authenticated as {auth.PlayerId} ({cfg?.Environment ?? "?"})");
                         OnStateChanged?.Invoke(ExoforgeConnectionState.Authenticated);
                         _readyTcs.TrySetResult(true);
+                        OnReady?.Invoke();
                     }
                     else
                     {
                         Debug.LogWarning($"[Exoforge] Connected, but authentication failed: {auth.Error}");
                         _readyTcs.TrySetResult(true);
+                        OnReady?.Invoke();
                     }
                 }
                 else
                 {
                     Debug.Log($"[Exoforge] Connected to {targetUrl} (unauthenticated)");
                     _readyTcs.TrySetResult(true);
+                    OnReady?.Invoke();
                 }
 
                 _reconnectAttempt = 0;

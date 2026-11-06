@@ -965,6 +965,7 @@ defmodule Exoforge.DashboardLiveViewTest do
       refute html =~ "Cluster Overview"
 
       # Verify 4-slot grid elements and dynamic widget
+      assert html =~ ~s(id="slot-quickstart")
       assert html =~ ~s(id="slot-event_graph")
       assert html =~ ~s(id="slot-error_graph")
       assert html =~ ~s(id="slot-server_state")
@@ -980,7 +981,7 @@ defmodule Exoforge.DashboardLiveViewTest do
 
       # When not in edit mode, size badges (2×2, 1×1) and movement arrows are hidden
       assert html =~ "Edit Grid Order"
-      refute html =~ "Reset Grid Order"
+      refute html =~ "Reset Grid"
       refute html =~ "2×2"
 
       # Multi-line time series SVG graphs (X axis time, Y axis count)
@@ -1010,11 +1011,26 @@ defmodule Exoforge.DashboardLiveViewTest do
       assert err_pos < ev_pos
 
       saved_order = Exoforge.Std.Dashboard.Preferences.overview_order(admin_id)
-      assert Enum.at(saved_order, 0) == "error_graph"
-      assert Enum.at(saved_order, 1) == "event_graph"
+      assert Enum.at(saved_order, 0) == "quickstart"
+      assert Enum.at(saved_order, 1) == "error_graph"
+      assert Enum.at(saved_order, 2) == "event_graph"
+
+      # Test removing a slot and re-adding it
+      removed_html =
+        render_click(view, "remove_overview_slot", %{"id" => "quickstart"})
+      refute removed_html =~ ~s(id="slot-quickstart")
+
+      order_after_remove = Exoforge.Std.Dashboard.Preferences.overview_order(admin_id)
+      refute "quickstart" in order_after_remove
+
+      added_html =
+        render_click(view, "add_overview_slot", %{"id" => "quickstart"})
+      assert added_html =~ ~s(id="slot-quickstart")
+      order_after_add = Exoforge.Std.Dashboard.Preferences.overview_order(admin_id)
+      assert "quickstart" in order_after_add
 
       # Reset button is now visible in edit mode because order is modified
-      assert reordered_html =~ "Reset Grid Order"
+      assert reordered_html =~ "Reset Grid"
 
       # Open SDK Download Modal from Overview tab
       sdk_html = render_click(view, "open_sdk_modal", %{})
@@ -1138,6 +1154,58 @@ defmodule Exoforge.DashboardLiveViewTest do
       # Verify Application env sync
       assert Exoforge.Metering.project_name() == "Cyber Arena 2099"
       assert Exoforge.Metering.studio_name() == "RetroForge Labs"
+    end
+
+    test "developer guide button in settings modal navigates to guide tab and supports attribute subpages" do
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{
+          "admin_player_id" => "admin",
+          "admin_scopes" => ["admin"]
+        })
+
+      {:ok, view, html} = live(conn, "/")
+
+      # Verify fixed top nav bar does NOT have guide button
+      [_, header_html, _] = String.split(html, ~r{</?header[^>]*>}, parts: 3)
+      refute header_html =~ ~s(phx-value-tab="guide")
+
+      # Open settings modal
+      settings_html = render_click(view, "open_settings", %{})
+      assert settings_html =~ "Developer Guide"
+      assert settings_html =~ "open_guide_from_settings"
+
+      # Click Developer Guide button in settings
+      _ = render_click(view, "open_guide_from_settings", %{})
+
+      # Now on Guide screen: verify default Quickstart Flow
+      guide_html = render(view)
+      assert guide_html =~ "From Zero to Live Online Multiplayer Features"
+      assert guide_html =~ "Tree-Shaking &amp; Native Compilation Architecture"
+
+      # Switch to [ExoExtension] subpage
+      ext_html = render_click(view, "set_guide_subpage", %{"subpage" => "exo_extension"})
+      assert ext_html =~ "[ExoExtension]"
+      assert ext_html =~ "OTP Supervision"
+      assert ext_html =~ "inventory_service"
+
+      # Switch to [ExoAction] subpage
+      act_html = render_click(view, "set_guide_subpage", %{"subpage" => "exo_action"})
+      assert act_html =~ "[ExoAction]"
+      assert act_html =~ "ExoActionException"
+      assert act_html =~ "matchmaker"
+
+      # Switch to [ExoEvent] subpage
+      evt_html = render_click(view, "set_guide_subpage", %{"subpage" => "exo_event"})
+      assert evt_html =~ "[ExoEvent]"
+      assert evt_html =~ "player.leveled_up"
+      assert evt_html =~ "ExoDispatcher"
+
+      # Switch to [ExoResource] subpage
+      res_html = render_click(view, "set_guide_subpage", %{"subpage" => "exo_resource"})
+      assert res_html =~ "[ExoResource]"
+      assert res_html =~ "Automatic Table Name Inference"
+      assert res_html =~ "player_profiles"
     end
   end
 end
