@@ -25,6 +25,14 @@ public class FrameLoopPlugin
         HostResult = HostBridge.DbGet("t", "k");
         return HostResult ?? "null";
     }
+
+    [ExoAction("fail_with_action_exception", Mode = ActionMode.Sync)]
+    public void FailWithActionException() =>
+        throw new ExoActionException("insufficient_funds", "You need 10 coins");
+
+    [ExoAction("fail_with_invalid_operation", Mode = ActionMode.Sync)]
+    public void FailWithInvalidOperation() =>
+        throw new System.InvalidOperationException("Bad state reached");
 }
 
 /// <summary>
@@ -75,5 +83,39 @@ public class FrameLoopTests
 
         Assert.Equal(2, plugin.Dispatched);
         Assert.Equal("{\"v\":1}", plugin.HostResult);
+    }
+
+    [Fact]
+    public void An_action_throwing_ExoActionException_returns_structured_code_and_message()
+    {
+        var plugin = new FrameLoopPlugin();
+        var output = new MemoryStream();
+        var input = new StringReader("{\"type\":\"action\",\"id\":42,\"action\":\"fail_with_action_exception\",\"payload\":{}}\n");
+
+        PluginHost.RunInstance(plugin, input, output, null);
+
+        string written = System.Text.Encoding.UTF8.GetString(output.ToArray());
+        Assert.Contains("\"type\":\"action_result\"", written);
+        Assert.Contains("\"id\":42", written);
+        Assert.Contains("\"status\":\"error\"", written);
+        Assert.Contains("\"code\":\"insufficient_funds\"", written);
+        Assert.Contains("\"message\":\"You need 10 coins\"", written);
+    }
+
+    [Fact]
+    public void An_action_throwing_standard_exception_is_wrapped_into_normalized_code_and_message()
+    {
+        var plugin = new FrameLoopPlugin();
+        var output = new MemoryStream();
+        var input = new StringReader("{\"type\":\"action\",\"id\":43,\"action\":\"fail_with_invalid_operation\",\"payload\":{}}\n");
+
+        PluginHost.RunInstance(plugin, input, output, null);
+
+        string written = System.Text.Encoding.UTF8.GetString(output.ToArray());
+        Assert.Contains("\"type\":\"action_result\"", written);
+        Assert.Contains("\"id\":43", written);
+        Assert.Contains("\"status\":\"error\"", written);
+        Assert.Contains("\"code\":\"invalid_operation\"", written);
+        Assert.Contains("\"message\":\"Bad state reached\"", written);
     }
 }

@@ -195,12 +195,11 @@ defmodule Exoforge.Std.Ws.SocketHandler do
         )
 
       {:error, {code, message}} when (is_atom(code) or is_binary(code)) and is_binary(message) ->
-        Logger.warning("[WS:Action] #{service}.#{action} by #{auth.player_id} -> error: #{code}: #{message} (#{latency_us}µs)")
+        Logger.warning("[WS] Authentication failed: #{code}: #{message}")
 
         reply(
           %{
-            type: @frame_action_result,
-            id: req_id,
+            type: @frame_auth_result,
             status: @status_error,
             error: %{
               code: to_string(code),

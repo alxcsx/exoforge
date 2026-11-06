@@ -43,6 +43,32 @@ public class ProtocolAndDispatcherTests
     }
 
     [Fact]
+    public void CanDeserializeActionResult_WithErrorObject()
+    {
+        string json = "{\"type\":\"action_result\",\"id\":\"req_2\",\"status\":\"error\",\"error\":{\"code\":\"insufficient_funds\",\"message\":\"Not enough coins\"}}";
+        var result = JsonSerializer.Deserialize<ExoActionResult>(json);
+
+        Assert.NotNull(result);
+        Assert.False(result.IsSuccess);
+        Assert.NotNull(result.Error);
+        Assert.Equal("insufficient_funds", result.Error.Code);
+        Assert.Equal("Not enough coins", result.Error.Message);
+    }
+
+    [Fact]
+    public void CanDeserializeActionResult_WithStringError()
+    {
+        string json = "{\"type\":\"action_result\",\"id\":\"req_3\",\"status\":\"error\",\"error\":\"Something unexpected went wrong\"}";
+        var result = JsonSerializer.Deserialize<ExoActionResult>(json);
+
+        Assert.NotNull(result);
+        Assert.False(result.IsSuccess);
+        Assert.NotNull(result.Error);
+        Assert.Equal("internal_error", result.Error.Code);
+        Assert.Equal("Something unexpected went wrong", result.Error.Message);
+    }
+
+    [Fact]
     public void CanDeserializeEventFrame()
     {
         string json = "{\"type\":\"event\",\"event\":\"value_changed\",\"topic\":\"sample:events\",\"payload\":{\"counter_id\":2,\"new_value\":25}}";

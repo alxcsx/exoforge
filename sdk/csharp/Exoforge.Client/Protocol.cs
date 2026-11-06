@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -47,6 +48,7 @@ public class ExoActionResult : ExoMessage
     public bool IsSuccess => Status == "ok";
 }
 
+[JsonConverter(typeof(ExoErrorDetailsConverter))]
 public class ExoErrorDetails
 {
     [JsonPropertyName("code")]
@@ -54,6 +56,66 @@ public class ExoErrorDetails
 
     [JsonPropertyName("message")]
     public string Message { get; set; } = string.Empty;
+}
+
+public sealed class ExoErrorDetailsConverter : JsonConverter<ExoErrorDetails>
+{
+    public override ExoErrorDetails? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.Null)
+        {
+            return null;
+        }
+
+        if (reader.TokenType == JsonTokenType.String)
+        {
+            return new ExoErrorDetails
+            {
+                Code = "internal_error",
+                Message = reader.GetString() ?? string.Empty
+            };
+        }
+
+        if (reader.TokenType == JsonTokenType.StartObject)
+        {
+            string code = "internal_error";
+            string message = string.Empty;
+
+            while (reader.Read())
+            {
+                if (reader.TokenType == JsonTokenType.EndObject)
+                {
+                    break;
+                }
+
+                if (reader.TokenType == JsonTokenType.PropertyName)
+                {
+                    string prop = reader.GetString() ?? string.Empty;
+                    reader.Read();
+                    if (string.Equals(prop, "code", StringComparison.OrdinalIgnoreCase))
+                    {
+                        code = reader.GetString() ?? code;
+                    }
+                    else if (string.Equals(prop, "message", StringComparison.OrdinalIgnoreCase))
+                    {
+                        message = reader.GetString() ?? message;
+                    }
+                }
+            }
+
+            return new ExoErrorDetails { Code = code, Message = message };
+        }
+
+        return new ExoErrorDetails { Code = "internal_error", Message = "Unknown error format" };
+    }
+
+    public override void Write(Utf8JsonWriter writer, ExoErrorDetails value, JsonSerializerOptions options)
+    {
+        writer.WriteStartObject();
+        writer.WriteString("code", value.Code);
+        writer.WriteString("message", value.Message);
+        writer.WriteEndObject();
+    }
 }
 
 public class ExoSubscriptionRequest : ExoMessage

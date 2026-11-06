@@ -472,7 +472,15 @@ public static class PluginHost
             }
             else
             {
-                Write($"{{\"type\":\"action_result\",\"id\":{id},\"status\":\"error\",\"error\":{JsonEncode(cause.Message)}}}");
+                string typeName = cause.GetType().Name;
+                if (typeName.EndsWith("Exception", StringComparison.Ordinal) && typeName.Length > 9)
+                {
+                    typeName = typeName.Substring(0, typeName.Length - 9);
+                }
+                string code = ExoNaming.ToSnakeCase(typeName);
+                if (string.IsNullOrEmpty(code)) code = "internal_error";
+
+                Write($"{{\"type\":\"action_result\",\"id\":{id},\"status\":\"error\",\"error\":{{\"code\":{JsonEncode(code)},\"message\":{JsonEncode(cause.Message)}}}}}");
             }
         }
     }
@@ -481,7 +489,18 @@ public static class PluginHost
     /// The exception a plugin actually threw. Invoking through reflection wraps it, and the wrapper
     /// says nothing useful about the plugin.
     /// </summary>
-    private static Exception Cause(Exception ex) => (ex as TargetInvocationException)?.InnerException ?? ex;
+    private static Exception Cause(Exception ex)
+    {
+        while (ex is TargetInvocationException tie && tie.InnerException != null)
+        {
+            ex = tie.InnerException;
+        }
+        if (ex is AggregateException agg && agg.InnerExceptions.Count == 1)
+        {
+            ex = agg.InnerExceptions[0];
+        }
+        return ex;
+    }
 
     private static object?[] BindArguments(ParameterInfo[] parameters, JsonElement payload)
     {
