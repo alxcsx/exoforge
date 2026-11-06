@@ -46,6 +46,10 @@ defmodule Exoforge.DashboardLiveViewTest do
       start_supervised!(Endpoint)
     end
 
+    unless Process.whereis(Exoforge.Std.Dashboard.RecentEvents) do
+      start_supervised!(Exoforge.Std.Dashboard.RecentEvents)
+    end
+
     Exoforge.Std.Dashboard.RecentEvents.init_table()
     Exoforge.Std.Dashboard.RecentEvents.clear()
 

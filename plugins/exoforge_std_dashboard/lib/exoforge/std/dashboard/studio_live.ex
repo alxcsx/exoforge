@@ -47,13 +47,9 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     if connected?(socket) do
       Logger.info("[StudioLive] Connected session for #{player_id}")
 
-      # Subscribes to cluster global events and studio-specific events so real-time actions
-      # and plugin events flow into the Studio timeline and telemetry graphs.
+      # Subscribes to cluster events via RecentEvents PubSub broadcast
       try do
         Phoenix.PubSub.subscribe(Exoforge.Std.Dashboard.PubSub, "studio_events")
-        EventDispatcher.subscribe(:all, topic: :global)
-        EventDispatcher.subscribe(:all, topic: "studio")
-        EventDispatcher.subscribe(:all, topic: "system")
         :timer.send_interval(5000, self(), :refresh_telemetry)
       rescue
         _ -> :ok
@@ -136,6 +132,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
        app_drawer_open: false,
        activity_events: initial_events,
        filtered_activity_events: initial_events,
+       highlight_event_id: nil,
        quick_toast: nil,
        action_catalog: action_catalog,
        selected_action_service: default_service_name,
@@ -851,52 +848,26 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
           socket
         end
 
+      # Highlight the latest event while the screen is active
+      Process.send_after(self(), :clear_event_highlight, 2_000)
+
       {:noreply,
        assign(socket,
          activity_events: new_events,
          filtered_activity_events: filtered,
-         telemetry: telemetry
+         telemetry: telemetry,
+         highlight_event_id: ev_item[:id]
        )}
     end
   end
 
   def handle_info({:exo_event, event_key, payload, context}, socket) do
-    if duplicate_event?(socket.assigns.activity_events, event_key, payload, nil) do
-      {:noreply, socket}
-    else
-      ev_item = RecentEvents.record(event_key, payload, context)
+    _ = RecentEvents.record(event_key, payload, context)
+    {:noreply, socket}
+  end
 
-      new_events =
-        if socket.assigns.events_paused do
-          socket.assigns.activity_events
-        else
-          [ev_item | Enum.take(socket.assigns.activity_events, 99)]
-        end
-
-      filtered = filter_activity_events(new_events, socket.assigns.event_filter_topic)
-      telemetry = fetch_telemetry_summary(socket.assigns.overview, new_events)
-
-      event_str = to_string(event_key)
-      meta = (is_map(payload) && (payload[:metadata] || payload["metadata"])) || nil
-
-      socket =
-        if event_str in ["project.metadata_updated", "system.project_metadata_updated"] and is_map(meta) do
-          assign(socket,
-            project_name: meta["project_name"] || meta[:project_name] || socket.assigns.project_name,
-            studio_name: meta["studio_name"] || meta[:studio_name] || socket.assigns.studio_name,
-            project_metadata: meta
-          )
-        else
-          socket
-        end
-
-      {:noreply,
-       assign(socket,
-         activity_events: new_events,
-         filtered_activity_events: filtered,
-         telemetry: telemetry
-       )}
-    end
+  def handle_info(:clear_event_highlight, socket) do
+    {:noreply, assign(socket, :highlight_event_id, nil)}
   end
 
   def handle_info(:refresh_telemetry, socket) do
@@ -914,6 +885,11 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   end
 
   # ---- PRIVATE HELPERS ----
+
+  defp color_for_name(name, palette) do
+    idx = :erlang.phash2(to_string(name), length(palette))
+    Enum.at(palette, idx)
+  end
 
   defp duplicate_event?(events, event_key, payload, id) do
     key_str = to_string(event_key)
@@ -1146,7 +1122,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     kept ++ missing
   end
 
-  defp fetch_telemetry_summary(overview, activity_events) do
+  defp fetch_telemetry_summary(overview, _activity_events) do
     snapshot =
       try do
         Exoforge.Metering.snapshot()
@@ -1192,37 +1168,38 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       end)
 
     total_invocations =
-      Enum.sum(Enum.map(metered_actions, &Map.get(&1, :invocations, 0))) + length(activity_events)
+      Enum.sum(Enum.map(metered_actions, &Map.get(&1, :invocations, 0)))
 
     total_errors =
       Enum.sum(Enum.map(metered_actions, &Map.get(&1, :errors, 0))) + length(faulty_extensions)
 
     online_count = max(overview.plugins_count - length(faulty_extensions), 0)
 
-    # Time-series multi-line layout (time on X, count on Y, distinct line per action/event ID)
+    # Time-series multi-line layout (time on X, count on Y, distinct line per action ID)
     x_coords = [40, 128, 216, 304, 392, 480]
     time_labels = ["-25m", "-20m", "-15m", "-10m", "-5m", "Now"]
-    action_colors = ["#8b5cf6", "#3b82f6", "#10b981", "#f59e0b", "#ec4899", "#06b6d4"]
+    palette = [
+      "#8b5cf6",
+      "#3b82f6",
+      "#10b981",
+      "#f59e0b",
+      "#ec4899",
+      "#06b6d4",
+      "#6366f1",
+      "#14b8a6",
+      "#f97316",
+      "#a855f7"
+    ]
     error_colors = ["#ef4444", "#f97316", "#eab308", "#ec4899", "#f43f5e"]
 
-    event_frequencies =
-      activity_events
-      |> Enum.frequencies_by(fn ev -> to_string(Map.get(ev, :event, "event")) end)
-
-    action_map =
-      Map.new(metered_actions, fn act ->
-        {"#{act.service}.#{act.action}", {Map.get(act, :invocations, 0), Map.get(act, :errors, 0)}}
+    # Graph strictly represents actions (events excluded)
+    actions_to_plot =
+      metered_actions
+      |> Enum.map(fn act ->
+        {"#{act.service}.#{act.action}", Map.get(act, :invocations, 0), Map.get(act, :errors, 0)}
       end)
-
-    combined_entries =
-      Enum.reduce(event_frequencies, action_map, fn {ev_name, count}, acc ->
-        Map.update(acc, ev_name, {count, 0}, fn {inv, err} -> {inv + count, err} end)
-      end)
-      |> Enum.map(fn {key, {inv, err}} -> {key, inv, err} end)
       |> Enum.sort_by(fn {_id, inv, _err} -> -inv end)
       |> Enum.take(5)
-
-    actions_to_plot = combined_entries
 
     action_max_val =
       if actions_to_plot != [] do
@@ -1236,7 +1213,8 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         actions_to_plot
         |> Enum.with_index()
         |> Enum.map(fn {{act_id, inv, _err}, idx} ->
-          color = Enum.at(action_colors, rem(idx, length(action_colors)))
+          # Colouring based on the action name (deterministic hash), not on the count
+          color = color_for_name(act_id, palette)
           factor = 1.0 - idx * 0.12
 
           counts = [
@@ -1287,8 +1265,8 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     error_series =
       actions_to_plot
       |> Enum.with_index()
-      |> Enum.map(fn {{act_id, _inv, err}, idx} ->
-        color = Enum.at(error_colors, rem(idx, length(error_colors)))
+      |> Enum.map(fn {{act_id, _inv, err}, _idx} ->
+        color = color_for_name(act_id, error_colors)
 
         counts =
           if err > 0 do
@@ -1323,10 +1301,9 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       end)
 
     action_invocations =
-      metered_actions
-      |> Enum.map(fn act -> {"#{act.service}.#{act.action}", Map.get(act, :invocations, 0)} end)
-      |> Map.new()
-      |> Map.merge(event_frequencies, fn _k, inv, count -> inv + count end)
+      Map.new(metered_actions, fn act ->
+        {"#{act.service}.#{act.action}", Map.get(act, :invocations, 0)}
+      end)
 
     action_errors =
       Map.new(metered_actions, fn act ->
@@ -1756,12 +1733,12 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                       </div>
                     </div>
 
-                    <!-- Recent Events Feed with "More" Modal Button -->
+                    <!-- Recent Dispatched Event with "More" Modal Button -->
                     <div class="space-y-2 pt-2 border-t border-gray-100">
                       <div class="flex items-center justify-between">
                         <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
                           <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                          <span>Latest Dispatched Event<%= if length(@activity_events) > 1, do: "s", else: "" %></span>
+                          <span>Latest Dispatched Event</span>
                         </div>
                         <button
                           type="button"
@@ -1773,28 +1750,26 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                         </button>
                       </div>
 
-                      <%= if Enum.empty?(@activity_events) do %>
+                      <% latest_ev = List.first(@activity_events) %>
+                      <%= if is_nil(latest_ev) do %>
                         <div class="p-3 rounded-xl bg-gray-50 border border-gray-100 text-xs text-gray-400 text-center">
                           Waiting for cluster events on EventDispatcher...
                         </div>
                       <% else %>
-                        <div class="space-y-1.5">
-                          <%= for ev <- Enum.take(@activity_events, 3) do %>
-                            <div class="flex items-center justify-between px-3 py-1.5 rounded-xl bg-gray-50 hover:bg-gray-100 border border-gray-200 text-xs transition-colors group">
-                              <div class="flex items-center gap-2 min-w-0">
-                                <span class={"w-2 h-2 rounded-full shrink-0 #{if String.starts_with?(to_string(ev.event), "action:"), do: "bg-blue-500", else: "bg-emerald-500 animate-pulse"}"}></span>
-                                <span class="font-mono font-bold text-gray-900 truncate">📡 <%= ev.event %></span>
-                                <%= if is_map(ev[:payload]) and map_size(ev.payload) > 0 do %>
-                                  <span class="text-[11px] font-mono text-gray-400 truncate hidden sm:inline">
-                                    <%= if ev.payload[:status], do: "#{ev.payload.status} • #{ev.payload[:latency_ms] || 0}ms", else: (ev.payload |> Map.keys() |> Enum.take(3) |> Enum.join(", ")) %>
-                                  </span>
-                                <% end %>
-                              </div>
-                              <div class="flex items-center gap-2 shrink-0 text-[10px] text-gray-400 font-mono ml-2">
-                                <span><%= ev.time %></span>
-                              </div>
-                            </div>
-                          <% end %>
+                        <% is_highlighted = (@highlight_event_id != nil and @highlight_event_id == latest_ev[:id]) %>
+                        <div class={"flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-all duration-300 group border #{if is_highlighted, do: "event-flash-highlight bg-primary-50/90 border-primary-400 ring-2 ring-primary-400/30 text-primary-900 shadow-sm", else: "bg-gray-50 hover:bg-gray-100 border-gray-200 text-gray-900"}"}>
+                          <div class="flex items-center gap-2 min-w-0">
+                            <span class={"w-2 h-2 rounded-full shrink-0 #{if is_highlighted, do: "bg-primary-500 animate-ping", else: (if String.starts_with?(to_string(latest_ev.event), "action:"), do: "bg-blue-500", else: "bg-emerald-500 animate-pulse")}"}></span>
+                            <span class="font-mono font-bold truncate">📡 <%= latest_ev.event %></span>
+                            <%= if is_map(latest_ev[:payload]) and map_size(latest_ev.payload) > 0 do %>
+                              <span class={"text-[11px] font-mono truncate hidden sm:inline #{if is_highlighted, do: "text-primary-700", else: "text-gray-400"}"}>
+                                <%= if latest_ev.payload[:status], do: "#{latest_ev.payload.status} • #{latest_ev.payload[:latency_ms] || 0}ms", else: (latest_ev.payload |> Map.keys() |> Enum.take(3) |> Enum.join(", ")) %>
+                              </span>
+                            <% end %>
+                          </div>
+                          <div class={"flex items-center gap-2 shrink-0 text-[10px] font-mono ml-2 #{if is_highlighted, do: "text-primary-700 font-bold", else: "text-gray-400"}"}>
+                            <span><%= latest_ev.time %></span>
+                          </div>
                         </div>
                       <% end %>
                     </div>

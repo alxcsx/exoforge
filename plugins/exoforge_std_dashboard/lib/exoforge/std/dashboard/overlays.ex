@@ -1273,7 +1273,19 @@ defmodule Exoforge.Std.Dashboard.Overlays do
         []
       end
 
-    assigns = assign(assigns, :sdk_files, sdk_files)
+    sorted_files =
+      Enum.sort_by(sdk_files, fn f ->
+        f["created_at"] || f[:created_at] || f["filename"] || ""
+      end, :desc)
+
+    latest_file = List.first(sorted_files)
+    older_files = Enum.drop(sorted_files, 1)
+
+    assigns =
+      assigns
+      |> assign(:sdk_files, sorted_files)
+      |> assign(:latest_file, latest_file)
+      |> assign(:older_files, older_files)
 
     ~H"""
     <.modal
@@ -1306,37 +1318,83 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               </p>
             </div>
           <% else %>
-            <div class="space-y-2 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
-              <%= for file <- @sdk_files do %>
-                <% engine = get_in(file, ["metadata", "engine"]) || "unity" %>
-                <div class="p-3.5 bg-gray-50 rounded-xl border border-gray-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="space-y-2.5">
+              <!-- Latest Version (Prominently Shown) -->
+              <%= if @latest_file do %>
+                <% engine = get_in(@latest_file, ["metadata", "engine"]) || "unity" %>
+                <div class="p-3.5 bg-primary-50/50 rounded-xl border border-primary-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
                   <div class="space-y-1 min-w-0">
                     <div class="flex items-center gap-2">
-                      <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-primary-100 text-primary-800 border border-primary-200 font-mono">
+                      <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-primary-600 text-white font-mono shadow-2xs">
+                        Latest
+                      </span>
+                      <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-white text-primary-800 border border-primary-200 font-mono">
                         <%= engine %>
                       </span>
-                      <span class="font-bold text-gray-900 font-mono truncate"><%= file["filename"] %></span>
+                      <span class="font-bold text-gray-900 font-mono truncate"><%= @latest_file["filename"] %></span>
                     </div>
                     <p class="text-[11px] text-gray-500 font-mono truncate">
-                      URL: <code class="text-gray-700 select-all">/api/files/sdk/<%= engine %></code> &bull; <code class="text-gray-700 select-all"><%= file["url"] %></code>
+                      URL: <code class="text-gray-700 select-all">/api/files/sdk/<%= engine %></code> &bull; <code class="text-gray-700 select-all"><%= @latest_file["url"] %></code>
                     </p>
                   </div>
                   <div class="flex items-center gap-2 shrink-0">
                     <a
-                      href={file["url"]}
-                      download={file["filename"]}
+                      href={@latest_file["url"]}
+                      download={@latest_file["filename"]}
                       target="_blank"
-                      class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg transition-colors flex items-center gap-1.5"
+                      class="px-3.5 py-2 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-xs"
                     >
                       <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                         <polyline points="7 10 12 15 17 10"></polyline>
                         <line x1="12" y1="15" x2="12" y2="3"></line>
                       </svg>
-                      <span>Download</span>
+                      <span>Download Latest</span>
                     </a>
                   </div>
                 </div>
+              <% end %>
+
+              <!-- Older Versions Fold / Accordion -->
+              <%= if @older_files != [] do %>
+                <details class="group border border-gray-200/80 rounded-xl overflow-hidden bg-gray-50/60">
+                  <summary class="p-2.5 px-3.5 flex items-center justify-between cursor-pointer text-[11px] font-bold text-gray-700 hover:text-gray-900 select-none">
+                    <div class="flex items-center gap-2">
+                      <span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
+                      <span>Older Versions (<%= length(@older_files) %>)</span>
+                    </div>
+                    <span class="text-xs text-gray-400 group-open:rotate-180 transition-transform">&darr;</span>
+                  </summary>
+                  <div class="p-3 border-t border-gray-200/70 space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
+                    <%= for file <- @older_files do %>
+                      <% engine = get_in(file, ["metadata", "engine"]) || "unity" %>
+                      <div class="p-2.5 bg-white rounded-lg border border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                        <div class="min-w-0 space-y-0.5">
+                          <div class="flex items-center gap-2">
+                            <span class="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-gray-100 text-gray-600 border border-gray-200 font-mono">
+                              <%= engine %>
+                            </span>
+                            <span class="font-medium text-gray-800 font-mono truncate"><%= file["filename"] %></span>
+                          </div>
+                          <p class="text-[10px] text-gray-400 font-mono truncate"><%= file["url"] %></p>
+                        </div>
+                        <a
+                          href={file["url"]}
+                          download={file["filename"]}
+                          target="_blank"
+                          class="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded text-[11px] transition-colors shrink-0 flex items-center gap-1 self-start sm:self-auto"
+                        >
+                          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                          </svg>
+                          <span>Download</span>
+                        </a>
+                      </div>
+                    <% end %>
+                  </div>
+                </details>
               <% end %>
             </div>
           <% end %>
@@ -1415,24 +1473,6 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             error_rate: err_rate
           }
         end
-
-      known_keys = MapSet.new(Enum.map(all_items, & &1.key))
-
-      stream_event_items =
-        for {key, count} <- (telemetry[:action_invocations] || %{}),
-            count > 0,
-            not MapSet.member?(known_keys, key) do
-          %{
-            service: %{name: "Event Bus", icon: "📡"},
-            action: %{name: key, title: key},
-            key: key,
-            invocations: count,
-            errors: Map.get(telemetry[:action_errors] || %{}, key, 0),
-            error_rate: 0.0
-          }
-        end
-
-      all_items = all_items ++ stream_event_items
 
       q = String.downcase(String.trim(assigns.search || ""))
 

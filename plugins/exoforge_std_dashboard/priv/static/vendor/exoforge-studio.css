@@ -598,3 +598,37 @@ details.exo-menu > .exo-menu-panel {
   width: 100%;
   animation: toastCountdown 2.5s linear forwards;
 }
+
+@keyframes eventFlash {
+  0% {
+    background-color: rgba(99, 102, 241, 0.22);
+    border-color: rgba(99, 102, 241, 0.7);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25);
+  }
+  100% {
+    background-color: rgba(249, 250, 251, 1);
+    border-color: rgba(229, 231, 235, 1);
+    box-shadow: none;
+  }
+}
+
+.event-flash-highlight {
+  animation: eventFlash 2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.dark .event-flash-highlight {
+  animation: eventFlashDark 2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes eventFlashDark {
+  0% {
+    background-color: rgba(99, 102, 241, 0.3);
+    border-color: rgba(129, 140, 248, 0.8);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.4);
+  }
+  100% {
+    background-color: rgba(31, 41, 55, 0.6);
+    border-color: rgba(55, 65, 81, 0.8);
+    box-shadow: none;
+  }
+}

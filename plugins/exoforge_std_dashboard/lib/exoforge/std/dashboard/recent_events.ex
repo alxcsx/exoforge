@@ -31,19 +31,35 @@ defmodule Exoforge.Std.Dashboard.RecentEvents do
 
   @impl true
   def handle_info({:exo_event, event_key, payload, context}, state) do
-    item = record(event_key, payload, context)
+    if duplicate?(event_key, payload) do
+      {:noreply, state}
+    else
+      item = record(event_key, payload, context)
 
-    try do
-      Phoenix.PubSub.broadcast(Exoforge.Std.Dashboard.PubSub, @pubsub_topic, {:studio_event, item})
-    rescue
-      _ -> :ok
+      try do
+        Phoenix.PubSub.broadcast(Exoforge.Std.Dashboard.PubSub, @pubsub_topic, {:studio_event, item})
+      rescue
+        _ -> :ok
+      end
+
+      {:noreply, state}
     end
-
-    {:noreply, state}
   end
 
   def handle_info(_msg, state) do
     {:noreply, state}
+  end
+
+  defp duplicate?(event_key, payload) do
+    key_str = to_string(event_key)
+    recent = list(5)
+    now_us = System.system_time(:microsecond)
+
+    Enum.any?(recent, fn e ->
+      to_string(e[:event]) == key_str and
+        e[:payload] == payload and
+        now_us - Map.get(e, :timestamp, 0) < 1_500_000
+    end)
   end
 
   def init_table do
