@@ -1,6 +1,6 @@
 {
   "name": "com.exoforge.sdk",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "displayName": "Exoforge Unity SDK",
   "description": "High-performance Unity client SDK for the Exoforge game backend platform.",
   "unity": "2022.3",

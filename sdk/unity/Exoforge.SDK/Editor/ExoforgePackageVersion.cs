@@ -18,9 +18,9 @@ namespace Exoforge.Unity.Editor
     /// </summary>
     public static class ExoforgePackageVersion
     {
-        public const string SdkVersion = "0.1.6";
-        public const string DefaultBuildHash = "6500fbb";
-        public const string DefaultBuildDate = "2026-11-06 10:11";
+        public const string SdkVersion = "0.1.7";
+        public const string DefaultBuildHash = "6be4ec5";
+        public const string DefaultBuildDate = "2026-11-06 16:08";
 
         private static string? s_resolvedHash;
         private static string? s_resolvedDate;
