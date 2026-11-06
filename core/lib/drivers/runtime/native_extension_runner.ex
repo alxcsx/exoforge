@@ -532,6 +532,7 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
   defp sanitize(result), do: Exoforge.ExtensionRegistry.sanitize_for_json(result)
 
   defp normalize_error(nil), do: "unknown_error"
+  defp normalize_error(%{"code" => code, "message" => msg}), do: {String.to_atom(code), msg}
   defp normalize_error(error) when is_binary(error), do: error
   defp normalize_error(error), do: inspect(error)
 

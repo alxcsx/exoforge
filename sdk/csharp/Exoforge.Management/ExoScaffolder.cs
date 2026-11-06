@@ -270,7 +270,7 @@ public static class ExoScaffolder
         exo {term} logs  {cleanName}     # what the {term} just did
         ```
 
-        In Unity: **Tools ▸ Exoforge ▸ Control Center**, then the Extensions tab.
+        In Unity: **Exoforge ▸ Studio**, then the Extensions tab.
         """;
     }
 
@@ -358,47 +358,37 @@ using Exoforge.Plugin.SDK;
 
 namespace {{ns}};
 
-[{{attr}}("{{serviceName}}", Version = "0.1.0")]
+[{{attr}}("{{serviceName}}", Version = "0.1.0", Resources = [typeof({{className}}Claim)])]
 public class {{className}}{{suffix}}
 {
     [ExoAction]
-    public {{className}}ClaimResponse ClaimDailyReward(int level)
+    public {{className}}Reward ClaimDailyReward()
     {
-        var playerId = ExoServices.Context.CallerPlayerId!;
+        var playerId = ExoServices.Context.CallerPlayerId;
+        if (string.IsNullOrEmpty(playerId))
+            throw new ExoActionException("unauthorized", "Player must be authenticated to claim rewards.");
+
         var today = DateTime.UtcNow.ToString("yyyy-MM-dd");
 
-        // Check player data: has the player already claimed today?
-        var status = ExoServices.Database.Get<{{className}}PlayerStatus>("daily_claims", playerId);
-        if (status != null && status.LastClaimDate == today)
-        {
-            return new {{className}}ClaimResponse(
-                Success: false,
-                Message: "Daily reward already claimed today. Come back tomorrow!",
-                Reward: null
-            );
-        }
+        var lastClaim = ExoServices.Database.Get<{{className}}Claim>(playerId);
+        if (lastClaim != null && lastClaim.ClaimDate == today)
+            throw new ExoActionException("already_claimed", "Daily reward already claimed today. Come back tomorrow!");
 
-        // Grant reward and record claim in player data
-        var reward = new {{className}}Reward("coins", 100 + (level * 10));
-        ExoServices.Database.Put("daily_claims", playerId, new {{className}}PlayerStatus(playerId, today, reward.Amount));
+        var reward = new {{className}}Reward("coins", 100);
+        ExoServices.Database.Put(new {{className}}Claim(playerId, today, reward.Amount));
 
-        return new {{className}}ClaimResponse(
-            Success: true,
-            Message: "Daily reward claimed successfully!",
-            Reward: reward
-        );
+        return reward;
     }
 }
 
-public record {{className}}ClaimResponse(
-    bool Success,
-    string Message,
-    {{className}}Reward? Reward = null
+[ExoResource("{{serviceName}}_claims", PrimaryKey = nameof(PlayerId))]
+public record {{className}}Claim(
+    [property: ExoColumn(Label = "Player ID", Filterable = true, Role = "user_id")] string PlayerId,
+    [property: ExoColumn(Label = "Claim Date", Sortable = true)] string ClaimDate,
+    [property: ExoColumn(Label = "Amount", Sortable = true)] int Amount
 );
 
 public record {{className}}Reward(string Kind, int Amount);
-
-public record {{className}}PlayerStatus(string PlayerId, string LastClaimDate, int LastAmount);
 """;
     }
 
@@ -409,28 +399,36 @@ public record {{className}}PlayerStatus(string PlayerId, string LastClaimDate, i
         string suffix = isExtension ? "Extension" : "Plugin";
 
         return $$"""
-using System.Threading.Tasks;
+using System.Collections.Generic;
 using Exoforge.Plugin.SDK;
 
 namespace {{ns}};
 
-[{{attr}}("{{serviceName}}", Version = "0.1.0", Resources = new[] { typeof({{className}}Item) })]
+[{{attr}}("{{serviceName}}", Version = "0.1.0", Resources = [typeof({{className}}Item)])]
 public class {{className}}{{suffix}}
 {
     [ExoAction]
-    public async Task<{{className}}Item?> GetItemAsync(string id) =>
-        await Exo.Database.FirstAsync<{{className}}Item>("id = @id", new { id });
+    public {{className}}Item? GetItem(string id) =>
+        ExoServices.Database.Get<{{className}}Item>(id);
+
+    [ExoAction]
+    public IReadOnlyList<{{className}}Item> ListItems() =>
+        ExoServices.Database.All<{{className}}Item>();
+
+    [ExoAction]
+    public {{className}}Item SaveItem(string id, int quantity)
+    {
+        var item = new {{className}}Item(id, quantity);
+        ExoServices.Database.Put(item);
+        return item;
+    }
 }
 
-[ExoResource("{{serviceName}}_items", PrimaryKey = "id")]
-public record {{className}}Item
-{
-    [ExoColumn(Sortable = true, Filterable = true)]
-    public string Id { get; init; } = "";
-
-    [ExoColumn(Sortable = true)]
-    public int Quantity { get; init; }
-}
+[ExoResource("{{serviceName}}_items", PrimaryKey = nameof(Id))]
+public record {{className}}Item(
+    [property: ExoColumn(Sortable = true, Filterable = true)] string Id,
+    [property: ExoColumn(Sortable = true)] int Quantity
+);
 """;
     }
 
@@ -445,13 +443,27 @@ using Exoforge.Plugin.SDK;
 
 namespace {{ns}};
 
-[{{attr}}("{{serviceName}}", Version = "0.1.0")]
+[{{attr}}("{{serviceName}}", Version = "0.1.0", Resources = [typeof({{className}}Config)])]
 public class {{className}}{{suffix}}
 {
     [ExoAction]
-    public string GetConfig(string key) =>
-        key == "difficulty" ? "normal" : "default";
+    public {{className}}Config GetConfig() =>
+        ExoServices.Database.First<{{className}}Config>() ?? new {{className}}Config("normal", 3);
+
+    [ExoAction]
+    public {{className}}Config UpdateConfig(string difficulty, int maxLives)
+    {
+        var config = new {{className}}Config(difficulty, maxLives);
+        ExoServices.Database.Put(config);
+        return config;
+    }
 }
+
+[ExoSingletonResource("{{serviceName}}_config")]
+public record {{className}}Config(
+    [property: ExoColumn(Label = "Difficulty")] string Difficulty,
+    [property: ExoColumn(Label = "Max Lives")] int MaxLives
+);
 """;
     }
 
@@ -472,11 +484,15 @@ namespace {{ns}};
 public class {{className}}{{suffix}}
 {
     [ExoAction]
-    public async Task EmitGreetingAsync(string name)
+    public async Task GreetPlayerAsync(string name)
     {
-        await Exo.Events.PublishAsync("{{serviceName}}:greeted", new { name, timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds() });
+        var playerId = ExoServices.Context.CallerPlayerId ?? "anonymous";
+        await ExoServices.Events.EmitAsync(new {{className}}PlayerGreeted(playerId, name, DateTimeOffset.UtcNow.ToUnixTimeSeconds()));
     }
 }
+
+[ExoEvent("player_greeted", Topic = "{{serviceName}}:events")]
+public record {{className}}PlayerGreeted(string PlayerId, string Name, long Timestamp);
 """;
     }
 

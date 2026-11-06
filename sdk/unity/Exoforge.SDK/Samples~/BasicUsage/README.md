@@ -4,9 +4,9 @@ Minimal integration sample.
 
 ## Setup
 
-1. `Tools ▸ Exoforge ▸ Exoforge Studio` → **Extensions ▸ Initialize Workspace** (or click Initialize on the first-import setup modal).
+1. `Exoforge ▸ Studio` → **Extensions ▸ Initialize Workspace** (or click Initialize on the first-import setup modal).
 2. **Exoforge Studio ▸ Settings ▸ Generate / Relink Runtime Config** (links the workspace config into `Resources/exoforge.json`).
-3. `Tools ▸ Exoforge ▸ Add Exoforge to Scene` (drops the standard **Exoforge** prefab).
+3. `Exoforge ▸ Add Exoforge to Scene` (drops the standard **Exoforge** prefab).
 4. Attach `BasicUsageController` to any GameObject and press Play.
 
 The prefab's `ExoforgeManager` connects, authenticates (reusing the token in

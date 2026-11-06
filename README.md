@@ -107,7 +107,7 @@ Exoforge separates game engineering from backend operations. Game developers wor
 
 ### 1. Unity Exoforge Studio (`com.exoforge.sdk`)
 
-A dedicated Unity Editor extension (`Tools ▸ Exoforge ▸ Control Center` or `Extensions`) providing:
+A dedicated Unity Editor extension (**Exoforge ▸ Studio**) providing:
 - **One-Click Scaffolding**: Generate native C# extensions directly into `extensions/` — each with its own solution (`.slnx`) and sources under `src/`.
 - **Compilation & Deployment**: Build the extension and its manifest and upload them to the running server.
 - **Live Action Sandbox**: Test actions and inspect payloads with latency metrics (`µs`).
@@ -185,7 +185,7 @@ You need an instance and the Unity package. The package is distributed as a tarb
 included — nothing here requires a clone of this repository.
 
 1. **Package Manager ▸ + ▸ Add package from tarball**, and pick the `.tgz`.
-2. **Tools ▸ Exoforge ▸ Exoforge Studio**, and point it at your instance in the Settings tab.
+2. **Exoforge ▸ Studio**, and point it at your instance in the Settings tab.
 3. **Extensions ▸ Scaffold**, then **Build & Deploy**.
 
 The sample project ships with the package and is the reference for the whole loop.

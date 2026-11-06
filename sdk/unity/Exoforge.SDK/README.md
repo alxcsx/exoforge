@@ -24,6 +24,7 @@ In **Exoforge Studio**, click **⚡ New Extension...**:
 This creates `Exoforge/extensions/daily_rewards/` with a clean, single-action C# service:
 
 ```csharp
+using System;
 using Exoforge.Plugin.SDK;
 
 namespace Exoforge.Extensions;
@@ -32,11 +33,24 @@ namespace Exoforge.Extensions;
 public class DailyRewardsExtension
 {
     [ExoAction]
-    public DailyRewardsReward GetReward(int level) =>
-        new("coins", 10 + level);
+    public DailyRewardsReward ClaimDailyReward(int level)
+    {
+        var playerId = ExoServices.Context.CurrentPlayerId;
+        if (string.IsNullOrEmpty(playerId))
+            throw new ExoActionException("unauthorized", "Player session is required.");
+
+        var existing = ExoServices.Database.Get<DailyRewardsClaim>(playerId);
+        if (existing != null)
+            throw new ExoActionException("already_claimed", "Daily reward has already been claimed.");
+
+        var reward = new DailyRewardsReward("coins", 10 + level);
+        ExoServices.Database.Put(new DailyRewardsClaim(playerId, DateTime.UtcNow));
+        return reward;
+    }
 }
 
 public record DailyRewardsReward(string Kind, int Amount);
+public record DailyRewardsClaim(string Id, DateTime ClaimedAt);
 ```
 
 ### 3. Build & Deploy
@@ -48,6 +62,7 @@ The extension compiles via your local .NET SDK (`>= 9.0`) and hot-loads into the
 ```csharp
 using UnityEngine;
 using Exoforge.Client.Unity;
+using Exoforge.Plugin.SDK;
 
 public class DailyRewardsController : MonoBehaviour
 {
@@ -56,17 +71,17 @@ public class DailyRewardsController : MonoBehaviour
         // 1. Wait for Exoforge client to connect and authenticate
         await Exoforge.Ready;
 
-        // 2. Invoke your extension action with full type safety
-        var response = await Exoforge.Client.DailyRewards()
-            .ClaimDailyRewardAsync(new() { Level = 5 });
+        // 2. Invoke your extension action with type safety and error handling
+        try
+        {
+            var reward = await Exoforge.Client.DailyRewards()
+                .ClaimDailyRewardAsync(new() { Level = 5 });
 
-        if (response.Success && response.Reward != null)
-        {
-            Debug.Log($"Granted {response.Reward.Amount} {response.Reward.Kind}!");
+            Debug.Log($"Granted {reward.Amount} {reward.Kind}!");
         }
-        else
+        catch (ExoActionException ex)
         {
-            Debug.Log($"Daily reward unavailable: {response.Message}");
+            Debug.LogWarning($"Daily reward failed [{ex.Code}]: {ex.Message}");
         }
     }
 }

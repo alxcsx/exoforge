@@ -464,10 +464,16 @@ public static class PluginHost
         {
             Exception cause = Cause(ex);
 
-            // The trace is logged and the message is returned. A caller gets "index out of range";
-            // `exo plugin logs` gets the file and the line, which is what fixes it.
+            // Log trace for debugging while returning formatted error to callers
             WriteHostLog(3, cause.ToString());
-            Write($"{{\"type\":\"action_result\",\"id\":{id},\"status\":\"error\",\"error\":{JsonEncode(cause.Message)}}}");
+            if (cause is ExoActionException actionEx)
+            {
+                Write($"{{\"type\":\"action_result\",\"id\":{id},\"status\":\"error\",\"error\":{{\"code\":{JsonEncode(actionEx.Code)},\"message\":{JsonEncode(actionEx.Message)}}}}}");
+            }
+            else
+            {
+                Write($"{{\"type\":\"action_result\",\"id\":{id},\"status\":\"error\",\"error\":{JsonEncode(cause.Message)}}}");
+            }
         }
     }
 

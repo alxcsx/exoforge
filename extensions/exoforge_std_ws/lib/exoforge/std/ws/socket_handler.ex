@@ -194,6 +194,22 @@ defmodule Exoforge.Std.Ws.SocketHandler do
           new_state
         )
 
+      {:error, {code, message}} when (is_atom(code) or is_binary(code)) and is_binary(message) ->
+        Logger.warning("[WS:Action] #{service}.#{action} by #{auth.player_id} -> error: #{code}: #{message} (#{latency_us}µs)")
+
+        reply(
+          %{
+            type: @frame_action_result,
+            id: req_id,
+            status: @status_error,
+            error: %{
+              code: to_string(code),
+              message: message
+            }
+          },
+          state
+        )
+
       {:error, reason} ->
         Logger.warning("[WS] Authentication failed: #{inspect(reason)}")
         reply(%{type: @frame_auth_result, status: @status_error, error: reason}, state)
@@ -337,6 +353,22 @@ defmodule Exoforge.Std.Ws.SocketHandler do
             error: %{
               code: "action_not_found",
               message: "Action '#{missing_action}' was not found on service '#{service}'."
+            }
+          },
+          state
+        )
+
+      {:error, {code, message}} when (is_atom(code) or is_binary(code)) and is_binary(message) ->
+        Logger.warning("[WS:Action] #{service}.#{action} by #{auth.player_id} -> error: #{code}: #{message} (#{latency_us}µs)")
+
+        reply(
+          %{
+            type: @frame_action_result,
+            id: req_id,
+            status: @status_error,
+            error: %{
+              code: to_string(code),
+              message: message
             }
           },
           state

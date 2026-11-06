@@ -202,7 +202,7 @@ will not show up in `git status`.
 Deploy the extension and regenerate the client:
 
 ```bash
-# Option A — Unity Editor: Tools ▸ Exoforge ▸ Exoforge Studio ▸ Extensions ▸ Build & Deploy
+# Option A — Unity Editor: Exoforge ▸ Studio ▸ Extensions ▸ Build & Deploy
 
 # Option B — CLI. The `exo` CLI is not installed on PATH — run it from the repo:
 CLI="dotnet run --project <repo>/sdk/csharp/Exoforge.CLI --"
@@ -211,7 +211,7 @@ $CLI extension push snake_leaderboard   # build + deploy to the running cluster
 $CLI sync                               # regenerate Assets/Exoforge/Generated/ExoforgeServices.g.cs
 ```
 
-From the Unity Editor, everything else lives in **Exoforge Control Center** and **Extensions Studio** (`Tools ▸ Exoforge ▸ Control Center` / `Extensions`):
+From the Unity Editor, everything else lives in **Exoforge Studio** (`Exoforge ▸ Studio`):
 **Extensions** scaffolds, builds and deploys; **Metrics** and **Settings** hold live status, paths and credentials. In the **Extensions** tab, every folder in
 `Exoforge/extensions/` gets a **Build**, **Deploy**, and **Inspect** button (plus
 **Refresh Dependencies** to regenerate every extension stub at once). Stub generation fetches the live contracts and

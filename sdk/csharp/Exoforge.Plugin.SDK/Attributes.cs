@@ -362,4 +362,21 @@ public class ExoInputTypeAttribute : Attribute
     }
 }
 
+/// <summary>
+/// Canonical action exception thrown by Exoforge extensions to fail an action invocation with an error code and message.
+/// Propagates to callers (Unity SDK, Web, Dashboard) as an error response instead of an unexpected crash.
+/// </summary>
+public class ExoActionException : Exception
+{
+    public string Code { get; }
+
+    public ExoActionException(string code, string message) : base(message)
+    {
+        Code = string.IsNullOrWhiteSpace(code) ? "action_failed" : code;
+    }
+
+    public ExoActionException(string message) : this("action_failed", message) { }
+}
+
+
 
