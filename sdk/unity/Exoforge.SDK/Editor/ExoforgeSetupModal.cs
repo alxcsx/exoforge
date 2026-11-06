@@ -26,9 +26,8 @@ namespace Exoforge.Unity.Editor
         private string _httpUrl = "http://localhost:4001";
         private bool _isOfflineMode = false;
 
-        private string _email = "admin@exoforge.local";
-        private string _password = "developer_password";
-        private bool _useDevBypass = true;
+        private string _email = !string.IsNullOrEmpty(ExoforgeEditorConfig.LastLoginEmail) ? ExoforgeEditorConfig.LastLoginEmail : "admin";
+        private string _password = !string.IsNullOrEmpty(ExoforgeEditorConfig.LastLoginPassword) ? ExoforgeEditorConfig.LastLoginPassword : "";
 
         private Action? _onCompleted;
         private VisualElement? _stepContainer;
@@ -222,12 +221,6 @@ namespace Exoforge.Unity.Editor
                 httpLabel.text = $"• HTTP REST: {_httpUrl}";
                 bool isLocal = ExoforgeEditorConfig.IsLocalUrl(_wsUrl);
                 _envName = isLocal ? "local" : "production";
-                _useDevBypass = isLocal;
-                if (!isLocal && (_email == "admin@exoforge.local" || string.IsNullOrEmpty(_email)))
-                {
-                    _email = "admin";
-                    _password = "";
-                }
             };
 
             baseField.RegisterValueChangedCallback(_ => updateDerived());
@@ -305,15 +298,11 @@ namespace Exoforge.Unity.Editor
         {
             if (_stepProgressLabel != null) _stepProgressLabel.text = "Step 2 of 5: Authenticate";
 
-            var desc = new Label("Authenticate with the server. For local development, use Developer Credentials.");
+            var desc = new Label("Enter your credentials to authenticate with the server.");
             desc.style.fontSize = 11;
             desc.style.color = ExoforgeUIStyle.TextSecondary;
             desc.style.marginBottom = 12;
             _stepContainer!.Add(desc);
-
-            var devBypassToggle = new Toggle("Use Local Developer Credentials (dev:developer)") { value = _useDevBypass };
-            devBypassToggle.style.marginBottom = 10;
-            _stepContainer.Add(devBypassToggle);
 
             var credBox = new VisualElement();
             var emailField = new TextField("Email / Username") { value = _email };
@@ -325,15 +314,6 @@ namespace Exoforge.Unity.Editor
             credBox.Add(passField);
 
             _stepContainer.Add(credBox);
-
-            Action updateToggle = () =>
-            {
-                _useDevBypass = devBypassToggle.value;
-                credBox.SetEnabled(!_useDevBypass);
-            };
-
-            devBypassToggle.RegisterValueChangedCallback(_ => updateToggle());
-            updateToggle();
 
             var spacer = new VisualElement();
             spacer.style.flexGrow = 1;
@@ -356,38 +336,26 @@ namespace Exoforge.Unity.Editor
                 _statusLabel?.SetText("Authenticating...");
                 _statusLabel!.style.color = ExoforgeUIStyle.AccentBlue;
 
-                if (_useDevBypass)
+                _email = emailField.value?.Trim() ?? "";
+                _password = passField.value ?? "";
+                var (ok, msg) = await ExoforgeControlCenter.LogInSharedWithResultAsync(
+                    _email,
+                    _password,
+                    httpUrlOverride: _httpUrl,
+                    wsUrlOverride: _wsUrl);
+
+                if (ok)
                 {
-                    ExoTokenStore.SaveStudioSession("dev:developer", "developer", new[] { "admin", "studio", "player" });
                     SaveWorkspaceEnvironment();
-                    _statusLabel.SetText("✓ Signed in using local developer credentials.");
+                    _statusLabel.SetText("✓ Authentication successful.");
                     _statusLabel.style.color = ExoforgeUIStyle.AccentGreen;
                     _currentStep = 3;
                     RenderCurrentStep();
                 }
                 else
                 {
-                    _email = emailField.value?.Trim() ?? "";
-                    _password = passField.value ?? "";
-                    var (ok, msg) = await ExoforgeControlCenter.LogInSharedWithResultAsync(
-                        _email,
-                        _password,
-                        httpUrlOverride: _httpUrl,
-                        wsUrlOverride: _wsUrl);
-
-                    if (ok)
-                    {
-                        SaveWorkspaceEnvironment();
-                        _statusLabel.SetText("✓ Authentication successful.");
-                        _statusLabel.style.color = ExoforgeUIStyle.AccentGreen;
-                        _currentStep = 3;
-                        RenderCurrentStep();
-                    }
-                    else
-                    {
-                        _statusLabel.SetText($"Authentication failed: {msg}");
-                        _statusLabel.style.color = ExoforgeUIStyle.AccentOrange;
-                    }
+                    _statusLabel.SetText($"Authentication failed: {msg}");
+                    _statusLabel.style.color = ExoforgeUIStyle.AccentOrange;
                 }
             }, bg: ExoforgeUIStyle.BrandPurple, textCol: Color.white, height: 28);
             btnRow.Add(nextBtn);
@@ -406,7 +374,10 @@ namespace Exoforge.Unity.Editor
                 }
 
                 var ws = ExoWorkspace.Load(wsPath);
-                string defaultToken = _useDevBypass ? "dev:developer" : ExoTokenStore.StudioToken;
+                string defaultToken = !string.IsNullOrEmpty(ExoTokenStore.StudioToken)
+                    ? ExoTokenStore.StudioToken
+                    : ExoTokenStore.Token;
+
                 ws.Config.Environments[_envName] = new ExoEnvironmentConfig
                 {
                     WsUrl = _wsUrl,

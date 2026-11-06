@@ -116,7 +116,7 @@ public class ExoClient : IDisposable
         _httpClient = httpClient ?? new HttpClient();
         if (_httpClient.DefaultRequestHeaders.UserAgent.Count == 0)
         {
-            _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Exoforge-Client/0.1.8");
+            _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Exoforge-Client/0.1.9");
         }
         HttpBaseUri = httpBaseUri;
 

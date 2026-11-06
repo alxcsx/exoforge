@@ -93,7 +93,7 @@ namespace Exoforge.Unity.Editor
             title.style.color = ExoforgeUIStyle.TextPrimary;
             titleCol.Add(title);
 
-            var subtitle = new Label("Authenticate with developer credentials for full cluster access.");
+            var subtitle = new Label("Sign in with your staff account (studio or admin) for cluster access.");
             subtitle.style.fontSize = 11;
             subtitle.style.color = ExoforgeUIStyle.TextSecondary;
             titleCol.Add(subtitle);
