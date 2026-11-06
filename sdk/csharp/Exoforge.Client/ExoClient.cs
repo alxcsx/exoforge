@@ -189,6 +189,31 @@ public class ExoClient : IDisposable
     }
 
     /// <summary>
+    /// Sends an action request to the Exoforge Kernel using automatic transport selection and a cancellation token.
+    /// </summary>
+    public Task<TResult> SendActionAsync<TResult>(
+        string service,
+        string action,
+        object? payload,
+        CancellationToken cancellationToken)
+    {
+        return SendActionAsync<TResult>(service, action, payload, ExoTransportPreference.Auto, timeout: null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Sends an action request to the Exoforge Kernel with explicit transport preference and a cancellation token.
+    /// </summary>
+    public Task<TResult> SendActionAsync<TResult>(
+        string service,
+        string action,
+        object? payload,
+        ExoTransportPreference transportPreference,
+        CancellationToken cancellationToken)
+    {
+        return SendActionAsync<TResult>(service, action, payload, transportPreference, timeout: null, cancellationToken);
+    }
+
+    /// <summary>
     /// Sends an action request to the Exoforge Kernel with explicit transport preference.
     /// </summary>
     public async Task<TResult> SendActionAsync<TResult>(

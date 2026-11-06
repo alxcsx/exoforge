@@ -389,7 +389,7 @@ public partial class ExoforgeControlCenter : EditorWindow
                 using var cts = new System.Threading.CancellationTokenSource(2500);
                 using var client = new ExoClient { HttpBaseUri = new Uri(httpUrl) };
                 var res = await client.SendActionAsync<JsonElement>(
-                    "auth", "authenticate", new { token }, ExoTransportPreference.Http, cts.Token);
+                    "auth", "authenticate", new { token }, ExoTransportPreference.Http, cancellationToken: cts.Token);
 
                 if (res.TryGetProperty("player_id", out _) || res.TryGetProperty("user_id", out _))
                 {
