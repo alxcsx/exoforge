@@ -418,8 +418,8 @@ defmodule Exoforge.Std.FileBucket do
   end
 
   defp infer_sdk_version(filename) do
-    case Regex.run(~r/-((\d+\.\d+\.\d+[^\.]*))(?:\.tgz|\.tar\.gz|\.zip|\.unitypackage)/, filename) do
-      [_, ver] -> ver
+    case Regex.run(~r/-(\d+\.\d+\.\d+[^\.]*)(?:\.tgz|\.tar\.gz|\.zip|\.unitypackage)/, filename) do
+      [_, ver | _] -> ver
       _ -> "0.1.0"
     end
   end
@@ -461,15 +461,28 @@ defmodule Exoforge.Std.FileBucket do
     ensure_meta_table()
     id_str = to_string(id)
 
-    case :ets.lookup(@meta_table, {bucket, id_str}) do
-      [{{^bucket, _id}, record}] ->
-        record
+    res =
+      case :ets.lookup(@meta_table, {bucket, id_str}) do
+        [{{^bucket, _id}, record}] ->
+          record
 
-      [] ->
-        case lookup_by_id(id_str) do
-          nil -> lookup_by_filename(bucket, id_str)
-          record -> record
-        end
+        [] ->
+          case lookup_by_id(id_str) do
+            nil -> lookup_by_filename(bucket, id_str)
+            record -> record
+          end
+      end
+
+    if is_nil(res) do
+      sync_disk_to_meta()
+      seed_sdk_packages()
+
+      case :ets.lookup(@meta_table, {bucket, id_str}) do
+        [{{^bucket, _id}, record}] -> record
+        [] -> lookup_by_id(id_str) || lookup_by_filename(bucket, id_str)
+      end
+    else
+      res
     end
   end
 
