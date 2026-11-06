@@ -95,8 +95,6 @@ namespace Exoforge.Unity.Editor
 
         [MenuItem("Tools/Exoforge/Extensions", false, 101)]
         [MenuItem("Window/Exoforge/Extensions", false, 2001)]
-        [MenuItem("Tools/Exoforge/Plugins", false, 102)]
-        [MenuItem("Window/Exoforge/Plugins", false, 2002)]
         public static void ShowWindow()
         {
             var window = GetWindow<ExoforgeExtensionsWindow>("Exoforge Extensions");
@@ -904,7 +902,7 @@ namespace Exoforge.Unity.Editor
             var selected = _plugins.FirstOrDefault(p => string.Equals(p.Id, _selectedPluginId, StringComparison.OrdinalIgnoreCase));
             if (selected == null)
             {
-                var placeholder = new Label("Select a plugin from the catalog to manage its lifecycle and inspect resources.");
+                var placeholder = new Label("Select an extension from the catalog to manage its lifecycle and inspect resources.");
                 placeholder.style.color = ExoforgeUIStyle.TextMuted;
                 placeholder.style.fontSize = 12;
                 placeholder.style.marginTop = 24;
@@ -1143,7 +1141,7 @@ namespace Exoforge.Unity.Editor
                 {
                     await ForceBuildPluginAsync(plugin);
                 }, height: 22);
-                forceBuildBtn.tooltip = "Force rebuild this plugin from source ignoring cached artifacts";
+                forceBuildBtn.tooltip = "Force rebuild this extension from source ignoring cached artifacts";
                 forceBuildBtn.style.marginRight = 6;
                 toolbar.Add(forceBuildBtn);
 
@@ -1186,7 +1184,7 @@ namespace Exoforge.Unity.Editor
                         RebuildUI();
                     }
                 }, height: 22);
-                logsBtn.tooltip = "View live runtime logs emitted by this plugin on the cluster";
+                logsBtn.tooltip = "View live runtime logs emitted by this extension on the cluster";
                 logsBtn.style.marginRight = 6;
                 toolbar.Add(logsBtn);
 
@@ -1284,14 +1282,14 @@ namespace Exoforge.Unity.Editor
             var metaCard = new VisualElement();
             ExoforgeUIStyle.ApplyCard(metaCard);
 
-            var metaHeader = new Label("Plugin Architecture & Contracts");
+            var metaHeader = new Label("Extension Architecture & Contracts");
             metaHeader.style.fontSize = 12;
             metaHeader.style.unityFontStyleAndWeight = FontStyle.Bold;
             metaHeader.style.color = ExoforgeUIStyle.TextPrimary;
             metaHeader.style.marginBottom = 8;
             metaCard.Add(metaHeader);
 
-            metaCard.Add(CreateMetaRow("Plugin Identifier", plugin.Id));
+            metaCard.Add(CreateMetaRow("Extension Identifier", plugin.Id));
             metaCard.Add(CreateMetaRow("Runtime Process", plugin.Type == "native" ? ".NET Core Native Process" : "Elixir In-Kernel Module"));
             metaCard.Add(CreateMetaRow("Version", plugin.Version));
             metaCard.Add(CreateMetaRow("Category", plugin.Category));
@@ -1405,7 +1403,7 @@ namespace Exoforge.Unity.Editor
             var resources = ExtractResources(manifest);
             if (resources.Count == 0)
             {
-                var empty = new Label("This plugin declares no [ExoResource] or schema models.");
+                var empty = new Label("This extension declares no [ExoResource] or schema models.");
                 empty.style.color = ExoforgeUIStyle.TextMuted;
                 empty.style.fontSize = 12;
                 empty.style.marginTop = 20;
@@ -1945,7 +1943,7 @@ namespace Exoforge.Unity.Editor
             var actions = ExtractActions(manifest, isWebhookOnly: false);
             if (actions.Count == 0)
             {
-                var empty = new Label("No actions declared for this plugin.");
+                var empty = new Label("No actions declared for this extension.");
                 empty.style.color = ExoforgeUIStyle.TextMuted;
                 empty.style.fontSize = 12;
                 empty.style.marginTop = 20;
@@ -2113,7 +2111,7 @@ namespace Exoforge.Unity.Editor
             var events = ExtractEvents(manifest);
             if (events.Count == 0)
             {
-                var empty = new Label("This plugin declares no events.");
+                var empty = new Label("This extension declares no events.");
                 empty.style.color = ExoforgeUIStyle.TextMuted;
                 empty.style.fontSize = 12;
                 empty.style.marginTop = 20;
@@ -2168,7 +2166,7 @@ namespace Exoforge.Unity.Editor
             var webhooks = ExtractActions(manifest, isWebhookOnly: true);
             if (webhooks.Count == 0)
             {
-                var empty = new Label("This plugin defines no actions marked with [ExoWebhook].");
+                var empty = new Label("This extension defines no actions marked with [ExoWebhook].");
                 empty.style.color = ExoforgeUIStyle.TextMuted;
                 empty.style.fontSize = 12;
                 empty.style.marginTop = 20;

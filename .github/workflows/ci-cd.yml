@@ -94,8 +94,8 @@ jobs:
               mix test --cover --export-coverage default
               echo '::endgroup::'
 
-              echo '::group::Standard Plugin Tests & Coverage'
-              for dir in /app/plugins/*/; do
+              echo '::group::Standard Extension Tests & Coverage'
+              for dir in /app/extensions/*/; do
                 if [ -d \"\$dir\" ] && [ -f \"\$dir/mix.exs\" ]; then
                   echo \"== Testing \$dir\"
                   (cd \"\$dir\" && mix deps.get && mix test --cover --export-coverage default)

@@ -480,7 +480,7 @@ public partial class ExoforgeControlCenter : EditorWindow
     {
         if (_editorClient == null || !_isConnected)
         {
-            ShowStatus("Not connected to cluster. Connect to view remote plugins.", MessageType.Warning);
+            ShowStatus("Not connected to cluster. Connect to view remote extensions.", MessageType.Warning);
             Repaint();
             return;
         }

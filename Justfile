@@ -11,11 +11,11 @@ compose_cmd := `command -v docker-compose >/dev/null 2>&1 && echo "docker-compos
 dev:
 	mix run --no-halt
 
-# Stop the dev server and wipe all dev data (SQLite databases + uploaded plugins)
+# Stop the dev server and wipe all dev data (SQLite databases + uploaded extensions)
 dev-reset:
 	-@pkill -f "mix run" 2>/dev/null
 	@find . -type d -path "*/priv/data" -not -path "*/_build/*" -prune -exec rm -rf {} +
-	@echo "Development data cleared — SQLite databases and uploaded plugins are gone."
+	@echo "Development data cleared — SQLite databases and uploaded extensions are gone."
 
 # Format all Elixir code
 format:
@@ -326,8 +326,8 @@ sample-live-tests: unity-sync
 		sleep 0.5
 	done
 
-	echo "[sample-live-tests] deploying the sample plugin"
-	(cd {{SAMPLE}} && dotnet run --project ../../../sdk/csharp/Exoforge.CLI -- plugin push snake_leaderboard >/dev/null)
+	echo "[sample-live-tests] deploying the sample extension"
+	(cd {{SAMPLE}} && dotnet run --project ../../../sdk/csharp/Exoforge.CLI -- extension push snake_leaderboard >/dev/null)
 
 	just sample-play-tests
 

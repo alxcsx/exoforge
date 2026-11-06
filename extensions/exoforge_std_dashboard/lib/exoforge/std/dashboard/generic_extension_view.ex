@@ -1440,7 +1440,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
           <h3 class="text-sm font-bold text-gray-900">Contract & Architecture Specification</h3>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
             <div class="p-4 bg-gray-50 rounded-xl border border-gray-100 space-y-2">
-              <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Plugin Identity</span>
+              <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Extension Identity</span>
               <p><strong>ID:</strong> <code class="font-mono text-purple-700"><%= @extension.id %></code></p>
               <p><strong>Entry Point:</strong> <code class="font-mono text-gray-700"><%= inspect(@extension[:entry_point] || @extension.id) %></code></p>
               <p><strong>Runtime Engine:</strong> <%= @extension.type %></p>

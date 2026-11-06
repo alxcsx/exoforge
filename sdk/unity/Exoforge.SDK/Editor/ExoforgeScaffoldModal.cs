@@ -96,7 +96,7 @@ namespace Exoforge.Unity.Editor
             title.style.color = ExoforgeUIStyle.TextPrimary;
             titleCol.Add(title);
 
-            var subtitle = new Label("Scaffold a new C# plugin module directly into your workspace.");
+            var subtitle = new Label("Scaffold a new C# extension module directly into your workspace.");
             subtitle.style.fontSize = 11;
             subtitle.style.color = ExoforgeUIStyle.TextSecondary;
             titleCol.Add(subtitle);

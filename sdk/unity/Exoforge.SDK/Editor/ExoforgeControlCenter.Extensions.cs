@@ -529,7 +529,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         EditorGUILayout.BeginHorizontal();
         GUILayout.FlexibleSpace();
         bool autoStubs = EditorGUILayout.ToggleLeft(
-            new GUIContent("Auto-generate stubs on rebuild", "Automatically regenerate typed C# plugin stubs after compiling or rebuilding an extension"),
+            new GUIContent("Auto-generate stubs on rebuild", "Automatically regenerate typed C# extension stubs after compiling or rebuilding an extension"),
             ExoforgeEditorConfig.AutoGenerateStubsOnBuild,
             GUILayout.Width(220));
         if (autoStubs != ExoforgeEditorConfig.AutoGenerateStubsOnBuild)
@@ -842,7 +842,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         var buildable = _localPlugins.Where(p => p.CanBuild).ToList();
         if (buildable.Count == 0)
         {
-            ShowStatus("No buildable plugins found.", MessageType.Info);
+            ShowStatus("No buildable extensions found.", MessageType.Info);
             return;
         }
 
@@ -852,7 +852,7 @@ public partial class ExoforgeControlCenter : EditorWindow
             targets = buildable;
         }
 
-        ShowStatus($"Building {targets.Count} plugin(s)…", MessageType.Info);
+        ShowStatus($"Building {targets.Count} extension(s)…", MessageType.Info);
         int failCount = 0;
         foreach (var plugin in targets)
         {
@@ -865,7 +865,7 @@ public partial class ExoforgeControlCenter : EditorWindow
 
         if (failCount == 0)
         {
-            ShowStatus($"✓ Built {targets.Count} plugin(s).", MessageType.Info);
+            ShowStatus($"✓ Built {targets.Count} extension(s).", MessageType.Info);
         }
         else
         {
@@ -910,7 +910,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         var unbuilt = _localPlugins.Where(p => p.CanBuild && (!p.IsBuilt || p.Modified)).ToList();
         if (unbuilt.Count > 0)
         {
-            ShowStatus($"Building {unbuilt.Count} unbuilt/modified plugin(s) before deploy…", MessageType.Info);
+            ShowStatus($"Building {unbuilt.Count} unbuilt/modified extension(s) before deploy…", MessageType.Info);
             foreach (var plugin in unbuilt)
             {
                 await BuildPluginAsync(plugin, thenDeploy: false);
@@ -920,12 +920,12 @@ public partial class ExoforgeControlCenter : EditorWindow
         var deployable = _localPlugins.Where(p => p.IsBuilt && SessionState.GetString(BuildFailureKey(p.Name), "").Length == 0).ToList();
         if (deployable.Count == 0)
         {
-            ShowStatus("No built plugins available to deploy.", MessageType.Warning);
+            ShowStatus("No built extensions available to deploy.", MessageType.Warning);
             return;
         }
 
         _isBuilding = true;
-        ShowStatus($"Deploying {deployable.Count} plugin(s) to cluster…", MessageType.Info);
+        ShowStatus($"Deploying {deployable.Count} extension(s) to cluster…", MessageType.Info);
         Repaint();
 
         int successCount = 0;
@@ -952,11 +952,11 @@ public partial class ExoforgeControlCenter : EditorWindow
 
             if (errors.Count == 0)
             {
-                ShowStatus($"✓ Successfully deployed all {successCount} plugin(s) to cluster.", MessageType.Info);
+                ShowStatus($"✓ Successfully deployed all {successCount} extension(s) to cluster.", MessageType.Info);
             }
             else
             {
-                ShowStatus($"Deployed {successCount}/{deployable.Count} plugin(s). Failures: {string.Join("; ", errors)}", MessageType.Error);
+                ShowStatus($"Deployed {successCount}/{deployable.Count} extension(s). Failures: {string.Join("; ", errors)}", MessageType.Error);
             }
         }
         catch (Exception ex)

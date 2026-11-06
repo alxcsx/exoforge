@@ -999,7 +999,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       %{
         id: "apps",
         title: "🧩 Go to Extensions Registry",
-        subtitle: "Browse and pin installed plugins",
+        subtitle: "Browse and pin installed extensions",
         type: "navigation"
       }
     ]
@@ -1031,7 +1031,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     tool_items = [
       %{
         id: "open_action_runner",
-        title: "⚡ Action Runner: Dispatch Plugin Actions",
+        title: "⚡ Action Runner: Dispatch Extension Actions",
         subtitle: "Interactive form to execute backend RPCs",
         type: "action"
       },
@@ -1914,7 +1914,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
                       <div class="flex items-center justify-between px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-xs">
                         <span class="text-gray-500">Monitored Callable Actions</span>
-                        <span class="font-mono font-bold text-gray-900"><%= @total_actions %> actions across <%= @overview.plugins_count %> plugins</span>
+                        <span class="font-mono font-bold text-gray-900"><%= @total_actions %> actions across <%= @overview.plugins_count %> extensions</span>
                       </div>
                     </div>
                   </div>
@@ -1979,7 +1979,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
                     <div class="pt-2 border-t border-gray-100 flex items-center justify-between text-[11px] text-gray-500">
                       <span>Resources: <strong class="text-gray-800"><%= @overview.resources_count %></strong></span>
-                      <span>Plugins: <strong class="text-primary-700"><%= @overview.plugins_count %></strong></span>
+                      <span>Extensions: <strong class="text-primary-700"><%= @overview.plugins_count %></strong></span>
                     </div>
                   </div>
 
