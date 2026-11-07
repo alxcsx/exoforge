@@ -1260,7 +1260,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
         </form>
 
         <div class="pt-2 text-center text-[10px] text-gray-400 font-mono">
-          Exoforge v<%= Exoforge.BuildInfo.version() %> (<%= Exoforge.BuildInfo.commit_hash() %>)
+          Exoforge v<%= Exoforge.BuildInfo.version() %> (<%= Exoforge.BuildInfo.commit_hash() %>) • Built <%= Exoforge.BuildInfo.build_date() %>
         </div>
       </div>
     </.modal>

@@ -1187,7 +1187,11 @@ defmodule Exoforge.DashboardLiveViewTest do
       # Now on Guide screen: verify default Quickstart Flow
       guide_html = render(view)
       assert guide_html =~ "From Zero to Live Online Multiplayer Features"
-      assert guide_html =~ "Tree-Shaking &amp; Native Compilation Architecture"
+      assert guide_html =~ "Connect &amp; Authenticate"
+
+      # Switch to Architecture subpage
+      arch_html = render_click(view, "set_guide_subpage", %{"subpage" => "architecture"})
+      assert arch_html =~ "Tree-Shaking"
 
       # Switch to aggregated C# Attributes subpage
       attr_html = render_click(view, "set_guide_subpage", %{"subpage" => "attributes"})
@@ -1198,7 +1202,8 @@ defmodule Exoforge.DashboardLiveViewTest do
       assert attr_html =~ "Exoforge.Plugin.SDK"
       assert attr_html =~ "exoforge_std_extension_manager"
       assert attr_html =~ "exoforge_std_resources"
-      assert attr_html =~ "Automatic Table Name Inference"
+      assert attr_html =~ "[ExoResource] Parameters"
+      assert attr_html =~ "[ExoColumn] Parameters"
     end
   end
 end

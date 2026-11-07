@@ -2529,7 +2529,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
       <!-- Dashboard Footer -->
       <footer class="mt-auto py-4 px-4 sm:px-6 lg:px-8 border-t border-gray-200/60 text-center text-[11px] text-gray-400 font-mono">
-        Exoforge v<%= @build_version %> (<%= @build_hash %>)
+        Exoforge v<%= @build_version %> (<%= @build_hash %>) • Built <%= @build_date %>
       </footer>
 
       <!-- Command Palette Modal (Cmd+K) -->

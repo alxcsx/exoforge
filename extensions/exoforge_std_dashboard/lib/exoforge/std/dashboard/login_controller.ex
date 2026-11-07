@@ -125,7 +125,7 @@ defmodule Exoforge.Std.Dashboard.LoginController do
       </div>
 
       <footer class="mt-6 text-center text-[11px] text-gray-400 font-mono">
-        Exoforge v#{Exoforge.BuildInfo.version()} (#{Exoforge.BuildInfo.commit_hash()})
+        Exoforge v#{Exoforge.BuildInfo.version()} (#{Exoforge.BuildInfo.commit_hash()}) • Built #{Exoforge.BuildInfo.build_date()}
       </footer>
     </body>
     </html>

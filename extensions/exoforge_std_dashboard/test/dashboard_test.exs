@@ -131,6 +131,7 @@ defmodule Exoforge.DashboardTest do
       refute conn.resp_body =~ "Quick Dev Sign-In"
       refute conn.resp_body =~ "dev_admin"
       assert conn.resp_body =~ "Exoforge v" <> Exoforge.BuildInfo.version()
+      assert conn.resp_body =~ "Built " <> Exoforge.BuildInfo.build_date()
     end
 
     test "GET / renders the dashboard with a session" do
@@ -144,6 +145,7 @@ defmodule Exoforge.DashboardTest do
 
       assert conn.status == 200
       assert String.contains?(conn.resp_body, "EXOFORGE")
+      assert conn.resp_body =~ "Built " <> Exoforge.BuildInfo.build_date()
     end
 
     test "GET and POST resource rows handles player profiles" do
