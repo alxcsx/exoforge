@@ -1180,9 +1180,15 @@ defmodule Exoforge.Std.Docs.View do
     assigns = assign(assigns, :html_content, Markdown.to_html(content))
 
     ~H"""
-    <div class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-6 print:border-gray-300 print:shadow-none">
-      <div class="prose prose-sm max-w-none text-gray-800">
-        <%= @html_content %>
+    <div class="space-y-8">
+      <div class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-6 print:border-gray-300 print:shadow-none">
+        <Exoforge.Std.Docs.ArchitectureGraph.visualizer />
+      </div>
+
+      <div class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-6 print:border-gray-300 print:shadow-none">
+        <div class="prose prose-sm max-w-none text-gray-800">
+          <%= @html_content %>
+        </div>
       </div>
     </div>
     """
@@ -1219,7 +1225,7 @@ defmodule Exoforge.Std.Docs.View do
       <% else %>
         <div class="space-y-4">
           <%= for svc <- @action_catalog do %>
-            <details class="group bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden transition-all duration-200 print:border-gray-300 print:shadow-none print:break-inside-avoid" open>
+            <details class="group bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden transition-all duration-200 print:border-gray-300 print:shadow-none print:break-inside-avoid">
               <summary class="flex items-center justify-between gap-3 p-5 cursor-pointer select-none bg-white hover:bg-gray-50 transition-colors list-none">
                 <div class="flex items-center gap-3">
                   <span class="w-9 h-9 rounded-xl bg-primary-50 text-primary-700 flex items-center justify-center font-bold text-base shadow-xs">
@@ -1247,11 +1253,11 @@ defmodule Exoforge.Std.Docs.View do
 
               <div class="p-5 pt-3 border-t border-gray-100 space-y-3 bg-gray-50/50 print:bg-white">
                 <%= for act <- (svc[:actions] || []) do %>
-                  <details class="group/act bg-white rounded-xl border border-gray-200/80 p-4 space-y-3 shadow-2xs transition-all print:border-gray-300 print:break-inside-avoid" open>
+                  <details class="group/act bg-white rounded-xl border border-gray-200/80 p-4 space-y-3 shadow-2xs transition-all print:border-gray-300 print:break-inside-avoid">
                     <summary class="flex items-center justify-between gap-2 cursor-pointer select-none list-none">
                       <div class="flex items-center gap-2">
                         <span class="font-bold text-primary-800 text-xs font-mono">
-                          .<%= act.name %>()
+                          <%= format_action_signature(act) %>
                         </span>
                         <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 uppercase font-mono">
                           <%= act.mode %>
@@ -1335,6 +1341,28 @@ defmodule Exoforge.Std.Docs.View do
       <% end %>
     </section>
     """
+  end
+
+  defp format_action_signature(act) do
+    name = act[:name] || act.name
+    params = act[:params] || act.params || []
+
+    params_str =
+      params
+      |> Enum.map(fn p ->
+        p_name = p[:name] || p["name"] || ""
+        p_type = to_string(p[:type] || p["type"] || "term")
+        optional? = p[:optional] || p["optional"] || false
+
+        if optional? do
+          "#{p_name}: #{p_type}?"
+        else
+          "#{p_name}: #{p_type}"
+        end
+      end)
+      |> Enum.join(", ")
+
+    ".#{name}(#{params_str})"
   end
 
   # ===========================================================================

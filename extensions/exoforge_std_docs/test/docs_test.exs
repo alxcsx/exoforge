@@ -265,5 +265,59 @@ defmodule Exoforge.Std.DocsTest do
       matches = Regex.scan(~r/\.add_item\(\)/, html)
       assert length(matches) == 1
     end
+
+    test "formats action signature with required and optional params, and collapses folds by default" do
+      catalog = [
+        %{
+          name: "auth",
+          title: "Auth Service",
+          icon: "🔐",
+          actions: [
+            %{
+              name: "authenticate",
+              mode: "sync",
+              doc: "Auth token",
+              params: [%{name: "token", type: "string", optional: false}]
+            },
+            %{
+              name: "verify_scope",
+              mode: "sync",
+              doc: "Verify scope",
+              params: [
+                %{name: "user_id", type: "string", optional: true},
+                %{name: "player_id", type: "string", optional: true},
+                %{name: "required_scope", type: "string", optional: false}
+              ]
+            }
+          ]
+        }
+      ]
+
+      assigns = %{
+        action_catalog: catalog,
+        extensions: [],
+        project_name: "TestGame",
+        studio_name: "TestStudio",
+        subpage: "catalog"
+      }
+
+      html = Phoenix.LiveViewTest.rendered_to_string(~H"""
+      <View.view
+        action_catalog={@action_catalog}
+        extensions={@extensions}
+        project_name={@project_name}
+        studio_name={@studio_name}
+        subpage={@subpage}
+      />
+      """)
+
+      # Action title signatures
+      assert html =~ ".authenticate(token: string)"
+      assert html =~ ".verify_scope(user_id: string?, player_id: string?, required_scope: string)"
+
+      # Folds collapsed by default (no 'open' attribute on details)
+      refute html =~ "<details class=\"group bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden transition-all duration-200 print:border-gray-300 print:shadow-none print:break-inside-avoid\" open>"
+      refute html =~ "<details class=\"group/act bg-white rounded-xl border border-gray-200/80 p-4 space-y-3 shadow-2xs transition-all print:border-gray-300 print:break-inside-avoid\" open>"
+    end
   end
 end
