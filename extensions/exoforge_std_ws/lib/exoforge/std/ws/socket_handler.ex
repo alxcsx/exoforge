@@ -216,9 +216,12 @@ defmodule Exoforge.Std.Ws.SocketHandler do
   end
 
   defp handle_action(req, state) do
+    service = Map.get(req, @service_key, "")
+    action = Map.get(req, @action_key, "")
+
     case Map.get(state, :auth) do
       nil ->
-        if public_action?(req) do
+        if Exoforge.Std.Transport.public_action?(service, action) do
           do_handle_action(req, %{player_id: nil, scopes: []}, state)
         else
           unauthenticated_action(req, state)
@@ -227,12 +230,6 @@ defmodule Exoforge.Std.Ws.SocketHandler do
       auth ->
         do_handle_action(req, auth, state)
     end
-  end
-
-  # Account-creating actions must be reachable before a session exists.
-  defp public_action?(req) do
-    Map.get(req, @service_key) == "auth" and
-      Map.get(req, @action_key) in ["login", "register", "create_player", "anonymous"]
   end
 
   defp unauthenticated_action(req, state) do
@@ -255,20 +252,13 @@ defmodule Exoforge.Std.Ws.SocketHandler do
     service_str = Map.get(req, @service_key, "")
     action_str = Map.get(req, @action_key, "")
 
-    raw_payload =
-      case Map.get(req, @payload_key) do
-        p when is_map(p) -> Map.delete(p, "_auth") |> Map.delete(:_auth)
-        other -> other
-      end
+    raw_payload = Map.get(req, @payload_key)
 
-    # The authenticated identity wins (M33 Fix 5): a frame naming another player must not reach
-    # the action as that player, and a frame carrying its own `_auth` must not be believed. A
-    # caller with no player yet - the public account-creating actions - keeps what it sent.
     payload =
       if is_map(raw_payload) do
         raw_payload
+        |> Exoforge.Std.Transport.sanitize_payload(auth)
         |> Map.put("_auth", auth)
-        |> stamp_player_id(auth)
       else
         raw_payload
       end
@@ -389,25 +379,6 @@ defmodule Exoforge.Std.Ws.SocketHandler do
           state
         )
     end
-  end
-
-  defp stamp_player_id(payload, %{player_id: player_id} = auth) do
-    has_explicit_target =
-      (Map.has_key?(payload, "player_id") and payload["player_id"] not in [nil, ""]) or
-        (Map.has_key?(payload, :player_id) and payload[:player_id] not in [nil, ""])
-
-    if has_explicit_target and staff_scope?(auth) do
-      payload
-    else
-      if player_id in [nil, ""], do: payload, else: Map.put(payload, "player_id", player_id)
-    end
-  end
-
-  defp stamp_player_id(payload, _auth), do: payload
-
-  defp staff_scope?(auth) do
-    scopes = Map.get(auth, :scopes) || Map.get(auth, "scopes") || []
-    Enum.any?(scopes, &(&1 in [:admin, "admin", :studio, "studio"]))
   end
 
   defp reply(data, state) do

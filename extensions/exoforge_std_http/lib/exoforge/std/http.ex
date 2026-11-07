@@ -5,6 +5,7 @@ defmodule Exoforge.Std.Http do
   Mounts Bandit HTTP server and routes incoming HTTP requests to contract actions.
   """
   use Exoforge.Extension, provides: [:http]
+  @behaviour Exoforge.Contracts.Transport
 
   @manifest %{
     dependencies: [Exoforge.Std.Services.Auth],
@@ -24,6 +25,17 @@ defmodule Exoforge.Std.Http do
       ]
     }
   }
+
+  @impl Exoforge.Contracts.Transport
+  def transport_id, do: :http
+
+  @impl Exoforge.Contracts.Transport
+  def transport_type, do: :stateless
+
+  @impl Exoforge.Contracts.Transport
+  def dispatch_action(service, action, payload, context) do
+    Exoforge.Std.Transport.dispatch(service, action, payload, context)
+  end
 
   def on_init(_manifest) do
     Exoforge.Std.Http.Cors.init()

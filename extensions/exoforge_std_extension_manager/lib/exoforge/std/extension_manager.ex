@@ -174,6 +174,12 @@ defmodule Exoforge.Std.ExtensionManager do
     export_info_internal()
   end
 
+  @impl true
+  defaction csharp_attributes do
+    files = scan_csharp_attributes()
+    {:ok, %{files: files, count: length(files)}}
+  end
+
   ## ---- PRIVATE HELPERS ----
 
   defp upload_extension_internal(payload) do
@@ -291,15 +297,46 @@ defmodule Exoforge.Std.ExtensionManager do
         }
       end)
 
+    attrs = scan_csharp_attributes()
+
     {:ok,
      %{
        export: %{
          "cluster" => to_string(node()),
          "timestamp" => System.system_time(:second),
          "extensions_count" => length(exported),
-         "extensions" => exported
+         "extensions" => exported,
+         "csharp_attributes" => attrs
        }
      }}
+  end
+
+  defp scan_csharp_attributes do
+    patterns = [
+      "extensions/*/{csharp,unity}/**/*.cs",
+      "extensions/*/{csharp,unity}/*.cs",
+      "extensions_csharp/*/{csharp,unity}/**/*.cs",
+      "extensions_csharp/*/{csharp,unity}/*.cs"
+    ]
+
+    patterns
+    |> Enum.flat_map(&Path.wildcard/1)
+    |> Enum.uniq()
+    |> Enum.map(fn file_path ->
+      ext_name =
+        file_path
+        |> Path.split()
+        |> Enum.at(1)
+
+      filename = Path.basename(file_path)
+
+      %{
+        "filename" => filename,
+        "extension" => ext_name,
+        "path" => file_path,
+        "content" => File.read!(file_path)
+      }
+    end)
   end
 
   # Resolves an extension by id, accepting either the string or the existing atom form.

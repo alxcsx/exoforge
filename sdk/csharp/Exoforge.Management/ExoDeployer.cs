@@ -483,6 +483,8 @@ public class ExoDeployer
         }
 
         ExoCodeGenerator.GeneratePluginStubsToFile(merged, output, services: targetServices, pluginId: cleanName);
+        string attrDir = Path.Combine(pluginDir, "src", "Generated", "Attributes");
+        SyncCompanionAttributes(merged, attrDir, emit);
         return output;
     }
 
@@ -523,6 +525,81 @@ public class ExoDeployer
         }
 
         return available.ToList();
+    }
+
+    /// <summary>
+    /// Synchronizes modular companion C# attributes/types from remote cluster export and local extension folders
+    /// into the generated attributes folder so the SDK / Unity compiles them.
+    /// </summary>
+    public int SyncCompanionAttributes(string exportJson, string? targetDir = null, Action<string>? emit = null)
+    {
+        string destDir = targetDir ?? Path.Combine(Path.GetDirectoryName(_workspace.GeneratedPath)!, "Attributes");
+        Directory.CreateDirectory(destDir);
+        int written = 0;
+
+        // 1. From remote cluster export JSON
+        try
+        {
+            var parsed = JsonNode.Parse(exportJson);
+            var exportNode = parsed?["export"] ?? parsed;
+            if (exportNode?["csharp_attributes"] is JsonArray remoteAttrs)
+            {
+                foreach (var attr in remoteAttrs)
+                {
+                    if (attr is null) continue;
+                    string? filename = attr["filename"]?.GetValue<string>();
+                    string? content = attr["content"]?.GetValue<string>();
+                    if (string.IsNullOrWhiteSpace(filename) || content is null) continue;
+
+                    string filePath = Path.Combine(destDir, filename);
+                    if (!File.Exists(filePath) || File.ReadAllText(filePath) != content)
+                    {
+                        File.WriteAllText(filePath, content);
+                        emit?.Invoke($"[sync] synced remote attribute: {filename}");
+                        written++;
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // Ignore parse errors from empty/partial export json
+        }
+
+        // 2. From local workspace extension folders
+        try
+        {
+            if (Directory.Exists(_workspace.ExtensionsPath))
+            {
+                var localCsFiles = Directory.GetFiles(_workspace.ExtensionsPath, "*.cs", SearchOption.AllDirectories)
+                    .Where(p =>
+                    {
+                        string dir = Path.GetDirectoryName(p) ?? "";
+                        return dir.EndsWith("csharp", StringComparison.OrdinalIgnoreCase) ||
+                               dir.EndsWith("unity", StringComparison.OrdinalIgnoreCase);
+                    });
+
+                foreach (var file in localCsFiles)
+                {
+                    string filename = Path.GetFileName(file);
+                    string destFile = Path.Combine(destDir, filename);
+                    string content = File.ReadAllText(file);
+
+                    if (!File.Exists(destFile) || File.ReadAllText(destFile) != content)
+                    {
+                        File.WriteAllText(destFile, content);
+                        emit?.Invoke($"[sync] synced local attribute: {filename}");
+                        written++;
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // Ignore local scan errors
+        }
+
+        return written;
     }
 
     /// <summary>
@@ -893,6 +970,11 @@ public class ExoDeployer
 
         string rawJson = MergeLocalContracts(exportJson);
         string targetPath = outputPathOverride ?? _workspace.GeneratedPath;
+        string? targetDir = Path.GetDirectoryName(targetPath);
+        if (!string.IsNullOrEmpty(targetDir))
+        {
+            SyncCompanionAttributes(rawJson, Path.Combine(targetDir, "Attributes"), emit);
+        }
         bool changed = ExoCodeGenerator.GenerateToFile(rawJson, targetPath, _workspace.Config.Codegen.Namespace, codeSearchRoot: _workspace.RootPath, log: emit);
 
         return changed ? 1 : 0;

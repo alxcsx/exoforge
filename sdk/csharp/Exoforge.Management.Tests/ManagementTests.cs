@@ -686,6 +686,56 @@ public class ManagementTests : IDisposable
         Assert.Equal(25, action.BytesOut);
     }
 
+    [Fact]
+    public void SyncCompanionAttributes_Syncs_Remote_And_Local_Attributes()
+    {
+        string tempDir = Path.Combine(Path.GetTempPath(), "exo_attr_test_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var ws = ExoWorkspace.Initialize(tempDir, "TestGame");
+            var deployer = new ExoDeployer(ws);
+
+            // 1. Create a local extension with a csharp/ folder and attribute
+            string extDir = Path.Combine(ws.ExtensionsPath, "test_ext", "csharp");
+            Directory.CreateDirectory(extDir);
+            File.WriteAllText(Path.Combine(extDir, "LocalAttr.cs"), "// local attr");
+
+            // 2. Prepare export JSON with a remote attribute
+            string exportJson = """
+            {
+              "export": {
+                "cluster": "test",
+                "csharp_attributes": [
+                  {
+                    "filename": "RemoteCronAttr.cs",
+                    "content": "// remote cron attr"
+                  }
+                ]
+              }
+            }
+            """;
+
+            string targetDir = Path.Combine(tempDir, "OutputAttributes");
+            int synced = deployer.SyncCompanionAttributes(exportJson, targetDir);
+
+            Assert.True(synced >= 2);
+            Assert.True(File.Exists(Path.Combine(targetDir, "LocalAttr.cs")));
+            Assert.Equal("// local attr", File.ReadAllText(Path.Combine(targetDir, "LocalAttr.cs")));
+
+            Assert.True(File.Exists(Path.Combine(targetDir, "RemoteCronAttr.cs")));
+            Assert.Equal("// remote cron attr", File.ReadAllText(Path.Combine(targetDir, "RemoteCronAttr.cs")));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, true);
+            }
+        }
+    }
+
     private static string ServiceJson(string service, string action) =>
         "{\"name\":\"" + service + "\",\"actions\":[{\"name\":\"" + action +
         "\",\"scope\":\"global\",\"params\":[{\"name\":\"id\",\"type\":\"string\"}]," +

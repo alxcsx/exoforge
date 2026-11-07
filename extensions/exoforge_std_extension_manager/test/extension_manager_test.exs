@@ -64,6 +64,23 @@ defmodule Exoforge.Std.ExtensionManagerTest do
       assert em["title"] == "Extension Manager"
     end
 
+    test "csharp_attributes and export_extension_info include companion C# files" do
+      assert {:ok, result} =
+               ActionDispatcher.dispatch(:extension_manager, :csharp_attributes, %{})
+
+      assert is_list(result.files)
+      cron_attr = Enum.find(result.files, &(&1["filename"] == "ExoCronAttribute.cs"))
+      assert cron_attr != nil
+      assert cron_attr["content"] =~ "ExoCronAttribute"
+
+      assert {:ok, exp_res} =
+               ActionDispatcher.dispatch(:extension_manager, :export_extension_info, %{}, caller_scopes: ["studio"])
+
+      exp_attrs = exp_res.export["csharp_attributes"]
+      assert is_list(exp_attrs)
+      assert Enum.any?(exp_attrs, &(&1["filename"] == "ExoCronAttribute.cs"))
+    end
+
     test "get_extension returns metadata for known extension" do
       assert {:ok, result} =
                ActionDispatcher.dispatch(

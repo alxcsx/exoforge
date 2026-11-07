@@ -4,6 +4,7 @@ defmodule Exoforge.Std.Ws do
   Provides the :ws service and manages the Bandit WebSocket server in its supervision tree.
   """
   use Exoforge.Extension, provides: [:ws]
+  @behaviour Exoforge.Contracts.Transport
 
   @manifest %{
     dependencies: [Exoforge.Std.Services.Auth],
@@ -13,6 +14,23 @@ defmodule Exoforge.Std.Ws do
     system: true,
     dashboard_view: nil
   }
+
+  @impl Exoforge.Contracts.Transport
+  def transport_id, do: :ws
+
+  @impl Exoforge.Contracts.Transport
+  def transport_type, do: :realtime
+
+  @impl Exoforge.Contracts.Transport
+  def dispatch_action(service, action, payload, context) do
+    Exoforge.Std.Transport.dispatch(service, action, payload, context)
+  end
+
+  @impl Exoforge.Contracts.Transport
+  def push_event(_conn_id, topic, event, payload) do
+    Exoforge.EventDispatcher.broadcast(event, payload, topic: topic)
+    :ok
+  end
 
   def children do
     port = Exoforge.Endpoints.ws_port()

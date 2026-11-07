@@ -446,6 +446,37 @@ defmodule Exoforge.Std.Services do
     end
   end
 
+  defservice transport do
+    @moduledoc "Transport abstraction layer for ingress network gateways."
+
+    @doc "Returns transport layer status."
+    action :status do
+      returns(status: :string, layer: :string)
+    end
+  end
+
+  defservice cron do
+    @moduledoc "Scheduled job execution and recurring cron runner."
+
+    @doc "Returns status and count of active cron jobs."
+    action :status do
+      returns(status: :string, active_jobs: :integer)
+    end
+
+    @doc "Lists all scheduled cron jobs."
+    action :list_jobs do
+      scope("studio")
+      returns(jobs: [:map], count: :integer)
+    end
+
+    @doc "Manually triggers a scheduled job by its name or id."
+    action :trigger_job do
+      scope("studio")
+      params(job_id: :string)
+      returns(status: :string)
+    end
+  end
+
   defservice extension_manager do
     @moduledoc "Lifecycle, deployment, and inspection of Exoforge extensions."
 
@@ -517,6 +548,11 @@ defmodule Exoforge.Std.Services do
     action :export_extension_info do
       scope("studio")
       returns(export: :map)
+    end
+
+    @doc "Exports C# companion attributes and types provided by loaded extensions."
+    action :csharp_attributes do
+      returns(files: [:map], count: :integer)
     end
   end
 
