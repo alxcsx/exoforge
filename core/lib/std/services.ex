@@ -697,4 +697,26 @@ defmodule Exoforge.Std.Services do
       errors([:not_found])
     end
   end
+
+  defservice docs do
+    @moduledoc "Developer Guide, documentation chapters, and dynamic API reference."
+
+    @doc "Lists all available documentation chapters."
+    action :list_chapters do
+      returns(chapters: [:map])
+    end
+
+    @doc "Retrieves the content of a specific documentation chapter."
+    action :get_chapter do
+      params(id: :string)
+      returns(chapter: :map)
+      errors([:not_found])
+    end
+
+    @doc "Exports the consolidated documentation and dynamic API reference as Markdown or HTML."
+    action :export_docs do
+      params(format: [type: :string, optional: true])
+      returns(title: :string, content: :string, format: :string)
+    end
+  end
 end

@@ -1,0 +1,174 @@
+defmodule Exoforge.Std.DocsTest do
+  use ExUnit.Case, async: true
+  import Phoenix.Component
+
+  alias Exoforge.Std.Docs
+  alias Exoforge.Std.Docs.Markdown
+  alias Exoforge.Std.Docs.View
+
+  describe "Markdown Renderer" do
+    test "renders headings, bold, italic, code, and links" do
+      md = """
+      # Main Title
+      ## Subtitle
+
+      This is **bold**, *italic*, and `inline_code`.
+      Check out [Exoforge](https://exoforge.dev).
+      """
+
+      html = Markdown.to_html(md) |> Phoenix.HTML.safe_to_string()
+
+      assert html =~ "<h1"
+      assert html =~ "Main Title</h1>"
+      assert html =~ "<h2"
+      assert html =~ "<strong class=\"font-bold text-gray-900\">bold</strong>"
+      assert html =~ "<em class=\"italic\">italic</em>"
+      assert html =~ "<code class=\"font-mono"
+      assert html =~ "inline_code</code>"
+      assert html =~ "<a href=\"https://exoforge.dev\""
+      assert html =~ "target=\"_blank\""
+    end
+
+    test "renders images" do
+      md = "![Diagram](/docs/images/arch.png)"
+      html = Markdown.to_html(md) |> Phoenix.HTML.safe_to_string()
+
+      assert html =~ "<img src=\"/docs/images/arch.png\" alt=\"Diagram\""
+    end
+
+    test "renders callout alerts" do
+      md = """
+      > [!NOTE]
+      > This is a helpful note.
+
+      > [!WARNING]
+      > Beware of something breaking.
+      """
+
+      html = Markdown.to_html(md) |> Phoenix.HTML.safe_to_string()
+
+      assert html =~ "Note"
+      assert html =~ "This is a helpful note."
+      assert html =~ "Warning"
+      assert html =~ "Beware of something breaking."
+    end
+
+    test "renders tables" do
+      md = """
+      | Name | Type | Description |
+      |---|---|---|
+      | score | integer | The total score |
+      """
+
+      html = Markdown.to_html(md) |> Phoenix.HTML.safe_to_string()
+
+      assert html =~ "<table"
+      assert html =~ ">Name</th>"
+      assert html =~ ">score</td>"
+      assert html =~ ">integer</td>"
+      assert html =~ ">The total score</td>"
+    end
+
+    test "renders syntax-highlighted C# code blocks" do
+      md = """
+      ```csharp
+      public class Player : MonoBehaviour
+      {
+          [ExoAction]
+          public int Score => 100;
+      }
+      ```
+      """
+
+      html = Markdown.to_html(md) |> Phoenix.HTML.safe_to_string()
+
+      assert html =~ "<pre"
+      assert html =~ "text-purple-400 font-semibold\">public</span>"
+      assert html =~ "text-yellow-300 font-semibold\">[ExoAction]</span>"
+    end
+  end
+
+  describe "Docs Extension Actions" do
+    test "list_chapters returns all markdown chapters" do
+      {:ok, %{chapters: chapters, count: count}} = Docs.list_chapters()
+      assert count >= 3
+      assert Enum.any?(chapters, &(&1.id == "01_quickstart"))
+      assert Enum.any?(chapters, &(&1.id == "02_csharp_attributes"))
+      assert Enum.any?(chapters, &(&1.id == "03_architecture"))
+    end
+
+    test "get_chapter returns chapter content and rendered html" do
+      {:ok, %{chapter: chapter}} = Docs.get_chapter(%{id: "01_quickstart"})
+      assert chapter.title =~ "Developer Quickstart"
+      assert chapter.content =~ "From zero to live"
+      assert chapter.html =~ "<h1"
+    end
+
+    test "get_chapter returns error for missing chapter" do
+      assert {:error, :not_found} = Docs.get_chapter(%{id: "non_existent"})
+    end
+
+    test "export_docs produces unified markdown and html" do
+      {:ok, %{title: title, content: md, format: "markdown"}} = Docs.export_docs(%{format: "markdown"})
+      assert title =~ "Exoforge Complete Developer Guide"
+      assert md =~ "Developer Quickstart"
+      assert md =~ "C# Attributes Reference"
+      assert md =~ "Dynamic Cluster API Reference"
+
+      {:ok, %{content: html, format: "html"}} = Docs.export_docs(%{format: "html"})
+      assert html =~ "<h1"
+    end
+  end
+
+  describe "Docs Phoenix Component View" do
+    test "renders quickstart flow by default" do
+      assigns = %{
+        action_catalog: [],
+        extensions: [],
+        project_name: "TestGame",
+        studio_name: "TestStudio",
+        subpage: "flow"
+      }
+
+      html = Phoenix.LiveViewTest.rendered_to_string(~H"""
+      <View.view
+        action_catalog={@action_catalog}
+        extensions={@extensions}
+        project_name={@project_name}
+        studio_name={@studio_name}
+        subpage={@subpage}
+      />
+      """)
+
+      assert html =~ "From Zero to Live Online Multiplayer Features"
+      assert html =~ "Export to PDF"
+      assert html =~ "@media print"
+    end
+
+    test "renders attributes subpage" do
+      assigns = %{
+        action_catalog: [],
+        extensions: [],
+        project_name: "TestGame",
+        studio_name: "TestStudio",
+        subpage: "attributes"
+      }
+
+      html = Phoenix.LiveViewTest.rendered_to_string(~H"""
+      <View.view
+        action_catalog={@action_catalog}
+        extensions={@extensions}
+        project_name={@project_name}
+        studio_name={@studio_name}
+        subpage={@subpage}
+      />
+      """)
+
+      assert html =~ "[ExoExtension]"
+      assert html =~ "[ExoAction]"
+      assert html =~ "[ExoCron]"
+      assert html =~ "[ExoEvent]"
+      assert html =~ "[ExoResource]"
+    end
+  end
+end

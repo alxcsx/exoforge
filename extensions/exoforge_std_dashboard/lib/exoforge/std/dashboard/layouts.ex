@@ -150,6 +150,36 @@ defmodule Exoforge.Std.Dashboard.Layouts do
                     }
                   }
                 },
+                NavCapacity: {
+                  mounted() {
+                    this.calcCapacity = () => {
+                      const w = window.innerWidth;
+                      // Fits within one row - 1 according to responsive breakpoint:
+                      let cap = 6;
+                      if (w < 640) cap = 2;
+                      else if (w < 768) cap = 3;
+                      else if (w < 1024) cap = 4;
+                      else if (w < 1280) cap = 6;
+                      else if (w < 1536) cap = 8;
+                      else cap = 10;
+
+                      if (this._lastCap !== cap) {
+                        this._lastCap = cap;
+                        this.pushEvent("set_nav_capacity", { max_pinned: cap, screen_width: w });
+                      }
+                    };
+
+                    this.calcCapacity();
+                    this.resizeHandler = () => {
+                      if (this._timer) clearTimeout(this._timer);
+                      this._timer = setTimeout(this.calcCapacity, 150);
+                    };
+                    window.addEventListener('resize', this.resizeHandler);
+                  },
+                  destroyed() {
+                    if (this.resizeHandler) window.removeEventListener('resize', this.resizeHandler);
+                  }
+                },
                 MicrofrontendLoader: {
                   mounted() {
                     this.load();

@@ -781,15 +781,21 @@ defmodule Exoforge.DashboardLiveViewTest do
       {extensions_pos, _} = :binary.match(html, "Extensions")
       assert overview_pos < extensions_pos
 
-      # Attempt to pin beyond the limit
-      # Max pinned is 8
+      # Pin beyond the limit with circular queue (FIFO)
+      # Default max pinned is 8
       for i <- 1..10 do
         render_click(view, "pin_extension", %{"id" => "ext_#{i}"})
       end
 
-      # Should hit the maximum limit
+      # Circular pinning: removes the oldest pin in a circle
       html = render_click(view, "pin_extension", %{"id" => "ext_overflow"})
-      assert html =~ "Maximum of 8 pinned extensions reached"
+      assert html =~ "ext_overflow"
+      refute html =~ ~s(phx-value-tab="ext_1")
+
+      # Screen size adjustment via set_nav_capacity hook
+      render_click(view, "set_nav_capacity", %{"max_pinned" => 4, "screen_width" => 800})
+      html_resized = render(view)
+      assert html_resized =~ "ext_overflow"
     end
 
     test "plugin manager extension view displays cluster runtime telemetry, inspector drawer, and modals" do
@@ -1048,7 +1054,7 @@ defmodule Exoforge.DashboardLiveViewTest do
       send(view.pid, {:studio_event, ev_item})
       feed_html = render(view)
       assert feed_html =~ "auth.login"
-      assert feed_html =~ "Latest Dispatched Event"
+      assert feed_html =~ "Live Stream Events"
       assert feed_html =~ "More"
 
       # Open Events History Modal via "More" button

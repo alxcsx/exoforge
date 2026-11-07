@@ -271,28 +271,57 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     {:noreply, push_patch(socket, to: tab_path(target_tab))}
   end
 
+  def handle_event("set_nav_capacity", %{"max_pinned" => max_val}, socket) do
+    cap =
+      case max_val do
+        i when is_integer(i) -> max(1, i)
+        s when is_binary(s) ->
+          case Integer.parse(s) do
+            {i, _} -> max(1, i)
+            _ -> @max_pinned
+          end
+        _ -> @max_pinned
+      end
+
+    pinned = socket.assigns.pinned_extensions
+
+    new_pinned =
+      if length(pinned) > cap do
+        Enum.take(pinned, -cap)
+      else
+        pinned
+      end
+
+    if new_pinned != pinned do
+      Exoforge.Std.Dashboard.Preferences.put_pinned(socket.assigns.player_id, new_pinned)
+    end
+
+    {:noreply, assign(socket, max_pinned: cap, pinned_extensions: new_pinned)}
+  end
+
   def handle_event("pin_extension", %{"id" => ext_id_str}, socket) do
     pinned = socket.assigns.pinned_extensions
+    max_pinned = socket.assigns.max_pinned
 
     if ext_id_str in pinned do
       {:noreply, socket}
     else
-      if length(pinned) >= @max_pinned do
-        {:noreply,
-         show_toast(
-           socket,
-           :error,
-           "Maximum of #{@max_pinned} pinned extensions reached. Unpin an extension to pin another."
-         )}
-      else
-        new_pinned = pinned ++ [ext_id_str]
-        Exoforge.Std.Dashboard.Preferences.put_pinned(socket.assigns.player_id, new_pinned)
+      # Circular pinning queue (fits in one row - 1):
+      # If at capacity, remove the oldest pin in a circle (FIFO) and append the new one
+      new_pinned =
+        if length(pinned) >= max_pinned do
+          drop_count = length(pinned) - max_pinned + 1
+          Enum.drop(pinned, drop_count) ++ [ext_id_str]
+        else
+          pinned ++ [ext_id_str]
+        end
 
-        {:noreply,
-         socket
-         |> assign(pinned_extensions: new_pinned)
-         |> show_toast(:info, "Pinned #{ext_id_str} to top navigation bar.")}
-      end
+      Exoforge.Std.Dashboard.Preferences.put_pinned(socket.assigns.player_id, new_pinned)
+
+      {:noreply,
+       socket
+       |> assign(pinned_extensions: new_pinned)
+       |> show_toast(:info, "Pinned #{ext_id_str} to top navigation bar.")}
     end
   end
 
@@ -1451,8 +1480,8 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
             </div>
           </div>
 
-          <!-- Top Navigation Bar: 1. Overview, 2. Extensions, 3. Pinned Items (wraps to 2nd line if needed, up to @max_pinned) -->
-          <nav class="flex-1 min-w-0 mx-1 flex flex-wrap items-center gap-0.5 bg-gray-100/90 p-0.5 rounded-xl border border-gray-200/80 shadow-inner">
+          <!-- Top Navigation Bar: 1. Overview, 2. Extensions, 3. Pinned Items (fits in one row - 1, circular queue) -->
+          <nav id="nav-container" phx-hook="NavCapacity" class="flex-1 min-w-0 mx-1 flex items-center flex-nowrap overflow-x-hidden gap-0.5 bg-gray-100/90 p-0.5 rounded-xl border border-gray-200/80 shadow-inner">
             <!-- 1. Overview Tab (Icon only + tooltip/aria) -->
             <button
               phx-click="switch_tab"
@@ -1846,8 +1875,8 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
                     <div class="flex items-baseline gap-3">
                       <span class="text-3xl font-black text-gray-900 tracking-tight"><%= @telemetry.total_invocations %></span>
-                      <span class="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
-                        <%= length(@activity_events) %> live stream events
+                      <span class="text-xs font-semibold text-gray-500 bg-gray-100 px-2.5 py-0.5 rounded-full font-mono">
+                        action calls
                       </span>
                     </div>
 
@@ -1900,12 +1929,12 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                       </div>
                     </div>
 
-                    <!-- Recent Dispatched Event with "More" Modal Button -->
+                    <!-- Recent Dispatched Event with Live Stream Event Count and "More" Modal Button -->
                     <div class="space-y-2 pt-2 border-t border-gray-100">
                       <div class="flex items-center justify-between">
-                        <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+                        <div class="text-[10px] font-bold uppercase tracking-wider text-gray-500 flex items-center gap-1.5">
                           <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                          <span>Latest Dispatched Event</span>
+                          <span>Live Stream Events (<%= length(@activity_events) %>)</span>
                         </div>
                         <button
                           type="button"

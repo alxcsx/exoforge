@@ -63,6 +63,7 @@ database ──▶ auth ──▶ player_data
 
 dashboard (:4005) ──▶ dashboard_views
 extension_manager ──▶ (independent root)
+docs        ──▶ extension_manager
 resources   ──▶ database
 metering    ──▶ database
 file_bucket ──▶ database
@@ -78,6 +79,7 @@ file_bucket ──▶ database
 | `exoforge_std_dashboard` | Studio (:4005) | `dashboard` | — | System extension hosting LiveView Producer Studio and Actor Inspector. |
 | `exoforge_std_dashboard_views` | Studio Views | `dashboard_view` | `dashboard` | Decoupled UI components for player data, extension manager, auth. |
 | `exoforge_std_extension_manager`| Lifecycle | `extension_manager` | — | Hot extension upload, reload, and manifest export. |
+| `exoforge_std_docs` | Docs / Guide | `docs` | `extension_manager` | Dynamic cluster API catalog, markdown chapters, and native PDF export. |
 | `exoforge_std_resources` | Store | `resource_store` | `database` | Schema-driven resource tables and generic CRUD. |
 | `exoforge_std_file_bucket` | Storage / CDN | `file_bucket` | `database` | Pluggable binary/blob asset storage with tags, metadata, and HTTP file routes. |
 | `exoforge_std_metering` | Operations | `metering` | `database` | Usage metering per extension and action, persisted on the instance. |
