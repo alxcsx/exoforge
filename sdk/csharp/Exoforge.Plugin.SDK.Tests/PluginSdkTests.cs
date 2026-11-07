@@ -43,7 +43,7 @@ public class CounterEntity
 
 [ExoResource("players", PrimaryKey = nameof(PlayerId), DrawerTabs = new[] { "overview", "inventory" })]
 public record PlayerRecord(
-    [property: PrimaryKey]
+    [property: ExoColumn(PrimaryKey = true)]
     int PlayerId,
     [property: ExoColumn(Label = "Display Name", Filterable = true)]
     string Name,

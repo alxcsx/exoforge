@@ -242,14 +242,6 @@ public class ExoSingletonResourceAttribute : ExoResourceAttribute
 }
 
 /// <summary>
-/// Explicitly marks a property or parameter as the primary key of a resource.
-/// </summary>
-[AttributeUsage(AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Parameter, Inherited = false, AllowMultiple = false)]
-public class PrimaryKeyAttribute : Attribute
-{
-}
-
-/// <summary>
 /// Declares a column on a resource schema. Supports smart defaults and type inference.
 /// </summary>
 [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Parameter, Inherited = false, AllowMultiple = false)]
@@ -258,6 +250,15 @@ public class ExoColumnAttribute : Attribute
     public string? Name { get; set; }
     public string? DataType { get; set; }
     public string? Label { get; set; }
+
+    /// <summary>Marks this column as the primary key of the resource table.</summary>
+    public bool PrimaryKey { get; set; }
+
+    /// <summary>Marks this column as a foreign key reference.</summary>
+    public bool ForeignKey { get; set; }
+
+    /// <summary>Target referenced table and column (e.g. "player_data.id").</summary>
+    public string? References { get; set; }
 
     /// <summary>Semantic role of the value (e.g. "user_id"), which the Studio renders specially.</summary>
     public string? Role { get; set; }

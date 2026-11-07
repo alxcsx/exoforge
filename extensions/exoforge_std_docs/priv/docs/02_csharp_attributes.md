@@ -43,12 +43,22 @@ Exposes public class methods as callable RPC endpoints over WebSocket, HTTP, and
 
 Decorate any public method with `[ExoAction]` to make it callable from Unity clients, Web UI, and CLI. Method arguments are automatically deserialized from incoming payloads, and return values are serialized back to the caller.
 
-### How `Mode` Works in Native C# Extensions
+### What `Mode` Implies in C# Extensions
 
-C# native extensions execute out-of-process and communicate with the Erlang/OTP host via standard I/O newline-delimited JSON. By default, `Mode` is set to `ActionMode.Auto`:
-* **`Task` / `Task<T>` return type**: Inferred as `ActionMode.Async` (`"async"`). The extension runtime awaits the asynchronous task before replying with an `action_result` frame.
-* **Concrete return type (`int`, `record`, `void`)**: Inferred as `ActionMode.Sync` (`"sync"`). The extension runtime executes the method synchronously and replies immediately.
-* **`ActionMode.Cast`**: Explicit fire-and-forget. The host dispatches the frame without blocking callers or awaiting an `action_result`.
+C# native extensions execute as out-of-process services communicating with the host cluster via high-speed IPC (newline-delimited JSON stdio). By default, `Mode` is set to `ActionMode.Auto`, which is recommended for almost all methods:
+
+* **`ActionMode.Auto` (Default)**: Automatically inferred from return type:
+  * **`Task` / `Task<T>`**: Inferred as `ActionMode.Async` (`"async"`).
+  * **Concrete types (`int`, `record`, `void`)**: Inferred as `ActionMode.Sync` (`"sync"`).
+* **`ActionMode.Sync` (Request / Response — Synchronous)**:
+  * **What it implies**: Runs synchronously on the extension dispatch thread and replies immediately with the return payload. The caller awaits the reply in-band.
+  * **Best for**: Fast in-memory computations, state lookups, math, and validations (< 1ms).
+* **`ActionMode.Async` (Request / Response — Asynchronous Non-Blocking)**:
+  * **What it implies**: The method returns `Task` or `Task<T>`. The extension process does not block its dispatch thread while awaiting I/O operations (database queries, external webhooks). Once the Task resolves, the result is serialized and returned to the caller.
+  * **Best for**: Database operations, external API calls, or multi-step async workflows.
+* **`ActionMode.Cast` (One-Way — Fire-and-Forget)**:
+  * **What it implies**: One-way dispatch without awaiting any return value or completion confirmation. No response frame is sent over the wire back to the client.
+  * **Best for**: Telemetry, analytics, player position pings, event logging, or fire-and-forget notifications where low latency is critical and no response payload is needed.
 
 | Property | Type | Default | Description |
 |---|---|---|---|
@@ -76,7 +86,7 @@ public TransferItemResponse TransferItem(TransferItemRequest req)
 
 ## [ExoCron]
 
-Executes scheduled recurring background jobs via the Erlang/OTP cluster scheduler.
+Executes scheduled recurring background tasks via the cluster scheduler.
 
 Decorate any service method with `[ExoCron("schedule")]` to turn it into an automated background job. Ideal for leaderboard rollovers, daily resets, state sweepers, and periodic syncs.
 
@@ -146,7 +156,7 @@ Declares a typed entity record mapped directly to SQLite / PostgreSQL storage. T
 | Property | Type | Default | Description |
 |---|---|---|---|
 | name (positional) | string | Record name | Database table name. When omitted, defaults to the record name in `snake_case` (e.g. `PlayerScoreRecord` → `player_scores`). |
-| PrimaryKey | string | `"id"` | Name of the primary key column. Can also be designated on a property using `[PrimaryKey]`. |
+| PrimaryKey | string | `"id"` | Name of the primary key column. Can also be designated on a column using `[ExoColumn(PrimaryKey = true)]` or automatically inferred from property name `Id`. |
 | Source | string | Same as `Name` | The table or view this resource is stored in. Real database table queryable via SQL (`WHERE`, `ORDER BY`). |
 | Singleton | bool | `false` | Indicates whether this resource stores exactly one record (e.g. server configuration). Creates a default record when empty and renders as a single form in Studio. (Or use `[ExoSingletonResource]`). |
 | DrawerTabs | string[] | `["overview"]` | Tab sections displayed when inspecting a row in the Studio drawer (e.g. `new[] { "overview", "attributes" }`). |
@@ -157,6 +167,9 @@ Declares a typed entity record mapped directly to SQLite / PostgreSQL storage. T
 | Property | Type | Default | Description |
 |---|---|---|---|
 | name (positional) | string | Property name | Column name in the database table in snake_case. |
+| PrimaryKey | bool | `false` | Marks this column as the primary key of the resource table. (Properties named `Id` are automatically inferred as primary keys). |
+| ForeignKey | bool | `false` | Marks this column as a foreign key reference. |
+| References | string | `null` | Target referenced table and column (e.g. `"player_data.id"`). |
 | Label | string | Property name | User-friendly header label rendered in Studio Dashboard data tables and drawer forms. |
 | DataType | string | Auto-inferred | Explicit SQL data type override (`"text"`, `"integer"`, `"float"`, `"boolean"`, `"datetime"`, `"json"`). Inferred from C# type. |
 | Role | string | `null` | Semantic role for special Studio UI presentation (e.g. `"user_id"`, `"file_reference"`, `"currency"`). |
@@ -168,10 +181,10 @@ Declares a typed entity record mapped directly to SQLite / PostgreSQL storage. T
 | FileReference | bool | `false` | Convenience shorthand for `Role = "file_reference"`. |
 
 ```csharp
-[ExoResource(Name = "player_scores", PrimaryKey = "id")]
+[ExoResource(Name = "player_scores")]
 public record PlayerScoreRecord(
-    [property: PrimaryKey] string Id,
-    [property: ExoColumn(Role = "user_id", Label = "Player ID")] string PlayerId,
+    [property: ExoColumn(PrimaryKey = true)] string Id,
+    [property: ExoColumn(ForeignKey = true, References = "player_data.id", Role = "user_id", Label = "Player ID")] string PlayerId,
     [property: ExoColumn(Label = "Score", Sortable = true)] int Score,
     [property: ExoColumn(Badge = true, InputType = ExoInput.Color)] string TierBadge,
     DateTime CreatedAt

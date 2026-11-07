@@ -191,8 +191,8 @@ defmodule Exoforge.Std.DocsTest do
       """)
 
       assert html =~ "Architecture"
-      assert html =~ "html:not(.light) code:not(pre code)"
-      assert html =~ "html:not(.light) .prose code"
+      assert html =~ "html:not(.light) :not(pre) > code"
+      assert html =~ "pre code"
     end
 
     test "subpage flow does not duplicate the action catalog" do

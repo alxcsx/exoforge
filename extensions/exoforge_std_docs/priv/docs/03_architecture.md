@@ -1,6 +1,6 @@
 # Exoforge Architecture & Native Process Runtime
 
-Tree-Shaking, Native Compilation, and OTP Supervision.
+Tree-Shaking, Native Compilation, and Actor Concurrency Supervision.
 
 ---
 
@@ -10,9 +10,9 @@ Tree-Shaking, Native Compilation, and OTP Supervision.
 > **The Exception**: The kernel itself is not an extension.
 
 The kernel is strictly limited to:
-- `ExtensionRegistry`: In-memory ETS catalog of service manifests and resources.
+- `ExtensionRegistry`: In-memory catalog of service manifests and resources.
 - `ActionDispatcher`: Authorization scope checks and service action routing.
-- `EventDispatcher`: Real-time pub/sub bus with pattern matching and Registry fanout.
+- `EventDispatcher`: Real-time pub/sub bus with pattern matching and registry fanout.
 - `WorkerRegistry`: Named singleton process locator.
 - `ExtensionSupervisor` & `ExtensionBootstrapper`: Topological DAG ordering and process lifecycle.
 
@@ -23,14 +23,14 @@ The kernel is strictly limited to:
 When publishing a native C# extension, Exoforge leverages **.NET IL Trimming & Ahead-Of-Time (AOT) tree-shaking**. All unused base class library (BCL) methods and reflection overhead are stripped at compile time.
 
 - **Zero Reflection at Runtime**: Contracts, actions, and parameter types are analyzed and serialized into a lightweight `manifest.json` at build time.
-- **Minimal Memory Footprint**: Stripped extension binaries load in milliseconds with predictable memory usage under Erlang/OTP supervision.
+- **Minimal Memory Footprint**: Stripped extension binaries load in milliseconds with predictable memory usage under actor concurrency supervision.
 - **Binary Isolation**: Each extension operates in an isolated worker OS process without polluting cluster dependencies.
 
 ---
 
 ## Extension Wire Protocol
 
-Communication between the Erlang/OTP host and the native .NET process takes place over stdio using newline-delimited JSON frames:
+Communication between the host cluster supervisor and the native .NET process takes place over stdio using newline-delimited JSON frames:
 
 | Frame Type | Direction | Carries |
 |---|---|---|

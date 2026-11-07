@@ -47,7 +47,7 @@ public interface IDatabaseTable<T>
 /// <summary>
 /// Type-safe extension methods for <see cref="IDatabase"/> to reduce magic strings.
 /// Resolves table names and primary keys using <see cref="ExoResourceAttribute"/>,
-/// <see cref="PrimaryKeyAttribute"/>, or standard conventions.
+/// <see cref="ExoColumnAttribute.PrimaryKey"/>, or standard conventions.
 /// </summary>
 public static class DatabaseExtensions
 {
@@ -236,10 +236,10 @@ internal static class EntityMetadata<T>
         }
 
         // 2. Discover primary key property
-        // a) Look for [PrimaryKey]
+        // a) Look for [ExoColumn(PrimaryKey = true)]
         foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
-            if (prop.GetCustomAttribute<PrimaryKeyAttribute>() != null)
+            if (prop.GetCustomAttribute<ExoColumnAttribute>()?.PrimaryKey == true)
             {
                 KeyProp = prop;
                 break;
@@ -265,7 +265,7 @@ internal static class EntityMetadata<T>
         {
             foreach (var field in type.GetFields(BindingFlags.Public | BindingFlags.Instance))
             {
-                if (field.GetCustomAttribute<PrimaryKeyAttribute>() != null)
+                if (field.GetCustomAttribute<ExoColumnAttribute>()?.PrimaryKey == true)
                 {
                     KeyField = field;
                     break;
@@ -302,7 +302,7 @@ internal static class EntityMetadata<T>
         {
             throw new InvalidOperationException(
                 $"Cannot determine primary key for type '{typeof(T).FullName}'. " +
-                $"Mark a property with [PrimaryKey], [ExoResource(PrimaryKey = \"...\")], or name it 'Id' or '{typeof(T).Name}Id'.");
+                $"Mark a property with [ExoColumn(PrimaryKey = true)], [ExoResource(PrimaryKey = \"...\")], or name it 'Id' or '{typeof(T).Name}Id'.");
         }
 
         if (val == null)

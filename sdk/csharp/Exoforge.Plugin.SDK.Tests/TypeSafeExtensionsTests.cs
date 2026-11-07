@@ -5,11 +5,11 @@ using Xunit;
 
 namespace Exoforge.Plugin.SDK.Tests;
 
-// Test entity with [ExoResource] and [PrimaryKey]
+// Test entity with [ExoResource] and [ExoColumn(PrimaryKey = true)]
 [ExoResource("custom_scores", PrimaryKey = "PlayerId")]
 public record TestScore
 {
-    [PrimaryKey]
+    [ExoColumn(PrimaryKey = true)]
     public string PlayerId { get; init; } = "";
     public int Score { get; init; }
 }

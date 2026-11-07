@@ -32,7 +32,6 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
     private const string CronAttribute = "Exoforge.Plugin.SDK.ExoCronAttribute";
     private const string EventAttribute = "Exoforge.Plugin.SDK.ExoEventAttribute";
     private const string ColumnAttribute = "Exoforge.Plugin.SDK.ExoColumnAttribute";
-    private const string PrimaryKeyAttribute = "Exoforge.Plugin.SDK.PrimaryKeyAttribute";
     private const string DependencyAttribute = "Exoforge.Plugin.SDK.ExoDependencyAttribute";
     private const string InputTypeAttribute = "Exoforge.Plugin.SDK.ExoInputTypeAttribute";
     private const string JsonContextBase = "System.Text.Json.Serialization.JsonSerializerContext";
@@ -883,12 +882,11 @@ namespace Exoforge.Plugin.SDK
             if (property.DeclaredAccessibility != Accessibility.Public || property.IsStatic) continue;
 
             var colAttr = FindAttribute(property.GetAttributes(), ColumnAttribute);
-            var pkAttr = FindAttribute(property.GetAttributes(), PrimaryKeyAttribute);
 
-            bool isExplicitPk = pkAttr is not null || property.Name.Equals("Id", StringComparison.OrdinalIgnoreCase);
+            bool isExplicitPk = NamedBool(colAttr, "PrimaryKey") || property.Name.Equals("Id", StringComparison.OrdinalIgnoreCase);
 
             // Without [ExoColumn] the property still counts when the record carries [ExoResource].
-            if (colAttr is null && pkAttr is null && resourceAttr is null) continue;
+            if (colAttr is null && resourceAttr is null) continue;
 
             string colName = NamedString(colAttr, "Name") ?? PositionalString(colAttr, 0) ?? ToSnakeCase(property.Name);
 
@@ -923,7 +921,7 @@ namespace Exoforge.Plugin.SDK
                 bucket,
                 inputType));
 
-            if (pkAttr is not null && string.IsNullOrEmpty(primaryKey)) primaryKey = colName;
+            if (NamedBool(colAttr, "PrimaryKey") && string.IsNullOrEmpty(primaryKey)) primaryKey = colName;
         }
 
         return columns;

@@ -2,7 +2,7 @@
 
 From zero to live online multiplayer backend services in 60 seconds.
 
-Exoforge allows game developers to write clean, strongly-typed native C# backend extensions that compile locally, hot-reload into distributed Erlang/OTP nodes, and sync seamlessly into client code without manual networking boilerplate.
+Exoforge allows game developers to write clean, strongly-typed native C# backend extensions that compile locally, hot-reload into an actor concurrency microservices runtime, and sync seamlessly into client code without manual networking boilerplate.
 
 ---
 
@@ -52,7 +52,7 @@ using Exoforge.SDK;
 [ExoExtension("gameplay_calculator", Version = "1.0.0")]
 public class GameplayCalculatorExtension
 {
-    [ExoAction(Mode = "sync")]
+    [ExoAction]
     public CalculateScoreResponse CalculateScore(CalculateScoreRequest req)
     {
         if (req.Multiplier <= 0)
@@ -68,7 +68,7 @@ public record CalculateScoreResponse(int TotalScore, System.DateTime CalculatedA
 ```
 
 > [!NOTE]
-> Extensions execute as native .NET processes under OTP supervision. Use modern C# records, type-safe APIs, and throw canonical `ExoActionException`.
+> Extensions execute as native .NET microservices with actor concurrency supervision. Use modern C# records, type-safe APIs, and throw canonical `ExoActionException`.
 
 ---
 

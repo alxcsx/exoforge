@@ -229,7 +229,7 @@ defmodule Exoforge.Std.Docs.Markdown do
     """
     <div class="relative group my-3">
       #{lang_badge}
-      <pre class="bg-gray-950 text-gray-200 p-4 rounded-2xl font-mono text-[11px] overflow-x-auto border border-gray-800 leading-relaxed shadow-sm print:bg-gray-100 print:text-gray-900 print:border-gray-300"><code>#{highlighted}</code></pre>
+      <pre class="bg-gray-950 text-gray-200 p-4 rounded-2xl font-mono text-xs md:text-[13px] overflow-x-auto border border-gray-800 leading-relaxed shadow-sm print:bg-gray-100 print:text-gray-900 print:border-gray-300"><code>#{highlighted}</code></pre>
     </div>
     """
   end

@@ -397,7 +397,6 @@ html:not(.light) .border-indigo-200\/80 {
  * Ensures all documentation badges (especially in Architecture & Catalog) have
  * optimal contrast against dark surfaces.
  * ============================================================================ */
-html:not(.light) code:not(pre code),
 html:not(.light) :not(pre) > code {
   background-color: rgba(139, 92, 246, 0.18) !important;
   color: #ddd6fe !important;
@@ -405,14 +404,14 @@ html:not(.light) :not(pre) > code {
   font-weight: 600;
 }
 
-html:not(.light) code.bg-gray-100,
-html:not(.light) code:not([class*="bg-primary"]):not([class*="bg-purple"]):not([class*="bg-violet"]):not([class*="bg-amber"]):not([class*="bg-emerald"]):not([class*="bg-rose"]):not([class*="bg-blue"]):not([class*="bg-indigo"]) {
+html:not(.light) :not(pre) > code.bg-gray-100,
+html:not(.light) :not(pre) > code:not([class*="bg-primary"]):not([class*="bg-purple"]):not([class*="bg-violet"]):not([class*="bg-amber"]):not([class*="bg-emerald"]):not([class*="bg-rose"]):not([class*="bg-blue"]):not([class*="bg-indigo"]) {
   background-color: var(--exo-surface-subtle) !important;
   color: #e2e8f0 !important;
   border-color: var(--exo-border) !important;
 }
 
-html:not(.light) .prose code,
+html:not(.light) .prose :not(pre) > code,
 html:not(.light) table code {
   background-color: rgba(139, 92, 246, 0.22) !important;
   color: #e9d5ff !important;
@@ -420,6 +419,21 @@ html:not(.light) table code {
   padding: 0.125rem 0.375rem !important;
   border-radius: 0.375rem !important;
   font-weight: 600 !important;
+}
+
+pre code,
+.prose pre code,
+html:not(.light) pre code,
+html:not(.light) .prose pre code {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  display: block !important;
+  font-weight: 400 !important;
+  color: inherit !important;
 }
 
 /* Form Elements in Dark Mode */
