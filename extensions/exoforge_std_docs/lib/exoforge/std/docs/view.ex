@@ -689,7 +689,7 @@ defmodule Exoforge.Std.Docs.View do
             </div>
           </div>
           <div class="text-[11px] font-mono bg-gray-100 px-3 py-1.5 rounded-xl text-gray-600 self-start sm:self-auto">
-            Source: <strong class="text-amber-700">Exoforge.Plugin.SDK</strong> (routed via <code class="text-gray-800">exoforge_std_ws</code>)
+            Source: <strong class="text-amber-700">Kernel ActionDispatcher</strong> (transports: <code class="text-gray-800">exoforge_std_ws</code>, <code class="text-gray-800">exoforge_std_http</code>)
           </div>
         </div>
 
@@ -702,46 +702,57 @@ defmodule Exoforge.Std.Docs.View do
             <div class="font-bold text-xs flex items-center gap-1.5 text-amber-900 dark:text-amber-300 uppercase tracking-wider">
               <span>💡</span> <span>What <code>Mode</code> Implies in C# Extensions</span>
             </div>
-            <p class="text-[11px] leading-relaxed text-gray-700 dark:text-gray-300">
-              Because native C# extensions run as out-of-process services communicating via high-speed IPC (newline-delimited JSON stdio), <code class="font-mono bg-amber-500/20 px-1 py-0.5 rounded font-bold">ActionMode.Auto</code> is the default and recommended setting. It automatically determines whether an action is asynchronous or synchronous based on the method return type:
-            </p>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px] leading-relaxed">
-              <div class="p-3 rounded-xl bg-white/60 dark:bg-gray-900/60 border border-amber-500/20 space-y-1">
-                <div class="font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1">
-                  <span>⚡</span> <span>Sync / Auto (Concrete)</span>
-                </div>
-                <p class="text-gray-700 dark:text-gray-300">
-                  <strong>What it implies:</strong> Executes directly on the extension dispatch thread and responds immediately with the return payload. The caller awaits the reply in-band.
-                </p>
-                <p class="text-gray-500 dark:text-gray-400">
-                  <strong>Best for:</strong> Pure in-memory math, validations, instant calculations (&lt; 1ms).
-                </p>
-              </div>
-
-              <div class="p-3 rounded-xl bg-white/60 dark:bg-gray-900/60 border border-amber-500/20 space-y-1">
-                <div class="font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1">
-                  <span>🔄</span> <span>Async / Auto (Task)</span>
-                </div>
-                <p class="text-gray-700 dark:text-gray-300">
-                  <strong>What it implies:</strong> Method returns <code class="font-mono">Task</code> or <code class="font-mono">Task&lt;T&gt;</code>. Awaits I/O without blocking the extension worker thread, then replies with <code class="font-mono">action_result</code> once resolved.
-                </p>
-                <p class="text-gray-500 dark:text-gray-400">
-                  <strong>Best for:</strong> Database queries, external webhooks, multi-step asynchronous logic.
-                </p>
-              </div>
-
-              <div class="p-3 rounded-xl bg-white/60 dark:bg-gray-900/60 border border-amber-500/20 space-y-1">
-                <div class="font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1">
-                  <span>🚀</span> <span>Cast (Fire-and-Forget)</span>
-                </div>
-                <p class="text-gray-700 dark:text-gray-300">
-                  <strong>What it implies:</strong> One-way dispatch. The cluster delivers the message to the extension and returns immediately without awaiting completion or returning any reply frame.
-                </p>
-                <p class="text-gray-500 dark:text-gray-400">
-                  <strong>Best for:</strong> Telemetry, analytics, player movement pings, audit logging.
-                </p>
-              </div>
+            <div class="p-3 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-950 dark:text-amber-200 text-[11px] leading-relaxed">
+              <strong>Client vs Server Execution:</strong> When called from game clients (Unity over WebSocket or HTTP), <strong>every action works asynchronously</strong> across the network transport (<code class="font-mono">await client.MyActionAsync(...)</code> or callbacks).
+              The <code class="font-mono font-bold">Mode</code> attribute exclusively matters for <strong>cluster-side execution</strong> and <strong>extension-to-extension / in-cluster IPC</strong> semantics (<code class="font-mono">ActionDispatcher.dispatch</code>).
             </div>
+
+            <p class="text-[11px] leading-relaxed text-gray-700 dark:text-gray-300">
+              <code class="font-mono bg-amber-500/20 px-1 py-0.5 rounded font-bold">ActionMode.Auto</code> is the default and recommended setting: <code class="font-mono">Task&lt;T&gt;</code> returns become async, concrete returns become sync, and fire-and-forget uses <code class="font-mono">Cast</code>.
+            </p>
+
+            <details class="group cursor-pointer rounded-xl bg-white/60 dark:bg-gray-900/60 border border-amber-500/20 p-3">
+              <summary class="font-bold text-amber-900 dark:text-amber-300 select-none text-[11px] hover:text-amber-700">
+                ▸ View Detailed Server-Side Execution Semantics (Sync vs Async vs Cast)
+              </summary>
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px] leading-relaxed mt-3">
+                <div class="p-3 rounded-xl bg-white/80 dark:bg-gray-800/80 border border-amber-500/20 space-y-1">
+                  <div class="font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1">
+                    <span>⚡</span> <span>Sync / Auto (Concrete)</span>
+                  </div>
+                  <p class="text-gray-700 dark:text-gray-300">
+                    <strong>What it implies:</strong> Executes directly on the extension dispatch thread and responds immediately with the return payload. In extension-to-extension IPC, the caller awaits the reply in-band.
+                  </p>
+                  <p class="text-gray-500 dark:text-gray-400">
+                    <strong>Best for:</strong> Pure in-memory math, validations, instant calculations (&lt; 1ms).
+                  </p>
+                </div>
+
+                <div class="p-3 rounded-xl bg-white/80 dark:bg-gray-800/80 border border-amber-500/20 space-y-1">
+                  <div class="font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1">
+                    <span>🔄</span> <span>Async / Auto (Task)</span>
+                  </div>
+                  <p class="text-gray-700 dark:text-gray-300">
+                    <strong>What it implies:</strong> Method returns <code class="font-mono">Task</code> or <code class="font-mono">Task&lt;T&gt;</code>. Awaits I/O without blocking the extension worker thread, then replies with <code class="font-mono">action_result</code> once resolved.
+                  </p>
+                  <p class="text-gray-500 dark:text-gray-400">
+                    <strong>Best for:</strong> Database queries, external webhooks, multi-step asynchronous logic.
+                  </p>
+                </div>
+
+                <div class="p-3 rounded-xl bg-white/80 dark:bg-gray-800/80 border border-amber-500/20 space-y-1">
+                  <div class="font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1">
+                    <span>🚀</span> <span>Cast (Fire-and-Forget)</span>
+                  </div>
+                  <p class="text-gray-700 dark:text-gray-300">
+                    <strong>What it implies:</strong> One-way dispatch. The cluster delivers the message to the extension and returns immediately without awaiting completion or returning any reply frame.
+                  </p>
+                  <p class="text-gray-500 dark:text-gray-400">
+                    <strong>Best for:</strong> Telemetry, analytics, player movement pings, audit logging.
+                  </p>
+                </div>
+              </div>
+            </details>
           </div>
 
           <div class="overflow-x-auto rounded-xl border border-gray-200 mt-3">
@@ -811,11 +822,11 @@ defmodule Exoforge.Std.Docs.View do
                 <h2 class="text-xl font-extrabold text-gray-900 font-mono">[ExoCron]</h2>
                 <span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold uppercase tracking-wider">Recurring Task</span>
               </div>
-              <p class="text-xs text-gray-500 mt-0.5">Executes scheduled recurring background jobs via the Erlang/OTP cluster scheduler.</p>
+              <p class="text-xs text-gray-500 mt-0.5">Executes scheduled recurring background jobs via the cluster supervisor and scheduler.</p>
             </div>
           </div>
           <div class="text-[11px] font-mono bg-gray-100 px-3 py-1.5 rounded-xl text-gray-600 self-start sm:self-auto">
-            Source: <strong class="text-amber-700">Exoforge.Plugin.SDK</strong> (scheduled by cluster worker runtime)
+            Source: <strong class="text-amber-700">Cron Extension</strong> (<code class="text-gray-800">exoforge_std_cron</code>)
           </div>
         </div>
 
@@ -889,6 +900,9 @@ defmodule Exoforge.Std.Docs.View do
               </div>
               <p class="text-xs text-gray-500 mt-0.5">Declares a record or class as a cluster pub/sub event schema contract.</p>
             </div>
+          </div>
+          <div class="text-[11px] font-mono bg-gray-100 px-3 py-1.5 rounded-xl text-gray-600 self-start sm:self-auto">
+            Source: <strong class="text-purple-700">Kernel EventDispatcher</strong> (broadcast via <code class="text-gray-800">:pg</code>, pushed via <code class="text-gray-800">exoforge_std_ws</code>)
           </div>
         </div>
 
@@ -978,7 +992,7 @@ defmodule Exoforge.Std.Docs.View do
             </div>
           </div>
           <div class="text-[11px] font-mono bg-gray-100 px-3 py-1.5 rounded-xl text-gray-600 self-start sm:self-auto">
-            Source: <strong class="text-emerald-700">Exoforge.Plugin.SDK</strong> (managed by <code class="text-gray-800">exoforge_std_resources</code>)
+            Source: <strong class="text-emerald-700">Database &amp; Resources</strong> (<code class="text-gray-800">exoforge_std_database</code>, <code class="text-gray-800">exoforge_std_resources</code>)
           </div>
         </div>
 
@@ -1078,7 +1092,7 @@ defmodule Exoforge.Std.Docs.View do
                   <td class="py-2 px-3 font-bold text-gray-900">Role</td>
                   <td class="py-2 px-3 text-primary-700">string?</td>
                   <td class="py-2 px-3 text-gray-400">Optional (null)</td>
-                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Semantic role for special Studio UI presentation (e.g. <code class="font-mono text-primary-700">"user_id"</code>, <code class="font-mono text-primary-700">"file_reference"</code>, <code class="font-mono text-primary-700">"currency"</code>).</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Semantic role for special Studio UI presentation from <code class="font-mono text-primary-700">ExoRole</code> (<code class="font-mono">ExoRole.PlayerId</code>, <code class="font-mono">ExoRole.FileReference</code>, <code class="font-mono">ExoRole.Currency</code>, <code class="font-mono">ExoRole.Status</code>, <code class="font-mono">ExoRole.Timestamp</code>, <code class="font-mono">ExoRole.Title</code>, <code class="font-mono">ExoRole.Description</code>).</td>
                 </tr>
                 <tr>
                   <td class="py-2 px-3 font-bold text-gray-900">InputType</td>
@@ -1114,7 +1128,7 @@ defmodule Exoforge.Std.Docs.View do
                   <td class="py-2 px-3 font-bold text-gray-900">FileReference</td>
                   <td class="py-2 px-3 text-primary-700">bool</td>
                   <td class="py-2 px-3 text-gray-400">Optional (false)</td>
-                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Convenience shorthand for <code class="font-mono text-primary-700">Role = "file_reference"</code>.</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Convenience shorthand for <code class="font-mono text-primary-700">Role = ExoRole.FileReference</code>.</td>
                 </tr>
                 <tr>
                   <td class="py-2 px-3 font-bold text-gray-900">PrimaryKey</td>
@@ -1126,13 +1140,19 @@ defmodule Exoforge.Std.Docs.View do
                   <td class="py-2 px-3 font-bold text-gray-900">ForeignKey</td>
                   <td class="py-2 px-3 text-primary-700">bool</td>
                   <td class="py-2 px-3 text-gray-400">Optional (false)</td>
-                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Marks this column as a foreign key referencing another resource or table.</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Marks this column as a foreign key referencing another resource or table. Inferred automatically when <code class="font-mono text-primary-700">ReferencesType</code> is provided.</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">ReferencesType</td>
+                  <td class="py-2 px-3 text-primary-700">Type?</td>
+                  <td class="py-2 px-3 text-gray-400">Optional (null)</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Entity record or class referenced by this column. Automatically infers <code class="font-mono text-primary-700">ForeignKey = true</code> and target table/key <code class="font-mono text-primary-700">References</code> (e.g. <code class="font-mono text-primary-700">ReferencesType = typeof(PlayerDataRecord)</code>).</td>
                 </tr>
                 <tr>
                   <td class="py-2 px-3 font-bold text-gray-900">References</td>
                   <td class="py-2 px-3 text-primary-700">string?</td>
                   <td class="py-2 px-3 text-gray-400">Optional (null)</td>
-                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Resource or column name referenced by this foreign key (e.g. <code class="font-mono text-primary-700">"player_data.id"</code>).</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Target referenced table and column (e.g. <code class="font-mono text-primary-700">"player_data.id"</code>). Inferred automatically from <code class="font-mono text-primary-700">ReferencesType</code> when provided.</td>
                 </tr>
               </tbody>
             </table>
@@ -1530,7 +1550,7 @@ defmodule Exoforge.Std.Docs.View do
     [ExoResource(Name = "player_scores", PrimaryKey = "id")]
     public record PlayerScoreRecord(
         [property: ExoColumn(PrimaryKey = true)] string Id,
-        [property: ExoColumn(ForeignKey = true, References = "player_data.id", Role = "user_id", Label = "Player ID")] string PlayerId,
+        [property: ExoColumn(ReferencesType = typeof(PlayerDataRecord), Role = ExoRole.PlayerId, Label = "Player ID")] string PlayerId,
         [property: ExoColumn(Label = "Score", Sortable = true)] int Score,
         [property: ExoColumn(Badge = true, InputType = ExoInput.Color)] string TierBadge,
         [property: ExoColumn(Label = "Submitted At")] DateTime CreatedAt

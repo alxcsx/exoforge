@@ -260,7 +260,16 @@ public class ExoColumnAttribute : Attribute
     /// <summary>Target referenced table and column (e.g. "player_data.id").</summary>
     public string? References { get; set; }
 
-    /// <summary>Semantic role of the value (e.g. "user_id"), which the Studio renders specially.</summary>
+    /// <summary>
+    /// Type of the referenced <see cref="ExoResourceAttribute"/> entity record or class.
+    /// When specified, <see cref="ForeignKey"/> is automatically inferred as true, and
+    /// <see cref="References"/> is automatically inferred from the target resource's table name and primary key.
+    /// </summary>
+    public Type? ReferencesType { get; set; }
+
+    /// <summary>
+    /// Semantic role of the value (e.g. from <see cref="ExoRole"/>), which the Studio renders specially.
+    /// </summary>
     public string? Role { get; set; }
 
     public bool Sortable { get; set; }
@@ -336,6 +345,22 @@ public static class ExoStandardInput
     public const string Checkbox = ExoInput.Checkbox;
     public const string Select = ExoInput.Select;
     public const string FileReference = ExoInput.FileReference;
+}
+
+/// <summary>
+/// Built-in semantic roles for <see cref="ExoColumnAttribute.Role"/>.
+/// Turns values into deep links, specialized editors, or chips in the Studio Dashboard.
+/// </summary>
+public static class ExoRole
+{
+    public const string UserId = "user_id";
+    public const string PlayerId = "user_id";
+    public const string FileReference = "file_reference";
+    public const string Currency = "currency";
+    public const string Status = "status";
+    public const string Timestamp = "timestamp";
+    public const string Title = "title";
+    public const string Description = "description";
 }
 
 /// <summary>

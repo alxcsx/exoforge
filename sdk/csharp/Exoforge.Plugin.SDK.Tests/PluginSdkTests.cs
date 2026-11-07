@@ -218,6 +218,19 @@ public class PluginSdkTests
     }
 
     [Fact]
+    public void ExoColumn_Role_And_ReferencesType_Work()
+    {
+        var col = new ExoColumnAttribute
+        {
+            Role = ExoRole.PlayerId,
+            ReferencesType = typeof(PlayerRecord)
+        };
+
+        Assert.Equal("user_id", col.Role);
+        Assert.Equal(typeof(PlayerRecord), col.ReferencesType);
+    }
+
+    [Fact]
     public void ExoNaming_UsesSnakeCase()
     {
         Assert.Equal("submit_score", ExoNaming.ToSnakeCase("SubmitScore"));

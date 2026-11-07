@@ -27,7 +27,7 @@ public interface IContractPing
 /// declares services on itself and implements one declared contract, and it is <c>partial</c> so the
 /// generator can add the contracts it declares as interfaces it implements.
 /// </summary>
-[ExoService("dispatch_sample", Version = "2.0.0", Category = "Test", Title = "Dispatch Sample", Icon = "🧪")]
+[ExoService("dispatch_sample", Version = "2.0.0", Category = "Test", Title = "Dispatch Sample", Icon = "🧪", Resources = new[] { typeof(UserRecord), typeof(PostRecord) })]
 [ExoService("dispatch_admin", Category = "Test", Title = "Dispatch Admin", Icon = "🛠️")]
 [ExoExtension("dispatch_extension", Category = "Test", Title = "Dispatch Extension", Icon = "🧩")]
 public partial class DispatchSamplePlugin : IContractPing, ISharedContract
@@ -132,6 +132,16 @@ public record ScoreRow
     public int Score { get; init; }
     public ScoreTier Tier { get; init; } = ScoreTier.Bronze;
 }
+
+[ExoResource("users", PrimaryKey = "user_id")]
+public record UserRecord(string UserId, string Email);
+
+[ExoResource("user_posts")]
+public record PostRecord(
+    [property: ExoColumn(PrimaryKey = true)] string PostId,
+    [property: ExoColumn(ReferencesType = typeof(UserRecord), Role = ExoRole.UserId)] string AuthorId,
+    [property: ExoColumn(Label = "Title")] string Title
+);
 
 /// <summary>
 /// The generator emits <c>Exoforge.Generated.ExoforgeDispatch</c> for this assembly, and the host
@@ -407,5 +417,38 @@ public class DispatchTests
         PluginHost.RunInstance(plugin, input, new ExoforgeDispatch());
 
         Assert.True(plugin.DailyCleanupRan);
+    }
+
+    [Fact]
+    public void Manifest_Includes_Inferred_ForeignKey_And_References_From_ReferencesType()
+    {
+        JsonNode manifest = Manifest();
+        var resources = Service(manifest, "dispatch_sample")["resources"]!.AsArray();
+        var posts = resources.FirstOrDefault(r => r?["name"]?.GetValue<string>() == "user_posts");
+
+        Assert.NotNull(posts);
+        var cols = posts!["columns"]!.AsArray();
+        var authorCol = cols.FirstOrDefault(c => c?["name"]?.GetValue<string>() == "author_id");
+
+        Assert.NotNull(authorCol);
+        Assert.True(authorCol!["foreign_key"]?.GetValue<bool>());
+        Assert.Equal("users.user_id", authorCol["references"]?.GetValue<string>());
+        Assert.Equal("user_id", authorCol["role"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void The_dispatch_serves_an_inbound_event()
+    {
+        var plugin = new DispatchSamplePlugin();
+
+        var input = new StringReader(string.Join("\n", new[]
+        {
+            "{\"type\":\"event\",\"event\":\"score_updated\",\"payload\":{\"Value\":42}}",
+            ""
+        }));
+
+        PluginHost.RunInstance(plugin, input, new ExoforgeDispatch());
+
+        Assert.Equal("score_updated:42", plugin.LastEvent);
     }
 }

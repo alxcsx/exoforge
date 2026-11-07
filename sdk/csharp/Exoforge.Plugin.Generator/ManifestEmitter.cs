@@ -21,7 +21,9 @@ internal sealed record ColumnModel(
     string? Default,
     List<string>? Choices,
     string? Bucket = null,
-    string? Input = null);
+    string? Input = null,
+    bool ForeignKey = false,
+    string? References = null);
 
 internal sealed record ActionModel(
     string Name,
@@ -229,8 +231,10 @@ internal static class ManifestEmitter
                     string bucket = column.Bucket is null ? "" : $", \"bucket\": {Str(column.Bucket)}";
                     string fallback = column.Default is null ? "" : $", \"default\": {Str(column.Default)}";
                     string choices = column.Choices is null ? "" : $", \"choices\": {Atoms(column.Choices)}";
+                    string fk = column.ForeignKey ? ", \"foreign_key\": true" : "";
+                    string refs = column.References is null ? "" : $", \"references\": {Str(column.References)}";
 
-                    sb.Append($"{{{Column(column)}{role}{bucket}{fallback}{choices}}}");
+                    sb.Append($"{{{Column(column)}{role}{bucket}{fallback}{choices}{fk}{refs}}}");
                     sb.Append(columnComma);
                 }
 

@@ -908,6 +908,23 @@ namespace Exoforge.Plugin.SDK
 
             string? inputType = NamedString(colAttr, "InputType");
 
+            var refType = NamedType(colAttr, "ReferencesType");
+            bool isFk = NamedBool(colAttr, "ForeignKey") || refType is not null;
+            string? references = NamedString(colAttr, "References");
+
+            if (string.IsNullOrEmpty(references) && refType is INamedTypeSymbol refNamed)
+            {
+                var targetResAttr = FindAttribute(refNamed.GetAttributes(), ResourceAttribute);
+                string targetTable = NamedString(targetResAttr, "Name") ?? PositionalString(targetResAttr, 0) ?? ToSnakeCase(refNamed.Name);
+                string targetPk = NamedString(targetResAttr, "PrimaryKey") ?? "id";
+                references = $"{targetTable}.{targetPk}";
+
+                if (string.IsNullOrEmpty(role) && (targetTable.Contains("player") || targetTable.Contains("user") || colName.Contains("player_id") || colName.Contains("user_id")))
+                {
+                    role = "user_id";
+                }
+            }
+
             columns.Add(new ColumnModel(
                 colName,
                 NamedString(colAttr, "DataType") ?? MapTypeToElixir(property.Type),
@@ -919,7 +936,9 @@ namespace Exoforge.Plugin.SDK
                 DefaultOf(property),
                 EnumOf(property)?.Members.Select(m => m.Value).ToList(),
                 bucket,
-                inputType));
+                inputType,
+                isFk,
+                references));
 
             if (NamedBool(colAttr, "PrimaryKey") && string.IsNullOrEmpty(primaryKey)) primaryKey = colName;
         }

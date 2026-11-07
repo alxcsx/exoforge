@@ -6,6 +6,8 @@ Comprehensive reference for all core attributes provided by the Exoforge Extensi
 
 ## [ExoExtension] / [ExoService]
 
+**Source / Provider:** Kernel & Extension Manager (`core/`, `exoforge_std_extension_manager`)
+
 Identifies a C# class as a cluster-supervised native headless service.
 
 The `[ExoExtension]` attribute (standard alias for `[ExoService]`) is the root entry point for backend features in Exoforge. Classes marked with this attribute are automatically registered into the server extension supervisor, inspected for exported RPC actions, and linked into client code generators.
@@ -39,19 +41,28 @@ public class InventoryExtension
 
 ## [ExoAction]
 
+**Source / Provider:** Kernel ActionDispatcher & Transports (`core/`, implemented via `exoforge_std_ws`, `exoforge_std_http`)
+
 Exposes public class methods as callable RPC endpoints over WebSocket, HTTP, and internal IPC.
 
 Decorate any public method with `[ExoAction]` to make it callable from Unity clients, Web UI, and CLI. Method arguments are automatically deserialized from incoming payloads, and return values are serialized back to the caller.
 
 ### What `Mode` Implies in C# Extensions
 
-C# native extensions execute as out-of-process services communicating with the host cluster via high-speed IPC (newline-delimited JSON stdio). By default, `Mode` is set to `ActionMode.Auto`, which is recommended for almost all methods:
+> [!NOTE]
+> **Client vs Server Execution**: When invoked from game clients (Unity over WebSocket or HTTP), **every request works asynchronously** across the network transport (`await client.MyActionAsync(...)` or callbacks).
+> The `Mode` attribute exclusively dictates **server-side execution** and **extension-to-extension / in-cluster IPC** semantics (`ActionDispatcher.dispatch`).
 
-* **`ActionMode.Auto` (Default)**: Automatically inferred from return type:
-  * **`Task` / `Task<T>`**: Inferred as `ActionMode.Async` (`"async"`).
-  * **Concrete types (`int`, `record`, `void`)**: Inferred as `ActionMode.Sync` (`"sync"`).
-* **`ActionMode.Sync` (Request / Response — Synchronous)**:
-  * **What it implies**: Runs synchronously on the extension dispatch thread and replies immediately with the return payload. The caller awaits the reply in-band.
+By default, `Mode` is set to `ActionMode.Auto`, which is recommended for almost all methods:
+* **`Task` / `Task<T>` returns**: Inferred as `ActionMode.Async` (`"async"`).
+* **Concrete returns (`int`, `record`, `void`)**: Inferred as `ActionMode.Sync` (`"sync"`).
+* **Fire-and-forget**: Set `Mode = ActionMode.Cast` for one-way notifications without caller replies.
+
+<details>
+<summary><strong>Detailed Server-Side Execution Semantics (Sync vs Async vs Cast)</strong></summary>
+
+* **`ActionMode.Sync` (Request / Response — Synchronous Inline)**:
+  * **What it implies**: Runs synchronously on the extension dispatch thread and replies immediately with the return payload. In extension-to-extension communication, the calling process waits inline for the reply.
   * **Best for**: Fast in-memory computations, state lookups, math, and validations (< 1ms).
 * **`ActionMode.Async` (Request / Response — Asynchronous Non-Blocking)**:
   * **What it implies**: The method returns `Task` or `Task<T>`. The extension process does not block its dispatch thread while awaiting I/O operations (database queries, external webhooks). Once the Task resolves, the result is serialized and returned to the caller.
@@ -59,6 +70,8 @@ C# native extensions execute as out-of-process services communicating with the h
 * **`ActionMode.Cast` (One-Way — Fire-and-Forget)**:
   * **What it implies**: One-way dispatch without awaiting any return value or completion confirmation. No response frame is sent over the wire back to the client.
   * **Best for**: Telemetry, analytics, player position pings, event logging, or fire-and-forget notifications where low latency is critical and no response payload is needed.
+
+</details>
 
 | Property | Type | Default | Description |
 |---|---|---|---|
@@ -86,6 +99,8 @@ public TransferItemResponse TransferItem(TransferItemRequest req)
 
 ## [ExoCron]
 
+**Source / Provider:** Cron Extension (`exoforge_std_cron`)
+
 Executes scheduled recurring background tasks via the cluster scheduler.
 
 Decorate any service method with `[ExoCron("schedule")]` to turn it into an automated background job. Ideal for leaderboard rollovers, daily resets, state sweepers, and periodic syncs.
@@ -109,6 +124,8 @@ public void RolloverDailyLeaderboards()
 ---
 
 ## [ExoEvent]
+
+**Source / Provider:** Kernel EventDispatcher & Realtime Transport (`core/`, pushed via `exoforge_std_ws`)
 
 Declares an **event schema** on records, classes, or structs emitted or received on the cluster pub/sub bus.
 
@@ -149,6 +166,8 @@ public class MyExtension
 
 ## [ExoResource] & [ExoColumn]
 
+**Source / Provider:** Database & Resource Store Extensions (`exoforge_std_database`, `exoforge_std_resources`)
+
 Declares a typed entity record mapped directly to SQLite / PostgreSQL storage. The Roslyn generator extracts typed columns, indexes, and primary keys to produce database tables without manual migration files.
 
 ### [ExoResource] Parameters
@@ -168,23 +187,24 @@ Declares a typed entity record mapped directly to SQLite / PostgreSQL storage. T
 |---|---|---|---|
 | name (positional) | string | Property name | Column name in the database table in snake_case. |
 | PrimaryKey | bool | `false` | Marks this column as the primary key of the resource table. (Properties named `Id` are automatically inferred as primary keys). |
-| ForeignKey | bool | `false` | Marks this column as a foreign key reference. |
-| References | string | `null` | Target referenced table and column (e.g. `"player_data.id"`). |
+| ForeignKey | bool | `false` | Marks this column as a foreign key reference. Inferred automatically when `ReferencesType` is specified. |
+| ReferencesType | Type | `null` | Entity record/class type referenced by this column. Automatically infers `ForeignKey = true` and target table/key `References` (e.g. `ReferencesType = typeof(PlayerDataRecord)`). |
+| References | string | `null` | Target referenced table and column (e.g. `"player_data.id"`). Inferred automatically from `ReferencesType` when provided. |
 | Label | string | Property name | User-friendly header label rendered in Studio Dashboard data tables and drawer forms. |
 | DataType | string | Auto-inferred | Explicit SQL data type override (`"text"`, `"integer"`, `"float"`, `"boolean"`, `"datetime"`, `"json"`). Inferred from C# type. |
-| Role | string | `null` | Semantic role for special Studio UI presentation (e.g. `"user_id"`, `"file_reference"`, `"currency"`). |
+| Role | string | `null` | Semantic role for special Studio UI presentation from `ExoRole` (`ExoRole.PlayerId`, `ExoRole.FileReference`, `ExoRole.Currency`, `ExoRole.Status`, `ExoRole.Timestamp`, `ExoRole.Title`, `ExoRole.Description`). |
 | InputType | string | `"text"` | Form input widget from `ExoInput` (`Text`, `Color`, `Date`, `Time`, `DateTimeLocal`, `Textarea`, `Email`, `Url`, `Password`, `Range`, `Json`, `List`, `Checkbox`, `Select`, `FileReference`). |
 | Sortable | bool | `true` | Enables column click-sorting in Studio data tables. |
 | Filterable | bool | `true` | Enables quick search & filtering on this column in Studio. |
 | Badge | bool | `false` | Renders the column value as a distinct colored badge chip in Studio. |
 | Bucket | string | `null` | Target storage bucket name when referencing binary/blob assets from `file_bucket`. |
-| FileReference | bool | `false` | Convenience shorthand for `Role = "file_reference"`. |
+| FileReference | bool | `false` | Convenience shorthand for `Role = ExoRole.FileReference`. |
 
 ```csharp
 [ExoResource(Name = "player_scores")]
 public record PlayerScoreRecord(
     [property: ExoColumn(PrimaryKey = true)] string Id,
-    [property: ExoColumn(ForeignKey = true, References = "player_data.id", Role = "user_id", Label = "Player ID")] string PlayerId,
+    [property: ExoColumn(ReferencesType = typeof(PlayerDataRecord), Role = ExoRole.PlayerId, Label = "Player ID")] string PlayerId,
     [property: ExoColumn(Label = "Score", Sortable = true)] int Score,
     [property: ExoColumn(Badge = true, InputType = ExoInput.Color)] string TierBadge,
     DateTime CreatedAt
