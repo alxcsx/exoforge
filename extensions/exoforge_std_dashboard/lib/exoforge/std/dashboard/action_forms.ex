@@ -109,7 +109,7 @@ defmodule Exoforge.Std.Dashboard.ActionForms do
       name: ExtensionRegistry.clean_service_name(svc[:name] || svc["name"]),
       title: svc[:title] || svc["title"] || nil,
       icon: svc[:icon] || svc["icon"] || nil,
-      actions: Enum.map(actions_of(svc), &normalize_action/1)
+      actions: Enum.map(actions_of(svc), &normalize_action/1) |> Enum.uniq_by(& &1.name)
     }
   end
 

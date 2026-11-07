@@ -170,5 +170,100 @@ defmodule Exoforge.Std.DocsTest do
       assert html =~ "[ExoEvent]"
       assert html =~ "[ExoResource]"
     end
+
+    test "renders architecture subpage with high-contrast badge styles" do
+      assigns = %{
+        action_catalog: [],
+        extensions: [],
+        project_name: "TestGame",
+        studio_name: "TestStudio",
+        subpage: "architecture"
+      }
+
+      html = Phoenix.LiveViewTest.rendered_to_string(~H"""
+      <View.view
+        action_catalog={@action_catalog}
+        extensions={@extensions}
+        project_name={@project_name}
+        studio_name={@studio_name}
+        subpage={@subpage}
+      />
+      """)
+
+      assert html =~ "Architecture"
+      assert html =~ "html:not(.light) code:not(pre code)"
+      assert html =~ "html:not(.light) .prose code"
+    end
+
+    test "subpage flow does not duplicate the action catalog" do
+      assigns = %{
+        action_catalog: [
+          %{name: "test_svc", title: "Test Svc", icon: "🎮", actions: [%{name: "run", mode: "sync", doc: "runs", params: []}]}
+        ],
+        extensions: [],
+        project_name: "TestGame",
+        studio_name: "TestStudio",
+        subpage: "flow"
+      }
+
+      html = Phoenix.LiveViewTest.rendered_to_string(~H"""
+      <View.view
+        action_catalog={@action_catalog}
+        extensions={@extensions}
+        project_name={@project_name}
+        studio_name={@studio_name}
+        subpage={@subpage}
+      />
+      """)
+
+      refute html =~ "<section id=\"catalog\""
+      assert html =~ "Live Action Catalog"
+    end
+
+    test "deduplicates duplicate services and actions in action_catalog" do
+      duplicated_catalog = [
+        %{
+          name: "inventory",
+          title: "Inventory Service",
+          icon: "🎒",
+          actions: [
+            %{name: "add_item", mode: "sync", doc: "Add item", params: []},
+            %{name: "add_item", mode: "sync", doc: "Add item duplicate", params: []}
+          ]
+        },
+        %{
+          name: "inventory",
+          title: "Duplicate Inventory Service",
+          icon: "🎒",
+          actions: [
+            %{name: "add_item", mode: "sync", doc: "Add item duplicate", params: []}
+          ]
+        }
+      ]
+
+      assigns = %{
+        action_catalog: duplicated_catalog,
+        extensions: [],
+        project_name: "TestGame",
+        studio_name: "TestStudio",
+        subpage: "catalog"
+      }
+
+      html = Phoenix.LiveViewTest.rendered_to_string(~H"""
+      <View.view
+        action_catalog={@action_catalog}
+        extensions={@extensions}
+        project_name={@project_name}
+        studio_name={@studio_name}
+        subpage={@subpage}
+      />
+      """)
+
+      assert html =~ "<section id=\"catalog\""
+      assert html =~ "1 Services Loaded"
+      # Count occurrences of .add_item() in action summaries
+      matches = Regex.scan(~r/\.add_item\(\)/, html)
+      assert length(matches) == 1
+    end
   end
 end

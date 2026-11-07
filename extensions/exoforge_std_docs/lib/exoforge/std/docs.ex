@@ -12,6 +12,7 @@ defmodule Exoforge.Std.Docs do
   alias Exoforge.ExtensionRegistry
 
   @manifest %{
+    system: true,
     dependencies: [Exoforge.Std.Services.ExtensionManager],
     title: "Developer Guide",
     icon: "📖",
@@ -105,6 +106,7 @@ defmodule Exoforge.Std.Docs do
       end)
     end)
     |> Enum.reject(&(&1.actions == []))
+    |> Enum.uniq_by(& &1.name)
     |> Enum.sort_by(& &1.name)
   end
 
@@ -125,6 +127,7 @@ defmodule Exoforge.Std.Docs do
       end)
     end)
     |> Enum.reject(&(&1.actions == []))
+    |> Enum.uniq_by(& &1.name)
     |> Enum.sort_by(& &1.name)
   end
 
@@ -156,6 +159,7 @@ defmodule Exoforge.Std.Docs do
               other ->
                 %{name: to_string(other), type: "term", optional: false, doc: nil}
             end)
+            |> Enum.uniq_by(& &1.name)
 
           _ ->
             []
@@ -170,6 +174,7 @@ defmodule Exoforge.Std.Docs do
         returns: act[:returns] || act["returns"]
       }
     end)
+    |> Enum.uniq_by(& &1.name)
     |> Enum.sort_by(& &1.name)
   end
 

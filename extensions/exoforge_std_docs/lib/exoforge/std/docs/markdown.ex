@@ -452,7 +452,7 @@ defmodule Exoforge.Std.Docs.Markdown do
 
   defp render_inline_code(text) do
     Regex.replace(~r/`([^`]+)`/, text, fn _match, code ->
-      "<code class=\"font-mono text-primary-700 bg-primary-50/80 px-1 py-0.5 rounded text-[11px] border border-primary-200/50\">#{Plug.HTML.html_escape(code)}</code>"
+      "<code class=\"font-mono text-primary-700 bg-primary-50 px-1.5 py-0.5 rounded text-[11px] border border-primary-200/60 font-semibold\">#{Plug.HTML.html_escape(code)}</code>"
     end)
   end
 

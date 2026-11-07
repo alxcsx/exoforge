@@ -23,11 +23,33 @@ defmodule Exoforge.Std.Docs.View do
         assigns.action_catalog
       end
 
+    # Ensure services and actions are strictly deduplicated by name and sanitized
+    action_catalog =
+      action_catalog
+      |> Enum.uniq_by(fn svc -> svc[:name] || svc["name"] end)
+      |> Enum.map(fn svc ->
+        actions =
+          (svc[:actions] || svc["actions"] || [])
+          |> Enum.uniq_by(fn act -> act[:name] || act["name"] end)
+          |> Enum.map(fn act ->
+            %{
+              name: to_string(act[:name] || act["name"]),
+              mode: to_string(act[:mode] || act["mode"] || "sync"),
+              scope: to_string(act[:scope] || act["scope"] || "guest"),
+              doc: act[:doc] || act["doc"] || "No description provided.",
+              params: act[:params] || act["params"] || [],
+              returns: act[:returns] || act["returns"]
+            }
+          end)
+
+        Map.put(svc, :actions, actions)
+      end)
+
     assigns = assign(assigns, :action_catalog, action_catalog)
 
     ~H"""
     <div class="space-y-6 max-w-6xl mx-auto pb-16 print:p-0 print:max-w-none print:pb-0">
-      <!-- Print Stylesheet -->
+      <!-- Print & Dark Theme Badges Stylesheet -->
       <style>
         @media print {
           body { background: white !important; color: black !important; font-size: 11pt !important; }
@@ -38,6 +60,28 @@ defmodule Exoforge.Std.Docs.View do
           .print\:p-0 { padding: 0 !important; }
           .print\:bg-white { background-color: white !important; }
           pre, code { white-space: pre-wrap !important; word-break: break-word !important; }
+        }
+
+        /* High-contrast badges & code tags in dark theme (especially Architecture & Catalog) */
+        html:not(.light) code:not(pre code) {
+          background-color: rgba(139, 92, 246, 0.18) !important;
+          color: #ddd6fe !important;
+          border: 1px solid rgba(139, 92, 246, 0.35) !important;
+          font-weight: 600 !important;
+        }
+
+        html:not(.light) .prose code,
+        html:not(.light) table code {
+          background-color: rgba(139, 92, 246, 0.22) !important;
+          color: #e9d5ff !important;
+          border: 1px solid rgba(139, 92, 246, 0.4) !important;
+          padding: 0.125rem 0.375rem !important;
+          border-radius: 0.375rem !important;
+          font-weight: 600 !important;
+        }
+
+        html:not(.light) .prose strong {
+          color: #f3f4f6 !important;
         }
       </style>
 
@@ -177,10 +221,15 @@ defmodule Exoforge.Std.Docs.View do
               <span>Call from Unity</span>
             </a>
             <span class="text-white/40">|</span>
-            <a href="#catalog" class="px-3 py-1.5 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 border border-purple-500/30 transition-colors flex items-center gap-1.5">
+            <button
+              type="button"
+              phx-click="set_guide_subpage"
+              phx-value-subpage="catalog"
+              class="px-3 py-1.5 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 border border-purple-500/30 transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
               <span>📖</span>
               <span>Live API Reference</span>
-            </a>
+            </button>
           </div>
         </div>
       </div>
@@ -380,8 +429,28 @@ defmodule Exoforge.Std.Docs.View do
         </div>
       </section>
 
-      <!-- DYNAMIC API CATALOG EMBED -->
-      <.subpage_catalog action_catalog={@action_catalog} />
+      <!-- CTA: Jump to Dedicated Live API Reference -->
+      <div class="p-6 rounded-3xl bg-gradient-to-r from-purple-950/40 via-indigo-950/30 to-purple-950/40 border border-purple-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 print:hidden">
+        <div class="space-y-1">
+          <div class="flex items-center gap-2 text-purple-300 font-bold text-xs uppercase tracking-wider">
+            <span>⚡</span>
+            <span>Live Action Catalog</span>
+          </div>
+          <h3 class="text-base font-extrabold text-white">Explore All Registered Services &amp; Actions</h3>
+          <p class="text-xs text-gray-300 leading-relaxed max-w-xl">
+            Inspect live cluster contracts, action signatures, parameters, authorization scopes, and copy-pasteable Unity SDK calling code in the dedicated API Reference.
+          </p>
+        </div>
+        <button
+          type="button"
+          phx-click="set_guide_subpage"
+          phx-value-subpage="catalog"
+          class="shrink-0 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer"
+        >
+          <span>⚡ View Live API Reference</span>
+          <span>➔</span>
+        </button>
+      </div>
     </div>
     """
   end
@@ -433,10 +502,10 @@ defmodule Exoforge.Std.Docs.View do
             </span>
             <div>
               <div class="flex items-center gap-2">
-                <h2 class="text-xl font-extrabold text-gray-900 font-mono">[ExoExtension]</h2>
+                <h2 class="text-xl font-extrabold text-gray-900 font-mono">[ExoExtension] / [ExoService]</h2>
                 <span class="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 text-[10px] font-bold uppercase tracking-wider">Service Root</span>
               </div>
-              <p class="text-xs text-gray-500 mt-0.5">Identifies a C# class as a cluster-supervised native headless service.</p>
+              <p class="text-xs text-gray-500 mt-0.5">Identifies a C# class or interface as a cluster-supervised native headless service.</p>
             </div>
           </div>
           <div class="text-[11px] font-mono bg-gray-100 px-3 py-1.5 rounded-xl text-gray-600 self-start sm:self-auto">
@@ -455,28 +524,64 @@ defmodule Exoforge.Std.Docs.View do
                 <tr>
                   <th class="py-2 px-3">Property</th>
                   <th class="py-2 px-3">Type</th>
-                  <th class="py-2 px-3">Default</th>
+                  <th class="py-2 px-3">Required / Default</th>
                   <th class="py-2 px-3">Description</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-100 font-mono text-[11px]">
                 <tr>
-                  <td class="py-2 px-3 font-bold text-gray-900">id (positional)</td>
+                  <td class="py-2 px-3 font-bold text-gray-900">name (positional)</td>
                   <td class="py-2 px-3 text-primary-700">string</td>
-                  <td class="py-2 px-3 text-gray-400">Required</td>
-                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Unique identifier of the extension (e.g. <code class="font-mono text-primary-700">"inventory_service"</code>). Used for RPC routing and log grouping.</td>
+                  <td class="py-2 px-3 text-rose-600 font-sans text-xs font-semibold">Required</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Unique identifier of the service / extension (e.g. <code class="font-mono text-primary-700">"inventory_service"</code>). Used for RPC routing, CLI targeting, and log grouping.</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">Title</td>
+                  <td class="py-2 px-3 text-primary-700">string?</td>
+                  <td class="py-2 px-3 text-gray-400">Optional (null)</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Human-readable title displayed in the Studio Dashboard, cards, and API documentation.</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">Icon</td>
+                  <td class="py-2 px-3 text-primary-700">string?</td>
+                  <td class="py-2 px-3 text-gray-400">Optional ("⚙️")</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Icon or emoji displayed on extension cards and navigation tabs in Studio (e.g. <code class="font-mono text-primary-700">"🎒"</code>, <code class="font-mono text-primary-700">"🎮"</code>).</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">Category</td>
+                  <td class="py-2 px-3 text-primary-700">string?</td>
+                  <td class="py-2 px-3 text-gray-400">Optional ("Extension")</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Classification category in Studio (e.g. <code class="font-mono text-primary-700">"Game"</code>, <code class="font-mono text-primary-700">"Economy"</code>, <code class="font-mono text-primary-700">"Social"</code>, <code class="font-mono text-primary-700">"Operations"</code>).</td>
                 </tr>
                 <tr>
                   <td class="py-2 px-3 font-bold text-gray-900">Version</td>
-                  <td class="py-2 px-3 text-primary-700">string</td>
-                  <td class="py-2 px-3 text-gray-400">"0.1.0"</td>
+                  <td class="py-2 px-3 text-primary-700">string?</td>
+                  <td class="py-2 px-3 text-gray-400">Optional ("0.1.0")</td>
                   <td class="py-2 px-3 font-sans text-xs text-gray-600">Semantic version string. Checked during client synchronization and hot-reload.</td>
                 </tr>
                 <tr>
                   <td class="py-2 px-3 font-bold text-gray-900">Resources</td>
-                  <td class="py-2 px-3 text-primary-700">Type[]</td>
-                  <td class="py-2 px-3 text-gray-400">[]</td>
+                  <td class="py-2 px-3 text-primary-700">Type[]?</td>
+                  <td class="py-2 px-3 text-gray-400">Optional ([])</td>
                   <td class="py-2 px-3 font-sans text-xs text-gray-600">Array of C# record types managed by this extension. Auto-creates database schemas and exposes entries in the Studio dashboard.</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">System</td>
+                  <td class="py-2 px-3 text-primary-700">bool</td>
+                  <td class="py-2 px-3 text-gray-400">Optional (false)</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Marks this as an essential system-level extension. Grouped into the System registry table in Studio.</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">DashboardElement</td>
+                  <td class="py-2 px-3 text-primary-700">string?</td>
+                  <td class="py-2 px-3 text-gray-400">Optional (null)</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Custom HTML web-component / microfrontend tag name for the Studio dashboard view.</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">DashboardEntry</td>
+                  <td class="py-2 px-3 text-primary-700">string?</td>
+                  <td class="py-2 px-3 text-gray-400">Optional (null)</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">JavaScript entry bundle path for custom Studio microfrontend views.</td>
                 </tr>
               </tbody>
             </table>
@@ -517,28 +622,56 @@ defmodule Exoforge.Std.Docs.View do
             Decorate any public method with <code class="font-mono text-amber-700 font-bold">[ExoAction]</code> to make it callable from Unity clients, Web UI, and CLI. Method arguments are automatically deserialized from incoming payloads, and return values are serialized back to the caller.
           </p>
 
+          <div class="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-950 dark:text-amber-200 space-y-1.5">
+            <div class="font-bold text-xs flex items-center gap-1.5">
+              <span>💡</span> <span>How <code>Mode</code> Works in Native C# Extensions</span>
+            </div>
+            <p class="text-[11px] leading-relaxed">
+              Because native C# extensions run as separate OS processes over newline-delimited JSON stdio, the runtime defaults to <code class="font-mono bg-amber-500/20 px-1 py-0.5 rounded">ActionMode.Auto</code>:
+              methods returning <code class="font-mono">Task</code> / <code class="font-mono">Task&lt;T&gt;</code> are inferred as <code class="font-mono text-amber-800 dark:text-amber-300 font-bold">:async</code>, awaiting completion before replying with <code class="font-mono">action_result</code>; concrete return types are inferred as <code class="font-mono text-amber-800 dark:text-amber-300 font-bold">:sync</code>; and <code class="font-mono font-bold">ActionMode.Cast</code> specifies fire-and-forget dispatch.
+            </p>
+          </div>
+
           <div class="overflow-x-auto rounded-xl border border-gray-200 mt-3">
             <table class="w-full text-left text-xs bg-white">
               <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 font-semibold text-[10px] uppercase">
                 <tr>
                   <th class="py-2 px-3">Property</th>
                   <th class="py-2 px-3">Type</th>
-                  <th class="py-2 px-3">Default</th>
+                  <th class="py-2 px-3">Required / Default</th>
                   <th class="py-2 px-3">Description</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-100 font-mono text-[11px]">
                 <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">name (positional)</td>
+                  <td class="py-2 px-3 text-primary-700">string?</td>
+                  <td class="py-2 px-3 text-gray-400">Optional (method name)</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Wire action name. When omitted, automatically converted from PascalCase to <code class="font-mono text-primary-700">snake_case</code> (e.g. <code class="font-mono text-primary-700">TransferItem</code> → <code class="font-mono text-primary-700">transfer_item</code>).</td>
+                </tr>
+                <tr>
                   <td class="py-2 px-3 font-bold text-gray-900">Mode</td>
-                  <td class="py-2 px-3 text-primary-700">string</td>
-                  <td class="py-2 px-3 text-gray-400">"sync"</td>
-                  <td class="py-2 px-3 font-sans text-xs text-gray-600"><code class="font-mono text-primary-700">"sync"</code> awaits execution and returns a result payload. <code class="font-mono text-primary-700">"async"</code> triggers background processing and returns immediately.</td>
+                  <td class="py-2 px-3 text-primary-700">ActionMode</td>
+                  <td class="py-2 px-3 text-gray-400">Optional (ActionMode.Auto)</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Execution mode (<code class="font-mono text-primary-700">Auto</code>, <code class="font-mono text-primary-700">Sync</code>, <code class="font-mono text-primary-700">Async</code>, <code class="font-mono text-primary-700">Cast</code>). <code class="font-mono">Auto</code> infers from return type: <code class="font-mono">Task&lt;T&gt;</code> becomes async, concrete returns become sync. <code class="font-mono">Cast</code> enables fire-and-forget.</td>
                 </tr>
                 <tr>
                   <td class="py-2 px-3 font-bold text-gray-900">Scope</td>
                   <td class="py-2 px-3 text-primary-700">string</td>
-                  <td class="py-2 px-3 text-gray-400">"guest"</td>
-                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Minimum authorization scope needed to invoke (<code class="font-mono text-primary-700">"guest"</code>, <code class="font-mono text-primary-700">"player"</code>, <code class="font-mono text-primary-700">"admin"</code>). The cluster enforces this before invoking the extension.</td>
+                  <td class="py-2 px-3 text-gray-400">Optional ("global")</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Minimum authorization scope needed to invoke (<code class="font-mono text-primary-700">"guest"</code>, <code class="font-mono text-primary-700">"player"</code>, <code class="font-mono text-primary-700">"admin"</code>, <code class="font-mono text-primary-700">"studio"</code>). The cluster enforces this before invoking the extension.</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">Transport</td>
+                  <td class="py-2 px-3 text-primary-700">ActionTransport</td>
+                  <td class="py-2 px-3 text-gray-400">Optional (ActionTransport.Auto)</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Preferred transport mechanism (<code class="font-mono text-primary-700">Auto</code>, <code class="font-mono text-primary-700">WebSocket</code>, <code class="font-mono text-primary-700">Http</code>, <code class="font-mono text-primary-700">Webhook</code>).</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">Service</td>
+                  <td class="py-2 px-3 text-primary-700">string?</td>
+                  <td class="py-2 px-3 text-gray-400">Optional (null)</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">The owning service name when a single extension class provides multiple <code class="font-mono text-primary-700">[ExoService]</code> contracts. Defaults to the primary service.</td>
                 </tr>
               </tbody>
             </table>
@@ -574,6 +707,57 @@ defmodule Exoforge.Std.Docs.View do
           </div>
         </div>
 
+        <div class="space-y-3 text-xs text-gray-700 leading-relaxed">
+          <p>
+            Decorate parameterless methods with <code class="font-mono text-amber-700 font-bold">[ExoCron]</code> to schedule automated background executions under cluster supervision.
+          </p>
+
+          <div class="overflow-x-auto rounded-xl border border-gray-200 mt-3">
+            <table class="w-full text-left text-xs bg-white">
+              <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 font-semibold text-[10px] uppercase">
+                <tr>
+                  <th class="py-2 px-3">Property</th>
+                  <th class="py-2 px-3">Type</th>
+                  <th class="py-2 px-3">Required / Default</th>
+                  <th class="py-2 px-3">Description</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100 font-mono text-[11px]">
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">schedule (positional 0)</td>
+                  <td class="py-2 px-3 text-primary-700">string</td>
+                  <td class="py-2 px-3 text-rose-600 font-sans text-xs font-semibold">Required</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Standard 5-field cron expression in UTC (<code class="font-mono text-primary-700">"minute hour day-of-month month day-of-week"</code>). Examples: <code class="font-mono text-primary-700">"0 0 * * *"</code> (midnight daily), <code class="font-mono text-primary-700">"*/5 * * * *"</code> (every 5 min).</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">name (positional 1 / named)</td>
+                  <td class="py-2 px-3 text-primary-700">string?</td>
+                  <td class="py-2 px-3 text-gray-400">Optional (method name)</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Unique task name on the wire. Defaults to method name in <code class="font-mono text-primary-700">snake_case</code>.</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">Description</td>
+                  <td class="py-2 px-3 text-primary-700">string?</td>
+                  <td class="py-2 px-3 text-gray-400">Optional (null)</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Human-readable description surfaced in Studio telemetry and operations cards.</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">RunOnStartup</td>
+                  <td class="py-2 px-3 text-primary-700">bool</td>
+                  <td class="py-2 px-3 text-gray-400">Optional (false)</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Whether the task executes immediately when the extension starts before the first cron trigger. Useful for seeding or cache pre-warming.</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">Service</td>
+                  <td class="py-2 px-3 text-primary-700">string?</td>
+                  <td class="py-2 px-3 text-gray-400">Optional (null)</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">The service this cron job belongs to when multiple services are declared. Defaults to primary service.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         <div class="space-y-2">
           <pre class="bg-gray-950 text-gray-200 p-4 rounded-2xl font-mono text-[11px] overflow-x-auto border border-gray-800"><code><%= Phoenix.HTML.raw(Markdown.highlight_csharp(code_exo_cron_page())) %></code></pre>
         </div>
@@ -591,14 +775,78 @@ defmodule Exoforge.Std.Docs.View do
                 <h2 class="text-xl font-extrabold text-gray-900 font-mono">[ExoEvent]</h2>
                 <span class="px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[10px] font-bold uppercase tracking-wider">Cluster Pub/Sub</span>
               </div>
-              <p class="text-xs text-gray-500 mt-0.5">Subscribes to cluster-wide real-time events published via EventDispatcher.</p>
+              <p class="text-xs text-gray-500 mt-0.5">Declares a record or class as a cluster pub/sub event schema contract.</p>
             </div>
           </div>
         </div>
 
+        <div class="space-y-3 text-xs text-gray-700 leading-relaxed">
+          <div class="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/30 text-purple-950 dark:text-purple-200 space-y-1.5">
+            <div class="font-bold text-xs flex items-center gap-1.5">
+              <span>⚠️</span> <span>Schema Contract Annotation, Not Function Listener</span>
+            </div>
+            <p class="text-[11px] leading-relaxed">
+              <code class="font-mono text-purple-800 dark:text-purple-300 font-bold">[ExoEvent]</code> annotates <strong>records, classes, or structs</strong> to declare the schema and wire contract of an event payload.
+              To <strong>listen</strong> to events inside a C# extension, implement <code class="font-mono bg-purple-500/20 px-1 py-0.5 rounded">public void OnEvent(string name, TPayload payload)</code> on your extension class.
+              To <strong>subscribe</strong> in Unity, call <code class="font-mono bg-purple-500/20 px-1 py-0.5 rounded">ExoforgeSDK.Events.Subscribe&lt;T&gt;()</code>.
+            </p>
+          </div>
+
+          <div class="overflow-x-auto rounded-xl border border-gray-200 mt-3">
+            <table class="w-full text-left text-xs bg-white">
+              <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 font-semibold text-[10px] uppercase">
+                <tr>
+                  <th class="py-2 px-3">Property</th>
+                  <th class="py-2 px-3">Type</th>
+                  <th class="py-2 px-3">Required / Default</th>
+                  <th class="py-2 px-3">Description</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100 font-mono text-[11px]">
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">name (positional 0)</td>
+                  <td class="py-2 px-3 text-primary-700">string?</td>
+                  <td class="py-2 px-3 text-gray-400">Optional (record name)</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Event name on the wire and bus (e.g. <code class="font-mono text-primary-700">"player.registered"</code>). When omitted, derived from the record name in <code class="font-mono text-primary-700">snake_case</code>.</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">Topic</td>
+                  <td class="py-2 px-3 text-primary-700">string?</td>
+                  <td class="py-2 px-3 text-gray-400">Optional (null)</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Pub/sub broadcast topic pattern (e.g. <code class="font-mono text-primary-700">"player:*"</code> or <code class="font-mono text-primary-700">"leaderboard.weekly"</code>).</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">Scope</td>
+                  <td class="py-2 px-3 text-primary-700">string</td>
+                  <td class="py-2 px-3 text-gray-400">Optional ("global")</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Minimum authorization scope required to receive or publish this event.</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">PayloadType</td>
+                  <td class="py-2 px-3 text-primary-700">Type?</td>
+                  <td class="py-2 px-3 text-gray-400">Optional (null)</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Explicit payload type override when declared on a service class rather than directly on the record.</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">Service</td>
+                  <td class="py-2 px-3 text-primary-700">string?</td>
+                  <td class="py-2 px-3 text-gray-400">Optional (null)</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">The service this event belongs to when multiple services are provided.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <pre class="bg-gray-950 text-gray-200 p-4 rounded-2xl font-mono text-[11px] overflow-x-auto border border-gray-800"><code><%= Phoenix.HTML.raw(Markdown.highlight_csharp(code_exo_event_page())) %></code></pre>
-          <pre class="bg-gray-950 text-gray-200 p-4 rounded-2xl font-mono text-[11px] overflow-x-auto border border-gray-800"><code><%= Phoenix.HTML.raw(Markdown.highlight_csharp(code_exo_event_unity())) %></code></pre>
+          <div>
+            <div class="text-xs text-gray-500 font-bold mb-1">C# Backend Schema &amp; Handler</div>
+            <pre class="bg-gray-950 text-gray-200 p-4 rounded-2xl font-mono text-[11px] overflow-x-auto border border-gray-800"><code><%= Phoenix.HTML.raw(Markdown.highlight_csharp(code_exo_event_page())) %></code></pre>
+          </div>
+          <div>
+            <div class="text-xs text-gray-500 font-bold mb-1">Unity C# Client Subscription</div>
+            <pre class="bg-gray-950 text-gray-200 p-4 rounded-2xl font-mono text-[11px] overflow-x-auto border border-gray-800"><code><%= Phoenix.HTML.raw(Markdown.highlight_csharp(code_exo_event_unity())) %></code></pre>
+          </div>
         </div>
       </section>
 
@@ -611,10 +859,10 @@ defmodule Exoforge.Std.Docs.View do
             </span>
             <div>
               <div class="flex items-center gap-2">
-                <h2 class="text-xl font-extrabold text-gray-900 font-mono">[ExoResource]</h2>
+                <h2 class="text-xl font-extrabold text-gray-900 font-mono">[ExoResource] &amp; [ExoColumn]</h2>
                 <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold uppercase tracking-wider">Database Entity</span>
               </div>
-              <p class="text-xs text-gray-500 mt-0.5">Declares a typed entity record mapped directly to SQLite / PostgreSQL storage.</p>
+              <p class="text-xs text-gray-500 mt-0.5">Declares typed entity records and columns mapped directly to SQLite / PostgreSQL storage.</p>
             </div>
           </div>
           <div class="text-[11px] font-mono bg-gray-100 px-3 py-1.5 rounded-xl text-gray-600 self-start sm:self-auto">
@@ -622,13 +870,143 @@ defmodule Exoforge.Std.Docs.View do
           </div>
         </div>
 
-        <div class="p-4 rounded-2xl bg-emerald-50 border border-emerald-200/80 text-emerald-900 text-xs space-y-1">
-          <div class="font-bold flex items-center gap-1.5 text-emerald-800 text-[11px] uppercase tracking-wider">
-            <span>✨</span> <span>Automatic Table Name Inference</span>
+        <div class="space-y-4 text-xs text-gray-700 leading-relaxed">
+          <div class="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-950 dark:text-emerald-200 space-y-1">
+            <div class="font-bold flex items-center gap-1.5 text-emerald-800 dark:text-emerald-300 text-[11px] uppercase tracking-wider">
+              <span>✨</span> <span>Automatic Table Inference &amp; Studio Forms</span>
+            </div>
+            <p class="leading-relaxed">
+              Resource records map directly to database tables without manual migration files. Attributes configure table names, primary keys, Studio dashboard tabs, sorting, filtering, and custom input widgets.
+            </p>
           </div>
-          <p class="leading-relaxed">
-            By default, resource record classes map directly to database tables without manual migrations.
-          </p>
+
+          <h3 class="text-sm font-bold text-gray-900 pt-2">[ExoResource] Parameters</h3>
+          <div class="overflow-x-auto rounded-xl border border-gray-200">
+            <table class="w-full text-left text-xs bg-white">
+              <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 font-semibold text-[10px] uppercase">
+                <tr>
+                  <th class="py-2 px-3">Property</th>
+                  <th class="py-2 px-3">Type</th>
+                  <th class="py-2 px-3">Required / Default</th>
+                  <th class="py-2 px-3">Description</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100 font-mono text-[11px]">
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">name (positional / named)</td>
+                  <td class="py-2 px-3 text-primary-700">string?</td>
+                  <td class="py-2 px-3 text-gray-400">Optional (record name)</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Database table name. When omitted, defaults to the record name in <code class="font-mono text-primary-700">snake_case</code>.</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">PrimaryKey</td>
+                  <td class="py-2 px-3 text-primary-700">string?</td>
+                  <td class="py-2 px-3 text-gray-400">Optional ("id")</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Name of the primary key column. Can also be designated on a property using <code class="font-mono text-primary-700">[PrimaryKey]</code>.</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">Source</td>
+                  <td class="py-2 px-3 text-primary-700">string?</td>
+                  <td class="py-2 px-3 text-gray-400">Optional (same as Name)</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">The table or view this resource is stored in. Real database table queryable via SQL.</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">Singleton</td>
+                  <td class="py-2 px-3 text-primary-700">bool</td>
+                  <td class="py-2 px-3 text-gray-400">Optional (false)</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Indicates whether this resource stores exactly one record (e.g. server configuration). Creates a default record when empty and renders as a single form in Studio.</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">DrawerTabs</td>
+                  <td class="py-2 px-3 text-primary-700">string[]?</td>
+                  <td class="py-2 px-3 text-gray-400">Optional (["overview"])</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Tab sections displayed when inspecting a row in the Studio drawer (e.g. <code class="font-mono text-primary-700">new[] &#123; "overview", "attributes" &#125;</code>).</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">ResourceType</td>
+                  <td class="py-2 px-3 text-primary-700">Type?</td>
+                  <td class="py-2 px-3 text-gray-400">Optional (null)</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Explicit record type when declared on a service class via <code class="font-mono text-primary-700">[ExoService(Resources = ...)]</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3 class="text-sm font-bold text-gray-900 pt-2">[ExoColumn] Parameters</h3>
+          <div class="overflow-x-auto rounded-xl border border-gray-200">
+            <table class="w-full text-left text-xs bg-white">
+              <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 font-semibold text-[10px] uppercase">
+                <tr>
+                  <th class="py-2 px-3">Property</th>
+                  <th class="py-2 px-3">Type</th>
+                  <th class="py-2 px-3">Required / Default</th>
+                  <th class="py-2 px-3">Description</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100 font-mono text-[11px]">
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">name (positional / named)</td>
+                  <td class="py-2 px-3 text-primary-700">string?</td>
+                  <td class="py-2 px-3 text-gray-400">Optional (property name)</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Column name in the database table in <code class="font-mono text-primary-700">snake_case</code>.</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">Label</td>
+                  <td class="py-2 px-3 text-primary-700">string?</td>
+                  <td class="py-2 px-3 text-gray-400">Optional (property name)</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">User-friendly header label rendered in Studio Dashboard data tables and drawer forms.</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">DataType</td>
+                  <td class="py-2 px-3 text-primary-700">string?</td>
+                  <td class="py-2 px-3 text-gray-400">Optional (auto-inferred)</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Explicit SQL data type override (<code class="font-mono text-primary-700">"text"</code>, <code class="font-mono text-primary-700">"integer"</code>, <code class="font-mono text-primary-700">"float"</code>, <code class="font-mono text-primary-700">"boolean"</code>, <code class="font-mono text-primary-700">"datetime"</code>, <code class="font-mono text-primary-700">"json"</code>).</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">Role</td>
+                  <td class="py-2 px-3 text-primary-700">string?</td>
+                  <td class="py-2 px-3 text-gray-400">Optional (null)</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Semantic role for special Studio UI presentation (e.g. <code class="font-mono text-primary-700">"user_id"</code>, <code class="font-mono text-primary-700">"file_reference"</code>, <code class="font-mono text-primary-700">"currency"</code>).</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">InputType</td>
+                  <td class="py-2 px-3 text-primary-700">string?</td>
+                  <td class="py-2 px-3 text-gray-400">Optional ("text")</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Form input widget from <code class="font-mono text-primary-700">ExoInput</code> (<code class="font-mono">Text</code>, <code class="font-mono">Color</code>, <code class="font-mono">Date</code>, <code class="font-mono">Time</code>, <code class="font-mono">DateTimeLocal</code>, <code class="font-mono">Textarea</code>, <code class="font-mono">Email</code>, <code class="font-mono">Url</code>, <code class="font-mono">Password</code>, <code class="font-mono">Range</code>, <code class="font-mono">Json</code>, <code class="font-mono">List</code>, <code class="font-mono">Checkbox</code>, <code class="font-mono">Select</code>, <code class="font-mono">FileReference</code>).</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">Sortable</td>
+                  <td class="py-2 px-3 text-primary-700">bool</td>
+                  <td class="py-2 px-3 text-gray-400">Optional (true)</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Enables column click-sorting in Studio data tables.</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">Filterable</td>
+                  <td class="py-2 px-3 text-primary-700">bool</td>
+                  <td class="py-2 px-3 text-gray-400">Optional (true)</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Enables quick search &amp; filtering on this column in Studio.</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">Badge</td>
+                  <td class="py-2 px-3 text-primary-700">bool</td>
+                  <td class="py-2 px-3 text-gray-400">Optional (false)</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Renders the column value as a distinct colored badge chip in Studio.</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">Bucket</td>
+                  <td class="py-2 px-3 text-primary-700">string?</td>
+                  <td class="py-2 px-3 text-gray-400">Optional (null)</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Target storage bucket name when referencing binary/blob assets from <code class="font-mono text-primary-700">file_bucket</code>.</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">FileReference</td>
+                  <td class="py-2 px-3 text-primary-700">bool</td>
+                  <td class="py-2 px-3 text-gray-400">Optional (false)</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Convenience shorthand for <code class="font-mono text-primary-700">Role = "file_reference"</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
 
         <div class="space-y-2">
@@ -926,10 +1304,15 @@ defmodule Exoforge.Std.Docs.View do
     """
     using Exoforge.SDK;
 
-    [ExoExtension("leaderboard_service", Version = "1.0.0", Resources = new[] { typeof(ScoreEntry) })]
+    [ExoExtension("leaderboard_service",
+        Title = "Leaderboards & Rankings",
+        Icon = "🏆",
+        Category = "Game",
+        Version = "1.0.0",
+        Resources = new[] { typeof(PlayerScoreRecord) })]
     public class LeaderboardExtension
     {
-        [ExoAction]
+        [ExoAction(Scope = "player")]
         public SubmitScoreResponse SubmitScore(SubmitScoreRequest req)
         {
             return new SubmitScoreResponse(req.Score, 1);
@@ -940,7 +1323,8 @@ defmodule Exoforge.Std.Docs.View do
 
   defp code_exo_action_page do
     """
-    [ExoAction(Mode = "sync", Scope = "player")]
+    // Mode is automatically inferred: Task<T> -> async, concrete -> sync.
+    [ExoAction(Scope = "player")]
     public TransferItemResponse TransferItem(TransferItemRequest req)
     {
         if (req.Quantity <= 0)
@@ -948,12 +1332,19 @@ defmodule Exoforge.Std.Docs.View do
 
         return new TransferItemResponse(req.ItemId, req.Quantity, true);
     }
+
+    // Explicit Cast mode for fire-and-forget
+    [ExoAction(Mode = ActionMode.Cast)]
+    public void RecordTelemetry(TelemetryPayload payload)
+    {
+        Exo.Log.Info($"Telemetry: {payload.EventName}");
+    }
     """
   end
 
   defp code_exo_cron_page do
     """
-    [ExoCron("0 0 * * *")]
+    [ExoCron("0 0 * * *", Description = "Rolls over daily leaderboards at midnight UTC", RunOnStartup = false)]
     public void RolloverDailyLeaderboards()
     {
         // Executes automatically at midnight UTC under cluster supervisor
@@ -963,16 +1354,24 @@ defmodule Exoforge.Std.Docs.View do
 
   defp code_exo_event_page do
     """
-    [ExoEvent("player.registered")]
-    public void OnPlayerRegistered(PlayerRegisteredEvent evt)
+    // 1. Declare Event Schema Contract (Record)
+    [ExoEvent("player.registered", Topic = "player:*")]
+    public record PlayerRegisteredEvent(string PlayerId, string DisplayName, DateTime RegisteredAt);
+
+    // 2. Handle Inbound Cluster Events in Extension
+    public class LeaderboardExtension
     {
-        // Handle incoming cluster broadcast
+        public void OnEvent(string name, PlayerRegisteredEvent evt)
+        {
+            Exo.Log.Info($"Player joined: {evt.DisplayName}");
+        }
     }
     """
   end
 
   defp code_exo_event_unity do
     """
+    // Subscribe to strongly-typed event stream in Unity
     ExoforgeSDK.Events.Subscribe<PlayerRegisteredEvent>("player.registered", evt => {
         Debug.Log($"Welcome {evt.DisplayName}!");
     });
@@ -982,7 +1381,13 @@ defmodule Exoforge.Std.Docs.View do
   defp code_exo_resource_page do
     """
     [ExoResource(Name = "player_scores", PrimaryKey = "id")]
-    public record PlayerScoreRecord(string Id, string PlayerId, int Score, DateTime CreatedAt);
+    public record PlayerScoreRecord(
+        [property: PrimaryKey] string Id,
+        [property: ExoColumn(Role = "user_id", Label = "Player ID")] string PlayerId,
+        [property: ExoColumn(Label = "Score", Sortable = true)] int Score,
+        [property: ExoColumn(Badge = true, InputType = ExoInput.Color)] string TierBadge,
+        [property: ExoColumn(Label = "Submitted At")] DateTime CreatedAt
+    );
     """
   end
 end
