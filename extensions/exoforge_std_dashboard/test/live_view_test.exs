@@ -1183,29 +1183,16 @@ defmodule Exoforge.DashboardLiveViewTest do
       assert guide_html =~ "From Zero to Live Online Multiplayer Features"
       assert guide_html =~ "Tree-Shaking &amp; Native Compilation Architecture"
 
-      # Switch to [ExoExtension] subpage
-      ext_html = render_click(view, "set_guide_subpage", %{"subpage" => "exo_extension"})
-      assert ext_html =~ "[ExoExtension]"
-      assert ext_html =~ "OTP Supervision"
-      assert ext_html =~ "inventory_service"
-
-      # Switch to [ExoAction] subpage
-      act_html = render_click(view, "set_guide_subpage", %{"subpage" => "exo_action"})
-      assert act_html =~ "[ExoAction]"
-      assert act_html =~ "ExoActionException"
-      assert act_html =~ "matchmaker"
-
-      # Switch to [ExoEvent] subpage
-      evt_html = render_click(view, "set_guide_subpage", %{"subpage" => "exo_event"})
-      assert evt_html =~ "[ExoEvent]"
-      assert evt_html =~ "player.leveled_up"
-      assert evt_html =~ "ExoDispatcher"
-
-      # Switch to [ExoResource] subpage
-      res_html = render_click(view, "set_guide_subpage", %{"subpage" => "exo_resource"})
-      assert res_html =~ "[ExoResource]"
-      assert res_html =~ "Automatic Table Name Inference"
-      assert res_html =~ "player_profiles"
+      # Switch to aggregated C# Attributes subpage
+      attr_html = render_click(view, "set_guide_subpage", %{"subpage" => "attributes"})
+      assert attr_html =~ "[ExoExtension]"
+      assert attr_html =~ "[ExoAction]"
+      assert attr_html =~ "[ExoEvent]"
+      assert attr_html =~ "[ExoResource]"
+      assert attr_html =~ "Exoforge.Plugin.SDK"
+      assert attr_html =~ "exoforge_std_extension_manager"
+      assert attr_html =~ "exoforge_std_resources"
+      assert attr_html =~ "Automatic Table Name Inference"
     end
   end
 end

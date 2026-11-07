@@ -1,8 +1,8 @@
 defmodule Exoforge.Std.Dashboard.Guide do
   @moduledoc """
-  Comprehensive Quickstart Guide, Attribute Reference & Live API Reference for Exoforge developers.
-  Renders interactive steps, dedicated attribute deep dives ([ExoAction], [ExoEvent], [ExoResource], [ExoExtension]),
-  copyable C# snippets, and a live catalog of all cluster services, actions, and resources.
+  Comprehensive Quickstart Guide, C# Attributes Reference & Live API Reference for Exoforge developers.
+  Renders interactive steps, aggregated attribute reference ([ExoExtension], [ExoAction], [ExoEvent], [ExoResource]),
+  syntax-highlighted C# snippets, and a live catalog dynamically generated from currently loaded cluster extensions.
   """
   use Phoenix.Component
 
@@ -23,83 +23,49 @@ defmodule Exoforge.Std.Dashboard.Guide do
           </span>
           <div>
             <span class="font-extrabold text-sm text-gray-900 block leading-tight">Exoforge Developer Guide</span>
-            <span class="text-[10px] text-gray-400">Architecture, SDK attributes &amp; live cluster catalog</span>
+            <span class="text-[10px] text-gray-400">Architecture, C# attributes reference &amp; live cluster catalog</span>
           </div>
         </div>
 
-        <!-- Subpage Pills -->
+        <!-- Subpage Pills: Quickstart Flow vs C# Attributes Reference -->
         <div class="flex flex-wrap items-center gap-1.5 p-1 bg-gray-100/80 rounded-xl text-xs font-semibold">
           <button
             type="button"
             phx-click="set_guide_subpage"
             phx-value-subpage="flow"
-            class={"px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 #{if @subpage == "flow", do: "bg-white text-primary-700 shadow-xs font-bold", else: "text-gray-600 hover:text-gray-900"}"}
+            class={"px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 #{if @subpage == "flow", do: "bg-white text-primary-700 shadow-xs font-bold", else: "text-gray-600 hover:text-gray-900"}"}
           >
             <span>🚀</span>
-            <span>Quickstart Flow</span>
+            <span>Quickstart Flow &amp; Catalog</span>
           </button>
           <button
             type="button"
             phx-click="set_guide_subpage"
-            phx-value-subpage="exo_extension"
-            class={"px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 #{if @subpage == "exo_extension", do: "bg-white text-primary-700 shadow-xs font-bold", else: "text-gray-600 hover:text-gray-900"}"}
+            phx-value-subpage="attributes"
+            class={"px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 #{if @subpage == "attributes", do: "bg-white text-primary-700 shadow-xs font-bold", else: "text-gray-600 hover:text-gray-900"}"}
           >
             <span>🧩</span>
-            <span>[ExoExtension]</span>
-          </button>
-          <button
-            type="button"
-            phx-click="set_guide_subpage"
-            phx-value-subpage="exo_action"
-            class={"px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 #{if @subpage == "exo_action", do: "bg-white text-primary-700 shadow-xs font-bold", else: "text-gray-600 hover:text-gray-900"}"}
-          >
-            <span>⚡</span>
-            <span>[ExoAction]</span>
-          </button>
-          <button
-            type="button"
-            phx-click="set_guide_subpage"
-            phx-value-subpage="exo_event"
-            class={"px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 #{if @subpage == "exo_event", do: "bg-white text-primary-700 shadow-xs font-bold", else: "text-gray-600 hover:text-gray-900"}"}
-          >
-            <span>📡</span>
-            <span>[ExoEvent]</span>
-          </button>
-          <button
-            type="button"
-            phx-click="set_guide_subpage"
-            phx-value-subpage="exo_resource"
-            class={"px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 #{if @subpage == "exo_resource", do: "bg-white text-primary-700 shadow-xs font-bold", else: "text-gray-600 hover:text-gray-900"}"}
-          >
-            <span>💾</span>
-            <span>[ExoResource]</span>
+            <span>C# Attributes Reference</span>
           </button>
         </div>
       </div>
 
-      <%= case @subpage do %>
-        <% "exo_extension" -> %>
-          <.subpage_exo_extension />
-        <% "exo_action" -> %>
-          <.subpage_exo_action />
-        <% "exo_event" -> %>
-          <.subpage_exo_event />
-        <% "exo_resource" -> %>
-          <.subpage_exo_resource />
-        <% _default -> %>
-          <.subpage_flow
-            action_catalog={@action_catalog}
-            extensions={@extensions}
-            project_name={@project_name}
-            studio_name={@studio_name}
-          />
+      <%= if @subpage == "attributes" do %>
+        <.subpage_attributes />
+      <% else %>
+        <.subpage_flow
+          action_catalog={@action_catalog}
+          extensions={@extensions}
+          project_name={@project_name}
+          studio_name={@studio_name}
+        />
       <% end %>
     </div>
     """
   end
 
   # ===========================================================================
-  # SUBPAGE: QUICKSTART FLOW & LIVE CATALOG
+  # SUBPAGE: QUICKSTART FLOW & DYNAMIC API REFERENCE
   # ===========================================================================
   defp subpage_flow(assigns) do
     ~H"""
@@ -195,7 +161,7 @@ defmodule Exoforge.Std.Dashboard.Guide do
           </div>
           <div class="space-y-1">
             <h2 class="text-xl font-bold text-gray-900 tracking-tight">Connect &amp; Authenticate</h2>
-            <p class="text-xs text-gray-500">Setting up credentials and attaching the Exoforge manager to your Unity project.</p>
+            <p class="text-xs text-gray-500">Sign in anonymously using device credentials or authenticate players with seamless token caching.</p>
           </div>
         </div>
 
@@ -203,27 +169,30 @@ defmodule Exoforge.Std.Dashboard.Guide do
           <div class="space-y-3">
             <h4 class="font-bold text-gray-900 text-sm flex items-center gap-2">
               <span>🎮</span>
-              <span>In the Unity Editor</span>
+              <span>Anonymous Login &amp; Scene Setup</span>
             </h4>
             <ol class="list-decimal list-inside space-y-2 text-gray-600 leading-relaxed">
               <li>
-                Open <strong class="text-gray-900">Exoforge ▸ Studio</strong> from the Unity top menu.
+                In your game's first scene, click <strong class="text-gray-900">Exoforge ▸ Add Exoforge to Scene</strong>. This creates the persistent <code class="font-mono bg-gray-100 px-1 py-0.5 rounded">Exoforge.prefab</code>.
               </li>
               <li>
-                Click <strong class="text-gray-900">Sign in to Exoforge</strong> and enter your staff account credentials.
+                By default, <code class="font-mono bg-gray-100 px-1 py-0.5 rounded text-primary-700">anonymousOnConnect: true</code> automatically mints an anonymous player session using the unique device identifier (<code class="font-mono bg-gray-100 px-1 py-0.5 rounded">ExoDeviceId.Get()</code>) without requiring passwords.
               </li>
               <li>
-                In your game's first scene, click <strong class="text-gray-900">Exoforge ▸ Add Exoforge to Scene</strong>. This places the persistent <code class="font-mono bg-gray-100 px-1 py-0.5 rounded">Exoforge.prefab</code> into the hierarchy.
+                Or call <code class="font-mono bg-gray-100 px-1 py-0.5 rounded text-primary-700 font-bold">Exoforge.Auth.LoginAnonymously()</code> programmatically from script.
               </li>
               <li>
-                The runtime exposes synchronous <code class="font-mono bg-gray-100 text-primary-700 px-1 py-0.5 rounded font-bold">Exoforge.IsReady</code> and the <code class="font-mono bg-gray-100 text-primary-700 px-1 py-0.5 rounded font-bold">Exoforge.OnReady</code> event callback.
+                Once authenticated, the session is cached locally in <code class="font-mono bg-gray-100 px-1 py-0.5 rounded">ExoTokenStore</code> and <code class="font-mono bg-gray-100 px-1 py-0.5 rounded">Exoforge.IsReady</code> becomes true.
               </li>
             </ol>
           </div>
 
-          <div class="bg-gray-950 text-gray-200 rounded-2xl p-5 font-mono text-[11px] space-y-2 border border-gray-800">
-            <div class="text-gray-400 font-bold border-b border-gray-800 pb-2">Unity Readiness Check</div>
-            <pre class="overflow-x-auto text-emerald-400"><code><%= code_auth() %></code></pre>
+          <div class="space-y-2">
+            <div class="flex items-center justify-between text-gray-400 font-bold text-xs pb-1">
+              <span>Unity Anonymous Sign-In</span>
+              <span class="text-emerald-400 font-mono text-[10px]">C# Client</span>
+            </div>
+            <pre class="bg-gray-950 text-gray-200 p-4 rounded-2xl font-mono text-[11px] overflow-x-auto border border-gray-800"><code><%= highlight_csharp(code_auth()) %></code></pre>
           </div>
         </div>
       </section>
@@ -246,25 +215,25 @@ defmodule Exoforge.Std.Dashboard.Guide do
             This creates an isolated solution in <code class="font-mono bg-gray-100 px-1.5 py-0.5 rounded">Exoforge/extensions/&lt;name&gt;/</code>.
           </p>
 
-          <div class="bg-gray-950 text-gray-200 rounded-2xl p-5 font-mono text-[11px] space-y-2 border border-gray-800">
-            <div class="flex items-center justify-between text-gray-400 font-bold border-b border-gray-800 pb-2">
+          <div class="space-y-2">
+            <div class="flex items-center justify-between text-gray-400 font-bold text-xs pb-1">
               <span>Exoforge/extensions/gameplay_calculator/src/GameplayCalculatorExtension.cs</span>
-              <span class="text-xs text-primary-400">C# 12 / .NET 9+</span>
+              <span class="text-xs text-primary-400 font-mono">C# 12 / .NET 9+</span>
             </div>
-            <pre class="overflow-x-auto text-gray-300"><code><%= code_extension() %></code></pre>
+            <pre class="bg-gray-950 text-gray-200 p-4 rounded-2xl font-mono text-[11px] overflow-x-auto border border-gray-800"><code><%= highlight_csharp(code_extension()) %></code></pre>
           </div>
 
-          <!-- Tree-Shaking Architectural Callout -->
-          <div class="p-5 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/80 space-y-2 text-amber-900">
-            <div class="flex items-center gap-2 font-bold text-sm text-amber-950">
+          <!-- Tree-Shaking Architectural Callout (High Contrast in Dark & Light) -->
+          <div class="p-5 rounded-2xl bg-amber-950/30 border border-amber-500/40 text-amber-200 space-y-2">
+            <div class="flex items-center gap-2 font-bold text-sm text-amber-300">
               <span>✂️</span>
               <span>Tree-Shaking &amp; Native Compilation Architecture</span>
             </div>
-            <p class="leading-relaxed text-xs text-amber-900">
+            <p class="leading-relaxed text-xs text-amber-200/90">
               When publishing an extension, Exoforge leverages <strong>.NET IL Trimming &amp; Ahead-Of-Time (AOT) tree-shaking</strong>. All unused base class library (BCL) methods and reflection overhead are stripped at compile time.
             </p>
-            <ul class="list-disc list-inside space-y-1 text-xs text-amber-800 pl-1">
-              <li><strong>Zero Reflection at Runtime:</strong> Contracts, actions, and parameter types are analyzed and serialized into a lightweight <code class="font-mono bg-amber-100 px-1 py-0.5 rounded">manifest.json</code> at build time.</li>
+            <ul class="list-disc list-inside space-y-1 text-xs text-amber-200/80 pl-1">
+              <li><strong>Zero Reflection at Runtime:</strong> Contracts, actions, and parameter types are analyzed and serialized into a lightweight <code class="font-mono bg-amber-900/60 text-amber-200 px-1 py-0.5 rounded">manifest.json</code> at build time.</li>
               <li><strong>Minimal Memory Footprint:</strong> Stripped extension binaries load in milliseconds with predictable memory usage under Erlang/OTP supervision.</li>
               <li><strong>Binary Isolation:</strong> Each extension operates in an isolated worker process without polluting cluster dependencies.</li>
             </ul>
@@ -322,17 +291,19 @@ defmodule Exoforge.Std.Dashboard.Guide do
           <p>
             Whenever an extension action or schema changes, click <strong class="text-gray-900">🔄 Sync Client</strong> in the Unity toolbar (or run <code class="font-mono bg-gray-100 text-primary-700 px-1 py-0.5 rounded font-bold">exo sync</code>).
           </p>
-          <div class="p-4 bg-purple-50 text-purple-900 border border-purple-200 rounded-2xl space-y-1">
-            <span class="font-bold">What this does:</span>
-            <p class="text-purple-800 text-[11px]">
-              It queries the live cluster contracts and generates <code class="font-mono bg-purple-100 px-1 py-0.5 rounded">Assets/Exoforge/Generated/ExoforgeServices.g.cs</code>.
-              Your Unity project immediately gains typed methods for every action (both main-thread callbacks and async overloads) and models for every return record!
+
+          <!-- High Contrast Callout in Dark & Light -->
+          <div class="p-4 rounded-2xl bg-purple-950/30 border border-purple-500/40 text-purple-200 space-y-1.5">
+            <span class="font-bold text-xs text-purple-300">What this does:</span>
+            <p class="text-purple-200/90 text-[11px] leading-relaxed">
+              It queries live cluster contracts and generates <code class="font-mono bg-purple-900/60 text-purple-200 px-1 py-0.5 rounded">Assets/Exoforge/Generated/ExoforgeServices.g.cs</code>.
+              Your Unity project immediately gains strongly-typed methods for every action (both main-thread callbacks and async overloads) and typed models for every return record!
             </p>
           </div>
         </div>
       </section>
 
-      <!-- STEP 5: Call from Unity -->
+      <!-- STEP 5: Call from Unity Gameplay Code -->
       <section id="step-gameplay" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-6">
         <div class="flex items-start gap-4">
           <div class="w-10 h-10 rounded-2xl bg-primary-600 text-white font-extrabold flex items-center justify-center shrink-0 shadow-md">
@@ -340,62 +311,20 @@ defmodule Exoforge.Std.Dashboard.Guide do
           </div>
           <div class="space-y-1">
             <h2 class="text-xl font-bold text-gray-900 tracking-tight">Call from Unity Gameplay Code</h2>
-            <p class="text-xs text-gray-500">Standard main-thread callbacks without mandatory async/await.</p>
+            <p class="text-xs text-gray-500">Standard main-thread callbacks without mandatory async/await or boilerplate.</p>
           </div>
         </div>
 
-        <div class="bg-gray-950 text-gray-200 rounded-2xl p-5 font-mono text-[11px] space-y-2 border border-gray-800">
-          <div class="flex items-center justify-between text-gray-400 font-bold border-b border-gray-800 pb-2">
+        <div class="space-y-2">
+          <div class="flex items-center justify-between text-gray-400 font-bold text-xs pb-1">
             <span>Assets/Scripts/GameplayRewardController.cs</span>
-            <span class="text-xs text-emerald-400">Unity C#</span>
+            <span class="text-xs text-emerald-400 font-mono">Unity C#</span>
           </div>
-          <pre class="overflow-x-auto text-gray-300"><code><%= code_unity() %></code></pre>
+          <pre class="bg-gray-950 text-gray-200 p-4 rounded-2xl font-mono text-[11px] overflow-x-auto border border-gray-800"><code><%= highlight_csharp(code_unity()) %></code></pre>
         </div>
       </section>
 
-      <!-- SECTION 6: Built-in C# Extension API Cheat Sheet -->
-      <section class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-6">
-        <div>
-          <h2 class="text-xl font-bold text-gray-900 tracking-tight flex items-center gap-2">
-            <span>📚</span>
-            <span>C# Extension API Cheat Sheet</span>
-          </h2>
-          <p class="text-xs text-gray-500 mt-1">Key methods available in <code class="font-mono bg-gray-100 text-primary-700 px-1 py-0.5 rounded">Exoforge.Plugin.SDK</code>.</p>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-          <!-- Database -->
-          <div class="p-5 rounded-2xl bg-gray-50 border border-gray-200 space-y-2">
-            <h4 class="font-bold text-gray-900 flex items-center gap-1.5 text-sm">
-              <span>💾</span>
-              <span>ExoServices.Database</span>
-            </h4>
-            <ul class="space-y-1.5 text-gray-600 font-mono text-[11px]">
-              <li><strong class="text-primary-700">Get&lt;T&gt;(id)</strong>: Query entity by PK (inferred table)</li>
-              <li><strong class="text-primary-700">Put(entity)</strong>: Upsert entity record</li>
-              <li><strong class="text-primary-700">Delete&lt;T&gt;(id)</strong>: Delete entity by PK</li>
-              <li><strong class="text-primary-700">All&lt;T&gt;()</strong>: Return all records of table</li>
-              <li><strong class="text-primary-700">First&lt;T&gt;()</strong>: Read singleton game config</li>
-            </ul>
-          </div>
-
-          <!-- Events & Context -->
-          <div class="p-5 rounded-2xl bg-gray-50 border border-gray-200 space-y-2">
-            <h4 class="font-bold text-gray-900 flex items-center gap-1.5 text-sm">
-              <span>📡</span>
-              <span>Events &amp; Context</span>
-            </h4>
-            <ul class="space-y-1.5 text-gray-600 font-mono text-[11px]">
-              <li><strong class="text-primary-700">ExoServices.Events.EmitAsync(evt)</strong>: Broadcast event</li>
-              <li><strong class="text-primary-700">ExoServices.Context.CurrentPlayerId</strong>: Caller verified ID</li>
-              <li><strong class="text-primary-700">ExoServices.Context.CurrentScopes</strong>: Caller roles</li>
-              <li><strong class="text-primary-700">throw new ExoActionException(code, msg)</strong>: Throw action error</li>
-            </ul>
-          </div>
-        </div>
-      </section>
-
-      <!-- SECTION 7: LIVE ACTION & RESOURCE CATALOG (DYNAMIC & FOLDABLE) -->
+      <!-- SECTION 6: LIVE SERVICES & ACTION CATALOG (DYNAMIC API REFERENCE) -->
       <section id="catalog" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-6">
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
@@ -407,10 +336,10 @@ defmodule Exoforge.Std.Dashboard.Guide do
               Live Services &amp; Action Catalog
             </h2>
             <p class="text-xs text-gray-500">
-              Dynamically extracted from currently loaded extensions. Foldable by extension and individual action.
+              Dynamically extracted from currently loaded extensions on this cluster. Foldable by extension and action.
             </p>
           </div>
-          <span class="text-xs font-bold text-gray-500 bg-gray-100 px-3 py-1.5 rounded-xl self-start md:self-auto">
+          <span class="text-xs font-bold text-gray-500 bg-gray-100 px-3 py-1.5 rounded-xl self-start md:self-auto font-mono">
             <%= length(@action_catalog) %> Services Loaded
           </span>
         </div>
@@ -422,9 +351,9 @@ defmodule Exoforge.Std.Dashboard.Guide do
         <% else %>
           <div class="space-y-4">
             <%= for svc <- @action_catalog do %>
-              <!-- Foldable Extension Group -->
-              <details class="group bg-white rounded-2xl border border-gray-200/90 shadow-sm overflow-hidden transition-all duration-200" open>
-                <summary class="flex items-center justify-between gap-3 p-5 cursor-pointer select-none bg-white hover:bg-gray-50/80 transition-colors list-none">
+              <!-- Foldable Service Card -->
+              <details class="group bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden transition-all duration-200" open>
+                <summary class="flex items-center justify-between gap-3 p-5 cursor-pointer select-none bg-white hover:bg-gray-50 transition-colors list-none">
                   <div class="flex items-center gap-3">
                     <span class="w-9 h-9 rounded-xl bg-primary-50 text-primary-700 flex items-center justify-center font-bold text-base shadow-xs">
                       <%= svc.icon || "⚙️" %>
@@ -450,10 +379,10 @@ defmodule Exoforge.Std.Dashboard.Guide do
                 </summary>
 
                 <!-- Actions List inside Service -->
-                <div class="p-5 pt-2 border-t border-gray-100 space-y-3 bg-gray-50/30">
+                <div class="p-5 pt-3 border-t border-gray-100 space-y-3 bg-gray-50/50">
                   <%= for act <- svc.actions do %>
-                    <!-- Foldable Action Card -->
-                    <details class="group/act bg-white rounded-xl border border-gray-200/70 p-4 space-y-3 shadow-2xs transition-all" open>
+                    <!-- Foldable Action Item -->
+                    <details class="group/act bg-white rounded-xl border border-gray-200/80 p-4 space-y-3 shadow-2xs transition-all" open>
                       <summary class="flex items-center justify-between gap-2 cursor-pointer select-none list-none">
                         <div class="flex items-center gap-2">
                           <span class="font-bold text-primary-800 text-xs font-mono">
@@ -519,20 +448,20 @@ defmodule Exoforge.Std.Dashboard.Guide do
                           </div>
                         <% end %>
 
-                        <!-- Dual C# Code Calling Previews -->
+                        <!-- Dual C# Code Calling Previews (Syntax Highlighted) -->
                         <div class="space-y-2 pt-1">
                           <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Unity Calling Styles</div>
                           
                           <!-- Callback Style (Main Thread) -->
                           <div class="space-y-1">
                             <div class="text-[10px] text-gray-500 font-semibold">Unity Callback (Non-Async / Main Thread):</div>
-                            <pre class="bg-gray-900 text-emerald-400 p-2.5 rounded-xl font-mono text-[10px] overflow-x-auto"><code><%= snippet_callback(svc.name, act) %></code></pre>
+                            <pre class="bg-gray-950 text-gray-200 p-3 rounded-xl font-mono text-[10px] overflow-x-auto border border-gray-800"><code><%= highlight_csharp(snippet_callback(svc.name, act)) %></code></pre>
                           </div>
 
                           <!-- Async Style -->
                           <div class="space-y-1">
                             <div class="text-[10px] text-gray-500 font-semibold">Task Async/Await:</div>
-                            <pre class="bg-gray-900 text-gray-300 p-2.5 rounded-xl font-mono text-[10px] overflow-x-auto"><code><%= snippet_async(svc.name, act) %></code></pre>
+                            <pre class="bg-gray-950 text-gray-200 p-3 rounded-xl font-mono text-[10px] overflow-x-auto border border-gray-800"><code><%= highlight_csharp(snippet_async(svc.name, act)) %></code></pre>
                           </div>
                         </div>
                       </div>
@@ -549,28 +478,65 @@ defmodule Exoforge.Std.Dashboard.Guide do
   end
 
   # ===========================================================================
-  # SUBPAGE: [ExoExtension] ATTRIBUTE REFERENCE
+  # SUBPAGE: AGGREGATED C# ATTRIBUTES REFERENCE
   # ===========================================================================
-  defp subpage_exo_extension(assigns) do
+  defp subpage_attributes(assigns) do
     ~H"""
-    <div class="space-y-6">
-      <div class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-4">
-        <div class="flex items-center gap-3 border-b border-gray-100 pb-4">
-          <span class="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold text-lg">
+    <div class="space-y-8">
+      <!-- Header Banner -->
+      <div class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-3">
+        <div class="flex items-center gap-3">
+          <span class="w-10 h-10 rounded-2xl bg-primary-50 text-primary-700 flex items-center justify-center font-bold text-xl">
             🧩
           </span>
           <div>
-            <div class="flex items-center gap-2">
-              <h2 class="text-xl font-extrabold text-gray-900 font-mono">[ExoExtension]</h2>
-              <span class="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 text-[10px] font-bold uppercase tracking-wider">Service Root</span>
+            <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">C# Attributes Reference</h1>
+            <p class="text-xs text-gray-500 mt-0.5">
+              Comprehensive reference for all core attributes provided by the Exoforge Plugin SDK and extensions.
+            </p>
+          </div>
+        </div>
+
+        <!-- Quick Jump Links -->
+        <div class="pt-2 flex flex-wrap gap-2 text-xs font-semibold">
+          <a href="#attr-extension" class="px-3 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors flex items-center gap-1.5">
+            <span>[ExoExtension]</span>
+          </a>
+          <a href="#attr-action" class="px-3 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors flex items-center gap-1.5">
+            <span>[ExoAction]</span>
+          </a>
+          <a href="#attr-event" class="px-3 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors flex items-center gap-1.5">
+            <span>[ExoEvent]</span>
+          </a>
+          <a href="#attr-resource" class="px-3 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors flex items-center gap-1.5">
+            <span>[ExoResource]</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- 1. [ExoExtension] -->
+      <section id="attr-extension" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+          <div class="flex items-center gap-3">
+            <span class="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold text-lg">
+              🧩
+            </span>
+            <div>
+              <div class="flex items-center gap-2">
+                <h2 class="text-xl font-extrabold text-gray-900 font-mono">[ExoExtension]</h2>
+                <span class="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 text-[10px] font-bold uppercase tracking-wider">Service Root</span>
+              </div>
+              <p class="text-xs text-gray-500 mt-0.5">Identifies a C# class as a cluster-supervised native headless service.</p>
             </div>
-            <p class="text-xs text-gray-500 mt-0.5">Identifies a C# class as a cluster-supervised native headless service.</p>
+          </div>
+          <div class="text-[11px] font-mono bg-gray-100 px-3 py-1.5 rounded-xl text-gray-600 self-start sm:self-auto">
+            Source: <strong class="text-indigo-700">Exoforge.Plugin.SDK</strong> (via <code class="text-gray-800">exoforge_std_extension_manager</code>)
           </div>
         </div>
 
         <div class="space-y-3 text-xs text-gray-700 leading-relaxed">
           <p>
-            The <code class="font-mono text-indigo-700 font-bold">[ExoExtension]</code> attribute is the root entry point for any backend feature in Exoforge. Classes marked with this attribute are automatically registered into the server extension supervisor, inspected for exported RPC actions, and linked into client code generators.
+            The <code class="font-mono text-indigo-700 font-bold">[ExoExtension]</code> attribute is the root entry point for backend features in Exoforge. Classes marked with this attribute are automatically registered into the server extension supervisor, inspected for exported RPC actions, and linked into client code generators.
           </p>
 
           <div class="overflow-x-auto rounded-xl border border-gray-200 mt-3">
@@ -588,7 +554,7 @@ defmodule Exoforge.Std.Dashboard.Guide do
                   <td class="py-2 px-3 font-bold text-gray-900">id (positional)</td>
                   <td class="py-2 px-3 text-primary-700">string</td>
                   <td class="py-2 px-3 text-gray-400">Required</td>
-                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Unique identifier of the extension (e.g. <code class="font-mono text-primary-700">"gameplay_calculator"</code>). Used for RPC addressing and log grouping.</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Unique identifier of the extension (e.g. <code class="font-mono text-primary-700">"inventory_service"</code>). Used for RPC routing and log grouping.</td>
                 </tr>
                 <tr>
                   <td class="py-2 px-3 font-bold text-gray-900">Version</td>
@@ -607,50 +573,32 @@ defmodule Exoforge.Std.Dashboard.Guide do
           </div>
         </div>
 
-        <div class="pt-2 space-y-2">
+        <div class="space-y-2">
           <div class="flex items-center justify-between text-xs text-gray-500 font-bold">
             <span>Extension Class Declaration Pattern</span>
             <span class="font-mono text-[11px] text-gray-400">C# 12 / .NET 9+</span>
           </div>
-          <pre class="bg-gray-950 text-gray-300 p-4 rounded-2xl font-mono text-[11px] overflow-x-auto"><code><%= code_exo_extension_page() %></code></pre>
+          <pre class="bg-gray-950 text-gray-200 p-4 rounded-2xl font-mono text-[11px] overflow-x-auto border border-gray-800"><code><%= highlight_csharp(code_exo_extension_page()) %></code></pre>
         </div>
+      </section>
 
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-          <div class="p-4 rounded-xl bg-gray-50 border border-gray-200/80 space-y-1">
-            <span class="font-bold text-gray-900 text-xs">🛡️ OTP Supervision</span>
-            <p class="text-[11px] text-gray-500">Each extension executes inside an isolated worker process. Uncaught exceptions or crashes restart in milliseconds without impacting other players or cluster services.</p>
-          </div>
-          <div class="p-4 rounded-xl bg-gray-50 border border-gray-200/80 space-y-1">
-            <span class="font-bold text-gray-900 text-xs">✂️ Treeshaked Binaries</span>
-            <p class="text-[11px] text-gray-500">Dead code trimming removes all unreferenced .NET BCL types, producing lightweight binaries with instant cold start times.</p>
-          </div>
-          <div class="p-4 rounded-xl bg-gray-50 border border-gray-200/80 space-y-1">
-            <span class="font-bold text-gray-900 text-xs">🔄 Zero-Reflection</span>
-            <p class="text-[11px] text-gray-500">Manifests and type tables are evaluated at build time. Runtime dispatching does not incur reflection overhead.</p>
-          </div>
-        </div>
-      </div>
-    </div>
-    """
-  end
-
-  # ===========================================================================
-  # SUBPAGE: [ExoAction] ATTRIBUTE REFERENCE
-  # ===========================================================================
-  defp subpage_exo_action(assigns) do
-    ~H"""
-    <div class="space-y-6">
-      <div class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-4">
-        <div class="flex items-center gap-3 border-b border-gray-100 pb-4">
-          <span class="w-10 h-10 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center font-bold text-lg">
-            ⚡
-          </span>
-          <div>
-            <div class="flex items-center gap-2">
-              <h2 class="text-xl font-extrabold text-gray-900 font-mono">[ExoAction]</h2>
-              <span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold uppercase tracking-wider">RPC Action</span>
+      <!-- 2. [ExoAction] -->
+      <section id="attr-action" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+          <div class="flex items-center gap-3">
+            <span class="w-10 h-10 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center font-bold text-lg">
+              ⚡
+            </span>
+            <div>
+              <div class="flex items-center gap-2">
+                <h2 class="text-xl font-extrabold text-gray-900 font-mono">[ExoAction]</h2>
+                <span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold uppercase tracking-wider">RPC Action</span>
+              </div>
+              <p class="text-xs text-gray-500 mt-0.5">Exposes public class methods as callable RPC endpoints over WebSocket and HTTP.</p>
             </div>
-            <p class="text-xs text-gray-500 mt-0.5">Exposes public class methods as callable RPC endpoints over WebSocket and HTTP.</p>
+          </div>
+          <div class="text-[11px] font-mono bg-gray-100 px-3 py-1.5 rounded-xl text-gray-600 self-start sm:self-auto">
+            Source: <strong class="text-amber-700">Exoforge.Plugin.SDK</strong> (routed via <code class="text-gray-800">exoforge_std_ws</code>)
           </div>
         </div>
 
@@ -687,113 +635,96 @@ defmodule Exoforge.Std.Dashboard.Guide do
           </div>
         </div>
 
-        <!-- C# Action Example -->
-        <div class="pt-2 space-y-2">
+        <div class="space-y-2">
           <div class="flex items-center justify-between text-xs text-gray-500 font-bold">
             <span>Server Action Implementation</span>
             <span class="font-mono text-[11px] text-gray-400">C# Backend</span>
           </div>
-          <pre class="bg-gray-950 text-gray-300 p-4 rounded-2xl font-mono text-[11px] overflow-x-auto"><code><%= code_exo_action_page() %></code></pre>
+          <pre class="bg-gray-950 text-gray-200 p-4 rounded-2xl font-mono text-[11px] overflow-x-auto border border-gray-800"><code><%= highlight_csharp(code_exo_action_page()) %></code></pre>
         </div>
 
-        <!-- Error Handling Callout -->
-        <div class="p-4 rounded-2xl bg-rose-50 border border-rose-200 space-y-2 text-rose-900 text-xs">
-          <div class="flex items-center gap-2 font-bold text-rose-950 text-sm">
+        <div class="p-4 rounded-2xl bg-rose-950/30 border border-rose-500/40 space-y-1.5 text-rose-200 text-xs">
+          <div class="flex items-center gap-2 font-bold text-rose-300 text-sm">
             <span>🚨</span>
             <span>Standardized Error Throwing with ExoActionException</span>
           </div>
-          <p class="leading-relaxed">
-            Do not throw raw exceptions. Throwing <code class="font-mono bg-rose-100 text-rose-800 px-1 py-0.5 rounded font-bold">new ExoActionException(code, message)</code> ensures structured error payloads propagate through the WebSocket layer with consistent error codes and clear user-facing messages.
+          <p class="leading-relaxed text-rose-200/90">
+            Throwing <code class="font-mono bg-rose-900/60 text-rose-200 px-1 py-0.5 rounded font-bold">new ExoActionException(code, message)</code> ensures structured error payloads propagate through the WebSocket layer with consistent error codes and clear user-facing messages.
           </p>
         </div>
-      </div>
-    </div>
-    """
-  end
+      </section>
 
-  # ===========================================================================
-  # SUBPAGE: [ExoEvent] ATTRIBUTE REFERENCE
-  # ===========================================================================
-  defp subpage_exo_event(assigns) do
-    ~H"""
-    <div class="space-y-6">
-      <div class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-4">
-        <div class="flex items-center gap-3 border-b border-gray-100 pb-4">
-          <span class="w-10 h-10 rounded-2xl bg-purple-50 text-purple-700 flex items-center justify-center font-bold text-lg">
-            📡
-          </span>
-          <div>
-            <div class="flex items-center gap-2">
-              <h2 class="text-xl font-extrabold text-gray-900 font-mono">[ExoEvent]</h2>
-              <span class="px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[10px] font-bold uppercase tracking-wider">Real-Time Messaging</span>
+      <!-- 3. [ExoEvent] -->
+      <section id="attr-event" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+          <div class="flex items-center gap-3">
+            <span class="w-10 h-10 rounded-2xl bg-purple-50 text-purple-700 flex items-center justify-center font-bold text-lg">
+              📡
+            </span>
+            <div>
+              <div class="flex items-center gap-2">
+                <h2 class="text-xl font-extrabold text-gray-900 font-mono">[ExoEvent]</h2>
+                <span class="px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[10px] font-bold uppercase tracking-wider">Real-Time Messaging</span>
+              </div>
+              <p class="text-xs text-gray-500 mt-0.5">Declares real-time event schemas and pub/sub topics across the distributed cluster.</p>
             </div>
-            <p class="text-xs text-gray-500 mt-0.5">Declares real-time event schemas and pub/sub topics across the distributed cluster.</p>
+          </div>
+          <div class="text-[11px] font-mono bg-gray-100 px-3 py-1.5 rounded-xl text-gray-600 self-start sm:self-auto">
+            Source: <strong class="text-purple-700">Exoforge.Plugin.SDK</strong> (backed by Phoenix PubSub &amp; <code class="text-gray-800">exoforge_std_ws</code>)
           </div>
         </div>
 
         <div class="space-y-3 text-xs text-gray-700 leading-relaxed">
           <p>
-            Decorate record models with <code class="font-mono text-purple-700 font-bold">[ExoEvent("topic.name")]</code>. Emit events from backend services using <code class="font-mono bg-purple-50 text-purple-700 px-1 py-0.5 rounded">ExoServices.Events.EmitAsync(evt)</code>. All subscribed Unity game clients and cluster listeners receive the payload over WebSocket in sub-millisecond time.
+            Decorate record models with <code class="font-mono text-purple-700 font-bold">[ExoEvent("topic.name")]</code>. Emit events from backend services using <code class="font-mono bg-purple-50 text-purple-700 px-1 py-0.5 rounded">ExoServices.Events.EmitAsync(evt)</code>. All subscribed Unity game clients receive the payload over WebSocket in sub-millisecond time.
           </p>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-2">
-          <!-- Backend Emit -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div class="space-y-2">
             <div class="text-xs text-gray-500 font-bold">1. Backend Event Declaration &amp; Emission</div>
-            <pre class="bg-gray-950 text-gray-300 p-4 rounded-2xl font-mono text-[11px] overflow-x-auto"><code><%= code_exo_event_page() %></code></pre>
+            <pre class="bg-gray-950 text-gray-200 p-4 rounded-2xl font-mono text-[11px] overflow-x-auto border border-gray-800"><code><%= highlight_csharp(code_exo_event_page()) %></code></pre>
           </div>
 
-          <!-- Unity Receive -->
           <div class="space-y-2">
             <div class="text-xs text-gray-500 font-bold">2. Unity Client Realtime Listener</div>
-            <pre class="bg-gray-950 text-emerald-400 p-4 rounded-2xl font-mono text-[11px] overflow-x-auto"><code><%= code_exo_event_unity() %></code></pre>
+            <pre class="bg-gray-950 text-gray-200 p-4 rounded-2xl font-mono text-[11px] overflow-x-auto border border-gray-800"><code><%= highlight_csharp(code_exo_event_unity()) %></code></pre>
           </div>
         </div>
+      </section>
 
-        <div class="p-4 rounded-2xl bg-purple-50/70 border border-purple-200 text-xs text-purple-900 space-y-1">
-          <span class="font-bold">Topic Filtering &amp; Routing:</span>
-          <p class="leading-relaxed text-purple-800 text-[11px]">
-            Topics follow standard dot-notation (<code class="font-mono bg-purple-100 px-1 py-0.2 rounded font-bold">match.player_joined</code>, <code class="font-mono bg-purple-100 px-1 py-0.2 rounded font-bold">economy.item_traded</code>). Unity subscriptions dispatch handlers onto the main thread via <code class="font-mono bg-purple-100 px-1 py-0.2 rounded">ExoDispatcher</code>, ensuring UI updates and GameObject manipulation remain safe.
-          </p>
-        </div>
-      </div>
-    </div>
-    """
-  end
-
-  # ===========================================================================
-  # SUBPAGE: [ExoResource] ATTRIBUTE REFERENCE
-  # ===========================================================================
-  defp subpage_exo_resource(assigns) do
-    ~H"""
-    <div class="space-y-6">
-      <div class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-4">
-        <div class="flex items-center gap-3 border-b border-gray-100 pb-4">
-          <span class="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold text-lg">
-            💾
-          </span>
-          <div>
-            <div class="flex items-center gap-2">
-              <h2 class="text-xl font-extrabold text-gray-900 font-mono">[ExoResource]</h2>
-              <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold uppercase tracking-wider">Persistence Schema</span>
+      <!-- 4. [ExoResource] -->
+      <section id="attr-resource" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+          <div class="flex items-center gap-3">
+            <span class="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold text-lg">
+              💾
+            </span>
+            <div>
+              <div class="flex items-center gap-2">
+                <h2 class="text-xl font-extrabold text-gray-900 font-mono">[ExoResource]</h2>
+                <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold uppercase tracking-wider">Persistence Schema</span>
+              </div>
+              <p class="text-xs text-gray-500 mt-0.5">Type-safe entity modeling with automatic table inference and generic database helpers.</p>
             </div>
-            <p class="text-xs text-gray-500 mt-0.5">Type-safe entity modeling with automatic table inference and generic database helpers.</p>
+          </div>
+          <div class="text-[11px] font-mono bg-gray-100 px-3 py-1.5 rounded-xl text-gray-600 self-start sm:self-auto">
+            Source: <strong class="text-emerald-700">Exoforge.Plugin.SDK</strong> (managed by <code class="text-gray-800">exoforge_std_resources</code> &amp; <code class="text-gray-800">exoforge_std_database</code>)
           </div>
         </div>
 
         <div class="space-y-3 text-xs text-gray-700 leading-relaxed">
           <p>
-            Exoforge simplifies persistence: you do not write raw SQL or manual migration scripts. Declare clean C# records, register them on your extension's <code class="font-mono text-emerald-700 font-bold">[ExoExtension(Resources = [...])]</code>, and interact with storage using generic helpers.
+            Declare clean C# records, register them on your extension's <code class="font-mono text-emerald-700 font-bold">[ExoExtension(Resources = [...])]</code>, and interact with storage using generic helpers.
           </p>
 
-          <div class="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 space-y-1.5 text-emerald-950">
-            <span class="font-bold text-xs flex items-center gap-1.5">
+          <div class="p-4 rounded-2xl bg-emerald-950/30 border border-emerald-500/40 space-y-1.5 text-emerald-200">
+            <span class="font-bold text-xs flex items-center gap-1.5 text-emerald-300">
               <span>✨</span>
               <span>Automatic Table Name Inference</span>
             </span>
-            <p class="text-[11px] leading-relaxed text-emerald-900">
-              When calling <code class="font-mono bg-emerald-100 px-1 py-0.5 rounded text-emerald-950 font-bold">ExoServices.Database.Get&lt;PlayerProfile&gt;(id)</code>, the database engine automatically infers the underlying table name as <code class="font-mono bg-emerald-100 px-1 py-0.5 rounded text-emerald-950 font-bold">"player_profiles"</code>. You can optionally override this with <code class="font-mono bg-emerald-100 px-1 py-0.5 rounded text-emerald-950 font-bold">[ExoResource("custom_name")]</code>.
+            <p class="text-[11px] leading-relaxed text-emerald-200/90">
+              When calling <code class="font-mono bg-emerald-900/60 text-emerald-200 px-1 py-0.5 rounded font-bold">ExoServices.Database.Get&lt;PlayerProfile&gt;(id)</code>, the database engine automatically infers the underlying table name as <code class="font-mono bg-emerald-900/60 text-emerald-200 px-1 py-0.5 rounded font-bold">"player_profiles"</code>. You can optionally override this with <code class="font-mono bg-emerald-900/60 text-emerald-200 px-1 py-0.5 rounded font-bold">[ExoResource("custom_name")]</code>.
             </p>
           </div>
 
@@ -843,16 +774,55 @@ defmodule Exoforge.Std.Dashboard.Guide do
           </div>
         </div>
 
-        <div class="pt-2 space-y-2">
+        <div class="space-y-2">
           <div class="flex items-center justify-between text-xs text-gray-500 font-bold">
             <span>Resource Record Declaration &amp; Database CRUD</span>
             <span class="font-mono text-[11px] text-gray-400">C# 12 / .NET 9+</span>
           </div>
-          <pre class="bg-gray-950 text-gray-300 p-4 rounded-2xl font-mono text-[11px] overflow-x-auto"><code><%= code_exo_resource_page() %></code></pre>
+          <pre class="bg-gray-950 text-gray-200 p-4 rounded-2xl font-mono text-[11px] overflow-x-auto border border-gray-800"><code><%= highlight_csharp(code_exo_resource_page()) %></code></pre>
         </div>
-      </div>
+      </section>
     </div>
     """
+  end
+
+  # ===========================================================================
+  # SYNTAX HIGHLIGHTING ENGINE (C#)
+  # ===========================================================================
+
+  @doc "Renders syntax-highlighted C# code wrapped in HTML spans."
+  def highlight_csharp(code) when is_binary(code) do
+    pattern =
+      ~r{(//[^\n]*)|("(?:[^"\\]|\\.)*")|(\[[A-Za-z0-9_]+(?:\([^)]*\))?\])|(\b(?:public|private|protected|internal|class|record|struct|interface|enum|static|readonly|void|string|int|long|float|double|bool|var|new|return|throw|using|namespace|async|await|if|else|try|catch|finally|null|true|false|this|base|typeof|is|as|get|set|event|override|virtual)\b)|(\b(?:Exoforge|ExoServices|ExoClient|ExoSession|ExoActionException|ExoDispatcher|Task|Action|Func|List|DateTime|Guid|MonoBehaviour|Debug|GameObject)\b)|(\b\d+(?:\.\d+)?f?\b)}
+
+    parts = Regex.split(pattern, code, include_captures: true, trim: false)
+
+    Enum.map(parts, fn part ->
+      cond do
+        String.starts_with?(part, "//") ->
+          "<span class=\"text-gray-500 italic\">#{Plug.HTML.html_escape(part)}</span>"
+
+        String.starts_with?(part, "\"") and String.ends_with?(part, "\"") ->
+          "<span class=\"text-emerald-300\">#{Plug.HTML.html_escape(part)}</span>"
+
+        String.starts_with?(part, "[") and String.ends_with?(part, "]") ->
+          "<span class=\"text-yellow-300 font-semibold\">#{Plug.HTML.html_escape(part)}</span>"
+
+        part in ~w(public private protected internal class record struct interface enum static readonly void string int long float double bool var new return throw using namespace async await if else try catch finally null true false this base typeof is as get set event override virtual) ->
+          "<span class=\"text-purple-400 font-semibold\">#{Plug.HTML.html_escape(part)}</span>"
+
+        part in ~w(Exoforge ExoServices ExoClient ExoSession ExoActionException ExoDispatcher Task Action Func List DateTime Guid MonoBehaviour Debug GameObject) ->
+          "<span class=\"text-cyan-300 font-bold\">#{Plug.HTML.html_escape(part)}</span>"
+
+        Regex.match?(~r{^\d+(?:\.\d+)?f?$}, part) ->
+          "<span class=\"text-amber-300 font-mono\">#{Plug.HTML.html_escape(part)}</span>"
+
+        true ->
+          Plug.HTML.html_escape(part)
+      end
+    end)
+    |> IO.iodata_to_binary()
+    |> Phoenix.HTML.raw()
   end
 
   # ===========================================================================
@@ -898,20 +868,24 @@ defmodule Exoforge.Std.Dashboard.Guide do
 
   defp code_auth do
     """
-    void Start()
-    {
-        // 1. Listen for readiness (dispatched on Unity's main thread)
-        Exoforge.OnReady += () =>
+    // 1. Scripted Anonymous Sign-In (no passwords or emails required)
+    // Automatically creates or resumes account tied to this device identifier
+    Exoforge.Auth.LoginAnonymously(
+        onComplete: session =>
         {
-            Debug.Log($"Connected & authenticated as {Exoforge.Client.PlayerId}");
-        };
-
-        // Or inspect synchronously at any time:
-        if (Exoforge.IsReady)
+            Debug.Log($"Connected & signed in anonymously as {session.PlayerId}!");
+            
+            // Optional: assign user-chosen display name
+            // await Exoforge.Auth.SetDisplayName("PlayerOne");
+        },
+        onError: ex =>
         {
-            Debug.Log($"Already ready! Player: {Exoforge.Client.PlayerId}");
+            Debug.LogError($"Sign-in failed: {ex.Message}");
         }
-    }
+    );
+
+    // Or via Task async/await:
+    // var session = await Exoforge.Auth.LoginAnonymously();
     """
     |> String.trim()
   end
@@ -960,22 +934,6 @@ defmodule Exoforge.Std.Dashboard.Guide do
 
     public class GameplayRewardController : MonoBehaviour
     {
-        void Start()
-        {
-            // Subscribe to the connection event
-            Exoforge.OnReady += OnExoforgeReady;
-        }
-
-        void OnDestroy()
-        {
-            Exoforge.OnReady -= OnExoforgeReady;
-        }
-
-        private void OnExoforgeReady()
-        {
-            Debug.Log($"Connected to Exoforge cluster as {Exoforge.Client.PlayerId}");
-        }
-
         public void OnCalculateButtonClicked()
         {
             // Verify readiness synchronously before calling

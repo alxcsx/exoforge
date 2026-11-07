@@ -136,6 +136,8 @@ html:not(.light) header.bg-white\/95 {
 
 /* Muted / Subtle Surfaces */
 html:not(.light) .bg-gray-50,
+html:not(.light) .bg-gray-50\/30,
+html:not(.light) .bg-gray-50\/40,
 html:not(.light) .bg-gray-50\/50,
 html:not(.light) .bg-gray-50\/60,
 html:not(.light) .bg-gray-50\/70,
@@ -239,10 +241,12 @@ html:not(.light) .text-primary-800,
 html:not(.light) .text-purple-600,
 html:not(.light) .text-purple-700,
 html:not(.light) .text-purple-800,
+html:not(.light) .text-purple-900,
 html:not(.light) .text-purple-950,
 html:not(.light) .text-violet-600,
 html:not(.light) .text-violet-700,
 html:not(.light) .text-violet-800,
+html:not(.light) .text-violet-900,
 html:not(.light) .text-violet-950 {
   color: #c4b5fd !important;
 }
@@ -288,7 +292,9 @@ html:not(.light) .bg-amber-100 {
 
 html:not(.light) .text-amber-600,
 html:not(.light) .text-amber-700,
-html:not(.light) .text-amber-800 {
+html:not(.light) .text-amber-800,
+html:not(.light) .text-amber-900,
+html:not(.light) .text-amber-950 {
   color: #fcd34d !important;
 }
 

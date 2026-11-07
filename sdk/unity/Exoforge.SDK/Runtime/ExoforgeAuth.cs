@@ -27,6 +27,29 @@ namespace Exoforge.Client.Unity
         /// Marks the account as one a test, a demo or a load run made, so `auth.purge_disposable` can
         /// remove it and nothing else. A game leaves this alone: its players are the point.
         /// </param>
+        /// <summary>
+        /// Non-async callback overload for anonymous login. Automatically dispatches onComplete
+        /// and onError onto the Unity main thread via the client dispatcher.
+        /// </summary>
+        public void LoginAnonymously(Action<ExoSession> onComplete, Action<Exception>? onError = null, bool disposable = false)
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var session = await LoginAnonymously(disposable);
+                    ExoforgeSDK.Client.Dispatcher.Post(() => onComplete(session));
+                }
+                catch (Exception ex)
+                {
+                    if (onError != null)
+                        ExoforgeSDK.Client.Dispatcher.Post(() => onError(ex));
+                    else
+                        Debug.LogError($"[Exoforge] Anonymous login error: {ex.Message}");
+                }
+            });
+        }
+
         public async Task<ExoSession> LoginAnonymously(bool disposable = false)
         {
             // No socket. Signing in is a request/response call, and a game that never subscribes
