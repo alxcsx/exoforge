@@ -40,6 +40,14 @@ public partial class DispatchSamplePlugin : IContractPing, ISharedContract
     public string LastEvent { get; private set; } = "";
     public string LastPing { get; private set; } = "";
     public string LastGreeting { get; private set; } = "";
+    public bool DailyCleanupRan { get; private set; }
+
+    [ExoCron("0 0 * * *", Description = "Cleans up expired tokens daily", RunOnStartup = true)]
+    public bool DailyCleanup()
+    {
+        DailyCleanupRan = true;
+        return true;
+    }
 
     [ExoAction]
     public int Add(int left, int right = 10)
@@ -369,5 +377,35 @@ public class DispatchTests
         var svc = Service(manifest, "dispatch_extension");
         Assert.NotNull(svc);
         Assert.Equal("Dispatch Extension", svc!["title"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void Manifest_Includes_ExoCron_Jobs()
+    {
+        JsonNode manifest = Manifest();
+        var crons = Service(manifest, "dispatch_sample")["crons"]?.AsArray();
+        Assert.NotNull(crons);
+
+        var cron = crons!.FirstOrDefault(c => c?["name"]?.GetValue<string>() == "daily_cleanup");
+        Assert.NotNull(cron);
+        Assert.Equal("0 0 * * *", cron!["schedule"]?.GetValue<string>());
+        Assert.True(cron["run_on_startup"]?.GetValue<bool>());
+        Assert.Equal("Cleans up expired tokens daily", cron["description"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void The_dispatch_serves_a_cron_action()
+    {
+        var plugin = new DispatchSamplePlugin();
+
+        var input = new StringReader(string.Join("\n", new[]
+        {
+            "{\"type\":\"action\",\"id\":1,\"action\":\"daily_cleanup\",\"payload\":{}}",
+            ""
+        }));
+
+        PluginHost.RunInstance(plugin, input, new ExoforgeDispatch());
+
+        Assert.True(plugin.DailyCleanupRan);
     }
 }

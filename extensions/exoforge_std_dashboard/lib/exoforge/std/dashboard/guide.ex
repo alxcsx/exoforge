@@ -505,6 +505,9 @@ defmodule Exoforge.Std.Dashboard.Guide do
           <a href="#attr-action" class="px-3 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors flex items-center gap-1.5">
             <span>[ExoAction]</span>
           </a>
+          <a href="#attr-cron" class="px-3 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors flex items-center gap-1.5">
+            <span>[ExoCron]</span>
+          </a>
           <a href="#attr-event" class="px-3 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors flex items-center gap-1.5">
             <span>[ExoEvent]</span>
           </a>
@@ -654,7 +657,97 @@ defmodule Exoforge.Std.Dashboard.Guide do
         </div>
       </section>
 
-      <!-- 3. [ExoEvent] -->
+      <!-- 3. [ExoCron] -->
+      <section id="attr-cron" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+          <div class="flex items-center gap-3">
+            <span class="w-10 h-10 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center font-bold text-lg">
+              ⏱️
+            </span>
+            <div>
+              <div class="flex items-center gap-2">
+                <h2 class="text-xl font-extrabold text-gray-900 font-mono">[ExoCron]</h2>
+                <span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold uppercase tracking-wider">Recurring Task</span>
+              </div>
+              <p class="text-xs text-gray-500 mt-0.5">Executes scheduled recurring background jobs via the Erlang/OTP cluster scheduler.</p>
+            </div>
+          </div>
+          <div class="text-[11px] font-mono bg-gray-100 px-3 py-1.5 rounded-xl text-gray-600 self-start sm:self-auto">
+            Source: <strong class="text-amber-700">Exoforge.Plugin.SDK</strong> (scheduled by cluster worker runtime)
+          </div>
+        </div>
+
+        <div class="space-y-3 text-xs text-gray-700 leading-relaxed">
+          <p>
+            Decorate any service method with <code class="font-mono text-amber-700 font-bold">[ExoCron("schedule")]</code> to turn it into an automated background job. Ideal for leaderboard rollovers, daily resets, state sweepers, and periodic syncs.
+          </p>
+
+          <div class="overflow-x-auto rounded-xl border border-gray-200 mt-3">
+            <table class="w-full text-left text-xs bg-white">
+              <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 font-semibold text-[10px] uppercase">
+                <tr>
+                  <th class="py-2 px-3">Property</th>
+                  <th class="py-2 px-3">Type</th>
+                  <th class="py-2 px-3">Default</th>
+                  <th class="py-2 px-3">Description</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100 font-mono text-[11px]">
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">schedule (positional)</td>
+                  <td class="py-2 px-3 text-primary-700">string</td>
+                  <td class="py-2 px-3 text-gray-400">Required</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Standard 5-field cron expression (e.g. <code class="font-mono text-primary-700">"0 0 * * *"</code> for daily midnight, <code class="font-mono text-primary-700">"*/5 * * * *"</code> for every 5 minutes, <code class="font-mono text-primary-700">"0 * * * *"</code> for hourly).</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">name (positional)</td>
+                  <td class="py-2 px-3 text-primary-700">string?</td>
+                  <td class="py-2 px-3 text-gray-400">null</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Unique action name on the wire. When omitted, the method name is used in snake_case.</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">Description</td>
+                  <td class="py-2 px-3 text-primary-700">string?</td>
+                  <td class="py-2 px-3 text-gray-400">null</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Human-readable description of what this recurring task does, shown in the Studio catalog and logs.</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">RunOnStartup</td>
+                  <td class="py-2 px-3 text-primary-700">bool</td>
+                  <td class="py-2 px-3 text-gray-400">false</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">When true, executes immediately once when the extension starts, before waiting for the first cron tick.</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">Service</td>
+                  <td class="py-2 px-3 text-primary-700">string?</td>
+                  <td class="py-2 px-3 text-gray-400">null</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">The service this cron job belongs to, when the plugin assembly provides multiple services.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <div class="flex items-center justify-between text-xs text-gray-500 font-bold">
+            <span>Scheduled Recurring Method Implementation</span>
+            <span class="font-mono text-[11px] text-gray-400">C# 12 / .NET 9+</span>
+          </div>
+          <pre class="bg-gray-950 text-gray-200 p-4 rounded-2xl font-mono text-[11px] overflow-x-auto border border-gray-800"><code><%= highlight_csharp(code_exo_cron_page()) %></code></pre>
+        </div>
+
+        <div class="p-4 rounded-2xl bg-amber-950/30 border border-amber-500/40 space-y-1.5 text-amber-200 text-xs">
+          <div class="flex items-center gap-2 font-bold text-amber-300 text-sm">
+            <span>⏱️</span>
+            <span>OTP Cluster-Supervised Scheduling</span>
+          </div>
+          <p class="leading-relaxed text-amber-200/90">
+            Cron jobs run directly inside your extension's headless worker process, coordinated by the Erlang/OTP cluster scheduler. Because methods are dispatched directly via compile-time jump tables, recurring tasks execute with zero reflection overhead.
+          </p>
+        </div>
+      </section>
+
+      <!-- 4. [ExoEvent] -->
       <section id="attr-event" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
           <div class="flex items-center gap-3">
@@ -693,7 +786,7 @@ defmodule Exoforge.Std.Dashboard.Guide do
         </div>
       </section>
 
-      <!-- 4. [ExoResource] -->
+      <!-- 5. [ExoResource] -->
       <section id="attr-resource" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
           <div class="flex items-center gap-3">
@@ -793,7 +886,7 @@ defmodule Exoforge.Std.Dashboard.Guide do
   @doc "Renders syntax-highlighted C# code wrapped in HTML spans."
   def highlight_csharp(code) when is_binary(code) do
     pattern =
-      ~r{(//[^\n]*)|("(?:[^"\\]|\\.)*")|(\[[A-Za-z0-9_]+(?:\([^)]*\))?\])|(\b(?:public|private|protected|internal|class|record|struct|interface|enum|static|readonly|void|string|int|long|float|double|bool|var|new|return|throw|using|namespace|async|await|if|else|try|catch|finally|null|true|false|this|base|typeof|is|as|get|set|event|override|virtual)\b)|(\b(?:Exoforge|ExoServices|ExoClient|ExoSession|ExoActionException|ExoDispatcher|Task|Action|Func|List|DateTime|Guid|MonoBehaviour|Debug|GameObject)\b)|(\b\d+(?:\.\d+)?f?\b)}
+      ~r{(//[^\n]*)|("(?:[^"\\]|\\.)*")|(\[[A-Za-z0-9_]+(?:\([^)]*\))?\])|(\b(?:public|private|protected|internal|class|record|struct|interface|enum|static|readonly|void|string|int|long|float|double|bool|var|new|return|throw|using|namespace|async|await|if|else|try|catch|finally|null|true|false|this|base|typeof|is|as|get|set|event|override|virtual)\b)|(\b(?:Exoforge|ExoServices|ExoClient|ExoSession|ExoActionException|ExoDispatcher|ExoCron|Task|Action|Func|List|DateTime|Guid|MonoBehaviour|Debug|GameObject)\b)|(\b\d+(?:\.\d+)?f?\b)}
 
     parts = Regex.split(pattern, code, include_captures: true, trim: false)
 
@@ -811,7 +904,7 @@ defmodule Exoforge.Std.Dashboard.Guide do
         part in ~w(public private protected internal class record struct interface enum static readonly void string int long float double bool var new return throw using namespace async await if else try catch finally null true false this base typeof is as get set event override virtual) ->
           "<span class=\"text-purple-400 font-semibold\">#{Plug.HTML.html_escape(part)}</span>"
 
-        part in ~w(Exoforge ExoServices ExoClient ExoSession ExoActionException ExoDispatcher Task Action Func List DateTime Guid MonoBehaviour Debug GameObject) ->
+        part in ~w(Exoforge ExoServices ExoClient ExoSession ExoActionException ExoDispatcher ExoCron Task Action Func List DateTime Guid MonoBehaviour Debug GameObject) ->
           "<span class=\"text-cyan-300 font-bold\">#{Plug.HTML.html_escape(part)}</span>"
 
         Regex.match?(~r{^\d+(?:\.\d+)?f?$}, part) ->
@@ -1023,6 +1116,61 @@ defmodule Exoforge.Std.Dashboard.Guide do
     }
 
     public record MatchTicket(string TicketId, string PlayerId, string Queue, string Status);
+    """
+    |> String.trim()
+  end
+
+  defp code_exo_cron_page do
+    """
+    using System;
+    using System.Linq;
+    using Exoforge.Plugin.SDK;
+
+    namespace Exoforge.Extensions;
+
+    [ExoExtension("leaderboard_service", Resources = [typeof(PlayerScore), typeof(LeaderboardConfig)])]
+    public class LeaderboardExtension
+    {
+        // Executes daily at midnight UTC: snapshots rankings and resets season
+        [ExoCron("0 0 * * *", Description = "Archives daily season scores and rolls over rankings", RunOnStartup = true)]
+        public void RollOverDailyLeaderboards()
+        {
+            ExoServices.Logger.LogInformation("Starting daily leaderboard rollover...");
+
+            // 1. Fetch top scores from storage
+            var topScores = ExoServices.Database.All<PlayerScore>()
+                .OrderByDescending(p => p.Score)
+                .Take(100)
+                .ToList();
+
+            // 2. Archive snapshots into historical archive
+            foreach (var player in topScores)
+            {
+                ExoServices.Database.Put(new SeasonArchive(
+                    Id: $"{DateTime.UtcNow:yyyyMMdd}_{player.PlayerId}",
+                    PlayerId: player.PlayerId,
+                    FinalScore: player.Score,
+                    ArchivedAt: DateTime.UtcNow
+                ));
+            }
+
+            // 3. Update active season config
+            ExoServices.Database.Put(new LeaderboardConfig(
+                Id: "active_season",
+                SeasonNumber: 42,
+                LastResetUtc: DateTime.UtcNow
+            ));
+
+            // 4. Notify all connected Unity game clients via realtime event
+            ExoServices.Events.EmitAsync(new LeaderboardResetEvent(SeasonNumber: 42));
+        }
+    }
+
+    public record PlayerScore(string Id, string PlayerId, int Score);
+    public record SeasonArchive(string Id, string PlayerId, int FinalScore, DateTime ArchivedAt);
+    public record LeaderboardConfig(string Id, int SeasonNumber, DateTime LastResetUtc);
+    [ExoEvent("leaderboard.reset")]
+    public record LeaderboardResetEvent(int SeasonNumber);
     """
     |> String.trim()
   end

@@ -29,6 +29,7 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
     private const string SingletonResourceAttribute = "Exoforge.Plugin.SDK.ExoSingletonResourceAttribute";
     private const string ActionAttribute = "Exoforge.Plugin.SDK.ExoActionAttribute";
     private const string WebhookAttribute = "Exoforge.Plugin.SDK.ExoWebhookAttribute";
+    private const string CronAttribute = "Exoforge.Plugin.SDK.ExoCronAttribute";
     private const string EventAttribute = "Exoforge.Plugin.SDK.ExoEventAttribute";
     private const string ColumnAttribute = "Exoforge.Plugin.SDK.ExoColumnAttribute";
     private const string PrimaryKeyAttribute = "Exoforge.Plugin.SDK.PrimaryKeyAttribute";
@@ -331,7 +332,24 @@ namespace Exoforge.Plugin.SDK
 
             var actionAttr = FindAttribute(method.GetAttributes(), ActionAttribute);
             var webhookAttr = FindAttribute(method.GetAttributes(), WebhookAttribute);
-            if (actionAttr is null && webhookAttr is null) continue;
+            var cronAttr = FindAttribute(method.GetAttributes(), CronAttribute);
+            if (actionAttr is null && webhookAttr is null && cronAttr is null) continue;
+
+            if (cronAttr is not null)
+            {
+                string cronName = PositionalString(cronAttr, 1) ?? NamedString(cronAttr, "Name") ?? ToSnakeCase(method.Name);
+                dispatches.Add(new ActionDispatch(cronName, method));
+
+                string schedule = PositionalString(cronAttr, 0) ?? NamedString(cronAttr, "Schedule") ?? "* * * * *";
+                string? desc = NamedString(cronAttr, "Description");
+                bool runOnStartup = NamedBool(cronAttr, "RunOnStartup");
+                ServiceFor(NamedString(cronAttr, "Service")).Crons.Add(new CronModel(
+                    cronName,
+                    schedule,
+                    runOnStartup,
+                    desc));
+                continue;
+            }
 
             bool isWebhook = webhookAttr is not null;
             var targetAttr = webhookAttr ?? actionAttr!;

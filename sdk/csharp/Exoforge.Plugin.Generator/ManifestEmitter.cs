@@ -51,6 +51,12 @@ internal sealed record ResourceModel(
     string? TypeName,
     bool Singleton = false);
 
+internal sealed record CronModel(
+    string Name,
+    string Schedule,
+    bool RunOnStartup,
+    string? Description = null);
+
 internal sealed record ServiceModel(
     string Name,
     List<ActionModel> Actions,
@@ -61,7 +67,11 @@ internal sealed record ServiceModel(
     string? Icon,
     bool System,
     string? DashboardElement = null,
-    string? DashboardEntry = null);
+    string? DashboardEntry = null,
+    List<CronModel>? Crons = null)
+{
+    public List<CronModel> Crons { get; init; } = Crons ?? new();
+}
 
 internal sealed record InputTypeModel(string Id, string Element, string Entry);
 
@@ -228,8 +238,26 @@ internal static class ManifestEmitter
                 sb.Append(comma).Append('\n');
             }
 
-            sb.Append("      ]\n");
-            sb.Append("    }");
+            sb.Append("      ]");
+
+            if (service.Crons != null && service.Crons.Count > 0)
+            {
+                sb.Append(",\n      \"crons\": [\n");
+                for (int i = 0; i < service.Crons.Count; i++)
+                {
+                    var cron = service.Crons[i];
+                    string comma = i == service.Crons.Count - 1 ? "" : ",";
+                    string desc = cron.Description is null ? "" : $", \"description\": {Str(cron.Description)}";
+                    sb.Append($"        {{\"name\": {Str(cron.Name)}, \"schedule\": {Str(cron.Schedule)}, \"run_on_startup\": {Lower(cron.RunOnStartup)}{desc}}}");
+                    sb.Append(comma).Append('\n');
+                }
+                sb.Append("      ]\n");
+                sb.Append("    }");
+            }
+            else
+            {
+                sb.Append("\n    }");
+            }
         }
 
         sb.Append("\n  ]\n");
