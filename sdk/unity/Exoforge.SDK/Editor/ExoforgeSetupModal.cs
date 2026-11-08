@@ -463,6 +463,88 @@ namespace Exoforge.Unity.Editor
 
             _stepContainer!.Add(statusCard);
 
+            // .NET SDK Verification Card
+            var dotnetRes = ExoforgeDotnetValidator.Validate(forceFresh: true);
+            var dotnetCard = new VisualElement();
+            dotnetCard.style.paddingLeft = 14;
+            dotnetCard.style.paddingRight = 14;
+            dotnetCard.style.paddingTop = 12;
+            dotnetCard.style.paddingBottom = 12;
+            dotnetCard.style.borderTopLeftRadius = 6;
+            dotnetCard.style.borderTopRightRadius = 6;
+            dotnetCard.style.borderBottomLeftRadius = 6;
+            dotnetCard.style.borderBottomRightRadius = 6;
+            dotnetCard.style.borderTopWidth = 1;
+            dotnetCard.style.borderBottomWidth = 1;
+            dotnetCard.style.borderLeftWidth = 1;
+            dotnetCard.style.borderRightWidth = 1;
+            dotnetCard.style.marginBottom = 12;
+
+            if (dotnetRes.IsValid)
+            {
+                dotnetCard.style.backgroundColor = ExoforgeUIStyle.BgCard;
+                dotnetCard.style.borderTopColor = ExoforgeUIStyle.BorderSubtle;
+                dotnetCard.style.borderBottomColor = ExoforgeUIStyle.BorderSubtle;
+                dotnetCard.style.borderLeftColor = ExoforgeUIStyle.BorderSubtle;
+                dotnetCard.style.borderRightColor = ExoforgeUIStyle.BorderSubtle;
+
+                var dotnetHeader = new Label($"✓ .NET SDK Ready: v{dotnetRes.Version}");
+                dotnetHeader.style.fontSize = 11;
+                dotnetHeader.style.unityFontStyleAndWeight = FontStyle.Bold;
+                dotnetHeader.style.color = ExoforgeUIStyle.AccentGreen;
+                dotnetHeader.style.marginBottom = 4;
+                dotnetCard.Add(dotnetHeader);
+
+                var dotnetPathLabel = new Label($"Resolved: {dotnetRes.ResolvedPath}");
+                dotnetPathLabel.style.fontSize = 10;
+                dotnetPathLabel.style.color = ExoforgeUIStyle.TextMuted;
+                dotnetCard.Add(dotnetPathLabel);
+            }
+            else
+            {
+                // High contrast theme-safe amber warning box (Rule 6)
+                dotnetCard.style.backgroundColor = new Color(0.96f, 0.62f, 0.12f, 0.12f);
+                dotnetCard.style.borderTopColor = new Color(0.96f, 0.62f, 0.12f, 0.45f);
+                dotnetCard.style.borderBottomColor = new Color(0.96f, 0.62f, 0.12f, 0.45f);
+                dotnetCard.style.borderLeftColor = new Color(0.96f, 0.62f, 0.12f, 0.45f);
+                dotnetCard.style.borderRightColor = new Color(0.96f, 0.62f, 0.12f, 0.45f);
+
+                var warnHeader = new Label(dotnetRes.IsInstalled ? "⚠️ .NET SDK Version Update Required" : "⚠️ .NET SDK Not Detected");
+                warnHeader.style.fontSize = 12;
+                warnHeader.style.unityFontStyleAndWeight = FontStyle.Bold;
+                warnHeader.style.color = ExoforgeUIStyle.AccentOrange;
+                warnHeader.style.marginBottom = 4;
+                dotnetCard.Add(warnHeader);
+
+                var warnMsg = new Label(
+                    !dotnetRes.IsInstalled
+                        ? "Exoforge backend extensions are written in C# and compiled to native assemblies. The .NET SDK (v9.0+) was not found on this computer."
+                        : $"Detected .NET SDK v{dotnetRes.Version}, but Exoforge requires .NET 9.0 or newer for building C# extensions.");
+                warnMsg.style.fontSize = 11;
+                warnMsg.style.color = ExoforgeUIStyle.TextPrimary;
+                warnMsg.style.whiteSpace = WhiteSpace.Normal;
+                warnMsg.style.marginBottom = 8;
+                dotnetCard.Add(warnMsg);
+
+                var actRow = new VisualElement();
+                actRow.style.flexDirection = FlexDirection.Row;
+                actRow.style.alignItems = Align.Center;
+
+                var dlBtn = ExoforgeUIStyle.CreateModernButton("⬇️ Download .NET SDK (.NET 9.0) ↗", () => ExoforgeDotnetValidator.OpenDownloadPage(), bg: ExoforgeUIStyle.BrandPurple, textCol: Color.white, height: 26);
+                dlBtn.style.marginRight = 8;
+                actRow.Add(dlBtn);
+
+                var rescanBtn = ExoforgeUIStyle.CreateModernButton("🔍 Re-scan", () =>
+                {
+                    RenderCurrentStep();
+                }, height: 26);
+                actRow.Add(rescanBtn);
+
+                dotnetCard.Add(actRow);
+            }
+
+            _stepContainer!.Add(dotnetCard);
+
             var prepBtn = ExoforgeUIStyle.CreateModernButton("⚙️ Initialize Workspace & Configs", () =>
             {
                 SaveWorkspaceEnvironment();
@@ -490,6 +572,24 @@ namespace Exoforge.Unity.Editor
 
             var nextBtn = ExoforgeUIStyle.CreateModernButton("Next: Scene Setup ➔", () =>
             {
+                var validation = ExoforgeDotnetValidator.Validate();
+                if (!validation.IsValid)
+                {
+                    bool proceed = EditorUtility.DisplayDialog(
+                        ".NET SDK Not Detected",
+                        "The .NET SDK (9.0+) was not detected on this computer.\n\n" +
+                        "You can continue setting up client and scene components, but compiling and deploying C# backend extensions will fail until the .NET SDK is installed.\n\n" +
+                        "Would you like to open the .NET download link?",
+                        "Open Download Page",
+                        "Continue Setup Anyway");
+
+                    if (proceed)
+                    {
+                        ExoforgeDotnetValidator.OpenDownloadPage();
+                        return;
+                    }
+                }
+
                 SaveWorkspaceEnvironment();
                 _currentStep = 4;
                 RenderCurrentStep();

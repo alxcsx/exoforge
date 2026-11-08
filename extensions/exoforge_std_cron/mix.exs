@@ -4,7 +4,7 @@ defmodule Exoforge.Std.Cron.MixProject do
   def project do
     [
       app: :exoforge_std_cron,
-      version: "0.1.22",
+      version: "0.1.23",
       elixir: "~> 1.20",
       deps: deps(),
       compilers: Mix.compilers() ++ [:exoforge_manifest]

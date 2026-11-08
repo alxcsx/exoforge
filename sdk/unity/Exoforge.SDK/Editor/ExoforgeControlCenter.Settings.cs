@@ -147,9 +147,44 @@ public partial class ExoforgeControlCenter : EditorWindow
             }
         }
         EditorGUILayout.EndHorizontal();
-        EditorGUILayout.LabelField(
-            $"Resolved: {ExoDeployer.ResolveDotnetPath(ExoforgeEditorConfig.DotnetPath)}",
-            EditorStyles.miniLabel);
+        var dotnetRes = ExoforgeDotnetValidator.Validate(ExoforgeEditorConfig.DotnetPath);
+        if (dotnetRes.IsValid)
+        {
+            EditorGUILayout.LabelField(
+                $"✓ Resolved: {dotnetRes.ResolvedPath} (v{dotnetRes.Version})",
+                EditorStyles.miniLabel);
+        }
+        else
+        {
+            EditorGUILayout.Space(2);
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            EditorGUILayout.HelpBox(
+                !dotnetRes.IsInstalled
+                    ? $"⚠️ .NET SDK not detected at '{dotnetRes.ResolvedPath}'. Native C# extension builds and deployments will fail without the .NET SDK (v9.0+)."
+                    : $"⚠️ Detected .NET SDK v{dotnetRes.Version}, but Exoforge requires .NET 9.0 or newer.",
+                MessageType.Warning);
+
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("⬇️ Download .NET SDK (.NET 9.0) ↗", GUILayout.Height(24)))
+            {
+                ExoforgeDotnetValidator.OpenDownloadPage();
+            }
+            if (GUILayout.Button("🔍 Verify Installation", GUILayout.Width(140), GUILayout.Height(24)))
+            {
+                var fresh = ExoforgeDotnetValidator.Validate(ExoforgeEditorConfig.DotnetPath, forceFresh: true);
+                if (fresh.IsValid)
+                {
+                    ShowStatus($"✓ .NET SDK verified: v{fresh.Version} at {fresh.ResolvedPath}", MessageType.Info);
+                }
+                else
+                {
+                    ExoforgeDotnetValidator.PromptIfMissing("build C# backend extensions");
+                }
+            }
+            EditorGUILayout.EndHorizontal();
+            EditorGUILayout.EndVertical();
+            EditorGUILayout.Space(2);
+        }
 
         EditorGUILayout.Space(4);
         ExoforgeEditorConfig.AutoGenerateStubsOnBuild = EditorGUILayout.Toggle(

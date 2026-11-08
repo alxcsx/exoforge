@@ -1256,6 +1256,11 @@ public partial class ExoforgeControlCenter : EditorWindow
     {
         if (_isBuilding) return;
 
+        if (!ExoforgeDotnetValidator.PromptIfMissing($"compile the '{plugin.Name}' extension"))
+        {
+            return;
+        }
+
         _isBuilding = true;
         _showBuildLog = true;
         _buildLog = $"Building {plugin.Name} ({plugin.PluginType})...\n";
