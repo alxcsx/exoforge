@@ -633,11 +633,25 @@ defmodule Exoforge.Std.ExtensionManager do
 
   defp upload_base_dir do
     cond do
+      dir = System.get_env("UPLOADED_EXTENSIONS_PATH") ->
+        dir
+
       dir = System.get_env("EXOFORGE_DATA_DIR") ->
         Path.join(dir, "uploaded_extensions")
 
       dir = Application.get_env(:exoforge_std_extension_manager, :upload_dir) ->
         dir
+
+      ext_paths = System.get_env("EXTENSIONS_PATH") ->
+        paths =
+          cond do
+            String.contains?(ext_paths, ",") -> String.split(ext_paths, ",", trim: true)
+            String.contains?(ext_paths, ";") -> String.split(ext_paths, ";", trim: true)
+            true -> [ext_paths]
+          end
+          |> Enum.map(&String.trim/1)
+
+        Enum.find(paths, fn p -> String.contains?(p, "upload") end) || List.last(paths) || "priv/data/uploaded_extensions"
 
       true ->
         "priv/data/uploaded_extensions"
@@ -680,13 +694,19 @@ defmodule Exoforge.Std.ExtensionManager do
     root_extensions_csharp = Path.expand("extensions_csharp")
     root_csharp = Path.expand("plugins_csharp")
     root_uploaded = Path.expand(upload_base_dir())
+    root_builtin = Path.expand("builtin_extensions")
 
-    if (String.starts_with?(norm, root_extensions) and norm != root_extensions) or
-         (String.starts_with?(norm, root_plugins) and norm != root_plugins) or
-         (String.starts_with?(norm, root_extensions_csharp) and norm != root_extensions_csharp) or
-         (String.starts_with?(norm, root_csharp) and norm != root_csharp) or
-         (String.starts_with?(norm, root_uploaded) and norm != root_uploaded) do
-      File.rm_rf(norm)
+    # Never delete files inside builtin_extensions
+    if String.starts_with?(norm, root_builtin) do
+      Logger.warning("[ExtensionManager] Refusing to delete builtin extension files at #{norm}")
+    else
+      if (String.starts_with?(norm, root_extensions) and norm != root_extensions) or
+           (String.starts_with?(norm, root_plugins) and norm != root_plugins) or
+           (String.starts_with?(norm, root_extensions_csharp) and norm != root_extensions_csharp) or
+           (String.starts_with?(norm, root_csharp) and norm != root_csharp) or
+           (String.starts_with?(norm, root_uploaded) and norm != root_uploaded) do
+        File.rm_rf(norm)
+      end
     end
   end
 

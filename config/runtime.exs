@@ -58,14 +58,39 @@ if config_env() == :prod do
   # no standard plugins at all: no database, no auth, and nothing louder than a warning.
   release_lib = Path.join([:code.root_dir(), "lib"])
 
+  raw_ext_path = System.get_env("EXTENSIONS_PATH") || "extensions"
+  uploaded_path = System.get_env("UPLOADED_EXTENSIONS_PATH")
+
+  parsed_ext_paths =
+    cond do
+      String.starts_with?(raw_ext_path, "[") and String.ends_with?(raw_ext_path, "]") ->
+        case Jason.decode(raw_ext_path) do
+          {:ok, list} when is_list(list) -> list
+          _ -> [raw_ext_path]
+        end
+
+      String.contains?(raw_ext_path, ",") ->
+        String.split(raw_ext_path, ",", trim: true)
+
+      String.contains?(raw_ext_path, ";") ->
+        String.split(raw_ext_path, ";", trim: true)
+
+      true ->
+        [raw_ext_path]
+    end
+    |> Enum.map(&String.trim/1)
+
   scan_paths =
-    [
-      System.get_env("EXTENSIONS_PATH") || "extensions",
-      "_build/prod/lib",
-      release_lib,
-      "extensions_csharp",
-      "priv/data/uploaded_extensions"
-    ]
+    (parsed_ext_paths ++
+       [
+         uploaded_path,
+         "builtin_extensions",
+         "_build/prod/lib",
+         release_lib,
+         "extensions_csharp",
+         "priv/data/uploaded_extensions"
+       ])
+    |> Enum.reject(&is_nil/1)
     |> Enum.uniq()
 
   config :exoforge, :module_loader, scan_path: scan_paths

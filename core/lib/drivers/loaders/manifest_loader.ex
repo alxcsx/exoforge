@@ -6,12 +6,70 @@ defmodule Exoforge.Drivers.Loaders.ManifestLoader do
 
   def load_extensions(paths) when is_list(paths) do
     paths
-    |> Enum.flat_map(&load_extensions/1)
-    |> Enum.uniq_by(& &1.id)
+    |> Enum.flat_map(&parse_path_entry/1)
+    |> Enum.flat_map(&do_load_path/1)
+    |> Enum.group_by(& &1.id)
+    |> Enum.map(fn {_id, list} ->
+      Enum.max_by(list, & &1.version, &compare_manifest_versions/2)
+    end)
   end
 
   def load_extensions(path) when is_binary(path) do
-    Logger.info("[ManifestLoader] Loading modules from #{path}")
+    case parse_path_entry(path) do
+      [single] -> do_load_path(single)
+      multiple -> load_extensions(multiple)
+    end
+  end
+
+  defp compare_manifest_versions(v1, v2) do
+    case {Version.parse(to_string(v1)), Version.parse(to_string(v2))} do
+      {{:ok, ver1}, {:ok, ver2}} ->
+        Version.compare(ver1, ver2) == :gt
+
+      {{:ok, _}, _} ->
+        true
+
+      {_, {:ok, _}} ->
+        false
+
+      _ ->
+        to_string(v1) > to_string(v2)
+    end
+  end
+
+  defp parse_path_entry(nil), do: []
+
+  defp parse_path_entry(path) when is_binary(path) do
+    trimmed = String.trim(path)
+
+    cond do
+      trimmed == "" ->
+        []
+
+      String.starts_with?(trimmed, "[") and String.ends_with?(trimmed, "]") ->
+        case Jason.decode(trimmed) do
+          {:ok, list} when is_list(list) -> Enum.flat_map(list, &parse_path_entry/1)
+          _ -> [trimmed]
+        end
+
+      String.contains?(trimmed, ",") ->
+        trimmed |> String.split(",", trim: true) |> Enum.map(&String.trim/1)
+
+      String.contains?(trimmed, ";") ->
+        trimmed |> String.split(";", trim: true) |> Enum.map(&String.trim/1)
+
+      true ->
+        [trimmed]
+    end
+  end
+
+  defp parse_path_entry(paths) when is_list(paths), do: Enum.flat_map(paths, &parse_path_entry/1)
+  defp parse_path_entry(_), do: []
+
+  defp do_load_path(path) when is_binary(path) do
+    if File.exists?(path) do
+      Logger.info("[ManifestLoader] Loading modules from #{path}")
+    end
 
     files =
       cond do

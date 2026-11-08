@@ -12,8 +12,14 @@ defmodule Exoforge.ExtensionBootstrapper do
       case Keyword.get(loader_config, :scan_path) do
         nil ->
           cond do
-            File.dir?("extensions") -> "extensions"
-            true -> "_build/dev/lib"
+            File.dir?("builtin_extensions") and File.dir?("uploaded_extensions") ->
+              ["builtin_extensions", "uploaded_extensions"]
+
+            File.dir?("extensions") ->
+              "extensions"
+
+            true ->
+              "_build/dev/lib"
           end
 
         custom ->
@@ -24,7 +30,8 @@ defmodule Exoforge.ExtensionBootstrapper do
 
     case run(driver, path) do
       [] ->
-        Logger.warning("[Exoforge] no extensions found at #{path}")
+        formatted = if is_list(path), do: Enum.join(path, ", "), else: to_string(path)
+        Logger.warning("[Exoforge] no extensions found at #{formatted}")
 
       loaded ->
         total_ms = System.monotonic_time(:millisecond) - t0

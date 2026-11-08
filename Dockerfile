@@ -88,25 +88,14 @@ WORKDIR /app
 
 # Non-root user for security (essential for Kubernetes runAsNonRoot)
 RUN addgroup -S exoforge && adduser -S exoforge -G exoforge && \
-    mkdir -p /app/extensions /app/extensions_csharp && \
+    mkdir -p /app/extensions /app/extensions_csharp /app/builtin_extensions /app/uploaded_extensions && \
     chown -R exoforge:exoforge /app
 
 # Copy assembled OTP release
 COPY --from=builder --chown=exoforge:exoforge /build/_build/prod/rel/exoforge ./
 
-# No plugin ships in the image. A plugin arrives by push - that is the whole DX, one click from the
-# Unity Editor - and a manifest here without its binary is worse than nothing: the bootstrapper reads
-# it, cannot find the plugin, and refuses to start. The directory itself is created above, empty and
-# writable, for the push to land in. Mount a volume over it to make pushed plugins outlive the
-# container; without one they are ephemeral, which is fine for a dev box.
-# The standard plugins, from the build tree rather than the release.
-#
-# `mix release` carries only `ebin/` and `priv/` for each application, and a plugin's manifest sits at
-# the application root in `_build/prod/lib/<name>/manifest.json` - so a release drops every standard
-# plugin's manifest, and scanning the release's own lib finds directories with nothing in them. The
-# build tree has both, unversioned, which is the layout the loader expects and the one `upload_plugin`
-# writes. Dereferenced via cp -rL into extensions_bundled so symlinked priv folders (like priv/docs)
-# are real directories inside the runner image.
+# The standard builtin extensions, copied to static builtin_extensions as well as ./extensions for backwards compatibility.
+COPY --from=builder --chown=exoforge:exoforge /build/extensions_bundled ./builtin_extensions
 COPY --from=builder --chown=exoforge:exoforge /build/extensions_bundled ./extensions
 
 USER exoforge

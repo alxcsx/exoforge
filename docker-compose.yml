@@ -44,7 +44,8 @@ services:
       DASHBOARD_PORT: "4005"
       GATEWAY_PORT: "4000"
       HTTP_PORT: "4001"
-      EXTENSIONS_PATH: "/app/extensions"
+      EXTENSIONS_PATH: "/app/builtin_extensions,/app/uploaded_extensions"
+      UPLOADED_EXTENSIONS_PATH: "/app/uploaded_extensions"
       EXOFORGE_ADMIN_EMAIL: ${EXOFORGE_ADMIN_EMAIL:-admin}
       EXOFORGE_ADMIN_PASSWORD: ${EXOFORGE_ADMIN_PASSWORD:-admin}
     ports:
@@ -52,8 +53,7 @@ services:
       - "4000:4000" # WebSocket Gateway
       - "4001:4001" # REST API Ingress
     volumes:
-      - exoforge_extensions:/app/extensions
-      - exoforge_uploads:/app/priv/data/uploaded_extensions
+      - exoforge_uploads:/app/uploaded_extensions
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:4005/health || exit 1"]
       interval: 5s
@@ -65,7 +65,6 @@ services:
 
 volumes:
   postgres_data:
-  exoforge_extensions:
   exoforge_uploads:
 
 networks:

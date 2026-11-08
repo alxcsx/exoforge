@@ -8,6 +8,7 @@ config :exoforge, :module_loader,
   driver: Exoforge.Drivers.Loaders.ManifestLoader,
   scan_path: [
     System.get_env("EXTENSIONS_PATH") || "_build/prod/lib",
+    "builtin_extensions",
     "extensions_csharp",
     "priv/data/uploaded_extensions"
   ]
