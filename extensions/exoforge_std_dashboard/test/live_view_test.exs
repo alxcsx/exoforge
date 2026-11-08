@@ -182,6 +182,23 @@ defmodule Exoforge.DashboardLiveViewTest do
       }
     })
 
+    ExtensionRegistry.register(%Exoforge.Domain.Manifest{
+      id: :exoforge_std_docs,
+      name: "exoforge_std_docs",
+      version: Version.parse!("0.1.0"),
+      entry_point: Exoforge.Std.Docs,
+      provides: [Exoforge.Std.Services.Docs],
+      dependencies: [Exoforge.Std.Services.ExtensionManager],
+      category: "System",
+      system: true,
+      dashboard_view: %{
+        id: :docs,
+        title: "Developer Guide",
+        icon: "📖",
+        module: Exoforge.Std.Docs.DashboardView
+      }
+    })
+
     Exoforge.Std.Resources.run_migrations()
 
     # Clear pinned state only once :resource_store is registered — otherwise this no-ops and

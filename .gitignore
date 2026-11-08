@@ -68,6 +68,7 @@ extensions_csharp/*/*.wasm
 # Not `manifest.json` unqualified: a Unity project's Packages/manifest.json is source.
 sdk/unity/sample_unity/Exoforge/extensions/*/manifest.json
 extensions_csharp/*/manifest.json
+extensions/*/priv/manifest.json
 
 # === Environment & Secrets ===
 .env

@@ -500,7 +500,41 @@ defmodule Exoforge.Std.Dashboard.Overlays do
       subtitle={"#{@project_name} cluster configuration & plugin options"}
       on_close={@on_close}
     >
-      <div class="flex flex-col md:flex-row min-h-[380px] -mx-6 -my-4 divide-y md:divide-y-0 md:divide-x divide-gray-100 text-xs">
+      {project_settings_panel(assigns)}
+    </.modal>
+    """
+  end
+
+  attr(:project_name, :string, default: "Exoforge")
+  attr(:studio_name, :string, default: "Exoforge Studio")
+  attr(:project_metadata, :map, default: %{})
+  attr(:settings_tab, :string, default: "project")
+  attr(:settings_hooks, :list, default: [])
+  attr(:cors_config, :map, default: %{})
+  attr(:overview, :map, default: %{extensions: []})
+  attr(:node_name, :string, default: "")
+  attr(:activity_events, :list, default: [])
+  attr(:events_paused, :boolean, default: false)
+  attr(:event_filter_topic, :string, default: "")
+  attr(:on_close, :string, default: "close_settings")
+
+  def project_settings_panel(assigns) do
+    assigns =
+      assigns
+      |> assign_new(:project_name, fn -> "Exoforge" end)
+      |> assign_new(:studio_name, fn -> "Exoforge Studio" end)
+      |> assign_new(:project_metadata, fn -> %{} end)
+      |> assign_new(:settings_tab, fn -> "project" end)
+      |> assign_new(:settings_hooks, fn -> [] end)
+      |> assign_new(:cors_config, fn -> %{} end)
+      |> assign_new(:overview, fn -> %{extensions: []} end)
+      |> assign_new(:node_name, fn -> to_string(node()) end)
+      |> assign_new(:activity_events, fn -> [] end)
+      |> assign_new(:events_paused, fn -> false end)
+      |> assign_new(:event_filter_topic, fn -> "" end)
+      |> assign_new(:on_close, fn -> "close_settings" end)
+    ~H"""
+    <div class="flex flex-col md:flex-row min-h-[380px] -mx-6 -my-4 divide-y md:divide-y-0 md:divide-x divide-gray-100 text-xs">
         <!-- Left Sidebar Navigation -->
         <div class="w-full md:w-56 p-3 bg-gray-50/70 flex flex-col justify-between">
           <div class="space-y-4">
@@ -1073,7 +1107,6 @@ defmodule Exoforge.Std.Dashboard.Overlays do
           <% end %>
         </div>
       </div>
-    </.modal>
     """
   end
 

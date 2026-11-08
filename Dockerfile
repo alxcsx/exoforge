@@ -52,7 +52,8 @@ ENV COMMIT_SHA=${COMMIT_SHA} \
 RUN mix deps.get --only ${MIX_ENV} && \
     mix deps.compile && \
     mix compile && \
-    mix release
+    mix release && \
+    cp -rL /build/_build/prod/lib /build/extensions_bundled
 
 # ---------------------------------------------------------------------
 # Stage 2: Minimal Production Runtime
@@ -103,8 +104,9 @@ COPY --from=builder --chown=exoforge:exoforge /build/_build/prod/rel/exoforge ./
 # the application root in `_build/prod/lib/<name>/manifest.json` - so a release drops every standard
 # plugin's manifest, and scanning the release's own lib finds directories with nothing in them. The
 # build tree has both, unversioned, which is the layout the loader expects and the one `upload_plugin`
-# writes. Copied to `extensions/`, which is a scan path already, so this needs no config.
-COPY --from=builder --chown=exoforge:exoforge /build/_build/prod/lib ./extensions
+# writes. Dereferenced via cp -rL into extensions_bundled so symlinked priv folders (like priv/docs)
+# are real directories inside the runner image.
+COPY --from=builder --chown=exoforge:exoforge /build/extensions_bundled ./extensions
 
 USER exoforge
 

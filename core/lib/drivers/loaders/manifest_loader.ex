@@ -14,10 +14,17 @@ defmodule Exoforge.Drivers.Loaders.ManifestLoader do
     Logger.info("[ManifestLoader] Loading modules from #{path}")
 
     files =
-      if File.exists?(Path.join(path, "manifest.json")) do
-        [Path.join(path, "manifest.json")]
-      else
-        Path.join([path, "*", "manifest.json"]) |> Path.wildcard()
+      cond do
+        File.exists?(Path.join(path, "manifest.json")) ->
+          [Path.join(path, "manifest.json")]
+
+        File.exists?(Path.join([path, "priv", "manifest.json"])) ->
+          [Path.join([path, "priv", "manifest.json"])]
+
+        true ->
+          (Path.wildcard(Path.join([path, "*", "manifest.json"])) ++
+             Path.wildcard(Path.join([path, "*", "priv", "manifest.json"])))
+          |> Enum.uniq()
       end
 
     files

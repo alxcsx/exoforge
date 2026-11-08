@@ -20,7 +20,8 @@ defmodule Exoforge.Std.Docs do
     dashboard_view: %{
       id: :docs,
       title: "Developer Guide",
-      icon: "📖"
+      icon: "📖",
+      module: Exoforge.Std.Docs.DashboardView
     }
   }
 
@@ -182,15 +183,36 @@ defmodule Exoforge.Std.Docs do
   ## ---- CHAPTER LOADER ----
 
   def docs_dir do
-    Application.app_dir(:exoforge_std_docs, "priv/docs")
-  rescue
-    _ ->
-      # Development fallback relative path
-      cond do
-        File.dir?("extensions/exoforge_std_docs/priv/docs") -> "extensions/exoforge_std_docs/priv/docs"
-        File.dir?("priv/docs") -> "priv/docs"
-        true -> "priv/docs"
+    priv_dir =
+      try do
+        :code.priv_dir(:exoforge_std_docs) |> to_string()
+      rescue
+        _ -> nil
       end
+
+    app_dir =
+      try do
+        Application.app_dir(:exoforge_std_docs, "priv/docs")
+      rescue
+        _ -> nil
+      end
+
+    release_dirs =
+      try do
+        Path.wildcard(Path.join([:code.root_dir(), "lib", "exoforge_std_docs*", "priv", "docs"]))
+      rescue
+        _ -> []
+      end
+
+    candidates =
+      [
+        priv_dir && Path.join(priv_dir, "docs"),
+        app_dir,
+        "extensions/exoforge_std_docs/priv/docs",
+        "priv/docs"
+      ] ++ release_dirs
+
+    Enum.find(candidates, fn path -> is_binary(path) and File.dir?(path) end) || "priv/docs"
   end
 
   defp load_all_chapters_meta do

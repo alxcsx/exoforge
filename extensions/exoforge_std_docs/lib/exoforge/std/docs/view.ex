@@ -13,8 +13,11 @@ defmodule Exoforge.Std.Docs.View do
   attr(:project_name, :string, default: "Game")
   attr(:studio_name, :string, default: "Studio")
   attr(:subpage, :string, default: "flow")
+  attr(:myself, :any, default: nil)
 
   def view(assigns) do
+    assigns = assign_new(assigns, :myself, fn -> nil end)
+
     # Fallback to dynamic catalog if not supplied
     action_catalog =
       if assigns.action_catalog == [] do
@@ -119,6 +122,7 @@ defmodule Exoforge.Std.Docs.View do
             <button
               type="button"
               phx-click="set_guide_subpage"
+              phx-target={@myself}
               phx-value-subpage="flow"
               class={"px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 #{if @subpage == "flow", do: "bg-white text-primary-700 shadow-xs font-bold", else: "text-gray-600 hover:text-gray-900"}"}
             >
@@ -128,6 +132,7 @@ defmodule Exoforge.Std.Docs.View do
             <button
               type="button"
               phx-click="set_guide_subpage"
+              phx-target={@myself}
               phx-value-subpage="attributes"
               class={"px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 #{if @subpage == "attributes", do: "bg-white text-primary-700 shadow-xs font-bold", else: "text-gray-600 hover:text-gray-900"}"}
             >
@@ -137,6 +142,7 @@ defmodule Exoforge.Std.Docs.View do
             <button
               type="button"
               phx-click="set_guide_subpage"
+              phx-target={@myself}
               phx-value-subpage="architecture"
               class={"px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 #{if @subpage == "architecture", do: "bg-white text-primary-700 shadow-xs font-bold", else: "text-gray-600 hover:text-gray-900"}"}
             >
@@ -146,6 +152,7 @@ defmodule Exoforge.Std.Docs.View do
             <button
               type="button"
               phx-click="set_guide_subpage"
+              phx-target={@myself}
               phx-value-subpage="catalog"
               class={"px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 #{if @subpage == "catalog", do: "bg-white text-primary-700 shadow-xs font-bold", else: "text-gray-600 hover:text-gray-900"}"}
             >
@@ -183,6 +190,7 @@ defmodule Exoforge.Std.Docs.View do
             extensions={@extensions}
             project_name={@project_name}
             studio_name={@studio_name}
+            myself={@myself}
           />
       <% end %>
     </div>
@@ -192,7 +200,14 @@ defmodule Exoforge.Std.Docs.View do
   # ===========================================================================
   # SUBPAGE: QUICKSTART FLOW & HERO
   # ===========================================================================
+  attr(:action_catalog, :list, default: [])
+  attr(:extensions, :list, default: [])
+  attr(:project_name, :string, default: "Game")
+  attr(:studio_name, :string, default: "Studio")
+  attr(:myself, :any, default: nil)
+
   defp subpage_flow(assigns) do
+    assigns = assign_new(assigns, :myself, fn -> nil end)
     ~H"""
     <div class="space-y-8">
       <!-- Hero Banner -->
@@ -520,6 +535,7 @@ defmodule Exoforge.Std.Docs.View do
         <button
           type="button"
           phx-click="set_guide_subpage"
+          phx-target={@myself}
           phx-value-subpage="catalog"
           class="shrink-0 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer"
         >

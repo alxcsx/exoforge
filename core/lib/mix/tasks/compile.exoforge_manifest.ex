@@ -73,6 +73,22 @@ defmodule Mix.Tasks.Compile.ExoforgeManifest do
     File.mkdir_p!(out_dir)
     File.write!(out_path, json_content <> "\n")
 
+    # Also persist to priv/manifest.json so OTP `mix release` packages the manifest into the release archive
+    priv_dir = Path.join(out_dir, "priv")
+
+    case File.read_link(priv_dir) do
+      {:ok, _target} ->
+        unless File.exists?(priv_dir) do
+          File.rm(priv_dir)
+        end
+
+      _ ->
+        :ok
+    end
+
+    File.mkdir_p!(priv_dir)
+    File.write!(Path.join(priv_dir, "manifest.json"), json_content <> "\n")
+
     # The Elixir map literal this replaced is a stale copy in a format nothing reads any more. Left
     # there, it is a second manifest to be confused by.
     File.rm(Path.join(out_dir, "manifest.exs"))
