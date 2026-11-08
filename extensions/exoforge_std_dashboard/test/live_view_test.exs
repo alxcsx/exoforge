@@ -1231,6 +1231,14 @@ defmodule Exoforge.DashboardLiveViewTest do
       assert attr_html =~ "exoforge_std_resources"
       assert attr_html =~ "[ExoResource] Parameters"
       assert attr_html =~ "[ExoColumn] Parameters"
+
+      # Switch to What You Can Build subpage
+      use_cases_html = render_click(view, "set_guide_subpage", %{"subpage" => "use_cases"})
+      assert use_cases_html =~ "What You Can Build with Exoforge"
+      assert use_cases_html =~ "The Paradigm Shift: Exoforge vs. Legacy BaaS"
+      assert use_cases_html =~ "Auction House &amp; P2P"
+      assert use_cases_html =~ "In-Memory Matchmaker"
+      assert use_cases_html =~ "Hot State in RAM, Durable in DB"
     end
   end
 end

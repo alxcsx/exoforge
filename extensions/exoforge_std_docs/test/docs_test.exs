@@ -91,17 +91,18 @@ defmodule Exoforge.Std.DocsTest do
   describe "Docs Extension Actions" do
     test "list_chapters returns all markdown chapters" do
       {:ok, %{chapters: chapters, count: count}} = Docs.list_chapters()
-      assert count >= 3
+      assert count >= 4
       assert Enum.any?(chapters, &(&1.id == "01_quickstart"))
       assert Enum.any?(chapters, &(&1.id == "02_csharp_attributes"))
       assert Enum.any?(chapters, &(&1.id == "03_architecture"))
+      assert Enum.any?(chapters, &(&1.id == "04_use_cases_and_patterns"))
     end
 
     test "get_chapter returns chapter content and rendered html" do
-      {:ok, %{chapter: chapter}} = Docs.get_chapter(%{id: "01_quickstart"})
-      assert chapter.title =~ "Developer Quickstart"
-      assert chapter.content =~ "From zero to live"
-      assert chapter.html =~ "<h1"
+      {:ok, %{chapter: chapter}} = Docs.get_chapter(%{id: "04_use_cases_and_patterns"})
+      assert chapter.title =~ "What You Can Build with Exoforge"
+      assert chapter.content =~ "Paradigm Shift"
+      assert chapter.html =~ "<table"
     end
 
     test "get_chapter returns error for missing chapter" do
@@ -169,6 +170,37 @@ defmodule Exoforge.Std.DocsTest do
       assert html =~ "[ExoCron]"
       assert html =~ "[ExoEvent]"
       assert html =~ "[ExoResource]"
+    end
+
+    test "renders use_cases subpage with blueprints and comparison matrix" do
+      assigns = %{
+        action_catalog: [],
+        extensions: [],
+        project_name: "TestGame",
+        studio_name: "TestStudio",
+        subpage: "use_cases"
+      }
+
+      html = Phoenix.LiveViewTest.rendered_to_string(~H"""
+      <View.view
+        action_catalog={@action_catalog}
+        extensions={@extensions}
+        project_name={@project_name}
+        studio_name={@studio_name}
+        subpage={@subpage}
+      />
+      """)
+
+      assert html =~ "What You Can Build with Exoforge"
+      assert html =~ "The Paradigm Shift: Exoforge vs. Legacy BaaS"
+      assert html =~ "Auction House &amp; P2P"
+      assert html =~ "In-Memory Matchmaker"
+      assert html =~ "World Boss LiveOps"
+      assert html =~ "Guilds &amp; Clans"
+      assert html =~ "Automated Season Rollovers"
+      assert html =~ "Web Store Checkout, Stripe Webhooks &amp; Instant Delivery"
+      assert html =~ "Exoforge Architecture Tips &amp; Golden Rules"
+      assert html =~ "Hot State in RAM, Durable in DB"
     end
 
     test "renders architecture subpage with high-contrast badge styles" do

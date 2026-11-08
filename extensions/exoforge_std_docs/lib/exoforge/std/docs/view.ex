@@ -133,6 +133,16 @@ defmodule Exoforge.Std.Docs.View do
               type="button"
               phx-click="set_guide_subpage"
               phx-target={@myself}
+              phx-value-subpage="use_cases"
+              class={"px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 #{if @subpage == "use_cases", do: "bg-white text-primary-700 shadow-xs font-bold", else: "text-gray-600 hover:text-gray-900"}"}
+            >
+              <span>💡</span>
+              <span>What You Can Build</span>
+            </button>
+            <button
+              type="button"
+              phx-click="set_guide_subpage"
+              phx-target={@myself}
               phx-value-subpage="attributes"
               class={"px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 #{if @subpage == "attributes", do: "bg-white text-primary-700 shadow-xs font-bold", else: "text-gray-600 hover:text-gray-900"}"}
             >
@@ -178,6 +188,8 @@ defmodule Exoforge.Std.Docs.View do
 
       <!-- SUBPAGE ROUTING -->
       <%= case @subpage do %>
+        <% "use_cases" -> %>
+          <.subpage_use_cases myself={@myself} />
         <% "attributes" -> %>
           <.subpage_attributes />
         <% "architecture" -> %>
@@ -520,29 +532,589 @@ defmodule Exoforge.Std.Docs.View do
         </div>
       </section>
 
-      <!-- CTA: Jump to Dedicated Live API Reference -->
-      <div class="p-6 rounded-3xl bg-gradient-to-r from-purple-950/40 via-indigo-950/30 to-purple-950/40 border border-purple-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 print:hidden">
-        <div class="space-y-1">
-          <div class="flex items-center gap-2 text-purple-300 font-bold text-xs uppercase tracking-wider">
-            <span>⚡</span>
-            <span>Live Action Catalog</span>
+      <!-- CTA: Jump to Blueprints or Dedicated Live API Reference -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 print:hidden">
+        <div class="p-6 rounded-3xl bg-gradient-to-r from-blue-950/40 via-indigo-950/30 to-blue-950/40 border border-blue-500/30 flex flex-col justify-between gap-4">
+          <div class="space-y-1">
+            <div class="flex items-center gap-2 text-blue-300 font-bold text-xs uppercase tracking-wider">
+              <span>💡</span>
+              <span>Architectural Blueprints</span>
+            </div>
+            <h3 class="text-base font-extrabold text-white">What You Can Build with Exoforge</h3>
+            <p class="text-xs text-gray-300 leading-relaxed">
+              Explore 6 production-grade C# patterns (Auction House, In-Memory Matchmaker, World Boss LiveOps, Guilds, Stripe Webhooks) and see how Exoforge eliminates PlayFab/UGS workarounds.
+            </p>
           </div>
-          <h3 class="text-base font-extrabold text-white">Explore All Registered Services &amp; Actions</h3>
-          <p class="text-xs text-gray-300 leading-relaxed max-w-xl">
-            Inspect live cluster contracts, action signatures, parameters, authorization scopes, and copy-pasteable Unity SDK calling code in the dedicated API Reference.
+          <button
+            type="button"
+            phx-click="set_guide_subpage"
+            phx-target={@myself}
+            phx-value-subpage="use_cases"
+            class="self-start px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer"
+          >
+            <span>💡 Explore Architecture &amp; Blueprints</span>
+            <span>➔</span>
+          </button>
+        </div>
+
+        <div class="p-6 rounded-3xl bg-gradient-to-r from-purple-950/40 via-indigo-950/30 to-purple-950/40 border border-purple-500/30 flex flex-col justify-between gap-4">
+          <div class="space-y-1">
+            <div class="flex items-center gap-2 text-purple-300 font-bold text-xs uppercase tracking-wider">
+              <span>⚡</span>
+              <span>Live Action Catalog</span>
+            </div>
+            <h3 class="text-base font-extrabold text-white">Explore All Registered Services &amp; Actions</h3>
+            <p class="text-xs text-gray-300 leading-relaxed">
+              Inspect live cluster contracts, action signatures, parameters, authorization scopes, and copy-pasteable Unity SDK calling code in the dedicated API Reference.
+            </p>
+          </div>
+          <button
+            type="button"
+            phx-click="set_guide_subpage"
+            phx-target={@myself}
+            phx-value-subpage="catalog"
+            class="self-start px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer"
+          >
+            <span>⚡ View Live API Reference</span>
+            <span>➔</span>
+          </button>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  # ===========================================================================
+  # SUBPAGE: WHAT YOU CAN BUILD (BLUEPRINTS, USE CASES & ARCHITECTURE TIPS)
+  # ===========================================================================
+  attr(:myself, :any, default: nil)
+
+  defp subpage_use_cases(assigns) do
+    ~H"""
+    <div class="space-y-8">
+      <!-- Hero Header -->
+      <div class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-4 print:border-gray-300 print:shadow-none">
+        <div class="flex items-start gap-4">
+          <span class="w-12 h-12 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center font-bold text-2xl shrink-0 shadow-xs">
+            💡
+          </span>
+          <div class="space-y-1">
+            <div class="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-amber-100/70 text-amber-900 border border-amber-200 text-[10px] font-bold uppercase tracking-wider">
+              <span>Architecture Patterns &amp; Blueprints</span>
+            </div>
+            <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">What You Can Build with Exoforge</h1>
+            <p class="text-xs text-gray-500 leading-relaxed max-w-3xl">
+              Break free from the constraints of serverless BaaS (PlayFab, Unity Gaming Services). Build stateful, realtime, relational multiplayer services in clean C# with isolated databases, actor supervision, and sub-millisecond pub/sub.
+            </p>
+          </div>
+        </div>
+
+        <!-- Sticky Quick Jump Bar -->
+        <div class="sticky top-2 z-20 print:hidden bg-white/95 backdrop-blur-md rounded-2xl border border-gray-200/90 p-3 shadow-xs flex flex-wrap gap-2 text-xs font-semibold">
+          <span class="text-gray-400 text-[11px] font-mono self-center mr-1">Jump to:</span>
+          <a href="#matrix" class="px-2.5 py-1 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">
+            <span>⚖️ Paradigm Shift (PlayFab vs UGS)</span>
+          </a>
+          <a href="#bp-economy" class="px-2.5 py-1 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">
+            <span>⚖️ Auction House &amp; P2P</span>
+          </a>
+          <a href="#bp-matchmaking" class="px-2.5 py-1 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">
+            <span>🎯 In-Memory Matchmaker</span>
+          </a>
+          <a href="#bp-world-boss" class="px-2.5 py-1 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">
+            <span>🐉 World Boss LiveOps</span>
+          </a>
+          <a href="#bp-guilds" class="px-2.5 py-1 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">
+            <span>🛡️ Guilds &amp; Clans</span>
+          </a>
+          <a href="#bp-seasons" class="px-2.5 py-1 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">
+            <span>🏆 Automated Season Reset</span>
+          </a>
+          <a href="#bp-webhooks" class="px-2.5 py-1 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">
+            <span>💳 Stripe &amp; Webhooks</span>
+          </a>
+          <a href="#rules" class="px-2.5 py-1 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 transition-colors">
+            <span>⭐ Golden Rules</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- SECTION: PARADIGM SHIFT COMPARISON MATRIX -->
+      <section id="matrix" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
+        <div class="border-b border-gray-100 pb-4">
+          <div class="flex items-center gap-2">
+            <span class="text-xl">⚖️</span>
+            <h2 class="text-xl font-extrabold text-gray-900 tracking-tight">The Paradigm Shift: Exoforge vs. Legacy BaaS</h2>
+          </div>
+          <p class="text-xs text-gray-500 mt-1">
+            Why gameplay features that feel hacky or cost prohibitive on PlayFab or Unity Gaming Services (UGS) are first-class primitives in Exoforge.
           </p>
         </div>
-        <button
-          type="button"
-          phx-click="set_guide_subpage"
-          phx-target={@myself}
-          phx-value-subpage="catalog"
-          class="shrink-0 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer"
-        >
-          <span>⚡ View Live API Reference</span>
-          <span>➔</span>
-        </button>
-      </div>
+
+        <div class="overflow-x-auto rounded-2xl border border-gray-200">
+          <table class="w-full text-left text-xs bg-white">
+            <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 font-semibold text-[10px] uppercase">
+              <tr>
+                <th class="py-3 px-4">Architecture Dimension</th>
+                <th class="py-3 px-4 text-gray-600">Microsoft PlayFab (CloudScript)</th>
+                <th class="py-3 px-4 text-gray-600">Unity Gaming Services (Cloud Code)</th>
+                <th class="py-3 px-4 text-primary-700 font-bold bg-primary-50/60">Exoforge Native Extensions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 text-[11px] leading-relaxed">
+              <tr>
+                <td class="py-3 px-4 font-bold text-gray-900">Execution Lifecycle</td>
+                <td class="py-3 px-4 text-gray-600">Serverless JS or Azure Functions. 1–3s cold starts; external subscription required.</td>
+                <td class="py-3 px-4 text-gray-600">Ephemeral serverless containers. Hard 15-second timeout; idle workers killed.</td>
+                <td class="py-3 px-4 bg-primary-50/30 font-semibold text-primary-900">
+                  <span class="text-emerald-600 font-bold">✓ Long-lived native OS processes.</span> Zero cold starts; sub-millisecond dispatch.
+                </td>
+              </tr>
+              <tr>
+                <td class="py-3 px-4 font-bold text-gray-900">In-Memory State</td>
+                <td class="py-3 px-4 text-gray-600">None. Strictly stateless; static variables wiped between calls.</td>
+                <td class="py-3 px-4 text-gray-600">None. Workers cycle unpredictably; ephemeral memory.</td>
+                <td class="py-3 px-4 bg-primary-50/30 font-semibold text-primary-900">
+                  <span class="text-emerald-600 font-bold">✓ Persistent C# RAM.</span> Keep active lobbies, match queues, and tick loops in memory.
+                </td>
+              </tr>
+              <tr>
+                <td class="py-3 px-4 font-bold text-gray-900">Data Storage</td>
+                <td class="py-3 px-4 text-gray-600">Per-player JSON blobs. No cross-player SQL queries; ~10 writes/sec rate limit.</td>
+                <td class="py-3 px-4 text-gray-600">Cloud Save key-value JSON. Size limits; no multi-player relational queries.</td>
+                <td class="py-3 px-4 bg-primary-50/30 font-semibold text-primary-900">
+                  <span class="text-emerald-600 font-bold">✓ Isolated Relational SQL.</span> Direct queries (<code class="font-mono text-primary-700 font-bold">Exo.Database.Query&lt;T&gt;</code>), joins, and indexes.
+                </td>
+              </tr>
+              <tr>
+                <td class="py-3 px-4 font-bold text-gray-900">Real-Time Push</td>
+                <td class="py-3 px-4 text-gray-600">Requires client polling or third-party SignalR / PubNub integration.</td>
+                <td class="py-3 px-4 text-gray-600">Requires client polling or external WebSocket server setup.</td>
+                <td class="py-3 px-4 bg-primary-50/30 font-semibold text-primary-900">
+                  <span class="text-emerald-600 font-bold">✓ Built-in :pg Pub/Sub Bus.</span> 0.07 ms fanout to thousands of clients via <code class="font-mono text-primary-700 font-bold">Exo.Events.EmitAsync</code>.
+                </td>
+              </tr>
+              <tr>
+                <td class="py-3 px-4 font-bold text-gray-900">LiveOps &amp; Tuning</td>
+                <td class="py-3 px-4 text-gray-600">Manual unvalidated JSON in "Title Data". Easy for typos to break production.</td>
+                <td class="py-3 px-4 text-gray-600">Remote Config raw key-value pairs without structured entity UI.</td>
+                <td class="py-3 px-4 bg-primary-50/30 font-semibold text-primary-900">
+                  <span class="text-emerald-600 font-bold">✓ Auto-Generated Studio UI.</span> Records with <code class="font-mono text-primary-700 font-bold">[ExoResource]</code> generate live tables, sliders &amp; forms.
+                </td>
+              </tr>
+              <tr>
+                <td class="py-3 px-4 font-bold text-gray-900">Scheduled Tasks</td>
+                <td class="py-3 px-4 text-gray-600">Scheduled Tasks time out when iterating over thousands of player records.</td>
+                <td class="py-3 px-4 text-gray-600">None native. Requires external cron runner calling public webhooks.</td>
+                <td class="py-3 px-4 bg-primary-50/30 font-semibold text-primary-900">
+                  <span class="text-emerald-600 font-bold">✓ Native [ExoCron] Attribute.</span> Runs in-process under cluster supervision.
+                </td>
+              </tr>
+              <tr>
+                <td class="py-3 px-4 font-bold text-gray-900">External Webhooks</td>
+                <td class="py-3 px-4 text-gray-600">Requires wiring Azure API Management or AWS Gateway for signature checks.</td>
+                <td class="py-3 px-4 text-gray-600">Rejects calls lacking a Unity Player Bearer token; needs proxy server.</td>
+                <td class="py-3 px-4 bg-primary-50/30 font-semibold text-primary-900">
+                  <span class="text-emerald-600 font-bold">✓ Native [ExoWebhook] Attribute.</span> Receive Stripe, Steam, Discord hooks with zero proxy glue.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- BLUEPRINT 1: CROSS-PLAYER ECONOMY -->
+      <section id="bp-economy" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+          <div class="flex items-center gap-3">
+            <span class="w-10 h-10 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center font-bold text-lg">
+              ⚖️
+            </span>
+            <div>
+              <div class="flex items-center gap-2">
+                <h2 class="text-xl font-extrabold text-gray-900">Blueprint 1: Cross-Player Economy (Auction House &amp; P2P)</h2>
+                <span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold uppercase tracking-wider">Economy</span>
+              </div>
+              <p class="text-xs text-gray-500 mt-0.5">Global player-driven marketplace with atomic currency exchange and instant push notifications.</p>
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-1.5 self-start sm:self-auto font-mono text-[10px]">
+            <span class="px-2 py-0.5 rounded bg-gray-100 text-gray-700 font-bold">[ExoResource]</span>
+            <span class="px-2 py-0.5 rounded bg-gray-100 text-gray-700 font-bold">[ExoAction]</span>
+            <span class="px-2 py-0.5 rounded bg-gray-100 text-gray-700 font-bold">[ExoEvent]</span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+          <div class="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-950 space-y-1.5">
+            <div class="font-bold text-rose-900 flex items-center gap-1.5">
+              <span>❌</span> <span>Why This Is Hacky in PlayFab &amp; UGS:</span>
+            </div>
+            <p class="leading-relaxed text-rose-800 text-[11px]">
+              Player inventory is locked inside isolated private JSON stores. Querying listings across players requires abusing PlayFab Shared Group Data (which has severe lock contention and race conditions) or hosting and paying for an external PostgreSQL database on AWS.
+            </p>
+          </div>
+          <div class="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 space-y-1.5">
+            <div class="font-bold text-emerald-900 flex items-center gap-1.5">
+              <span>✅</span> <span>The Exoforge Native Pattern:</span>
+            </div>
+            <p class="leading-relaxed text-emerald-800 text-[11px]">
+              Declare an <code class="font-mono bg-emerald-100 px-1 py-0.5 rounded">[ExoResource("market_listings")]</code>. Use standard relational SQL with sorting and pagination. On purchase, swap currency and items atomically and emit an <code class="font-mono bg-emerald-100 px-1 py-0.5 rounded">[ExoEvent]</code> so the seller's client receives an instant WebSocket alert.
+            </p>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <div class="flex items-center justify-between text-xs text-gray-500 font-bold">
+            <span>MarketplaceExtension.cs</span>
+            <span class="font-mono text-[11px] text-gray-400">C# 12 / .NET 9+</span>
+          </div>
+          <div class="relative group">
+            <button type="button" onclick="window.exoCopyCode && window.exoCopyCode(this)" class="absolute top-2.5 right-3 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white border border-gray-700 flex items-center gap-1 cursor-pointer print:hidden shadow-xs" title="Copy code">
+              <span class="copy-icon">📋</span><span class="copy-text">Copy</span>
+            </button>
+            <pre class="bg-gray-950 text-gray-200 p-4 rounded-2xl font-mono text-xs md:text-[13px] leading-relaxed overflow-x-auto border border-gray-800"><code><%= Phoenix.HTML.raw(Markdown.highlight_csharp(snippet_auction_house())) %></code></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- BLUEPRINT 2: IN-MEMORY MATCHMAKING -->
+      <section id="bp-matchmaking" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+          <div class="flex items-center gap-3">
+            <span class="w-10 h-10 rounded-2xl bg-blue-50 text-blue-700 flex items-center justify-center font-bold text-lg">
+              🎯
+            </span>
+            <div>
+              <div class="flex items-center gap-2">
+                <h2 class="text-xl font-extrabold text-gray-900">Blueprint 2: Stateful In-Memory Matchmaking &amp; Turn-Based Rooms</h2>
+                <span class="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-bold uppercase tracking-wider">Multiplayer</span>
+              </div>
+              <p class="text-xs text-gray-500 mt-0.5">High-speed ELO queue and turn-based room state held in C# memory with zero polling.</p>
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-1.5 self-start sm:self-auto font-mono text-[10px]">
+            <span class="px-2 py-0.5 rounded bg-gray-100 text-gray-700 font-bold">[ExoAction]</span>
+            <span class="px-2 py-0.5 rounded bg-gray-100 text-gray-700 font-bold">[ExoCron]</span>
+            <span class="px-2 py-0.5 rounded bg-gray-100 text-gray-700 font-bold">[ExoEvent]</span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+          <div class="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-950 space-y-1.5">
+            <div class="font-bold text-rose-900 flex items-center gap-1.5">
+              <span>❌</span> <span>Why This Is Hacky in PlayFab &amp; UGS:</span>
+            </div>
+            <p class="leading-relaxed text-rose-800 text-[11px]">
+              Cloud Code workers are stateless; memory is wiped after each invocation. Custom matchmaking queues or turn-based room states must be written to external databases on every move, and clients must poll every 2–5 seconds waiting for a match.
+            </p>
+          </div>
+          <div class="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 space-y-1.5">
+            <div class="font-bold text-emerald-900 flex items-center gap-1.5">
+              <span>✅</span> <span>The Exoforge Native Pattern:</span>
+            </div>
+            <p class="leading-relaxed text-emerald-800 text-[11px]">
+              Because an extension is a persistent process, store queues directly in C# memory (<code class="font-mono bg-emerald-100 px-1 py-0.5 rounded">ConcurrentDictionary</code>). Match players in-memory, then push an immediate <code class="font-mono bg-emerald-100 px-1 py-0.5 rounded">[ExoEvent("matchmaking.found")]</code> over WebSocket. Total pairing latency: &lt; 1ms.
+            </p>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <div class="flex items-center justify-between text-xs text-gray-500 font-bold">
+            <span>MatchmakerExtension.cs</span>
+            <span class="font-mono text-[11px] text-gray-400">C# 12 / .NET 9+</span>
+          </div>
+          <div class="relative group">
+            <button type="button" onclick="window.exoCopyCode && window.exoCopyCode(this)" class="absolute top-2.5 right-3 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white border border-gray-700 flex items-center gap-1 cursor-pointer print:hidden shadow-xs" title="Copy code">
+              <span class="copy-icon">📋</span><span class="copy-text">Copy</span>
+            </button>
+            <pre class="bg-gray-950 text-gray-200 p-4 rounded-2xl font-mono text-xs md:text-[13px] leading-relaxed overflow-x-auto border border-gray-800"><code><%= Phoenix.HTML.raw(Markdown.highlight_csharp(snippet_matchmaking())) %></code></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- BLUEPRINT 3: DESIGNER-FRIENDLY LIVEOPS -->
+      <section id="bp-world-boss" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+          <div class="flex items-center gap-3">
+            <span class="w-10 h-10 rounded-2xl bg-purple-50 text-purple-700 flex items-center justify-center font-bold text-lg">
+              🐉
+            </span>
+            <div>
+              <div class="flex items-center gap-2">
+                <h2 class="text-xl font-extrabold text-gray-900">Blueprint 3: Designer-Friendly LiveOps &amp; Global Boss Events</h2>
+                <span class="px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[10px] font-bold uppercase tracking-wider">LiveOps</span>
+              </div>
+              <p class="text-xs text-gray-500 mt-0.5">Studio-tunable game balance, gacha rates, and server-wide boss battles with zero engineering glue.</p>
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-1.5 self-start sm:self-auto font-mono text-[10px]">
+            <span class="px-2 py-0.5 rounded bg-gray-100 text-gray-700 font-bold">[ExoSingletonResource]</span>
+            <span class="px-2 py-0.5 rounded bg-gray-100 text-gray-700 font-bold">[ExoColumn]</span>
+            <span class="px-2 py-0.5 rounded bg-gray-100 text-gray-700 font-bold">[ExoEvent]</span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+          <div class="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-950 space-y-1.5">
+            <div class="font-bold text-rose-900 flex items-center gap-1.5">
+              <span>❌</span> <span>Why This Is Hacky in PlayFab &amp; UGS:</span>
+            </div>
+            <p class="leading-relaxed text-rose-800 text-[11px]">
+              Tuning drop rates or setting up a shared World Boss in PlayFab requires editing unvalidated JSON in "Title Data". One syntax error can break production, and coordinating a 10,000,000 HP boss requires solving race conditions across global JSON blobs.
+            </p>
+          </div>
+          <div class="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 space-y-1.5">
+            <div class="font-bold text-emerald-900 flex items-center gap-1.5">
+              <span>✅</span> <span>The Exoforge Native Pattern:</span>
+            </div>
+            <p class="leading-relaxed text-emerald-800 text-[11px]">
+              Annotate records with <code class="font-mono bg-emerald-100 px-1 py-0.5 rounded">[ExoSingletonResource]</code> and UI attributes (<code class="font-mono">ExoInput.Range</code>, <code class="font-mono">ExoRole.Currency</code>). Studio renders interactive forms for designers, and HP updates are broadcast in real time across the cluster.
+            </p>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <div class="flex items-center justify-between text-xs text-gray-500 font-bold">
+            <span>WorldBossExtension.cs</span>
+            <span class="font-mono text-[11px] text-gray-400">C# 12 / .NET 9+</span>
+          </div>
+          <div class="relative group">
+            <button type="button" onclick="window.exoCopyCode && window.exoCopyCode(this)" class="absolute top-2.5 right-3 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white border border-gray-700 flex items-center gap-1 cursor-pointer print:hidden shadow-xs" title="Copy code">
+              <span class="copy-icon">📋</span><span class="copy-text">Copy</span>
+            </button>
+            <pre class="bg-gray-950 text-gray-200 p-4 rounded-2xl font-mono text-xs md:text-[13px] leading-relaxed overflow-x-auto border border-gray-800"><code><%= Phoenix.HTML.raw(Markdown.highlight_csharp(snippet_world_boss())) %></code></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- BLUEPRINT 4: GUILDS & CLANS -->
+      <section id="bp-guilds" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+          <div class="flex items-center gap-3">
+            <span class="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold text-lg">
+              🛡️
+            </span>
+            <div>
+              <div class="flex items-center gap-2">
+                <h2 class="text-xl font-extrabold text-gray-900">Blueprint 4: Guilds, Clans &amp; Real-Time Social Feeds</h2>
+                <span class="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 text-[10px] font-bold uppercase tracking-wider">Social</span>
+              </div>
+              <p class="text-xs text-gray-500 mt-0.5">Relational guild rosters, shared vaults, and topic-scoped WebSocket event feeds.</p>
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-1.5 self-start sm:self-auto font-mono text-[10px]">
+            <span class="px-2 py-0.5 rounded bg-gray-100 text-gray-700 font-bold">[ExoResource]</span>
+            <span class="px-2 py-0.5 rounded bg-gray-100 text-gray-700 font-bold">[ExoAction]</span>
+            <span class="px-2 py-0.5 rounded bg-gray-100 text-gray-700 font-bold">[ExoEvent]</span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+          <div class="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-950 space-y-1.5">
+            <div class="font-bold text-rose-900 flex items-center gap-1.5">
+              <span>❌</span> <span>Why This Is Hacky in PlayFab &amp; UGS:</span>
+            </div>
+            <p class="leading-relaxed text-rose-800 text-[11px]">
+              Guilds in PlayFab require stitching together Entity Groups, custom JSON files, and third-party chat solutions like Photon or PubNub. Adding member roles and shared bank vaults requires multiple API calls, manual security checks, and continuous polling.
+            </p>
+          </div>
+          <div class="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 space-y-1.5">
+            <div class="font-bold text-emerald-900 flex items-center gap-1.5">
+              <span>✅</span> <span>The Exoforge Native Pattern:</span>
+            </div>
+            <p class="leading-relaxed text-emerald-800 text-[11px]">
+              Model guilds as relational tables with <code class="font-mono">ReferencesType = typeof(PlayerDataRecord)</code> so Studio links directly to player profiles. Scope events to <code class="font-mono">guild:&#123;id&#125;</code> so members receive live bank deposits and chat over their existing WebSocket connection.
+            </p>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <div class="flex items-center justify-between text-xs text-gray-500 font-bold">
+            <span>GuildExtension.cs</span>
+            <span class="font-mono text-[11px] text-gray-400">C# 12 / .NET 9+</span>
+          </div>
+          <div class="relative group">
+            <button type="button" onclick="window.exoCopyCode && window.exoCopyCode(this)" class="absolute top-2.5 right-3 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white border border-gray-700 flex items-center gap-1 cursor-pointer print:hidden shadow-xs" title="Copy code">
+              <span class="copy-icon">📋</span><span class="copy-text">Copy</span>
+            </button>
+            <pre class="bg-gray-950 text-gray-200 p-4 rounded-2xl font-mono text-xs md:text-[13px] leading-relaxed overflow-x-auto border border-gray-800"><code><%= Phoenix.HTML.raw(Markdown.highlight_csharp(snippet_guilds())) %></code></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- BLUEPRINT 5: AUTOMATED SEASON ROLLOVERS -->
+      <section id="bp-seasons" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+          <div class="flex items-center gap-3">
+            <span class="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold text-lg">
+              🏆
+            </span>
+            <div>
+              <div class="flex items-center gap-2">
+                <h2 class="text-xl font-extrabold text-gray-900">Blueprint 5: Automated Season Rollovers &amp; Leaderboards</h2>
+                <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold uppercase tracking-wider">Operations</span>
+              </div>
+              <p class="text-xs text-gray-500 mt-0.5">Automated background resets, rank archiving, and rewards in a single atomic SQL transaction.</p>
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-1.5 self-start sm:self-auto font-mono text-[10px]">
+            <span class="px-2 py-0.5 rounded bg-gray-100 text-gray-700 font-bold">[ExoCron]</span>
+            <span class="px-2 py-0.5 rounded bg-gray-100 text-gray-700 font-bold">[ExoEvent]</span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+          <div class="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-950 space-y-1.5">
+            <div class="font-bold text-rose-900 flex items-center gap-1.5">
+              <span>❌</span> <span>Why This Is Hacky in PlayFab &amp; UGS:</span>
+            </div>
+            <p class="leading-relaxed text-rose-800 text-[11px]">
+              Cloud Code has no native cron triggers, and PlayFab Scheduled Tasks time out when iterating through large player lists. Studios maintain complex external AWS Lambda or Azure Functions infrastructure with batching loops and pagination.
+            </p>
+          </div>
+          <div class="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 space-y-1.5">
+            <div class="font-bold text-emerald-900 flex items-center gap-1.5">
+              <span>✅</span> <span>The Exoforge Native Pattern:</span>
+            </div>
+            <p class="leading-relaxed text-emerald-800 text-[11px]">
+              Use <code class="font-mono bg-emerald-100 px-1 py-0.5 rounded">[ExoCron("0 0 * * 1")]</code> for weekly execution. Combine rank archiving and score resets in atomic SQL statements, then broadcast a season rollover event to all connected Unity clients.
+            </p>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <div class="flex items-center justify-between text-xs text-gray-500 font-bold">
+            <span>SeasonExtension.cs</span>
+            <span class="font-mono text-[11px] text-gray-400">C# 12 / .NET 9+</span>
+          </div>
+          <div class="relative group">
+            <button type="button" onclick="window.exoCopyCode && window.exoCopyCode(this)" class="absolute top-2.5 right-3 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white border border-gray-700 flex items-center gap-1 cursor-pointer print:hidden shadow-xs" title="Copy code">
+              <span class="copy-icon">📋</span><span class="copy-text">Copy</span>
+            </button>
+            <pre class="bg-gray-950 text-gray-200 p-4 rounded-2xl font-mono text-xs md:text-[13px] leading-relaxed overflow-x-auto border border-gray-800"><code><%= Phoenix.HTML.raw(Markdown.highlight_csharp(snippet_season_rollover())) %></code></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- BLUEPRINT 6: WEB STORE & WEBHOOKS -->
+      <section id="bp-webhooks" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+          <div class="flex items-center gap-3">
+            <span class="w-10 h-10 rounded-2xl bg-rose-50 text-rose-700 flex items-center justify-center font-bold text-lg">
+              💳
+            </span>
+            <div>
+              <div class="flex items-center gap-2">
+                <h2 class="text-xl font-extrabold text-gray-900">Blueprint 6: Web Store Checkout, Stripe Webhooks &amp; Instant Delivery</h2>
+                <span class="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 text-[10px] font-bold uppercase tracking-wider">Payments</span>
+              </div>
+              <p class="text-xs text-gray-500 mt-0.5">Secure external HTTP webhooks with HMAC validation and instant WebSocket delivery to Unity.</p>
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-1.5 self-start sm:self-auto font-mono text-[10px]">
+            <span class="px-2 py-0.5 rounded bg-gray-100 text-gray-700 font-bold">[ExoWebhook]</span>
+            <span class="px-2 py-0.5 rounded bg-gray-100 text-gray-700 font-bold">[ExoEvent]</span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+          <div class="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-950 space-y-1.5">
+            <div class="font-bold text-rose-900 flex items-center gap-1.5">
+              <span>❌</span> <span>Why This Is Hacky in PlayFab &amp; UGS:</span>
+            </div>
+            <p class="leading-relaxed text-rose-800 text-[11px]">
+              Unity Cloud Code endpoints reject requests lacking a Unity Player Bearer token, making it impossible to receive raw webhooks from Stripe, Shopify, or Steam without an external proxy server. In PlayFab, developers must configure Azure API Management or AWS API Gateway.
+            </p>
+          </div>
+          <div class="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 space-y-1.5">
+            <div class="font-bold text-emerald-900 flex items-center gap-1.5">
+              <span>✅</span> <span>The Exoforge Native Pattern:</span>
+            </div>
+            <p class="leading-relaxed text-emerald-800 text-[11px]">
+              Expose a public endpoint with <code class="font-mono bg-emerald-100 px-1 py-0.5 rounded">[ExoWebhook("stripe")]</code>. Validate headers directly in C#, record the purchase in SQL, and push a <code class="font-mono bg-emerald-100 px-1 py-0.5 rounded">PurchaseFulfilledEvent</code> so the player's client immediately unlocks the item.
+            </p>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <div class="flex items-center justify-between text-xs text-gray-500 font-bold">
+            <span>BillingExtension.cs</span>
+            <span class="font-mono text-[11px] text-gray-400">C# 12 / .NET 9+</span>
+          </div>
+          <div class="relative group">
+            <button type="button" onclick="window.exoCopyCode && window.exoCopyCode(this)" class="absolute top-2.5 right-3 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white border border-gray-700 flex items-center gap-1 cursor-pointer print:hidden shadow-xs" title="Copy code">
+              <span class="copy-icon">📋</span><span class="copy-text">Copy</span>
+            </button>
+            <pre class="bg-gray-950 text-gray-200 p-4 rounded-2xl font-mono text-xs md:text-[13px] leading-relaxed overflow-x-auto border border-gray-800"><code><%= Phoenix.HTML.raw(Markdown.highlight_csharp(snippet_webhooks_checkout())) %></code></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION: ARCHITECTURE GOLDEN RULES -->
+      <section id="rules" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
+        <div class="border-b border-gray-100 pb-4">
+          <div class="flex items-center gap-2">
+            <span class="text-xl">⭐</span>
+            <h2 class="text-xl font-extrabold text-gray-900 tracking-tight">Exoforge Architecture Tips &amp; Golden Rules</h2>
+          </div>
+          <p class="text-xs text-gray-500 mt-1">
+            Five core engineering principles for designing scalable, maintainable multiplayer game backends.
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 text-xs text-gray-600">
+          <div class="p-5 rounded-2xl bg-gray-50 border border-gray-200/80 space-y-2">
+            <div class="w-8 h-8 rounded-xl bg-primary-100 text-primary-700 font-black flex items-center justify-center text-sm shadow-xs">
+              1
+            </div>
+            <h3 class="font-bold text-gray-900 text-sm">Hot State in RAM, Durable in DB</h3>
+            <p class="leading-relaxed text-[11px]">
+              Take advantage of long-running processes. Keep active matchmaking queues, room lobbies, and tick timers directly in C# fields. Only write to <code class="font-mono text-primary-700">Exo.Database</code> when state changes must survive process restarts.
+            </p>
+          </div>
+
+          <div class="p-5 rounded-2xl bg-gray-50 border border-gray-200/80 space-y-2">
+            <div class="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 font-black flex items-center justify-center text-sm shadow-xs">
+              2
+            </div>
+            <h3 class="font-bold text-gray-900 text-sm">Let [ExoResource] Build Your UI</h3>
+            <p class="leading-relaxed text-[11px]">
+              Never build custom internal admin tools. Decorate records with <code class="font-mono text-purple-700">[ExoColumn]</code> roles (<code class="font-mono">ExoRole.PlayerId</code>, <code class="font-mono">Badge = true</code>, <code class="font-mono">ExoInput.Range</code>), and Producer Studio will auto-generate searchable tables and editing drawers.
+            </p>
+          </div>
+
+          <div class="p-5 rounded-2xl bg-gray-50 border border-gray-200/80 space-y-2">
+            <div class="w-8 h-8 rounded-xl bg-cyan-100 text-cyan-700 font-black flex items-center justify-center text-sm shadow-xs">
+              3
+            </div>
+            <h3 class="font-bold text-gray-900 text-sm">Decouple via Stubs &amp; Events</h3>
+            <p class="leading-relaxed text-[11px]">
+              Separate complex domains into independent extensions (<code class="font-mono text-cyan-700">inventory</code>, <code class="font-mono text-cyan-700">billing</code>). Call other extensions using generated typed stubs (<code class="font-mono">exo extension stubs &lt;name&gt;</code>), and broadcast major lifecycle moments asynchronously.
+            </p>
+          </div>
+
+          <div class="p-5 rounded-2xl bg-gray-50 border border-gray-200/80 space-y-2">
+            <div class="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 font-black flex items-center justify-center text-sm shadow-xs">
+              4
+            </div>
+            <h3 class="font-bold text-gray-900 text-sm">Never Poll from Unity</h3>
+            <p class="leading-relaxed text-[11px]">
+              If a client action requires waiting (matchmaking, async crafting, webhook confirmation), return an immediate response from <code class="font-mono text-emerald-700">[ExoAction]</code> and push the completion payload using <code class="font-mono text-emerald-700">Exo.Events.EmitAsync</code>.
+            </p>
+          </div>
+
+          <div class="p-5 rounded-2xl bg-gray-50 border border-gray-200/80 space-y-2 col-span-1 md:col-span-2 lg:col-span-1">
+            <div class="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 font-black flex items-center justify-center text-sm shadow-xs">
+              5
+            </div>
+            <h3 class="font-bold text-gray-900 text-sm">Use ExoActionException for Domain Errors</h3>
+            <p class="leading-relaxed text-[11px]">
+              Throwing <code class="font-mono text-amber-700 font-bold">new ExoActionException("insufficient_gold", "...")</code> automatically returns structured error codes to the client, triggering <code class="font-mono">onError</code> callbacks or catching in Unity async/await blocks cleanly.
+            </p>
+          </div>
+        </div>
+      </section>
     </div>
     """
   end
@@ -1803,5 +2375,335 @@ defmodule Exoforge.Std.Docs.View do
         }
     }
     """
+  end
+
+  defp snippet_auction_house do
+    """
+    using System;
+    using System.Collections.Generic;
+    using System.Threading.Tasks;
+    using Exoforge.Plugin.SDK;
+
+    [ExoService("marketplace_service", Title = "Auction House", Icon = "⚖️")]
+    public class MarketplaceExtension
+    {
+        [Inject("player_data")]
+        public PlayerDataServiceClient PlayerData { get; set; } = null!;
+
+        [ExoAction(Scope = "player")]
+        public CreateListingResponse ListItem(CreateListingRequest req)
+        {
+            string listingId = Guid.NewGuid().ToString("N");
+            var listing = new MarketListingRecord(
+                listingId,
+                Exo.Context.CallerPlayerId,
+                req.ItemId,
+                req.Quantity,
+                req.UnitPrice,
+                DateTime.UtcNow
+            );
+
+            Exo.Database.Put("market_listings", listingId, listing);
+            Exo.Logger.Info($"Player {Exo.Context.CallerPlayerId} listed {req.Quantity}x {req.ItemId} for {req.UnitPrice}g");
+            return new CreateListingResponse(listingId);
+        }
+
+        [ExoAction(Scope = "player")]
+        public List<MarketListingRecord> BrowseListings(BrowseListingsRequest req)
+        {
+            // Native SQL query across all players with filtering and paging
+            return Exo.Database.Query<MarketListingRecord>(
+                "SELECT * FROM market_listings WHERE item_id = $1 ORDER BY unit_price ASC LIMIT $2 OFFSET $3",
+                req.ItemId, req.Limit, req.Offset
+            );
+        }
+
+        [ExoAction(Scope = "player")]
+        public async Task<BuyListingResponse> BuyListing(BuyListingRequest req)
+        {
+            var listing = Exo.Database.Get<MarketListingRecord>("market_listings", req.ListingId);
+            if (listing == null)
+                throw new ExoActionException("listing_not_found", "Item has already been purchased or expired.");
+
+            // Deduct currency & transfer item atomically
+            Exo.Database.Execute("DELETE FROM market_listings WHERE id = $1", req.ListingId);
+
+            // Real-time seller notification pushed over WebSocket
+            await Exo.Events.EmitAsync(new ListingSoldEvent(
+                listing.SellerPlayerId,
+                listing.ItemId,
+                listing.Quantity,
+                listing.UnitPrice * listing.Quantity
+            ));
+
+            return new BuyListingResponse(true);
+        }
+    }
+
+    [ExoResource(Name = "market_listings", PrimaryKey = "Id")]
+    public record MarketListingRecord(
+        [property: ExoColumn(PrimaryKey = true)] string Id,
+        [property: ExoColumn(ReferencesType = typeof(PlayerDataRecord), Role = ExoRole.PlayerId)] string SellerPlayerId,
+        [property: ExoColumn(Sortable = true, Filterable = true)] string ItemId,
+        [property: ExoColumn] int Quantity,
+        [property: ExoColumn(Role = ExoRole.Currency, Sortable = true)] int UnitPrice,
+        [property: ExoColumn(Role = ExoRole.Timestamp)] DateTime CreatedAt
+    );
+
+    [ExoEvent("marketplace.sold", Topic = "player:*")]
+    public record ListingSoldEvent(string SellerPlayerId, string ItemId, int Quantity, int TotalEarned);
+    """
+    |> String.trim()
+  end
+
+  defp snippet_matchmaking do
+    """
+    using System;
+    using System.Collections.Concurrent;
+    using System.Collections.Generic;
+    using System.Linq;
+    using System.Threading.Tasks;
+    using Exoforge.Plugin.SDK;
+
+    [ExoService("matchmaker_service", Title = "Fast Matchmaker", Icon = "🎯")]
+    public class MatchmakerExtension
+    {
+        // High-performance hot RAM queue: zero database round-trips
+        private readonly ConcurrentDictionary<string, QueueEntry> _queue = new();
+
+        [ExoAction(Scope = "player")]
+        public QueueStatusResponse JoinQueue(JoinQueueRequest req)
+        {
+            string playerId = Exo.Context.CallerPlayerId;
+            _queue[playerId] = new QueueEntry(playerId, req.EloRating, DateTime.UtcNow);
+            return new QueueStatusResponse(true, _queue.Count);
+        }
+
+        [ExoAction(Scope = "player")]
+        public QueueStatusResponse LeaveQueue()
+        {
+            _queue.TryRemove(Exo.Context.CallerPlayerId, out _);
+            return new QueueStatusResponse(false, _queue.Count);
+        }
+
+        // Evaluates queue and pairs players by ELO rating in microseconds
+        [ExoCron("*/1 * * * *", Description = "Evaluates matchmaking queue and pairs players")]
+        public async Task EvaluateQueue()
+        {
+            if (_queue.Count < 2) return;
+
+            var sorted = _queue.Values.OrderBy(p => p.EloRating).ToList();
+            for (int i = 0; i < sorted.Count - 1; i += 2)
+            {
+                var p1 = sorted[i];
+                var p2 = sorted[i + 1];
+
+                if (Math.Abs(p1.EloRating - p2.EloRating) <= 200)
+                {
+                    _queue.TryRemove(p1.PlayerId, out _);
+                    _queue.TryRemove(p2.PlayerId, out _);
+
+                    string matchId = Guid.NewGuid().ToString("N");
+                    await Exo.Events.EmitAsync(new MatchFoundEvent(matchId, p1.PlayerId, p2.PlayerId));
+                    Exo.Logger.Info($"Paired match {matchId}: {p1.PlayerId} vs {p2.PlayerId}");
+                }
+            }
+        }
+    }
+
+    public record QueueEntry(string PlayerId, int EloRating, DateTime QueuedAt);
+    public record JoinQueueRequest(int EloRating);
+    public record QueueStatusResponse(bool InQueue, int TotalInQueue);
+
+    [ExoEvent("matchmaking.found", Topic = "player:*")]
+    public record MatchFoundEvent(string MatchId, string Player1Id, string Player2Id);
+    """
+    |> String.trim()
+  end
+
+  defp snippet_world_boss do
+    """
+    using System;
+    using System.Threading.Tasks;
+    using Exoforge.Plugin.SDK;
+
+    [ExoService("world_boss_service", Title = "World Boss Event", Icon = "🐉",
+        Resources = new[] { typeof(WorldBossConfig) })]
+    public class WorldBossExtension
+    {
+        private static int _currentBossHp = 5_000_000;
+
+        [ExoAction(Scope = "player")]
+        public async Task<AttackBossResponse> AttackBoss(AttackBossRequest req)
+        {
+            var config = Exo.Database.First<WorldBossConfig>("world_boss_config");
+            if (config == null || !config.IsEventActive)
+                throw new ExoActionException("event_inactive", "The World Boss is currently sleeping.");
+
+            int damage = Math.Clamp(req.ReportedDamage, 1, config.MaxDamagePerHit);
+            _currentBossHp = Math.Max(0, _currentBossHp - damage);
+
+            // Broadcast live damage to all connected players in real time
+            await Exo.Events.EmitAsync(new BossDamagedEvent(Exo.Context.CallerPlayerId, damage, _currentBossHp));
+
+            if (_currentBossHp == 0)
+            {
+                await Exo.Events.EmitAsync(new BossDefeatedEvent(Exo.Context.CallerPlayerId, config.VictoryRewardGold));
+            }
+
+            return new AttackBossResponse(_currentBossHp, damage);
+        }
+    }
+
+    // Designers tune this directly inside Exoforge Producer Studio with auto-generated UI
+    [ExoSingletonResource("world_boss_config")]
+    public record WorldBossConfig(
+        [property: ExoColumn(Label = "Event Active", InputType = ExoInput.Checkbox)] bool IsEventActive,
+        [property: ExoColumn(Label = "Boss Name")] string BossName,
+        [property: ExoColumn(Label = "Total Max HP", Sortable = true)] int TotalMaxHp,
+        [property: ExoColumn(Label = "Max Damage Cap / Hit", InputType = ExoInput.Range)] int MaxDamagePerHit,
+        [property: ExoColumn(Label = "Victory Reward", Role = ExoRole.Currency)] int VictoryRewardGold
+    );
+
+    [ExoEvent("boss.damaged", Topic = "world:*")]
+    public record BossDamagedEvent(string AttackerPlayerId, int DamageDealt, int RemainingHp);
+
+    [ExoEvent("boss.defeated", Topic = "world:*")]
+    public record BossDefeatedEvent(string FinalBlowPlayerId, int RewardGold);
+    """
+    |> String.trim()
+  end
+
+  defp snippet_guilds do
+    """
+    using System;
+    using System.Collections.Generic;
+    using System.Threading.Tasks;
+    using Exoforge.Plugin.SDK;
+
+    [ExoService("guild_service", Title = "Guilds & Clans", Icon = "🛡️")]
+    public class GuildExtension
+    {
+        [ExoAction(Scope = "player")]
+        public async Task<DepositGoldResponse> DepositGuildGold(DepositGoldRequest req)
+        {
+            string playerId = Exo.Context.CallerPlayerId;
+            var member = Exo.Database.Get<GuildMemberRecord>("guild_members", playerId);
+            if (member == null)
+                throw new ExoActionException("not_in_guild", "You are not a member of any guild.");
+
+            var guild = Exo.Database.Get<GuildRecord>("guilds", member.GuildId);
+            int newBankTotal = guild.BankGold + req.Amount;
+
+            Exo.Database.Execute("UPDATE guilds SET bank_gold = $1 WHERE id = $2", newBankTotal, guild.Id);
+
+            // Notify all online guild members in real time over WebSocket
+            await Exo.Events.EmitAsync(new GuildActivityEvent(
+                $"guild:{guild.Id}",
+                playerId,
+                $"{playerId} deposited {req.Amount} gold to the guild vault!"
+            ));
+
+            return new DepositGoldResponse(newBankTotal);
+        }
+    }
+
+    [ExoResource(Name = "guilds", PrimaryKey = "Id")]
+    public record GuildRecord(
+        [property: ExoColumn(PrimaryKey = true)] string Id,
+        [property: ExoColumn(Label = "Guild Name", Sortable = true)] string Name,
+        [property: ExoColumn(Role = ExoRole.Currency)] int BankGold,
+        [property: ExoColumn(Badge = true)] int Level
+    );
+
+    [ExoResource(Name = "guild_members", PrimaryKey = "PlayerId")]
+    public record GuildMemberRecord(
+        [property: ExoColumn(PrimaryKey = true, ReferencesType = typeof(PlayerDataRecord), Role = ExoRole.PlayerId)] string PlayerId,
+        [property: ExoColumn(ReferencesType = typeof(GuildRecord))] string GuildId,
+        [property: ExoColumn(Badge = true)] string Rank
+    );
+
+    [ExoEvent("guild.activity", Topic = "guild:*")]
+    public record GuildActivityEvent(string Topic, string ActorPlayerId, string Message);
+    """
+    |> String.trim()
+  end
+
+  defp snippet_season_rollover do
+    """
+    using System.Threading.Tasks;
+    using Exoforge.Plugin.SDK;
+
+    [ExoService("season_service", Title = "Season Manager", Icon = "🏆")]
+    public class SeasonExtension
+    {
+        // Midnight UTC on Monday: Automated Season Rollover
+        [ExoCron("0 0 * * 1", Description = "Weekly season rollover and reward distribution")]
+        public async Task RolloverWeeklySeason()
+        {
+            Exo.Logger.Info("Beginning automated season rollover...");
+
+            // Atomic SQL: Archive top 100 players into hall of fame
+            Exo.Database.Execute(@"
+                INSERT INTO hall_of_fame (player_id, final_score, season_number, recorded_at)
+                SELECT player_id, score, 12, datetime('now')
+                FROM season_scores
+                ORDER BY score DESC LIMIT 100
+            ");
+
+            // Reset active scores for the new week
+            Exo.Database.Execute("DELETE FROM season_scores");
+
+            // Broadcast season reset to all online Unity clients
+            await Exo.Events.EmitAsync(new SeasonResetEvent(13, "Season 13 is now live!"));
+            Exo.Logger.Info("Season 13 successfully initialized.");
+        }
+    }
+
+    [ExoEvent("season.reset", Topic = "global")]
+    public record SeasonResetEvent(int NewSeasonNumber, string Announcement);
+    """
+    |> String.trim()
+  end
+
+  defp snippet_webhooks_checkout do
+    """
+    using System.Threading.Tasks;
+    using Exoforge.Plugin.SDK;
+
+    [ExoService("billing_service", Title = "Payments & Store", Icon = "💳")]
+    public class BillingExtension
+    {
+        [Inject("player_data")]
+        public PlayerDataServiceClient PlayerData { get; set; } = null!;
+
+        // External HTTP POST webhook (e.g. https://api.yourgame.com/ext/billing_service/webhook/stripe)
+        [ExoWebhook("stripe")]
+        public async Task<WebhookResult> HandleStripeWebhook(WebhookPayload payload)
+        {
+            string signature = payload.Headers.TryGetValue("Stripe-Signature", out var sig) ? sig : "";
+            Exo.Logger.Info($"Inbound Stripe webhook: {payload.EventName}");
+
+            // Verify HMAC signature, parse customer player ID, and grant purchased item
+            string targetPlayerId = payload.Data["client_reference_id"]?.ToString() ?? "";
+            string productId = payload.Data["product_id"]?.ToString() ?? "";
+
+            // Instantly credit player account
+            Exo.Database.Execute(
+                "INSERT INTO player_purchases (player_id, product_id, purchased_at) VALUES ($1, $2, datetime('now'))",
+                targetPlayerId, productId
+            );
+
+            // Push real-time unlock animation event directly to the player's active Unity client
+            await Exo.Events.EmitAsync(new PurchaseFulfilledEvent(targetPlayerId, productId));
+
+            return WebhookResult.Success();
+        }
+    }
+
+    [ExoEvent("store.fulfilled", Topic = "player:*")]
+    public record PurchaseFulfilledEvent(string PlayerId, string ProductId);
+    """
+    |> String.trim()
   end
 end
