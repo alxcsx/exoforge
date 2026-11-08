@@ -99,7 +99,8 @@ public partial class ExoforgeControlCenter : EditorWindow
             _isConnected = false;
             _isConnecting = false;
             _connectionStatus = "No token";
-            ShowStatus("A bearer token is required. Enter one above (e.g. 'dev:developer') or sign in.", MessageType.Error);
+            ShowStatus("A bearer token is required. Enter one above or sign in with your account credentials.", MessageType.Error);
+            RefreshTabContent();
             Repaint();
             return;
         }
@@ -204,6 +205,7 @@ public partial class ExoforgeControlCenter : EditorWindow
             {
                 _isConnecting = false;
             }
+            RefreshTabContent();
             Repaint();
         }
     }
@@ -214,6 +216,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         {
             _rawConnected = false;
             _connectionStatus = "Disconnected";
+            RefreshTabContent();
             Repaint();
 
             if (SessionState.GetBool(WasConnectedSessionKey, false) && !_isConnecting)
@@ -299,6 +302,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         RemoteSdkPackageUrl = null;
         RemoteSdkPackageFilename = null;
         SdkStatus = SdkCompatibilityStatus.Unknown;
+        RefreshTabContent();
         Repaint();
         ExoforgePluginsWindow.Instance?.Repaint();
     }
@@ -628,8 +632,16 @@ public partial class ExoforgeControlCenter : EditorWindow
             // SDK bucket or package not seeded yet
         }
 
-        RemoteSdkVersion ??= (RemoteVersion != "—" ? RemoteVersion : null);
-        SdkStatus = ExoforgePackageVersion.Compare(RemoteSdkVersion ?? RemoteVersion, RemoteCommitHash);
+        // Compare against cluster engine version first.
+        // If an SDK package in file_bucket is explicitly newer than our SDK, mark UpdateAvailable.
+        string effectiveRemoteVer = RemoteVersion;
+        if (!string.IsNullOrEmpty(RemoteSdkVersion) && RemoteSdkVersion != "—" &&
+            ExoforgePackageVersion.Compare(RemoteSdkVersion) == SdkCompatibilityStatus.UpdateAvailable)
+        {
+            effectiveRemoteVer = RemoteSdkVersion;
+        }
+
+        SdkStatus = ExoforgePackageVersion.Compare(effectiveRemoteVer, RemoteCommitHash);
 
         // 2c. Dashboard Project Metadata
         try
@@ -666,6 +678,7 @@ public partial class ExoforgeControlCenter : EditorWindow
             ShowStatus($"✓ Extensions & telemetry updated: {_remotePlugins.Count} remote extensions, cluster node: {_nodeName}.", MessageType.Info);
         }
 
+        RefreshTabContent();
         Repaint();
     }
 
@@ -679,6 +692,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         else
         {
             ShowStatus($"✓ Local extensions refreshed ({_localPlugins.Count} found). Connect to cluster to refresh remote extensions.", MessageType.Info);
+            RefreshTabContent();
             Repaint();
         }
     }

@@ -79,17 +79,13 @@ public static class ExoforgeEditorConfig
         }
     }
 
-    public const string DefaultLoginEmail = "dev@exoforge.game";
+    public const string DefaultLoginEmail = "";
     public const string DefaultWorkspaceRelPath = "Exoforge";
     public const string DefaultGeneratedScriptRelPath = "Assets/Exoforge/Generated/ExoforgeServices.g.cs";
 
     // No Guest preset (M33 Fix 14): the Studio is staff tooling, and a guest token is a session
     // a player mints for itself - never one the editor signs in with.
-    public static readonly (string Label, string Token)[] TokenPresets = new[]
-    {
-        ("Dev", "dev:developer"),
-        ("Admin", "dev:admin")
-    };
+    public static readonly (string Label, string Token)[] TokenPresets = Array.Empty<(string Label, string Token)>();
 
     /// <summary>True when the endpoint is on this machine. Uses the URI rather than a port literal.</summary>
     public static bool IsLocalUrl(string url)

@@ -16,7 +16,7 @@ namespace Exoforge.Unity.Editor
         private string _envName = "";
         private string _wsUrl = "";
         private string _httpUrl = "";
-        private string _token = "dev:developer";
+        private string _token = "";
         private Action? _onCreated;
 
         private Label? _statusLabel;

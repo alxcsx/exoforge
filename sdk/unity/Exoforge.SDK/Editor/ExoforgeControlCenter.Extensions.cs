@@ -82,7 +82,7 @@ public partial class ExoforgeControlCenter : EditorWindow
 
             container.Add(warningCard);
         }
-        else if (SdkStatus == SdkCompatibilityStatus.UpdateAvailable || SdkStatus == SdkCompatibilityStatus.Ahead)
+        else if (SdkStatus == SdkCompatibilityStatus.UpdateAvailable)
         {
             var outOfSyncCard = new VisualElement();
             outOfSyncCard.style.backgroundColor = new Color(0.96f, 0.62f, 0.12f, 0.10f); // theme-safe amber-500/10
@@ -114,9 +114,8 @@ public partial class ExoforgeControlCenter : EditorWindow
             syncIcon.style.marginRight = 8;
             syncHeader.Add(syncIcon);
 
-            string titleText = SdkStatus == SdkCompatibilityStatus.UpdateAvailable
-                ? $"SDK VERSION OUT OF SYNC — CLUSTER v{RemoteSdkVersion ?? RemoteVersion} (INSTALLED: v{ExoforgePackageVersion.SdkVersion})"
-                : $"SDK IS AHEAD OF CLUSTER — INSTALLED v{ExoforgePackageVersion.SdkVersion} (CLUSTER: v{RemoteVersion})";
+            string targetVer = RemoteSdkVersion ?? RemoteVersion;
+            string titleText = $"SDK VERSION OUT OF SYNC — CLUSTER v{targetVer} (INSTALLED: v{ExoforgePackageVersion.SdkVersion})";
 
             var syncTitle = new Label(titleText);
             syncTitle.style.fontSize = 13;
@@ -125,10 +124,7 @@ public partial class ExoforgeControlCenter : EditorWindow
             syncHeader.Add(syncTitle);
             outOfSyncCard.Add(syncHeader);
 
-            var syncDesc = new Label(
-                SdkStatus == SdkCompatibilityStatus.UpdateAvailable
-                    ? "Your Unity SDK version differs from the connected cluster. You can still list, inspect, and develop extensions, but some contracts or features may require updating the package."
-                    : "Your Unity SDK version is newer than the connected cluster. Extension listing and inspection remain fully active.");
+            var syncDesc = new Label("Your Unity SDK version differs from the connected cluster. You can still list, inspect, and develop extensions, but some contracts or features may require updating the package.");
             syncDesc.style.fontSize = 11;
             syncDesc.style.color = ExoforgeUIStyle.TextPrimary;
             syncDesc.style.whiteSpace = WhiteSpace.Normal;

@@ -26,7 +26,7 @@ namespace Exoforge.Unity.Editor
         private string _httpUrl = "";
         private bool _isOfflineMode = false;
 
-        private string _email = "admin";
+        private string _email = "";
         private string _password = "";
 
         private Action? _onCompleted;

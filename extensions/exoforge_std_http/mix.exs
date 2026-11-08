@@ -4,7 +4,7 @@ defmodule Exoforge.Std.Http.MixProject do
   def project do
     [
       app: :exoforge_std_http,
-      version: "0.1.24",
+      version: "0.1.25",
       elixir: "~> 1.20",
       deps: deps(),
       compilers: Mix.compilers() ++ [:exoforge_manifest]

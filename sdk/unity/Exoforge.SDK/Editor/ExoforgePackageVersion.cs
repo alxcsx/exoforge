@@ -18,7 +18,7 @@ namespace Exoforge.Unity.Editor
     /// </summary>
     public static class ExoforgePackageVersion
     {
-        public const string SdkVersion = "0.1.24";
+        public const string SdkVersion = "0.1.25";
         public const string DefaultBuildHash = "6be4ec5";
         public const string DefaultBuildDate = "2026-11-06 16:08";
 
@@ -60,13 +60,6 @@ namespace Exoforge.Unity.Editor
             {
                 if (rVer > lVer) return SdkCompatibilityStatus.UpdateAvailable;
                 if (rVer < lVer) return SdkCompatibilityStatus.Ahead;
-
-                if (!string.IsNullOrEmpty(remoteHash) && remoteHash != "dev" &&
-                    !string.IsNullOrEmpty(BuildHash) && BuildHash != "dev" &&
-                    !string.Equals(remoteHash, BuildHash, StringComparison.OrdinalIgnoreCase))
-                {
-                    return SdkCompatibilityStatus.UpdateAvailable;
-                }
 
                 return SdkCompatibilityStatus.UpToDate;
             }

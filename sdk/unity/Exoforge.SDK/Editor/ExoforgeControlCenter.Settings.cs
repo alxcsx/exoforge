@@ -304,7 +304,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
         EditorGUILayout.LabelField($"Device ID: {PlayerPrefs.GetString("Exoforge.DeviceId", "(none)")}", EditorStyles.miniLabel);
         EditorGUILayout.LabelField($"Player Token: {(PlayerPrefs.HasKey("Exoforge.Token") ? "(cached in PlayerPrefs)" : "(none)")}", EditorStyles.miniLabel);
-        EditorGUILayout.LabelField($"Player Name: {PlayerPrefs.GetString("Exoforge.PlayerName", "(unnamed)")}", EditorStyles.miniLabel);
+        EditorGUILayout.LabelField($"Player Name: {PlayerPrefs.GetString("Exoforge.PlayerName", "(none)")}", EditorStyles.miniLabel);
         EditorGUILayout.Space(4);
         if (GUILayout.Button("Reset Anonymous Player Session (New Device ID & Fresh Account)"))
         {

@@ -207,8 +207,13 @@ public partial class ExoforgeControlCenter : EditorWindow
 
     // Authentication foldout
     private bool _showAuthFoldout;
-    private string _loginEmail = ExoforgeEditorConfig.DefaultLoginEmail;
+    private string _loginEmail = ExoforgeEditorConfig.LastLoginEmail ?? "";
     private string _loginPassword = "";
+
+    // Tab content synchronization state
+    private bool _lastRenderedConnectedState;
+    private bool _lastRenderedConnectingState;
+    private SdkCompatibilityStatus _lastRenderedSdkStatus = SdkCompatibilityStatus.Unknown;
 
     // Status Banner
     private string _statusMessage = "";
@@ -706,6 +711,16 @@ public partial class ExoforgeControlCenter : EditorWindow
             _ = PingAndAutoConnectIfReachableAsync();
         }
 
+        if (_isConnected != _lastRenderedConnectedState ||
+            _isConnecting != _lastRenderedConnectingState ||
+            SdkStatus != _lastRenderedSdkStatus)
+        {
+            _lastRenderedConnectedState = _isConnected;
+            _lastRenderedConnectingState = _isConnecting;
+            _lastRenderedSdkStatus = SdkStatus;
+            RefreshTabContent();
+        }
+
         UpdateModernHeaderUI();
 
         if (_isBuilding || arrived) Repaint();
@@ -750,6 +765,10 @@ public partial class ExoforgeControlCenter : EditorWindow
         _tabContentArea.style.paddingRight = 8;
         _tabContentArea.style.paddingTop = 6;
         _tabContentArea.style.paddingBottom = 8;
+
+        _lastRenderedConnectedState = _isConnected;
+        _lastRenderedConnectingState = _isConnecting;
+        _lastRenderedSdkStatus = SdkStatus;
 
         RefreshTabContent();
         _root.Add(_tabContentArea);

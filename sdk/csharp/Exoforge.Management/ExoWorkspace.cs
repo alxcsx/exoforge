@@ -38,7 +38,7 @@ public class ExoProjectConfig
         {
             WsUrl = "ws://localhost:4000/ws",
             HttpUrl = "http://localhost:4001",
-            Token = "dev:developer"
+            Token = ""
         }
     };
 
@@ -58,7 +58,7 @@ public class ExoEnvironmentConfig
     public string HttpUrl { get; set; } = "http://localhost:4001";
 
     [JsonPropertyName("token")]
-    public string Token { get; set; } = "dev:developer";
+    public string Token { get; set; } = "";
 }
 
 public class ExoCodegenConfig
