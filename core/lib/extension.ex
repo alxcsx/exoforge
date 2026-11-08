@@ -49,7 +49,7 @@ defmodule Exoforge.Extension do
     mode = Keyword.get(opts, :mode, :sync)
     scope =
       opts
-      |> Keyword.get(:scope, :global)
+      |> Keyword.get(:scope, :player)
       |> Exoforge.Auth.Roles.validate_action_scope!("defaction #{name}")
 
     # ignore payload case no argument was passed to the defaction
@@ -109,22 +109,19 @@ defmodule Exoforge.Extension do
   Defines an inbound webhook handler.
 
   A webhook is a specialized action with `scope: :webhook` and `transport: :webhook`.
-  It can accept zero, one, or two arguments:
-  - `defwebhook ping do ... end` (0 args)
-  - `defwebhook stripe(payload) do ... end` (1 arg: map with `"body"`, `"headers"`, etc.)
-  - `defwebhook stripe(body, headers) do ... end` (2 args: raw body string and headers map)
+  It must accept exactly one argument for the webhook payload map:
+  - `defwebhook stripe(payload) do ... end` (payload map with `"body"`, `"headers"`, etc.)
   """
   defmacro defwebhook(call, opts \\ [], do: block) do
     {name, meta, args, _guard} = extract_call_signature(call)
 
-    if length(args) > 2 do
+    if length(args) != 1 do
       raise CompileError,
         file: __CALLER__.file,
         line: Keyword.get(meta, :line, __CALLER__.line),
-        description: "defwebhook #{name} must accept zero, one, or two arguments"
+        description: "defwebhook #{name} must accept a single payload argument"
     end
 
-    arity = length(args)
     line = Keyword.get(meta, :line, __CALLER__.line)
     mode = Keyword.get(opts, :mode, :sync)
     scope =
@@ -133,37 +130,14 @@ defmodule Exoforge.Extension do
       |> Exoforge.Auth.Roles.validate_action_scope!("defwebhook #{name}")
 
     clean_call = {:__execute_action__, meta, [name, quote(do: payload)]}
+    [arg1] = args
+    fn_ast = {:fn, meta, [{:->, meta, [[arg1], block]}]}
 
     inner_def =
-      case arity do
-        2 ->
-          [arg1, arg2] = args
-          fn_ast = {:fn, meta, [{:->, meta, [[arg1, arg2], block]}]}
-
-          quote do
-            def unquote(clean_call) do
-              b = Map.get(payload, "body") || Map.get(payload, :body, "")
-              h = Map.get(payload, "headers") || Map.get(payload, :headers, %{})
-              unquote(fn_ast).(b, h)
-            end
-          end
-
-        1 ->
-          [arg1] = args
-          fn_ast = {:fn, meta, [{:->, meta, [[arg1], block]}]}
-
-          quote do
-            def unquote(clean_call) do
-              unquote(fn_ast).(payload)
-            end
-          end
-
-        0 ->
-          quote do
-            def unquote(clean_call) do
-              unquote(block)
-            end
-          end
+      quote do
+        def unquote(clean_call) do
+          unquote(fn_ast).(payload)
+        end
       end
 
     quote line: line do
@@ -179,27 +153,14 @@ defmodule Exoforge.Extension do
             mode: unquote(mode),
             scope: unquote(scope),
             transport: :webhook,
-            arity: unquote(arity)
+            arity: 1
           })
 
         Module.put_attribute(__MODULE__, :exo_actions_map, action_map)
         @exo_actions MapSet.new(Map.values(action_map))
 
-        cond do
-          unquote(arity) == 2 ->
-            def unquote(name)(body, headers) do
-              Exoforge.ActionDispatcher.dispatch(__MODULE__, unquote(name), %{"body" => body, "headers" => headers})
-            end
-
-          unquote(arity) == 1 ->
-            def unquote(name)(payload) do
-              Exoforge.ActionDispatcher.dispatch(__MODULE__, unquote(name), payload)
-            end
-
-          true ->
-            def unquote(name)() do
-              Exoforge.ActionDispatcher.dispatch(__MODULE__, unquote(name), %{})
-            end
+        def unquote(name)(payload) do
+          Exoforge.ActionDispatcher.dispatch(__MODULE__, unquote(name), payload)
         end
       end
 

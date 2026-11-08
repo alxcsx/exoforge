@@ -8,6 +8,24 @@ defmodule Exoforge.Std.Docs.View do
 
   alias Exoforge.Std.Docs.Markdown
 
+  @badge_color_palette [
+    "bg-emerald-50 text-emerald-700 border-emerald-200",
+    "bg-sky-50 text-sky-700 border-sky-200",
+    "bg-indigo-50 text-indigo-700 border-indigo-200",
+    "bg-purple-50 text-purple-700 border-purple-200",
+    "bg-amber-50 text-amber-700 border-amber-200",
+    "bg-rose-50 text-rose-700 border-rose-200",
+    "bg-teal-50 text-teal-700 border-teal-200",
+    "bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200"
+  ]
+
+  defp hashed_badge_class(nil), do: "bg-gray-100 text-gray-600 border-gray-200"
+  defp hashed_badge_class(str) when is_binary(str) do
+    idx = :erlang.phash2(str, length(@badge_color_palette))
+    Enum.at(@badge_color_palette, idx)
+  end
+  defp hashed_badge_class(atom) when is_atom(atom), do: hashed_badge_class(to_string(atom))
+
   attr(:action_catalog, :list, default: [])
   attr(:extensions, :list, default: [])
   attr(:project_name, :string, default: "Game")
@@ -205,6 +223,18 @@ defmodule Exoforge.Std.Docs.View do
             myself={@myself}
           />
       <% end %>
+
+      <!-- Floating Back to Top Button -->
+      <button
+        type="button"
+        onclick="window.scrollTo({top: 0, behavior: 'smooth'})"
+        title="Back to Top"
+        class="fixed bottom-6 right-6 z-50 print:hidden p-3 rounded-full bg-primary-600 hover:bg-primary-700 text-white shadow-lg shadow-primary-900/30 transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center cursor-pointer border border-primary-500/30"
+      >
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 15l7-7 7 7" />
+        </svg>
+      </button>
     </div>
     """
   end
@@ -231,7 +261,7 @@ defmodule Exoforge.Std.Docs.View do
             <span>Developer Quickstart &amp; Architecture Reference</span>
           </div>
           <h1 class="text-3xl lg:text-4xl font-extrabold tracking-tight text-white leading-tight">
-            From Zero to Live Online Multiplayer Features in 60 Seconds
+            Creating Your First Online Multiplayer Feature
           </h1>
           <p class="text-base text-gray-300 leading-relaxed">
             Exoforge allows Unity and game developers to write clean, strongly-typed native C# backend extensions that compile locally, hot-reload into an actor concurrency microservices runtime, and sync seamlessly into client code without manual networking boilerplate.
@@ -287,6 +317,55 @@ defmodule Exoforge.Std.Docs.View do
         </div>
       </div>
 
+      <!-- CTA: Jump to Blueprints or Dedicated Live API Reference -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 print:hidden">
+        <div class="p-6 rounded-3xl bg-gradient-to-r from-blue-950/40 via-indigo-950/30 to-blue-950/40 border border-blue-500/30 flex flex-col justify-between gap-4">
+          <div class="space-y-1">
+            <div class="flex items-center gap-2 text-blue-300 font-bold text-xs uppercase tracking-wider">
+              <span>💡</span>
+              <span>Architectural Blueprints</span>
+            </div>
+            <h3 class="text-base font-extrabold text-white">What You Can Build with Exoforge</h3>
+            <p class="text-xs text-gray-300 leading-relaxed">
+              Explore 6 production-grade C# patterns (Auction House, In-Memory Matchmaker, World Boss LiveOps, Guilds, Stripe Webhooks) and see how Exoforge eliminates PlayFab/UGS workarounds.
+            </p>
+          </div>
+          <button
+            type="button"
+            phx-click="set_guide_subpage"
+            phx-target={@myself}
+            phx-value-subpage="use_cases"
+            class="self-start px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer"
+          >
+            <span>💡 Explore Architecture &amp; Blueprints</span>
+            <span>➔</span>
+          </button>
+        </div>
+
+        <div class="p-6 rounded-3xl bg-gradient-to-r from-purple-950/40 via-indigo-950/30 to-purple-950/40 border border-purple-500/30 flex flex-col justify-between gap-4">
+          <div class="space-y-1">
+            <div class="flex items-center gap-2 text-purple-300 font-bold text-xs uppercase tracking-wider">
+              <span>⚡</span>
+              <span>Live Action Catalog</span>
+            </div>
+            <h3 class="text-base font-extrabold text-white">Explore All Registered Services &amp; Actions</h3>
+            <p class="text-xs text-gray-300 leading-relaxed">
+              Inspect live cluster contracts, action signatures, parameters, authorization scopes, and copy-pasteable Unity SDK calling code in the dedicated API Reference.
+            </p>
+          </div>
+          <button
+            type="button"
+            phx-click="set_guide_subpage"
+            phx-target={@myself}
+            phx-value-subpage="catalog"
+            class="self-start px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer"
+          >
+            <span>⚡ View Live API Reference</span>
+            <span>➔</span>
+          </button>
+        </div>
+      </div>
+
       <!-- Quick Summary Cards -->
       <div class="grid grid-cols-1 md:grid-cols-3 gap-5 print:gap-3">
         <div class="bg-white p-6 rounded-2xl border border-gray-200/90 shadow-sm space-y-2 print:border-gray-300 print:shadow-none print:break-inside-avoid">
@@ -295,7 +374,7 @@ defmodule Exoforge.Std.Docs.View do
           </div>
           <h3 class="font-bold text-gray-900 text-sm">Native C# Headless Services</h3>
           <p class="text-xs text-gray-500 leading-relaxed">
-            Extensions execute as isolated native .NET microservices with actor concurrency supervision. Use modern C# records, type-safe APIs, and throw canonical <code class="font-mono text-primary-700 bg-primary-50 px-1 py-0.5 rounded">ExoActionException</code>.
+            Extensions execute as isolated native .NET microservices with actor concurrency supervision. Use modern C# records, type-safe APIs, and standard C# exceptions or structured error codes.
           </p>
         </div>
 
@@ -396,7 +475,7 @@ defmodule Exoforge.Std.Docs.View do
             </li>
             <li class="flex items-start gap-2">
               <span class="text-primary-600 font-bold shrink-0">●</span>
-              <span><strong>Canonical Error Handling:</strong> Throw <code class="font-mono text-primary-700 bg-gray-100 px-1 py-0.5 rounded font-bold">ExoActionException(code, message)</code> to return structured error codes directly to client callbacks and catch blocks.</span>
+              <span><strong>Canonical Error Handling:</strong> Throw standard C# exceptions (e.g. <code class="font-mono text-primary-700 bg-gray-100 px-1 py-0.5 rounded font-bold">ArgumentOutOfRangeException</code>) or structured <code class="font-mono text-primary-700 bg-gray-100 px-1 py-0.5 rounded font-bold">ExoActionException(code, message)</code> to return error codes directly to client callbacks and catch blocks.</span>
             </li>
           </ul>
 
@@ -510,7 +589,7 @@ defmodule Exoforge.Std.Docs.View do
           <ul class="space-y-2.5 text-gray-600 leading-relaxed">
             <li class="flex items-start gap-2">
               <span class="text-primary-600 font-bold shrink-0">●</span>
-              <span><strong>Fluent Service Access:</strong> Call your backend service via generated client extensions: <code class="font-mono text-primary-700 bg-gray-100 px-1 py-0.5 rounded font-bold">ExoforgeSDK.Client.&lt;ServiceName&gt;()</code>.</span>
+              <span><strong>Fluent Service Access:</strong> Call your backend service via generated client extensions: <code class="font-mono text-primary-700 bg-gray-100 px-1 py-0.5 rounded font-bold">Exo.&lt;ServiceName&gt;</code> or <code class="font-mono text-primary-700 bg-gray-100 px-1 py-0.5 rounded font-bold">ExoforgeSDK.Client.&lt;ServiceName&gt;()</code>.</span>
             </li>
             <li class="flex items-start gap-2">
               <span class="text-primary-600 font-bold shrink-0">●</span>
@@ -518,7 +597,7 @@ defmodule Exoforge.Std.Docs.View do
             </li>
             <li class="flex items-start gap-2">
               <span class="text-primary-600 font-bold shrink-0">●</span>
-              <span><strong>Task Async/Await (Style B):</strong> Await <code class="font-mono text-primary-700 font-bold">&lt;ActionName&gt;Async(...)</code> in asynchronous methods or Coroutines, catching <code class="font-mono">ExoActionException</code> directly.</span>
+              <span><strong>Task Async/Await (Style B):</strong> Await <code class="font-mono text-primary-700 font-bold">&lt;ActionName&gt;Async(...)</code> in asynchronous methods or Coroutines, catching exceptions directly.</span>
             </li>
           </ul>
 
@@ -531,55 +610,6 @@ defmodule Exoforge.Std.Docs.View do
           </div>
         </div>
       </section>
-
-      <!-- CTA: Jump to Blueprints or Dedicated Live API Reference -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 print:hidden">
-        <div class="p-6 rounded-3xl bg-gradient-to-r from-blue-950/40 via-indigo-950/30 to-blue-950/40 border border-blue-500/30 flex flex-col justify-between gap-4">
-          <div class="space-y-1">
-            <div class="flex items-center gap-2 text-blue-300 font-bold text-xs uppercase tracking-wider">
-              <span>💡</span>
-              <span>Architectural Blueprints</span>
-            </div>
-            <h3 class="text-base font-extrabold text-white">What You Can Build with Exoforge</h3>
-            <p class="text-xs text-gray-300 leading-relaxed">
-              Explore 6 production-grade C# patterns (Auction House, In-Memory Matchmaker, World Boss LiveOps, Guilds, Stripe Webhooks) and see how Exoforge eliminates PlayFab/UGS workarounds.
-            </p>
-          </div>
-          <button
-            type="button"
-            phx-click="set_guide_subpage"
-            phx-target={@myself}
-            phx-value-subpage="use_cases"
-            class="self-start px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer"
-          >
-            <span>💡 Explore Architecture &amp; Blueprints</span>
-            <span>➔</span>
-          </button>
-        </div>
-
-        <div class="p-6 rounded-3xl bg-gradient-to-r from-purple-950/40 via-indigo-950/30 to-purple-950/40 border border-purple-500/30 flex flex-col justify-between gap-4">
-          <div class="space-y-1">
-            <div class="flex items-center gap-2 text-purple-300 font-bold text-xs uppercase tracking-wider">
-              <span>⚡</span>
-              <span>Live Action Catalog</span>
-            </div>
-            <h3 class="text-base font-extrabold text-white">Explore All Registered Services &amp; Actions</h3>
-            <p class="text-xs text-gray-300 leading-relaxed">
-              Inspect live cluster contracts, action signatures, parameters, authorization scopes, and copy-pasteable Unity SDK calling code in the dedicated API Reference.
-            </p>
-          </div>
-          <button
-            type="button"
-            phx-click="set_guide_subpage"
-            phx-target={@myself}
-            phx-value-subpage="catalog"
-            class="self-start px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer"
-          >
-            <span>⚡ View Live API Reference</span>
-            <span>➔</span>
-          </button>
-        </div>
-      </div>
     </div>
     """
   end
@@ -599,7 +629,7 @@ defmodule Exoforge.Std.Docs.View do
             💡
           </span>
           <div class="space-y-1">
-            <div class="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-amber-100/70 text-amber-900 border border-amber-200 text-[10px] font-bold uppercase tracking-wider">
+            <div class="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold uppercase tracking-wider">
               <span>Architecture Patterns &amp; Blueprints</span>
             </div>
             <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">What You Can Build with Exoforge</h1>
@@ -666,23 +696,23 @@ defmodule Exoforge.Std.Docs.View do
                 <td class="py-3 px-4 font-bold text-gray-900">Execution Lifecycle</td>
                 <td class="py-3 px-4 text-gray-600">Serverless JS or Azure Functions. 1–3s cold starts; external subscription required.</td>
                 <td class="py-3 px-4 text-gray-600">Ephemeral serverless containers. Hard 15-second timeout; idle workers killed.</td>
-                <td class="py-3 px-4 bg-primary-50/30 font-semibold text-primary-900">
+                <td class="py-3 px-4 bg-primary-50/50 font-medium text-gray-900">
                   <span class="text-emerald-600 font-bold">✓ Long-lived native OS processes.</span> Zero cold starts; sub-millisecond dispatch.
                 </td>
               </tr>
               <tr>
-                <td class="py-3 px-4 font-bold text-gray-900">In-Memory State</td>
+                <td class="py-3 px-4 font-bold text-gray-900">State &amp; Background Execution</td>
                 <td class="py-3 px-4 text-gray-600">None. Strictly stateless; static variables wiped between calls.</td>
                 <td class="py-3 px-4 text-gray-600">None. Workers cycle unpredictably; ephemeral memory.</td>
-                <td class="py-3 px-4 bg-primary-50/30 font-semibold text-primary-900">
-                  <span class="text-emerald-600 font-bold">✓ Persistent C# RAM.</span> Keep active lobbies, match queues, and tick loops in memory.
+                <td class="py-3 px-4 bg-primary-50/50 font-medium text-gray-900">
+                  <span class="text-emerald-600 font-bold">✓ Clean DB Storage &amp; Dedicated Workers.</span> Extensions act as stateless handlers while dedicated background workers run tick loops, with zero data loss on updates.
                 </td>
               </tr>
               <tr>
                 <td class="py-3 px-4 font-bold text-gray-900">Data Storage</td>
                 <td class="py-3 px-4 text-gray-600">Per-player JSON blobs. No cross-player SQL queries; ~10 writes/sec rate limit.</td>
                 <td class="py-3 px-4 text-gray-600">Cloud Save key-value JSON. Size limits; no multi-player relational queries.</td>
-                <td class="py-3 px-4 bg-primary-50/30 font-semibold text-primary-900">
+                <td class="py-3 px-4 bg-primary-50/50 font-medium text-gray-900">
                   <span class="text-emerald-600 font-bold">✓ Isolated Relational SQL.</span> Direct queries (<code class="font-mono text-primary-700 font-bold">Exo.Database.Query&lt;T&gt;</code>), joins, and indexes.
                 </td>
               </tr>
@@ -690,7 +720,7 @@ defmodule Exoforge.Std.Docs.View do
                 <td class="py-3 px-4 font-bold text-gray-900">Real-Time Push</td>
                 <td class="py-3 px-4 text-gray-600">Requires client polling or third-party SignalR / PubNub integration.</td>
                 <td class="py-3 px-4 text-gray-600">Requires client polling or external WebSocket server setup.</td>
-                <td class="py-3 px-4 bg-primary-50/30 font-semibold text-primary-900">
+                <td class="py-3 px-4 bg-primary-50/50 font-medium text-gray-900">
                   <span class="text-emerald-600 font-bold">✓ Built-in :pg Pub/Sub Bus.</span> 0.07 ms fanout to thousands of clients via <code class="font-mono text-primary-700 font-bold">Exo.Events.EmitAsync</code>.
                 </td>
               </tr>
@@ -698,7 +728,7 @@ defmodule Exoforge.Std.Docs.View do
                 <td class="py-3 px-4 font-bold text-gray-900">LiveOps &amp; Tuning</td>
                 <td class="py-3 px-4 text-gray-600">Manual unvalidated JSON in "Title Data". Easy for typos to break production.</td>
                 <td class="py-3 px-4 text-gray-600">Remote Config raw key-value pairs without structured entity UI.</td>
-                <td class="py-3 px-4 bg-primary-50/30 font-semibold text-primary-900">
+                <td class="py-3 px-4 bg-primary-50/50 font-medium text-gray-900">
                   <span class="text-emerald-600 font-bold">✓ Auto-Generated Studio UI.</span> Records with <code class="font-mono text-primary-700 font-bold">[ExoResource]</code> generate live tables, sliders &amp; forms.
                 </td>
               </tr>
@@ -706,7 +736,7 @@ defmodule Exoforge.Std.Docs.View do
                 <td class="py-3 px-4 font-bold text-gray-900">Scheduled Tasks</td>
                 <td class="py-3 px-4 text-gray-600">Scheduled Tasks time out when iterating over thousands of player records.</td>
                 <td class="py-3 px-4 text-gray-600">None native. Requires external cron runner calling public webhooks.</td>
-                <td class="py-3 px-4 bg-primary-50/30 font-semibold text-primary-900">
+                <td class="py-3 px-4 bg-primary-50/50 font-medium text-gray-900">
                   <span class="text-emerald-600 font-bold">✓ Native [ExoCron] Attribute.</span> Runs in-process under cluster supervision.
                 </td>
               </tr>
@@ -714,7 +744,7 @@ defmodule Exoforge.Std.Docs.View do
                 <td class="py-3 px-4 font-bold text-gray-900">External Webhooks</td>
                 <td class="py-3 px-4 text-gray-600">Requires wiring Azure API Management or AWS Gateway for signature checks.</td>
                 <td class="py-3 px-4 text-gray-600">Rejects calls lacking a Unity Player Bearer token; needs proxy server.</td>
-                <td class="py-3 px-4 bg-primary-50/30 font-semibold text-primary-900">
+                <td class="py-3 px-4 bg-primary-50/50 font-medium text-gray-900">
                   <span class="text-emerald-600 font-bold">✓ Native [ExoWebhook] Attribute.</span> Receive Stripe, Steam, Discord hooks with zero proxy glue.
                 </td>
               </tr>
@@ -1068,9 +1098,9 @@ defmodule Exoforge.Std.Docs.View do
             <div class="w-8 h-8 rounded-xl bg-primary-100 text-primary-700 font-black flex items-center justify-center text-sm shadow-xs">
               1
             </div>
-            <h3 class="font-bold text-gray-900 text-sm">Hot State in RAM, Durable in DB</h3>
+            <h3 class="font-bold text-gray-900 text-sm">Stateless Extensions, Resilient State in DB &amp; Workers</h3>
             <p class="leading-relaxed text-[11px]">
-              Take advantage of long-running processes. Keep active matchmaking queues, room lobbies, and tick timers directly in C# fields. Only write to <code class="font-mono text-primary-700">Exo.Database</code> when state changes must survive process restarts.
+              Keep extensions lightweight and stateless for zero-downtime hot reloading. Store durable state via <code class="font-mono text-primary-700">Exo.Database</code>, and delegate long-running continuous game loops or tick timers to dedicated cluster workers so code updates never corrupt active gameplay state.
             </p>
           </div>
 
@@ -1108,9 +1138,9 @@ defmodule Exoforge.Std.Docs.View do
             <div class="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 font-black flex items-center justify-center text-sm shadow-xs">
               5
             </div>
-            <h3 class="font-bold text-gray-900 text-sm">Use ExoActionException for Domain Errors</h3>
+            <h3 class="font-bold text-gray-900 text-sm">Standard C# Exceptions &amp; Custom Error Codes</h3>
             <p class="leading-relaxed text-[11px]">
-              Throwing <code class="font-mono text-amber-700 font-bold">new ExoActionException("insufficient_gold", "...")</code> automatically returns structured error codes to the client, triggering <code class="font-mono">onError</code> callbacks or catching in Unity async/await blocks cleanly.
+              Throw standard C# exceptions (e.g. <code class="font-mono text-amber-700 font-bold">ArgumentOutOfRangeException</code>) for quick validations, or <code class="font-mono text-amber-700 font-bold">ExoActionException(code, message)</code> for business logic errors. Both are caught and cleanly dispatched to Unity <code class="font-mono">onError</code> callbacks or async catch blocks with structured error payloads.
             </p>
           </div>
         </div>
@@ -1183,7 +1213,7 @@ defmodule Exoforge.Std.Docs.View do
             </div>
           </div>
           <div class="text-[11px] font-mono bg-gray-100 px-3 py-1.5 rounded-xl text-gray-600 self-start sm:self-auto">
-            Source: <strong class="text-indigo-700">Exoforge.Plugin.SDK</strong> (via <code class="text-gray-800">exoforge_std_extension_manager</code>)
+            Source: <strong class="text-indigo-700">Extension Manager</strong> (<code class="text-gray-800">exoforge_std_extension_manager</code>)
           </div>
         </div>
 
@@ -1379,8 +1409,8 @@ defmodule Exoforge.Std.Docs.View do
                 <tr>
                   <td class="py-2 px-3 font-bold text-gray-900">Scope</td>
                   <td class="py-2 px-3 text-primary-700">string</td>
-                  <td class="py-2 px-3 text-gray-400">Optional ("global")</td>
-                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Minimum authorization scope needed to invoke (<code class="font-mono text-primary-700">"guest"</code>, <code class="font-mono text-primary-700">"player"</code>, <code class="font-mono text-primary-700">"admin"</code>, <code class="font-mono text-primary-700">"studio"</code>). The cluster enforces this before invoking the extension.</td>
+                  <td class="py-2 px-3 text-gray-400">Optional ("player")</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Minimum authorization scope needed to invoke (<code class="font-mono text-primary-700">"guest"</code>, <code class="font-mono text-primary-700">"player"</code>, <code class="font-mono text-primary-700">"admin"</code>, <code class="font-mono text-primary-700">"studio"</code>). Defaults to authenticated player scope; the cluster enforces this before invoking the extension.</td>
                 </tr>
                 <tr>
                   <td class="py-2 px-3 font-bold text-gray-900">Transport</td>
@@ -1784,7 +1814,8 @@ defmodule Exoforge.Std.Docs.View do
 
         <div class="space-y-3 text-xs text-gray-700 leading-relaxed">
           <p>
-            Decorate your extension class or contract with <code class="font-mono text-cyan-700 font-bold">[ExoDependency("service_name")]</code> or <code class="font-mono text-cyan-700 font-bold">[ExoDependency&lt;TService&gt;]</code>. The cluster supervisor ensures this service initializes only after all required dependencies have successfully started and verified health.
+            Decorate your extension class or contract with <code class="font-mono text-cyan-700 font-bold">[ExoDependency("service_name")]</code> or type-safe contract pinning <code class="font-mono text-cyan-700 font-bold">[ExoDependency&lt;TContract&gt;]</code>.
+            Dependencies are automatically inferred from static <code class="font-mono text-cyan-700">Exo.&lt;Service&gt;</code> calls during compilation, while explicit attributes guarantee topological DAG boot order or pin a specific service implementation.
           </p>
 
           <pre class="bg-gray-950 text-gray-200 p-4 rounded-2xl font-mono text-xs md:text-[13px] leading-relaxed overflow-x-auto border border-gray-800"><code><%= Phoenix.HTML.raw(Markdown.highlight_csharp(code_exo_dependency_page())) %></code></pre>
@@ -1842,7 +1873,7 @@ defmodule Exoforge.Std.Docs.View do
 
         <div class="space-y-3 text-xs text-gray-700 leading-relaxed">
           <p>
-            Extensions access cluster capabilities via the ambient static <code class="font-mono text-purple-700 font-bold">Exo</code> holder or via injected properties (<code class="font-mono">[Inject] IDatabase Database</code>):
+            Extensions access cluster capabilities via the ambient static <code class="font-mono text-purple-700 font-bold">Exo</code> holder with zero reflection overhead and automatic tree-shaking:
           </p>
 
           <div class="overflow-x-auto rounded-xl border border-gray-200">
@@ -1996,11 +2027,11 @@ defmodule Exoforge.Std.Docs.View do
                         <span class="font-bold text-primary-800 text-xs font-mono">
                           <%= format_action_signature(act) %>
                         </span>
-                        <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 uppercase font-mono">
+                        <span class={"text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase font-mono " <> hashed_badge_class(act.mode)}>
                           <%= act.mode %>
                         </span>
-                        <%= if act.scope && act.scope != "guest" do %>
-                          <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 uppercase font-mono">
+                        <%= if act.scope do %>
+                          <span class={"text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase font-mono " <> hashed_badge_class(act.scope)}>
                             <%= act.scope %>
                           </span>
                         <% end %>
@@ -2125,7 +2156,7 @@ defmodule Exoforge.Std.Docs.View do
       end
 
     """
-    ExoforgeSDK.Client.#{service_pascal}().#{action_pascal}(
+    Exo.#{service_pascal}.#{action_pascal}(
         #{args}onComplete: result => Debug.Log($"Success: {result}"),
         onError: err => Debug.LogError($"Error: {err.Message}")
     );
@@ -2147,7 +2178,7 @@ defmodule Exoforge.Std.Docs.View do
       end
 
     """
-    var result = await ExoforgeSDK.Client.#{service_pascal}().#{action_pascal}Async(#{args});
+    var result = await Exo.#{service_pascal}.#{action_pascal}Async(#{args});
     Debug.Log($"Success: {result}");
     """
     |> String.trim()
@@ -2176,7 +2207,7 @@ defmodule Exoforge.Std.Docs.View do
 
   defp code_extension do
     """
-    using System.Threading.Tasks;
+    using System;
     using Exoforge.Plugin.SDK;
 
     [ExoService("gameplay_calculator", Version = "1.0.0")]
@@ -2186,21 +2217,22 @@ defmodule Exoforge.Std.Docs.View do
         public CalculateScoreResponse CalculateScore(CalculateScoreRequest req)
         {
             if (req.Multiplier <= 0)
-                throw new ExoActionException("invalid_multiplier", "Multiplier must be positive.");
+                throw new ArgumentOutOfRangeException(nameof(req.Multiplier), "Multiplier must be positive.");
 
             int finalScore = (req.BasePoints * req.Multiplier) + req.Bonus;
-            return new CalculateScoreResponse(finalScore, System.DateTime.UtcNow);
+            return new CalculateScoreResponse(finalScore, DateTime.UtcNow);
         }
     }
 
     public record CalculateScoreRequest(int BasePoints, int Multiplier, int Bonus = 0);
-    public record CalculateScoreResponse(int TotalScore, System.DateTime CalculatedAt);
+    public record CalculateScoreResponse(int TotalScore, DateTime CalculatedAt);
     """
   end
 
   defp code_unity do
     """
     using UnityEngine;
+    using System;
     using System.Threading.Tasks;
     using Exoforge.SDK;
     using Exoforge.Generated;
@@ -2210,9 +2242,7 @@ defmodule Exoforge.Std.Docs.View do
         // Style A: Unity Main-Thread Callback
         void OnLevelCompletedWithCallback(int points, int multiplier)
         {
-            var client = ExoforgeSDK.Client.GameplayCalculator();
-
-            client.CalculateScore(
+            Exo.GameplayCalculator.CalculateScore(
                 new CalculateScoreRequest(points, multiplier),
                 onComplete: res => Debug.Log($"Callback Score: {res.TotalScore}"),
                 onError: err => Debug.LogError($"Calculation failed: {err.Message}")
@@ -2224,11 +2254,10 @@ defmodule Exoforge.Std.Docs.View do
         {
             try
             {
-                var client = ExoforgeSDK.Client.GameplayCalculator();
-                var res = await client.CalculateScoreAsync(new CalculateScoreRequest(points, multiplier));
+                var res = await Exo.GameplayCalculator.CalculateScoreAsync(new CalculateScoreRequest(points, multiplier));
                 Debug.Log($"Async Score: {res.TotalScore}");
             }
-            catch (ExoActionException err)
+            catch (Exception err)
             {
                 Debug.LogError($"Calculation failed: {err.Message}");
             }
@@ -2249,7 +2278,7 @@ defmodule Exoforge.Std.Docs.View do
         Resources = new[] { typeof(PlayerScoreRecord) })]
     public class LeaderboardExtension
     {
-        [ExoAction(Scope = "player")]
+        [ExoAction]
         public SubmitScoreResponse SubmitScore(SubmitScoreRequest req)
         {
             return new SubmitScoreResponse(req.Score, 1);
@@ -2261,11 +2290,12 @@ defmodule Exoforge.Std.Docs.View do
   defp code_exo_action_page do
     """
     // Mode is automatically inferred: Task<T> -> async, concrete -> sync.
-    [ExoAction(Scope = "player")]
+    // Scope defaults to "player" (authenticated).
+    [ExoAction]
     public TransferItemResponse TransferItem(TransferItemRequest req)
     {
         if (req.Quantity <= 0)
-            throw new ExoActionException("invalid_quantity", "Must transfer at least 1 item.");
+            throw new ArgumentOutOfRangeException(nameof(req.Quantity), "Must transfer at least 1 item.");
 
         return new TransferItemResponse(req.ItemId, req.Quantity, true);
     }
@@ -2335,20 +2365,16 @@ defmodule Exoforge.Std.Docs.View do
     using System.Threading.Tasks;
     using Exoforge.Plugin.SDK;
 
-    // Declares topological dependency DAG boot order and client stub scope
+    // Dependencies are auto-inferred from Exo.<Service> calls, or pinned with [ExoDependency]
     [ExoService("inventory_service")]
-    [ExoDependency("database")]
-    [ExoDependency("player_data")]
+    [ExoDependency<IPlayerDataService>]
     public class InventoryExtension
     {
-        [Inject("player_data")]
-        public PlayerDataServiceClient PlayerData { get; set; } = null!;
-
-        [ExoAction(Scope = "player")]
+        [ExoAction]
         public async Task<GrantItemResponse> GrantItem(GrantItemRequest req)
         {
-            // Extension stubs make inter-service RPC typed and natural
-            var profile = await PlayerData.GetProfileAsync(new GetProfileRequest(req.PlayerId));
+            // Inter-service RPC via generated static service stubs
+            var profile = await Exo.PlayerData.GetProfileAsync(new GetProfileRequest(req.PlayerId));
             return new GrantItemResponse(req.ItemId, profile.DisplayName);
         }
     }
@@ -2367,7 +2393,7 @@ defmodule Exoforge.Std.Docs.View do
         [ExoWebhook("stripe")]
         public async Task<WebhookResult> HandleStripeWebhook(WebhookPayload payload)
         {
-            string signature = payload.Headers["Stripe-Signature"];
+            string signature = payload.Headers.TryGetValue("Stripe-Signature", out var sig) ? sig : "";
             Exo.Logger.Info($"Processing Stripe checkout webhook: {payload.EventName}");
 
             // Process payload and acknowledge receipt
@@ -2387,10 +2413,7 @@ defmodule Exoforge.Std.Docs.View do
     [ExoService("marketplace_service", Title = "Auction House", Icon = "⚖️")]
     public class MarketplaceExtension
     {
-        [Inject("player_data")]
-        public PlayerDataServiceClient PlayerData { get; set; } = null!;
-
-        [ExoAction(Scope = "player")]
+        [ExoAction]
         public CreateListingResponse ListItem(CreateListingRequest req)
         {
             string listingId = Guid.NewGuid().ToString("N");
@@ -2408,7 +2431,7 @@ defmodule Exoforge.Std.Docs.View do
             return new CreateListingResponse(listingId);
         }
 
-        [ExoAction(Scope = "player")]
+        [ExoAction]
         public List<MarketListingRecord> BrowseListings(BrowseListingsRequest req)
         {
             // Native SQL query across all players with filtering and paging
@@ -2418,7 +2441,7 @@ defmodule Exoforge.Std.Docs.View do
             );
         }
 
-        [ExoAction(Scope = "player")]
+        [ExoAction]
         public async Task<BuyListingResponse> BuyListing(BuyListingRequest req)
         {
             var listing = Exo.Database.Get<MarketListingRecord>("market_listings", req.ListingId);
@@ -2471,7 +2494,7 @@ defmodule Exoforge.Std.Docs.View do
         // High-performance hot RAM queue: zero database round-trips
         private readonly ConcurrentDictionary<string, QueueEntry> _queue = new();
 
-        [ExoAction(Scope = "player")]
+        [ExoAction]
         public QueueStatusResponse JoinQueue(JoinQueueRequest req)
         {
             string playerId = Exo.Context.CallerPlayerId;
@@ -2479,7 +2502,7 @@ defmodule Exoforge.Std.Docs.View do
             return new QueueStatusResponse(true, _queue.Count);
         }
 
-        [ExoAction(Scope = "player")]
+        [ExoAction]
         public QueueStatusResponse LeaveQueue()
         {
             _queue.TryRemove(Exo.Context.CallerPlayerId, out _);
@@ -2533,7 +2556,7 @@ defmodule Exoforge.Std.Docs.View do
     {
         private static int _currentBossHp = 5_000_000;
 
-        [ExoAction(Scope = "player")]
+        [ExoAction]
         public async Task<AttackBossResponse> AttackBoss(AttackBossRequest req)
         {
             var config = Exo.Database.First<WorldBossConfig>("world_boss_config");
@@ -2584,7 +2607,7 @@ defmodule Exoforge.Std.Docs.View do
     [ExoService("guild_service", Title = "Guilds & Clans", Icon = "🛡️")]
     public class GuildExtension
     {
-        [ExoAction(Scope = "player")]
+        [ExoAction]
         public async Task<DepositGoldResponse> DepositGuildGold(DepositGoldRequest req)
         {
             string playerId = Exo.Context.CallerPlayerId;
@@ -2674,9 +2697,6 @@ defmodule Exoforge.Std.Docs.View do
     [ExoService("billing_service", Title = "Payments & Store", Icon = "💳")]
     public class BillingExtension
     {
-        [Inject("player_data")]
-        public PlayerDataServiceClient PlayerData { get; set; } = null!;
-
         // External HTTP POST webhook (e.g. https://api.yourgame.com/ext/billing_service/webhook/stripe)
         [ExoWebhook("stripe")]
         public async Task<WebhookResult> HandleStripeWebhook(WebhookPayload payload)
@@ -2684,9 +2704,9 @@ defmodule Exoforge.Std.Docs.View do
             string signature = payload.Headers.TryGetValue("Stripe-Signature", out var sig) ? sig : "";
             Exo.Logger.Info($"Inbound Stripe webhook: {payload.EventName}");
 
-            // Verify HMAC signature, parse customer player ID, and grant purchased item
-            string targetPlayerId = payload.Data["client_reference_id"]?.ToString() ?? "";
-            string productId = payload.Data["product_id"]?.ToString() ?? "";
+            // Verify signature, extract player ID and product from payload
+            string targetPlayerId = payload.Data.TryGetValue("client_reference_id", out var refId) ? refId?.ToString() ?? "" : "";
+            string productId = payload.Data.TryGetValue("product_id", out var pId) ? pId?.ToString() ?? "" : "";
 
             // Instantly credit player account
             Exo.Database.Execute(

@@ -78,7 +78,8 @@ public class ExoActionAttribute : Attribute
     /// <summary>Defaults to <see cref="ActionMode.Auto"/> (inferred from the return type).</summary>
     public ActionMode Mode { get; set; } = ActionMode.Auto;
 
-    public string Scope { get; set; } = "global";
+    /// <summary>Defaults to "player" (requires player or higher authentication).</summary>
+    public string Scope { get; set; } = "player";
     public ActionTransport Transport { get; set; } = ActionTransport.Auto;
 
     /// <summary>
@@ -440,6 +441,39 @@ public class ExoActionException : Exception
     }
 
     public ExoActionException(string message) : this("action_failed", message) { }
+}
+
+/// <summary>
+/// Inbound webhook payload dispatched from external HTTP providers (e.g. Stripe, Steam, Discord).
+/// Carries raw body text, request headers, HTTP method, and query parameters.
+/// </summary>
+public class WebhookPayload
+{
+    public string Body { get; set; } = "";
+    public string RawBody { get; set; } = "";
+    public System.Text.Json.JsonElement Json { get; set; } = default;
+    public System.Collections.Generic.IReadOnlyDictionary<string, string>? Headers { get; set; }
+    public string Method { get; set; } = "POST";
+    public System.Collections.Generic.IReadOnlyDictionary<string, string>? Query { get; set; }
+}
+
+/// <summary>
+/// Optional response structure for inbound webhook handlers.
+/// </summary>
+public class WebhookResult
+{
+    public int StatusCode { get; set; } = 200;
+    public string? Body { get; set; }
+    public bool Verified { get; set; } = true;
+
+    public WebhookResult() { }
+
+    public WebhookResult(int statusCode, string? body = null, bool verified = true)
+    {
+        StatusCode = statusCode;
+        Body = body;
+        Verified = verified;
+    }
 }
 
 

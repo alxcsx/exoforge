@@ -155,7 +155,7 @@ defmodule Exoforge.Std.Transport do
   # ---- Actions ----
 
   @impl true
-  defaction status() do
+  defaction status(), scope: :global do
     {:ok, %{status: "online", layer: "exoforge_std_transport"}}
   end
 end

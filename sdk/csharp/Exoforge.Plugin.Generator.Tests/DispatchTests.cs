@@ -84,9 +84,9 @@ public partial class DispatchSamplePlugin : IContractPing, ISharedContract
     public bool Wipe() => true;
 
     [ExoWebhook("stripe_webhook")]
-    public string HandleStripe(string body, Dictionary<string, string>? headers = null)
+    public string HandleStripe(WebhookPayload payload)
     {
-        return $"handled:{body}:{(headers != null && headers.ContainsKey("sig") ? headers["sig"] : "")}";
+        return $"handled:{payload.Body}:{(payload.Headers != null && payload.Headers.ContainsKey("sig") ? payload.Headers["sig"] : "")}";
     }
 
     [ExoAction]
@@ -349,6 +349,17 @@ public class DispatchTests
         Assert.NotNull(webhook);
         Assert.Equal("webhook", webhook!["transport"]?.GetValue<string>());
         Assert.Equal("webhook", webhook!["scope"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void Manifest_Defaults_Action_Scope_To_Player()
+    {
+        JsonNode manifest = Manifest();
+        var actions = Service(manifest, "dispatch_sample")["actions"]!.AsArray();
+        var add = actions.FirstOrDefault(a => a?["name"]?.GetValue<string>() == "add");
+
+        Assert.NotNull(add);
+        Assert.Equal("player", add!["scope"]?.GetValue<string>());
     }
 
     [Fact]

@@ -143,6 +143,13 @@ html:not(.light) .bg-gray-50\/60,
 html:not(.light) .bg-gray-50\/70,
 html:not(.light) .bg-gray-50\/75,
 html:not(.light) .bg-gray-50\/80,
+html:not(.light) .bg-slate-50,
+html:not(.light) .bg-slate-50\/30,
+html:not(.light) .bg-slate-50\/40,
+html:not(.light) .bg-slate-50\/50,
+html:not(.light) .bg-slate-50\/60,
+html:not(.light) .bg-slate-50\/70,
+html:not(.light) .bg-slate-50\/80,
 html:not(.light) .bg-\[\#f3f4f6\] {
   background-color: var(--exo-surface-muted) !important;
 }
@@ -151,7 +158,12 @@ html:not(.light) .bg-gray-100,
 html:not(.light) .bg-gray-100\/80,
 html:not(.light) .bg-gray-100\/90,
 html:not(.light) .bg-gray-200,
-html:not(.light) .bg-gray-200\/80 {
+html:not(.light) .bg-gray-200\/80,
+html:not(.light) .bg-slate-100,
+html:not(.light) .bg-slate-100\/80,
+html:not(.light) .bg-slate-100\/90,
+html:not(.light) .bg-slate-200,
+html:not(.light) .bg-slate-200\/80 {
   background-color: var(--exo-surface-subtle) !important;
 }
 
@@ -165,29 +177,44 @@ html:not(.light) .hover\:bg-gray-100:hover,
 html:not(.light) .hover\:bg-gray-100\/70:hover,
 html:not(.light) .hover\:bg-gray-200:hover,
 html:not(.light) .hover\:bg-gray-200\/50:hover,
-html:not(.light) .hover\:bg-gray-200\/80:hover {
+html:not(.light) .hover\:bg-gray-200\/80:hover,
+html:not(.light) .hover\:bg-slate-50:hover,
+html:not(.light) .hover\:bg-slate-100:hover,
+html:not(.light) .hover\:bg-slate-200:hover {
   background-color: var(--exo-surface-elevated) !important;
 }
 
 /* Typography Hierarchy */
 html:not(.light) .text-gray-900,
-html:not(.light) .text-gray-800 {
+html:not(.light) .text-gray-800,
+html:not(.light) .text-slate-900,
+html:not(.light) .text-slate-800 {
   color: var(--exo-text) !important;
 }
 
 html:not(.light) .text-gray-700,
-html:not(.light) .text-gray-600 {
+html:not(.light) .text-gray-600,
+html:not(.light) .text-slate-700,
+html:not(.light) .text-slate-600 {
   color: #cbd5e1 !important;
 }
 
 html:not(.light) .text-gray-500,
-html:not(.light) .text-gray-400 {
+html:not(.light) .text-gray-400,
+html:not(.light) .text-slate-500,
+html:not(.light) .text-slate-400 {
   color: var(--exo-text-muted) !important;
+}
+
+html:not(.light) .text-primary-900 {
+  color: #ede9fe !important;
 }
 
 html:not(.light) .hover\:text-gray-900:hover,
 html:not(.light) .hover\:text-gray-800:hover,
-html:not(.light) .hover\:text-gray-700:hover {
+html:not(.light) .hover\:text-gray-700:hover,
+html:not(.light) .hover\:text-slate-900:hover,
+html:not(.light) .hover\:text-slate-800:hover {
   color: #ffffff !important;
 }
 
@@ -197,18 +224,28 @@ html:not(.light) .border-gray-200,
 html:not(.light) .border-gray-200\/60,
 html:not(.light) .border-gray-200\/80,
 html:not(.light) .border-gray-200\/90,
-html:not(.light) .border-gray-300 {
+html:not(.light) .border-gray-300,
+html:not(.light) .border-slate-100,
+html:not(.light) .border-slate-200,
+html:not(.light) .border-slate-200\/60,
+html:not(.light) .border-slate-200\/80,
+html:not(.light) .border-slate-200\/90,
+html:not(.light) .border-slate-300 {
   border-color: var(--exo-border) !important;
 }
 
 html:not(.light) .divide-gray-50 > :not([hidden]) ~ :not([hidden]),
 html:not(.light) .divide-gray-100 > :not([hidden]) ~ :not([hidden]),
-html:not(.light) .divide-gray-200 > :not([hidden]) ~ :not([hidden]) {
+html:not(.light) .divide-gray-200 > :not([hidden]) ~ :not([hidden]),
+html:not(.light) .divide-slate-50 > :not([hidden]) ~ :not([hidden]),
+html:not(.light) .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+html:not(.light) .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
   border-color: var(--exo-border-subtle) !important;
 }
 
 /* Pastel Tinted Badges & Accents in Dark Mode */
 html:not(.light) .bg-primary-50,
+html:not(.light) .bg-primary-50\/30,
 html:not(.light) .bg-primary-50\/40,
 html:not(.light) .bg-primary-50\/50,
 html:not(.light) .bg-primary-50\/60,
@@ -312,6 +349,7 @@ html:not(.light) .bg-amber-50\/70,
 html:not(.light) .bg-amber-50\/80,
 html:not(.light) .bg-amber-50\/90,
 html:not(.light) .bg-amber-100,
+html:not(.light) .bg-amber-100\/70,
 html:not(.light) .bg-amber-200 {
   background-color: rgba(245, 158, 11, 0.14) !important;
 }

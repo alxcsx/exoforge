@@ -20,7 +20,9 @@ defmodule Exoforge.HttpTest do
   defmodule MockWebhookService do
     use Exoforge.Extension
 
-    defwebhook stripe(body, headers) do
+    defwebhook stripe(payload) do
+      body = payload["body"] || ""
+      headers = payload["headers"] || %{}
       signature = headers["stripe-signature"] || ""
 
       if signature == "valid_signature" do
@@ -40,7 +42,7 @@ defmodule Exoforge.HttpTest do
       end
     end
 
-    defwebhook ping do
+    defwebhook ping(_payload) do
       {:ok, %{pong: true}}
     end
   end

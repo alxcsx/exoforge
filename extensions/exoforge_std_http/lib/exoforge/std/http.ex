@@ -51,11 +51,11 @@ defmodule Exoforge.Std.Http do
   end
 
   @impl true
-  defaction status() do
+  defaction status(), scope: :global do
     {:ok, %{status: "ok", port: Exoforge.Endpoints.http_port()}}
   end
 
-  defaction get_cors_config() do
+  defaction get_cors_config(), scope: :global do
     {:ok, Exoforge.Std.Http.Cors.get_config()}
   end
 

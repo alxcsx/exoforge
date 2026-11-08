@@ -83,7 +83,7 @@ defmodule Exoforge.Std.Database do
   end
 
   @impl true
-  defaction health_check() do
+  defaction health_check(), scope: :global do
     case Manager.health_check() do
       {:ok, %{status: status}} ->
         {:ok, %{status: status}}

@@ -112,7 +112,7 @@ defmodule Exoforge.Std.Auth do
   ## ---- SERVICE ACTIONS ----
 
   @impl true
-  defaction authenticate(payload) do
+  defaction authenticate(payload), scope: :global do
     token = extract_token(payload)
 
     cond do
@@ -164,7 +164,7 @@ defmodule Exoforge.Std.Auth do
   end
 
   @impl true
-  defaction login(payload) do
+  defaction login(payload), scope: :global do
     identifier =
       Map.get(payload, :email) || Map.get(payload, "email") ||
         Map.get(payload, :player_id) || Map.get(payload, "player_id")
@@ -234,7 +234,7 @@ defmodule Exoforge.Std.Auth do
   end
 
   @impl true
-  defaction verify_scope(payload) do
+  defaction verify_scope(payload), scope: :global do
     user_id =
       Map.get(payload, :user_id) || Map.get(payload, "user_id") ||
         Map.get(payload, :player_id) || Map.get(payload, "player_id")
@@ -279,12 +279,12 @@ defmodule Exoforge.Std.Auth do
   end
 
   @impl true
-  defaction register(payload) do
+  defaction register(payload), scope: :global do
     do_register_player(payload)
   end
 
   @impl true
-  defaction create_player(payload) do
+  defaction create_player(payload), scope: :global do
     do_register_player(payload)
   end
 
@@ -295,7 +295,7 @@ defmodule Exoforge.Std.Auth do
   otherwise a new player is registered using the optional display `name`.
   """
   @impl true
-  defaction anonymous(payload) do
+  defaction anonymous(payload), scope: :global do
     player_id = Map.get(payload, :player_id) || Map.get(payload, "player_id")
 
     cond do

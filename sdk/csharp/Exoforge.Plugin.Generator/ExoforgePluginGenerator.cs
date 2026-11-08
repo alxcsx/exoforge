@@ -127,6 +127,14 @@ namespace Exoforge.Plugin.SDK
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
 
+    private static readonly DiagnosticDescriptor InvalidWebhookSignature = new(
+        "EXO004",
+        "A webhook method must accept a single WebhookPayload parameter",
+        "Webhook method '{0}' marked with [ExoWebhook] must accept exactly one parameter of type WebhookPayload",
+        "Exoforge",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var servicesFromService = context.SyntaxProvider
@@ -244,7 +252,8 @@ namespace Exoforge.Plugin.SDK
         string ContractInterface,
         string ContractBinding,
         List<ServiceModel> Models,
-        List<InputTypeModel> InputTypes);
+        List<InputTypeModel> InputTypes,
+        List<string> WebhookValidationErrors);
 
 
     // ---- service extraction ----
@@ -324,6 +333,7 @@ namespace Exoforge.Plugin.SDK
         }
 
         var dispatches = new List<ActionDispatch>();
+        var webhookValidationErrors = new List<string>();
 
         foreach (var member in declared.GetMembers())
         {
@@ -351,6 +361,15 @@ namespace Exoforge.Plugin.SDK
             }
 
             bool isWebhook = webhookAttr is not null;
+            if (isWebhook)
+            {
+                bool valid = method.Parameters.Length == 1 &&
+                    method.Parameters[0].Type.Name == "WebhookPayload";
+                if (!valid)
+                {
+                    webhookValidationErrors.Add(method.Name);
+                }
+            }
             var targetAttr = webhookAttr ?? actionAttr!;
 
             string actionName = PositionalString(targetAttr, 0) ?? ToSnakeCase(method.Name);
@@ -361,7 +380,7 @@ namespace Exoforge.Plugin.SDK
             ServiceFor(NamedString(targetAttr, "Service")).Actions.Add(new ActionModel(
                 actionName,
                 isWebhook ? "sync" : ResolveActionMode(targetAttr, method.ReturnType),
-                NamedString(targetAttr, "Scope") ?? (isWebhook ? "webhook" : "global"),
+                NamedString(targetAttr, "Scope") ?? (isWebhook ? "webhook" : "player"),
                 isWebhook ? "webhook" : (NamedEnum(targetAttr, "Transport") ?? "auto").ToLowerInvariant(),
                 method.Parameters.Select(p => new ParamModel(ToSnakeCase(p.Name), MapTypeToElixir(p.Type))).ToList(),
                 returnsScalar,
@@ -649,7 +668,8 @@ namespace Exoforge.Plugin.SDK
             contract,
             binding,
             services,
-            inputTypes);
+            inputTypes,
+            webhookValidationErrors);
     }
 
     private static ImmutableArray<ServiceEmit> ExtractReferencedContracts(Compilation compilation, CancellationToken ct)
@@ -968,6 +988,14 @@ namespace Exoforge.Plugin.SDK
         {
             spc.ReportDiagnostic(Diagnostic.Create(
                 MultipleRoots, Location.None, root, string.Join(", ", roots.Skip(1))));
+        }
+
+        foreach (var emit in ordered)
+        {
+            foreach (var methodName in emit.WebhookValidationErrors)
+            {
+                spc.ReportDiagnostic(Diagnostic.Create(InvalidWebhookSignature, Location.None, methodName));
+            }
         }
 
         var cases = new StringBuilder();

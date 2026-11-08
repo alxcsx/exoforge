@@ -21,7 +21,7 @@ public class ActionContractModel
 {
     public string Name { get; set; } = string.Empty;
     public string? Doc { get; set; }
-    public string Scope { get; set; } = "global";
+    public string Scope { get; set; } = "player";
     public string Transport { get; set; } = "auto";
     public List<ParamModel> Params { get; set; } = new();
     public List<ParamModel> ReturnFields { get; set; } = new();
@@ -385,7 +385,7 @@ public static class ExoCodeGenerator
                 {
                     Name = act.TryGetProperty("name", out var an) ? an.GetString() ?? "" : "",
                     Doc = act.TryGetProperty("doc", out var ad) ? ad.GetString() : null,
-                    Scope = act.TryGetProperty("scope", out var sc) ? sc.GetString() ?? "global" : "global",
+                    Scope = act.TryGetProperty("scope", out var sc) ? sc.GetString() ?? "player" : "player",
                     Transport = act.TryGetProperty("transport", out var tr) ? tr.GetString() ?? "auto" : "auto"
                 };
 
@@ -1260,6 +1260,7 @@ public static class ExoCodeGenerator
         sb.AppendLine();
         sb.AppendLine("using System;");
         sb.AppendLine("using System.Collections.Generic;");
+        sb.AppendLine("using System.Reflection;");
         sb.AppendLine("using System.Runtime.CompilerServices;");
         sb.AppendLine("using System.Text.Json;");
         sb.AppendLine("using System.Text.Json.Serialization;");
@@ -1370,6 +1371,54 @@ public static class ExoCodeGenerator
             sb.AppendLine($"    /// <summary>Access the {pascalName} service contract.</summary>");
             sb.AppendLine($"    public static {pascalName}ServiceClient {pascalName}(this ExoClient client) =>");
             sb.AppendLine($"        client.Services().{pascalName};");
+            sb.AppendLine();
+        }
+        sb.AppendLine("}");
+        sb.AppendLine();
+
+        // 2b. Static Exo facade matching the extension runtime syntax
+        sb.AppendLine("/// <summary>");
+        sb.AppendLine("/// Static access to Exoforge services matching the extension runtime syntax.");
+        sb.AppendLine("/// In Unity, uses the ambient ExoforgeSDK.Client; in standalone applications, assign Exo.Client.");
+        sb.AppendLine("/// </summary>");
+        sb.AppendLine("public static class Exo");
+        sb.AppendLine("{");
+        sb.AppendLine("    private static Func<ExoClient>? _clientLocator;");
+        sb.AppendLine("    private static ExoClient? _fallbackClient;");
+        sb.AppendLine();
+        sb.AppendLine("    /// <summary>The active ExoClient used by static service calls.</summary>");
+        sb.AppendLine("    public static ExoClient Client");
+        sb.AppendLine("    {");
+        sb.AppendLine("        get");
+        sb.AppendLine("        {");
+        sb.AppendLine("            if (_clientLocator != null) return _clientLocator();");
+        sb.AppendLine("            if (_fallbackClient != null) return _fallbackClient;");
+        sb.AppendLine();
+        sb.AppendLine("            var unitySdkType = Type.GetType(\"Exoforge.Client.Unity.ExoforgeSDK, Exoforge.SDK.Runtime\")");
+        sb.AppendLine("                ?? Type.GetType(\"Exoforge.Client.Unity.ExoforgeSDK\");");
+        sb.AppendLine("            if (unitySdkType != null)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                var prop = unitySdkType.GetProperty(\"Client\", BindingFlags.Public | BindingFlags.Static);");
+        sb.AppendLine("                if (prop?.GetValue(null) is ExoClient unityClient)");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    return unityClient;");
+        sb.AppendLine("                }");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine("            throw new InvalidOperationException(\"No active ExoClient configured. Call ExoforgeSDK.ConnectAsync() or assign Exo.Client.\");");
+        sb.AppendLine("        }");
+        sb.AppendLine("        set => _fallbackClient = value;");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+        sb.AppendLine("    /// <summary>Configures a custom resolver for the active ExoClient.</summary>");
+        sb.AppendLine("    public static void SetClientLocator(Func<ExoClient> locator) => _clientLocator = locator;");
+        sb.AppendLine();
+        foreach (var svc in serviceList)
+        {
+            string pascalName = ToPascalCase(svc.Name);
+            sb.AppendLine($"    /// <summary>Access the {pascalName} service contract.</summary>");
+            sb.AppendLine($"    public static {pascalName}ServiceClient {pascalName} =>");
+            sb.AppendLine($"        Client.{pascalName}();");
             sb.AppendLine();
         }
         sb.AppendLine("}");
