@@ -448,6 +448,17 @@ public class DispatchTests
     }
 
     [Fact]
+    public void Manifest_Includes_Studio_Extension_Metadata_And_Dashboard_View()
+    {
+        JsonNode manifest = Manifest();
+        Assert.Equal("Test", manifest["category"]?.GetValue<string>());
+        Assert.NotNull(manifest["title"]);
+        Assert.NotNull(manifest["icon"]);
+        Assert.NotNull(manifest["dashboard_view"]);
+        Assert.Null(manifest["system"]);
+    }
+
+    [Fact]
     public void The_dispatch_serves_an_inbound_event()
     {
         var plugin = new DispatchSamplePlugin();

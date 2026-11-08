@@ -69,7 +69,8 @@ defmodule Exoforge.DashboardLiveViewTest do
       name: "exoforge_std_resources",
       version: "0.1.0",
       entry_point: Exoforge.Std.Resources,
-      provides: [Exoforge.Std.Services.ResourceStore]
+      provides: [Exoforge.Std.Services.ResourceStore],
+      system: true
     })
 
     ExtensionRegistry.register(%Exoforge.Domain.Manifest{

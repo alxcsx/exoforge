@@ -194,10 +194,10 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
 
     ~H"""
           <% filtered_exts = filter_extensions(@extensions, @search, @category) %>
-          <% ui_exts = filtered_exts |> Enum.reject(& &1.system) |> Enum.filter(& &1.has_dashboard_view) |> Enum.sort_by(&ExtensionPresenter.display_name/1) %>
+          <% ui_exts = filtered_exts |> Enum.reject(& &1.system) |> Enum.sort_by(&ExtensionPresenter.display_name/1) %>
           <% system_exts =
                filtered_exts
-               |> Enum.filter(&(&1.system or not &1.has_dashboard_view))
+               |> Enum.filter(& &1.system)
                |> Enum.sort_by(fn ext ->
                  rank =
                    cond do

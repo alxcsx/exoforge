@@ -457,7 +457,7 @@ using Exoforge.Plugin.SDK;
 
 namespace {{ns}};
 
-[{{attr}}("{{serviceName}}", Version = "0.1.0", Resources = [typeof({{className}}Claim)])]
+[{{attr}}("{{serviceName}}", Version = "0.1.0", Category = "Game", Title = "{{className}}", Icon = "🎁", Resources = [typeof({{className}}Claim)])]
 public class {{className}}{{suffix}}
 {
     [ExoAction]
@@ -503,7 +503,7 @@ using Exoforge.Plugin.SDK;
 
 namespace {{ns}};
 
-[{{attr}}("{{serviceName}}", Version = "0.1.0", Resources = [typeof({{className}}Item)])]
+[{{attr}}("{{serviceName}}", Version = "0.1.0", Category = "Game", Title = "{{className}}", Icon = "📦", Resources = [typeof({{className}}Item)])]
 public class {{className}}{{suffix}}
 {
     [ExoAction]
@@ -542,7 +542,7 @@ using Exoforge.Plugin.SDK;
 
 namespace {{ns}};
 
-[{{attr}}("{{serviceName}}", Version = "0.1.0", Resources = [typeof({{className}}Config)])]
+[{{attr}}("{{serviceName}}", Version = "0.1.0", Category = "Game", Title = "{{className}}", Icon = "⚙️", Resources = [typeof({{className}}Config)])]
 public class {{className}}{{suffix}}
 {
     [ExoAction]
@@ -579,7 +579,7 @@ using Exoforge.Plugin.SDK;
 
 namespace {{ns}};
 
-[{{attr}}("{{serviceName}}", Version = "0.1.0")]
+[{{attr}}("{{serviceName}}", Version = "0.1.0", Category = "Game", Title = "{{className}}", Icon = "📡")]
 public class {{className}}{{suffix}}
 {
     [ExoAction]

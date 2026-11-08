@@ -606,13 +606,22 @@ defmodule Exoforge.Std.ExtensionManager do
           manifest_param |> ExtensionRegistry.sanitize_for_json() |> Jason.encode!(pretty: true)
 
         true ->
+          title = Macro.camelize(name)
           %{
             "id" => name,
+            "title" => title,
+            "category" => "Game",
+            "icon" => "🧩",
             "version" => "0.1.0",
             "type" => to_string(default_type),
-            "entry_point" => "Elixir." <> Macro.camelize(name),
+            "entry_point" => "Elixir." <> title,
             "provides" => [name],
-            "dependencies" => []
+            "dependencies" => [],
+            "dashboard_view" => %{
+              "id" => name,
+              "title" => title,
+              "icon" => "🧩"
+            }
           }
           |> Jason.encode!(pretty: true)
       end

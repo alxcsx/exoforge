@@ -1,7 +1,7 @@
 # Exoforge Operating Manual (`Agents.MD`)
 
 > **Branch**: `projetao_mvp`  
-> **Status**: Kernel, 14 standard extensions, C# Client & Extension SDKs, C# Management Engine (`exo` CLI), Unity SDK (`com.exoforge.sdk` v0.1.31), Producer Studio and the extension runtime are **complete** — **320 Elixir + 133 C# = 453 tests passing**, plus a live E2E vertical slice of 6 tests and Unity headless self-check (`just sample-check`).  
+> **Status**: Kernel, 14 standard extensions, C# Client & Extension SDKs, C# Management Engine (`exo` CLI), Unity SDK (`com.exoforge.sdk` v0.1.32), Producer Studio and the extension runtime are **complete** — **320 Elixir + 139 C# = 459 tests passing**, plus a live E2E vertical slice of 6 tests and Unity headless self-check (`just sample-check`).  
 > **MVP Execution Plan**: Phase 0 (ADR 001) & Phase 1 (Extension Terminology Bulldozer) **Completed**.  
 > **Verified SLA**: 0.07 ms fanout to 50 event subscribers over `:pg`.
 

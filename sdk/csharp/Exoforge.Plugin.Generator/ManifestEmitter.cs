@@ -123,19 +123,22 @@ internal static class ManifestEmitter
         sb.Append($"  \"dependencies\": {Atoms(dependencies)},\n");
         sb.Append($"  \"provides\": {Atoms(provides)},\n");
 
-        if (!string.IsNullOrEmpty(category)) sb.Append($"  \"category\": {Str(category!)},\n");
-        if (!string.IsNullOrEmpty(title)) sb.Append($"  \"title\": {Str(title!)},\n");
-        if (!string.IsNullOrEmpty(icon)) sb.Append($"  \"icon\": {Str(icon!)},\n");
+        string effectiveCategory = !string.IsNullOrEmpty(category) ? category! : (system ? "System" : "Game");
+        string effectiveTitle = !string.IsNullOrEmpty(title) ? title! : FormatTitle(id);
+        string effectiveIcon = !string.IsNullOrEmpty(icon) ? icon! : (system ? "⚙️" : "🧩");
+
+        sb.Append($"  \"category\": {Str(effectiveCategory)},\n");
+        sb.Append($"  \"title\": {Str(effectiveTitle)},\n");
+        sb.Append($"  \"icon\": {Str(effectiveIcon)},\n");
         if (system) sb.Append("  \"system\": true,\n");
 
-        if (!string.IsNullOrEmpty(title) || !string.IsNullOrEmpty(icon))
+        if (!system || !string.IsNullOrEmpty(title) || !string.IsNullOrEmpty(icon))
         {
             var primary = services.FirstOrDefault();
             string extra = "";
             if (!string.IsNullOrEmpty(primary?.DashboardElement)) extra += $", \"element\": {Str(primary!.DashboardElement!)}";
             if (!string.IsNullOrEmpty(primary?.DashboardEntry)) extra += $", \"entry\": {Str(primary!.DashboardEntry!)}";
-            string viewTitle = !string.IsNullOrEmpty(title) ? title! : id;
-            sb.Append($"  \"dashboard_view\": {{\"id\": {Str(id)}, \"title\": {Str(viewTitle)}, \"icon\": {Str(icon ?? "")}{extra}}},\n");
+            sb.Append($"  \"dashboard_view\": {{\"id\": {Str(id)}, \"title\": {Str(effectiveTitle)}, \"icon\": {Str(effectiveIcon)}{extra}}},\n");
         }
 
         if (inputTypes != null && inputTypes.Any())
@@ -332,4 +335,16 @@ internal static class ManifestEmitter
     }
 
     private static string Lower(bool value) => value ? "true" : "false";
+
+    private static string FormatTitle(string id)
+    {
+        if (string.IsNullOrEmpty(id)) return id;
+        string[] parts = id.Split(new[] { '_', '-' }, StringSplitOptions.RemoveEmptyEntries);
+        for (int i = 0; i < parts.Length; i++)
+        {
+            if (parts[i].Length > 0)
+                parts[i] = char.ToUpperInvariant(parts[i][0]) + parts[i].Substring(1);
+        }
+        return string.Join(" ", parts);
+    }
 }

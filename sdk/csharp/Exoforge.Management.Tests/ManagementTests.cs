@@ -214,10 +214,25 @@ public class ManagementTests : IDisposable
         Assert.True(Directory.Exists(createdDir));
         string code = File.ReadAllText(Path.Combine(createdDir, "src", "BlankDemoExtension.cs"));
         Assert.Contains("[ExoExtension(\"blank_demo\"", code);
+        Assert.Contains("Category = \"Game\"", code);
         Assert.Contains("public class BlankDemoExtension", code);
         Assert.Contains("public string Ping()", code);
         Assert.DoesNotContain("Claim", code);
         Assert.DoesNotContain("Resources =", code);
+    }
+
+    [Theory]
+    [InlineData("blank", "🧩")]
+    [InlineData("basic", "🎁")]
+    [InlineData("persistent", "📦")]
+    [InlineData("config", "⚙️")]
+    [InlineData("events", "📡")]
+    public void Scaffolder_All_Templates_Default_To_Studio_Game_Extensions(string template, string expectedIcon)
+    {
+        string code = ExoScaffolder.GenerateExtensionCode("my_test", "MyTest", template);
+        Assert.Contains("Category = \"Game\"", code);
+        Assert.Contains("Title = \"MyTest\"", code);
+        Assert.Contains($"Icon = \"{expectedIcon}\"", code);
     }
 
     [Fact]
