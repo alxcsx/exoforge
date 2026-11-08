@@ -715,6 +715,36 @@ defmodule Exoforge.DashboardLiveViewTest do
       refute render(view) =~ "Pinned exoforge_std_ws to top navigation bar."
     end
 
+    test "toast notices dismiss immediately on click" do
+      session = %{"admin_player_id" => "toast_click_user", "admin_scopes" => ["admin"]}
+      Exoforge.Std.Dashboard.Preferences.put_pinned("toast_click_user", [])
+      conn = build_conn() |> Plug.Test.init_test_session(session)
+      {:ok, view, _html} = live(conn, "/")
+
+      html = render_click(view, "pin_extension", %{"id" => "exoforge_std_ws"})
+      assert html =~ "Pinned exoforge_std_ws to top navigation bar."
+
+      # Clicking anywhere on the toast card dispatches dismiss_toast
+      rendered = render_click(view, "dismiss_toast", %{"kind" => "info"})
+      refute rendered =~ "Pinned exoforge_std_ws to top navigation bar."
+    end
+
+    test "inbound sign-in flash toasts auto-dismiss" do
+      session = %{"admin_player_id" => "admin", "admin_scopes" => ["admin"]}
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(session)
+        |> Phoenix.Controller.fetch_flash()
+        |> Phoenix.Controller.put_flash(:info, "Signed in successfully as admin")
+
+      {:ok, view, html} = live(conn, "/")
+      assert html =~ "Signed in successfully as admin"
+
+      # The timer scheduled on mount clears it
+      send(view.pid, {:clear_toast, :info})
+      refute render(view) =~ "Signed in successfully as admin"
+    end
+
     test "pinned extensions persist across remounts" do
       session = %{"admin_player_id" => "pin_persist_user", "admin_scopes" => ["admin"]}
 

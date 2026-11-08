@@ -54,6 +54,13 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       rescue
         _ -> :ok
       end
+
+      # Automatically schedule dismissal for any inbound flash (e.g. login/action redirects)
+      for kind <- [:info, :error] do
+        if Phoenix.Flash.get(socket.assigns.flash, kind) do
+          Process.send_after(self(), {:clear_toast, kind}, 2_500)
+        end
+      end
     end
 
     overview = fetch_overview()
@@ -349,8 +356,13 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     end
   end
 
-  def handle_event("dismiss_toast", %{"kind" => kind}, socket) when kind in ["info", "error"] do
-    {:noreply, clear_flash(socket, Exoforge.Atoms.existing(kind))}
+  def handle_event("dismiss_toast", %{"kind" => kind}, socket) when kind in ["info", "error", :info, :error] do
+    atom_kind = if is_atom(kind), do: kind, else: Exoforge.Atoms.existing(kind)
+    {:noreply, clear_flash(socket, atom_kind)}
+  end
+
+  def handle_event("dismiss_toast", _params, socket) do
+    {:noreply, socket |> clear_flash(:info) |> clear_flash(:error)}
   end
 
   def handle_event("search_extensions", %{"query" => query}, socket) do
@@ -1667,14 +1679,18 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       <!-- Floating Toast Notifications (completely outside document flow to avoid layout shifts) -->
       <div id="studio-toasts" class="fixed top-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none max-w-sm w-full">
         <%= for {kind, msg} <- [{:info, Phoenix.Flash.get(@flash, :info)}, {:error, Phoenix.Flash.get(@flash, :error)}], msg do %>
-          <div class={"relative overflow-hidden pointer-events-auto p-3.5 rounded-xl text-xs font-bold flex items-center gap-3 shadow-xl #{if kind == :info, do: "bg-emerald-600 text-white shadow-emerald-900/20", else: "bg-red-600 text-white shadow-red-900/20"}"}>
-            <span class="text-sm font-black"><%= if kind == :info, do: "✓", else: "!" %></span>
-            <span class="flex-1 leading-snug"><%= msg %></span>
+          <div
+            phx-click="dismiss_toast"
+            phx-value-kind={kind}
+            role="alert"
+            title="Click to dismiss"
+            class={"relative overflow-hidden pointer-events-auto p-3.5 rounded-xl text-xs font-bold flex items-center gap-3 shadow-xl cursor-pointer select-none transition-transform hover:scale-[1.02] active:scale-[0.98] #{if kind == :info, do: "bg-emerald-600 text-white shadow-emerald-900/20", else: "bg-red-600 text-white shadow-red-900/20"}"}
+          >
+            <span class="text-sm font-black pointer-events-none"><%= if kind == :info, do: "✓", else: "!" %></span>
+            <span class="flex-1 leading-snug pointer-events-none"><%= msg %></span>
             <button
               type="button"
-              phx-click="dismiss_toast"
-              phx-value-kind={kind}
-              class="opacity-80 hover:opacity-100 text-base font-black leading-none p-1"
+              class="opacity-80 hover:opacity-100 text-base font-black leading-none p-1 pointer-events-none"
               title="Dismiss"
             >
               &times;
