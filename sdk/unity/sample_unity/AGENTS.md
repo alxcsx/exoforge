@@ -221,7 +221,7 @@ From the Unity Editor, everything else lives in **Exoforge Studio** (`Exoforge �
 `Exoforge/extensions/` gets a **Build**, **Deploy**, and **Inspect** button (plus
 **Refresh Dependencies** to regenerate every extension stub at once). Stub generation fetches the live contracts and
 writes each extension's `src/Generated/PluginServices.g.cs`. Native builds run `dotnet publish`
-(framework-dependent) and regenerate `manifest.json`; set a **Native RID** (e.g. `linux-x64`) to build
+(framework-dependent) and regenerate `manifest.json`; set a **Native RID** (e.g. `linux-musl-x64`) to build
 for a non-host deploy target. If Unity can't find `dotnet` (GUI apps often don't inherit your shell PATH), set
 **Dotnet Path** in the Settings tab. The build streams its log into the window, and every build stamps
 the manifest version with a build counter and source fingerprint (`1.0.0+42.<hash>`), so a deploy is
@@ -241,7 +241,7 @@ Rules of thumb:
   `IDatabase`, and `get_leaderboard` returns `List<SnakeScoreRecord>`. Nothing needs registering:
   the generator writes the entry point, and a framework-dependent extension serialises its records by
   reflection. A hand-written `JsonSerializerContext` is still honoured, just not required.
-- Extensions build per OS: `$CLI extension build snake_leaderboard --rid linux-x64` for a Linux deploy.
+- Extensions build per OS: `$CLI extension build snake_leaderboard --rid linux-musl-x64` for container/Alpine deploy.
 - Uploaded extensions **do not survive a server restart** — re-`push` after restarting the backend.
 - `just dev-reset` stops the dev server and wipes every `priv/data` (SQLite databases and
   uploaded extensions). Use it for a clean slate — the server recreates its databases on boot.

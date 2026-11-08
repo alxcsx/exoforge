@@ -6,7 +6,7 @@
 [![Build Status](https://img.shields.io/badge/tests-452%20passing-brightgreen)](Justfile)
 [![E2E Vertical Slice](https://img.shields.io/badge/E2E%20Slice-verified%20live-blue)](sdk/csharp/Exoforge.Client.Tests/VerticalSliceIntegrationTests.cs)
 [![Event Fanout](https://img.shields.io/badge/event%20fanout-0.07%20ms%20to%2050%20subs-purple)](test/cluster_benchmark_test.exs)
-[![Unity SDK](https://img.shields.io/badge/Unity%20SDK-v0.1.30%20UPM%20Ready-black)](sdk/unity/Exoforge.SDK)
+[![Unity SDK](https://img.shields.io/badge/Unity%20SDK-v0.1.31%20UPM%20Ready-black)](sdk/unity/Exoforge.SDK)
 
 ---
 

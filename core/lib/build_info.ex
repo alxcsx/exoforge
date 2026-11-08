@@ -17,7 +17,7 @@ defmodule Exoforge.BuildInfo do
           _ ->
             case :application.get_key(:exoforge_core, :vsn) do
               {:ok, vsn} -> to_string(vsn)
-              _ -> "0.1.30"
+              _ -> "0.1.31"
             end
         end
     end

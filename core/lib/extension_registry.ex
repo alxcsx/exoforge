@@ -15,6 +15,7 @@ defmodule Exoforge.ExtensionRegistry do
   def initialize_ets do
     ensure_table(:exo_extensions_mem, :set)
     ensure_table(:exo_services_mem, :bag)
+    ensure_table(:exo_extension_status_mem, :set)
     :ok
   end
 
@@ -32,6 +33,7 @@ defmodule Exoforge.ExtensionRegistry do
   # Register an extension manifest
   def register(%Manifest{} = manifest) do
     id = Map.get(manifest, :id)
+    clear_crash_status(id)
     :ets.insert(:exo_extensions_mem, {id, manifest})
 
     provides = Map.get(manifest, :provides, [])
@@ -52,6 +54,7 @@ defmodule Exoforge.ExtensionRegistry do
 
   # Unregister an extension manifest and its services
   def unregister(manifest_id) do
+    clear_crash_status(manifest_id)
     id_atom = Exoforge.Atoms.existing(manifest_id, manifest_id)
 
     :ets.delete(:exo_extensions_mem, manifest_id)
@@ -62,6 +65,44 @@ defmodule Exoforge.ExtensionRegistry do
         match_services({{:_, :_}, %{id: id_atom}})
 
     Enum.each(existing, &:ets.delete_object(:exo_services_mem, &1))
+    :ok
+  end
+
+  @doc "Marks an extension as crashed with a reason and timestamp."
+  def mark_crashed(manifest_id, reason) do
+    ts = System.system_time(:second)
+    safe(:insert, [:exo_extension_status_mem, {manifest_id, {:crashed, reason, ts}}])
+    id_atom = Exoforge.Atoms.existing(manifest_id, manifest_id)
+    if id_atom != manifest_id do
+      safe(:insert, [:exo_extension_status_mem, {id_atom, {:crashed, reason, ts}}])
+    end
+    :ok
+  end
+
+  @doc "Returns crash details for an extension if it crashed, or nil otherwise."
+  def get_crash_info(manifest_id) do
+    case safe(:lookup, [:exo_extension_status_mem, manifest_id]) do
+      [{_, {:crashed, reason, _ts}} | _] -> {:crashed, reason}
+      _ ->
+        id_atom = Exoforge.Atoms.existing(manifest_id, manifest_id)
+        if id_atom != manifest_id do
+          case safe(:lookup, [:exo_extension_status_mem, id_atom]) do
+            [{_, {:crashed, reason, _ts}} | _] -> {:crashed, reason}
+            _ -> nil
+          end
+        else
+          nil
+        end
+    end
+  end
+
+  @doc "Clears crash status for an extension."
+  def clear_crash_status(manifest_id) do
+    safe(:delete, [:exo_extension_status_mem, manifest_id])
+    id_atom = Exoforge.Atoms.existing(manifest_id, manifest_id)
+    if id_atom != manifest_id do
+      safe(:delete, [:exo_extension_status_mem, id_atom])
+    end
     :ok
   end
 

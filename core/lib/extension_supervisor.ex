@@ -10,6 +10,6 @@ defmodule Exoforge.ExtensionSupervisor do
 
   @impl true
   def init(:ok) do
-    DynamicSupervisor.init(strategy: :one_for_one)
+    DynamicSupervisor.init(strategy: :one_for_one, max_restarts: 100, max_seconds: 5)
   end
 end

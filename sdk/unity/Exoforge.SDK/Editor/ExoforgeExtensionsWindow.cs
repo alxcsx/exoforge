@@ -2784,7 +2784,11 @@ namespace Exoforge.Unity.Editor
             {
                 var ws = ExoWorkspace.Load(ExoforgeEditorConfig.GetAbsoluteWorkspacePath());
                 var deployer = new ExoDeployer(ws);
-                var build = await deployer.BuildPluginAsync(targetName, null, ExoforgeEditorConfig.DotnetPath, s => _buildLog += s + "\n");
+                string? configuredRid = string.IsNullOrWhiteSpace(ExoforgeEditorConfig.TargetBuildRid) ? null : ExoforgeEditorConfig.TargetBuildRid.Trim();
+                string effectiveRid = !string.IsNullOrEmpty(configuredRid) && !string.Equals(configuredRid, "auto", StringComparison.OrdinalIgnoreCase)
+                    ? configuredRid
+                    : (IsConnected ? ExoforgeDotnetValidator.StandardServerRid : ExoDeployer.HostRuntimeIdentifier());
+                var build = await deployer.BuildPluginAsync(targetName, effectiveRid, ExoforgeEditorConfig.DotnetPath, s => _buildLog += s + "\n");
                 _buildLog = build.Output;
                 SessionState.EraseString($"Exoforge_BuildFailed_{targetName}");
                 ShowStatus($"✓ Successfully built '{targetName}'.");

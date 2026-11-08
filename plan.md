@@ -1,8 +1,8 @@
 # Exoforge Architecture & Plan (`plan.md`)
 
 > **Status**: Kernel, 14 standard extensions, C# Client SDK, C# Extension SDK, C# Management Engine (`exo`
-> CLI), Unity SDK (`com.exoforge.sdk` v0.1.30), Producer Studio, clustering, CI/CD pipeline, and Arch Linux staging deploy are
-> **complete** — **319 Elixir + 133 C# = 452 tests passing**, plus a live E2E vertical slice of 6 tests
+> CLI), Unity SDK (`com.exoforge.sdk` v0.1.31), Producer Studio, clustering, CI/CD pipeline, and Arch Linux staging deploy are
+> **complete** — **320 Elixir + 133 C# = 453 tests passing**, plus a live E2E vertical slice of 6 tests
 > against a running server and Unity headless check (`just sample-check`).
 > **MVP Status**: Phase 0 (ADR 001 Architecture Decision Record) & Phase 1 (Extension Terminology Bulldozer) **Completed**.
 > **Benchmark**: 0.07 ms fanout to 50 event subscribers over `:pg`.
@@ -74,6 +74,7 @@ extension_manager ─▶ (independent root)
 | **M35** | Studio LiveView Overhaul, Project Metadata & Staging CI/CD — Theme engine (dark/light mode contrast), telemetry rendering optimization, throughput graph, deterministic action colors, event deduplication, persistent cluster events; project metadata persistence (`ProjectMetadata`, title/studio settings modal, Unity SDK sync); dynamic CORS policy and WebSocket studio dispatch; SDK bucket downloads; GitHub Actions CI/CD with volume persistence; Arch Linux staging guide (`deploy/STAGING_DEPLOY.md`) and deployment automation |
 | **M36** | ADR 001 & Extension Terminology Bulldozer — Recorded ADR 001 (Unity-first, single-title, native extensions, immutable deployment, VPS containers). Bulldozed all platform code from "plugin" to "extension", renamed `plugins/` → `extensions/`, purged fallback wrappers (`plugins_csharp`, `PLUGINS_PATH`, `plugin_manager`), and standardized kernel registries and drivers |
 | **M37** | Unity SDK v0.1.30 & Extension DX Hardening — Standalone IDE solution launching (`<name>.sln`) bypassing Unity parent project evaluation; client API symmetry (`ExoServices.<Service>`); blank/minimal template scaffolding; enforced Unity player auth doctrine (`ExoforgeSDK.Auth`); cluster package version resolution & semantic version sorting in `file_bucket`; .NET 9+ SDK and runtime packs validation (`ExoforgeDotnetValidator`); global error logging (`ExoClient.OnError` -> `Debug.LogError`) and actionable `service_not_found` diagnostics |
+| **M38** | Extension Fault Isolation & Musl/Alpine RID Support (v0.1.31) — Dynamic musl/Alpine detection on cluster (`linux-musl-x64`) with `EXOFORGE_TARGET_RID` support; Unity Editor RID targeting with `linux-musl-x64` prewarming and default container targeting; supervisor fault isolation using `restart: :temporary` on extension supervisors, pre-handshake exit isolation, and crash registry tracking (`mark_crashed`) to prevent crash loop cascade to root supervisor |
 
 ---
 

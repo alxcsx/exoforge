@@ -42,6 +42,23 @@ defmodule Exoforge.Std.CronTest do
   end
 
   describe "Scheduler" do
+    setup do
+      unless Process.whereis(Exoforge.ExtensionRegistry) do
+        start_supervised!(Exoforge.ExtensionRegistry)
+      end
+
+      Exoforge.ExtensionRegistry.register(%Exoforge.Domain.Manifest{
+        id: :cron,
+        name: "cron",
+        version: "0.1.0",
+        entry_point: Exoforge.Std.Cron,
+        provides: [:cron]
+      })
+
+      start_supervised!({Scheduler, []})
+      :ok
+    end
+
     test "can register and list jobs" do
       job = %{
         name: "test_cleanup",

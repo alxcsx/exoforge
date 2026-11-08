@@ -160,7 +160,7 @@ defmodule Exoforge.Std.Cron.Scheduler do
 
     res =
       try do
-        ActionDispatcher.dispatch(service, action, %{}, caller_scopes: ["cron", "server"])
+        ActionDispatcher.dispatch(service, action, %{}, caller_scopes: :internal)
       rescue
         e -> {:error, Exception.message(e)}
       catch

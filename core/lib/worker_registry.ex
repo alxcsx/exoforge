@@ -15,9 +15,15 @@ defmodule Exoforge.WorkerRegistry do
 
   @doc "Looks up the PID of a worker by its plugin_id and worker_id."
   def lookup(plugin_id, worker_id) do
-    case Registry.lookup(@registry, {plugin_id, worker_id}) do
+    case safe_lookup({plugin_id, worker_id}) do
       [{pid, _value}] -> {:ok, pid}
-      [] -> {:error, :not_found}
+      _ -> {:error, :not_found}
     end
+  end
+
+  defp safe_lookup(key) do
+    Registry.lookup(@registry, key)
+  rescue
+    ArgumentError -> []
   end
 end

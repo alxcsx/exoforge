@@ -66,6 +66,7 @@ ARG DOTNET_RUNTIME_IMAGE=mcr.microsoft.com/dotnet/runtime:10.0-alpine
 
 ENV LANG=C.UTF-8 \
     MIX_ENV=prod \
+    EXOFORGE_TARGET_RID=linux-musl-x64 \
     ERL_EPMD_PORT=4369 \
     PORT=4005 \
     DASHBOARD_PORT=4005 \

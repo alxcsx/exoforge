@@ -1280,7 +1280,7 @@ public partial class ExoforgeControlCenter : EditorWindow
             }
             else if (thenDeploy)
             {
-                // When deploying to server: target the cluster's reported RID or standard linux-x64
+                // When deploying to server: target the cluster's reported RID or standard linux-musl-x64
                 effectiveRid = !string.IsNullOrEmpty(_clusterTargetRid) ? _clusterTargetRid : ExoforgeDotnetValidator.StandardServerRid;
             }
             else

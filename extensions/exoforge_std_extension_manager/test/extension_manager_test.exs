@@ -126,6 +126,18 @@ defmodule Exoforge.Std.ExtensionManagerTest do
       assert is_binary(sys["arch"])
     end
 
+    test "get_system_info respects EXOFORGE_TARGET_RID environment override" do
+      prev = System.get_env("EXOFORGE_TARGET_RID")
+      on_exit(fn ->
+        if prev, do: System.put_env("EXOFORGE_TARGET_RID", prev), else: System.delete_env("EXOFORGE_TARGET_RID")
+      end)
+
+      System.put_env("EXOFORGE_TARGET_RID", "linux-musl-x64")
+      assert {:ok, result} =
+               ActionDispatcher.dispatch(:extension_manager, :get_system_info, %{}, caller_scopes: ["studio"])
+      assert result.system["target_rid"] == "linux-musl-x64"
+    end
+
     test "upload_extension rejects a binary that is not an extension" do
       bad_binary = "This is not an extension binary at all"
 

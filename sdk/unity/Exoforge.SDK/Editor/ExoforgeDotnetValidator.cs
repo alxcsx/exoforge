@@ -16,7 +16,8 @@ namespace Exoforge.Unity.Editor
     {
         public const string DotnetDownloadUrl = "https://dotnet.microsoft.com/download/dotnet/9.0";
         public const int MinimumRequiredMajorVersion = 9;
-        public const string StandardServerRid = "linux-x64";
+        public const string StandardServerRid = "linux-musl-x64";
+        public const string FallbackServerRid = "linux-x64";
 
         public struct ValidationResult
         {
@@ -74,7 +75,7 @@ namespace Exoforge.Unity.Editor
                 IsInstalled = false,
                 MeetsMinimumVersion = false,
                 HasLocalRuntimePack = IsRuntimePackCached(hostRid, MinimumRequiredMajorVersion),
-                HasLinuxRuntimePack = IsRuntimePackCached(StandardServerRid, MinimumRequiredMajorVersion),
+                HasLinuxRuntimePack = IsRuntimePackCached(StandardServerRid, MinimumRequiredMajorVersion) || IsRuntimePackCached(FallbackServerRid, MinimumRequiredMajorVersion),
                 Message = ""
             };
 
@@ -270,7 +271,7 @@ namespace Exoforge.Unity.Editor
         public static bool PrewarmRuntimePacks(string? targetRid = null, string? dotnetPath = null, Action<string>? log = null)
         {
             string dotnet = ExoDeployer.ResolveDotnetPath(dotnetPath ?? ExoforgeEditorConfig.DotnetPath);
-            string ridsToRestore = targetRid ?? $"{ExoDeployer.HostRuntimeIdentifier()},{StandardServerRid}";
+            string ridsToRestore = targetRid ?? $"{ExoDeployer.HostRuntimeIdentifier()},{StandardServerRid},{FallbackServerRid}";
             string[] rids = ridsToRestore.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
 
             bool allOk = true;

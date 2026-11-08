@@ -201,7 +201,7 @@ defmodule Exoforge.Std.FileBucketTest do
     on_exit(fn -> File.rm_rf(dist_dir) end)
 
     File.write!(Path.join(dist_dir, "com.exoforge.sdk-0.1.15.tgz"), "older_payload")
-    File.write!(Path.join(dist_dir, "com.exoforge.sdk-0.1.30.tgz"), "newer_payload")
+    File.write!(Path.join(dist_dir, "com.exoforge.sdk-0.1.31.tgz"), "newer_payload")
     Application.put_env(:exoforge_std_file_bucket, :sdk_dist_dir, dist_dir)
     on_exit(fn -> Application.delete_env(:exoforge_std_file_bucket, :sdk_dist_dir) end)
 
@@ -213,7 +213,7 @@ defmodule Exoforge.Std.FileBucketTest do
                "id" => "unity"
              })
 
-    assert sdk_file["filename"] == "com.exoforge.sdk-0.1.30.tgz"
-    assert sdk_file["metadata"]["version"] == "0.1.30"
+    assert sdk_file["filename"] == "com.exoforge.sdk-0.1.31.tgz"
+    assert sdk_file["metadata"]["version"] == "0.1.31"
   end
 end

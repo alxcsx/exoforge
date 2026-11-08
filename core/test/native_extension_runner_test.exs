@@ -68,6 +68,14 @@ defmodule Exoforge.NativeExtensionRunnerTest do
   """
 
   setup do
+    unless Process.whereis(Exoforge.ExtensionRegistry) do
+      start_supervised!(Exoforge.ExtensionRegistry)
+    end
+
+    unless Process.whereis(Exoforge.WorkerRegistry.Registry) do
+      start_supervised!(Exoforge.WorkerRegistry)
+    end
+
     unless Process.whereis(Exoforge.EventDispatcher.registry_name()) do
       start_supervised!(Exoforge.EventDispatcher)
     end
@@ -288,5 +296,28 @@ defmodule Exoforge.NativeExtensionRunnerTest do
   test "fails loudly when the binary is missing", %{manifest: manifest} do
     missing = %{manifest | physical_path: Path.join(System.tmp_dir!(), "exo_native_missing")}
     assert {:error, {:binary_not_found, _}} = NativeExtensionRunner.load(missing)
+    assert {:crashed, {:binary_not_found, _}} = Exoforge.ExtensionRegistry.get_crash_info(missing.id)
+  end
+
+  test "isolates pre-handshake exit and marks extension as crashed", %{manifest: manifest} do
+    # Simulates an immediate process exit (e.g. exit 2 due to missing glibc/musl ld-linux interpreter)
+    exit_immediately = """
+    #!/usr/bin/env bash
+    exit 2
+    """
+    variant = write_variant(manifest, exit_immediately)
+
+    Process.flag(:trap_exit, true)
+    pid = start_runner(manifest, variant)
+
+    # Shuts down with {:shutdown, {:extension_exited, 2}} so OTP supervisor does NOT restart it
+    assert_receive {:EXIT, ^pid, {:shutdown, {:extension_exited, 2}}}, 1_000
+
+    # Extension status is recorded in ExtensionRegistry
+    assert {:crashed, {:exit_before_handshake, 2}} = Exoforge.ExtensionRegistry.get_crash_info(manifest.id)
+
+    # Action invocation returns the crash error immediately
+    assert {:error, {:extension_crashed, {:exit_before_handshake, 2}}} =
+             NativeExtensionRunner.execute_action(manifest.id, "ping", %{})
   end
 end

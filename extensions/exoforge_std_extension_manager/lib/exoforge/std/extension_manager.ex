@@ -49,6 +49,7 @@ defmodule Exoforge.Std.ExtensionManager do
           "icon" => icon,
           "version" => to_string(m.version),
           "type" => to_string(m.type),
+          "status" => extension_status(m.id),
           "entry_point" => to_string(m.entry_point),
           "category" => m.category || "Extension",
           "provides" => Enum.map(m.provides || [], &ExtensionRegistry.service_alias_or_module/1),
@@ -92,6 +93,7 @@ defmodule Exoforge.Std.ExtensionManager do
             "icon" => icon,
             "version" => to_string(m.version),
             "type" => to_string(m.type),
+            "status" => extension_status(m.id),
             "category" => m.category || "Extension",
             "entry_point" => to_string(m.entry_point),
             "provides" => Enum.map(m.provides || [], &ExtensionRegistry.service_alias_or_module/1),
@@ -316,19 +318,34 @@ defmodule Exoforge.Std.ExtensionManager do
   end
 
   defp scan_csharp_attributes do
+    base_prefix =
+      cond do
+        File.dir?("extensions") -> ""
+        File.dir?("../../extensions") -> "../../"
+        File.dir?("../extensions") -> "../"
+        true -> ""
+      end
+
     patterns = [
-      "extensions/*/{csharp,unity}/**/*.cs",
-      "extensions/*/{csharp,unity}/*.cs",
-      "extensions_csharp/*/{csharp,unity}/**/*.cs",
-      "extensions_csharp/*/{csharp,unity}/*.cs"
+      Path.join(base_prefix, "extensions/*/{csharp,unity}/**/*.cs"),
+      Path.join(base_prefix, "extensions/*/{csharp,unity}/*.cs"),
+      Path.join(base_prefix, "extensions_csharp/*/{csharp,unity}/**/*.cs"),
+      Path.join(base_prefix, "extensions_csharp/*/{csharp,unity}/*.cs")
     ]
 
     patterns
     |> Enum.flat_map(&Path.wildcard/1)
     |> Enum.uniq()
     |> Enum.map(fn file_path ->
+      rel =
+        if base_prefix != "" and String.starts_with?(file_path, base_prefix) do
+          String.replace_prefix(file_path, base_prefix, "")
+        else
+          file_path
+        end
+
       ext_name =
-        file_path
+        rel
         |> Path.split()
         |> Enum.at(1)
 
@@ -682,11 +699,24 @@ defmodule Exoforge.Std.ExtensionManager do
 
   defp cluster_os do
     case :os.type() do
-      {:unix, :linux} -> "linux"
+      {:unix, :linux} ->
+        if is_musl_linux?() do
+          "linux-musl"
+        else
+          "linux"
+        end
+
       {:unix, :darwin} -> "osx"
       {:win32, _} -> "win"
       {family, name} -> "#{family}-#{name}"
     end
+  end
+
+  defp is_musl_linux? do
+    File.exists?("/etc/alpine-release") or
+      Path.wildcard("/lib/ld-musl-*.so*") != [] or
+      Path.wildcard("/lib64/ld-musl-*.so*") != [] or
+      Path.wildcard("/usr/lib/ld-musl-*.so*") != []
   end
 
   defp cluster_arch do
@@ -700,6 +730,19 @@ defmodule Exoforge.Std.ExtensionManager do
   end
 
   defp cluster_target_rid do
-    "#{cluster_os()}-#{cluster_arch()}"
+    case System.get_env("EXOFORGE_TARGET_RID") do
+      val when is_binary(val) and val != "" ->
+        String.trim(val)
+
+      _ ->
+        "#{cluster_os()}-#{cluster_arch()}"
+    end
+  end
+
+  defp extension_status(manifest_id) do
+    case ExtensionRegistry.get_crash_info(manifest_id) do
+      {:crashed, reason} -> "crashed: #{inspect(reason)}"
+      _ -> "running"
+    end
   end
 end

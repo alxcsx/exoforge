@@ -1,7 +1,7 @@
 # Exoforge Operating Manual (`Agents.MD`)
 
 > **Branch**: `projetao_mvp`  
-> **Status**: Kernel, 14 standard extensions, C# Client & Extension SDKs, C# Management Engine (`exo` CLI), Unity SDK (`com.exoforge.sdk` v0.1.30), Producer Studio and the extension runtime are **complete** — **319 Elixir + 133 C# = 452 tests passing**, plus a live E2E vertical slice of 6 tests and Unity headless self-check (`just sample-check`).  
+> **Status**: Kernel, 14 standard extensions, C# Client & Extension SDKs, C# Management Engine (`exo` CLI), Unity SDK (`com.exoforge.sdk` v0.1.31), Producer Studio and the extension runtime are **complete** — **320 Elixir + 133 C# = 453 tests passing**, plus a live E2E vertical slice of 6 tests and Unity headless self-check (`just sample-check`).  
 > **MVP Execution Plan**: Phase 0 (ADR 001) & Phase 1 (Extension Terminology Bulldozer) **Completed**.  
 > **Verified SLA**: 0.07 ms fanout to 50 event subscribers over `:pg`.
 
@@ -189,7 +189,7 @@ topic) and forwards them as `{"type":"event"}` frames. The extension handles the
 host call. The payload is deserialized to `TPayload`; register it on the extension's JSON context (below).
 
 **Per-OS builds**: an extension is an assembly with a native apphost, so build for the deploy target:
-`exo extension build <name> --rid linux-x64` (defaults to the host).
+`exo extension build <name> --rid linux-musl-x64` (defaults to the host, or `linux-musl-x64` for container/Alpine VPS deploy).
 
 Extension payloads are **records**, not raw `JsonObject`/`JsonElement` — and the reason is the contract
 rather than the runtime. A record has a *name*, and that name is what the manifest, the generated

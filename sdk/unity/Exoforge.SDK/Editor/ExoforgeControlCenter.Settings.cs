@@ -167,16 +167,16 @@ public partial class ExoforgeControlCenter : EditorWindow
 
             EditorGUILayout.Space(2);
             EditorGUILayout.BeginHorizontal();
-            if (GUILayout.Button("⬇️ Pre-warm / Restore Runtime Packs (linux-x64 & host)", GUILayout.Height(22)))
+            if (GUILayout.Button("⬇️ Pre-warm / Restore Runtime Packs (linux-musl-x64, linux-x64 & host)", GUILayout.Height(22)))
             {
-                ShowStatus("Restoring targeting packs for linux-x64 and host RID...", MessageType.Info);
+                ShowStatus("Restoring targeting packs for linux-musl-x64, linux-x64 and host RID...", MessageType.Info);
                 bool ok = ExoforgeDotnetValidator.PrewarmRuntimePacks(
-                    $"{dotnetRes.HostRid},{ExoforgeDotnetValidator.StandardServerRid}",
+                    $"{dotnetRes.HostRid},{ExoforgeDotnetValidator.StandardServerRid},{ExoforgeDotnetValidator.FallbackServerRid}",
                     ExoforgeEditorConfig.DotnetPath,
                     msg => UnityEngine.Debug.Log($"[Exoforge] {msg}"));
                 if (ok)
                 {
-                    ShowStatus("✓ Runtime packs (linux-x64 & host) successfully restored and cached.", MessageType.Info);
+                    ShowStatus("✓ Runtime packs (linux-musl-x64, linux-x64 & host) successfully restored and cached.", MessageType.Info);
                 }
                 else
                 {
@@ -225,10 +225,11 @@ public partial class ExoforgeControlCenter : EditorWindow
         EditorGUILayout.Space(4);
         string currentRid = ExoforgeEditorConfig.TargetBuildRid;
         if (string.IsNullOrEmpty(currentRid)) currentRid = "auto";
-        string[] ridOptions = new[] { "auto", "linux-x64", "linux-arm64", "win-x64", "osx-arm64" };
+        string[] ridOptions = new[] { "auto", "linux-musl-x64", "linux-x64", "linux-arm64", "win-x64", "osx-arm64" };
         string[] ridLabels = new[] {
-            $"Auto (Deploy: {(!string.IsNullOrEmpty(_clusterTargetRid) ? _clusterTargetRid : "linux-x64")}, Local: {dotnetRes.HostRid})",
-            "linux-x64 (Standard Linux VPS / Docker)",
+            $"Auto (Deploy: {(!string.IsNullOrEmpty(_clusterTargetRid) ? _clusterTargetRid : ExoforgeDotnetValidator.StandardServerRid)}, Local: {dotnetRes.HostRid})",
+            "linux-musl-x64 (Docker / Alpine Container - Default)",
+            "linux-x64 (Standard Linux glibc / VPS)",
             "linux-arm64 (Linux ARM64 / AWS Graviton)",
             "win-x64 (Windows Server / Local Dev)",
             "osx-arm64 (macOS Apple Silicon)"

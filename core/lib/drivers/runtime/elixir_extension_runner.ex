@@ -30,6 +30,7 @@ defmodule Exoforge.Drivers.Runtime.ElixirExtensionRunner do
 
     child_spec = %{
       id: ext_sup_name,
+      restart: :temporary,
       start: {Supervisor, :start_link, [children, [name: ext_sup_name, strategy: :one_for_one]]},
       type: :supervisor
     }

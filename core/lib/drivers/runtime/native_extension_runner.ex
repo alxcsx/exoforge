@@ -17,6 +17,7 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
   alias Exoforge.Domain.Manifest
   alias Exoforge.Drivers.Runtime.ExtensionProtocol
   alias Exoforge.EventDispatcher
+  alias Exoforge.ExtensionRegistry
   alias Exoforge.WorkerRegistry
 
   @runner_key :native_runner
@@ -59,10 +60,11 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
 
         child_spec = %{
           id: sup_name,
+          restart: :temporary,
           start: {
             Supervisor,
             :start_link,
-            [children, [name: sup_name, strategy: :one_for_one]]
+            [children, [name: sup_name, strategy: :one_for_one, max_restarts: 3, max_seconds: 5]]
           },
           type: :supervisor
         }
@@ -71,6 +73,7 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
 
       {:error, reason} ->
         Logger.error("[NativeExtensionRunner] No binary for #{manifest.id}: #{inspect(reason)}")
+        ExtensionRegistry.mark_crashed(manifest.id, reason)
         {:error, reason}
     end
   end
@@ -124,7 +127,13 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
         end
 
       {:error, :not_found} ->
-        {:error, {:extension_not_running, extension_id}}
+        case ExtensionRegistry.get_crash_info(extension_id) do
+          {:crashed, reason} ->
+            {:error, {:extension_crashed, reason}}
+
+          _ ->
+            {:error, {:extension_not_running, extension_id}}
+        end
     end
   end
 
@@ -226,19 +235,32 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
   def handle_info({port, {:exit_status, status}}, %{port: port} = state) do
     if is_nil(state.handshake) do
       Logger.error(
-        "[NativeExtensionRunner] #{state.manifest.id} exited before the protocol handshake. " <>
-          "If it was built for a newer .NET, this image may not carry that runtime."
+        "[NativeExtensionRunner] #{state.manifest.id} exited before the protocol handshake (exit status #{status}). " <>
+          "This usually indicates: 1) LIBC/RID MISMATCH: The binary was compiled for glibc (e.g. linux-x64) instead of musl (e.g. linux-musl-x64) for Alpine Linux; " <>
+          "2) RUNTIME PACK: The required .NET runtime is missing from the container image; or 3) MISSING DEPENDENCY. " <>
+          "The extension has been marked as crashed and isolated to protect the cluster supervision tree."
       )
+
+      ExtensionRegistry.mark_crashed(state.manifest.id, {:exit_before_handshake, status})
+
+      Enum.each(state.pending, fn {_id, entry} ->
+        record_call(state.manifest.id, entry, :exited, 0)
+        GenServer.reply(entry.from, {:error, {:extension_crashed, {:exit_before_handshake, status}}})
+      end)
+
+      {:stop, {:shutdown, {:extension_exited, status}}, %{state | pending: %{}}}
+    else
+      Logger.warning("[NativeExtensionRunner] Extension #{state.manifest.id} exited with status #{status}")
+
+      ExtensionRegistry.mark_crashed(state.manifest.id, {:extension_exited, status})
+
+      Enum.each(state.pending, fn {_id, entry} ->
+        record_call(state.manifest.id, entry, :exited, 0)
+        GenServer.reply(entry.from, {:error, {:extension_exited, status}})
+      end)
+
+      {:stop, {:extension_exited, status}, %{state | pending: %{}}}
     end
-
-    Logger.warning("[NativeExtensionRunner] Extension #{state.manifest.id} exited with status #{status}")
-
-    Enum.each(state.pending, fn {_id, entry} ->
-      record_call(state.manifest.id, entry, :exited, 0)
-      GenServer.reply(entry.from, {:error, {:extension_exited, status}})
-    end)
-
-    {:stop, {:extension_exited, status}, %{state | pending: %{}}}
   end
 
   def handle_info(:handshake_timeout, %{handshake: nil} = state), do: refuse(state, :no_handshake)
@@ -378,6 +400,8 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
       "[NativeExtensionRunner] Refusing #{state.manifest.id}: #{ExtensionProtocol.refusal(reason)}. " <>
         "Rebuild the extension against the current SDK, or update the image."
     )
+
+    ExtensionRegistry.mark_crashed(state.manifest.id, {:handshake_refused, reason})
 
     Enum.each(state.pending, fn {_id, entry} ->
       GenServer.reply(entry.from, {:error, {:extension_incompatible, reason}})

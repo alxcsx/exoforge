@@ -162,10 +162,16 @@ public class ExoDeployer
 
             string? version = ReadString(result, "extension", "version") ?? ReadString(result, "plugin", "version");
             string? type = ReadString(result, "extension", "type") ?? ReadString(result, "plugin", "type");
+            string? status = ReadString(result, "extension", "status") ?? ReadString(result, "plugin", "status");
 
             if (version == null)
             {
                 return new PluginDeploymentStatus(false, null, null, $"cluster does not have '{cleanName}'");
+            }
+
+            if (status != null && status.StartsWith("crashed", StringComparison.OrdinalIgnoreCase))
+            {
+                return new PluginDeploymentStatus(false, version, type, $"extension crashed on boot: {status}");
             }
 
             if (expectedVersion != null && !string.Equals(version, expectedVersion, StringComparison.Ordinal))

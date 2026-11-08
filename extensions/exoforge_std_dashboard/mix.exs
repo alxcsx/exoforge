@@ -4,7 +4,7 @@ defmodule Exoforge.Std.Dashboard.MixProject do
   def project do
     [
       app: :exoforge_std_dashboard,
-      version: "0.1.30",
+      version: "0.1.31",
       elixir: "~> 1.20",
       deps: deps(),
       compilers: Mix.compilers() ++ [:exoforge_manifest]
