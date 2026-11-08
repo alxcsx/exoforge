@@ -1212,7 +1212,7 @@ defmodule Exoforge.DashboardLiveViewTest do
 
       # Now on Guide screen: verify default Quickstart Flow
       guide_html = render(view)
-      assert guide_html =~ "From Zero to Live Online Multiplayer Features"
+      assert guide_html =~ "Creating Your First Online Multiplayer Feature"
       assert guide_html =~ "Connect &amp; Authenticate"
 
       # Switch to Architecture subpage
@@ -1226,7 +1226,7 @@ defmodule Exoforge.DashboardLiveViewTest do
       assert attr_html =~ "[ExoAction]"
       assert attr_html =~ "[ExoEvent]"
       assert attr_html =~ "[ExoResource]"
-      assert attr_html =~ "Exoforge.Plugin.SDK"
+      assert attr_html =~ "Extension Manager"
       assert attr_html =~ "exoforge_std_extension_manager"
       assert attr_html =~ "exoforge_std_resources"
       assert attr_html =~ "[ExoResource] Parameters"
@@ -1238,7 +1238,7 @@ defmodule Exoforge.DashboardLiveViewTest do
       assert use_cases_html =~ "The Paradigm Shift: Exoforge vs. Legacy BaaS"
       assert use_cases_html =~ "Auction House &amp; P2P"
       assert use_cases_html =~ "In-Memory Matchmaker"
-      assert use_cases_html =~ "Hot State in RAM, Durable in DB"
+      assert use_cases_html =~ "Stateless Extensions, Resilient State in DB"
     end
   end
 end

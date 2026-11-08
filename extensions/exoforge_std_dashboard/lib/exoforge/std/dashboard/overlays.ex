@@ -612,7 +612,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
           <div class="pt-3 border-t border-gray-200/60 px-2 text-[10px] text-gray-400 space-y-1">
             <div class="truncate"><span>Node: </span><span class="font-mono text-gray-600"><%= @node_name %></span></div>
             <div class="truncate" title={@overview[:commit_hash]}>
-              <span>Cluster: </span><span class="font-mono text-gray-600">v<%= @overview[:version] || "1.0.0" %> (<%= String.slice(to_string(@overview[:commit_hash] || "dev"), 0, 7) %>)</span>
+              <span>Cluster: </span><span class="font-mono text-gray-600">v<%= @overview[:version] || Exoforge.BuildInfo.version() %> (<%= String.slice(to_string(@overview[:commit_hash] || "dev"), 0, 7) %>)</span>
             </div>
           </div>
         </div>
@@ -716,7 +716,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
                   <div class="p-2.5 bg-white border border-gray-200 rounded-lg min-w-0">
                     <span class="text-[10px] font-bold text-gray-400 uppercase block">Version</span>
-                    <p class="text-sm font-bold text-gray-800 font-mono mt-0.5 truncate">v<%= @overview[:version] || "1.0.0" %></p>
+                    <p class="text-sm font-bold text-gray-800 font-mono mt-0.5 truncate">v<%= @overview[:version] || Exoforge.BuildInfo.version() %></p>
                   </div>
                   <div class="p-2.5 bg-white border border-gray-200 rounded-lg min-w-0 overflow-hidden">
                     <span class="text-[10px] font-bold text-gray-400 uppercase block">Commit Hash</span>

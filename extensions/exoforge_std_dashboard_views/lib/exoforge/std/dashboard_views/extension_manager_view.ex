@@ -523,7 +523,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
           <div class="min-w-0 flex-1">
             <div class="text-xs font-semibold text-gray-500 truncate">Cluster Build</div>
             <div class="flex items-center gap-2 mt-0.5">
-              <span class="text-lg font-black font-mono text-gray-900">v<%= Map.get(@system_info, "version", "1.0.0") %></span>
+              <span class="text-lg font-black font-mono text-gray-900">v<%= Map.get(@system_info, "version", "0.1.0") %></span>
               <span class="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-purple-50 text-purple-700">
                 #<%= Map.get(@system_info, "commit_hash", "dev") %>
               </span>
@@ -923,7 +923,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
                 <textarea
                   name="upload[manifest_json]"
                   rows="2"
-                  placeholder='{"version": "1.0.0", "category": "Gameplay"}'
+                  placeholder='{"version": "0.1.0", "category": "Gameplay"}'
                   class="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:bg-white font-mono"
                 ><%= @upload_form["manifest_json"] %></textarea>
               </div>

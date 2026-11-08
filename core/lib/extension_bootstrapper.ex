@@ -225,7 +225,7 @@ defmodule Exoforge.ExtensionBootstrapper do
       banner = """
 
       ==============================================================================
-        🚀 EXOFORGE CLUSTER RUNTIME (v1.0.0 [#{env}])
+        🚀 EXOFORGE CLUSTER RUNTIME (v#{Exoforge.BuildInfo.version()} [#{env}])
       ==============================================================================
         • Exoforge Dashboard:   http://localhost:#{dash_port}
         • REST API Gateway:  http://localhost:#{http_port} (Docs: /api/docs)

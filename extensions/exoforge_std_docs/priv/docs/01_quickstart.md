@@ -51,7 +51,7 @@ using System;
 using System.Threading.Tasks;
 using Exoforge.Plugin.SDK;
 
-[ExoService("gameplay_calculator", Title = "Gameplay Calculator", Icon = "🧮", Version = "1.0.0")]
+[ExoService("gameplay_calculator", Title = "Gameplay Calculator", Icon = "🧮", Version = "0.1.0")]
 public class GameplayCalculatorExtension
 {
     [ExoAction(Scope = "player")]

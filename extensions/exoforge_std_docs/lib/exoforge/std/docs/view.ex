@@ -2210,7 +2210,7 @@ defmodule Exoforge.Std.Docs.View do
     using System;
     using Exoforge.Plugin.SDK;
 
-    [ExoService("gameplay_calculator", Version = "1.0.0")]
+    [ExoService("gameplay_calculator", Version = "0.1.0")]
     public class GameplayCalculatorExtension
     {
         [ExoAction]
@@ -2274,7 +2274,7 @@ defmodule Exoforge.Std.Docs.View do
         Title = "Leaderboards & Rankings",
         Icon = "🏆",
         Category = "Game",
-        Version = "1.0.0",
+        Version = "0.1.0",
         Resources = new[] { typeof(PlayerScoreRecord) })]
     public class LeaderboardExtension
     {

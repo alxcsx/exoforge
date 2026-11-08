@@ -16,7 +16,7 @@ defmodule Exoforge.Std.Http.OpenAPI do
         title: "Exoforge Game Backend REST API",
         description:
           "Automatically generated OpenAPI 3.0 specification derived from active Exoforge service contracts and plugins.",
-        version: "1.0.0"
+        version: Exoforge.BuildInfo.version()
       },
       servers: [
         %{
