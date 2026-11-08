@@ -76,7 +76,7 @@ namespace Exoforge.Client.Unity
             "this device's own session. Play mode then shares the Studio's player - the same leaderboard " +
             "rows and the same player data - and no anonymous account is minted for the editor. " +
             "A build has no Studio window, so it falls back to the device's own session.")]
-        [SerializeField] private bool useStudioConnection = true;
+        [SerializeField] private bool useStudioConnection = false;
 
         [Header("Reconnect")]
         [Tooltip("Reconnect automatically when the connection drops.")]

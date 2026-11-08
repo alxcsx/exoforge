@@ -27,6 +27,7 @@ namespace Exoforge.Client
         private const string PlayerIdKey = "Exoforge.PlayerId";
         private const string ScopesKey = "Exoforge.Scopes";
         private const string NameKey = "Exoforge.PlayerName";
+        private const string AttachedDeviceIdKey = "Exoforge.DeviceId.Attached";
 
         private const string StudioTokenKey = "Exoforge.Studio.Token";
         private const string StudioPlayerIdKey = "Exoforge.Studio.PlayerId";
@@ -79,6 +80,40 @@ namespace Exoforge.Client
         // The Studio's slot, whatever UseStudioSession says. The editor works with these directly:
         // it is the Studio, and its session is not the device's.
 
+        /// <summary>The device's own bearer token, irrespective of <see cref="UseStudioSession"/>.</summary>
+        public static string DeviceToken => PlayerPrefs.GetString(TokenKey, string.Empty);
+
+        /// <summary>The device's own player id, irrespective of <see cref="UseStudioSession"/>.</summary>
+        public static string DevicePlayerId => PlayerPrefs.GetString(PlayerIdKey, string.Empty);
+
+        /// <summary>The device id that was active when the device session was saved.</summary>
+        public static string AttachedDeviceId => PlayerPrefs.GetString(AttachedDeviceIdKey, string.Empty);
+
+        /// <summary>Forgets the device's player session, leaving the Studio's alone.</summary>
+        public static void ClearDeviceSession()
+        {
+            PlayerPrefs.DeleteKey(TokenKey);
+            PlayerPrefs.DeleteKey(PlayerIdKey);
+            PlayerPrefs.DeleteKey(ScopesKey);
+            PlayerPrefs.DeleteKey(NameKey);
+            PlayerPrefs.DeleteKey(AttachedDeviceIdKey);
+
+            lock (s_memoryCache)
+            {
+                s_memoryCache.Remove(TokenKey);
+                s_memoryCache.Remove(PlayerIdKey);
+                s_memoryCache.Remove(ScopesKey);
+                s_memoryCache.Remove(NameKey);
+                s_memoryCache.Remove(AttachedDeviceIdKey);
+            }
+
+            try
+            {
+                PlayerPrefs.Save();
+            }
+            catch (Exception) { }
+        }
+
         /// <summary>The Studio's bearer token.</summary>
         public static string StudioToken => PlayerPrefs.GetString(StudioTokenKey, string.Empty);
 
@@ -98,8 +133,20 @@ namespace Exoforge.Client
             PlayerPrefs.Save();
         }
 
-        public static void SaveSession(string token, string? playerId = null, IEnumerable<string>? scopes = null, string? name = null) =>
+        public static void SaveSession(string token, string? playerId = null, IEnumerable<string>? scopes = null, string? name = null, string? attachedDeviceId = null)
+        {
             Store(TokenKey, PlayerIdKey, ScopesKey, NameKey, token, playerId, scopes, name);
+            if (!string.IsNullOrEmpty(attachedDeviceId))
+            {
+                try
+                {
+                    PlayerPrefs.SetString(AttachedDeviceIdKey, attachedDeviceId);
+                    lock (s_memoryCache) s_memoryCache[AttachedDeviceIdKey] = attachedDeviceId;
+                    PlayerPrefs.Save();
+                }
+                catch (Exception) { }
+            }
+        }
 
         /// <summary>
         /// Stores the Exoforge Studio window's session. Written by the editor on connect; read in play
@@ -157,15 +204,14 @@ namespace Exoforge.Client
         /// <summary>Clears the session in use, leaving the other one alone.</summary>
         public static void Clear()
         {
-            Delete(TokenKey, StudioTokenKey);
-            Delete(PlayerIdKey, StudioPlayerIdKey);
-            Delete(ScopesKey, StudioScopesKey);
-            Delete(NameKey, StudioNameKey);
-            try
+            if (UseStudioSession)
             {
-                PlayerPrefs.Save();
+                ClearStudioSession();
             }
-            catch (Exception) { }
+            else
+            {
+                ClearDeviceSession();
+            }
         }
 
         private static string Read(string deviceKey, string studioKey)

@@ -56,32 +56,37 @@ namespace Exoforge.Client.Unity
             // should never open one - so this goes over HTTP and the socket stays shut until
             // something actually needs it.
             var client = ExoforgeSDK.Client;
+            string activeDeviceId = ExoDeviceId.Get();
 
-            // Fast path: the credential this machine already holds.
-            if (ExoTokenStore.HasToken)
+            // Fast path: the credential this machine already holds for the active device ID.
+            // Anonymous login is strictly for device/player sessions and must never reuse staff/admin credentials.
+            string cachedToken = ExoTokenStore.DeviceToken;
+            string attachedDeviceId = ExoTokenStore.AttachedDeviceId;
+
+            if (!string.IsNullOrEmpty(cachedToken) && string.Equals(attachedDeviceId, activeDeviceId, StringComparison.Ordinal))
             {
-                var existing = await AuthenticateAsync(client, ExoTokenStore.Token);
+                var existing = await AuthenticateAsync(client, cachedToken);
 
                 if (existing != null)
                 {
                     bool isStaff = existing.Value.Scopes.Contains("admin") || existing.Value.Scopes.Contains("studio");
-                    if (isStaff && !ExoTokenStore.UseStudioSession)
+                    if (isStaff)
                     {
-                        Debug.LogWarning("[Exoforge] Cached token belongs to staff/admin while running as player. Resetting session to mint fresh anonymous account.");
-                        LogoutAndForgetDevice();
+                        Debug.LogWarning("[Exoforge] Cached device token belongs to staff/admin while running as player. Resetting session to mint fresh anonymous account.");
+                        ExoTokenStore.ClearDeviceSession();
                     }
                     else
                     {
-                        client.UseToken(ExoTokenStore.Token);
+                        client.UseToken(cachedToken);
                         if (client.IsConnected && !client.IsAuthenticated)
                         {
-                            await client.AuthenticateAsync(ExoTokenStore.Token);
+                            await client.AuthenticateAsync(cachedToken);
                         }
 
                         Current = new ExoSession(
                             existing.Value.PlayerId,
                             ExoTokenStore.PlayerName,
-                            ExoTokenStore.Token,
+                            cachedToken,
                             existing.Value.Scopes,
                             false);
 
@@ -89,16 +94,19 @@ namespace Exoforge.Client.Unity
                         return Current;
                     }
                 }
-
-                // Stored credential is stale — fall through and mint a fresh account.
-                ExoTokenStore.Clear();
+                else
+                {
+                    // Stored credential is stale — fall through and mint a fresh account.
+                    ExoTokenStore.ClearDeviceSession();
+                }
             }
 
             // `player_id` is the account key, so this creates the player on first sight of the
-            // device and re-enters it on a fresh install.
+            // device and re-enters it on a fresh install. We pass both player_id and device_id.
             var result = await client.SendActionAsync<JsonElement>("auth", "anonymous", new
             {
-                player_id = ExoDeviceId.Get(),
+                player_id = activeDeviceId,
+                device_id = activeDeviceId,
                 disposable
             }, ExoTransportPreference.Http);
 
@@ -124,7 +132,7 @@ namespace Exoforge.Client.Unity
                 ? nameProp.GetString() ?? ""
                 : "";
 
-            ExoTokenStore.SaveSession(token, auth.PlayerId, auth.Scopes, name);
+            ExoTokenStore.SaveSession(token, auth.PlayerId, auth.Scopes, name, activeDeviceId);
 
             Current = new ExoSession(auth.PlayerId, name, token, auth.Scopes, true);
             ExoforgeSDK.WireExoServicesLocator();
@@ -208,7 +216,7 @@ namespace Exoforge.Client.Unity
         /// </summary>
         public void Logout()
         {
-            ExoTokenStore.Clear();
+            ExoTokenStore.ClearDeviceSession();
             Current = null;
             try
             {

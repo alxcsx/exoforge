@@ -19,9 +19,30 @@ namespace Exoforge.Client.Unity
     public static class ExoDeviceId
     {
         private const string Key = "Exoforge.DeviceId";
+        private const string PreviousKey = "Exoforge.PreviousDeviceId";
         private static string? s_cached;
 
-        /// <summary>Returns the cached device id, deriving and persisting it on first call.</summary>
+        /// <summary>Returns the true hardware-derived device id (stable across reinstalls).</summary>
+        public static string HardwareId
+        {
+            get
+            {
+                string seed = SystemInfo.deviceUniqueIdentifier;
+                if (string.IsNullOrEmpty(seed) || seed == SystemInfo.unsupportedIdentifier)
+                {
+                    seed = "hw_fallback_device";
+                }
+                return Derive(seed);
+            }
+        }
+
+        /// <summary>Returns the previously active device id before the last reset/impersonation, if any.</summary>
+        public static string PreviousId => PlayerPrefs.GetString(PreviousKey, string.Empty);
+
+        /// <summary>True if the active device id is masked or impersonated away from the native hardware id.</summary>
+        public static bool IsCustom => !string.Equals(Get(), HardwareId, StringComparison.Ordinal);
+
+        /// <summary>Returns the active device id, deriving and persisting it on first call.</summary>
         public static string Get()
         {
             if (!string.IsNullOrEmpty(s_cached))
@@ -39,15 +60,7 @@ namespace Exoforge.Client.Unity
                     return cached;
                 }
 
-                string seed = SystemInfo.deviceUniqueIdentifier;
-
-                // Unity returns this when the platform exposes no identifier.
-                if (string.IsNullOrEmpty(seed) || seed == SystemInfo.unsupportedIdentifier)
-                {
-                    seed = Guid.NewGuid().ToString("N");
-                }
-
-                string deviceId = Derive(seed);
+                string deviceId = HardwareId;
                 PlayerPrefs.SetString(Key, deviceId);
                 PlayerPrefs.Save();
 
@@ -62,24 +75,81 @@ namespace Exoforge.Client.Unity
         }
 
         /// <summary>Clears the cached id and generates a fresh unique device id — the next sign-in claims a brand new account.</summary>
-        public static string Reset()
-        {
-            return ResetWithNewId();
-        }
+        public static string Reset() => ResetWithNewId();
 
-        /// <summary>Generates and persists a new unique device identifier.</summary>
+        /// <summary>
+        /// Masks the current device by generating a brand new random device id, saving the current one
+        /// to <see cref="PreviousId"/>, and clearing the cached anonymous player credentials.
+        /// </summary>
+        public static string Mask() => ResetWithNewId();
+
+        /// <summary>Generates and persists a new unique device identifier, saving the previous one.</summary>
         public static string ResetWithNewId()
         {
+            string current = Get();
             string seed = Guid.NewGuid().ToString("N");
-            string deviceId = Derive(seed);
-            s_cached = deviceId;
+            string newId = Derive(seed);
+
+            SaveTransition(current, newId);
+            return newId;
+        }
+
+        /// <summary>
+        /// Impersonates a specific device identifier for testing, saving the current one to <see cref="PreviousId"/>
+        /// and clearing the cached player credentials so the next sign-in enters that account.
+        /// </summary>
+        public static string Impersonate(string targetDeviceId)
+        {
+            if (string.IsNullOrWhiteSpace(targetDeviceId))
+                throw new ArgumentException("Target device ID cannot be empty.", nameof(targetDeviceId));
+
+            string current = Get();
+            string trimmed = targetDeviceId.Trim();
+
+            SaveTransition(current, trimmed);
+            return trimmed;
+        }
+
+        /// <summary>
+        /// Reverts the active device id to the previous one before the last change, if available.
+        /// </summary>
+        public static string? ResetToPreviousId()
+        {
+            string previous = PreviousId;
+            if (string.IsNullOrEmpty(previous)) return null;
+
+            string current = Get();
+            SaveTransition(current, previous);
+            return previous;
+        }
+
+        /// <summary>
+        /// Reverts the active device id to the native hardware device ID, saving the current one to <see cref="PreviousId"/>.
+        /// </summary>
+        public static string ResetToHardwareId()
+        {
+            string current = Get();
+            string hardware = HardwareId;
+            SaveTransition(current, hardware);
+            return hardware;
+        }
+
+        private static void SaveTransition(string previous, string next)
+        {
+            s_cached = next;
             try
             {
-                PlayerPrefs.SetString(Key, deviceId);
+                if (!string.IsNullOrEmpty(previous) && !string.Equals(previous, next, StringComparison.Ordinal))
+                {
+                    PlayerPrefs.SetString(PreviousKey, previous);
+                }
+                PlayerPrefs.SetString(Key, next);
                 PlayerPrefs.Save();
+
+                // Clear cached anonymous player token so next sign-in claims the new identity
+                ExoTokenStore.ClearDeviceSession();
             }
             catch (Exception) { }
-            return deviceId;
         }
 
         private static string Derive(string seed)

@@ -37,6 +37,7 @@ public class ExoDispatcher
                 }
                 catch (Exception ex)
                 {
+                    ExoClient.OnError?.Invoke($"[ExoDispatcher] Uncaught exception in callback: {ex.Message}", ex);
                     Console.Error.WriteLine($"[ExoDispatcher] Uncaught exception in callback: {ex}");
                 }
             }, null);
@@ -61,6 +62,7 @@ public class ExoDispatcher
             }
             catch (Exception ex)
             {
+                ExoClient.OnError?.Invoke($"[ExoDispatcher] Uncaught exception in callback: {ex.Message}", ex);
                 Console.Error.WriteLine($"[ExoDispatcher] Uncaught exception in callback: {ex}");
             }
         }

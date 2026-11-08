@@ -296,6 +296,7 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
     private Tab _currentTab = Tab.Extensions;
     private Vector2 _mainScroll;
     private Vector2 _settingsScroll;
+    private string _impersonateTargetId = "";
 
     // UI Toolkit references
     private VisualElement? _root;
@@ -554,11 +555,7 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
     [MenuItem("Exoforge/Sessions/Reset Anonymous Player Session", false, 50)]
     public static void ResetAnonymousPlayerSession()
     {
-        PlayerPrefs.DeleteKey("Exoforge.Token");
-        PlayerPrefs.DeleteKey("Exoforge.PlayerId");
-        PlayerPrefs.DeleteKey("Exoforge.Scopes");
-        PlayerPrefs.DeleteKey("Exoforge.PlayerName");
-        PlayerPrefs.Save();
+        ExoTokenStore.ClearDeviceSession();
         ExoDeviceId.ResetWithNewId();
         UnityEngine.Debug.Log("[Exoforge] Cleared anonymous player session and generated a new unique device identifier.");
     }

@@ -417,10 +417,12 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
         id = to_string(p[:player_id] || p["player_id"] || "")
         uid = to_string(p[:user_id] || p["user_id"] || "")
         name = to_string(p[:name] || p["name"] || "")
+        did = to_string(p[:device_id] || p["device_id"] || "")
 
         String.contains?(String.downcase(id), q) or
           String.contains?(String.downcase(uid), q) or
-          String.contains?(String.downcase(name), q)
+          String.contains?(String.downcase(name), q) or
+          String.contains?(String.downcase(did), q)
       end)
     end
   end
@@ -532,7 +534,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
           <input
             type="search"
             name="query"
-            placeholder="Search by Player ID, User ID, or Name..."
+            placeholder="Search by Player ID, User ID, Device ID, or Name..."
             value={@search_query}
             phx-debounce="250"
             class="w-full pl-9 pr-4 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:bg-white transition-all"
@@ -618,6 +620,11 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
                           Retained (No User)
                         </span>
                       <% end %>
+                      <%= if did = (player[:device_id] || player["device_id"]) do %>
+                        <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-purple-50 text-purple-700 border border-purple-200" title={"Attached Device ID: #{did}"}>
+                          📱 <%= did %>
+                        </span>
+                      <% end %>
                     </div>
                     <div class="text-[11px] text-gray-500 flex items-center gap-2 mt-0.5">
                       <span class={"inline-block w-1.5 h-1.5 rounded-full #{if is_linked, do: "bg-emerald-500", else: "bg-amber-500"}"}></span>
@@ -680,14 +687,23 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
       <%= if @selected_player do %>
         <% p_name = @selected_player[:name] || @selected_player["name"] || @selected_player_id %>
         <% p_uid = @selected_player[:user_id] || @selected_player["user_id"] %>
+        <% p_did = @selected_player[:device_id] || @selected_player["device_id"] %>
+        <% p_dids = @selected_player[:device_ids] || @selected_player["device_ids"] || (if p_did, do: [p_did], else: []) %>
         <Exoforge.Std.DashboardViews.InspectPopup.inspect_popup
           open={true}
           icon="👤"
           title={p_name}
           subtitle={
-            if p_uid && p_uid != "",
-              do: "Linked user: #{Map.get(@user_names, to_string(p_uid), p_name)}",
-              else: "Unlinked / Retained account"
+            cond do
+              p_did && p_did != "" and p_uid && p_uid != "" ->
+                "User: #{Map.get(@user_names, to_string(p_uid), p_name)} • Device: #{p_did}"
+              p_did && p_did != "" ->
+                "Attached Device: #{p_did}"
+              p_uid && p_uid != "" ->
+                "Linked user: #{Map.get(@user_names, to_string(p_uid), p_name)}"
+              true ->
+                "Unlinked / Retained account"
+            end
           }
           tabs={@player_inspect_hooks}
           active_tab={@player_inspect_tab}
@@ -698,6 +714,18 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
           <%= if @edit_error do %>
             <div class="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-medium">
               <%= @edit_error %>
+            </div>
+          <% end %>
+
+          <%= if p_dids != [] do %>
+            <div class="px-3 py-2 bg-purple-50/70 border border-purple-100 rounded-xl text-xs text-purple-900 flex items-center justify-between mb-3">
+              <span class="font-semibold flex items-center gap-1.5">
+                <span>📱</span>
+                <span>Attached Device IDs:</span>
+              </span>
+              <span class="font-mono text-[11px] text-purple-700 font-bold truncate max-w-sm" title={Enum.join(p_dids, ", ")}>
+                <%= Enum.join(p_dids, ", ") %>
+              </span>
             </div>
           <% end %>
 

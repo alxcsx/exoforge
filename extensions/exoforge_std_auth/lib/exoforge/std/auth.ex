@@ -317,6 +317,12 @@ defmodule Exoforge.Std.Auth do
 
           # A returning device, still passwordless: reissue its token.
           true ->
+            device_id =
+              Map.get(payload, :device_id) || Map.get(payload, "device_id") ||
+                (if String.starts_with?(player_id, "did_"), do: player_id, else: nil)
+
+            attach_device_id(player_id, device_id)
+
             case anonymous_token(player_id) do
               {:ok, result} ->
                 Exoforge.EventDispatcher.broadcast(:"auth.anonymous", %{player_id: player_id}, topic: "auth")
@@ -771,6 +777,48 @@ defmodule Exoforge.Std.Auth do
     end
   end
 
+  defp attach_device_id(_player_id, nil), do: :ok
+  defp attach_device_id(_player_id, ""), do: :ok
+
+  defp attach_device_id(player_id, device_id) do
+    did = to_string(device_id)
+
+    case ActionDispatcher.dispatch(:player_data, :get_player, %{player_id: player_id}) do
+      {:ok, %{player: profile}} ->
+        existing_devices = Map.get(profile, "device_ids") || []
+        current_did = Map.get(profile, "device_id")
+
+        if did in existing_devices and current_did == did do
+          :ok
+        else
+          new_devices = Enum.uniq(existing_devices ++ [did])
+          existing_attrs = Map.get(profile, "attributes") || []
+
+          updated_attrs =
+            Enum.reject(existing_attrs, fn attr ->
+              (Map.get(attr, "key") || Map.get(attr, :key)) == "device_id"
+            end) ++ [%{"key" => "device_id", "value" => did}]
+
+          updated_data = %{
+            "device_id" => did,
+            "device_ids" => new_devices,
+            "attributes" => updated_attrs
+          }
+
+          _ =
+            ActionDispatcher.dispatch(:player_data, :update_player, %{
+              player_id: player_id,
+              data: updated_data
+            })
+
+          :ok
+        end
+
+      _ ->
+        :ok
+    end
+  end
+
   defp do_register_player(payload, opts \\ []) do
     init_schema()
 
@@ -816,12 +864,33 @@ defmodule Exoforge.Std.Auth do
     # eventually deletes someone's.
     disposable = Map.get(payload, :disposable) || Map.get(payload, "disposable")
 
+    raw_device_id =
+      Map.get(payload, :device_id) || Map.get(payload, "device_id") ||
+        (if is_binary(user_id) and String.starts_with?(user_id, "did_"), do: user_id, else: nil)
+
+    device_id_str = if raw_device_id && raw_device_id != "", do: to_string(raw_device_id), else: nil
+
     if raw_password && raw_password != "" do
       _ = upsert_account(user_id, email, raw_password, scopes)
     end
 
     case generate_and_store_token(user_id, scopes, disposable) do
       {:ok, token} ->
+        base_attrs = [
+          %{"key" => "locale", "value" => "en_US"},
+          %{
+            "key" => "registered_at",
+            "value" => Calendar.strftime(DateTime.utc_now(), "%Y-%m-%d %H:%M:%S")
+          }
+        ]
+
+        attrs =
+          if device_id_str do
+            base_attrs ++ [%{"key" => "device_id", "value" => device_id_str}]
+          else
+            base_attrs
+          end
+
         profile = %{
           "user_id" => user_id,
           "player_id" => user_id,
@@ -830,13 +899,9 @@ defmodule Exoforge.Std.Auth do
           "total_spent" => "$0.00",
           "time_in_game" => "0m",
           "status" => "Active",
-          "attributes" => [
-            %{"key" => "locale", "value" => "en_US"},
-            %{
-              "key" => "registered_at",
-              "value" => Calendar.strftime(DateTime.utc_now(), "%Y-%m-%d %H:%M:%S")
-            }
-          ]
+          "device_id" => device_id_str,
+          "device_ids" => (if device_id_str, do: [device_id_str], else: []),
+          "attributes" => attrs
         }
 
         # Hook into player_data canonical profile store, linking player to user

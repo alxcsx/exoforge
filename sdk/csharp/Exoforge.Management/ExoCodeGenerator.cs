@@ -1394,17 +1394,6 @@ public static class ExoCodeGenerator
         sb.AppendLine("            if (_clientLocator != null) return _clientLocator();");
         sb.AppendLine("            if (_fallbackClient != null) return _fallbackClient;");
         sb.AppendLine();
-        sb.AppendLine("#if UNITY_2018_1_OR_NEWER || UNITY_5_3_OR_NEWER");
-        sb.AppendLine("            try");
-        sb.AppendLine("            {");
-        sb.AppendLine("                return global::Exoforge.Client.Unity.ExoforgeSDK.Client;");
-        sb.AppendLine("            }");
-        sb.AppendLine("            catch (InvalidOperationException) when (_fallbackClient != null)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                return _fallbackClient;");
-        sb.AppendLine("            }");
-        sb.AppendLine("#endif");
-        sb.AppendLine();
         sb.AppendLine("            var unitySdkType = Type.GetType(\"Exoforge.Client.Unity.ExoforgeSDK, Exoforge.SDK\")");
         sb.AppendLine("                ?? Type.GetType(\"Exoforge.Client.Unity.ExoforgeSDK, Exoforge.SDK.Runtime\")");
         sb.AppendLine("                ?? Type.GetType(\"Exoforge.Client.Unity.ExoforgeSDK\");");
@@ -1632,7 +1621,7 @@ public static class ExoCodeGenerator
                     sb.AppendLine("            if (t.IsFaulted)");
                     sb.AppendLine("            {");
                     sb.AppendLine("                var ex = t.Exception?.InnerException as ExoActionException ?? new ExoActionException(\"action_failed\", t.Exception?.InnerException?.Message ?? \"Action failed\");");
-                    sb.AppendLine("                _client.Dispatcher.Post(() => onError?.Invoke(ex));");
+                    sb.AppendLine($"                _client.Dispatcher.Post(() => {{ if (onError != null) onError(ex); else ExoClient.OnError?.Invoke($\"[{svc.Name}.{act.Name}] Action error: {{ex.Message}}\", ex); }});");
                     sb.AppendLine("            }");
                     sb.AppendLine("            else");
                     sb.AppendLine("            {");
@@ -1662,7 +1651,7 @@ public static class ExoCodeGenerator
                     sb.AppendLine("            if (t.IsFaulted)");
                     sb.AppendLine("            {");
                     sb.AppendLine("                var ex = t.Exception?.InnerException as ExoActionException ?? new ExoActionException(\"action_failed\", t.Exception?.InnerException?.Message ?? \"Action failed\");");
-                    sb.AppendLine("                _client.Dispatcher.Post(() => onError?.Invoke(ex));");
+                    sb.AppendLine($"                _client.Dispatcher.Post(() => {{ if (onError != null) onError(ex); else ExoClient.OnError?.Invoke($\"[{svc.Name}.{act.Name}] Action error: {{ex.Message}}\", ex); }});");
                     sb.AppendLine("            }");
                     sb.AppendLine("            else");
                     sb.AppendLine("            {");
@@ -1693,7 +1682,7 @@ public static class ExoCodeGenerator
                     sb.AppendLine("            if (t.IsFaulted)");
                     sb.AppendLine("            {");
                     sb.AppendLine("                var ex = t.Exception?.InnerException as ExoActionException ?? new ExoActionException(\"action_failed\", t.Exception?.InnerException?.Message ?? \"Action failed\");");
-                    sb.AppendLine("                _client.Dispatcher.Post(() => onError?.Invoke(ex));");
+                    sb.AppendLine($"                _client.Dispatcher.Post(() => {{ if (onError != null) onError(ex); else ExoClient.OnError?.Invoke($\"[{svc.Name}.{act.Name}] Action error: {{ex.Message}}\", ex); }});");
                     sb.AppendLine("            }");
                     sb.AppendLine("            else");
                     sb.AppendLine("            {");

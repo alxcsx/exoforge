@@ -92,7 +92,8 @@ defmodule Exoforge.DashboardLiveViewTest do
       entry_point: Exoforge.Std.DashboardViews,
       provides: [Exoforge.Std.Services.DashboardView],
       dependencies: [Exoforge.Std.Services.Dashboard],
-      category: "Studio"
+      category: "Studio",
+      system: true
     })
 
     ExtensionRegistry.register(%Exoforge.Domain.Manifest{

@@ -5,13 +5,14 @@ defmodule Exoforge.Std.DashboardViews do
   visual controls for core services (player_data, extension_manager, auth)
   strictly via service contracts without depending on concrete plugin implementations.
   """
-  use Exoforge.Extension, provides: [:dashboard_view]
+  use Exoforge.Extension, provides: [:dashboard_view], system: true
 
   @manifest %{
     dependencies: [Exoforge.Std.Services.Dashboard],
     title: "Studio Views",
     icon: "🎨",
     category: "System",
+    system: true,
     dashboard_view: nil
   }
 

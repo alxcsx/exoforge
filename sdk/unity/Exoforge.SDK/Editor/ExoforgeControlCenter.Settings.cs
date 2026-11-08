@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Exoforge.Client;
+using Exoforge.Client.Unity;
 using Exoforge.Management;
 using UnityEditor;
 using UnityEngine;
@@ -355,17 +356,87 @@ public partial class ExoforgeControlCenter : EditorWindow
 
         EditorGUILayout.Space(8);
 
-        // Anonymous Player Session
-        EditorGUILayout.LabelField("Anonymous Player Session", EditorStyles.boldLabel);
+        // Anonymous Player Session & Device ID Management
+        EditorGUILayout.LabelField("Anonymous Player Session & Device ID", EditorStyles.boldLabel);
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-        EditorGUILayout.LabelField($"Device ID: {PlayerPrefs.GetString("Exoforge.DeviceId", "(none)")}", EditorStyles.miniLabel);
-        EditorGUILayout.LabelField($"Player Token: {(PlayerPrefs.HasKey("Exoforge.Token") ? "(cached in PlayerPrefs)" : "(none)")}", EditorStyles.miniLabel);
-        EditorGUILayout.LabelField($"Player Name: {PlayerPrefs.GetString("Exoforge.PlayerName", "(none)")}", EditorStyles.miniLabel);
-        EditorGUILayout.Space(4);
-        if (GUILayout.Button("Reset Anonymous Player Session (New Device ID & Fresh Account)"))
+
+        string activeDeviceId = ExoDeviceId.Get();
+        bool isCustom = ExoDeviceId.IsCustom;
+        string previousDeviceId = ExoDeviceId.PreviousId;
+        string hardwareDeviceId = ExoDeviceId.HardwareId;
+
+        EditorGUILayout.BeginHorizontal();
+        EditorGUILayout.LabelField($"Active Device ID: {activeDeviceId}", EditorStyles.boldLabel);
+        GUILayout.Label(isCustom ? "[Masked / Impersonated]" : "[Native Hardware]", isCustom ? EditorStyles.miniBoldLabel : EditorStyles.miniLabel, GUILayout.Width(130));
+        EditorGUILayout.EndHorizontal();
+
+        EditorGUILayout.LabelField($"Hardware ID: {hardwareDeviceId}", EditorStyles.miniLabel);
+        if (!string.IsNullOrEmpty(previousDeviceId))
         {
-            ResetAnonymousPlayerSession();
-            ShowStatus("Anonymous player session reset. A fresh player account will be minted on next run.", MessageType.Info);
+            EditorGUILayout.LabelField($"Previous Device ID: {previousDeviceId}", EditorStyles.miniLabel);
+        }
+
+        EditorGUILayout.LabelField($"Cached Token: {(PlayerPrefs.HasKey("Exoforge.Token") ? "(cached in PlayerPrefs)" : "(none)")}", EditorStyles.miniLabel);
+        EditorGUILayout.LabelField($"Attached Device: {(string.IsNullOrEmpty(ExoTokenStore.AttachedDeviceId) ? "(none)" : ExoTokenStore.AttachedDeviceId)}", EditorStyles.miniLabel);
+        EditorGUILayout.LabelField($"Player Name: {PlayerPrefs.GetString("Exoforge.PlayerName", "(none)")}", EditorStyles.miniLabel);
+
+        EditorGUILayout.Space(6);
+        EditorGUILayout.BeginHorizontal();
+        if (GUILayout.Button("🎲 Mask Device ID (New Account)", GUILayout.Height(24)))
+        {
+            string newId = ExoDeviceId.Mask();
+            ShowStatus($"✓ Masked device ID to {newId}. Next sign-in will mint a fresh anonymous account.", MessageType.Info);
+        }
+
+        using (new EditorGUI.DisabledScope(string.IsNullOrEmpty(previousDeviceId)))
+        {
+            if (GUILayout.Button("↩ Revert to Previous ID", GUILayout.Height(24)))
+            {
+                string? reverted = ExoDeviceId.ResetToPreviousId();
+                if (reverted != null)
+                {
+                    ShowStatus($"✓ Reverted active device ID to previous: {reverted}", MessageType.Info);
+                }
+            }
+        }
+        EditorGUILayout.EndHorizontal();
+
+        if (isCustom)
+        {
+            EditorGUILayout.Space(2);
+            if (GUILayout.Button("🖥️ Reset to Native Hardware ID", GUILayout.Height(22)))
+            {
+                string hw = ExoDeviceId.ResetToHardwareId();
+                ShowStatus($"✓ Reset active device ID to native hardware: {hw}", MessageType.Info);
+            }
+        }
+
+        EditorGUILayout.Space(4);
+        EditorGUILayout.LabelField("Impersonate Specific Device ID", EditorStyles.boldLabel);
+        EditorGUILayout.BeginHorizontal();
+        _impersonateTargetId = EditorGUILayout.TextField(_impersonateTargetId);
+        using (new EditorGUI.DisabledScope(string.IsNullOrWhiteSpace(_impersonateTargetId)))
+        {
+            if (GUILayout.Button("🎭 Impersonate", GUILayout.Width(110), GUILayout.Height(20)))
+            {
+                try
+                {
+                    string target = ExoDeviceId.Impersonate(_impersonateTargetId);
+                    ShowStatus($"✓ Impersonating device ID: {target}. Stored player token cleared.", MessageType.Info);
+                }
+                catch (Exception ex)
+                {
+                    ShowStatus($"Impersonation error: {ex.Message}", MessageType.Error);
+                }
+            }
+        }
+        EditorGUILayout.EndHorizontal();
+
+        EditorGUILayout.Space(4);
+        if (GUILayout.Button("Clear Anonymous Player Session (Forget Account on Device)"))
+        {
+            ExoTokenStore.ClearDeviceSession();
+            ShowStatus("Anonymous player session cleared from device storage.", MessageType.Info);
         }
         EditorGUILayout.EndVertical();
 
