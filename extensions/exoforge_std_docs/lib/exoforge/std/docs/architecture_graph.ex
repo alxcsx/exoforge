@@ -1,14 +1,15 @@
 defmodule Exoforge.Std.Docs.ArchitectureGraph do
   @moduledoc """
-  Interactive Network Architecture Diagram, In-Graph Inspection Dialog, Fullscreen Maximizer,
-  and Sequential Workflow Pipeline Visualizer for Exoforge.
+  Interactive Network Architecture Diagram, Progressive Disclosure Subsystem Envelopes,
+  Docked Component Inspector Drawer, Fullscreen Maximizer, and Sequential Workflow Pipeline
+  Visualizer for Exoforge.
   """
   use Phoenix.Component
 
-  # ---- Architecture Components Specification ----
+  # ---- Subsystems & Components Specification ----
 
   @components [
-    # Ingress (x: 35)
+    # Ingress Layer (Client & Tooling)
     %{
       id: "unity_client",
       title: "Unity Client SDK",
@@ -16,9 +17,12 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       desc: "Client runtime with async/await stubs, device anonymous auth, and reactive event hooks.",
       icon: "🕹️",
       package: "Client Ingress",
+      group: "client",
       category: "client",
       badge: "GAME CLIENT",
       protocol: "WebSocket / HTTP RPC",
+      upstream: "",
+      downstream: "ws_gateway,transport_layer",
       x: 35,
       y: 135,
       width: 175,
@@ -31,9 +35,12 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       desc: "Local dev engine, Roslyn generator, C# extension compiler, and remote cluster push.",
       icon: "💻",
       package: "Developer Tooling",
+      group: "client",
       category: "tooling",
       badge: "DEV TOOLING",
       protocol: "HTTP Administration",
+      upstream: "",
+      downstream: "transport_layer,http_gateway",
       x: 35,
       y: 280,
       width: 175,
@@ -46,16 +53,19 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       desc: "Web-based actor inspector, live cluster metrics, extension lifecycle manager, and dev guide.",
       icon: "🎛️",
       package: "Studio Operations",
+      group: "client",
       category: "studio",
       badge: "STUDIO UI",
       protocol: "Phoenix LiveView",
+      upstream: "",
+      downstream: "http_gateway",
       x: 35,
       y: 425,
       width: 175,
       height: 80
     },
 
-    # Gateways (x: 245)
+    # Gateways Layer
     %{
       id: "ws_gateway",
       title: "WebSocket Gateway",
@@ -63,9 +73,12 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       desc: "Real-time framed JSON WebSocket ingress and low-latency bidirectional pub/sub event bus.",
       icon: "⚡",
       package: "Gateway Layer",
+      group: "gateways",
       category: "extension",
-      badge: "GATEWAY EXTENSION",
+      badge: "GATEWAY",
       protocol: "Framed JSON Socket",
+      upstream: "unity_client",
+      downstream: "action_dispatcher,event_dispatcher",
       x: 245,
       y: 135,
       width: 180,
@@ -73,14 +86,17 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
     },
     %{
       id: "transport_layer",
-      title: "Transport Abstraction",
+      title: "Transport Normalizer",
       subtitle: ":transport service",
       desc: "Strips unverified client spoofed fields, stamps verified player credentials, and normalizes RPCs.",
       icon: "🔄",
       package: "Gateway Layer",
+      group: "gateways",
       category: "extension",
-      badge: "GATEWAY EXTENSION",
+      badge: "GATEWAY",
       protocol: "Sanitized RPC Envelope",
+      upstream: "unity_client,exo_cli",
+      downstream: "action_dispatcher",
       x: 245,
       y: 280,
       width: 180,
@@ -93,26 +109,32 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       desc: "Dynamic OpenAPI REST endpoints derived automatically from service action contracts.",
       icon: "🌐",
       package: "Gateway Layer",
+      group: "gateways",
       category: "extension",
-      badge: "GATEWAY EXTENSION",
+      badge: "GATEWAY",
       protocol: "HTTP / OpenAPI JSON",
+      upstream: "producer_studio,exo_cli",
+      downstream: "action_dispatcher",
       x: 245,
       y: 425,
       width: 180,
       height: 80
     },
 
-    # Kernel Core (Central Equilibrium Hub)
+    # Kernel Core (Central Microkernel Hub)
     %{
       id: "extension_registry",
       title: "ExtensionRegistry",
       subtitle: "In-Memory ETS Catalog",
-      desc: "Lockless ETS table of registered extensions, action contracts, resources, and route metadata.",
+      desc: "Lockless in-memory catalog of registered extensions, action contracts, resources, and route metadata.",
       icon: "📚",
       package: "Kernel Core",
+      group: "kernel",
       category: "kernel",
       badge: "KERNEL [IMMUTABLE]",
-      protocol: "Direct ETS Lockless Read",
+      protocol: "Direct In-Memory Read",
+      upstream: "action_dispatcher",
+      downstream: "",
       x: 485,
       y: 48,
       width: 220,
@@ -125,9 +147,12 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       desc: "Zero-latency in-memory security scope verification (:guest, :player, :admin) & provider routing.",
       icon: "🎯",
       package: "Kernel Core",
+      group: "kernel",
       category: "kernel",
       badge: "KERNEL [IMMUTABLE]",
-      protocol: "In-Memory Zero-Copy",
+      protocol: "Zero-Copy In-Memory",
+      upstream: "ws_gateway,transport_layer,http_gateway",
+      downstream: "extension_registry,native_csharp,elixir_runner,std_services",
       x: 475,
       y: 190,
       width: 240,
@@ -136,13 +161,16 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
     %{
       id: "event_dispatcher",
       title: "EventDispatcher",
-      subtitle: ":pg Distributed Bus",
+      subtitle: "Cluster Pub/Sub Bus",
       desc: "Pattern-matched topic fanout over distributed process groups (0.07 ms SLA to 50 concurrent subscribers).",
       icon: "📡",
       package: "Kernel Core",
+      group: "kernel",
       category: "kernel",
       badge: "KERNEL [IMMUTABLE]",
-      protocol: "Erlang Process Groups (:pg)",
+      protocol: "Distributed Pub/Sub (:pg)",
+      upstream: "ws_gateway,native_csharp",
+      downstream: "ws_gateway,extension_supervisor,native_csharp",
       x: 475,
       y: 340,
       width: 240,
@@ -151,20 +179,23 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
     %{
       id: "extension_supervisor",
       title: "ExtensionSupervisor",
-      subtitle: "Topological OTP DAG",
+      subtitle: "Topological DAG Tree",
       desc: "Starts extensions in topological dependency order, isolates worker failures, and restarts crashed actors.",
       icon: "🛡️",
       package: "Kernel Core",
+      group: "kernel",
       category: "kernel",
       badge: "KERNEL [IMMUTABLE]",
-      protocol: "OTP Supervision Tree",
+      protocol: "Cluster Supervision Tree",
+      upstream: "event_dispatcher",
+      downstream: "native_csharp,elixir_runner",
       x: 485,
       y: 490,
       width: 220,
       height: 72
     },
 
-    # Extension Workers (x: 765)
+    # Extension Workers
     %{
       id: "native_csharp",
       title: "Native C# Game Worker",
@@ -172,9 +203,12 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       desc: "Framework-dependent single-file binary with AOT trimming, zero reflection, and static dispatch delegates.",
       icon: "⚙️",
       package: "Extension Workers",
+      group: "extension",
       category: "extension",
       badge: "GAME EXTENSION",
       protocol: "Newline-Delimited JSON stdio",
+      upstream: "action_dispatcher,event_dispatcher",
+      downstream: "database_manager,event_dispatcher",
       x: 765,
       y: 135,
       width: 205,
@@ -183,13 +217,16 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
     %{
       id: "elixir_runner",
       title: "Elixir Extensions",
-      subtitle: "OTP Actor Concurrency",
-      desc: "System extensions running directly inside the Erlang/Elixir BEAM cluster supervision tree.",
+      subtitle: "Actor Concurrency",
+      desc: "System extensions running directly inside the BEAM cluster supervision tree.",
       icon: "🧪",
       package: "Extension Workers",
+      group: "extension",
       category: "extension",
       badge: "SYSTEM EXTENSION",
-      protocol: "Direct BEAM Message Passing",
+      protocol: "Direct Message Passing",
+      upstream: "action_dispatcher,extension_supervisor",
+      downstream: "resource_store",
       x: 765,
       y: 280,
       width: 205,
@@ -202,16 +239,19 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       desc: "Modular platform services providing token issuance, profile persistence, and cron scheduling.",
       icon: "📦",
       package: "Extension Workers",
+      group: "extension",
       category: "extension",
       badge: "PLATFORM SERVICE",
       protocol: "Service Action Contracts",
+      upstream: "action_dispatcher",
+      downstream: "storage_adapters",
       x: 765,
       y: 425,
       width: 205,
       height: 80
     },
 
-    # Data & Storage Layer (x: 1010)
+    # Data & Storage Layer
     %{
       id: "database_manager",
       title: "Database Manager",
@@ -219,9 +259,12 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       desc: "Multi-engine database service managing connection pools and per-extension schema isolation.",
       icon: "🗄️",
       package: "Data & Storage",
+      group: "storage",
       category: "extension",
       badge: "STORAGE EXTENSION",
       protocol: "Connection Pool RPC",
+      upstream: "native_csharp",
+      downstream: "storage_adapters",
       x: 1010,
       y: 135,
       width: 165,
@@ -234,9 +277,12 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       desc: "Schema-driven entity storage with declarative typed CRUD, migrations, and drawer definitions.",
       icon: "📊",
       package: "Data & Storage",
+      group: "storage",
       category: "extension",
       badge: "STORAGE EXTENSION",
       protocol: "Typed Resource Schema",
+      upstream: "elixir_runner",
+      downstream: "database_manager,storage_adapters",
       x: 1010,
       y: 280,
       width: 165,
@@ -249,9 +295,12 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       desc: "Strictly isolated schema namespace (e.g. ext_snake_game) preventing cross-extension data leakage.",
       icon: "💾",
       package: "Data & Storage",
+      group: "storage",
       category: "internal",
       badge: "INTERNAL ENGINE",
       protocol: "Isolated Schema SQL",
+      upstream: "database_manager,resource_store,std_services",
+      downstream: "",
       x: 1010,
       y: 425,
       width: 165,
@@ -265,7 +314,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
     %{from: "exo_cli", to: "transport_layer", path: "M 210 320 L 245 320", label: "Build Push"},
     %{from: "producer_studio", to: "http_gateway", path: "M 210 465 L 245 465", label: "REST / LiveView"},
     %{from: "ws_gateway", to: "action_dispatcher", path: "M 425 175 C 450 175, 450 225, 475 225", label: "dispatch"},
-    %{from: "ws_gateway", to: "event_dispatcher", path: "M 425 175 C 450 175, 450 375, 475 375", label: ":pg pub/sub"},
+    %{from: "ws_gateway", to: "event_dispatcher", path: "M 425 175 C 450 175, 450 375, 475 375", label: "pub/sub"},
     %{from: "transport_layer", to: "action_dispatcher", path: "M 425 320 C 450 320, 450 240, 475 240", label: "verified"},
     %{from: "http_gateway", to: "action_dispatcher", path: "M 425 465 C 455 465, 450 255, 475 255", label: "route"},
     %{from: "action_dispatcher", to: "extension_registry", path: "M 595 190 L 595 120", label: "catalog lookup"},
@@ -275,6 +324,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
     %{from: "event_dispatcher", to: "extension_supervisor", path: "M 595 425 L 595 490", label: "health status"},
     %{from: "event_dispatcher", to: "native_csharp", path: "M 715 375 C 740 375, 740 190, 765 190", label: "event frame"},
     %{from: "native_csharp", to: "database_manager", path: "M 970 175 L 1010 175", label: "host_call"},
+    %{from: "native_csharp", to: "event_dispatcher", path: "M 765 195 C 735 195, 735 355, 715 355", label: "publish"},
     %{from: "elixir_runner", to: "resource_store", path: "M 970 320 L 1010 320", label: "schema CRUD"},
     %{from: "std_services", to: "storage_adapters", path: "M 970 465 L 1010 465", label: "storage"},
     %{from: "database_manager", to: "storage_adapters", path: "M 1092 215 L 1092 425", label: "SQL isolation"}
@@ -286,6 +336,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
     %{
       step: 1,
       id: "wf_client",
+      actor_node: "unity_client",
       title: "Client Action Request",
       actor: "Unity Game Client",
       action: "ExoforgeSDK.Client.SnakeLeaderboard().SubmitScoreAsync(1500)",
@@ -309,10 +360,11 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
     %{
       step: 2,
       id: "wf_gateway",
-      title: "Gateway Sanitization & Auth Stamp",
-      actor: "Transport Gateway (:ws / :http)",
-      action: "Exoforge.Std.Transport.sanitize_payload/2",
-      summary: "Transport strips unverified client spoofed fields and forcibly stamps verified player identity from the session token.",
+      actor_node: "transport_layer",
+      title: "Gateway Sanitization & Token Verification",
+      actor: "Transport Gateway (:ws / :transport)",
+      action: "Transport.sanitize_and_stamp_credentials(packet)",
+      summary: "Gateway strips unverified client spoofed fields and stamps verified player identity from the session token.",
       wire_sample: """
       {
         "action": "submit_score",
@@ -330,38 +382,40 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       latency: "< 0.05 ms",
       badge: "Security",
       color: "violet",
-      details: "Clients can never forge their player_id or scopes. The gateway validates the cryptographic session token issued by the auth extension and stamps the verified context."
+      details: "Clients can never forge player_id or scopes. The gateway validates the cryptographic session token issued by the auth extension and stamps the verified context."
     },
     %{
       step: 3,
       id: "wf_dispatcher",
+      actor_node: "action_dispatcher",
       title: "Scope Authorization & Provider Resolution",
       actor: "ActionDispatcher (Kernel)",
       action: "ActionDispatcher.dispatch(:snake_game, :submit_score, payload)",
-      summary: "Kernel verifies that caller's scopes satisfy the contract requirements and resolves worker entry point in memory.",
+      summary: "Kernel verifies caller scope against contract requirements and routes to registered worker in memory.",
       wire_sample: """
       {
-        "kernel_dispatch": "ScopeAuthorizationCheck",
+        "dispatch": "ScopeAuthorizationCheck",
         "required_scope": "player",
         "caller_scopes": ["player"],
         "status": "authorized",
         "target_worker": "NativeWorker[snake_game]"
       }
       """,
-      latency: "< 0.02 ms (Lockless ETS)",
+      latency: "< 0.02 ms (Lockless)",
       badge: "Kernel",
       color: "amber",
-      details: "Pure lockless in-memory resolution. If caller has required scope (:guest, :player, :server, :studio), the request is dispatched immediately to the registered worker."
+      details: "Pure lockless in-memory resolution. If the caller has required scope (:guest, :player, :server, :studio), the request routes immediately to the registered worker."
     },
     %{
       step: 4,
       id: "wf_runner",
+      actor_node: "native_csharp",
       title: "Native C# Extension Execution",
       actor: "Native .NET Worker (OS Process)",
       action: "SnakeExtension.SubmitScore(ScoreRecord record)",
-      summary: "Host delivers newline-delimited JSON frame over stdio to the isolated .NET OS process. Dispatch runs without reflection.",
+      summary: "Host delivers newline-delimited JSON frame over stdio to the isolated .NET process without reflection.",
       wire_sample: """
-      [ExoAction]
+      [ExoAction(Scope = "player")]
       public SnakeScoreSubmitted SubmitScore(int score) {
           Exo.Database.Put("snake_scores", PlayerId, new SnakeScore(score));
           return new SnakeScoreSubmitted(score, Rank: 1);
@@ -370,11 +424,12 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       latency: "0.2 - 0.8 ms",
       badge: "Execution",
       color: "emerald",
-      details: "The framework-dependent .NET single-file worker deserializes the JSON arguments into typed records. Roslyn-generated ExoforgeDispatch maps method directly without reflection."
+      details: "The framework-dependent single-file .NET worker deserializes arguments into typed records. Roslyn-generated dispatch maps method directly without reflection overhead."
     },
     %{
       step: 5,
       id: "wf_storage",
+      actor_node: "database_manager",
       title: "Isolated Schema Database Query",
       actor: "Database Manager (:database)",
       action: "Exo.Database.Put / Typed SQL",
@@ -388,14 +443,15 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       latency: "< 0.3 ms",
       badge: "Persistence",
       color: "cyan",
-      details: "Each extension has its own isolated schema namespace (e.g. ext_snake_game). No extension can access or modify another extension's data without authorized contract actions."
+      details: "Each extension has its own isolated schema namespace (e.g. ext_snake_game). No extension can access or modify another extension's data without authorized contracts."
     },
     %{
       step: 6,
       id: "wf_response",
+      actor_node: "ws_gateway",
       title: "Framed Response Returned to Client",
       actor: "Transport Gateway ➔ Unity Client",
-      action: "Exoforge.Std.Transport.format_action_result/3",
+      action: "Transport.format_action_result(result)",
       summary: "Result is framed with status ok and matching request id, resolving the client async Task.",
       wire_sample: """
       {
@@ -412,7 +468,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       latency: "< 0.1 ms framing",
       badge: "Egress",
       color: "blue",
-      details: "The gateway writes the JSON frame back down the client socket. In Unity, the matching Task completion source is triggered and returns the strongly-typed C# record."
+      details: "The gateway writes the JSON frame back down the client socket. In Unity, the matching Task completion source is resolved and returns the strongly-typed C# record."
     }
   ]
 
@@ -420,14 +476,15 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
     %{
       step: 1,
       id: "ev_publish",
+      actor_node: "native_csharp",
       title: "Extension Publishes Event",
       actor: "Game Extension",
-      action: "Exo.Events.Publish(\"snake.score_submitted\", payload)",
-      summary: "Extension emits an event without knowing who or how many consumers are listening.",
+      action: "await Exo.Events.EmitAsync(new SnakeScoreSubmitted(...))",
+      summary: "Extension emits an event without needing to know who or how many consumers are listening.",
       wire_sample: """
       {
         "type": "host_call",
-        "op": "publish_event",
+        "op": "emit_event",
         "args": {
           "event": "snake.score_submitted",
           "topic": "snake:leaderboard",
@@ -446,6 +503,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
     %{
       step: 2,
       id: "ev_dispatcher",
+      actor_node: "event_dispatcher",
       title: "Kernel Event Fanout via High-Performance Bus",
       actor: "EventDispatcher (Kernel)",
       action: "EventDispatcher.broadcast(\"snake.score_submitted\", payload)",
@@ -456,20 +514,21 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
         "topic": "snake:leaderboard",
         "sla": "0.07 ms fanout to 50 concurrent subscribers",
         "subscribers_matched": 50,
-        "delivery": "zero_lock_direct_dispatch"
+        "delivery": "direct_process_fanout"
       }
       """,
       latency: "0.07 ms verified SLA",
       badge: "Kernel",
       color: "amber",
-      details: "Cluster distributed pub/sub distributes messages directly to subscriber worker processes with zero central serialization bottleneck (0.07 ms verified SLA to 50 concurrent subscribers)."
+      details: "Cluster distributed pub/sub delivers messages directly to subscriber worker processes with zero central serialization bottleneck (0.07 ms verified SLA to 50 concurrent subscribers)."
     },
     %{
       step: 3,
       id: "ev_gateway",
+      actor_node: "ws_gateway",
       title: "Gateway Realtime Frame Push",
       actor: "WebSocket Gateway (:ws)",
-      action: "WebSock.push({:text, json})",
+      action: "WebSocket.push_framed_json(connection, event_frame)",
       summary: "WebSocket gateway serializes the event frame and writes it down to subscribed client connections.",
       wire_sample: """
       {
@@ -490,6 +549,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
     %{
       step: 4,
       id: "ev_client",
+      actor_node: "unity_client",
       title: "Client Gameplay Hook Triggered",
       actor: "Unity Client SDK",
       action: "ExoforgeSDK.Events.Subscribe<SnakeScoreSubmitted>(...)",
@@ -507,7 +567,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
     }
   ]
 
-  # ---- Components ----
+  # ---- Visualizer Component ----
 
   def visualizer(assigns) do
     assigns =
@@ -518,23 +578,23 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       |> assign_new(:event_workflow_steps, fn -> @event_workflow_steps end)
 
     ~H"""
-    <div class="space-y-8 select-none font-sans" id="exoforge-architecture-visualizer">
+    <div class="space-y-6 select-none font-sans" id="exoforge-architecture-visualizer">
       <!-- Section Header -->
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-200">
         <div>
           <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-200 text-[10px] font-bold">
             <span class="w-1.5 h-1.5 rounded-full bg-violet-600 animate-pulse"></span>
-            <span>UML Subsystem Diagram &amp; Execution Pipeline</span>
+            <span>Progressive Disclosure Architecture &amp; Execution Pipeline</span>
           </div>
           <h2 class="text-xl font-bold text-gray-900 tracking-tight mt-1">
             System Topology, Packages &amp; Execution Flow
           </h2>
           <p class="text-xs text-gray-500">
-            Interactive network architecture, in-graph component inspection dialog, and sequential workflow cascades.
+            Interactive network architecture, 1-hop dependency spotlighting, pan/zoom canvas, and sequential cascades.
           </p>
         </div>
 
-        <!-- Mode Toggle: UML Architecture vs Sequential Workflow -->
+        <!-- Mode Toggle: Architecture vs Workflow Cascade -->
         <div class="flex items-center gap-2 p-1 bg-gray-100 rounded-xl border border-gray-200/80 text-xs font-semibold self-start sm:self-auto">
           <button
             type="button"
@@ -558,7 +618,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       </div>
 
       <!-- VIEW 1: NETWORK ARCHITECTURE COMPONENT DIAGRAM -->
-      <div id="arch-view-graph" class="space-y-6">
+      <div id="arch-view-graph" class="space-y-4">
         <!-- Core Philosophy: Microkernel & Pluggable Extensions -->
         <div class="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 text-white border border-slate-800 shadow-xl relative overflow-hidden">
           <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -577,7 +637,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
               </p>
             </div>
 
-            <!-- Simple Rule of Thumb Card -->
+            <!-- Rule of Thumb Card -->
             <div class="bg-slate-800/90 p-4 rounded-2xl border border-slate-700 md:max-w-xs shrink-0 space-y-2 text-xs">
               <div class="font-bold text-amber-400 flex items-center gap-1.5">
                 <span>💡</span>
@@ -591,10 +651,10 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
           </div>
         </div>
 
-        <!-- Diagram Toolbar: Maximize & Package Filters -->
+        <!-- Diagram Toolbar: Filters, Zoom, Progressive Disclosure & Fullscreen -->
         <div class="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-gray-200/80 shadow-2xs">
-          <!-- Package Filters -->
-          <div class="flex items-center gap-1.5 text-xs font-semibold">
+          <!-- Layer Filter Pills -->
+          <div class="flex flex-wrap items-center gap-1.5 text-xs font-semibold">
             <span class="text-gray-400 text-[11px] mr-1 hidden sm:inline">Highlight Layer:</span>
             <button
               type="button"
@@ -633,68 +693,156 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
             </button>
           </div>
 
-          <!-- Maximize Button -->
-          <button
-            type="button"
-            onclick="document.getElementById('arch-graph-modal').classList.remove('hidden');"
-            class="px-3.5 py-1.5 rounded-xl bg-violet-50 hover:bg-violet-100 text-violet-700 border border-violet-200 transition-all cursor-pointer text-xs font-bold flex items-center gap-1.5 shadow-2xs"
-          >
-            <span>⛶</span>
-            <span>Maximize Diagram</span>
-          </button>
+          <!-- Canvas Controls: Zoom, Reset, Expand All & Maximize -->
+          <div class="flex items-center gap-2">
+            <!-- Zoom Controls -->
+            <div class="flex items-center bg-gray-100 rounded-xl border border-gray-200/80 p-0.5 text-xs font-mono font-bold text-gray-700">
+              <button
+                type="button"
+                onclick="window.ExoGraphEngine.zoom('arch-graph', 0.85)"
+                class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white transition-colors cursor-pointer"
+                title="Zoom Out"
+              >
+                −
+              </button>
+              <span id="arch-graph-zoom-level" class="px-2 text-[11px] select-none">100%</span>
+              <button
+                type="button"
+                onclick="window.ExoGraphEngine.zoom('arch-graph', 1.15)"
+                class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white transition-colors cursor-pointer"
+                title="Zoom In"
+              >
+                +
+              </button>
+              <button
+                type="button"
+                onclick="window.ExoGraphEngine.reset('arch-graph')"
+                class="px-2 h-7 flex items-center justify-center rounded-lg hover:bg-white text-[10px] font-sans transition-colors cursor-pointer border-l border-gray-200"
+                title="Reset View"
+              >
+                Reset
+              </button>
+            </div>
+
+            <!-- Progressive Disclosure Toggles -->
+            <div class="hidden md:flex items-center gap-1">
+              <button
+                type="button"
+                onclick="window.ExoGraphEngine.expandAll('arch-graph')"
+                class="px-2.5 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold transition-all cursor-pointer"
+              >
+                Expand All
+              </button>
+              <button
+                type="button"
+                onclick="window.ExoGraphEngine.collapseAll('arch-graph')"
+                class="px-2.5 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold transition-all cursor-pointer"
+              >
+                Collapse All
+              </button>
+            </div>
+
+            <!-- Maximize Fullscreen Button -->
+            <button
+              type="button"
+              onclick="document.getElementById('arch-graph-modal').classList.remove('hidden'); setTimeout(function() { window.ExoGraphEngine.fit('modal-arch-graph'); }, 50);"
+              class="px-3 py-1.5 rounded-xl bg-violet-50 hover:bg-violet-100 text-violet-700 border border-violet-200 transition-all cursor-pointer text-xs font-bold flex items-center gap-1.5 shadow-2xs"
+            >
+              <span>⛶</span>
+              <span>Maximize Diagram</span>
+            </button>
+          </div>
         </div>
 
-        <!-- Network Graph Canvas with In-Graph Dialog Container -->
-        <div class="border border-slate-800 rounded-3xl bg-slate-950 overflow-x-auto relative shadow-2xl p-4 min-h-[580px]">
-          <div class="min-w-[1180px]">
+        <!-- Network Graph Canvas with Pan/Zoom & Docked Inspector Drawer -->
+        <div
+          id="arch-graph-container"
+          class="border border-slate-800 rounded-3xl bg-slate-950 overflow-hidden relative shadow-2xl h-[620px] select-none"
+        >
+          <!-- Canvas Background Click Area (clears spotlight) -->
+          <div class="graph-canvas-bg absolute inset-0 z-0 cursor-default"></div>
+
+          <!-- Viewport Element Transformed by Pan/Zoom -->
+          <div
+            id="arch-graph-viewport"
+            class="absolute top-0 left-0 w-[1220px] h-[590px] transition-transform duration-75 z-10"
+          >
             {render_network_svg(assigns, "inline")}
           </div>
 
-          <!-- In-Graph Component Inspector Dialog (Overlay inside graph) -->
-          {render_node_dialog("arch-node-inspector")}
+          <!-- Hint Pill -->
+          <div class="absolute bottom-3 left-4 z-20 pointer-events-none text-[11px] font-mono text-slate-400 bg-slate-900/80 px-3 py-1 rounded-full border border-slate-800 backdrop-blur-sm flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-violet-400 animate-pulse"></span>
+            <span>Click any node to spotlight 1-hop dependencies • Drag to pan • Scroll to zoom</span>
+          </div>
+
+          <!-- Docked In-Graph Inspector Drawer -->
+          {render_docked_drawer("arch-node-inspector")}
         </div>
       </div>
 
       <!-- VIEW 2: SEQUENTIAL CASCADE WORKFLOW (INBOUND RPC & REALTIME PUB/SUB) -->
       <div id="arch-view-workflow" class="hidden space-y-6">
-        <!-- Workflow Mode Switcher -->
-        <div class="flex items-center justify-between bg-white p-4 rounded-2xl border border-gray-200/80 shadow-2xs">
+        <!-- Interactive Workflow Stepper Bar -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-gray-200/80 shadow-2xs">
           <div>
-            <h3 class="text-sm font-bold text-gray-900">End-to-End Execution Cascade</h3>
-            <p class="text-xs text-gray-500">Step-by-step sequential timeline of data flow across boundaries.</p>
+            <h3 class="text-sm font-bold text-gray-900">Execution Pipeline Stepper</h3>
+            <p class="text-xs text-gray-500">Interactive step-by-step trace of packets across boundaries.</p>
           </div>
 
-          <div class="flex items-center gap-2 p-1 bg-gray-100 rounded-xl border border-gray-200 text-xs font-semibold">
-            <button
-              type="button"
-              onclick="document.getElementById('cascade-action-workflow').classList.remove('hidden'); document.getElementById('cascade-event-workflow').classList.add('hidden'); document.getElementById('btn-wf-action').classList.add('bg-white', 'text-violet-700', 'shadow-xs'); document.getElementById('btn-wf-event').classList.remove('bg-white', 'text-violet-700', 'shadow-xs');"
-              id="btn-wf-action"
-              class="px-3 py-1.5 rounded-lg bg-white text-violet-700 shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
-            >
-              <span>🎯</span>
-              <span>Action RPC Request (6 Steps)</span>
-            </button>
-            <button
-              type="button"
-              onclick="document.getElementById('cascade-event-workflow').classList.remove('hidden'); document.getElementById('cascade-action-workflow').classList.add('hidden'); document.getElementById('btn-wf-event').classList.add('bg-white', 'text-violet-700', 'shadow-xs'); document.getElementById('btn-wf-action').classList.remove('bg-white', 'text-violet-700', 'shadow-xs');"
-              id="btn-wf-event"
-              class="px-3 py-1.5 rounded-lg text-gray-600 hover:text-gray-900 transition-all cursor-pointer flex items-center gap-1.5"
-            >
-              <span>📡</span>
-              <span>Event Pub/Sub Broadcast (4 Steps)</span>
-            </button>
+          <div class="flex flex-wrap items-center gap-2">
+            <!-- Workflow Mode Select -->
+            <div class="flex items-center gap-1.5 p-1 bg-gray-100 rounded-xl border border-gray-200 text-xs font-semibold">
+              <button
+                type="button"
+                onclick="document.getElementById('cascade-action-workflow').classList.remove('hidden'); document.getElementById('cascade-event-workflow').classList.add('hidden'); document.getElementById('btn-wf-action').classList.add('bg-white', 'text-violet-700', 'shadow-xs'); document.getElementById('btn-wf-event').classList.remove('bg-white', 'text-violet-700', 'shadow-xs'); window._wfType = 'action'; window.ExoGraphEngine.stepWorkflow(1, 'action');"
+                id="btn-wf-action"
+                class="px-3 py-1.5 rounded-lg bg-white text-violet-700 shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <span>🎯</span>
+                <span>Action RPC (6 Steps)</span>
+              </button>
+              <button
+                type="button"
+                onclick="document.getElementById('cascade-event-workflow').classList.remove('hidden'); document.getElementById('cascade-action-workflow').classList.add('hidden'); document.getElementById('btn-wf-event').classList.add('bg-white', 'text-violet-700', 'shadow-xs'); document.getElementById('btn-wf-action').classList.remove('bg-white', 'text-violet-700', 'shadow-xs'); window._wfType = 'event'; window.ExoGraphEngine.stepWorkflow(1, 'event');"
+                id="btn-wf-event"
+                class="px-3 py-1.5 rounded-lg text-gray-600 hover:text-gray-900 transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <span>📡</span>
+                <span>Event Pub/Sub (4 Steps)</span>
+              </button>
+            </div>
+
+            <!-- Stepper Navigation -->
+            <div class="flex items-center gap-1 bg-gray-100 p-1 rounded-xl border border-gray-200">
+              <button
+                type="button"
+                onclick="window._activeStep = Math.max(1, (window._activeStep || 1) - 1); window.ExoGraphEngine.stepWorkflow(window._activeStep, window._wfType || 'action');"
+                class="px-2.5 py-1 rounded-lg bg-white hover:bg-gray-50 text-gray-700 text-xs font-semibold border border-gray-200/60 shadow-2xs cursor-pointer"
+              >
+                ◀ Prev
+              </button>
+              <span id="trace-step-counter" class="px-2.5 text-xs font-mono font-bold text-violet-700">Step 1</span>
+              <button
+                type="button"
+                onclick="window._activeStep = Math.min(6, (window._activeStep || 1) + 1); window.ExoGraphEngine.stepWorkflow(window._activeStep, window._wfType || 'action');"
+                class="px-2.5 py-1 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold shadow-2xs cursor-pointer"
+              >
+                Next ▶
+              </button>
+            </div>
           </div>
         </div>
 
         <!-- 1. ACTION RPC SEQUENTIAL CASCADE -->
         <div id="cascade-action-workflow" class="space-y-4 relative">
-          <!-- Continuous Vertical Pipeline Line -->
-          <div class="absolute left-6 -translate-x-1/2 top-6 bottom-6 w-0.5 bg-gradient-to-b from-blue-400 via-violet-400 to-emerald-400 z-0"></div>
+          <!-- Pixel-Perfect Centered Vertical Pipeline Line (Center at 16px) -->
+          <div class="absolute left-4 -translate-x-1/2 top-4 bottom-4 w-0.5 bg-gradient-to-b from-blue-400 via-violet-400 to-emerald-400 z-0"></div>
 
           <%= for step <- @action_workflow_steps do %>
-            <div class="relative z-10 pl-14">
-              <!-- Step Circle Badge on Pipeline Line -->
-              <div class={"absolute left-6 -translate-x-1/2 top-5 w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs font-black shadow-sm #{case step.color do
+            <div class="flex items-start gap-4 relative z-10" data-workflow-type="action" data-step-num={step.step} data-actor-node={step.actor_node}>
+              <!-- Concentric Step Circle Badge on Vertical Pipeline -->
+              <div class={"w-8 h-8 rounded-full border-2 flex items-center justify-center text-xs font-black shadow-sm shrink-0 z-10 #{case step.color do
                 "blue" -> "bg-blue-600 text-white border-blue-200"
                 "violet" -> "bg-violet-600 text-white border-violet-200"
                 "amber" -> "bg-amber-500 text-white border-amber-200"
@@ -705,7 +853,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
               </div>
 
               <!-- Expandable Accordion Card -->
-              <details class="group bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden transition-all duration-200 hover:border-violet-300">
+              <details class="group flex-1 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden transition-all duration-200 hover:border-violet-300">
                 <summary class="p-4 flex items-center justify-between gap-3 cursor-pointer select-none list-none">
                   <div class="flex items-center gap-3">
                     <div>
@@ -744,11 +892,19 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
                     <%= step.details %>
                   </p>
 
-                  <div>
-                    <div class="text-[10px] font-mono font-bold text-gray-500 uppercase tracking-wider mb-1">
-                      Wire Frame / Code Execution:
+                  <div class="relative group/code">
+                    <div class="flex items-center justify-between text-[10px] font-mono font-bold text-gray-500 uppercase tracking-wider mb-1">
+                      <span>Wire Frame / Code Execution:</span>
+                      <button
+                        type="button"
+                        onclick="window.exoCopyCode && window.exoCopyCode(this)"
+                        class="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-gray-200 hover:bg-gray-300 text-gray-700 flex items-center gap-1 cursor-pointer"
+                      >
+                        <span class="copy-icon">📋</span>
+                        <span class="copy-text">Copy</span>
+                      </button>
                     </div>
-                    <pre class="bg-slate-950 text-gray-200 p-4 rounded-xl font-mono text-xs overflow-x-auto border border-slate-800 leading-relaxed"><code>{highlight_code(step.wire_sample)}</code></pre>
+                    <pre class="bg-slate-950 text-gray-200 p-4 rounded-xl font-mono text-xs overflow-x-auto border border-slate-800 leading-relaxed shadow-sm"><code>{highlight_code(step.wire_sample)}</code></pre>
                   </div>
                 </div>
               </details>
@@ -758,13 +914,13 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
 
         <!-- 2. EVENT PUB/SUB SEQUENTIAL CASCADE -->
         <div id="cascade-event-workflow" class="hidden space-y-4 relative">
-          <!-- Continuous Vertical Pipeline Line -->
-          <div class="absolute left-6 -translate-x-1/2 top-6 bottom-6 w-0.5 bg-gradient-to-b from-emerald-400 via-amber-400 to-blue-400 z-0"></div>
+          <!-- Pixel-Perfect Centered Vertical Pipeline Line (Center at 16px) -->
+          <div class="absolute left-4 -translate-x-1/2 top-4 bottom-4 w-0.5 bg-gradient-to-b from-emerald-400 via-amber-400 to-blue-400 z-0"></div>
 
           <%= for step <- @event_workflow_steps do %>
-            <div class="relative z-10 pl-14">
-              <!-- Step Circle Badge on Pipeline Line -->
-              <div class={"absolute left-6 -translate-x-1/2 top-5 w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs font-black shadow-sm #{case step.color do
+            <div class="flex items-start gap-4 relative z-10" data-workflow-type="event" data-step-num={step.step} data-actor-node={step.actor_node}>
+              <!-- Concentric Step Circle Badge -->
+              <div class={"w-8 h-8 rounded-full border-2 flex items-center justify-center text-xs font-black shadow-sm shrink-0 z-10 #{case step.color do
                 "blue" -> "bg-blue-600 text-white border-blue-200"
                 "violet" -> "bg-violet-600 text-white border-violet-200"
                 "amber" -> "bg-amber-500 text-white border-amber-200"
@@ -774,7 +930,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
               </div>
 
               <!-- Expandable Accordion Card -->
-              <details class="group bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden transition-all duration-200 hover:border-violet-300">
+              <details class="group flex-1 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden transition-all duration-200 hover:border-violet-300">
                 <summary class="p-4 flex items-center justify-between gap-3 cursor-pointer select-none list-none">
                   <div class="flex items-center gap-3">
                     <div>
@@ -812,11 +968,19 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
                     <%= step.details %>
                   </p>
 
-                  <div>
-                    <div class="text-[10px] font-mono font-bold text-gray-500 uppercase tracking-wider mb-1">
-                      Wire Event Frame:
+                  <div class="relative group/code">
+                    <div class="flex items-center justify-between text-[10px] font-mono font-bold text-gray-500 uppercase tracking-wider mb-1">
+                      <span>Wire Event Frame:</span>
+                      <button
+                        type="button"
+                        onclick="window.exoCopyCode && window.exoCopyCode(this)"
+                        class="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-gray-200 hover:bg-gray-300 text-gray-700 flex items-center gap-1 cursor-pointer"
+                      >
+                        <span class="copy-icon">📋</span>
+                        <span class="copy-text">Copy</span>
+                      </button>
                     </div>
-                    <pre class="bg-slate-950 text-gray-200 p-4 rounded-xl font-mono text-xs overflow-x-auto border border-slate-800 leading-relaxed"><code>{highlight_code(step.wire_sample)}</code></pre>
+                    <pre class="bg-slate-950 text-gray-200 p-4 rounded-xl font-mono text-xs overflow-x-auto border border-slate-800 leading-relaxed shadow-sm"><code>{highlight_code(step.wire_sample)}</code></pre>
                   </div>
                 </div>
               </details>
@@ -834,126 +998,169 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
               <span class="text-xl">🕸️</span>
               <div>
                 <h3 class="text-base font-bold text-white tracking-tight">Exoforge UML Architecture Diagram</h3>
-                <p class="text-xs text-slate-400">Subsystem Packages, Core Microkernel, and Ingress Topology</p>
+                <p class="text-xs text-slate-400">Progressive Disclosure, 1-Hop Spotlighting, and Interconnect Topology</p>
               </div>
             </div>
 
-            <button
-              type="button"
-              onclick="document.getElementById('arch-graph-modal').classList.add('hidden');"
-              class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
-            >
-              <span>✕</span>
-              <span>Close Fullscreen</span>
-            </button>
+            <!-- Modal Controls -->
+            <div class="flex items-center gap-3">
+              <div class="flex items-center bg-slate-800 rounded-xl p-0.5 text-xs font-mono font-bold text-slate-200">
+                <button
+                  type="button"
+                  onclick="window.ExoGraphEngine.zoom('modal-arch-graph', 0.85)"
+                  class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-700 cursor-pointer"
+                >
+                  −
+                </button>
+                <span id="modal-arch-graph-zoom-level" class="px-2 select-none">100%</span>
+                <button
+                  type="button"
+                  onclick="window.ExoGraphEngine.zoom('modal-arch-graph', 1.15)"
+                  class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-700 cursor-pointer"
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  onclick="window.ExoGraphEngine.fit('modal-arch-graph')"
+                  class="px-2 h-7 flex items-center justify-center rounded-lg hover:bg-slate-700 text-[10px] font-sans cursor-pointer border-l border-slate-700"
+                >
+                  Fit
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onclick="document.getElementById('arch-graph-modal').classList.add('hidden');"
+                class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+              >
+                <span>✕</span>
+                <span>Close Fullscreen</span>
+              </button>
+            </div>
           </div>
 
-          <!-- Modal Body with Full-Size SVG -->
-          <div class="flex-1 overflow-auto p-6 flex items-center justify-center relative">
-            <div class="w-full max-w-[1240px]">
+          <!-- Modal Body Canvas -->
+          <div id="modal-arch-graph-container" class="flex-1 overflow-hidden relative p-4 select-none">
+            <div class="graph-canvas-bg absolute inset-0 z-0 cursor-default"></div>
+            <div id="modal-arch-graph-viewport" class="absolute top-0 left-0 w-[1220px] h-[590px] transition-transform duration-75 z-10">
               {render_network_svg(assigns, "modal")}
             </div>
-
-            <!-- In-Modal Dialog for full-screen inspection -->
-            {render_node_dialog("modal-node-inspector")}
+            <!-- In-Modal Docked Drawer -->
+            {render_docked_drawer("modal-node-inspector")}
           </div>
         </div>
       </div>
     </div>
+    <script>
+      (function() {
+        if (window.ExoGraphEngine) {
+          window.ExoGraphEngine.initPanZoom('arch-graph');
+          window.ExoGraphEngine.initPanZoom('modal-arch-graph');
+        }
+      })();
+    </script>
     """
   end
 
-  # ---- Helper: In-Graph Node Inspector Dialog ----
+  # ---- Helper: Docked In-Graph Inspector Drawer ----
 
-  defp render_node_dialog(dialog_id) do
-    assigns = %{dialog_id: dialog_id}
+  defp render_docked_drawer(drawer_id) do
+    assigns = %{drawer_id: drawer_id}
 
     ~H"""
     <div
-      id={@dialog_id}
-      class="graph-node-dialog absolute inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 hidden z-30 transition-all duration-200"
-      onclick="if (event.target === this) this.classList.add('hidden')"
+      id={@drawer_id}
+      class="graph-docked-drawer absolute top-4 right-4 bottom-4 w-80 sm:w-96 bg-slate-900/95 border border-slate-700/80 rounded-3xl shadow-2xl p-6 text-white flex flex-col justify-between z-30 translate-x-full transition-transform duration-300 backdrop-blur-md hidden"
+      onclick="event.stopPropagation()"
     >
-      <div
-        class="bg-slate-900 border border-slate-700/80 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl relative text-white space-y-5 animate-in fade-in zoom-in-95 duration-150"
-        onclick="event.stopPropagation()"
-      >
-        <!-- Close button -->
-        <button
-          type="button"
-          onclick="document.querySelectorAll('.graph-node-dialog').forEach(d => d.classList.add('hidden'))"
-          class="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center font-bold text-sm transition-colors cursor-pointer"
-          title="Close dialog"
-        >
-          ✕
-        </button>
+      <div class="space-y-5">
+        <!-- Close button & Header -->
+        <div class="flex items-start justify-between gap-3 border-b border-slate-800 pb-4">
+          <div class="flex items-center gap-3">
+            <div class="drawer-icon w-12 h-12 rounded-2xl bg-slate-800/90 border border-slate-700 flex items-center justify-center text-2xl shrink-0 shadow-inner">
+              🎯
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <h3 class="drawer-title text-base font-black text-white tracking-tight">
+                  ActionDispatcher
+                </h3>
+              </div>
+              <div class="drawer-subtitle text-xs font-mono font-semibold text-violet-400 mt-0.5">
+                Scope &amp; Route Engine
+              </div>
+            </div>
+          </div>
 
-        <!-- Header: Icon, Title, Badge -->
-        <div class="flex items-start gap-4">
-          <div
-            id={"#{@dialog_id}-icon"}
-            class="dialog-icon w-14 h-14 rounded-2xl bg-slate-800/90 border border-slate-700 flex items-center justify-center text-3xl shrink-0 shadow-inner"
+          <button
+            type="button"
+            onclick="window.ExoGraphEngine.clearSpotlight()"
+            class="w-7 h-7 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center font-bold text-xs transition-colors cursor-pointer"
+            title="Dismiss Inspector"
           >
-            🎯
-          </div>
-          <div class="space-y-1 pr-6">
-            <div class="flex flex-wrap items-center gap-2">
-              <h3 id={"#{@dialog_id}-title"} class="dialog-title text-xl font-black text-white tracking-tight">
-                ActionDispatcher
-              </h3>
-              <span
-                id={"#{@dialog_id}-badge"}
-                class="dialog-badge text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30"
-              >
-                KERNEL [IMMUTABLE]
-              </span>
-            </div>
-            <div id={"#{@dialog_id}-subtitle"} class="dialog-subtitle text-xs font-mono font-semibold text-violet-400">
-              Scope &amp; Route Engine
-            </div>
-          </div>
+            ✕
+          </button>
+        </div>
+
+        <div class="flex items-center justify-between">
+          <span class="drawer-badge text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
+            KERNEL [IMMUTABLE]
+          </span>
+          <span class="drawer-package text-[11px] font-mono text-slate-400">
+            Kernel Core
+          </span>
         </div>
 
         <!-- Description -->
-        <div class="bg-slate-950/60 p-4 rounded-2xl border border-slate-800/80">
-          <div class="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+        <div class="bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800/80">
+          <div class="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider mb-1">
             Subsystem Role &amp; Responsibility
           </div>
-          <p id={"#{@dialog_id}-desc"} class="dialog-desc text-xs text-slate-200 leading-relaxed">
+          <p class="drawer-desc text-xs text-slate-200 leading-relaxed">
             Zero-latency in-memory security scope verification (:guest, :player, :admin) &amp; provider routing.
           </p>
         </div>
 
-        <!-- Details Grid: Package & Interconnects -->
-        <div class="grid grid-cols-2 gap-3">
-          <div class="bg-slate-800/50 p-3 rounded-xl border border-slate-700/60">
-            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Subsystem Layer</div>
-            <div id={"#{@dialog_id}-package"} class="dialog-package text-xs font-bold text-slate-100 mt-0.5 font-mono">
-              Kernel Core
-            </div>
+        <!-- Protocol & Transport -->
+        <div class="bg-slate-800/40 p-3 rounded-xl border border-slate-700/60 flex items-center justify-between">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Interconnect</span>
+          <span class="drawer-protocol text-xs font-bold text-violet-300 font-mono">
+            In-Memory Zero-Copy
+          </span>
+        </div>
+
+        <!-- 1-Hop Upstream Dependencies (What calls or supplies this) -->
+        <div class="space-y-1.5">
+          <div class="text-[10px] font-mono font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1">
+            <span>▲</span> <span>Direct Upstream Dependencies:</span>
           </div>
-          <div class="bg-slate-800/50 p-3 rounded-xl border border-slate-700/60">
-            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Interconnect Protocol</div>
-            <div id={"#{@dialog_id}-protocol"} class="dialog-protocol text-xs font-bold text-violet-300 mt-0.5 font-mono">
-              In-Memory Zero-Copy
-            </div>
+          <div class="drawer-upstream-list flex flex-wrap gap-1.5">
+            <!-- Dynamically populated -->
           </div>
         </div>
 
-        <!-- Dismiss footer -->
-        <div class="flex items-center justify-between pt-2 border-t border-slate-800 text-[11px] text-slate-400">
-          <span class="flex items-center gap-1.5">
-            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-            Click anywhere outside or press ESC to dismiss
-          </span>
-          <button
-            type="button"
-            onclick="document.querySelectorAll('.graph-node-dialog').forEach(d => d.classList.add('hidden'))"
-            class="text-violet-400 hover:text-violet-300 font-semibold cursor-pointer"
-          >
-            Dismiss
-          </button>
+        <!-- 1-Hop Downstream Consumers (What depends on this) -->
+        <div class="space-y-1.5">
+          <div class="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+            <span>▼</span> <span>Direct Downstream Consumers:</span>
+          </div>
+          <div class="drawer-downstream-list flex flex-wrap gap-1.5">
+            <!-- Dynamically populated -->
+          </div>
         </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="pt-3 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
+        <span>Click canvas or ESC to dismiss</span>
+        <button
+          type="button"
+          onclick="window.ExoGraphEngine.clearSpotlight()"
+          class="text-violet-400 hover:text-violet-300 font-semibold cursor-pointer"
+        >
+          Dismiss
+        </button>
       </div>
     </div>
     """
@@ -971,15 +1178,15 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       class="w-full h-auto select-none font-sans"
     >
       <defs>
-        <!-- Arrowhead Marker -->
+        <!-- Arrowhead Markers -->
         <marker id={"#{@prefix}net-arrow"} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
           <path d="M 0 1 L 10 5 L 0 9 z" fill="#64748b" />
         </marker>
         <marker id={"#{@prefix}net-arrow-amber"} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
           <path d="M 0 1 L 10 5 L 0 9 z" fill="#f59e0b" />
         </marker>
-        <marker id={"#{@prefix}net-arrow-violet"} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-          <path d="M 0 1 L 10 5 L 0 9 z" fill="#8b5cf6" />
+        <marker id={"#{@prefix}net-arrow-emerald"} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 1 L 10 5 L 0 9 z" fill="#10b981" />
         </marker>
 
         <!-- Drop Shadow Filters -->
@@ -1005,31 +1212,38 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
         </linearGradient>
       </defs>
 
-      <!-- Subsystem UML Packages (Envelopes) -->
+      <!-- Subsystem Macro Envelopes (Progressive Disclosure Containers) -->
       <g class="uml-packages">
-        <!-- Package 1: Client Ingress & Gateways -->
-        <g class="uml-package-box" data-category="client">
-          <rect x="20" y="24" width="418" height="544" rx="20" fill="#0f172a" fill-opacity="0.6" stroke="#334155" stroke-width="1.2" stroke-dasharray="4 3" />
-          <path d="M 20 48 L 140 48 L 152 36 L 152 24 L 20 24 Z" fill="#1e293b" />
-          <text x="32" y="40" fill="#94a3b8" font-size="9.5" font-weight="bold" font-family="monospace">package Ingress</text>
+        <!-- Package 1: Ingress (Client & Dev Tooling) -->
+        <g class="uml-package-box" data-category="client" data-subsystem="client">
+          <rect x="20" y="24" width="205" height="544" rx="20" fill="#0f172a" fill-opacity="0.6" stroke="#334155" stroke-width="1.2" stroke-dasharray="4 3" />
+          <path d="M 20 48 L 135 48 L 147 36 L 147 24 L 20 24 Z" fill="#1e293b" />
+          <text x="30" y="40" fill="#94a3b8" font-size="9" font-weight="bold" font-family="monospace">package Ingress</text>
         </g>
 
-        <!-- Package 2: Kernel Core (Prominent Microkernel Boundary) -->
-        <g class="uml-package-box" data-category="kernel">
+        <!-- Package 2: Gateways Layer -->
+        <g class="uml-package-box" data-category="extension" data-subsystem="gateways">
+          <rect x="235" y="24" width="200" height="544" rx="20" fill="#0f172a" fill-opacity="0.6" stroke="#475569" stroke-width="1.2" stroke-dasharray="4 3" />
+          <path d="M 235 48 L 350 48 L 362 36 L 362 24 L 235 24 Z" fill="#1e293b" />
+          <text x="245" y="40" fill="#94a3b8" font-size="9" font-weight="bold" font-family="monospace">package Gateways</text>
+        </g>
+
+        <!-- Package 3: Kernel Core (Microkernel Boundary) -->
+        <g class="uml-package-box" data-category="kernel" data-subsystem="kernel">
           <rect x="456" y="24" width="278" height="544" rx="20" fill="#181308" fill-opacity="0.8" stroke="#f59e0b" stroke-width="2" filter={"url(##{@prefix}kernel-glow)"} />
-          <path d="M 456 48 L 610 48 L 622 36 L 622 24 L 456 24 Z" fill="#451a03" />
-          <text x="468" y="40" fill="#fde047" font-size="9.5" font-weight="black" font-family="monospace">⚡ package Kernel</text>
+          <path d="M 456 48 L 600 48 L 612 36 L 612 24 L 456 24 Z" fill="#451a03" />
+          <text x="466" y="40" fill="#fde047" font-size="9.5" font-weight="black" font-family="monospace">⚡ package Kernel Core</text>
         </g>
 
-        <!-- Package 3: Extension Workers -->
-        <g class="uml-package-box" data-category="extension">
+        <!-- Package 4: Extension Workers -->
+        <g class="uml-package-box" data-category="extension" data-subsystem="extension">
           <rect x="750" y="24" width="234" height="544" rx="20" fill="#0f172a" fill-opacity="0.6" stroke="#059669" stroke-width="1.2" stroke-dasharray="4 3" />
           <path d="M 750 48 L 890 48 L 902 36 L 902 24 L 750 24 Z" fill="#064e3b" />
           <text x="762" y="40" fill="#6ee7b7" font-size="9.5" font-weight="bold" font-family="monospace">package Extensions</text>
         </g>
 
-        <!-- Package 4: Data & Storage -->
-        <g class="uml-package-box" data-category="internal">
+        <!-- Package 5: Data & Storage -->
+        <g class="uml-package-box" data-category="internal" data-subsystem="storage">
           <rect x="996" y="24" width="192" height="544" rx="20" fill="#0f172a" fill-opacity="0.6" stroke="#0284c7" stroke-width="1.2" stroke-dasharray="4 3" />
           <path d="M 996 48 L 1120 48 L 1132 36 L 1132 24 L 996 24 Z" fill="#082f49" />
           <text x="1008" y="40" fill="#7dd3fc" font-size="9.5" font-weight="bold" font-family="monospace">package Storage</text>
@@ -1046,7 +1260,9 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
             stroke="#475569"
             stroke-width="1.8"
             marker-end={"url(##{@prefix}net-arrow)"}
-            class="opacity-50"
+            class="graph-edge opacity-60 transition-all duration-200"
+            data-edge-from={edge.from}
+            data-edge-to={edge.to}
           />
           <!-- Animated Flow Overlay -->
           <path
@@ -1054,7 +1270,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
             fill="none"
             stroke="#8b5cf6"
             stroke-width="1.8"
-            class="animate-flow-dash opacity-80"
+            class="animate-flow-dash opacity-75 pointer-events-none"
           />
         <% end %>
       </g>
@@ -1066,6 +1282,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
             class="network-node uml-comp-node cursor-pointer group"
             data-graph-node="true"
             data-category={comp.category}
+            data-group-id={comp.group}
             data-node-id={comp.id}
             data-node-title={comp.title}
             data-node-subtitle={comp.subtitle}
@@ -1074,10 +1291,12 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
             data-node-package={comp.package}
             data-node-icon={comp.icon}
             data-node-protocol={comp.protocol}
-            onclick="window.exoOpenNodeDialog && window.exoOpenNodeDialog(this)"
+            data-node-upstream={comp.upstream}
+            data-node-downstream={comp.downstream}
+            onclick="window.ExoGraphEngine.spotlightNode(this)"
             transform={"translate(#{comp.x}, #{comp.y})"}
           >
-            <!-- Card Outer Rectangle -->
+            <!-- Card Outer Box -->
             <rect
               width={comp.width}
               height={comp.height}
@@ -1096,7 +1315,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
               end}
               stroke-width={if comp.category == "kernel", do: "2", else: "1.4"}
               filter={"url(##{@prefix}net-shadow)"}
-              class="group-hover:stroke-white transition-all"
+              class="group-hover:stroke-white transition-all duration-150"
             />
 
             <!-- Top Meta Line: Stereotype & Category Badge -->

@@ -1217,8 +1217,8 @@ defmodule Exoforge.DashboardLiveViewTest do
 
       # Switch to Architecture subpage
       arch_html = render_click(view, "set_guide_subpage", %{"subpage" => "architecture"})
-      assert arch_html =~ "UML Subsystem Diagram"
-      assert arch_html =~ "package Kernel"
+      assert arch_html =~ "Exoforge UML Architecture Diagram"
+      assert arch_html =~ "ActionDispatcher"
 
       # Switch to aggregated C# Attributes subpage
       attr_html = render_click(view, "set_guide_subpage", %{"subpage" => "attributes"})

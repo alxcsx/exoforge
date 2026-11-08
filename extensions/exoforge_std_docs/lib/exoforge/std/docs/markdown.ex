@@ -226,8 +226,13 @@ defmodule Exoforge.Std.Docs.Markdown do
         ""
       end
 
+    copy_btn = """
+    <button type=\"button\" onclick=\"window.exoCopyCode && window.exoCopyCode(this)\" class=\"absolute top-2 right-14 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white border border-gray-700 flex items-center gap-1 cursor-pointer print:hidden shadow-xs\" title=\"Copy code\"><span class=\"copy-icon\">📋</span><span class=\"copy-text\">Copy</span></button>
+    """
+
     """
     <div class="relative group my-3">
+      #{copy_btn}
       #{lang_badge}
       <pre class="bg-gray-950 text-gray-200 p-4 rounded-2xl font-mono text-xs md:text-[13px] overflow-x-auto border border-gray-800 leading-relaxed shadow-sm print:bg-gray-100 print:text-gray-900 print:border-gray-300"><code>#{highlighted}</code></pre>
     </div>

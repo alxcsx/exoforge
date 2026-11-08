@@ -139,28 +139,336 @@ defmodule Exoforge.Std.Dashboard.Layouts do
             }
           };
 
-          window.exoOpenNodeDialog = function(el) {
-            if (!el) return;
-            var d = el.dataset;
-            document.querySelectorAll(".graph-node-dialog").forEach(function(dialog) {
-              var titleEl = dialog.querySelector(".dialog-title");
-              var subEl = dialog.querySelector(".dialog-subtitle");
-              var badgeEl = dialog.querySelector(".dialog-badge");
-              var descEl = dialog.querySelector(".dialog-desc");
-              var pkgEl = dialog.querySelector(".dialog-package");
-              var iconEl = dialog.querySelector(".dialog-icon");
-              var protoEl = dialog.querySelector(".dialog-protocol");
-
-              if (titleEl && d.nodeTitle) titleEl.textContent = d.nodeTitle;
-              if (subEl && d.nodeSubtitle) subEl.textContent = d.nodeSubtitle;
-              if (badgeEl && d.nodeBadge) badgeEl.textContent = d.nodeBadge;
-              if (descEl && d.nodeDesc) descEl.textContent = d.nodeDesc;
-              if (pkgEl && d.nodePackage) pkgEl.textContent = d.nodePackage;
-              if (iconEl && d.nodeIcon) iconEl.textContent = d.nodeIcon;
-              if (protoEl && d.nodeProtocol) protoEl.textContent = d.nodeProtocol;
-
-              dialog.classList.remove("hidden");
+          // One-click Code Copier
+          window.exoCopyCode = function(btn) {
+            if (!btn) return;
+            var container = btn.closest('.relative, .group') || btn.parentElement;
+            var pre = container ? container.querySelector('pre') : null;
+            if (!pre) return;
+            var text = pre.innerText || pre.textContent;
+            navigator.clipboard.writeText(text).then(function() {
+              var textSpan = btn.querySelector('.copy-text');
+              var iconSpan = btn.querySelector('.copy-icon');
+              var prevText = textSpan ? textSpan.textContent : '';
+              var prevIcon = iconSpan ? iconSpan.textContent : '';
+              if (textSpan) textSpan.textContent = 'Copied!';
+              if (iconSpan) iconSpan.textContent = '✓';
+              btn.classList.add('text-emerald-400', 'border-emerald-500/50');
+              setTimeout(function() {
+                if (textSpan) textSpan.textContent = prevText || 'Copy';
+                if (iconSpan) iconSpan.textContent = prevIcon || '📋';
+                btn.classList.remove('text-emerald-400', 'border-emerald-500/50');
+              }, 2000);
             });
+          };
+
+          // Interactive Graph Engine: Pan/Zoom, 1-Hop Spotlight, Progressive Disclosure & Tracing
+          window.ExoGraphEngine = (function() {
+            var state = {};
+
+            function getGraph(id) {
+              if (!state[id]) {
+                state[id] = {
+                  scale: 1.0,
+                  tx: 0,
+                  ty: 0,
+                  isPanning: false,
+                  startX: 0,
+                  startY: 0,
+                  selectedNode: null,
+                  collapsedGroups: {},
+                  traceStep: 0,
+                  traceTimer: null
+                };
+              }
+              return state[id];
+            }
+
+            function applyTransform(graphId) {
+              var s = getGraph(graphId);
+              var viewport = document.getElementById(graphId + "-viewport");
+              if (viewport) {
+                viewport.style.transform = "translate(" + s.tx + "px, " + s.ty + "px) scale(" + s.scale + ")";
+                viewport.style.transformOrigin = "0 0";
+              }
+              var zoomBadge = document.getElementById(graphId + "-zoom-level");
+              if (zoomBadge) {
+                zoomBadge.textContent = Math.round(s.scale * 100) + "%";
+              }
+            }
+
+            return {
+              zoom: function(graphId, factor) {
+                var s = getGraph(graphId);
+                var newScale = Math.min(2.5, Math.max(0.4, s.scale * factor));
+                s.scale = newScale;
+                applyTransform(graphId);
+              },
+              reset: function(graphId) {
+                var s = getGraph(graphId);
+                s.scale = 1.0;
+                s.tx = 0;
+                s.ty = 0;
+                applyTransform(graphId);
+              },
+              fit: function(graphId) {
+                var container = document.getElementById(graphId + "-container");
+                var viewport = document.getElementById(graphId + "-viewport");
+                if (!container || !viewport) return;
+                var cw = container.clientWidth;
+                var ch = container.clientHeight;
+                var s = getGraph(graphId);
+                s.scale = Math.min(1.0, Math.max(0.5, (cw - 40) / 1220));
+                s.tx = Math.max(0, (cw - 1220 * s.scale) / 2);
+                s.ty = 20;
+                applyTransform(graphId);
+              },
+              initPanZoom: function(graphId) {
+                var container = document.getElementById(graphId + "-container");
+                if (!container || container.dataset.panInit === "true") return;
+                container.dataset.panInit = "true";
+                var s = getGraph(graphId);
+
+                container.addEventListener("mousedown", function(e) {
+                  if (e.target.closest("[data-graph-node]") || e.target.closest("button") || e.target.closest(".graph-docked-drawer")) return;
+                  s.isPanning = true;
+                  s.startX = e.clientX - s.tx;
+                  s.startY = e.clientY - s.ty;
+                  container.style.cursor = "grabbing";
+                });
+
+                window.addEventListener("mousemove", function(e) {
+                  if (!s.isPanning) return;
+                  s.tx = e.clientX - s.startX;
+                  s.ty = e.clientY - s.startY;
+                  applyTransform(graphId);
+                });
+
+                window.addEventListener("mouseup", function() {
+                  s.isPanning = false;
+                  if (container) container.style.cursor = "default";
+                });
+
+                container.addEventListener("wheel", function(e) {
+                  e.preventDefault();
+                  var factor = e.deltaY < 0 ? 1.08 : 0.92;
+                  var newScale = Math.min(2.5, Math.max(0.4, s.scale * factor));
+                  s.scale = newScale;
+                  applyTransform(graphId);
+                }, { passive: false });
+              },
+              toggleGroup: function(groupId, graphId) {
+                graphId = graphId || "arch-graph";
+                var s = getGraph(graphId);
+                var isCollapsed = !s.collapsedGroups[groupId];
+                s.collapsedGroups[groupId] = isCollapsed;
+
+                var groupEls = document.querySelectorAll("[data-group-id='" + groupId + "']");
+                var macroBox = document.querySelector("[data-macro-box='" + groupId + "']");
+                var toggleBtn = document.querySelector("[data-toggle-group='" + groupId + "']");
+
+                groupEls.forEach(function(el) {
+                  if (isCollapsed) {
+                    el.classList.add("hidden");
+                  } else {
+                    el.classList.remove("hidden");
+                  }
+                });
+
+                if (macroBox) {
+                  if (isCollapsed) {
+                    macroBox.classList.remove("hidden");
+                  } else {
+                    macroBox.classList.add("hidden");
+                  }
+                }
+
+                if (toggleBtn) {
+                  toggleBtn.textContent = isCollapsed ? "+ Expand" : "− Collapse";
+                }
+              },
+              expandAll: function(graphId) {
+                graphId = graphId || "arch-graph";
+                var s = getGraph(graphId);
+                s.collapsedGroups = {};
+                document.querySelectorAll("[data-group-id]").forEach(function(el) {
+                  el.classList.remove("hidden");
+                });
+                document.querySelectorAll("[data-macro-box]").forEach(function(el) {
+                  el.classList.add("hidden");
+                });
+                document.querySelectorAll("[data-toggle-group]").forEach(function(btn) {
+                  btn.textContent = "− Collapse";
+                });
+              },
+              collapseAll: function(graphId) {
+                graphId = graphId || "arch-graph";
+                var s = getGraph(graphId);
+                document.querySelectorAll("[data-toggle-group]").forEach(function(btn) {
+                  var gid = btn.dataset.toggleGroup;
+                  if (gid) {
+                    s.collapsedGroups[gid] = true;
+                    btn.textContent = "+ Expand";
+                  }
+                });
+                document.querySelectorAll("[data-group-id]").forEach(function(el) {
+                  el.classList.add("hidden");
+                });
+                document.querySelectorAll("[data-macro-box]").forEach(function(el) {
+                  el.classList.remove("hidden");
+                });
+              },
+              spotlightNode: function(nodeEl, graphId) {
+                if (!nodeEl) return;
+                graphId = graphId || "arch-graph";
+                var s = getGraph(graphId);
+                var nodeId = nodeEl.dataset.nodeId;
+                s.selectedNode = nodeId;
+
+                var nodes = document.querySelectorAll(".network-node, .uml-comp-node");
+                var edges = document.querySelectorAll(".graph-edge");
+                var upstreamIds = (nodeEl.dataset.nodeUpstream || "").split(",").filter(Boolean);
+                var downstreamIds = (nodeEl.dataset.nodeDownstream || "").split(",").filter(Boolean);
+
+                nodes.forEach(function(n) {
+                  var nid = n.dataset.nodeId;
+                  if (nid === nodeId) {
+                    n.style.opacity = "1.0";
+                    n.classList.add("ring-selected");
+                  } else if (upstreamIds.indexOf(nid) !== -1) {
+                    n.style.opacity = "1.0";
+                    n.classList.add("ring-upstream");
+                  } else if (downstreamIds.indexOf(nid) !== -1) {
+                    n.style.opacity = "1.0";
+                    n.classList.add("ring-downstream");
+                  } else {
+                    n.style.opacity = "0.18";
+                    n.classList.remove("ring-selected", "ring-upstream", "ring-downstream");
+                  }
+                });
+
+                edges.forEach(function(e) {
+                  var from = e.dataset.edgeFrom;
+                  var to = e.dataset.edgeTo;
+                  if (from === nodeId || to === nodeId) {
+                    e.style.opacity = "1.0";
+                    e.setAttribute("stroke-width", "2.8");
+                    e.setAttribute("stroke", from === nodeId ? "#10b981" : "#f59e0b");
+                  } else {
+                    e.style.opacity = "0.12";
+                    e.setAttribute("stroke-width", "1.5");
+                    e.setAttribute("stroke", "#475569");
+                  }
+                });
+
+                window.ExoGraphEngine.openInspector(nodeEl);
+              },
+              clearSpotlight: function(graphId) {
+                graphId = graphId || "arch-graph";
+                var s = getGraph(graphId);
+                s.selectedNode = null;
+                document.querySelectorAll(".network-node, .uml-comp-node").forEach(function(n) {
+                  n.style.opacity = "1.0";
+                  n.classList.remove("ring-selected", "ring-upstream", "ring-downstream");
+                });
+                document.querySelectorAll(".graph-edge").forEach(function(e) {
+                  e.style.opacity = "0.6";
+                  e.setAttribute("stroke-width", "1.8");
+                  e.setAttribute("stroke", "#64748b");
+                });
+                window.ExoGraphEngine.closeInspector();
+              },
+              openInspector: function(nodeEl) {
+                var d = nodeEl.dataset;
+                var drawers = document.querySelectorAll(".graph-docked-drawer");
+                drawers.forEach(function(drawer) {
+                  var titleEl = drawer.querySelector(".drawer-title");
+                  var subEl = drawer.querySelector(".drawer-subtitle");
+                  var badgeEl = drawer.querySelector(".drawer-badge");
+                  var descEl = drawer.querySelector(".drawer-desc");
+                  var pkgEl = drawer.querySelector(".drawer-package");
+                  var protoEl = drawer.querySelector(".drawer-protocol");
+                  var iconEl = drawer.querySelector(".drawer-icon");
+                  var upList = drawer.querySelector(".drawer-upstream-list");
+                  var downList = drawer.querySelector(".drawer-downstream-list");
+
+                  if (titleEl) titleEl.textContent = d.nodeTitle || "";
+                  if (subEl) subEl.textContent = d.nodeSubtitle || "";
+                  if (badgeEl) badgeEl.textContent = d.nodeBadge || "";
+                  if (descEl) descEl.textContent = d.nodeDesc || "";
+                  if (pkgEl) pkgEl.textContent = d.nodePackage || "";
+                  if (protoEl) protoEl.textContent = d.nodeProtocol || "";
+                  if (iconEl) iconEl.textContent = d.nodeIcon || "🧩";
+
+                  if (upList) {
+                    var up = (d.nodeUpstream || "").split(",").filter(Boolean);
+                    if (up.length === 0) {
+                      upList.innerHTML = '<span class="text-slate-500 italic text-[11px]">None (Root layer)</span>';
+                    } else {
+                      upList.innerHTML = up.map(function(item) {
+                        return '<span class="px-2 py-0.5 rounded-lg bg-amber-400/15 text-amber-300 border border-amber-400/30 font-mono text-[10px]">' + item + '</span>';
+                      }).join(' ');
+                    }
+                  }
+
+                  if (downList) {
+                    var down = (d.nodeDownstream || "").split(",").filter(Boolean);
+                    if (down.length === 0) {
+                      downList.innerHTML = '<span class="text-slate-500 italic text-[11px]">None (Terminal endpoint)</span>';
+                    } else {
+                      downList.innerHTML = down.map(function(item) {
+                        return '<span class="px-2 py-0.5 rounded-lg bg-emerald-400/15 text-emerald-300 border border-emerald-400/30 font-mono text-[10px]">' + item + '</span>';
+                      }).join(' ');
+                    }
+                  }
+
+                  drawer.classList.remove("translate-x-full", "hidden");
+                });
+              },
+              closeInspector: function() {
+                document.querySelectorAll(".graph-docked-drawer").forEach(function(drawer) {
+                  drawer.classList.add("translate-x-full");
+                });
+              },
+              stepWorkflow: function(stepIndex, workflowType) {
+                workflowType = workflowType || "action";
+                var prefix = workflowType === "event" ? "ev_" : "wf_";
+                var stepCards = document.querySelectorAll("[data-workflow-type='" + workflowType + "']");
+                var total = stepCards.length;
+                if (stepIndex < 1) stepIndex = 1;
+                if (stepIndex > total) stepIndex = total;
+
+                // Update counter
+                var counter = document.getElementById("trace-step-counter");
+                if (counter) counter.textContent = "Step " + stepIndex + " of " + total;
+
+                // Highlight active step card and open accordion
+                stepCards.forEach(function(card, idx) {
+                  var current = idx + 1;
+                  var details = card.closest("details");
+                  if (current === stepIndex) {
+                    card.classList.add("ring-2", "ring-violet-500", "bg-violet-50/30");
+                    if (details) details.open = true;
+                    card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                  } else {
+                    card.classList.remove("ring-2", "ring-violet-500", "bg-violet-50/30");
+                  }
+                });
+
+                // Highlight corresponding node on graph
+                var activeCard = document.querySelector("[data-workflow-type='" + workflowType + "'][data-step-num='" + stepIndex + "']");
+                if (activeCard && activeCard.dataset.actorNode) {
+                  var actorNode = document.querySelector("[data-node-id='" + activeCard.dataset.actorNode + "']");
+                  if (actorNode) {
+                    window.ExoGraphEngine.spotlightNode(actorNode);
+                  }
+                }
+              }
+            };
+          })();
+
+          window.exoOpenNodeDialog = function(el) {
+            window.ExoGraphEngine.spotlightNode(el);
           };
 
           window.exoHighlightPackage = function(category) {
@@ -170,7 +478,7 @@ defmodule Exoforge.Std.Dashboard.Layouts do
               if (category === "all" || nodeCat === category) {
                 node.style.opacity = "1.0";
               } else {
-                node.style.opacity = "0.2";
+                node.style.opacity = "0.18";
               }
             });
 
@@ -197,15 +505,19 @@ defmodule Exoforge.Std.Dashboard.Layouts do
             // Architecture Graph Node Click
             var nodeEl = e.target.closest("[data-graph-node]");
             if (nodeEl) {
-              window.exoOpenNodeDialog(nodeEl);
+              window.ExoGraphEngine.spotlightNode(nodeEl);
+              return;
+            }
+
+            // Click canvas background to clear spotlight
+            if (e.target.closest(".graph-canvas-bg")) {
+              window.ExoGraphEngine.clearSpotlight();
             }
           });
 
           document.addEventListener("keydown", function(e) {
             if (e.key === "Escape") {
-              document.querySelectorAll(".graph-node-dialog").forEach(function(d) {
-                d.classList.add("hidden");
-              });
+              window.ExoGraphEngine.clearSpotlight();
               var modal = document.getElementById("arch-graph-modal");
               if (modal) modal.classList.add("hidden");
             }

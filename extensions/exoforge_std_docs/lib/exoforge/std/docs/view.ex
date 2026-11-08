@@ -324,24 +324,24 @@ defmodule Exoforge.Std.Docs.View do
           <div class="space-y-3">
             <h4 class="font-bold text-gray-900 text-sm flex items-center gap-2">
               <span>🎮</span>
-              <span>Anonymous Login &amp; Scene Setup</span>
+              <span>Two-Stage Anonymous Login &amp; Zero-Wiring Setup</span>
             </h4>
             <ul class="space-y-2.5 text-gray-600 leading-relaxed">
               <li class="flex items-start gap-2">
                 <span class="text-primary-600 font-bold shrink-0">●</span>
-                <span><strong>Add Exoforge Prefab:</strong> In your initial scene, click <strong class="text-gray-900">Exoforge ▸ Add Exoforge to Scene</strong> to instantiate the persistent runtime manager.</span>
+                <span><strong>Zero Scene Wiring:</strong> You do not need to manually place prefabs in your scene. <code class="font-mono bg-gray-100 text-gray-800 px-1 py-0.5 rounded">ExoforgeManager</code> initializes automatically on demand when any SDK call is made.</span>
               </li>
               <li class="flex items-start gap-2">
                 <span class="text-primary-600 font-bold shrink-0">●</span>
-                <span><strong>Automatic Device Login:</strong> With <code class="font-mono text-primary-700 bg-gray-100 px-1 py-0.5 rounded font-semibold">anonymousOnConnect: true</code>, Exoforge signs the player in instantly using their unique hardware hash (<code class="font-mono bg-gray-100 text-gray-800 px-1 py-0.5 rounded">ExoDeviceId.Get()</code>) without passwords.</span>
+                <span><strong>Stage 1 (Device Sign-In):</strong> Call <code class="font-mono text-primary-700 bg-gray-100 px-1 py-0.5 rounded font-semibold">await ExoforgeSDK.Auth.LoginAnonymously()</code>. Signs the player in using their stable hardware device hash (<code class="font-mono bg-gray-100 text-gray-800 px-1 py-0.5 rounded">ExoDeviceId</code>).</span>
               </li>
               <li class="flex items-start gap-2">
                 <span class="text-primary-600 font-bold shrink-0">●</span>
-                <span><strong>Script Login:</strong> Or call <code class="font-mono text-primary-700 bg-gray-100 px-1 py-0.5 rounded font-semibold">await ExoforgeSDK.Auth.LoginAnonymously()</code> programmatically from any MonoBehaviour.</span>
+                <span><strong>Stage 2 (Display Name):</strong> When <code class="font-mono bg-gray-100 text-gray-800 px-1 py-0.5 rounded">session.HasDisplayName == false</code>, prompt the player and call <code class="font-mono text-primary-700 bg-gray-100 px-1 py-0.5 rounded font-semibold">await ExoforgeSDK.Auth.SetDisplayName("Viper")</code>.</span>
               </li>
               <li class="flex items-start gap-2">
                 <span class="text-primary-600 font-bold shrink-0">●</span>
-                <span><strong>Automatic Token Caching:</strong> Player session tokens persist in <code class="font-mono bg-gray-100 text-gray-800 px-1 py-0.5 rounded">ExoTokenStore</code>, and <code class="font-mono bg-gray-100 text-gray-800 px-1 py-0.5 rounded">Exoforge.IsReady</code> activates immediately upon connect.</span>
+                <span><strong>Session Caching:</strong> Player session credentials persist in local storage securely, and reconnects resolve seamlessly.</span>
               </li>
             </ul>
           </div>
@@ -468,11 +468,11 @@ defmodule Exoforge.Std.Docs.View do
           <ul class="space-y-2.5 text-gray-600 leading-relaxed">
             <li class="flex items-start gap-2">
               <span class="text-primary-600 font-bold shrink-0">●</span>
-              <span><strong>1-Click Client Sync:</strong> Click <strong class="text-gray-900">🔄 Sync Client</strong> in the Unity toolbar (or run <code class="font-mono bg-gray-100 text-primary-700 px-1 py-0.5 rounded font-bold">exo sync</code>) whenever backend contracts change.</span>
+              <span><strong>1-Click Unity Client Sync:</strong> Click <strong class="text-gray-900">🔄 Sync Client</strong> in the Unity toolbar (or via Studio) whenever backend contracts change to generate typed client bindings in <code class="font-mono bg-gray-100 text-gray-800 px-1 py-0.5 rounded">Assets/Exoforge/Generated/ExoforgeServices.g.cs</code>.</span>
             </li>
             <li class="flex items-start gap-2">
               <span class="text-primary-600 font-bold shrink-0">●</span>
-              <span><strong>Live Contract Reflection:</strong> Queries live extension manifests from the cluster and emits <code class="font-mono bg-gray-100 text-gray-800 px-1 py-0.5 rounded">Assets/Exoforge/Generated/ExoforgeServices.g.cs</code>.</span>
+              <span><strong>Server Extension Stubs:</strong> Run <code class="font-mono bg-gray-100 text-primary-700 px-1 py-0.5 rounded font-bold">exo extension stubs &lt;name&gt;</code> to generate strongly-typed inter-service call stubs from the cluster contract export.</span>
             </li>
             <li class="flex items-start gap-2">
               <span class="text-primary-600 font-bold shrink-0">●</span>
@@ -566,21 +566,31 @@ defmodule Exoforge.Std.Docs.View do
           </div>
         </div>
 
-        <div class="print:hidden pt-2 flex flex-wrap gap-2 text-xs font-semibold">
-          <a href="#attr-extension" class="px-3 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors flex items-center gap-1.5">
-            <span>[ExoExtension]</span>
+        <div class="sticky top-2 z-20 print:hidden bg-white/95 backdrop-blur-md rounded-2xl border border-gray-200/90 p-3 shadow-xs flex flex-wrap gap-2 text-xs font-semibold">
+          <span class="text-gray-400 text-[11px] font-mono self-center mr-1">Quick Jump:</span>
+          <a href="#attr-extension" class="px-2.5 py-1 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">
+            <span>[ExoService]</span>
           </a>
-          <a href="#attr-action" class="px-3 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors flex items-center gap-1.5">
+          <a href="#attr-action" class="px-2.5 py-1 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">
             <span>[ExoAction]</span>
           </a>
-          <a href="#attr-cron" class="px-3 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors flex items-center gap-1.5">
+          <a href="#attr-cron" class="px-2.5 py-1 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">
             <span>[ExoCron]</span>
           </a>
-          <a href="#attr-event" class="px-3 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors flex items-center gap-1.5">
+          <a href="#attr-event" class="px-2.5 py-1 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">
             <span>[ExoEvent]</span>
           </a>
-          <a href="#attr-resource" class="px-3 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors flex items-center gap-1.5">
+          <a href="#attr-resource" class="px-2.5 py-1 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">
             <span>[ExoResource]</span>
+          </a>
+          <a href="#attr-dependency" class="px-2.5 py-1 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">
+            <span>[ExoDependency]</span>
+          </a>
+          <a href="#attr-webhook" class="px-2.5 py-1 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">
+            <span>[ExoWebhook]</span>
+          </a>
+          <a href="#attr-capabilities" class="px-2.5 py-1 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200/60 transition-colors">
+            <span>⚡ Exo.* Capabilities</span>
           </a>
         </div>
       </div>
@@ -1179,6 +1189,130 @@ defmodule Exoforge.Std.Docs.View do
           <pre class="bg-gray-950 text-gray-200 p-4 rounded-2xl font-mono text-xs md:text-[13px] leading-relaxed overflow-x-auto border border-gray-800"><code><%= Phoenix.HTML.raw(Markdown.highlight_csharp(code_exo_resource_page())) %></code></pre>
         </div>
       </section>
+
+      <!-- [ExoDependency] -->
+      <section id="attr-dependency" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+          <div class="flex items-center gap-3">
+            <span class="w-10 h-10 rounded-2xl bg-cyan-50 text-cyan-700 flex items-center justify-center font-bold text-lg">
+              🔗
+            </span>
+            <div>
+              <div class="flex items-center gap-2">
+                <h2 class="text-xl font-extrabold text-gray-900 font-mono">[ExoDependency]</h2>
+                <span class="px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-800 text-[10px] font-bold uppercase tracking-wider">Topological Dependency</span>
+              </div>
+              <p class="text-xs text-gray-500 mt-0.5">Declares explicit service dependencies determining DAG boot order and client stub scope.</p>
+            </div>
+          </div>
+          <div class="text-[11px] font-mono bg-gray-100 px-3 py-1.5 rounded-xl text-gray-600 self-start sm:self-auto">
+            Source: <strong class="text-cyan-700">ExtensionBootstrapper</strong> (Kernel DAG)
+          </div>
+        </div>
+
+        <div class="space-y-3 text-xs text-gray-700 leading-relaxed">
+          <p>
+            Decorate your extension class or contract with <code class="font-mono text-cyan-700 font-bold">[ExoDependency("service_name")]</code> or <code class="font-mono text-cyan-700 font-bold">[ExoDependency&lt;TService&gt;]</code>. The cluster supervisor ensures this service initializes only after all required dependencies have successfully started and verified health.
+          </p>
+
+          <pre class="bg-gray-950 text-gray-200 p-4 rounded-2xl font-mono text-xs md:text-[13px] leading-relaxed overflow-x-auto border border-gray-800"><code><%= Phoenix.HTML.raw(Markdown.highlight_csharp(code_exo_dependency_page())) %></code></pre>
+        </div>
+      </section>
+
+      <!-- [ExoWebhook] -->
+      <section id="attr-webhook" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+          <div class="flex items-center gap-3">
+            <span class="w-10 h-10 rounded-2xl bg-rose-50 text-rose-700 flex items-center justify-center font-bold text-lg">
+              🪝
+            </span>
+            <div>
+              <div class="flex items-center gap-2">
+                <h2 class="text-xl font-extrabold text-gray-900 font-mono">[ExoWebhook]</h2>
+                <span class="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 text-[10px] font-bold uppercase tracking-wider">External HTTP Hook</span>
+              </div>
+              <p class="text-xs text-gray-500 mt-0.5">Exposes endpoints for external provider webhooks (e.g. Stripe, GitHub, Discord).</p>
+            </div>
+          </div>
+          <div class="text-[11px] font-mono bg-gray-100 px-3 py-1.5 rounded-xl text-gray-600 self-start sm:self-auto">
+            Source: <strong class="text-rose-700">HTTP Gateway</strong> (<code class="text-gray-800">exoforge_std_http</code>)
+          </div>
+        </div>
+
+        <div class="space-y-3 text-xs text-gray-700 leading-relaxed">
+          <p>
+            Decorate webhook handlers with <code class="font-mono text-rose-700 font-bold">[ExoWebhook("name")]</code> to receive raw inbound HTTP POST events with request headers, signature validation data, and raw body buffers.
+          </p>
+
+          <pre class="bg-gray-950 text-gray-200 p-4 rounded-2xl font-mono text-xs md:text-[13px] leading-relaxed overflow-x-auto border border-gray-800"><code><%= Phoenix.HTML.raw(Markdown.highlight_csharp(code_exo_webhook_page())) %></code></pre>
+        </div>
+      </section>
+
+      <!-- Static Exo Capabilities Reference -->
+      <section id="attr-capabilities" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+          <div class="flex items-center gap-3">
+            <span class="w-10 h-10 rounded-2xl bg-purple-50 text-purple-700 flex items-center justify-center font-bold text-lg">
+              ⚡
+            </span>
+            <div>
+              <div class="flex items-center gap-2">
+                <h2 class="text-xl font-extrabold text-gray-900 font-mono">Static Exo.* Capabilities</h2>
+                <span class="px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[10px] font-bold uppercase tracking-wider">Host Bridge</span>
+              </div>
+              <p class="text-xs text-gray-500 mt-0.5">High-performance ambient static access to host capabilities without service reflection.</p>
+            </div>
+          </div>
+          <div class="text-[11px] font-mono bg-gray-100 px-3 py-1.5 rounded-xl text-gray-600 self-start sm:self-auto">
+            Source: <strong class="text-purple-700">HostBridge &amp; PluginContext</strong>
+          </div>
+        </div>
+
+        <div class="space-y-3 text-xs text-gray-700 leading-relaxed">
+          <p>
+            Extensions access cluster capabilities via the ambient static <code class="font-mono text-purple-700 font-bold">Exo</code> holder or via injected properties (<code class="font-mono">[Inject] IDatabase Database</code>):
+          </p>
+
+          <div class="overflow-x-auto rounded-xl border border-gray-200">
+            <table class="w-full text-left text-xs bg-white">
+              <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 font-semibold text-[10px] uppercase">
+                <tr>
+                  <th class="py-2 px-3">Capability</th>
+                  <th class="py-2 px-3">Property</th>
+                  <th class="py-2 px-3">Example Usage</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100 font-mono text-[11px]">
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">Database</td>
+                  <td class="py-2 px-3 text-purple-700">Exo.Database</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600"><code class="font-mono">Exo.Database.Get&lt;Score&gt;("scores", id)</code>, <code class="font-mono">Exo.Database.Put(record)</code>, <code class="font-mono">Exo.Database.Query&lt;T&gt;("SELECT ...")</code></td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">Events</td>
+                  <td class="py-2 px-3 text-purple-700">Exo.Events</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600"><code class="font-mono">await Exo.Events.EmitAsync(new PlayerRegisteredEvent(id, name))</code></td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">Logger</td>
+                  <td class="py-2 px-3 text-purple-700">Exo.Logger</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600"><code class="font-mono">Exo.Logger.Info("Player joined")</code>, <code class="font-mono">Exo.Logger.Error("Calculation failed")</code></td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">Actions</td>
+                  <td class="py-2 px-3 text-purple-700">Exo.Actions</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600"><code class="font-mono">await Exo.Actions.CallActionAsync&lt;Req, Res&gt;(req)</code></td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-bold text-gray-900">Context</td>
+                  <td class="py-2 px-3 text-purple-700">Exo.Context</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600"><code class="font-mono">Exo.Context.CallerPlayerId</code>, <code class="font-mono">Exo.Context.CallerScopes</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
     </div>
     """
   end
@@ -1218,12 +1352,43 @@ defmodule Exoforge.Std.Docs.View do
         </span>
       </div>
 
+      <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2 border-t border-gray-100">
+        <div class="relative flex-1">
+          <input
+            type="text"
+            id="catalog-search"
+            placeholder="Search services, actions, parameters..."
+            oninput="const q = this.value.toLowerCase().trim(); document.querySelectorAll('#catalog-list > details').forEach(d => { const text = d.innerText.toLowerCase(); d.style.display = (!q || text.includes(q)) ? '' : 'none'; if (q && text.includes(q)) d.open = true; });"
+            class="w-full pl-9 pr-4 py-2 bg-gray-50 hover:bg-gray-100/80 focus:bg-white border border-gray-200 rounded-xl text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all font-mono"
+          />
+          <svg class="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onclick="document.querySelectorAll('#catalog-list details').forEach(d => d.open = true);"
+            class="px-3 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold transition-colors cursor-pointer"
+          >
+            Expand All
+          </button>
+          <button
+            type="button"
+            onclick="document.querySelectorAll('#catalog-list details').forEach(d => d.open = false);"
+            class="px-3 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold transition-colors cursor-pointer"
+          >
+            Collapse All
+          </button>
+        </div>
+      </div>
+
       <%= if @action_catalog == [] do %>
         <div class="text-center py-12 text-gray-400 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
           No callable services currently registered. Scaffold and deploy an extension to see it live!
         </div>
       <% else %>
-        <div class="space-y-4">
+        <div id="catalog-list" class="space-y-4">
           <%= for svc <- @action_catalog do %>
             <details class="group bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden transition-all duration-200 print:border-gray-300 print:shadow-none print:break-inside-avoid">
               <summary class="flex items-center justify-between gap-3 p-5 cursor-pointer select-none bg-white hover:bg-gray-50 transition-colors list-none">
@@ -1440,9 +1605,9 @@ defmodule Exoforge.Std.Docs.View do
   defp code_extension do
     """
     using System.Threading.Tasks;
-    using Exoforge.SDK;
+    using Exoforge.Plugin.SDK;
 
-    [ExoExtension("gameplay_calculator", Version = "1.0.0")]
+    [ExoService("gameplay_calculator", Version = "1.0.0")]
     public class GameplayCalculatorExtension
     {
         [ExoAction]
@@ -1502,9 +1667,9 @@ defmodule Exoforge.Std.Docs.View do
 
   defp code_exo_extension_page do
     """
-    using Exoforge.SDK;
+    using Exoforge.Plugin.SDK;
 
-    [ExoExtension("leaderboard_service",
+    [ExoService("leaderboard_service",
         Title = "Leaderboards & Rankings",
         Icon = "🏆",
         Category = "Game",
@@ -1537,7 +1702,7 @@ defmodule Exoforge.Std.Docs.View do
     [ExoAction(Mode = ActionMode.Cast)]
     public void RecordTelemetry(TelemetryPayload payload)
     {
-        Exo.Log.Info($"Telemetry: {payload.EventName}");
+        Exo.Logger.Info($"Telemetry: {payload.EventName}");
     }
     """
   end
@@ -1554,6 +1719,8 @@ defmodule Exoforge.Std.Docs.View do
 
   defp code_exo_event_page do
     """
+    using Exoforge.Plugin.SDK;
+
     // 1. Declare Event Schema Contract (Record)
     [ExoEvent("player.registered", Topic = "player:*")]
     public record PlayerRegisteredEvent(string PlayerId, string DisplayName, DateTime RegisteredAt);
@@ -1563,7 +1730,7 @@ defmodule Exoforge.Std.Docs.View do
     {
         public void OnEvent(string name, PlayerRegisteredEvent evt)
         {
-            Exo.Log.Info($"Player joined: {evt.DisplayName}");
+            Exo.Logger.Info($"Player joined: {evt.DisplayName}");
         }
     }
     """
@@ -1588,6 +1755,53 @@ defmodule Exoforge.Std.Docs.View do
         [property: ExoColumn(Badge = true, InputType = ExoInput.Color)] string TierBadge,
         [property: ExoColumn(Label = "Submitted At")] DateTime CreatedAt
     );
+    """
+  end
+
+  defp code_exo_dependency_page do
+    """
+    using System.Threading.Tasks;
+    using Exoforge.Plugin.SDK;
+
+    // Declares topological dependency DAG boot order and client stub scope
+    [ExoService("inventory_service")]
+    [ExoDependency("database")]
+    [ExoDependency("player_data")]
+    public class InventoryExtension
+    {
+        [Inject("player_data")]
+        public PlayerDataServiceClient PlayerData { get; set; } = null!;
+
+        [ExoAction(Scope = "player")]
+        public async Task<GrantItemResponse> GrantItem(GrantItemRequest req)
+        {
+            // Extension stubs make inter-service RPC typed and natural
+            var profile = await PlayerData.GetProfileAsync(new GetProfileRequest(req.PlayerId));
+            return new GrantItemResponse(req.ItemId, profile.DisplayName);
+        }
+    }
+    """
+  end
+
+  defp code_exo_webhook_page do
+    """
+    using System.Threading.Tasks;
+    using Exoforge.Plugin.SDK;
+
+    [ExoService("billing_service")]
+    public class BillingExtension
+    {
+        // Inbound external HTTP POST webhook endpoint (e.g. Stripe checkout)
+        [ExoWebhook("stripe")]
+        public async Task<WebhookResult> HandleStripeWebhook(WebhookPayload payload)
+        {
+            string signature = payload.Headers["Stripe-Signature"];
+            Exo.Logger.Info($"Processing Stripe checkout webhook: {payload.EventName}");
+
+            // Process payload and acknowledge receipt
+            return WebhookResult.Success();
+        }
+    }
     """
   end
 end

@@ -4,17 +4,19 @@ Comprehensive reference for all core attributes provided by the Exoforge Extensi
 
 ---
 
-## [ExoExtension] / [ExoService]
+## [ExoService] / [ExoExtension]
 
 **Source / Provider:** Kernel & Extension Manager (`core/`, `exoforge_std_extension_manager`)
 
-Identifies a C# class as a cluster-supervised native headless service.
+Identifies a C# class or interface as a cluster-supervised native headless service contract and implementation.
 
-The `[ExoExtension]` attribute (standard alias for `[ExoService]`) is the root entry point for backend features in Exoforge. Classes marked with this attribute are automatically registered into the server extension supervisor, inspected for exported RPC actions, and linked into client code generators.
+The `[ExoService]` attribute (and its standardized alias `[ExoExtension]`) is the root entry point for backend features in Exoforge.
+- On a **class**: The class is its own contract and implementation. Its `[ExoAction]`, `[ExoCron]`, and `[ExoEvent]` members define the service.
+- On an **interface**: The interface is the contract and the class implementing it is the extension's root. This allows one extension to provide several services or share contracts via shared packages.
 
 | Property | Type | Default | Description |
 |---|---|---|---|
-| id (positional) | string | **Required** | Unique identifier of the service / extension (e.g. `"inventory_service"`). Used for RPC routing, CLI targeting, and log grouping. |
+| name (positional) | string | **Required** | Unique identifier of the service (e.g. `"inventory_service"`). Used for RPC routing, CLI targeting, and log grouping. |
 | Title | string | `null` | Human-readable title displayed in the Studio Dashboard, cards, and API catalog (e.g. `"Inventory Manager"`). |
 | Icon | string | `"⚙️"` | Icon or emoji displayed on extension cards and navigation tabs in Studio (e.g. `"🎒"`, `"🎮"`). |
 | Category | string | `"Extension"` | Classification category in Studio (e.g. `"Game"`, `"Economy"`, `"Social"`, `"Operations"`, `"System"`). |
@@ -25,7 +27,9 @@ The `[ExoExtension]` attribute (standard alias for `[ExoService]`) is the root e
 | DashboardEntry | string | `null` | JavaScript entry bundle path for custom Studio microfrontend views. |
 
 ```csharp
-[ExoExtension("inventory_service", 
+using Exoforge.Plugin.SDK;
+
+[ExoService("inventory_service", 
     Title = "Inventory & Equipment", 
     Icon = "🎒", 
     Category = "Game", 
@@ -133,7 +137,7 @@ Declares an **event schema** on records, classes, or structs emitted or received
 > `[ExoEvent]` is used to describe an **event schema** on records or classes, **NOT** to annotate a listener function.
 > * To **define an event schema**: Decorate a record/class with `[ExoEvent]`. Public properties become the payload contract.
 > * To **listen to events** in a C# extension: Implement `public void OnEvent(string name, TPayload payload)` on your extension root class.
-> * To **publish events** in C#: Call `Exo.Events.Publish("topic", eventRecord)`.
+> * To **publish events** in C#: Call `await Exo.Events.EmitAsync(new MyEvent(...))`.
 > * To **subscribe** in Unity: Call `ExoforgeSDK.Events.Subscribe<TEvent>("topic", handler)`.
 
 | Property | Type | Default | Description |
@@ -150,14 +154,14 @@ Declares an **event schema** on records, classes, or structs emitted or received
 public record PlayerRegisteredEvent(string PlayerId, string DisplayName, DateTime RegisteredAt);
 
 // 2. Publish Event from Server
-Exo.Events.Publish($"player:{player.Id}", new PlayerRegisteredEvent(player.Id, player.Name, DateTime.UtcNow));
+await Exo.Events.EmitAsync(new PlayerRegisteredEvent(player.Id, player.Name, DateTime.UtcNow));
 
 // 3. Receive Inbound Event in Extension Class
 public class MyExtension
 {
     public void OnEvent(string name, PlayerRegisteredEvent evt)
     {
-        Exo.Log.Info($"Player registered: {evt.DisplayName}");
+        Exo.Logger.Info($"Player registered: {evt.DisplayName}");
     }
 }
 ```
@@ -210,3 +214,67 @@ public record PlayerScoreRecord(
     DateTime CreatedAt
 );
 ```
+
+---
+
+## [ExoDependency] & [ExoDependency<T>]
+
+**Source / Provider:** Kernel ExtensionBootstrapper (`core/`)
+
+Declares an explicit runtime dependency on another service contract, determining topological boot order and client stub generation scope.
+
+```csharp
+[ExoService("guild_service")]
+[ExoDependency("player_data")]
+[ExoDependency("auth")]
+public class GuildExtension
+{
+    // Boots after player_data and auth are initialized
+}
+```
+
+---
+
+## [ExoWebhook]
+
+**Source / Provider:** HTTP Gateway (`exoforge_std_http`)
+
+Marks a method as an inbound external webhook receiver (e.g. Stripe, GitHub, Discord) routed over HTTP POST. Automatically receives raw payload, query strings, and request headers.
+
+```csharp
+[ExoWebhook("stripe_payment")]
+public async Task HandleStripeWebhook(StripeWebhookPayload payload)
+{
+    Exo.Logger.Info($"Received payment event: {payload.Type}");
+}
+```
+
+---
+
+## [ExoSingletonResource]
+
+**Source / Provider:** Resource Store (`exoforge_std_resources`)
+
+Convenience attribute for configuration entities that store exactly one record (e.g. server settings, seasonal balance tuning). Rendered in Studio as a direct single-form editor rather than a multi-row table.
+
+```csharp
+[ExoSingletonResource("season_settings")]
+public record SeasonSettings(
+    [property: ExoColumn(Label = "Current Season")] int SeasonNumber,
+    [property: ExoColumn(Label = "Double XP Active")] bool DoubleXpEnabled
+);
+```
+
+---
+
+## Static `Exo` & `ExoServices` Capabilities Reference
+
+Extensions access the ambient cluster environment through the static `Exo` holder:
+
+| Capability | Property | Usage Example |
+|---|---|---|
+| **Database** | `Exo.Database` | `Exo.Database.Get<PlayerScore>("player_scores", id)`, `Exo.Database.Put(record)`, `Exo.Database.Query<T>("SELECT ... WHERE id = $1", id)` |
+| **Events** | `Exo.Events` | `await Exo.Events.EmitAsync(new PlayerRegisteredEvent(id, name))` |
+| **Logger** | `Exo.Logger` | `Exo.Logger.Info("Player logged in")`, `Exo.Logger.Error("Operation failed")` |
+| **Inter-Service Actions** | `Exo.Actions` | `var res = await Exo.Actions.CallActionAsync<TReq, TRes>(req)` |
+| **Context** | `Exo.Context` | `Exo.Context.CallerPlayerId`, `Exo.Context.CallerScopes` |

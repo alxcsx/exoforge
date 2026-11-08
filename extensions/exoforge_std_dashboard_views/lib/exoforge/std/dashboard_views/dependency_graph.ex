@@ -9,19 +9,31 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
   """
   use Phoenix.Component
 
-  defp build_dependency_graph(plugins) do
+  defp get_val(map, key) when is_map(map) do
+    Map.get(map, to_string(key)) || Map.get(map, String.to_atom(to_string(key)))
+  end
+  defp get_val(_other, _key), do: nil
+
+  defp build_dependency_graph(plugins) when is_list(plugins) do
     # Map service names (string) to the plugin id providing it
     provider_map =
       Enum.reduce(plugins, %{}, fn p, acc ->
-        Enum.reduce(p["provides"] || [], acc, fn svc, m ->
+        provides = get_val(p, :provides) || []
+        pid = to_string(get_val(p, :id) || "")
+        Enum.reduce(provides, acc, fn svc, m ->
           clean_svc = svc |> to_string() |> String.replace_prefix(":", "") |> String.downcase()
-          Map.put(m, clean_svc, p["id"])
+          Map.put(m, clean_svc, pid)
         end)
       end)
 
     Enum.map(plugins, fn p ->
-      pid = p["id"]
-      deps = p["dependencies"] || []
+      pid = to_string(get_val(p, :id) || "")
+      name = to_string(get_val(p, :title) || get_val(p, :name) || pid)
+      deps = get_val(p, :dependencies) || []
+      provides = get_val(p, :provides) || []
+      tier = to_string(get_val(p, :category) || "Extension")
+      type = to_string(get_val(p, :type) || "elixir")
+      icon = to_string(get_val(p, :icon) || "🧩")
 
       resolved_deps =
         Enum.map(deps, fn d ->
@@ -33,40 +45,47 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
       dependents =
         Enum.filter(plugins, fn other ->
           other_deps =
-            Enum.map(other["dependencies"] || [], fn d ->
+            Enum.map(get_val(other, :dependencies) || [], fn d ->
               d |> to_string() |> String.replace_prefix(":", "") |> String.downcase()
             end)
 
           my_provides =
-            Enum.map(p["provides"] || [], fn s ->
+            Enum.map(provides, fn s ->
               s |> to_string() |> String.replace_prefix(":", "") |> String.downcase()
             end)
 
           Enum.any?(other_deps, &(&1 in my_provides))
         end)
-        |> Enum.map(& &1["id"])
+        |> Enum.map(&to_string(get_val(&1, :id)))
 
-      tier = p["category"] || "Extension"
+      upstream_ids =
+        resolved_deps
+        |> Enum.map(& &1.provider)
+        |> Enum.reject(&is_nil/1)
+        |> Enum.uniq()
 
       %{
         id: pid,
-        name: p["name"] || pid,
+        name: name,
         tier: tier,
-        type: p["type"] || "elixir",
-        provides: p["provides"] || [],
+        type: type,
+        icon: icon,
+        provides: provides,
         dependencies: resolved_deps,
-        dependents: dependents
+        dependents: dependents,
+        upstream_ids: upstream_ids
       }
     end)
   end
+  defp build_dependency_graph(_), do: []
 
   defp compute_graph_layout(graph_nodes, graph_tiers) do
-    col_width = 230
+    col_width = 240
     col_gap = 70
-    row_height = 80
+    row_height = 85
     row_gap = 24
     pad_x = 30
-    pad_y = 30
+    pad_y = 35
 
     tier_indices =
       graph_tiers
@@ -139,9 +158,9 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
       end)
 
     total_cols = max(1, length(graph_tiers))
-    canvas_width = max(900, pad_x * 2 + total_cols * (col_width + col_gap))
+    canvas_width = max(980, pad_x * 2 + total_cols * (col_width + col_gap))
     max_rows = Enum.map(positioned_nodes, & &1.row) |> Enum.max(fn -> 0 end)
-    canvas_height = max(520, pad_y * 2 + (max_rows + 1) * (row_height + row_gap) + 40)
+    canvas_height = max(560, pad_y * 2 + (max_rows + 1) * (row_height + row_gap) + 40)
 
     {positioned_nodes, edges, canvas_width, canvas_height}
   end
@@ -151,7 +170,8 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
   attr(:target, :any, required: true)
 
   def graph(assigns) do
-    graph_nodes = build_dependency_graph(assigns.plugins)
+    plugins = assigns.plugins || []
+    graph_nodes = build_dependency_graph(plugins)
     graph_tiers = graph_nodes |> Enum.map(& &1.tier) |> Enum.uniq() |> Enum.sort()
     selected_node = Enum.find(graph_nodes, &(&1.id == assigns.selected_plugin_id))
 
@@ -159,64 +179,71 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
       compute_graph_layout(graph_nodes, graph_tiers)
 
     assigns =
-      assigns
-      |> assign(:graph_nodes, graph_nodes)
-      |> assign(:graph_tiers, graph_tiers)
-      |> assign(:selected_node, selected_node)
-      |> assign(:pos_nodes, pos_nodes)
-      |> assign(:edges, edges)
-      |> assign(:canvas_width, canvas_w)
-      |> assign(:canvas_height, canvas_h)
+      Map.merge(assigns, %{
+        graph_nodes: graph_nodes,
+        graph_tiers: graph_tiers,
+        selected_node: selected_node,
+        pos_nodes: pos_nodes,
+        edges: edges,
+        canvas_width: canvas_w,
+        canvas_height: canvas_h
+      })
 
     ~H"""
-    <div class="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div class="bg-white rounded-3xl max-w-7xl w-full p-6 shadow-2xl border border-gray-200 relative animate-in fade-in zoom-in-95 duration-150 flex flex-col h-[92vh]">
+    <div class="fixed inset-0 z-50 overflow-hidden bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-5">
+      <div class="bg-slate-950 rounded-3xl max-w-7xl w-full p-5 shadow-2xl border border-slate-800 relative animate-in fade-in zoom-in-95 duration-150 flex flex-col h-[94vh] text-white">
         <!-- Modal Header -->
-        <div class="flex items-center justify-between pb-4 border-b border-gray-100">
+        <div class="flex items-center justify-between pb-4 border-b border-slate-800">
           <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-2xl bg-violet-100 text-violet-700 flex items-center justify-center text-xl shadow-inner">
+            <div class="w-10 h-10 rounded-2xl bg-violet-500/20 text-violet-400 border border-violet-500/30 flex items-center justify-center text-xl shadow-inner">
               🕸️
             </div>
             <div>
               <div class="flex items-center gap-2">
-                <h3 class="text-lg font-bold text-gray-900 tracking-tight">Extension Dependency Architecture</h3>
-                <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-200">
-                  DAG Graph
+                <h3 class="text-lg font-black text-white tracking-tight">Extension Dependency Architecture</h3>
+                <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-violet-400/20 text-violet-300 border border-violet-400/30">
+                  DAG Engine
+                </span>
+                <span class="text-[10px] font-mono text-slate-400">
+                  <%= length(@graph_nodes) %> Extensions
                 </span>
               </div>
-              <p class="text-xs text-gray-500">
-                Visual Directed Acyclic Graph (DAG) with bezier dependency routing and actor supervision tiers.
+              <p class="text-xs text-slate-400">
+                Topological supervision tiers, 1-hop dependency spotlighting, and service interconnect contracts.
               </p>
             </div>
           </div>
 
           <!-- Controls & Close -->
           <div class="flex items-center gap-3">
-            <div class="hidden sm:flex items-center gap-1.5 p-1 bg-gray-100 rounded-xl border border-gray-200 text-xs font-semibold">
+            <!-- View Switcher -->
+            <div class="hidden sm:flex items-center gap-1.5 p-1 bg-slate-900 rounded-xl border border-slate-800 text-xs font-semibold">
               <button
                 type="button"
-                onclick="document.getElementById('dep-graph-svg-view').classList.remove('hidden'); document.getElementById('dep-graph-matrix-view').classList.add('hidden'); document.getElementById('btn-dag-graph').classList.add('bg-white', 'text-violet-700', 'shadow-xs'); document.getElementById('btn-dag-matrix').classList.remove('bg-white', 'text-violet-700', 'shadow-xs');"
+                onclick="document.getElementById('dep-graph-svg-view').classList.remove('hidden'); document.getElementById('dep-graph-matrix-view').classList.add('hidden'); document.getElementById('btn-dag-graph').classList.add('bg-violet-600', 'text-white'); document.getElementById('btn-dag-graph').classList.remove('text-slate-400'); document.getElementById('btn-dag-matrix').classList.remove('bg-violet-600', 'text-white'); document.getElementById('btn-dag-matrix').classList.add('text-slate-400');"
                 id="btn-dag-graph"
-                class="px-3 py-1.5 rounded-lg bg-white text-violet-700 shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                class="px-3 py-1.5 rounded-lg bg-violet-600 text-white shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
               >
                 <span>🕸️</span>
-                <span>DAG Graph View</span>
+                <span>DAG Graph</span>
               </button>
               <button
                 type="button"
-                onclick="document.getElementById('dep-graph-matrix-view').classList.remove('hidden'); document.getElementById('dep-graph-svg-view').classList.add('hidden'); document.getElementById('btn-dag-matrix').classList.add('bg-white', 'text-violet-700', 'shadow-xs'); document.getElementById('btn-dag-graph').classList.remove('bg-white', 'text-violet-700', 'shadow-xs');"
+                onclick="document.getElementById('dep-graph-matrix-view').classList.remove('hidden'); document.getElementById('dep-graph-svg-view').classList.add('hidden'); document.getElementById('btn-dag-matrix').classList.add('bg-violet-600', 'text-white'); document.getElementById('btn-dag-matrix').classList.remove('text-slate-400'); document.getElementById('btn-dag-graph').classList.remove('bg-violet-600', 'text-white'); document.getElementById('btn-dag-graph').classList.add('text-slate-400');"
                 id="btn-dag-matrix"
-                class="px-3 py-1.5 rounded-lg text-gray-600 hover:text-gray-900 transition-all flex items-center gap-1.5 cursor-pointer"
+                class="px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition-all flex items-center gap-1.5 cursor-pointer"
               >
                 <span>📊</span>
                 <span>Tier Columns</span>
               </button>
             </div>
 
+            <!-- Close Modal -->
             <button
               phx-click="close_dependency_graph"
               phx-target={@target}
-              class="text-gray-400 hover:text-gray-600 text-xl font-bold p-1 rounded-lg hover:bg-gray-100 transition-colors"
+              class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center font-bold text-sm transition-colors cursor-pointer"
+              title="Close Modal"
             >
               ✕
             </button>
@@ -224,7 +251,7 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
         </div>
 
         <!-- VIEW 1: INTERACTIVE SVG DAG GRAPH CANVAS -->
-        <div id="dep-graph-svg-view" class="overflow-auto py-4 flex-1 border border-gray-100 rounded-2xl bg-slate-900/95 relative shadow-inner">
+        <div id="dep-graph-svg-view" class="overflow-auto py-3 flex-1 border border-slate-800/80 rounded-2xl bg-slate-950 relative shadow-inner">
           <svg
             width={@canvas_width}
             height={@canvas_height}
@@ -233,43 +260,45 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
           >
             <defs>
               <!-- Arrow Markers -->
-              <marker id="arrow-default" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <marker id="dep-arrow-default" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                 <path d="M 0 1 L 10 5 L 0 9 z" fill="#64748b" />
               </marker>
-              <marker id="arrow-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <marker id="dep-arrow-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
                 <path d="M 0 1 L 10 5 L 0 9 z" fill="#f59e0b" />
               </marker>
-              <marker id="arrow-emerald" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <marker id="dep-arrow-emerald" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
                 <path d="M 0 1 L 10 5 L 0 9 z" fill="#10b981" />
               </marker>
               <!-- Drop Shadow Filter -->
-              <filter id="node-shadow" x="-10%" y="-10%" width="120%" height="120%">
-                <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.3" />
+              <filter id="dep-node-shadow" x="-10%" y="-10%" width="120%" height="120%">
+                <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.45" />
               </filter>
             </defs>
 
             <!-- Tier Column Backgrounds & Headers -->
             <%= for {tier_name, col_idx} <- Enum.with_index(@graph_tiers) do %>
-              <% col_x = 30 + col_idx * 300 %>
+              <% col_x = 30 + col_idx * 310 %>
               <g class="tier-column">
                 <rect
                   x={col_x - 10}
-                  y="10"
-                  width="250"
-                  height={@canvas_height - 20}
-                  rx="16"
-                  fill="#0f172a"
+                  y="12"
+                  width="260"
+                  height={@canvas_height - 24}
+                  rx="18"
+                  fill="#0b0f19"
                   stroke="#1e293b"
-                  stroke-width="1"
+                  stroke-width="1.2"
+                  stroke-dasharray="4 3"
                 />
+                <path d={"M #{col_x - 10} 38 L #{col_x + 130} 38 L #{col_x + 142} 24 L #{col_x + 142} 12 L #{col_x - 10} 12 Z"} fill="#1e293b" />
                 <text
-                  x={col_x + 10}
-                  y="26"
+                  x={col_x + 8}
+                  y="28"
                   fill="#94a3b8"
-                  font-size="11"
+                  font-size="10.5"
                   font-weight="bold"
-                  letter-spacing="0.08em"
-                  text-transform="uppercase"
+                  font-family="monospace"
+                  letter-spacing="0.06em"
                 >
                   <%= String.upcase(tier_name) %>
                 </text>
@@ -281,12 +310,6 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
               <%= for edge <- @edges do %>
                 <% is_from_selected = @selected_plugin_id == edge.from %>
                 <% is_to_selected = @selected_plugin_id == edge.to %>
-                <% edge_class = cond do
-                  is_from_selected -> "edge-downstream stroke-emerald-400"
-                  is_to_selected -> "edge-upstream stroke-amber-400 stroke-dash"
-                  @selected_plugin_id != nil -> "opacity-20 stroke-slate-600"
-                  true -> "opacity-50 hover:opacity-100 stroke-slate-500 transition-opacity"
-                end %>
 
                 <path
                   d={edge.path}
@@ -297,14 +320,15 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
                     @selected_plugin_id != nil -> "#334155"
                     true -> "#64748b"
                   end}
-                  stroke-width={if is_from_selected || is_to_selected, do: "2.5", else: "1.5"}
+                  stroke-width={if is_from_selected || is_to_selected, do: "2.8", else: "1.6"}
                   stroke-dasharray={if is_to_selected, do: "5 3", else: "none"}
                   marker-end={cond do
-                    is_from_selected -> "url(#arrow-emerald)"
-                    is_to_selected -> "url(#arrow-amber)"
-                    true -> "url(#arrow-default)"
+                    is_from_selected -> "url(#dep-arrow-emerald)"
+                    is_to_selected -> "url(#dep-arrow-amber)"
+                    true -> "url(#dep-arrow-default)"
                   end}
-                  class={edge_class}
+                  opacity={if @selected_plugin_id != nil and not (is_from_selected or is_to_selected), do: "0.15", else: "0.65"}
+                  class="transition-all duration-150"
                 />
               <% end %>
             </g>
@@ -314,22 +338,24 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
               <%= for node <- @pos_nodes do %>
                 <% is_selected = @selected_plugin_id == node.id %>
                 <% is_dependent = not is_nil(@selected_node) and node.id in (@selected_node.dependents || []) %>
-                <% is_dependency = not is_nil(@selected_node) and Enum.any?(@selected_node.dependencies, fn d -> d.provider == node.id end) %>
+                <% is_dependency = not is_nil(@selected_node) and node.id in (@selected_node.upstream_ids || []) %>
+                <% is_dimmed = not is_nil(@selected_plugin_id) and not (is_selected or is_dependent or is_dependency) %>
 
                 <g
                   class="cursor-pointer group"
                   phx-click="select_graph_plugin"
                   phx-value-id={node.id}
                   phx-target={@target}
+                  opacity={if is_dimmed, do: "0.2", else: "1.0"}
                   transform={"translate(#{node.x}, #{node.y})"}
                 >
                   <!-- Node Card Box -->
                   <rect
                     width={node.width}
                     height={node.height}
-                    rx="12"
+                    rx="16"
                     fill={cond do
-                      is_selected -> "#7c3aed"
+                      is_selected -> "#4c1d95"
                       is_dependency -> "#451a03"
                       is_dependent -> "#064e3b"
                       true -> "#1e293b"
@@ -338,36 +364,39 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
                       is_selected -> "#c4b5fd"
                       is_dependency -> "#f59e0b"
                       is_dependent -> "#10b981"
-                      true -> "#334155"
+                      true -> "#475569"
                     end}
-                    stroke-width={if is_selected || is_dependency || is_dependent, do: "2", else: "1"}
-                    filter="url(#node-shadow)"
+                    stroke-width={if is_selected || is_dependency || is_dependent, do: "2.4", else: "1.2"}
+                    filter="url(#dep-node-shadow)"
                   />
+
+                  <!-- Icon -->
+                  <text x="12" y="32" font-size="18"><%= node.icon %></text>
 
                   <!-- Node Title -->
                   <text
-                    x="12"
-                    y="24"
+                    x="38"
+                    y="27"
                     fill={if is_selected, do: "#ffffff", else: "#f8fafc"}
                     font-size="12"
                     font-weight="bold"
-                    font-family="monospace"
+                    font-family="system-ui, -apple-system, sans-serif"
                   >
                     <%= node.name %>
                   </text>
 
                   <!-- Runtime Type Badge -->
                   <rect
-                    x={node.width - 65}
-                    y="10"
-                    width="55"
+                    x={node.width - 64}
+                    y="12"
+                    width="52"
                     height="18"
                     rx="6"
-                    fill={if is_selected, do: "#5b21b6", else: "#0f172a"}
+                    fill={if is_selected, do: "#6d28d9", else: "#0f172a"}
                   />
                   <text
                     x={node.width - 38}
-                    y="22"
+                    y="24"
                     fill={if is_selected, do: "#ddd6fe", else: "#94a3b8"}
                     font-size="9"
                     font-weight="bold"
@@ -378,21 +407,21 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
                   </text>
 
                   <!-- Provides Contracts Badges -->
-                  <g transform="translate(12, 38)">
+                  <g transform="translate(12, 42)">
                     <%= for {svc, idx} <- Enum.with_index(Enum.take(node.provides, 2)) do %>
                       <rect
-                        x={idx * 75}
+                        x={idx * 80}
                         y="0"
-                        width="70"
-                        height="16"
-                        rx="4"
-                        fill={if is_selected, do: "#6d28d9", else: "#334155"}
+                        width="74"
+                        height="18"
+                        rx="5"
+                        fill={if is_selected, do: "#7c3aed", else: "#334155"}
                       />
                       <text
-                        x={idx * 75 + 35}
-                        y="11"
-                        fill={if is_selected, do: "#ffffff", else: "#a78bfa"}
-                        font-size="9"
+                        x={idx * 80 + 37}
+                        y="12"
+                        fill={if is_selected, do: "#ffffff", else: "#c4b5fd"}
+                        font-size="9.5"
                         font-weight="bold"
                         font-family="monospace"
                         text-anchor="middle"
@@ -405,9 +434,9 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
                   <!-- Requirements Summary -->
                   <text
                     x="12"
-                    y="68"
-                    fill={if is_selected, do: "#ede9fe", else: "#64748b"}
-                    font-size="9"
+                    y="74"
+                    fill={if is_selected, do: "#ddd6fe", else: "#94a3b8"}
+                    font-size="9.5"
                     font-family="monospace"
                   >
                     <%= if node.dependencies == [], do: "Root service", else: "Requires #{length(node.dependencies)} contracts" %>
@@ -419,49 +448,47 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
         </div>
 
         <!-- VIEW 2: TIER COLUMNS VIEW (ALTERNATIVE) -->
-        <div id="dep-graph-matrix-view" class="hidden overflow-y-auto py-5 space-y-6 flex-1 pr-1">
+        <div id="dep-graph-matrix-view" class="hidden overflow-y-auto py-4 space-y-4 flex-1 pr-1">
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
             <%= for tier_name <- @graph_tiers do %>
               <% tier_nodes = Enum.filter(@graph_nodes, &(&1.tier == tier_name)) %>
-              <div class="bg-gray-50/80 rounded-2xl p-3 border border-gray-200/80 flex flex-col">
+              <div class="bg-slate-900 rounded-2xl p-3.5 border border-slate-800 flex flex-col">
                 <div class="flex items-center justify-between mb-3 px-1">
-                  <span class="text-[11px] font-bold text-gray-500 uppercase tracking-wider"><%= tier_name %></span>
-                  <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-gray-200/80 text-gray-700"><%= length(tier_nodes) %></span>
+                  <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider font-mono"><%= tier_name %></span>
+                  <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-mono"><%= length(tier_nodes) %></span>
                 </div>
 
                 <div class="space-y-2.5 flex-1">
                   <%= for node <- tier_nodes do %>
                     <% is_selected = @selected_plugin_id == node.id %>
                     <% is_dependent = not is_nil(@selected_node) and node.id in (@selected_node.dependents || []) %>
-                    <% is_dependency = not is_nil(@selected_node) and Enum.any?(@selected_node.dependencies, fn d -> d.provider == node.id end) %>
+                    <% is_dependency = not is_nil(@selected_node) and node.id in (@selected_node.upstream_ids || []) %>
                     <div
                       phx-click="select_graph_plugin"
                       phx-value-id={node.id}
                       phx-target={@target}
-                      class={"p-3 rounded-xl border cursor-pointer transition-all #{cond do
-                        is_selected -> "bg-violet-600 text-white border-violet-700 shadow-md ring-2 ring-violet-400"
-                        is_dependency -> "bg-amber-50 border-amber-300 shadow-sm ring-1 ring-amber-300"
-                        is_dependent -> "bg-emerald-50 border-emerald-300 shadow-sm ring-1 ring-emerald-300"
-                        true -> "bg-white border-gray-200 hover:border-violet-300 hover:shadow-xs text-gray-800"
+                      class={"p-3 rounded-2xl border cursor-pointer transition-all #{cond do
+                        is_selected -> "bg-violet-900/90 text-white border-violet-400 shadow-md ring-2 ring-violet-400"
+                        is_dependency -> "bg-amber-950/60 border-amber-400 text-amber-200 ring-1 ring-amber-400"
+                        is_dependent -> "bg-emerald-950/60 border-emerald-400 text-emerald-200 ring-1 ring-emerald-400"
+                        true -> "bg-slate-950 border-slate-800 hover:border-violet-400 text-slate-200"
                       end}"}
                     >
                       <div class="flex items-center justify-between">
-                        <span class={"font-bold text-xs truncate max-w-[140px] #{if is_selected, do: "text-white", else: "text-gray-900"}"} title={node.name}>
-                          <%= node.name %>
+                        <span class="font-bold text-xs truncate max-w-[140px]" title={node.name}>
+                          <%= node.icon %> <%= node.name %>
                         </span>
-                        <span class={"text-[9px] font-mono px-1.5 py-0.5 rounded #{if is_selected, do: "bg-violet-700 text-violet-100", else: "bg-gray-100 text-gray-500"}"}>
+                        <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
                           <%= if node.dependencies == [], do: "Root", else: "#{length(node.dependencies)} deps" %>
                         </span>
                       </div>
 
-                      <div class="mt-2 space-y-1">
-                        <div class="flex flex-wrap gap-1">
-                          <%= for s <- node.provides do %>
-                            <span class={"text-[9px] font-mono font-bold px-1 rounded #{if is_selected, do: "bg-violet-500 text-white", else: "bg-violet-50 text-violet-700 border border-violet-200"}"}>
-                              :<%= s %>
-                            </span>
-                          <% end %>
-                        </div>
+                      <div class="mt-2 flex flex-wrap gap-1">
+                        <%= for s <- node.provides do %>
+                          <span class="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-300 border border-violet-500/30">
+                            :<%= s %>
+                          </span>
+                        <% end %>
                       </div>
                     </div>
                   <% end %>
@@ -473,51 +500,52 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
 
         <!-- Node Inspector & Dependency Ledger -->
         <%= if @selected_node do %>
-          <div class="mt-4 bg-violet-50/70 border border-violet-200 rounded-2xl p-4 animate-in fade-in duration-150">
+          <div class="mt-3 bg-slate-900 border border-violet-500/40 rounded-2xl p-4 animate-in fade-in duration-150">
             <div class="flex items-center justify-between mb-3">
               <div class="flex items-center gap-2">
-                <span class="text-base font-bold text-violet-950 font-mono"><%= @selected_node.name %></span>
-                <span class="text-xs text-violet-600 font-mono">(<%= @selected_node.id %>)</span>
-                <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-violet-200 text-violet-800">
+                <span class="text-xl"><%= @selected_node.icon %></span>
+                <span class="text-base font-bold text-white font-mono"><%= @selected_node.name %></span>
+                <span class="text-xs text-violet-400 font-mono">(<%= @selected_node.id %>)</span>
+                <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-violet-400/20 text-violet-300 border border-violet-400/30">
                   <%= @selected_node.tier %>
                 </span>
               </div>
-              <button phx-click="select_graph_plugin" phx-value-id={@selected_node.id} phx-target={@target} class="text-xs font-semibold text-violet-600 hover:text-violet-800 cursor-pointer">
+              <button phx-click="select_graph_plugin" phx-value-id={@selected_node.id} phx-target={@target} class="text-xs font-semibold text-violet-400 hover:text-violet-300 cursor-pointer">
                 Clear selection
               </button>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-              <div class="bg-white p-3 rounded-xl border border-violet-100 shadow-2xs">
-                <span class="font-bold text-gray-700 block mb-1">
-                  Direct Upstream Dependencies (What this needs):
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+              <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
+                <span class="font-bold text-amber-400 block mb-1.5 flex items-center gap-1 font-mono text-[11px]">
+                  <span>▲</span> <span>Direct Upstream Dependencies (What this needs):</span>
                 </span>
                 <%= if @selected_node.dependencies == [] do %>
-                  <p class="text-gray-400 italic">None (Independent root service)</p>
+                  <p class="text-slate-500 italic">None (Independent root service)</p>
                 <% else %>
                   <ul class="space-y-1">
                     <%= for dep <- @selected_node.dependencies do %>
-                      <li class="flex items-center justify-between text-gray-700">
-                        <span class="font-mono font-bold text-amber-700">:<%= dep.service %></span>
-                        <span class="text-gray-400">satisfied by: <span class="font-mono text-gray-700 font-semibold"><%= dep.provider || "unresolved" %></span></span>
+                      <li class="flex items-center justify-between text-slate-300 font-mono">
+                        <span class="font-bold text-amber-400">:<%= dep.service %></span>
+                        <span class="text-slate-500 text-[11px]">satisfied by: <span class="text-slate-200 font-semibold"><%= dep.provider || "unresolved" %></span></span>
                       </li>
                     <% end %>
                   </ul>
                 <% end %>
               </div>
 
-              <div class="bg-white p-3 rounded-xl border border-violet-100 shadow-2xs">
-                <span class="font-bold text-gray-700 block mb-1">
-                  Downstream Dependents (What depends on this):
+              <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
+                <span class="font-bold text-emerald-400 block mb-1.5 flex items-center gap-1 font-mono text-[11px]">
+                  <span>▼</span> <span>Downstream Dependents (What depends on this):</span>
                 </span>
                 <%= if @selected_node.dependents == [] do %>
-                  <p class="text-gray-400 italic">No other extensions currently depend on this</p>
+                  <p class="text-slate-500 italic">No other extensions currently depend on this</p>
                 <% else %>
                   <ul class="space-y-1">
                     <%= for dependent_id <- @selected_node.dependents do %>
-                      <li class="flex items-center gap-1.5 text-gray-700">
-                        <span class="text-emerald-500 font-bold">▲</span>
-                        <span class="font-mono font-semibold"><%= dependent_id %></span>
+                      <li class="flex items-center gap-1.5 text-slate-300 font-mono">
+                        <span class="text-emerald-400 font-bold">▲</span>
+                        <span class="font-semibold text-slate-200"><%= dependent_id %></span>
                       </li>
                     <% end %>
                   </ul>
@@ -526,15 +554,15 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
             </div>
           </div>
         <% else %>
-          <div class="text-center py-2 text-xs text-gray-400">
-            Click on any extension above to trace its upstream dependencies (amber) and downstream dependents (emerald).
+          <div class="text-center py-2 text-xs text-slate-500 font-mono">
+            Click on any extension card above to spotlight upstream dependencies (amber) and downstream dependents (emerald).
           </div>
         <% end %>
 
         <!-- Modal Footer -->
-        <div class="pt-3 border-t border-gray-100 flex items-center justify-between">
-          <div class="flex items-center gap-4 text-[11px] text-gray-500">
-            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-violet-600 inline-block"></span> Selected</span>
+        <div class="pt-3 border-t border-slate-800 flex items-center justify-between">
+          <div class="flex items-center gap-4 text-[11px] text-slate-400">
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-violet-500 inline-block"></span> Selected</span>
             <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block"></span> Upstream Dependency</span>
             <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block"></span> Downstream Dependent</span>
           </div>
@@ -542,7 +570,7 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
             type="button"
             phx-click="close_dependency_graph"
             phx-target={@target}
-            class="px-4 py-2 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors cursor-pointer"
+            class="px-4 py-2 text-xs font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 rounded-xl transition-colors cursor-pointer"
           >
             Close
           </button>

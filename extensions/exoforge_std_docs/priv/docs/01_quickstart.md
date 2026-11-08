@@ -10,12 +10,11 @@ Exoforge allows game developers to write clean, strongly-typed native C# backend
 
 Sign in anonymously using device credentials or authenticate players with seamless token caching.
 
-### Anonymous Login & Scene Setup
+### Two-Stage Anonymous Login & Zero-Wiring Setup
 
-1. In your game's first scene, click **Exoforge ▸ Add Exoforge to Scene**. This creates the persistent `Exoforge.prefab`.
-2. By default, `anonymousOnConnect: true` automatically mints an anonymous player session using the unique device identifier (`ExoDeviceId.Get()`) without requiring passwords.
-3. Or call `Exoforge.Auth.LoginAnonymously()` programmatically from script.
-4. Once authenticated, the session is cached locally in `ExoTokenStore` and `Exoforge.IsReady` becomes true.
+1. **Zero Scene Wiring**: You do not need to manually instantiate prefabs in your scene. `ExoforgeManager` initializes automatically on demand when your game invokes any `ExoforgeSDK` method.
+2. **Stage 1 (Device Anonymous Login)**: `ExoforgeSDK.Auth.LoginAnonymously()` enters or registers an account keyed by the device identifier (`ExoDeviceId` derives a stable, hashed id from `SystemInfo.deviceUniqueIdentifier`). The same machine always resolves to the same player even if credentials are lost.
+3. **Stage 2 (Display Name)**: A new account returns with `session.HasDisplayName == false`. Call `ExoforgeSDK.Auth.SetDisplayName("Viper")` to name the player.
 
 ```csharp
 using UnityEngine;
@@ -25,13 +24,15 @@ public class GameInitializer : MonoBehaviour
 {
     async void Start()
     {
-        // Connect & claim or resume anonymous session keyed by stable device hash
+        // Stage 1: Connect & claim or resume anonymous session keyed by stable device hash
         var session = await ExoforgeSDK.Auth.LoginAnonymously();
         Debug.Log($"Signed in as Player ID: {session.PlayerId}");
 
+        // Stage 2: Prompt new players for a display name if not yet assigned
         if (!session.HasDisplayName)
         {
-            await ExoforgeSDK.Auth.SetDisplayName("Viper");
+            session = await ExoforgeSDK.Auth.SetDisplayName("Viper");
+            Debug.Log($"Welcome {session.DisplayName}!");
         }
     }
 }
@@ -43,32 +44,33 @@ public class GameInitializer : MonoBehaviour
 
 Scaffold clean, modern C# backend services in seconds.
 
-In Unity Studio, navigate to the **Extensions** tab and click **New Extension...** (or run `exo extension new <name>`). This creates an isolated solution in `Exoforge/extensions/<name>/`.
+In Unity Studio, navigate to the **Extensions** tab and click **New Extension...** (or run `exo extension new <name>`). This creates an isolated solution in `Exoforge/extensions/<name>/` outside `Assets/`, allowing modern C# and .NET features without polluting Unity.
 
 ```csharp
+using System;
 using System.Threading.Tasks;
-using Exoforge.SDK;
+using Exoforge.Plugin.SDK;
 
-[ExoExtension("gameplay_calculator", Version = "1.0.0")]
+[ExoService("gameplay_calculator", Title = "Gameplay Calculator", Icon = "🧮", Version = "1.0.0")]
 public class GameplayCalculatorExtension
 {
-    [ExoAction]
+    [ExoAction(Scope = "player")]
     public CalculateScoreResponse CalculateScore(CalculateScoreRequest req)
     {
         if (req.Multiplier <= 0)
             throw new ExoActionException("invalid_multiplier", "Multiplier must be positive.");
 
         int finalScore = (req.BasePoints * req.Multiplier) + req.Bonus;
-        return new CalculateScoreResponse(finalScore, System.DateTime.UtcNow);
+        return new CalculateScoreResponse(finalScore, DateTime.UtcNow);
     }
 }
 
 public record CalculateScoreRequest(int BasePoints, int Multiplier, int Bonus = 0);
-public record CalculateScoreResponse(int TotalScore, System.DateTime CalculatedAt);
+public record CalculateScoreResponse(int TotalScore, DateTime CalculatedAt);
 ```
 
 > [!NOTE]
-> Extensions execute as native .NET microservices with actor concurrency supervision. Use modern C# records, type-safe APIs, and throw canonical `ExoActionException`.
+> Extensions execute as native .NET microservices with actor supervision. Use modern C# records, type-safe APIs, and throw canonical `ExoActionException`.
 
 ---
 
@@ -87,12 +89,15 @@ exo extension logs gameplay_calculator
 
 ---
 
-## 4. Generate Client Stubs
+## 4. Generate Typed Stubs
 
-Whenever an extension action or schema changes, click **Sync Client** in the Unity toolbar (or run `exo sync`).
+Whenever an extension action or schema changes, update your typed code contracts:
 
-> [!IMPORTANT]
-> This queries live cluster contracts and generates `Assets/Exoforge/Generated/ExoforgeServices.g.cs`. Your Unity project immediately gains strongly-typed methods for every action (both main-thread callbacks and async overloads) and typed models for every return record!
+### Client Game Stubs (Unity)
+Click **Sync Client** in the Unity toolbar (or the Exoforge Studio menu). This queries live cluster contracts and generates `Assets/Exoforge/Generated/ExoforgeServices.g.cs`. Your Unity project immediately gains strongly-typed methods (`ExoforgeSDK.Client.GameplayCalculator()`) for every action (both main-thread callbacks and async overloads) and typed models for every return record!
+
+### Extension-to-Extension Stubs (Server)
+Run `exo extension stubs <name>` to generate typed client stubs for services declared in your extension's `manifest.json` dependencies, writing to `src/Generated/ExtensionServices.g.cs`.
 
 ---
 
@@ -100,12 +105,13 @@ Whenever an extension action or schema changes, click **Sync Client** in the Uni
 
 ```csharp
 using UnityEngine;
+using System.Threading.Tasks;
 using Exoforge.SDK;
 using Exoforge.Generated;
 
 public class GameplayRewardController : MonoBehaviour
 {
-    void OnLevelCompleted(int points, int multiplier)
+    void OnLevelCompletedWithCallback(int points, int multiplier)
     {
         var client = ExoforgeSDK.Client.GameplayCalculator();
 
@@ -119,10 +125,17 @@ public class GameplayRewardController : MonoBehaviour
 
     async Task OnLevelCompletedAsync(int points, int multiplier)
     {
-        // Style B: Task Async/Await
-        var res = await ExoforgeSDK.Client.GameplayCalculator()
-            .CalculateScoreAsync(new CalculateScoreRequest(points, multiplier));
-        Debug.Log($"Score calculated: {res.TotalScore}");
+        // Style B: Task Async/Await Overload
+        try
+        {
+            var res = await ExoforgeSDK.Client.GameplayCalculator()
+                .CalculateScoreAsync(new CalculateScoreRequest(points, multiplier));
+            Debug.Log($"Score calculated: {res.TotalScore}");
+        }
+        catch (ExoActionException err)
+        {
+            Debug.LogError($"Calculation failed: {err.Message}");
+        }
     }
 }
 ```

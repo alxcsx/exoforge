@@ -20,9 +20,9 @@ Communication between the host cluster supervisor (Elixir BEAM) and the native C
 | `action` | Host ➔ Worker | A player calls an action, or a background cron triggers a scheduled task. | `id: "req_..."`, `action: "method_name"`, `payload: { ... }` |
 | `action_result` | Worker ➔ Host | The C# action method finishes execution (or throws an unhandled exception). | `id: "req_..."`, `status: "ok" \| "error"`, `data: { ... }` or `error: "..."` |
 | `event` | Host ➔ Worker | An event that this extension subscribed to is published on the cluster event bus. | `event: "topic.name"`, `payload: { ... }` |
-| `host_call` | Worker ➔ Host | Extension invokes host capabilities: `Exo.Database.Put`, `Exo.Database.Query`, or `Exo.Events.Publish`. | `id: "call_..."`, `op: "db_put" \| "db_query" \| "publish_event"`, `args: { ... }` |
+| `host_call` | Worker ➔ Host | Extension invokes host capabilities: `Exo.Database.Put`, `Exo.Database.Query`, or `Exo.Events.EmitAsync`. | `id: "call_..."`, `op: "db_put" \| "db_query" \| "publish_event"`, `args: { ... }` |
 | `host_call_result` | Host ➔ Worker | The host completes the requested database operation or event publication. | `id: "call_..."`, `result: { ... }` |
-| `host_log` | Worker ➔ Host | Extension outputs logs via `Exo.Log.Info` or `Console.WriteLine`. | `level: "info" \| "warn" \| "error"`, `message: "..."` |
+| `host_log` | Worker ➔ Host | Extension outputs logs via `Exo.Logger.Info` or `Console.WriteLine`. | `level: "info" \| "warn" \| "error"`, `message: "..."` |
 
 ### Handshake & Fault Isolation Guarantees
 1. **5-Second Handshake**: If an extension does not answer `hello` with valid capabilities within 5 seconds, the host refuses the extension with a clear log reason.
