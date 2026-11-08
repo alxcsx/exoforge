@@ -38,3 +38,13 @@ Game extensions in Exoforge are native C# compiled to a **framework-dependent si
 - **Ahead-Of-Time (AOT) IL Trimming**: All unused Base Class Library (BCL) classes and metadata are stripped out. The compiled binary is only a few hundred kilobytes.
 - **Pure C# Records**: Data contracts are typed C# records with parameter names matching action arguments. The SDK owns JSON serialization, and generated stubs preserve end-to-end typing from server to client.
 - **Multi-Engine Isolated Storage**: Extensions access the database through `Exo.Database`, which automatically scopes queries and KV storage to the extension's private schema (`ext_<extension_name>`), preventing cross-service data corruption.
+
+---
+
+## 3. Extension Discovery & Production Volume Isolation
+
+Exoforge boots by scanning configured paths for `manifest.json` files and constructing a topological dependency graph:
+
+- **Multi-Path Scanning**: `EXTENSIONS_PATH` (or `:scan_path` in application config) can be configured with multiple paths. The runtime accepts Elixir lists, comma-separated, semicolon-separated, or JSON array strings (e.g., `EXTENSIONS_PATH="/app/builtin_extensions,/app/uploaded_extensions"`).
+- **Static vs. Mutable Volume Separation**: In containerized production deployments (Docker / Kubernetes), pre-compiled standard extensions are baked into `/app/builtin_extensions` inside the immutable image. A persistent volume is mounted strictly over `/app/uploaded_extensions` (`UPLOADED_EXTENSIONS_PATH`). This ensures that image updates deploy new built-in extensions without overwriting or obscuring custom user extensions.
+- **Deduplication & Semver Precedence**: When an extension ID appears in multiple scanned directories, `ManifestLoader` resolves the collision by keeping the higher semantic version. If versions are identical, the later/uploaded directory takes precedence so that hot patches override built-ins seamlessly. Built-in files are protected against accidental file deletion.

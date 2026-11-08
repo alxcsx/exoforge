@@ -92,8 +92,15 @@ PORT=4005
 DASHBOARD_PORT=4005
 GATEWAY_PORT=4000
 HTTP_PORT=4001
+
+# Extensions Storage (Static Builtins vs. Mutable Persistent Volume)
+EXTENSIONS_PATH=/app/builtin_extensions,/app/uploaded_extensions
+UPLOADED_EXTENSIONS_PATH=/app/uploaded_extensions
 EOF
 ```
+
+> [!NOTE]
+> **Extension Path Volume Separation**: Exoforge supports scanning multiple paths (delimited by comma, semicolon, or JSON array). Bundled standard extensions live statically in `/app/builtin_extensions` inside the image, while hot-deployed extensions pushed from Unity or Studio persist in `/app/uploaded_extensions` mounted to the `exoforge_uploads` Docker volume. This guarantees that deploying new image releases updates built-ins without erasing or masking user extensions.
 
 > [!NOTE]
 > Review generated admin credentials: `grep EXOFORGE_ADMIN /opt/exoforge/.env`

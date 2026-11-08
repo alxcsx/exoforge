@@ -106,6 +106,11 @@ file_bucket ──▶ database
 
 > **Rule**: Game-specific extensions must NOT touch `core/`, `extensions/`, or `extensions_csharp/`. They live exclusively inside the game project and are built/deployed independently. The system `just build-extensions` only builds `extensions_csharp/`; game extensions are built within their own project (e.g., Unity Editor menu or the game's own build scripts).
 
+### Multi-Path Extension Scanning & Docker Volume Isolation
+- **Multi-Path Scanning**: `EXTENSIONS_PATH` and `:scan_path` accept either a list of directories or delimited strings (comma, semicolon, or JSON array, e.g. `"/app/builtin_extensions,/app/uploaded_extensions"`).
+- **Static Builtins vs. Mutable Persistent Volumes**: In Docker deployments, bundled system extensions are compiled into the image under `/app/builtin_extensions` (read-only), while user/game extensions uploaded via Studio or CLI land in `/app/uploaded_extensions` (configured via `UPLOADED_EXTENSIONS_PATH` or `EXOFORGE_DATA_DIR`). This guarantees Docker volume mounts over `/app/uploaded_extensions` never wipe or hide bundled extensions across image updates.
+- **Deduplication & Semver Precedence**: When an extension ID exists in multiple directories, `ManifestLoader` resolves the conflict by keeping the higher semantic version (`compare_manifest_versions`). When versions are identical, the later/uploaded directory takes precedence. Builtin extension files are protected against deletion via `ExtensionManager`.
+
 ### Extension Runtimes
 
 | Runtime | Manifest `type` | Written in | Built by | Use for |
