@@ -408,6 +408,7 @@ namespace Exoforge.Unity.Editor
                 ExoforgeEditorConfig.SelectedEnvironment = _envName;
                 ExoforgeControlCenter.InvalidateWorkspaceShared();
                 ExoforgeRuntimeConfigGenerator.Generate();
+                ExoforgeIdeProjectGenerator.EnsureWorkspaceNugetConfig();
             }
             catch (Exception ex)
             {
@@ -585,6 +586,7 @@ namespace Exoforge.Unity.Editor
                     ws.Config.SetupCompleted = true;
                     ws.Save();
                 }
+                ExoforgeIdeProjectGenerator.EnsureIdeConfiguration(forceRegenerate: true);
             }
             catch { }
 

@@ -97,6 +97,7 @@ Recordings/
 # === Unity-generated IDE project files (regenerated on import) ===
 sdk/unity/sample_unity/*.csproj
 sdk/unity/sample_unity/*.slnx
+sdk/unity/sample_unity/*.sln
 
 # Unity/Mono crash dumps.
 sdk/unity/sample_unity/mono_crash.*

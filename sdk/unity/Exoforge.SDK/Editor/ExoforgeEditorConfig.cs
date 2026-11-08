@@ -406,7 +406,7 @@ public static class ExoforgeEditorConfig
     ///
     /// This assembly's own location is always absolute, so it is the reliable anchor.
     /// </summary>
-    private static string ProjectRoot
+    public static string ProjectRoot
     {
         get
         {
