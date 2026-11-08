@@ -1,7 +1,7 @@
 # Exoforge Operating Manual (`Agents.MD`)
 
 > **Branch**: `projetao_mvp`  
-> **Status**: Kernel, 11 standard extensions, C# Client & Extension SDKs, C# Management Engine (`exo` CLI), Unity SDK (`com.exoforge.sdk` v0.1.6), Producer Studio and the extension runtime are **complete** — **318 Elixir + 121 C# = 439 tests passing**, plus a live E2E vertical slice of 6 tests against a running server.  
+> **Status**: Kernel, 14 standard extensions, C# Client & Extension SDKs, C# Management Engine (`exo` CLI), Unity SDK (`com.exoforge.sdk` v0.1.30), Producer Studio and the extension runtime are **complete** — **319 Elixir + 133 C# = 452 tests passing**, plus a live E2E vertical slice of 6 tests and Unity headless self-check (`just sample-check`).  
 > **MVP Execution Plan**: Phase 0 (ADR 001) & Phase 1 (Extension Terminology Bulldozer) **Completed**.  
 > **Verified SLA**: 0.07 ms fanout to 50 event subscribers over `:pg`.
 
@@ -235,12 +235,16 @@ PlayerDataServiceClient PlayerData`), so extension code only deals with services
 
 ### Unity SDK Surface (game-facing)
 
-Game code talks to exactly one entry point:
+Game code talks to two primary surfaces:
 
 ```csharp
-var session = await ExoforgeSDK.Auth.LoginAnonymously();          // stage 1: enter/register the account
-if (!session.HasDisplayName) session = await ExoforgeSDK.Auth.SetDisplayName("Viper");   // stage 2
-var board   = await ExoforgeSDK.Client.SnakeLeaderboard().GetLeaderboardAsync(10);
+// Authentication: ALWAYS use ExoforgeSDK.Auth for player sign-in (handles device ID derivation & token caching)
+var session = await ExoforgeSDK.Auth.LoginAnonymously();                                  // stage 1: enter/register
+if (!session.HasDisplayName) session = await ExoforgeSDK.Auth.SetDisplayName("Viper");   // stage 2: name player
+
+// Service Invocations: use symmetrical ExoServices.<Extension> or ExoforgeSDK.Client.<Extension>()
+var board   = await ExoServices.SnakeLeaderboard.GetLeaderboardAsync(10);
+// or: await ExoforgeSDK.Client.SnakeLeaderboard().GetLeaderboardAsync(10);
 ```
 
 - `ExoforgeSDK.Auth.LoginAnonymously()` — **stage 1**. Signs in, keyed by the device (the PlayFab
@@ -249,17 +253,32 @@ var board   = await ExoforgeSDK.Client.SnakeLeaderboard().GetLeaderboardAsync(10
   machine always resolves to the same player even if the stored credential is lost. It does **not**
   assign a display name; a new account comes back with `ExoSession.HasDisplayName == false`.
   `LogoutAndForgetDevice()` claims a fresh account.
+  > [!IMPORTANT]
+  > Never call the raw RPC `ExoServices.Auth.AnonymousAsync()` directly from Unity gameplay code.
+  > Raw RPCs bypass `ExoDeviceId` derivation, `ExoTokenStore` persistence, and session lifecycle management.
 - `ExoforgeSDK.Auth.SetDisplayName(name)` — **stage 2**. Names the signed-in player (the server takes
   the player from the caller's identity, so a player can only name themselves).
+- `ExoServices.<Extension>` & `ExoforgeSDK.Client` — **primary service accessors**. Client stubs match
+  the server extension C# runtime syntax (`ExoServices.<Service>`), with `Exo.<Service>` and
+  `Client.<Service>()` available as aliases.
 - `ExoTokenStore` is public but **low-level** — use `ExoforgeSDK.Auth`. Exposed only for custom
   credential storage and tooling.
-- `ExoforgeSDK.Client` — the connected `ExoClient`; use the **generated** service extensions
-  (`Client.PlayerData()`, `Client.SnakeLeaderboard()`, …) rather than hand-written calls.
 - `ExoforgeSDK.ConnectAsync()` — idempotent connect. `ExoforgeManager` is created on demand if no
   Exoforge prefab is in the scene, so a game needs no scene wiring to use the SDK.
+- **Standalone IDE Extension Solutions**: The Unity Studio "Edit" button opens the extension's dedicated
+  `<name>.sln` solution directly in Rider or the configured external editor, completely avoiding
+  Rider evaluating .NET 9+ extension assemblies under Unity's parent Mono / .NET Standard 2.1 project.
+- **Extension Scaffolding Templates**: Five templates are supported: `blank` (minimal empty service with `Ping()`),
+  `basic` (single action reward service), `persistent` (resource table + database CRUD), `config` (singleton key-value store),
+  and `events` (pub/sub event broadcast).
+- **Dotnet Toolchain & Runtime Pack Validation**: `ExoforgeDotnetValidator` checks that .NET 9+ SDK and
+  the active architecture's runtime packs (`Microsoft.NETCore.App.Runtime.<rid>`) are installed, warning early with
+  actionable install links if absent.
+- **Global Error Logging & Action Diagnostics**: `ExoClient.OnError` routes directly to `UnityEngine.Debug.LogError`.
+  Service or action resolution failures (`service_not_found`, `action_not_found`) emit detailed, actionable messages.
 
 Gameplay must not hold a client, an endpoint, or a token. It publishes hooks (e.g.
-`SnakeGameController.RunEnded`) and a game-side controller bridges them to `ExoforgeSDK.Client`.
+`SnakeGameController.RunEnded`) and a game-side controller bridges them to `ExoforgeSDK.Client` or `ExoServices`.
 
 ---
 

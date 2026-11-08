@@ -19,9 +19,9 @@ Open **Exoforge ▸ Studio**:
 ### 2. Create Your First Extension
 In **Exoforge Studio**, click **⚡ New Extension...**:
 - Name: `daily_rewards`
-- Template: `Basic Service`
+- Template: `Basic Service` (or choose `Blank / Minimal`, `Persistent Data`, `Config & State`, `Event Producer`)
 
-This creates `Exoforge/extensions/daily_rewards/` with a clean, single-action C# service:
+This creates `Exoforge/extensions/daily_rewards/` with a clean, single-action C# service (and standalone `.sln`):
 
 ```csharp
 using System;
@@ -56,26 +56,31 @@ public record DailyRewardsClaim(string Id, DateTime ClaimedAt);
 ### 3. Build & Deploy
 Click **🚀 Build & Deploy** on the `daily_rewards` card in Exoforge Studio.
 The extension compiles via your local .NET SDK (`>= 9.0`) and hot-loads into the Exoforge cluster.
+Click **Edit** anytime to open its standalone solution directly in Rider or Visual Studio.
 
 ### 4. Call from Unity Gameplay Code
 
 ```csharp
 using UnityEngine;
+using Exoforge.Client;
 using Exoforge.Client.Unity;
-using Exoforge.Plugin.SDK;
 
 public class DailyRewardsController : MonoBehaviour
 {
     private async void Start()
     {
-        // 1. Wait for Exoforge client to connect and authenticate
-        await Exoforge.Ready;
+        // 1. Authenticate player via device ID
+        var session = await ExoforgeSDK.Auth.LoginAnonymously();
+        if (!session.HasDisplayName)
+        {
+            await ExoforgeSDK.Auth.SetDisplayName("Viper");
+        }
 
         // 2. Invoke your extension action with type safety and error handling
         try
         {
-            var reward = await Exoforge.Client.DailyRewards()
-                .ClaimDailyRewardAsync(new() { Level = 5 });
+            var reward = await ExoServices.DailyRewards.ClaimDailyRewardAsync(5);
+            // or: await ExoforgeSDK.Client.DailyRewards().ClaimDailyRewardAsync(5);
 
             Debug.Log($"Granted {reward.Amount} {reward.Kind}!");
         }

@@ -3,10 +3,10 @@
 > **The High-Performance, Modular Game Backend Platform & LiveOps Engine.**  
 > Built on Erlang/BEAM, with native C# extensions and Unity integration.
 
-[![Build Status](https://img.shields.io/badge/tests-439%20passing-brightgreen)](Justfile)
+[![Build Status](https://img.shields.io/badge/tests-452%20passing-brightgreen)](Justfile)
 [![E2E Vertical Slice](https://img.shields.io/badge/E2E%20Slice-verified%20live-blue)](sdk/csharp/Exoforge.Client.Tests/VerticalSliceIntegrationTests.cs)
 [![Event Fanout](https://img.shields.io/badge/event%20fanout-0.07%20ms%20to%2050%20subs-purple)](test/cluster_benchmark_test.exs)
-[![Unity SDK](https://img.shields.io/badge/Unity%20SDK-v0.1.6%20UPM%20Ready-black)](sdk/unity/Exoforge.SDK)
+[![Unity SDK](https://img.shields.io/badge/Unity%20SDK-v0.1.30%20UPM%20Ready-black)](sdk/unity/Exoforge.SDK)
 
 ---
 
@@ -98,6 +98,8 @@ All networking, storage, authentication, and game domains exist as swappable ext
 | `exoforge_std_file_bucket` | Storage / CDN | `:file_bucket` | Pluggable binary/blob asset storage with tags, metadata, and HTTP file routes. |
 | `exoforge_std_dashboard_views` | Studio Views | `:dashboard_view` | View modules for the Studio's core extensions. |
 | `exoforge_std_metering` | Operations | `:metering` | Usage metering: calls, wall time, bytes, CPU and RSS, persisted on instance. |
+| `exoforge_std_transport` | Gateway | `:transport` | Common gateway abstraction, framing normalization, and RPC dispatching for network ingress. |
+| `exoforge_std_cron` | Operations | `:cron` | Scheduled background task execution and recurring cron runner. |
 
 ---
 
@@ -172,7 +174,7 @@ Benchmarked on commodity single-node hardware (Apple Silicon / Linux x86_64):
 | **Actor Latency** | **2.4 µs** (0.0024 ms) | In-memory distributed actor round-trip |
 | **Actor Activation** | **0.024 ms / entity** | Instant on-demand actor state hydration |
 | **Cluster Fanout** | **0.15 ms** | 50 concurrent subscribers per broadcast |
-| **Test Suite** | **318 Elixir + 121 C# passing** | Core, the 11 standard extensions, system integration, and C# SDKs; 6 more in the live E2E slice |
+| **Test Suite** | **319 Elixir + 133 C# passing (452 total)** | Core, the 14 standard extensions, system integration, C# SDKs, and live E2E slice |
 
 ---
 

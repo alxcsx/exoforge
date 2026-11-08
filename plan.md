@@ -1,14 +1,14 @@
 # Exoforge Architecture & Plan (`plan.md`)
 
-> **Status**: Kernel, 11 standard extensions, C# Client SDK, C# Extension SDK, C# Management Engine (`exo`
-> CLI), Unity SDK (`com.exoforge.sdk` v0.1.6), Producer Studio, clustering, CI/CD pipeline, and Arch Linux staging deploy are
-> **complete** — **318 Elixir + 121 C# = 439 tests passing**, plus a live E2E vertical slice of 6 tests
-> against a running server.
+> **Status**: Kernel, 14 standard extensions, C# Client SDK, C# Extension SDK, C# Management Engine (`exo`
+> CLI), Unity SDK (`com.exoforge.sdk` v0.1.30), Producer Studio, clustering, CI/CD pipeline, and Arch Linux staging deploy are
+> **complete** — **319 Elixir + 133 C# = 452 tests passing**, plus a live E2E vertical slice of 6 tests
+> against a running server and Unity headless check (`just sample-check`).
 > **MVP Status**: Phase 0 (ADR 001 Architecture Decision Record) & Phase 1 (Extension Terminology Bulldozer) **Completed**.
 > **Benchmark**: 0.07 ms fanout to 50 event subscribers over `:pg`.
 
 Completed work is not kept here. It is in `git log`, which is the record that does not drift; this
-file is the invariants and what is next. Milestone identifiers (**M1**…**M36**) are historical and are
+file is the invariants and what is next. Milestone identifiers (**M1**…**M37**) are historical and are
 referenced from `Agents.MD`, `DX.md` and commit messages, so they stay in the table below and nowhere
 else.
 
@@ -73,6 +73,7 @@ extension_manager ─▶ (independent root)
 | **M34** | Extension Terminology, Static Holder `Exo` & C# Toolbox Hardening — `[ExoExtension]`, `ExtensionHost`, static capability holder `Exo` (`Exo.Database`, `Exo.Log`, `Exo.Events`, `Exo.Services`) with tree-shaking, singleton resources (`[ExoSingletonResource]`, `First<T>`), deterministic `Result<T>`; offline packaging (`just pack-sdk` / `just pack-unity`, embedded `NuGet~` feed, pre-packed `System.Text.Json`), dynamic `.NET 9+` TFM detection, `Exoforge.Generated.asmdef` isolation, active in-use stub preservation during sync, collision hardening in `ExoCodeGenerator`, and normalized `service_not_found` diagnostics |
 | **M35** | Studio LiveView Overhaul, Project Metadata & Staging CI/CD — Theme engine (dark/light mode contrast), telemetry rendering optimization, throughput graph, deterministic action colors, event deduplication, persistent cluster events; project metadata persistence (`ProjectMetadata`, title/studio settings modal, Unity SDK sync); dynamic CORS policy and WebSocket studio dispatch; SDK bucket downloads; GitHub Actions CI/CD with volume persistence; Arch Linux staging guide (`deploy/STAGING_DEPLOY.md`) and deployment automation |
 | **M36** | ADR 001 & Extension Terminology Bulldozer — Recorded ADR 001 (Unity-first, single-title, native extensions, immutable deployment, VPS containers). Bulldozed all platform code from "plugin" to "extension", renamed `plugins/` → `extensions/`, purged fallback wrappers (`plugins_csharp`, `PLUGINS_PATH`, `plugin_manager`), and standardized kernel registries and drivers |
+| **M37** | Unity SDK v0.1.30 & Extension DX Hardening — Standalone IDE solution launching (`<name>.sln`) bypassing Unity parent project evaluation; client API symmetry (`ExoServices.<Service>`); blank/minimal template scaffolding; enforced Unity player auth doctrine (`ExoforgeSDK.Auth`); cluster package version resolution & semantic version sorting in `file_bucket`; .NET 9+ SDK and runtime packs validation (`ExoforgeDotnetValidator`); global error logging (`ExoClient.OnError` -> `Debug.LogError`) and actionable `service_not_found` diagnostics |
 
 ---
 

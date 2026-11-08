@@ -94,7 +94,7 @@ exo extension logs gameplay_calculator
 Whenever an extension action or schema changes, update your typed code contracts:
 
 ### Client Game Stubs (Unity)
-Click **Sync Client** in the Unity toolbar (or the Exoforge Studio menu). This queries live cluster contracts and generates `Assets/Exoforge/Generated/ExoforgeServices.g.cs`. Your Unity project immediately gains strongly-typed methods (`ExoforgeSDK.Client.GameplayCalculator()`) for every action (both main-thread callbacks and async overloads) and typed models for every return record!
+Click **Sync Client** in the Unity toolbar (or the Exoforge Studio menu). This queries live cluster contracts and generates `Assets/Exoforge/Generated/ExoforgeServices.g.cs`. Your Unity project immediately gains strongly-typed static accessors (`ExoServices.GameplayCalculator`) and client extensions (`ExoforgeSDK.Client.GameplayCalculator()`) for every action (both main-thread callbacks and async overloads) and typed models for every return record!
 
 ### Extension-to-Extension Stubs (Server)
 Run `exo extension stubs <name>` to generate typed client stubs for services declared in your extension's `manifest.json` dependencies, writing to `src/Generated/ExtensionServices.g.cs`.
@@ -106,14 +106,14 @@ Run `exo extension stubs <name>` to generate typed client stubs for services dec
 ```csharp
 using UnityEngine;
 using System.Threading.Tasks;
-using Exoforge.SDK;
-using Exoforge.Generated;
+using Exoforge.Client;
+using Exoforge.Client.Unity;
 
 public class GameplayRewardController : MonoBehaviour
 {
     void OnLevelCompletedWithCallback(int points, int multiplier)
     {
-        var client = ExoforgeSDK.Client.GameplayCalculator();
+        var client = ExoServices.GameplayCalculator;
 
         // Style A: Unity Main-Thread Callback
         client.CalculateScore(
@@ -125,10 +125,10 @@ public class GameplayRewardController : MonoBehaviour
 
     async Task OnLevelCompletedAsync(int points, int multiplier)
     {
-        // Style B: Task Async/Await Overload
+        // Style B: Task Async/Await Overload (via ExoServices or ExoforgeSDK.Client)
         try
         {
-            var res = await ExoforgeSDK.Client.GameplayCalculator()
+            var res = await ExoServices.GameplayCalculator
                 .CalculateScoreAsync(new CalculateScoreRequest(points, multiplier));
             Debug.Log($"Score calculated: {res.TotalScore}");
         }

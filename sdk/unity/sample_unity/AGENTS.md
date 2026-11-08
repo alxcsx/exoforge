@@ -102,7 +102,12 @@ if (!session.HasDisplayName)
   identity, so a player can only name themselves.
 - Gameplay stays disabled until both stages succeed (`SnakePlayerController.enableOnReady`).
 
-`ExoTokenStore` is public but low-level — use `ExoforgeSDK.Auth`.
+> [!IMPORTANT]
+> Always authenticate via `ExoforgeSDK.Auth`. Do not invoke the raw RPC `ExoServices.Auth.AnonymousAsync()` directly,
+> as it skips device ID derivation and session initialization.
+
+`ExoTokenStore` is public but low-level — use `ExoforgeSDK.Auth`. Service invocations can be performed
+either via `ExoforgeSDK.Client.<Service>()` or directly via static `ExoServices.<Service>` (e.g. `ExoServices.SnakeLeaderboard`).
 
 ---
 
