@@ -8,25 +8,39 @@ defmodule Exoforge.Std.Docs.View do
 
   alias Exoforge.Std.Docs.Markdown
 
-  @badge_color_palette [
-    "bg-emerald-50 text-emerald-700 border-emerald-200",
-    "bg-sky-50 text-sky-700 border-sky-200",
-    "bg-indigo-50 text-indigo-700 border-indigo-200",
-    "bg-purple-50 text-purple-700 border-purple-200",
-    "bg-amber-50 text-amber-700 border-amber-200",
-    "bg-rose-50 text-rose-700 border-rose-200",
-    "bg-teal-50 text-teal-700 border-teal-200",
-    "bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200"
-  ]
+  defp scope_badge_class(scope) do
+    case to_string(scope || "guest") |> String.downcase() do
+      "admin" ->
+        "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-500/30"
 
-  defp hashed_badge_class(nil), do: "bg-gray-100 text-gray-600 border-gray-200"
+      "studio" ->
+        "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-500/30"
 
-  defp hashed_badge_class(str) when is_binary(str) do
-    idx = :erlang.phash2(str, length(@badge_color_palette))
-    Enum.at(@badge_color_palette, idx)
+      "global" ->
+        "bg-sky-50 text-sky-800 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-500/30"
+
+      "player" ->
+        "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-500/30"
+
+      "guest" ->
+        "bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700"
+
+      "server" ->
+        "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-500/30"
+
+      _other ->
+        "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-500/30"
+    end
   end
 
-  defp hashed_badge_class(atom) when is_atom(atom), do: hashed_badge_class(to_string(atom))
+  defp mode_badge_class("async"),
+    do: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-500/30"
+
+  defp mode_badge_class("cast"),
+    do: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-500/30"
+
+  defp mode_badge_class(_),
+    do: "bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700"
 
   attr(:action_catalog, :list, default: [])
   attr(:extensions, :list, default: [])
@@ -307,9 +321,21 @@ defmodule Exoforge.Std.Docs.View do
       <div class="print:border print:border-gray-300 print:text-black relative overflow-hidden bg-gradient-to-br from-gray-900 via-primary-950 to-indigo-950 text-white rounded-3xl p-8 lg:p-10 shadow-xl border border-primary-500/20">
         <div class="absolute -right-12 -bottom-12 w-96 h-96 bg-primary-600/10 rounded-full blur-3xl pointer-events-none"></div>
         <div class="relative z-10 space-y-5 max-w-4xl">
-          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur border border-white/10 text-xs font-bold text-primary-200">
-            <span>⚡</span>
-            <span>Developer Quickstart &amp; Architecture Reference</span>
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur border border-white/10 text-xs font-bold text-primary-200">
+              <span>⚡</span>
+              <span>Developer Quickstart &amp; Architecture Reference</span>
+            </div>
+
+            <button
+              type="button"
+              phx-click="open_sdk_modal"
+              class="print:hidden inline-flex items-center gap-2 px-4 py-1.5 rounded-xl bg-primary-600 hover:bg-primary-500 text-white font-bold text-xs shadow-md transition-all cursor-pointer border border-primary-400/30"
+            >
+              <span>📦</span>
+              <span>Download Unity SDK</span>
+              <span class="text-xs text-primary-200">➔</span>
+            </button>
           </div>
           <h1 class="text-3xl lg:text-4xl font-extrabold tracking-tight text-white leading-tight">
             Creating Your First Online Multiplayer Feature
@@ -403,14 +429,26 @@ defmodule Exoforge.Std.Docs.View do
 
       <!-- STEP 1: Connect & Auth -->
       <section id="step-auth" data-guide-section class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-6 print:border-gray-300 print:shadow-none print:break-inside-avoid">
-        <div class="flex items-start gap-4">
-          <div class="w-10 h-10 rounded-2xl bg-primary-600 text-white font-extrabold flex items-center justify-center shrink-0 shadow-md">
-            1
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-4">
+          <div class="flex items-start gap-4">
+            <div class="w-10 h-10 rounded-2xl bg-primary-600 text-white font-extrabold flex items-center justify-center shrink-0 shadow-md">
+              1
+            </div>
+            <div class="space-y-1">
+              <h2 class="text-xl font-bold text-gray-900 tracking-tight">Connect &amp; Authenticate</h2>
+              <p class="text-xs text-gray-500">Sign in anonymously using device credentials or authenticate players with seamless token caching.</p>
+            </div>
           </div>
-          <div class="space-y-1">
-            <h2 class="text-xl font-bold text-gray-900 tracking-tight">Connect &amp; Authenticate</h2>
-            <p class="text-xs text-gray-500">Sign in anonymously using device credentials or authenticate players with seamless token caching.</p>
-          </div>
+
+          <button
+            type="button"
+            phx-click="open_sdk_modal"
+            class="print:hidden shrink-0 self-start sm:self-auto inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-primary-50 hover:bg-primary-100 text-primary-700 border border-primary-200 text-xs font-bold transition-all shadow-xs cursor-pointer"
+          >
+            <span>📦</span>
+            <span>Download SDK Package</span>
+            <span class="text-xs text-primary-500">➔</span>
+          </button>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 text-xs text-gray-700">
@@ -1686,10 +1724,10 @@ defmodule Exoforge.Std.Docs.View do
         <div class="space-y-4 text-xs text-gray-700 leading-relaxed">
           <div class="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-950 dark:text-emerald-200 space-y-1">
             <div class="font-bold flex items-center gap-1.5 text-emerald-800 dark:text-emerald-300 text-[11px] uppercase tracking-wider">
-              <span>✨</span> <span>Automatic Table Inference &amp; Studio Forms</span>
+              <span>✨</span> <span>Automatic Table Inference &amp; Type Compatibility</span>
             </div>
             <p class="leading-relaxed">
-              Resource records map directly to database tables without manual migration files. Attributes configure table names, primary keys, Studio dashboard tabs, sorting, filtering, and custom input widgets.
+              Resources map directly to database tables without manual migration files. Supported on C# <strong>records</strong>, standard <strong>classes</strong>, and <strong>structs</strong> (targeting <code class="font-mono bg-emerald-100/50 dark:bg-emerald-950/60 px-1 py-0.5 rounded">AttributeTargets.Class | AttributeTargets.Struct</code>). Attributes configure table names, primary keys, Studio dashboard tabs, sorting, filtering, and custom input widgets.
             </p>
           </div>
 
@@ -1948,7 +1986,7 @@ defmodule Exoforge.Std.Docs.View do
                 <tr>
                   <td class="py-2 px-3 font-bold text-gray-900">Database</td>
                   <td class="py-2 px-3 text-purple-700">Exo.Database</td>
-                  <td class="py-2 px-3 font-sans text-xs text-gray-600"><code class="font-mono">Exo.Database.Get&lt;Score&gt;("scores", id)</code>, <code class="font-mono">Exo.Database.Put(record)</code>, <code class="font-mono">Exo.Database.Query&lt;T&gt;("SELECT ...")</code></td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600"><code class="font-mono">Exo.Database.Get&lt;Score&gt;(id)</code>, <code class="font-mono">Exo.Database.Put(record)</code>, <code class="font-mono">Exo.Database.Query&lt;T&gt;("SELECT ...")</code></td>
                 </tr>
                 <tr>
                   <td class="py-2 px-3 font-bold text-gray-900">Events</td>
@@ -2129,10 +2167,10 @@ defmodule Exoforge.Std.Docs.View do
                           <%= format_action_signature(act) %>
                         </span>
                         <%= if act.mode in ["async", "cast"] do %>
-                          <span class={"text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase font-mono " <> hashed_badge_class(act.mode)}><%= act.mode %></span>
+                          <span class={"text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase font-mono " <> mode_badge_class(act.mode)}><%= act.mode %></span>
                         <% end %>
                         <%= if act.scope do %>
-                          <span class={"text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase font-mono " <> hashed_badge_class(act.scope)}><%= act.scope %></span>
+                          <span class={"text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase font-mono " <> scope_badge_class(act.scope)}><%= act.scope %></span>
                         <% end %>
                       </div>
 
@@ -2626,6 +2664,7 @@ defmodule Exoforge.Std.Docs.View do
 
   defp code_exo_resource_page do
     """
+    // Option A: C# Record (Recommended for immutability & concise syntax)
     [ExoResource(Name = "player_scores", PrimaryKey = "id")]
     public record PlayerScoreRecord(
         [property: ExoColumn(PrimaryKey = true)] string Id,
@@ -2634,6 +2673,28 @@ defmodule Exoforge.Std.Docs.View do
         [property: ExoColumn(Badge = true, InputType = ExoInput.Color)] string TierBadge,
         [property: ExoColumn(Label = "Submitted At")] DateTime CreatedAt
     );
+
+    // Option B: Standard C# Class (Supports mutable OOP or existing class hierarchies)
+    [ExoResource("guild_profiles")]
+    public class GuildProfile
+    {
+        [ExoColumn(PrimaryKey = true)]
+        public string Id { get; set; } = string.Empty;
+
+        [ExoColumn(Sortable = true)]
+        public string GuildName { get; set; } = string.Empty;
+
+        [ExoColumn(Role = ExoRole.Currency)]
+        public int BankGold { get; set; }
+    }
+
+    // Option C: C# Struct / Record Struct (High-throughput value types)
+    [ExoResource("leaderboard_entries")]
+    public struct LeaderboardEntry
+    {
+        [ExoColumn(PrimaryKey = true)] public string EntryId { get; set; }
+        [ExoColumn(Sortable = true)] public int HighScore { get; set; }
+    }
     """
   end
 
@@ -2703,7 +2764,7 @@ defmodule Exoforge.Std.Docs.View do
                 DateTime.UtcNow
             );
 
-            Exo.Database.Put("market_listings", listingId, listing);
+            Exo.Database.Put(listing);
             Exo.Logger.Info($"Player {Exo.Context.CallerPlayerId} listed {req.Quantity}x {req.ItemId} for {req.UnitPrice}g");
             return new CreateListingResponse(listingId);
         }
@@ -2721,12 +2782,13 @@ defmodule Exoforge.Std.Docs.View do
         [ExoAction]
         public async Task<BuyListingResponse> BuyListing(BuyListingRequest req)
         {
-            var listing = Exo.Database.Get<MarketListingRecord>("market_listings", req.ListingId);
+            // Typed Get directly infers table name and primary key from MarketListingRecord
+            var listing = Exo.Database.Get<MarketListingRecord>(req.ListingId);
             if (listing == null)
                 throw new ExoActionException("listing_not_found", "Item has already been purchased or expired.");
 
-            // Deduct currency & transfer item atomically
-            Exo.Database.Execute("DELETE FROM market_listings WHERE id = $1", req.ListingId);
+            // Typed Delete by primary key
+            Exo.Database.Delete<MarketListingRecord>(req.ListingId);
 
             // Real-time seller notification pushed over WebSocket
             await Exo.Events.EmitAsync(new ListingSoldEvent(
@@ -2836,7 +2898,8 @@ defmodule Exoforge.Std.Docs.View do
         [ExoAction]
         public async Task<AttackBossResponse> AttackBoss(AttackBossRequest req)
         {
-            var config = Exo.Database.First<WorldBossConfig>("world_boss_config");
+            // Singleton config lookup automatically resolves table name from [ExoSingletonResource]
+            var config = Exo.Database.First<WorldBossConfig>();
             if (config == null || !config.IsEventActive)
                 throw new ExoActionException("event_inactive", "The World Boss is currently sleeping.");
 
@@ -2888,11 +2951,11 @@ defmodule Exoforge.Std.Docs.View do
         public async Task<DepositGoldResponse> DepositGuildGold(DepositGoldRequest req)
         {
             string playerId = Exo.Context.CallerPlayerId;
-            var member = Exo.Database.Get<GuildMemberRecord>("guild_members", playerId);
+            var member = Exo.Database.Get<GuildMemberRecord>(playerId);
             if (member == null)
                 throw new ExoActionException("not_in_guild", "You are not a member of any guild.");
 
-            var guild = Exo.Database.Get<GuildRecord>("guilds", member.GuildId);
+            var guild = Exo.Database.Get<GuildRecord>(member.GuildId);
             int newBankTotal = guild.BankGold + req.Amount;
 
             Exo.Database.Execute("UPDATE guilds SET bank_gold = $1 WHERE id = $2", newBankTotal, guild.Id);

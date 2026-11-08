@@ -885,7 +885,9 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
             action: to_string(act.name),
             status: status_sym,
             latency_ms: latency_ms
-          }, source: "studio_console")
+          },
+          source: "studio_console"
+        )
       rescue
         _ -> :ok
       end
@@ -1020,6 +1022,10 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
   def handle_info({:clear_toast, kind}, socket) do
     {:noreply, socket |> clear_flash(kind) |> clear_flash(to_string(kind))}
+  end
+
+  def handle_info(:open_sdk_modal, socket) do
+    {:noreply, assign(socket, :sdk_modal_open, true)}
   end
 
   def handle_info(_msg, socket) do

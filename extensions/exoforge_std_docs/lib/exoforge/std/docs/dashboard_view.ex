@@ -31,6 +31,12 @@ defmodule Exoforge.Std.Docs.DashboardView do
   end
 
   @impl true
+  def handle_event("open_sdk_modal", _params, socket) do
+    send(self(), :open_sdk_modal)
+    {:noreply, socket}
+  end
+
+  @impl true
   def render(assigns) do
     action_catalog =
       if assigns[:action_catalog] && assigns[:action_catalog] != [] do
