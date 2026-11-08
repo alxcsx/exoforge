@@ -296,6 +296,7 @@ Gameplay must not hold a client, an endpoint, or a token. It publishes hooks (e.
 | `just benchmark` | Run the cluster event fanout benchmark |
 | `just sample-setup` | Rebuild the Unity Snake sample scene via the Unity CLI (idempotent) |
 | `just sample-check` | Headless self-check for the Unity Snake sample (exit 0 = pass) |
+| `just test-unity-package` | Clean Unity project integration test for package tarball, compilation check & live auth |
 
 ---
 

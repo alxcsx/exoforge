@@ -73,7 +73,7 @@ defmodule Exoforge.Std.DashboardViews.UserPlayersTab do
             <% time_in_game = player[:time_in_game] || player["time_in_game"] || "0m" %>
             <.link
               patch={"/tab/exoforge_std_player_data?focus=player:#{URI.encode_www_form(to_string(pid))}"}
-              class="block p-3 bg-gray-50 hover:bg-purple-50 border border-gray-200 hover:border-purple-200 rounded-xl transition-colors"
+              class="block p-3 bg-gray-50 hover:bg-purple-500/10 border border-gray-200 hover:border-purple-500/30 rounded-xl transition-colors"
             >
               <div class="flex items-center justify-between">
                 <span class="text-xs font-bold text-gray-900"><%= name %></span>

@@ -43,6 +43,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
        delete_file_target: nil,
        new_bucket_name: "",
        action_notification: nil,
+       modal_error: nil,
        loaded: false
      )}
   end
@@ -83,7 +84,20 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
     {:noreply, assign(socket, expanded_buckets: new_expanded)}
   end
 
-  def handle_event("search", %{"query" => query}, socket) do
+  def handle_event("filter_change", %{"type" => type} = params, socket) do
+    query = Map.get(params, "query", socket.assigns.search_query)
+
+    socket =
+      socket
+      |> assign(type_filter: type, search_query: query)
+      |> apply_filters()
+
+    {:noreply, socket}
+  end
+
+  def handle_event("search", params, socket) do
+    query = Map.get(params, "query") || Map.get(params, "value") || ""
+
     socket =
       socket
       |> assign(search_query: query)
@@ -122,6 +136,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
     {:noreply,
      assign(socket,
        show_upload_modal: true,
+       modal_error: nil,
        upload_target_bucket: target_bucket,
        upload_form: %{
          "bucket" => target_bucket,
@@ -165,10 +180,10 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
 
     cond do
       content == "" ->
-        {:noreply, notify(socket, :error, "Please select a file to upload first.")}
+        {:noreply, assign(socket, modal_error: "Please select a file to upload first.")}
 
       filename == "" ->
-        {:noreply, notify(socket, :error, "Please enter a filename for the upload.")}
+        {:noreply, assign(socket, modal_error: "Please enter a filename for the upload.")}
 
       true ->
         payload = %{
@@ -182,14 +197,14 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
           {:ok, %{file: file}} ->
             socket =
               socket
-              |> assign(show_upload_modal: false, selected_file: file)
+              |> assign(show_upload_modal: false, modal_error: nil, selected_file: file)
               |> load_data()
               |> notify(:info, "Uploaded '#{filename}' to bucket '#{bucket}' (ID: #{file["id"]})")
 
             {:noreply, socket}
 
           {:error, reason} ->
-            {:noreply, notify(socket, :error, "Upload failed: #{inspect(reason)}")}
+            {:noreply, assign(socket, modal_error: "Upload failed: #{inspect(reason)}")}
         end
     end
   end
@@ -348,7 +363,8 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
        show_upload_modal: false,
        show_modify_modal: false,
        show_delete_modal: false,
-       show_new_bucket_modal: false
+       show_new_bucket_modal: false,
+       modal_error: nil
      )}
   end
 
@@ -597,33 +613,33 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
         </div>
 
         <div class="flex items-center gap-2 w-full md:w-auto justify-end">
-          <!-- Search box -->
-          <div class="relative flex-1 md:w-64">
-            <input
-              type="text"
-              placeholder="Search filename or ID..."
-              value={@search_query}
-              phx-keyup="search"
-              phx-target={@myself}
-              class="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 shadow-sm"
-            />
-            <span class="absolute left-2.5 top-2 text-xs text-gray-400">🔍</span>
-          </div>
+          <form id="file-bucket-toolbar-form" phx-change="filter_change" phx-submit="search" phx-target={@myself} class="flex items-center gap-2 flex-1 md:w-auto">
+            <!-- Search box -->
+            <div class="relative flex-1 md:w-64">
+              <input
+                type="search"
+                name="query"
+                placeholder="Search filename or ID..."
+                value={@search_query}
+                phx-debounce="250"
+                class="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 shadow-sm"
+              />
+              <span class="absolute left-2.5 top-2 text-xs text-gray-400">🔍</span>
+            </div>
 
-          <!-- Type filter dropdown -->
-          <select
-            phx-change="filter_type"
-            name="type"
-            phx-target={@myself}
-            class="text-xs bg-white border border-gray-200 rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-violet-500 shadow-sm"
-          >
-            <option value="all" selected={@type_filter == "all"}>All Types</option>
-            <option value="image" selected={@type_filter == "image"}>Images</option>
-            <option value="bundle" selected={@type_filter == "bundle"}>Bundles / Addressables</option>
-            <option value="document" selected={@type_filter == "document"}>Documents</option>
-            <option value="audio" selected={@type_filter == "audio"}>Audio & Media</option>
-            <option value="other" selected={@type_filter == "other"}>Other</option>
-          </select>
+            <!-- Type filter dropdown -->
+            <select
+              name="type"
+              class="text-xs bg-white border border-gray-200 rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-violet-500 shadow-sm"
+            >
+              <option value="all" selected={@type_filter == "all"}>All Types</option>
+              <option value="image" selected={@type_filter == "image"}>Images</option>
+              <option value="bundle" selected={@type_filter == "bundle"}>Bundles / Addressables</option>
+              <option value="document" selected={@type_filter == "document"}>Documents</option>
+              <option value="audio" selected={@type_filter == "audio"}>Audio & Media</option>
+              <option value="other" selected={@type_filter == "other"}>Other</option>
+            </select>
+          </form>
 
           <!-- View Mode Toggle -->
           <div class="flex items-center bg-gray-100 p-0.5 rounded-xl border border-gray-200 shrink-0">
@@ -970,7 +986,8 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
       <!-- 1. Upload File Modal -->
       <%= if @show_upload_modal do %>
         <div class="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-200 space-y-4">
+          <div class="fixed inset-0" phx-click="close_modal" phx-target={@myself}></div>
+          <div class="relative bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-200 space-y-4">
             <div class="flex items-center justify-between border-b border-gray-100 pb-3">
               <div class="flex items-center gap-2">
                 <span class="text-xl">⬆️</span>
@@ -979,10 +996,13 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
               <button phx-click="close_modal" phx-target={@myself} class="text-gray-400 hover:text-gray-600 text-sm font-bold">✕</button>
             </div>
 
-            <form phx-submit="submit_upload" phx-target={@myself} class="space-y-4">
-              <input type="hidden" id="bucket_upload_content_input" name="upload[content]" value="" />
-              <input type="hidden" id="bucket_upload_content_type_input" name="upload[content_type]" value="" />
+            <%= if @modal_error do %>
+              <div class="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-semibold">
+                <%= @modal_error %>
+              </div>
+            <% end %>
 
+            <form phx-submit="submit_upload" phx-target={@myself} class="space-y-4">
               <!-- Bucket Target Selection -->
               <div>
                 <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Target Bucket</label>
@@ -996,8 +1016,11 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
                 </select>
               </div>
 
-              <!-- File Picker via Client-Side FileReader -->
-              <div>
+              <!-- File Picker via Client-Side FileReader (phx-update="ignore" preserves picked base64 across 5s heartbeat re-renders) -->
+              <div phx-update="ignore" id="bucket_upload_picker_container">
+                <input type="hidden" id="bucket_upload_content_input" name="upload[content]" value="" />
+                <input type="hidden" id="bucket_upload_content_type_input" name="upload[content_type]" value="" />
+
                 <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Select File to Upload</label>
                 <div class="border-2 border-dashed border-gray-300 rounded-xl p-5 text-center hover:border-violet-400 transition-colors bg-gray-50/50">
                   <input
@@ -1077,6 +1100,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
                 </button>
                 <button
                   type="submit"
+                  phx-disable-with="Uploading..."
                   class="px-4 py-2 text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 rounded-xl transition-colors shadow-sm"
                 >
                   Upload File
@@ -1090,7 +1114,8 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
       <!-- 2. Modify File Modal -->
       <%= if @show_modify_modal do %>
         <div class="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-200 space-y-4">
+          <div class="fixed inset-0" phx-click="close_modal" phx-target={@myself}></div>
+          <div class="relative bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-200 space-y-4">
             <div class="flex items-center justify-between border-b border-gray-100 pb-3">
               <div class="flex items-center gap-2">
                 <span class="text-xl">✏️</span>
@@ -1100,9 +1125,6 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
             </div>
 
             <form phx-submit="submit_modify" phx-target={@myself} class="space-y-4">
-              <input type="hidden" id="bucket_modify_content_input" name="modify[content]" value="" />
-              <input type="hidden" id="bucket_modify_content_type_input" name="modify[content_type]" value="" />
-
               <!-- Bucket (Readonly) -->
               <div>
                 <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Bucket</label>
@@ -1129,8 +1151,11 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
                 />
               </div>
 
-              <!-- Optional Content Replacement -->
-              <div>
+              <!-- Optional Content Replacement (phx-update="ignore" preserves picked base64) -->
+              <div phx-update="ignore" id="bucket_modify_picker_container">
+                <input type="hidden" id="bucket_modify_content_input" name="modify[content]" value="" />
+                <input type="hidden" id="bucket_modify_content_type_input" name="modify[content_type]" value="" />
+
                 <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Replace Binary Content (Optional)</label>
                 <input
                   type="file"
@@ -1187,6 +1212,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
                 </button>
                 <button
                   type="submit"
+                  phx-disable-with="Uploading..."
                   class="px-4 py-2 text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 rounded-xl transition-colors shadow-sm"
                 >
                   Save Changes
@@ -1269,6 +1295,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
                 </button>
                 <button
                   type="submit"
+                  phx-disable-with="Uploading..."
                   class="px-4 py-2 text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 rounded-xl transition-colors shadow-sm"
                 >
                   Create Bucket

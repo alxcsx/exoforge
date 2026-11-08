@@ -252,7 +252,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     end
   end
 
-  defp focused_extension(%{kind: "ext", id: id}, extensions) do
+  defp focused_extension(%{kind: kind, id: id}, extensions) when kind in ["ext", "extension", "plugin"] do
     Enum.find(extensions, &(to_string(&1.id) == to_string(id)))
   end
 
@@ -356,13 +356,30 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     end
   end
 
-  def handle_event("dismiss_toast", %{"kind" => kind}, socket) when kind in ["info", "error", :info, :error] do
-    atom_kind = if is_atom(kind), do: kind, else: Exoforge.Atoms.existing(kind)
-    {:noreply, clear_flash(socket, atom_kind)}
+  def handle_event("dismiss_toast", %{"kind" => kind}, socket) do
+    str_kind = to_string(kind)
+    atom_kind = if is_atom(kind), do: kind, else: Exoforge.Atoms.existing(kind, :info)
+
+    socket =
+      socket
+      |> clear_flash(atom_kind)
+      |> clear_flash(str_kind)
+
+    {:noreply, socket}
   end
 
   def handle_event("dismiss_toast", _params, socket) do
-    {:noreply, socket |> clear_flash(:info) |> clear_flash(:error)}
+    {:noreply,
+     socket
+     |> clear_flash(:info)
+     |> clear_flash(:error)
+     |> clear_flash("info")
+     |> clear_flash("error")}
+  end
+
+  def handle_event("show_toast", %{"kind" => kind, "message" => msg}, socket) do
+    atom_kind = if is_atom(kind), do: kind, else: Exoforge.Atoms.existing(kind, :info)
+    {:noreply, show_toast(socket, atom_kind, msg)}
   end
 
   def handle_event("search_extensions", %{"query" => query}, socket) do
@@ -974,7 +991,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   end
 
   def handle_info({:clear_toast, kind}, socket) do
-    {:noreply, clear_flash(socket, kind)}
+    {:noreply, socket |> clear_flash(kind) |> clear_flash(to_string(kind))}
   end
 
   def handle_info(_msg, socket) do
@@ -1333,19 +1350,11 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       if actions_to_plot != [] do
         actions_to_plot
         |> Enum.with_index()
-        |> Enum.map(fn {{act_id, inv, _err}, idx} ->
-          # Colouring based on the action name (deterministic hash), not on the count
+        |> Enum.map(fn {{act_id, inv, _err}, _idx} ->
           color = color_for_name(act_id, palette)
-          factor = 1.0 - idx * 0.12
 
-          counts = [
-            max(round(inv * 0.25 * factor), 0),
-            max(round(inv * 0.40 * factor), 0),
-            max(round(inv * 0.55 * factor), 0),
-            max(round(inv * 0.70 * factor), 0),
-            max(round(inv * 0.85 * factor), 0),
-            inv
-          ]
+          # Honest representation: previous intervals are zero until recorded, latest is true measured count
+          counts = [0, 0, 0, 0, 0, inv]
 
           dots =
             Enum.zip(x_coords, counts)
@@ -1391,14 +1400,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
         counts =
           if err > 0 do
-            [
-              max(round(err * 0.2), 0),
-              max(round(err * 0.4), 0),
-              max(round(err * 0.3), 0),
-              max(round(err * 0.6), 0),
-              max(round(err * 0.8), 0),
-              err
-            ]
+            [0, 0, 0, 0, 0, err]
           else
             [0, 0, 0, 0, 0, 0]
           end
@@ -1678,15 +1680,19 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
       <!-- Floating Toast Notifications (completely outside document flow to avoid layout shifts) -->
       <div id="studio-toasts" class="fixed top-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none max-w-sm w-full">
-        <%= for {kind, msg} <- [{:info, Phoenix.Flash.get(@flash, :info)}, {:error, Phoenix.Flash.get(@flash, :error)}], msg do %>
+        <%= for {kind, msg} <- [{:info, Phoenix.Flash.get(@flash, :info) || Phoenix.Flash.get(@flash, "info")}, {:error, Phoenix.Flash.get(@flash, :error) || Phoenix.Flash.get(@flash, "error")}], msg do %>
           <div
+            id={"toast-#{kind}"}
+            phx-hook="AutoDismissToast"
+            data-kind={kind}
             phx-click="dismiss_toast"
             phx-value-kind={kind}
+            onclick="this.remove()"
             role="alert"
             title="Click to dismiss"
-            class={"relative overflow-hidden pointer-events-auto p-3.5 rounded-xl text-xs font-bold flex items-center gap-3 shadow-xl cursor-pointer select-none transition-transform hover:scale-[1.02] active:scale-[0.98] #{if kind == :info, do: "bg-emerald-600 text-white shadow-emerald-900/20", else: "bg-red-600 text-white shadow-red-900/20"}"}
+            class={"relative overflow-hidden pointer-events-auto p-3.5 rounded-xl text-xs font-bold flex items-center gap-3 shadow-xl cursor-pointer select-none transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] #{if kind in [:info, "info"], do: "bg-emerald-600 text-white shadow-emerald-900/20", else: "bg-red-600 text-white shadow-red-900/20"}"}
           >
-            <span class="text-sm font-black pointer-events-none"><%= if kind == :info, do: "✓", else: "!" %></span>
+            <span class="text-sm font-black pointer-events-none"><%= if kind in [:info, "info"], do: "✓", else: "!" %></span>
             <span class="flex-1 leading-snug pointer-events-none"><%= msg %></span>
             <button
               type="button"

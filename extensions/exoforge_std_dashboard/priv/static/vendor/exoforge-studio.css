@@ -19,11 +19,11 @@ html.dark {
 
   /* Unity-Inspired Dark Surfaces & Backgrounds */
   --exo-bg: #141417;
-  --exo-surface: #1e1e24;
-  --exo-surface-elevated: #25252d;
   --exo-surface-muted: #18181d;
-  --exo-surface-subtle: #272730;
-  --exo-header-bg: rgba(24, 24, 29, 0.88);
+  --exo-surface-subtle: #1e1e24;
+  --exo-surface: #262630;
+  --exo-surface-elevated: #2e2e3a;
+  --exo-header-bg: rgba(24, 24, 29, 0.92);
 
   /* Borders & Dividers */
   --exo-border: #2e2e38;
@@ -527,13 +527,15 @@ details.exo-fold > summary:hover {
   background-color: var(--exo-surface-subtle);
 }
 
-details.exo-fold > summary .exo-fold-chevron {
+details.exo-fold > summary .exo-fold-chevron,
+details.exo-fold > summary .exo-chevron {
   transition: transform 0.18s ease;
   font-size: 0.65rem;
   opacity: 0.75;
 }
 
-details.exo-fold[open] > summary .exo-fold-chevron {
+details.exo-fold[open] > summary .exo-fold-chevron,
+details.exo-fold[open] > summary .exo-chevron {
   transform: rotate(90deg);
 }
 
@@ -591,6 +593,39 @@ details.exo-menu > .exo-menu-panel {
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
+}
+
+.exo-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--exo-radius-md);
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--exo-text);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.exo-menu-item:hover {
+  background-color: var(--exo-surface-subtle);
+  color: var(--exo-text);
+}
+
+.exo-menu-item.exo-menu-danger,
+.exo-menu-danger {
+  color: var(--exo-status-error);
+}
+
+.exo-menu-item.exo-menu-danger:hover,
+.exo-menu-danger:hover {
+  background-color: var(--exo-status-error-bg);
+  color: var(--exo-status-error);
 }
 
 /* Standard Studio Card */

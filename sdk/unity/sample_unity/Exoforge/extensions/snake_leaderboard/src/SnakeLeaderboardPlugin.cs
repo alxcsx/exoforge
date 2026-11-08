@@ -7,7 +7,7 @@ using Exoforge.Plugins.Generated;
 
 namespace Exoforge.Plugins.SnakeLeaderboard;
 
-[ExoService("snake_leaderboard", Version = "1.0.0", Resources = new[] { typeof(SnakeScoreRecord) },
+[ExoService("snake_leaderboard", Version = "0.1.0", Resources = new[] { typeof(SnakeScoreRecord) },
     Category = "Game", Title = "Snake Leaderboard", Icon = "🏆")]
 public class SnakeLeaderboardPlugin
 {

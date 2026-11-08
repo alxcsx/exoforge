@@ -176,15 +176,19 @@ defmodule Exoforge.Std.Dashboard.Components do
 
     case col[:type] do
       :badge ->
+        safe_val = Phoenix.HTML.html_escape(to_string(val || "active")) |> Phoenix.HTML.safe_to_string()
+
         Phoenix.HTML.raw("""
         <span class="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-          #{val || "active"}
+          #{safe_val}
         </span>
         """)
 
       :code ->
+        safe_val = Phoenix.HTML.html_escape(to_string(val || "")) |> Phoenix.HTML.safe_to_string()
+
         Phoenix.HTML.raw("""
-        <code class="px-1.5 py-0.5 rounded bg-gray-100 font-mono text-[11px] text-gray-700">#{val}</code>
+        <code class="px-1.5 py-0.5 rounded bg-gray-100 font-mono text-[11px] text-gray-700">#{safe_val}</code>
         """)
 
       _ ->

@@ -232,7 +232,9 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
   end
 
   @impl true
-  def handle_event("search_resource", %{"query" => query}, socket) do
+  def handle_event("search_resource", params, socket) do
+    query = Map.get(params, "query") || Map.get(params, "value") || ""
+
     socket =
       socket
       |> assign(:resource_search, query)
@@ -342,7 +344,8 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
   end
 
   @impl true
-  def handle_event("file_picker_search", %{"query" => query}, socket) do
+  def handle_event("file_picker_search", params, socket) do
+    query = Map.get(params, "query") || Map.get(params, "value") || ""
     q = String.downcase(String.trim(query))
     files = socket.assigns.file_picker_files
 
@@ -1188,16 +1191,16 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
 
             <%= if not singleton_resource?(assigns) do %>
               <div class="flex items-center gap-2">
-                <input
-                  type="text"
-                  placeholder="Search rows..."
-                  value={@resource_search}
-                  phx-input="search_resource"
-                  phx-target={@myself}
-                  phx-debounce="200"
-                  name="query"
-                  class="px-3 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500"
-                />
+                <form id="resource-search-form" phx-change="search_resource" phx-submit="search_resource" phx-target={@myself}>
+                  <input
+                    type="search"
+                    placeholder="Search rows..."
+                    value={@resource_search}
+                    phx-debounce="200"
+                    name="query"
+                    class="px-3 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                </form>
 
                 <button
                   type="button"
@@ -1695,17 +1698,17 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                 <% end %>
               </div>
 
-              <div class="relative w-full sm:w-56">
+              <form id="file-picker-search-form" phx-change="file_picker_search" phx-submit="file_picker_search" phx-target={@myself} class="relative w-full sm:w-56">
                 <input
-                  type="text"
+                  type="search"
+                  name="query"
                   placeholder="Search files..."
                   value={@file_picker_search}
-                  phx-keyup="file_picker_search"
-                  phx-target={@myself}
+                  phx-debounce="150"
                   class="w-full text-xs pl-7 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500"
                 />
                 <span class="absolute left-2.5 top-2 text-xs text-gray-400">🔍</span>
-              </div>
+              </form>
             </div>
 
             <!-- File Grid / List -->

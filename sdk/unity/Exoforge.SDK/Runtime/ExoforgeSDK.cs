@@ -30,11 +30,15 @@ namespace Exoforge.Client.Unity
             _mainThreadId = 0;
         }
 
+#if UNITY_EDITOR
+        [UnityEditor.InitializeOnLoadMethod]
+#endif
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void CaptureMainThread()
         {
             _mainContext = SynchronizationContext.Current;
             _mainThreadId = Environment.CurrentManagedThreadId;
+            try { ExoDeviceId.Get(); } catch { }
         }
 
         /// <summary>Player sign-in.</summary>
@@ -123,11 +127,14 @@ namespace Exoforge.Client.Unity
             var existing = UnityEngine.Object.FindAnyObjectByType<ExoforgeManager>(FindObjectsInactive.Include);
             if (existing != null)
             {
+                ExoforgeManager.Current = existing;
                 return existing;
             }
 
             var host = new GameObject("[ExoforgeSDK]");
-            return host.AddComponent<ExoforgeManager>();
+            var created = host.AddComponent<ExoforgeManager>();
+            ExoforgeManager.Current = created;
+            return created;
         }
     }
 

@@ -96,7 +96,10 @@ defmodule Exoforge.Std.Dashboard.Microfrontend do
   end
 
   defp render_custom_element_tag(element, plugin_id, target_id, context) do
+    safe_elem = Phoenix.HTML.html_escape(to_string(element)) |> Phoenix.HTML.safe_to_string()
+    safe_pid = Phoenix.HTML.html_escape(to_string(plugin_id)) |> Phoenix.HTML.safe_to_string()
+    safe_tid = Phoenix.HTML.html_escape(to_string(target_id || "")) |> Phoenix.HTML.safe_to_string()
     json_ctx = Jason.encode!(context) |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
-    "<#{element} plugin-id=\"#{plugin_id}\" target-id=\"#{target_id || ""}\" context=\"#{json_ctx}\"></#{element}>"
+    "<#{safe_elem} plugin-id=\"#{safe_pid}\" target-id=\"#{safe_tid}\" context=\"#{json_ctx}\"></#{safe_elem}>"
   end
 end

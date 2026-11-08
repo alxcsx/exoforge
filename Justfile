@@ -436,6 +436,108 @@ clean-room-sdk:
 
 	grep -E "\[clean-room\]" "$work/run.log" | tail -3
 
+# Integration test (run on demand): creates a clean temporary Unity project,
+# imports the packaged SDK tarball (dist/com.exoforge.sdk-*.tgz), checks for compilation errors,
+# writes any compile errors to log/unity-compilation-errors.log, and tests live auth/connection
+# against localhost (or $EXOFORGE_TEST_URL).
+test-unity-package:
+	#!/usr/bin/env bash
+	set -euo pipefail
+
+	started_server=0
+	server_pid=""
+	data_dir=""
+	cleanup() {
+		if [ "$started_server" -eq 1 ] && [ -n "$server_pid" ]; then
+			echo "[test-unity-package] Stopping temporary backend server..."
+			kill "$server_pid" 2>/dev/null || true
+			pkill -f "mix run" 2>/dev/null || true
+			pkill -f beam.smp 2>/dev/null || true
+			if [ -n "$data_dir" ] && [ -d "$data_dir" ]; then
+				rm -rf "$data_dir"
+			fi
+		fi
+	}
+	trap cleanup EXIT
+
+	target_url="${EXOFORGE_TEST_URL:-http://localhost:4001}"
+	if [[ "$target_url" == *"localhost"* ]] || [[ "$target_url" == *"127.0.0.1"* ]]; then
+		if ! nc -z 127.0.0.1 4000 2>/dev/null; then
+			echo "[test-unity-package] Starting local backend server with disposable data dir..."
+			data_dir=$(mktemp -d)
+			EXOFORGE_DATA_DIR="$data_dir" mix run --no-halt > /tmp/exoforge-package-test-server.log 2>&1 &
+			server_pid=$!
+			started_server=1
+
+			for _ in $(seq 1 60); do
+				nc -z 127.0.0.1 4000 2>/dev/null && break
+				sleep 0.5
+			done
+		else
+			echo "[test-unity-package] Using existing local cluster on port 4000"
+		fi
+	fi
+
+	echo "[test-unity-package] 1/4 Packaging latest Exoforge Unity SDK..."
+	just pack-unity >/dev/null
+	tarball=$(ls -t dist/com.exoforge.sdk-*.tgz | head -1)
+	abs_tarball="$(cd "$(dirname "$tarball")" && pwd)/$(basename "$tarball")"
+	echo "[test-unity-package] Using package: $abs_tarball"
+
+	mkdir -p log
+	err_log="$(pwd)/log/unity-compilation-errors.log"
+	test_log="$(pwd)/log/unity-package-test.log"
+	rm -f "$err_log" "$test_log"
+
+	work=$(mktemp -d -t exo-pkg-test-XXXXXX)
+	echo "[test-unity-package] 2/4 Creating fresh Unity project at $work/Game..."
+	if ! "{{UNITY}}" -batchmode -quit -nographics -createProject "$work/Game" -logFile "$work/create.log" >/dev/null; then
+		cp "$work/create.log" "$err_log"
+		echo "[test-unity-package] FAILED to create Unity project. Log saved to $err_log"
+		exit 1
+	fi
+
+	echo "[test-unity-package] 3/4 Adding package tarball to manifest and staging probe..."
+	python3 -c "import json, sys; p, t = sys.argv[1], sys.argv[2]; f = open(p, 'r'); d = json.load(f); f.close(); d.setdefault('dependencies', {})['com.exoforge.sdk'] = 'file:' + t; f = open(p, 'w'); json.dump(d, f, indent=2); f.close()" "$work/Game/Packages/manifest.json" "$abs_tarball"
+
+	mkdir -p "$work/Game/Assets/Editor"
+	cp sdk/unity/package-test-probe.cs "$work/Game/Assets/Editor/ExoforgePackageProbe.cs"
+
+	echo "[test-unity-package] 4/4 Compiling project and executing probe..."
+	set +e
+	"{{UNITY}}" -batchmode -nographics \
+		-projectPath "$work/Game" \
+		-executeMethod ExoforgePackageProbe.Run \
+		-logFile "$work/run.log"
+	unity_status=$?
+	set -e
+
+	if [ $unity_status -ne 0 ]; then
+		cp "$work/run.log" "$err_log"
+		echo ""
+		echo "================================================================================"
+		echo "❌ [test-unity-package] Unity SDK package test FAILED (exit code: $unity_status)"
+		echo "================================================================================"
+		echo "Full log saved to: log/unity-compilation-errors.log"
+		echo ""
+		echo "Compilation & error lines:"
+		grep -E "error CS|Compilation failed|Scripts have compiler errors|\[package-probe\] FAIL|Exception" "$err_log" | head -30 || true
+		echo "================================================================================"
+		echo "Temp project kept for inspection at: $work"
+		exit $unity_status
+	else
+		cp "$work/run.log" "$test_log"
+		echo ""
+		echo "================================================================================"
+		echo "✅ [test-unity-package] Unity SDK package test PASSED!"
+		echo "================================================================================"
+		grep -E "\[package-probe\]" "$test_log" | tail -15 || true
+		echo "================================================================================"
+		echo "Full log saved to: log/unity-package-test.log"
+		rm -rf "$work"
+	fi
+
+
 # ---- Unity SDK Distribution ----
 
 # Build the distributable Unity package: the UPM tarball, with the plugin SDK inside it so a

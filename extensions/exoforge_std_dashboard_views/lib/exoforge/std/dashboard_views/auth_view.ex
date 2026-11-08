@@ -59,7 +59,9 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
   end
 
   @impl true
-  def handle_event("search", %{"query" => query}, socket) do
+  def handle_event("search", params, socket) do
+    query = Map.get(params, "query") || Map.get(params, "value") || ""
+
     socket =
       socket
       |> assign(search_query: query)
@@ -480,12 +482,12 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
 
       <!-- Action Notification Banner -->
       <%= if @action_notification do %>
-        <div class="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl p-4 shadow-sm flex items-center justify-between animate-in fade-in duration-150">
+        <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 shadow-sm flex items-center justify-between animate-in fade-in duration-150">
           <div class="flex items-center gap-3">
             <div class="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shrink-0">
               ✓
             </div>
-            <p class="text-xs font-bold text-emerald-900">
+            <p class="text-xs font-bold text-emerald-800 dark:text-emerald-300">
               <%= @action_notification %>
             </p>
           </div>
@@ -501,17 +503,17 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
 
       <!-- Issued Token Alert Banner -->
       <%= if @issued_token_info do %>
-        <div class="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-2xl p-5 shadow-sm">
+        <div class="bg-purple-500/10 border border-purple-500/20 rounded-2xl p-5 shadow-sm">
           <div class="flex items-start justify-between">
             <div class="flex items-start gap-3">
               <div class="w-8 h-8 rounded-lg bg-purple-600 text-white flex items-center justify-center font-bold text-sm shrink-0 mt-0.5">
                 🔑
               </div>
               <div class="space-y-1">
-                <h4 class="text-sm font-bold text-purple-950">
-                  New Bearer Token Generated for <span class="font-bold text-purple-700"><%= @issued_token_info[:name] || @issued_token_info.player_id %></span>
+                <h4 class="text-sm font-bold text-purple-900 dark:text-purple-200">
+                  New Bearer Token Generated for <span class="font-bold text-purple-600 dark:text-purple-400"><%= @issued_token_info[:name] || @issued_token_info.player_id %></span>
                 </h4>
-                <p class="text-xs text-purple-700">
+                <p class="text-xs text-purple-700 dark:text-purple-300">
                   Save this token securely. It grants client authentication with scopes:
                   <span class="font-semibold"><%= Enum.join(@issued_token_info.scopes, ", ") %></span>.
                 </p>
@@ -600,13 +602,11 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
       <!-- Filters & Search Toolbar -->
       <div class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div class="flex items-center gap-3 flex-1 max-w-md">
-          <div class="relative w-full">
+          <form id="auth-search-form" phx-change="search" phx-submit="search" phx-target={@myself} class="relative w-full">
             <input
-              type="text"
+              type="search"
               placeholder="Search user ID or scope..."
               value={@search_query}
-              phx-input="search"
-              phx-target={@myself}
               phx-debounce="200"
               name="query"
               class="w-full pl-9 pr-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:bg-white transition-all"
@@ -614,7 +614,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
             <svg class="w-4 h-4 text-gray-400 absolute left-3 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
-          </div>
+          </form>
         </div>
 
         <div class="flex items-center gap-2">
@@ -805,6 +805,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
       <!-- Register User Modal -->
       <%= if @show_register_modal do %>
         <div class="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div class="fixed inset-0" phx-click="close_register_modal" phx-target={@myself}></div>
           <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-200 relative animate-in fade-in duration-150">
             <button
               phx-click="close_register_modal"
@@ -903,6 +904,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                 </button>
                 <button
                   type="submit"
+                  phx-disable-with="Creating..."
                   class="px-5 py-2 text-xs font-bold text-white bg-purple-600 rounded-xl hover:bg-purple-700 transition-colors shadow-sm"
                 >
                   Create Account &amp; Issue Token
@@ -915,7 +917,8 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
 
       <!-- Reset Password Modal -->
       <%= if @show_reset_password_modal and @reset_password_user do %>
-        <div class="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="fixed inset-0 z-[60] overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div class="fixed inset-0" phx-click="close_reset_password_modal" phx-target={@myself}></div>
           <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-200 relative animate-in fade-in duration-150">
             <button
               phx-click="close_reset_password_modal"
@@ -978,7 +981,8 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
 
       <!-- Change Roles Modal -->
       <%= if @show_roles_modal and @roles_user do %>
-        <div class="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="fixed inset-0 z-[60] overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div class="fixed inset-0" phx-click="close_roles_modal" phx-target={@myself}></div>
           <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-200 relative animate-in fade-in duration-150">
             <button
               phx-click="close_roles_modal"
@@ -1046,6 +1050,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                 </button>
                 <button
                   type="submit"
+                  phx-disable-with="Updating..."
                   class="px-5 py-2 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-xl shadow-sm transition-colors"
                 >
                   Update Roles

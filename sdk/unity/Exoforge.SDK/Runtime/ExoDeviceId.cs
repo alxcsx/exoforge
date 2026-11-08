@@ -19,30 +19,46 @@ namespace Exoforge.Client.Unity
     public static class ExoDeviceId
     {
         private const string Key = "Exoforge.DeviceId";
+        private static string? s_cached;
 
         /// <summary>Returns the cached device id, deriving and persisting it on first call.</summary>
         public static string Get()
         {
-            string cached = PlayerPrefs.GetString(Key, string.Empty);
-
-            if (!string.IsNullOrEmpty(cached))
+            if (!string.IsNullOrEmpty(s_cached))
             {
-                return cached;
+                return s_cached!;
             }
 
-            string seed = SystemInfo.deviceUniqueIdentifier;
-
-            // Unity returns this when the platform exposes no identifier.
-            if (string.IsNullOrEmpty(seed) || seed == SystemInfo.unsupportedIdentifier)
+            try
             {
-                seed = Guid.NewGuid().ToString("N");
+                string cached = PlayerPrefs.GetString(Key, string.Empty);
+
+                if (!string.IsNullOrEmpty(cached))
+                {
+                    s_cached = cached;
+                    return cached;
+                }
+
+                string seed = SystemInfo.deviceUniqueIdentifier;
+
+                // Unity returns this when the platform exposes no identifier.
+                if (string.IsNullOrEmpty(seed) || seed == SystemInfo.unsupportedIdentifier)
+                {
+                    seed = Guid.NewGuid().ToString("N");
+                }
+
+                string deviceId = Derive(seed);
+                PlayerPrefs.SetString(Key, deviceId);
+                PlayerPrefs.Save();
+
+                s_cached = deviceId;
+                return deviceId;
             }
-
-            string deviceId = Derive(seed);
-            PlayerPrefs.SetString(Key, deviceId);
-            PlayerPrefs.Save();
-
-            return deviceId;
+            catch (Exception)
+            {
+                s_cached ??= Derive(Guid.NewGuid().ToString("N"));
+                return s_cached;
+            }
         }
 
         /// <summary>Clears the cached id and generates a fresh unique device id — the next sign-in claims a brand new account.</summary>
@@ -56,8 +72,13 @@ namespace Exoforge.Client.Unity
         {
             string seed = Guid.NewGuid().ToString("N");
             string deviceId = Derive(seed);
-            PlayerPrefs.SetString(Key, deviceId);
-            PlayerPrefs.Save();
+            s_cached = deviceId;
+            try
+            {
+                PlayerPrefs.SetString(Key, deviceId);
+                PlayerPrefs.Save();
+            }
+            catch (Exception) { }
             return deviceId;
         }
 

@@ -73,13 +73,13 @@ defmodule Exoforge.Std.DashboardViews.ExtensionUpload do
 
   # ---- internals ---------------------------------------------------------------------
 
-  defp validate("", _type, _binary, _code), do: {:error, "Plugin name is required."}
+  defp validate("", _type, _binary, _code), do: {:error, "Extension name is required."}
 
   defp validate(_name, "elixir", _binary, ""),
     do: {:error, "Elixir module code is required."}
 
   defp validate(_name, "native", "", _code),
-    do: {:error, "Plugin binary content or file is required."}
+    do: {:error, "Extension binary content or file is required."}
 
   defp validate(_name, _type, _binary, _code), do: :ok
 

@@ -36,6 +36,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
        edit_profile_raw: "",
        edit_error: nil,
        action_notification: nil,
+       loaded: false,
        loading: false
      )}
   end
@@ -45,8 +46,9 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
     socket = assign(socket, assigns)
 
     socket =
-      if connected?(socket) and (socket.assigns.players == [] or assigns[:refresh] == true) do
+      if connected?(socket) and (not Map.get(socket.assigns, :loaded, false) or assigns[:refresh] == true) do
         load_players(socket)
+        |> assign(:loaded, true)
       else
         socket
       end
@@ -73,7 +75,8 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
   end
 
   @impl true
-  def handle_event("search_players", %{"query" => query}, socket) do
+  def handle_event("search_players", params, socket) do
+    query = Map.get(params, "query") || Map.get(params, "value") || ""
     q = String.trim(query) |> String.downcase()
     filtered = apply_filters(socket.assigns.players, socket.assigns.retention_filter, q)
     {:noreply, assign(socket, search_query: query, filtered_players: filtered)}
@@ -156,11 +159,19 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
                data: parsed
              }) do
           {:ok, %{player: updated}} ->
+            # Preserve :linked and linked user fields from existing selected_player
+            merged =
+              if existing = socket.assigns.selected_player do
+                Map.merge(existing, updated)
+              else
+                updated
+              end
+
             socket =
               socket
               |> assign(
-                selected_player: updated,
-                edit_profile_raw: Jason.encode!(updated, pretty: true),
+                selected_player: merged,
+                edit_profile_raw: Jason.encode!(merged, pretty: true),
                 edit_error: nil,
                 action_notification: "Profile updated successfully!"
               )
@@ -517,19 +528,19 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
           </button>
         </div>
 
-        <div class="relative flex-1 w-full max-w-md">
+        <form id="player-search-form" phx-change="search_players" phx-submit="search_players" phx-target={@myself} class="relative flex-1 w-full max-w-md">
           <input
-            type="text"
+            type="search"
+            name="query"
             placeholder="Search by Player ID, User ID, or Name..."
             value={@search_query}
-            phx-keyup="search_players"
-            phx-target={@myself}
+            phx-debounce="250"
             class="w-full pl-9 pr-4 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:bg-white transition-all"
           />
           <svg class="w-4 h-4 text-gray-400 absolute left-3 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
-        </div>
+        </form>
 
         <div class="flex items-center gap-2 w-full md:w-auto justify-end">
           <button
@@ -798,6 +809,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
                     </button>
                     <button
                       type="submit"
+                      phx-disable-with="Saving..."
                       class="px-5 py-2 text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 rounded-xl shadow-sm transition-colors"
                     >
                       Save Changes
@@ -839,6 +851,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
       <!-- Create Player Modal -->
       <%= if @show_create_modal do %>
         <div class="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div class="fixed inset-0" phx-click="close_create_modal" phx-target={@myself}></div>
           <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-200 relative animate-in fade-in duration-150">
             <button
               phx-click="close_create_modal"
@@ -911,6 +924,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
                 </button>
                 <button
                   type="submit"
+                  phx-disable-with="Creating..."
                   class="px-5 py-2 text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 rounded-xl shadow-sm transition-colors"
                 >
                   Create Profile

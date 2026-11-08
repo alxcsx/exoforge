@@ -64,7 +64,9 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
   ## ---- EVENT HANDLERS ----
 
   @impl true
-  def handle_event("search", %{"query" => query}, socket) do
+  def handle_event("search", params, socket) do
+    query = Map.get(params, "query") || Map.get(params, "value") || ""
+
     socket =
       socket
       |> assign(search_query: query)
@@ -204,7 +206,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
         {:noreply, socket}
 
       {:error, reason} ->
-        {:noreply, assign(socket, action_notification: "Failed to remove plugin: #{inspect(reason)}")}
+        {:noreply, assign(socket, action_notification: "Failed to remove extension: #{inspect(reason)}")}
     end
   end
 
@@ -350,21 +352,15 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
 
     services_code =
       Enum.map_join(provides, "\n\n", fn svc ->
-        "// Call action on '" <>
-          svc <>
-          "' service\n" <>
-          "var response = await client.InvokeAsync<dynamic>(\n" <>
-          "    service: \"" <>
-          svc <>
-          "\",\n" <>
-          "    action: \"execute\",\n" <>
-          "    parameters: new {\n" <>
-          "        // arguments here\n" <>
-          "    }\n" <>
-          ");"
+        pascal_svc = Macro.camelize(to_string(svc))
+
+        "// Call generated typed service client\n" <>
+          "var result = await client." <>
+          pascal_svc <>
+          "().ExecuteAsync();"
       end)
 
-    "// C# Unity / Client SDK snippet\n" <>
+    "// C# Unity / Client SDK snippet (typed contract stubs)\n" <>
       "using Exoforge.Client;\n\n" <>
       services_code
   end
@@ -406,7 +402,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
               </span>
             </div>
             <p class="text-sm text-gray-500 mt-0.5">
-              Manage runtime lifecycle, inspect contracts &amp; actor schemas, and hot-load sandboxed C# WebAssembly modules.
+              Manage runtime lifecycle, inspect contracts &amp; actor schemas, and load native C# and Elixir extensions.
             </p>
           </div>
         </div>
@@ -426,11 +422,11 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
           <button
             phx-click="open_restart_modal"
             phx-target={@myself}
-            class="px-3.5 py-2 text-sm font-semibold text-red-700 bg-red-50 border border-red-200 rounded-xl hover:bg-red-100 transition-colors shadow-sm flex items-center gap-2"
-            title="Hot-reload plugin supervision trees and clear cache"
+            class="px-3.5 py-2 text-sm font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl hover:bg-amber-100 transition-colors shadow-sm flex items-center gap-2"
+            title="Hot-reload extension supervision trees and clear cache"
           >
-            <svg class="w-4 h-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            <svg class="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
             Restart Cluster
           </button>
@@ -450,12 +446,12 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
 
       <!-- Action Success / Notification Banner -->
       <%= if @upload_success || @restart_status || @action_notification do %>
-        <div class="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl p-4 shadow-sm flex items-center justify-between">
+        <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 shadow-sm flex items-center justify-between">
           <div class="flex items-center gap-3">
             <div class="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shrink-0">
               ✓
             </div>
-            <p class="text-xs font-bold text-emerald-900">
+            <p class="text-xs font-bold text-emerald-800 dark:text-emerald-300">
               <%= @upload_success || @restart_status || @action_notification %>
             </p>
           </div>
@@ -535,13 +531,11 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
       <!-- Filters & Search Toolbar -->
       <div class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div class="flex items-center gap-3 flex-1 max-w-lg">
-          <div class="relative w-full">
+          <form id="extension-search-form" phx-change="search" phx-submit="search" phx-target={@myself} class="relative w-full">
             <input
-              type="text"
+              type="search"
               placeholder="Search extension by name, ID, or provided service..."
               value={@search_query}
-              phx-input="search"
-              phx-target={@myself}
               phx-debounce="150"
               name="query"
               class="w-full pl-9 pr-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:bg-white transition-all"
@@ -549,7 +543,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
             <svg class="w-4 h-4 text-gray-400 absolute left-3 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
-          </div>
+          </form>
         </div>
 
         <div class="flex items-center gap-2">
@@ -788,6 +782,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
       <!-- Upload Extension Modal -->
       <%= if @show_upload_modal do %>
         <div class="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div class="fixed inset-0" phx-click="close_upload_modal" phx-target={@myself}></div>
           <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-200 relative animate-in fade-in duration-150">
             <button
               phx-click="close_upload_modal"
@@ -939,6 +934,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
                 </button>
                 <button
                   type="submit"
+                  phx-disable-with="Uploading..."
                   class="px-5 py-2 text-xs font-bold text-white bg-violet-600 rounded-xl hover:bg-violet-700 transition-colors shadow-sm"
                 >
                   Upload &amp; Hot-Load Extension
@@ -952,6 +948,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
       <!-- Restart Confirmation Modal -->
       <%= if @show_restart_modal do %>
         <div class="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div class="fixed inset-0" phx-click="close_restart_modal" phx-target={@myself}></div>
           <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-200 relative animate-in fade-in duration-150">
             <div class="flex items-center gap-3 mb-4">
               <div class="w-10 h-10 rounded-xl bg-red-100 text-red-700 flex items-center justify-center text-xl shrink-0">
@@ -989,7 +986,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
         </div>
       <% end %>
 
-      <!-- Plugin Dependency Graph Modal -->
+      <!-- Extension Dependency Graph Modal -->
       <%= if @show_dependency_graph do %>
         <Exoforge.Std.DashboardViews.DependencyGraph.graph
           plugins={@plugins}

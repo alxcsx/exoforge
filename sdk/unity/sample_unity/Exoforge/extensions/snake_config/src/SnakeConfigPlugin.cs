@@ -4,7 +4,7 @@ using Exoforge.Plugins.Generated;
 
 namespace Exoforge.Plugins.SnakeConfig;
 
-[ExoService("snake_config", Version = "1.0.0",
+[ExoService("snake_config", Version = "0.1.0",
     Category = "Game", Title = "Snake Configuration", Icon = "⚙️")]
 public class SnakeConfigPlugin
 {

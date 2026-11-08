@@ -458,7 +458,7 @@ public partial class ExoforgeControlCenter : EditorWindow
 
         string tag = BuildTag(plugin.Version);
         string sizeStr = plugin.BinarySizeBytes > 0 ? $"{plugin.BinarySizeBytes / 1024} KB" : "";
-        string subText = $"{plugin.PluginType.ToUpperInvariant()} • v{plugin.Version ?? "1.0.0"} {tag} {(sizeStr != "" ? "• " + sizeStr : "")}";
+        string subText = $"{plugin.PluginType.ToUpperInvariant()} • v{plugin.Version ?? "0.1.0"} {tag} {(sizeStr != "" ? "• " + sizeStr : "")}";
         var subLabel = new Label(subText);
         subLabel.style.fontSize = 10;
         subLabel.style.color = ExoforgeUIStyle.TextMuted;
@@ -792,7 +792,7 @@ public partial class ExoforgeControlCenter : EditorWindow
                 // Subtitle: Type, Version, Size
                 string tag = BuildTag(plugin.Version);
                 string sizeStr = plugin.BinarySizeBytes > 0 ? $"{plugin.BinarySizeBytes / 1024} KB" : "";
-                string subText = $"{plugin.PluginType.ToUpperInvariant()} • {plugin.Version ?? "1.0.0"} {tag} {(sizeStr != "" ? "• " + sizeStr : "")}";
+                string subText = $"{plugin.PluginType.ToUpperInvariant()} • {plugin.Version ?? "0.1.0"} {tag} {(sizeStr != "" ? "• " + sizeStr : "")}";
                 EditorGUILayout.LabelField(subText, EditorStyles.miniLabel);
                 EditorGUILayout.EndVertical();
 

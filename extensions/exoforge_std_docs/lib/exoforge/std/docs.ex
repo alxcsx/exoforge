@@ -170,7 +170,7 @@ defmodule Exoforge.Std.Docs do
       %{
         name: to_string(act[:name] || act["name"]),
         mode: to_string(act[:mode] || act["mode"] || "sync"),
-        scope: to_string(act[:scope] || act["scope"] || "guest"),
+        scope: to_string(act[:scope] || act["scope"] || "player"),
         doc: act[:doc] || act["doc"] || "No documentation provided.",
         params: params,
         returns: act[:returns] || act["returns"]

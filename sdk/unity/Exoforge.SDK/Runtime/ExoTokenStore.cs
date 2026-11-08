@@ -108,33 +108,50 @@ namespace Exoforge.Client
         public static void SaveStudioSession(string token, string? playerId = null, IEnumerable<string>? scopes = null, string? name = null) =>
             Store(StudioTokenKey, StudioPlayerIdKey, StudioScopesKey, StudioNameKey, token, playerId, scopes, name);
 
+        private static readonly Dictionary<string, string> s_memoryCache = new();
+
         private static void Store(
             string tokenKey, string playerIdKey, string scopesKey, string nameKey,
             string token, string? playerId, IEnumerable<string>? scopes, string? name)
         {
             string resolvedPlayerId = playerId ?? string.Empty;
 
-            // A different account cannot inherit the previous one's name. Callers that reconnect
-            // with a stored token pass no name, so without this the name stuck around and
-            // ExoSession.DisplayName reported the wrong player — which is how someone else's name
-            // ends up on a shared leaderboard.
-            bool samePlayer = !string.IsNullOrEmpty(resolvedPlayerId) &&
-                              string.Equals(PlayerPrefs.GetString(playerIdKey, string.Empty), resolvedPlayerId, StringComparison.Ordinal);
-
-            PlayerPrefs.SetString(tokenKey, token);
-            PlayerPrefs.SetString(playerIdKey, resolvedPlayerId);
-            PlayerPrefs.SetString(scopesKey, scopes != null ? string.Join(",", scopes) : string.Empty);
-
-            if (name != null)
+            lock (s_memoryCache)
             {
-                PlayerPrefs.SetString(nameKey, name);
-            }
-            else if (!samePlayer)
-            {
-                PlayerPrefs.SetString(nameKey, string.Empty);
+                s_memoryCache[tokenKey] = token;
+                s_memoryCache[playerIdKey] = resolvedPlayerId;
+                s_memoryCache[scopesKey] = scopes != null ? string.Join(",", scopes) : string.Empty;
+                if (name != null) s_memoryCache[nameKey] = name;
             }
 
-            PlayerPrefs.Save();
+            try
+            {
+                // A different account cannot inherit the previous one's name. Callers that reconnect
+                // with a stored token pass no name, so without this the name stuck around and
+                // ExoSession.DisplayName reported the wrong player — which is how someone else's name
+                // ends up on a shared leaderboard.
+                bool samePlayer = !string.IsNullOrEmpty(resolvedPlayerId) &&
+                                  string.Equals(PlayerPrefs.GetString(playerIdKey, string.Empty), resolvedPlayerId, StringComparison.Ordinal);
+
+                PlayerPrefs.SetString(tokenKey, token);
+                PlayerPrefs.SetString(playerIdKey, resolvedPlayerId);
+                PlayerPrefs.SetString(scopesKey, scopes != null ? string.Join(",", scopes) : string.Empty);
+
+                if (name != null)
+                {
+                    PlayerPrefs.SetString(nameKey, name);
+                }
+                else if (!samePlayer)
+                {
+                    PlayerPrefs.SetString(nameKey, string.Empty);
+                }
+
+                PlayerPrefs.Save();
+            }
+            catch (Exception)
+            {
+                // PlayerPrefs unavailable on background thread; state preserved in memory cache.
+            }
         }
 
         /// <summary>Clears the session in use, leaving the other one alone.</summary>
@@ -144,16 +161,52 @@ namespace Exoforge.Client
             Delete(PlayerIdKey, StudioPlayerIdKey);
             Delete(ScopesKey, StudioScopesKey);
             Delete(NameKey, StudioNameKey);
-            PlayerPrefs.Save();
+            try
+            {
+                PlayerPrefs.Save();
+            }
+            catch (Exception) { }
         }
 
-        private static string Read(string deviceKey, string studioKey) =>
-            PlayerPrefs.GetString(UseStudioSession ? studioKey : deviceKey, string.Empty);
+        private static string Read(string deviceKey, string studioKey)
+        {
+            string key = UseStudioSession ? studioKey : deviceKey;
+            try
+            {
+                string val = PlayerPrefs.GetString(key, string.Empty);
+                lock (s_memoryCache) s_memoryCache[key] = val;
+                return val;
+            }
+            catch (Exception)
+            {
+                lock (s_memoryCache)
+                {
+                    return s_memoryCache.TryGetValue(key, out var cached) ? cached : string.Empty;
+                }
+            }
+        }
 
-        private static void Write(string deviceKey, string studioKey, string? value) =>
-            PlayerPrefs.SetString(UseStudioSession ? studioKey : deviceKey, value ?? string.Empty);
+        private static void Write(string deviceKey, string studioKey, string? value)
+        {
+            string key = UseStudioSession ? studioKey : deviceKey;
+            string val = value ?? string.Empty;
+            lock (s_memoryCache) s_memoryCache[key] = val;
+            try
+            {
+                PlayerPrefs.SetString(key, val);
+            }
+            catch (Exception) { }
+        }
 
-        private static void Delete(string deviceKey, string studioKey) =>
-            PlayerPrefs.DeleteKey(UseStudioSession ? studioKey : deviceKey);
+        private static void Delete(string deviceKey, string studioKey)
+        {
+            string key = UseStudioSession ? studioKey : deviceKey;
+            lock (s_memoryCache) s_memoryCache.Remove(key);
+            try
+            {
+                PlayerPrefs.DeleteKey(key);
+            }
+            catch (Exception) { }
+        }
     }
 }

@@ -224,44 +224,42 @@ defmodule Exoforge.Std.Dashboard.Overlays do
 
                         <% custom_spec = Exoforge.Std.Dashboard.InputTypes.resolve(param) %>
 
-                        <%= case custom_spec do %>
-                          <% spec when is_map(spec) -> %>
-                            <.widget spec={spec} name={"param_#{param.name}"} value={Map.get(@action_params, param.name, "")} />
-                          <% nil -> %>
-                        <% end %>
-
-                        <%= case p_type do %>
-                          <% t when t in [:integer, :float] -> %>
-                            <input
-                              type="number"
-                              name={"param_#{param.name}"}
-                              value={Map.get(@action_params, param.name, if(t == :integer, do: "1", else: "1.0"))}
-                              step={if t == :float, do: "0.1", else: "1"}
-                              class="w-full px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-gray-800 focus:outline-none focus:border-primary-500"
-                            />
-                          <% :boolean -> %>
-                            <select
-                              name={"param_#{param.name}"}
-                              class="w-full px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-gray-800 focus:outline-none focus:border-primary-500"
-                            >
-                              <option value="true" selected={Map.get(@action_params, param.name) in ["true", true]}>true</option>
-                              <option value="false" selected={Map.get(@action_params, param.name) in ["false", false]}>false</option>
-                            </select>
-                          <% :map -> %>
-                            <textarea
-                              name={"param_#{param.name}"}
-                              rows="2"
-                              class="w-full px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-gray-800 focus:outline-none focus:border-primary-500"
-                              placeholder="{}"
-                            ><%= Map.get(@action_params, param.name, "{}") %></textarea>
-                          <% _ -> %>
-                            <input
-                              type="text"
-                              name={"param_#{param.name}"}
-                              value={Map.get(@action_params, param.name, "")}
-                              placeholder={"Enter #{param.name}..."}
-                              class="w-full px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-gray-800 focus:outline-none focus:border-primary-500"
-                            />
+                        <%= if is_map(custom_spec) do %>
+                          <.widget spec={custom_spec} name={"param_#{param.name}"} value={Map.get(@action_params, param.name, "")} />
+                        <% else %>
+                          <%= case p_type do %>
+                            <% t when t in [:integer, :float] -> %>
+                              <input
+                                type="number"
+                                name={"param_#{param.name}"}
+                                value={Map.get(@action_params, param.name, if(t == :integer, do: "1", else: "1.0"))}
+                                step={if t == :float, do: "0.1", else: "1"}
+                                class="w-full px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-gray-800 focus:outline-none focus:border-primary-500"
+                              />
+                            <% :boolean -> %>
+                              <select
+                                name={"param_#{param.name}"}
+                                class="w-full px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-gray-800 focus:outline-none focus:border-primary-500"
+                              >
+                                <option value="true" selected={Map.get(@action_params, param.name) in ["true", true]}>true</option>
+                                <option value="false" selected={Map.get(@action_params, param.name) in ["false", false]}>false</option>
+                              </select>
+                            <% :map -> %>
+                              <textarea
+                                name={"param_#{param.name}"}
+                                rows="2"
+                                class="w-full px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-gray-800 focus:outline-none focus:border-primary-500"
+                                placeholder="{}"
+                              ><%= Map.get(@action_params, param.name, "{}") %></textarea>
+                            <% _ -> %>
+                              <input
+                                type="text"
+                                name={"param_#{param.name}"}
+                                value={Map.get(@action_params, param.name, "")}
+                                placeholder={"Enter #{param.name}..."}
+                                class="w-full px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-gray-800 focus:outline-none focus:border-primary-500"
+                              />
+                          <% end %>
                         <% end %>
                       </div>
                     <% end %>
@@ -1866,7 +1864,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                         <td class="py-2.5 px-3">
                           <div class="flex items-center gap-1.5">
                             <span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-gray-100 text-gray-600">
-                              <%= Map.get(item.action, :scope) || "guest" %>
+                              <%= Map.get(item.action, :scope) || "player" %>
                             </span>
                             <span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-gray-100 text-gray-600">
                               <%= Map.get(item.action, :transport) || "auto" %>

@@ -38,7 +38,11 @@ namespace Exoforge.Client.Unity
         }
 
         /// <summary>The active instance, or null when no Exoforge prefab is in the scene.</summary>
-        public static ExoforgeManager? Current => _instance;
+        public static ExoforgeManager? Current
+        {
+            get => _instance;
+            set => _instance = value;
+        }
 
         /// <summary>The active instance; throws a clear error when the prefab is missing.</summary>
         public static ExoforgeManager Instance =>
@@ -339,6 +343,11 @@ namespace Exoforge.Client.Unity
                 return $"{scheme}://{clean}/ws";
             }
 
+            if (isSecure)
+            {
+                return $"{scheme}://{clean}/ws";
+            }
+
             return $"{scheme}://{clean}:4000/ws";
         }
 
@@ -355,6 +364,11 @@ namespace Exoforge.Client.Unity
             string scheme = isSecure ? "https" : "http";
 
             if (clean.Contains(":"))
+            {
+                return $"{scheme}://{clean}";
+            }
+
+            if (isSecure)
             {
                 return $"{scheme}://{clean}";
             }

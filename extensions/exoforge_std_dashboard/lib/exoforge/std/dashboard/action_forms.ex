@@ -118,7 +118,7 @@ defmodule Exoforge.Std.Dashboard.ActionForms do
       name: to_string(act[:name] || act["name"]),
       doc: act[:doc] || act["doc"] || "No description provided.",
       mode: to_string(act[:mode] || act["mode"] || "sync"),
-      scope: to_string(act[:scope] || act["scope"] || "guest"),
+      scope: to_string(act[:scope] || act["scope"] || "player"),
       transport: to_string(act[:transport] || act["transport"] || "auto"),
       params: Extensions.normalize_action_params(act[:params] || act["params"] || [])
     }

@@ -529,6 +529,25 @@ defmodule Exoforge.Std.Dashboard.Layouts do
               const csrfToken = metaEl ? metaEl.getAttribute("content") : "";
 
               const Hooks = {
+                AutoDismissToast: {
+                  mounted() {
+                    const el = this.el;
+                    const kind = el.dataset.kind || "info";
+                    const timer = setTimeout(() => {
+                      el.classList.add("opacity-0", "translate-x-4", "transition-all", "duration-300");
+                      setTimeout(() => {
+                        el.remove();
+                        this.pushEvent("dismiss_toast", { kind: kind });
+                      }, 300);
+                    }, 3500);
+
+                    el.addEventListener("click", () => {
+                      clearTimeout(timer);
+                      el.remove();
+                      this.pushEvent("dismiss_toast", { kind: kind });
+                    });
+                  }
+                },
                 StudioDispatcher: {
                   mounted() {
                     window._studioDispatcher = this;
@@ -663,6 +682,19 @@ defmodule Exoforge.Std.Dashboard.Layouts do
               liveSocket.connect();
               window.liveSocket = liveSocket;
               console.log("[Exoforge Studio] Connected to BEAM via Phoenix LiveView!");
+
+              window.addEventListener("exoforge:clip", function(e) {
+                const text = (e.detail && e.detail.text) || (e.target && e.target.getAttribute("data-clip")) || "";
+                if (text && navigator.clipboard) {
+                  navigator.clipboard.writeText(text).then(() => {
+                    if (window._studioDispatcher) {
+                      window._studioDispatcher.pushEvent("show_toast", { kind: "info", message: "Copied to clipboard!" });
+                    }
+                  }).catch(function(err) {
+                    console.warn("Clipboard copy failed", err);
+                  });
+                }
+              });
             }
           });
         </script>

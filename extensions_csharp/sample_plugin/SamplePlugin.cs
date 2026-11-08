@@ -3,7 +3,7 @@ using Exoforge.Plugin.SDK;
 
 namespace Exoforge.Plugins.SamplePlugin;
 
-[ExoService("sample_plugin", Version = "1.0.0", Resources = new[] { typeof(Counter) }, Category = "Utility", Title = "Sample Plugin", Icon = "🔧")]
+[ExoService("sample_plugin", Version = "0.1.0", Resources = new[] { typeof(Counter) }, Category = "Utility", Title = "Sample Plugin", Icon = "🔧")]
 public class SamplePlugin
 {
     [ExoAction("ping")]
