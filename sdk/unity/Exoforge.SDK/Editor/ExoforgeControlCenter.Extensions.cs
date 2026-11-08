@@ -445,7 +445,12 @@ public partial class ExoforgeControlCenter : EditorWindow
         nameLabel.style.color = ExoforgeUIStyle.TextPrimary;
         titleRow.Add(nameLabel);
 
-        var immutableBadge = ExoforgeUIStyle.CreatePill("🔒 Remote / Immutable", new Color(0.6f, 0.6f, 0.7f), new Color(0.15f, 0.15f, 0.2f));
+        bool isSystem = (plugin.TryGetProperty("system", out var sysProp) && sysProp.ValueKind == JsonValueKind.True)
+            || (plugin.TryGetProperty("category", out var catProp) && string.Equals(catProp.GetString(), "System", StringComparison.OrdinalIgnoreCase));
+
+        var immutableBadge = isSystem
+            ? ExoforgeUIStyle.CreatePill("⚙️ System", new Color(0.6f, 0.6f, 0.7f), new Color(0.15f, 0.15f, 0.2f))
+            : ExoforgeUIStyle.CreatePill("🔒 Remote / Immutable", new Color(0.6f, 0.6f, 0.7f), new Color(0.15f, 0.15f, 0.2f));
         immutableBadge.style.marginLeft = 8;
         titleRow.Add(immutableBadge);
 
@@ -1039,7 +1044,10 @@ public partial class ExoforgeControlCenter : EditorWindow
 
                     EditorGUILayout.BeginVertical();
                     EditorGUILayout.LabelField(title, EditorStyles.boldLabel);
-                    string remSub = (title != id && !string.IsNullOrEmpty(title)) ? $"{id} • REMOTE • {version}" : $"REMOTE • {version}";
+                    bool isSystem = (plugin.TryGetProperty("system", out var sysProp) && sysProp.ValueKind == JsonValueKind.True)
+                        || (plugin.TryGetProperty("category", out var catProp) && string.Equals(catProp.GetString(), "System", StringComparison.OrdinalIgnoreCase));
+                    string badgeText = isSystem ? "SYSTEM" : "REMOTE";
+                    string remSub = (title != id && !string.IsNullOrEmpty(title)) ? $"{id} • {badgeText} • {version}" : $"{badgeText} • {version}";
                     EditorGUILayout.LabelField(remSub, EditorStyles.miniLabel);
                     EditorGUILayout.EndVertical();
 
