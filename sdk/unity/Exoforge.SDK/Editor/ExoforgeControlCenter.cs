@@ -207,7 +207,7 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
 
     // Authentication foldout
     private bool _showAuthFoldout;
-    private string _loginEmail = ExoforgeEditorConfig.LastLoginEmail ?? "";
+    private string _loginEmail = "";
     private string _loginPassword = "";
 
     // Tab content synchronization state

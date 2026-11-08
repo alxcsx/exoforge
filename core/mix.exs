@@ -4,7 +4,7 @@ defmodule Exoforge.Core do
   def project do
     [
       app: :exoforge_core,
-      version: "0.1.26",
+      version: "0.1.27",
       elixir: "~> 1.20",
       test_coverage: [summary: [threshold: 0]],
       deps: deps()
