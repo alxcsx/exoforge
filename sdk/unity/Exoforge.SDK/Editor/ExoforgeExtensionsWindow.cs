@@ -2743,6 +2743,7 @@ namespace Exoforge.Unity.Editor
                 sw.Stop();
                 _sandboxLatency = $"Failed after {sw.ElapsedMilliseconds} ms";
                 _sandboxResult = $"Error invoking {actionName}: {ex.Message}";
+                UnityEngine.Debug.LogError($"[Exoforge] Action '{pluginId}.{actionName}' failed: {ex.Message}");
             }
             finally
             {

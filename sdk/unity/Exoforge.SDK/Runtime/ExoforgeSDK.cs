@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Exoforge.Client;
 using UnityEngine;
 
 namespace Exoforge.Client.Unity
@@ -41,7 +42,15 @@ namespace Exoforge.Client.Unity
             try { ExoDeviceId.Get(); } catch { }
         }
 
-        /// <summary>Player sign-in.</summary>
+        /// <summary>
+        /// Player sign-in and session management.
+        /// <para>
+        /// In Unity games, ALWAYS use this property (<c>ExoforgeSDK.Auth.LoginAnonymously()</c> or <c>ExoforgeSDK.Auth.LoginWithEmail()</c>)
+        /// rather than calling raw RPCs on <c>ExoServices.Auth.AnonymousAsync()</c> or <c>ExoforgeSDK.Client.Services().Auth.AnonymousAsync()</c>.
+        /// <c>ExoforgeSDK.Auth</c> automatically mints and caches the stable device ID, manages <c>ExoTokenStore</c> persistence,
+        /// and configures the ambient authenticated player session.
+        /// </para>
+        /// </summary>
         public static ExoforgeAuth Auth => _auth ??= new ExoforgeAuth();
 
         /// <summary>Task that completes when the client has established connection and authenticated.</summary>

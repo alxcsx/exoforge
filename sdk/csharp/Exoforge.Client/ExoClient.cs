@@ -59,6 +59,11 @@ public class ExoClient : IDisposable
     public string? AuthToken { get; private set; }
 
     /// <summary>
+    /// Global error logging handler, typically configured by ExoforgeSDK to route errors to UnityEngine.Debug.LogError.
+    /// </summary>
+    public static Action<string, Exception?>? OnError { get; set; }
+
+    /// <summary>
     /// Opens the socket if this operation needs one and it is not already open. A no-op for the
     /// HTTP path, which is the point: a game that never subscribes never opens a socket.
     /// </summary>
@@ -239,9 +244,14 @@ public class ExoClient : IDisposable
             {
                 return await SendActionHttpAsync<TResult>(service, action, payload, timeout, cancellationToken).ConfigureAwait(false);
             }
+            catch (ExoActionException)
+            {
+                // Action error reported by cluster (service_not_found, auth error, etc.) - propagate immediately
+                throw;
+            }
             catch (Exception) when (transportPreference == ExoTransportPreference.Auto && IsConnected)
             {
-                // Fall back to WebSocket if Auto was requested, HTTP had a transport issue, and WebSocket is connected.
+                // Fall back to WebSocket only if Auto was requested, HTTP had a connectivity issue, and WebSocket is connected.
             }
         }
 
@@ -292,7 +302,9 @@ public class ExoClient : IDisposable
             {
                 string errCode = result.Error?.Code ?? "unknown_error";
                 string errMsg = result.Error?.Message ?? "Action failed on server";
-                throw CreateActionException(service, action, errCode, errMsg);
+                var ex = CreateActionException(service, action, errCode, errMsg);
+                OnError?.Invoke(ex.Message, ex);
+                throw ex;
             }
 
             return DeserializeResult<TResult>(result.Data);
@@ -349,7 +361,7 @@ public class ExoClient : IDisposable
         var root = doc.RootElement;
 
         string status = root.TryGetProperty("status", out var sProp) ? sProp.GetString() ?? "" : "";
-        if (status != "ok" && !response.IsSuccessStatusCode)
+        if (status == "error" || !response.IsSuccessStatusCode || status != "ok")
         {
             string errCode = "http_error";
             string errMsg = $"HTTP {(int)response.StatusCode}";
@@ -358,6 +370,10 @@ public class ExoClient : IDisposable
                 if (errProp.ValueKind == JsonValueKind.String)
                 {
                     errMsg = errProp.GetString() ?? errMsg;
+                    if (errMsg == "service_not_found" || errMsg.Contains("service_not_found"))
+                    {
+                        errCode = "service_not_found";
+                    }
                 }
                 else if (errProp.ValueKind == JsonValueKind.Object)
                 {
@@ -365,7 +381,9 @@ public class ExoClient : IDisposable
                     if (errProp.TryGetProperty("message", out var mProp)) errMsg = mProp.GetString() ?? errMsg;
                 }
             }
-            throw CreateActionException(service, action, errCode, errMsg);
+            var ex = CreateActionException(service, action, errCode, errMsg);
+            OnError?.Invoke(ex.Message, ex);
+            throw ex;
         }
 
         JsonElement dataElement = root.TryGetProperty("data", out var dProp) ? dProp.Clone() : root.Clone();
@@ -374,14 +392,16 @@ public class ExoClient : IDisposable
 
     private static ExoActionException CreateActionException(string service, string action, string errCode, string errMsg)
     {
-        if (errCode == "service_not_found" || errMsg == "service_not_found" || errMsg == ":service_not_found")
+        if (errCode == "service_not_found" || errMsg == "service_not_found" || errMsg == ":service_not_found" ||
+            errMsg.Contains("was not found on the remote server") || errMsg.Contains("service_not_found"))
         {
             return new ExoActionException(
                 "service_not_found",
                 $"Service '{service}' (called via '{service}.{action}') was not found on the remote server. Ensure the extension providing '{service}' is deployed and running.");
         }
 
-        if (errCode == "action_not_found" || errMsg == "action_not_found" || errMsg.StartsWith("{:action_not_found", StringComparison.Ordinal))
+        if (errCode == "action_not_found" || errMsg == "action_not_found" ||
+            errMsg.StartsWith("{:action_not_found", StringComparison.Ordinal) || errMsg.Contains("action_not_found"))
         {
             return new ExoActionException(
                 "action_not_found",

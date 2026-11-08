@@ -501,17 +501,67 @@ defmodule Exoforge.Std.FileBucket do
     clean_name = Path.basename(to_string(filename))
     q = String.downcase(clean_name)
 
-    :ets.tab2list(@meta_table)
-    |> Enum.find_value(fn {{b, _id}, rec} ->
-      if is_nil(bucket) or b == bucket do
-        fname = to_string(rec["filename"] || "")
-        engine = get_in(rec, ["metadata", "engine"]) |> to_string() |> String.downcase()
+    matches =
+      :ets.tab2list(@meta_table)
+      |> Enum.filter(fn {{b, _id}, rec} ->
+        if is_nil(bucket) or b == bucket do
+          fname = to_string(rec["filename"] || "")
+          engine = get_in(rec, ["metadata", "engine"]) |> to_string() |> String.downcase()
 
-        if fname == clean_name or fname == to_string(filename) or (engine != "" and engine == q) do
-          rec
+          fname == clean_name or fname == to_string(filename) or (engine != "" and engine == q)
         end
+      end)
+      |> Enum.map(fn {_key, rec} -> rec end)
+
+    # 1. Exact filename match takes precedence
+    exact =
+      Enum.find(matches, fn rec ->
+        fname = to_string(rec["filename"] || "")
+        fname == clean_name or fname == to_string(filename)
+      end)
+
+    if exact do
+      exact
+    else
+      # 2. Sort by version descending (latest package first)
+      sort_records_by_version_desc(matches)
+      |> List.first()
+    end
+  end
+
+  defp sort_records_by_version_desc(records) do
+    Enum.sort(records, fn a, b ->
+      va = extract_record_version(a)
+      vb = extract_record_version(b)
+
+      case Version.compare(va, vb) do
+        :gt -> true
+        :eq -> (a["created_at"] || 0) >= (b["created_at"] || 0)
+        :lt -> false
       end
     end)
+  end
+
+  defp extract_record_version(rec) do
+    ver_str = get_in(rec, ["metadata", "version"]) || infer_sdk_version(rec["filename"] || "")
+
+    case Version.parse(ver_str) do
+      {:ok, v} ->
+        v
+
+      _ ->
+        case Regex.run(~r/(\d+)\.(\d+)\.(\d+)/, to_string(ver_str)) do
+          [_, maj, min, pat] ->
+            %Version{
+              major: String.to_integer(maj),
+              minor: String.to_integer(min),
+              patch: String.to_integer(pat)
+            }
+
+          _ ->
+            %Version{major: 0, minor: 0, patch: 0}
+        end
+    end
   end
 
   defp list_bucket_files(bucket) do

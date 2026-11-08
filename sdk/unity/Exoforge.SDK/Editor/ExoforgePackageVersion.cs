@@ -18,7 +18,7 @@ namespace Exoforge.Unity.Editor
     /// </summary>
     public static class ExoforgePackageVersion
     {
-        public const string SdkVersion = "0.1.29";
+        public const string SdkVersion = "0.1.30";
         public const string DefaultBuildHash = "6be4ec5";
         public const string DefaultBuildDate = "2026-11-06 16:08";
 
@@ -70,6 +70,21 @@ namespace Exoforge.Unity.Editor
             }
 
             return SdkCompatibilityStatus.UpdateAvailable;
+        }
+
+        /// <summary>Returns true if version v1 is strictly older than version v2.</summary>
+        public static bool IsOlderThan(string? v1, string? v2)
+        {
+            if (string.IsNullOrWhiteSpace(v1) || string.IsNullOrWhiteSpace(v2) || v1 == "—" || v2 == "—")
+                return false;
+
+            string c1 = CleanSemVer(v1);
+            string c2 = CleanSemVer(v2);
+            if (System.Version.TryParse(c1, out var p1) && System.Version.TryParse(c2, out var p2))
+            {
+                return p1 < p2;
+            }
+            return false;
         }
 
         private static string CleanSemVer(string v)

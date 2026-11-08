@@ -4,7 +4,7 @@ defmodule Exoforge.Std.Transport.MixProject do
   def project do
     [
       app: :exoforge_std_transport,
-      version: "0.1.29",
+      version: "0.1.30",
       elixir: "~> 1.20",
       deps: deps(),
       compilers: Mix.compilers() ++ [:exoforge_manifest]

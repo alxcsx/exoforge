@@ -193,4 +193,27 @@ defmodule Exoforge.Std.FileBucketTest do
     assert sdk_file["content_type"] == "application/gzip"
     assert sdk_file["metadata"]["engine"] == "unity"
   end
+
+  test "seeds multiple SDK versions and resolves engine query to latest version", %{storage_dir: storage_dir} do
+    File.rm_rf!(Path.join(storage_dir, "sdk"))
+    dist_dir = "priv/data/test_dist_multi_#{System.unique_integer([:positive])}"
+    File.mkdir_p!(dist_dir)
+    on_exit(fn -> File.rm_rf(dist_dir) end)
+
+    File.write!(Path.join(dist_dir, "com.exoforge.sdk-0.1.15.tgz"), "older_payload")
+    File.write!(Path.join(dist_dir, "com.exoforge.sdk-0.1.30.tgz"), "newer_payload")
+    Application.put_env(:exoforge_std_file_bucket, :sdk_dist_dir, dist_dir)
+    on_exit(fn -> Application.delete_env(:exoforge_std_file_bucket, :sdk_dist_dir) end)
+
+    Exoforge.Std.FileBucket.on_init(%{})
+
+    assert {:ok, %{file: sdk_file}} =
+             ActionDispatcher.dispatch(:file_bucket, :get_file_info, %{
+               "bucket" => "sdk",
+               "id" => "unity"
+             })
+
+    assert sdk_file["filename"] == "com.exoforge.sdk-0.1.30.tgz"
+    assert sdk_file["metadata"]["version"] == "0.1.30"
+  end
 end

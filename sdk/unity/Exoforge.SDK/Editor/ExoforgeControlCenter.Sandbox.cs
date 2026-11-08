@@ -230,7 +230,9 @@ public partial class ExoforgeControlCenter : EditorWindow
             sw.Stop();
             _sandboxSuccess = false;
             _sandboxLatency = $"{sw.ElapsedMilliseconds} ms";
-            _sandboxResult = ex.Message;
+            _sandboxResult = $"[ERROR] {ex.Message}";
+            UnityEngine.Debug.LogError($"[Exoforge] Sandbox action '{_sandboxService}.{_sandboxAction}' failed: {ex.Message}");
+            ShowStatus($"Action failed: {ex.Message}", MessageType.Error);
         }
 
         Repaint();

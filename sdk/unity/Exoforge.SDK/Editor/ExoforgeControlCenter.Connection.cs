@@ -627,6 +627,12 @@ public partial class ExoforgeControlCenter : EditorWindow
                     var m = System.Text.RegularExpressions.Regex.Match(RemoteSdkPackageFilename, @"-(\d+\.\d+\.\d+[^.]*)");
                     if (m.Success) RemoteSdkVersion = m.Groups[1].Value;
                 }
+
+                if (!string.IsNullOrEmpty(RemoteSdkVersion) && RemoteVersion != "—" && ExoforgePackageVersion.IsOlderThan(RemoteSdkVersion, RemoteVersion))
+                {
+                    // Stale file bucket package older than running cluster
+                    RemoteSdkVersion = RemoteVersion;
+                }
             }
         }
         catch

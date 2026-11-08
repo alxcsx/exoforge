@@ -4,7 +4,7 @@ defmodule Exoforge.Project do
   def project do
     [
       app: :exoforge,
-      version: "0.1.29",
+      version: "0.1.30",
       elixir: "~> 1.20",
       test_coverage: [summary: [threshold: 0]],
       aliases: aliases(),

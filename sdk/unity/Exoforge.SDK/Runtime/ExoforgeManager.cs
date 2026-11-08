@@ -412,6 +412,8 @@ namespace Exoforge.Client.Unity
             var cfg = Config;
             var client = new ExoClient();
 
+            ExoClient.OnError = (msg, ex) => Debug.LogError($"[Exoforge] {msg}");
+
             string effectiveHttp = GetEffectiveHttpUrl();
             if (!string.IsNullOrEmpty(effectiveHttp))
             {

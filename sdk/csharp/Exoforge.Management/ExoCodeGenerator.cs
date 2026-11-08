@@ -1376,12 +1376,12 @@ public static class ExoCodeGenerator
         sb.AppendLine("}");
         sb.AppendLine();
 
-        // 2b. Static Exo facade matching the extension runtime syntax
+        // 2b. Static ExoServices facade matching the extension runtime syntax
         sb.AppendLine("/// <summary>");
         sb.AppendLine("/// Static access to Exoforge services matching the extension runtime syntax.");
-        sb.AppendLine("/// In Unity, uses the ambient ExoforgeSDK.Client; in standalone applications, assign Exo.Client.");
+        sb.AppendLine("/// In Unity, uses the ambient ExoforgeSDK.Client; in standalone applications, assign ExoServices.Client.");
         sb.AppendLine("/// </summary>");
-        sb.AppendLine("public static class Exo");
+        sb.AppendLine("public static class ExoServices");
         sb.AppendLine("{");
         sb.AppendLine("    private static Func<ExoClient>? _clientLocator;");
         sb.AppendLine("    private static ExoClient? _fallbackClient;");
@@ -1405,7 +1405,7 @@ public static class ExoCodeGenerator
         sb.AppendLine("                }");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            throw new InvalidOperationException(\"No active ExoClient configured. Call ExoforgeSDK.ConnectAsync() or assign Exo.Client.\");");
+        sb.AppendLine("            throw new InvalidOperationException(\"No active ExoClient configured. Call ExoforgeSDK.ConnectAsync() or assign ExoServices.Client.\");");
         sb.AppendLine("        }");
         sb.AppendLine("        set => _fallbackClient = value;");
         sb.AppendLine("    }");
@@ -1419,6 +1419,31 @@ public static class ExoCodeGenerator
             sb.AppendLine($"    /// <summary>Access the {pascalName} service contract.</summary>");
             sb.AppendLine($"    public static {pascalName}ServiceClient {pascalName} =>");
             sb.AppendLine($"        Client.{pascalName}();");
+            sb.AppendLine();
+        }
+        sb.AppendLine("}");
+        sb.AppendLine();
+        sb.AppendLine("/// <summary>");
+        sb.AppendLine("/// Backwards-compatibility alias forwarding to <see cref=\"ExoServices\"/>.");
+        sb.AppendLine("/// </summary>");
+        sb.AppendLine("public static class Exo");
+        sb.AppendLine("{");
+        sb.AppendLine("    /// <summary>The active ExoClient used by static service calls.</summary>");
+        sb.AppendLine("    public static ExoClient Client");
+        sb.AppendLine("    {");
+        sb.AppendLine("        get => ExoServices.Client;");
+        sb.AppendLine("        set => ExoServices.Client = value;");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+        sb.AppendLine("    /// <summary>Configures a custom resolver for the active ExoClient.</summary>");
+        sb.AppendLine("    public static void SetClientLocator(Func<ExoClient> locator) => ExoServices.SetClientLocator(locator);");
+        sb.AppendLine();
+        foreach (var svc in serviceList)
+        {
+            string pascalName = ToPascalCase(svc.Name);
+            sb.AppendLine($"    /// <summary>Access the {pascalName} service contract.</summary>");
+            sb.AppendLine($"    public static {pascalName}ServiceClient {pascalName} =>");
+            sb.AppendLine($"        ExoServices.{pascalName};");
             sb.AppendLine();
         }
         sb.AppendLine("}");
@@ -1454,6 +1479,13 @@ public static class ExoCodeGenerator
         {
             string svcPascal = ToPascalCase(svc.Name);
             sb.AppendLine($"/// <summary>Client interface for the {svc.Name} service.</summary>");
+            if (svc.Name.Equals("auth", StringComparison.OrdinalIgnoreCase))
+            {
+                sb.AppendLine("/// <remarks>");
+                sb.AppendLine("/// ⚠️ IMPORTANT: In Unity games, use <c>ExoforgeSDK.Auth.LoginAnonymously()</c> or <c>ExoforgeSDK.Auth.LoginWithEmail()</c>");
+                sb.AppendLine("/// instead of calling raw RPCs on this client. <c>ExoforgeSDK.Auth</c> handles device ID caching, token persistence, and session lifecycle.");
+                sb.AppendLine("/// </remarks>");
+            }
             sb.AppendLine($"public class {svcPascal}ServiceClient");
             sb.AppendLine("{");
             sb.AppendLine("    private readonly ExoClient _client;");
@@ -1518,6 +1550,17 @@ public static class ExoCodeGenerator
                 string? respName = actionRespNames.TryGetValue(act, out var arName) ? arName : null;
                 string returnType = ReturnTypeName(svcPascal, act, respName);
 
+                bool isAuthAction = svc.Name.Equals("auth", StringComparison.OrdinalIgnoreCase) &&
+                    (act.Name.Equals("anonymous", StringComparison.OrdinalIgnoreCase) ||
+                     act.Name.Equals("login", StringComparison.OrdinalIgnoreCase) ||
+                     act.Name.Equals("register", StringComparison.OrdinalIgnoreCase));
+                string authDocNotice = isAuthAction
+                    ? "\n    /// <remarks>⚠️ NOTE: In Unity game code, prefer ExoforgeSDK.Auth (e.g. ExoforgeSDK.Auth.LoginAnonymously()) instead.</remarks>"
+                    : "";
+                string authObsoleteAttr = isAuthAction
+                    ? "    [Obsolete(\"In Unity game code, prefer using ExoforgeSDK.Auth (e.g. ExoforgeSDK.Auth.LoginAnonymously()) which automatically persists device IDs and manages session credentials.\", false)]\n"
+                    : "";
+
                 // Overload 1: Strongly-typed parameter arguments
                 if (hasParams)
                 {
@@ -1536,7 +1579,8 @@ public static class ExoCodeGenerator
                     }
                     string paramSignature = string.Join(", ", paramDefs);
 
-                    sb.AppendLine($"    /// <summary>{XmlDoc(act.Doc, $"Executes {act.Name} action with typed arguments.")}</summary>");
+                    sb.AppendLine($"    /// <summary>{XmlDoc(act.Doc, $"Executes {act.Name} action with typed arguments.")}</summary>{authDocNotice}");
+                    if (!string.IsNullOrEmpty(authObsoleteAttr)) sb.Append(authObsoleteAttr);
                     sb.AppendLine($"    public Task<{returnType}> {actPascal}Async({paramSignature}, CancellationToken cancellationToken = default)");
                     sb.AppendLine("    {");
                     sb.AppendLine($"        var req = new {svcPascal}{actPascal}Request");
@@ -1553,7 +1597,8 @@ public static class ExoCodeGenerator
                     // Callback overload 1 (Unity-friendly)
                     string callbackParams = $"{paramSignature}, Action<{returnType}> onComplete, Action<ExoActionException>? onError = null";
                     string callArgs = string.Join(", ", assignments.Select(a => a.Item2));
-                    sb.AppendLine($"    /// <summary>{XmlDoc(act.Doc, $"Executes {act.Name} action with callbacks on the Unity main thread.")}</summary>");
+                    sb.AppendLine($"    /// <summary>{XmlDoc(act.Doc, $"Executes {act.Name} action with callbacks on the Unity main thread.")}</summary>{authDocNotice}");
+                    if (!string.IsNullOrEmpty(authObsoleteAttr)) sb.Append(authObsoleteAttr);
                     sb.AppendLine($"    public void {actPascal}({callbackParams})");
                     sb.AppendLine("    {");
                     sb.AppendLine($"        _ = {actPascal}Async({callArgs}).ContinueWith(t =>");
@@ -1573,7 +1618,8 @@ public static class ExoCodeGenerator
                     sb.AppendLine();
 
                     // Overload 2: Strongly-typed Request DTO
-                    sb.AppendLine($"    /// <summary>{XmlDoc(act.Doc, $"Executes {act.Name} action with a typed request DTO.")}</summary>");
+                    sb.AppendLine($"    /// <summary>{XmlDoc(act.Doc, $"Executes {act.Name} action with a typed request DTO.")}</summary>{authDocNotice}");
+                    if (!string.IsNullOrEmpty(authObsoleteAttr)) sb.Append(authObsoleteAttr);
                     sb.AppendLine($"    public Task<{returnType}> {actPascal}Async({svcPascal}{actPascal}Request request, CancellationToken cancellationToken = default)");
                     sb.AppendLine("    {");
                     sb.AppendLine($"        return _client.SendActionAsync<{returnType}>(\"{svc.Name}\", \"{act.Name}\", request, {transportPref}, cancellationToken: cancellationToken);");
@@ -1581,7 +1627,8 @@ public static class ExoCodeGenerator
                     sb.AppendLine();
 
                     // Callback overload 2: Strongly-typed Request DTO with callback
-                    sb.AppendLine($"    /// <summary>{XmlDoc(act.Doc, $"Executes {act.Name} action with a typed request DTO and callbacks.")}</summary>");
+                    sb.AppendLine($"    /// <summary>{XmlDoc(act.Doc, $"Executes {act.Name} action with a typed request DTO and callbacks.")}</summary>{authDocNotice}");
+                    if (!string.IsNullOrEmpty(authObsoleteAttr)) sb.Append(authObsoleteAttr);
                     sb.AppendLine($"    public void {actPascal}({svcPascal}{actPascal}Request request, Action<{returnType}> onComplete, Action<ExoActionException>? onError = null)");
                     sb.AppendLine("    {");
                     sb.AppendLine($"        _ = {actPascal}Async(request).ContinueWith(t =>");
@@ -1603,14 +1650,16 @@ public static class ExoCodeGenerator
 
                 if (!hasParams)
                 {
-                    sb.AppendLine($"    /// <summary>{XmlDoc(act.Doc, $"Executes {act.Name} action.")}</summary>");
+                    sb.AppendLine($"    /// <summary>{XmlDoc(act.Doc, $"Executes {act.Name} action.")}</summary>{authDocNotice}");
+                    if (!string.IsNullOrEmpty(authObsoleteAttr)) sb.Append(authObsoleteAttr);
                     sb.AppendLine($"    public Task<{returnType}> {actPascal}Async(CancellationToken cancellationToken = default)");
                     sb.AppendLine("    {");
                     sb.AppendLine($"        return _client.SendActionAsync<{returnType}>(\"{svc.Name}\", \"{act.Name}\", null, {transportPref}, cancellationToken: cancellationToken);");
                     sb.AppendLine("    }");
                     sb.AppendLine();
 
-                    sb.AppendLine($"    /// <summary>{XmlDoc(act.Doc, $"Executes {act.Name} action with callbacks on the Unity main thread.")}</summary>");
+                    sb.AppendLine($"    /// <summary>{XmlDoc(act.Doc, $"Executes {act.Name} action with callbacks on the Unity main thread.")}</summary>{authDocNotice}");
+                    if (!string.IsNullOrEmpty(authObsoleteAttr)) sb.Append(authObsoleteAttr);
                     sb.AppendLine($"    public void {actPascal}(Action<{returnType}> onComplete, Action<ExoActionException>? onError = null)");
                     sb.AppendLine("    {");
                     sb.AppendLine($"        _ = {actPascal}Async().ContinueWith(t =>");

@@ -206,6 +206,21 @@ public class ManagementTests : IDisposable
     }
 
     [Fact]
+    public void Scaffolder_Creates_Blank_Template()
+    {
+        var ws = ExoWorkspace.Initialize(_tempDir, "TestGameProject");
+        string createdDir = ExoScaffolder.ScaffoldExtension(ws.ExtensionsPath, "blank_demo", template: "blank");
+
+        Assert.True(Directory.Exists(createdDir));
+        string code = File.ReadAllText(Path.Combine(createdDir, "src", "BlankDemoExtension.cs"));
+        Assert.Contains("[ExoExtension(\"blank_demo\"", code);
+        Assert.Contains("public class BlankDemoExtension", code);
+        Assert.Contains("public string Ping()", code);
+        Assert.DoesNotContain("Claim", code);
+        Assert.DoesNotContain("Resources =", code);
+    }
+
+    [Fact]
     public void BuildPlugin_Throws_When_Plugin_Directory_Missing()
     {
         var ws = ExoWorkspace.Initialize(_tempDir, "TestGameProject");
@@ -362,6 +377,8 @@ public class ManagementTests : IDisposable
 
         Assert.Contains("namespace MyGame.Client", code);
         Assert.Contains("public static class ExoClientGeneratedExtensions", code);
+        Assert.Contains("public static class ExoServices", code);
+        Assert.Contains("public static class Exo", code);
         Assert.Contains("public static SamplePluginServiceClient SamplePlugin(this ExoClient client)", code);
         Assert.Contains("public class ExoforgeServicesHub", code);
         Assert.Contains("public class SamplePluginServiceClient", code);

@@ -19,7 +19,7 @@ namespace Exoforge.Management;
 public static class ExoScaffolder
 {
     /// <summary>Templates a caller may ask for. Keep in step with <see cref="GeneratePluginCode"/>.</summary>
-    public static readonly string[] Templates = { "standard", "basic", "persistent", "config", "events" };
+    public static readonly string[] Templates = { "standard", "basic", "blank", "persistent", "config", "events" };
 
     public static string ScaffoldExtension(string extensionsDirectory, string rawName, string template = "standard", string? feed = null) =>
         Scaffold(extensionsDirectory, rawName, isExtension: true, template: template, feed: feed);
@@ -370,13 +370,39 @@ EndGlobal
 
         return kind switch
         {
+            "blank" or "empty" or "minimal" => BlankTemplate(serviceName, className, isExtension),
             "standard" or "basic" or "" => BasicTemplate(serviceName, className, isExtension),
             "persistent" => PersistentTemplate(serviceName, className, isExtension),
             "config" => ConfigTemplate(serviceName, className, isExtension),
             "events" => EventsTemplate(serviceName, className, isExtension),
             _ => throw new ArgumentException(
-                $"Unknown template '{template}'. Available templates: basic, standard, persistent, config, events.", nameof(template))
+                $"Unknown template '{template}'. Available templates: blank, basic, standard, persistent, config, events.", nameof(template))
         };
+    }
+
+    private static string BlankTemplate(string serviceName, string className, bool isExtension = true)
+    {
+        string ns = isExtension ? "Exoforge.Extensions" : "Exoforge.Plugins";
+        string attr = isExtension ? "ExoExtension" : "ExoService";
+        string suffix = isExtension ? "Extension" : "Plugin";
+
+        return $$"""
+using System;
+using Exoforge.Plugin.SDK;
+
+namespace {{ns}};
+
+[{{attr}}("{{serviceName}}", Version = "0.1.0", Category = "Game", Title = "{{className}}", Icon = "🧩")]
+public class {{className}}{{suffix}}
+{
+    [ExoAction]
+    public string Ping()
+    {
+        ExoServices.Logger.Info("[{{serviceName}}] ping");
+        return "pong";
+    }
+}
+""";
     }
 
     private static string LegacyStandardTemplate(string serviceName, string className)

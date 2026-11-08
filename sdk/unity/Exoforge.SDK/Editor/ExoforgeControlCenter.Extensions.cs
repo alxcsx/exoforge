@@ -1486,16 +1486,52 @@ public partial class ExoforgeControlCenter : EditorWindow
     }
 
     /// <summary>
-    /// Opens the extension folder and main source file in the code editor.
+    /// Opens the extension solution or folder in the configured external code editor (e.g. Rider, VS, VS Code).
+    /// Opening the extension's dedicated .sln file avoids loading the extension under Unity's parent solution.
     /// </summary>
     public static void OpenExtensionInEditor(string extensionDir)
     {
         if (string.IsNullOrEmpty(extensionDir) || !Directory.Exists(extensionDir)) return;
 
-        string? mainFile = FindExtensionMainFile(extensionDir);
-        string targetPath = mainFile ?? extensionDir;
+        // 1. Prefer opening the standalone solution file (.sln) or project file (.csproj)
+        string? slnPath = Directory.GetFiles(extensionDir, "*.sln").FirstOrDefault();
+        if (string.IsNullOrEmpty(slnPath))
+        {
+            slnPath = Directory.GetFiles(extensionDir, "*.csproj", SearchOption.AllDirectories).FirstOrDefault();
+        }
 
-        // Try launching VS Code if available with folder and navigate to main file in the same window
+        string? mainFile = FindExtensionMainFile(extensionDir);
+        string targetPath = slnPath ?? mainFile ?? extensionDir;
+
+        // If a standalone solution exists, prioritize opening it directly with the configured external editor or system default app
+        if (!string.IsNullOrEmpty(slnPath) && File.Exists(slnPath))
+        {
+            string extEditor = EditorPrefs.GetString("kScriptsDefaultApp", "");
+            if (!string.IsNullOrEmpty(extEditor) && File.Exists(extEditor))
+            {
+                try
+                {
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName = extEditor,
+                        Arguments = $"\"{slnPath}\"",
+                        UseShellExecute = true
+                    };
+                    using var proc = Process.Start(psi);
+                    if (proc != null) return;
+                }
+                catch { }
+            }
+
+            try
+            {
+                EditorUtility.OpenWithDefaultApp(slnPath);
+                return;
+            }
+            catch { }
+        }
+
+        // 2. Try launching VS Code if available with folder and navigate to main file in the same window
         try
         {
             var psi = new ProcessStartInfo
@@ -1512,7 +1548,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         }
         catch { }
 
-        // Fallback 1: Unity external script editor
+        // 3. Fallback: Unity external script editor
         if (File.Exists(targetPath))
         {
             try
@@ -1525,7 +1561,7 @@ public partial class ExoforgeControlCenter : EditorWindow
             catch { }
         }
 
-        // Fallback 2: AssetDatabase if within Assets
+        // 4. Fallback: AssetDatabase if within Assets
         if (targetPath.StartsWith(Application.dataPath, StringComparison.OrdinalIgnoreCase))
         {
             string rel = "Assets" + targetPath.Substring(Application.dataPath.Length).Replace('\\', '/');
@@ -1536,7 +1572,7 @@ public partial class ExoforgeControlCenter : EditorWindow
             }
         }
 
-        // Fallback 3: System default editor
+        // 5. Fallback: System default editor
         EditorUtility.OpenWithDefaultApp(targetPath);
     }
 }

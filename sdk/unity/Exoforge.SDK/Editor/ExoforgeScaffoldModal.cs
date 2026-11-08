@@ -23,6 +23,7 @@ namespace Exoforge.Unity.Editor
 
         private static readonly (string Label, string Id)[] AvailableTemplates =
         {
+            ("Blank / Minimal (Empty Service)", "blank"),
             ("Basic Service (Single Action)", "basic"),
             ("Persistent Data (Resource & DB)", "persistent"),
             ("Config & State (Key-Value Store)", "config"),
