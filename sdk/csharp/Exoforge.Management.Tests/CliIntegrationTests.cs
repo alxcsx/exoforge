@@ -96,6 +96,7 @@ public class CliIntegrationTests : IDisposable
         string extDir = Path.Combine(ws.ExtensionsPath, "economy_system");
         Assert.True(Directory.Exists(extDir));
         Assert.True(File.Exists(Path.Combine(extDir, "economy_system.slnx")));
+        Assert.True(File.Exists(Path.Combine(extDir, "economy_system.sln")));
         Assert.True(File.Exists(Path.Combine(extDir, "src", "economy_system.csproj")));
         Assert.True(File.Exists(Path.Combine(extDir, "src", "EconomySystemExtension.cs")));
     }

@@ -39,12 +39,18 @@ public static class ExoScaffolder
         string suffix = isExtension ? "Extension" : "Plugin";
         File.WriteAllText(Path.Combine(srcDir, $"{cleanName}.csproj"), GenerateCsproj());
         File.WriteAllText(Path.Combine(srcDir, $"{className}{suffix}.cs"), GenerateCode(cleanName, className, isExtension, template));
+        File.WriteAllText(Path.Combine(targetDir, $"{cleanName}.sln"), GenerateSln(cleanName));
         File.WriteAllText(Path.Combine(targetDir, $"{cleanName}.slnx"), GenerateSolution(cleanName));
 
         // The staged native binary and the local build counter are build artifacts.
         File.WriteAllText(Path.Combine(targetDir, ".gitignore"), "/.exoforge/\n/.buildcount\n/manifest.json\n");
 
+        // Ensure nuget feed in workspace root as well as directly inside the extension folder for Rider
         RegisterLocalFeed(targetDirectory, feed);
+        EnsureLocalFeed(targetDir, feed);
+
+        // Pre-restore packages so Rider has project assets, autocomplete, and Roslyn analyzers ready
+        RestoreExtension(srcDir, cleanName);
 
         return targetDir;
     }
@@ -88,14 +94,28 @@ public static class ExoScaffolder
 
         // Check adjacent NuGet~ folder next to Exoforge.Management.dll (when inside Editor/Plugins)
         string? asmDir = Path.GetDirectoryName(typeof(ExoScaffolder).Assembly.Location);
+        var candidateRoots = new System.Collections.Generic.List<string>();
+
         if (!string.IsNullOrEmpty(asmDir))
         {
             string adjacent = Path.Combine(asmDir, "NuGet~");
             if (Directory.Exists(adjacent)) return Path.GetFullPath(adjacent);
 
-            // When loaded from <ProjectRoot>/Library/ScriptAssemblies inside Unity Editor,
-            // check <ProjectRoot>/Packages/com.exoforge.sdk/Editor/Plugins/NuGet~ and Library/PackageCache
-            string projectRoot = Path.GetFullPath(Path.Combine(asmDir, "..", ".."));
+            candidateRoots.Add(Path.GetFullPath(Path.Combine(asmDir, "..", "..")));
+        }
+
+        // In Unity, Assembly.Location is empty because assemblies are loaded from memory streams.
+        // Check current working directory (Unity sets this to project root) and AppDomain base directory.
+        string currentDir = Directory.GetCurrentDirectory();
+        if (!string.IsNullOrEmpty(currentDir) && !candidateRoots.Contains(currentDir))
+            candidateRoots.Add(currentDir);
+
+        string appDomainDir = AppDomain.CurrentDomain.BaseDirectory;
+        if (!string.IsNullOrEmpty(appDomainDir) && !candidateRoots.Contains(appDomainDir))
+            candidateRoots.Add(appDomainDir);
+
+        foreach (string projectRoot in candidateRoots)
+        {
             string embeddedPkg = Path.Combine(projectRoot, "Packages", "com.exoforge.sdk", "Editor", "Plugins", "NuGet~");
             if (Directory.Exists(embeddedPkg)) return Path.GetFullPath(embeddedPkg);
 
@@ -177,21 +197,50 @@ public static class ExoScaffolder
     public static void EnsureLocalFeed(string workspaceRoot, string? explicitFeed = null)
     {
         string nugetConfig = Path.Combine(workspaceRoot, "nuget.config");
-        if (File.Exists(nugetConfig)) return;
-
         string? feed = ResolveDefaultFeed(explicitFeed);
         if (string.IsNullOrEmpty(feed) || !Directory.Exists(feed)) return;
 
+        string normFeed = feed!.Replace('\\', '/');
         string config =
             "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" +
             "<configuration>\n" +
             "  <!-- Local packages feed for Exoforge extensions -->\n" +
             "  <packageSources>\n" +
-            "    <add key=\"exoforge\" value=\"" + feed + "\" />\n" +
+            $"    <add key=\"exoforge\" value=\"{normFeed}\" />\n" +
             "  </packageSources>\n" +
             "</configuration>\n";
 
-        File.WriteAllText(nugetConfig, config);
+        if (!File.Exists(nugetConfig) || !File.ReadAllText(nugetConfig).Contains(normFeed))
+        {
+            File.WriteAllText(nugetConfig, config);
+        }
+    }
+
+    /// <summary>
+    /// Pre-restores dependencies for a newly scaffolded extension so IDEs have project assets ready.
+    /// </summary>
+    private static void RestoreExtension(string srcDir, string cleanName)
+    {
+        try
+        {
+            string csprojPath = Path.Combine(srcDir, $"{cleanName}.csproj");
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = ExoDeployer.ResolveDotnetPath("dotnet"),
+                Arguments = $"restore \"{csprojPath}\"",
+                WorkingDirectory = srcDir,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            using var proc = System.Diagnostics.Process.Start(psi);
+            proc?.WaitForExit(5000);
+        }
+        catch
+        {
+            // Non-fatal if dotnet is unavailable or network-isolated
+        }
     }
 
     /// <summary>
@@ -272,6 +321,34 @@ public static class ExoScaffolder
 
         In Unity: **Exoforge ▸ Studio**, then the Extensions tab.
         """;
+    }
+
+    public static string GenerateSln(string cleanName)
+    {
+        string projGuid = Guid.NewGuid().ToString("B").ToUpperInvariant();
+        return $$"""
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "{{cleanName}}", "src/{{cleanName}}.csproj", "{{projGuid}}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{{projGuid}}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{{projGuid}}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{{projGuid}}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{{projGuid}}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
+""";
     }
 
     private static string GenerateSolution(string cleanName) => $"""

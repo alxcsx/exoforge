@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
+using Exoforge.Management;
 using UnityEditor;
 using UnityEngine;
 
@@ -105,11 +106,37 @@ namespace Exoforge.Unity.Editor
                     "  </packageSources>\n" +
                     "</configuration>\n";
 
+                bool changed = false;
                 if (!File.Exists(nugetPath) || !File.ReadAllText(nugetPath).Contains(expectedFeed))
                 {
                     File.WriteAllText(nugetPath, expectedContent);
-                    return true;
+                    changed = true;
                 }
+
+                string extDir = Path.Combine(wsPath, "extensions");
+                if (Directory.Exists(extDir))
+                {
+                    foreach (string dir in Directory.GetDirectories(extDir))
+                    {
+                        string extNuget = Path.Combine(dir, "nuget.config");
+                        if (!File.Exists(extNuget) || !File.ReadAllText(extNuget).Contains(expectedFeed))
+                        {
+                            File.WriteAllText(extNuget, expectedContent);
+                            changed = true;
+                        }
+
+                        string extName = Path.GetFileName(dir);
+                        string extSln = Path.Combine(dir, $"{extName}.sln");
+                        string extCsproj = Path.Combine(dir, "src", $"{extName}.csproj");
+                        if (File.Exists(extCsproj) && !File.Exists(extSln))
+                        {
+                            File.WriteAllText(extSln, ExoScaffolder.GenerateSln(extName));
+                            changed = true;
+                        }
+                    }
+                }
+
+                return changed;
             }
             catch (Exception ex)
             {

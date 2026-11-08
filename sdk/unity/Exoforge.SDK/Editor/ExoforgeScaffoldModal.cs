@@ -195,7 +195,9 @@ namespace Exoforge.Unity.Editor
                     ? AvailableTemplates[_templateIndex].Id
                     : "basic";
 
-                ExoScaffolder.ScaffoldExtension(ws.ExtensionsPath, normalized, template: template);
+                string? feed = ExoforgeEditorConfig.BundledFeedPath;
+                ExoScaffolder.ScaffoldExtension(ws.ExtensionsPath, normalized, template: template, feed: feed);
+                ExoforgeIdeProjectGenerator.EnsureIdeConfiguration(forceRegenerate: true);
                 Close();
                 _onCreatedWithId?.Invoke(normalized);
                 _onCreated?.Invoke();
