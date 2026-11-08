@@ -681,6 +681,63 @@ defmodule Exoforge.Std.Dashboard.Layouts do
                         `;
                       });
                   }
+                },
+                GuideNavigator: {
+                  mounted() {
+                    this.initNavigator();
+                  },
+                  updated() {
+                    this.initNavigator();
+                  },
+                  initNavigator() {
+                    const hash = window.location.hash;
+                    if (hash && hash.length > 1) {
+                      try {
+                        const target = document.querySelector(hash);
+                        if (target) {
+                          setTimeout(() => {
+                            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                          }, 90);
+                        }
+                      } catch(_) {}
+                    }
+
+                    if (this._observer) {
+                      this._observer.disconnect();
+                    }
+
+                    const sections = this.el.querySelectorAll('[data-guide-section]');
+                    if (!sections || sections.length === 0) return;
+
+                    let debounceTimer = null;
+                    this._observer = new IntersectionObserver((entries) => {
+                      entries.forEach((entry) => {
+                        if (entry.isIntersecting && entry.intersectionRatio >= 0.25) {
+                          const sectionId = entry.target.id;
+                          if (sectionId && window.location.hash !== '#' + sectionId) {
+                            clearTimeout(debounceTimer);
+                            debounceTimer = setTimeout(() => {
+                              if (window.history && window.history.replaceState) {
+                                const url = new URL(window.location.href);
+                                url.hash = sectionId;
+                                window.history.replaceState(null, '', url.toString());
+                              }
+                            }, 120);
+                          }
+                        }
+                      });
+                    }, {
+                      rootMargin: '-10% 0px -70% 0px',
+                      threshold: [0.25, 0.5]
+                    });
+
+                    sections.forEach(sec => this._observer.observe(sec));
+                  },
+                  destroyed() {
+                    if (this._observer) {
+                      this._observer.disconnect();
+                    }
+                  }
                 }
               };
 

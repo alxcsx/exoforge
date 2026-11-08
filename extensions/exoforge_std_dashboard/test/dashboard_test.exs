@@ -325,5 +325,18 @@ defmodule Exoforge.DashboardTest do
       refute html =~ "cdn.tailwindcss.com"
       assert html =~ "/vendor/tailwind.js"
     end
+
+    test "GET /api/docs/manual.pdf returns 200 with application/pdf" do
+      conn =
+        conn(:get, "/api/docs/manual.pdf")
+        |> Router.call(@opts)
+
+      assert conn.status == 200
+      assert Plug.Conn.get_resp_header(conn, "content-type") == ["application/pdf"]
+      assert Plug.Conn.get_resp_header(conn, "content-disposition") == [
+               "attachment; filename=\"exoforge-developer-manual.pdf\""
+             ]
+      assert String.starts_with?(conn.resp_body, "%PDF-1.4")
+    end
   end
 end

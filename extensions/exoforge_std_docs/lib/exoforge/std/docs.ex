@@ -64,6 +64,10 @@ defmodule Exoforge.Std.Docs do
     full_markdown = consolidated_md <> "\n\n---\n\n" <> catalog_md
 
     case format do
+      "pdf" ->
+        pdf = Exoforge.Std.Docs.PdfManual.generate()
+        {:ok, %{title: "Exoforge Complete Developer Guide", binary: pdf, format: "pdf"}}
+
       "html" ->
         html = Markdown.to_html(full_markdown) |> Phoenix.HTML.safe_to_string()
         {:ok, %{title: "Exoforge Complete Developer Guide", content: html, format: "html"}}
@@ -138,9 +142,6 @@ defmodule Exoforge.Std.Docs do
         case act[:params] || act["params"] do
           list when is_list(list) ->
             Enum.map(list, fn
-              {k, type} when is_atom(k) ->
-                %{name: to_string(k), type: to_string(type), optional: false, doc: nil}
-
               {k, opts} when is_list(opts) ->
                 %{
                   name: to_string(k),
@@ -148,6 +149,16 @@ defmodule Exoforge.Std.Docs do
                   optional: Keyword.get(opts, :optional, false),
                   doc: Keyword.get(opts, :doc)
                 }
+
+              {k, type} when is_atom(k) ->
+                type_str =
+                  cond do
+                    is_binary(type) -> type
+                    is_atom(type) -> Atom.to_string(type)
+                    true -> inspect(type)
+                  end
+
+                %{name: to_string(k), type: type_str, optional: false, doc: nil}
 
               p when is_map(p) ->
                 %{

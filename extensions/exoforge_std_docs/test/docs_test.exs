@@ -118,6 +118,11 @@ defmodule Exoforge.Std.DocsTest do
 
       {:ok, %{content: html, format: "html"}} = Docs.export_docs(%{format: "html"})
       assert html =~ "<h1"
+
+      {:ok, %{title: pdf_title, binary: pdf_bytes, format: "pdf"}} = Docs.export_docs(%{format: "pdf"})
+      assert pdf_title =~ "Exoforge Complete Developer Guide"
+      assert is_binary(pdf_bytes)
+      assert String.starts_with?(pdf_bytes, "%PDF-1.4")
     end
   end
 
@@ -143,6 +148,7 @@ defmodule Exoforge.Std.DocsTest do
 
       assert html =~ "Creating Your First Online Multiplayer Feature"
       assert html =~ "Export to PDF"
+      assert html =~ "/api/docs/manual.pdf"
       assert html =~ "@media print"
     end
 

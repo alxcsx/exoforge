@@ -385,4 +385,14 @@ defmodule Exoforge.Std.Dashboard.ApiController do
         |> json(%{status: "error", error: "not_found"})
     end
   end
+
+  def download_manual_pdf(conn, _params) do
+    pdf = Exoforge.Std.Docs.PdfManual.generate()
+
+    conn
+    |> put_resp_content_type("application/pdf", nil)
+    |> put_resp_header("content-disposition", ~s(attachment; filename="exoforge-developer-manual.pdf"))
+    |> put_resp_header("cache-control", "no-cache")
+    |> send_resp(200, pdf)
+  end
 end

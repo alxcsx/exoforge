@@ -22,7 +22,12 @@ defmodule Exoforge.Std.Docs.DashboardView do
 
   @impl true
   def handle_event("set_guide_subpage", %{"subpage" => subpage}, socket) do
-    {:noreply, assign(socket, :subpage, subpage)}
+    path = if subpage == "flow", do: "/guide", else: "/guide?subpage=#{subpage}"
+
+    {:noreply,
+     socket
+     |> assign(:subpage, subpage)
+     |> push_patch(to: path)}
   end
 
   @impl true

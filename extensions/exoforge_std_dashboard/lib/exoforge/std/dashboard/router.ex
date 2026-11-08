@@ -76,6 +76,8 @@ defmodule Exoforge.Std.Dashboard.Router do
     get("/api/files/:id", ApiController, :serve_file)
     get("/api/files/:bucket/:id", ApiController, :serve_file)
     get("/api/files/:bucket/:id/:filename", ApiController, :serve_file)
+    get("/api/docs/manual.pdf", ApiController, :download_manual_pdf)
+    get("/guide/manual.pdf", ApiController, :download_manual_pdf)
   end
 
   scope "/", Exoforge.Std.Dashboard do

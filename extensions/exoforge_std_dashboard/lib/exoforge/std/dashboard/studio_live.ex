@@ -88,6 +88,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
           payload: %{node: to_string(node()), plugins: overview.plugins_count},
           time: "Just now"
         }
+
         RecentEvents.record("kernel:ready", boot_ev.payload)
         [boot_ev]
       end
@@ -183,10 +184,13 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       end
 
     focus = parse_focus(params["focus"])
+    subpage_param = params["subpage"] || params["guide_tab"] || params["sub"]
+    guide_subpage = subpage_param || socket.assigns[:guide_subpage] || "flow"
 
     socket =
       socket
       |> assign(:current_tab, tab)
+      |> assign(:guide_subpage, guide_subpage)
       |> assign(:focus, focus)
       |> assign(:inspecting_extension, focused_extension(focus, extensions))
       |> assign(:pinned_menu_open, false)
@@ -290,13 +294,17 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   def handle_event("set_nav_capacity", %{"max_pinned" => max_val}, socket) do
     cap =
       case max_val do
-        i when is_integer(i) -> max(1, i)
+        i when is_integer(i) ->
+          max(1, i)
+
         s when is_binary(s) ->
           case Integer.parse(s) do
             {i, _} -> max(1, i)
             _ -> @max_pinned
           end
-        _ -> @max_pinned
+
+        _ ->
+          @max_pinned
       end
 
     pinned = socket.assigns.pinned_extensions
@@ -652,6 +660,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     new_order = List.delete(current_ids, slot_id)
 
     Exoforge.Std.Dashboard.Preferences.put_overview_order(socket.assigns.player_id, new_order)
+
     {:noreply,
      socket
      |> assign(:overview_grid_order, new_order)
@@ -664,6 +673,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     new_order = if slot_id in current_ids, do: current_ids, else: current_ids ++ [slot_id]
 
     Exoforge.Std.Dashboard.Preferences.put_overview_order(socket.assigns.player_id, new_order)
+
     {:noreply,
      socket
      |> assign(:overview_grid_order, new_order)
@@ -689,7 +699,18 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   end
 
   def handle_event("set_guide_subpage", %{"subpage" => subpage}, socket) do
-    {:noreply, assign(socket, :guide_subpage, subpage)}
+    path =
+      if socket.assigns[:current_tab] in [:exoforge_std_docs, "exoforge_std_docs", "guide", "docs"] do
+        if subpage == "flow", do: "/guide", else: "/guide?subpage=#{subpage}"
+      else
+        tab_str = to_string(socket.assigns[:current_tab] || "guide")
+        if subpage == "flow", do: "/tab/#{tab_str}", else: "/tab/#{tab_str}?subpage=#{subpage}"
+      end
+
+    {:noreply,
+     socket
+     |> assign(:guide_subpage, subpage)
+     |> push_patch(to: path)}
   end
 
   def handle_event("inspect_extension", %{"id" => id}, socket) do
@@ -848,16 +869,23 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
       duration_us = System.monotonic_time(:microsecond) - start_time
       latency_ms = Float.round(duration_us / 1000, 2)
-      status_sym = case result do {:error, _} -> :error; _ -> :ok end
+
+      status_sym =
+        case result do
+          {:error, _} -> :error
+          _ -> :ok
+        end
 
       # Broadcast action execution so it immediately appears in the real-time event feed
       try do
-        EventDispatcher.broadcast(:"action:#{svc.name}.#{act.name}", %{
-          service: to_string(svc.name),
-          action: to_string(act.name),
-          status: status_sym,
-          latency_ms: latency_ms
-        }, source: "studio_console")
+        EventDispatcher.broadcast(
+          :"action:#{svc.name}.#{act.name}",
+          %{
+            service: to_string(svc.name),
+            action: to_string(act.name),
+            status: status_sym,
+            latency_ms: latency_ms
+          }, source: "studio_console")
       rescue
         _ -> :ok
       end
@@ -1284,7 +1312,6 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         {to_string(p.plugin_id), Map.get(p, :restarts, 0)}
       end)
 
-
     faulty_extensions =
       Enum.flat_map(overview.plugins, fn p ->
         pid = to_string(p.id)
@@ -1316,6 +1343,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     # Time-series multi-line layout (time on X, count on Y, distinct line per action ID)
     x_coords = [40, 128, 216, 304, 392, 480]
     time_labels = ["-25m", "-20m", "-15m", "-10m", "-5m", "Now"]
+
     palette = [
       "#8b5cf6",
       "#3b82f6",
@@ -1328,6 +1356,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       "#f97316",
       "#a855f7"
     ]
+
     error_colors = ["#ef4444", "#f97316", "#eab308", "#ec4899", "#f43f5e"]
 
     # Graph strictly represents actions (events excluded)

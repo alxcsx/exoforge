@@ -20,10 +20,12 @@ defmodule Exoforge.Std.Docs.View do
   ]
 
   defp hashed_badge_class(nil), do: "bg-gray-100 text-gray-600 border-gray-200"
+
   defp hashed_badge_class(str) when is_binary(str) do
     idx = :erlang.phash2(str, length(@badge_color_palette))
     Enum.at(@badge_color_palette, idx)
   end
+
   defp hashed_badge_class(atom) when is_atom(atom), do: hashed_badge_class(to_string(atom))
 
   attr(:action_catalog, :list, default: [])
@@ -69,7 +71,7 @@ defmodule Exoforge.Std.Docs.View do
     assigns = assign(assigns, :action_catalog, action_catalog)
 
     ~H"""
-    <div class="space-y-6 max-w-6xl mx-auto pb-16 print:p-0 print:max-w-none print:pb-0">
+    <div id="developer-guide-container" phx-hook="GuideNavigator" class="space-y-6 max-w-6xl mx-auto pb-16 print:p-0 print:max-w-none print:pb-0">
       <!-- Print & Dark Theme Badges Stylesheet -->
       <style>
         @media print {
@@ -152,6 +154,7 @@ defmodule Exoforge.Std.Docs.View do
               phx-click="set_guide_subpage"
               phx-target={@myself}
               phx-value-subpage="flow"
+              onclick="window.scrollTo({top: 0, behavior: 'smooth'})"
               class={"px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 #{if @subpage == "flow", do: "bg-white text-primary-700 shadow-xs font-bold", else: "text-gray-600 hover:text-gray-900"}"}
             >
               <span>🚀</span>
@@ -162,6 +165,7 @@ defmodule Exoforge.Std.Docs.View do
               phx-click="set_guide_subpage"
               phx-target={@myself}
               phx-value-subpage="use_cases"
+              onclick="window.scrollTo({top: 0, behavior: 'smooth'})"
               class={"px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 #{if @subpage == "use_cases", do: "bg-white text-primary-700 shadow-xs font-bold", else: "text-gray-600 hover:text-gray-900"}"}
             >
               <span>💡</span>
@@ -172,6 +176,7 @@ defmodule Exoforge.Std.Docs.View do
               phx-click="set_guide_subpage"
               phx-target={@myself}
               phx-value-subpage="attributes"
+              onclick="window.scrollTo({top: 0, behavior: 'smooth'})"
               class={"px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 #{if @subpage == "attributes", do: "bg-white text-primary-700 shadow-xs font-bold", else: "text-gray-600 hover:text-gray-900"}"}
             >
               <span>🧩</span>
@@ -182,6 +187,7 @@ defmodule Exoforge.Std.Docs.View do
               phx-click="set_guide_subpage"
               phx-target={@myself}
               phx-value-subpage="architecture"
+              onclick="window.scrollTo({top: 0, behavior: 'smooth'})"
               class={"px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 #{if @subpage == "architecture", do: "bg-white text-primary-700 shadow-xs font-bold", else: "text-gray-600 hover:text-gray-900"}"}
             >
               <span>🏗️</span>
@@ -192,6 +198,7 @@ defmodule Exoforge.Std.Docs.View do
               phx-click="set_guide_subpage"
               phx-target={@myself}
               phx-value-subpage="catalog"
+              onclick="window.scrollTo({top: 0, behavior: 'smooth'})"
               class={"px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 #{if @subpage == "catalog", do: "bg-white text-primary-700 shadow-xs font-bold", else: "text-gray-600 hover:text-gray-900"}"}
             >
               <span>⚡</span>
@@ -199,18 +206,18 @@ defmodule Exoforge.Std.Docs.View do
             </button>
           </div>
 
-          <!-- 1-Click PDF / Print Export Button -->
-          <button
-            type="button"
-            onclick="window.print()"
-            title="Export to PDF using native browser print"
-            class="px-3.5 py-1.5 rounded-xl bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+          <!-- 1-Click PDF Export Button (Direct Binary Download) -->
+          <a
+            href="/api/docs/manual.pdf"
+            download="exoforge-developer-manual.pdf"
+            title="Download Exoforge Developer Manual as a PDF"
+            class="px-3.5 py-1.5 rounded-xl bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer no-underline"
           >
             <svg class="w-3.5 h-3.5 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
             <span>Export to PDF</span>
-          </button>
+          </a>
         </div>
       </div>
 
@@ -293,6 +300,7 @@ defmodule Exoforge.Std.Docs.View do
 
   defp subpage_flow(assigns) do
     assigns = assign_new(assigns, :myself, fn -> nil end)
+
     ~H"""
     <div class="space-y-8">
       <!-- Hero Banner -->
@@ -394,7 +402,7 @@ defmodule Exoforge.Std.Docs.View do
       </div>
 
       <!-- STEP 1: Connect & Auth -->
-      <section id="step-auth" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-6 print:border-gray-300 print:shadow-none print:break-inside-avoid">
+      <section id="step-auth" data-guide-section class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-6 print:border-gray-300 print:shadow-none print:break-inside-avoid">
         <div class="flex items-start gap-4">
           <div class="w-10 h-10 rounded-2xl bg-primary-600 text-white font-extrabold flex items-center justify-center shrink-0 shadow-md">
             1
@@ -444,7 +452,7 @@ defmodule Exoforge.Std.Docs.View do
       </section>
 
       <!-- STEP 2: Scaffold Extension -->
-      <section id="step-scaffold" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-6 print:border-gray-300 print:shadow-none print:break-inside-avoid">
+      <section id="step-scaffold" data-guide-section class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-6 print:border-gray-300 print:shadow-none print:break-inside-avoid">
         <div class="flex items-start gap-4">
           <div class="w-10 h-10 rounded-2xl bg-primary-600 text-white font-extrabold flex items-center justify-center shrink-0 shadow-md">
             2
@@ -486,7 +494,7 @@ defmodule Exoforge.Std.Docs.View do
       </section>
 
       <!-- STEP 3: Build & Deploy -->
-      <section id="step-deploy" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-6 print:border-gray-300 print:shadow-none print:break-inside-avoid">
+      <section id="step-deploy" data-guide-section class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-6 print:border-gray-300 print:shadow-none print:break-inside-avoid">
         <div class="flex items-start gap-4">
           <div class="w-10 h-10 rounded-2xl bg-primary-600 text-white font-extrabold flex items-center justify-center shrink-0 shadow-md">
             3
@@ -540,7 +548,7 @@ defmodule Exoforge.Std.Docs.View do
       </section>
 
       <!-- STEP 4: Generate Client Stubs -->
-      <section id="step-stubs" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-6 print:border-gray-300 print:shadow-none print:break-inside-avoid">
+      <section id="step-stubs" data-guide-section class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-6 print:border-gray-300 print:shadow-none print:break-inside-avoid">
         <div class="flex items-start gap-4">
           <div class="w-10 h-10 rounded-2xl bg-primary-600 text-white font-extrabold flex items-center justify-center shrink-0 shadow-md">
             4
@@ -570,7 +578,7 @@ defmodule Exoforge.Std.Docs.View do
       </section>
 
       <!-- STEP 5: Call from Unity Gameplay Code -->
-      <section id="step-gameplay" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-6 print:border-gray-300 print:shadow-none print:break-inside-avoid">
+      <section id="step-gameplay" data-guide-section class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-6 print:border-gray-300 print:shadow-none print:break-inside-avoid">
         <div class="flex items-start gap-4">
           <div class="w-10 h-10 rounded-2xl bg-primary-600 text-white font-extrabold flex items-center justify-center shrink-0 shadow-md">
             5
@@ -628,6 +636,7 @@ defmodule Exoforge.Std.Docs.View do
             </div>
             <button
               type="button"
+              onclick="window.scrollTo({top: 0, behavior: 'smooth'})"
               phx-click="set_guide_subpage"
               phx-target={@myself}
               phx-value-subpage="use_cases"
@@ -651,6 +660,7 @@ defmodule Exoforge.Std.Docs.View do
             </div>
             <button
               type="button"
+              onclick="window.scrollTo({top: 0, behavior: 'smooth'})"
               phx-click="set_guide_subpage"
               phx-target={@myself}
               phx-value-subpage="catalog"
@@ -722,7 +732,7 @@ defmodule Exoforge.Std.Docs.View do
       </div>
 
       <!-- SECTION: PARADIGM SHIFT COMPARISON MATRIX -->
-      <section id="matrix" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
+      <section id="matrix" data-guide-section class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
         <div class="border-b border-gray-100 pb-4">
           <div class="flex items-center gap-2">
             <span class="text-xl">⚖️</span>
@@ -806,7 +816,7 @@ defmodule Exoforge.Std.Docs.View do
       </section>
 
       <!-- BLUEPRINT 1: CROSS-PLAYER ECONOMY -->
-      <section id="bp-economy" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
+      <section id="bp-economy" data-guide-section class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
           <div class="flex items-center gap-3">
             <span class="w-10 h-10 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center font-bold text-lg">
@@ -858,7 +868,7 @@ defmodule Exoforge.Std.Docs.View do
       </section>
 
       <!-- BLUEPRINT 2: IN-MEMORY MATCHMAKING -->
-      <section id="bp-matchmaking" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
+      <section id="bp-matchmaking" data-guide-section class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
           <div class="flex items-center gap-3">
             <span class="w-10 h-10 rounded-2xl bg-blue-50 text-blue-700 flex items-center justify-center font-bold text-lg">
@@ -913,7 +923,7 @@ defmodule Exoforge.Std.Docs.View do
       </section>
 
       <!-- BLUEPRINT 3: DESIGNER-FRIENDLY LIVEOPS -->
-      <section id="bp-world-boss" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
+      <section id="bp-world-boss" data-guide-section class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
           <div class="flex items-center gap-3">
             <span class="w-10 h-10 rounded-2xl bg-purple-50 text-purple-700 flex items-center justify-center font-bold text-lg">
@@ -968,7 +978,7 @@ defmodule Exoforge.Std.Docs.View do
       </section>
 
       <!-- BLUEPRINT 4: GUILDS & CLANS -->
-      <section id="bp-guilds" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
+      <section id="bp-guilds" data-guide-section class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
           <div class="flex items-center gap-3">
             <span class="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold text-lg">
@@ -1023,7 +1033,7 @@ defmodule Exoforge.Std.Docs.View do
       </section>
 
       <!-- BLUEPRINT 5: AUTOMATED SEASON ROLLOVERS -->
-      <section id="bp-seasons" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
+      <section id="bp-seasons" data-guide-section class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
           <div class="flex items-center gap-3">
             <span class="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold text-lg">
@@ -1077,7 +1087,7 @@ defmodule Exoforge.Std.Docs.View do
       </section>
 
       <!-- BLUEPRINT 6: WEB STORE & WEBHOOKS -->
-      <section id="bp-webhooks" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
+      <section id="bp-webhooks" data-guide-section class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
           <div class="flex items-center gap-3">
             <span class="w-10 h-10 rounded-2xl bg-rose-50 text-rose-700 flex items-center justify-center font-bold text-lg">
@@ -1131,7 +1141,7 @@ defmodule Exoforge.Std.Docs.View do
       </section>
 
       <!-- SECTION: ARCHITECTURE GOLDEN RULES -->
-      <section id="rules" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
+      <section id="rules" data-guide-section class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
         <div class="border-b border-gray-100 pb-4">
           <div class="flex items-center gap-2">
             <span class="text-xl">⭐</span>
@@ -1247,7 +1257,7 @@ defmodule Exoforge.Std.Docs.View do
       </div>
 
       <!-- [ExoExtension] -->
-      <section id="attr-extension" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
+      <section id="attr-extension" data-guide-section class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
           <div class="flex items-center gap-3">
             <span class="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold text-lg">
@@ -1351,7 +1361,7 @@ defmodule Exoforge.Std.Docs.View do
       </section>
 
       <!-- [ExoAction] -->
-      <section id="attr-action" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
+      <section id="attr-action" data-guide-section class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
           <div class="flex items-center gap-3">
             <span class="w-10 h-10 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center font-bold text-lg">
@@ -1488,7 +1498,7 @@ defmodule Exoforge.Std.Docs.View do
       </section>
 
       <!-- [ExoCron] -->
-      <section id="attr-cron" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
+      <section id="attr-cron" data-guide-section class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
           <div class="flex items-center gap-3">
             <span class="w-10 h-10 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center font-bold text-lg">
@@ -1564,7 +1574,7 @@ defmodule Exoforge.Std.Docs.View do
       </section>
 
       <!-- [ExoEvent] -->
-      <section id="attr-event" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
+      <section id="attr-event" data-guide-section class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
           <div class="flex items-center gap-3">
             <span class="w-10 h-10 rounded-2xl bg-purple-50 text-purple-700 flex items-center justify-center font-bold text-lg">
@@ -1654,7 +1664,7 @@ defmodule Exoforge.Std.Docs.View do
       </section>
 
       <!-- [ExoResource] -->
-      <section id="attr-resource" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
+      <section id="attr-resource" data-guide-section class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
           <div class="flex items-center gap-3">
             <span class="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold text-lg">
@@ -1842,7 +1852,7 @@ defmodule Exoforge.Std.Docs.View do
       </section>
 
       <!-- [ExoDependency] -->
-      <section id="attr-dependency" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
+      <section id="attr-dependency" data-guide-section class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
           <div class="flex items-center gap-3">
             <span class="w-10 h-10 rounded-2xl bg-cyan-50 text-cyan-700 flex items-center justify-center font-bold text-lg">
@@ -1872,7 +1882,7 @@ defmodule Exoforge.Std.Docs.View do
       </section>
 
       <!-- [ExoWebhook] -->
-      <section id="attr-webhook" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
+      <section id="attr-webhook" data-guide-section class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
           <div class="flex items-center gap-3">
             <span class="w-10 h-10 rounded-2xl bg-rose-50 text-rose-700 flex items-center justify-center font-bold text-lg">
@@ -1901,7 +1911,7 @@ defmodule Exoforge.Std.Docs.View do
       </section>
 
       <!-- Static Exo Capabilities Reference -->
-      <section id="attr-capabilities" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
+      <section id="attr-capabilities" data-guide-section class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
           <div class="flex items-center gap-3">
             <span class="w-10 h-10 rounded-2xl bg-purple-50 text-purple-700 flex items-center justify-center font-bold text-lg">
@@ -2016,7 +2026,7 @@ defmodule Exoforge.Std.Docs.View do
   # ===========================================================================
   defp subpage_architecture(assigns) do
     ~H"""
-    <div class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-6 print:border-gray-300 print:shadow-none">
+    <div id="architecture-graph" data-guide-section class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-6 print:border-gray-300 print:shadow-none">
       <Exoforge.Std.Docs.ArchitectureGraph.visualizer />
     </div>
     """
@@ -2027,7 +2037,7 @@ defmodule Exoforge.Std.Docs.View do
   # ===========================================================================
   defp subpage_catalog(assigns) do
     ~H"""
-    <section id="catalog" class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-6 print:border-gray-300 print:shadow-none print:break-inside-avoid">
+    <section id="catalog" data-guide-section class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-6 print:border-gray-300 print:shadow-none print:break-inside-avoid">
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
