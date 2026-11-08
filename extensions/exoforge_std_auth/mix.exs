@@ -4,7 +4,7 @@ defmodule Exoforge.Std.Auth.MixProject do
   def project do
     [
       app: :exoforge_std_auth,
-      version: "0.1.31",
+      version: "0.1.34",
       elixir: "~> 1.20",
       deps: deps(),
       compilers: Mix.compilers() ++ [:exoforge_manifest]
