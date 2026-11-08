@@ -10,6 +10,7 @@ defmodule Exoforge.Std.ExtensionManager do
   alias Exoforge.ExtensionRegistry
   alias Exoforge.ExtensionBootstrapper
   alias Exoforge.Drivers.Loaders.ManifestLoader
+  require Logger
 
   @manifest %{
     dependencies: [],
@@ -369,22 +370,71 @@ defmodule Exoforge.Std.ExtensionManager do
       clean_name = sanitize_name(name_str)
       binary = decode_binary(raw_binary)
 
-      target_dir = upload_target_dir(clean_name)
-      binary_path = Path.join(target_dir, clean_name)
-      staged_path = binary_path <> ".new"
-      manifest_path = Path.join(target_dir, "manifest.json")
+      case ensure_writable_target_dir(clean_name) do
+        {:ok, target_dir} ->
+          is_win = match?({:win32, _}, :os.type())
+          binary_name = if is_win, do: clean_name <> ".exe", else: clean_name
+          binary_path = Path.join(target_dir, binary_name)
+          staged_path = binary_path <> ".new"
+          manifest_path = Path.join(target_dir, "manifest.json")
 
-      with :ok <- File.mkdir_p(target_dir),
-           :ok <- File.write(staged_path, binary),
-           :ok <- File.chmod(staged_path, 0o755),
-           :ok <- File.rename(staged_path, binary_path),
-           :ok <- write_extension_files(target_dir, files_map),
-           :ok <- write_manifest_file(manifest_path, clean_name, manifest_param, :native) do
-        load_and_boot_extension(target_dir, clean_name, :native)
-      else
-        {:error, reason} -> {:error, reason}
-        _ -> {:error, :write_failed}
+          with :ok <- File.write(staged_path, binary),
+               :ok <- safe_install_binary(staged_path, binary_path),
+               :ok <- write_extension_files(target_dir, files_map),
+               :ok <- write_manifest_file(manifest_path, clean_name, manifest_param, :native) do
+            load_and_boot_extension(target_dir, clean_name, :native)
+          else
+            {:error, reason} ->
+              Logger.error("[ExtensionManager] Failed to install native extension #{clean_name}: #{inspect(reason)}")
+              {:error, reason}
+
+            _ ->
+              {:error, :write_failed}
+          end
+
+        {:error, reason} ->
+          Logger.error("[ExtensionManager] Could not create target directory for #{clean_name}: #{inspect(reason)}")
+          {:error, reason}
       end
+    end
+  end
+
+  defp safe_install_binary(staged_path, binary_path, retries \\ 10) do
+    _ = File.chmod(staged_path, 0o755)
+
+    if File.exists?(binary_path) do
+      case File.rm(binary_path) do
+        :ok ->
+          :ok
+
+        {:error, :eacces} when retries > 0 ->
+          :timer.sleep(100)
+          safe_install_binary(staged_path, binary_path, retries - 1)
+
+        {:error, _} ->
+          :ok
+      end
+    end
+
+    case File.rename(staged_path, binary_path) do
+      :ok ->
+        _ = File.chmod(binary_path, 0o755)
+        :ok
+
+      {:error, :eacces} when retries > 0 ->
+        :timer.sleep(100)
+        safe_install_binary(staged_path, binary_path, retries - 1)
+
+      {:error, _} ->
+        case File.copy(staged_path, binary_path) do
+          {:ok, _} ->
+            _ = File.rm(staged_path)
+            _ = File.chmod(binary_path, 0o755)
+            :ok
+
+          {:error, reason} ->
+            {:error, reason}
+        end
     end
   end
 
@@ -424,18 +474,24 @@ defmodule Exoforge.Std.ExtensionManager do
       {:error, :invalid_package}
     else
       clean_name = sanitize_name(name_str)
-      target_dir = upload_target_dir(clean_name)
-      lib_dir = Path.join([target_dir, "lib"])
-      manifest_path = Path.join(target_dir, "manifest.json")
 
-      with :ok <- File.mkdir_p(lib_dir),
-           :ok <- write_elixir_files(target_dir, clean_name, elixir_code, files_map),
-           :ok <- write_manifest_file(manifest_path, clean_name, manifest_param, :elixir),
-           :ok <- compile_elixir_extension(target_dir, elixir_code) do
-        load_and_boot_extension(target_dir, clean_name, :elixir)
-      else
-        {:error, reason} -> {:error, reason}
-        _ -> {:error, :write_failed}
+      case ensure_writable_target_dir(clean_name) do
+        {:ok, target_dir} ->
+          lib_dir = Path.join([target_dir, "lib"])
+          manifest_path = Path.join(target_dir, "manifest.json")
+
+          with :ok <- File.mkdir_p(lib_dir),
+               :ok <- write_elixir_files(target_dir, clean_name, elixir_code, files_map),
+               :ok <- write_manifest_file(manifest_path, clean_name, manifest_param, :elixir),
+               :ok <- compile_elixir_extension(target_dir, elixir_code) do
+            load_and_boot_extension(target_dir, clean_name, :elixir)
+          else
+            {:error, reason} -> {:error, reason}
+            _ -> {:error, :write_failed}
+          end
+
+        {:error, reason} ->
+          {:error, reason}
       end
     end
   end
@@ -547,15 +603,46 @@ defmodule Exoforge.Std.ExtensionManager do
     File.write(manifest_path, content <> "\n")
   end
 
-  defp upload_target_dir(clean_name) do
-    base =
-      Application.get_env(
-        :exoforge_std_extension_manager,
-        :upload_dir,
-        "priv/data/uploaded_extensions"
-      )
+  defp upload_base_dir do
+    cond do
+      dir = System.get_env("EXOFORGE_DATA_DIR") ->
+        Path.join(dir, "uploaded_extensions")
 
-    Path.join(base, clean_name)
+      dir = Application.get_env(:exoforge_std_extension_manager, :upload_dir) ->
+        dir
+
+      true ->
+        "priv/data/uploaded_extensions"
+    end
+  end
+
+  defp upload_target_dir(clean_name) do
+    Path.join(upload_base_dir(), clean_name)
+  end
+
+  defp ensure_writable_target_dir(clean_name) do
+    primary = upload_target_dir(clean_name)
+
+    case File.mkdir_p(primary) do
+      :ok ->
+        {:ok, primary}
+
+      {:error, :eacces} ->
+        fallback_base = Path.join(System.tmp_dir!(), "exoforge_uploaded_extensions")
+        fallback = Path.join(fallback_base, clean_name)
+
+        case File.mkdir_p(fallback) do
+          :ok ->
+            Logger.warning("[ExtensionManager] Primary upload directory #{primary} returned :eacces; using fallback: #{fallback}")
+            {:ok, fallback}
+
+          {:error, err} ->
+            {:error, err}
+        end
+
+      {:error, reason} ->
+        {:error, reason}
+    end
   end
 
   defp clean_delete_directory(dir_path) do
@@ -564,7 +651,7 @@ defmodule Exoforge.Std.ExtensionManager do
     root_plugins = Path.expand("plugins")
     root_extensions_csharp = Path.expand("extensions_csharp")
     root_csharp = Path.expand("plugins_csharp")
-    root_uploaded = Path.expand(Application.get_env(:exoforge_std_extension_manager, :upload_dir, "priv/data/uploaded_extensions"))
+    root_uploaded = Path.expand(upload_base_dir())
 
     if (String.starts_with?(norm, root_extensions) and norm != root_extensions) or
          (String.starts_with?(norm, root_plugins) and norm != root_plugins) or

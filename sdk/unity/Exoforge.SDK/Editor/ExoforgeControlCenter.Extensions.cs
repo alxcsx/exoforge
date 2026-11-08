@@ -1376,7 +1376,12 @@ public partial class ExoforgeControlCenter : EditorWindow
         }
         catch (Exception ex)
         {
-            ShowStatus($"Deploy failed: {ex.Message}", MessageType.Error);
+            string msg = ex.Message;
+            if (msg.Contains(":eacces"))
+            {
+                msg = $"{msg} (Server permission denied. The previous extension process may still be releasing file locks, or the server directory has restricted permissions. Try deploying again).";
+            }
+            ShowStatus($"Deploy failed: {msg}", MessageType.Error);
         }
 
         Repaint();

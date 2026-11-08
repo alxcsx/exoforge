@@ -134,6 +134,7 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
   end
 
   def init({manifest, binary_path, idx, handshake_timeout_ms}) do
+    Process.flag(:trap_exit, true)
     Logger.debug("[NativeExtensionRunner] Starting native extension #{manifest.id} (worker #{idx}) from #{binary_path}")
 
     port =
@@ -254,6 +255,43 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
   end
 
   def handle_info(_msg, state), do: {:noreply, state}
+
+  @impl true
+  def terminate(_reason, %{port: port} = _state) do
+    try do
+      case Port.info(port, :os_pid) do
+        {:os_pid, pid} when is_integer(pid) and pid > 0 ->
+          kill_os_process(pid)
+
+        _ ->
+          :ok
+      end
+    catch
+      _, _ -> :ok
+    end
+
+    try do
+      Port.close(port)
+    catch
+      _, _ -> :ok
+    end
+
+    :ok
+  end
+
+  def terminate(_reason, _state), do: :ok
+
+  defp kill_os_process(pid) do
+    case :os.type() do
+      {:win32, _} ->
+        System.cmd("taskkill", ["/F", "/T", "/PID", to_string(pid)], stderr_to_stdout: true)
+
+      _ ->
+        System.cmd("kill", ["-9", to_string(pid)], stderr_to_stdout: true)
+    end
+  rescue
+    _ -> :ok
+  end
 
   defp schedule_os_sample, do: Process.send_after(self(), :sample_os, @os_sample_ms)
 
@@ -544,13 +582,19 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
   defp find_binary_path(manifest) do
     dir = manifest.physical_path || ""
     staged = Path.join(dir, ".exoforge")
+    id_str = to_string(manifest.id)
+    ep_str = if is_binary(manifest.entry_point), do: manifest.entry_point, else: nil
 
     candidates =
       [
-        Path.join(staged, to_string(manifest.id)),
-        Path.join(dir, to_string(manifest.id)),
-        if(is_binary(manifest.entry_point), do: Path.join(staged, manifest.entry_point)),
-        if(is_binary(manifest.entry_point), do: Path.join(dir, manifest.entry_point))
+        Path.join(staged, id_str),
+        Path.join(staged, id_str <> ".exe"),
+        Path.join(dir, id_str),
+        Path.join(dir, id_str <> ".exe"),
+        if(ep_str, do: Path.join(staged, ep_str)),
+        if(ep_str, do: Path.join(staged, ep_str <> ".exe")),
+        if(ep_str, do: Path.join(dir, ep_str)),
+        if(ep_str, do: Path.join(dir, ep_str <> ".exe"))
       ]
       |> Enum.reject(&is_nil/1)
 

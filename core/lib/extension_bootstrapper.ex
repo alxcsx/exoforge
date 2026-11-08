@@ -52,6 +52,9 @@ defmodule Exoforge.ExtensionBootstrapper do
 
     if manifest do
       terminate_extension_processes(manifest)
+      if manifest.type == :native do
+        Process.sleep(100)
+      end
     end
 
     ExtensionRegistry.unregister(extension_id)
