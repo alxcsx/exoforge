@@ -332,7 +332,8 @@ html:not(.light) .bg-emerald-200 {
 html:not(.light) .text-emerald-600,
 html:not(.light) .text-emerald-700,
 html:not(.light) .text-emerald-800,
-html:not(.light) .text-emerald-900 {
+html:not(.light) .text-emerald-900,
+html:not(.light) .text-emerald-950 {
   color: #6ee7b7 !important;
 }
 
@@ -384,10 +385,12 @@ html:not(.light) .text-red-600,
 html:not(.light) .text-red-700,
 html:not(.light) .text-red-800,
 html:not(.light) .text-red-900,
+html:not(.light) .text-red-950,
 html:not(.light) .text-rose-600,
 html:not(.light) .text-rose-700,
 html:not(.light) .text-rose-800,
-html:not(.light) .text-rose-900 {
+html:not(.light) .text-rose-900,
+html:not(.light) .text-rose-950 {
   color: #fca5a5 !important;
 }
 
@@ -401,9 +404,11 @@ html:not(.light) .border-rose-200\/80 {
 }
 
 html:not(.light) .bg-blue-50,
+html:not(.light) .bg-blue-50\/70,
 html:not(.light) .bg-blue-50\/80,
 html:not(.light) .bg-blue-100,
 html:not(.light) .bg-indigo-50,
+html:not(.light) .bg-indigo-50\/70,
 html:not(.light) .bg-indigo-50\/80,
 html:not(.light) .bg-indigo-100,
 html:not(.light) .bg-indigo-200 {
@@ -414,10 +419,12 @@ html:not(.light) .text-blue-600,
 html:not(.light) .text-blue-700,
 html:not(.light) .text-blue-800,
 html:not(.light) .text-blue-900,
+html:not(.light) .text-blue-950,
 html:not(.light) .text-indigo-600,
 html:not(.light) .text-indigo-700,
 html:not(.light) .text-indigo-800,
-html:not(.light) .text-indigo-900 {
+html:not(.light) .text-indigo-900,
+html:not(.light) .text-indigo-950 {
   color: #93c5fd !important;
 }
 

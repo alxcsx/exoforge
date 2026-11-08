@@ -105,6 +105,16 @@ defmodule Exoforge.Std.Docs.View do
           color: #f3f4f6 !important;
         }
 
+        /* High-contrast callouts and disclaimers in dark theme */
+        html:not(.light) .text-rose-950, html:not(.light) .text-rose-900 { color: #fca5a5 !important; }
+        html:not(.light) .text-rose-800 { color: #fecdd3 !important; }
+        html:not(.light) .text-emerald-950, html:not(.light) .text-emerald-900 { color: #6ee7b7 !important; }
+        html:not(.light) .text-emerald-800 { color: #a7f3d0 !important; }
+        html:not(.light) .text-amber-950, html:not(.light) .text-amber-900 { color: #fcd34d !important; }
+        html:not(.light) .text-amber-800 { color: #fde68a !important; }
+        html:not(.light) .text-blue-950, html:not(.light) .text-blue-900 { color: #93c5fd !important; }
+        html:not(.light) .text-blue-800 { color: #bfdbfe !important; }
+
         /* Prevent background/border bleed onto preformatted code blocks */
         pre code,
         .prose pre code,
@@ -1966,20 +1976,6 @@ defmodule Exoforge.Std.Docs.View do
               </p>
             </div>
 
-            <div class="p-4 rounded-2xl bg-amber-50/70 border border-amber-200/80 text-xs text-amber-950 space-y-1.5">
-              <div class="flex items-center gap-1.5 font-bold text-amber-900">
-                <span>💡</span>
-                <span>Does Exoforge have a Query Builder?</span>
-              </div>
-              <p class="text-amber-800 leading-relaxed text-[11px]">
-                <strong>No — by deliberate architectural design.</strong> Complex query builders (like EF Core or LINQ-to-Entities) introduce runtime expression compilation, large binary size, and high garbage collection pressure. Instead, Exoforge gives you two native, zero-overhead primitives:
-              </p>
-              <ul class="list-disc list-inside space-y-1 text-amber-800 text-[11px]">
-                <li><strong>Type-Safe Table Repository (<code class="font-mono font-semibold">Exo.Database.Table&lt;T&gt;()</code>):</strong> Pure C# CRUD with auto-resolved table names, primary keys, and singleton lookups. Zero SQL strings needed.</li>
-                <li><strong>Parameterized Raw SQL (<code class="font-mono font-semibold">Exo.Database.Query&lt;T&gt;()</code>):</strong> High-performance SQL queries with positional <code class="font-mono font-semibold">$1, $2, ...</code> arguments, automatic record mapping, and atomic in-place updates.</li>
-              </ul>
-            </div>
-
             <.code_tabs
               badge="C# Database"
               tabs={[
@@ -1987,6 +1983,27 @@ defmodule Exoforge.Std.Docs.View do
                 %{label: "Parameterized Raw SQL (Queries & In-Place Updates)", code: code_db_sql()}
               ]}
             />
+
+            <details class="group cursor-pointer rounded-2xl bg-amber-500/10 border border-amber-500/30 p-4 text-xs text-amber-950 dark:text-amber-200 transition-all">
+              <summary class="flex items-center justify-between font-bold text-amber-900 dark:text-amber-300 select-none list-none">
+                <div class="flex items-center gap-2">
+                  <span>💡</span>
+                  <span>Architecture Note: Why Exoforge avoids complex Query Builders</span>
+                </div>
+                <svg class="w-4 h-4 text-amber-700 dark:text-amber-300 group-open:rotate-180 transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </summary>
+              <div class="mt-3 pt-3 border-t border-amber-500/20 space-y-2 text-[11px] leading-relaxed">
+                <p>
+                  <strong>No runtime query builders — by deliberate design.</strong> Complex query builders (like EF Core or LINQ-to-Entities) introduce runtime expression compilation, large binary size, and high garbage collection pressure. Instead, Exoforge gives you two native, zero-overhead primitives:
+                </p>
+                <ul class="list-disc list-inside space-y-1">
+                  <li><strong>Type-Safe Table Repository (<code class="font-mono font-semibold">Exo.Database.Table&lt;T&gt;()</code>):</strong> Pure C# CRUD with auto-resolved table names, primary keys, and singleton lookups. Zero SQL strings needed.</li>
+                  <li><strong>Parameterized Raw SQL (<code class="font-mono font-semibold">Exo.Database.Query&lt;T&gt;()</code>):</strong> High-performance SQL queries with positional <code class="font-mono font-semibold">$1, $2, ...</code> arguments, automatic record mapping, and atomic in-place updates.</li>
+                </ul>
+              </div>
+            </details>
           </div>
         </div>
       </section>
@@ -2027,20 +2044,6 @@ defmodule Exoforge.Std.Docs.View do
         <span class="text-xs font-bold text-gray-500 bg-gray-100 px-3 py-1.5 rounded-xl self-start md:self-auto font-mono">
           <%= length(@action_catalog) %> Services Loaded
         </span>
-      </div>
-
-      <!-- Educational Banner: Server Action Modes vs Client Asynchrony -->
-      <div class="p-4 rounded-2xl bg-blue-50/70 border border-blue-200/80 text-xs text-blue-900 space-y-1.5 print:border-gray-300">
-        <div class="flex items-center gap-2 font-bold text-blue-900">
-          <span>ℹ️</span>
-          <span>Understanding Action Modes (<code class="font-mono text-primary-700">SYNC</code>, <code class="font-mono text-purple-700">ASYNC</code>, <code class="font-mono text-amber-700">CAST</code>) vs. Client Asynchrony</span>
-        </div>
-        <p class="text-blue-800 leading-relaxed text-[11px]">
-          In this live catalog, badges show the <strong>server-side execution mode</strong>. A <span class="font-mono font-bold uppercase px-1 py-0.5 rounded bg-blue-100 text-blue-900 border border-blue-300 text-[10px]">sync</span> badge indicates a standard <strong>request-reply RPC</strong>: the server process handles the call synchronously within its actor (completing database operations, auth checks, etc.) and returns the result in the RPC response frame. In C# extensions, methods returning <code class="font-mono">Task&lt;T&gt;</code> run as <span class="font-mono font-bold uppercase px-1 py-0.5 rounded bg-cyan-100 text-cyan-900 border border-cyan-300 text-[10px]">async</span>, while fire-and-forget actions use <span class="font-mono font-bold uppercase px-1 py-0.5 rounded bg-purple-100 text-purple-900 border border-purple-300 text-[10px]">cast</span>.
-        </p>
-        <p class="text-blue-800 leading-relaxed text-[11px]">
-          <strong>From the Unity C# client, every network RPC is 100% non-blocking and asynchronous.</strong> Generated stubs emit both <code class="font-mono font-bold text-primary-800">Task&lt;T&gt; *Async(...)</code> overloads for <code class="font-mono">await</code> and main-thread <code class="font-mono font-bold text-primary-800">callbacks</code> (<code class="font-mono">onComplete</code> / <code class="font-mono">onError</code>) for every action.
-        </p>
       </div>
 
       <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2 border-t border-gray-100">
@@ -2115,13 +2118,11 @@ defmodule Exoforge.Std.Docs.View do
                         <span class="font-bold text-primary-800 text-xs font-mono">
                           <%= format_action_signature(act) %>
                         </span>
-                        <span class={"text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase font-mono " <> hashed_badge_class(act.mode)}>
-                          <%= act.mode %>
-                        </span>
+                        <%= if act.mode in ["async", "cast"] do %>
+                          <span class={"text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase font-mono " <> hashed_badge_class(act.mode)}><%= act.mode %></span>
+                        <% end %>
                         <%= if act.scope do %>
-                          <span class={"text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase font-mono " <> hashed_badge_class(act.scope)}>
-                            <%= act.scope %>
-                          </span>
+                          <span class={"text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase font-mono " <> hashed_badge_class(act.scope)}><%= act.scope %></span>
                         <% end %>
                       </div>
 

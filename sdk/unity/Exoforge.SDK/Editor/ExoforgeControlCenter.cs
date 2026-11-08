@@ -67,11 +67,11 @@ public partial class ExoforgeControlCenter : EditorWindow
             try
             {
                 var env = ExoWorkspace.Load(ExoforgeEditorConfig.GetAbsoluteWorkspacePath())?.GetActiveEnvironment();
-                return env?.HttpUrl ?? "http://localhost:4001";
+                return env?.HttpUrl ?? "";
             }
             catch
             {
-                return "http://localhost:4001";
+                return "";
             }
         }
     }
@@ -87,11 +87,11 @@ public partial class ExoforgeControlCenter : EditorWindow
             try
             {
                 var env = ExoWorkspace.Load(ExoforgeEditorConfig.GetAbsoluteWorkspacePath())?.GetActiveEnvironment();
-                return env?.WsUrl ?? "ws://localhost:4000/ws";
+                return env?.WsUrl ?? "";
             }
             catch
             {
-                return "ws://localhost:4000/ws";
+                return "";
             }
         }
     }
@@ -141,19 +141,39 @@ public partial class ExoforgeControlCenter : EditorWindow
         get
         {
             string wsPath = ExoforgeEditorConfig.GetAbsoluteWorkspacePath();
-            if (ExoWorkspace.Exists(wsPath))
+            if (!ExoWorkspace.Exists(wsPath))
             {
-                try
+                return true;
+            }
+
+            try
+            {
+                var ws = ExoWorkspace.Load(wsPath);
+                if (ws == null || ws.Config == null)
                 {
-                    var ws = ExoWorkspace.Load(wsPath);
-                    if (ws?.Config?.Environments != null && ws.Config.Environments.Count > 0)
+                    return true;
+                }
+
+                if (ws.Config.SetupCompleted)
+                {
+                    return false;
+                }
+
+                if (ws.Config.Environments != null && ws.Config.Environments.Count > 0)
+                {
+                    var env = ws.GetActiveEnvironment(ExoforgeEditorConfig.SelectedEnvironment);
+                    if (!string.IsNullOrEmpty(env?.WsUrl) || !string.IsNullOrEmpty(env?.HttpUrl))
                     {
-                        return false;
+                        return !ExoforgeEditorConfig.HasCompletedInitialSetup;
                     }
                 }
-                catch { }
+
+                return true;
             }
-            return !ExoforgeEditorConfig.HasCompletedInitialSetup;
+            catch
+            {
+                return true;
+            }
         }
     }
     [NonSerialized] private static bool s_rawConnected;
@@ -461,60 +481,32 @@ public partial class ExoforgeControlCenter : EditorWindow
                 return;
             }
 
-            // Always ensure workspace and runtime configs exist regardless of auth/onboarding stage
-            EnsureWorkspaceAndConfigsInitialized();
-
-            // Check if first install or unconfigured workspace
-            if (!ExoforgeEditorConfig.HasCompletedInitialSetup)
+            if (IsSetupRequired)
             {
-                string wsPath = ExoforgeEditorConfig.GetAbsoluteWorkspacePath();
-                if (ExoWorkspace.Exists(wsPath))
-                {
-                    try
-                    {
-                        var ws = ExoWorkspace.Load(wsPath);
-                        if (ws?.Config?.Environments != null && ws.Config.Environments.Count > 0)
-                        {
-                            ExoforgeEditorConfig.HasCompletedInitialSetup = true;
-                        }
-                    }
-                    catch { }
-                }
+                // First install / unconfigured project: prompt the setup wizard
+                ExoforgeSetupModal.Open();
+                return;
             }
 
-            // Do not pop up modal automatically: the Studio and Extensions windows
-            // present a non-intrusive setup blocker card with a launch button whenever opened.
+            EnsureWorkspaceAndConfigsInitialized();
             CheckAuthAndPromptLogin();
         };
     }
 
     /// <summary>
-    /// Ensures the Exoforge workspace directory and runtime config (Assets/Resources/exoforge.json)
-    /// exist regardless of onboarding progress so developers never hit missing path or runtime errors.
+    /// Ensures the Exoforge runtime config (Assets/Resources/exoforge.json)
+    /// exists once a workspace has completed setup.
     /// </summary>
     public static void EnsureWorkspaceAndConfigsInitialized()
     {
         try
         {
+            if (IsSetupRequired) return;
+
             string wsPath = ExoforgeEditorConfig.GetAbsoluteWorkspacePath();
             if (!ExoWorkspace.Exists(wsPath))
             {
-                ExoWorkspace.Initialize(wsPath);
-            }
-
-            var ws = ExoWorkspace.Load(wsPath);
-            string selectedEnv = ExoforgeEditorConfig.SelectedEnvironment;
-            if (ws.Config.Environments == null || ws.Config.Environments.Count == 0)
-            {
-                ws.Config.Environments ??= new();
-                ws.Config.Environments["local"] = new ExoEnvironmentConfig
-                {
-                    WsUrl = "ws://localhost:4000/ws",
-                    HttpUrl = "http://localhost:4001",
-                    Token = !string.IsNullOrEmpty(ExoTokenStore.Token) ? ExoTokenStore.Token : "dev:developer"
-                };
-                ws.Config.DefaultEnvironment = "local";
-                ws.Save();
+                return;
             }
 
             string rtPath = Path.GetFullPath(ExoforgeRuntimeConfigGenerator.OutputPath);

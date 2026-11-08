@@ -20,10 +20,10 @@ namespace Exoforge.Unity.Editor
     public sealed class ExoforgeSetupModal : EditorWindow
     {
         private int _currentStep = 1;
-        private string _baseUrl = "localhost";
-        private string _envName = "local";
-        private string _wsUrl = "ws://localhost:4000/ws";
-        private string _httpUrl = "http://localhost:4001";
+        private string _baseUrl = "";
+        private string _envName = "default";
+        private string _wsUrl = "";
+        private string _httpUrl = "";
         private bool _isOfflineMode = false;
 
         private string _email = "admin";
@@ -183,14 +183,14 @@ namespace Exoforge.Unity.Editor
         {
             if (_stepProgressLabel != null) _stepProgressLabel.text = "Step 1 of 5: Connect to Instance";
 
-            var desc = new Label("Enter your Exoforge server address (keep localhost for a local dev server).");
+            var desc = new Label("Enter your Exoforge server address.");
             desc.style.fontSize = 11;
             desc.style.color = ExoforgeUIStyle.TextSecondary;
             desc.style.marginBottom = 12;
             _stepContainer!.Add(desc);
 
             var baseField = new TextField("Instance URL") { value = _baseUrl };
-            baseField.tooltip = "Enter your cluster host (e.g. localhost, https://my-cluster.exoforge.app)";
+            baseField.tooltip = "Enter your cluster host (e.g. https://my-cluster.exoforge.app)";
             baseField.style.marginBottom = 8;
             _stepContainer.Add(baseField);
 
@@ -220,12 +220,11 @@ namespace Exoforge.Unity.Editor
 
             Action updateDerived = () =>
             {
-                _baseUrl = baseField.value?.Trim() ?? "localhost";
+                _baseUrl = baseField.value?.Trim() ?? "";
                 ExoforgeEditorConfig.DeriveEndpoints(_baseUrl, out _wsUrl, out _httpUrl);
-                wsLabel.text = $"• WebSocket: {_wsUrl}";
-                httpLabel.text = $"• HTTP REST: {_httpUrl}";
-                bool isLocal = ExoforgeEditorConfig.IsLocalUrl(_wsUrl);
-                _envName = isLocal ? "local" : "production";
+                wsLabel.text = !string.IsNullOrEmpty(_wsUrl) ? $"• WebSocket: {_wsUrl}" : "• WebSocket: (waiting for URL)";
+                httpLabel.text = !string.IsNullOrEmpty(_httpUrl) ? $"• HTTP REST: {_httpUrl}" : "• HTTP REST: (waiting for URL)";
+                _envName = "default";
             };
 
             baseField.RegisterValueChangedCallback(_ => updateDerived());
@@ -234,6 +233,13 @@ namespace Exoforge.Unity.Editor
             // Test Ping Button
             var testPingBtn = ExoforgeUIStyle.CreateModernButton("🔍 Test Connection (Ping)", async () =>
             {
+                if (string.IsNullOrWhiteSpace(_wsUrl))
+                {
+                    _statusLabel?.SetText("⚠️ Please enter a cluster URL first.");
+                    if (_statusLabel != null) _statusLabel.style.color = ExoforgeUIStyle.AccentOrange;
+                    return;
+                }
+
                 _statusLabel?.SetText("Pinging cluster...");
                 _statusLabel!.style.color = ExoforgeUIStyle.AccentBlue;
                 try
@@ -286,6 +292,12 @@ namespace Exoforge.Unity.Editor
 
             var nextBtn = ExoforgeUIStyle.CreateModernButton("Next: Sign In ➔", () =>
             {
+                if (string.IsNullOrWhiteSpace(_baseUrl) || string.IsNullOrWhiteSpace(_wsUrl))
+                {
+                    _statusLabel?.SetText("⚠️ Please enter your Exoforge cluster URL before continuing, or select 'Work Offline'.");
+                    if (_statusLabel != null) _statusLabel.style.color = ExoforgeUIStyle.AccentOrange;
+                    return;
+                }
                 _isOfflineMode = false;
                 SaveWorkspaceEnvironment();
                 _currentStep = 2;
@@ -390,6 +402,7 @@ namespace Exoforge.Unity.Editor
                     Token = defaultToken
                 };
                 ws.Config.DefaultEnvironment = _envName;
+                ws.Config.SetupCompleted = true;
                 ws.Save();
 
                 ExoforgeEditorConfig.SelectedEnvironment = _envName;
@@ -563,6 +576,17 @@ namespace Exoforge.Unity.Editor
             if (_stepProgressLabel != null) _stepProgressLabel.text = "Step 5 of 5: Ready to Build";
 
             ExoforgeEditorConfig.HasCompletedInitialSetup = true;
+            try
+            {
+                string wsPath = ExoforgeEditorConfig.GetAbsoluteWorkspacePath();
+                if (ExoWorkspace.Exists(wsPath))
+                {
+                    var ws = ExoWorkspace.Load(wsPath);
+                    ws.Config.SetupCompleted = true;
+                    ws.Save();
+                }
+            }
+            catch { }
 
             var card = new VisualElement();
             card.style.backgroundColor = ExoforgeUIStyle.BgCard;
@@ -624,6 +648,9 @@ namespace Exoforge.Unity.Editor
             {
                 _onCompleted?.Invoke();
             }
+            ExoforgeControlCenter.InvalidateWorkspaceShared();
+            ExoforgeControlCenter.Instance?.RebuildStudioUI();
+            ExoforgeExtensionsWindow.Instance?.RebuildUI();
         }
     }
 }

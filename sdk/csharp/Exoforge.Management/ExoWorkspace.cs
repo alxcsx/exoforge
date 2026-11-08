@@ -28,6 +28,9 @@ public class ExoProjectConfig
     [JsonPropertyName("default_environment")]
     public string DefaultEnvironment { get; set; } = "local";
 
+    [JsonPropertyName("setup_completed")]
+    public bool SetupCompleted { get; set; } = false;
+
     [JsonPropertyName("environments")]
     public Dictionary<string, ExoEnvironmentConfig> Environments { get; set; } = new()
     {

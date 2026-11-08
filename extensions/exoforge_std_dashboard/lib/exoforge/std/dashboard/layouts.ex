@@ -206,9 +206,17 @@ defmodule Exoforge.Std.Dashboard.Layouts do
               },
               reset: function(graphId) {
                 var s = getGraph(graphId);
-                s.scale = 1.0;
-                s.tx = 0;
-                s.ty = 0;
+                var container = document.getElementById(graphId + "-container");
+                if (container) {
+                  var cw = container.clientWidth || 1080;
+                  s.scale = Math.min(1.0, Math.max(0.4, (cw - 32) / 1080));
+                  s.tx = Math.max(0, (cw - 1080 * s.scale) / 2);
+                  s.ty = 16;
+                } else {
+                  s.scale = 1.0;
+                  s.tx = 0;
+                  s.ty = 0;
+                }
                 applyTransform(graphId);
               },
               fit: function(graphId) {
@@ -218,9 +226,9 @@ defmodule Exoforge.Std.Dashboard.Layouts do
                 var cw = container.clientWidth;
                 var ch = container.clientHeight;
                 var s = getGraph(graphId);
-                s.scale = Math.min(1.0, Math.max(0.5, (cw - 40) / 1220));
-                s.tx = Math.max(0, (cw - 1220 * s.scale) / 2);
-                s.ty = 20;
+                s.scale = Math.min(1.0, Math.max(0.35, Math.min((cw - 32) / 1080, (ch - 32) / 850)));
+                s.tx = Math.max(0, (cw - 1080 * s.scale) / 2);
+                s.ty = 16;
                 applyTransform(graphId);
               },
               initPanZoom: function(graphId) {
@@ -229,30 +237,65 @@ defmodule Exoforge.Std.Dashboard.Layouts do
                 container.dataset.panInit = "true";
                 var s = getGraph(graphId);
 
-                container.addEventListener("mousedown", function(e) {
+                // Auto-center on initial load
+                if (s.tx === 0 && s.ty === 0 && s.scale === 1.0) {
+                  var cw = container.clientWidth || 1080;
+                  s.scale = Math.min(1.0, Math.max(0.4, (cw - 32) / 1080));
+                  s.tx = Math.max(0, (cw - 1080 * s.scale) / 2);
+                  s.ty = 16;
+                  applyTransform(graphId);
+                }
+
+                container.style.cursor = "grab";
+
+                function onPointerDown(e) {
                   if (e.target.closest("[data-graph-node]") || e.target.closest("button") || e.target.closest(".graph-docked-drawer")) return;
                   s.isPanning = true;
+                  s.hasMoved = false;
                   s.startX = e.clientX - s.tx;
                   s.startY = e.clientY - s.ty;
                   container.style.cursor = "grabbing";
-                });
+                  var viewport = document.getElementById(graphId + "-viewport");
+                  if (viewport) viewport.style.transition = "none";
+                  if (e.pointerId && container.setPointerCapture) {
+                    try { container.setPointerCapture(e.pointerId); } catch(_) {}
+                  }
+                  e.preventDefault();
+                }
 
-                window.addEventListener("mousemove", function(e) {
+                function onPointerMove(e) {
                   if (!s.isPanning) return;
+                  s.hasMoved = true;
                   s.tx = e.clientX - s.startX;
                   s.ty = e.clientY - s.startY;
                   applyTransform(graphId);
-                });
+                }
 
-                window.addEventListener("mouseup", function() {
+                function onPointerUp(e) {
+                  if (!s.isPanning) return;
                   s.isPanning = false;
-                  if (container) container.style.cursor = "default";
-                });
+                  container.style.cursor = "grab";
+                  var viewport = document.getElementById(graphId + "-viewport");
+                  if (viewport) viewport.style.transition = "";
+                  if (e && e.pointerId && container.releasePointerCapture) {
+                    try { container.releasePointerCapture(e.pointerId); } catch(_) {}
+                  }
+                }
+
+                container.addEventListener("pointerdown", onPointerDown);
+                container.addEventListener("pointermove", onPointerMove);
+                container.addEventListener("pointerup", onPointerUp);
+                container.addEventListener("pointercancel", onPointerUp);
+
+                // Mouse fallbacks
+                container.addEventListener("mousedown", onPointerDown);
+                window.addEventListener("mousemove", onPointerMove);
+                window.addEventListener("mouseup", onPointerUp);
 
                 container.addEventListener("wheel", function(e) {
                   e.preventDefault();
                   var factor = e.deltaY < 0 ? 1.08 : 0.92;
-                  var newScale = Math.min(2.5, Math.max(0.4, s.scale * factor));
+                  var newScale = Math.min(2.5, Math.max(0.35, s.scale * factor));
                   s.scale = newScale;
                   applyTransform(graphId);
                 }, { passive: false });
@@ -555,6 +598,20 @@ defmodule Exoforge.Std.Dashboard.Layouts do
                   destroyed() {
                     if (window._studioDispatcher === this) {
                       window._studioDispatcher = null;
+                    }
+                  }
+                },
+                ArchGraph: {
+                  mounted() {
+                    if (window.ExoGraphEngine) {
+                      window.ExoGraphEngine.initPanZoom('arch-graph');
+                      window.ExoGraphEngine.initPanZoom('modal-arch-graph');
+                    }
+                  },
+                  updated() {
+                    if (window.ExoGraphEngine) {
+                      window.ExoGraphEngine.initPanZoom('arch-graph');
+                      window.ExoGraphEngine.initPanZoom('modal-arch-graph');
                     }
                   }
                 },

@@ -55,13 +55,13 @@ namespace Exoforge.Client.Unity
         [Tooltip("Optional workspace config (exoforge.json). Empty loads Resources/exoforge.json.")]
         [SerializeField] private TextAsset? workspaceConfig;
 
-        [Tooltip("Optional base Server URL (e.g. localhost or http://localhost). Automatically sets WS to :4000/ws and HTTP to :4001 when set.")]
+        [Tooltip("Optional base Server URL (e.g. https://my-cluster.exoforge.app). Automatically sets WS and HTTP endpoints when set.")]
         [SerializeField] private string serverUrl = "";
 
-        [Tooltip("Optional WebSocket endpoint override (e.g. ws://localhost:4000/ws). Empty uses serverUrl or workspace config.")]
+        [Tooltip("Optional WebSocket endpoint override (e.g. wss://my-cluster.exoforge.app/ws). Empty uses serverUrl or workspace config.")]
         [SerializeField] private string wsUrlOverride = "";
 
-        [Tooltip("Optional HTTP endpoint override (e.g. http://localhost:4001). Empty uses serverUrl or workspace config.")]
+        [Tooltip("Optional HTTP endpoint override (e.g. https://my-cluster.exoforge.app). Empty uses serverUrl or workspace config.")]
         [SerializeField] private string httpUrlOverride = "";
 
         [Tooltip("Default transport preference for RPC actions. HTTP is fast, isolated, and recommended for request/response operations.")]
@@ -310,7 +310,7 @@ namespace Exoforge.Client.Unity
                 return DeriveWsUrl(serverUrl.Trim());
             }
 
-            return Config?.WsUrl ?? "ws://localhost:4000/ws";
+            return Config?.WsUrl ?? "";
         }
 
         /// <summary>Returns the effective HTTP base URL resolved from overrides, serverUrl, or workspace config.</summary>
@@ -323,7 +323,7 @@ namespace Exoforge.Client.Unity
                 return DeriveHttpUrl(serverUrl.Trim());
             }
 
-            return Config?.HttpUrl ?? "http://localhost:4001";
+            return Config?.HttpUrl ?? "";
         }
 
         private static string DeriveWsUrl(string raw)

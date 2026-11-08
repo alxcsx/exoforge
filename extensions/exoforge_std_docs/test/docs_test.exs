@@ -320,6 +320,18 @@ defmodule Exoforge.Std.DocsTest do
                 %{name: "player_id", type: "string", optional: true},
                 %{name: "required_scope", type: "string", optional: false}
               ]
+            },
+            %{
+              name: "ping_event",
+              mode: "cast",
+              doc: "Cast ping",
+              params: []
+            },
+            %{
+              name: "fetch_stats",
+              mode: "async",
+              doc: "Async stats",
+              params: []
             }
           ]
         }
@@ -346,6 +358,12 @@ defmodule Exoforge.Std.DocsTest do
       # Action title signatures: parameter names only, required first, ? for optionals
       assert html =~ ".authenticate(token)"
       assert html =~ ".verify_scope(required_scope, user_id?, player_id?)"
+
+      # Only async and cast modes show badges in live catalog; sync is omitted
+      refute html =~ "Understanding Action Modes"
+      refute html =~ ">sync<"
+      assert html =~ ">cast<"
+      assert html =~ ">async<"
 
       # Folds collapsed by default (no 'open' attribute on details)
       refute html =~ "<details class=\"group bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden transition-all duration-200 print:border-gray-300 print:shadow-none print:break-inside-avoid\" open>"

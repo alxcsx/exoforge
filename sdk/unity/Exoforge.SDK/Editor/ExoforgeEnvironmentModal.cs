@@ -12,10 +12,10 @@ namespace Exoforge.Unity.Editor
     /// </summary>
     public sealed class ExoforgeEnvironmentModal : EditorWindow
     {
-        private string _baseUrl = "localhost";
+        private string _baseUrl = "";
         private string _envName = "";
-        private string _wsUrl = "ws://localhost:4000/ws";
-        private string _httpUrl = "http://localhost:4001";
+        private string _wsUrl = "";
+        private string _httpUrl = "";
         private string _token = "dev:developer";
         private Action? _onCreated;
 
@@ -110,7 +110,7 @@ namespace Exoforge.Unity.Editor
 
             // 2. Input Fields
             var baseField = new TextField("Cluster Base URL") { value = _baseUrl };
-            baseField.tooltip = "Enter the cluster hostname or URL (e.g. exof1.alexcs.me or localhost). Endpoints are inferred automatically.";
+            baseField.tooltip = "Enter the cluster hostname or URL (e.g. https://my-cluster.exoforge.app). Endpoints are inferred automatically.";
             baseField.style.marginBottom = 6;
             root.Add(baseField);
 
@@ -158,7 +158,7 @@ namespace Exoforge.Unity.Editor
                     if (colon > 0) suggested = suggested.Substring(0, colon);
                     int dot = suggested.IndexOf('.');
                     if (dot > 0) suggested = suggested.Substring(0, dot);
-                    if (suggested != "localhost" && suggested != "127")
+                    if (!string.IsNullOrWhiteSpace(suggested) && suggested != "127")
                     {
                         _envName = suggested.ToLowerInvariant();
                         nameField.SetValueWithoutNotify(_envName);

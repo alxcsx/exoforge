@@ -17,14 +17,14 @@ namespace Exoforge.Client.Unity
         /// <summary>Resources name of the linked workspace config file.</summary>
         public const string ResourcePath = "exoforge";
 
-        /// <summary>Active environment name (e.g. <c>local</c>, <c>staging</c>, <c>production</c>).</summary>
-        public string Environment { get; private set; } = "local";
+        /// <summary>Active environment name (e.g. <c>default</c>, <c>staging</c>, <c>production</c>).</summary>
+        public string Environment { get; private set; } = "default";
 
         /// <summary>WebSocket gateway endpoint.</summary>
-        public string WsUrl { get; private set; } = "ws://localhost:4000/ws";
+        public string WsUrl { get; private set; } = "";
 
         /// <summary>HTTP REST gateway base address.</summary>
-        public string HttpUrl { get; private set; } = "http://localhost:4001";
+        public string HttpUrl { get; private set; } = "";
 
         /// <summary>Bootstrap token used when no session token is stored yet.</summary>
         public string Token { get; private set; } = "";

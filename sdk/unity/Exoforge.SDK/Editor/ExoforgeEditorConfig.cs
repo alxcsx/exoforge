@@ -104,8 +104,8 @@ public static class ExoforgeEditorConfig
     {
         if (string.IsNullOrWhiteSpace(input))
         {
-            wsUrl = "ws://localhost:4000/ws";
-            httpUrl = "http://localhost:4001";
+            wsUrl = "";
+            httpUrl = "";
             return;
         }
 
@@ -176,11 +176,10 @@ public static class ExoforgeEditorConfig
     public static string DeriveBaseUrl(string? wsUrl, string? httpUrl)
     {
         string candidate = !string.IsNullOrWhiteSpace(httpUrl) ? httpUrl! : (wsUrl ?? "");
-        if (string.IsNullOrWhiteSpace(candidate)) return "localhost";
+        if (string.IsNullOrWhiteSpace(candidate)) return "";
 
         if (Uri.TryCreate(candidate, UriKind.Absolute, out var uri))
         {
-            if (uri.IsLoopback) return "localhost";
             string portPart = uri.IsDefaultPort ? "" : $":{uri.Port}";
             string path = uri.AbsolutePath.TrimEnd('/');
             if (path.EndsWith("/ws", StringComparison.OrdinalIgnoreCase))

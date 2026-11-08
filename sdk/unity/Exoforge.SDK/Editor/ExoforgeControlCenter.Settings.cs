@@ -240,18 +240,6 @@ public partial class ExoforgeControlCenter : EditorWindow
                 ShowStatus($"Failed to save exoforge.json: {ex.Message}", MessageType.Error);
             }
         }
-
-        if (GUILayout.Button("Reset to Localhost", EditorStyles.miniButton, GUILayout.Width(125)))
-        {
-            if (activeEnvConfig != null)
-            {
-                activeEnvConfig.WsUrl = "ws://localhost:4000/ws";
-                activeEnvConfig.HttpUrl = "http://localhost:4001";
-                Workspace?.Save();
-                ExoforgeRuntimeConfigGenerator.Generate();
-                ShowStatus("✓ Endpoints reset to localhost.", MessageType.Info);
-            }
-        }
         EditorGUILayout.EndHorizontal();
 
         EditorGUILayout.Space(4);

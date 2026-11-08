@@ -9,7 +9,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
   # ---- Subsystems & Components Specification ----
 
   @components [
-    # Ingress Layer (Client & Tooling)
+    # Layer 1 (Top): Ingress Layer (Client & Tooling)
     %{
       id: "unity_client",
       title: "Unity Client SDK",
@@ -23,10 +23,10 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       protocol: "WebSocket / HTTP RPC",
       upstream: "",
       downstream: "ws_gateway,transport_layer",
-      x: 35,
-      y: 135,
-      width: 175,
-      height: 80
+      x: 50,
+      y: 55,
+      width: 300,
+      height: 76
     },
     %{
       id: "exo_cli",
@@ -41,10 +41,10 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       protocol: "HTTP Administration",
       upstream: "",
       downstream: "transport_layer,http_gateway",
-      x: 35,
-      y: 280,
-      width: 175,
-      height: 80
+      x: 390,
+      y: 55,
+      width: 300,
+      height: 76
     },
     %{
       id: "producer_studio",
@@ -59,13 +59,13 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       protocol: "Phoenix LiveView",
       upstream: "",
       downstream: "http_gateway",
-      x: 35,
-      y: 425,
-      width: 175,
-      height: 80
+      x: 730,
+      y: 55,
+      width: 300,
+      height: 76
     },
 
-    # Gateways Layer
+    # Layer 2: Gateways Layer
     %{
       id: "ws_gateway",
       title: "WebSocket Gateway",
@@ -79,10 +79,10 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       protocol: "Framed JSON Socket",
       upstream: "unity_client",
       downstream: "action_dispatcher,event_dispatcher",
-      x: 245,
-      y: 135,
-      width: 180,
-      height: 80
+      x: 50,
+      y: 220,
+      width: 300,
+      height: 76
     },
     %{
       id: "transport_layer",
@@ -97,10 +97,10 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       protocol: "Sanitized RPC Envelope",
       upstream: "unity_client,exo_cli",
       downstream: "action_dispatcher",
-      x: 245,
-      y: 280,
-      width: 180,
-      height: 80
+      x: 390,
+      y: 220,
+      width: 300,
+      height: 76
     },
     %{
       id: "http_gateway",
@@ -115,13 +115,13 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       protocol: "HTTP / OpenAPI JSON",
       upstream: "producer_studio,exo_cli",
       downstream: "action_dispatcher",
-      x: 245,
-      y: 425,
-      width: 180,
-      height: 80
+      x: 730,
+      y: 220,
+      width: 300,
+      height: 76
     },
 
-    # Kernel Core (Central Microkernel Hub)
+    # Layer 3: Kernel Core (Microkernel Boundary)
     %{
       id: "extension_registry",
       title: "ExtensionRegistry",
@@ -135,10 +135,10 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       protocol: "Direct In-Memory Read",
       upstream: "action_dispatcher",
       downstream: "",
-      x: 485,
-      y: 48,
-      width: 220,
-      height: 72
+      x: 45,
+      y: 395,
+      width: 230,
+      height: 78
     },
     %{
       id: "action_dispatcher",
@@ -153,10 +153,10 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       protocol: "Zero-Copy In-Memory",
       upstream: "ws_gateway,transport_layer,http_gateway",
       downstream: "extension_registry,native_csharp,elixir_runner,std_services",
-      x: 475,
-      y: 190,
-      width: 240,
-      height: 85
+      x: 295,
+      y: 395,
+      width: 230,
+      height: 78
     },
     %{
       id: "event_dispatcher",
@@ -171,10 +171,10 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       protocol: "Distributed Pub/Sub (:pg)",
       upstream: "ws_gateway,native_csharp",
       downstream: "ws_gateway,extension_supervisor,native_csharp",
-      x: 475,
-      y: 340,
-      width: 240,
-      height: 85
+      x: 545,
+      y: 395,
+      width: 230,
+      height: 78
     },
     %{
       id: "extension_supervisor",
@@ -189,13 +189,13 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       protocol: "Cluster Supervision Tree",
       upstream: "event_dispatcher",
       downstream: "native_csharp,elixir_runner",
-      x: 485,
-      y: 490,
-      width: 220,
-      height: 72
+      x: 795,
+      y: 395,
+      width: 230,
+      height: 78
     },
 
-    # Extension Workers
+    # Layer 4: Extension Workers
     %{
       id: "native_csharp",
       title: "Native C# Game Worker",
@@ -209,10 +209,10 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       protocol: "Newline-Delimited JSON stdio",
       upstream: "action_dispatcher,event_dispatcher",
       downstream: "database_manager,event_dispatcher",
-      x: 765,
-      y: 135,
-      width: 205,
-      height: 85
+      x: 50,
+      y: 565,
+      width: 300,
+      height: 76
     },
     %{
       id: "elixir_runner",
@@ -227,10 +227,10 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       protocol: "Direct Message Passing",
       upstream: "action_dispatcher,extension_supervisor",
       downstream: "resource_store",
-      x: 765,
-      y: 280,
-      width: 205,
-      height: 80
+      x: 390,
+      y: 565,
+      width: 300,
+      height: 76
     },
     %{
       id: "std_services",
@@ -245,13 +245,13 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       protocol: "Service Action Contracts",
       upstream: "action_dispatcher",
       downstream: "storage_adapters",
-      x: 765,
-      y: 425,
-      width: 205,
-      height: 80
+      x: 730,
+      y: 565,
+      width: 300,
+      height: 76
     },
 
-    # Data & Storage Layer
+    # Layer 5 (Bottom): Data & Storage Layer
     %{
       id: "database_manager",
       title: "Database Manager",
@@ -265,10 +265,10 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       protocol: "Connection Pool RPC",
       upstream: "native_csharp",
       downstream: "storage_adapters",
-      x: 1010,
-      y: 135,
-      width: 165,
-      height: 80
+      x: 50,
+      y: 730,
+      width: 300,
+      height: 76
     },
     %{
       id: "resource_store",
@@ -283,10 +283,10 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       protocol: "Typed Resource Schema",
       upstream: "elixir_runner",
       downstream: "database_manager,storage_adapters",
-      x: 1010,
-      y: 280,
-      width: 165,
-      height: 80
+      x: 390,
+      y: 730,
+      width: 300,
+      height: 76
     },
     %{
       id: "storage_adapters",
@@ -301,33 +301,34 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       protocol: "Isolated Schema SQL",
       upstream: "database_manager,resource_store,std_services",
       downstream: "",
-      x: 1010,
-      y: 425,
-      width: 165,
-      height: 80
+      x: 730,
+      y: 730,
+      width: 300,
+      height: 76
     }
   ]
 
   @edges [
-    %{from: "unity_client", to: "ws_gateway", path: "M 210 175 L 245 175", label: "WebSocket"},
-    %{from: "unity_client", to: "transport_layer", path: "M 210 175 C 230 175, 225 320, 245 320", label: "RPC Ingress"},
-    %{from: "exo_cli", to: "transport_layer", path: "M 210 320 L 245 320", label: "Build Push"},
-    %{from: "producer_studio", to: "http_gateway", path: "M 210 465 L 245 465", label: "REST / LiveView"},
-    %{from: "ws_gateway", to: "action_dispatcher", path: "M 425 175 C 450 175, 450 225, 475 225", label: "dispatch"},
-    %{from: "ws_gateway", to: "event_dispatcher", path: "M 425 175 C 450 175, 450 375, 475 375", label: "pub/sub"},
-    %{from: "transport_layer", to: "action_dispatcher", path: "M 425 320 C 450 320, 450 240, 475 240", label: "verified"},
-    %{from: "http_gateway", to: "action_dispatcher", path: "M 425 465 C 455 465, 450 255, 475 255", label: "route"},
-    %{from: "action_dispatcher", to: "extension_registry", path: "M 595 190 L 595 120", label: "catalog lookup"},
-    %{from: "action_dispatcher", to: "native_csharp", path: "M 715 225 C 740 225, 740 175, 765 175", label: "stdio IPC"},
-    %{from: "action_dispatcher", to: "elixir_runner", path: "M 715 235 C 740 235, 740 320, 765 320", label: "actor message"},
-    %{from: "action_dispatcher", to: "std_services", path: "M 715 245 C 745 245, 740 465, 765 465", label: "dispatch"},
-    %{from: "event_dispatcher", to: "extension_supervisor", path: "M 595 425 L 595 490", label: "health status"},
-    %{from: "event_dispatcher", to: "native_csharp", path: "M 715 375 C 740 375, 740 190, 765 190", label: "event frame"},
-    %{from: "native_csharp", to: "database_manager", path: "M 970 175 L 1010 175", label: "host_call"},
-    %{from: "native_csharp", to: "event_dispatcher", path: "M 765 195 C 735 195, 735 355, 715 355", label: "publish"},
-    %{from: "elixir_runner", to: "resource_store", path: "M 970 320 L 1010 320", label: "schema CRUD"},
-    %{from: "std_services", to: "storage_adapters", path: "M 970 465 L 1010 465", label: "storage"},
-    %{from: "database_manager", to: "storage_adapters", path: "M 1092 215 L 1092 425", label: "SQL isolation"}
+    %{from: "unity_client", to: "ws_gateway", path: "M 200 131 L 200 220", label: "WebSocket"},
+    %{from: "unity_client", to: "transport_layer", path: "M 230 131 C 230 175, 500 175, 500 220", label: "RPC Ingress"},
+    %{from: "exo_cli", to: "transport_layer", path: "M 540 131 L 540 220", label: "Build Push"},
+    %{from: "producer_studio", to: "http_gateway", path: "M 880 131 L 880 220", label: "REST / LiveView"},
+    %{from: "ws_gateway", to: "action_dispatcher", path: "M 200 296 C 200 350, 360 350, 360 395", label: "dispatch"},
+    %{from: "ws_gateway", to: "event_dispatcher", path: "M 240 296 C 240 350, 600 350, 600 395", label: "pub/sub"},
+    %{from: "transport_layer", to: "action_dispatcher", path: "M 520 296 C 520 350, 410 350, 410 395", label: "verified"},
+    %{from: "http_gateway", to: "action_dispatcher", path: "M 860 296 C 860 350, 460 350, 460 395", label: "route"},
+    %{from: "action_dispatcher", to: "extension_registry", path: "M 295 434 L 275 434", label: "catalog lookup"},
+    %{from: "action_dispatcher", to: "native_csharp", path: "M 360 473 C 360 520, 200 520, 200 565", label: "stdio IPC"},
+    %{from: "action_dispatcher", to: "elixir_runner", path: "M 410 473 C 410 520, 540 520, 540 565", label: "actor message"},
+    %{from: "action_dispatcher", to: "std_services", path: "M 460 473 C 460 520, 860 520, 860 565", label: "dispatch"},
+    %{from: "event_dispatcher", to: "extension_supervisor", path: "M 775 434 L 795 434", label: "health status"},
+    %{from: "event_dispatcher", to: "native_csharp", path: "M 620 473 C 620 525, 250 525, 250 565", label: "event frame"},
+    %{from: "native_csharp", to: "event_dispatcher", path: "M 220 565 C 220 515, 580 515, 580 473", label: "publish"},
+    %{from: "native_csharp", to: "database_manager", path: "M 200 641 L 200 730", label: "host_call"},
+    %{from: "elixir_runner", to: "resource_store", path: "M 540 641 L 540 730", label: "schema CRUD"},
+    %{from: "std_services", to: "storage_adapters", path: "M 880 641 L 880 730", label: "storage"},
+    %{from: "database_manager", to: "storage_adapters", path: "M 350 768 C 480 768, 600 755, 730 755", label: "SQL isolation"},
+    %{from: "resource_store", to: "storage_adapters", path: "M 690 768 L 730 768", label: "resource persistence"}
   ]
 
   # ---- Workflow Steps Definition ----
@@ -757,15 +758,17 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
         <!-- Network Graph Canvas with Pan/Zoom & Docked Inspector Drawer -->
         <div
           id="arch-graph-container"
-          class="border border-slate-800 rounded-3xl bg-slate-950 overflow-hidden relative shadow-2xl h-[620px] select-none"
+          phx-hook="ArchGraph"
+          onmouseenter="window.ExoGraphEngine && window.ExoGraphEngine.initPanZoom('arch-graph')"
+          class="border border-slate-800 rounded-3xl bg-slate-950 overflow-hidden relative shadow-2xl h-[680px] select-none cursor-grab"
         >
           <!-- Canvas Background Click Area (clears spotlight) -->
-          <div class="graph-canvas-bg absolute inset-0 z-0 cursor-default"></div>
+          <div class="graph-canvas-bg absolute inset-0 z-0"></div>
 
           <!-- Viewport Element Transformed by Pan/Zoom -->
           <div
             id="arch-graph-viewport"
-            class="absolute top-0 left-0 w-[1220px] h-[590px] transition-transform duration-75 z-10"
+            class="absolute top-0 left-0 w-[1080px] h-[850px] transition-transform duration-75 z-10"
           >
             {render_network_svg(assigns, "inline")}
           </div>
@@ -1041,9 +1044,14 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
           </div>
 
           <!-- Modal Body Canvas -->
-          <div id="modal-arch-graph-container" class="flex-1 overflow-hidden relative p-4 select-none">
-            <div class="graph-canvas-bg absolute inset-0 z-0 cursor-default"></div>
-            <div id="modal-arch-graph-viewport" class="absolute top-0 left-0 w-[1220px] h-[590px] transition-transform duration-75 z-10">
+          <div
+            id="modal-arch-graph-container"
+            phx-hook="ArchGraph"
+            onmouseenter="window.ExoGraphEngine && window.ExoGraphEngine.initPanZoom('modal-arch-graph')"
+            class="flex-1 overflow-hidden relative p-4 select-none cursor-grab"
+          >
+            <div class="graph-canvas-bg absolute inset-0 z-0"></div>
+            <div id="modal-arch-graph-viewport" class="absolute top-0 left-0 w-[1080px] h-[850px] transition-transform duration-75 z-10">
               {render_network_svg(assigns, "modal")}
             </div>
             <!-- In-Modal Docked Drawer -->
@@ -1174,7 +1182,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
 
     ~H"""
     <svg
-      viewBox="0 0 1208 590"
+      viewBox="0 0 1080 850"
       class="w-full h-auto select-none font-sans"
     >
       <defs>
@@ -1216,37 +1224,37 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       <g class="uml-packages">
         <!-- Package 1: Ingress (Client & Dev Tooling) -->
         <g class="uml-package-box" data-category="client" data-subsystem="client">
-          <rect x="20" y="24" width="205" height="544" rx="20" fill="#0f172a" fill-opacity="0.6" stroke="#334155" stroke-width="1.2" stroke-dasharray="4 3" />
-          <path d="M 20 48 L 135 48 L 147 36 L 147 24 L 20 24 Z" fill="#1e293b" />
-          <text x="30" y="40" fill="#94a3b8" font-size="9" font-weight="bold" font-family="monospace">package Ingress</text>
+          <rect x="20" y="20" width="1040" height="135" rx="20" fill="#0f172a" fill-opacity="0.6" stroke="#334155" stroke-width="1.2" stroke-dasharray="4 3" />
+          <path d="M 20 44 L 145 44 L 157 32 L 157 20 L 20 20 Z" fill="#1e293b" />
+          <text x="30" y="36" fill="#94a3b8" font-size="9" font-weight="bold" font-family="monospace">package Ingress</text>
         </g>
 
         <!-- Package 2: Gateways Layer -->
         <g class="uml-package-box" data-category="extension" data-subsystem="gateways">
-          <rect x="235" y="24" width="200" height="544" rx="20" fill="#0f172a" fill-opacity="0.6" stroke="#475569" stroke-width="1.2" stroke-dasharray="4 3" />
-          <path d="M 235 48 L 350 48 L 362 36 L 362 24 L 235 24 Z" fill="#1e293b" />
-          <text x="245" y="40" fill="#94a3b8" font-size="9" font-weight="bold" font-family="monospace">package Gateways</text>
+          <rect x="20" y="185" width="1040" height="135" rx="20" fill="#0f172a" fill-opacity="0.6" stroke="#475569" stroke-width="1.2" stroke-dasharray="4 3" />
+          <path d="M 20 209 L 145 209 L 157 197 L 157 185 L 20 185 Z" fill="#1e293b" />
+          <text x="30" y="201" fill="#94a3b8" font-size="9" font-weight="bold" font-family="monospace">package Gateways</text>
         </g>
 
         <!-- Package 3: Kernel Core (Microkernel Boundary) -->
         <g class="uml-package-box" data-category="kernel" data-subsystem="kernel">
-          <rect x="456" y="24" width="278" height="544" rx="20" fill="#181308" fill-opacity="0.8" stroke="#f59e0b" stroke-width="2" filter={"url(##{@prefix}kernel-glow)"} />
-          <path d="M 456 48 L 600 48 L 612 36 L 612 24 L 456 24 Z" fill="#451a03" />
-          <text x="466" y="40" fill="#fde047" font-size="9.5" font-weight="black" font-family="monospace">⚡ package Kernel Core</text>
+          <rect x="20" y="350" width="1040" height="150" rx="20" fill="#181308" fill-opacity="0.8" stroke="#f59e0b" stroke-width="2" filter={"url(##{@prefix}kernel-glow)"} />
+          <path d="M 20 374 L 175 374 L 187 362 L 187 350 L 20 350 Z" fill="#451a03" />
+          <text x="30" y="366" fill="#fde047" font-size="9.5" font-weight="black" font-family="monospace">⚡ package Kernel Core</text>
         </g>
 
         <!-- Package 4: Extension Workers -->
         <g class="uml-package-box" data-category="extension" data-subsystem="extension">
-          <rect x="750" y="24" width="234" height="544" rx="20" fill="#0f172a" fill-opacity="0.6" stroke="#059669" stroke-width="1.2" stroke-dasharray="4 3" />
-          <path d="M 750 48 L 890 48 L 902 36 L 902 24 L 750 24 Z" fill="#064e3b" />
-          <text x="762" y="40" fill="#6ee7b7" font-size="9.5" font-weight="bold" font-family="monospace">package Extensions</text>
+          <rect x="20" y="530" width="1040" height="135" rx="20" fill="#0f172a" fill-opacity="0.6" stroke="#059669" stroke-width="1.2" stroke-dasharray="4 3" />
+          <path d="M 20 554 L 155 554 L 167 542 L 167 530 L 20 530 Z" fill="#064e3b" />
+          <text x="30" y="546" fill="#6ee7b7" font-size="9.5" font-weight="bold" font-family="monospace">package Extensions</text>
         </g>
 
         <!-- Package 5: Data & Storage -->
         <g class="uml-package-box" data-category="internal" data-subsystem="storage">
-          <rect x="996" y="24" width="192" height="544" rx="20" fill="#0f172a" fill-opacity="0.6" stroke="#0284c7" stroke-width="1.2" stroke-dasharray="4 3" />
-          <path d="M 996 48 L 1120 48 L 1132 36 L 1132 24 L 996 24 Z" fill="#082f49" />
-          <text x="1008" y="40" fill="#7dd3fc" font-size="9.5" font-weight="bold" font-family="monospace">package Storage</text>
+          <rect x="20" y="695" width="1040" height="135" rx="20" fill="#0f172a" fill-opacity="0.6" stroke="#0284c7" stroke-width="1.2" stroke-dasharray="4 3" />
+          <path d="M 20 719 L 145 719 L 157 707 L 157 695 L 20 695 Z" fill="#082f49" />
+          <text x="30" y="711" fill="#7dd3fc" font-size="9.5" font-weight="bold" font-family="monospace">package Storage</text>
         </g>
       </g>
 

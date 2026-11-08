@@ -817,7 +817,11 @@ public partial class ExoforgeControlCenter : EditorWindow
     public static async Task DownloadOrUpdateSdkAsync()
     {
         string host = ActiveHttpEndpoint;
-        if (string.IsNullOrEmpty(host)) host = "http://localhost:4005";
+        if (string.IsNullOrEmpty(host))
+        {
+            EditorUtility.DisplayDialog("Exoforge SDK", "No active cluster HTTP endpoint is configured. Please connect to a cluster first.", "OK");
+            return;
+        }
 
         string targetUrl = !string.IsNullOrEmpty(RemoteSdkPackageUrl)
             ? $"{host.TrimEnd('/')}{RemoteSdkPackageUrl}"
