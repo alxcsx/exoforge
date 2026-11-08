@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Exoforge.Client;
@@ -40,6 +41,31 @@ namespace Exoforge.Client.Unity
             _mainContext = SynchronizationContext.Current;
             _mainThreadId = Environment.CurrentManagedThreadId;
             try { ExoDeviceId.Get(); } catch { }
+            try { WireExoServicesLocator(); } catch { }
+        }
+
+        /// <summary>
+        /// Auto-wires the static ExoServices.Client and Exo.Client facade to this ambient SDK client.
+        /// </summary>
+        internal static void WireExoServicesLocator()
+        {
+            try
+            {
+                foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+                {
+                    var exoServicesType = asm.GetType("Exoforge.Client.ExoServices");
+                    if (exoServicesType != null)
+                    {
+                        var setLocator = exoServicesType.GetMethod("SetClientLocator", BindingFlags.Public | BindingFlags.Static);
+                        if (setLocator != null)
+                        {
+                            Func<ExoClient> locator = () => Client;
+                            setLocator.Invoke(null, new object[] { locator });
+                        }
+                    }
+                }
+            }
+            catch { }
         }
 
         /// <summary>
@@ -88,14 +114,26 @@ namespace Exoforge.Client.Unity
         /// Use it with the generated service extensions
         /// (<c>Client.PlayerData()</c>, <c>Client.SnakeLeaderboard()</c>, …).
         /// </summary>
-        public static ExoClient Client =>
-            Behaviour.Client is { CanSendActions: true } client
-                ? client
-                : throw new InvalidOperationException(
-                    "Exoforge has no transport. Link the workspace config, or call ExoforgeSDK.ConnectAsync().");
+        public static ExoClient Client
+        {
+            get
+            {
+                var client = Behaviour.Client is { CanSendActions: true } c
+                    ? c
+                    : throw new InvalidOperationException(
+                        "Exoforge has no transport. Link the workspace config, or call ExoforgeSDK.ConnectAsync().");
+                try { WireExoServicesLocator(); } catch { }
+                return client;
+            }
+        }
 
         /// <summary>Connects to the cluster (idempotent) and returns the client.</summary>
-        public static Task<ExoClient> ConnectAsync() => Behaviour.GetClientAsync();
+        public static async Task<ExoClient> ConnectAsync()
+        {
+            var client = await Behaviour.GetClientAsync();
+            try { WireExoServicesLocator(); } catch { }
+            return client;
+        }
 
         /// <summary>
         /// Closes the socket and stops reconnecting. Actions that do not need one keep working over

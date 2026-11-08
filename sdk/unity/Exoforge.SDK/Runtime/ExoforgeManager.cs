@@ -487,6 +487,7 @@ namespace Exoforge.Client.Unity
                         OnStateChanged?.Invoke(ExoforgeConnectionState.Authenticated);
                         _readyTcs.TrySetResult(true);
                         OnReady?.Invoke();
+                        ExoforgeSDK.WireExoServicesLocator();
                     }
                     else
                     {

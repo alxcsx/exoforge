@@ -155,4 +155,24 @@ public class ExoCodeGeneratorTests
             try { Directory.Delete(tempDir, true); } catch { }
         }
     }
+
+    [Fact]
+    public void Generate_ExoServices_Includes_Unity_Direct_Binding_And_Assembly_Fallbacks()
+    {
+        var services = new List<ServiceContractModel>
+        {
+            new ServiceContractModel
+            {
+                Name = "test_service",
+                Actions = new List<ActionContractModel>()
+            }
+        };
+
+        string code = ExoCodeGenerator.Generate(services);
+        Assert.Contains("public static class ExoServices", code);
+        Assert.Contains("#if UNITY_2018_1_OR_NEWER || UNITY_5_3_OR_NEWER", code);
+        Assert.Contains("return global::Exoforge.Client.Unity.ExoforgeSDK.Client;", code);
+        Assert.Contains("Type.GetType(\"Exoforge.Client.Unity.ExoforgeSDK, Exoforge.SDK\")", code);
+        Assert.Contains("foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())", code);
+    }
 }

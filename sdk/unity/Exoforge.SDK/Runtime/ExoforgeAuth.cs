@@ -85,6 +85,7 @@ namespace Exoforge.Client.Unity
                             existing.Value.Scopes,
                             false);
 
+                        ExoforgeSDK.WireExoServicesLocator();
                         return Current;
                     }
                 }
@@ -126,6 +127,7 @@ namespace Exoforge.Client.Unity
             ExoTokenStore.SaveSession(token, auth.PlayerId, auth.Scopes, name);
 
             Current = new ExoSession(auth.PlayerId, name, token, auth.Scopes, true);
+            ExoforgeSDK.WireExoServicesLocator();
             return Current;
         }
 
