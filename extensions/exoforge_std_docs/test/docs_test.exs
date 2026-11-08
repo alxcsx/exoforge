@@ -141,7 +141,7 @@ defmodule Exoforge.Std.DocsTest do
       />
       """)
 
-      assert html =~ "From Zero to Live Online Multiplayer Features"
+      assert html =~ "Creating Your First Online Multiplayer Feature"
       assert html =~ "Export to PDF"
       assert html =~ "@media print"
     end
@@ -200,7 +200,7 @@ defmodule Exoforge.Std.DocsTest do
       assert html =~ "Automated Season Rollovers"
       assert html =~ "Web Store Checkout, Stripe Webhooks &amp; Instant Delivery"
       assert html =~ "Exoforge Architecture Tips &amp; Golden Rules"
-      assert html =~ "Hot State in RAM, Durable in DB"
+      assert html =~ "Stateless Extensions, Resilient State in DB"
     end
 
     test "renders architecture subpage with high-contrast badge styles" do

@@ -240,6 +240,39 @@ defmodule Exoforge.Std.Docs.View do
   end
 
   # ===========================================================================
+  # COMPONENT: CODE TABS (ASYNC / CALLBACK / SQL / TABLE VARIANTS)
+  # ===========================================================================
+  attr(:badge, :string, default: "C#")
+  attr(:tabs, :list, required: true)
+
+  defp code_tabs(assigns) do
+    ~H"""
+    <div class="code-tab-group rounded-2xl border border-gray-800 overflow-hidden bg-gray-950 shadow-md">
+      <div class="flex items-center justify-between border-b border-gray-800 bg-gray-900/90 px-3 py-2">
+        <div class="flex items-center gap-1.5 text-xs font-bold flex-wrap">
+          <%= for {tab, idx} <- Enum.with_index(@tabs) do %>
+            <button
+              type="button"
+              onclick={"const g = this.closest('.code-tab-group'); g.querySelectorAll('.tab-btn').forEach(b => { b.classList.remove('bg-primary-600', 'text-white'); b.classList.add('text-gray-400', 'hover:text-white'); }); this.classList.add('bg-primary-600', 'text-white'); this.classList.remove('text-gray-400', 'hover:text-white'); g.querySelectorAll('.tab-pane').forEach((p, i) => p.classList.toggle('hidden', i !== #{idx}));"}
+              class={"tab-btn px-2.5 py-1 rounded-lg transition-all text-xs cursor-pointer " <> if idx == 0, do: "bg-primary-600 text-white shadow-2xs", else: "text-gray-400 hover:text-white"}
+            >
+              <%= tab.label %>
+            </button>
+          <% end %>
+        </div>
+        <span class="text-xs text-emerald-400 font-mono shrink-0 pl-2"><%= @badge %></span>
+      </div>
+
+      <%= for {tab, idx} <- Enum.with_index(@tabs) do %>
+        <div class={"tab-pane " <> if idx != 0, do: "hidden", else: ""}>
+          <pre class="bg-gray-950 text-gray-200 p-4 font-mono text-xs md:text-[13px] leading-relaxed overflow-x-auto"><code><%= Phoenix.HTML.raw(Markdown.highlight_csharp(tab.code)) %></code></pre>
+        </div>
+      <% end %>
+    </div>
+    """
+  end
+
+  # ===========================================================================
   # SUBPAGE: QUICKSTART FLOW & HERO
   # ===========================================================================
   attr(:action_catalog, :list, default: [])
@@ -317,55 +350,6 @@ defmodule Exoforge.Std.Docs.View do
         </div>
       </div>
 
-      <!-- CTA: Jump to Blueprints or Dedicated Live API Reference -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 print:hidden">
-        <div class="p-6 rounded-3xl bg-gradient-to-r from-blue-950/40 via-indigo-950/30 to-blue-950/40 border border-blue-500/30 flex flex-col justify-between gap-4">
-          <div class="space-y-1">
-            <div class="flex items-center gap-2 text-blue-300 font-bold text-xs uppercase tracking-wider">
-              <span>💡</span>
-              <span>Architectural Blueprints</span>
-            </div>
-            <h3 class="text-base font-extrabold text-white">What You Can Build with Exoforge</h3>
-            <p class="text-xs text-gray-300 leading-relaxed">
-              Explore 6 production-grade C# patterns (Auction House, In-Memory Matchmaker, World Boss LiveOps, Guilds, Stripe Webhooks) and see how Exoforge eliminates PlayFab/UGS workarounds.
-            </p>
-          </div>
-          <button
-            type="button"
-            phx-click="set_guide_subpage"
-            phx-target={@myself}
-            phx-value-subpage="use_cases"
-            class="self-start px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer"
-          >
-            <span>💡 Explore Architecture &amp; Blueprints</span>
-            <span>➔</span>
-          </button>
-        </div>
-
-        <div class="p-6 rounded-3xl bg-gradient-to-r from-purple-950/40 via-indigo-950/30 to-purple-950/40 border border-purple-500/30 flex flex-col justify-between gap-4">
-          <div class="space-y-1">
-            <div class="flex items-center gap-2 text-purple-300 font-bold text-xs uppercase tracking-wider">
-              <span>⚡</span>
-              <span>Live Action Catalog</span>
-            </div>
-            <h3 class="text-base font-extrabold text-white">Explore All Registered Services &amp; Actions</h3>
-            <p class="text-xs text-gray-300 leading-relaxed">
-              Inspect live cluster contracts, action signatures, parameters, authorization scopes, and copy-pasteable Unity SDK calling code in the dedicated API Reference.
-            </p>
-          </div>
-          <button
-            type="button"
-            phx-click="set_guide_subpage"
-            phx-target={@myself}
-            phx-value-subpage="catalog"
-            class="self-start px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer"
-          >
-            <span>⚡ View Live API Reference</span>
-            <span>➔</span>
-          </button>
-        </div>
-      </div>
-
       <!-- Quick Summary Cards -->
       <div class="grid grid-cols-1 md:grid-cols-3 gap-5 print:gap-3">
         <div class="bg-white p-6 rounded-2xl border border-gray-200/90 shadow-sm space-y-2 print:border-gray-300 print:shadow-none print:break-inside-avoid">
@@ -437,12 +421,14 @@ defmodule Exoforge.Std.Docs.View do
             </ul>
           </div>
 
-          <div class="space-y-2">
-            <div class="flex items-center justify-between text-gray-400 font-bold text-xs pb-1">
-              <span>Unity Anonymous Sign-In</span>
-              <span class="text-emerald-400 font-mono text-[10px]">C# Client</span>
-            </div>
-            <pre class="bg-gray-950 text-gray-200 p-4 rounded-2xl font-mono text-xs md:text-[13px] leading-relaxed overflow-x-auto border border-gray-800"><code><%= Phoenix.HTML.raw(Markdown.highlight_csharp(code_auth())) %></code></pre>
+          <div>
+            <.code_tabs
+              badge="Unity C#"
+              tabs={[
+                %{label: "Async / Await (Task)", code: code_auth_async()},
+                %{label: "Main-Thread Callback", code: code_auth_callback()}
+              ]}
+            />
           </div>
         </div>
       </section>
@@ -601,15 +587,71 @@ defmodule Exoforge.Std.Docs.View do
             </li>
           </ul>
 
-          <div class="space-y-2 pt-1">
-            <div class="flex items-center justify-between text-gray-400 font-bold text-xs pb-1">
-              <span>Assets/Scripts/GameplayRewardController.cs</span>
-              <span class="text-xs text-emerald-400 font-mono">Unity C#</span>
-            </div>
-            <pre class="bg-gray-950 text-gray-200 p-4 rounded-2xl font-mono text-xs md:text-[13px] leading-relaxed overflow-x-auto border border-gray-800"><code><%= Phoenix.HTML.raw(Markdown.highlight_csharp(code_unity())) %></code></pre>
+          <div class="pt-1">
+            <.code_tabs
+              badge="Unity C#"
+              tabs={[
+                %{label: "Async / Await (Task)", code: code_unity_async()},
+                %{label: "Main-Thread Callback", code: code_unity_callback()}
+              ]}
+            />
           </div>
         </div>
       </section>
+
+      <!-- Next Steps: Deep Dive into Blueprints or Live Action Catalog -->
+      <div class="space-y-4 pt-4 border-t border-gray-200/60 print:hidden">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-bold text-gray-400 uppercase tracking-wider font-mono">Next Steps &amp; Deep Dive</span>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div class="p-6 rounded-3xl bg-gradient-to-r from-blue-950/40 via-indigo-950/30 to-blue-950/40 border border-blue-500/30 flex flex-col justify-between gap-4 shadow-md">
+            <div class="space-y-1">
+              <div class="flex items-center gap-2 text-blue-300 font-bold text-xs uppercase tracking-wider">
+                <span>💡</span>
+                <span>Architectural Blueprints</span>
+              </div>
+              <h3 class="text-base font-extrabold text-white">What You Can Build with Exoforge</h3>
+              <p class="text-xs text-gray-300 leading-relaxed">
+                Explore 6 production-grade C# patterns (Auction House, In-Memory Matchmaker, World Boss LiveOps, Guilds, Stripe Webhooks) and see how Exoforge eliminates PlayFab/UGS workarounds.
+              </p>
+            </div>
+            <button
+              type="button"
+              phx-click="set_guide_subpage"
+              phx-target={@myself}
+              phx-value-subpage="use_cases"
+              class="self-start px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer"
+            >
+              <span>💡 Explore Architecture &amp; Blueprints</span>
+              <span>➔</span>
+            </button>
+          </div>
+
+          <div class="p-6 rounded-3xl bg-gradient-to-r from-purple-950/40 via-indigo-950/30 to-purple-950/40 border border-purple-500/30 flex flex-col justify-between gap-4 shadow-md">
+            <div class="space-y-1">
+              <div class="flex items-center gap-2 text-purple-300 font-bold text-xs uppercase tracking-wider">
+                <span>⚡</span>
+                <span>Live Action Catalog</span>
+              </div>
+              <h3 class="text-base font-extrabold text-white">Explore All Registered Services &amp; Actions</h3>
+              <p class="text-xs text-gray-300 leading-relaxed">
+                Inspect live cluster contracts, action signatures, parameters, authorization scopes, and copy-pasteable Unity SDK calling code in the dedicated API Reference.
+              </p>
+            </div>
+            <button
+              type="button"
+              phx-click="set_guide_subpage"
+              phx-target={@myself}
+              phx-value-subpage="catalog"
+              class="self-start px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer"
+            >
+              <span>⚡ View Live API Reference</span>
+              <span>➔</span>
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
     """
   end
@@ -794,17 +836,14 @@ defmodule Exoforge.Std.Docs.View do
           </div>
         </div>
 
-        <div class="space-y-2">
-          <div class="flex items-center justify-between text-xs text-gray-500 font-bold">
-            <span>MarketplaceExtension.cs</span>
-            <span class="font-mono text-[11px] text-gray-400">C# 12 / .NET 9+</span>
-          </div>
-          <div class="relative group">
-            <button type="button" onclick="window.exoCopyCode && window.exoCopyCode(this)" class="absolute top-2.5 right-3 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white border border-gray-700 flex items-center gap-1 cursor-pointer print:hidden shadow-xs" title="Copy code">
-              <span class="copy-icon">📋</span><span class="copy-text">Copy</span>
-            </button>
-            <pre class="bg-gray-950 text-gray-200 p-4 rounded-2xl font-mono text-xs md:text-[13px] leading-relaxed overflow-x-auto border border-gray-800"><code><%= Phoenix.HTML.raw(Markdown.highlight_csharp(snippet_auction_house())) %></code></pre>
-          </div>
+        <div>
+          <.code_tabs
+            badge="C# 12 / .NET 9+"
+            tabs={[
+              %{label: "Hybrid (Raw SQL Queries + Key/Value)", code: snippet_auction_house()},
+              %{label: "Type-Safe Table Repository (No SQL)", code: snippet_auction_house_table()}
+            ]}
+          />
         </div>
       </section>
 
@@ -1914,6 +1953,41 @@ defmodule Exoforge.Std.Docs.View do
               </tbody>
             </table>
           </div>
+
+          <!-- Data Access Paradigms: Table Repository vs Parameterized SQL -->
+          <div class="mt-6 space-y-4 pt-4 border-t border-gray-100">
+            <div>
+              <h4 class="font-bold text-gray-900 text-sm flex items-center gap-2">
+                <span>🗄️</span>
+                <span>Database Access Paradigms: Table Repository vs. Parameterized SQL</span>
+              </h4>
+              <p class="text-xs text-gray-500 mt-0.5">
+                Exoforge provides two complementary database paradigms to eliminate ORM bloat and keep runtime memory minimal.
+              </p>
+            </div>
+
+            <div class="p-4 rounded-2xl bg-amber-50/70 border border-amber-200/80 text-xs text-amber-950 space-y-1.5">
+              <div class="flex items-center gap-1.5 font-bold text-amber-900">
+                <span>💡</span>
+                <span>Does Exoforge have a Query Builder?</span>
+              </div>
+              <p class="text-amber-800 leading-relaxed text-[11px]">
+                <strong>No — by deliberate architectural design.</strong> Complex query builders (like EF Core or LINQ-to-Entities) introduce runtime expression compilation, large binary size, and high garbage collection pressure. Instead, Exoforge gives you two native, zero-overhead primitives:
+              </p>
+              <ul class="list-disc list-inside space-y-1 text-amber-800 text-[11px]">
+                <li><strong>Type-Safe Table Repository (<code class="font-mono font-semibold">Exo.Database.Table&lt;T&gt;()</code>):</strong> Pure C# CRUD with auto-resolved table names, primary keys, and singleton lookups. Zero SQL strings needed.</li>
+                <li><strong>Parameterized Raw SQL (<code class="font-mono font-semibold">Exo.Database.Query&lt;T&gt;()</code>):</strong> High-performance SQL queries with positional <code class="font-mono font-semibold">$1, $2, ...</code> arguments, automatic record mapping, and atomic in-place updates.</li>
+              </ul>
+            </div>
+
+            <.code_tabs
+              badge="C# Database"
+              tabs={[
+                %{label: "Type-Safe Table Repository (No SQL)", code: code_db_table()},
+                %{label: "Parameterized Raw SQL (Queries & In-Place Updates)", code: code_db_sql()}
+              ]}
+            />
+          </div>
         </div>
       </section>
     </div>
@@ -1953,6 +2027,20 @@ defmodule Exoforge.Std.Docs.View do
         <span class="text-xs font-bold text-gray-500 bg-gray-100 px-3 py-1.5 rounded-xl self-start md:self-auto font-mono">
           <%= length(@action_catalog) %> Services Loaded
         </span>
+      </div>
+
+      <!-- Educational Banner: Server Action Modes vs Client Asynchrony -->
+      <div class="p-4 rounded-2xl bg-blue-50/70 border border-blue-200/80 text-xs text-blue-900 space-y-1.5 print:border-gray-300">
+        <div class="flex items-center gap-2 font-bold text-blue-900">
+          <span>ℹ️</span>
+          <span>Understanding Action Modes (<code class="font-mono text-primary-700">SYNC</code>, <code class="font-mono text-purple-700">ASYNC</code>, <code class="font-mono text-amber-700">CAST</code>) vs. Client Asynchrony</span>
+        </div>
+        <p class="text-blue-800 leading-relaxed text-[11px]">
+          In this live catalog, badges show the <strong>server-side execution mode</strong>. A <span class="font-mono font-bold uppercase px-1 py-0.5 rounded bg-blue-100 text-blue-900 border border-blue-300 text-[10px]">sync</span> badge indicates a standard <strong>request-reply RPC</strong>: the server process handles the call synchronously within its actor (completing database operations, auth checks, etc.) and returns the result in the RPC response frame. In C# extensions, methods returning <code class="font-mono">Task&lt;T&gt;</code> run as <span class="font-mono font-bold uppercase px-1 py-0.5 rounded bg-cyan-100 text-cyan-900 border border-cyan-300 text-[10px]">async</span>, while fire-and-forget actions use <span class="font-mono font-bold uppercase px-1 py-0.5 rounded bg-purple-100 text-purple-900 border border-purple-300 text-[10px]">cast</span>.
+        </p>
+        <p class="text-blue-800 leading-relaxed text-[11px]">
+          <strong>From the Unity C# client, every network RPC is 100% non-blocking and asynchronous.</strong> Generated stubs emit both <code class="font-mono font-bold text-primary-800">Task&lt;T&gt; *Async(...)</code> overloads for <code class="font-mono">await</code> and main-thread <code class="font-mono font-bold text-primary-800">callbacks</code> (<code class="font-mono">onComplete</code> / <code class="font-mono">onError</code>) for every action.
+        </p>
       </div>
 
       <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2 border-t border-gray-100">
@@ -2184,13 +2272,14 @@ defmodule Exoforge.Std.Docs.View do
     |> String.trim()
   end
 
-  defp code_auth do
+  defp code_auth_async do
     """
     using UnityEngine;
     using Exoforge.SDK;
 
     public class GameInitializer : MonoBehaviour
     {
+        // Variant A: Task Async / Await
         async void Start()
         {
             var session = await ExoforgeSDK.Auth.LoginAnonymously();
@@ -2200,6 +2289,35 @@ defmodule Exoforge.Std.Docs.View do
             {
                 await ExoforgeSDK.Auth.SetDisplayName("Viper");
             }
+        }
+    }
+    """
+  end
+
+  defp code_auth_callback do
+    """
+    using UnityEngine;
+    using Exoforge.SDK;
+
+    public class GameInitializer : MonoBehaviour
+    {
+        // Variant B: Unity Main-Thread Callback
+        void Start()
+        {
+            ExoforgeSDK.Auth.LoginAnonymously(
+                onComplete: session =>
+                {
+                    Debug.Log($"Player session ready: {session.PlayerId}");
+                    if (!session.HasDisplayName)
+                    {
+                        ExoforgeSDK.Auth.SetDisplayName("Viper",
+                            namedSession => Debug.Log($"Display name set: {namedSession.DisplayName}"),
+                            err => Debug.LogError($"Naming failed: {err.Message}")
+                        );
+                    }
+                },
+                onError: err => Debug.LogError($"Anonymous sign-in failed: {err.Message}")
+            );
         }
     }
     """
@@ -2229,7 +2347,7 @@ defmodule Exoforge.Std.Docs.View do
     """
   end
 
-  defp code_unity do
+  defp code_unity_async do
     """
     using UnityEngine;
     using System;
@@ -2239,28 +2357,176 @@ defmodule Exoforge.Std.Docs.View do
 
     public class GameplayRewardController : MonoBehaviour
     {
-        // Style A: Unity Main-Thread Callback
-        void OnLevelCompletedWithCallback(int points, int multiplier)
-        {
-            Exo.GameplayCalculator.CalculateScore(
-                new CalculateScoreRequest(points, multiplier),
-                onComplete: res => Debug.Log($"Callback Score: {res.TotalScore}"),
-                onError: err => Debug.LogError($"Calculation failed: {err.Message}")
-            );
-        }
-
-        // Style B: Task Async / Await Overload
-        async Task OnLevelCompletedAsync(int points, int multiplier)
+        // Variant A: Task Async / Await Overload
+        public async Task OnLevelCompletedAsync(int points, int multiplier)
         {
             try
             {
-                var res = await Exo.GameplayCalculator.CalculateScoreAsync(new CalculateScoreRequest(points, multiplier));
-                Debug.Log($"Async Score: {res.TotalScore}");
+                var req = new CalculateScoreRequest(points, multiplier);
+                var res = await Exo.GameplayCalculator.CalculateScoreAsync(req);
+                Debug.Log($"Score calculated: {res.TotalScore} at {res.CalculatedAt}");
+            }
+            catch (ExoActionException err)
+            {
+                Debug.LogError($"Server error [{err.ErrorCode}]: {err.Message}");
             }
             catch (Exception err)
             {
-                Debug.LogError($"Calculation failed: {err.Message}");
+                Debug.LogError($"Network or client error: {err.Message}");
             }
+        }
+    }
+    """
+  end
+
+  defp code_unity_callback do
+    """
+    using UnityEngine;
+    using Exoforge.SDK;
+    using Exoforge.Generated;
+
+    public class GameplayRewardController : MonoBehaviour
+    {
+        // Variant B: Unity Main-Thread Callback
+        public void OnLevelCompleted(int points, int multiplier)
+        {
+            var req = new CalculateScoreRequest(points, multiplier);
+            Exo.GameplayCalculator.CalculateScore(
+                req,
+                onComplete: res =>
+                {
+                    Debug.Log($"Score: {res.TotalScore} at {res.CalculatedAt}");
+                    // Safe to modify GameObjects & UI transforms immediately
+                    UpdateScoreUI(res.TotalScore);
+                },
+                onError: err =>
+                {
+                    Debug.LogError($"Calculation failed [{err.Code}]: {err.Message}");
+                }
+            );
+        }
+
+        private void UpdateScoreUI(int score) => scoreText.text = $"Score: {score}";
+        [SerializeField] private UnityEngine.UI.Text scoreText;
+    }
+    """
+  end
+
+  defp code_db_table do
+    """
+    using System;
+    using Exoforge.Plugin.SDK;
+
+    // Pattern 1: Type-Safe Table Repository (No raw SQL strings)
+    public class EconomyService
+    {
+        public void ManageListing(string listingId, string sellerId, int price)
+        {
+            // Strongly typed table repository for MarketListingRecord
+            var table = Exo.Database.Table<MarketListingRecord>();
+
+            // 1. Get by primary key
+            var item = table.Get(listingId);
+
+            // 2. Put / Upsert entity (auto-resolves table name & primary key)
+            table.Put(new MarketListingRecord(listingId, sellerId, "sword_01", 1, price, DateTime.UtcNow));
+
+            // 3. Retrieve all records
+            var all = table.All();
+
+            // 4. Delete by ID
+            table.Delete(listingId);
+
+            // 5. Singleton config resource
+            var config = Exo.Database.First<EconomyConfigRecord>();
+        }
+    }
+    """
+  end
+
+  defp code_db_sql do
+    """
+    using System;
+    using System.Collections.Generic;
+    using Exoforge.Plugin.SDK;
+
+    // Pattern 2: Parameterized Raw SQL (Queries, Joins, Aggregates & Atomic In-Place Updates)
+    public class EconomyService
+    {
+        public List<MarketListingRecord> SearchListings(string itemId, int maxPrice, int limit)
+        {
+            // Positional parameters ($1, $2, ...) prevent SQL injection
+            // Result rows map directly to immutable C# records
+            return Exo.Database.Query<MarketListingRecord>(
+                "SELECT * FROM market_listings WHERE item_id = $1 AND unit_price <= $2 ORDER BY unit_price ASC LIMIT $3",
+                itemId, maxPrice, limit
+            );
+        }
+
+        public void AtomicGoldTransfer(string senderId, string receiverId, int gold)
+        {
+            // Atomic in-place updates eliminate read-modify-write race conditions
+            Exo.Database.Execute("UPDATE players SET gold = gold - $1 WHERE id = $2 AND gold >= $1", gold, senderId);
+            Exo.Database.Execute("UPDATE players SET gold = gold + $1 WHERE id = $2", gold, receiverId);
+        }
+    }
+    """
+  end
+
+  defp snippet_auction_house_table do
+    """
+    using System;
+    using System.Collections.Generic;
+    using System.Threading.Tasks;
+    using Exoforge.Plugin.SDK;
+
+    [ExoService("marketplace_service", Title = "Auction House", Icon = "⚖️")]
+    public class MarketplaceExtension
+    {
+        [ExoAction]
+        public CreateListingResponse ListItem(CreateListingRequest req)
+        {
+            string listingId = Guid.NewGuid().ToString("N");
+            var listing = new MarketListingRecord(
+                listingId,
+                Exo.Context.CallerPlayerId,
+                req.ItemId,
+                req.Quantity,
+                req.UnitPrice,
+                DateTime.UtcNow
+            );
+
+            // Pure C# table repository — zero raw SQL strings
+            Exo.Database.Table<MarketListingRecord>().Put(listing);
+            Exo.Logger.Info($"Player {Exo.Context.CallerPlayerId} listed {req.Quantity}x {req.ItemId}");
+            return new CreateListingResponse(listingId);
+        }
+
+        [ExoAction]
+        public IReadOnlyList<MarketListingRecord> AllListings()
+        {
+            // Read all entities via typed table repository
+            return Exo.Database.Table<MarketListingRecord>().All();
+        }
+
+        [ExoAction]
+        public async Task<BuyListingResponse> BuyListing(BuyListingRequest req)
+        {
+            var table = Exo.Database.Table<MarketListingRecord>();
+            var listing = table.Get(req.ListingId);
+            if (listing == null)
+                throw new ExoActionException("listing_not_found", "Item has expired or already sold.");
+
+            table.Delete(req.ListingId);
+
+            await Exo.Events.EmitAsync(new ListingSoldEvent(
+                listing.SellerPlayerId,
+                listing.ItemId,
+                listing.Quantity,
+                listing.UnitPrice * listing.Quantity
+            ));
+
+            return new BuyListingResponse(true);
         }
     }
     """
