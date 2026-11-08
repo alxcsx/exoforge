@@ -160,6 +160,7 @@ defmodule Exoforge.Std.Docs do
                 %{name: to_string(other), type: "term", optional: false, doc: nil}
             end)
             |> Enum.uniq_by(& &1.name)
+            |> Enum.sort_by(fn p -> if p.optional, do: 1, else: 0 end)
 
           _ ->
             []

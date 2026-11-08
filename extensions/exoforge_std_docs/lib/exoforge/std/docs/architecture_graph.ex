@@ -1,24 +1,26 @@
 defmodule Exoforge.Std.Docs.ArchitectureGraph do
   @moduledoc """
-  Interactive SVG architecture DAG topology, zoomable inspector, and sequential cascade
-  workflow pipeline visualizer for Exoforge.
+  Interactive UML Architecture Diagram, Fullscreen Maximizer, and Sequential Workflow
+  Pipeline Visualizer for Exoforge.
   """
   use Phoenix.Component
 
-  # ---- Architecture Nodes Definition ----
+  # ---- Architecture Components Specification ----
 
-  @nodes [
+  @components [
     %{
       id: "unity_client",
       title: "Unity Client SDK",
       subtitle: "com.exoforge.sdk",
-      desc: "Game client runtime with async/await stubs, device auth, and reactive event bindings.",
+      desc: "Game client runtime with async/await stubs, device anonymous auth, and reactive event hooks.",
       icon: "🕹️",
+      package: "Client Ingress",
       category: "client",
-      badge: "CLIENT",
-      x: 40,
-      y: 60,
-      litmus: "Client Ingress (Calls gateways over network; not an extension)"
+      badge: "GAME CLIENT",
+      x: 45,
+      y: 75,
+      width: 160,
+      height: 70
     },
     %{
       id: "exo_cli",
@@ -26,197 +28,227 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       subtitle: "Management Engine",
       desc: "Local development CLI, scaffolding, C# extension compiler, and remote cluster push.",
       icon: "💻",
+      package: "Developer Tooling",
       category: "tooling",
-      badge: "TOOLING",
-      x: 40,
-      y: 200,
-      litmus: "Developer Tooling (External executable; interacts via HTTP API)"
+      badge: "DEV TOOLING",
+      x: 45,
+      y: 195,
+      width: 160,
+      height: 70
     },
     %{
       id: "producer_studio",
       title: "Producer Studio",
       subtitle: "LiveView Dashboard :4005",
-      desc: "Web-based actor inspector, live metrics, extension lifecycle manager, and dev guide.",
+      desc: "Web-based actor inspector, live cluster metrics, extension lifecycle manager, and dev guide.",
       icon: "🎛️",
+      package: "Studio Operations",
       category: "studio",
-      badge: "STUDIO",
-      x: 40,
-      y: 340,
-      litmus: "Studio Extension (LiveView UI interacting with kernel and extensions)"
+      badge: "STUDIO UI",
+      x: 45,
+      y: 315,
+      width: 160,
+      height: 70
     },
     %{
       id: "ws_gateway",
       title: "WebSocket Gateway",
       subtitle: ":ws on port 4000",
-      desc: "Framed realtime JSON WebSocket ingress & low-latency bidirectional pub/sub bus.",
+      desc: "Real-time framed JSON WebSocket ingress and low-latency bidirectional pub/sub event bus.",
       icon: "⚡",
+      package: "Gateway Layer",
       category: "extension",
-      badge: "EXTENSION - PLUGGABLE",
-      x: 260,
-      y: 60,
-      litmus: "Swappable (Can be swapped with TCP/UDP; other services do not compile against it)"
+      badge: "GATEWAY EXTENSION",
+      x: 265,
+      y: 75,
+      width: 160,
+      height: 70
     },
     %{
       id: "http_gateway",
       title: "HTTP REST Gateway",
       subtitle: ":http on port 4001",
-      desc: "Dynamic OpenAPI REST endpoints automatically derived from service action contracts.",
+      desc: "Dynamic OpenAPI REST endpoints derived automatically from service action contracts.",
       icon: "🌐",
+      package: "Gateway Layer",
       category: "extension",
-      badge: "EXTENSION - PLUGGABLE",
-      x: 260,
-      y: 200,
-      litmus: "Swappable (Can be swapped with gRPC; other services do not compile against it)"
+      badge: "GATEWAY EXTENSION",
+      x: 265,
+      y: 195,
+      width: 160,
+      height: 70
     },
     %{
       id: "transport_layer",
       title: "Transport Abstraction",
       subtitle: ":transport service",
-      desc: "Normalizes inbound requests, strips spoofed auth, and stamps verified credentials.",
+      desc: "Strips unverified client spoofed fields, stamps verified player credentials, and normalizes RPCs.",
       icon: "🔄",
+      package: "Gateway Layer",
       category: "extension",
-      badge: "EXTENSION - PLUGGABLE",
-      x: 260,
-      y: 340,
-      litmus: "Contract Dependency (Gateways rely on this shared ingress contract)"
+      badge: "GATEWAY EXTENSION",
+      x: 265,
+      y: 315,
+      width: 160,
+      height: 70
     },
     %{
       id: "action_dispatcher",
       title: "ActionDispatcher",
       subtitle: "Scope & Route Engine",
-      desc: "Checks caller security scopes (:guest, :player, :admin) & routes actions to service providers.",
+      desc: "Zero-latency in-memory security scope verification (:guest, :player, :admin) & provider routing.",
       icon: "🎯",
+      package: "Kernel Core",
       category: "kernel",
-      badge: "KERNEL - IMMUTABLE",
-      x: 490,
-      y: 60,
-      litmus: "Boot Dependency (Required to route ANY action; cannot be swapped or disabled)"
+      badge: "KERNEL [IMMUTABLE]",
+      x: 485,
+      y: 65,
+      width: 170,
+      height: 65
     },
     %{
       id: "event_dispatcher",
       title: "EventDispatcher",
       subtitle: ":pg Distributed Bus",
-      desc: "Pattern-matched topic fanout over Erlang process groups (0.07 ms SLA to 50 subscribers).",
+      desc: "Pattern-matched topic fanout over Erlang process groups (0.07 ms SLA to 50 concurrent subscribers).",
       icon: "📡",
+      package: "Kernel Core",
       category: "kernel",
-      badge: "KERNEL - IMMUTABLE",
-      x: 490,
-      y: 160,
-      litmus: "Boot Dependency (Provides the root event pub/sub mechanism of the cluster)"
+      badge: "KERNEL [IMMUTABLE]",
+      x: 485,
+      y: 155,
+      width: 170,
+      height: 65
     },
     %{
       id: "extension_registry",
       title: "ExtensionRegistry",
       subtitle: "In-Memory ETS Catalog",
-      desc: "Lockless in-memory ETS table of registered extensions, action contracts, and resources.",
+      desc: "Lockless ETS table of registered extensions, action contracts, resources, and route metadata.",
       icon: "📚",
+      package: "Kernel Core",
       category: "kernel",
-      badge: "KERNEL - IMMUTABLE",
-      x: 490,
-      y: 260,
-      litmus: "Boot Dependency (Stores service metadata that the entire cluster reads)"
+      badge: "KERNEL [IMMUTABLE]",
+      x: 485,
+      y: 245,
+      width: 170,
+      height: 65
     },
     %{
       id: "extension_supervisor",
       title: "ExtensionSupervisor",
       subtitle: "Topological OTP DAG",
-      desc: "Orders startup DAG, isolates worker crashes, and supervises actor lifecycle.",
+      desc: "Starts extensions in topological dependency order, isolates worker failures, and restarts crashed actors.",
       icon: "🛡️",
+      package: "Kernel Core",
       category: "kernel",
-      badge: "KERNEL - IMMUTABLE",
-      x: 490,
-      y: 360,
-      litmus: "Boot Dependency (Owns the root supervision tree of the BEAM node)"
+      badge: "KERNEL [IMMUTABLE]",
+      x: 485,
+      y: 335,
+      width: 170,
+      height: 65
     },
     %{
       id: "native_csharp",
-      title: "Native C# Game Extension",
-      subtitle: ".NET Worker OS Process",
-      desc: "IL trimmed & AOT tree-shaken single file running in an isolated OS worker over stdio IPC.",
+      title: "Native C# Game Worker",
+      subtitle: ".NET OS Process (stdio IPC)",
+      desc: "Framework-dependent single-file binary with AOT trimming, zero reflection, and static dispatch delegates.",
       icon: "⚙️",
+      package: "Extension Workers",
       category: "extension",
-      badge: "EXTENSION - PLUGGABLE",
-      x: 740,
-      y: 60,
-      litmus: "Game Feature (First-party game code; hot-reloaded and isolated in worker process)"
+      badge: "GAME EXTENSION",
+      x: 715,
+      y: 75,
+      width: 170,
+      height: 75
     },
     %{
       id: "elixir_runner",
-      title: "Elixir System Extensions",
+      title: "Elixir Extensions",
       subtitle: "OTP Actor Concurrency",
-      desc: "Native BEAM actor processes running directly in cluster supervision tree.",
+      desc: "System extensions running directly inside the Erlang/Elixir BEAM cluster supervision tree.",
       icon: "🧪",
+      package: "Extension Workers",
       category: "extension",
-      badge: "EXTENSION - PLUGGABLE",
-      x: 740,
-      y: 200,
-      litmus: "System Extension (Pluggable services written in native Elixir OTP)"
+      badge: "SYSTEM EXTENSION",
+      x: 715,
+      y: 195,
+      width: 170,
+      height: 70
     },
     %{
       id: "std_services",
       title: "Standard Services",
       subtitle: "auth, player_data, cron",
-      desc: "Standard platform services providing identity tokens, player profiles, and scheduled jobs.",
+      desc: "Modular platform services providing token issuance, profile persistence, and cron scheduling.",
       icon: "📦",
+      package: "Extension Workers",
       category: "extension",
-      badge: "EXTENSION - PLUGGABLE",
-      x: 740,
-      y: 340,
-      litmus: "Contract Dependency (Swappable implementations consumed via abstract service contracts)"
+      badge: "PLATFORM SERVICE",
+      x: 715,
+      y: 315,
+      width: 170,
+      height: 70
     },
     %{
       id: "database_manager",
       title: "Database Manager",
       subtitle: ":database service",
-      desc: "Multi-engine storage routing with strict per-extension schema isolation.",
+      desc: "Multi-engine database service managing connection pools and per-extension schema isolation.",
       icon: "🗄️",
+      package: "Data & Storage",
       category: "extension",
-      badge: "EXTENSION - PLUGGABLE",
-      x: 970,
-      y: 60,
-      litmus: "Swappable (Swappable storage service consumed via :database atom)"
+      badge: "STORAGE EXTENSION",
+      x: 950,
+      y: 75,
+      width: 180,
+      height: 75
     },
     %{
       id: "resource_store",
       title: "Resource Store",
       subtitle: ":resource_store",
-      desc: "Schema-driven entity storage with declarative typed CRUD and migrations.",
+      desc: "Schema-driven entity storage with declarative typed CRUD, migrations, and drawer definitions.",
       icon: "📊",
+      package: "Data & Storage",
       category: "extension",
-      badge: "EXTENSION - PLUGGABLE",
-      x: 970,
-      y: 200,
-      litmus: "Contract Dependency (Standard storage extension for typed game resources)"
+      badge: "STORAGE EXTENSION",
+      x: 950,
+      y: 195,
+      width: 180,
+      height: 70
     },
     %{
       id: "storage_adapters",
-      title: "Storage Adapters",
+      title: "Isolated DB Schemas",
       subtitle: "SQLite / PostgreSQL Engine",
-      desc: "Low-level connection pools and query adapters internal to the database extension.",
+      desc: "Strictly isolated schema namespace (e.g. ext_snake_game) preventing cross-extension data leakage.",
       icon: "💾",
+      package: "Data & Storage",
       category: "internal",
-      badge: "INTERNAL",
-      x: 970,
-      y: 340,
-      litmus: "Internal Implementation (Only consumed internally by the :database extension)"
+      badge: "INTERNAL ENGINE",
+      x: 950,
+      y: 315,
+      width: 180,
+      height: 70
     }
   ]
 
   @edges [
-    %{from: "unity_client", to: "ws_gateway", path: "M 200 95 C 230 95, 230 95, 260 95", label: "WebSocket :4000"},
-    %{from: "unity_client", to: "http_gateway", path: "M 200 95 C 230 95, 230 235, 260 235", label: "REST :4001"},
-    %{from: "exo_cli", to: "http_gateway", path: "M 200 235 C 230 235, 230 235, 260 235", label: "REST Push"},
-    %{from: "producer_studio", to: "action_dispatcher", path: "M 200 375 C 345 375, 345 95, 490 95", label: "Studio Dispatch"},
-    %{from: "ws_gateway", to: "action_dispatcher", path: "M 420 95 C 455 95, 455 95, 490 95", label: "Dispatch"},
-    %{from: "ws_gateway", to: "event_dispatcher", path: "M 420 95 C 455 95, 455 195, 490 195", label: "Pub/Sub"},
-    %{from: "http_gateway", to: "action_dispatcher", path: "M 420 235 C 455 235, 455 95, 490 95", label: "Route"},
-    %{from: "transport_layer", to: "action_dispatcher", path: "M 420 375 C 455 375, 455 95, 490 95", label: "Normalized"},
-    %{from: "action_dispatcher", to: "extension_registry", path: "M 570 130 C 570 180, 570 210, 570 260", label: "Lookup"},
-    %{from: "action_dispatcher", to: "native_csharp", path: "M 650 95 C 695 95, 695 95, 740 95", label: "Stdio IPC"},
-    %{from: "action_dispatcher", to: "elixir_runner", path: "M 650 95 C 695 95, 695 235, 740 235", label: "Actor Msg"},
-    %{from: "action_dispatcher", to: "std_services", path: "M 650 95 C 695 95, 695 375, 740 375", label: "Direct"},
-    %{from: "native_csharp", to: "database_manager", path: "M 900 95 C 935 95, 935 95, 970 95", label: "Host Call"},
-    %{from: "database_manager", to: "storage_adapters", path: "M 1050 130 C 1050 200, 1050 280, 1050 340", label: "Internal Pool"}
+    %{from: "unity_client", to: "ws_gateway", path: "M 205 110 L 265 110", label: "WebSocket"},
+    %{from: "unity_client", to: "http_gateway", path: "M 205 110 C 235 110, 235 230, 265 230", label: "REST"},
+    %{from: "exo_cli", to: "http_gateway", path: "M 205 230 L 265 230", label: "Build Push"},
+    %{from: "producer_studio", to: "action_dispatcher", path: "M 205 350 C 345 350, 345 95, 485 95", label: "LiveView"},
+    %{from: "ws_gateway", to: "action_dispatcher", path: "M 425 110 C 455 110, 455 95, 485 95", label: "dispatch"},
+    %{from: "ws_gateway", to: "event_dispatcher", path: "M 425 110 C 455 110, 455 185, 485 185", label: ":pg pub/sub"},
+    %{from: "http_gateway", to: "action_dispatcher", path: "M 425 230 C 455 230, 455 95, 485 95", label: "route"},
+    %{from: "transport_layer", to: "action_dispatcher", path: "M 425 350 C 455 350, 455 95, 485 95", label: "normalized"},
+    %{from: "action_dispatcher", to: "extension_registry", path: "M 570 130 L 570 245", label: "lookup"},
+    %{from: "action_dispatcher", to: "native_csharp", path: "M 655 95 C 685 95, 685 110, 715 110", label: "stdio IPC"},
+    %{from: "action_dispatcher", to: "elixir_runner", path: "M 655 95 C 685 95, 685 230, 715 230", label: "actor"},
+    %{from: "action_dispatcher", to: "std_services", path: "M 655 95 C 685 95, 685 350, 715 350", label: "dispatch"},
+    %{from: "native_csharp", to: "database_manager", path: "M 885 110 L 950 110", label: "host_call"},
+    %{from: "database_manager", to: "storage_adapters", path: "M 1040 150 L 1040 315", label: "SQL"}
   ]
 
   # ---- Workflow Steps Definition ----
@@ -435,29 +467,29 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
   def visualizer(assigns) do
     assigns =
       assigns
-      |> assign_new(:nodes, fn -> @nodes end)
+      |> assign_new(:components, fn -> @components end)
       |> assign_new(:edges, fn -> @edges end)
       |> assign_new(:action_workflow_steps, fn -> @action_workflow_steps end)
       |> assign_new(:event_workflow_steps, fn -> @event_workflow_steps end)
 
     ~H"""
-    <div class="space-y-10 select-none font-sans" id="exoforge-architecture-visualizer">
+    <div class="space-y-8 select-none font-sans" id="exoforge-architecture-visualizer">
       <!-- Section Header -->
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-200">
         <div>
           <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-200 text-[10px] font-bold">
             <span class="w-1.5 h-1.5 rounded-full bg-violet-600 animate-pulse"></span>
-            <span>Interactive Architecture Topology &amp; Execution Pipeline</span>
+            <span>UML Subsystem Diagram &amp; Execution Pipeline</span>
           </div>
           <h2 class="text-xl font-bold text-gray-900 tracking-tight mt-1">
-            System Topology, Boundaries &amp; Execution Flow
+            System Topology, Packages &amp; Execution Flow
           </h2>
           <p class="text-xs text-gray-500">
-            Interactive Directed Acyclic Graph (DAG), zoomable inspection, and end-to-end sequential workflow cascades.
+            UML component architecture, fullscreen inspection, and end-to-end sequential workflow cascades.
           </p>
         </div>
 
-        <!-- Mode Toggle: Topology Graph vs Sequential Workflow -->
+        <!-- Mode Toggle: UML Architecture vs Sequential Workflow -->
         <div class="flex items-center gap-2 p-1 bg-gray-100 rounded-xl border border-gray-200/80 text-xs font-semibold self-start sm:self-auto">
           <button
             type="button"
@@ -465,8 +497,8 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
             id="btn-tab-graph"
             class="px-3.5 py-1.5 rounded-lg bg-white text-violet-700 shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
           >
-            <span>🕸️</span>
-            <span>Architecture Graph</span>
+            <span>📐</span>
+            <span>UML Architecture</span>
           </button>
           <button
             type="button"
@@ -480,85 +512,57 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
         </div>
       </div>
 
-      <!-- VIEW 1: INTERACTIVE ZOOMABLE ARCHITECTURE GRAPH -->
+      <!-- VIEW 1: UML ARCHITECTURE COMPONENT DIAGRAM -->
       <div id="arch-view-graph" class="space-y-6">
-        <!-- Architectural Doctrine & Litmus Test Banner -->
+        <!-- Core Philosophy: Microkernel & Pluggable Extensions -->
         <div class="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 text-white border border-slate-800 shadow-xl relative overflow-hidden">
-          <div class="absolute -right-10 -bottom-10 opacity-10 text-9xl pointer-events-none select-none">
-            ⚡
-          </div>
-
-          <div class="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-            <div class="space-y-2 max-w-xl">
+          <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div class="space-y-2 max-w-2xl">
               <div class="flex items-center gap-2">
                 <span class="text-xs font-bold font-mono tracking-wider px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
-                  ARCHITECTURAL DOCTRINE
+                  CORE PHILOSOPHY
                 </span>
-                <span class="text-xs text-slate-400">Rule &amp; One Exception</span>
+                <span class="text-xs text-slate-400">Microkernel &amp; Pluggable Extensions</span>
               </div>
               <h3 class="text-lg font-black tracking-tight text-white">
-                "The Rule: Everything above the kernel is an extension."
+                Immutable Kernel Core + Pluggable Extensions
               </h3>
               <p class="text-xs text-slate-300 leading-relaxed">
-                The kernel is strictly limited to 4 foundational primitives: <code class="text-amber-300 font-mono">ActionDispatcher</code>, <code class="text-amber-300 font-mono">EventDispatcher</code>, <code class="text-amber-300 font-mono">ExtensionRegistry</code>, and <code class="text-amber-300 font-mono">ExtensionSupervisor</code>. Everything else—gateways, auth, storage, and game features—is a pluggable extension.
+                The kernel is strictly limited to four foundational primitives: <code class="text-amber-300 font-mono">ActionDispatcher</code>, <code class="text-amber-300 font-mono">EventDispatcher</code>, <code class="text-amber-300 font-mono">ExtensionRegistry</code>, and <code class="text-amber-300 font-mono">ExtensionSupervisor</code>. Everything else—gateways, auth, databases, and native C# game logic—is a pluggable extension.
               </p>
             </div>
 
-            <!-- Litmus Test Interactive Buttons -->
-            <div class="grid grid-cols-2 gap-2 text-xs">
-              <button
-                type="button"
-                onclick="window.exoFilterNodes('extension')"
-                class="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-left transition-all cursor-pointer group"
-              >
-                <div class="text-[10px] font-bold text-emerald-400">1. Swappable?</div>
-                <div class="text-[11px] text-slate-200 group-hover:text-white">REST ↔ WS ➔ Extension</div>
-              </button>
-              <button
-                type="button"
-                onclick="window.exoFilterNodes('extension')"
-                class="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-left transition-all cursor-pointer group"
-              >
-                <div class="text-[10px] font-bold text-violet-400">2. Contract Dep?</div>
-                <div class="text-[11px] text-slate-200 group-hover:text-white">Dep by Contract ➔ Extension</div>
-              </button>
-              <button
-                type="button"
-                onclick="window.exoFilterNodes('kernel')"
-                class="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-left transition-all cursor-pointer group"
-              >
-                <div class="text-[10px] font-bold text-amber-400">3. Boot Dep?</div>
-                <div class="text-[11px] text-slate-200 group-hover:text-white">Boot depends on it ➔ Kernel</div>
-              </button>
-              <button
-                type="button"
-                onclick="window.exoFilterNodes('internal')"
-                class="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-left transition-all cursor-pointer group"
-              >
-                <div class="text-[10px] font-bold text-cyan-400">4. Domain Only?</div>
-                <div class="text-[11px] text-slate-200 group-hover:text-white">Consumed by one ➔ Internal</div>
-              </button>
+            <!-- Simple Rule of Thumb Card -->
+            <div class="bg-slate-800/90 p-4 rounded-2xl border border-slate-700 md:max-w-xs shrink-0 space-y-2 text-xs">
+              <div class="font-bold text-amber-400 flex items-center gap-1.5">
+                <span>💡</span>
+                <span>Rule of Thumb</span>
+              </div>
+              <div class="text-slate-300 leading-snug">
+                • <strong>Game logic, storage, or transport?</strong> ➔ <span class="text-emerald-400 font-semibold">Extension</span><br/>
+                • <strong>Bootstrapping depends on it?</strong> ➔ <span class="text-amber-300 font-semibold">Kernel</span>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- Graph Viewport Controls & Focus Filter -->
+        <!-- Diagram Toolbar: Maximize & Package Filters -->
         <div class="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-gray-200/80 shadow-2xs">
-          <!-- Boundary Focus Filter Pills -->
+          <!-- Package Filters -->
           <div class="flex items-center gap-1.5 text-xs font-semibold">
-            <span class="text-gray-400 text-[11px] mr-1 hidden sm:inline">Focus Boundary:</span>
+            <span class="text-gray-400 text-[11px] mr-1 hidden sm:inline">Highlight Package:</span>
             <button
               type="button"
-              onclick="window.exoFilterNodes('all')"
-              id="filter-btn-all"
+              onclick="window.exoHighlightPackage('all')"
+              id="pkg-btn-all"
               class="px-2.5 py-1 rounded-lg bg-slate-900 text-white shadow-2xs transition-all cursor-pointer text-xs"
             >
-              All Components
+              All Packages
             </button>
             <button
               type="button"
-              onclick="window.exoFilterNodes('kernel')"
-              id="filter-btn-kernel"
+              onclick="window.exoHighlightPackage('kernel')"
+              id="pkg-btn-kernel"
               class="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-all cursor-pointer text-xs flex items-center gap-1"
             >
               <span>⚡</span>
@@ -566,8 +570,8 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
             </button>
             <button
               type="button"
-              onclick="window.exoFilterNodes('extension')"
-              id="filter-btn-extension"
+              onclick="window.exoHighlightPackage('extension')"
+              id="pkg-btn-extension"
               class="px-2.5 py-1 rounded-lg bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100 transition-all cursor-pointer text-xs flex items-center gap-1"
             >
               <span>🧩</span>
@@ -575,223 +579,34 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
             </button>
             <button
               type="button"
-              onclick="window.exoFilterNodes('internal')"
-              id="filter-btn-internal"
+              onclick="window.exoHighlightPackage('internal')"
+              id="pkg-btn-internal"
               class="px-2.5 py-1 rounded-lg bg-cyan-50 text-cyan-700 border border-cyan-200 hover:bg-cyan-100 transition-all cursor-pointer text-xs flex items-center gap-1"
             >
               <span>💾</span>
-              <span>Internal / Storage</span>
+              <span>Storage</span>
             </button>
           </div>
 
-          <!-- Zoom & Pan Controls -->
-          <div class="flex items-center gap-1.5 bg-gray-100 p-1 rounded-xl border border-gray-200 text-xs font-mono font-bold">
-            <button
-              type="button"
-              onclick="window.exoGraphZoom(-0.15)"
-              class="w-7 h-7 flex items-center justify-center rounded-lg bg-white text-gray-700 hover:bg-gray-50 shadow-2xs cursor-pointer"
-              title="Zoom Out"
-            >
-              −
-            </button>
-            <span id="arch-graph-zoom-label" class="px-2 text-[11px] text-gray-600 font-bold min-w-[48px] text-center">
-              100%
-            </span>
-            <button
-              type="button"
-              onclick="window.exoGraphZoom(0.15)"
-              class="w-7 h-7 flex items-center justify-center rounded-lg bg-white text-gray-700 hover:bg-gray-50 shadow-2xs cursor-pointer"
-              title="Zoom In"
-            >
-              +
-            </button>
-            <button
-              type="button"
-              onclick="window.exoGraphResetZoom()"
-              class="px-2.5 h-7 flex items-center justify-center rounded-lg bg-white text-gray-700 hover:bg-gray-50 shadow-2xs cursor-pointer text-[10px]"
-              title="Reset View"
-            >
-              Reset
-            </button>
+          <!-- Maximize Button -->
+          <button
+            type="button"
+            onclick="document.getElementById('arch-graph-modal').classList.remove('hidden');"
+            class="px-3.5 py-1.5 rounded-xl bg-violet-50 hover:bg-violet-100 text-violet-700 border border-violet-200 transition-all cursor-pointer text-xs font-bold flex items-center gap-1.5 shadow-2xs"
+          >
+            <span>⛶</span>
+            <span>Maximize Diagram</span>
+          </button>
+        </div>
+
+        <!-- Inline SVG UML Diagram Container -->
+        <div class="border border-gray-200/90 rounded-3xl bg-slate-950 overflow-x-auto relative shadow-inner p-4">
+          <div class="min-w-[1160px]">
+            {render_uml_svg(assigns, "inline")}
           </div>
         </div>
 
-        <!-- SVG Graph Canvas -->
-        <div class="border border-gray-200/90 rounded-3xl bg-slate-950 overflow-hidden relative shadow-inner">
-          <div id="arch-graph-container" class="overflow-auto max-h-[640px] cursor-grab active:cursor-grabbing p-6">
-            <svg
-              id="arch-dag-svg"
-              width="1220"
-              height="490"
-              viewBox="0 0 1220 490"
-              class="w-full h-auto select-none font-sans"
-              style="transform-origin: 0 0; transition: transform 0.15s ease-out;"
-            >
-              <defs>
-                <!-- Arrow Markers -->
-                <marker id="marker-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#64748b" />
-                </marker>
-                <marker id="marker-arrow-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#f59e0b" />
-                </marker>
-                <marker id="marker-arrow-violet" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#8b5cf6" />
-                </marker>
-                <marker id="marker-arrow-emerald" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#10b981" />
-                </marker>
-                <!-- Node Shadow Filter -->
-                <filter id="node-drop-shadow" x="-10%" y="-10%" width="120%" height="120%">
-                  <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.4" />
-                </filter>
-              </defs>
-
-              <!-- Layer Column Background Zones -->
-              <g class="layer-columns opacity-70">
-                <!-- 1. Client / Tooling -->
-                <rect x="20" y="20" width="200" height="440" rx="20" fill="#0f172a" stroke="#1e293b" stroke-width="1" />
-                <text x="35" y="44" fill="#94a3b8" font-size="11" font-weight="bold" letter-spacing="0.08em">1. CLIENT &amp; TOOLING</text>
-
-                <!-- 2. Gateways & Transport -->
-                <rect x="240" y="20" width="200" height="440" rx="20" fill="#0f172a" stroke="#1e293b" stroke-width="1" />
-                <text x="255" y="44" fill="#a78bfa" font-size="11" font-weight="bold" letter-spacing="0.08em">2. GATEWAY INGRESS</text>
-
-                <!-- 3. Kernel Boundary (Prominent Golden Frame) -->
-                <rect x="465" y="20" width="210" height="440" rx="20" fill="#1e1b18" stroke="#f59e0b" stroke-width="2" stroke-dasharray="6 4" />
-                <rect x="475" y="28" width="190" height="20" rx="6" fill="#f59e0b" fill-opacity="0.2" />
-                <text x="485" y="42" fill="#fbbf24" font-size="10" font-weight="black" letter-spacing="0.08em">⚡ 3. KERNEL (IMMUTABLE)</text>
-
-                <!-- 4. Extension Runtimes -->
-                <rect x="700" y="20" width="210" height="440" rx="20" fill="#0f172a" stroke="#1e293b" stroke-width="1" />
-                <text x="715" y="44" fill="#34d399" font-size="11" font-weight="bold" letter-spacing="0.08em">4. EXTENSION RUNTIME</text>
-
-                <!-- 5. Persistence & Storage -->
-                <rect x="930" y="20" width="220" height="440" rx="20" fill="#0f172a" stroke="#1e293b" stroke-width="1" />
-                <text x="945" y="44" fill="#38bdf8" font-size="11" font-weight="bold" letter-spacing="0.08em">5. STORAGE &amp; ADAPTERS</text>
-              </g>
-
-              <!-- Connection Edges (Bezier Curves) -->
-              <g class="edges" id="arch-graph-edges">
-                <%= for edge <- @edges do %>
-                  <path
-                    d={edge.path}
-                    fill="none"
-                    stroke="#64748b"
-                    stroke-width="1.8"
-                    marker-end="url(#marker-arrow)"
-                    class="opacity-60 hover:opacity-100 hover:stroke-violet-400 transition-opacity"
-                  />
-                <% end %>
-              </g>
-
-              <!-- Interactive Topology Nodes -->
-              <g class="nodes" id="arch-graph-nodes">
-                <%= for node <- @nodes do %>
-                  <g
-                    id={"node-#{node.id}"}
-                    class="cursor-pointer group transition-transform duration-150"
-                    data-category={node.category}
-                    data-title={node.title}
-                    data-subtitle={node.subtitle}
-                    data-badge={node.badge}
-                    data-desc={node.desc}
-                    data-litmus={node.litmus}
-                    data-icon={node.icon}
-                    onclick="window.exoSelectNode(this)"
-                    transform={"translate(#{node.x}, #{node.y})"}
-                  >
-                    <!-- Node Box -->
-                    <rect
-                      width="160"
-                      height="70"
-                      rx="14"
-                      fill={case node.category do
-                        "kernel" -> "#291e0a"
-                        "extension" -> "#1e1b4b"
-                        "internal" -> "#082f49"
-                        _ -> "#1e293b"
-                      end}
-                      stroke={case node.category do
-                        "kernel" -> "#f59e0b"
-                        "extension" -> "#8b5cf6"
-                        "internal" -> "#06b6d4"
-                        _ -> "#475569"
-                      end}
-                      stroke-width={if node.category == "kernel", do: "2", else: "1.2"}
-                      filter="url(#node-drop-shadow)"
-                      class="group-hover:stroke-white transition-colors"
-                    />
-
-                    <!-- Icon & Title -->
-                    <text x="12" y="24" font-size="14"><%= node.icon %></text>
-                    <text
-                      x="34"
-                      y="23"
-                      fill="#ffffff"
-                      font-size="11"
-                      font-weight="bold"
-                      font-family="system-ui, sans-serif"
-                    >
-                      <%= node.title %>
-                    </text>
-
-                    <!-- Subtitle / Port -->
-                    <text
-                      x="12"
-                      y="42"
-                      fill={case node.category do
-                        "kernel" -> "#fcd34d"
-                        "extension" -> "#c4b5fd"
-                        "internal" -> "#67e8f9"
-                        _ -> "#94a3b8"
-                      end}
-                      font-size="9"
-                      font-weight="bold"
-                      font-family="monospace"
-                    >
-                      <%= node.subtitle %>
-                    </text>
-
-                    <!-- Category Pill Badge -->
-                    <rect
-                      x="12"
-                      y="49"
-                      width="136"
-                      height="14"
-                      rx="4"
-                      fill={case node.category do
-                        "kernel" -> "#f59e0b"
-                        "extension" -> "#7c3aed"
-                        "internal" -> "#0284c7"
-                        _ -> "#334155"
-                      end}
-                      fill-opacity="0.3"
-                    />
-                    <text
-                      x="18"
-                      y="59"
-                      fill={case node.category do
-                        "kernel" -> "#fef08a"
-                        "extension" -> "#e9d5ff"
-                        "internal" -> "#bae6fd"
-                        _ -> "#cbd5e1"
-                      end}
-                      font-size="8"
-                      font-weight="bold"
-                      letter-spacing="0.04em"
-                      font-family="monospace"
-                    >
-                      [<%= node.badge %>]
-                    </text>
-                  </g>
-                <% end %>
-              </g>
-            </svg>
-          </div>
-        </div>
-
-        <!-- Node Inspector Detail Card -->
+        <!-- Interactive Component Inspector Card -->
         <div id="arch-node-inspector" class="bg-white p-5 rounded-3xl border border-gray-200/90 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div class="flex items-center gap-4">
             <div id="inspector-icon" class="w-12 h-12 rounded-2xl bg-amber-50 text-amber-700 border border-amber-200 flex items-center justify-center text-2xl shrink-0">
@@ -803,25 +618,56 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
                   ActionDispatcher
                 </h4>
                 <span id="inspector-badge" class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-                  KERNEL - IMMUTABLE
+                  KERNEL [IMMUTABLE]
                 </span>
               </div>
               <div id="inspector-subtitle" class="text-xs font-mono font-semibold text-violet-600 mt-0.5">
                 Scope &amp; Route Engine
               </div>
               <p id="inspector-desc" class="text-xs text-gray-600 mt-1 max-w-xl">
-                Checks caller security scopes (:guest, :player, :admin) &amp; routes actions to service providers.
+                Zero-latency in-memory security scope verification (:guest, :player, :admin) &amp; provider routing.
               </p>
             </div>
           </div>
 
           <div class="bg-gray-50 p-3.5 rounded-2xl border border-gray-200/80 md:max-w-xs shrink-0">
             <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-              Litmus Test Verdict
+              Subsystem Package
             </div>
-            <div id="inspector-litmus" class="text-xs font-semibold text-gray-900 mt-1 leading-snug">
-              Boot Dependency (Required to route ANY action; cannot be swapped or disabled)
+            <div id="inspector-package" class="text-xs font-bold text-gray-900 mt-0.5">
+              Kernel Core
             </div>
+          </div>
+        </div>
+
+        <!-- Clickable UML Component Directory -->
+        <div class="bg-white p-5 rounded-3xl border border-gray-200/80 shadow-2xs space-y-3">
+          <div class="text-xs font-bold text-gray-500 uppercase tracking-wider">
+            Click to Inspect Subsystem Components:
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
+            <%= for comp <- @components do %>
+              <button
+                type="button"
+                onclick={"window.exoSelectComponentById('#{comp.id}')"}
+                class={"p-2.5 rounded-xl border text-left transition-all cursor-pointer hover:shadow-sm group flex flex-col justify-between h-20 #{case comp.category do
+                  "kernel" -> "bg-amber-50/60 border-amber-200 hover:border-amber-400"
+                  "extension" -> "bg-violet-50/60 border-violet-200 hover:border-violet-400"
+                  "internal" -> "bg-cyan-50/60 border-cyan-200 hover:border-cyan-400"
+                  _ -> "bg-gray-50/80 border-gray-200 hover:border-gray-400"
+                end}"}
+              >
+                <div class="flex items-center justify-between">
+                  <span class="text-base"><%= comp.icon %></span>
+                  <span class="text-[9px] font-mono font-bold text-gray-500 uppercase">
+                    <%= comp.category %>
+                  </span>
+                </div>
+                <div class="font-bold text-[11px] text-gray-900 truncate group-hover:text-violet-700">
+                  <%= comp.title %>
+                </div>
+              </button>
+            <% end %>
           </div>
         </div>
       </div>
@@ -996,36 +842,65 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
         </div>
       </div>
 
-      <!-- Graph Interactive JavaScript Controller -->
+      <!-- FULLSCREEN MODAL POPUP FOR ARCHITECTURE DIAGRAM -->
+      <div id="arch-graph-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex flex-col p-4 sm:p-6 animate-in fade-in duration-150">
+        <div class="bg-slate-950 rounded-3xl border border-slate-800 flex-1 flex flex-col overflow-hidden shadow-2xl">
+          <!-- Modal Header -->
+          <div class="flex items-center justify-between p-4 px-6 border-b border-slate-800 bg-slate-900/80">
+            <div class="flex items-center gap-3">
+              <span class="text-xl">📐</span>
+              <div>
+                <h3 class="text-base font-bold text-white tracking-tight">Exoforge UML Architecture Diagram</h3>
+                <p class="text-xs text-slate-400">Subsystem Packages, Core Microkernel, and Ingress Topology</p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onclick="document.getElementById('arch-graph-modal').classList.add('hidden');"
+              class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+            >
+              <span>✕</span>
+              <span>Close Fullscreen</span>
+            </button>
+          </div>
+
+          <!-- Modal Body with Full-Size SVG -->
+          <div class="flex-1 overflow-auto p-6 flex items-center justify-center">
+            <div class="w-full max-w-[1240px]">
+              {render_uml_svg(assigns, "modal")}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- JavaScript Controller for Diagram Interaction -->
       <script>
         (function() {
-          let currentZoom = 1.0;
-          const svg = document.getElementById('arch-dag-svg');
-          const zoomLabel = document.getElementById('arch-graph-zoom-label');
+          const components = <%= Phoenix.HTML.raw(Jason.encode!(Map.new(@components, fn c -> {c.id, c} end))) %>;
 
-          window.exoGraphZoom = function(delta) {
-            currentZoom = Math.min(2.0, Math.max(0.6, currentZoom + delta));
-            if (svg) {
-              svg.style.transform = `scale(${currentZoom})`;
-            }
-            if (zoomLabel) {
-              zoomLabel.innerText = `${Math.round(currentZoom * 100)}%`;
-            }
+          window.exoSelectComponentById = function(id) {
+            const comp = components[id];
+            if (!comp) return;
+
+            const titleEl = document.getElementById('inspector-title');
+            const subEl = document.getElementById('inspector-subtitle');
+            const badgeEl = document.getElementById('inspector-badge');
+            const descEl = document.getElementById('inspector-desc');
+            const pkgEl = document.getElementById('inspector-package');
+            const iconEl = document.getElementById('inspector-icon');
+
+            if (titleEl) titleEl.innerText = comp.title;
+            if (subEl) subEl.innerText = comp.subtitle;
+            if (badgeEl) badgeEl.innerText = comp.badge;
+            if (descEl) descEl.innerText = comp.desc;
+            if (pkgEl) pkgEl.innerText = comp.package;
+            if (iconEl) iconEl.innerText = comp.icon;
           };
 
-          window.exoGraphResetZoom = function() {
-            currentZoom = 1.0;
-            if (svg) {
-              svg.style.transform = 'scale(1.0)';
-            }
-            if (zoomLabel) {
-              zoomLabel.innerText = '100%';
-            }
-          };
-
-          window.exoFilterNodes = function(category) {
-            const nodes = document.querySelectorAll('#arch-graph-nodes > g');
-            const edges = document.getElementById('arch-graph-edges');
+          window.exoHighlightPackage = function(category) {
+            const nodes = document.querySelectorAll('.uml-comp-node');
+            const packages = document.querySelectorAll('.uml-package-box');
 
             nodes.forEach(node => {
               const nodeCat = node.getAttribute('data-category');
@@ -1036,13 +911,9 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
               }
             });
 
-            if (edges) {
-              edges.style.opacity = category === 'all' ? '0.6' : '0.2';
-            }
-
-            // Update button styles
+            // Update toolbar button states
             ['all', 'kernel', 'extension', 'internal'].forEach(cat => {
-              const btn = document.getElementById('filter-btn-' + cat);
+              const btn = document.getElementById('pkg-btn-' + cat);
               if (btn) {
                 if (cat === category) {
                   btn.classList.add('ring-2', 'ring-offset-1', 'ring-violet-500');
@@ -1053,24 +924,158 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
             });
           };
 
-          window.exoSelectNode = function(elem) {
-            const title = elem.getAttribute('data-title');
-            const subtitle = elem.getAttribute('data-subtitle');
-            const badge = elem.getAttribute('data-badge');
-            const desc = elem.getAttribute('data-desc');
-            const litmus = elem.getAttribute('data-litmus');
-            const icon = elem.getAttribute('data-icon');
-
-            document.getElementById('inspector-title').innerText = title;
-            document.getElementById('inspector-subtitle').innerText = subtitle;
-            document.getElementById('inspector-badge').innerText = badge;
-            document.getElementById('inspector-desc').innerText = desc;
-            document.getElementById('inspector-litmus').innerText = litmus;
-            document.getElementById('inspector-icon').innerText = icon;
-          };
+          // Close modal on Escape key
+          document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+              const modal = document.getElementById('arch-graph-modal');
+              if (modal) modal.classList.add('hidden');
+            }
+          });
         })();
       </script>
     </div>
+    """
+  end
+
+  # Helper to render the UML Architecture SVG
+  defp render_uml_svg(assigns, variant) do
+    prefix = if variant == "modal", do: "m_", else: "i_"
+    assigns = assign(assigns, :prefix, prefix)
+
+    ~H"""
+    <svg
+      viewBox="0 0 1180 440"
+      class="w-full h-auto select-none font-sans"
+    >
+      <defs>
+        <marker id={"#{@prefix}uml-arrow"} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 1 L 10 5 L 0 9 z" fill="#64748b" />
+        </marker>
+        <filter id={"#{@prefix}uml-shadow"} x="-10%" y="-10%" width="120%" height="120%">
+          <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#000000" flood-opacity="0.35" />
+        </filter>
+      </defs>
+
+      <!-- Subsystem UML Packages (Envelopes) -->
+      <g class="uml-packages">
+        <!-- Package 1: Client Ingress -->
+        <g class="uml-package-box" data-category="client">
+          <rect x="30" y="30" width="190" height="390" rx="16" fill="#0f172a" stroke="#334155" stroke-width="1.2" stroke-dasharray="4 3" />
+          <path d="M 30 54 L 140 54 L 152 42 L 152 30 L 30 30 Z" fill="#1e293b" />
+          <text x="42" y="46" fill="#94a3b8" font-size="9" font-weight="bold" font-family="monospace">package Ingress</text>
+        </g>
+
+        <!-- Package 2: Gateways -->
+        <g class="uml-package-box" data-category="extension">
+          <rect x="250" y="30" width="190" height="390" rx="16" fill="#0f172a" stroke="#6d28d9" stroke-width="1.2" stroke-dasharray="4 3" />
+          <path d="M 250 54 L 370 54 L 382 42 L 382 30 L 250 30 Z" fill="#2e1065" />
+          <text x="262" y="46" fill="#c4b5fd" font-size="9" font-weight="bold" font-family="monospace">package Gateways</text>
+        </g>
+
+        <!-- Package 3: Kernel Core (Glow Boundary) -->
+        <g class="uml-package-box" data-category="kernel">
+          <rect x="470" y="30" width="200" height="390" rx="16" fill="#1e180d" stroke="#f59e0b" stroke-width="2" />
+          <path d="M 470 54 L 620 54 L 632 42 L 632 30 L 470 30 Z" fill="#451a03" />
+          <text x="482" y="46" fill="#fde047" font-size="9" font-weight="black" font-family="monospace">⚡ package Kernel</text>
+        </g>
+
+        <!-- Package 4: Extension Workers -->
+        <g class="uml-package-box" data-category="extension">
+          <rect x="700" y="30" width="200" height="390" rx="16" fill="#0f172a" stroke="#059669" stroke-width="1.2" stroke-dasharray="4 3" />
+          <path d="M 700 54 L 840 54 L 852 42 L 852 30 L 700 30 Z" fill="#064e3b" />
+          <text x="712" y="46" fill="#6ee7b7" font-size="9" font-weight="bold" font-family="monospace">package Extensions</text>
+        </g>
+
+        <!-- Package 5: Storage -->
+        <g class="uml-package-box" data-category="internal">
+          <rect x="930" y="30" width="220" height="390" rx="16" fill="#0f172a" stroke="#0284c7" stroke-width="1.2" stroke-dasharray="4 3" />
+          <path d="M 930 54 L 1060 54 L 1072 42 L 1072 30 L 930 30 Z" fill="#082f49" />
+          <text x="942" y="46" fill="#7dd3fc" font-size="9" font-weight="bold" font-family="monospace">package Storage</text>
+        </g>
+      </g>
+
+      <!-- UML Connecting Directed Edges -->
+      <g class="uml-edges">
+        <%= for edge <- @edges do %>
+          <path
+            d={edge.path}
+            fill="none"
+            stroke="#64748b"
+            stroke-width="1.8"
+            marker-end={"url(##{@prefix}uml-arrow)"}
+            class="opacity-70 hover:opacity-100 hover:stroke-violet-400 transition-opacity"
+          />
+        <% end %>
+      </g>
+
+      <!-- UML Components -->
+      <g class="uml-components">
+        <%= for comp <- @components do %>
+          <g
+            class="uml-comp-node cursor-pointer group transition-transform duration-100"
+            data-category={comp.category}
+            data-id={comp.id}
+            onclick={"window.exoSelectComponentById('#{comp.id}')"}
+            transform={"translate(#{comp.x}, #{comp.y})"}
+          >
+            <!-- Component Outer Rectangle -->
+            <rect
+              width={comp.width}
+              height={comp.height}
+              rx="12"
+              fill={case comp.category do
+                "kernel" -> "#291e0a"
+                "extension" -> "#1e1b4b"
+                "internal" -> "#082f49"
+                _ -> "#1e293b"
+              end}
+              stroke={case comp.category do
+                "kernel" -> "#f59e0b"
+                "extension" -> "#8b5cf6"
+                "internal" -> "#06b6d4"
+                _ -> "#475569"
+              end}
+              stroke-width={if comp.category == "kernel", do: "2", else: "1.2"}
+              filter={"url(##{@prefix}uml-shadow)"}
+              class="group-hover:stroke-white transition-colors"
+            />
+
+            <!-- UML Stereotype <<component>> -->
+            <text x="10" y="16" fill="#94a3b8" font-size="8" font-family="monospace">&laquo;component&raquo;</text>
+
+            <!-- Icon & Title -->
+            <text x="10" y="32" font-size="13"><%= comp.icon %></text>
+            <text
+              x="30"
+              y="32"
+              fill="#ffffff"
+              font-size="10.5"
+              font-weight="bold"
+              font-family="system-ui, sans-serif"
+            >
+              <%= comp.title %>
+            </text>
+
+            <!-- Subtitle -->
+            <text
+              x="10"
+              y="48"
+              fill={case comp.category do
+                "kernel" -> "#fcd34d"
+                "extension" -> "#c4b5fd"
+                "internal" -> "#67e8f9"
+                _ -> "#94a3b8"
+              end}
+              font-size="8.5"
+              font-weight="bold"
+              font-family="monospace"
+            >
+              <%= comp.subtitle %>
+            </text>
+          </g>
+        <% end %>
+      </g>
+    </svg>
     """
   end
 end

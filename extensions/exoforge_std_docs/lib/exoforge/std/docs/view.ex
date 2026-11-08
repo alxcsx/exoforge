@@ -1347,8 +1347,14 @@ defmodule Exoforge.Std.Docs.View do
     name = act[:name] || act.name
     params = act[:params] || act.params || []
 
+    sorted_params =
+      Enum.sort_by(params, fn p ->
+        optional? = p[:optional] || p["optional"] || false
+        if optional?, do: 1, else: 0
+      end)
+
     params_str =
-      params
+      sorted_params
       |> Enum.map(fn p ->
         p_name = p[:name] || p["name"] || ""
         optional? = p[:optional] || p["optional"] || false

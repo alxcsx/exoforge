@@ -311,33 +311,38 @@ defmodule Exoforge.Std.DocsTest do
       />
       """)
 
-      # Action title signatures: parameter names only, ? for optionals
+      # Action title signatures: parameter names only, required first, ? for optionals
       assert html =~ ".authenticate(token)"
-      assert html =~ ".verify_scope(user_id?, player_id?, required_scope)"
+      assert html =~ ".verify_scope(required_scope, user_id?, player_id?)"
 
       # Folds collapsed by default (no 'open' attribute on details)
       refute html =~ "<details class=\"group bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden transition-all duration-200 print:border-gray-300 print:shadow-none print:break-inside-avoid\" open>"
       refute html =~ "<details class=\"group/act bg-white rounded-xl border border-gray-200/80 p-4 space-y-3 shadow-2xs transition-all print:border-gray-300 print:break-inside-avoid\" open>"
     end
 
-    test "renders ArchitectureGraph with zoomable SVG, doctrine banner, and sequential workflow cascade" do
+    test "renders ArchitectureGraph with UML diagram, maximize modal, and sequential workflow cascade" do
       assigns = %{}
 
       html = Phoenix.LiveViewTest.rendered_to_string(~H"""
       <Exoforge.Std.Docs.ArchitectureGraph.visualizer />
       """)
 
-      # Architectural Doctrine & Litmus Test
-      assert html =~ "ARCHITECTURAL DOCTRINE"
-      assert html =~ "The Rule: Everything above the kernel is an extension."
-      assert html =~ "1. Swappable?"
-      assert html =~ "3. Boot Dep?"
+      # Core Philosophy & Rule of Thumb
+      assert html =~ "CORE PHILOSOPHY"
+      assert html =~ "Immutable Kernel Core + Pluggable Extensions"
+      assert html =~ "Rule of Thumb"
 
-      # Interactive SVG DAG & Node Badges
-      assert html =~ "id=\"arch-dag-svg\""
-      assert html =~ "[KERNEL - IMMUTABLE]"
-      assert html =~ "[EXTENSION - PLUGGABLE]"
-      assert html =~ "[INTERNAL]"
+      # UML Packages & Components
+      assert html =~ "package Ingress"
+      assert html =~ "package Kernel"
+      assert html =~ "package Extensions"
+      assert html =~ "package Storage"
+      assert html =~ "&laquo;component&raquo;"
+
+      # Maximize Button & Modal Popup
+      assert html =~ "Maximize Diagram"
+      assert html =~ "id=\"arch-graph-modal\""
+      assert html =~ "Exoforge UML Architecture Diagram"
 
       # Node Inspector
       assert html =~ "id=\"arch-node-inspector\""

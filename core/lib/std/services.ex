@@ -24,8 +24,8 @@ defmodule Exoforge.Std.Services do
       scope(:server)
 
       params(
-        plugin: [type: :term, optional: true],
-        table: :string
+        table: :string,
+        plugin: [type: :term, optional: true]
       )
 
       returns(columns: [:string])
@@ -171,9 +171,9 @@ defmodule Exoforge.Std.Services do
     @doc "Verifies whether a player or user has the required authorization scope."
     action :verify_scope do
       params(
+        required_scope: :string,
         user_id: [type: :string, optional: true],
-        player_id: [type: :string, optional: true],
-        required_scope: :string
+        player_id: [type: :string, optional: true]
       )
 
       returns(authorized: :boolean)
@@ -223,7 +223,7 @@ defmodule Exoforge.Std.Services do
 
     @doc "Sets the signed-in player's display name."
     action :set_display_name do
-      params(player_id: [type: :string, optional: true], name: :string)
+      params(name: :string, player_id: [type: :string, optional: true])
       returns(player_id: :string, name: :string)
       errors([:unauthorized, :invalid_attributes, :player_not_found])
     end
@@ -260,9 +260,9 @@ defmodule Exoforge.Std.Services do
       scope("admin")
 
       params(
+        password: :string,
         user_id: [type: :string, optional: true],
-        player_id: [type: :string, optional: true],
-        password: :string
+        player_id: [type: :string, optional: true]
       )
 
       returns(user_id: :string, player_id: :string, status: :string)
