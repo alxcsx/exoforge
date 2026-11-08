@@ -1200,9 +1200,14 @@ defmodule Exoforge.DashboardLiveViewTest do
       # Open settings modal
       settings_html = render_click(view, "open_settings", %{})
       assert settings_html =~ "Developer Guide"
-      assert settings_html =~ "open_guide_from_settings"
+      assert settings_html =~ ~s(phx-value-tab="guide")
 
-      # Click Developer Guide button in settings
+      # Switch to guide tab in settings modal
+      guide_tab_html = render_click(view, "set_settings_tab", %{"tab" => "guide"})
+      assert guide_tab_html =~ "Exoforge Developer Guide"
+      assert guide_tab_html =~ "open_guide_from_settings"
+
+      # Click Developer Guide button in settings to open full extension tab
       _ = render_click(view, "open_guide_from_settings", %{})
 
       # Now on Guide screen: verify default Quickstart Flow

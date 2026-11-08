@@ -335,7 +335,7 @@ defmodule Exoforge.Std.Dashboard.Components do
     ~H"""
     <%= if @open do %>
       <div id={@id} class="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
-        <div class="min-h-screen px-4 text-center flex items-center justify-center">
+        <div class="min-h-full p-4 sm:p-6 flex items-center justify-center text-center my-auto">
           <!-- Backdrop -->
           <div
             class="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
@@ -343,8 +343,8 @@ defmodule Exoforge.Std.Dashboard.Components do
           ></div>
 
           <!-- Dialog Box -->
-          <div class={"relative bg-white rounded-2xl #{@max_width} w-full p-6 text-left shadow-2xl border border-gray-200 z-10 animate-fade-in"}>
-            <div class="flex items-center justify-between pb-3 border-b border-gray-100">
+          <div class={"relative bg-white rounded-2xl #{@max_width} w-full text-left shadow-2xl border border-gray-200 z-10 animate-fade-in flex flex-col max-h-[calc(100vh-3rem)] sm:max-h-[calc(100vh-4rem)] overflow-hidden"}>
+            <div class="flex items-center justify-between p-6 pb-3 border-b border-gray-100 shrink-0">
               <div>
                 <h3 class="font-bold text-gray-900 text-base"><%= @title %></h3>
                 <%= if @subtitle do %>
@@ -355,17 +355,18 @@ defmodule Exoforge.Std.Dashboard.Components do
                 type="button"
                 phx-click={@on_close}
                 class="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center transition-colors text-xs font-bold"
+                title="Close modal"
               >
                 ✕
               </button>
             </div>
 
-            <div class="py-4 space-y-4">
+            <div class="p-6 py-4 overflow-y-auto min-h-0 flex-1 custom-scrollbar">
               <%= render_slot(@inner_block) %>
             </div>
 
             <%= if @footer != [] do %>
-              <div class="pt-3 border-t border-gray-100 flex items-center justify-end gap-2">
+              <div class="p-6 pt-3 border-t border-gray-100 flex items-center justify-end gap-2 shrink-0">
                 <%= render_slot(@footer) %>
               </div>
             <% end %>
@@ -397,27 +398,28 @@ defmodule Exoforge.Std.Dashboard.Components do
     ~H"""
     <%= if @open do %>
       <div
-        class="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+        class="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6"
         role="dialog"
         aria-modal="true"
       >
         <div class="fixed inset-0" phx-click={@on_close} phx-target={@target}></div>
 
-        <div class={"relative bg-white rounded-2xl #{@width} w-full shadow-2xl border border-gray-200 animate-in fade-in duration-150 overflow-hidden"}>
+        <div class={"relative bg-white rounded-2xl #{@width} w-full shadow-2xl border border-gray-200 animate-in fade-in duration-150 overflow-hidden flex flex-col max-h-[calc(100vh-3.5rem)]"}>
           <button
             type="button"
             phx-click={@on_close}
             phx-target={@target}
-            class="absolute top-4 right-5 z-10 text-gray-400 hover:text-gray-600 text-lg font-bold"
+            class="absolute top-4 right-5 z-10 w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-400 hover:text-gray-600 flex items-center justify-center transition-colors text-xs font-bold"
+            title="Close"
           >
             ✕
           </button>
 
-          <div class="flex items-center gap-3 px-6 py-4 border-b border-gray-100">
+          <div class="flex items-center gap-3 px-6 py-4 border-b border-gray-100 shrink-0">
             <div class="w-10 h-10 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center text-xl shrink-0">
               <%= @icon %>
             </div>
-            <div class="min-w-0">
+            <div class="min-w-0 pr-8">
               <h3 class="text-base font-bold text-gray-900 truncate"><%= @title %></h3>
               <%= if @subtitle do %>
                 <p class="text-xs text-gray-500 truncate"><%= @subtitle %></p>
@@ -425,9 +427,9 @@ defmodule Exoforge.Std.Dashboard.Components do
             </div>
           </div>
 
-          <div class="flex flex-col md:flex-row min-h-[360px] divide-y md:divide-y-0 md:divide-x divide-gray-100">
+          <div class="flex flex-col md:flex-row min-h-[360px] flex-1 min-h-0 divide-y md:divide-y-0 md:divide-x divide-gray-100 overflow-hidden">
             <%= if @tabs != [] do %>
-              <div class="w-full md:w-48 p-2 bg-gray-50/70 space-y-0.5 shrink-0">
+              <div class="w-full md:w-48 p-2 bg-gray-50/70 space-y-0.5 shrink-0 overflow-y-auto custom-scrollbar">
                 <%= for tab <- @tabs do %>
                   <button
                     type="button"
@@ -443,7 +445,7 @@ defmodule Exoforge.Std.Dashboard.Components do
               </div>
             <% end %>
 
-            <div class="flex-1 p-5 min-w-0 space-y-4">
+            <div class="flex-1 p-5 min-w-0 space-y-4 overflow-y-auto custom-scrollbar">
               <%= render_slot(@inner_block) %>
             </div>
           </div>

@@ -534,9 +534,9 @@ defmodule Exoforge.Std.Dashboard.Overlays do
       |> assign_new(:event_filter_topic, fn -> "" end)
       |> assign_new(:on_close, fn -> "close_settings" end)
     ~H"""
-    <div class="flex flex-col md:flex-row min-h-[380px] -mx-6 -my-4 divide-y md:divide-y-0 md:divide-x divide-gray-100 text-xs">
+    <div class="flex flex-col md:flex-row min-h-[380px] md:h-[540px] md:max-h-[calc(85vh-7rem)] -mx-6 -my-4 divide-y md:divide-y-0 md:divide-x divide-gray-100 text-xs">
         <!-- Left Sidebar Navigation -->
-        <div class="w-full md:w-56 p-3 bg-gray-50/70 flex flex-col justify-between">
+        <div class="w-full md:w-56 p-3 bg-gray-50/70 flex flex-col justify-between shrink-0 overflow-y-auto custom-scrollbar">
           <div class="space-y-4">
             <!-- Cluster & Core Settings -->
             <div>
@@ -568,6 +568,15 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                 >
                   <span>📟</span>
                   <span>Console</span>
+                </button>
+                <button
+                  type="button"
+                  phx-click="set_settings_tab"
+                  phx-value-tab="guide"
+                  class={"w-full text-left px-2.5 py-2 rounded-xl font-bold flex items-center gap-2 transition-all #{if @settings_tab == "guide", do: "bg-white text-primary-700 shadow-sm border border-gray-200/80", else: "text-gray-600 hover:text-gray-900 hover:bg-white/60"}"}
+                >
+                  <span>📖</span>
+                  <span>Developer Guide</span>
                 </button>
               </div>
             </div>
@@ -605,22 +614,11 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             <div class="truncate" title={@overview[:commit_hash]}>
               <span>Cluster: </span><span class="font-mono text-gray-600">v<%= @overview[:version] || "1.0.0" %> (<%= String.slice(to_string(@overview[:commit_hash] || "dev"), 0, 7) %>)</span>
             </div>
-            <div class="pt-1.5">
-              <button
-                type="button"
-                phx-click="open_guide_from_settings"
-                class="w-full px-2.5 py-1.5 rounded-xl bg-white hover:bg-primary-50 text-gray-700 hover:text-primary-700 font-bold flex items-center justify-center gap-1.5 text-xs transition-colors border border-gray-200/80 shadow-2xs"
-                title="Developer Quickstart & API Guide"
-              >
-                <span>📖</span>
-                <span>Developer Guide</span>
-              </button>
-            </div>
           </div>
         </div>
 
         <!-- Right Content Pane -->
-        <div class="flex-1 p-6 space-y-4 overflow-y-auto min-w-0">
+        <div class="flex-1 p-6 space-y-4 overflow-y-auto min-w-0 custom-scrollbar">
           <%= if @settings_tab == "project" do %>
             <% meta = @project_metadata || %{} %>
             <% desc = to_string(meta["description"] || meta[:description] || "") %>
@@ -1067,8 +1065,89 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             </div>
           <% end %>
 
+          <!-- Developer Guide Tab -->
+          <%= if @settings_tab == "guide" do %>
+            <div class="space-y-4">
+              <div class="flex items-center justify-between pb-3 border-b border-gray-100">
+                <div>
+                  <h4 class="text-sm font-bold text-gray-900 flex items-center gap-2">
+                    <span>📖</span>
+                    <span>Exoforge Developer Guide</span>
+                  </h4>
+                  <p class="text-xs text-gray-500 mt-0.5">Quick reference for C# extension development, live cluster contracts, and platform architecture.</p>
+                </div>
+                <button
+                  type="button"
+                  phx-click="open_guide_from_settings"
+                  class="px-3.5 py-1.5 bg-primary-600 hover:bg-primary-700 text-white font-bold text-xs rounded-xl transition-all shadow-xs flex items-center gap-1.5 shrink-0"
+                >
+                  <span>Open Full Guide</span>
+                  <span>&rarr;</span>
+                </button>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div class="p-3.5 bg-gray-50 rounded-xl border border-gray-200/80 space-y-1.5">
+                  <div class="flex items-center gap-2 text-primary-700 font-bold text-xs">
+                    <span>🚀</span>
+                    <span>Quickstart Flow</span>
+                  </div>
+                  <p class="text-[11px] text-gray-600 leading-relaxed">
+                    Step-by-step multiplayer integration: Anonymous auth, Player Data sync, custom C# extensions, and client stubs.
+                  </p>
+                </div>
+
+                <div class="p-3.5 bg-gray-50 rounded-xl border border-gray-200/80 space-y-1.5">
+                  <div class="flex items-center gap-2 text-purple-700 font-bold text-xs">
+                    <span>🧩</span>
+                    <span>C# Attributes Reference</span>
+                  </div>
+                  <p class="text-[11px] text-gray-600 leading-relaxed">
+                    Declarative attributes for native .NET extensions: <code class="font-mono text-purple-700 font-bold">[ExoAction]</code>, <code class="font-mono text-purple-700 font-bold">[ExoEvent]</code>, <code class="font-mono text-purple-700 font-bold">[ExoResource]</code>.
+                  </p>
+                </div>
+
+                <div class="p-3.5 bg-gray-50 rounded-xl border border-gray-200/80 space-y-1.5">
+                  <div class="flex items-center gap-2 text-indigo-700 font-bold text-xs">
+                    <span>🏗️</span>
+                    <span>Interactive Architecture</span>
+                  </div>
+                  <p class="text-[11px] text-gray-600 leading-relaxed">
+                    Live UML topology diagram, kernel pub/sub bus fanout (&lt; 0.1ms), native process runners, and OTP supervisors.
+                  </p>
+                </div>
+
+                <div class="p-3.5 bg-gray-50 rounded-xl border border-gray-200/80 space-y-1.5">
+                  <div class="flex items-center gap-2 text-emerald-700 font-bold text-xs">
+                    <span>⚡</span>
+                    <span>Live Dynamic API Reference</span>
+                  </div>
+                  <p class="text-[11px] text-gray-600 leading-relaxed">
+                    Real-time contract explorer dynamically built from registered extensions with copy-pasteable client calling code.
+                  </p>
+                </div>
+              </div>
+
+              <!-- Banner with CTA to full guide extension -->
+              <div class="p-4 bg-gradient-to-r from-gray-900 via-primary-950 to-indigo-950 rounded-2xl text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm border border-primary-500/20">
+                <div class="space-y-0.5 min-w-0">
+                  <span class="text-xs font-bold block">Need the comprehensive interactive guide &amp; PDF export?</span>
+                  <p class="text-[11px] text-gray-300">Open the full-screen Developer Guide extension tab for deep interactive UML exploration and full code samples.</p>
+                </div>
+                <button
+                  type="button"
+                  phx-click="open_guide_from_settings"
+                  class="px-4 py-2 bg-white hover:bg-gray-100 text-primary-900 font-bold rounded-xl text-xs transition-colors shrink-0 flex items-center justify-center gap-1.5 shadow-xs"
+                >
+                  <span>Launch Guide Tab</span>
+                  <span>&rarr;</span>
+                </button>
+              </div>
+            </div>
+          <% end %>
+
           <!-- Dynamic Plugin Settings Tab Fallback -->
-          <%= if @settings_tab not in ["project", "visual", "database", "auth", "http"] do %>
+          <%= if @settings_tab not in ["project", "visual", "console", "database", "auth", "http", "guide"] do %>
             <% active_hook = Enum.find(@settings_hooks, fn h -> to_string(h.id) == @settings_tab end) %>
             <%= if active_hook do %>
               <%= cond do %>
@@ -1124,7 +1203,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
         open={true}
         icon={(is_map(@extension.dashboard_view) && @extension.dashboard_view[:icon]) || ExtensionPresenter.icon(@extension)}
         title={display_name(@extension)}
-        subtitle={"Plugin #{@extension.id} (v#{@extension.version})"}
+        subtitle={"Extension #{@extension.id} (v#{@extension.version})"}
         on_close={@on_close}
         width="max-w-2xl"
       >
@@ -1199,7 +1278,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               Exported Actions (<%= length(@extension.actions) %>)
             </span>
             <%= if Enum.empty?(@extension.actions) do %>
-              <p class="p-3 bg-gray-50 rounded-xl text-gray-400 italic">No actions exposed by this plugin.</p>
+              <p class="p-3 bg-gray-50 rounded-xl text-gray-400 italic">No actions exposed by this extension.</p>
             <% else %>
               <div class="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                 <%= for act <- @extension.actions do %>

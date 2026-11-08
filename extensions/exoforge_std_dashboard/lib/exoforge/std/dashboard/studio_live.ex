@@ -165,9 +165,6 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         live_action == :apps or tab_param in ["apps", "extensions"] ->
           :apps
 
-        live_action == :settings or tab_param in ["settings", "project_settings"] ->
-          :settings
-
         live_action in [:guide, :docs] or tab_param in ["guide", "docs"] ->
           :exoforge_std_docs
 
@@ -188,6 +185,15 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       |> assign(:pinned_menu_open, false)
       |> maybe_refresh_tab_data(tab)
 
+    socket =
+      if tab_param in ["settings", "project_settings"] do
+        hooks = Exoforge.UIHookRegistry.list_hooks(:settings)
+        cors = fetch_cors_config()
+        assign(socket, settings_open: true, settings_hooks: hooks, cors_config: cors)
+      else
+        socket
+      end
+
     {:noreply, socket}
   end
 
@@ -198,8 +204,6 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   defp resolve_tab("apps", _extensions), do: :apps
   defp resolve_tab(:apps, _extensions), do: :apps
   defp resolve_tab("extensions", _extensions), do: :apps
-  defp resolve_tab("settings", _extensions), do: :settings
-  defp resolve_tab(:settings, _extensions), do: :settings
   defp resolve_tab("guide", _extensions), do: :exoforge_std_docs
   defp resolve_tab(:guide, _extensions), do: :exoforge_std_docs
   defp resolve_tab("docs", _extensions), do: :exoforge_std_docs
@@ -259,8 +263,6 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   defp tab_path(:overview), do: "/"
   defp tab_path("apps"), do: "/tab/apps"
   defp tab_path(:apps), do: "/tab/apps"
-  defp tab_path("settings"), do: "/tab/settings"
-  defp tab_path(:settings), do: "/tab/settings"
   defp tab_path("guide"), do: "/tab/exoforge_std_docs"
   defp tab_path(:guide), do: "/tab/exoforge_std_docs"
   defp tab_path("docs"), do: "/tab/exoforge_std_docs"
@@ -477,11 +479,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   def handle_event("open_settings", _params, socket) do
     hooks = Exoforge.UIHookRegistry.list_hooks(:settings)
     cors = fetch_cors_config()
-
-    {:noreply,
-     socket
-     |> assign(settings_open: false, settings_hooks: hooks, cors_config: cors)
-     |> push_patch(to: tab_path(:settings))}
+    {:noreply, assign(socket, settings_open: true, settings_hooks: hooks, cors_config: cors)}
   end
 
   def handle_event("change_cors_settings", params, socket) do
@@ -644,16 +642,10 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   end
 
   def handle_event("close_settings", _params, socket) do
-    socket =
-      socket
-      |> push_event("close-popup", %{})
-      |> assign(:settings_open, false)
-
-    if socket.assigns.current_tab == :settings do
-      {:noreply, push_patch(socket, to: tab_path(:overview))}
-    else
-      {:noreply, socket}
-    end
+    {:noreply,
+     socket
+     |> push_event("close-popup", %{})
+     |> assign(:settings_open, false)}
   end
 
   def handle_event("set_settings_tab", %{"tab" => tab}, socket) do
@@ -1596,7 +1588,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
             <% end %>
 
             <!-- 3c. Active Unpinned Extension Breadcrumb -->
-            <%= if to_string(@current_tab) not in ["overview", "apps", "settings"] and to_string(@current_tab) not in @pinned_extensions do %>
+            <%= if to_string(@current_tab) not in ["overview", "apps"] and to_string(@current_tab) not in @pinned_extensions do %>
               <% active_unpinned = Enum.find(@overview.extensions, fn e -> to_string(e.id) == to_string(@current_tab) end) %>
               <%= if active_unpinned do %>
                 <% title = tab_short_name(active_unpinned) %>
@@ -1625,9 +1617,8 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
             <button
               type="button"
-              phx-click="switch_tab"
-              phx-value-tab="settings"
-              class={"w-9 h-9 rounded-xl flex items-center justify-center transition-all text-sm border #{if @current_tab == :settings, do: "bg-white text-primary-700 border-primary-300 shadow-sm font-bold ring-2 ring-primary-500/20", else: "bg-gray-100 hover:bg-gray-200/80 text-gray-600 border-gray-200/60"}"}
+              phx-click="open_settings"
+              class={"w-9 h-9 rounded-xl flex items-center justify-center transition-all text-sm border #{if @settings_open, do: "bg-white text-primary-700 border-primary-300 shadow-sm font-bold ring-2 ring-primary-500/20", else: "bg-gray-100 hover:bg-gray-200/80 text-gray-600 border-gray-200/60"}"}
               title="Project Settings"
             >
               ⚙️
@@ -2475,28 +2466,8 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
           />
         <% end %>
 
-        <!-- SETTINGS TAB -->
-        <%= if @current_tab == :settings do %>
-          <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-6 overflow-hidden">
-            <Exoforge.Std.Dashboard.Overlays.project_settings_panel
-              project_name={@project_name}
-              studio_name={@studio_name}
-              project_metadata={@project_metadata}
-              settings_tab={@settings_tab}
-              settings_hooks={@settings_hooks}
-              cors_config={@cors_config}
-              overview={@overview}
-              node_name={to_string(node())}
-              activity_events={@filtered_activity_events}
-              events_paused={@events_paused}
-              event_filter_topic={@event_filter_topic}
-              on_close="close_settings"
-            />
-          </div>
-        <% end %>
-
         <!-- DYNAMIC EXTENSION VIEW MOUNT -->
-        <%= if to_string(@current_tab) not in ["overview", "apps", "settings"] do %>
+        <%= if to_string(@current_tab) not in ["overview", "apps"] do %>
           <% current_tab_str = to_string(@current_tab) %>
           <% active_ext =
                Enum.find(@overview.extensions, fn e ->

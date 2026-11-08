@@ -54,7 +54,6 @@ defmodule Exoforge.Std.Dashboard.Router do
 
       live("/", StudioLive, :index)
       live("/extensions", StudioLive, :apps)
-      live("/settings", StudioLive, :settings)
       live("/guide", StudioLive, :guide)
       live("/docs", StudioLive, :guide)
       live("/tab/:tab", StudioLive, :tab)
