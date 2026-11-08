@@ -99,6 +99,19 @@ defmodule Exoforge.Std.Dashboard.Layouts do
           .prof-tab-btn { justify-content: flex-start; text-align: left; }
           .prof-tab-btn .prof-tab-label { min-width: 0; display: flex; align-items: center; gap: 0.625rem; }
           .prof-tab-btn .prof-tab-badge { margin-left: auto; flex-shrink: 0; }
+          @keyframes flowDash {
+            to { stroke-dashoffset: -24; }
+          }
+          .animate-flow-dash {
+            stroke-dasharray: 6 5;
+            animation: flowDash 1.4s linear infinite;
+          }
+          .network-node {
+            transition: transform 0.15s ease, filter 0.15s ease;
+          }
+          .network-node:hover {
+            filter: drop-shadow(0 0 10px rgba(139, 92, 246, 0.45));
+          }
         </style>
         <script defer src="/vendor/phoenix.js"></script>
         <script defer src="/vendor/phoenix_live_view.js"></script>
@@ -126,12 +139,76 @@ defmodule Exoforge.Std.Dashboard.Layouts do
             }
           };
 
+          window.exoOpenNodeDialog = function(el) {
+            if (!el) return;
+            var d = el.dataset;
+            document.querySelectorAll(".graph-node-dialog").forEach(function(dialog) {
+              var titleEl = dialog.querySelector(".dialog-title");
+              var subEl = dialog.querySelector(".dialog-subtitle");
+              var badgeEl = dialog.querySelector(".dialog-badge");
+              var descEl = dialog.querySelector(".dialog-desc");
+              var pkgEl = dialog.querySelector(".dialog-package");
+              var iconEl = dialog.querySelector(".dialog-icon");
+              var protoEl = dialog.querySelector(".dialog-protocol");
+
+              if (titleEl && d.nodeTitle) titleEl.textContent = d.nodeTitle;
+              if (subEl && d.nodeSubtitle) subEl.textContent = d.nodeSubtitle;
+              if (badgeEl && d.nodeBadge) badgeEl.textContent = d.nodeBadge;
+              if (descEl && d.nodeDesc) descEl.textContent = d.nodeDesc;
+              if (pkgEl && d.nodePackage) pkgEl.textContent = d.nodePackage;
+              if (iconEl && d.nodeIcon) iconEl.textContent = d.nodeIcon;
+              if (protoEl && d.nodeProtocol) protoEl.textContent = d.nodeProtocol;
+
+              dialog.classList.remove("hidden");
+            });
+          };
+
+          window.exoHighlightPackage = function(category) {
+            var nodes = document.querySelectorAll(".network-node, .uml-comp-node");
+            nodes.forEach(function(node) {
+              var nodeCat = node.getAttribute("data-category");
+              if (category === "all" || nodeCat === category) {
+                node.style.opacity = "1.0";
+              } else {
+                node.style.opacity = "0.2";
+              }
+            });
+
+            ["all", "kernel", "extension", "internal"].forEach(function(cat) {
+              var btn = document.getElementById("pkg-btn-" + cat);
+              if (btn) {
+                if (cat === category) {
+                  btn.classList.add("ring-2", "ring-offset-1", "ring-violet-500");
+                } else {
+                  btn.classList.remove("ring-2", "ring-offset-1", "ring-violet-500");
+                }
+              }
+            });
+          };
+
           document.addEventListener("click", function(e) {
+            // Close open menus
             document.querySelectorAll("details.exo-menu[open]").forEach(function(menu) {
               if (!menu.contains(e.target)) {
                 menu.removeAttribute("open");
               }
             });
+
+            // Architecture Graph Node Click
+            var nodeEl = e.target.closest("[data-graph-node]");
+            if (nodeEl) {
+              window.exoOpenNodeDialog(nodeEl);
+            }
+          });
+
+          document.addEventListener("keydown", function(e) {
+            if (e.key === "Escape") {
+              document.querySelectorAll(".graph-node-dialog").forEach(function(d) {
+                d.classList.add("hidden");
+              });
+              var modal = document.getElementById("arch-graph-modal");
+              if (modal) modal.classList.add("hidden");
+            }
           });
 
           document.addEventListener("DOMContentLoaded", function() {

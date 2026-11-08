@@ -1,40 +1,43 @@
 defmodule Exoforge.Std.Docs.ArchitectureGraph do
   @moduledoc """
-  Interactive UML Architecture Diagram, Fullscreen Maximizer, and Sequential Workflow
-  Pipeline Visualizer for Exoforge.
+  Interactive Network Architecture Diagram, In-Graph Inspection Dialog, Fullscreen Maximizer,
+  and Sequential Workflow Pipeline Visualizer for Exoforge.
   """
   use Phoenix.Component
 
   # ---- Architecture Components Specification ----
 
   @components [
+    # Ingress (x: 35)
     %{
       id: "unity_client",
       title: "Unity Client SDK",
       subtitle: "com.exoforge.sdk",
-      desc: "Game client runtime with async/await stubs, device anonymous auth, and reactive event hooks.",
+      desc: "Client runtime with async/await stubs, device anonymous auth, and reactive event hooks.",
       icon: "🕹️",
       package: "Client Ingress",
       category: "client",
       badge: "GAME CLIENT",
-      x: 45,
-      y: 75,
-      width: 160,
-      height: 70
+      protocol: "WebSocket / HTTP RPC",
+      x: 35,
+      y: 135,
+      width: 175,
+      height: 80
     },
     %{
       id: "exo_cli",
       title: "Exo CLI & Engine",
       subtitle: "Management Engine",
-      desc: "Local development CLI, scaffolding, C# extension compiler, and remote cluster push.",
+      desc: "Local dev engine, Roslyn generator, C# extension compiler, and remote cluster push.",
       icon: "💻",
       package: "Developer Tooling",
       category: "tooling",
       badge: "DEV TOOLING",
-      x: 45,
-      y: 195,
-      width: 160,
-      height: 70
+      protocol: "HTTP Administration",
+      x: 35,
+      y: 280,
+      width: 175,
+      height: 80
     },
     %{
       id: "producer_studio",
@@ -45,11 +48,14 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       package: "Studio Operations",
       category: "studio",
       badge: "STUDIO UI",
-      x: 45,
-      y: 315,
-      width: 160,
-      height: 70
+      protocol: "Phoenix LiveView",
+      x: 35,
+      y: 425,
+      width: 175,
+      height: 80
     },
+
+    # Gateways (x: 245)
     %{
       id: "ws_gateway",
       title: "WebSocket Gateway",
@@ -59,24 +65,11 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       package: "Gateway Layer",
       category: "extension",
       badge: "GATEWAY EXTENSION",
-      x: 265,
-      y: 75,
-      width: 160,
-      height: 70
-    },
-    %{
-      id: "http_gateway",
-      title: "HTTP REST Gateway",
-      subtitle: ":http on port 4001",
-      desc: "Dynamic OpenAPI REST endpoints derived automatically from service action contracts.",
-      icon: "🌐",
-      package: "Gateway Layer",
-      category: "extension",
-      badge: "GATEWAY EXTENSION",
-      x: 265,
-      y: 195,
-      width: 160,
-      height: 70
+      protocol: "Framed JSON Socket",
+      x: 245,
+      y: 135,
+      width: 180,
+      height: 80
     },
     %{
       id: "transport_layer",
@@ -87,10 +80,43 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       package: "Gateway Layer",
       category: "extension",
       badge: "GATEWAY EXTENSION",
-      x: 265,
-      y: 315,
-      width: 160,
-      height: 70
+      protocol: "Sanitized RPC Envelope",
+      x: 245,
+      y: 280,
+      width: 180,
+      height: 80
+    },
+    %{
+      id: "http_gateway",
+      title: "HTTP REST Gateway",
+      subtitle: ":http on port 4001",
+      desc: "Dynamic OpenAPI REST endpoints derived automatically from service action contracts.",
+      icon: "🌐",
+      package: "Gateway Layer",
+      category: "extension",
+      badge: "GATEWAY EXTENSION",
+      protocol: "HTTP / OpenAPI JSON",
+      x: 245,
+      y: 425,
+      width: 180,
+      height: 80
+    },
+
+    # Kernel Core (Central Equilibrium Hub)
+    %{
+      id: "extension_registry",
+      title: "ExtensionRegistry",
+      subtitle: "In-Memory ETS Catalog",
+      desc: "Lockless ETS table of registered extensions, action contracts, resources, and route metadata.",
+      icon: "📚",
+      package: "Kernel Core",
+      category: "kernel",
+      badge: "KERNEL [IMMUTABLE]",
+      protocol: "Direct ETS Lockless Read",
+      x: 485,
+      y: 48,
+      width: 220,
+      height: 72
     },
     %{
       id: "action_dispatcher",
@@ -101,38 +127,26 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       package: "Kernel Core",
       category: "kernel",
       badge: "KERNEL [IMMUTABLE]",
-      x: 485,
-      y: 65,
-      width: 170,
-      height: 65
+      protocol: "In-Memory Zero-Copy",
+      x: 475,
+      y: 190,
+      width: 240,
+      height: 85
     },
     %{
       id: "event_dispatcher",
       title: "EventDispatcher",
       subtitle: ":pg Distributed Bus",
-      desc: "Pattern-matched topic fanout over Erlang process groups (0.07 ms SLA to 50 concurrent subscribers).",
+      desc: "Pattern-matched topic fanout over distributed process groups (0.07 ms SLA to 50 concurrent subscribers).",
       icon: "📡",
       package: "Kernel Core",
       category: "kernel",
       badge: "KERNEL [IMMUTABLE]",
-      x: 485,
-      y: 155,
-      width: 170,
-      height: 65
-    },
-    %{
-      id: "extension_registry",
-      title: "ExtensionRegistry",
-      subtitle: "In-Memory ETS Catalog",
-      desc: "Lockless ETS table of registered extensions, action contracts, resources, and route metadata.",
-      icon: "📚",
-      package: "Kernel Core",
-      category: "kernel",
-      badge: "KERNEL [IMMUTABLE]",
-      x: 485,
-      y: 245,
-      width: 170,
-      height: 65
+      protocol: "Erlang Process Groups (:pg)",
+      x: 475,
+      y: 340,
+      width: 240,
+      height: 85
     },
     %{
       id: "extension_supervisor",
@@ -143,24 +157,28 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       package: "Kernel Core",
       category: "kernel",
       badge: "KERNEL [IMMUTABLE]",
+      protocol: "OTP Supervision Tree",
       x: 485,
-      y: 335,
-      width: 170,
-      height: 65
+      y: 490,
+      width: 220,
+      height: 72
     },
+
+    # Extension Workers (x: 765)
     %{
       id: "native_csharp",
       title: "Native C# Game Worker",
-      subtitle: ".NET OS Process (stdio IPC)",
+      subtitle: ".NET Single-File Process",
       desc: "Framework-dependent single-file binary with AOT trimming, zero reflection, and static dispatch delegates.",
       icon: "⚙️",
       package: "Extension Workers",
       category: "extension",
       badge: "GAME EXTENSION",
-      x: 715,
-      y: 75,
-      width: 170,
-      height: 75
+      protocol: "Newline-Delimited JSON stdio",
+      x: 765,
+      y: 135,
+      width: 205,
+      height: 85
     },
     %{
       id: "elixir_runner",
@@ -171,10 +189,11 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       package: "Extension Workers",
       category: "extension",
       badge: "SYSTEM EXTENSION",
-      x: 715,
-      y: 195,
-      width: 170,
-      height: 70
+      protocol: "Direct BEAM Message Passing",
+      x: 765,
+      y: 280,
+      width: 205,
+      height: 80
     },
     %{
       id: "std_services",
@@ -185,11 +204,14 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       package: "Extension Workers",
       category: "extension",
       badge: "PLATFORM SERVICE",
-      x: 715,
-      y: 315,
-      width: 170,
-      height: 70
+      protocol: "Service Action Contracts",
+      x: 765,
+      y: 425,
+      width: 205,
+      height: 80
     },
+
+    # Data & Storage Layer (x: 1010)
     %{
       id: "database_manager",
       title: "Database Manager",
@@ -199,10 +221,11 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       package: "Data & Storage",
       category: "extension",
       badge: "STORAGE EXTENSION",
-      x: 950,
-      y: 75,
-      width: 180,
-      height: 75
+      protocol: "Connection Pool RPC",
+      x: 1010,
+      y: 135,
+      width: 165,
+      height: 80
     },
     %{
       id: "resource_store",
@@ -213,10 +236,11 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       package: "Data & Storage",
       category: "extension",
       badge: "STORAGE EXTENSION",
-      x: 950,
-      y: 195,
-      width: 180,
-      height: 70
+      protocol: "Typed Resource Schema",
+      x: 1010,
+      y: 280,
+      width: 165,
+      height: 80
     },
     %{
       id: "storage_adapters",
@@ -227,28 +251,33 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       package: "Data & Storage",
       category: "internal",
       badge: "INTERNAL ENGINE",
-      x: 950,
-      y: 315,
-      width: 180,
-      height: 70
+      protocol: "Isolated Schema SQL",
+      x: 1010,
+      y: 425,
+      width: 165,
+      height: 80
     }
   ]
 
   @edges [
-    %{from: "unity_client", to: "ws_gateway", path: "M 205 110 L 265 110", label: "WebSocket"},
-    %{from: "unity_client", to: "http_gateway", path: "M 205 110 C 235 110, 235 230, 265 230", label: "REST"},
-    %{from: "exo_cli", to: "http_gateway", path: "M 205 230 L 265 230", label: "Build Push"},
-    %{from: "producer_studio", to: "action_dispatcher", path: "M 205 350 C 345 350, 345 95, 485 95", label: "LiveView"},
-    %{from: "ws_gateway", to: "action_dispatcher", path: "M 425 110 C 455 110, 455 95, 485 95", label: "dispatch"},
-    %{from: "ws_gateway", to: "event_dispatcher", path: "M 425 110 C 455 110, 455 185, 485 185", label: ":pg pub/sub"},
-    %{from: "http_gateway", to: "action_dispatcher", path: "M 425 230 C 455 230, 455 95, 485 95", label: "route"},
-    %{from: "transport_layer", to: "action_dispatcher", path: "M 425 350 C 455 350, 455 95, 485 95", label: "normalized"},
-    %{from: "action_dispatcher", to: "extension_registry", path: "M 570 130 L 570 245", label: "lookup"},
-    %{from: "action_dispatcher", to: "native_csharp", path: "M 655 95 C 685 95, 685 110, 715 110", label: "stdio IPC"},
-    %{from: "action_dispatcher", to: "elixir_runner", path: "M 655 95 C 685 95, 685 230, 715 230", label: "actor"},
-    %{from: "action_dispatcher", to: "std_services", path: "M 655 95 C 685 95, 685 350, 715 350", label: "dispatch"},
-    %{from: "native_csharp", to: "database_manager", path: "M 885 110 L 950 110", label: "host_call"},
-    %{from: "database_manager", to: "storage_adapters", path: "M 1040 150 L 1040 315", label: "SQL"}
+    %{from: "unity_client", to: "ws_gateway", path: "M 210 175 L 245 175", label: "WebSocket"},
+    %{from: "unity_client", to: "transport_layer", path: "M 210 175 C 230 175, 225 320, 245 320", label: "RPC Ingress"},
+    %{from: "exo_cli", to: "transport_layer", path: "M 210 320 L 245 320", label: "Build Push"},
+    %{from: "producer_studio", to: "http_gateway", path: "M 210 465 L 245 465", label: "REST / LiveView"},
+    %{from: "ws_gateway", to: "action_dispatcher", path: "M 425 175 C 450 175, 450 225, 475 225", label: "dispatch"},
+    %{from: "ws_gateway", to: "event_dispatcher", path: "M 425 175 C 450 175, 450 375, 475 375", label: ":pg pub/sub"},
+    %{from: "transport_layer", to: "action_dispatcher", path: "M 425 320 C 450 320, 450 240, 475 240", label: "verified"},
+    %{from: "http_gateway", to: "action_dispatcher", path: "M 425 465 C 455 465, 450 255, 475 255", label: "route"},
+    %{from: "action_dispatcher", to: "extension_registry", path: "M 595 190 L 595 120", label: "catalog lookup"},
+    %{from: "action_dispatcher", to: "native_csharp", path: "M 715 225 C 740 225, 740 175, 765 175", label: "stdio IPC"},
+    %{from: "action_dispatcher", to: "elixir_runner", path: "M 715 235 C 740 235, 740 320, 765 320", label: "actor message"},
+    %{from: "action_dispatcher", to: "std_services", path: "M 715 245 C 745 245, 740 465, 765 465", label: "dispatch"},
+    %{from: "event_dispatcher", to: "extension_supervisor", path: "M 595 425 L 595 490", label: "health status"},
+    %{from: "event_dispatcher", to: "native_csharp", path: "M 715 375 C 740 375, 740 190, 765 190", label: "event frame"},
+    %{from: "native_csharp", to: "database_manager", path: "M 970 175 L 1010 175", label: "host_call"},
+    %{from: "elixir_runner", to: "resource_store", path: "M 970 320 L 1010 320", label: "schema CRUD"},
+    %{from: "std_services", to: "storage_adapters", path: "M 970 465 L 1010 465", label: "storage"},
+    %{from: "database_manager", to: "storage_adapters", path: "M 1092 215 L 1092 425", label: "SQL isolation"}
   ]
 
   # ---- Workflow Steps Definition ----
@@ -266,7 +295,9 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
         "type": "action",
         "service": "snake_game",
         "action": "submit_score",
-        "payload": { "score": 1500 },
+        "payload": {
+          "score": 1500
+        },
         "id": "req_8492"
       }
       """,
@@ -283,11 +314,17 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       action: "Exoforge.Std.Transport.sanitize_payload/2",
       summary: "Transport strips unverified client spoofed fields and forcibly stamps verified player identity from the session token.",
       wire_sample: """
-      // Strips unverified spoofed auth; forcibly stamps session
-      sanitized_payload = %{
-        "score" => 1500,
-        "player_id" => "usr_99a8b1",
-        "_auth" => %{player_id: "usr_99a8b1", scopes: ["player"]}
+      {
+        "action": "submit_score",
+        "payload": {
+          "score": 1500,
+          "player_id": "usr_99a8b1"
+        },
+        "context": {
+          "authenticated": true,
+          "scopes": ["player"],
+          "verified_at": "2026-11-07T21:00:00Z"
+        }
       }
       """,
       latency: "< 0.05 ms",
@@ -301,13 +338,15 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       title: "Scope Authorization & Provider Resolution",
       actor: "ActionDispatcher (Kernel)",
       action: "ActionDispatcher.dispatch(:snake_game, :submit_score, payload)",
-      summary: "Kernel verifies that caller's scopes satisfy the contract requirements and resolves worker entry point in ETS.",
+      summary: "Kernel verifies that caller's scopes satisfy the contract requirements and resolves worker entry point in memory.",
       wire_sample: """
-      // In-Memory Kernel Dispatch & Scope Check
-      case verify_scope(manifest.scope, caller_scopes) do
-        :ok -> route_to_worker(manifest.entry_point, payload)
-        {:error, reason} -> {:error, :unauthorized}
-      end
+      {
+        "kernel_dispatch": "ScopeAuthorizationCheck",
+        "required_scope": "player",
+        "caller_scopes": ["player"],
+        "status": "authorized",
+        "target_worker": "NativeWorker[snake_game]"
+      }
       """,
       latency: "< 0.02 ms (Lockless ETS)",
       badge: "Kernel",
@@ -322,7 +361,6 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       action: "SnakeExtension.SubmitScore(ScoreRecord record)",
       summary: "Host delivers newline-delimited JSON frame over stdio to the isolated .NET OS process. Dispatch runs without reflection.",
       wire_sample: """
-      // C# Action Execution (Framework-Dependent Single File)
       [ExoAction]
       public SnakeScoreSubmitted SubmitScore(int score) {
           Exo.Database.Put("snake_scores", PlayerId, new SnakeScore(score));
@@ -342,7 +380,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       action: "Exo.Database.Put / Typed SQL",
       summary: "Extension invokes host capability to persist data into its strictly isolated SQLite/PostgreSQL schema.",
       wire_sample: """
-      -- Isolated schema query executed by host bridge
+      -- Extension-isolated schema query executed via host bridge
       INSERT INTO ext_snake_game.scores (player_id, score, updated_at)
       VALUES ($1, $2, NOW())
       ON CONFLICT (player_id) DO UPDATE SET score = EXCLUDED.score;
@@ -387,13 +425,16 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       action: "Exo.Events.Publish(\"snake.score_submitted\", payload)",
       summary: "Extension emits an event without knowing who or how many consumers are listening.",
       wire_sample: """
-      // Extension Host Call over Stdio
       {
         "type": "host_call",
         "op": "publish_event",
         "args": {
           "event": "snake.score_submitted",
-          "payload": { "player_id": "usr_1", "score": 1500 }
+          "topic": "snake:leaderboard",
+          "payload": {
+            "player_id": "usr_1",
+            "score": 1500
+          }
         }
       }
       """,
@@ -405,19 +446,23 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
     %{
       step: 2,
       id: "ev_dispatcher",
-      title: "Kernel Event Fanout via :pg",
+      title: "Kernel Event Fanout via High-Performance Bus",
       actor: "EventDispatcher (Kernel)",
       action: "EventDispatcher.broadcast(\"snake.score_submitted\", payload)",
-      summary: "Kernel matches event against active topic subscribers and fans out over distributed Erlang process groups.",
+      summary: "Kernel matches event against active topic subscribers and fans out over distributed process groups.",
       wire_sample: """
-      // Verified SLA: 0.07 ms fanout to 50 concurrent subscribers over :pg
-      :pg.get_members(:exo_events, topic)
-      |> Enum.each(&send(&1, {:exo_event, topic, payload}))
+      {
+        "event_bus": "ClusterDistributedPubSub",
+        "topic": "snake:leaderboard",
+        "sla": "0.07 ms fanout to 50 concurrent subscribers",
+        "subscribers_matched": 50,
+        "delivery": "zero_lock_direct_dispatch"
+      }
       """,
       latency: "0.07 ms verified SLA",
       badge: "Kernel",
       color: "amber",
-      details: "Erlang distributed process groups (:pg) deliver messages directly to subscriber process mailboxes with zero central serialization bottleneck."
+      details: "Cluster distributed pub/sub distributes messages directly to subscriber worker processes with zero central serialization bottleneck (0.07 ms verified SLA to 50 concurrent subscribers)."
     },
     %{
       step: 3,
@@ -485,7 +530,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
             System Topology, Packages &amp; Execution Flow
           </h2>
           <p class="text-xs text-gray-500">
-            UML component architecture, fullscreen inspection, and end-to-end sequential workflow cascades.
+            Interactive network architecture, in-graph component inspection dialog, and sequential workflow cascades.
           </p>
         </div>
 
@@ -497,8 +542,8 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
             id="btn-tab-graph"
             class="px-3.5 py-1.5 rounded-lg bg-white text-violet-700 shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
           >
-            <span>📐</span>
-            <span>UML Architecture</span>
+            <span>🕸️</span>
+            <span>Network Architecture</span>
           </button>
           <button
             type="button"
@@ -512,7 +557,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
         </div>
       </div>
 
-      <!-- VIEW 1: UML ARCHITECTURE COMPONENT DIAGRAM -->
+      <!-- VIEW 1: NETWORK ARCHITECTURE COMPONENT DIAGRAM -->
       <div id="arch-view-graph" class="space-y-6">
         <!-- Core Philosophy: Microkernel & Pluggable Extensions -->
         <div class="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 text-white border border-slate-800 shadow-xl relative overflow-hidden">
@@ -550,14 +595,14 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
         <div class="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-gray-200/80 shadow-2xs">
           <!-- Package Filters -->
           <div class="flex items-center gap-1.5 text-xs font-semibold">
-            <span class="text-gray-400 text-[11px] mr-1 hidden sm:inline">Highlight Package:</span>
+            <span class="text-gray-400 text-[11px] mr-1 hidden sm:inline">Highlight Layer:</span>
             <button
               type="button"
               onclick="window.exoHighlightPackage('all')"
               id="pkg-btn-all"
               class="px-2.5 py-1 rounded-lg bg-slate-900 text-white shadow-2xs transition-all cursor-pointer text-xs"
             >
-              All Packages
+              All Layers
             </button>
             <button
               type="button"
@@ -599,76 +644,14 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
           </button>
         </div>
 
-        <!-- Inline SVG UML Diagram Container -->
-        <div class="border border-gray-200/90 rounded-3xl bg-slate-950 overflow-x-auto relative shadow-inner p-4">
-          <div class="min-w-[1160px]">
-            {render_uml_svg(assigns, "inline")}
-          </div>
-        </div>
-
-        <!-- Interactive Component Inspector Card -->
-        <div id="arch-node-inspector" class="bg-white p-5 rounded-3xl border border-gray-200/90 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div class="flex items-center gap-4">
-            <div id="inspector-icon" class="w-12 h-12 rounded-2xl bg-amber-50 text-amber-700 border border-amber-200 flex items-center justify-center text-2xl shrink-0">
-              🎯
-            </div>
-            <div>
-              <div class="flex items-center gap-2">
-                <h4 id="inspector-title" class="text-base font-bold text-gray-900 tracking-tight">
-                  ActionDispatcher
-                </h4>
-                <span id="inspector-badge" class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-                  KERNEL [IMMUTABLE]
-                </span>
-              </div>
-              <div id="inspector-subtitle" class="text-xs font-mono font-semibold text-violet-600 mt-0.5">
-                Scope &amp; Route Engine
-              </div>
-              <p id="inspector-desc" class="text-xs text-gray-600 mt-1 max-w-xl">
-                Zero-latency in-memory security scope verification (:guest, :player, :admin) &amp; provider routing.
-              </p>
-            </div>
+        <!-- Network Graph Canvas with In-Graph Dialog Container -->
+        <div class="border border-slate-800 rounded-3xl bg-slate-950 overflow-x-auto relative shadow-2xl p-4 min-h-[580px]">
+          <div class="min-w-[1180px]">
+            {render_network_svg(assigns, "inline")}
           </div>
 
-          <div class="bg-gray-50 p-3.5 rounded-2xl border border-gray-200/80 md:max-w-xs shrink-0">
-            <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-              Subsystem Package
-            </div>
-            <div id="inspector-package" class="text-xs font-bold text-gray-900 mt-0.5">
-              Kernel Core
-            </div>
-          </div>
-        </div>
-
-        <!-- Clickable UML Component Directory -->
-        <div class="bg-white p-5 rounded-3xl border border-gray-200/80 shadow-2xs space-y-3">
-          <div class="text-xs font-bold text-gray-500 uppercase tracking-wider">
-            Click to Inspect Subsystem Components:
-          </div>
-          <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
-            <%= for comp <- @components do %>
-              <button
-                type="button"
-                onclick={"window.exoSelectComponentById('#{comp.id}')"}
-                class={"p-2.5 rounded-xl border text-left transition-all cursor-pointer hover:shadow-sm group flex flex-col justify-between h-20 #{case comp.category do
-                  "kernel" -> "bg-amber-50/60 border-amber-200 hover:border-amber-400"
-                  "extension" -> "bg-violet-50/60 border-violet-200 hover:border-violet-400"
-                  "internal" -> "bg-cyan-50/60 border-cyan-200 hover:border-cyan-400"
-                  _ -> "bg-gray-50/80 border-gray-200 hover:border-gray-400"
-                end}"}
-              >
-                <div class="flex items-center justify-between">
-                  <span class="text-base"><%= comp.icon %></span>
-                  <span class="text-[9px] font-mono font-bold text-gray-500 uppercase">
-                    <%= comp.category %>
-                  </span>
-                </div>
-                <div class="font-bold text-[11px] text-gray-900 truncate group-hover:text-violet-700">
-                  <%= comp.title %>
-                </div>
-              </button>
-            <% end %>
-          </div>
+          <!-- In-Graph Component Inspector Dialog (Overlay inside graph) -->
+          {render_node_dialog("arch-node-inspector")}
         </div>
       </div>
 
@@ -755,7 +738,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
                   </div>
                 </summary>
 
-                <!-- Expanded Details & Wire JSON Framing -->
+                <!-- Expanded Details & Syntax-Highlighted Wire JSON Framing -->
                 <div class="p-5 pt-0 border-t border-gray-100 bg-gray-50/50 space-y-3">
                   <p class="text-xs text-gray-600 mt-3 leading-relaxed">
                     <%= step.details %>
@@ -765,7 +748,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
                     <div class="text-[10px] font-mono font-bold text-gray-500 uppercase tracking-wider mb-1">
                       Wire Frame / Code Execution:
                     </div>
-                    <pre class="bg-gray-950 text-gray-200 p-3.5 rounded-xl font-mono text-[11px] overflow-x-auto border border-gray-800 leading-tight"><code><%= step.wire_sample %></code></pre>
+                    <pre class="bg-slate-950 text-gray-200 p-4 rounded-xl font-mono text-xs overflow-x-auto border border-slate-800 leading-relaxed"><code>{highlight_code(step.wire_sample)}</code></pre>
                   </div>
                 </div>
               </details>
@@ -833,7 +816,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
                     <div class="text-[10px] font-mono font-bold text-gray-500 uppercase tracking-wider mb-1">
                       Wire Event Frame:
                     </div>
-                    <pre class="bg-gray-950 text-gray-200 p-3.5 rounded-xl font-mono text-[11px] overflow-x-auto border border-gray-800 leading-tight"><code><%= step.wire_sample %></code></pre>
+                    <pre class="bg-slate-950 text-gray-200 p-4 rounded-xl font-mono text-xs overflow-x-auto border border-slate-800 leading-relaxed"><code>{highlight_code(step.wire_sample)}</code></pre>
                   </div>
                 </div>
               </details>
@@ -843,12 +826,12 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       </div>
 
       <!-- FULLSCREEN MODAL POPUP FOR ARCHITECTURE DIAGRAM -->
-      <div id="arch-graph-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex flex-col p-4 sm:p-6 animate-in fade-in duration-150">
-        <div class="bg-slate-950 rounded-3xl border border-slate-800 flex-1 flex flex-col overflow-hidden shadow-2xl">
+      <div id="arch-graph-modal" class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex flex-col p-4 sm:p-6 animate-in fade-in duration-150">
+        <div class="bg-slate-950 rounded-3xl border border-slate-800 flex-1 flex flex-col overflow-hidden shadow-2xl relative">
           <!-- Modal Header -->
           <div class="flex items-center justify-between p-4 px-6 border-b border-slate-800 bg-slate-900/80">
             <div class="flex items-center gap-3">
-              <span class="text-xl">📐</span>
+              <span class="text-xl">🕸️</span>
               <div>
                 <h3 class="text-base font-bold text-white tracking-tight">Exoforge UML Architecture Diagram</h3>
                 <p class="text-xs text-slate-400">Subsystem Packages, Core Microkernel, and Ingress Topology</p>
@@ -866,167 +849,243 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
           </div>
 
           <!-- Modal Body with Full-Size SVG -->
-          <div class="flex-1 overflow-auto p-6 flex items-center justify-center">
+          <div class="flex-1 overflow-auto p-6 flex items-center justify-center relative">
             <div class="w-full max-w-[1240px]">
-              {render_uml_svg(assigns, "modal")}
+              {render_network_svg(assigns, "modal")}
             </div>
+
+            <!-- In-Modal Dialog for full-screen inspection -->
+            {render_node_dialog("modal-node-inspector")}
           </div>
         </div>
       </div>
-
-      <!-- JavaScript Controller for Diagram Interaction -->
-      <script>
-        (function() {
-          const components = <%= Phoenix.HTML.raw(Jason.encode!(Map.new(@components, fn c -> {c.id, c} end))) %>;
-
-          window.exoSelectComponentById = function(id) {
-            const comp = components[id];
-            if (!comp) return;
-
-            const titleEl = document.getElementById('inspector-title');
-            const subEl = document.getElementById('inspector-subtitle');
-            const badgeEl = document.getElementById('inspector-badge');
-            const descEl = document.getElementById('inspector-desc');
-            const pkgEl = document.getElementById('inspector-package');
-            const iconEl = document.getElementById('inspector-icon');
-
-            if (titleEl) titleEl.innerText = comp.title;
-            if (subEl) subEl.innerText = comp.subtitle;
-            if (badgeEl) badgeEl.innerText = comp.badge;
-            if (descEl) descEl.innerText = comp.desc;
-            if (pkgEl) pkgEl.innerText = comp.package;
-            if (iconEl) iconEl.innerText = comp.icon;
-          };
-
-          window.exoHighlightPackage = function(category) {
-            const nodes = document.querySelectorAll('.uml-comp-node');
-            const packages = document.querySelectorAll('.uml-package-box');
-
-            nodes.forEach(node => {
-              const nodeCat = node.getAttribute('data-category');
-              if (category === 'all' || nodeCat === category) {
-                node.style.opacity = '1.0';
-              } else {
-                node.style.opacity = '0.2';
-              }
-            });
-
-            // Update toolbar button states
-            ['all', 'kernel', 'extension', 'internal'].forEach(cat => {
-              const btn = document.getElementById('pkg-btn-' + cat);
-              if (btn) {
-                if (cat === category) {
-                  btn.classList.add('ring-2', 'ring-offset-1', 'ring-violet-500');
-                } else {
-                  btn.classList.remove('ring-2', 'ring-offset-1', 'ring-violet-500');
-                }
-              }
-            });
-          };
-
-          // Close modal on Escape key
-          document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') {
-              const modal = document.getElementById('arch-graph-modal');
-              if (modal) modal.classList.add('hidden');
-            }
-          });
-        })();
-      </script>
     </div>
     """
   end
 
-  # Helper to render the UML Architecture SVG
-  defp render_uml_svg(assigns, variant) do
+  # ---- Helper: In-Graph Node Inspector Dialog ----
+
+  defp render_node_dialog(dialog_id) do
+    assigns = %{dialog_id: dialog_id}
+
+    ~H"""
+    <div
+      id={@dialog_id}
+      class="graph-node-dialog absolute inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 hidden z-30 transition-all duration-200"
+      onclick="if (event.target === this) this.classList.add('hidden')"
+    >
+      <div
+        class="bg-slate-900 border border-slate-700/80 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl relative text-white space-y-5 animate-in fade-in zoom-in-95 duration-150"
+        onclick="event.stopPropagation()"
+      >
+        <!-- Close button -->
+        <button
+          type="button"
+          onclick="document.querySelectorAll('.graph-node-dialog').forEach(d => d.classList.add('hidden'))"
+          class="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center font-bold text-sm transition-colors cursor-pointer"
+          title="Close dialog"
+        >
+          ✕
+        </button>
+
+        <!-- Header: Icon, Title, Badge -->
+        <div class="flex items-start gap-4">
+          <div
+            id={"#{@dialog_id}-icon"}
+            class="dialog-icon w-14 h-14 rounded-2xl bg-slate-800/90 border border-slate-700 flex items-center justify-center text-3xl shrink-0 shadow-inner"
+          >
+            🎯
+          </div>
+          <div class="space-y-1 pr-6">
+            <div class="flex flex-wrap items-center gap-2">
+              <h3 id={"#{@dialog_id}-title"} class="dialog-title text-xl font-black text-white tracking-tight">
+                ActionDispatcher
+              </h3>
+              <span
+                id={"#{@dialog_id}-badge"}
+                class="dialog-badge text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30"
+              >
+                KERNEL [IMMUTABLE]
+              </span>
+            </div>
+            <div id={"#{@dialog_id}-subtitle"} class="dialog-subtitle text-xs font-mono font-semibold text-violet-400">
+              Scope &amp; Route Engine
+            </div>
+          </div>
+        </div>
+
+        <!-- Description -->
+        <div class="bg-slate-950/60 p-4 rounded-2xl border border-slate-800/80">
+          <div class="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+            Subsystem Role &amp; Responsibility
+          </div>
+          <p id={"#{@dialog_id}-desc"} class="dialog-desc text-xs text-slate-200 leading-relaxed">
+            Zero-latency in-memory security scope verification (:guest, :player, :admin) &amp; provider routing.
+          </p>
+        </div>
+
+        <!-- Details Grid: Package & Interconnects -->
+        <div class="grid grid-cols-2 gap-3">
+          <div class="bg-slate-800/50 p-3 rounded-xl border border-slate-700/60">
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Subsystem Layer</div>
+            <div id={"#{@dialog_id}-package"} class="dialog-package text-xs font-bold text-slate-100 mt-0.5 font-mono">
+              Kernel Core
+            </div>
+          </div>
+          <div class="bg-slate-800/50 p-3 rounded-xl border border-slate-700/60">
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Interconnect Protocol</div>
+            <div id={"#{@dialog_id}-protocol"} class="dialog-protocol text-xs font-bold text-violet-300 mt-0.5 font-mono">
+              In-Memory Zero-Copy
+            </div>
+          </div>
+        </div>
+
+        <!-- Dismiss footer -->
+        <div class="flex items-center justify-between pt-2 border-t border-slate-800 text-[11px] text-slate-400">
+          <span class="flex items-center gap-1.5">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            Click anywhere outside or press ESC to dismiss
+          </span>
+          <button
+            type="button"
+            onclick="document.querySelectorAll('.graph-node-dialog').forEach(d => d.classList.add('hidden'))"
+            class="text-violet-400 hover:text-violet-300 font-semibold cursor-pointer"
+          >
+            Dismiss
+          </button>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  # ---- Helper: Render Network SVG ----
+
+  defp render_network_svg(assigns, variant) do
     prefix = if variant == "modal", do: "m_", else: "i_"
     assigns = assign(assigns, :prefix, prefix)
 
     ~H"""
     <svg
-      viewBox="0 0 1180 440"
+      viewBox="0 0 1208 590"
       class="w-full h-auto select-none font-sans"
     >
       <defs>
-        <marker id={"#{@prefix}uml-arrow"} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <!-- Arrowhead Marker -->
+        <marker id={"#{@prefix}net-arrow"} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
           <path d="M 0 1 L 10 5 L 0 9 z" fill="#64748b" />
         </marker>
-        <filter id={"#{@prefix}uml-shadow"} x="-10%" y="-10%" width="120%" height="120%">
-          <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#000000" flood-opacity="0.35" />
+        <marker id={"#{@prefix}net-arrow-amber"} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 1 L 10 5 L 0 9 z" fill="#f59e0b" />
+        </marker>
+        <marker id={"#{@prefix}net-arrow-violet"} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 1 L 10 5 L 0 9 z" fill="#8b5cf6" />
+        </marker>
+
+        <!-- Drop Shadow Filters -->
+        <filter id={"#{@prefix}net-shadow"} x="-10%" y="-10%" width="120%" height="120%">
+          <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.45" />
         </filter>
+        <filter id={"#{@prefix}kernel-glow"} x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="#f59e0b" flood-opacity="0.25" />
+        </filter>
+
+        <!-- Gradients -->
+        <linearGradient id={"#{@prefix}kernel-bg"} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#2a1f0a" />
+          <stop offset="100%" stop-color="#191305" />
+        </linearGradient>
+        <linearGradient id={"#{@prefix}extension-bg"} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#1e183a" />
+          <stop offset="100%" stop-color="#0f0c24" />
+        </linearGradient>
+        <linearGradient id={"#{@prefix}storage-bg"} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#082a3d" />
+          <stop offset="100%" stop-color="#031622" />
+        </linearGradient>
       </defs>
 
       <!-- Subsystem UML Packages (Envelopes) -->
       <g class="uml-packages">
-        <!-- Package 1: Client Ingress -->
+        <!-- Package 1: Client Ingress & Gateways -->
         <g class="uml-package-box" data-category="client">
-          <rect x="30" y="30" width="190" height="390" rx="16" fill="#0f172a" stroke="#334155" stroke-width="1.2" stroke-dasharray="4 3" />
-          <path d="M 30 54 L 140 54 L 152 42 L 152 30 L 30 30 Z" fill="#1e293b" />
-          <text x="42" y="46" fill="#94a3b8" font-size="9" font-weight="bold" font-family="monospace">package Ingress</text>
+          <rect x="20" y="24" width="418" height="544" rx="20" fill="#0f172a" fill-opacity="0.6" stroke="#334155" stroke-width="1.2" stroke-dasharray="4 3" />
+          <path d="M 20 48 L 140 48 L 152 36 L 152 24 L 20 24 Z" fill="#1e293b" />
+          <text x="32" y="40" fill="#94a3b8" font-size="9.5" font-weight="bold" font-family="monospace">package Ingress</text>
         </g>
 
-        <!-- Package 2: Gateways -->
-        <g class="uml-package-box" data-category="extension">
-          <rect x="250" y="30" width="190" height="390" rx="16" fill="#0f172a" stroke="#6d28d9" stroke-width="1.2" stroke-dasharray="4 3" />
-          <path d="M 250 54 L 370 54 L 382 42 L 382 30 L 250 30 Z" fill="#2e1065" />
-          <text x="262" y="46" fill="#c4b5fd" font-size="9" font-weight="bold" font-family="monospace">package Gateways</text>
-        </g>
-
-        <!-- Package 3: Kernel Core (Glow Boundary) -->
+        <!-- Package 2: Kernel Core (Prominent Microkernel Boundary) -->
         <g class="uml-package-box" data-category="kernel">
-          <rect x="470" y="30" width="200" height="390" rx="16" fill="#1e180d" stroke="#f59e0b" stroke-width="2" />
-          <path d="M 470 54 L 620 54 L 632 42 L 632 30 L 470 30 Z" fill="#451a03" />
-          <text x="482" y="46" fill="#fde047" font-size="9" font-weight="black" font-family="monospace">⚡ package Kernel</text>
+          <rect x="456" y="24" width="278" height="544" rx="20" fill="#181308" fill-opacity="0.8" stroke="#f59e0b" stroke-width="2" filter={"url(##{@prefix}kernel-glow)"} />
+          <path d="M 456 48 L 610 48 L 622 36 L 622 24 L 456 24 Z" fill="#451a03" />
+          <text x="468" y="40" fill="#fde047" font-size="9.5" font-weight="black" font-family="monospace">⚡ package Kernel</text>
         </g>
 
-        <!-- Package 4: Extension Workers -->
+        <!-- Package 3: Extension Workers -->
         <g class="uml-package-box" data-category="extension">
-          <rect x="700" y="30" width="200" height="390" rx="16" fill="#0f172a" stroke="#059669" stroke-width="1.2" stroke-dasharray="4 3" />
-          <path d="M 700 54 L 840 54 L 852 42 L 852 30 L 700 30 Z" fill="#064e3b" />
-          <text x="712" y="46" fill="#6ee7b7" font-size="9" font-weight="bold" font-family="monospace">package Extensions</text>
+          <rect x="750" y="24" width="234" height="544" rx="20" fill="#0f172a" fill-opacity="0.6" stroke="#059669" stroke-width="1.2" stroke-dasharray="4 3" />
+          <path d="M 750 48 L 890 48 L 902 36 L 902 24 L 750 24 Z" fill="#064e3b" />
+          <text x="762" y="40" fill="#6ee7b7" font-size="9.5" font-weight="bold" font-family="monospace">package Extensions</text>
         </g>
 
-        <!-- Package 5: Storage -->
+        <!-- Package 4: Data & Storage -->
         <g class="uml-package-box" data-category="internal">
-          <rect x="930" y="30" width="220" height="390" rx="16" fill="#0f172a" stroke="#0284c7" stroke-width="1.2" stroke-dasharray="4 3" />
-          <path d="M 930 54 L 1060 54 L 1072 42 L 1072 30 L 930 30 Z" fill="#082f49" />
-          <text x="942" y="46" fill="#7dd3fc" font-size="9" font-weight="bold" font-family="monospace">package Storage</text>
+          <rect x="996" y="24" width="192" height="544" rx="20" fill="#0f172a" fill-opacity="0.6" stroke="#0284c7" stroke-width="1.2" stroke-dasharray="4 3" />
+          <path d="M 996 48 L 1120 48 L 1132 36 L 1132 24 L 996 24 Z" fill="#082f49" />
+          <text x="1008" y="40" fill="#7dd3fc" font-size="9.5" font-weight="bold" font-family="monospace">package Storage</text>
         </g>
       </g>
 
-      <!-- UML Connecting Directed Edges -->
+      <!-- Connecting Directed Edges with Dynamic Animated Flow -->
       <g class="uml-edges">
         <%= for edge <- @edges do %>
+          <!-- Static Base Line -->
           <path
             d={edge.path}
             fill="none"
-            stroke="#64748b"
+            stroke="#475569"
             stroke-width="1.8"
-            marker-end={"url(##{@prefix}uml-arrow)"}
-            class="opacity-70 hover:opacity-100 hover:stroke-violet-400 transition-opacity"
+            marker-end={"url(##{@prefix}net-arrow)"}
+            class="opacity-50"
+          />
+          <!-- Animated Flow Overlay -->
+          <path
+            d={edge.path}
+            fill="none"
+            stroke="#8b5cf6"
+            stroke-width="1.8"
+            class="animate-flow-dash opacity-80"
           />
         <% end %>
       </g>
 
-      <!-- UML Components -->
+      <!-- Subsystem Network Nodes (Cards with Large, Legible Typography) -->
       <g class="uml-components">
         <%= for comp <- @components do %>
           <g
-            class="uml-comp-node cursor-pointer group transition-transform duration-100"
+            class="network-node uml-comp-node cursor-pointer group"
+            data-graph-node="true"
             data-category={comp.category}
-            data-id={comp.id}
-            onclick={"window.exoSelectComponentById('#{comp.id}')"}
+            data-node-id={comp.id}
+            data-node-title={comp.title}
+            data-node-subtitle={comp.subtitle}
+            data-node-badge={comp.badge}
+            data-node-desc={comp.desc}
+            data-node-package={comp.package}
+            data-node-icon={comp.icon}
+            data-node-protocol={comp.protocol}
+            onclick="window.exoOpenNodeDialog && window.exoOpenNodeDialog(this)"
             transform={"translate(#{comp.x}, #{comp.y})"}
           >
-            <!-- Component Outer Rectangle -->
+            <!-- Card Outer Rectangle -->
             <rect
               width={comp.width}
               height={comp.height}
-              rx="12"
+              rx="16"
               fill={case comp.category do
-                "kernel" -> "#291e0a"
-                "extension" -> "#1e1b4b"
-                "internal" -> "#082f49"
+                "kernel" -> "url(##{@prefix}kernel-bg)"
+                "extension" -> "url(##{@prefix}extension-bg)"
+                "internal" -> "url(##{@prefix}storage-bg)"
                 _ -> "#1e293b"
               end}
               stroke={case comp.category do
@@ -1035,47 +1094,130 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
                 "internal" -> "#06b6d4"
                 _ -> "#475569"
               end}
-              stroke-width={if comp.category == "kernel", do: "2", else: "1.2"}
-              filter={"url(##{@prefix}uml-shadow)"}
-              class="group-hover:stroke-white transition-colors"
+              stroke-width={if comp.category == "kernel", do: "2", else: "1.4"}
+              filter={"url(##{@prefix}net-shadow)"}
+              class="group-hover:stroke-white transition-all"
             />
 
-            <!-- UML Stereotype <<component>> -->
-            <text x="10" y="16" fill="#94a3b8" font-size="8" font-family="monospace">&laquo;component&raquo;</text>
-
-            <!-- Icon & Title -->
-            <text x="10" y="32" font-size="13"><%= comp.icon %></text>
+            <!-- Top Meta Line: Stereotype & Category Badge -->
+            <text x="12" y="19" fill="#94a3b8" font-size="8.5" font-family="monospace">&laquo;component&raquo;</text>
             <text
-              x="30"
-              y="32"
-              fill="#ffffff"
-              font-size="10.5"
-              font-weight="bold"
-              font-family="system-ui, sans-serif"
-            >
-              <%= comp.title %>
-            </text>
-
-            <!-- Subtitle -->
-            <text
-              x="10"
-              y="48"
+              x={comp.width - 12}
+              y="19"
+              text-anchor="end"
               fill={case comp.category do
-                "kernel" -> "#fcd34d"
+                "kernel" -> "#fde047"
                 "extension" -> "#c4b5fd"
                 "internal" -> "#67e8f9"
-                _ -> "#94a3b8"
+                _ -> "#cbd5e1"
               end}
               font-size="8.5"
               font-weight="bold"
               font-family="monospace"
             >
+              <%= comp.badge %>
+            </text>
+
+            <!-- Icon -->
+            <text x="12" y="48" font-size="22"><%= comp.icon %></text>
+
+            <!-- Title (Large 13.5px Bold White) -->
+            <text
+              x="42"
+              y="44"
+              fill="#ffffff"
+              font-size="13.5"
+              font-weight="bold"
+              font-family="system-ui, -apple-system, sans-serif"
+            >
+              <%= comp.title %>
+            </text>
+
+            <!-- Subtitle (10.5px Monospace) -->
+            <text
+              x="42"
+              y="61"
+              fill={case comp.category do
+                "kernel" -> "#fcd34d"
+                "extension" -> "#a78bfa"
+                "internal" -> "#38bdf8"
+                _ -> "#94a3b8"
+              end}
+              font-size="10.5"
+              font-weight="600"
+              font-family="monospace"
+            >
               <%= comp.subtitle %>
             </text>
+
+            <!-- Live Active Indicator Dot -->
+            <%= if comp.category in ["kernel", "extension"] do %>
+              <circle
+                cx={comp.width - 14}
+                cy="44"
+                r="3.5"
+                fill={if comp.category == "kernel", do: "#f59e0b", else: "#10b981"}
+                class="animate-pulse"
+              />
+            <% end %>
           </g>
         <% end %>
       </g>
     </svg>
     """
+  end
+
+  # ---- Syntax Highlighter for Workflow JSON & Code ----
+
+  defp highlight_code(code) do
+    code
+    |> String.trim()
+    |> Phoenix.HTML.html_escape()
+    |> Phoenix.HTML.safe_to_string()
+    |> String.split("\n")
+    |> Enum.map(&highlight_line/1)
+    |> Enum.join("\n")
+    |> Phoenix.HTML.raw()
+  end
+
+  defp highlight_line(line) do
+    trimmed = String.trim(line)
+
+    cond do
+      String.starts_with?(trimmed, "//") or String.starts_with?(trimmed, "--") or
+          String.starts_with?(trimmed, "/*") ->
+        "<span class=\"text-slate-500 italic\">#{line}</span>"
+
+      String.starts_with?(trimmed, "[") and String.ends_with?(trimmed, "]") ->
+        "<span class=\"text-violet-400 font-semibold\">#{line}</span>"
+
+      true ->
+        line
+        # JSON keys: &quot;key&quot;:
+        |> String.replace(
+          ~r/&quot;([a-zA-Z0-9_]+)&quot;(?=\s*:)/,
+          "<span class=\"text-sky-300 font-semibold\">&quot;\\1&quot;</span>"
+        )
+        # JSON string values: : &quot;value&quot;
+        |> String.replace(
+          ~r/(:\s*)&quot;([^&]*)&quot;/,
+          "\\1<span class=\"text-emerald-300\">&quot;\\2&quot;</span>"
+        )
+        # JSON numbers: : 1234
+        |> String.replace(
+          ~r/(:\s*)([0-9]+(?:\.[0-9]+)?)/,
+          "\\1<span class=\"text-amber-300 font-bold\">\\2</span>"
+        )
+        # JSON booleans & null
+        |> String.replace(
+          ~r/(:\s*)(true|false|null)/,
+          "\\1<span class=\"text-purple-300 font-bold\">\\2</span>"
+        )
+        # SQL keywords
+        |> String.replace(
+          ~r/\b(INSERT INTO|VALUES|ON CONFLICT|DO UPDATE SET|SELECT|FROM|WHERE)\b/,
+          "<span class=\"text-violet-400 font-bold\">\\1</span>"
+        )
+    end
   end
 end
