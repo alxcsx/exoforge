@@ -45,6 +45,9 @@ public class ExoActionResult : ExoMessage
     [JsonPropertyName("error")]
     public ExoErrorDetails? Error { get; set; }
 
+    [JsonPropertyName("logs")]
+    public List<string>? Logs { get; set; }
+
     public bool IsSuccess => Status == "ok";
 }
 

@@ -35,7 +35,10 @@ defmodule Exoforge.ExtensionLogs do
         drop_oldest(table, id)
       end
 
-      :ets.insert(table, {id, System.system_time(:millisecond), normalize_level(level), message})
+      at = System.system_time(:millisecond)
+      lvl = normalize_level(level)
+      :ets.insert(table, {id, at, lvl, message})
+      persist_async(id, at, lvl, message)
       :ok
     else
       :rate_limited
@@ -49,13 +52,28 @@ defmodule Exoforge.ExtensionLogs do
     table = ensure_table()
     id = to_string(extension_id)
 
-    table
-    |> :ets.lookup(id)
-    |> Enum.map(fn {_id, at, level, message} ->
-      %{at: at, level: level, level_name: level_name(level), message: message}
-    end)
+    entries =
+      case :ets.lookup(table, id) do
+        [] ->
+          # If ETS has no logs for this extension, try loading persisted logs from DB
+          load_from_db(id, limit)
+
+        cached ->
+          Enum.map(cached, fn {_id, at, level, message} ->
+            %{at: at, level: level, level_name: level_name(level), message: message}
+          end)
+      end
+
+    entries
     |> Enum.sort_by(& &1.at)
     |> Enum.take(-max(limit, 1))
+  end
+
+  @doc "Returns recent log lines for an extension since timestamp `since_ms`."
+  def since(extension_id, since_ms) do
+    list(extension_id, 50)
+    |> Enum.filter(&(&1.at >= since_ms))
+    |> Enum.map(&"[#{String.upcase(&1.level_name)}] #{&1.message}")
   end
 
   @doc "Drops every recorded line for an extension (called when it is removed)."
@@ -63,6 +81,21 @@ defmodule Exoforge.ExtensionLogs do
     id = to_string(extension_id)
     :ets.delete(ensure_table(), id)
     :ets.delete(ensure_rate_table(), id)
+
+    Task.start(fn ->
+      try do
+        Exoforge.ActionDispatcher.dispatch(:database, :execute, %{
+          plugin: :extension_logs,
+          operation: "DELETE FROM extension_logs WHERE extension_id = $1",
+          arguments: [id]
+        })
+      rescue
+        _ -> :ok
+      catch
+        _, _ -> :ok
+      end
+    end)
+
     :ok
   end
 
@@ -139,4 +172,111 @@ defmodule Exoforge.ExtensionLogs do
   defp level_name(2), do: "warning"
   defp level_name(3), do: "error"
   defp level_name(_), do: "info"
+
+  defp persist_async(id, at, level, message) do
+    if id not in ["database", "lldb", "extension_logs"] do
+      Task.start(fn ->
+        try do
+          ensure_schema()
+
+          Exoforge.ActionDispatcher.dispatch(:database, :execute, %{
+            plugin: :extension_logs,
+            operation: """
+            INSERT INTO extension_logs (id, extension_id, level, level_name, message, timestamp)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            """,
+            arguments: [
+              "log_#{System.unique_integer([:positive])}",
+              id,
+              level,
+              level_name(level),
+              message,
+              at
+            ]
+          })
+        rescue
+          _ -> :ok
+        catch
+          _, _ -> :ok
+        end
+      end)
+    end
+  end
+
+  defp load_from_db(extension_id, limit) do
+    try do
+      ensure_schema()
+
+      case Exoforge.ActionDispatcher.dispatch(:database, :execute, %{
+             plugin: :extension_logs,
+             operation: "SELECT level, level_name, message, timestamp FROM extension_logs WHERE extension_id = $1 ORDER BY timestamp DESC LIMIT $2",
+             arguments: [to_string(extension_id), limit]
+           }) do
+        {:ok, %{rows: rows}} when is_list(rows) ->
+          Enum.map(rows, fn row ->
+            at = String.to_integer(to_string(row["timestamp"] || "0"))
+            level = String.to_integer(to_string(row["level"] || "1"))
+            %{
+              at: at,
+              level: level,
+              level_name: to_string(row["level_name"] || level_name(level)),
+              message: to_string(row["message"] || "")
+            }
+          end)
+
+        _ ->
+          []
+      end
+    rescue
+      _ -> []
+    catch
+      _, _ -> []
+    end
+  end
+
+  defp ensure_schema do
+    case :ets.info(:exo_extension_logs_schema) do
+      :undefined ->
+        case do_create_schema() do
+          :ok ->
+            try do
+              :ets.new(:exo_extension_logs_schema, [:named_table, :public, :set])
+            rescue
+              _ -> :ok
+            end
+
+          _ ->
+            :ok
+        end
+
+      _ ->
+        :ok
+    end
+  end
+
+  defp do_create_schema do
+    try do
+      case Exoforge.ActionDispatcher.dispatch(:database, :execute, %{
+             plugin: :extension_logs,
+             operation: """
+             CREATE TABLE IF NOT EXISTS extension_logs (
+               id text PRIMARY KEY,
+               extension_id text,
+               level integer,
+               level_name text,
+               message text,
+               timestamp integer
+             )
+             """
+           }) do
+        {:ok, _} -> :ok
+        :ok -> :ok
+        _ -> :retry
+      end
+    rescue
+      _ -> :retry
+    catch
+      _, _ -> :retry
+    end
+  end
 end

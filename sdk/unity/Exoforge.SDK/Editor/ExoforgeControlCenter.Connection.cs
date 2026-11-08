@@ -827,7 +827,14 @@ public partial class ExoforgeControlCenter : EditorWindow
             {
                 version = ExoDeployer.ReadManifestVersion(dir);
                 string fingerprint = ExoDeployer.ComputeSourceFingerprint(dir);
-                modified = version == null || !version.EndsWith("." + fingerprint, StringComparison.Ordinal);
+                if (version != null && version.Contains('+'))
+                {
+                    modified = !version.EndsWith("." + fingerprint, StringComparison.Ordinal);
+                }
+                else
+                {
+                    modified = false;
+                }
             }
 
             string icon = "🧩";

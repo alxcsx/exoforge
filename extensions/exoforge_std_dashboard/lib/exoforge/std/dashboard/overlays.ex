@@ -1301,6 +1301,36 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               </div>
             <% end %>
           </div>
+
+          <!-- Recent Logs -->
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                Recent Logs
+              </span>
+              <span class="text-[10px] text-gray-400 font-mono">Persisted</span>
+            </div>
+            <% logs = Exoforge.ExtensionLogs.list(@extension.id, 20) %>
+            <%= if Enum.empty?(logs) do %>
+              <p class="p-3 bg-gray-50 rounded-xl text-gray-400 italic font-mono text-[11px]">No logs recorded for this extension.</p>
+            <% else %>
+              <div class="space-y-1 max-h-48 overflow-y-auto p-2.5 bg-gray-900 text-gray-200 rounded-xl font-mono text-[11px]">
+                <%= for l <- logs do %>
+                  <div class="flex items-start gap-2 py-0.5 border-b border-gray-800/50 last:border-0">
+                    <span class={case l.level_name do
+                      "error" -> "text-red-400 font-bold"
+                      "warning" -> "text-yellow-400 font-bold"
+                      "debug" -> "text-blue-400 font-bold"
+                      _ -> "text-emerald-400 font-bold"
+                    end}>
+                      [<%= String.upcase(l.level_name) %>]
+                    </span>
+                    <span class="text-gray-300 break-all"><%= l.message %></span>
+                  </div>
+                <% end %>
+              </div>
+            <% end %>
+          </div>
         </div>
       </.inspect_popup>
     <% end %>

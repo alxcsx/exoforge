@@ -18,6 +18,8 @@ defmodule Exoforge.Std.Dashboard.RecentEvents do
   @impl true
   def init(_opts) do
     init_table()
+    ensure_schema()
+    warmup_from_db()
 
     # Subscribe to all events across all topics via the global fallback in EventDispatcher
     try do
@@ -98,6 +100,8 @@ defmodule Exoforge.Std.Dashboard.RecentEvents do
       _ -> :ok
     end
 
+    persist_async(item)
+
     item
   end
 
@@ -107,7 +111,18 @@ defmodule Exoforge.Std.Dashboard.RecentEvents do
 
     try do
       case :ets.tab2list(@table) do
-        [] -> []
+        [] ->
+          warmup_from_db()
+
+          case :ets.tab2list(@table) do
+            [] -> []
+            list ->
+              list
+              |> Enum.sort_by(&elem(&1, 0))
+              |> Enum.take(limit)
+              |> Enum.map(&elem(&1, 1))
+          end
+
         list ->
           list
           |> Enum.sort_by(&elem(&1, 0))
@@ -126,6 +141,19 @@ defmodule Exoforge.Std.Dashboard.RecentEvents do
     rescue
       _ -> :ok
     end
+
+    Task.start(fn ->
+      try do
+        Exoforge.ActionDispatcher.dispatch(:database, :execute, %{
+          plugin: :dashboard,
+          operation: "DELETE FROM recent_events"
+        })
+      rescue
+        _ -> :ok
+      catch
+        _, _ -> :ok
+      end
+    end)
   end
 
   defp trim do
@@ -139,5 +167,158 @@ defmodule Exoforge.Std.Dashboard.RecentEvents do
     end
   rescue
     _ -> :ok
+  end
+
+  defp persist_async(item) do
+    Task.start(fn ->
+      try do
+        ensure_schema()
+
+        payload_str =
+          case Jason.encode(item.payload) do
+            {:ok, bin} -> bin
+            _ -> inspect(item.payload)
+          end
+
+        context_str =
+          case Jason.encode(item.context) do
+            {:ok, bin} -> bin
+            _ -> "{}"
+          end
+
+        Exoforge.ActionDispatcher.dispatch(:database, :execute, %{
+          plugin: :dashboard,
+          operation: """
+          INSERT INTO recent_events (id, event, payload, context, time, timestamp)
+          VALUES ($1, $2, $3, $4, $5, $6)
+          """,
+          arguments: [
+            item.id,
+            item.event,
+            payload_str,
+            context_str,
+            item.time,
+            item.timestamp
+          ]
+        })
+      rescue
+        _ -> :ok
+      catch
+        _, _ -> :ok
+      end
+    end)
+  end
+
+  defp ensure_schema do
+    case :ets.info(:exo_recent_events_schema) do
+      :undefined ->
+        case do_create_schema() do
+          :ok ->
+            try do
+              :ets.new(:exo_recent_events_schema, [:named_table, :public, :set])
+            rescue
+              _ -> :ok
+            end
+
+          _ ->
+            :ok
+        end
+
+      _ ->
+        :ok
+    end
+  end
+
+  defp do_create_schema do
+    try do
+      case Exoforge.ActionDispatcher.dispatch(:database, :execute, %{
+             plugin: :dashboard,
+             operation: """
+             CREATE TABLE IF NOT EXISTS recent_events (
+               id text PRIMARY KEY,
+               event text,
+               payload text,
+               context text,
+               time text,
+               timestamp integer
+             )
+             """
+           }) do
+        {:ok, _} -> :ok
+        :ok -> :ok
+        _ -> :retry
+      end
+    rescue
+      _ -> :retry
+    catch
+      _, _ -> :retry
+    end
+  end
+
+  defp warmup_from_db do
+    ensure_schema()
+
+    try do
+      case Exoforge.ActionDispatcher.dispatch(:database, :execute, %{
+             plugin: :dashboard,
+             operation:
+               "SELECT id, event, payload, context, time, timestamp FROM recent_events ORDER BY timestamp DESC LIMIT #{@max_events}"
+           }) do
+        {:ok, %{rows: rows}} when is_list(rows) ->
+          Enum.each(rows, fn row ->
+            case parse_db_row(row) do
+              nil ->
+                :ok
+
+              item ->
+                :ets.insert_new(@table, {-item.timestamp, item})
+            end
+          end)
+
+        _ ->
+          :ok
+      end
+    rescue
+      _ -> :ok
+    catch
+      _, _ -> :ok
+    end
+  end
+
+  defp parse_db_row(row) do
+    try do
+      payload =
+        case row["payload"] do
+          nil -> %{}
+          bin when is_binary(bin) ->
+            case Jason.decode(bin) do
+              {:ok, decoded} -> decoded
+              _ -> bin
+            end
+          other -> other
+        end
+
+      context =
+        case row["context"] do
+          nil -> %{}
+          bin when is_binary(bin) ->
+            case Jason.decode(bin) do
+              {:ok, decoded} -> decoded
+              _ -> %{}
+            end
+          other -> other
+        end
+
+      %{
+        id: to_string(row["id"]),
+        event: to_string(row["event"]),
+        payload: payload,
+        context: context,
+        time: to_string(row["time"]),
+        timestamp: String.to_integer(to_string(row["timestamp"] || "0"))
+      }
+    rescue
+      _ -> nil
+    end
   end
 end

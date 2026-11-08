@@ -289,38 +289,42 @@ defmodule Exoforge.Std.Http.Router do
   end
 
   defp dispatch_http(conn, service, action, payload, caller_scopes) do
+    t0_ms = System.system_time(:millisecond)
     t0 = System.monotonic_time(:microsecond)
     result = ActionDispatcher.dispatch(service, action, payload, caller_scopes: caller_scopes)
     latency_us = System.monotonic_time(:microsecond) - t0
 
+    manifest = Exoforge.ExtensionRegistry.fetch_service(service) || Exoforge.ExtensionRegistry.fetch_manifest(service)
+    logs = if manifest, do: Exoforge.ExtensionLogs.since(manifest.id, t0_ms - 50), else: []
+
     case result do
       {:ok, result} ->
         Logger.info("[HTTP:Action] #{service}.#{action} -> 200 OK (#{latency_us}µs)")
-        send_json(conn, 200, %{status: "ok", data: result})
+        send_json(conn, 200, %{status: "ok", data: result, logs: logs})
 
       :ok ->
         Logger.info("[HTTP:Action] #{service}.#{action} -> 200 OK (#{latency_us}µs)")
-        send_json(conn, 200, %{status: "ok"})
+        send_json(conn, 200, %{status: "ok", logs: logs})
 
       {:error, :service_not_found} ->
         Logger.warning("[HTTP:Action] #{service}.#{action} -> 404 service_not_found (#{latency_us}µs)")
-        send_json(conn, 404, %{status: "error", error: "service_not_found"})
+        send_json(conn, 404, %{status: "error", error: "service_not_found", logs: logs})
 
       {:error, {:action_not_found, _}} ->
         Logger.warning("[HTTP:Action] #{service}.#{action} -> 404 action_not_found (#{latency_us}µs)")
-        send_json(conn, 404, %{status: "error", error: "action_not_found"})
+        send_json(conn, 404, %{status: "error", error: "action_not_found", logs: logs})
 
       {:error, :unauthorized} ->
         Logger.warning("[HTTP:Action] #{service}.#{action} -> 401 unauthorized (#{latency_us}µs)")
-        send_json(conn, 401, %{status: "error", error: "unauthorized"})
+        send_json(conn, 401, %{status: "error", error: "unauthorized", logs: logs})
 
       {:error, :forbidden_scope} ->
         Logger.warning("[HTTP:Action] #{service}.#{action} -> 403 forbidden_scope (#{latency_us}µs)")
-        send_json(conn, 403, %{status: "error", error: "forbidden_scope"})
+        send_json(conn, 403, %{status: "error", error: "forbidden_scope", logs: logs})
 
       {:error, reason} ->
         Logger.warning("[HTTP:Action] #{service}.#{action} -> 400 error: #{inspect(reason)} (#{latency_us}µs)")
-        send_json(conn, 400, %{status: "error", error: inspect(reason)})
+        send_json(conn, 400, %{status: "error", error: inspect(reason), logs: logs})
     end
   end
 

@@ -63,7 +63,9 @@ defmodule Exoforge.ActionDispatcherTest do
   end
 
   setup do
-    start_supervised!(ExtensionRegistry)
+    unless Process.whereis(ExtensionRegistry) do
+      start_supervised!(ExtensionRegistry)
+    end
     :ok
   end
 

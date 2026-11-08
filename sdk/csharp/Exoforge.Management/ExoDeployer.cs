@@ -1241,7 +1241,15 @@ public class ExoDeployer
     private static bool IsBuildPath(string path)
     {
         string normalized = path.Replace('\\', '/');
-        return normalized.Contains("/bin/") || normalized.Contains("/obj/");
+        return normalized.Contains("/bin/") ||
+               normalized.Contains("/obj/") ||
+               normalized.Contains("/.exoforge/") ||
+               normalized.Contains("/.vs/") ||
+               normalized.Contains("/.idea/") ||
+               normalized.Contains("/.git/") ||
+               normalized.Contains("/.vscode/") ||
+               normalized.Contains("/Generated/") ||
+               normalized.EndsWith(".g.cs", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -1273,14 +1281,15 @@ public class ExoDeployer
         var files = Directory.EnumerateFiles(pluginDir, "*.cs", SearchOption.AllDirectories)
             .Concat(Directory.EnumerateFiles(pluginDir, "*.csproj", SearchOption.AllDirectories))
             .Where(path => !IsBuildPath(path))
-            .OrderBy(path => path, StringComparer.Ordinal)
+            .OrderBy(path => Path.GetRelativePath(pluginDir, path).Replace('\\', '/'), StringComparer.Ordinal)
             .ToList();
 
         var content = new StringBuilder();
         foreach (string file in files)
         {
-            content.Append(Path.GetRelativePath(pluginDir, file)).Append('\n');
-            content.Append(File.ReadAllText(file)).Append('\n');
+            content.Append(Path.GetRelativePath(pluginDir, file).Replace('\\', '/')).Append('\n');
+            string text = File.ReadAllText(file).Replace("\r\n", "\n").TrimEnd();
+            content.Append(text).Append('\n');
         }
 
         using var sha = System.Security.Cryptography.SHA256.Create();

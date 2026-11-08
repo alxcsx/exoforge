@@ -268,9 +268,13 @@ defmodule Exoforge.Std.Ws.SocketHandler do
     service = parse_service(service_str)
     action = parse_action(action_str)
 
+    t0_ms = System.system_time(:millisecond)
     t0 = System.monotonic_time(:microsecond)
-    res = ActionDispatcher.dispatch(service, action, payload, caller_scopes: caller_scopes)
+    res = ActionDispatcher.dispatch(service, action, payload, caller_scopes: caller_scopes, caller: auth.player_id)
     latency_us = System.monotonic_time(:microsecond) - t0
+
+    manifest = Exoforge.ExtensionRegistry.fetch_service(service) || Exoforge.ExtensionRegistry.fetch_manifest(service)
+    logs = if manifest, do: Exoforge.ExtensionLogs.since(manifest.id, t0_ms - 50), else: []
 
     case res do
       {:ok, data} ->
@@ -281,7 +285,8 @@ defmodule Exoforge.Std.Ws.SocketHandler do
             type: @frame_action_result,
             id: req_id,
             status: @status_ok,
-            data: data
+            data: data,
+            logs: logs
           },
           state
         )
@@ -294,7 +299,8 @@ defmodule Exoforge.Std.Ws.SocketHandler do
             type: @frame_action_result,
             id: req_id,
             status: @status_ok,
-            data: %{}
+            data: %{},
+            logs: logs
           },
           state
         )
@@ -310,7 +316,8 @@ defmodule Exoforge.Std.Ws.SocketHandler do
             error: %{
               code: to_string(reason),
               message: "Scope authorization failed"
-            }
+            },
+            logs: logs
           },
           state
         )
@@ -326,7 +333,8 @@ defmodule Exoforge.Std.Ws.SocketHandler do
             error: %{
               code: "service_not_found",
               message: "Service '#{service}' was not found on the remote server. Ensure the extension providing '#{service}' is deployed and running."
-            }
+            },
+            logs: logs
           },
           state
         )
@@ -342,7 +350,8 @@ defmodule Exoforge.Std.Ws.SocketHandler do
             error: %{
               code: "action_not_found",
               message: "Action '#{missing_action}' was not found on service '#{service}'."
-            }
+            },
+            logs: logs
           },
           state
         )
@@ -358,7 +367,8 @@ defmodule Exoforge.Std.Ws.SocketHandler do
             error: %{
               code: to_string(code),
               message: message
-            }
+            },
+            logs: logs
           },
           state
         )
@@ -374,7 +384,8 @@ defmodule Exoforge.Std.Ws.SocketHandler do
             error: %{
               code: @code_action_failed,
               message: inspect(reason)
-            }
+            },
+            logs: logs
           },
           state
         )

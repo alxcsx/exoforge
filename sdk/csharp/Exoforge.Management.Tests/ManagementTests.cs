@@ -321,6 +321,40 @@ public class ManagementTests : IDisposable
     }
 
     [Fact]
+    public void SourceFingerprint_IgnoresCrlfAndBuildOutputs()
+    {
+        string dir = Path.Combine(_tempDir, "fp_ignored");
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "code.cs"), "public class Test {}\n");
+
+        string original = ExoDeployer.ComputeSourceFingerprint(dir);
+
+        // CRLF vs LF gives same fingerprint
+        File.WriteAllText(Path.Combine(dir, "code.cs"), "public class Test {}\r\n");
+        string withCrlf = ExoDeployer.ComputeSourceFingerprint(dir);
+        Assert.Equal(original, withCrlf);
+
+        // Ignored directories do not alter fingerprint
+        Directory.CreateDirectory(Path.Combine(dir, "bin", "Debug"));
+        File.WriteAllText(Path.Combine(dir, "bin", "Debug", "dummy.cs"), "public class BinDummy {}");
+
+        Directory.CreateDirectory(Path.Combine(dir, "obj", "Release"));
+        File.WriteAllText(Path.Combine(dir, "obj", "Release", "dummy.cs"), "public class ObjDummy {}");
+
+        Directory.CreateDirectory(Path.Combine(dir, ".idea"));
+        File.WriteAllText(Path.Combine(dir, ".idea", "rider.cs"), "public class RiderDummy {}");
+
+        Directory.CreateDirectory(Path.Combine(dir, ".vs"));
+        File.WriteAllText(Path.Combine(dir, ".vs", "vs.cs"), "public class VsDummy {}");
+
+        Directory.CreateDirectory(Path.Combine(dir, "src", "Generated"));
+        File.WriteAllText(Path.Combine(dir, "src", "Generated", "PluginServices.g.cs"), "public class Stubs {}");
+
+        string afterIgnored = ExoDeployer.ComputeSourceFingerprint(dir);
+        Assert.Equal(original, afterIgnored);
+    }
+
+    [Fact]
     public void ReadManifestVersion_ReturnsBuildMetadata()
     {
         string dir = Path.Combine(_tempDir, "mv");

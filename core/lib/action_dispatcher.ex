@@ -16,42 +16,111 @@ defmodule Exoforge.ActionDispatcher do
   explicitly on anything reachable from outside the node.
   """
   def dispatch(service, action, payload, opts \\ []) do
+    t0 = System.monotonic_time(:microsecond)
     context = Keyword.get(opts, :context, :global)
     service_atom = to_atom_safe(service)
     action_atom = to_atom_safe(action)
     resolved_mod = resolve_module(service_atom, context)
 
-    case check_scope(resolved_mod, action_atom, payload, opts) do
-      :ok ->
-        case validate_params(resolved_mod, action_atom, payload, opts) do
-          :ok ->
-            case run_action(resolved_mod, action_atom, payload) do
-              {:error, reason} = err ->
-                case resolved_mod do
-                  nil -> Logger.warning("[Action] service not found: #{inspect(service)}, action: #{action}")
-                  mod -> Logger.warning("[Action] failed in #{inspect(mod)}.#{action}: #{inspect(reason)}")
-                end
+    result =
+      case check_scope(resolved_mod, action_atom, payload, opts) do
+        :ok ->
+          case validate_params(resolved_mod, action_atom, payload, opts) do
+            :ok ->
+              case run_action(resolved_mod, action_atom, payload) do
+                {:error, reason} = err ->
+                  case resolved_mod do
+                    nil -> Logger.warning("[Action] service not found: #{inspect(service)}, action: #{action}")
+                    mod -> Logger.warning("[Action] failed in #{inspect(mod)}.#{action}: #{inspect(reason)}")
+                  end
 
-                err
+                  err
 
-              {:ok, _} = ok ->
-                ok
+                {:ok, _} = ok ->
+                  ok
 
-              :ok ->
-                :ok
+                :ok ->
+                  :ok
 
-              other ->
-                {:ok, other}
-            end
+                other ->
+                  {:ok, other}
+              end
 
-          {:error, _} = param_err ->
-            Logger.warning("[Action] invalid parameters for #{inspect(resolved_mod)}.#{action}: #{inspect(param_err)}")
-            param_err
+            {:error, _} = param_err ->
+              Logger.warning("[Action] invalid parameters for #{inspect(resolved_mod)}.#{action}: #{inspect(param_err)}")
+              param_err
+          end
+
+        {:error, reason} = auth_err ->
+          Logger.warning("[Action] auth failed for #{inspect(resolved_mod)}.#{action}: #{inspect(reason)}")
+          auth_err
+      end
+
+    latency_us = System.monotonic_time(:microsecond) - t0
+    record_action_telemetry(service_atom, action_atom, result, latency_us, resolved_mod, opts)
+
+    result
+  end
+
+  defp record_action_telemetry(service, action, result, latency_us, resolved_mod, opts) do
+    if service not in [:database, :lldb] do
+      status_str =
+        case result do
+          {:ok, _} -> "ok"
+          :ok -> "ok"
+          {:error, reason} -> "error: #{inspect(reason)}"
+          _ -> "ok"
         end
 
-      {:error, reason} = auth_err ->
-        Logger.warning("[Action] auth failed for #{inspect(resolved_mod)}.#{action}: #{inspect(reason)}")
-        auth_err
+      duration_ms = div(latency_us, 1000)
+
+      # 1. Broadcast action event over EventDispatcher (RecentEvents listens to :all on :global)
+      try do
+        Exoforge.EventDispatcher.broadcast(
+          "action:#{service}.#{action}",
+          %{
+            service: service,
+            action: action,
+            status: status_str,
+            duration_ms: duration_ms
+          },
+          topic: :global,
+          source: to_string(Keyword.get(opts, :caller, "client"))
+        )
+      rescue
+        _ -> :ok
+      catch
+        _, _ -> :ok
+      end
+
+      # 2. Append to ExtensionLogs for the providing extension
+      try do
+        manifest =
+          case resolved_mod do
+            %Manifest{} = m -> m
+            mod when is_atom(mod) and not is_nil(mod) ->
+              if function_exported?(mod, :manifest, 0) do
+                mod.manifest()
+              else
+                ExtensionRegistry.fetch_service(service) || ExtensionRegistry.fetch_manifest(service)
+              end
+            _ ->
+              ExtensionRegistry.fetch_service(service) || ExtensionRegistry.fetch_manifest(service)
+          end
+
+        if manifest && is_binary(manifest.id) do
+          level = if status_str == "ok", do: 1, else: 2
+          Exoforge.ExtensionLogs.append(
+            manifest.id,
+            level,
+            "[action] #{service}.#{action} -> #{status_str} (#{duration_ms}ms)"
+          )
+        end
+      rescue
+        _ -> :ok
+      catch
+        _, _ -> :ok
+      end
     end
   end
 

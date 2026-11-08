@@ -64,6 +64,21 @@ public class ExoClient : IDisposable
     public static Action<string, Exception?>? OnError { get; set; }
 
     /// <summary>
+    /// Global log handler, typically configured by ExoforgeSDK to route returned action/server logs to UnityEngine.Debug.Log.
+    /// </summary>
+    public static Action<string>? OnLog { get; set; }
+
+    private readonly List<string> _lastActionLogs = new();
+    /// <summary>Logs emitted by the server/extension during the most recent action execution.</summary>
+    public IReadOnlyList<string> LastActionLogs
+    {
+        get
+        {
+            lock (_lastActionLogs) return _lastActionLogs.ToArray();
+        }
+    }
+
+    /// <summary>
     /// Opens the socket if this operation needs one and it is not already open. A no-op for the
     /// HTTP path, which is the point: a game that never subscribes never opens a socket.
     /// </summary>
@@ -298,6 +313,19 @@ public class ExoClient : IDisposable
 
             ExoActionResult result = await tcs.Task.ConfigureAwait(false);
 
+            lock (_lastActionLogs)
+            {
+                _lastActionLogs.Clear();
+                if (result.Logs != null && result.Logs.Count > 0)
+                {
+                    _lastActionLogs.AddRange(result.Logs);
+                    foreach (string line in result.Logs)
+                    {
+                        OnLog?.Invoke($"[{service}.{action}] {line}");
+                    }
+                }
+            }
+
             if (!result.IsSuccess)
             {
                 string errCode = result.Error?.Code ?? "unknown_error";
@@ -359,6 +387,23 @@ public class ExoClient : IDisposable
         string responseContent = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
         using var doc = JsonDocument.Parse(responseContent);
         var root = doc.RootElement;
+
+        lock (_lastActionLogs)
+        {
+            _lastActionLogs.Clear();
+            if (root.TryGetProperty("logs", out var lProp) && lProp.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var el in lProp.EnumerateArray())
+                {
+                    string? line = el.GetString();
+                    if (!string.IsNullOrEmpty(line))
+                    {
+                        _lastActionLogs.Add(line!);
+                        OnLog?.Invoke($"[{service}.{action}] {line}");
+                    }
+                }
+            }
+        }
 
         string status = root.TryGetProperty("status", out var sProp) ? sProp.GetString() ?? "" : "";
         if (status == "error" || !response.IsSuccessStatusCode || status != "ok")

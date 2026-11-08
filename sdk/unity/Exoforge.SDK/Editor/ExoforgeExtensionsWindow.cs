@@ -2407,7 +2407,14 @@ namespace Exoforge.Unity.Editor
                     {
                         string? builtVer = ExoDeployer.ReadManifestVersion(dir);
                         string fingerprint = ExoDeployer.ComputeSourceFingerprint(dir);
-                        modified = builtVer == null || !builtVer.EndsWith("." + fingerprint, StringComparison.Ordinal);
+                        if (builtVer != null && builtVer.Contains('+'))
+                        {
+                            modified = !builtVer.EndsWith("." + fingerprint, StringComparison.Ordinal);
+                        }
+                        else
+                        {
+                            modified = false;
+                        }
                     }
 
                     string displayTitle = !string.IsNullOrWhiteSpace(title) ? title : name;
