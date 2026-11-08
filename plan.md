@@ -60,7 +60,7 @@ extension_manager ─▶ (independent root)
 | **M21** | Unity SDK `com.exoforge.sdk` — one game-facing entry point (`ExoforgeSDK.Auth`/`.Client`/`.ConnectAsync`), device-keyed two-stage anonymous sign-in, prefab created on demand, `Samples~/BasicUsage` |
 | **M22** | Control Center window — cluster ping, environment switcher, event monitor, action sandbox, extension scaffold/build/deploy/logs, typed codegen. Split across `ExoforgeControlCenter*.cs` partials; `just pack-unity` builds the tarball |
 | **M23** | SQLite local mode — `Exoforge.Std.Database.Adapters.Sqlite` + `:sqlite` driver, no PostgreSQL daemon needed |
-| **M24** | Extension Tooling DX ([`DX.md`](DX.md)) — 21 fixes across extension creation, upload and management |
+| **M24** | Extension Tooling DX ([`DX.md`](docs/archive/DX.md)) — 21 fixes across extension creation, upload and management |
 | **M25** | LiveOps *(withdrawn)* — time windows, schedule timeline and calendar view removed; game rules belong in the game, not the platform |
 | **M26** | `Exoforge.Plugin.Generator` — a Roslyn source generator replaces the out-of-process `ManifestGen` tool. The manifest, the entry point, the action/event dispatch table and the contract interfaces come from the extension's own compile, so every build shares one pipeline, the host no longer reflects over a generated extension's methods, and a C# extension declares services on a class or on a contract interface in its own assembly |
 | **M27** | Self-Contained Unity Package — no symlink leaves the package, no path is resolved by walking out of it, and nothing in package code names this repository's layout |
@@ -471,7 +471,7 @@ plus the same CDN script in the login page it was missed in (Fix 36).
 
 ## 6. M34: Extension Standard, Static Holder `Exo` & C# Toolbox Hardening — *Landed*
 
-Landed across commit `ede9f54` and subsequent refactoring iterations. Detailed specs live in [`UNITY_TOOLBOX_PLAN.md`](UNITY_TOOLBOX_PLAN.md).
+Landed across commit `ede9f54` and subsequent refactoring iterations. Detailed specs live in [`UNITY_TOOLBOX_PLAN.md`](docs/archive/UNITY_TOOLBOX_PLAN.md).
 
 - **Extension Terminology & Static Capabilities**:
   - Replaced `[Inject]` with direct static holder `Exo` (e.g. `Exo.Database`, `Exo.Log`, `Exo.Events`, `Exo.Services`) enabling clean tree-shaking and eliminating verbose injection attributes, with full backward compatibility preserved.

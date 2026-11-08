@@ -2860,7 +2860,7 @@ namespace Exoforge.Unity.Editor
             {
                 try
                 {
-                    await deployer.UploadPluginAsync(p.Name, existingClient: GetClient());
+                    await deployer.UploadExtensionAsync(p.Name, existingClient: GetClient());
                     success++;
                 }
                 catch (Exception ex)
@@ -2886,7 +2886,7 @@ namespace Exoforge.Unity.Editor
             {
                 var ws = ExoWorkspace.Load(ExoforgeEditorConfig.GetAbsoluteWorkspacePath());
                 var deployer = new ExoDeployer(ws);
-                await deployer.UploadPluginAsync(plugin.Name, existingClient: GetClient());
+                await deployer.UploadExtensionAsync(plugin.Name, existingClient: GetClient());
                 ShowStatus($"✓ Successfully deployed '{plugin.Name}' to cluster.");
                 await RefreshPluginsDataAsync();
                 int changed = await deployer.SyncContractsAsync(outputPathOverride: ExoforgeEditorConfig.GetAbsoluteGeneratedScriptPath(), existingClient: GetClient());

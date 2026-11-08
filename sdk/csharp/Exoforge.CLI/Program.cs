@@ -507,7 +507,7 @@ public static class Program
         JsonElement result;
         try
         {
-            result = await deployer.ReloadPluginAsync(name, cli.Value("env")).ConfigureAwait(false);
+            result = await deployer.ReloadExtensionAsync(name, cli.Value("env")).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -584,7 +584,7 @@ public static class Program
         {
             Thread.Sleep(1000);
 
-            var fresh = await deployer.GetPluginLogsAsync(name, limit, env).ConfigureAwait(false);
+            var fresh = await deployer.GetExtensionLogsAsync(name, limit, env).ConfigureAwait(false);
             if (fresh.Count == 0) continue;
 
             // Resume after the last line we printed; if it has rotated out of the buffer, the whole
@@ -638,10 +638,10 @@ public static class Program
         var ws = ExoWorkspace.Load(cli.Value("dir") ?? Directory.GetCurrentDirectory());
         var deployer = new ExoDeployer(ws);
 
-        PluginUsageReport report;
+        ExtensionUsageReport report;
         try
         {
-            report = await deployer.GetPluginUsageAsync(name, since, cli.Value("env")).ConfigureAwait(false);
+            report = await deployer.GetExtensionUsageAsync(name, since, cli.Value("env")).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -800,7 +800,7 @@ public static class Program
         var ws = ExoWorkspace.Load(cli.Value("dir") ?? Directory.GetCurrentDirectory());
         var deployer = new ExoDeployer(ws);
 
-        await deployer.RemovePluginAsync(id, cli.Value("env"), deleteFiles: cli.Has("delete-files"))
+        await deployer.RemoveExtensionAsync(id, cli.Value("env"), deleteFiles: cli.Has("delete-files"))
             .ConfigureAwait(false);
 
         Success($"[Exoforge] Removed extension '{id}' from the cluster.");
@@ -877,7 +877,7 @@ public static class Program
     private static string PrettyJson(JsonElement element) =>
         JsonSerializer.Serialize(element, JsonOptions);
 
-    private static void PrintUsage(PluginUsageReport report)
+    private static void PrintUsage(ExtensionUsageReport report)
     {
         Console.WriteLine($"Title {report.TitleId}  (studio {report.StudioId})");
 

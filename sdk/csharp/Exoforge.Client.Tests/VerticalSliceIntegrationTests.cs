@@ -11,22 +11,34 @@ public class VerticalSliceIntegrationTests
 {
     private static readonly Uri ServerUri = new("ws://127.0.0.1:4000/ws");
 
+    private static async Task<bool> ConnectOrSkipAsync(ExoClient client, string testName)
+    {
+        try
+        {
+            await client.ConnectAsync(ServerUri);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            if (string.Equals(Environment.GetEnvironmentVariable("CI"), "true", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(Environment.GetEnvironmentVariable("EXOFORGE_REQUIRE_E2E"), "true", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException($"[IntegrationTest] Live connection to {ServerUri} failed during '{testName}' in CI / required E2E mode: {ex.Message}", ex);
+            }
+
+            Console.WriteLine($"[IntegrationTest] Skipping live {testName} (server not running on 4000): {ex.Message}");
+            return false;
+        }
+    }
+
     [Fact]
     public async Task EndToEnd_Client_WsPlugin_Kernel_NativePlugin_Event_Loop()
     {
         var dispatcher = new ExoDispatcher(useSynchronizationContext: false);
         using var client = new ExoClient(dispatcher);
 
-        try
-        {
-            await client.ConnectAsync(ServerUri);
-        }
-        catch (Exception ex)
-        {
-            // If the server isn't running locally on port 4000 during isolated test runs, skip gracefully
-            Console.WriteLine($"[IntegrationTest] Skipping live connection test (server not running on 4000): {ex.Message}");
+        if (!await ConnectOrSkipAsync(client, nameof(EndToEnd_Client_WsPlugin_Kernel_NativePlugin_Event_Loop)))
             return;
-        }
 
         Assert.True(client.IsConnected);
 
@@ -83,15 +95,8 @@ public class VerticalSliceIntegrationTests
         var dispatcher = new ExoDispatcher(useSynchronizationContext: false);
         using var client = new ExoClient(dispatcher);
 
-        try
-        {
-            await client.ConnectAsync(ServerUri);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[IntegrationTest] Skipping live connection test: {ex.Message}");
+        if (!await ConnectOrSkipAsync(client, nameof(EndToEnd_Client_Wildcard_Subscription_Receives_Events)))
             return;
-        }
 
         await client.AuthenticateAsync("dev:wildcard_tester");
 
@@ -130,15 +135,8 @@ public class VerticalSliceIntegrationTests
         var dispatcher = new ExoDispatcher(useSynchronizationContext: false);
         using var client = new ExoClient(dispatcher);
 
-        try
-        {
-            await client.ConnectAsync(ServerUri);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[IntegrationTest] Skipping live login test (server not running on 4000): {ex.Message}");
+        if (!await ConnectOrSkipAsync(client, nameof(Guest_Can_Login_And_Reauthenticate_With_Issued_Token)))
             return;
-        }
 
         // Bootstrap as guest: `auth.login` requires an authenticated socket.
         var guest = await client.AuthenticateAsync("guest");
@@ -159,20 +157,13 @@ public class VerticalSliceIntegrationTests
     }
 
     [Fact]
-    public async Task PluginManager_ListPlugins_And_SystemInfo()
+    public async Task ExtensionManager_ListExtensions_And_SystemInfo()
     {
         var dispatcher = new ExoDispatcher(useSynchronizationContext: false);
         using var client = new ExoClient(dispatcher);
 
-        try
-        {
-            await client.ConnectAsync(ServerUri);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[IntegrationTest] Skipping live plugin-manager test (server not running on 4000): {ex.Message}");
+        if (!await ConnectOrSkipAsync(client, nameof(ExtensionManager_ListExtensions_And_SystemInfo)))
             return;
-        }
 
         var auth = await client.AuthenticateAsync("dev:developer");
         Assert.True(auth.IsSuccess);
@@ -198,15 +189,8 @@ public class VerticalSliceIntegrationTests
         var dispatcher = new ExoDispatcher(useSynchronizationContext: false);
         using var client = new ExoClient(dispatcher);
 
-        try
-        {
-            await client.ConnectAsync(ServerUri);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[IntegrationTest] Skipping live two-stage test (server not running): {ex.Message}");
+        if (!await ConnectOrSkipAsync(client, nameof(Two_Stage_Sign_In_Names_A_Fresh_Account)))
             return;
-        }
 
         string device = "dev_two_stage_" + Guid.NewGuid().ToString("N")[..8];
 
@@ -240,15 +224,8 @@ public class VerticalSliceIntegrationTests
         var dispatcher = new ExoDispatcher(useSynchronizationContext: false);
         using var client = new ExoClient(dispatcher);
 
-        try
-        {
-            await client.ConnectAsync(ServerUri);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[IntegrationTest] Skipping live anonymous test (server not running): {ex.Message}");
+        if (!await ConnectOrSkipAsync(client, nameof(Anonymous_Auth_Creates_Player_Before_Any_Session)))
             return;
-        }
 
         // No prior auth: `auth.anonymous` must be reachable on an unauthenticated socket.
         var result = await client.SendActionAsync<JsonElement>(

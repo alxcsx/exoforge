@@ -94,6 +94,7 @@ All networking, storage, authentication, and game domains exist as swappable ext
 | `exoforge_std_ws` | Realtime (:4000) | `:ws` | Low-latency JSON WebSocket framing for actions and event pub/sub. |
 | `exoforge_std_dashboard` | Studio (:4005) | `:dashboard` | Game Producer & Designer Studio (LiveView UI, actor inspector, extension management). |
 | `exoforge_std_extension_manager` | Lifecycle | `:extension_manager` | Runtime extension lifecycle, hot binary uploads, and manifest exports. |
+| `exoforge_std_docs` | Docs / Guide | `:docs` | Dynamic cluster API catalog, markdown chapters, and native PDF export. |
 | `exoforge_std_resources` | Store | `:resource_store` | Schema-driven resource tables and generic CRUD over the `:database` contract. |
 | `exoforge_std_file_bucket` | Storage / CDN | `:file_bucket` | Pluggable binary/blob asset storage with tags, metadata, and HTTP file routes. |
 | `exoforge_std_dashboard_views` | Studio Views | `:dashboard_view` | View modules for the Studio's core extensions. |
@@ -131,25 +132,22 @@ exo sync                        # Generate strongly-typed C# client bindings
 exo status                      # Inspect cluster health and telemetry
 ```
 
-### 3. C# Client SDK (`ExoClient`)
+### 3. Unity & C# Client Golden Path
 
 ```csharp
-using Exoforge.Client;
+using Exoforge.SDK;
 
-var client = new ExoClient();
-await client.ConnectAsync(new Uri("ws://localhost:4000/ws"));
-await client.AuthenticateAsync("dev:player_42");
+// Stage 1: Anonymous device-based sign-in with automatic token persistence
+var session = await ExoforgeSDK.Auth.LoginAnonymously();
 
-// Subscribe to backend event broadcasts
-client.Subscribe("player_damaged", (eventName, payload) => {
-    Debug.Log($"Damage event received: {payload}");
-});
+// Stage 2: Name player if newly registered
+if (!session.HasDisplayName)
+{
+    session = await ExoforgeSDK.Auth.SetDisplayName("Viper");
+}
 
-// Invoke backend action
-var result = await client.SendActionAsync<CombatResult>("combat", "attack", new {
-    target_id = "enemy_99",
-    damage = 45
-});
+// Service Invocations: strongly-typed, auto-generated service stubs
+var board = await ExoServices.SnakeLeaderboard.GetLeaderboardAsync(10);
 ```
 
 ### 4. Native C# Extension Architecture
@@ -173,8 +171,8 @@ Benchmarked on commodity single-node hardware (Apple Silicon / Linux x86_64):
 | **Stateful Actor Calls** | **> 420,000 ops / sec** | Clustered virtual actor RPC throughput |
 | **Actor Latency** | **2.4 µs** (0.0024 ms) | In-memory distributed actor round-trip |
 | **Actor Activation** | **0.024 ms / entity** | Instant on-demand actor state hydration |
-| **Cluster Fanout** | **0.15 ms** | 50 concurrent subscribers per broadcast |
-| **Test Suite** | **319 Elixir + 133 C# passing (452 total)** | Core, the 14 standard extensions, system integration, C# SDKs, and live E2E slice |
+| **Cluster Fanout** | **0.07 ms** | 50 concurrent subscribers per broadcast over `:pg` |
+| **Test Suite** | **320 Elixir + 140 C# = 460 passing** | Core, the 14 standard extensions, system integration, C# SDKs, and live E2E slice |
 
 ---
 
@@ -229,7 +227,7 @@ just run-release
 ├── core/                         # Exoforge OTP Kernel
 │   ├── lib/                      # Dispatcher, Registry, Supervisors
 │   └── test/                     # Kernel unit & benchmark tests
-├── extensions/                   # Standard Elixir Extensions
+├── extensions/                   # Standard Elixir Extensions (14 standard services)
 │   ├── exoforge_std_auth/        # Authentication & RBAC scopes
 │   ├── exoforge_std_database/    # PostgreSQL & SQLite storage adapters
 │   ├── exoforge_std_player_data/ # Player profile management
@@ -240,7 +238,10 @@ just run-release
 │   ├── exoforge_std_resources/   # Schema-driven resource tables
 │   ├── exoforge_std_file_bucket/ # Binary asset and file storage service
 │   ├── exoforge_std_metering/    # Usage metering, persisted per title
-│   └── exoforge_std_extension_manager/ # Runtime extension lifecycle & upload
+│   ├── exoforge_std_extension_manager/ # Runtime extension lifecycle & upload
+│   ├── exoforge_std_docs/        # Dynamic API catalog and documentation guide
+│   ├── exoforge_std_transport/   # Gateway abstraction and framing normalization
+│   └── exoforge_std_cron/        # Scheduled tasks and recurring cron runner
 ├── extensions_csharp/           # Sample C# extensions
 │   └── sample_plugin/            # The reference extension, and the E2E test subject
 ├── sdk/

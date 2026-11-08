@@ -1224,7 +1224,7 @@ public partial class ExoforgeControlCenter : EditorWindow
             {
                 try
                 {
-                    await deployer.UploadPluginAsync(plugin.Name, existingClient: _editorClient);
+                    await deployer.UploadExtensionAsync(plugin.Name, existingClient: _editorClient);
                     successCount++;
                 }
                 catch (Exception ex)
@@ -1297,12 +1297,12 @@ public partial class ExoforgeControlCenter : EditorWindow
                 effectiveRid = ExoDeployer.HostRuntimeIdentifier();
             }
 
-            var build = await deployer.BuildPluginAsync(
+            var build = await deployer.BuildExtensionAsync(
                 plugin.Name, effectiveRid, ExoforgeEditorConfig.DotnetPath, AppendBuildLog);
 
             _buildLog = build.Output;
             SessionState.EraseString(BuildFailureKey(plugin.Name));
-            ShowStatus($"✓ Built '{plugin.Name}' ({build.PluginType}).", MessageType.Info);
+            ShowStatus($"✓ Built '{plugin.Name}' ({build.ExtensionType}).", MessageType.Info);
             RefreshLocalPlugins();
 
             if (ExoforgeEditorConfig.AutoGenerateStubsOnBuild)
@@ -1345,7 +1345,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         try
         {
             var deployer = new ExoDeployer(Workspace);
-            string output = await deployer.GeneratePluginStubsAsync(plugin.Name, existingClient: _isConnected ? _editorClient : null);
+            string output = await deployer.GenerateExtensionStubsAsync(plugin.Name, existingClient: _isConnected ? _editorClient : null);
             ShowStatus($"✓ Generated typed service stubs for '{plugin.Name}' → {output}", MessageType.Info);
         }
         catch (Exception ex)
@@ -1361,8 +1361,8 @@ public partial class ExoforgeControlCenter : EditorWindow
         try
         {
             var deployer = new ExoDeployer(Workspace);
-            var outputs = await deployer.GenerateAllPluginStubsAsync(existingClient: _isConnected ? _editorClient : null);
-            ShowStatus($"✓ Generated typed service stubs for {outputs.Count} plugin(s).", MessageType.Info);
+            var outputs = await deployer.GenerateAllExtensionStubsAsync(existingClient: _isConnected ? _editorClient : null);
+            ShowStatus($"✓ Generated typed service stubs for {outputs.Count} extension(s).", MessageType.Info);
         }
         catch (Exception ex)
         {
@@ -1377,7 +1377,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         try
         {
             var deployer = new ExoDeployer(Workspace);
-            await deployer.UploadPluginAsync(plugin.Name, existingClient: _editorClient);
+            await deployer.UploadExtensionAsync(plugin.Name, existingClient: _editorClient);
             ShowStatus($"Successfully deployed '{plugin.Name}' to cluster.", MessageType.Info);
             await RefreshPluginsAsync();
             await SyncAndGenerateClientAsync();
@@ -1418,10 +1418,10 @@ public partial class ExoforgeControlCenter : EditorWindow
         try
         {
             var deployer = new ExoDeployer(Workspace);
-            var lines = await deployer.GetPluginLogsAsync(clean, 100, existingClient: _isConnected ? _editorClient : null);
+            var lines = await deployer.GetExtensionLogsAsync(clean, 100, existingClient: _isConnected ? _editorClient : null);
 
             _pluginLogs = lines.Count == 0
-                ? "(no log lines recorded — the plugin may not have run yet)"
+                ? "(no log lines recorded — the extension may not have run yet)"
                 : string.Join("\n", lines.Select(l => $"{l.LocalTime:HH:mm:ss}  {l.LevelName,-7} {l.Message}"));
         }
         catch (Exception ex)
@@ -1439,8 +1439,8 @@ public partial class ExoforgeControlCenter : EditorWindow
         try
         {
             var deployer = new ExoDeployer(Workspace);
-            await deployer.RemovePluginAsync(pluginId, existingClient: _editorClient);
-            ShowStatus($"Removed remote plugin '{pluginId}'.", MessageType.Info);
+            await deployer.RemoveExtensionAsync(pluginId, existingClient: _editorClient);
+            ShowStatus($"Removed remote extension '{pluginId}'.", MessageType.Info);
             await RefreshPluginsAsync();
             await SyncAndGenerateClientAsync();
         }
