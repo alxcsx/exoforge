@@ -297,7 +297,7 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
                     @selected_plugin_id != nil -> "#334155"
                     true -> "#64748b"
                   end}
-                  stroke-width={if is_from_selected or is_to_selected, do: "2.5", else: "1.5"}
+                  stroke-width={if is_from_selected || is_to_selected, do: "2.5", else: "1.5"}
                   stroke-dasharray={if is_to_selected, do: "5 3", else: "none"}
                   marker-end={cond do
                     is_from_selected -> "url(#arrow-emerald)"
@@ -313,8 +313,8 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
             <g class="nodes">
               <%= for node <- @pos_nodes do %>
                 <% is_selected = @selected_plugin_id == node.id %>
-                <% is_dependent = @selected_node && node.id in (@selected_node.dependents || []) %>
-                <% is_dependency = @selected_node && Enum.any?(@selected_node.dependencies, fn d -> d.provider == node.id end) %>
+                <% is_dependent = not is_nil(@selected_node) and node.id in (@selected_node.dependents || []) %>
+                <% is_dependency = not is_nil(@selected_node) and Enum.any?(@selected_node.dependencies, fn d -> d.provider == node.id end) %>
 
                 <g
                   class="cursor-pointer group"
@@ -340,7 +340,7 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
                       is_dependent -> "#10b981"
                       true -> "#334155"
                     end}
-                    stroke-width={if is_selected or is_dependency or is_dependent, do: "2", else: "1"}
+                    stroke-width={if is_selected || is_dependency || is_dependent, do: "2", else: "1"}
                     filter="url(#node-shadow)"
                   />
 
@@ -432,8 +432,8 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
                 <div class="space-y-2.5 flex-1">
                   <%= for node <- tier_nodes do %>
                     <% is_selected = @selected_plugin_id == node.id %>
-                    <% is_dependent = @selected_node && node.id in (@selected_node.dependents || []) %>
-                    <% is_dependency = @selected_node && Enum.any?(@selected_node.dependencies, fn d -> d.provider == node.id end) %>
+                    <% is_dependent = not is_nil(@selected_node) and node.id in (@selected_node.dependents || []) %>
+                    <% is_dependency = not is_nil(@selected_node) and Enum.any?(@selected_node.dependencies, fn d -> d.provider == node.id end) %>
                     <div
                       phx-click="select_graph_plugin"
                       phx-value-id={node.id}

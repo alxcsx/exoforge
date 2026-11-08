@@ -1351,13 +1351,12 @@ defmodule Exoforge.Std.Docs.View do
       params
       |> Enum.map(fn p ->
         p_name = p[:name] || p["name"] || ""
-        p_type = to_string(p[:type] || p["type"] || "term")
         optional? = p[:optional] || p["optional"] || false
 
         if optional? do
-          "#{p_name}: #{p_type}?"
+          "#{p_name}?"
         else
-          "#{p_name}: #{p_type}"
+          "#{p_name}"
         end
       end)
       |> Enum.join(", ")

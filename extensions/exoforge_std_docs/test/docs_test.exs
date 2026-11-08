@@ -311,13 +311,44 @@ defmodule Exoforge.Std.DocsTest do
       />
       """)
 
-      # Action title signatures
-      assert html =~ ".authenticate(token: string)"
-      assert html =~ ".verify_scope(user_id: string?, player_id: string?, required_scope: string)"
+      # Action title signatures: parameter names only, ? for optionals
+      assert html =~ ".authenticate(token)"
+      assert html =~ ".verify_scope(user_id?, player_id?, required_scope)"
 
       # Folds collapsed by default (no 'open' attribute on details)
       refute html =~ "<details class=\"group bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden transition-all duration-200 print:border-gray-300 print:shadow-none print:break-inside-avoid\" open>"
       refute html =~ "<details class=\"group/act bg-white rounded-xl border border-gray-200/80 p-4 space-y-3 shadow-2xs transition-all print:border-gray-300 print:break-inside-avoid\" open>"
+    end
+
+    test "renders ArchitectureGraph with zoomable SVG, doctrine banner, and sequential workflow cascade" do
+      assigns = %{}
+
+      html = Phoenix.LiveViewTest.rendered_to_string(~H"""
+      <Exoforge.Std.Docs.ArchitectureGraph.visualizer />
+      """)
+
+      # Architectural Doctrine & Litmus Test
+      assert html =~ "ARCHITECTURAL DOCTRINE"
+      assert html =~ "The Rule: Everything above the kernel is an extension."
+      assert html =~ "1. Swappable?"
+      assert html =~ "3. Boot Dep?"
+
+      # Interactive SVG DAG & Node Badges
+      assert html =~ "id=\"arch-dag-svg\""
+      assert html =~ "[KERNEL - IMMUTABLE]"
+      assert html =~ "[EXTENSION - PLUGGABLE]"
+      assert html =~ "[INTERNAL]"
+
+      # Node Inspector
+      assert html =~ "id=\"arch-node-inspector\""
+      assert html =~ "ActionDispatcher"
+
+      # Sequential Workflow Cascade with collapsible cards
+      assert html =~ "id=\"cascade-action-workflow\""
+      assert html =~ "Client Action Request"
+      assert html =~ "Scope Authorization &amp; Provider Resolution"
+      assert html =~ "Native C# Extension Execution"
+      assert html =~ "0.07 ms verified SLA"
     end
   end
 end

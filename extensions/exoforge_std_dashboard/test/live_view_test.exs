@@ -837,6 +837,10 @@ defmodule Exoforge.DashboardLiveViewTest do
       # Close restart modal
       html = view |> element("button", "Cancel") |> render_click()
       refute html =~ "Restart Cluster Supervision?"
+
+      # Open dependency graph modal
+      html = view |> element("button", "Show Dependency Graph") |> render_click()
+      assert html =~ "Extension Dependency Architecture"
     end
 
     test "direct URL navigation and deep-linking routes correctly" do
