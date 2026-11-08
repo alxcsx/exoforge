@@ -591,7 +591,7 @@ flowchart TD
   - Standardize CLI `--dir <UnityProject>/Exoforge` argument resolution.
 
 - [ ] **Phase 3 — Extension Source & Build Artifact Formats**
-  - Source layout: `Exoforge/extensions/<id>/` (`manifest.json`, `src/`, `assets/`, `.slnx`).
+  - Source layout: `Exoforge/extensions/<id>/` (`manifest.json`, `src/`, `assets/`, `.sln`).
   - Build artifact: `.exoforge/build/<id>/<build-id>/` (`manifest.json`, single-file binary, `manifest.fingerprint`, `assets/`).
   - Recorded source SHA-256 fingerprint, build timestamp, target RID.
 

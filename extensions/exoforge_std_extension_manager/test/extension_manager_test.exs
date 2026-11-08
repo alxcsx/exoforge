@@ -121,6 +121,9 @@ defmodule Exoforge.Std.ExtensionManagerTest do
       assert is_binary(sys["studio_id"])
       assert is_binary(sys["project_name"])
       assert is_binary(sys["studio_name"])
+      assert is_binary(sys["target_rid"])
+      assert is_binary(sys["os"])
+      assert is_binary(sys["arch"])
     end
 
     test "upload_extension rejects a binary that is not an extension" do

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
@@ -100,14 +101,15 @@ namespace Exoforge.Unity.Editor
                 string expectedContent =
                     "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" +
                     "<configuration>\n" +
-                    "  <!-- Local packages feed for Exoforge extensions -->\n" +
+                    "  <!-- Package feeds for Exoforge extensions: official nuget.org for runtime packs + local feed -->\n" +
                     "  <packageSources>\n" +
+                    "    <add key=\"nuget.org\" value=\"https://api.nuget.org/v3/index.json\" protocolVersion=\"3\" />\n" +
                     $"    <add key=\"exoforge\" value=\"{expectedFeed}\" />\n" +
                     "  </packageSources>\n" +
                     "</configuration>\n";
 
                 bool changed = false;
-                if (!File.Exists(nugetPath) || !File.ReadAllText(nugetPath).Contains(expectedFeed))
+                if (!File.Exists(nugetPath) || !File.ReadAllText(nugetPath).Contains(expectedFeed) || !File.ReadAllText(nugetPath).Contains("https://api.nuget.org/v3/index.json"))
                 {
                     File.WriteAllText(nugetPath, expectedContent);
                     changed = true;
@@ -116,10 +118,12 @@ namespace Exoforge.Unity.Editor
                 string extDir = Path.Combine(wsPath, "extensions");
                 if (Directory.Exists(extDir))
                 {
+                    var extensionProjects = new List<(string Name, string RelativeCsprojPath)>();
+
                     foreach (string dir in Directory.GetDirectories(extDir))
                     {
                         string extNuget = Path.Combine(dir, "nuget.config");
-                        if (!File.Exists(extNuget) || !File.ReadAllText(extNuget).Contains(expectedFeed))
+                        if (!File.Exists(extNuget) || !File.ReadAllText(extNuget).Contains(expectedFeed) || !File.ReadAllText(extNuget).Contains("https://api.nuget.org/v3/index.json"))
                         {
                             File.WriteAllText(extNuget, expectedContent);
                             changed = true;
@@ -127,10 +131,43 @@ namespace Exoforge.Unity.Editor
 
                         string extName = Path.GetFileName(dir);
                         string extSln = Path.Combine(dir, $"{extName}.sln");
+                        string extSlnx = Path.Combine(dir, $"{extName}.slnx");
                         string extCsproj = Path.Combine(dir, "src", $"{extName}.csproj");
-                        if (File.Exists(extCsproj) && !File.Exists(extSln))
+
+                        // Prefer standard .sln format for wider compatibility; clean up legacy .slnx
+                        if (File.Exists(extSlnx))
                         {
-                            File.WriteAllText(extSln, ExoScaffolder.GenerateSln(extName));
+                            try { File.Delete(extSlnx); changed = true; } catch { }
+                            string slnxMeta = extSlnx + ".meta";
+                            if (File.Exists(slnxMeta))
+                            {
+                                try { File.Delete(slnxMeta); } catch { }
+                            }
+                        }
+
+                        if (File.Exists(extCsproj))
+                        {
+                            if (!File.Exists(extSln))
+                            {
+                                File.WriteAllText(extSln, ExoScaffolder.GenerateSln(extName));
+                                changed = true;
+                            }
+
+                            extensionProjects.Add((extName, Path.Combine(extName, "src", $"{extName}.csproj")));
+                        }
+                    }
+
+                    // Maintain an independent master solution for backend extensions:
+                    // Exoforge/extensions/Exoforge.Extensions.sln
+                    // Opening this solution in Rider or VS Code gives full .NET 9+ / .NET 10 SDK support
+                    // completely decoupled from Unity's Mono / MSBuild toolset.
+                    if (extensionProjects.Count > 0)
+                    {
+                        string masterSln = Path.Combine(extDir, "Exoforge.Extensions.sln");
+                        string masterContent = GenerateMasterExtensionsSln(extensionProjects);
+                        if (!File.Exists(masterSln) || File.ReadAllText(masterSln) != masterContent)
+                        {
+                            File.WriteAllText(masterSln, masterContent);
                             changed = true;
                         }
                     }
@@ -140,10 +177,54 @@ namespace Exoforge.Unity.Editor
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[Exoforge] Failed to configure workspace nuget.config: {ex.Message}");
+                Debug.LogWarning($"[Exoforge] Failed to configure workspace nuget.config & solutions: {ex.Message}");
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Generates a standalone Visual Studio solution (.sln) combining all backend extensions.
+        /// When opened in Rider/VS, this solution runs under the modern .NET SDK (net9.0/net10.0)
+        /// without any Unity-imposed language or toolchain constraints.
+        /// </summary>
+        public static string GenerateMasterExtensionsSln(IEnumerable<(string Name, string RelativeCsprojPath)> projects)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("Microsoft Visual Studio Solution File, Format Version 12.00");
+            sb.AppendLine("# Visual Studio Version 17");
+            sb.AppendLine("VisualStudioVersion = 17.0.31903.59");
+            sb.AppendLine("MinimumVisualStudioVersion = 10.0.40219.1");
+
+            var configs = new List<(string Guid, string Name)>();
+            foreach (var (name, relPath) in projects)
+            {
+                string guid = ComputeDeterministicGuid(relPath).ToString("B").ToUpperInvariant();
+                configs.Add((guid, name));
+                string normRel = relPath.Replace('/', '\\');
+                sb.AppendLine($"Project(\"{{9A19103F-16F7-4668-BE54-9A1E7A4F7556}}\") = \"{name}\", \"{normRel}\", \"{guid}\"");
+                sb.AppendLine("EndProject");
+            }
+
+            sb.AppendLine("Global");
+            sb.AppendLine("\tGlobalSection(SolutionConfigurationPlatforms) = preSolution");
+            sb.AppendLine("\t\tDebug|Any CPU = Debug|Any CPU");
+            sb.AppendLine("\t\tRelease|Any CPU = Release|Any CPU");
+            sb.AppendLine("\tEndGlobalSection");
+            sb.AppendLine("\tGlobalSection(ProjectConfigurationPlatforms) = postSolution");
+            foreach (var (guid, _) in configs)
+            {
+                sb.AppendLine($"\t\t{guid}.Debug|Any CPU.ActiveCfg = Debug|Any CPU");
+                sb.AppendLine($"\t\t{guid}.Debug|Any CPU.Build.0 = Debug|Any CPU");
+                sb.AppendLine($"\t\t{guid}.Release|Any CPU.ActiveCfg = Release|Any CPU");
+                sb.AppendLine($"\t\t{guid}.Release|Any CPU.Build.0 = Release|Any CPU");
+            }
+            sb.AppendLine("\tEndGlobalSection");
+            sb.AppendLine("\tGlobalSection(SolutionProperties) = preSolution");
+            sb.AppendLine("\t\tHideSolutionNode = FALSE");
+            sb.AppendLine("\tEndGlobalSection");
+            sb.AppendLine("EndGlobal");
+            return sb.ToString();
         }
 
         /// <summary>
@@ -175,108 +256,59 @@ namespace Exoforge.Unity.Editor
 
         private static string OnGeneratedSlnSolution(string path, string content)
         {
+            // Do NOT inject backend extensions into the Unity .sln solution.
+            // When backend projects are embedded inside Unity's solution, Rider's Unity plugin
+            // treats them as Unity projects and enforces Unity's Mono/MSBuild toolset,
+            // which rejects modern .NET 9+ / .NET 10 language features and SDKs.
+            if (!content.Contains(FolderGuid) && !content.Contains("Exoforge Extensions"))
+            {
+                return content;
+            }
+
             try
             {
-                string wsPath = ExoforgeEditorConfig.GetAbsoluteWorkspacePath();
-                string extDir = Path.Combine(wsPath, "extensions");
-                if (!Directory.Exists(extDir)) return content;
-
-                var csprojFiles = Directory.GetFiles(extDir, "*.csproj", SearchOption.AllDirectories);
-                if (csprojFiles.Length == 0) return content;
-
-                string projectRoot = ExoforgeEditorConfig.ProjectRoot;
-                var sbProjects = new StringBuilder();
-                var sbConfigs = new StringBuilder();
-                var sbNested = new StringBuilder();
-
-                bool hasFolder = content.Contains(FolderGuid);
-                if (!hasFolder)
-                {
-                    sbProjects.AppendLine($"Project(\"{FolderTypeGuid}\") = \"Exoforge Extensions\", \"Exoforge Extensions\", \"{FolderGuid}\"");
-                    sbProjects.AppendLine("EndProject");
-                }
-
-                bool anyAdded = false;
-                foreach (var csproj in csprojFiles)
-                {
-                    string fileName = Path.GetFileName(csproj);
-                    if (content.Contains(fileName)) continue;
-
-                    string projName = Path.GetFileNameWithoutExtension(csproj);
-                    string relPath = MakeRelativePath(projectRoot, csproj).Replace('/', '\\');
-                    string projGuid = ComputeDeterministicGuid(relPath).ToString("B").ToUpperInvariant();
-
-                    sbProjects.AppendLine($"Project(\"{CSharpProjectTypeGuid}\") = \"{projName}\", \"{relPath}\", \"{projGuid}\"");
-                    sbProjects.AppendLine("EndProject");
-
-                    sbConfigs.AppendLine($"\t\t{projGuid}.Debug|Any CPU.ActiveCfg = Debug|Any CPU");
-                    sbConfigs.AppendLine($"\t\t{projGuid}.Debug|Any CPU.Build.0 = Debug|Any CPU");
-                    sbConfigs.AppendLine($"\t\t{projGuid}.Release|Any CPU.ActiveCfg = Release|Any CPU");
-                    sbConfigs.AppendLine($"\t\t{projGuid}.Release|Any CPU.Build.0 = Release|Any CPU");
-
-                    sbNested.AppendLine($"\t\t{projGuid} = {FolderGuid}");
-                    anyAdded = true;
-                }
-
-                if (!anyAdded && hasFolder) return content;
-
-                // Inject projects right before the Global section
-                int globalIdx = content.IndexOf("Global\n", StringComparison.Ordinal);
-                if (globalIdx < 0) globalIdx = content.IndexOf("Global\r\n", StringComparison.Ordinal);
-                if (globalIdx > 0 && sbProjects.Length > 0)
-                {
-                    content = content.Insert(globalIdx, sbProjects.ToString());
-                }
-
-                // Inject project configuration mappings
-                int projCfgIdx = content.IndexOf("GlobalSection(ProjectConfigurationPlatforms) = postSolution", StringComparison.Ordinal);
-                if (projCfgIdx > 0 && sbConfigs.Length > 0)
-                {
-                    int nextLine = content.IndexOf('\n', projCfgIdx);
-                    if (nextLine > 0)
-                    {
-                        content = content.Insert(nextLine + 1, sbConfigs.ToString());
-                    }
-                }
-
-                // Inject nested project folder associations
-                if (sbNested.Length > 0)
-                {
-                    int nestedIdx = content.IndexOf("GlobalSection(NestedProjects) = preSolution", StringComparison.Ordinal);
-                    if (nestedIdx > 0)
-                    {
-                        int nextLine = content.IndexOf('\n', nestedIdx);
-                        if (nextLine > 0)
-                        {
-                            content = content.Insert(nextLine + 1, sbNested.ToString());
-                        }
-                    }
-                    else
-                    {
-                        int endGlobalIdx = content.LastIndexOf("\nEndGlobal", StringComparison.Ordinal);
-                        if (endGlobalIdx < 0) endGlobalIdx = content.LastIndexOf("\r\nEndGlobal", StringComparison.Ordinal);
-                        if (endGlobalIdx >= 0)
-                        {
-                            int insertAt = content.IndexOf("EndGlobal", endGlobalIdx, StringComparison.Ordinal);
-                            if (insertAt >= 0)
-                            {
-                                string nestedBlock =
-                                    "\tGlobalSection(NestedProjects) = preSolution\n" +
-                                    sbNested.ToString() +
-                                    "\tEndGlobalSection\n";
-                                content = content.Insert(insertAt, nestedBlock);
-                            }
-                        }
-                    }
-                }
-
-                return content;
+                return StripExoforgeExtensionsFromSln(content);
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[Exoforge] Failed to post-process .sln solution: {ex.Message}");
+                Debug.LogWarning($"[Exoforge] Failed to clean Unity .sln solution: {ex.Message}");
                 return content;
             }
+        }
+
+        internal static string StripExoforgeExtensionsFromSln(string content)
+        {
+            var lines = content.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
+            var result = new List<string>(lines.Length);
+            bool inExoProject = false;
+
+            foreach (string line in lines)
+            {
+                if (line.StartsWith("Project(") &&
+                    (line.Contains(FolderGuid) ||
+                     line.Contains("Exoforge Extensions") ||
+                     (line.Contains("Exoforge") && line.Contains(".csproj"))))
+                {
+                    inExoProject = true;
+                    continue;
+                }
+
+                if (inExoProject)
+                {
+                    if (line.Trim() == "EndProject")
+                    {
+                        inExoProject = false;
+                    }
+                    continue;
+                }
+
+                if (line.Contains(FolderGuid)) continue;
+                if (line.Contains("Exoforge Extensions")) continue;
+
+                result.Add(line);
+            }
+
+            return string.Join("\n", result);
         }
 
         private static string OnGeneratedCSProject(string path, string content)
@@ -417,6 +449,31 @@ namespace Exoforge.Unity.Editor
                     "Project generation flags are already configured correctly with LocalTarBall support.",
                     "OK");
             }
+        }
+
+        [MenuItem("Exoforge/IDE & Solution/Open Backend Extensions in Rider or IDE ↗", false, 32)]
+        public static void MenuOpenExtensionsSolution()
+        {
+            string wsPath = ExoforgeEditorConfig.GetAbsoluteWorkspacePath();
+            string extDir = Path.Combine(wsPath, "extensions");
+            string masterSln = Path.Combine(extDir, "Exoforge.Extensions.sln");
+
+            EnsureWorkspaceNugetConfig();
+
+            if (File.Exists(masterSln))
+            {
+                EditorUtility.OpenWithDefaultApp(masterSln);
+                return;
+            }
+
+            var slnFiles = Directory.Exists(extDir) ? Directory.GetFiles(extDir, "*.sln", SearchOption.AllDirectories) : Array.Empty<string>();
+            if (slnFiles.Length > 0)
+            {
+                EditorUtility.OpenWithDefaultApp(slnFiles[0]);
+                return;
+            }
+
+            EditorUtility.DisplayDialog("Exoforge Extensions", "No C# backend extensions found in " + extDir, "OK");
         }
 
         private static Guid ComputeDeterministicGuid(string input)

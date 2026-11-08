@@ -108,7 +108,7 @@ Exoforge separates game engineering from backend operations. Game developers wor
 ### 1. Unity Exoforge Studio (`com.exoforge.sdk`)
 
 A dedicated Unity Editor extension (**Exoforge ▸ Studio**) providing:
-- **One-Click Scaffolding**: Generate native C# extensions directly into `extensions/` — each with its own solution (`.slnx`) and sources under `src/`.
+- **One-Click Scaffolding**: Generate native C# extensions directly into `extensions/` — each with its own solution (`.sln`) and sources under `src/`.
 - **Compilation & Deployment**: Build the extension and its manifest and upload them to the running server.
 - **Live Action Sandbox**: Test actions and inspect payloads with latency metrics (`µs`).
 - **Real-Time Event Stream**: Monitor backend broadcasts and filter topics inside Unity.

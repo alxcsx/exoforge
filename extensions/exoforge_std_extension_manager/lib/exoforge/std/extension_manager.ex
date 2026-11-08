@@ -126,7 +126,10 @@ defmodule Exoforge.Std.ExtensionManager do
       "title_id" => Exoforge.Metering.title_id(),
       "studio_id" => Exoforge.Metering.studio_id(),
       "project_name" => Exoforge.Metering.project_name(),
-      "studio_name" => Exoforge.Metering.studio_name()
+      "studio_name" => Exoforge.Metering.studio_name(),
+      "target_rid" => cluster_target_rid(),
+      "os" => cluster_os(),
+      "arch" => cluster_arch()
     }
 
     {:ok, %{system: info}}
@@ -588,5 +591,28 @@ defmodule Exoforge.Std.ExtensionManager do
     |> to_string()
     |> Macro.underscore()
     |> String.replace(~r/[^a-z0-9_]/, "")
+  end
+
+  defp cluster_os do
+    case :os.type() do
+      {:unix, :linux} -> "linux"
+      {:unix, :darwin} -> "osx"
+      {:win32, _} -> "win"
+      {family, name} -> "#{family}-#{name}"
+    end
+  end
+
+  defp cluster_arch do
+    arch_str = to_string(:erlang.system_info(:system_architecture))
+    cond do
+      String.contains?(arch_str, "aarch64") or String.contains?(arch_str, "arm64") -> "arm64"
+      String.contains?(arch_str, "x86_64") or String.contains?(arch_str, "amd64") -> "x64"
+      String.contains?(arch_str, "arm") -> "arm"
+      true -> "x64"
+    end
+  end
+
+  defp cluster_target_rid do
+    "#{cluster_os()}-#{cluster_arch()}"
   end
 end

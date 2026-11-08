@@ -173,10 +173,6 @@ public class ManagementTests : IDisposable
         Assert.True(Directory.Exists(createdDir));
 
         // Per-plugin solution + src/ layout.
-        string slnxFile = Path.Combine(createdDir, "guild_system.slnx");
-        Assert.True(File.Exists(slnxFile));
-        Assert.Contains("src/guild_system.csproj", File.ReadAllText(slnxFile));
-
         string slnFile = Path.Combine(createdDir, "guild_system.sln");
         Assert.True(File.Exists(slnFile));
         Assert.Contains("src/guild_system.csproj", File.ReadAllText(slnFile));

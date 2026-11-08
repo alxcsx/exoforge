@@ -582,6 +582,7 @@ public partial class ExoforgeControlCenter : EditorWindow
                 RemoteBuildDate = sys.TryGetProperty("build_date", out var d) ? d.GetString() ?? "—" : "—";
                 RemoteProjectName = sys.TryGetProperty("project_name", out var pn) ? pn.GetString() ?? "—" : "—";
                 RemoteStudioName = sys.TryGetProperty("studio_name", out var sn) ? sn.GetString() ?? "—" : "—";
+                _clusterTargetRid = sys.TryGetProperty("target_rid", out var tr) ? tr.GetString() ?? "" : "";
                 if (sys.TryGetProperty("extensions_count", out var ec))
                 {
                     _pluginsCount = ec.GetInt32();

@@ -151,8 +151,44 @@ public partial class ExoforgeControlCenter : EditorWindow
         if (dotnetRes.IsValid)
         {
             EditorGUILayout.LabelField(
-                $"✓ Resolved: {dotnetRes.ResolvedPath} (v{dotnetRes.Version})",
+                $"✓ .NET SDK: {dotnetRes.ResolvedPath} (v{dotnetRes.Version})",
                 EditorStyles.miniLabel);
+
+            string runtimesStr = dotnetRes.InstalledRuntimes.Count > 0
+                ? string.Join(", ", dotnetRes.InstalledRuntimes)
+                : "Standard .NET runtime";
+            EditorGUILayout.LabelField(
+                $"✓ Installed Runtimes: {runtimesStr}",
+                EditorStyles.miniLabel);
+
+            EditorGUILayout.LabelField(
+                $"✓ Host Platform: {dotnetRes.HostRid} | Target Server: {dotnetRes.TargetServerRid}",
+                EditorStyles.miniLabel);
+
+            EditorGUILayout.Space(2);
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("⬇️ Pre-warm / Restore Runtime Packs (linux-x64 & host)", GUILayout.Height(22)))
+            {
+                ShowStatus("Restoring targeting packs for linux-x64 and host RID...", MessageType.Info);
+                bool ok = ExoforgeDotnetValidator.PrewarmRuntimePacks(
+                    $"{dotnetRes.HostRid},{ExoforgeDotnetValidator.StandardServerRid}",
+                    ExoforgeEditorConfig.DotnetPath,
+                    msg => UnityEngine.Debug.Log($"[Exoforge] {msg}"));
+                if (ok)
+                {
+                    ShowStatus("✓ Runtime packs (linux-x64 & host) successfully restored and cached.", MessageType.Info);
+                }
+                else
+                {
+                    ShowStatus("⚠️ Some runtime packs could not be restored; check internet connection to nuget.org.", MessageType.Warning);
+                }
+            }
+            if (GUILayout.Button("🔍 Re-scan", GUILayout.Width(90), GUILayout.Height(22)))
+            {
+                var fresh = ExoforgeDotnetValidator.Validate(ExoforgeEditorConfig.DotnetPath, forceFresh: true);
+                ShowStatus($"✓ .NET SDK refreshed: v{fresh.Version}", MessageType.Info);
+            }
+            EditorGUILayout.EndHorizontal();
         }
         else
         {
@@ -187,6 +223,25 @@ public partial class ExoforgeControlCenter : EditorWindow
         }
 
         EditorGUILayout.Space(4);
+        string currentRid = ExoforgeEditorConfig.TargetBuildRid;
+        if (string.IsNullOrEmpty(currentRid)) currentRid = "auto";
+        string[] ridOptions = new[] { "auto", "linux-x64", "linux-arm64", "win-x64", "osx-arm64" };
+        string[] ridLabels = new[] {
+            $"Auto (Deploy: {(!string.IsNullOrEmpty(_clusterTargetRid) ? _clusterTargetRid : "linux-x64")}, Local: {dotnetRes.HostRid})",
+            "linux-x64 (Standard Linux VPS / Docker)",
+            "linux-arm64 (Linux ARM64 / AWS Graviton)",
+            "win-x64 (Windows Server / Local Dev)",
+            "osx-arm64 (macOS Apple Silicon)"
+        };
+        int selectedIndex = Array.IndexOf(ridOptions, currentRid.ToLowerInvariant());
+        if (selectedIndex < 0) selectedIndex = 0;
+        int newIndex = EditorGUILayout.Popup("Target Runtime (RID)", selectedIndex, ridLabels);
+        if (newIndex != selectedIndex)
+        {
+            ExoforgeEditorConfig.TargetBuildRid = newIndex == 0 ? "" : ridOptions[newIndex];
+        }
+
+        EditorGUILayout.Space(2);
         ExoforgeEditorConfig.AutoGenerateStubsOnBuild = EditorGUILayout.Toggle(
             new GUIContent("Auto-Generate Stubs on Build", "Automatically regenerate typed C# plugin stubs after compiling or rebuilding an extension"),
             ExoforgeEditorConfig.AutoGenerateStubsOnBuild);
@@ -385,7 +440,7 @@ public partial class ExoforgeControlCenter : EditorWindow
                 ShowStatus("✓ Re-linked IDE project generation flags, nuget.config, and .csproj solutions.", MessageType.Info);
             }
             EditorGUILayout.EndHorizontal();
-            EditorGUILayout.LabelField("Reconfigures LocalTarBall flags (128), nuget feeds, and injects backend extensions into .sln.", EditorStyles.miniLabel);
+            EditorGUILayout.LabelField("Reconfigures LocalTarBall flags (128), nuget feeds, and generates dedicated Exoforge.Extensions.sln.", EditorStyles.miniLabel);
 
             EditorGUILayout.Space(6);
 

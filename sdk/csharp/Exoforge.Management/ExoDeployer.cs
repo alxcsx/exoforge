@@ -1146,10 +1146,17 @@ public class ExoDeployer
         // One pass. It was two while the generator wrote a JsonSerializerContext for a second compile
         // to pick up; plugins are framework-dependent now, so reflection serialises their records and
         // there is nothing to write.
+        emit($"[build] dotnet restore -r {targetRid}");
+        RunProcess(
+            dotnetPath,
+            $"restore \"{RelativeTo(pluginDir, csproj)}\" -r {targetRid}{tfmArg}",
+            pluginDir,
+            emit);
+
         emit($"[build] dotnet publish -c Release -r {targetRid}");
         RunProcess(
             dotnetPath,
-            $"publish \"{RelativeTo(pluginDir, csproj)}\" -c Release -r {targetRid}{tfmArg} " +
+            $"publish \"{RelativeTo(pluginDir, csproj)}\" -c Release -r {targetRid}{tfmArg} --no-restore " +
             $"-p:ExoforgePluginType=native -p:ExoforgeBuildStamp={buildStamp} " +
             // Absolute: a relative path is resolved by whoever consumes it, and the compiler runs
             // from its own directory rather than this one.
@@ -1413,6 +1420,14 @@ public class ExoDeployer
 
         if (proc.ExitCode != 0)
         {
+            string outStr = output.ToString();
+            if (outStr.Contains("NETSDK1112"))
+            {
+                throw new InvalidOperationException(
+                    $"{fileName} exited with code {proc.ExitCode}.\n{outStr}\n" +
+                    "[Exoforge Diagnosis] NETSDK1112 indicates that the target runtime pack was not downloaded.\n" +
+                    "Make sure your workspace nuget.config includes nuget.org and that your machine has an active internet connection to download Microsoft.NETCore.App.Runtime targeting packs from nuget.org.");
+            }
             throw new InvalidOperationException($"{fileName} exited with code {proc.ExitCode}.\n{output}");
         }
     }
@@ -1565,7 +1580,7 @@ public class ExoDeployer
         return null;
     }
 
-    private static string HostRuntimeIdentifier()
+    public static string HostRuntimeIdentifier()
     {
         string os = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "win"
             : RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "osx"

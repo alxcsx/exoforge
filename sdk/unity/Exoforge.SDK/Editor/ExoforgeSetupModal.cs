@@ -498,7 +498,13 @@ namespace Exoforge.Unity.Editor
                 var dotnetPathLabel = new Label($"Resolved: {dotnetRes.ResolvedPath}");
                 dotnetPathLabel.style.fontSize = 10;
                 dotnetPathLabel.style.color = ExoforgeUIStyle.TextMuted;
+                dotnetPathLabel.style.marginBottom = 2;
                 dotnetCard.Add(dotnetPathLabel);
+
+                var ridLabel = new Label($"Host Platform: {dotnetRes.HostRid}  |  Target Server: {dotnetRes.TargetServerRid}");
+                ridLabel.style.fontSize = 10;
+                ridLabel.style.color = ExoforgeUIStyle.TextMuted;
+                dotnetCard.Add(ridLabel);
             }
             else
             {

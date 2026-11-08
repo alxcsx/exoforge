@@ -287,6 +287,7 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
     private List<JsonElement> _remotePlugins = new();
     private Vector2 _pluginsScroll;
     private string _buildRid = "";
+    private string _clusterTargetRid = "";
     private bool _isBuilding;
     private string _buildLog = "";
     private bool _showBuildLog;

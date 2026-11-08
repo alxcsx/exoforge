@@ -84,7 +84,7 @@ Better than most plugin tooling; these are why the SDK feels good when it works:
 - **`SessionState`-persisted build failures** surviving domain reloads, with the full exception.
 - **`ResolveDotnetPath`** — Unity GUI apps do not inherit the shell PATH; the PATH → login shell →
   common-locations fallback chain is the right fix, well documented.
-- **The sample dogfoods the scaffolder** (`src/`, `.slnx`, `.gitignore`, `PluginServices.g.cs`).
+- **The sample dogfoods the scaffolder** (`src/`, `.sln`, `.gitignore`, `PluginServices.g.cs`).
 
 ---
 

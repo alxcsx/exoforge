@@ -301,6 +301,33 @@ public static class ExoforgeEditorConfig
         }
     }
 
+    private static string TargetBuildRidKey => Scoped("Exoforge_TargetBuildRid");
+    private static string _fallbackTargetBuildRid = "";
+
+    /// <summary>
+    /// Explicit target RID for extension compilation (e.g. "linux-x64", "win-x64").
+    /// Empty or "auto" means automatic selection (linux-x64 for cluster deploy, host RID for local).
+    /// </summary>
+    public static string TargetBuildRid
+    {
+        get
+        {
+#if UNITY_EDITOR
+            return EditorPrefs.GetString(TargetBuildRidKey, "");
+#else
+            return _fallbackTargetBuildRid;
+#endif
+        }
+        set
+        {
+#if UNITY_EDITOR
+            EditorPrefs.SetString(TargetBuildRidKey, value ?? "");
+#else
+            _fallbackTargetBuildRid = value ?? "";
+#endif
+        }
+    }
+
     /// <summary>
     /// Last email used in the Control Center's <c>auth.login</c> form, persisted in per-user
     /// EditorPrefs so the form does not reset (and is never committed to the project).

@@ -7,7 +7,7 @@ namespace Exoforge.Management;
 /// Generates a plugin project skeleton:
 /// <code>
 /// plugins/&lt;name&gt;/
-///   &lt;name&gt;.slnx          solution for the plugin
+///   &lt;name&gt;.sln           solution for the plugin
 ///   .gitignore           ignores the build outputs (the staged binary, the manifest)
 ///   src/&lt;name&gt;.csproj
 ///   src/&lt;Name&gt;Plugin.cs  the actions
@@ -40,7 +40,6 @@ public static class ExoScaffolder
         File.WriteAllText(Path.Combine(srcDir, $"{cleanName}.csproj"), GenerateCsproj());
         File.WriteAllText(Path.Combine(srcDir, $"{className}{suffix}.cs"), GenerateCode(cleanName, className, isExtension, template));
         File.WriteAllText(Path.Combine(targetDir, $"{cleanName}.sln"), GenerateSln(cleanName));
-        File.WriteAllText(Path.Combine(targetDir, $"{cleanName}.slnx"), GenerateSolution(cleanName));
 
         // The staged native binary and the local build counter are build artifacts.
         File.WriteAllText(Path.Combine(targetDir, ".gitignore"), "/.exoforge/\n/.buildcount\n/manifest.json\n");
@@ -204,13 +203,16 @@ public static class ExoScaffolder
         string config =
             "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" +
             "<configuration>\n" +
-            "  <!-- Local packages feed for Exoforge extensions -->\n" +
+            "  <!-- Package feeds for Exoforge extensions: official nuget.org for runtime packs + local feed -->\n" +
             "  <packageSources>\n" +
+            "    <add key=\"nuget.org\" value=\"https://api.nuget.org/v3/index.json\" protocolVersion=\"3\" />\n" +
             $"    <add key=\"exoforge\" value=\"{normFeed}\" />\n" +
             "  </packageSources>\n" +
             "</configuration>\n";
 
-        if (!File.Exists(nugetConfig) || !File.ReadAllText(nugetConfig).Contains(normFeed))
+        if (!File.Exists(nugetConfig) ||
+            !File.ReadAllText(nugetConfig).Contains(normFeed) ||
+            !File.ReadAllText(nugetConfig).Contains("https://api.nuget.org/v3/index.json"))
         {
             File.WriteAllText(nugetConfig, config);
         }
@@ -350,12 +352,6 @@ Global
 EndGlobal
 """;
     }
-
-    private static string GenerateSolution(string cleanName) => $"""
-<Solution>
-  <Project Path="src/{cleanName}.csproj" />
-</Solution>
-""";
 
     public static string GeneratePluginCode(string serviceName, string className, string template) =>
         GenerateCode(serviceName, className, isExtension: false, template: template);

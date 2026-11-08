@@ -1266,10 +1266,31 @@ public partial class ExoforgeControlCenter : EditorWindow
         try
         {
             var deployer = new ExoDeployer(Workspace);
-            string? rid = string.IsNullOrWhiteSpace(_buildRid) ? null : _buildRid.Trim();
+            string? configuredRid = string.IsNullOrWhiteSpace(ExoforgeEditorConfig.TargetBuildRid) ? null : ExoforgeEditorConfig.TargetBuildRid.Trim();
+            string? overrideRid = string.IsNullOrWhiteSpace(_buildRid) ? null : _buildRid.Trim();
+
+            string effectiveRid;
+            if (!string.IsNullOrEmpty(overrideRid) && !string.Equals(overrideRid, "auto", StringComparison.OrdinalIgnoreCase))
+            {
+                effectiveRid = overrideRid;
+            }
+            else if (!string.IsNullOrEmpty(configuredRid) && !string.Equals(configuredRid, "auto", StringComparison.OrdinalIgnoreCase))
+            {
+                effectiveRid = configuredRid;
+            }
+            else if (thenDeploy)
+            {
+                // When deploying to server: target the cluster's reported RID or standard linux-x64
+                effectiveRid = !string.IsNullOrEmpty(_clusterTargetRid) ? _clusterTargetRid : ExoforgeDotnetValidator.StandardServerRid;
+            }
+            else
+            {
+                // Local build: use host RID
+                effectiveRid = ExoDeployer.HostRuntimeIdentifier();
+            }
 
             var build = await deployer.BuildPluginAsync(
-                plugin.Name, rid, ExoforgeEditorConfig.DotnetPath, AppendBuildLog);
+                plugin.Name, effectiveRid, ExoforgeEditorConfig.DotnetPath, AppendBuildLog);
 
             _buildLog = build.Output;
             SessionState.EraseString(BuildFailureKey(plugin.Name));
@@ -1450,8 +1471,8 @@ public partial class ExoforgeControlCenter : EditorWindow
             .ToArray();
         if (matches.Length > 0) return matches[0];
 
-        string[] slnx = Directory.GetFiles(extensionDir, "*.slnx");
-        if (slnx.Length > 0) return slnx[0];
+        string[] sln = Directory.GetFiles(extensionDir, "*.sln");
+        if (sln.Length > 0) return sln[0];
 
         string[] csproj = Directory.GetFiles(extensionDir, "*.csproj", SearchOption.AllDirectories);
         if (csproj.Length > 0) return csproj[0];

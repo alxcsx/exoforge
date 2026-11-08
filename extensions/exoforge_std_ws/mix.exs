@@ -4,7 +4,7 @@ defmodule Exoforge.Std.Ws.MixProject do
   def project do
     [
       app: :exoforge_std_ws,
-      version: "0.1.27",
+      version: "0.1.28",
       elixir: "~> 1.20",
       deps: deps(),
       compilers: Mix.compilers() ++ [:exoforge_manifest]
