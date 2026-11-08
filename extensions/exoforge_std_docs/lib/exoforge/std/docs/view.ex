@@ -1171,25 +1171,9 @@ defmodule Exoforge.Std.Docs.View do
   # SUBPAGE: ARCHITECTURE
   # ===========================================================================
   defp subpage_architecture(assigns) do
-    content =
-      case Exoforge.Std.Docs.get_chapter(%{id: "03_architecture"}) do
-        {:ok, %{chapter: %{content: raw}}} -> raw
-        _ -> "# Exoforge Architecture\n\nNative C# Process runtime with OTP Supervision."
-      end
-
-    assigns = assign(assigns, :html_content, Markdown.to_html(content))
-
     ~H"""
-    <div class="space-y-8">
-      <div class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-6 print:border-gray-300 print:shadow-none">
-        <Exoforge.Std.Docs.ArchitectureGraph.visualizer />
-      </div>
-
-      <div class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-6 print:border-gray-300 print:shadow-none">
-        <div class="prose prose-sm max-w-none text-gray-800">
-          <%= @html_content %>
-        </div>
-      </div>
+    <div class="bg-white rounded-3xl border border-gray-200/90 p-8 shadow-sm space-y-6 print:border-gray-300 print:shadow-none">
+      <Exoforge.Std.Docs.ArchitectureGraph.visualizer />
     </div>
     """
   end

@@ -706,12 +706,12 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
         <!-- 1. ACTION RPC SEQUENTIAL CASCADE -->
         <div id="cascade-action-workflow" class="space-y-4 relative">
           <!-- Continuous Vertical Pipeline Line -->
-          <div class="absolute left-6 top-6 bottom-6 w-0.5 bg-gradient-to-b from-blue-400 via-violet-400 to-emerald-400 z-0"></div>
+          <div class="absolute left-6 -translate-x-1/2 top-6 bottom-6 w-0.5 bg-gradient-to-b from-blue-400 via-violet-400 to-emerald-400 z-0"></div>
 
           <%= for step <- @action_workflow_steps do %>
             <div class="relative z-10 pl-14">
               <!-- Step Circle Badge on Pipeline Line -->
-              <div class={"absolute left-3.5 -translate-x-1/2 top-5 w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs font-black shadow-sm #{case step.color do
+              <div class={"absolute left-6 -translate-x-1/2 top-5 w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs font-black shadow-sm #{case step.color do
                 "blue" -> "bg-blue-600 text-white border-blue-200"
                 "violet" -> "bg-violet-600 text-white border-violet-200"
                 "amber" -> "bg-amber-500 text-white border-amber-200"
@@ -776,12 +776,12 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
         <!-- 2. EVENT PUB/SUB SEQUENTIAL CASCADE -->
         <div id="cascade-event-workflow" class="hidden space-y-4 relative">
           <!-- Continuous Vertical Pipeline Line -->
-          <div class="absolute left-6 top-6 bottom-6 w-0.5 bg-gradient-to-b from-emerald-400 via-amber-400 to-blue-400 z-0"></div>
+          <div class="absolute left-6 -translate-x-1/2 top-6 bottom-6 w-0.5 bg-gradient-to-b from-emerald-400 via-amber-400 to-blue-400 z-0"></div>
 
           <%= for step <- @event_workflow_steps do %>
             <div class="relative z-10 pl-14">
               <!-- Step Circle Badge on Pipeline Line -->
-              <div class={"absolute left-3.5 -translate-x-1/2 top-5 w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs font-black shadow-sm #{case step.color do
+              <div class={"absolute left-6 -translate-x-1/2 top-5 w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs font-black shadow-sm #{case step.color do
                 "blue" -> "bg-blue-600 text-white border-blue-200"
                 "violet" -> "bg-violet-600 text-white border-violet-200"
                 "amber" -> "bg-amber-500 text-white border-amber-200"
