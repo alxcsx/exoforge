@@ -22,8 +22,48 @@ public static class ExoforgePackageCheck
 
     static ExoforgePackageCheck()
     {
+        SanitizeStaleGeneratedStubs();
         // Deferred: the package manager is not necessarily ready during static construction.
         EditorApplication.delayCall += Check;
+    }
+
+    private static void SanitizeStaleGeneratedStubs()
+    {
+        try
+        {
+            string generatedPath = Path.Combine(Application.dataPath, "Exoforge", "Generated", "ExoforgeServices.g.cs");
+            if (File.Exists(generatedPath))
+            {
+                string text = File.ReadAllText(generatedPath);
+                if (text.Contains("global::Exoforge.Client.Unity.ExoforgeSDK.Client"))
+                {
+                    var lines = text.Split(new[] { "\r\n", "\r", "\n" }, System.StringSplitOptions.None);
+                    var filtered = new List<string>();
+                    bool insideBadBlock = false;
+                    foreach (var line in lines)
+                    {
+                        if (line.Contains("#if UNITY_2018_1_OR_NEWER || UNITY_5_3_OR_NEWER"))
+                        {
+                            insideBadBlock = true;
+                            continue;
+                        }
+                        if (insideBadBlock)
+                        {
+                            if (line.Contains("#endif"))
+                            {
+                                insideBadBlock = false;
+                            }
+                            continue;
+                        }
+                        filtered.Add(line);
+                    }
+                    string fixedText = string.Join("\n", filtered);
+                    File.WriteAllText(generatedPath, fixedText, new System.Text.UTF8Encoding(false));
+                    Debug.Log("[Exoforge] Automatically sanitized stale cross-assembly reference in Assets/Exoforge/Generated/ExoforgeServices.g.cs");
+                }
+            }
+        }
+        catch { }
     }
 
     private static void Check()
