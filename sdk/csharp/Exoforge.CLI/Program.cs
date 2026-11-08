@@ -42,7 +42,11 @@ public static class Program
 
                 case "sync":
                 case "gen":
+                case "stubs":
                     return await HandleSyncAsync(cli).ConfigureAwait(false);
+
+                case "repair":
+                    return HandleRepair(cli);
 
                 case "status":
                     return await HandleStatusAsync(cli).ConfigureAwait(false);
@@ -76,6 +80,8 @@ public static class Program
           init                       Initialize the workspace and exoforge.json
           extension <subcommand>     Create, build, deploy and inspect extensions
           sync                       Download live contracts and generate the typed C# client
+          stubs                      Alias for sync (updates C# client stubs)
+          repair                     Sanitize and repair client stubs in-place
           status                     Inspect live cluster health and metrics
 
         Options:
@@ -181,6 +187,51 @@ public static class Program
         else
         {
             Success($"[Exoforge] C# client bindings are already up-to-date at:\n  {outPath ?? ws.GeneratedPath}");
+        }
+        return 0;
+    }
+
+    private static int HandleRepair(CliArgs cli)
+    {
+        string dir = cli.Value("dir") ?? Directory.GetCurrentDirectory();
+        string defaultPath = Path.Combine(dir, "Assets", "Exoforge", "Generated", "ExoforgeServices.g.cs");
+        string targetPath = cli.Value("path") ?? (File.Exists(defaultPath) ? defaultPath : Path.Combine(dir, "Generated", "ExoforgeServices.g.cs"));
+
+        if (!File.Exists(targetPath))
+        {
+            Error($"[Exoforge] Generated stub file not found at: {targetPath}");
+            return 1;
+        }
+
+        string text = File.ReadAllText(targetPath);
+        if (text.Contains("global::Exoforge.Client.Unity.ExoforgeSDK.Client") || text.Contains("#if UNITY_2018_1_OR_NEWER || UNITY_5_3_OR_NEWER"))
+        {
+            var lines = text.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+            var filtered = new List<string>();
+            bool insideBadBlock = false;
+            foreach (var line in lines)
+            {
+                if (line.Contains("#if UNITY_2018_1_OR_NEWER || UNITY_5_3_OR_NEWER"))
+                {
+                    insideBadBlock = true;
+                    continue;
+                }
+                if (insideBadBlock)
+                {
+                    if (line.Contains("#endif"))
+                    {
+                        insideBadBlock = false;
+                    }
+                    continue;
+                }
+                filtered.Add(line);
+            }
+            File.WriteAllText(targetPath, string.Join("\n", filtered), new System.Text.UTF8Encoding(false));
+            Success($"[Exoforge] Successfully sanitized and repaired stubs in-place at:\n  {targetPath}");
+        }
+        else
+        {
+            Success($"[Exoforge] Stubs at {targetPath} are already clean.");
         }
         return 0;
     }
