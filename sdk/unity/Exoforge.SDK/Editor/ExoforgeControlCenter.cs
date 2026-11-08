@@ -24,7 +24,7 @@ namespace Exoforge.Unity.Editor
 /// Unity Editor Exoforge Studio — cluster management, authentication, live events, action sandbox,
 /// plugin scaffolding/build/deploy/stubs, and client/runtime-config generation.
 /// </summary>
-public partial class ExoforgeControlCenter : EditorWindow
+public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbackReceiver
 {
     private enum Tab { Extensions, Metrics, LiveEvents, Settings, Plugins = Extensions }
 
@@ -244,20 +244,20 @@ public partial class ExoforgeControlCenter : EditorWindow
     /// Discovered services and actions, filled from the live export. Deliberately starts empty:
     /// a seeded list drifts out of date and the Sandbox then opens on an action that 404s.
     /// </summary>
-    private readonly Dictionary<string, List<ActionSpec>> _serviceCatalog = new();
+    private Dictionary<string, List<ActionSpec>> _serviceCatalog = new();
 
     /// <summary>Plugin id → the service names it provides, for the per-plugin "Test" shortcut.</summary>
-    private readonly Dictionary<string, List<string>> _pluginServices = new();
+    private Dictionary<string, List<string>> _pluginServices = new();
     private int _selectedServiceIndex = 0;
     private int _selectedActionIndex = 0;
 
     // Live Events
     private sealed record LoggedEvent(DateTime At, string Topic, string EventName, string RawJson);
-    private readonly List<LoggedEvent> _eventLog = new();
+    private List<LoggedEvent> _eventLog = new();
 
     // Network callbacks arrive on background threads; OnGUI enumerates _eventLog on the main one.
     // Incoming events are staged here and drained in OnEditorUpdate (M33 Fix 17).
-    private readonly ConcurrentQueue<LoggedEvent> _pendingEvents = new();
+    private ConcurrentQueue<LoggedEvent> _pendingEvents = new();
     private bool _eventPaused;
     private bool _eventAutoScroll = true;
     private string _eventFilter = "";
@@ -570,9 +570,28 @@ public partial class ExoforgeControlCenter : EditorWindow
         UnityEngine.Debug.Log("[Exoforge] Cleared all stored sessions.");
     }
 
+    internal void EnsureCollectionsInitialized()
+    {
+        _pendingEvents ??= new ConcurrentQueue<LoggedEvent>();
+        _eventLog ??= new List<LoggedEvent>();
+        _serviceCatalog ??= new Dictionary<string, List<ActionSpec>>();
+        _pluginServices ??= new Dictionary<string, List<string>>();
+        _tabButtons ??= new List<Button>();
+        _localPlugins ??= new List<LocalPluginInfo>();
+        _remotePlugins ??= new List<JsonElement>();
+    }
+
+    public void OnBeforeSerialize() { }
+
+    public void OnAfterDeserialize()
+    {
+        EnsureCollectionsInitialized();
+    }
+
     private void OnEnable()
     {
         Instance = this;
+        EnsureCollectionsInitialized();
         // The editor authenticates with the runtime session token. Seed it from the active
         // environment, so exoforge.json decides what a fresh editor signs in as rather than a
         // hardcoded default.
@@ -690,6 +709,9 @@ public partial class ExoforgeControlCenter : EditorWindow
     // Keeps the window repainting while a build runs, so the streamed build log updates live.
     private void OnEditorUpdate()
     {
+        EnsureCollectionsInitialized();
+        if (_pendingEvents == null || _eventLog == null) return;
+
         // Drain what background threads staged, on the thread that renders it (M33 Fix 17).
         bool arrived = false;
 
@@ -1169,6 +1191,8 @@ public partial class ExoforgeControlCenter : EditorWindow
 
     private void UpdateTabButtonStyles()
     {
+        if (_tabButtons == null) return;
+
         bool canReach = CanReachCluster;
 
         // Auto-switch away from cluster-only tabs when offline
@@ -1179,6 +1203,7 @@ public partial class ExoforgeControlCenter : EditorWindow
 
         foreach (var btn in _tabButtons)
         {
+            if (btn == null) continue;
             if (btn.userData is Tab tabId)
             {
                 bool isClusterTab = tabId == Tab.Metrics || tabId == Tab.LiveEvents;

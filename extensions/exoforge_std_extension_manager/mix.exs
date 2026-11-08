@@ -4,7 +4,7 @@ defmodule Exoforge.Std.ExtensionManager.MixProject do
   def project do
     [
       app: :exoforge_std_extension_manager,
-      version: "0.1.25",
+      version: "0.1.26",
       elixir: "~> 1.20",
       deps: deps(),
       compilers: Mix.compilers() ++ [:exoforge_manifest]

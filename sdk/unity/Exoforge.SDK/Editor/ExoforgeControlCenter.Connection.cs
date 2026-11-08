@@ -533,6 +533,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         try { raw = JsonSerializer.Serialize(evt.Payload, new JsonSerializerOptions { WriteIndented = true }); }
         catch { raw = evt.Payload.ToString() ?? "{}"; }
 
+        EnsureCollectionsInitialized();
         _pendingEvents.Enqueue(new LoggedEvent(DateTime.UtcNow, evt.Topic, evt.Event, raw));
     }
 
