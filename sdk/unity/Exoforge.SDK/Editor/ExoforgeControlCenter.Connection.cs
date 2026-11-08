@@ -32,14 +32,44 @@ public partial class ExoforgeControlCenter : EditorWindow
             await testClient.ConnectAsync(new Uri(ActiveWsUrl));
             sw.Stop();
             _connectionLatency = $"{sw.ElapsedMilliseconds} ms";
-            ShowStatus($"Server reachable at {ActiveWsUrl} in {sw.ElapsedMilliseconds} ms.", MessageType.Info);
             await testClient.DisconnectAsync();
+
+            if (!_isConnected && !_isConnecting && !IsSetupRequired)
+            {
+                ShowStatus($"Server reachable at {ActiveWsUrl} ({sw.ElapsedMilliseconds} ms). Connecting editor...", MessageType.Info);
+                _ = ConnectAsync();
+            }
+            else
+            {
+                ShowStatus($"Server reachable at {ActiveWsUrl} in {sw.ElapsedMilliseconds} ms.", MessageType.Info);
+            }
         }
         catch (Exception ex)
         {
             ShowStatus($"Ping failed to {ActiveWsUrl}: {ex.Message}", MessageType.Error);
         }
         Repaint();
+    }
+
+    private async Task PingAndAutoConnectIfReachableAsync()
+    {
+        if (_isConnected || _isConnecting || IsSetupRequired || string.IsNullOrEmpty(ActiveWsUrl)) return;
+        try
+        {
+            using var pingCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+            using var testClient = new ExoClient();
+            await testClient.ConnectAsync(new Uri(ActiveWsUrl), pingCts.Token);
+            await testClient.DisconnectAsync();
+
+            if (!_isConnected && !_isConnecting)
+            {
+                await ConnectAsync();
+            }
+        }
+        catch
+        {
+            // Silent ping check failure while disconnected
+        }
     }
 
     private async Task ConnectAsync(string? tokenOverride = null, string? wsUrlOverride = null)
@@ -132,6 +162,12 @@ public partial class ExoforgeControlCenter : EditorWindow
 
                 await _editorClient.SubscribeAsync("*", cancellationToken: cts.Token);
                 await RefreshRemoteInfoAsync();
+
+                string generatedPath = ExoforgeEditorConfig.GetAbsoluteGeneratedScriptPath();
+                if (!File.Exists(generatedPath))
+                {
+                    _ = SyncAndGenerateClientAsync(forceReload: false);
+                }
             }
             else
             {

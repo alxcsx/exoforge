@@ -82,6 +82,76 @@ public partial class ExoforgeControlCenter : EditorWindow
 
             container.Add(warningCard);
         }
+        else if (SdkStatus == SdkCompatibilityStatus.UpdateAvailable || SdkStatus == SdkCompatibilityStatus.Ahead)
+        {
+            var outOfSyncCard = new VisualElement();
+            outOfSyncCard.style.backgroundColor = new Color(0.96f, 0.62f, 0.12f, 0.10f); // theme-safe amber-500/10
+            outOfSyncCard.style.borderTopWidth = 1;
+            outOfSyncCard.style.borderBottomWidth = 1;
+            outOfSyncCard.style.borderLeftWidth = 1;
+            outOfSyncCard.style.borderRightWidth = 1;
+            outOfSyncCard.style.borderTopColor = new Color(0.96f, 0.62f, 0.12f, 0.35f);
+            outOfSyncCard.style.borderBottomColor = new Color(0.96f, 0.62f, 0.12f, 0.35f);
+            outOfSyncCard.style.borderLeftColor = new Color(0.96f, 0.62f, 0.12f, 0.35f);
+            outOfSyncCard.style.borderRightColor = new Color(0.96f, 0.62f, 0.12f, 0.35f);
+            outOfSyncCard.style.borderTopLeftRadius = 8;
+            outOfSyncCard.style.borderTopRightRadius = 8;
+            outOfSyncCard.style.borderBottomLeftRadius = 8;
+            outOfSyncCard.style.borderBottomRightRadius = 8;
+            outOfSyncCard.style.paddingLeft = 14;
+            outOfSyncCard.style.paddingRight = 14;
+            outOfSyncCard.style.paddingTop = 10;
+            outOfSyncCard.style.paddingBottom = 10;
+            outOfSyncCard.style.marginBottom = 10;
+
+            var syncHeader = new VisualElement();
+            syncHeader.style.flexDirection = FlexDirection.Row;
+            syncHeader.style.alignItems = Align.Center;
+            syncHeader.style.marginBottom = 4;
+
+            var syncIcon = new Label("⚠️");
+            syncIcon.style.fontSize = 18;
+            syncIcon.style.marginRight = 8;
+            syncHeader.Add(syncIcon);
+
+            string titleText = SdkStatus == SdkCompatibilityStatus.UpdateAvailable
+                ? $"SDK VERSION OUT OF SYNC — CLUSTER v{RemoteSdkVersion ?? RemoteVersion} (INSTALLED: v{ExoforgePackageVersion.SdkVersion})"
+                : $"SDK IS AHEAD OF CLUSTER — INSTALLED v{ExoforgePackageVersion.SdkVersion} (CLUSTER: v{RemoteVersion})";
+
+            var syncTitle = new Label(titleText);
+            syncTitle.style.fontSize = 13;
+            syncTitle.style.unityFontStyleAndWeight = FontStyle.Bold;
+            syncTitle.style.color = ExoforgeUIStyle.AccentOrange;
+            syncHeader.Add(syncTitle);
+            outOfSyncCard.Add(syncHeader);
+
+            var syncDesc = new Label(
+                SdkStatus == SdkCompatibilityStatus.UpdateAvailable
+                    ? "Your Unity SDK version differs from the connected cluster. You can still list, inspect, and develop extensions, but some contracts or features may require updating the package."
+                    : "Your Unity SDK version is newer than the connected cluster. Extension listing and inspection remain fully active.");
+            syncDesc.style.fontSize = 11;
+            syncDesc.style.color = ExoforgeUIStyle.TextPrimary;
+            syncDesc.style.whiteSpace = WhiteSpace.Normal;
+            syncDesc.style.marginBottom = 8;
+            outOfSyncCard.Add(syncDesc);
+
+            var syncActionRow = new VisualElement();
+            syncActionRow.style.flexDirection = FlexDirection.Row;
+            syncActionRow.style.alignItems = Align.Center;
+
+            if (SdkStatus == SdkCompatibilityStatus.UpdateAvailable)
+            {
+                var updateBtn = ExoforgeUIStyle.CreateModernButton("⬇️ Download / Update SDK from Cluster", () => _ = DownloadOrUpdateSdkAsync(), bg: ExoforgeUIStyle.BrandPurple, height: 26);
+                updateBtn.style.marginRight = 8;
+                syncActionRow.Add(updateBtn);
+            }
+
+            var resyncBtn = ExoforgeUIStyle.CreateModernButton("🔄 Force Sync Client Stubs", () => _ = SyncAndGenerateClientAsync(forceReload: true), height: 26);
+            syncActionRow.Add(resyncBtn);
+
+            outOfSyncCard.Add(syncActionRow);
+            container.Add(outOfSyncCard);
+        }
 
         // 2. Action Strip (New Extension + Unity Client Sync)
         var actionStrip = new VisualElement();
@@ -250,7 +320,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         descLabel.style.marginBottom = 10;
         section.Add(descLabel);
 
-        if (!CanReachCluster)
+        if (!CanReachCluster && _remotePlugins.Count == 0)
         {
             var offlineBox = new VisualElement();
             offlineBox.style.backgroundColor = ExoforgeUIStyle.BgCard;
@@ -278,6 +348,15 @@ public partial class ExoforgeControlCenter : EditorWindow
 
             section.Add(offlineBox);
             return section;
+        }
+
+        if (!CanReachCluster && _remotePlugins.Count > 0)
+        {
+            var cachedPill = new Label($"Showing {_remotePlugins.Count} cached remote extensions (Offline / Read-only)");
+            cachedPill.style.fontSize = 11;
+            cachedPill.style.color = ExoforgeUIStyle.AccentOrange;
+            cachedPill.style.marginBottom = 6;
+            section.Add(cachedPill);
         }
 
         if (_remotePlugins.Count == 0)

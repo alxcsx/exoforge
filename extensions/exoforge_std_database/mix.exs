@@ -4,7 +4,7 @@ defmodule Exoforge.Std.Database.MixProject do
   def project do
     [
       app: :exoforge_std_database,
-      version: "0.1.21",
+      version: "0.1.22",
       elixir: "~> 1.20",
       deps: deps(),
       compilers: Mix.compilers() ++ [:exoforge_manifest]

@@ -230,6 +230,7 @@ public partial class ExoforgeControlCenter : EditorWindow
     public static string? RemoteSdkPackageUrl { get; internal set; }
     public static string? RemoteSdkPackageFilename { get; internal set; }
     public static SdkCompatibilityStatus SdkStatus { get; internal set; } = SdkCompatibilityStatus.Unknown;
+    private double _lastHealthCheckTime;
 
     /// <summary>One action from the live contract export, with the params needed to build a payload.</summary>
     private sealed record ActionSpec(string Name, Dictionary<string, JsonElement> Params);
@@ -608,11 +609,11 @@ public partial class ExoforgeControlCenter : EditorWindow
     {
         if (IsSetupRequired) return;
 
-        string token = !string.IsNullOrWhiteSpace(ExoTokenStore.StudioToken)
+        string targetToken = !string.IsNullOrWhiteSpace(ExoTokenStore.StudioToken)
             ? ExoTokenStore.StudioToken
-            : ExoTokenStore.Token;
+            : ActiveToken;
 
-        if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(ExoTokenStore.StudioPlayerId))
+        if (string.IsNullOrWhiteSpace(targetToken))
         {
             ShowStatus("No active session defined. Use the Account button above to sign in.", MessageType.Info);
             return;
@@ -620,6 +621,15 @@ public partial class ExoforgeControlCenter : EditorWindow
 
         ShowStatus("Connecting to the cluster…", MessageType.Info);
         _ = ConnectAsync();
+    }
+
+    private void OnFocus()
+    {
+        if (IsSetupRequired) return;
+        if (!_isConnected && !_isConnecting && !string.IsNullOrEmpty(ActiveWsUrl))
+        {
+            _ = PingAndAutoConnectIfReachableAsync();
+        }
     }
 
     private void OnDisable()
@@ -688,6 +698,12 @@ public partial class ExoforgeControlCenter : EditorWindow
         if (arrived && _eventAutoScroll)
         {
             _eventScroll.y = 0;
+        }
+
+        if (!_isConnected && !_isConnecting && !IsSetupRequired && EditorApplication.timeSinceStartup - _lastHealthCheckTime > 12.0)
+        {
+            _lastHealthCheckTime = EditorApplication.timeSinceStartup;
+            _ = PingAndAutoConnectIfReachableAsync();
         }
 
         UpdateModernHeaderUI();
@@ -1190,7 +1206,18 @@ public partial class ExoforgeControlCenter : EditorWindow
         {
             Color dotColor = _isConnected ? ExoforgeUIStyle.AccentGreen : (_isConnecting ? ExoforgeUIStyle.AccentOrange : ExoforgeUIStyle.AccentGray);
             _connectionDot.style.backgroundColor = dotColor;
-            _connectionText.text = _isConnected ? $"Online ({_connectionStatus})" : (_isConnecting ? "Connecting..." : "Offline");
+
+            if (_isConnected && SdkStatus == SdkCompatibilityStatus.UpdateAvailable)
+            {
+                _connectionText.text = $"Online • ⚠️ Out of Sync (Cluster v{RemoteSdkVersion ?? RemoteVersion})";
+                _connectionText.style.color = ExoforgeUIStyle.AccentOrange;
+            }
+            else
+            {
+                _connectionText.text = _isConnected ? $"Online ({_connectionStatus})" : (_isConnecting ? "Connecting..." : "Offline");
+                _connectionText.style.color = ExoforgeUIStyle.TextPrimary;
+            }
+
             _connectBtn.text = _isConnected ? "Disconnect" : (_isConnecting ? "Retry" : "⚡ Connect");
             _connectBtn.style.backgroundColor = _isConnected ? ExoforgeUIStyle.BgHeaderBtn : ExoforgeUIStyle.BrandPurple;
         }
@@ -1458,10 +1485,12 @@ public partial class ExoforgeControlCenter : EditorWindow
             if (changedCount > 0 || !File.Exists(outputPath) || forceReload)
             {
                 AssetDatabase.Refresh();
+                ExoforgeIdeProjectGenerator.EnsureIdeConfiguration(forceRegenerate: true);
                 ShowStatus($"✓ Strongly-typed C# client updated at {ExoforgeEditorConfig.GeneratedScriptPath}", MessageType.Info);
             }
             else
             {
+                ExoforgeIdeProjectGenerator.EnsureIdeConfiguration(forceRegenerate: false);
                 ShowStatus("✓ C# client bindings are already up-to-date (skipped reload).", MessageType.Info);
             }
         }

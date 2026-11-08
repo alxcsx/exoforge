@@ -331,7 +331,97 @@ public partial class ExoforgeControlCenter : EditorWindow
         }
         EditorGUILayout.EndVertical();
 
+        EditorGUILayout.Space(8);
+
+        // Troubleshooting & Upgrade Helpers (Progressive Disclosure Fold)
+        _showTroubleshootingFold = EditorGUILayout.Foldout(_showTroubleshootingFold, "🛠️ Troubleshooting & Upgrade Helpers", true, EditorStyles.foldoutHeader);
+        if (_showTroubleshootingFold)
+        {
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            EditorGUILayout.LabelField("Resolve IDE sync issues, regenerate stubs, or clean local caches.", EditorStyles.miniLabel);
+            EditorGUILayout.Space(4);
+
+            // 1. IDE Re-link
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField("IDE Integration & Solution Link", EditorStyles.boldLabel, GUILayout.Width(220));
+            if (GUILayout.Button("Re-link IDE Projects (Rider / VS)", GUILayout.Height(24)))
+            {
+                ExoforgeIdeProjectGenerator.EnsureIdeConfiguration(forceRegenerate: true);
+                ShowStatus("✓ Re-linked IDE project generation flags, nuget.config, and .csproj solutions.", MessageType.Info);
+            }
+            EditorGUILayout.EndHorizontal();
+            EditorGUILayout.LabelField("Reconfigures LocalTarBall flags (128), nuget feeds, and injects backend extensions into .sln.", EditorStyles.miniLabel);
+
+            EditorGUILayout.Space(6);
+
+            // 2. Client Stubs
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField("Strongly-Typed Client Stubs", EditorStyles.boldLabel, GUILayout.Width(220));
+            if (GUILayout.Button("Force Regenerate Stubs & Config", GUILayout.Height(24)))
+            {
+                _ = SyncAndGenerateClientAsync(forceReload: true);
+            }
+            EditorGUILayout.EndHorizontal();
+            EditorGUILayout.LabelField("Re-fetches contracts, regenerates Assets/Exoforge/Generated/ and runtime config.", EditorStyles.miniLabel);
+
+            EditorGUILayout.Space(6);
+
+            // 3. Clear Caches
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField("Caches & Session State", EditorStyles.boldLabel, GUILayout.Width(220));
+            if (GUILayout.Button("Clear SDK & Staging Caches", GUILayout.Height(24)))
+            {
+                ClearSdkCaches();
+            }
+            EditorGUILayout.EndHorizontal();
+            EditorGUILayout.LabelField("Purges temporary build artifacts, session flags, and triggers clean asset re-index.", EditorStyles.miniLabel);
+
+            EditorGUILayout.Space(6);
+
+            // 4. Update / Download SDK
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField("Cluster SDK Package", EditorStyles.boldLabel, GUILayout.Width(220));
+            using (new EditorGUI.DisabledScope(!_isConnected))
+            {
+                if (GUILayout.Button("Download Latest SDK Tarball", GUILayout.Height(24)))
+                {
+                    _ = DownloadOrUpdateSdkAsync();
+                }
+            }
+            EditorGUILayout.EndHorizontal();
+            EditorGUILayout.LabelField($"Installed: v{ExoforgePackageVersion.SdkVersion} • Cluster: v{RemoteSdkVersion ?? RemoteVersion}", EditorStyles.miniLabel);
+
+            EditorGUILayout.EndVertical();
+        }
+
         EditorGUILayout.EndScrollView();
+    }
+
+    private static bool _showTroubleshootingFold = false;
+
+    private void ClearSdkCaches()
+    {
+        try
+        {
+            string projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+            string tempStaging = Path.Combine(projectRoot, "Temp", "ExoforgeStaging");
+            if (Directory.Exists(tempStaging))
+            {
+                Directory.Delete(tempStaging, true);
+            }
+
+            SessionState.EraseBool(WasConnectedSessionKey);
+            SessionState.EraseBool(AutoConnectSessionKey);
+            SessionState.EraseBool("Exoforge_PackageWarned");
+
+            ExoforgeIdeProjectGenerator.EnsureIdeConfiguration(forceRegenerate: true);
+            AssetDatabase.Refresh();
+            ShowStatus("✓ Exoforge caches cleared and project files regenerated.", MessageType.Info);
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Failed to clear caches: {ex.Message}", MessageType.Error);
+        }
     }
 
     private async Task PushProjectMetadataToClusterAsync()

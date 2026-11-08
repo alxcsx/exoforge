@@ -287,8 +287,9 @@ namespace Exoforge.Unity.Editor
                 if (string.IsNullOrEmpty(pkgRoot)) return content;
 
                 string fileName = Path.GetFileName(path);
+                string projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
 
-                // Inject Exoforge.Client reference if missing from consuming game / generated projects
+                // 1. Inject Exoforge.Client reference if missing from consuming game / generated projects
                 if (!content.Contains("Exoforge.Client"))
                 {
                     string clientDll = Path.Combine(pkgRoot!, "Runtime", "Plugins", "Exoforge.Client.dll");
@@ -308,7 +309,55 @@ namespace Exoforge.Unity.Editor
                     }
                 }
 
-                // For editor projects, inject Exoforge.Management reference if missing
+                // 2. Inject Exoforge.Generated project reference if missing from game projects
+                string genCsproj = Path.Combine(projectRoot, "Exoforge.Generated.csproj");
+                if (!fileName.StartsWith("Exoforge.", StringComparison.OrdinalIgnoreCase) &&
+                    File.Exists(genCsproj) &&
+                    !content.Contains("Exoforge.Generated"))
+                {
+                    string genGuid = ComputeDeterministicGuid("Exoforge.Generated.csproj").ToString("B").ToUpperInvariant();
+                    string projRef =
+                        $"    <ProjectReference Include=\"Exoforge.Generated.csproj\">\n" +
+                        $"      <Project>{genGuid}</Project>\n" +
+                        $"      <Name>Exoforge.Generated</Name>\n" +
+                        $"    </ProjectReference>\n";
+
+                    int endItemGrp = content.IndexOf("</ItemGroup>", StringComparison.Ordinal);
+                    if (endItemGrp > 0)
+                    {
+                        content = content.Insert(endItemGrp, projRef);
+                    }
+                }
+
+                // 3. For Exoforge.Generated.csproj itself, ensure Exoforge.Client and System.Text.Json are referenced
+                if (fileName.Equals("Exoforge.Generated.csproj", StringComparison.OrdinalIgnoreCase))
+                {
+                    var sbMissing = new StringBuilder();
+                    string clientDll = Path.Combine(pkgRoot!, "Runtime", "Plugins", "Exoforge.Client.dll");
+                    string jsonDll = Path.Combine(pkgRoot!, "Runtime", "Plugins", "System.Text.Json.dll");
+
+                    if (!content.Contains("Exoforge.Client") && File.Exists(clientDll))
+                    {
+                        string normClient = Path.GetFullPath(clientDll).Replace('\\', '/');
+                        sbMissing.AppendLine($"    <Reference Include=\"Exoforge.Client\">\n      <HintPath>{normClient}</HintPath>\n    </Reference>");
+                    }
+                    if (!content.Contains("System.Text.Json") && File.Exists(jsonDll))
+                    {
+                        string normJson = Path.GetFullPath(jsonDll).Replace('\\', '/');
+                        sbMissing.AppendLine($"    <Reference Include=\"System.Text.Json\">\n      <HintPath>{normJson}</HintPath>\n    </Reference>");
+                    }
+
+                    if (sbMissing.Length > 0)
+                    {
+                        int endItemGrp = content.IndexOf("</ItemGroup>", StringComparison.Ordinal);
+                        if (endItemGrp > 0)
+                        {
+                            content = content.Insert(endItemGrp, sbMissing.ToString());
+                        }
+                    }
+                }
+
+                // 4. For editor projects, inject Exoforge.Management reference if missing
                 if (fileName.Contains("Editor") && !content.Contains("Exoforge.Management"))
                 {
                     string mgmtDll = Path.Combine(pkgRoot!, "Editor", "Plugins", "Exoforge.Management.dll");
