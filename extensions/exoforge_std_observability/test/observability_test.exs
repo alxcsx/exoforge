@@ -7,6 +7,29 @@ defmodule Exoforge.Std.ObservabilityTest do
   alias Exoforge.Std.Observability.Analytics
   alias Exoforge.Std.Observability.Events
 
+  # A service with a visible side effect, so replay can be observed rather than inferred.
+  defmodule CounterService do
+    import Exoforge.Contracts.Service
+
+    defservice counter do
+      action :bump do
+        params(by: [type: :integer, optional: true])
+        returns(total: :integer)
+      end
+    end
+  end
+
+  defmodule CounterPlugin do
+    use Exoforge.Extension, provides: [Exoforge.Std.ObservabilityTest.CounterService.Counter]
+
+    @impl true
+    defaction bump(payload) do
+      by = Map.get(payload, "by") || Map.get(payload, :by) || 1
+      total = :ets.update_counter(:obs_counter, :n, {2, by}, {:n, 0})
+      {:ok, %{total: total}}
+    end
+  end
+
   setup do
     Exoforge.ExtensionCase.start_kernel()
 
@@ -21,6 +44,18 @@ defmodule Exoforge.Std.ObservabilityTest do
       provides: [Exoforge.Std.Services.Observability],
       dependencies: [Exoforge.Std.Services.Database]
     )
+
+    Exoforge.ExtensionCase.register_extension(CounterPlugin,
+      id: :counter_plugin,
+      provides: [CounterService.Counter]
+    )
+
+    if :ets.info(:obs_counter) == :undefined do
+      :ets.new(:obs_counter, [:named_table, :public, :set])
+    end
+
+    :ets.insert(:obs_counter, {:n, 0})
+    Exoforge.DebugCapture.stop_all()
 
     unless Process.whereis(Events) do
       start_supervised!(Events)
@@ -168,6 +203,55 @@ defmodule Exoforge.Std.ObservabilityTest do
       |> Map.get(:rows)
 
     assert row["n"] == 1
+  end
+
+  test "a capture keeps the full request, and replay dispatches it again for the same caller" do
+    assert {:ok, %{capture: %{kind: "player", value: "alice"}}} =
+             ActionDispatcher.dispatch_internal(:observability, :capture, %{
+               kind: "player",
+               value: "alice",
+               seconds: 60
+             })
+
+    assert {:ok, %{total: 1}} =
+             ActionDispatcher.dispatch(CounterService.Counter, :bump, %{"by" => 1},
+               caller: "alice",
+               caller_scopes: [:player],
+               rid: "r_replay_src"
+             )
+
+    assert {:ok, %{captures: [%{kind: "player", value: "alice", remaining_s: _}]}} =
+             ActionDispatcher.dispatch_internal(:observability, :captures, %{})
+
+    [sample] = Enum.filter(Exoforge.ActionTrace.recent_samples(20), &(&1.rid == "r_replay_src"))
+    assert %{payload: %{"by" => 1}} = Exoforge.ActionTrace.deep_sample(sample.id)
+
+    assert {:ok,
+            %{source_rid: "r_replay_src", rid: new_rid, status: %{status: "ok", data: result}}} =
+             ActionDispatcher.dispatch_internal(:observability, :replay, %{id: sample.id})
+
+    assert result == %{total: 2}
+    assert new_rid =~ ~r/^r_/
+
+    # The replay is a real request: a new rid, the same caller, traced.
+    assert Enum.any?(
+             Exoforge.ActionTrace.recent_samples(20),
+             &(&1.rid == new_rid and &1.caller == "alice")
+           )
+
+    assert {:ok, %{status: "stopped"}} =
+             ActionDispatcher.dispatch_internal(:observability, :stop_capture, %{
+               kind: "player",
+               value: "alice"
+             })
+
+    assert {:ok, %{captures: []}} =
+             ActionDispatcher.dispatch_internal(:observability, :captures, %{})
+  end
+
+  test "replay refuses a sample that was not captured" do
+    assert {:error, :not_captured} =
+             ActionDispatcher.dispatch_internal(:observability, :replay, %{id: 1})
   end
 
   test "health reports 30-minute rates, percentiles and an attention list" do

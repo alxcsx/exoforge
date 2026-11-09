@@ -2528,8 +2528,13 @@ defmodule Exoforge.Std.Dashboard.Overlays do
   attr(:open, :boolean, default: false)
   attr(:rid, :string, default: "")
   attr(:nodes, :list, default: [])
+  attr(:captures, :list, default: [])
+  attr(:replay, :map, default: nil)
   attr(:on_close, :string, default: "close_timeline")
   attr(:on_search, :string, default: "search_timeline")
+  attr(:on_capture, :string, default: "capture_timeline")
+  attr(:on_stop_capture, :string, default: "stop_capture")
+  attr(:on_replay, :string, default: "replay_action")
 
   def timeline_modal(assigns) do
     ~H"""
@@ -2580,6 +2585,86 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               </button>
             </form>
 
+            <!-- Deep capture: full payloads, memory only, bounded by the rule's expiry -->
+            <div class="p-2.5 bg-gray-50 rounded-xl border border-gray-200/80 space-y-2 text-xs">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-gray-700 uppercase tracking-wider text-[10px]">Deep capture</span>
+                <span class="text-[10px] text-gray-400">Full payloads stay in memory and expire with the rule</span>
+              </div>
+
+              <form phx-submit={@on_capture} class="flex flex-wrap items-center gap-1.5">
+                <select name="kind" class="px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-mono">
+                  <option value="player">player</option>
+                  <option value="action">action</option>
+                  <option value="global">global</option>
+                </select>
+                <input
+                  type="text"
+                  name="value"
+                  placeholder="player id or service.action"
+                  class="flex-1 px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-mono"
+                />
+                <input
+                  type="number"
+                  name="seconds"
+                  value="60"
+                  min="5"
+                  max="3600"
+                  class="w-16 px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-mono"
+                />
+                <button
+                  type="submit"
+                  class="px-2.5 py-1.5 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg text-xs"
+                >
+                  🔬 Capture
+                </button>
+              </form>
+
+              <%= if @captures != [] do %>
+                <div class="flex flex-wrap gap-1.5">
+                  <%= for capture <- @captures do %>
+                    <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-primary-50 border border-primary-200 text-primary-700 font-mono text-[10px]">
+                      <%= capture.kind %>:<%= capture.value %> · <%= capture.remaining_s %>s
+                      <button
+                        type="button"
+                        phx-click={@on_stop_capture}
+                        phx-value-kind={capture.kind}
+                        phx-value-value={capture.value}
+                        class="text-primary-500 hover:text-primary-800 font-bold"
+                        title="Stop this capture"
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  <% end %>
+                </div>
+              <% end %>
+            </div>
+
+            <!-- Replay result: the same request, dispatched again as the caller who made it -->
+            <%= if @replay do %>
+              <div class={"p-2.5 rounded-xl border text-xs space-y-1 #{if @replay[:error], do: "bg-red-50 border-red-200", else: "bg-emerald-50/70 border-emerald-200"}"}>
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <span class="font-bold text-[11px]">
+                    <%= if @replay[:error], do: "Replay refused: #{@replay.error}", else: "Replayed from #{@replay.source_rid} as #{@replay.rid}" %>
+                  </span>
+                  <%= if @replay[:rid] do %>
+                    <button
+                      type="button"
+                      phx-click="open_timeline"
+                      phx-value-rid={@replay.rid}
+                      class="px-1.5 py-0.5 rounded bg-white border border-emerald-200 text-emerald-700 font-mono text-[10px] font-bold"
+                    >
+                      🔭 Open the new request
+                    </button>
+                  <% end %>
+                </div>
+                <%= if @replay[:status] do %>
+                  <pre class="p-2 bg-gray-950 text-emerald-300 rounded-lg overflow-x-auto font-mono text-[10px]"><%= Jason.encode!(@replay.status, pretty: true) %></pre>
+                <% end %>
+              </div>
+            <% end %>
+
             <%= cond do %>
               <% @rid == "" -> %>
                 <p class="text-xs text-gray-400 italic bg-gray-50 p-3 rounded-xl border border-gray-200">
@@ -2594,7 +2679,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               <% true -> %>
                 <div class="space-y-1.5 max-h-[60vh] overflow-y-auto custom-scrollbar">
                   <%= for node <- @nodes do %>
-                    <.timeline_node node={node} />
+                    <.timeline_node node={node} on_replay={@on_replay} />
                   <% end %>
                 </div>
             <% end %>
@@ -2606,6 +2691,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
   end
 
   attr(:node, :map, required: true)
+  attr(:on_replay, :string, default: "replay_action")
 
   def timeline_node(assigns) do
     ~H"""
@@ -2642,7 +2728,20 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             <span class="px-1.5 py-0.5 rounded bg-red-50 text-red-700 border border-red-200 text-[10px] font-bold"><%= @node.count %>×</span>
           <% end %>
         </div>
-        <span class="text-gray-400 font-mono text-[10px]"><%= sample_time(@node.at) %></span>
+        <div class="flex items-center gap-2">
+          <%= if @node[:id] do %>
+            <button
+              type="button"
+              phx-click={@on_replay}
+              phx-value-id={@node.id}
+              class="px-1.5 py-0.5 rounded bg-gray-100 hover:bg-gray-200 text-gray-600 text-[10px] font-bold"
+              title="Replay this request as its original caller (side effects repeat)"
+            >
+              ↻ Replay
+            </button>
+          <% end %>
+          <span class="text-gray-400 font-mono text-[10px]"><%= sample_time(@node.at) %></span>
+        </div>
       </div>
 
       <%= if @node[:message] do %>

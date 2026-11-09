@@ -112,6 +112,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     tracked_services = Exoforge.Std.Dashboard.Preferences.tracked_services(player_id)
     telemetry = fetch_telemetry_summary(overview, initial_events, "", tracked_services)
     health = fetch_health()
+    captures = fetch_captures()
 
     {:ok,
      assign(socket,
@@ -124,6 +125,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
        overview: overview,
        telemetry: telemetry,
        health: health,
+       captures: captures,
        build_version: overview[:version] || Exoforge.BuildInfo.version(),
        build_hash: overview[:commit_hash] || Exoforge.BuildInfo.commit_hash(),
        build_date: overview[:build_date] || Exoforge.BuildInfo.build_date(),
@@ -148,6 +150,8 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
        timeline_open: false,
        timeline_rid: "",
        timeline_nodes: [],
+       timeline_replay: nil,
+       captures: [],
        tracked_services: tracked_services,
        visualizable_extensions: visualizable_extensions,
        cmd_palette_open: false,
@@ -837,8 +841,53 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
   def handle_event("open_timeline", params, socket) do
     rid = Map.get(params, "rid", "") |> to_string()
-    socket = assign(socket, timeline_open: true, timeline_rid: rid)
+
+    socket =
+      assign(socket,
+        timeline_open: true,
+        timeline_rid: rid,
+        timeline_replay: nil,
+        captures: fetch_captures()
+      )
+
     {:noreply, if(rid == "", do: socket, else: load_timeline(socket))}
+  end
+
+  def handle_event("capture_player", %{"player" => player}, socket) do
+    {:noreply,
+     socket
+     |> capture("player", player, 60)
+     |> show_toast(:info, "Capturing #{player} for 60s: full payloads are kept in memory.")
+     |> assign(:captures, fetch_captures())}
+  end
+
+  def handle_event("capture_timeline", %{"kind" => kind, "value" => value, "seconds" => seconds}, socket) do
+    {:noreply, assign(capture(socket, kind, value, seconds), :captures, fetch_captures())}
+  end
+
+  def handle_event("stop_capture", %{"kind" => kind} = params, socket) do
+    value = Map.get(params, "value")
+
+    _ =
+      ActionDispatcher.dispatch_internal(:observability, :stop_capture, %{
+        kind: kind,
+        value: value
+      })
+
+    {:noreply, assign(socket, :captures, fetch_captures())}
+  end
+
+  def handle_event("replay_action", %{"id" => id}, socket) do
+    result =
+      case ActionDispatcher.dispatch_internal(:observability, :replay, %{id: id}) do
+        {:ok, %{source_rid: source, rid: rid, status: status}} ->
+          %{source_rid: source, rid: rid, status: status}
+
+        {:error, reason} ->
+          %{error: inspect(reason)}
+      end
+
+    {:noreply, assign(socket, :timeline_replay, result)}
   end
 
   def handle_event("close_timeline", _params, socket) do
@@ -1213,7 +1262,13 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         socket.assigns.tracked_services
       )
 
-    {:noreply, assign(socket, overview: overview, telemetry: telemetry, health: fetch_health())}
+    {:noreply,
+     assign(socket,
+       overview: overview,
+       telemetry: telemetry,
+       health: fetch_health(),
+       captures: fetch_captures()
+     )}
   end
 
   def handle_info({:clear_toast, kind}, socket) do
@@ -1512,6 +1567,18 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
   defp us_to_ms(nil), do: nil
   defp us_to_ms(us) when is_integer(us), do: Float.round(us / 1000, 1)
+
+  defp capture(socket, kind, value, seconds) do
+    _ = ActionDispatcher.dispatch_internal(:observability, :capture, %{kind: kind, value: value, seconds: seconds})
+    socket
+  end
+
+  defp fetch_captures do
+    case ActionDispatcher.dispatch_internal(:observability, :captures, %{}) do
+      {:ok, %{captures: captures}} -> captures
+      _ -> []
+    end
+  end
 
   defp fetch_health do
     case ActionDispatcher.dispatch_internal(:observability, :health, %{limit: 25}) do
@@ -3149,8 +3216,13 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         open={@timeline_open}
         rid={@timeline_rid}
         nodes={@timeline_nodes}
+        captures={@captures}
+        replay={@timeline_replay}
         on_close="close_timeline"
         on_search="search_timeline"
+        on_capture="capture_timeline"
+        on_stop_capture="stop_capture"
+        on_replay="replay_action"
       />
 
       <.events_modal

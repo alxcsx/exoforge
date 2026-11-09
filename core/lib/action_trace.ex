@@ -25,6 +25,12 @@ defmodule Exoforge.ActionTrace do
   @per_action 30
   @max_samples 2_000
 
+  # A captured request keeps its full payload here, unmasked, for replay. Bounded hard: fifty
+  # entries, 64 KB each, memory only.
+  @deep :exo_action_trace_deep
+  @deep_max 50
+  @deep_max_bytes 65_536
+
   @doc "Starts recording. Idempotent; called by an observer (the Studio), not by the kernel."
   def enable do
     unless enabled?() do
@@ -41,7 +47,7 @@ defmodule Exoforge.ActionTrace do
   Records one invocation. Never raises into the caller: a trace is diagnostics, not a dependency.
   """
   def record(service, action, caller, payload, result, duration_ms, internal? \\ false, kind \\ :action) do
-    if enabled?() do
+    if enabled?() or Exoforge.RequestContext.capturing?() do
       init_tables()
 
       now = System.system_time(:millisecond)
@@ -53,7 +59,10 @@ defmodule Exoforge.ActionTrace do
       incr({minute, key, caller, :count})
       if status != "ok", do: incr({minute, key, caller, :error})
 
+      seq = System.unique_integer([:monotonic])
+
       sample = %{
+        id: seq,
         at: now,
         key: key,
         kind: kind,
@@ -67,10 +76,13 @@ defmodule Exoforge.ActionTrace do
         response: preview_result(result)
       }
 
-      seq = System.unique_integer([:monotonic])
       :ets.insert(@samples, {seq, sample})
       remember({{:queue, key}, @per_action}, seq)
       remember({:queue_all, @max_samples}, seq)
+
+      if Exoforge.RequestContext.capturing?() do
+        keep_deep(sample, service, action, caller, internal?, payload)
+      end
 
       # A failure is kept twice: once in the action's recent samples, once in its error bucket. Each
       # queue then owns the rows it evicts, so a burst of successes cannot erase the failures the
@@ -151,8 +163,26 @@ defmodule Exoforge.ActionTrace do
     init_tables()
     :ets.delete_all_objects(@samples)
     :ets.delete_all_objects(@buckets)
+    :ets.delete_all_objects(@deep)
     :ok
   end
+
+  @doc """
+  The full request of a captured sample, for replay, or `%{too_large: bytes}` when it was bigger
+  than the ring allows. `nil` when the sample was not captured.
+  """
+  def deep_sample(id) when is_integer(id) do
+    init_tables()
+
+    case :ets.lookup(@deep, id) do
+      [{^id, entry}] -> entry
+      [] -> nil
+    end
+  rescue
+    _ -> nil
+  end
+
+  def deep_sample(_id), do: nil
 
   @doc "The newest retained samples across every action, newest first."
   def recent_samples(limit \\ 100) do
@@ -196,6 +226,41 @@ defmodule Exoforge.ActionTrace do
   defp init_tables do
     ensure_table(@samples, [:ordered_set, :public, :named_table, read_concurrency: true])
     ensure_table(@buckets, [:set, :public, :named_table, write_concurrency: true])
+    ensure_table(@deep, [:ordered_set, :public, :named_table, read_concurrency: true])
+  end
+
+  defp keep_deep(sample, service, action, caller, internal?, payload) do
+    size = :erlang.external_size(payload)
+
+    entry =
+      if size > @deep_max_bytes do
+        %{id: sample.id, rid: sample.rid, at: sample.at, too_large: size}
+      else
+        %{
+          id: sample.id,
+          rid: sample.rid,
+          at: sample.at,
+          service: to_string(service),
+          action: to_string(action),
+          caller: caller,
+          internal: internal?,
+          payload: payload
+        }
+      end
+
+    :ets.insert(@deep, {sample.id, entry})
+    trim_deep()
+  end
+
+  defp trim_deep do
+    if :ets.info(@deep, :size) > @deep_max do
+      case :ets.first(@deep) do
+        :"$end_of_table" -> :ok
+        oldest -> :ets.delete(@deep, oldest)
+      end
+    end
+  rescue
+    _ -> :ok
   end
 
   defp ensure_table(name, opts) do

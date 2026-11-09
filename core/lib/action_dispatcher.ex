@@ -44,12 +44,17 @@ defmodule Exoforge.ActionDispatcher do
       |> Keyword.put(:rid, rid)
       |> Keyword.put(:internal, internal?)
 
+    # A capture is inherited by the whole chain; only the top-level dispatch has to match a rule.
+    capture =
+      (parent && parent.capture) ||
+        Exoforge.DebugCapture.capture_for(caller, "#{service}.#{action}")
+
     previous =
       Exoforge.RequestContext.enter(%{
         origin: caller,
         rid: rid,
         depth: if(parent, do: parent.depth + 1, else: 0),
-        capture: (parent && parent.capture) || :off
+        capture: capture
       })
 
     try do

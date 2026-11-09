@@ -140,6 +140,41 @@ defmodule Exoforge.ActionTraceTest do
     assert sample.rid == "r_capture"
   end
 
+  test "a captured dispatch keeps the full request for replay, while the sample stays masked" do
+    Exoforge.DebugCapture.capture("player", "alice", 60)
+
+    assert {:error, :service_not_found} =
+             ActionDispatcher.dispatch(:nobody, :nothing, %{"password" => "hunter2", "x" => 1},
+               caller: "alice",
+               rid: "r_deep"
+             )
+
+    Exoforge.DebugCapture.stop_all()
+
+    assert %{samples: [sample]} = ActionTrace.samples("nobody.nothing")
+    assert sample.rid == "r_deep"
+    assert sample.request["password"] == "•••"
+
+    assert %{payload: %{"password" => "hunter2", "x" => 1}, service: "nobody", action: "nothing"} =
+             ActionTrace.deep_sample(sample.id)
+  end
+
+  test "a captured payload over the ring's cap is recorded as too large to replay" do
+    Exoforge.DebugCapture.capture("global", "*", 60)
+
+    assert {:error, :service_not_found} =
+             ActionDispatcher.dispatch(:nobody, :nothing, %{"blob" => String.duplicate("x", 70_000)},
+               caller: "alice",
+               rid: "r_big"
+             )
+
+    Exoforge.DebugCapture.stop_all()
+
+    assert %{samples: [sample]} = ActionTrace.samples("nobody.nothing")
+    assert %{too_large: size} = ActionTrace.deep_sample(sample.id)
+    assert size > 65_536
+  end
+
   test "for_rid returns only the samples of one request" do
     alice = %{origin: "alice", rid: "r_one", depth: 0, capture: :off}
     previous = Exoforge.RequestContext.enter(alice)

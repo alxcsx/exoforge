@@ -684,6 +684,7 @@ defmodule Exoforge.DashboardLiveViewTest do
       {:ok, view, html} = live(conn, "/tab/exoforge_std_auth?focus=user:#{viewer}")
 
       assert html =~ "Events"
+      assert html =~ "Capture 60s"
 
       html =
         view
@@ -1360,10 +1361,18 @@ defmodule Exoforge.DashboardLiveViewTest do
 
       {:ok, view, _html} = live(conn, "/")
 
-      # Mounting enables the trace; a dispatch after that carries its rid into the trace and the
-      # failure group, which is what the timeline reads.
+      # Mounting enables the trace; a captured dispatch keeps its full request, so the timeline
+      # offers a replay as well as the trace row.
+      Exoforge.DebugCapture.capture("player", "debugger_test", 60)
+      on_exit(fn -> Exoforge.DebugCapture.stop_all() end)
+
       assert {:error, :service_not_found} =
-               Exoforge.ActionDispatcher.dispatch(:ghost_timeline, :do_thing, %{}, rid: "r_ui_1")
+               Exoforge.ActionDispatcher.dispatch(:ghost_timeline, :do_thing, %{},
+                 caller: "debugger_test",
+                 rid: "r_ui_1"
+               )
+
+      Exoforge.DebugCapture.stop_all()
 
       html = render_click(view, "open_timeline", %{"rid" => "r_ui_1"})
 
@@ -1371,6 +1380,12 @@ defmodule Exoforge.DashboardLiveViewTest do
       assert html =~ "ghost_timeline.do_thing"
       assert html =~ "ACTION"
       assert html =~ "r_ui_1"
+      assert html =~ "Deep capture"
+      assert html =~ "↻ Replay"
+
+      [sample] = Enum.filter(Exoforge.ActionTrace.recent_samples(20), &(&1.rid == "r_ui_1"))
+      html = render_click(view, "replay_action", %{"id" => to_string(sample.id)})
+      assert html =~ "Replayed from r_ui_1"
     end
 
     test "the error mode groups failures and shows the request id of the last one" do

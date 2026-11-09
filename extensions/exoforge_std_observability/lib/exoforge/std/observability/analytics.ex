@@ -175,6 +175,7 @@ defmodule Exoforge.Std.Observability.Analytics do
 
   defp trace_node(sample) do
     %{
+      id: Map.get(sample, :id),
       kind: Map.get(sample, :kind) || :action,
       at: sample.at,
       depth: Map.get(sample, :depth) || 0,

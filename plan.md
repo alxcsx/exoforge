@@ -8,7 +8,7 @@
 > **Benchmark**: 0.07 ms fanout to 50 event subscribers over `:pg`.
 
 Completed work is not kept here. It is in `git log`, which is the record that does not drift; this
-file is the invariants and what is next. Milestone identifiers (**M1**…**M43**) are historical and are
+file is the invariants and what is next. Milestone identifiers (**M1**…**M44**) are historical and are
 referenced from `Agents.MD`, `DX.md` and commit messages, so they stay in the table below and nowhere
 else.
 
@@ -76,6 +76,7 @@ extension_manager ─▶ (independent root)
 | **M37** | Unity SDK v0.1.30 & Extension DX Hardening — Standalone IDE solution launching (`<name>.sln`) bypassing Unity parent project evaluation; client API symmetry (`ExoServices.<Service>`); blank/minimal template scaffolding; enforced Unity player auth doctrine (`ExoforgeSDK.Auth`); cluster package version resolution & semantic version sorting in `file_bucket`; .NET 9+ SDK and runtime packs validation (`ExoforgeDotnetValidator`); global error logging (`ExoClient.OnError` -> `Debug.LogError`) and actionable `service_not_found` diagnostics |
 | **M38** | Extension Fault Isolation & Musl/Alpine RID Support (v0.1.31) — Dynamic musl/Alpine detection on cluster (`linux-musl-x64`) with `EXOFORGE_TARGET_RID` support; Unity Editor RID targeting with `linux-musl-x64` prewarming and default container targeting; supervisor fault isolation using `restart: :temporary` on extension supervisors, pre-handshake exit isolation, and crash registry tracking (`mark_crashed`) to prevent crash loop cascade to root supervisor |
 | **M39** | Studio Telemetry, Top Bar Centering & Ingress Hardening (v0.1.34) — Real-time metering pipeline feeding action throughput and non-zero error charts; centered Studio top bar with dynamic label omission and 4-item pin cap; 85vh live event stream modal with server-side syntax highlighting, payload folding, and automated error detection; unprivileged `ActionDispatcher.dispatch` deny-by-default (`[]`) with `dispatch_internal` for privileged orchestration; auth synthesis of env admin accounts in `list_users` ensuring visibility before database bootstrap |
+| **M44** | Capture on Demand & Replay — `Exoforge.DebugCapture` keeps expiring rules (player, action or global) in `persistent_term`; a matched top-level dispatch inherits `capture: :deep`, traces even when the global trace is off, and keeps the full request in a bounded in-memory ring (50 × 64 KB, too-large payloads marked, never persisted); `observability.replay` re-dispatches a captured request as its original caller under a new rid; the Studio timeline hosts the capture form, the countdown/stop list and a replay button per captured call, and the user drawer starts a 60-second capture for that account |
 | **M43** | Action Health & Percentiles — `Exoforge.Metering` records a log-scale latency histogram and reports p50/p95 per action; `observability.health` joins the 30-minute trace rates with those percentiles and composes a "needs attention" list (newest failures, slow actions, restarting extensions); the Overview throughput card renders that strip with a timeline link per failure, and the actions modal gains a p95 column |
 | **M42** | Event Retention, Rollups & Archive — the event store grows a day column, indexes and batched ingest; hourly rollups survive the raw rows; every day older than `EXOFORGE_EVENT_HOT_DAYS` (default 30) is exported to `events-YYYY-MM-DD.ndjson.gz`, catalogued in `event_archives`, and only then deleted (a failed export keeps the rows); `observability.events` pages the hot table and falls back to a capped archive scan for older ranges; the user inspector's Events tab reads that history with paging and an archive toggle; `auth.delete_user` purges the caller's hot events |
 | **M41** | Observability Extension & Request Timeline — `exoforge_std_observability` owns the cluster event store (moved out of the Studio) and the `observability` contract (`recent_events`, `error_groups`, `timeline`, `clear_events`); the Studio keeps its own live tail from the event bus and reads history through the service; the timeline drawer joins one request's calls, events, log lines and failure by rid, opened from a failure group, a trace sample, an event row or a pasted id; trace samples carry `kind` and a captured request keeps its queries and host calls |
@@ -629,7 +630,7 @@ flowchart TD
 
 ## 11. M40–M45: Live Debugging & Observability (Implementation Plan)
 
-Status: **M40–M43 landed** (request ids, error groups, observability extension, request timeline, event retention/archive, action health); M44–M45 planned. A review of the current analytics/troubleshooting surfaces
+Status: **M40–M44 landed** (request ids, error groups, observability extension, request timeline, event retention/archive, action health, capture/replay); M45 planned. A review of the current analytics/troubleshooting surfaces
 (`Exoforge.Metering`, `Exoforge.ActionTrace`, `RecentEvents`, `ExtensionLogs`, the Studio's six
 surfaces) found one missing spine and three missing views:
 
@@ -969,7 +970,7 @@ throughput card (failures with a timeline link, slow actions, restarting extensi
 actions modal shows p95 beside the average. The Unity Control Center read of `observability.health`
 is deferred (the contract exists; the editor has its Metrics tab).
 
-### 11.6 M44 — Capture on demand and replay
+### 11.6 M44 — Capture on demand and replay (Landed)
 
 - `core/lib/debug_capture.ex` (new, ETS + `:persistent_term`): rules
   `%{kind: :player | :action | :global, value, until_ms, payloads: boolean}`; `match?(origin)`.
@@ -985,6 +986,14 @@ is deferred (the contract exists; the editor has its Metrics tab).
 
 Acceptance: capture one player for a minute, see their failing call with its full request, replay
 it, and diff the two results.
+
+What landed, with two scoped deviations: rules live in `:persistent_term` rather than ETS (three
+O(1) reads on the dispatch path and no table to own), and there is one capture mode — `:deep`, the
+payload capture — so the planned `:errors` middle step is not implemented. Replay dispatches with
+the original caller and `caller_scopes: :internal` under a new rid and returns both rids; the
+planned `replayed_from` marker on the new trace sample was not added, the response pair says the
+same thing. Payloads above 64 KB are recorded as `too_large` and refused for replay. The capture
+controls live in the timeline modal and the user drawer; the action modal has none.
 
 ### 11.7 M45 — SDK and Unity editor integration
 

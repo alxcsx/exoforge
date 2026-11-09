@@ -85,6 +85,42 @@ defmodule Exoforge.Std.Services do
       scope("studio")
     end
 
+    @doc "Starts a deep capture for one player, one action, or the whole cluster, for a few minutes."
+    action :capture do
+      params(
+        kind: [type: :string, optional: true],
+        value: [type: :string, optional: true],
+        seconds: [type: :integer, optional: true]
+      )
+
+      returns(capture: :map)
+      scope("studio")
+    end
+
+    @doc "The active deep captures, with their remaining seconds."
+    action :captures do
+      returns(captures: [:map])
+      scope("studio")
+    end
+
+    @doc "Stops one capture (or every capture when kind is global and the value is blank)."
+    action :stop_capture do
+      params(
+        kind: [type: :string, optional: true],
+        value: [type: :string, optional: true]
+      )
+
+      returns(status: :string)
+      scope("studio")
+    end
+
+    @doc "Replays a captured invocation's full request as the caller who made it."
+    action :replay do
+      params(id: :term)
+      returns(source_rid: :string, rid: :string, status: :map, data: :term)
+      scope("studio")
+    end
+
     @doc "Per-action health: 30-minute rates, lifetime p50/p95, and what needs attention."
     action :health do
       params(limit: [type: :integer, optional: true])

@@ -37,6 +37,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
        user_events_pages: 1,
        user_events_capped: false,
        user_events_archive: false,
+       capture_notice: nil,
        register_form: %{
          "user_id" => "",
          "player_id" => "",
@@ -385,6 +386,29 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
     {:noreply, load_user_events(socket)}
   end
 
+  # A capture is a debugging session, not a setting: sixty seconds of full payloads in memory.
+  def handle_event("capture_player", %{"player" => player}, socket) do
+    _ =
+      ActionDispatcher.dispatch_internal(:observability, :capture, %{
+        kind: "player",
+        value: player,
+        seconds: 60
+      })
+
+    {:noreply,
+     assign(socket, :capture_notice, "Capturing #{player} for 60s — full payloads stay in memory.")}
+  end
+
+  def handle_event("stop_capture_player", %{"player" => player}, socket) do
+    _ =
+      ActionDispatcher.dispatch_internal(:observability, :stop_capture, %{
+        kind: "player",
+        value: player
+      })
+
+    {:noreply, assign(socket, :capture_notice, "Capture stopped.")}
+  end
+
   @impl true
   def handle_event("close_focus", _params, socket) do
     tab = (socket.assigns[:extension] && socket.assigns.extension.id) || "exoforge_std_auth"
@@ -478,6 +502,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
           socket
           |> assign(:selected_user, user)
           |> assign(:user_inspect_tab, "overview")
+          |> assign(:capture_notice, nil)
           |> assign(:user_inspect_hooks, Exoforge.UIHookRegistry.list_hooks(:user_inspect))
       end
     end
@@ -1224,6 +1249,31 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                 </p>
               </div>
             <% end %>
+
+            <div class="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                phx-click="capture_player"
+                phx-value-player={@selected_user["player_id"]}
+                phx-target={@myself}
+                class="px-2.5 py-1.5 text-xs font-bold text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-200 rounded-xl transition-colors"
+                title="Keep this account's full action payloads in memory for 60 seconds"
+              >
+                🔬 Capture 60s
+              </button>
+              <button
+                type="button"
+                phx-click="stop_capture_player"
+                phx-value-player={@selected_user["player_id"]}
+                phx-target={@myself}
+                class="px-2.5 py-1.5 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-xl transition-colors"
+              >
+                Stop capture
+              </button>
+              <%= if @capture_notice do %>
+                <span class="text-[11px] text-gray-500"><%= @capture_notice %></span>
+              <% end %>
+            </div>
 
             <div>
               <div class="flex items-center justify-between mb-2">

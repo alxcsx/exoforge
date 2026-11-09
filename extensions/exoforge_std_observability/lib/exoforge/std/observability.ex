@@ -26,6 +26,7 @@ defmodule Exoforge.Std.Observability do
     dashboard_view: nil
   }
 
+  alias Exoforge.ActionDispatcher
   alias Exoforge.Std.Observability.Analytics
   alias Exoforge.Std.Observability.Events
 
@@ -62,6 +63,66 @@ defmodule Exoforge.Std.Observability do
   end
 
   @impl true
+  defaction capture(payload), scope: Exoforge.Auth.Roles.studio() do
+    rule =
+      Exoforge.DebugCapture.capture(
+        value(payload, :kind) || "player",
+        value(payload, :value) || "*",
+        int(payload, :seconds, 60)
+      )
+
+    {:ok, %{capture: rule}}
+  end
+
+  @impl true
+  defaction captures, scope: Exoforge.Auth.Roles.studio() do
+    {:ok, %{captures: Exoforge.DebugCapture.list()}}
+  end
+
+  @impl true
+  defaction stop_capture(payload), scope: Exoforge.Auth.Roles.studio() do
+    kind = value(payload, :kind) || "player"
+    value = value(payload, :value)
+
+    if kind == "global" and value in [nil, "", "*"] do
+      Exoforge.DebugCapture.stop_all()
+    else
+      Exoforge.DebugCapture.stop(kind, value)
+    end
+
+    {:ok, %{status: "stopped"}}
+  end
+
+  @impl true
+  defaction replay(payload), scope: Exoforge.Auth.Roles.studio() do
+    case Exoforge.ActionTrace.deep_sample(int(payload, :id, 0)) do
+      %{payload: request, service: service, action: action, caller: caller} = sample ->
+        rid = Exoforge.RequestContext.new_rid()
+
+        result =
+          ActionDispatcher.dispatch(service, action, request,
+            caller: caller,
+            caller_scopes: :internal,
+            rid: rid
+          )
+
+        {:ok,
+         %{
+           source_rid: sample.rid,
+           rid: rid,
+           status: replay_status(result),
+           data: result
+         }}
+
+      %{too_large: size} ->
+        {:error, {:payload_too_large, size}}
+
+      nil ->
+        {:error, :not_captured}
+    end
+  end
+
+  @impl true
   defaction health(payload), scope: Exoforge.Auth.Roles.studio() do
     {:ok, Analytics.health(int(payload, :limit, 25))}
   end
@@ -90,6 +151,10 @@ defmodule Exoforge.Std.Observability do
     do: Map.get(payload, key) || Map.get(payload, to_string(key))
 
   defp value(_payload, _key), do: nil
+
+  defp replay_status({:ok, data}), do: %{status: "ok", data: data}
+  defp replay_status(:ok), do: %{status: "ok"}
+  defp replay_status({:error, reason}), do: %{status: "error", error: inspect(reason)}
 
   defp int(payload, key, default) do
     case value(payload, key) do
