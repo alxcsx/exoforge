@@ -170,6 +170,24 @@ defmodule Exoforge.Std.ObservabilityTest do
     assert row["n"] == 1
   end
 
+  test "health reports 30-minute rates, percentiles and an attention list" do
+    assert {:error, :service_not_found} =
+             ActionDispatcher.dispatch(:ghost_slow, :do_thing, %{}, caller: "alice")
+
+    assert {:ok, %{rows: rows, attention: attention}} =
+             ActionDispatcher.dispatch_internal(:observability, :health, %{limit: 10})
+
+    row = Enum.find(rows, &(&1.action == "do_thing"))
+    assert row
+    assert row.calls_30m >= 1
+    assert row.errors_30m >= 1
+    assert row.error_rate > 0
+    assert is_float(row.p50_ms)
+    assert row.p95_ms >= row.p50_ms
+
+    assert Enum.any?(attention, &(&1.kind == "error" and &1.label =~ "ghost_slow"))
+  end
+
   test "retention archives an old day to gzip, then drops the rows, and the archive answers queries" do
     dir = Path.join(System.tmp_dir!(), "exo-archive-#{System.unique_integer([:positive])}")
     System.put_env("EXOFORGE_EVENT_ARCHIVE_DIR", dir)

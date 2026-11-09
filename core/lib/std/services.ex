@@ -85,6 +85,13 @@ defmodule Exoforge.Std.Services do
       scope("studio")
     end
 
+    @doc "Per-action health: 30-minute rates, lifetime p50/p95, and what needs attention."
+    action :health do
+      params(limit: [type: :integer, optional: true])
+      returns(rows: [:map], attention: [:map])
+      scope("studio")
+    end
+
     @doc "One page of stored events, filtered; ranges older than the hot window come from the archive."
     action :events do
       params(

@@ -22,6 +22,21 @@ defmodule Exoforge.MeteringTest do
              usage.actions
   end
 
+  test "reports p50 and p95 from the latency histogram" do
+    id = plugin_id()
+
+    # Ninety fast calls and ten slow ones: the median is in the fast bucket, p95 in the slow one.
+    for _ <- 1..90, do: Metering.record_invocation(id, :read, 2_000, :ok, 0, 0)
+    for _ <- 1..10, do: Metering.record_invocation(id, :read, 900_000, :ok, 0, 0)
+
+    assert %{plugins: [usage]} = Metering.snapshot(id)
+    assert [action] = usage.actions
+
+    assert action.p50_us == 2_500
+    assert action.p95_us == 1_000_000
+    assert action.p95_us > action.p50_us
+  end
+
   test "counts events, host calls, starts and restarts" do
     id = plugin_id()
 

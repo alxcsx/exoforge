@@ -16,6 +16,30 @@ defmodule Exoforge.Metering do
 
   @table :exo_metering
 
+  # Log-scale latency buckets (µs, upper bounds). A histogram is what makes p50/p95 possible from
+  # counters; the last bucket is a ceiling, so >30 s is reported as 30 s.
+  @latency_buckets_us [
+    100,
+    250,
+    500,
+    1_000,
+    2_500,
+    5_000,
+    10_000,
+    25_000,
+    50_000,
+    100_000,
+    250_000,
+    500_000,
+    1_000_000,
+    2_500_000,
+    5_000_000,
+    10_000_000,
+    30_000_000
+  ]
+
+  @latency_top length(@latency_buckets_us) - 1
+
   @doc "Records one action call, with the wall time and wire bytes the runner observed."
   def record_invocation(plugin_id, action, duration_us, status, bytes_in, bytes_out) do
     id = to_string(plugin_id)
@@ -24,6 +48,7 @@ defmodule Exoforge.Metering do
     incr({:action, id, action, :invocations}, 1)
     if status != :ok, do: incr({:action, id, action, :errors}, 1)
     incr({:action, id, action, :wall_us}, duration_us)
+    incr({:action, id, action, :lat, latency_bucket(duration_us)}, 1)
     incr({:action, id, action, :bytes_in}, bytes_in)
     incr({:action, id, action, :bytes_out}, bytes_out)
     :ok
@@ -189,12 +214,16 @@ defmodule Exoforge.Metering do
 
     actions =
       rows
-      |> Enum.filter(&match?({{:action, ^id, _action, _field}, _value}, &1))
-      |> Enum.group_by(
-        fn {{:action, _id, action, _field}, _value} -> action end,
-        fn {key, value} -> {elem(key, 3), value} end
-      )
-      |> Enum.map(fn {action, fields} -> action_usage(action, Map.new(fields)) end)
+      |> Enum.filter(fn
+        {{:action, ^id, _action, _field}, _value} -> true
+        {{:action, ^id, _action, :lat, _bucket}, _value} -> true
+        _ -> false
+      end)
+      |> Enum.group_by(fn
+        {{:action, _id, action, :lat, _bucket}, _value} -> action
+        {{:action, _id, action, _field}, _value} -> action
+      end)
+      |> Enum.map(fn {action, rows} -> action_usage(action, rows) end)
       |> Enum.sort_by(& &1.action)
 
     events = for {{:event, ^id, event, :count}, count} <- rows, do: %{event: event, count: count}
@@ -220,7 +249,14 @@ defmodule Exoforge.Metering do
     }
   end
 
-  defp action_usage(action, fields) do
+  defp action_usage(action, rows) do
+    fields = for {{:action, _id, _action, field}, value} <- rows, into: %{}, do: {field, value}
+
+    latency =
+      for {{:action, _id, _action, :lat, bucket}, count} <- rows, into: %{} do
+        {bucket, count}
+      end
+
     invocations = Map.get(fields, :invocations, 0)
     wall_us = Map.get(fields, :wall_us, 0)
 
@@ -230,9 +266,44 @@ defmodule Exoforge.Metering do
       errors: Map.get(fields, :errors, 0),
       wall_us: wall_us,
       avg_wall_us: if(invocations > 0, do: div(wall_us, invocations), else: 0),
+      p50_us: percentile(latency, 0.50),
+      p95_us: percentile(latency, 0.95),
       bytes_in: Map.get(fields, :bytes_in, 0),
       bytes_out: Map.get(fields, :bytes_out, 0)
     }
+  end
+
+  defp latency_bucket(us) when is_integer(us) do
+    Enum.find_index(@latency_buckets_us, &(us <= &1)) || @latency_top
+  end
+
+  defp latency_bucket(_us), do: @latency_top
+
+  # The upper edge of the bucket the percentile falls in: a small over-estimate, never an
+  # under-estimate, which is the direction a latency budget wants.
+  defp percentile(latency, pct) do
+    total = latency |> Map.values() |> Enum.sum()
+
+    if total == 0 do
+      nil
+    else
+      target = max(ceil(total * pct), 1)
+
+      {_seen, value} =
+        latency
+        |> Enum.sort_by(fn {bucket, _count} -> bucket end)
+        |> Enum.reduce_while({0, nil}, fn {bucket, count}, {seen, value} ->
+          seen = seen + count
+
+          if seen >= target do
+            {:halt, {seen, Enum.at(@latency_buckets_us, bucket, List.last(@latency_buckets_us))}}
+          else
+            {:cont, {seen, value}}
+          end
+        end)
+
+      value
+    end
   end
 
   defp incr(key, amount) do

@@ -62,6 +62,11 @@ defmodule Exoforge.Std.Observability do
   end
 
   @impl true
+  defaction health(payload), scope: Exoforge.Auth.Roles.studio() do
+    {:ok, Analytics.health(int(payload, :limit, 25))}
+  end
+
+  @impl true
   defaction timeline(payload), scope: Exoforge.Auth.Roles.studio() do
     nodes =
       Analytics.timeline(%{

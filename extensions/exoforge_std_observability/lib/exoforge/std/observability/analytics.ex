@@ -14,6 +14,9 @@ defmodule Exoforge.Std.Observability.Analytics do
   @default_limit 200
   @recent_sample_limit 2_000
 
+  # What counts as "slow" in the attention strip: a p95 above this is worth a producer's time.
+  @slow_p95_ms 250
+
   @doc """
   Nodes for one request (`:rid`) or one caller's recent activity (`:player`), oldest first.
 
@@ -40,6 +43,119 @@ defmodule Exoforge.Std.Observability.Analytics do
         []
     end
   end
+
+  @doc """
+  Per-action health: 30-minute rate and error rate from the trace, lifetime p50/p95 from the
+  metering histogram, and a short "needs attention" list (newest failures, slow actions, restarting
+  extensions).
+  """
+  def health(limit \\ 25) do
+    snapshot = Exoforge.Metering.snapshot()
+    metered = metered_lookup(snapshot)
+
+    rows =
+      window_counts()
+      |> Enum.map(fn {{service, action}, {calls, errors}} ->
+        stats = Map.get(metered, {normalize_service(service), action}, %{})
+
+        %{
+          service: service,
+          action: action,
+          calls_30m: calls,
+          errors_30m: errors,
+          error_rate: if(calls > 0, do: Float.round(errors / calls * 100, 1), else: 0.0),
+          p50_ms: us_to_ms(Map.get(stats, :p50_us)),
+          p95_ms: us_to_ms(Map.get(stats, :p95_us)),
+          invocations: Map.get(stats, :invocations, 0)
+        }
+      end)
+      |> Enum.sort_by(fn row ->
+        {-row.errors_30m, -(row.p95_ms || 0), row.service, row.action}
+      end)
+      |> Enum.take(max(limit, 1))
+
+    %{rows: rows, attention: attention(rows, snapshot)}
+  end
+
+  # Trace keys are "service.action" as dispatched; metering keys actions by extension id. One
+  # canonical service name makes them meet.
+  defp window_counts do
+    Exoforge.ActionTrace.snapshot().buckets
+    |> Enum.reduce(%{}, fn {_minute, key, _caller, kind, n}, acc ->
+      {service, action} = split_key(key)
+      {calls, errors} = Map.get(acc, {service, action}, {0, 0})
+
+      case kind do
+        :error -> Map.put(acc, {service, action}, {calls, errors + n})
+        _ -> Map.put(acc, {service, action}, {calls + n, errors})
+      end
+    end)
+  end
+
+  defp metered_lookup(snapshot) do
+    snapshot
+    |> Map.get(:actions, [])
+    |> Enum.reduce(%{}, fn action, acc ->
+      Map.put(acc, {normalize_service(action.service), action.action}, action)
+    end)
+  end
+
+  defp attention(rows, snapshot) do
+    slow =
+      rows
+      |> Enum.filter(fn row -> (row.p95_ms || 0) >= @slow_p95_ms end)
+      |> Enum.take(2)
+      |> Enum.map(fn row ->
+        %{
+          kind: "latency",
+          label: "#{normalize_service(row.service)}.#{row.action}",
+          detail: "p95 #{row.p95_ms}ms over #{row.invocations} calls"
+        }
+      end)
+
+    restarted =
+      snapshot
+      |> Map.get(:plugins, [])
+      |> Enum.filter(fn plugin -> Map.get(plugin.plugin, :restarts, 0) > 0 end)
+      |> Enum.take(2)
+      |> Enum.map(fn plugin ->
+        %{
+          kind: "extension",
+          label: to_string(plugin.plugin_id),
+          detail: "restarted #{plugin.plugin.restarts}×"
+        }
+      end)
+
+    errors =
+      Exoforge.ErrorGroups.list(%{}, 2)
+      |> Enum.map(fn group ->
+        %{
+          kind: "error",
+          label: "#{normalize_service(group.service)}.#{group.action}",
+          detail: "#{group.count}× #{group.reason}",
+          rid: group.rid
+        }
+      end)
+
+    (errors ++ slow ++ restarted) |> Enum.take(5)
+  end
+
+  defp normalize_service(service) do
+    service
+    |> to_string()
+    |> String.replace_prefix("exoforge_std_", "")
+    |> Exoforge.ExtensionRegistry.clean_service_name()
+  end
+
+  defp split_key(key) do
+    case String.split(to_string(key), ".") do
+      [single] -> {single, ""}
+      parts -> {parts |> Enum.drop(-1) |> Enum.join("."), List.last(parts)}
+    end
+  end
+
+  defp us_to_ms(nil), do: nil
+  defp us_to_ms(us) when is_integer(us), do: Float.round(us / 1000, 1)
 
   ## ---- nodes ----
 

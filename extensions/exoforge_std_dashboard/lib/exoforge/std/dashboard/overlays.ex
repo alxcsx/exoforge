@@ -1900,6 +1900,8 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             errors: errors,
             error_rate: err_rate,
             avg_ms: stats.avg_ms,
+            p50_ms: Map.get(stats, :p50_ms),
+            p95_ms: Map.get(stats, :p95_ms),
             window: Map.get(stats, :window, 0),
             window_errors: Map.get(stats, :window_errors, 0),
             samples: samples,
@@ -2252,6 +2254,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                       <th class="py-2.5 px-3 text-right">Invocations</th>
                       <th class="py-2.5 px-3 text-right">30m</th>
                       <th class="py-2.5 px-3 text-right">Avg</th>
+                      <th class="py-2.5 px-3 text-right">p95</th>
                       <th class="py-2.5 px-3 text-right">Errors</th>
                       <th class="py-2.5 px-3">Last Error</th>
                       <th class="py-2.5 px-3 text-right">Action</th>
@@ -2297,6 +2300,9 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                         <td class="py-2.5 px-3 text-right font-mono text-[11px] text-gray-500" title="Average server-side wall time per invocation">
                           <%= item.avg_ms %>ms
                         </td>
+                        <td class="py-2.5 px-3 text-right font-mono text-[11px] text-gray-500" title="95th percentile (lifetime, log-scale histogram)">
+                          <%= if item.p95_ms, do: "#{item.p95_ms}ms", else: "—" %>
+                        </td>
                         <td class={"py-2.5 px-3 text-right font-mono font-bold #{if item.errors > 0, do: "text-red-600", else: "text-gray-400"}"}>
                           <%= item.errors %>
                           <%= if item.error_rate > 0 do %>
@@ -2330,7 +2336,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                       <%= if @expansion && @expansion.key == item.key do %>
                         <% page = @expansion.result %>
                         <tr class="bg-gray-50/80">
-                          <td colspan="8" class="px-4 py-3 border-l-2 border-primary-400">
+                          <td colspan="9" class="px-4 py-3 border-l-2 border-primary-400">
                             <div class="flex flex-wrap items-center justify-between gap-2 pb-2">
                               <div class="flex items-center gap-1.5 p-1 bg-gray-200 rounded-xl">
                                 <button

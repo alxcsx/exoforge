@@ -111,6 +111,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     default_params = ActionForms.default_params(default_action)
     tracked_services = Exoforge.Std.Dashboard.Preferences.tracked_services(player_id)
     telemetry = fetch_telemetry_summary(overview, initial_events, "", tracked_services)
+    health = fetch_health()
 
     {:ok,
      assign(socket,
@@ -122,6 +123,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
        max_pinned: @max_pinned,
        overview: overview,
        telemetry: telemetry,
+       health: health,
        build_version: overview[:version] || Exoforge.BuildInfo.version(),
        build_hash: overview[:commit_hash] || Exoforge.BuildInfo.commit_hash(),
        build_date: overview[:build_date] || Exoforge.BuildInfo.build_date(),
@@ -1211,7 +1213,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         socket.assigns.tracked_services
       )
 
-    {:noreply, assign(socket, overview: overview, telemetry: telemetry)}
+    {:noreply, assign(socket, overview: overview, telemetry: telemetry, health: fetch_health())}
   end
 
   def handle_info({:clear_toast, kind}, socket) do
@@ -1506,6 +1508,16 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     )
   rescue
     _ -> %{samples: [], total: 0, page: 1, pages: 1}
+  end
+
+  defp us_to_ms(nil), do: nil
+  defp us_to_ms(us) when is_integer(us), do: Float.round(us / 1000, 1)
+
+  defp fetch_health do
+    case ActionDispatcher.dispatch_internal(:observability, :health, %{limit: 25}) do
+      {:ok, %{rows: rows, attention: attention}} -> %{rows: rows, attention: attention}
+      _ -> %{rows: [], attention: []}
+    end
   end
 
   defp recompute_telemetry(socket) do
@@ -1867,6 +1879,8 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
           {key,
            %{
              avg_ms: Float.round(Map.get(act, :avg_wall_us, 0) / 1000, 1),
+             p50_ms: us_to_ms(Map.get(act, :p50_us)),
+             p95_ms: us_to_ms(Map.get(act, :p95_us)),
              window: count,
              window_errors: errors
            }}
@@ -2411,6 +2425,40 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                         <% end %>
                       </div>
                     </div>
+
+                    <!-- Needs attention: the two or three rows worth a producer's time -->
+                    <%= if @health.attention != [] do %>
+                      <div class="space-y-1.5 pt-2 border-t border-gray-100">
+                        <div class="text-[10px] font-bold uppercase tracking-wider text-amber-700 flex items-center gap-1.5">
+                          <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                          <span>Needs attention</span>
+                        </div>
+                        <%= for item <- @health.attention do %>
+                          <div class="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-amber-50/70 border border-amber-200/70 text-[11px]">
+                            <div class="flex items-center gap-2 min-w-0">
+                              <span><%= case item.kind do
+                                "extension" -> "🧩"
+                                "error" -> "⚠️"
+                                _ -> "🐢"
+                              end %></span>
+                              <span class="font-mono font-bold text-gray-900 truncate"><%= item.label %></span>
+                              <span class="text-gray-500 truncate"><%= item.detail %></span>
+                            </div>
+                            <%= if item[:rid] do %>
+                              <button
+                                type="button"
+                                phx-click="open_timeline"
+                                phx-value-rid={item.rid}
+                                class="px-1.5 py-0.5 rounded bg-white border border-primary-200 text-primary-700 text-[10px] font-bold hover:bg-primary-50 shrink-0"
+                                title="Open this failure's request timeline"
+                              >
+                                🔭
+                              </button>
+                            <% end %>
+                          </div>
+                        <% end %>
+                      </div>
+                    <% end %>
 
                     <!-- Recent Dispatched Event with Live Stream Event Count and "More" Modal Button -->
                     <div class="space-y-2 pt-2 border-t border-gray-100">

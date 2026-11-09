@@ -1288,6 +1288,7 @@ defmodule Exoforge.DashboardLiveViewTest do
       assert html =~ "dashboard_view.list_views"
       assert html =~ "error: :unauthorized"
       assert html =~ "Last Error"
+      assert html =~ "p95"
     end
 
     test "an action row unfolds into the invocation, masks credentials, and follows the caller filter" do
@@ -1332,6 +1333,24 @@ defmodule Exoforge.DashboardLiveViewTest do
       assert html =~ "1 tracked"
       html = render_click(view, "toggle_tracked_service", %{"service" => ""})
       assert html =~ "All services"
+    end
+
+    test "the overview surfaces needs-attention rows with a request timeline link" do
+      Exoforge.ErrorGroups.clear()
+      on_exit(fn -> Exoforge.ErrorGroups.clear() end)
+
+      assert {:error, :service_not_found} =
+               Exoforge.ActionDispatcher.dispatch(:attention_ghost, :boom, %{})
+
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{"admin_player_id" => "admin", "admin_scopes" => ["admin"]})
+
+      {:ok, _view, html} = live(conn, "/")
+
+      assert html =~ "Needs attention"
+      assert html =~ "attention_ghost.boom"
+      assert html =~ "phx-value-rid"
     end
 
     test "the request timeline joins an action and its failure by request id" do
