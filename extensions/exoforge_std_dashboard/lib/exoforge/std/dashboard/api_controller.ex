@@ -163,7 +163,10 @@ defmodule Exoforge.Std.Dashboard.ApiController do
         |> put_status(400)
         |> json(%{status: "error", error: "service and action are required"})
       else
-        case ActionDispatcher.dispatch(service, action, payload, caller_scopes: auth_ctx.scopes) do
+        case ActionDispatcher.dispatch(service, action, payload,
+               caller_scopes: auth_ctx.scopes,
+               caller: auth_ctx.player_id
+             ) do
           {:ok, result} ->
             json(conn, %{status: "ok", data: result, caller: auth_ctx.player_id})
 

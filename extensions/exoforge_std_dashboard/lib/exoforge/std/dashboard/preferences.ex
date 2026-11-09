@@ -60,6 +60,36 @@ defmodule Exoforge.Std.Dashboard.Preferences do
 
   def put_overview_order(_player_id, _order), do: :ok
 
+  @doc """
+  Services whose actions this account tracks in the console and the telemetry graphs.
+
+  An empty list means "all" — the default, and the only sane one for a fresh account, since
+  narrowing it hides traffic instead of reducing it.
+  """
+  def tracked_services(player_id) when is_binary(player_id) and player_id != "" do
+    case fetch_prefs(player_id) do
+      %{"tracked_services" => list} when is_list(list) -> Enum.map(list, &to_string/1)
+      _ -> []
+    end
+  end
+
+  def tracked_services(_player_id), do: []
+
+  @doc "Persists the tracked service list (empty means all)."
+  def put_tracked_services(player_id, services)
+      when is_binary(player_id) and player_id != "" and is_list(services) do
+    current =
+      case fetch_prefs(player_id) do
+        %{} = map -> map
+        list when is_list(list) -> %{"pinned" => Enum.map(list, &to_string/1)}
+        _ -> %{}
+      end
+
+    save_prefs(player_id, Map.put(current, "tracked_services", Enum.map(services, &to_string/1)))
+  end
+
+  def put_tracked_services(_player_id, _services), do: :ok
+
   defp fetch_prefs(player_id) do
     case store(:get, %{resource: @resource, id: player_id}) do
       {:ok, %{row: row}} ->

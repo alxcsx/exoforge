@@ -51,7 +51,10 @@ defmodule Exoforge.ActionDispatcher do
               end
 
             {:error, _} = param_err ->
-              Logger.warning("[Action] invalid parameters for #{inspect(resolved_mod)}.#{action}: #{inspect(param_err)}")
+              Logger.warning(
+                "[Action] invalid parameters for #{inspect(resolved_mod)}.#{action}: #{inspect(param_err)}"
+              )
+
               param_err
           end
 
@@ -61,12 +64,12 @@ defmodule Exoforge.ActionDispatcher do
       end
 
     latency_us = System.monotonic_time(:microsecond) - t0
-    record_action_telemetry(service_atom, action_atom, result, latency_us, resolved_mod, opts)
+    record_action_telemetry(service_atom, action_atom, payload, result, latency_us, resolved_mod, opts)
 
     result
   end
 
-  defp record_action_telemetry(service, action, result, latency_us, resolved_mod, opts) do
+  defp record_action_telemetry(service, action, payload, result, latency_us, resolved_mod, opts) do
     if service not in [:database, :lldb] do
       status_str =
         case result do
@@ -77,6 +80,14 @@ defmodule Exoforge.ActionDispatcher do
         end
 
       duration_ms = div(latency_us, 1000)
+
+      # 0. The console's debug window, when an observer asked for it (opt-in, memory only, bounded,
+      # payload previews masked). Kept off the event bus: payloads are not cluster events.
+      caller =
+        Keyword.get(opts, :caller) ||
+          if(Keyword.get(opts, :internal, false), do: "internal", else: "client")
+
+      Exoforge.ActionTrace.record(service, action, caller, payload, result, duration_ms)
 
       # 1. Broadcast action event over EventDispatcher (RecentEvents listens to :all on :global)
       try do
@@ -101,13 +112,16 @@ defmodule Exoforge.ActionDispatcher do
       try do
         manifest =
           case resolved_mod do
-            %Manifest{} = m -> m
+            %Manifest{} = m ->
+              m
+
             mod when is_atom(mod) and not is_nil(mod) ->
               if function_exported?(mod, :manifest, 0) do
                 mod.manifest()
               else
                 ExtensionRegistry.fetch_service(service) || ExtensionRegistry.fetch_manifest(service)
               end
+
             _ ->
               ExtensionRegistry.fetch_service(service) || ExtensionRegistry.fetch_manifest(service)
           end
@@ -121,6 +135,7 @@ defmodule Exoforge.ActionDispatcher do
 
         if manifest && is_binary(manifest.id) do
           level = if status_str == "ok", do: 1, else: 2
+
           Exoforge.ExtensionLogs.append(
             manifest.id,
             level,

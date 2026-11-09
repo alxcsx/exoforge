@@ -16,6 +16,10 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
   @max_pinned 4
 
+  # The action graphs window. One month of minutes would not fit a LiveView assign; half an hour is
+  # what a producer is looking at while they debug an action.
+  @trace_window_minutes 30
+
   @impl true
   def mount(params, session, socket) do
     logged_out? = session["logged_out"] == true or params["logged_out"] == "true"
@@ -54,6 +58,10 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       rescue
         _ -> :ok
       end
+
+      # The action graphs and the invocation inspector read from a debug trace that only exists
+      # once someone asks for it. A Studio that opens is that request; nothing is recorded otherwise.
+      Exoforge.ActionTrace.enable()
 
       # Automatically schedule dismissal for any inbound flash (e.g. login/action redirects)
       for kind <- [:info, :error] do
@@ -98,7 +106,8 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     default_action = if default_service, do: List.first(default_service.actions), else: nil
     default_action_name = if default_action, do: default_action.name, else: nil
     default_params = ActionForms.default_params(default_action)
-    telemetry = fetch_telemetry_summary(overview, initial_events)
+    tracked_services = Exoforge.Std.Dashboard.Preferences.tracked_services(player_id)
+    telemetry = fetch_telemetry_summary(overview, initial_events, "", tracked_services)
 
     {:ok,
      assign(socket,
@@ -129,6 +138,9 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
        actions_detail_modal: nil,
        actions_detail_search: "",
        actions_detail_tab: "all",
+       actions_detail_caller: "",
+       actions_detail_expanded: nil,
+       tracked_services: tracked_services,
        visualizable_extensions: visualizable_extensions,
        cmd_palette_open: false,
        cmd_query: "",
@@ -257,7 +269,8 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     end
   end
 
-  defp focused_extension(%{kind: kind, id: id}, extensions) when kind in ["ext", "extension", "plugin"] do
+  defp focused_extension(%{kind: kind, id: id}, extensions)
+       when kind in ["ext", "extension", "plugin"] do
     Enum.find(extensions, &(to_string(&1.id) == to_string(id)))
   end
 
@@ -409,7 +422,8 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         new_open = !socket.assigns.cmd_palette_open
         results = if new_open, do: default_cmd_results(socket), else: []
 
-        {:noreply, assign(socket, cmd_palette_open: new_open, cmd_query: "", cmd_results: results)}
+        {:noreply,
+         assign(socket, cmd_palette_open: new_open, cmd_query: "", cmd_results: results)}
 
       key in ["Escape", "Esc"] ->
         {:noreply,
@@ -545,7 +559,9 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     allow_creds = Map.get(params, "allow_credentials") in [true, "true", "on", "1"]
     clean_params = Map.put(params, "allow_credentials", allow_creds)
 
-    case ActionDispatcher.dispatch(:http, :set_cors_config, clean_params, caller_scopes: socket.assigns.current_scopes) do
+    case ActionDispatcher.dispatch(:http, :set_cors_config, clean_params,
+           caller_scopes: socket.assigns.current_scopes
+         ) do
       {:ok, updated} ->
         {:noreply,
          socket
@@ -701,7 +717,12 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
   def handle_event("set_guide_subpage", %{"subpage" => subpage}, socket) do
     path =
-      if socket.assigns[:current_tab] in [:exoforge_std_docs, "exoforge_std_docs", "guide", "docs"] do
+      if socket.assigns[:current_tab] in [
+           :exoforge_std_docs,
+           "exoforge_std_docs",
+           "guide",
+           "docs"
+         ] do
         if subpage == "flow", do: "/guide", else: "/guide?subpage=#{subpage}"
       else
         tab_str = to_string(socket.assigns[:current_tab] || "guide")
@@ -783,7 +804,8 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
      assign(socket,
        actions_detail_modal: mode,
        actions_detail_search: "",
-       actions_detail_tab: tab
+       actions_detail_tab: tab,
+       actions_detail_expanded: nil
      )}
   end
 
@@ -791,7 +813,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     {:noreply,
      socket
      |> push_event("close-popup", %{})
-     |> assign(actions_detail_modal: nil)}
+     |> assign(actions_detail_modal: nil, actions_detail_expanded: nil)}
   end
 
   def handle_event("search_actions_detail", %{"query" => query}, socket) do
@@ -800,6 +822,40 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
   def handle_event("filter_actions_detail_tab", %{"tab" => tab}, socket) do
     {:noreply, assign(socket, :actions_detail_tab, tab)}
+  end
+
+  def handle_event("filter_actions_detail_caller", %{"caller" => caller}, socket) do
+    {:noreply, recompute_telemetry(assign(socket, :actions_detail_caller, caller))}
+  end
+
+  # One row unfolds at a time: the table is a scan surface, not a tree.
+  def handle_event("toggle_action_detail", %{"key" => key}, socket) do
+    expanded = if socket.assigns.actions_detail_expanded == key, do: nil, else: key
+    {:noreply, assign(socket, :actions_detail_expanded, expanded)}
+  end
+
+  # What is tracked is a per-account preference: a producer debugging one service should not have
+  # to re-select it on every reconnect.
+  def handle_event("toggle_tracked_service", %{"service" => service}, socket) do
+    current = socket.assigns.tracked_services
+
+    updated =
+      cond do
+        service == "" -> []
+        service in current -> List.delete(current, service)
+        true -> [service | current]
+      end
+      |> Enum.sort()
+
+    Exoforge.Std.Dashboard.Preferences.put_tracked_services(socket.assigns.player_id, updated)
+
+    socket =
+      socket
+      |> assign(:tracked_services, updated)
+      |> recompute_telemetry()
+      |> refilter_events()
+
+    {:noreply, socket}
   end
 
   def handle_event("select_action_service", %{"service" => svc_name}, socket) do
@@ -819,7 +875,9 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   end
 
   def handle_event("select_action_name", %{"action" => act_name}, socket) do
-    svc = ActionForms.service(socket.assigns.action_catalog, socket.assigns.selected_action_service)
+    svc =
+      ActionForms.service(socket.assigns.action_catalog, socket.assigns.selected_action_service)
+
     act = ActionForms.action(svc, act_name)
     initial_params = ActionForms.default_params(act)
 
@@ -849,7 +907,9 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         _other, acc -> acc
       end)
 
-    svc = ActionForms.service(socket.assigns.action_catalog, socket.assigns.selected_action_service)
+    svc =
+      ActionForms.service(socket.assigns.action_catalog, socket.assigns.selected_action_service)
+
     act = ActionForms.action(svc, socket.assigns.selected_action_name)
 
     if svc && act do
@@ -861,7 +921,10 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
       result =
         try do
-          ActionDispatcher.dispatch(svc.name, act.name, payload, caller_scopes: scopes)
+          ActionDispatcher.dispatch(svc.name, act.name, payload,
+            caller_scopes: scopes,
+            caller: socket.assigns.player_id
+          )
         rescue
           e -> {:error, Exception.message(e)}
         catch
@@ -904,12 +967,19 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     end
   end
 
-  def handle_event("studio_dispatch", %{"service" => service, "action" => action} = params, socket) do
+  def handle_event(
+        "studio_dispatch",
+        %{"service" => service, "action" => action} = params,
+        socket
+      ) do
     payload = Map.get(params, "payload") || %{}
     scopes = socket.assigns.current_scopes
 
     result =
-      case ActionDispatcher.dispatch(service, action, payload, caller_scopes: scopes) do
+      case ActionDispatcher.dispatch(service, action, payload,
+             caller_scopes: scopes,
+             caller: socket.assigns.player_id
+           ) do
         {:ok, data} -> %{"status" => "ok", "data" => data}
         :ok -> %{"status" => "ok"}
         {:error, reason} -> %{"status" => "error", "error" => inspect(reason)}
@@ -968,7 +1038,12 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
   @impl true
   def handle_info({:studio_event, ev_item}, socket) do
-    if duplicate_event?(socket.assigns.activity_events, ev_item.event, ev_item.payload, ev_item[:id]) do
+    if duplicate_event?(
+         socket.assigns.activity_events,
+         ev_item.event,
+         ev_item.payload,
+         ev_item[:id]
+       ) do
       {:noreply, socket}
     else
       new_events =
@@ -978,17 +1053,32 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
           [ev_item | Enum.take(socket.assigns.activity_events, 99)]
         end
 
-      filtered = filter_activity_events(new_events, socket.assigns.event_filter_topic, socket.assigns.event_kind_filter)
-      telemetry = fetch_telemetry_summary(socket.assigns.overview, new_events)
+      filtered =
+        filter_activity_events(
+          new_events,
+          socket.assigns.event_filter_topic,
+          socket.assigns.event_kind_filter,
+          socket.assigns.tracked_services
+        )
+
+      telemetry =
+        fetch_telemetry_summary(
+          socket.assigns.overview,
+          new_events,
+          socket.assigns.actions_detail_caller,
+          socket.assigns.tracked_services
+        )
 
       event_str = to_string(ev_item.event)
       payload = ev_item[:payload] || %{}
       meta = (is_map(payload) && (payload[:metadata] || payload["metadata"])) || nil
 
       socket =
-        if event_str in ["project.metadata_updated", "system.project_metadata_updated"] and is_map(meta) do
+        if event_str in ["project.metadata_updated", "system.project_metadata_updated"] and
+             is_map(meta) do
           assign(socket,
-            project_name: meta["project_name"] || meta[:project_name] || socket.assigns.project_name,
+            project_name:
+              meta["project_name"] || meta[:project_name] || socket.assigns.project_name,
             studio_name: meta["studio_name"] || meta[:studio_name] || socket.assigns.studio_name,
             project_metadata: meta
           )
@@ -1029,8 +1119,18 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     # broadcast one event) per extension every five seconds for a list that changes only on
     # install or reload.
     plugins = fetch_plugins()
-    overview = Map.merge(socket.assigns.overview, %{plugins: plugins, plugins_count: length(plugins)})
-    telemetry = fetch_telemetry_summary(overview, socket.assigns.activity_events)
+
+    overview =
+      Map.merge(socket.assigns.overview, %{plugins: plugins, plugins_count: length(plugins)})
+
+    telemetry =
+      fetch_telemetry_summary(
+        overview,
+        socket.assigns.activity_events,
+        socket.assigns.actions_detail_caller,
+        socket.assigns.tracked_services
+      )
+
     {:noreply, assign(socket, overview: overview, telemetry: telemetry)}
   end
 
@@ -1091,7 +1191,8 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
           infinite_loop: Map.get(m, :infinite_loop, false),
           crashed_recently: Map.get(m, :crashed_recently, false),
           provides: Enum.map(m.provides || [], &ExtensionRegistry.service_alias_or_module/1),
-          dependencies: Enum.map(m.dependencies || [], &ExtensionRegistry.service_alias_or_module/1)
+          dependencies:
+            Enum.map(m.dependencies || [], &ExtensionRegistry.service_alias_or_module/1)
         }
       end)
     rescue
@@ -1263,22 +1364,41 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   defp humanize_plugin_name(ext_or_id), do: ExtensionPresenter.display_name(ext_or_id)
   defp tab_short_name(ext_or_id), do: ExtensionPresenter.display_name(ext_or_id)
 
-  defp refilter_events(socket) do
-    assign(socket,
-      :filtered_activity_events,
-      filter_activity_events(
+  defp recompute_telemetry(socket) do
+    assign(
+      socket,
+      :telemetry,
+      fetch_telemetry_summary(
+        socket.assigns.overview,
         socket.assigns.activity_events,
-        socket.assigns.event_filter_topic,
-        socket.assigns.event_kind_filter
+        socket.assigns.actions_detail_caller,
+        socket.assigns.tracked_services
       )
     )
   end
 
-  defp filter_activity_events(events, query, kind) do
+  defp refilter_events(socket) do
+    assign(
+      socket,
+      :filtered_activity_events,
+      filter_activity_events(
+        socket.assigns.activity_events,
+        socket.assigns.event_filter_topic,
+        socket.assigns.event_kind_filter,
+        socket.assigns.tracked_services
+      )
+    )
+  end
+
+  defp filter_activity_events(events, query, kind, tracked) do
     q = String.downcase(String.trim(query || ""))
 
     events
     |> Enum.filter(fn ev -> kind in ["all", nil, ""] or RecentEvents.kind(ev) == kind end)
+    |> Enum.filter(fn ev ->
+      tracked in [[], nil] or RecentEvents.kind(ev) != "action" or
+        action_service(trace_key(ev.event)) in tracked
+    end)
     |> Enum.filter(fn ev ->
       q == "" or String.contains?(String.downcase(ev.event), q) or
         String.contains?(String.downcase(to_string(ev.id)), q) or
@@ -1351,16 +1471,78 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     ExtensionPresenter.service_key(chosen[:name] || extension_id)
   end
 
-  defp event_act_key("action:" <> rest) do
-    case String.split(rest, ".", parts: 2) do
-      [service, action] -> "#{ExtensionPresenter.service_key(service)}.#{action}"
-      _ -> rest
+  defp event_act_key("action:" <> rest), do: normalize_action_key(rest)
+  defp event_act_key(other), do: to_string(other)
+
+  # "file_bucket.list_files", or a module-qualified service: the action is the last segment.
+  defp normalize_action_key(key) do
+    "#{action_service(key)}.#{action_name(key)}"
+  end
+
+  defp action_service(key) do
+    case String.split(to_string(key), ".") do
+      [_single] -> ExtensionPresenter.service_key(to_string(key))
+      parts -> parts |> Enum.drop(-1) |> Enum.join(".") |> ExtensionPresenter.service_key()
     end
   end
 
-  defp event_act_key(other), do: to_string(other)
+  defp action_name(key) do
+    key |> to_string() |> String.split(".") |> List.last()
+  end
 
-  defp fetch_telemetry_summary(overview, activity_events) do
+  defp minute_axis(minutes) do
+    now = div(System.system_time(:millisecond), 60_000) * 60_000
+    for i <- (minutes - 1)..0//-1, do: now - i * 60_000
+  end
+
+  # `index` is 0 for invocations and 1 for errors in the {count, errors} buckets.
+  # SVG polyline for a per-minute series. Shared geometry with the modal's expanded chart, scaled
+  # to each viewBox: x spans [x0, x1], y is `base` at zero and `base - height` at `max_val`.
+  defp series_points(counts, x0, x1, base, height, max_val) do
+    last = max(length(counts) - 1, 1)
+
+    counts
+    |> Enum.with_index()
+    |> Enum.map_join(" ", fn {count, index} ->
+      x = x0 + round(index * (x1 - x0) / last)
+      y = base - round(count / max(max_val, 1) * height)
+      "#{x},#{y}"
+    end)
+  end
+
+  defp build_series(keys, axis, window, index, palette, fallback_id) do
+    if keys == [] do
+      [
+        %{
+          id: fallback_id,
+          color: "#94a3b8",
+          counts: List.duplicate(0, length(axis)),
+          latest_count: 0,
+          total: 0
+        }
+      ]
+    else
+      Enum.map(keys, fn {key, _count, _errors} ->
+        counts =
+          Enum.map(axis, fn minute ->
+            window |> Map.get({key, minute}, {0, 0}) |> elem(index)
+          end)
+
+        %{
+          id: key,
+          color: color_for_name(key, palette),
+          counts: counts,
+          latest_count: List.last(counts) || 0,
+          total: Enum.sum(counts)
+        }
+      end)
+    end
+  end
+
+  defp trace_key("action:" <> rest), do: rest
+  defp trace_key(other), do: to_string(other)
+
+  defp fetch_telemetry_summary(overview, activity_events, caller, tracked) do
     snapshot =
       try do
         Exoforge.Metering.snapshot()
@@ -1369,10 +1551,12 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       end
 
     metered_plugins = Map.get(snapshot, :plugins, [])
+
     metered_actions =
       case Map.get(snapshot, :actions) do
         actions when is_list(actions) and actions != [] ->
           actions
+
         _ ->
           Enum.flat_map(metered_plugins, fn p ->
             Enum.map(p.actions, &Map.put(&1, :service, p.plugin_id))
@@ -1398,14 +1582,29 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         restarts = max(Map.get(p, :restarts, 0), Map.get(restarts_by_id, pid, 0))
         log_rate = Map.get(log_rates, pid, 0)
         infinite_loop? = Map.get(p, :infinite_loop, false) == true or log_rate >= 100
-        crashed? = Map.get(p, :crashed_recently, false) == true or restarts > 0 or Map.get(p, :status) in [:faulty, "faulty", :crashed, "crashed"]
+
+        crashed? =
+          Map.get(p, :crashed_recently, false) == true or restarts > 0 or
+            Map.get(p, :status) in [:faulty, "faulty", :crashed, "crashed"]
 
         cond do
           infinite_loop? ->
-            [%{id: pid, name: humanize_plugin_name(p), reason: "Infinite loop / log flood detected (#{max(log_rate, 100)} logs/s)"}]
+            [
+              %{
+                id: pid,
+                name: humanize_plugin_name(p),
+                reason: "Infinite loop / log flood detected (#{max(log_rate, 100)} logs/s)"
+              }
+            ]
 
           crashed? ->
-            [%{id: pid, name: humanize_plugin_name(p), reason: "Crashed recently (#{max(restarts, 1)} restart(s))"}]
+            [
+              %{
+                id: pid,
+                name: humanize_plugin_name(p),
+                reason: "Crashed recently (#{max(restarts, 1)} restart(s))"
+              }
+            ]
 
           true ->
             []
@@ -1420,9 +1619,57 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
     online_count = max(overview.plugins_count - length(faulty_extensions), 0)
 
-    # Time-series multi-line layout (time on X, count on Y, distinct line per action ID)
-    x_coords = [40, 128, 216, 304, 392, 480]
-    time_labels = ["-25m", "-20m", "-15m", "-10m", "-5m", "Now"]
+    # ---- time series (the opt-in trace window, not the lifetime counters) ----
+    #
+    # Metering answers "how many ever"; the graphs answer "how many, when" the way PlayFab's
+    # CloudScript chart does. Per-minute buckets live in ActionTrace; every series below is built
+    # from them, so the caller filter is a filter on real data rather than on the last five samples.
+    trace =
+      try do
+        Exoforge.ActionTrace.snapshot(@trace_window_minutes)
+      rescue
+        _ -> %{buckets: [], samples: []}
+      end
+
+    axis = minute_axis(@trace_window_minutes)
+    tracked? = fn key -> tracked in [[], nil] or action_service(key) in tracked end
+
+    # {{action_key, minute}} => {count, errors}, for the selected caller ("" is everyone)
+    window =
+      Enum.reduce(trace.buckets, %{}, fn {minute, key, caller_name, kind, n}, acc ->
+        key = normalize_action_key(key)
+        selected? = caller in [nil, ""] or caller_name == caller
+
+        if tracked?.(key) and selected? do
+          {count, errors} = Map.get(acc, {key, minute}, {0, 0})
+
+          case kind do
+            :error -> Map.put(acc, {key, minute}, {count, errors + n})
+            :count -> Map.put(acc, {key, minute}, {count + n, errors})
+          end
+        else
+          acc
+        end
+      end)
+
+    window_totals =
+      Enum.reduce(window, %{}, fn {{key, _minute}, {count, errors}}, acc ->
+        {total_count, total_error} = Map.get(acc, key, {0, 0})
+        Map.put(acc, key, {total_count + count, total_error + errors})
+      end)
+
+    plotted =
+      window_totals
+      |> Enum.map(fn {key, {count, errors}} -> {key, count, errors} end)
+      |> Enum.sort_by(fn {_key, count, _errors} -> -count end)
+
+    plotted_errors =
+      plotted
+      |> Enum.filter(fn {_key, _count, errors} -> errors > 0 end)
+      |> Enum.sort_by(fn {_key, _count, errors} -> -errors end)
+      |> Enum.take(5)
+
+    plotted_errors = if plotted_errors == [], do: Enum.take(plotted, 5), else: plotted_errors
 
     palette = [
       "#8b5cf6",
@@ -1439,143 +1686,33 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
     error_colors = ["#ef4444", "#f97316", "#eab308", "#ec4899", "#f43f5e"]
 
-    # Graph strictly represents actions (events excluded)
-    actions_to_plot =
-      metered_actions
-      |> Enum.map(fn act ->
-        {act_key(act, overview), Map.get(act, :invocations, 0), Map.get(act, :errors, 0)}
-      end)
-      |> Enum.sort_by(fn {_id, inv, _err} -> -inv end)
-      |> Enum.take(5)
+    action_series = build_series(Enum.take(plotted, 5), axis, window, 0, palette, "idle")
+    error_series = build_series(plotted_errors, axis, window, 1, error_colors, "healthy")
 
     action_max_val =
-      if actions_to_plot != [] do
-        Enum.max([10 | Enum.map(actions_to_plot, &elem(&1, 1))])
-      else
-        10
-      end
+      action_series |> Enum.flat_map(& &1.counts) |> Enum.max(fn -> 0 end) |> max(5)
 
-    action_series =
-      if actions_to_plot != [] do
-        actions_to_plot
-        |> Enum.with_index()
-        |> Enum.map(fn {{act_id, inv, _err}, _idx} ->
-          color = color_for_name(act_id, palette)
+    error_max_val = error_series |> Enum.flat_map(& &1.counts) |> Enum.max(fn -> 0 end) |> max(5)
 
-          # Honest representation: previous intervals are zero until recorded, latest is true measured count
-          counts = [0, 0, 0, 0, 0, inv]
+    callers =
+      (Enum.map(trace.buckets, &elem(&1, 2)) ++ Enum.map(trace.samples, & &1.caller))
+      |> Enum.reject(&(&1 in [nil, ""]))
+      |> Enum.uniq()
+      |> Enum.sort()
 
-          dots =
-            Enum.zip(x_coords, counts)
-            |> Enum.map(fn {x, c} ->
-              y = 125 - round(c / max(action_max_val, 1) * 95)
-              %{x: x, y: y, count: c}
-            end)
-
-          points = Enum.map_join(dots, " ", fn d -> "#{d.x},#{d.y}" end)
-
-          %{
-            id: act_id,
-            color: color,
-            points: points,
-            dots: dots,
-            latest_count: inv
-          }
-        end)
-      else
-        [
-          %{
-            id: "idle",
-            color: "#94a3b8",
-            points: "40,125 128,125 216,125 304,125 392,125 480,125",
-            dots: Enum.map(x_coords, &%{x: &1, y: 125, count: 0}),
-            latest_count: 0
-          }
-        ]
-      end
-
-    actions_with_errors =
-      metered_actions
-      |> Enum.map(fn act ->
-        {act_key(act, overview), Map.get(act, :invocations, 0), Map.get(act, :errors, 0)}
+    action_samples =
+      trace.samples
+      |> Enum.filter(fn sample ->
+        key = normalize_action_key(sample.key)
+        tracked?.(key) and (caller in [nil, ""] or sample.caller == caller)
       end)
-      |> Enum.filter(fn {_id, _inv, err} -> err > 0 end)
-      |> Enum.sort_by(fn {_id, _inv, err} -> -err end)
-      |> Enum.take(5)
+      |> Enum.group_by(&normalize_action_key(&1.key))
+      |> Map.new(fn {key, samples} -> {key, Enum.take(samples, 6)} end)
 
-    error_actions_to_plot =
-      if actions_with_errors != [] do
-        actions_with_errors
-      else
-        actions_to_plot
-      end
+    time_labels = ["-30m", "-24m", "-18m", "-12m", "-6m", "now"]
+    x_coords = [40, 128, 216, 304, 392, 480]
 
-    error_max_val =
-      if error_actions_to_plot != [] do
-        Enum.max([5, total_errors | Enum.map(error_actions_to_plot, &elem(&1, 2))])
-      else
-        5
-      end
-
-    error_series =
-      if error_actions_to_plot != [] do
-        error_actions_to_plot
-        |> Enum.with_index()
-        |> Enum.map(fn {{act_id, _inv, err}, _idx} ->
-          color = color_for_name(act_id, error_colors)
-
-          counts =
-            if err > 0 do
-              [0, 0, 0, 0, 0, err]
-            else
-              [0, 0, 0, 0, 0, 0]
-            end
-
-          dots =
-            Enum.zip(x_coords, counts)
-            |> Enum.map(fn {x, c} ->
-              y = 125 - round(c / max(error_max_val, 1) * 95)
-              %{x: x, y: y, count: c}
-            end)
-
-          points = Enum.map_join(dots, " ", fn d -> "#{d.x},#{d.y}" end)
-
-          %{
-            id: act_id,
-            color: color,
-            points: points,
-            dots: dots,
-            latest_count: err
-          }
-        end)
-      else
-        [
-          %{
-            id: "healthy",
-            color: "#10b981",
-            points: "40,125 128,125 216,125 304,125 392,125 480,125",
-            dots: Enum.map(x_coords, &%{x: &1, y: 125, count: 0}),
-            latest_count: 0
-          }
-        ]
-      end
-
-    action_invocations =
-      Map.new(metered_actions, &{act_key(&1, overview), Map.get(&1, :invocations, 0)})
-
-    action_errors = Map.new(metered_actions, &{act_key(&1, overview), Map.get(&1, :errors, 0)})
-
-    action_stats =
-      Map.new(metered_actions, fn act ->
-        {act_key(act, overview),
-         %{
-           avg_ms: Float.round(Map.get(act, :avg_wall_us, 0) / 1000, 1),
-           bytes: Map.get(act, :bytes_in, 0) + Map.get(act, :bytes_out, 0)
-         }}
-      end)
-
-    action_events =
-      Enum.filter(activity_events || [], &(RecentEvents.kind(&1) == "action"))
+    action_events = Enum.filter(activity_events || [], &(RecentEvents.kind(&1) == "action"))
 
     # Newest first in the buffer, so the first error seen for a key is the last one that happened.
     last_errors =
@@ -1590,12 +1727,32 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
          %{status: to_string(ev.payload[:status] || ev.payload["status"]), time: ev.time}}
       end)
 
-    cutoff = System.system_time(:microsecond) - 300_000_000
+    action_invocations =
+      Map.new(metered_actions, &{act_key(&1, overview), Map.get(&1, :invocations, 0)})
 
-    recent_traffic =
-      action_events
-      |> Enum.filter(&(Map.get(&1, :timestamp, 0) >= cutoff))
-      |> Enum.frequencies_by(&event_act_key(&1.event))
+    action_errors = Map.new(metered_actions, &{act_key(&1, overview), Map.get(&1, :errors, 0)})
+
+    # Actions the trace saw but metering has no lifetime row for (a call that failed before the
+    # plugin was reached, a freshly started cluster) still deserve a table row.
+    action_stats =
+      window_totals
+      |> Map.new(fn {key, {count, errors}} ->
+        {key, %{avg_ms: 0.0, bytes: 0, window: count, window_errors: errors}}
+      end)
+      |> Map.merge(
+        Map.new(metered_actions, fn act ->
+          key = act_key(act, overview)
+          {count, errors} = Map.get(window_totals, key, {0, 0})
+
+          {key,
+           %{
+             avg_ms: Float.round(Map.get(act, :avg_wall_us, 0) / 1000, 1),
+             bytes: Map.get(act, :bytes_in, 0) + Map.get(act, :bytes_out, 0),
+             window: count,
+             window_errors: errors
+           }}
+        end)
+      )
 
     %{
       total_invocations: total_invocations,
@@ -1607,8 +1764,11 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       action_invocations: action_invocations,
       action_errors: action_errors,
       action_stats: action_stats,
-      recent_traffic: recent_traffic,
       last_errors: last_errors,
+      action_samples: action_samples,
+      callers: callers,
+      tracked_services: tracked,
+      window_minutes: @trace_window_minutes,
       time_labels: time_labels,
       x_coords: x_coords,
       online_count: online_count,
@@ -2107,19 +2267,16 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                             <text x={x} y="142" text-anchor="middle" font-size="9" font-family="monospace" fill="#94a3b8"><%= lbl %></text>
                           <% end %>
 
-                          <!-- Multi-lines for each Action ID -->
+                          <!-- One line per action: one point per minute, the last 30 minutes -->
                           <%= for s <- @telemetry.action_series do %>
                             <polyline
                               fill="none"
                               stroke={s.color}
-                              stroke-width="2.5"
+                              stroke-width="2"
                               stroke-linecap="round"
                               stroke-linejoin="round"
-                              points={s.points}
+                              points={series_points(s.counts, 40, 480, 125, 95, @telemetry.action_max_val)}
                             />
-                            <%= for d <- s.dots do %>
-                              <circle cx={d.x} cy={d.y} r="3" fill={s.color} stroke="#ffffff" stroke-width="1" />
-                            <% end %>
                           <% end %>
                         </svg>
                       </div>
@@ -2130,7 +2287,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                           <div class="flex items-center gap-1.5">
                             <span class="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs" style={"background-color: #{s.color}"}></span>
                             <span class="font-mono text-gray-700 font-semibold"><%= if s.id == "idle", do: "Cluster Idle", else: s.id %></span>
-                            <span class="text-gray-400 font-mono text-[10px]">(<%= s.latest_count %> <%= if s.id == "idle", do: "calls", else: "calls" %>)</span>
+                            <span class="text-gray-400 font-mono text-[10px]">(<%= s.total %> calls / 30m)</span>
                           </div>
                         <% end %>
                       </div>
@@ -2180,7 +2337,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
                 <% "error_graph" -> %>
                   <!-- 2x2 ERROR GRAPH -->
-                  <% non_zero_errors = Enum.filter(@telemetry.error_series, &(&1.latest_count > 0)) %>
+                  <% non_zero_errors = Enum.filter(@telemetry.error_series, &(&1.total > 0)) %>
                   <div
                     id="slot-error_graph"
                     data-slot-id="error_graph"
@@ -2276,19 +2433,16 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                             <text x={x} y="142" text-anchor="middle" font-size="9" font-family="monospace" fill="#94a3b8"><%= lbl %></text>
                           <% end %>
 
-                          <!-- Multi-lines for each Action Error series (Only series with >0 errors) -->
+                          <!-- One error line per action, one point per minute -->
                           <%= for s <- non_zero_errors do %>
                             <polyline
                               fill="none"
                               stroke={s.color}
-                              stroke-width="2.5"
+                              stroke-width="2"
                               stroke-linecap="round"
                               stroke-linejoin="round"
-                              points={s.points}
+                              points={series_points(s.counts, 40, 480, 125, 95, @telemetry.error_max_val)}
                             />
-                            <%= for d <- s.dots do %>
-                              <circle cx={d.x} cy={d.y} r="3" fill={s.color} stroke="#ffffff" stroke-width="1" />
-                            <% end %>
                           <% end %>
                           <%= if non_zero_errors == [] do %>
                             <line x1="40" y1="125" x2="480" y2="125" stroke="#10b981" stroke-width="1.5" stroke-dasharray="4 4" />
@@ -2303,7 +2457,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                             <div class="flex items-center gap-1.5">
                               <span class="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs" style={"background-color: #{s.color}"}></span>
                               <span class="font-mono text-gray-700 font-semibold"><%= s.id %></span>
-                              <span class="font-mono text-[10px] text-red-600 font-bold">(<%= s.latest_count %> errors)</span>
+                              <span class="font-mono text-[10px] text-red-600 font-bold">(<%= s.total %> errors / 30m)</span>
                             </div>
                           <% end %>
                         </div>
@@ -2802,9 +2956,16 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         filter_tab={@actions_detail_tab}
         catalog={@action_catalog}
         telemetry={@telemetry}
+        caller={@actions_detail_caller}
+        expanded={@actions_detail_expanded}
+        services={Enum.map(@action_catalog, & &1.name)}
+        tracked_services={@tracked_services}
         on_close="close_actions_detail_modal"
         on_search="search_actions_detail"
         on_filter_tab="filter_actions_detail_tab"
+        on_filter_caller="filter_actions_detail_caller"
+        on_toggle_row="toggle_action_detail"
+        on_toggle_service="toggle_tracked_service"
         on_run_action="open_action_modal"
         on_switch_mode="open_actions_detail_modal"
       />
@@ -2816,6 +2977,9 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         paused={@events_paused}
         filter_topic={@event_filter_topic}
         kind_filter={@event_kind_filter}
+        services={Enum.map(@action_catalog, & &1.name)}
+        tracked_services={@tracked_services}
+        on_toggle_service="toggle_tracked_service"
         on_close="close_events_modal"
         on_pause="toggle_event_pause"
         on_clear="clear_events"
@@ -2836,6 +3000,9 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         events={@filtered_activity_events}
         paused={@events_paused}
         filter_topic={@event_filter_topic}
+        services={Enum.map(@action_catalog, & &1.name)}
+        tracked_services={@tracked_services}
+        on_toggle_service="toggle_tracked_service"
         on_toggle="toggle_event_dock"
         on_pause="toggle_event_pause"
         on_clear="clear_events"

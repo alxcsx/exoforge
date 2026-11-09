@@ -1060,8 +1060,8 @@ defmodule Exoforge.DashboardLiveViewTest do
 
       # Multi-line time series SVG graphs (X axis time, Y axis count)
       assert html =~ "polyline"
-      assert html =~ "-25m"
-      assert html =~ "Now"
+      assert html =~ "-30m"
+      assert html =~ "now"
       refute html =~ "Open Console"
 
       # Console is available in Settings modal only
@@ -1139,7 +1139,8 @@ defmodule Exoforge.DashboardLiveViewTest do
       assert detail_html =~ "Expanded Action Throughput"
       assert detail_html =~ "Filter actions by name or service..."
       assert detail_html =~ "Active Traffic"
-      assert detail_html =~ "Last 5m"
+      assert detail_html =~ "All callers"
+      assert detail_html =~ "All services"
       assert detail_html =~ "Last Error"
 
       # Open Error Breakdown mode
@@ -1182,7 +1183,56 @@ defmodule Exoforge.DashboardLiveViewTest do
 
       assert html =~ "dashboard_view.list_views"
       assert html =~ "error: :unauthorized"
-      assert html =~ "Last 5m"
+      assert html =~ "Last Error"
+    end
+
+    test "an action row unfolds into the invocation, masks credentials, and follows the caller filter" do
+      Exoforge.ActionTrace.enable()
+
+      Exoforge.ActionTrace.record(
+        :dashboard_view,
+        :list_views,
+        "player_42",
+        %{"password" => "hunter2", "page" => 1},
+        {:error, :unauthorized},
+        3
+      )
+
+      on_exit(fn ->
+        for table <- [:exo_action_trace, :exo_action_trace_buckets] do
+          try do
+            :ets.delete_all_objects(table)
+          rescue
+            _ -> :ok
+          end
+        end
+      end)
+
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{"admin_player_id" => "admin", "admin_scopes" => ["admin"]})
+
+      {:ok, view, _html} = live(conn, "/")
+
+      html = render_click(view, "open_actions_detail_modal", %{"mode" => "actions"})
+      assert html =~ "caller: player_42"
+      assert html =~ "All callers"
+
+      html = render_click(view, "toggle_action_detail", %{"key" => "dashboard_view.list_views"})
+      assert html =~ "Sent payload"
+      assert html =~ "Received / error"
+      assert html =~ "•••"
+      refute html =~ "hunter2"
+
+      # A caller filter that matches nobody empties the unfolded invocation list, not the table.
+      html = render_change(view, "filter_actions_detail_caller", %{"caller" => "someone_else"})
+      assert html =~ "No invocations captured in the traced window"
+
+      # Tracking one service hides the others from the graph/console aggregation.
+      html = render_click(view, "toggle_tracked_service", %{"service" => "auth"})
+      assert html =~ "1 tracked"
+      html = render_click(view, "toggle_tracked_service", %{"service" => ""})
+      assert html =~ "All services"
     end
 
     test "CORS access policy controller updates highlight and disables allowed_origins when relaxed or strict" do

@@ -341,6 +341,9 @@ defmodule Exoforge.Std.Dashboard.Overlays do
   attr(:events, :list, default: [])
   attr(:paused, :boolean, default: false)
   attr(:filter_topic, :string, default: "")
+  attr(:services, :list, default: [])
+  attr(:tracked_services, :list, default: [])
+  attr(:on_toggle_service, :string, default: "toggle_tracked_service")
   attr(:on_toggle, :string, default: "toggle_event_dock")
   attr(:on_pause, :string, default: "toggle_event_pause")
   attr(:on_clear, :string, default: "clear_events")
@@ -379,6 +382,12 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                 class="px-2.5 py-1 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-primary-500 w-36 sm:w-48 font-mono"
               />
             </form>
+
+            <.service_filter
+              services={@services}
+              tracked={@tracked_services}
+              on_toggle={@on_toggle_service}
+            />
 
             <button
               type="button"
@@ -1572,8 +1581,15 @@ defmodule Exoforge.Std.Dashboard.Overlays do
   attr(:mode, :string, default: "actions")
   attr(:search, :string, default: "")
   attr(:filter_tab, :string, default: "all")
+  attr(:caller, :string, default: "")
+  attr(:expanded, :string, default: nil)
+  attr(:services, :list, default: [])
+  attr(:tracked_services, :list, default: [])
   attr(:catalog, :list, default: [])
   attr(:telemetry, :map, default: %{})
+  attr(:on_filter_caller, :string, default: "filter_actions_detail_caller")
+  attr(:on_toggle_row, :string, default: "toggle_action_detail")
+  attr(:on_toggle_service, :string, default: "toggle_tracked_service")
   attr(:on_close, :string, default: "close_actions_detail_modal")
   attr(:on_search, :string, default: "search_actions_detail")
   attr(:on_filter_tab, :string, default: "filter_actions_detail_tab")
@@ -1597,8 +1613,8 @@ defmodule Exoforge.Std.Dashboard.Overlays do
           invocations = Map.get(telemetry[:action_invocations] || %{}, key, 0)
           errors = Map.get(telemetry[:action_errors] || %{}, key, 0)
           stats = Map.get(telemetry[:action_stats] || %{}, key, %{avg_ms: 0.0, bytes: 0})
-          recent = Map.get(telemetry[:recent_traffic] || %{}, key, 0)
           last_error = Map.get(telemetry[:last_errors] || %{}, key)
+          samples = Map.get(telemetry[:action_samples] || %{}, key, [])
 
           err_rate =
             if invocations > 0 do
@@ -1615,7 +1631,9 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             errors: errors,
             error_rate: err_rate,
             avg_ms: stats.avg_ms,
-            recent: recent,
+            window: Map.get(stats, :window, 0),
+            window_errors: Map.get(stats, :window_errors, 0),
+            samples: samples,
             last_error: last_error
           }
         end
@@ -1638,7 +1656,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
         |> Enum.filter(fn item ->
           case assigns.filter_tab do
             "active" -> item.invocations > 0
-            "errors_only" -> item.errors > 0
+            "errors_only" -> item.errors > 0 or item.window_errors > 0
             _ -> true
           end
         end)
@@ -1655,7 +1673,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
       is_error_mode = assigns.mode == "errors"
       chart_series =
         if is_error_mode do
-          Enum.filter(telemetry[:error_series] || [], &((&1[:latest_count] || 0) > 0))
+          Enum.filter(telemetry[:error_series] || [], &((&1[:total] || 0) > 0))
         else
           telemetry[:action_series] || []
         end
@@ -1667,22 +1685,24 @@ defmodule Exoforge.Std.Dashboard.Overlays do
           telemetry[:action_max_val] || 10
         end
 
-      # Expanded 760px wide chart coordinates
+      # Expanded chart geometry: 760x160 viewBox, x 60..700, y 135 (zero) .. 30 (peak).
       expanded_x_coords = [60, 188, 316, 444, 572, 700]
 
       expanded_series =
         Enum.map(chart_series, fn s ->
-          dots_list = Map.get(s, :dots, [])
-          pts =
-            for {x, d} <- Enum.zip(expanded_x_coords, dots_list) do
-              count = Map.get(d, :count, 0)
-              y = 135 - round(count / max(chart_max, 1) * 105)
-              {x, max(25, min(135, y))}
-            end
+          counts = Map.get(s, :counts, [])
+          last = max(length(counts) - 1, 1)
 
-          poly_str = Enum.map_join(pts, " ", fn {x, y} -> "#{x},#{y}" end)
-          dots = Enum.map(pts, fn {x, y} -> %{x: x, y: y} end)
-          Map.merge(s, %{expanded_points: poly_str, expanded_dots: dots})
+          points =
+            counts
+            |> Enum.with_index()
+            |> Enum.map_join(" ", fn {count, index} ->
+              x = 60 + round(index * 640 / last)
+              y = 135 - round(count / max(chart_max, 1) * 105)
+              "#{x},#{max(25, min(135, y))}"
+            end)
+
+          Map.put(s, :expanded_points, points)
         end)
 
       assigns =
@@ -1788,9 +1808,6 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                       stroke-linejoin="round"
                       points={s.expanded_points}
                     />
-                    <%= for d <- s.expanded_dots do %>
-                      <circle cx={d.x} cy={d.y} r="3.5" fill={Map.get(s, :color, "#8b5cf6")} stroke="#ffffff" stroke-width="1.5" />
-                    <% end %>
                   <% end %>
                 </svg>
               </div>
@@ -1802,7 +1819,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                     <div class="flex items-center gap-1.5">
                       <span class="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs" style={"background-color: #{Map.get(s, :color, "#8b5cf6")}"}></span>
                       <span class="font-mono text-gray-800 font-semibold"><%= if s[:id] == "idle", do: "Cluster Idle", else: s[:id] %></span>
-                      <span class="text-gray-400 font-mono text-[10px]">(<%= s[:latest_count] %> <%= if @is_error_mode, do: "errors", else: "calls" %>)</span>
+                      <span class="text-gray-400 font-mono text-[10px]">(<%= s[:total] || 0 %> <%= if @is_error_mode, do: "errors", else: "calls" %> / <%= @telemetry[:window_minutes] || 30 %>m)</span>
                     </div>
                   <% end %>
                 </div>
@@ -1854,6 +1871,33 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               </form>
             </div>
 
+            <div class="flex flex-wrap items-center gap-2 pt-1">
+              <form id="actions_detail_caller_form" phx-change={@on_filter_caller} class="m-0">
+                <select
+                  name="caller"
+                  class="px-2.5 py-1.5 bg-white border border-gray-200 rounded-xl text-xs font-mono text-gray-700 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  title="Graphs and captured invocations for one caller"
+                >
+                  <option value="" selected={@caller == ""}>All callers</option>
+                  <%= for caller_name <- Enum.uniq([@caller | @telemetry[:callers] || []]), caller_name != "" do %>
+                    <option value={caller_name} selected={@caller == caller_name}>
+                      caller: <%= caller_name %>
+                    </option>
+                  <% end %>
+                </select>
+              </form>
+
+              <.service_filter
+                services={@services}
+                tracked={@tracked_services}
+                on_toggle={@on_toggle_service}
+              />
+
+              <span class="text-[11px] text-gray-400">
+                Graphs and captured invocations cover the last <%= @telemetry[:window_minutes] || 30 %> minutes<%= if @caller != "", do: " for #{@caller}" %>. Select a row to unfold it.
+              </span>
+            </div>
+
             <!-- Actions Table -->
             <div class="max-h-[30rem] overflow-y-auto border border-gray-200 rounded-xl custom-scrollbar text-xs">
               <%= if Enum.empty?(@items) do %>
@@ -1867,7 +1911,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                       <th class="py-2.5 px-3">Service &amp; Action</th>
                       <th class="py-2.5 px-3">Scope / Transport</th>
                       <th class="py-2.5 px-3 text-right">Invocations</th>
-                      <th class="py-2.5 px-3 text-right">Last 5m</th>
+                      <th class="py-2.5 px-3 text-right">30m</th>
                       <th class="py-2.5 px-3 text-right">Avg</th>
                       <th class="py-2.5 px-3 text-right">Errors</th>
                       <th class="py-2.5 px-3">Last Error</th>
@@ -1876,9 +1920,16 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   </thead>
                   <tbody class="divide-y divide-gray-100 text-xs">
                     <%= for item <- @items do %>
-                      <tr class="hover:bg-gray-50/80 transition-colors">
+                      <tr
+                        class={"transition-colors cursor-pointer #{if @expanded == item.key, do: "bg-primary-50/40", else: "hover:bg-gray-50/80"}"}
+                        phx-click={@on_toggle_row}
+                        phx-value-key={item.key}
+                      >
                         <td class="py-2.5 px-3">
                           <div class="flex items-center gap-2">
+                            <span class="w-3 text-[10px] text-gray-400 shrink-0">
+                              <%= if @expanded == item.key, do: "▾", else: "▸" %>
+                            </span>
                             <span class="w-6 h-6 rounded-md bg-purple-50 text-purple-700 flex items-center justify-center text-xs shrink-0">
                               <%= Map.get(item.service, :icon) || "⚡" %>
                             </span>
@@ -1901,8 +1952,8 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                         <td class="py-2.5 px-3 text-right font-mono font-bold text-gray-800">
                           <%= item.invocations %>
                         </td>
-                        <td class="py-2.5 px-3 text-right font-mono text-[11px] text-gray-500" title="Dispatches captured in the live stream during the last 5 minutes">
-                          <%= item.recent %>
+                        <td class="py-2.5 px-3 text-right font-mono text-[11px] text-gray-500" title="Invocations in the traced window (respects the caller filter)">
+                          <%= item.window %>
                         </td>
                         <td class="py-2.5 px-3 text-right font-mono text-[11px] text-gray-500" title="Average server-side wall time per invocation">
                           <%= item.avg_ms %>ms
@@ -1935,6 +1986,59 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                           </button>
                         </td>
                       </tr>
+
+                      <!-- Unfolded row: what was actually sent and what came back -->
+                      <%= if @expanded == item.key do %>
+                        <tr class="bg-gray-50/80">
+                          <td colspan="8" class="px-4 py-3 border-l-2 border-primary-400">
+                            <%= if item.samples == [] do %>
+                              <p class="text-[11px] text-gray-400">
+                                No invocations captured in the traced window<%= if @caller != "", do: " for #{@caller}" %>.
+                              </p>
+                            <% else %>
+                              <div class="space-y-2">
+                                <%= for sample <- item.samples do %>
+                                  <% errored? = String.starts_with?(sample.status, "error") %>
+                                  <div class={"rounded-xl border p-2.5 space-y-1.5 bg-white #{if errored?, do: "border-red-200", else: "border-gray-200"}"}>
+                                    <div class="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                                      <div class="flex items-center gap-2 font-mono">
+                                        <span class={"px-1.5 py-0.5 rounded font-bold border #{if errored?, do: "bg-red-50 text-red-700 border-red-200", else: "bg-emerald-50 text-emerald-700 border-emerald-200"}"}>
+                                          <%= sample.status %>
+                                        </span>
+                                        <span class="text-gray-600">caller: <%= sample.caller %></span>
+                                        <span class="text-gray-400"><%= sample.duration_ms %>ms</span>
+                                      </div>
+                                      <span class="text-[10px] text-gray-400 font-mono"><%= sample_time(sample.at) %></span>
+                                    </div>
+
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                      <details class="group" open={errored?}>
+                                        <summary class="cursor-pointer select-none text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center justify-between py-0.5">
+                                          <span class="flex items-center gap-1">
+                                            <span class="transition-transform group-open:rotate-90 inline-block text-[8px]">▶</span>
+                                            <span>Sent payload</span>
+                                          </span>
+                                        </summary>
+                                        <pre class="mt-1 text-[11px] overflow-x-auto p-2.5 bg-gray-950 rounded-lg border border-gray-800 font-mono leading-relaxed custom-scrollbar"><%= highlight_json(sample.request) %></pre>
+                                      </details>
+
+                                      <details class="group" open={errored?}>
+                                        <summary class="cursor-pointer select-none text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center justify-between py-0.5">
+                                          <span class="flex items-center gap-1">
+                                            <span class="transition-transform group-open:rotate-90 inline-block text-[8px]">▶</span>
+                                            <span>Received / error</span>
+                                          </span>
+                                        </summary>
+                                        <pre class="mt-1 text-[11px] overflow-x-auto p-2.5 bg-gray-950 rounded-lg border border-gray-800 font-mono leading-relaxed custom-scrollbar"><%= highlight_json(sample.response || sample.status) %></pre>
+                                      </details>
+                                    </div>
+                                  </div>
+                                <% end %>
+                              </div>
+                            <% end %>
+                          </td>
+                        </tr>
+                      <% end %>
                     <% end %>
                   </tbody>
                 </table>
@@ -1948,6 +2052,59 @@ defmodule Exoforge.Std.Dashboard.Overlays do
   end
 
   @doc """
+  Multi-select for the services the Studio tracks.
+
+  Shared by the action console and the event console: one selection, stored per account, applied to
+  what the graphs aggregate and to what the event stream shows. An empty selection means every
+  service — narrowing it hides traffic, it does not reduce it.
+  """
+  attr(:services, :list, default: [])
+  attr(:tracked, :list, default: [])
+  attr(:on_toggle, :string, default: "toggle_tracked_service")
+
+  def service_filter(assigns) do
+    ~H"""
+    <details class="relative">
+      <summary class="list-none cursor-pointer select-none px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-bold text-gray-700 dark:text-gray-200 flex items-center gap-1.5 hover:bg-gray-50 dark:hover:bg-gray-700">
+        <span>🎯</span>
+        <span><%= if @tracked == [], do: "All services", else: "#{length(@tracked)} tracked" %></span>
+        <span class="text-[9px] text-gray-400">▾</span>
+      </summary>
+
+      <div class="absolute right-0 z-30 mt-1 w-64 max-h-72 overflow-y-auto bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl p-1.5 space-y-0.5 custom-scrollbar">
+        <button
+          type="button"
+          phx-click={@on_toggle}
+          phx-value-service=""
+          class={"w-full text-left px-2 py-1.5 rounded-lg text-xs font-bold #{if @tracked == [], do: "bg-primary-50 text-primary-700", else: "text-gray-600 hover:bg-gray-100"}"}
+        >
+          All services
+        </button>
+        <%= for service <- @services do %>
+          <button
+            type="button"
+            phx-click={@on_toggle}
+            phx-value-service={service}
+            class={"w-full text-left px-2 py-1.5 rounded-lg text-xs font-mono flex items-center justify-between gap-2 #{if service in @tracked, do: "bg-primary-50 text-primary-700 font-bold", else: "text-gray-600 hover:bg-gray-100"}"}
+          >
+            <span class="truncate"><%= service %></span>
+            <span class="text-[10px]"><%= if service in @tracked, do: "✓" %></span>
+          </button>
+        <% end %>
+      </div>
+    </details>
+    """
+  end
+
+  defp sample_time(ms) when is_integer(ms) do
+    ms |> DateTime.from_unix!(:millisecond) |> Calendar.strftime("%H:%M:%S")
+  rescue
+    _ -> ""
+  end
+
+  defp sample_time(_), do: ""
+
+  @doc """
   Renders the full cluster events history modal ("More" button on Latest Dispatched Events).
   """
   attr(:open, :boolean, default: false)
@@ -1955,6 +2112,9 @@ defmodule Exoforge.Std.Dashboard.Overlays do
   attr(:paused, :boolean, default: false)
   attr(:filter_topic, :string, default: "")
   attr(:kind_filter, :string, default: "all")
+  attr(:services, :list, default: [])
+  attr(:tracked_services, :list, default: [])
+  attr(:on_toggle_service, :string, default: "toggle_tracked_service")
   attr(:on_close, :string, default: "close_events_modal")
   attr(:on_pause, :string, default: "toggle_event_pause")
   attr(:on_clear, :string, default: "clear_events")
@@ -2012,6 +2172,12 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                     class="px-2.5 py-1.5 bg-white border border-gray-300 rounded-lg text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-primary-500 w-44 sm:w-64 font-mono"
                   />
                 </form>
+
+                <.service_filter
+                  services={@services}
+                  tracked={@tracked_services}
+                  on_toggle={@on_toggle_service}
+                />
 
                 <div class="flex items-center p-1 bg-gray-200/70 rounded-xl gap-0.5">
                   <%= for {kind, label} <- [{"all", "All"}, {"action", "Actions"}, {"event", "Events"}, {"webhook", "Webhooks"}, {"cron", "Cron"}] do %>
