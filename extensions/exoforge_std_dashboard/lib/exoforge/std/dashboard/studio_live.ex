@@ -2925,6 +2925,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                   project_name={@project_name}
                   studio_name={@studio_name}
                   guide_subpage={@guide_subpage}
+                  activity_events={@activity_events}
                 />
 
               <% true -> %>

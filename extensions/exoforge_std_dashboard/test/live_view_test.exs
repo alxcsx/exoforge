@@ -642,6 +642,58 @@ defmodule Exoforge.DashboardLiveViewTest do
       refute render(view) =~ "Linked Players"
     end
 
+    test "the user inspector has an activity tab that shows only that account's events" do
+      # Sorts first so paging keeps it on the visible page in the shared test database.
+      viewer = "0evt_viewer_#{System.unique_integer([:positive])}"
+
+      assert {:ok, _} =
+               Exoforge.ActionDispatcher.dispatch(:auth, :register, %{
+                 player_id: viewer,
+                 email: "#{viewer}@exoforge.test"
+               })
+
+      own =
+        Exoforge.Std.Dashboard.RecentEvents.record(
+          "action:player_data.update_player",
+          %{player_id: viewer, status: "ok"},
+          %{origin: viewer, source: viewer, topic: "global"}
+        )
+
+      other =
+        Exoforge.Std.Dashboard.RecentEvents.record(
+          "action:someone_else.only_here",
+          %{player_id: "someone_else", status: "ok"},
+          %{origin: "someone_else", source: "someone_else", topic: "global"}
+        )
+
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{
+          "admin_player_id" => "admin",
+          "admin_scopes" => ["admin"]
+        })
+
+      {:ok, view, html} = live(conn, "/tab/exoforge_std_auth?focus=user:#{viewer}")
+
+      assert html =~ "Events"
+
+      send(view.pid, {:studio_event, own})
+      send(view.pid, {:studio_event, other})
+      _ = render(view)
+
+      html =
+        view
+        |> element(~s{button[phx-click=switch_user_inspect_tab][phx-value-tab="events"]})
+        |> render_click()
+
+      assert html =~ "Events triggered by this account"
+      assert html =~ "action:player_data.update_player"
+
+      # Another account's event is in the same live buffer and must not be in this list.
+      refute html =~ "action:someone_else.only_here"
+      assert html =~ viewer
+    end
+
     test "mounts PlayerDataView from dashboard_views for exoforge_std_player_data" do
       conn =
         build_conn()

@@ -371,13 +371,68 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
 
   ## ---- PRIVATE HELPERS ----
 
+  # An event belongs to an account when the action chain that raised it started with them (origin),
+  # when they were the transport caller (source), or when its payload names them - auth.login and
+  # auth.register carry the player id, and a login is triggered by the user who logged in.
+  defp user_events(events, user) do
+    ids =
+      [user["player_id"], user["user_id"], user["email"]]
+      |> Enum.reject(&(&1 in [nil, ""]))
+      |> Enum.map(&to_string/1)
+      |> MapSet.new()
+
+    if MapSet.size(ids) == 0 do
+      []
+    else
+      (events || [])
+      |> Enum.filter(fn ev -> Enum.any?(event_attribution(ev), &MapSet.member?(ids, &1)) end)
+    end
+  end
+
+  defp event_errored?(ev) do
+    payload = Map.get(ev, :payload) || %{}
+    status = to_string(payload[:status] || payload["status"] || "")
+
+    String.starts_with?(status, "error") or Map.has_key?(payload, :error) or
+      Map.has_key?(payload, "error")
+  end
+
+  defp event_json(payload) do
+    case Jason.encode(payload, pretty: true) do
+      {:ok, json} -> json
+      _ -> inspect(payload, pretty: true)
+    end
+  end
+
+  defp event_attribution(ev) do
+    payload = Map.get(ev, :payload) || %{}
+    context = Map.get(ev, :context) || %{}
+
+    [
+      context[:origin],
+      context["origin"],
+      context[:source],
+      context["source"],
+      payload[:player_id],
+      payload["player_id"],
+      payload[:user_id],
+      payload["user_id"],
+      payload[:email],
+      payload["email"]
+    ]
+    |> Enum.reject(&(&1 in [nil, ""]))
+    |> Enum.map(&to_string/1)
+    |> Enum.uniq()
+  end
+
   # Opens a user's inspector drawer, resetting it to the Overview tab and picking up whatever
   # tabs plugins contribute through the `:user_inspect` hook point.
-  # The Overview tab is always present; hooked tabs come after it. No hooks means no rail.
-  defp user_inspect_tabs([]), do: []
-
+  # Overview and Events are always present; hooked tabs come after them.
   defp user_inspect_tabs(hooks) do
-    [%{id: :overview, title: "Overview", icon: "🧭"} | hooks]
+    [
+      %{id: :overview, title: "Overview", icon: "🧭"},
+      %{id: :events, title: "Events", icon: "📡"}
+    ] ++ hooks
   end
 
   defp select_user(socket, player_id) do
@@ -1128,7 +1183,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
           on_select_tab="switch_user_inspect_tab"
           target={@myself}
         >
-          <%= if @user_inspect_tab == "overview" or @user_inspect_hooks == [] do %>
+          <%= if @user_inspect_tab in ["overview", "", nil] do %>
             <%= if sel_is_protected do %>
               <div class="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-center gap-2">
                 <span>🔒</span>
@@ -1219,26 +1274,71 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
               <% end %>
             </div>
           <% else %>
-            <%= for hook <- @user_inspect_hooks, to_string(hook.id) == @user_inspect_tab do %>
-              <% mod = hook[:module] || hook["module"] %>
-              <% mod_atom = cond do
-                   is_atom(mod) -> mod
-                   is_binary(mod) ->
-                     try do
-                       String.to_existing_atom(mod)
-                     rescue
-                       _ -> nil
-                     end
-                   true -> nil
-                 end %>
-              <%= if mod_atom && Code.ensure_loaded?(mod_atom) do %>
-                <.live_component
-                  module={mod_atom}
-                  id={"user_inspect_#{hook.id}"}
-                  user={@selected_user}
-                />
-              <% else %>
-                <p class="text-xs text-gray-400 italic">This tab does not provide a view.</p>
+            <%= if @user_inspect_tab == "events" do %>
+              <% events = user_events(@activity_events, @selected_user) %>
+              <div class="space-y-2">
+                <div class="flex items-center justify-between">
+                  <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Events triggered by this account</h4>
+                  <span class="text-[10px] font-mono text-gray-400"><%= length(events) %> in the live buffer</span>
+                </div>
+
+                <%= if events == [] do %>
+                  <p class="text-xs text-gray-400 italic bg-gray-50 p-3 rounded-xl border border-gray-200">
+                    Nothing yet. An event is attributed to this account when the action chain that raised it started with them — including the internal calls that chain makes.
+                  </p>
+                <% else %>
+                  <div class="space-y-1.5 max-h-[320px] overflow-y-auto custom-scrollbar">
+                    <%= for ev <- events do %>
+                      <% errored? = event_errored?(ev) %>
+                      <% origin = ev[:context] && (ev[:context][:origin] || ev[:context]["origin"]) %>
+                      <% show_origin? = origin not in [nil, ""] and to_string(origin) != to_string(@selected_user["player_id"]) %>
+                      <div class={"p-2.5 rounded-xl border text-xs #{if errored?, do: "bg-red-50/70 border-red-200", else: "bg-gray-50 border-gray-200"}"}>
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                          <div class="flex items-center gap-2 min-w-0">
+                            <span class={"px-1.5 py-0.5 rounded font-mono font-bold text-[10px] border #{if errored?, do: "bg-red-100 text-red-700 border-red-200", else: "bg-white text-purple-700 border-purple-200"}"}>
+                              <%= ev[:event] %>
+                            </span>
+                            <%= if show_origin? do %>
+                              <span class="text-[10px] text-gray-500 font-mono truncate">via <%= origin %></span>
+                            <% end %>
+                          </div>
+                          <span class="text-[10px] text-gray-400 font-mono"><%= ev[:time] %></span>
+                        </div>
+
+                        <details class="group mt-1">
+                          <summary class="cursor-pointer select-none text-[10px] font-bold text-gray-500 uppercase tracking-wider list-none">
+                            <span class="group-open:hidden">▸ Payload</span>
+                            <span class="hidden group-open:inline">▾ Payload</span>
+                          </summary>
+                          <pre class="mt-1 p-2 bg-gray-950 text-emerald-300 rounded-lg overflow-x-auto font-mono text-[10px] leading-relaxed custom-scrollbar"><%= event_json(ev[:payload]) %></pre>
+                        </details>
+                      </div>
+                    <% end %>
+                  </div>
+                <% end %>
+              </div>
+            <% else %>
+              <%= for hook <- @user_inspect_hooks, to_string(hook.id) == @user_inspect_tab do %>
+                <% mod = hook[:module] || hook["module"] %>
+                <% mod_atom = cond do
+                     is_atom(mod) -> mod
+                     is_binary(mod) ->
+                       try do
+                         String.to_existing_atom(mod)
+                       rescue
+                         _ -> nil
+                       end
+                     true -> nil
+                   end %>
+                <%= if mod_atom && Code.ensure_loaded?(mod_atom) do %>
+                  <.live_component
+                    module={mod_atom}
+                    id={"user_inspect_#{hook.id}"}
+                    user={@selected_user}
+                  />
+                <% else %>
+                  <p class="text-xs text-gray-400 italic">This tab does not provide a view.</p>
+                <% end %>
               <% end %>
             <% end %>
           <% end %>
