@@ -85,7 +85,7 @@ file_bucket ──▶ database
 | `exoforge_std_resources` | Store | `resource_store` | `database` | Schema-driven resource tables and generic CRUD. |
 | `exoforge_std_file_bucket` | Storage / CDN | `file_bucket` | `database` | Pluggable binary/blob asset storage with tags, metadata, and HTTP file routes. |
 | `exoforge_std_metering` | Operations | `metering` | `database` | Usage metering per extension and action, persisted on the instance. |
-| `exoforge_std_observability` | Debug / History | `observability` | `database` | Cluster event history and the joins behind it: request timelines, failure groups, live-tail reads. |
+| `exoforge_std_observability` | Debug / History | `observability` | `database` | Cluster event history (day-indexed, hourly rollups, gzip archive with retention) and the joins behind it: request timelines, failure groups, live-tail reads. |
 | `exoforge_std_transport` | Gateway Abstraction | `transport` | — | Common gateway abstraction, framing normalization, and RPC dispatching for network ingress. |
 | `exoforge_std_cron` | Operations | `cron` | — | Scheduled background task execution and recurring cron runner. |
 

@@ -85,6 +85,23 @@ defmodule Exoforge.Std.Services do
       scope("studio")
     end
 
+    @doc "One page of stored events, filtered; ranges older than the hot window come from the archive."
+    action :events do
+      params(
+        rid: [type: :string, optional: true],
+        player: [type: :string, optional: true],
+        event: [type: :string, optional: true],
+        status: [type: :string, optional: true],
+        since_ms: [type: :integer, optional: true],
+        until_ms: [type: :integer, optional: true],
+        limit: [type: :integer, optional: true],
+        offset: [type: :integer, optional: true]
+      )
+
+      returns(events: [:map], total: :integer, capped: :boolean)
+      scope("studio")
+    end
+
     @doc "One request's timeline (or one caller's recent activity): calls, events, logs and failures."
     action :timeline do
       params(
@@ -100,6 +117,13 @@ defmodule Exoforge.Std.Services do
 
     @doc "Drops the in-memory ring and the persisted event history."
     action :clear_events do
+      returns(status: :string)
+      scope("admin")
+    end
+
+    @doc "Drops one caller's hot events (account deletion); archived files are left untouched."
+    action :purge_events do
+      params(origin: :string)
       returns(status: :string)
       scope("admin")
     end

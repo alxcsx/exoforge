@@ -82,12 +82,8 @@ defmodule Exoforge.Std.Observability.Analytics do
   defp origin_event_nodes(player, since) do
     player = to_string(player)
 
-    Events.list(50)
-    |> Enum.filter(fn event ->
-      context = Map.get(event, :context) || %{}
-      origin = to_string(context[:origin] || context["origin"] || context[:source] || "")
-      origin == player and div(event.timestamp, 1000) >= since
-    end)
+    # Hot table first, archive when the range reaches back; the store caps the search.
+    Events.query(%{player: player, since_ms: since}, 100).events
     |> Enum.map(&event_node/1)
   end
 

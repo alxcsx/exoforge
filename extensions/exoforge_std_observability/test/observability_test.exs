@@ -142,6 +142,125 @@ defmodule Exoforge.Std.ObservabilityTest do
              ActionDispatcher.dispatch_internal(:observability, :recent_events, %{limit: 10})
   end
 
+  test "events persist with day, origin, rid and status, and roll up by hour" do
+    Events.record(
+      "action:auth.login",
+      %{status: "ok"},
+      %{origin: "alice", rid: "r_persist", topic: "global"}
+    )
+
+    Events.flush!()
+
+    %{events: [event], total: 1} = Events.page(%{rid: "r_persist"})
+    assert event.event == "action:auth.login"
+    assert event.origin == "alice"
+    assert event.status == "ok"
+    assert event.day == Date.utc_today() |> Date.to_iso8601()
+    assert event.rid == "r_persist"
+
+    [row | _] =
+      Exoforge.ActionDispatcher.dispatch_internal(:database, :execute, %{
+        plugin: :observability,
+        operation: "SELECT n FROM event_rollups WHERE day = $1 AND event = $2 AND origin = $3",
+        arguments: [event.day, "action:auth.login", "alice"]
+      })
+      |> elem(1)
+      |> Map.get(:rows)
+
+    assert row["n"] == 1
+  end
+
+  test "retention archives an old day to gzip, then drops the rows, and the archive answers queries" do
+    dir = Path.join(System.tmp_dir!(), "exo-archive-#{System.unique_integer([:positive])}")
+    System.put_env("EXOFORGE_EVENT_ARCHIVE_DIR", dir)
+
+    on_exit(fn ->
+      System.delete_env("EXOFORGE_EVENT_ARCHIVE_DIR")
+      File.rm_rf(dir)
+    end)
+
+    old_day = Date.utc_today() |> Date.add(-60) |> Date.to_iso8601()
+
+    old_at =
+      DateTime.new!(Date.from_iso8601!(old_day), ~T[12:00:00], "Etc/UTC")
+      |> DateTime.to_unix(:millisecond)
+
+    assert {:ok, _} =
+             ActionDispatcher.dispatch_internal(:database, :execute, %{
+               plugin: :observability,
+               operation:
+                 "INSERT INTO events (id, at, day, event, origin, rid, status, payload, context, time, timestamp) " <>
+                   "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
+               arguments: [
+                 "ev_archived",
+                 old_at,
+                 old_day,
+                 "action:player_data.get_player",
+                 "alice",
+                 "r_archived",
+                 "error: :not_found",
+                 ~s({"player_id":"alice"}),
+                 ~s({"origin":"alice","rid":"r_archived"}),
+                 "12:00:00",
+                 old_at * 1000
+               ]
+             })
+
+    assert [^old_day] = Events.maintain()
+
+    path = Path.join(dir, "events-#{old_day}.ndjson.gz")
+    assert File.exists?(path)
+
+    [line | _] = File.stream!(path, [:compressed, :utf8], :line) |> Enum.take(1)
+    archived = Jason.decode!(line)
+    assert archived["rid"] == "r_archived"
+    assert archived["day"] == old_day
+
+    # The hot table no longer has it; the archive catalog does.
+    assert Events.page(%{rid: "r_archived"}).events == []
+
+    assert [%{"day" => ^old_day}] =
+             ActionDispatcher.dispatch_internal(:database, :execute, %{
+               plugin: :observability,
+               operation: "SELECT day FROM event_archives WHERE day = $1",
+               arguments: [old_day]
+             })
+             |> elem(1)
+             |> Map.get(:rows)
+
+    # An old request id is still findable, and the timeline includes its archived event.
+    assert [%{rid: "r_archived"}] = Events.for_rid("r_archived")
+    assert Enum.any?(Analytics.timeline(%{rid: "r_archived"}), &(&1.kind == :event))
+  end
+
+  test "log lines survive the memory buffer and are found by request id in the table" do
+    rid = "r_log_db"
+
+    previous =
+      Exoforge.RequestContext.enter(%{origin: "alice", rid: rid, depth: 0, capture: :off})
+
+    :ok = Exoforge.ExtensionLogs.append(:db_log_plugin, 1, "persisted line")
+    Exoforge.RequestContext.restore(previous)
+
+    # Persistence is asynchronous.
+    :timer.sleep(200)
+    :ets.delete_all_objects(:exo_extension_logs)
+
+    entries = Exoforge.ExtensionLogs.entries_for_rid(rid)
+    assert Enum.any?(entries, &(&1.message == "persisted line"))
+  end
+
+  test "purge_origin drops one caller's hot events" do
+    Events.record("action:auth.login", %{}, %{origin: "alice", rid: "r_purge"})
+    Events.record("action:auth.login", %{}, %{origin: "bob", rid: "r_keep"})
+    Events.flush!()
+
+    Events.purge_origin("alice")
+
+    assert Events.page(%{rid: "r_purge"}).events == []
+    assert [_] = Events.page(%{rid: "r_keep"}).events
+  end
+
   test "a player timeline filters the retained samples by caller" do
     for caller <- ["alice", "bob"] do
       previous =

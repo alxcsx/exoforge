@@ -45,6 +45,23 @@ defmodule Exoforge.Std.Observability do
   end
 
   @impl true
+  defaction events(payload), scope: Exoforge.Auth.Roles.studio() do
+    {:ok, Events.query(payload, int(payload, :limit, 25), int(payload, :offset, 0))}
+  end
+
+  @impl true
+  defaction purge_events(payload), scope: Exoforge.Auth.Roles.admin() do
+    case value(payload, :origin) do
+      origin when is_binary(origin) and origin != "" ->
+        Events.purge_origin(origin)
+        {:ok, %{status: "purged"}}
+
+      _ ->
+        {:error, :invalid_origin}
+    end
+  end
+
+  @impl true
   defaction timeline(payload), scope: Exoforge.Auth.Roles.studio() do
     nodes =
       Analytics.timeline(%{

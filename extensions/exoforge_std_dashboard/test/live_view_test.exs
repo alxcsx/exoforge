@@ -661,28 +661,29 @@ defmodule Exoforge.DashboardLiveViewTest do
                  email: "#{viewer}@exoforge.test"
                })
 
-      own_key = "action:player_data.update_player"
-      own_payload = %{player_id: viewer, status: "ok"}
-      own_context = %{origin: viewer, source: viewer, topic: "global", rid: "r_viewer"}
+      for n <- 1..30 do
+        Exoforge.Std.Observability.Events.record(
+          "action:player_data.update_player",
+          %{player_id: viewer, n: n, status: "ok"},
+          %{origin: viewer, source: viewer, rid: "r_viewer", topic: "global"}
+        )
+      end
 
-      other_key = "action:someone_else.only_here"
-      other_payload = %{player_id: "someone_else", status: "ok"}
-      other_context = %{origin: "someone_else", source: "someone_else", topic: "global"}
+      Exoforge.Std.Observability.Events.record(
+        "action:someone_else.only_here",
+        %{player_id: "someone_else", status: "ok"},
+        %{origin: "someone_else", source: "someone_else", topic: "global"}
+      )
+
+      Exoforge.Std.Observability.Events.flush!()
 
       conn =
         build_conn()
-        |> Plug.Test.init_test_session(%{
-          "admin_player_id" => "admin",
-          "admin_scopes" => ["admin"]
-        })
+        |> Plug.Test.init_test_session(%{"admin_player_id" => "admin", "admin_scopes" => ["admin"]})
 
       {:ok, view, html} = live(conn, "/tab/exoforge_std_auth?focus=user:#{viewer}")
 
       assert html =~ "Events"
-
-      send(view.pid, {:exo_event, own_key, own_payload, own_context})
-      send(view.pid, {:exo_event, other_key, other_payload, other_context})
-      _ = render(view)
 
       html =
         view
@@ -691,10 +692,18 @@ defmodule Exoforge.DashboardLiveViewTest do
 
       assert html =~ "Events triggered by this account"
       assert html =~ "action:player_data.update_player"
+      assert html =~ "Page 1 of 2"
 
-      # Another account's event is in the same live buffer and must not be in this list.
+      # Another account's event is stored too and must not be in this history.
       refute html =~ "action:someone_else.only_here"
-      assert html =~ viewer
+
+      html =
+        view
+        |> element(~s{button[phx-click=user_events_page][phx-value-page="next"]})
+        |> render_click()
+
+      assert html =~ "Page 2 of 2"
+
     end
 
     test "mounts PlayerDataView from dashboard_views for exoforge_std_player_data" do

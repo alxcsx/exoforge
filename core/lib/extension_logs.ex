@@ -45,7 +45,7 @@ defmodule Exoforge.ExtensionLogs do
       lvl = normalize_level(level)
       rid = Exoforge.RequestContext.rid()
       :ets.insert(table, {id, at, lvl, message, rid})
-      persist_async(id, at, lvl, message)
+      persist_async(id, at, lvl, message, rid)
       :ok
     else
       :rate_limited
@@ -119,19 +119,78 @@ defmodule Exoforge.ExtensionLogs do
   def entries_for_rid(rid) when is_binary(rid) and rid != "" do
     ensure_table()
 
-    @table
-    |> :ets.tab2list()
-    |> Enum.filter(fn
-      {_id, _at, _level, _message, ^rid} -> true
-      _ -> false
-    end)
-    |> Enum.sort_by(fn {_id, at, _level, _message, _rid} -> at end)
-    |> Enum.map(fn {_id, at, level, message, _rid} ->
-      %{at: at, level: level, level_name: level_name(level), message: message, rid: rid}
-    end)
+    from_memory =
+      @table
+      |> :ets.tab2list()
+      |> Enum.filter(fn
+        {_id, _at, _level, _message, ^rid} -> true
+        _ -> false
+      end)
+      |> Enum.sort_by(fn {_id, at, _level, _message, _rid} -> at end)
+      |> Enum.map(fn {_id, at, level, message, _rid} ->
+        %{at: at, level: level, level_name: level_name(level), message: message, rid: rid}
+      end)
+
+    case from_memory do
+      [] -> from_db_for_rid(rid)
+      entries -> entries
+    end
   end
 
   def entries_for_rid(_), do: []
+
+  @doc "Drops persisted lines older than `before_ms` (the retention pass calls this)."
+  def prune(before_ms) when is_integer(before_ms) do
+    Task.start(fn ->
+      try do
+        ensure_schema()
+
+        Exoforge.ActionDispatcher.dispatch_internal(:database, :execute, %{
+          plugin: :extension_logs,
+          operation: "DELETE FROM extension_logs WHERE timestamp < $1",
+          arguments: [before_ms]
+        })
+      rescue
+        _ -> :ok
+      catch
+        _, _ -> :ok
+      end
+    end)
+
+    :ok
+  end
+
+  defp from_db_for_rid(rid) do
+    try do
+      ensure_schema()
+
+      case Exoforge.ActionDispatcher.dispatch_internal(:database, :execute, %{
+             plugin: :extension_logs,
+             operation:
+               "SELECT level, level_name, message, timestamp, rid FROM extension_logs WHERE rid = $1 ORDER BY timestamp ASC LIMIT 500",
+             arguments: [rid]
+           }) do
+        {:ok, %{rows: rows}} when is_list(rows) ->
+          Enum.map(rows, fn row ->
+            at = String.to_integer(to_string(row["timestamp"] || "0"))
+            level = String.to_integer(to_string(row["level"] || "1"))
+
+            %{
+              at: at,
+              level: level,
+              level_name: to_string(row["level_name"] || level_name(level)),
+              message: to_string(row["message"] || ""),
+              rid: to_string(row["rid"] || rid)
+            }
+          end)
+
+        _ ->
+          []
+      end
+    rescue
+      _ -> []
+    end
+  end
 
   @doc "Drops every recorded line for an extension (called when it is removed)."
   def clear(extension_id) do
@@ -230,7 +289,7 @@ defmodule Exoforge.ExtensionLogs do
   defp level_name(3), do: "error"
   defp level_name(_), do: "info"
 
-  defp persist_async(id, at, level, message) do
+  defp persist_async(id, at, level, message, rid) do
     if id not in ["database", "lldb", "extension_logs"] do
       Task.start(fn ->
         try do
@@ -239,8 +298,8 @@ defmodule Exoforge.ExtensionLogs do
           Exoforge.ActionDispatcher.dispatch_internal(:database, :execute, %{
             plugin: :extension_logs,
             operation: """
-            INSERT INTO extension_logs (id, extension_id, level, level_name, message, timestamp)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO extension_logs (id, extension_id, level, level_name, message, timestamp, rid)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             """,
             arguments: [
               "log_#{System.unique_integer([:positive])}",
@@ -248,7 +307,8 @@ defmodule Exoforge.ExtensionLogs do
               level,
               level_name(level),
               message,
-              at
+              at,
+              rid
             ]
           })
         rescue
@@ -267,7 +327,7 @@ defmodule Exoforge.ExtensionLogs do
       case Exoforge.ActionDispatcher.dispatch_internal(:database, :execute, %{
              plugin: :extension_logs,
              operation:
-               "SELECT level, level_name, message, timestamp FROM extension_logs WHERE extension_id = $1 ORDER BY timestamp DESC LIMIT $2",
+               "SELECT level, level_name, message, timestamp, rid FROM extension_logs WHERE extension_id = $1 ORDER BY timestamp DESC LIMIT $2",
              arguments: [to_string(extension_id), limit]
            }) do
         {:ok, %{rows: rows}} when is_list(rows) ->
@@ -325,18 +385,43 @@ defmodule Exoforge.ExtensionLogs do
                level integer,
                level_name text,
                message text,
-               timestamp integer
+               timestamp integer,
+               rid text
              )
              """
            }) do
-        {:ok, _} -> :ok
-        :ok -> :ok
-        _ -> :retry
+        {:ok, _} ->
+          # A table created before the rid column existed gains it; CREATE TABLE does not add it.
+          unless column_exists?("extension_logs", "rid") do
+            _ =
+              Exoforge.ActionDispatcher.dispatch_internal(:database, :execute, %{
+                plugin: :extension_logs,
+                operation: "ALTER TABLE extension_logs ADD COLUMN rid text"
+              })
+          end
+
+          :ok
+
+        :ok ->
+          :ok
+
+        _ ->
+          :retry
       end
     rescue
       _ -> :retry
     catch
       _, _ -> :retry
+    end
+  end
+
+  defp column_exists?(table, column) do
+    case Exoforge.ActionDispatcher.dispatch_internal(:database, :table_columns, %{
+           plugin: :extension_logs,
+           table: table
+         }) do
+      {:ok, %{columns: columns}} -> to_string(column) in columns
+      _ -> false
     end
   end
 end

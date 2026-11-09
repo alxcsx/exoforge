@@ -680,6 +680,11 @@ defmodule Exoforge.Std.Auth do
         # Retain player record without user linkage for data retention and telemetry compliance
         _ = ActionDispatcher.dispatch_internal(:player_data, :retain_player, %{player_id: pid})
 
+        # The account's stored cluster events are personal data too. Best-effort: an instance
+        # without the observability extension still deletes the account. Cold archive files are
+        # not rewritten here (documented ceiling).
+        _ = ActionDispatcher.dispatch_internal(:observability, :purge_events, %{origin: pid})
+
         {:ok, %{user_id: pid, player_id: pid, status: "deleted"}}
     end
   end

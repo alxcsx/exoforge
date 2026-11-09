@@ -31,6 +31,12 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
        selected_user: nil,
        user_inspect_tab: "overview",
        user_inspect_hooks: [],
+       user_events: [],
+       user_events_total: 0,
+       user_events_page: 1,
+       user_events_pages: 1,
+       user_events_capped: false,
+       user_events_archive: false,
        register_form: %{
          "user_id" => "",
          "player_id" => "",
@@ -356,7 +362,27 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
 
   @impl true
   def handle_event("switch_user_inspect_tab", %{"tab" => tab}, socket) do
-    {:noreply, assign(socket, :user_inspect_tab, tab)}
+    socket = assign(socket, :user_inspect_tab, tab)
+    socket = if tab == "events", do: socket |> assign(user_events_page: 1) |> load_user_events(), else: socket
+    {:noreply, socket}
+  end
+
+  def handle_event("user_events_page", %{"page" => page}, socket) do
+    target = if page == "next", do: socket.assigns.user_events_page + 1, else: socket.assigns.user_events_page - 1
+
+    {:noreply,
+     socket |> assign(user_events_page: max(target, 1)) |> load_user_events()}
+  end
+
+  def handle_event("toggle_user_events_archive", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(user_events_archive: !socket.assigns.user_events_archive, user_events_page: 1)
+     |> load_user_events()}
+  end
+
+  def handle_event("refresh_user_events", _params, socket) do
+    {:noreply, load_user_events(socket)}
   end
 
   @impl true
@@ -371,23 +397,9 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
 
   ## ---- PRIVATE HELPERS ----
 
-  # An event belongs to an account when the action chain that raised it started with them (origin),
-  # when they were the transport caller (source), or when its payload names them - auth.login and
-  # auth.register carry the player id, and a login is triggered by the user who logged in.
-  defp user_events(events, user) do
-    ids =
-      [user["player_id"], user["user_id"], user["email"]]
-      |> Enum.reject(&(&1 in [nil, ""]))
-      |> Enum.map(&to_string/1)
-      |> MapSet.new()
-
-    if MapSet.size(ids) == 0 do
-      []
-    else
-      (events || [])
-      |> Enum.filter(fn ev -> Enum.any?(event_attribution(ev), &MapSet.member?(ids, &1)) end)
-    end
-  end
+  # Opens a user's inspector drawer, resetting it to the Overview tab and picking up whatever
+  # tabs plugins contribute through the `:user_inspect` hook point.
+  @user_events_per_page 25
 
   defp event_errored?(ev) do
     payload = Map.get(ev, :payload) || %{}
@@ -404,27 +416,42 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
     end
   end
 
-  defp event_attribution(ev) do
-    payload = Map.get(ev, :payload) || %{}
-    context = Map.get(ev, :context) || %{}
+  # The tab reads history through the observability contract: the live tail is the console's job,
+  # and a support question is about what happened earlier.
+  defp load_user_events(socket) do
+    player = socket.assigns[:selected_user] && socket.assigns.selected_user["player_id"]
 
-    [
-      value(context, :origin),
-      value(context, :source),
-      value(payload, :player_id),
-      value(payload, :user_id),
-      value(payload, :email)
-    ]
-    |> Enum.reject(&(&1 in [nil, ""]))
-    |> Enum.map(&to_string/1)
-    |> Enum.uniq()
+    if is_nil(player) do
+      assign(socket, user_events: [], user_events_total: 0, user_events_pages: 1)
+    else
+      page = max(socket.assigns.user_events_page, 1)
+
+      payload = %{
+        player: to_string(player),
+        limit: @user_events_per_page,
+        offset: (page - 1) * @user_events_per_page
+      }
+
+      payload = if socket.assigns.user_events_archive, do: Map.put(payload, :since_ms, 1), else: payload
+
+      case ActionDispatcher.dispatch_internal(:observability, :events, payload) do
+        {:ok, %{events: events, total: total} = result} ->
+          pages = max(ceil(total / @user_events_per_page), 1)
+
+          assign(socket,
+            user_events: events,
+            user_events_total: total,
+            user_events_pages: pages,
+            user_events_page: min(page, pages),
+            user_events_capped: Map.get(result, :capped, false)
+          )
+
+        _ ->
+          assign(socket, user_events: [], user_events_total: 0, user_events_pages: 1, user_events_capped: false)
+      end
+    end
   end
 
-  # Fresh events carry atom keys; the ones warmed from the database were decoded from JSON.
-  defp value(map, key), do: Map.get(map, key) || Map.get(map, to_string(key))
-
-  # Opens a user's inspector drawer, resetting it to the Overview tab and picking up whatever
-  # tabs plugins contribute through the `:user_inspect` hook point.
   # Overview and Events are always present; hooked tabs come after them.
   defp user_inspect_tabs(hooks) do
     [
@@ -1273,31 +1300,59 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
             </div>
           <% else %>
             <%= if @user_inspect_tab == "events" do %>
-              <% events = user_events(@activity_events, @selected_user) %>
               <div class="space-y-2">
-                <div class="flex items-center justify-between">
+                <div class="flex flex-wrap items-center justify-between gap-2">
                   <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Events triggered by this account</h4>
-                  <span class="text-[10px] font-mono text-gray-400"><%= length(events) %> in the live buffer</span>
+                  <div class="flex items-center gap-1.5 text-[10px] text-gray-400">
+                    <span class="font-mono"><%= @user_events_total %> stored</span>
+                    <button
+                      type="button"
+                      phx-click="refresh_user_events"
+                      phx-target={@myself}
+                      class="px-1.5 py-0.5 rounded bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold"
+                      title="Reload the page"
+                    >
+                      ↻
+                    </button>
+                    <button
+                      type="button"
+                      phx-click="toggle_user_events_archive"
+                      phx-target={@myself}
+                      class={"px-1.5 py-0.5 rounded font-bold border #{if @user_events_archive, do: "bg-primary-50 border-primary-200 text-primary-700", else: "bg-gray-100 border-gray-200 text-gray-600"}"}
+                      title="Search archived days too (capped)"
+                    >
+                      📦 Archive
+                    </button>
+                  </div>
                 </div>
 
-                <%= if events == [] do %>
+                <%= if @user_events == [] do %>
                   <p class="text-xs text-gray-400 italic bg-gray-50 p-3 rounded-xl border border-gray-200">
                     Nothing yet. An event is attributed to this account when the action chain that raised it started with them — including the internal calls that chain makes.
                   </p>
                 <% else %>
                   <div class="space-y-1.5 max-h-[320px] overflow-y-auto custom-scrollbar">
-                    <%= for ev <- events do %>
+                    <%= for ev <- @user_events do %>
                       <% errored? = event_errored?(ev) %>
-                      <% origin = ev[:context] && (ev[:context][:origin] || ev[:context]["origin"]) %>
-                      <% show_origin? = origin not in [nil, ""] and to_string(origin) != to_string(@selected_user["player_id"]) %>
                       <div class={"p-2.5 rounded-xl border text-xs #{if errored?, do: "bg-red-50/70 border-red-200", else: "bg-gray-50 border-gray-200"}"}>
                         <div class="flex flex-wrap items-center justify-between gap-2">
                           <div class="flex items-center gap-2 min-w-0">
                             <span class={"px-1.5 py-0.5 rounded font-mono font-bold text-[10px] border #{if errored?, do: "bg-red-100 text-red-700 border-red-200", else: "bg-white text-purple-700 border-purple-200"}"}>
-                              <%= ev[:event] %>
+                              <%= ev.event %>
                             </span>
-                            <%= if show_origin? do %>
-                              <span class="text-[10px] text-gray-500 font-mono truncate">via <%= origin %></span>
+                            <%= if ev[:origin] not in [nil, ""] and to_string(ev[:origin]) != to_string(@selected_user["player_id"]) do %>
+                              <span class="text-[10px] text-gray-500 font-mono truncate">via <%= ev.origin %></span>
+                            <% end %>
+                            <%= if ev[:rid] not in [nil, ""] do %>
+                              <button
+                                type="button"
+                                phx-click="open_timeline"
+                                phx-value-rid={ev.rid}
+                                class="px-1.5 py-0.5 rounded bg-primary-50 border border-primary-200 text-primary-700 text-[10px] font-bold hover:bg-primary-100"
+                                title="Open this event's request timeline"
+                              >
+                                🔭
+                              </button>
                             <% end %>
                           </div>
                           <span class="text-[10px] text-gray-400 font-mono"><%= ev[:time] %></span>
@@ -1310,6 +1365,32 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                           </summary>
                           <pre class="mt-1 p-2 bg-gray-950 text-emerald-300 rounded-lg overflow-x-auto font-mono text-[10px] leading-relaxed custom-scrollbar"><%= event_json(ev[:payload]) %></pre>
                         </details>
+                      </div>
+                    <% end %>
+                  </div>
+
+                  <div class="flex items-center justify-between text-[10px] text-gray-400 font-mono">
+                    <span>
+                      Page <%= @user_events_page %> of <%= @user_events_pages %><%= if @user_events_capped, do: " (capped by the archive search)" %>
+                    </span>
+                    <%= if @user_events_pages > 1 do %>
+                      <div class="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          phx-click="user_events_page"
+                          phx-value-page="prev"
+                          phx-target={@myself}
+                          disabled={@user_events_page <= 1}
+                          class="px-2 py-0.5 rounded bg-white border border-gray-200 disabled:opacity-40"
+                        >‹</button>
+                        <button
+                          type="button"
+                          phx-click="user_events_page"
+                          phx-value-page="next"
+                          phx-target={@myself}
+                          disabled={@user_events_page >= @user_events_pages}
+                          class="px-2 py-0.5 rounded bg-white border border-gray-200 disabled:opacity-40"
+                        >›</button>
                       </div>
                     <% end %>
                   </div>
