@@ -171,7 +171,7 @@ defmodule Exoforge.Std.Http.Cors do
 
   defp init_db do
     _ =
-      ActionDispatcher.dispatch(:database, :execute, %{
+      ActionDispatcher.dispatch_internal(:database, :execute, %{
         plugin: :http,
         operation: "CREATE TABLE IF NOT EXISTS #{@settings_table} (key text PRIMARY KEY, value text)"
       })
@@ -180,7 +180,7 @@ defmodule Exoforge.Std.Http.Cors do
   end
 
   defp load_from_db do
-    case ActionDispatcher.dispatch(:database, :execute, %{
+    case ActionDispatcher.dispatch_internal(:database, :execute, %{
            plugin: :http,
            operation: "SELECT value FROM #{@settings_table} WHERE key = $1",
            arguments: ["cors_config"]
@@ -205,7 +205,7 @@ defmodule Exoforge.Std.Http.Cors do
   defp persist_to_db(config) do
     json = Jason.encode!(config)
     _ =
-      ActionDispatcher.dispatch(:database, :execute, %{
+      ActionDispatcher.dispatch_internal(:database, :execute, %{
         plugin: :http,
         operation: "INSERT INTO #{@settings_table} (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2",
         arguments: ["cors_config", json]

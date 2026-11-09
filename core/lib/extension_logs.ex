@@ -84,7 +84,7 @@ defmodule Exoforge.ExtensionLogs do
 
     Task.start(fn ->
       try do
-        Exoforge.ActionDispatcher.dispatch(:database, :execute, %{
+        Exoforge.ActionDispatcher.dispatch_internal(:database, :execute, %{
           plugin: :extension_logs,
           operation: "DELETE FROM extension_logs WHERE extension_id = $1",
           arguments: [id]
@@ -179,7 +179,7 @@ defmodule Exoforge.ExtensionLogs do
         try do
           ensure_schema()
 
-          Exoforge.ActionDispatcher.dispatch(:database, :execute, %{
+          Exoforge.ActionDispatcher.dispatch_internal(:database, :execute, %{
             plugin: :extension_logs,
             operation: """
             INSERT INTO extension_logs (id, extension_id, level, level_name, message, timestamp)
@@ -207,7 +207,7 @@ defmodule Exoforge.ExtensionLogs do
     try do
       ensure_schema()
 
-      case Exoforge.ActionDispatcher.dispatch(:database, :execute, %{
+      case Exoforge.ActionDispatcher.dispatch_internal(:database, :execute, %{
              plugin: :extension_logs,
              operation: "SELECT level, level_name, message, timestamp FROM extension_logs WHERE extension_id = $1 ORDER BY timestamp DESC LIMIT $2",
              arguments: [to_string(extension_id), limit]
@@ -256,7 +256,7 @@ defmodule Exoforge.ExtensionLogs do
 
   defp do_create_schema do
     try do
-      case Exoforge.ActionDispatcher.dispatch(:database, :execute, %{
+      case Exoforge.ActionDispatcher.dispatch_internal(:database, :execute, %{
              plugin: :extension_logs,
              operation: """
              CREATE TABLE IF NOT EXISTS extension_logs (

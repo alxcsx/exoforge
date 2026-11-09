@@ -881,25 +881,25 @@ public static class Program
     {
         Console.WriteLine($"Title {report.TitleId}  (studio {report.StudioId})");
 
-        if (report.Plugins.Count == 0)
+        if (report.Extensions.Count == 0)
         {
             Console.WriteLine("(no usage recorded yet)");
             return;
         }
 
-        foreach (var plugin in report.Plugins)
+        foreach (var extension in report.Extensions)
         {
-            long calls = plugin.Actions.Sum(a => a.Invocations);
-            long errors = plugin.Actions.Sum(a => a.Errors);
+            long calls = extension.Actions.Sum(a => a.Invocations);
+            long errors = extension.Actions.Sum(a => a.Errors);
 
             Console.WriteLine();
             Console.WriteLine(
-                $"{plugin.PluginId}  {calls} calls  {errors} errors  " +
-                $"cpu {FormatDuration(plugin.CpuMs)}  peak RSS {FormatBytes(plugin.PeakRssKb * 1024L)}  " +
-                $"up {FormatDuration(plugin.UptimeMs)}  {plugin.Events} events  " +
-                $"{plugin.HostCalls} host calls  {plugin.Restarts} restarts");
+                $"{extension.ExtensionId}  {calls} calls  {errors} errors  " +
+                $"cpu {FormatDuration(extension.CpuMs)}  peak RSS {FormatBytes(extension.PeakRssKb * 1024L)}  " +
+                $"up {FormatDuration(extension.UptimeMs)}  {extension.Events} events  " +
+                $"{extension.HostCalls} host calls  {extension.Restarts} restarts");
 
-            foreach (var action in plugin.Actions)
+            foreach (var action in extension.Actions)
             {
                 Console.WriteLine(
                     $"  {action.Action,-24} {action.Invocations,8} calls  {action.Errors,5} errors  " +

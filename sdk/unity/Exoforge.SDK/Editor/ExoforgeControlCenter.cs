@@ -426,8 +426,8 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
             // Generate runtime config
             ExoforgeRuntimeConfigGenerator.Generate();
 
-            // Generate stubs for local plugins
-            await deployer.GenerateAllPluginStubsAsync();
+            // Generate stubs for local extensions
+            await deployer.GenerateAllExtensionStubsAsync();
 
             AssetDatabase.Refresh();
             UnityEngine.Debug.Log("[Exoforge] ✓ Successfully repaired and regenerated C# client bindings and plugin stubs.");

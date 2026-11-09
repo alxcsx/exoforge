@@ -133,7 +133,7 @@ defmodule Exoforge.Std.Resources do
 
   defp existing_columns(pid, table) do
     # The adapter answers with its own dialect (M33 Fix 9); a PRAGMA is SQLite-only.
-    case ActionDispatcher.dispatch(:database, :table_columns, %{plugin: pid, table: table}) do
+    case ActionDispatcher.dispatch_internal(:database, :table_columns, %{plugin: pid, table: table}) do
       {:ok, %{columns: columns}} -> columns
       _ -> []
     end
@@ -716,7 +716,7 @@ defmodule Exoforge.Std.Resources do
   defp mark_migrated(key), do: :ets.insert(@cache, {key, true})
 
   defp db(plugin_id, sql, args \\ []) do
-    ActionDispatcher.dispatch(:database, :execute, %{
+    ActionDispatcher.dispatch_internal(:database, :execute, %{
       plugin: plugin_id,
       operation: sql,
       arguments: args

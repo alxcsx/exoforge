@@ -76,7 +76,7 @@ defmodule Exoforge.ActionDispatcherTest do
   end
 
   test "dispatches action directly to plugin module" do
-    assert {:ok, %{sum: 7}} = ActionDispatcher.dispatch(TestPlugin, :add, %{a: 3, b: 4})
+    assert {:ok, %{sum: 7}} = ActionDispatcher.dispatch_internal(TestPlugin, :add, %{a: 3, b: 4})
   end
 
   test "dispatches action by contract module via ExtensionRegistry" do
@@ -91,8 +91,8 @@ defmodule Exoforge.ActionDispatcherTest do
     assert :ok = ExtensionRegistry.register(manifest)
 
     # Dispatching to the contract module TestService.Math
-    assert {:ok, %{sum: 12}} = ActionDispatcher.dispatch(TestService.Math, :add, %{a: 5, b: 7})
-    assert {:error, :division_by_zero} = ActionDispatcher.dispatch(TestService.Math, :divide, %{a: 10, b: 0})
+    assert {:ok, %{sum: 12}} = ActionDispatcher.dispatch_internal(TestService.Math, :add, %{a: 5, b: 7})
+    assert {:error, :division_by_zero} = ActionDispatcher.dispatch_internal(TestService.Math, :divide, %{a: 10, b: 0})
   end
 
   test "returns error when service is not found" do
@@ -105,10 +105,12 @@ defmodule Exoforge.ActionDispatcherTest do
 
   describe "scope enforcement" do
     test "internal dispatch to scoped action succeeds" do
-      assert {:ok, %{status: "reset_ok"}} = ActionDispatcher.dispatch(TestPlugin, :admin_reset, %{})
+      assert {:ok, %{status: "reset_ok"}} = ActionDispatcher.dispatch_internal(TestPlugin, :admin_reset, %{})
+      assert {:ok, %{status: "reset_ok"}} = ActionDispatcher.dispatch(TestPlugin, :admin_reset, %{}, internal: true)
     end
 
-    test "external unauthenticated caller is rejected with :unauthorized" do
+    test "external unauthenticated caller without scopes is denied by default with :unauthorized" do
+      assert {:error, :unauthorized} = ActionDispatcher.dispatch(TestPlugin, :admin_reset, %{})
       assert {:error, :unauthorized} =
                ActionDispatcher.dispatch(TestPlugin, :admin_reset, %{}, caller_scopes: [])
     end
@@ -139,17 +141,17 @@ defmodule Exoforge.ActionDispatcherTest do
   describe "parameter validation" do
     test "rejects invalid parameter types with descriptive error" do
       assert {:error, {:invalid_param_type, field: :b, expected: :integer, received: "invalid"}} =
-               ActionDispatcher.dispatch(TestPlugin, :add, %{a: 5, b: "invalid"})
+               ActionDispatcher.dispatch_internal(TestPlugin, :add, %{a: 5, b: "invalid"})
     end
 
     test "rejects missing required parameters when require_params is enabled" do
       assert {:error, {:missing_param, :target}} =
-               ActionDispatcher.dispatch(TestPlugin, :admin_reset, %{}, require_params: true)
+               ActionDispatcher.dispatch_internal(TestPlugin, :admin_reset, %{}, require_params: true)
     end
 
     test "accepts false boolean parameters" do
       assert {:ok, %{enabled: false}} =
-               ActionDispatcher.dispatch(TestPlugin, :flag, %{enabled: false}, require_params: true)
+               ActionDispatcher.dispatch_internal(TestPlugin, :flag, %{enabled: false}, require_params: true)
     end
   end
 end

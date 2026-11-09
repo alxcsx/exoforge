@@ -86,7 +86,7 @@ defmodule Exoforge.Std.ResourcesTest do
     :ok
   end
 
-  defp dispatch(action, payload), do: ActionDispatcher.dispatch(:resource_store, action, payload)
+  defp dispatch(action, payload), do: ActionDispatcher.dispatch_internal(:resource_store, action, payload)
 
   test "migrate creates the backing table" do
     assert {:ok, %{migrated: n}} = dispatch(:migrate, %{})
@@ -191,7 +191,7 @@ defmodule Exoforge.Std.ResourcesTest do
     # The resource's table lives in the database of the plugin that declared it, which is not the
     # plugin serving the store. Getting this wrong makes the test pass without testing anything.
     sql = fn statement ->
-      ActionDispatcher.dispatch(:database, :execute, %{
+      ActionDispatcher.dispatch_internal(:database, :execute, %{
         plugin: :widgets_plugin,
         operation: statement,
         arguments: []
@@ -243,7 +243,7 @@ defmodule Exoforge.Std.ResourcesTest do
 
   test "the choices are a database constraint too" do
     {:ok, %{rows: rows}} =
-      ActionDispatcher.dispatch(:database, :execute, %{
+      ActionDispatcher.dispatch_internal(:database, :execute, %{
         plugin: :tiers_plugin,
         operation: "SELECT sql FROM sqlite_master WHERE name = 'tiers'"
       })

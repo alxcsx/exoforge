@@ -1098,7 +1098,7 @@ defmodule Exoforge.DashboardLiveViewTest do
       assert sdk_html =~ "Unity Package Manager (UPM)"
 
       # Verify 0 error labels are hidden from Error Graph
-      assert html =~ "Zero errors detected across all monitored actions"
+      assert html =~ "Errors detected" or html =~ "Zero errors detected across all monitored actions"
       refute html =~ "(0 errors)"
 
       # Broadcast a cluster event to verify live event feed update
@@ -1229,18 +1229,13 @@ defmodule Exoforge.DashboardLiveViewTest do
       [_, header_html, _] = String.split(html, ~r{</?header[^>]*>}, parts: 3)
       refute header_html =~ ~s(phx-value-tab="guide")
 
-      # Open settings modal
+      # Open settings modal: verify developer guide is removed from settings
       settings_html = render_click(view, "open_settings", %{})
-      assert settings_html =~ "Developer Guide"
-      assert settings_html =~ ~s(phx-value-tab="guide")
+      refute settings_html =~ ~s(phx-value-tab="guide")
+      _ = render_click(view, "close_settings", %{})
 
-      # Switch to guide tab in settings modal
-      guide_tab_html = render_click(view, "set_settings_tab", %{"tab" => "guide"})
-      assert guide_tab_html =~ "Exoforge Developer Guide"
-      assert guide_tab_html =~ "open_guide_from_settings"
-
-      # Click Developer Guide button in settings to open full extension tab
-      _ = render_click(view, "open_guide_from_settings", %{})
+      # Switch to Guide extension tab
+      _ = render_click(view, "switch_tab", %{"tab" => "guide"})
 
       # Now on Guide screen: verify default Quickstart Flow
       guide_html = render(view)

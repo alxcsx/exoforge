@@ -473,7 +473,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
       _ ->
         attributes = ResourceForms.attributes(values, columns)
 
-        case ActionDispatcher.dispatch(:resource_store, :upsert, %{
+        case ActionDispatcher.dispatch_internal(:resource_store, :upsert, %{
                resource: name,
                attributes: attributes
              }) do
@@ -509,13 +509,13 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
         result =
           case form.mode do
             :new ->
-              ActionDispatcher.dispatch(:resource_store, :create, %{
+              ActionDispatcher.dispatch_internal(:resource_store, :create, %{
                 resource: name,
                 attributes: attributes
               })
 
             :edit ->
-              ActionDispatcher.dispatch(:resource_store, :update, %{
+              ActionDispatcher.dispatch_internal(:resource_store, :update, %{
                 resource: name,
                 id: Map.get(values, to_string(key.key)),
                 attributes: attributes
@@ -538,7 +538,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
   @impl true
   def handle_event("delete_resource", _params, socket) do
     _ =
-      ActionDispatcher.dispatch(:resource_store, :clear, %{
+      ActionDispatcher.dispatch_internal(:resource_store, :clear, %{
         resource: socket.assigns.selected_resource_name
       })
 

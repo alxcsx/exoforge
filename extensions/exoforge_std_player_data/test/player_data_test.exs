@@ -32,7 +32,7 @@ defmodule Exoforge.PlayerDataTest do
       EventDispatcher.subscribe(Exoforge.Std.Services.PlayerData.PlayerCreated)
 
       assert {:ok, result} =
-               ActionDispatcher.dispatch(:player_data, :create_player, %{
+               ActionDispatcher.dispatch_internal(:player_data, :create_player, %{
                  player_id: "hero_1",
                  user_id: "u_arthur",
                  profile: %{"name" => "Arthur", "level" => 1, "class" => "paladin"}
@@ -48,7 +48,7 @@ defmodule Exoforge.PlayerDataTest do
 
       # Verify get_player returns the created player
       assert {:ok, %{player: player}} =
-               ActionDispatcher.dispatch(:player_data, :get_player, %{player_id: "hero_1"})
+               ActionDispatcher.dispatch_internal(:player_data, :get_player, %{player_id: "hero_1"})
 
       assert player["name"] == "Arthur"
       assert player["class"] == "paladin"
@@ -56,33 +56,33 @@ defmodule Exoforge.PlayerDataTest do
 
     test "display names are unique across players" do
       assert {:ok, _} =
-               ActionDispatcher.dispatch(:player_data, :create_player, %{
+               ActionDispatcher.dispatch_internal(:player_data, :create_player, %{
                  player_id: "p_a",
                  profile: %{"name" => "Viper"}
                })
 
       # A second player cannot take the same name, even with different casing.
       assert {:error, :name_taken} =
-               ActionDispatcher.dispatch(:player_data, :create_player, %{
+               ActionDispatcher.dispatch_internal(:player_data, :create_player, %{
                  player_id: "p_b",
                  profile: %{"name" => "viper"}
                })
 
       assert {:ok, _} =
-               ActionDispatcher.dispatch(:player_data, :create_player, %{
+               ActionDispatcher.dispatch_internal(:player_data, :create_player, %{
                  player_id: "p_c",
                  profile: %{"name" => "Cobra"}
                })
 
       # Renaming onto a taken name is refused; keeping your own name is fine.
       assert {:error, :name_taken} =
-               ActionDispatcher.dispatch(:player_data, :update_player, %{
+               ActionDispatcher.dispatch_internal(:player_data, :update_player, %{
                  player_id: "p_c",
                  data: %{"name" => "Viper"}
                })
 
       assert {:ok, _} =
-               ActionDispatcher.dispatch(:player_data, :update_player, %{
+               ActionDispatcher.dispatch_internal(:player_data, :update_player, %{
                  player_id: "p_c",
                  data: %{"name" => "Cobra"}
                })
@@ -90,13 +90,13 @@ defmodule Exoforge.PlayerDataTest do
 
     test "updates player record" do
       _ =
-        ActionDispatcher.dispatch(:player_data, :create_player, %{
+        ActionDispatcher.dispatch_internal(:player_data, :create_player, %{
           player_id: "hero_2",
           profile: %{"name" => "Merlin", "level" => 10}
         })
 
       assert {:ok, %{player: updated}} =
-               ActionDispatcher.dispatch(:player_data, :update_player, %{
+               ActionDispatcher.dispatch_internal(:player_data, :update_player, %{
                  player_id: "hero_2",
                  data: %{"level" => 11, "title" => "Archmage"}
                })
@@ -108,7 +108,7 @@ defmodule Exoforge.PlayerDataTest do
 
     test "deletes player and emits player_deleted event" do
       _ =
-        ActionDispatcher.dispatch(:player_data, :create_player, %{
+        ActionDispatcher.dispatch_internal(:player_data, :create_player, %{
           player_id: "hero_3",
           profile: %{"name" => "Galahad"}
         })
@@ -117,14 +117,14 @@ defmodule Exoforge.PlayerDataTest do
       EventDispatcher.subscribe(Exoforge.Std.Services.PlayerData.PlayerDeleted)
 
       assert {:ok, %{status: "deleted"}} =
-               ActionDispatcher.dispatch(:player_data, :delete_player, %{player_id: "hero_3"})
+               ActionDispatcher.dispatch_internal(:player_data, :delete_player, %{player_id: "hero_3"})
 
       assert_receive {:exo_event, Exoforge.Std.Services.PlayerData.PlayerDeleted, payload, _opts}
       assert payload.player_id == "hero_3"
 
       # Subsequent get_player returns error
       assert {:error, :player_not_found} =
-               ActionDispatcher.dispatch(:player_data, :get_player, %{player_id: "hero_3"})
+               ActionDispatcher.dispatch_internal(:player_data, :get_player, %{player_id: "hero_3"})
     end
   end
 
@@ -132,7 +132,7 @@ defmodule Exoforge.PlayerDataTest do
     test "retained player without user is inaccessible by default" do
       # Create player explicitly unlinked / retained
       assert {:ok, _} =
-               ActionDispatcher.dispatch(:player_data, :create_player, %{
+               ActionDispatcher.dispatch_internal(:player_data, :create_player, %{
                  player_id: "retained_p1",
                  user_id: nil,
                  profile: %{"name" => "Old Telemetry", "coins" => 500}
@@ -140,11 +140,11 @@ defmodule Exoforge.PlayerDataTest do
 
       # Direct get_player should be blocked
       assert {:error, :player_not_accessible} =
-               ActionDispatcher.dispatch(:player_data, :get_player, %{player_id: "retained_p1"})
+               ActionDispatcher.dispatch_internal(:player_data, :get_player, %{player_id: "retained_p1"})
 
       # With allow_retained flag (for studio / admin audit), it succeeds
       assert {:ok, %{player: p}} =
-               ActionDispatcher.dispatch(:player_data, :get_player, %{
+               ActionDispatcher.dispatch_internal(:player_data, :get_player, %{
                  player_id: "retained_p1",
                  allow_retained: true
                })
@@ -154,26 +154,26 @@ defmodule Exoforge.PlayerDataTest do
 
     test "retain_player unlinks user and scrubs PII" do
       assert {:ok, _} =
-               ActionDispatcher.dispatch(:player_data, :create_player, %{
+               ActionDispatcher.dispatch_internal(:player_data, :create_player, %{
                  player_id: "player_to_retain",
                  user_id: "u_ret_user",
                  profile: %{"name" => "John Doe", "email" => "john@example.com", "score" => 999}
                })
 
       assert {:ok, %{status: "retained"}} =
-               ActionDispatcher.dispatch(:player_data, :retain_player, %{
+               ActionDispatcher.dispatch_internal(:player_data, :retain_player, %{
                  player_id: "player_to_retain"
                })
 
       # Now it is inaccessible via normal ingress
       assert {:error, :player_not_accessible} =
-               ActionDispatcher.dispatch(:player_data, :get_player, %{
+               ActionDispatcher.dispatch_internal(:player_data, :get_player, %{
                  player_id: "player_to_retain"
                })
 
       # Accessible when allow_retained is true; PII scrubbed
       assert {:ok, %{player: p}} =
-               ActionDispatcher.dispatch(:player_data, :get_player, %{
+               ActionDispatcher.dispatch_internal(:player_data, :get_player, %{
                  player_id: "player_to_retain",
                  allow_retained: true
                })
@@ -185,27 +185,27 @@ defmodule Exoforge.PlayerDataTest do
 
     test "list_players filters active vs retained players" do
       _ =
-        ActionDispatcher.dispatch(:player_data, :create_player, %{
+        ActionDispatcher.dispatch_internal(:player_data, :create_player, %{
           player_id: "active_hero",
           user_id: "u_active",
           profile: %{"name" => "Active Hero"}
         })
 
       _ =
-        ActionDispatcher.dispatch(:player_data, :create_player, %{
+        ActionDispatcher.dispatch_internal(:player_data, :create_player, %{
           player_id: "ghost_hero",
           user_id: nil,
           profile: %{"name" => "Ghost"}
         })
 
       assert {:ok, %{players: valid_players}} =
-               ActionDispatcher.dispatch(:player_data, :list_players, %{filter: "valid"})
+               ActionDispatcher.dispatch_internal(:player_data, :list_players, %{filter: "valid"})
 
       assert Enum.any?(valid_players, &(&1.player_id == "active_hero"))
       refute Enum.any?(valid_players, &(&1.player_id == "ghost_hero"))
 
       assert {:ok, %{players: retained_players}} =
-               ActionDispatcher.dispatch(:player_data, :list_players, %{filter: "retained"})
+               ActionDispatcher.dispatch_internal(:player_data, :list_players, %{filter: "retained"})
 
       assert Enum.any?(retained_players, &(&1.player_id == "ghost_hero"))
       refute Enum.any?(retained_players, &(&1.player_id == "active_hero"))
@@ -215,7 +215,7 @@ defmodule Exoforge.PlayerDataTest do
   describe "Fine-Grained Key-Value JSON Storage" do
     test "sets, gets, deletes, and lists key-value JSON entries for player" do
       _ =
-        ActionDispatcher.dispatch(:player_data, :create_player, %{
+        ActionDispatcher.dispatch_internal(:player_data, :create_player, %{
           player_id: "kv_player",
           user_id: "u_kv",
           profile: %{"name" => "KV Tester"}
@@ -225,7 +225,7 @@ defmodule Exoforge.PlayerDataTest do
       inv_data = %{"weapons" => ["excalibur", "dagger"], "gold" => 1500}
 
       assert {:ok, %{key: "inventory", value: ^inv_data}} =
-               ActionDispatcher.dispatch(:player_data, :set_data, %{
+               ActionDispatcher.dispatch_internal(:player_data, :set_data, %{
                  player_id: "kv_player",
                  key: "inventory",
                  value: inv_data
@@ -235,7 +235,7 @@ defmodule Exoforge.PlayerDataTest do
       settings_data = %{"sound" => 0.8, "graphics" => "ultra"}
 
       assert {:ok, %{key: "settings", value: ^settings_data}} =
-               ActionDispatcher.dispatch(:player_data, :set_data, %{
+               ActionDispatcher.dispatch_internal(:player_data, :set_data, %{
                  player_id: "kv_player",
                  key: "settings",
                  value: settings_data
@@ -243,7 +243,7 @@ defmodule Exoforge.PlayerDataTest do
 
       # Get single key
       assert {:ok, %{key: "inventory", value: retrieved_inv}} =
-               ActionDispatcher.dispatch(:player_data, :get_data, %{
+               ActionDispatcher.dispatch_internal(:player_data, :get_data, %{
                  player_id: "kv_player",
                  key: "inventory"
                })
@@ -253,7 +253,7 @@ defmodule Exoforge.PlayerDataTest do
 
       # Get all keys as map
       assert {:ok, %{data: all_data}} =
-               ActionDispatcher.dispatch(:player_data, :get_all_data, %{
+               ActionDispatcher.dispatch_internal(:player_data, :get_all_data, %{
                  player_id: "kv_player"
                })
 
@@ -263,13 +263,13 @@ defmodule Exoforge.PlayerDataTest do
 
       # Delete a key
       assert {:ok, %{status: "deleted"}} =
-               ActionDispatcher.dispatch(:player_data, :delete_data, %{
+               ActionDispatcher.dispatch_internal(:player_data, :delete_data, %{
                  player_id: "kv_player",
                  key: "settings"
                })
 
       assert {:error, :key_not_found} =
-               ActionDispatcher.dispatch(:player_data, :get_data, %{
+               ActionDispatcher.dispatch_internal(:player_data, :get_data, %{
                  player_id: "kv_player",
                  key: "settings"
                })
@@ -277,7 +277,7 @@ defmodule Exoforge.PlayerDataTest do
 
     test "scans keys by prefix in get_all_data and get_data" do
       _ =
-        ActionDispatcher.dispatch(:player_data, :create_player, %{
+        ActionDispatcher.dispatch_internal(:player_data, :create_player, %{
           player_id: "prefix_player",
           user_id: "u_prefix",
           profile: %{"name" => "Prefix Hero"}
@@ -285,14 +285,14 @@ defmodule Exoforge.PlayerDataTest do
 
       # Set items under 'inv:' prefix
       _ =
-        ActionDispatcher.dispatch(:player_data, :set_data, %{
+        ActionDispatcher.dispatch_internal(:player_data, :set_data, %{
           player_id: "prefix_player",
           key: "inv:weapon:sword",
           value: %{"atk" => 50, "rarity" => "rare"}
         })
 
       _ =
-        ActionDispatcher.dispatch(:player_data, :set_data, %{
+        ActionDispatcher.dispatch_internal(:player_data, :set_data, %{
           player_id: "prefix_player",
           key: "inv:armor:shield",
           value: %{"def" => 30, "rarity" => "common"}
@@ -300,7 +300,7 @@ defmodule Exoforge.PlayerDataTest do
 
       # Set stats under 'stats:' prefix
       _ =
-        ActionDispatcher.dispatch(:player_data, :set_data, %{
+        ActionDispatcher.dispatch_internal(:player_data, :set_data, %{
           player_id: "prefix_player",
           key: "stats:hp",
           value: 100
@@ -308,7 +308,7 @@ defmodule Exoforge.PlayerDataTest do
 
       # Prefix scan via get_all_data with prefix: "inv:"
       assert {:ok, %{data: inv_items}} =
-               ActionDispatcher.dispatch(:player_data, :get_all_data, %{
+               ActionDispatcher.dispatch_internal(:player_data, :get_all_data, %{
                  player_id: "prefix_player",
                  prefix: "inv:"
                })
@@ -319,7 +319,7 @@ defmodule Exoforge.PlayerDataTest do
 
       # Subtree prefix scan with prefix: "inv:weapon"
       assert {:ok, %{data: weapons}} =
-               ActionDispatcher.dispatch(:player_data, :get_all_data, %{
+               ActionDispatcher.dispatch_internal(:player_data, :get_all_data, %{
                  player_id: "prefix_player",
                  prefix: "inv:weapon"
                })
@@ -329,7 +329,7 @@ defmodule Exoforge.PlayerDataTest do
 
       # Prefix scan via get_data with prefix: "inv:"
       assert {:ok, %{data: via_get_data}} =
-               ActionDispatcher.dispatch(:player_data, :get_data, %{
+               ActionDispatcher.dispatch_internal(:player_data, :get_data, %{
                  player_id: "prefix_player",
                  prefix: "inv:"
                })
@@ -341,6 +341,9 @@ defmodule Exoforge.PlayerDataTest do
 
   describe "M33 hardening" do
     test "user-facing listing and deletion is staff-gated over transports (M33 Fix 3)" do
+      assert {:error, :unauthorized} =
+               ActionDispatcher.dispatch(:player_data, :list_players, %{})
+
       assert {:error, :forbidden_scope} =
                ActionDispatcher.dispatch(:player_data, :list_players, %{}, caller_scopes: ["player"])
 
@@ -348,15 +351,15 @@ defmodule Exoforge.PlayerDataTest do
                ActionDispatcher.dispatch(:player_data, :delete_player, %{player_id: "someone"}, caller_scopes: ["player"])
 
       # The Studio is staff; its calls are unaffected.
-      assert {:ok, _} = ActionDispatcher.dispatch(:player_data, :list_players, %{user_id: "someone"})
+      assert {:ok, _} = ActionDispatcher.dispatch_internal(:player_data, :list_players, %{user_id: "someone"})
     end
 
     test "list_players filters by user_id in the query (M33 Fix 33)" do
-      {:ok, _} = ActionDispatcher.dispatch(:player_data, :create_player, %{player_id: "p_link", user_id: "u_link"})
-      {:ok, _} = ActionDispatcher.dispatch(:player_data, :create_player, %{player_id: "p_other", user_id: "u_other"})
+      {:ok, _} = ActionDispatcher.dispatch_internal(:player_data, :create_player, %{player_id: "p_link", user_id: "u_link"})
+      {:ok, _} = ActionDispatcher.dispatch_internal(:player_data, :create_player, %{player_id: "p_other", user_id: "u_other"})
 
       assert {:ok, %{players: players}} =
-               ActionDispatcher.dispatch(:player_data, :list_players, %{user_id: "u_link"})
+               ActionDispatcher.dispatch_internal(:player_data, :list_players, %{user_id: "u_link"})
 
       assert [%{id: "p_link"}] = players
     end

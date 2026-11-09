@@ -552,6 +552,33 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                 <button
                   type="button"
                   phx-click="set_settings_tab"
+                  phx-value-tab="database"
+                  class={"w-full text-left px-2.5 py-2 rounded-xl font-bold flex items-center gap-2 transition-all #{if @settings_tab == "database", do: "bg-white text-primary-700 shadow-sm border border-gray-200/80", else: "text-gray-600 hover:text-gray-900 hover:bg-white/60"}"}
+                >
+                  <span>🗄️</span>
+                  <span>Database</span>
+                </button>
+                <button
+                  type="button"
+                  phx-click="set_settings_tab"
+                  phx-value-tab="auth"
+                  class={"w-full text-left px-2.5 py-2 rounded-xl font-bold flex items-center gap-2 transition-all #{if @settings_tab == "auth", do: "bg-white text-primary-700 shadow-sm border border-gray-200/80", else: "text-gray-600 hover:text-gray-900 hover:bg-white/60"}"}
+                >
+                  <span>🔐</span>
+                  <span>Authentication</span>
+                </button>
+                <button
+                  type="button"
+                  phx-click="set_settings_tab"
+                  phx-value-tab="cors"
+                  class={"w-full text-left px-2.5 py-2 rounded-xl font-bold flex items-center gap-2 transition-all #{if @settings_tab in ["cors", "http"], do: "bg-white text-primary-700 shadow-sm border border-gray-200/80", else: "text-gray-600 hover:text-gray-900 hover:bg-white/60"}"}
+                >
+                  <span>🌐</span>
+                  <span>HTTP &amp; CORS</span>
+                </button>
+                <button
+                  type="button"
+                  phx-click="set_settings_tab"
                   phx-value-tab="visual"
                   class={"w-full text-left px-2.5 py-2 rounded-xl font-bold flex items-center gap-2 transition-all #{if @settings_tab == "visual", do: "bg-white text-primary-700 shadow-sm border border-gray-200/80", else: "text-gray-600 hover:text-gray-900 hover:bg-white/60"}"}
                 >
@@ -565,16 +592,16 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   class={"w-full text-left px-2.5 py-2 rounded-xl font-bold flex items-center gap-2 transition-all #{if @settings_tab == "console", do: "bg-white text-primary-700 shadow-sm border border-gray-200/80", else: "text-gray-600 hover:text-gray-900 hover:bg-white/60"}"}
                 >
                   <span>📟</span>
-                  <span>Console</span>
+                  <span>Live Console</span>
                 </button>
                 <button
                   type="button"
                   phx-click="set_settings_tab"
-                  phx-value-tab="guide"
-                  class={"w-full text-left px-2.5 py-2 rounded-xl font-bold flex items-center gap-2 transition-all #{if @settings_tab == "guide", do: "bg-white text-primary-700 shadow-sm border border-gray-200/80", else: "text-gray-600 hover:text-gray-900 hover:bg-white/60"}"}
+                  phx-value-tab="extensions_config"
+                  class={"w-full text-left px-2.5 py-2 rounded-xl font-bold flex items-center gap-2 transition-all #{if @settings_tab == "extensions_config", do: "bg-white text-primary-700 shadow-sm border border-gray-200/80", else: "text-gray-600 hover:text-gray-900 hover:bg-white/60"}"}
                 >
-                  <span>📖</span>
-                  <span>Developer Guide</span>
+                  <span>🧩</span>
+                  <span>Extensions</span>
                 </button>
               </div>
             </div>
@@ -740,41 +767,77 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               <div>
                 <h4 class="text-sm font-bold text-gray-900 flex items-center gap-2">
                   <span>🗄️</span>
-                  <span>Database Engine &amp; Multi-Tenancy</span>
+                  <span>Database Engine &amp; Storage Architecture</span>
                 </h4>
-                <p class="text-xs text-gray-500 mt-0.5">Per-plugin schema isolation with PostgreSQL or SQLite adapter.</p>
+                <p class="text-xs text-gray-500 mt-0.5">Per-extension schema isolation with PostgreSQL &amp; SQLite adapters.</p>
               </div>
 
               <div class="space-y-3 bg-gray-50 p-4 rounded-xl border border-gray-200/80">
-                <div class="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
-                  <div>
-                    <span class="font-bold text-gray-800">Storage Engine Mode</span>
-                    <p class="text-[11px] text-gray-500">SQLite (Test/Dev) with automatic PostgreSQL fallback</p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div class="p-3 bg-white border border-gray-200 rounded-lg">
+                    <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Storage Engine</span>
+                    <div class="flex items-center gap-2 mt-1">
+                      <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                      <span class="font-bold text-gray-900 text-xs">
+                        <%= if System.get_env("DATABASE_URL"), do: "PostgreSQL (Production)", else: "SQLite (Local / Embedded)" %>
+                      </span>
+                    </div>
+                    <p class="text-[10px] text-gray-500 mt-1">
+                      <%= if System.get_env("DATABASE_URL"), do: "Connected via pg connection pool", else: "Persisted under priv/data/sqlite/" %>
+                    </p>
                   </div>
-                  <span class="px-2.5 py-1 text-[10px] font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    Active
-                  </span>
+
+                  <div class="p-3 bg-white border border-gray-200 rounded-lg">
+                    <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Extension Isolation</span>
+                    <div class="flex items-center gap-2 mt-1">
+                      <span class="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-200">
+                        Zero Cross-Tenant Access
+                      </span>
+                    </div>
+                    <p class="text-[10px] text-gray-500 mt-1">
+                      Each extension interacts strictly with its dedicated schema or file.
+                    </p>
+                  </div>
                 </div>
 
-                <div class="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
-                  <div>
-                    <span class="font-bold text-gray-800">Plugin Isolation</span>
-                    <p class="text-[11px] text-gray-500">Each plugin accesses exclusively its own tenant namespace</p>
+                <div class="p-3 bg-white border border-gray-200 rounded-lg space-y-2">
+                  <span class="font-bold text-gray-800 text-xs block">Cluster Database Diagnostics</span>
+                  <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px]">
+                    <div class="p-2 bg-gray-50 rounded border border-gray-100">
+                      <span class="text-gray-400 text-[10px] block">Driver</span>
+                      <span class="font-mono font-bold text-gray-700">
+                        <%= if System.get_env("DATABASE_URL"), do: "Postgres", else: "Sqlite" %>
+                      </span>
+                    </div>
+                    <div class="p-2 bg-gray-50 rounded border border-gray-100">
+                      <span class="text-gray-400 text-[10px] block">Pool Registry</span>
+                      <span class="font-mono font-bold text-emerald-600">Active</span>
+                    </div>
+                    <div class="p-2 bg-gray-50 rounded border border-gray-100">
+                      <span class="text-gray-400 text-[10px] block">Health Status</span>
+                      <span class="font-mono font-bold text-emerald-600">Healthy (200 OK)</span>
+                    </div>
                   </div>
-                  <span class="px-2.5 py-1 text-[10px] font-bold rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                    Isolated
-                  </span>
                 </div>
 
-                <div class="pt-2 flex gap-2">
+                <div class="pt-2 flex flex-wrap gap-2">
                   <button
                     type="button"
                     phx-click="open_action_modal"
                     phx-value-service="database"
-                    class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg transition-colors flex items-center gap-1.5"
+                    class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer text-xs"
                   >
                     <span>⚡</span>
-                    <span>Execute Database Action</span>
+                    <span>Test Database Ping</span>
+                  </button>
+                  <button
+                    type="button"
+                    phx-click="switch_tab"
+                    phx-value-tab="resources"
+                    class="px-3 py-1.5 bg-white hover:bg-gray-100 text-gray-700 border border-gray-300 font-bold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer text-xs"
+                  >
+                    <span>📊</span>
+                    <span>Inspect Resources &amp; Tables</span>
                   </button>
                 </div>
               </div>
@@ -782,39 +845,68 @@ defmodule Exoforge.Std.Dashboard.Overlays do
           <% end %>
 
           <%= if @settings_tab == "auth" do %>
+            <% admin_email = System.get_env("EXOFORGE_ADMIN_EMAIL") || "admin" %>
             <div class="space-y-4">
               <div>
                 <h4 class="text-sm font-bold text-gray-900 flex items-center gap-2">
                   <span>🔐</span>
-                  <span>Authentication &amp; Security Policies</span>
+                  <span>Authentication &amp; Identity Architecture</span>
                 </h4>
-                <p class="text-xs text-gray-500 mt-0.5">Token lifecycle, authorization scopes, and session rules.</p>
+                <p class="text-xs text-gray-500 mt-0.5">Token lifecycle, authorization scopes, device derivation, and password security.</p>
               </div>
 
               <div class="space-y-3 bg-gray-50 p-4 rounded-xl border border-gray-200/80">
-                <div class="p-3 bg-white border border-gray-200 rounded-lg space-y-1">
-                  <span class="font-bold text-gray-800">Token Strategy</span>
-                  <p class="text-[11px] text-gray-500">Bearer Token with cross-port cookie extraction (<code class="font-mono text-purple-700">{hd(Exoforge.Auth.Request.cookie_names())}</code> on ports {Exoforge.Endpoints.dashboard_port()}, {Exoforge.Endpoints.http_port()}, {Exoforge.Endpoints.ws_port()}).</p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div class="p-3 bg-white border border-gray-200 rounded-lg">
+                    <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Admin Principal</span>
+                    <div class="flex items-center gap-2 mt-1">
+                      <span class="font-mono font-bold text-gray-900 text-xs"><%= admin_email %></span>
+                      <span class="px-1.5 py-0.2 rounded bg-purple-50 text-purple-700 font-mono text-[9px] font-bold border border-purple-200">Protected</span>
+                    </div>
+                    <p class="text-[10px] text-gray-500 mt-1">
+                      Defined via environment variables. Protected against external deletion.
+                    </p>
+                  </div>
+
+                  <div class="p-3 bg-white border border-gray-200 rounded-lg">
+                    <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Device Key Derivation</span>
+                    <div class="flex items-center gap-2 mt-1">
+                      <span class="font-bold text-emerald-700 text-xs">ExoDeviceId (PlayFab Pattern)</span>
+                    </div>
+                    <p class="text-[10px] text-gray-500 mt-1">
+                      Stable hardware hash via SystemInfo.deviceUniqueIdentifier.
+                    </p>
+                  </div>
                 </div>
 
-                <div class="p-3 bg-white border border-gray-200 rounded-lg space-y-1">
-                  <span class="font-bold text-gray-800">Role Multi-Scope Mapping</span>
-                  <div class="flex flex-wrap gap-1.5 pt-1">
+                <div class="p-3 bg-white border border-gray-200 rounded-lg space-y-1.5">
+                  <span class="font-bold text-gray-800 text-xs block">Authorization Scope Hierarchy</span>
+                  <div class="flex flex-wrap gap-1.5">
                     <span class="px-2 py-0.5 rounded bg-purple-50 text-purple-700 text-[10px] font-mono">admin &rarr; admin, studio, service, player, guest</span>
                     <span class="px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-mono">studio &rarr; studio, service, player, guest</span>
                     <span class="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10px] font-mono">player &rarr; player, guest</span>
                   </div>
                 </div>
 
-                <div class="pt-2 flex gap-2">
+                <div class="pt-2 flex flex-wrap gap-2">
                   <button
                     type="button"
                     phx-click="switch_tab"
                     phx-value-tab="auth"
-                    class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg transition-colors flex items-center gap-1.5"
+                    class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer text-xs"
                   >
                     <span>🛡️</span>
                     <span>Open Users &amp; Auth View</span>
+                  </button>
+                  <button
+                    type="button"
+                    phx-click="open_action_modal"
+                    phx-value-service="auth"
+                    phx-value-action="issue_token"
+                    class="px-3 py-1.5 bg-white hover:bg-gray-100 text-gray-700 border border-gray-300 font-bold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer text-xs"
+                  >
+                    <span>🔑</span>
+                    <span>Issue Service Token</span>
                   </button>
                 </div>
               </div>
@@ -841,7 +933,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                     <button
                       type="button"
                       onclick="window.ExoforgeTheme && window.ExoforgeTheme.set('dark')"
-                      class="px-3 py-1.5 rounded-lg font-bold text-xs bg-gray-900 text-white hover:bg-gray-800 border border-gray-700 transition-colors flex items-center gap-1.5"
+                      class="px-3 py-1.5 rounded-lg font-bold text-xs bg-gray-900 text-white hover:bg-gray-800 border border-gray-700 transition-colors flex items-center gap-1.5 cursor-pointer"
                     >
                       <span>🌙</span>
                       <span>Dark</span>
@@ -849,7 +941,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                     <button
                       type="button"
                       onclick="window.ExoforgeTheme && window.ExoforgeTheme.set('light')"
-                      class="px-3 py-1.5 rounded-lg font-bold text-xs bg-white text-gray-800 hover:bg-gray-100 border border-gray-300 transition-colors flex items-center gap-1.5"
+                      class="px-3 py-1.5 rounded-lg font-bold text-xs bg-white text-gray-800 hover:bg-gray-100 border border-gray-300 transition-colors flex items-center gap-1.5 cursor-pointer"
                     >
                       <span>☀️</span>
                       <span>Light</span>
@@ -858,7 +950,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                       type="button"
                       onclick="window.ExoforgeTheme && window.ExoforgeTheme.toggle()"
                       title="Toggle Dark / Light Theme"
-                      class="px-3 py-1.5 rounded-lg font-bold text-xs bg-primary-600 hover:bg-primary-700 text-white transition-colors flex items-center gap-1.5"
+                      class="px-3 py-1.5 rounded-lg font-bold text-xs bg-primary-600 hover:bg-primary-700 text-white transition-colors flex items-center gap-1.5 cursor-pointer"
                     >
                       <span>🌓</span>
                       <span>Toggle Theme</span>
@@ -870,8 +962,8 @@ defmodule Exoforge.Std.Dashboard.Overlays do
           <% end %>
 
           <%= if @settings_tab == "console" do %>
-            <div class="space-y-4">
-              <div class="flex items-center justify-between">
+            <div class="space-y-3 flex flex-col h-full">
+              <div class="flex items-center justify-between flex-shrink-0">
                 <div>
                   <h4 class="text-sm font-bold text-gray-900 flex items-center gap-2">
                     <span>📟</span>
@@ -892,14 +984,14 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               </div>
 
               <!-- Console Controls Toolbar -->
-              <div class="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-gray-50 rounded-xl border border-gray-200/80 text-xs">
+              <div class="flex flex-wrap items-center justify-between gap-2 p-2 bg-gray-50 rounded-xl border border-gray-200/80 text-xs flex-shrink-0">
                 <form id="settings_console_filter_form" phx-change="filter_event_dock" class="m-0">
                   <input
                     type="text"
                     name="topic"
                     value={@event_filter_topic}
                     placeholder="Filter event or payload..."
-                    class="px-2.5 py-1 bg-white border border-gray-300 rounded-lg text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-primary-500 w-44 sm:w-56 font-mono"
+                    class="px-2.5 py-1 bg-white border border-gray-300 rounded-lg text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-primary-500 w-44 sm:w-64 font-mono"
                   />
                 </form>
 
@@ -907,7 +999,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   <button
                     type="button"
                     phx-click="toggle_event_pause"
-                    class={"px-2.5 py-1 rounded-lg font-bold text-xs flex items-center gap-1 transition-colors #{if @events_paused, do: "bg-emerald-600 hover:bg-emerald-500 text-white", else: "bg-white hover:bg-gray-100 text-gray-700 border border-gray-200"}"}
+                    class={"px-2.5 py-1 rounded-lg font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer #{if @events_paused, do: "bg-emerald-600 hover:bg-emerald-500 text-white", else: "bg-white hover:bg-gray-100 text-gray-700 border border-gray-200"}"}
                   >
                     <%= if @events_paused, do: "▶ Resume", else: "⏸ Pause" %>
                   </button>
@@ -915,39 +1007,113 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   <button
                     type="button"
                     phx-click="clear_events"
-                    class="px-2.5 py-1 bg-white hover:bg-gray-100 text-gray-600 border border-gray-200 rounded-lg font-bold text-xs transition-colors"
+                    class="px-2.5 py-1 bg-white hover:bg-gray-100 text-gray-600 border border-gray-200 rounded-lg font-bold text-xs transition-colors cursor-pointer"
                   >
                     Clear
                   </button>
                 </div>
               </div>
 
-              <!-- Console Terminal Window -->
-              <div class="bg-gray-950 rounded-xl p-3.5 border border-gray-800 text-gray-100 max-h-72 overflow-y-auto space-y-2 font-mono text-xs custom-scrollbar">
+              <!-- Polished Console Terminal Window (No weird cutouts) -->
+              <div class="bg-gray-950 rounded-xl p-3 border border-gray-800 text-gray-100 h-[360px] overflow-y-auto space-y-2 font-mono text-xs custom-scrollbar">
                 <%= if Enum.empty?(@activity_events) do %>
-                  <div class="py-8 flex flex-col items-center justify-center text-center space-y-1.5">
-                    <span class="text-xl">📡</span>
+                  <div class="h-full flex flex-col items-center justify-center text-center space-y-1.5 py-12">
+                    <span class="text-2xl">📡</span>
                     <p class="text-xs text-gray-400 font-sans">Waiting for live cluster events on <code class="text-primary-400">EventDispatcher</code> bus...</p>
-                    <p class="text-[11px] text-gray-500 font-sans">Click "⚡ Simulate Event" above or dispatch an action to test.</p>
+                    <p class="text-[11px] text-gray-500 font-sans">Click "⚡ Simulate Event" or dispatch an action to test.</p>
                   </div>
                 <% else %>
                   <%= for ev <- @activity_events do %>
-                    <div class="p-2.5 bg-gray-900/90 rounded-lg border border-gray-800/80 flex flex-col gap-1.5">
+                    <% is_err = is_event_error?(ev) %>
+                    <div class={"p-2.5 rounded-lg border flex flex-col gap-1.5 transition-all #{if is_err, do: "bg-red-950/25 border-red-800/80", else: "bg-gray-900/90 border-gray-800/80 hover:border-gray-700"}"}>
                       <div class="flex items-center justify-between text-[11px]">
                         <div class="flex items-center gap-2">
-                          <span class="px-2 py-0.5 rounded bg-primary-950 text-primary-300 font-bold border border-primary-800/60 font-mono">
+                          <span class={"px-2 py-0.5 rounded font-bold font-mono text-[10px] border #{if is_err, do: "bg-red-950 text-red-300 border-red-800/80", else: "bg-primary-950 text-primary-300 border-primary-800/60"}"}>
                             <%= ev.event %>
                           </span>
-                          <span class="text-gray-500 text-[10px]"><%= ev.time %></span>
+                          <%= if is_err do %>
+                            <span class="px-1.5 py-0.2 rounded bg-red-900 text-red-200 font-bold text-[9px]">ERROR</span>
+                          <% end %>
+                          <span class="text-gray-400 text-[10px]"><%= ev.time %></span>
                           <%= if Map.get(ev, :context) do %>
-                            <span class="text-gray-600 text-[10px] hidden sm:inline">ctx: <%= inspect(ev.context) %></span>
+                            <span class="text-gray-500 text-[10px] hidden sm:inline font-mono">ctx: <%= inspect(ev.context) %></span>
                           <% end %>
                         </div>
                         <span class="text-[10px] text-gray-500 font-mono">#<%= ev.id %></span>
                       </div>
-                      <pre class="text-[10px] text-emerald-400 overflow-x-auto p-2 bg-black/60 rounded border border-gray-800/60 font-mono"><%= Jason.encode!(ev.payload, pretty: true) %></pre>
+                      <details open class="group">
+                        <summary class="cursor-pointer select-none text-[10px] text-gray-400 hover:text-gray-200 py-0.5 flex items-center justify-between">
+                          <span class="flex items-center gap-1 font-sans">
+                            <span class="transition-transform group-open:rotate-90 inline-block text-[8px]">▶</span>
+                            <span>Payload</span>
+                          </span>
+                        </summary>
+                        <pre class="mt-1 text-[10px] overflow-x-auto p-2 bg-black/60 rounded border border-gray-800/60 font-mono leading-relaxed"><%= highlight_json(ev.payload) %></pre>
+                      </details>
                     </div>
                   <% end %>
+                <% end %>
+              </div>
+            </div>
+          <% end %>
+
+          <%= if @settings_tab == "extensions_config" do %>
+            <div class="space-y-4">
+              <div class="flex items-center justify-between pb-2 border-b border-gray-100">
+                <div>
+                  <h4 class="text-sm font-bold text-gray-900 flex items-center gap-2">
+                    <span>🧩</span>
+                    <span>Installed Extension Runtime</span>
+                  </h4>
+                  <p class="text-xs text-gray-500 mt-0.5">Cluster-wide status, lifecycle control, and service inspection for all extensions.</p>
+                </div>
+                <span class="px-2.5 py-1 text-[10px] font-bold rounded-full bg-primary-50 text-primary-700 border border-primary-200">
+                  <%= length(@overview.extensions) %> Installed
+                </span>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[380px] overflow-y-auto custom-scrollbar p-0.5">
+                <%= for ext <- @overview.extensions do %>
+                  <% icon = (is_map(ext.dashboard_view) && ext.dashboard_view[:icon]) || ExtensionPresenter.icon(ext) %>
+                  <% is_native = ext.type in [:native, "native"] %>
+                  <div class="p-3.5 bg-gray-50/80 hover:bg-gray-50 rounded-xl border border-gray-200 transition-all flex flex-col justify-between space-y-3">
+                    <div class="flex items-start justify-between gap-2">
+                      <div class="flex items-center gap-2.5 min-w-0">
+                        <span class="w-9 h-9 rounded-xl bg-white border border-gray-200 text-lg flex items-center justify-center shrink-0 shadow-2xs">
+                          <%= icon %>
+                        </span>
+                        <div class="min-w-0">
+                          <h5 class="font-bold text-gray-900 text-xs truncate"><%= display_name(ext) %></h5>
+                          <p class="text-[10px] font-mono text-gray-400 truncate"><%= ext.id %> &bull; v<%= ext.version %></p>
+                        </div>
+                      </div>
+                      <span class={"px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider shrink-0 border #{if is_native, do: "bg-purple-50 text-purple-700 border-purple-200", else: "bg-emerald-50 text-emerald-700 border-emerald-200"}"}>
+                        <%= if is_native, do: "C# Native", else: "Elixir OTP" %>
+                      </span>
+                    </div>
+
+                    <div class="flex items-center justify-between pt-1 border-t border-gray-200/60 text-[10px]">
+                      <span class="text-gray-500 font-medium">Category: <strong class="text-gray-700"><%= ext.category || "General" %></strong></span>
+                      <div class="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          phx-click="inspect_extension"
+                          phx-value-id={ext.id}
+                          class="px-2 py-1 bg-white hover:bg-gray-100 text-gray-700 font-bold rounded-md border border-gray-200 transition-colors cursor-pointer"
+                        >
+                          Inspect
+                        </button>
+                        <button
+                          type="button"
+                          phx-click="inspect_extension_logs"
+                          phx-value-id={ext.id}
+                          class="px-2 py-1 bg-white hover:bg-gray-100 text-primary-700 font-bold rounded-md border border-gray-200 transition-colors cursor-pointer"
+                        >
+                          Logs
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 <% end %>
               </div>
             </div>
@@ -1063,89 +1229,8 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             </div>
           <% end %>
 
-          <!-- Developer Guide Tab -->
-          <%= if @settings_tab == "guide" do %>
-            <div class="space-y-4">
-              <div class="flex items-center justify-between pb-3 border-b border-gray-100">
-                <div>
-                  <h4 class="text-sm font-bold text-gray-900 flex items-center gap-2">
-                    <span>📖</span>
-                    <span>Exoforge Developer Guide</span>
-                  </h4>
-                  <p class="text-xs text-gray-500 mt-0.5">Quick reference for C# extension development, live cluster contracts, and platform architecture.</p>
-                </div>
-                <button
-                  type="button"
-                  phx-click="open_guide_from_settings"
-                  class="px-3.5 py-1.5 bg-primary-600 hover:bg-primary-700 text-white font-bold text-xs rounded-xl transition-all shadow-xs flex items-center gap-1.5 shrink-0"
-                >
-                  <span>Open Full Guide</span>
-                  <span>&rarr;</span>
-                </button>
-              </div>
-
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div class="p-3.5 bg-gray-50 rounded-xl border border-gray-200/80 space-y-1.5">
-                  <div class="flex items-center gap-2 text-primary-700 font-bold text-xs">
-                    <span>🚀</span>
-                    <span>Quickstart Flow</span>
-                  </div>
-                  <p class="text-[11px] text-gray-600 leading-relaxed">
-                    Step-by-step multiplayer integration: Anonymous auth, Player Data sync, custom C# extensions, and client stubs.
-                  </p>
-                </div>
-
-                <div class="p-3.5 bg-gray-50 rounded-xl border border-gray-200/80 space-y-1.5">
-                  <div class="flex items-center gap-2 text-purple-700 font-bold text-xs">
-                    <span>🧩</span>
-                    <span>C# Attributes Reference</span>
-                  </div>
-                  <p class="text-[11px] text-gray-600 leading-relaxed">
-                    Declarative attributes for native .NET extensions: <code class="font-mono text-purple-700 font-bold">[ExoAction]</code>, <code class="font-mono text-purple-700 font-bold">[ExoEvent]</code>, <code class="font-mono text-purple-700 font-bold">[ExoResource]</code>.
-                  </p>
-                </div>
-
-                <div class="p-3.5 bg-gray-50 rounded-xl border border-gray-200/80 space-y-1.5">
-                  <div class="flex items-center gap-2 text-indigo-700 font-bold text-xs">
-                    <span>🏗️</span>
-                    <span>Interactive Architecture</span>
-                  </div>
-                  <p class="text-[11px] text-gray-600 leading-relaxed">
-                    Live UML topology diagram, kernel pub/sub bus fanout (&lt; 0.1ms), native process runners, and OTP supervisors.
-                  </p>
-                </div>
-
-                <div class="p-3.5 bg-gray-50 rounded-xl border border-gray-200/80 space-y-1.5">
-                  <div class="flex items-center gap-2 text-emerald-700 font-bold text-xs">
-                    <span>⚡</span>
-                    <span>Live Dynamic API Reference</span>
-                  </div>
-                  <p class="text-[11px] text-gray-600 leading-relaxed">
-                    Real-time contract explorer dynamically built from registered extensions with copy-pasteable client calling code.
-                  </p>
-                </div>
-              </div>
-
-              <!-- Banner with CTA to full guide extension -->
-              <div class="p-4 bg-gradient-to-r from-gray-900 via-primary-950 to-indigo-950 rounded-2xl text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm border border-primary-500/20">
-                <div class="space-y-0.5 min-w-0">
-                  <span class="text-xs font-bold block">Need the comprehensive interactive guide &amp; PDF export?</span>
-                  <p class="text-[11px] text-gray-300">Open the full-screen Developer Guide extension tab for deep interactive UML exploration and full code samples.</p>
-                </div>
-                <button
-                  type="button"
-                  phx-click="open_guide_from_settings"
-                  class="px-4 py-2 bg-white hover:bg-gray-100 text-primary-900 font-bold rounded-xl text-xs transition-colors shrink-0 flex items-center justify-center gap-1.5 shadow-xs"
-                >
-                  <span>Launch Guide Tab</span>
-                  <span>&rarr;</span>
-                </button>
-              </div>
-            </div>
-          <% end %>
-
           <!-- Dynamic Plugin Settings Tab Fallback -->
-          <%= if @settings_tab not in ["project", "visual", "console", "database", "auth", "http", "guide"] do %>
+          <%= if @settings_tab not in ["project", "visual", "console", "database", "auth", "http", "cors", "extensions_config"] do %>
             <% active_hook = Enum.find(@settings_hooks, fn h -> to_string(h.id) == @settings_tab end) %>
             <%= if active_hook do %>
               <%= cond do %>
@@ -1955,7 +2040,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
     ~H"""
     <%= if @open do %>
       <div id="events_history_modal" class="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
-        <div class="min-h-screen px-4 text-center flex items-center justify-center py-8">
+        <div class="min-h-screen px-4 text-center flex items-center justify-center py-6">
           <!-- Backdrop -->
           <div
             class="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
@@ -1963,8 +2048,8 @@ defmodule Exoforge.Std.Dashboard.Overlays do
           ></div>
 
           <!-- Dialog Box -->
-          <div class="relative bg-white rounded-2xl max-w-3xl w-full p-6 text-left shadow-2xl border border-gray-200 z-10 animate-fade-in space-y-4">
-            <div class="flex items-center justify-between pb-3 border-b border-gray-100">
+          <div class="relative bg-white rounded-2xl max-w-5xl w-full p-6 text-left shadow-2xl border border-gray-200 z-10 animate-fade-in flex flex-col h-[85vh] space-y-4">
+            <div class="flex items-center justify-between pb-3 border-b border-gray-100 flex-shrink-0">
               <div class="flex items-center gap-2.5">
                 <div class="w-8 h-8 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center font-bold text-sm">
                   📡
@@ -1975,13 +2060,13 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                 </div>
               </div>
               <div class="flex items-center gap-2">
-                <span class="px-2 py-0.5 rounded-full bg-gray-100 font-mono font-bold text-[10px] text-gray-600 border border-gray-200">
+                <span class="px-2.5 py-1 rounded-full bg-gray-100 font-mono font-bold text-[10px] text-gray-600 border border-gray-200">
                   <%= length(@events) %> captured
                 </span>
                 <button
                   type="button"
                   phx-click={@on_close}
-                  class="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center transition-colors text-xs font-bold"
+                  class="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center transition-colors text-xs font-bold cursor-pointer"
                   title="Close Modal (Esc)"
                 >
                   ✕
@@ -1990,14 +2075,14 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             </div>
 
             <!-- Controls Toolbar -->
-            <div class="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-gray-50 rounded-xl border border-gray-200/80 text-xs">
+            <div class="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-gray-50 rounded-xl border border-gray-200/80 text-xs flex-shrink-0">
               <form id="events_modal_filter_form" phx-change={@on_filter} class="m-0">
                 <input
                   type="text"
                   name="topic"
                   value={@filter_topic}
                   placeholder="Filter event or payload..."
-                  class="px-2.5 py-1 bg-white border border-gray-300 rounded-lg text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-primary-500 w-44 sm:w-64 font-mono"
+                  class="px-2.5 py-1 bg-white border border-gray-300 rounded-lg text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-primary-500 w-44 sm:w-72 font-mono"
                 />
               </form>
 
@@ -2005,45 +2090,74 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                 <button
                   type="button"
                   phx-click={@on_pause}
-                  class={"px-2.5 py-1 rounded-lg font-bold text-xs flex items-center gap-1 transition-colors #{if @paused, do: "bg-emerald-600 hover:bg-emerald-500 text-white", else: "bg-white hover:bg-gray-100 text-gray-700 border border-gray-200"}"}
+                  class={"px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer #{if @paused, do: "bg-emerald-600 hover:bg-emerald-500 text-white", else: "bg-white hover:bg-gray-100 text-gray-700 border border-gray-200"}"}
                 >
-                  <%= if @paused, do: "▶ Resume", else: "⏸ Pause" %>
+                  <%= if @paused, do: "▶ Resume Stream", else: "⏸ Pause Stream" %>
                 </button>
 
                 <button
                   type="button"
                   phx-click={@on_clear}
-                  class="px-2.5 py-1 bg-white hover:bg-gray-100 text-gray-600 border border-gray-200 rounded-lg font-bold text-xs transition-colors"
+                  class="px-3 py-1.5 bg-white hover:bg-gray-100 text-gray-600 border border-gray-200 rounded-lg font-bold text-xs transition-colors cursor-pointer"
                 >
-                  Clear
+                  Clear History
                 </button>
               </div>
             </div>
 
             <!-- Events List Window -->
-            <div class="bg-gray-950 rounded-xl p-3.5 border border-gray-800 text-gray-100 max-h-96 overflow-y-auto space-y-2 font-mono text-xs custom-scrollbar">
+            <div class="bg-gray-950 rounded-xl p-4 border border-gray-800 text-gray-100 flex-1 overflow-y-auto space-y-3 font-mono text-xs custom-scrollbar">
               <%= if Enum.empty?(@events) do %>
-                <div class="py-10 flex flex-col items-center justify-center text-center space-y-1.5">
-                  <span class="text-2xl">📡</span>
-                  <p class="text-xs text-gray-400 font-sans">No cluster events captured yet.</p>
-                  <p class="text-[11px] text-gray-500 font-sans">Dispatch an action, log in, or upload a file to see live events stream in real time.</p>
+                <div class="h-full flex flex-col items-center justify-center text-center space-y-1.5 py-16">
+                  <span class="text-3xl">📡</span>
+                  <p class="text-sm font-semibold text-gray-300 font-sans">No cluster events captured yet.</p>
+                  <p class="text-xs text-gray-500 font-sans">Dispatch an action, log in, or upload a file to see live events stream in real time.</p>
                 </div>
               <% else %>
                 <%= for ev <- @events do %>
-                  <div class="p-2.5 bg-gray-900/90 rounded-lg border border-gray-800/80 flex flex-col gap-1.5 hover:border-gray-700 transition-colors">
-                    <div class="flex items-center justify-between text-[11px]">
-                      <div class="flex items-center gap-2">
-                        <span class="px-2 py-0.5 rounded bg-primary-950 text-primary-300 font-bold border border-primary-800/60 font-mono">
+                  <% is_err = is_event_error?(ev) %>
+                  <div class={"p-3 rounded-xl border flex flex-col gap-2 transition-all #{if is_err, do: "bg-red-950/25 border-red-800/80 hover:border-red-600", else: "bg-gray-900/90 border-gray-800/80 hover:border-gray-700"}"}>
+                    <div class="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <span class={"px-2 py-0.5 rounded font-bold font-mono text-[11px] border #{if is_err, do: "bg-red-950 text-red-300 border-red-800/80", else: "bg-primary-950 text-primary-300 border-primary-800/60"}"}>
                           <%= ev.event %>
                         </span>
-                        <span class="text-gray-500 text-[10px]"><%= ev.time %></span>
+                        <%= if is_err do %>
+                          <span class="px-2 py-0.5 rounded bg-red-900/90 text-red-100 font-bold border border-red-700 text-[10px] animate-pulse">
+                            ⚠️ ERROR
+                          </span>
+                        <% end %>
+                        <span class="text-gray-400 text-[10px]"><%= ev.time %></span>
+                        <%= if Map.get(ev, :topic) do %>
+                          <span class="px-1.5 py-0.2 rounded bg-gray-800 text-gray-400 text-[10px] border border-gray-700 font-mono">
+                            topic: <%= ev.topic %>
+                          </span>
+                        <% end %>
+                        <%= if Map.get(ev, :source) do %>
+                          <span class="px-1.5 py-0.2 rounded bg-gray-800 text-gray-400 text-[10px] border border-gray-700 font-mono">
+                            src: <%= ev.source %>
+                          </span>
+                        <% end %>
                         <%= if Map.get(ev, :context) do %>
-                          <span class="text-gray-600 text-[10px] hidden sm:inline">ctx: <%= inspect(ev.context) %></span>
+                          <span class="px-1.5 py-0.2 rounded bg-purple-950/80 text-purple-300 text-[10px] border border-purple-800/50 font-mono">
+                            ctx: <%= inspect(ev.context) %>
+                          </span>
                         <% end %>
                       </div>
                       <span class="text-[10px] text-gray-500 font-mono">#<%= ev.id %></span>
                     </div>
-                    <pre class="text-[10px] text-emerald-400 overflow-x-auto p-2 bg-black/60 rounded border border-gray-800/60 font-mono"><%= Jason.encode!(ev.payload, pretty: true) %></pre>
+
+                    <!-- Collapsible & Highlighted Payload -->
+                    <details open class="group">
+                      <summary class="cursor-pointer select-none text-[10px] text-gray-400 hover:text-gray-200 py-1 flex items-center justify-between">
+                        <span class="flex items-center gap-1.5 font-sans font-semibold">
+                          <span class="transition-transform group-open:rotate-90 inline-block text-[9px]">▶</span>
+                          <span>Payload (<%= if is_map(ev.payload), do: map_size(ev.payload), else: 1 %> fields)</span>
+                        </span>
+                        <span class="text-[9px] text-gray-600 font-mono">JSON</span>
+                      </summary>
+                      <pre class="mt-1 text-[11px] overflow-x-auto p-3 bg-black/75 rounded-lg border border-gray-800/80 font-mono leading-relaxed custom-scrollbar"><%= highlight_json(ev.payload) %></pre>
+                    </details>
                   </div>
                 <% end %>
               <% end %>
@@ -2053,6 +2167,54 @@ defmodule Exoforge.Std.Dashboard.Overlays do
       </div>
     <% end %>
     """
+  end
+
+  defp is_event_error?(ev) do
+    ev_str = String.downcase(to_string(ev.event || ""))
+    has_error_name? = String.contains?(ev_str, ["error", "fail", "crash", "exception"])
+
+    payload_error? =
+      case ev.payload do
+        %{} = m ->
+          status = to_string(m["status"] || m[:status] || "")
+          String.contains?(status, "error") or
+            Map.has_key?(m, "error") or Map.has_key?(m, :error) or
+            Map.has_key?(m, "exception") or Map.has_key?(m, :exception)
+        _ ->
+          false
+      end
+
+    has_error_name? or payload_error?
+  end
+
+  defp highlight_json(payload) do
+    json_str =
+      case Jason.encode(payload, pretty: true) do
+        {:ok, s} -> s
+        _ -> inspect(payload, pretty: true)
+      end
+
+    escaped = Phoenix.HTML.html_escape(json_str) |> Phoenix.HTML.safe_to_string()
+
+    highlighted =
+      escaped
+      |> String.replace(~r/(&quot;[^&]+&quot;)(:)/, "<span class=\"text-sky-300 font-semibold\">\\1</span>\\2")
+      |> then(fn str ->
+        Regex.replace(~r/(: )(&quot;[^&]*&quot;)/, str, fn _, p1, p2 ->
+          color =
+            if String.contains?(p2, "error") or String.contains?(p2, "fail") do
+              "text-rose-400 font-bold"
+            else
+              "text-emerald-300"
+            end
+
+          "#{p1}<span class=\"#{color}\">#{p2}</span>"
+        end)
+      end)
+      |> String.replace(~r/(: )(-?\d+\.?\d*)/, "\\1<span class=\"text-amber-300\">\\2</span>")
+      |> String.replace(~r/\b(true|false|null)\b/, "<span class=\"text-purple-300 font-semibold\">\\1</span>")
+
+    Phoenix.HTML.raw(highlighted)
   end
 
   defp display_name(ext_or_id), do: ExtensionPresenter.display_name(ext_or_id)

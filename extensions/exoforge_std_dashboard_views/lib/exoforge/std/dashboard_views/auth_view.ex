@@ -383,7 +383,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
   end
 
   defp load_users(socket) do
-    case ActionDispatcher.dispatch(:auth, :list_users, %{limit: 50}) do
+    case ActionDispatcher.dispatch_internal(:auth, :list_users, %{limit: 50}) do
       {:ok, %{users: users}} ->
         socket
         |> assign(users: users)

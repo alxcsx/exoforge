@@ -253,10 +253,10 @@ defmodule Exoforge.DashboardTest do
 
     test "dashboard contract actions" do
       assert {:ok, %{mount: _}} =
-               ActionDispatcher.dispatch(:dashboard, :get_dashboard_mount, %{view_id: :main})
+               ActionDispatcher.dispatch_internal(:dashboard, :get_dashboard_mount, %{view_id: :main})
 
       assert {:ok, %{data: data}} =
-               ActionDispatcher.dispatch(:dashboard, :get_dashboard_data, %{view_id: :main})
+               ActionDispatcher.dispatch_internal(:dashboard, :get_dashboard_data, %{view_id: :main})
 
       assert data.plugins_count >= 2
     end

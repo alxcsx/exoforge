@@ -6,15 +6,19 @@ defmodule Exoforge.ActionDispatcher do
   @doc """
   Runs an action, authorizing the caller first.
 
-  ## Caller scopes
+  ## Caller scopes and authorization
 
   Authorization is driven by `:caller_scopes` / `:scopes` in `opts`, or by `_auth` in the payload.
-  **When neither is supplied the caller is treated as `:internal`, which is authorized for every
-  scope**, including `:server` and `:admin`. That is deliberate - the plugin runtimes and other
-  in-process callers are the server and dispatch without a caller - but it means a new transport
-  that forgets to pass scopes silently gets full trust rather than being denied. Pass scopes
-  explicitly on anything reachable from outside the node.
+  When privileged server-level execution is needed (e.g. database access, system maintenance),
+  callers must explicitly use `dispatch_internal/4` or pass `internal: true`.
+
+  Calls without scopes or `internal: true` default to empty scopes (`[]`), denying access to
+  any action requiring elevated scopes (`:player`, `:admin`, `:studio`, `:server`).
   """
+  def dispatch_internal(service, action, payload, opts \\ []) do
+    dispatch(service, action, payload, Keyword.put(opts, :internal, true))
+  end
+
   def dispatch(service, action, payload, opts \\ []) do
     t0 = System.monotonic_time(:microsecond)
     context = Keyword.get(opts, :context, :global)
@@ -108,6 +112,13 @@ defmodule Exoforge.ActionDispatcher do
               ExtensionRegistry.fetch_service(service) || ExtensionRegistry.fetch_manifest(service)
           end
 
+        ext_id =
+          cond do
+            manifest && is_binary(manifest.id) -> manifest.id
+            manifest && is_atom(manifest.id) -> to_string(manifest.id)
+            true -> to_string(service)
+          end
+
         if manifest && is_binary(manifest.id) do
           level = if status_str == "ok", do: 1, else: 2
           Exoforge.ExtensionLogs.append(
@@ -115,6 +126,18 @@ defmodule Exoforge.ActionDispatcher do
             level,
             "[action] #{service}.#{action} -> #{status_str} (#{duration_ms}ms)"
           )
+        end
+
+        # 3. Record in Metering for non-native extensions (native runner tracks its own stdio port bytes)
+        is_native =
+          case resolved_mod do
+            %Manifest{type: :native} -> true
+            _ -> false
+          end
+
+        unless is_native do
+          status_atom = if status_str == "ok", do: :ok, else: :error
+          Exoforge.Metering.record_invocation(ext_id, action, latency_us, status_atom, 0, 0)
         end
       rescue
         _ -> :ok
@@ -265,6 +288,12 @@ defmodule Exoforge.ActionDispatcher do
 
   defp extract_caller_scopes(payload, opts) do
     cond do
+      Keyword.get(opts, :internal, false) == true ->
+        :internal
+
+      Keyword.get(opts, :caller_scopes) == :internal or Keyword.get(opts, :scopes) == :internal ->
+        :internal
+
       Keyword.has_key?(opts, :caller_scopes) ->
         Keyword.get(opts, :caller_scopes)
 
@@ -281,7 +310,9 @@ defmodule Exoforge.ActionDispatcher do
         end
 
       true ->
-        :internal
+        # Deny by default: unprivileged dispatch without explicit scopes.
+        # Callers requiring server-level internal trust must use dispatch_internal/4 or pass internal: true.
+        []
     end
   end
 

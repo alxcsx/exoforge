@@ -73,11 +73,17 @@ defmodule Exoforge.Metering do
       |> Enum.map(fn {id, rows} -> plugin_usage(id, rows, now) end)
       |> Enum.sort_by(& &1.plugin_id)
 
+    all_actions =
+      Enum.flat_map(plugins, fn p ->
+        Enum.map(p.actions, &Map.put(&1, :service, p.plugin_id))
+      end)
+
     %{
       title_id: title_id(),
       studio_id: studio_id(),
       generated_at: now,
-      plugins: plugins
+      plugins: plugins,
+      actions: all_actions
     }
   end
 

@@ -79,7 +79,6 @@ public class ExoWorkspace
     public ExoProjectConfig Config { get; private set; }
 
     public string ExtensionsPath => ResolveWorkspacePath(Config.ExtensionsDir);
-    public string PluginsPath => ExtensionsPath;
     public string GeneratedPath => ResolveWorkspacePath(Config.Codegen.OutputPath);
 
     private string ResolveWorkspacePath(string path)

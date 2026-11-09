@@ -18,34 +18,27 @@ namespace Exoforge.Management;
 /// </summary>
 public static class ExoScaffolder
 {
-    /// <summary>Templates a caller may ask for. Keep in step with <see cref="GeneratePluginCode"/>.</summary>
+    /// <summary>Templates a caller may ask for. Keep in step with <see cref="GenerateExtensionCode"/>.</summary>
     public static readonly string[] Templates = { "standard", "basic", "blank", "persistent", "config", "events" };
 
-    public static string ScaffoldExtension(string extensionsDirectory, string rawName, string template = "standard", string? feed = null) =>
-        Scaffold(extensionsDirectory, rawName, isExtension: true, template: template, feed: feed);
-
-    public static string ScaffoldPlugin(string pluginsDirectory, string rawName, string template = "standard", string? feed = null) =>
-        Scaffold(pluginsDirectory, rawName, isExtension: false, template: template, feed: feed);
-
-    private static string Scaffold(string targetDirectory, string rawName, bool isExtension, string template = "standard", string? feed = null)
+    public static string ScaffoldExtension(string extensionsDirectory, string rawName, string template = "standard", string? feed = null)
     {
         string cleanName = NormalizeName(rawName);
         string className = ToPascalCase(cleanName);
-        string targetDir = Path.Combine(targetDirectory, cleanName);
+        string targetDir = Path.Combine(extensionsDirectory, cleanName);
         string srcDir = Path.Combine(targetDir, "src");
 
         Directory.CreateDirectory(srcDir);
 
-        string suffix = isExtension ? "Extension" : "Plugin";
         File.WriteAllText(Path.Combine(srcDir, $"{cleanName}.csproj"), GenerateCsproj());
-        File.WriteAllText(Path.Combine(srcDir, $"{className}{suffix}.cs"), GenerateCode(cleanName, className, isExtension, template));
+        File.WriteAllText(Path.Combine(srcDir, $"{className}Extension.cs"), GenerateExtensionCode(cleanName, className, template));
         File.WriteAllText(Path.Combine(targetDir, $"{cleanName}.sln"), GenerateSln(cleanName));
 
         // The staged native binary and the local build counter are build artifacts.
         File.WriteAllText(Path.Combine(targetDir, ".gitignore"), "/.exoforge/\n/.buildcount\n/manifest.json\n");
 
         // Ensure nuget feed in workspace root as well as directly inside the extension folder for Rider
-        RegisterLocalFeed(targetDirectory, feed);
+        RegisterLocalFeed(extensionsDirectory, feed);
         EnsureLocalFeed(targetDir, feed);
 
         // Pre-restore packages so Rider has project assets, autocomplete, and Roslyn analyzers ready
@@ -353,47 +346,32 @@ EndGlobal
 """;
     }
 
-    public static string GeneratePluginCode(string serviceName, string className, string template) =>
-        GenerateCode(serviceName, className, isExtension: false, template: template);
-
-    public static string GenerateExtensionCode(string serviceName, string className, string template) =>
-        GenerateCode(serviceName, className, isExtension: true, template: template);
-
-    private static string GenerateCode(string serviceName, string className, bool isExtension, string template)
+    public static string GenerateExtensionCode(string serviceName, string className, string template)
     {
         string kind = template.ToLowerInvariant();
 
-        if (!isExtension && kind is "standard" or "")
-        {
-            return LegacyStandardTemplate(serviceName, className);
-        }
-
         return kind switch
         {
-            "blank" or "empty" or "minimal" => BlankTemplate(serviceName, className, isExtension),
-            "standard" or "basic" or "" => BasicTemplate(serviceName, className, isExtension),
-            "persistent" => PersistentTemplate(serviceName, className, isExtension),
-            "config" => ConfigTemplate(serviceName, className, isExtension),
-            "events" => EventsTemplate(serviceName, className, isExtension),
+            "blank" or "empty" or "minimal" => BlankTemplate(serviceName, className),
+            "standard" or "basic" or "" => BasicTemplate(serviceName, className),
+            "persistent" => PersistentTemplate(serviceName, className),
+            "config" => ConfigTemplate(serviceName, className),
+            "events" => EventsTemplate(serviceName, className),
             _ => throw new ArgumentException(
                 $"Unknown template '{template}'. Available templates: blank, basic, standard, persistent, config, events.", nameof(template))
         };
     }
 
-    private static string BlankTemplate(string serviceName, string className, bool isExtension = true)
+    private static string BlankTemplate(string serviceName, string className)
     {
-        string ns = isExtension ? "Exoforge.Extensions" : "Exoforge.Plugins";
-        string attr = isExtension ? "ExoExtension" : "ExoService";
-        string suffix = isExtension ? "Extension" : "Plugin";
-
         return $$"""
 using System;
 using Exoforge.Plugin.SDK;
 
-namespace {{ns}};
+namespace Exoforge.Extensions;
 
-[{{attr}}("{{serviceName}}", Version = "0.1.0", Category = "Game", Title = "{{className}}", Icon = "🧩")]
-public class {{className}}{{suffix}}
+[ExoExtension("{{serviceName}}", Version = "0.1.0", Category = "Game", Title = "{{className}}", Icon = "🧩")]
+public class {{className}}Extension
 {
     [ExoAction]
     public string Ping()
@@ -405,60 +383,16 @@ public class {{className}}{{suffix}}
 """;
     }
 
-    private static string LegacyStandardTemplate(string serviceName, string className)
+    private static string BasicTemplate(string serviceName, string className)
     {
-        return $$"""
-using Exoforge.Plugin.SDK;
-
-namespace Exoforge.Plugins;
-
-[ExoService("{{serviceName}}", Version = "0.1.0", Resources = new[] { typeof({{className}}Item) },
-    Category = "Game", Title = "{{className}}", Icon = "🧩")]
-public class {{className}}Plugin
-{
-    [ExoAction]
-    public int Ping()
-    {
-        ExoServices.Logger.Info("[{{serviceName}}] ping");
-        return 42;
-    }
-
-    [ExoAction]
-    public int Echo(int value) => value;
-}
-
-[ExoResource("{{serviceName}}_items", PrimaryKey = "id", DrawerTabs = new[] { "overview", "attributes" })]
-public record {{className}}Item
-{
-    [ExoColumn(Sortable = true, Filterable = true)]
-    public string Id { get; init; } = "";
-
-    [ExoColumn(Sortable = true, Filterable = true)]
-    public string OwnerId { get; init; } = "";
-
-    [ExoColumn(Sortable = true)]
-    public int Quantity { get; init; }
-
-    [ExoColumn(Badge = true)]
-    public string Status { get; init; } = "active";
-}
-""";
-    }
-
-    private static string BasicTemplate(string serviceName, string className, bool isExtension = true)
-    {
-        string ns = isExtension ? "Exoforge.Extensions" : "Exoforge.Plugins";
-        string attr = isExtension ? "ExoExtension" : "ExoService";
-        string suffix = isExtension ? "Extension" : "Plugin";
-
         return $$"""
 using System;
 using Exoforge.Plugin.SDK;
 
-namespace {{ns}};
+namespace Exoforge.Extensions;
 
-[{{attr}}("{{serviceName}}", Version = "0.1.0", Category = "Game", Title = "{{className}}", Icon = "🎁", Resources = [typeof({{className}}Claim)])]
-public class {{className}}{{suffix}}
+[ExoExtension("{{serviceName}}", Version = "0.1.0", Category = "Game", Title = "{{className}}", Icon = "🎁", Resources = [typeof({{className}}Claim)])]
+public class {{className}}Extension
 {
     [ExoAction]
     public {{className}}Reward ClaimDailyReward()
@@ -491,20 +425,16 @@ public record {{className}}Reward(string Kind, int Amount);
 """;
     }
 
-    private static string PersistentTemplate(string serviceName, string className, bool isExtension = true)
+    private static string PersistentTemplate(string serviceName, string className)
     {
-        string ns = isExtension ? "Exoforge.Extensions" : "Exoforge.Plugins";
-        string attr = isExtension ? "ExoExtension" : "ExoService";
-        string suffix = isExtension ? "Extension" : "Plugin";
-
         return $$"""
 using System.Collections.Generic;
 using Exoforge.Plugin.SDK;
 
-namespace {{ns}};
+namespace Exoforge.Extensions;
 
-[{{attr}}("{{serviceName}}", Version = "0.1.0", Category = "Game", Title = "{{className}}", Icon = "📦", Resources = [typeof({{className}}Item)])]
-public class {{className}}{{suffix}}
+[ExoExtension("{{serviceName}}", Version = "0.1.0", Category = "Game", Title = "{{className}}", Icon = "📦", Resources = [typeof({{className}}Item)])]
+public class {{className}}Extension
 {
     [ExoAction]
     public {{className}}Item? GetItem(string id) =>
@@ -531,19 +461,15 @@ public record {{className}}Item(
 """;
     }
 
-    private static string ConfigTemplate(string serviceName, string className, bool isExtension = true)
+    private static string ConfigTemplate(string serviceName, string className)
     {
-        string ns = isExtension ? "Exoforge.Extensions" : "Exoforge.Plugins";
-        string attr = isExtension ? "ExoExtension" : "ExoService";
-        string suffix = isExtension ? "Extension" : "Plugin";
-
         return $$"""
 using Exoforge.Plugin.SDK;
 
-namespace {{ns}};
+namespace Exoforge.Extensions;
 
-[{{attr}}("{{serviceName}}", Version = "0.1.0", Category = "Game", Title = "{{className}}", Icon = "⚙️", Resources = [typeof({{className}}Config)])]
-public class {{className}}{{suffix}}
+[ExoExtension("{{serviceName}}", Version = "0.1.0", Category = "Game", Title = "{{className}}", Icon = "⚙️", Resources = [typeof({{className}}Config)])]
+public class {{className}}Extension
 {
     [ExoAction]
     public {{className}}Config GetConfig() =>
@@ -566,21 +492,17 @@ public record {{className}}Config(
 """;
     }
 
-    private static string EventsTemplate(string serviceName, string className, bool isExtension = true)
+    private static string EventsTemplate(string serviceName, string className)
     {
-        string ns = isExtension ? "Exoforge.Extensions" : "Exoforge.Plugins";
-        string attr = isExtension ? "ExoExtension" : "ExoService";
-        string suffix = isExtension ? "Extension" : "Plugin";
-
         return $$"""
 using System;
 using System.Threading.Tasks;
 using Exoforge.Plugin.SDK;
 
-namespace {{ns}};
+namespace Exoforge.Extensions;
 
-[{{attr}}("{{serviceName}}", Version = "0.1.0", Category = "Game", Title = "{{className}}", Icon = "📡")]
-public class {{className}}{{suffix}}
+[ExoExtension("{{serviceName}}", Version = "0.1.0", Category = "Game", Title = "{{className}}", Icon = "📡")]
+public class {{className}}Extension
 {
     [ExoAction]
     public async Task GreetPlayerAsync(string name)

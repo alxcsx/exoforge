@@ -35,26 +35,26 @@ defmodule Exoforge.Std.DashboardViewsTest do
 
   test "resolve_view action resolves module over ActionDispatcher" do
     assert {:ok, result} =
-             ActionDispatcher.dispatch(:dashboard_view, :resolve_view, %{id: "player_data"})
+             ActionDispatcher.dispatch_internal(:dashboard_view, :resolve_view, %{id: "player_data"})
 
     assert result.module == PlayerDataView
     assert result.found == true
 
     assert {:ok, em_result} =
-             ActionDispatcher.dispatch(:dashboard_view, :resolve_view, %{id: "extension_manager"})
+             ActionDispatcher.dispatch_internal(:dashboard_view, :resolve_view, %{id: "extension_manager"})
 
     assert em_result.module == ExtensionManagerView
     assert em_result.found == true
 
     assert {:ok, none_result} =
-             ActionDispatcher.dispatch(:dashboard_view, :resolve_view, %{id: "nonexistent_view"})
+             ActionDispatcher.dispatch_internal(:dashboard_view, :resolve_view, %{id: "nonexistent_view"})
 
     assert none_result.module == nil
     assert none_result.found == false
   end
 
   test "list_views returns registered views" do
-    assert {:ok, result} = ActionDispatcher.dispatch(:dashboard_view, :list_views, %{})
+    assert {:ok, result} = ActionDispatcher.dispatch_internal(:dashboard_view, :list_views, %{})
     assert is_list(result.views)
     assert result.count >= 3
     ids = Enum.map(result.views, & &1["id"])

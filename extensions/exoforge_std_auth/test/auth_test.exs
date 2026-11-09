@@ -173,8 +173,13 @@ defmodule Exoforge.AuthTest do
                ActionDispatcher.dispatch(:auth, :issue_token, %{player_id: "someone"}, caller_scopes: ["player"])
     end
 
-    test "an in-process caller (the Studio's own views) keeps working" do
-      assert {:ok, _} = ActionDispatcher.dispatch(:auth, :list_users, %{})
+    test "an unauthenticated caller without scopes is denied by default" do
+      assert {:error, :unauthorized} = ActionDispatcher.dispatch(:auth, :list_users, %{})
+      assert {:error, :unauthorized} = ActionDispatcher.dispatch(:auth, :issue_token, %{player_id: "someone"})
+    end
+
+    test "an explicit in-process / internal caller keeps working" do
+      assert {:ok, _} = ActionDispatcher.dispatch_internal(:auth, :list_users, %{})
     end
   end
 
@@ -227,7 +232,7 @@ defmodule Exoforge.AuthTest do
 
       # Verify player profile was hooked and stored in player_data
       assert {:ok, %{player: profile}} =
-               ActionDispatcher.dispatch(:player_data, :get_player, %{player_id: "p_lancelot"})
+               ActionDispatcher.dispatch_internal(:player_data, :get_player, %{player_id: "p_lancelot"})
 
       assert profile["name"] == "Sir Lancelot"
       assert profile["email"] == "lance@camelot.io"
@@ -239,9 +244,9 @@ defmodule Exoforge.AuthTest do
       {:ok, _u2} = ActionDispatcher.dispatch(:auth, :register, %{player_id: "user_beta", scopes: ["player"]})
 
       # Issue additional token for user_alpha
-      {:ok, _t2} = ActionDispatcher.dispatch(:auth, :issue_token, %{player_id: "user_alpha"})
+      {:ok, _t2} = ActionDispatcher.dispatch_internal(:auth, :issue_token, %{player_id: "user_alpha"})
 
-      assert {:ok, %{users: users, count: count}} = ActionDispatcher.dispatch(:auth, :list_users, %{})
+      assert {:ok, %{users: users, count: count}} = ActionDispatcher.dispatch_internal(:auth, :list_users, %{})
       assert count >= 2
 
       alpha = Enum.find(users, &(&1["player_id"] == "user_alpha"))
@@ -422,7 +427,7 @@ defmodule Exoforge.AuthTest do
         })
 
       assert {:ok, %{status: "password_reset"}} =
-               ActionDispatcher.dispatch(:auth, :reset_password, %{
+               ActionDispatcher.dispatch_internal(:auth, :reset_password, %{
                  player_id: "reset_me",
                  password: "new_secret_pass"
                })
@@ -448,7 +453,7 @@ defmodule Exoforge.AuthTest do
         })
 
       assert {:ok, %{scopes: ["player", "studio"]}} =
-               ActionDispatcher.dispatch(:auth, :update_user_roles, %{
+               ActionDispatcher.dispatch_internal(:auth, :update_user_roles, %{
                  player_id: "role_changer",
                  scopes: ["player", "studio"]
                })
@@ -468,7 +473,7 @@ defmodule Exoforge.AuthTest do
         })
 
       assert {:ok, %{status: "deleted"}} =
-               ActionDispatcher.dispatch(:auth, :delete_user, %{player_id: "to_delete"})
+               ActionDispatcher.dispatch_internal(:auth, :delete_user, %{player_id: "to_delete"})
 
       assert {:error, :invalid_token} =
                ActionDispatcher.dispatch(:auth, :authenticate, %{token: token})
@@ -479,19 +484,19 @@ defmodule Exoforge.AuthTest do
       assert :ok = Auth.ensure_admin_account()
 
       assert {:error, :protected_admin_account} =
-               ActionDispatcher.dispatch(:auth, :delete_user, %{player_id: "admin"})
+               ActionDispatcher.dispatch_internal(:auth, :delete_user, %{player_id: "admin"})
 
       assert {:error, :protected_admin_account} =
-               ActionDispatcher.dispatch(:auth, :delete_user, %{player_id: "envadmin@exoforge.test"})
+               ActionDispatcher.dispatch_internal(:auth, :delete_user, %{player_id: "envadmin@exoforge.test"})
 
       assert {:error, :protected_admin_account} =
-               ActionDispatcher.dispatch(:auth, :update_user_roles, %{
+               ActionDispatcher.dispatch_internal(:auth, :update_user_roles, %{
                  player_id: "admin",
                  scopes: ["player"]
                })
 
       assert {:error, :protected_admin_account} =
-               ActionDispatcher.dispatch(:auth, :reset_password, %{
+               ActionDispatcher.dispatch_internal(:auth, :reset_password, %{
                  player_id: "admin",
                  password: "hacked"
                })
@@ -532,7 +537,7 @@ defmodule Exoforge.AuthTest do
 
       # Stage 2: the signed-in player names themselves.
       assert {:ok, %{name: "Viper"}} =
-               ActionDispatcher.dispatch(:auth, :set_display_name, %{
+               ActionDispatcher.dispatch_internal(:auth, :set_display_name, %{
                  player_id: device,
                  name: "  Viper  "
                })
@@ -547,7 +552,7 @@ defmodule Exoforge.AuthTest do
       assert {:ok, _} = ActionDispatcher.dispatch(:auth, :anonymous, %{player_id: device})
 
       assert {:error, :invalid_attributes} =
-               ActionDispatcher.dispatch(:auth, :set_display_name, %{player_id: device, name: "   "})
+               ActionDispatcher.dispatch_internal(:auth, :set_display_name, %{player_id: device, name: "   "})
     end
 
     test "set_display_name requires an identity" do
@@ -574,7 +579,7 @@ defmodule Exoforge.AuthTest do
 
     # Changing roles must not quietly make a disposable account permanent.
     assert {:ok, _} =
-             ActionDispatcher.dispatch(:auth, :update_user_roles, %{
+             ActionDispatcher.dispatch_internal(:auth, :update_user_roles, %{
                player_id: disp,
                scopes: ["player"]
              })
@@ -597,7 +602,7 @@ defmodule Exoforge.AuthTest do
   end
 
   defp player_row(player_id) do
-    case ActionDispatcher.dispatch(:database, :execute, %{
+    case ActionDispatcher.dispatch_internal(:database, :execute, %{
            plugin: :auth,
            operation: "SELECT player_id FROM players WHERE player_id = $1",
            arguments: [player_id]
@@ -608,7 +613,7 @@ defmodule Exoforge.AuthTest do
   end
 
   defp token_count(player_id) do
-    case ActionDispatcher.dispatch(:database, :execute, %{
+    case ActionDispatcher.dispatch_internal(:database, :execute, %{
            plugin: :auth,
            operation: "SELECT count(*) as n FROM tokens WHERE player_id = $1",
            arguments: [player_id]

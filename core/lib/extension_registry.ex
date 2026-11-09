@@ -273,7 +273,7 @@ defmodule Exoforge.ExtensionRegistry do
             name -> Exoforge.Atoms.existing(name, :all)
           end
 
-        case Exoforge.ActionDispatcher.dispatch(ext_id, list_action, %{}) do
+        case Exoforge.ActionDispatcher.dispatch_internal(ext_id, list_action, %{}) do
           {:ok, %{rows: r}} when is_list(r) ->
             r
 
@@ -285,7 +285,7 @@ defmodule Exoforge.ExtensionRegistry do
 
           _ ->
             if valid_identifier?(table_name) do
-              case Exoforge.ActionDispatcher.dispatch(:database, :execute, %{
+              case Exoforge.ActionDispatcher.dispatch_internal(:database, :execute, %{
                      extension: ext_id,
                      operation: "SELECT * FROM #{table_name}"
                    }) do

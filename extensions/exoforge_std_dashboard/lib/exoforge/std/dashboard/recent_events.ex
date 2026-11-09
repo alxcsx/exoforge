@@ -144,7 +144,7 @@ defmodule Exoforge.Std.Dashboard.RecentEvents do
 
     Task.start(fn ->
       try do
-        Exoforge.ActionDispatcher.dispatch(:database, :execute, %{
+        Exoforge.ActionDispatcher.dispatch_internal(:database, :execute, %{
           plugin: :dashboard,
           operation: "DELETE FROM recent_events"
         })
@@ -186,7 +186,7 @@ defmodule Exoforge.Std.Dashboard.RecentEvents do
             _ -> "{}"
           end
 
-        Exoforge.ActionDispatcher.dispatch(:database, :execute, %{
+        Exoforge.ActionDispatcher.dispatch_internal(:database, :execute, %{
           plugin: :dashboard,
           operation: """
           INSERT INTO recent_events (id, event, payload, context, time, timestamp)
@@ -231,7 +231,7 @@ defmodule Exoforge.Std.Dashboard.RecentEvents do
 
   defp do_create_schema do
     try do
-      case Exoforge.ActionDispatcher.dispatch(:database, :execute, %{
+      case Exoforge.ActionDispatcher.dispatch_internal(:database, :execute, %{
              plugin: :dashboard,
              operation: """
              CREATE TABLE IF NOT EXISTS recent_events (
@@ -259,7 +259,7 @@ defmodule Exoforge.Std.Dashboard.RecentEvents do
     ensure_schema()
 
     try do
-      case Exoforge.ActionDispatcher.dispatch(:database, :execute, %{
+      case Exoforge.ActionDispatcher.dispatch_internal(:database, :execute, %{
              plugin: :dashboard,
              operation:
                "SELECT id, event, payload, context, time, timestamp FROM recent_events ORDER BY timestamp DESC LIMIT #{@max_events}"

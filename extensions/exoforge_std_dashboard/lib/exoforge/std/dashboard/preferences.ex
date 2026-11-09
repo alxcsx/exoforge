@@ -85,5 +85,5 @@ defmodule Exoforge.Std.Dashboard.Preferences do
     })
   end
 
-  defp store(action, payload), do: ActionDispatcher.dispatch(:resource_store, action, payload)
+  defp store(action, payload), do: ActionDispatcher.dispatch_internal(:resource_store, action, payload)
 end

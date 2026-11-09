@@ -38,7 +38,7 @@ defmodule Exoforge.Std.Metering do
   @doc "Creates the append-only usage tables in this plugin's isolated database."
   def init_schema do
     _ =
-      ActionDispatcher.dispatch(:database, :execute, %{
+      ActionDispatcher.dispatch_internal(:database, :execute, %{
         plugin: :metering,
         operation: """
         CREATE TABLE IF NOT EXISTS usage_actions (
@@ -51,7 +51,7 @@ defmodule Exoforge.Std.Metering do
       })
 
     _ =
-      ActionDispatcher.dispatch(:database, :execute, %{
+      ActionDispatcher.dispatch_internal(:database, :execute, %{
         plugin: :metering,
         operation: """
         CREATE TABLE IF NOT EXISTS usage_plugins (
@@ -121,7 +121,7 @@ defmodule Exoforge.Std.Metering do
     do: {" WHERE plugin_id = $1 AND period_end >= $2", [plugin_id, since]}
 
   defp query(sql, args) do
-    case ActionDispatcher.dispatch(:database, :execute, %{
+    case ActionDispatcher.dispatch_internal(:database, :execute, %{
            plugin: :metering,
            operation: sql,
            arguments: args

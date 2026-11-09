@@ -29,7 +29,7 @@ defmodule Exoforge.Std.FileBucketTest do
       "content_type" => "text/plain"
     }
 
-    assert {:ok, %{file: file}} = ActionDispatcher.dispatch(:file_bucket, :upload_file, payload)
+    assert {:ok, %{file: file}} = ActionDispatcher.dispatch_internal(:file_bucket, :upload_file, payload)
     assert file["filename"] == "hello.txt"
     assert file["bucket"] == "test_bucket"
     assert file["size_bytes"] == 27
@@ -48,13 +48,13 @@ defmodule Exoforge.Std.FileBucketTest do
       "content" => b64
     }
 
-    assert {:ok, %{file: file}} = ActionDispatcher.dispatch(:file_bucket, :upload_file, payload)
+    assert {:ok, %{file: file}} = ActionDispatcher.dispatch_internal(:file_bucket, :upload_file, payload)
     assert file["filename"] == "data.bin"
     assert file["size_bytes"] == byte_size(raw)
 
     # Read back and verify content
     assert {:ok, %{content: content, file: read_file}} =
-             ActionDispatcher.dispatch(:file_bucket, :read_file, %{"id" => file["id"], "bucket" => "unity_assets"})
+             ActionDispatcher.dispatch_internal(:file_bucket, :read_file, %{"id" => file["id"], "bucket" => "unity_assets"})
 
     assert content == raw
     assert read_file["id"] == file["id"]
@@ -62,7 +62,7 @@ defmodule Exoforge.Std.FileBucketTest do
 
   test "get_file_info and list_files with search" do
     for i <- 1..3 do
-      ActionDispatcher.dispatch(:file_bucket, :upload_file, %{
+      ActionDispatcher.dispatch_internal(:file_bucket, :upload_file, %{
         "bucket" => "avatars",
         "filename" => "avatar_#{i}.png",
         "content" => "fake png content #{i}"
@@ -70,45 +70,45 @@ defmodule Exoforge.Std.FileBucketTest do
     end
 
     assert {:ok, %{files: files, count: 3}} =
-             ActionDispatcher.dispatch(:file_bucket, :list_files, %{"bucket" => "avatars"})
+             ActionDispatcher.dispatch_internal(:file_bucket, :list_files, %{"bucket" => "avatars"})
 
     assert length(files) == 3
 
     first = hd(files)
     # Lookup by id without specifying bucket
     assert {:ok, %{file: fetched}} =
-             ActionDispatcher.dispatch(:file_bucket, :get_file_info, %{"id" => first["id"]})
+             ActionDispatcher.dispatch_internal(:file_bucket, :get_file_info, %{"id" => first["id"]})
 
     assert fetched["id"] == first["id"]
     assert fetched["filename"] == first["filename"]
 
     # Search filter
     assert {:ok, %{files: search_res, count: 1}} =
-             ActionDispatcher.dispatch(:file_bucket, :list_files, %{"search" => "avatar_2"})
+             ActionDispatcher.dispatch_internal(:file_bucket, :list_files, %{"search" => "avatar_2"})
     assert hd(search_res)["filename"] == "avatar_2.png"
   end
 
   test "list_buckets lists all active buckets" do
-    ActionDispatcher.dispatch(:file_bucket, :upload_file, %{
+    ActionDispatcher.dispatch_internal(:file_bucket, :upload_file, %{
       "bucket" => "bucket_alpha",
       "filename" => "alpha.txt",
       "content" => "alpha"
     })
 
-    ActionDispatcher.dispatch(:file_bucket, :upload_file, %{
+    ActionDispatcher.dispatch_internal(:file_bucket, :upload_file, %{
       "bucket" => "bucket_beta",
       "filename" => "beta.txt",
       "content" => "beta"
     })
 
-    assert {:ok, %{buckets: buckets}} = ActionDispatcher.dispatch(:file_bucket, :list_buckets, %{})
+    assert {:ok, %{buckets: buckets}} = ActionDispatcher.dispatch_internal(:file_bucket, :list_buckets, %{})
     assert "bucket_alpha" in buckets
     assert "bucket_beta" in buckets
     assert "default" in buckets
   end
 
   test "update_file modifies filename and replaces content while keeping id" do
-    assert {:ok, %{file: file}} = ActionDispatcher.dispatch(:file_bucket, :upload_file, %{
+    assert {:ok, %{file: file}} = ActionDispatcher.dispatch_internal(:file_bucket, :upload_file, %{
       "bucket" => "docs",
       "filename" => "old_name.txt",
       "content" => "old content"
@@ -116,7 +116,7 @@ defmodule Exoforge.Std.FileBucketTest do
 
     id = file["id"]
 
-    assert {:ok, %{file: updated}} = ActionDispatcher.dispatch(:file_bucket, :update_file, %{
+    assert {:ok, %{file: updated}} = ActionDispatcher.dispatch_internal(:file_bucket, :update_file, %{
       "id" => id,
       "bucket" => "docs",
       "filename" => "new_name.txt",
@@ -128,12 +128,12 @@ defmodule Exoforge.Std.FileBucketTest do
     assert updated["size_bytes"] == byte_size("new replaced content!")
 
     assert {:ok, %{content: read_content}} =
-             ActionDispatcher.dispatch(:file_bucket, :read_file, %{"id" => id, "bucket" => "docs"})
+             ActionDispatcher.dispatch_internal(:file_bucket, :read_file, %{"id" => id, "bucket" => "docs"})
     assert read_content == "new replaced content!"
   end
 
   test "delete_file removes metadata and file from disk" do
-    assert {:ok, %{file: file}} = ActionDispatcher.dispatch(:file_bucket, :upload_file, %{
+    assert {:ok, %{file: file}} = ActionDispatcher.dispatch_internal(:file_bucket, :upload_file, %{
       "bucket" => "temp",
       "filename" => "temp.txt",
       "content" => "delete me"
@@ -142,16 +142,16 @@ defmodule Exoforge.Std.FileBucketTest do
     assert File.exists?(file["disk_path"])
 
     assert {:ok, %{deleted: true}} =
-             ActionDispatcher.dispatch(:file_bucket, :delete_file, %{"id" => file["id"], "bucket" => "temp"})
+             ActionDispatcher.dispatch_internal(:file_bucket, :delete_file, %{"id" => file["id"], "bucket" => "temp"})
 
     refute File.exists?(file["disk_path"])
 
     assert {:error, :not_found} =
-             ActionDispatcher.dispatch(:file_bucket, :get_file_info, %{"id" => file["id"], "bucket" => "temp"})
+             ActionDispatcher.dispatch_internal(:file_bucket, :get_file_info, %{"id" => file["id"], "bucket" => "temp"})
   end
 
   test "lookup by filename and .bundle content type detection" do
-    assert {:ok, %{file: file}} = ActionDispatcher.dispatch(:file_bucket, :upload_file, %{
+    assert {:ok, %{file: file}} = ActionDispatcher.dispatch_internal(:file_bucket, :upload_file, %{
       "bucket" => "addressables",
       "filename" => "scene_all_123.bundle",
       "content" => "bundle_binary_content",
@@ -162,7 +162,7 @@ defmodule Exoforge.Std.FileBucketTest do
 
     # Lookup using filename instead of id
     assert {:ok, %{file: by_name}} =
-             ActionDispatcher.dispatch(:file_bucket, :get_file_info, %{
+             ActionDispatcher.dispatch_internal(:file_bucket, :get_file_info, %{
                "bucket" => "addressables",
                "id" => "scene_all_123.bundle"
              })
@@ -184,7 +184,7 @@ defmodule Exoforge.Std.FileBucketTest do
     Exoforge.Std.FileBucket.on_init(%{})
 
     assert {:ok, %{file: sdk_file}} =
-             ActionDispatcher.dispatch(:file_bucket, :get_file_info, %{
+             ActionDispatcher.dispatch_internal(:file_bucket, :get_file_info, %{
                "bucket" => "sdk",
                "id" => "unity"
              })
@@ -208,7 +208,7 @@ defmodule Exoforge.Std.FileBucketTest do
     Exoforge.Std.FileBucket.on_init(%{})
 
     assert {:ok, %{file: sdk_file}} =
-             ActionDispatcher.dispatch(:file_bucket, :get_file_info, %{
+             ActionDispatcher.dispatch_internal(:file_bucket, :get_file_info, %{
                "bucket" => "sdk",
                "id" => "unity"
              })

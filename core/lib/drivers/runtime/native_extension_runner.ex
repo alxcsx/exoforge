@@ -519,7 +519,7 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
         %{error: "cannot_call_own_service"}
 
       true ->
-        case ActionDispatcher.dispatch(
+        case ActionDispatcher.dispatch_internal(
                Exoforge.Atoms.existing(service, service),
                Exoforge.Atoms.existing(action, action),
                payload
@@ -547,7 +547,7 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
   end
 
   defp db_put(manifest, table, key, value) do
-    case ActionDispatcher.dispatch(:database, :execute, %{
+    case ActionDispatcher.dispatch_internal(:database, :execute, %{
            extension: manifest.id,
            operation: %{action: :put, table: table, id: key, data: value}
          }) do
@@ -557,7 +557,7 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
   end
 
   defp db_get(manifest, table, key) do
-    case ActionDispatcher.dispatch(:database, :execute, %{
+    case ActionDispatcher.dispatch_internal(:database, :execute, %{
            extension: manifest.id,
            operation: %{action: :get, table: table, id: key}
          }) do
@@ -568,7 +568,7 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
   end
 
   defp db_all(manifest, table) do
-    case ActionDispatcher.dispatch(:database, :execute, %{
+    case ActionDispatcher.dispatch_internal(:database, :execute, %{
            extension: manifest.id,
            operation: %{action: :all, table: table}
          }) do
@@ -580,7 +580,7 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
   end
 
   defp db_delete(manifest, table, key) do
-    case ActionDispatcher.dispatch(:database, :execute, %{
+    case ActionDispatcher.dispatch_internal(:database, :execute, %{
            extension: manifest.id,
            operation: %{action: :delete, table: table, id: key}
          }) do

@@ -2351,13 +2351,6 @@ namespace Exoforge.Unity.Editor
                         if (scannedPaths.Add(dir)) extensionDirs.Add(dir);
                     }
                 }
-                if (Directory.Exists(ws.PluginsPath))
-                {
-                    foreach (var dir in Directory.GetDirectories(ws.PluginsPath))
-                    {
-                        if (scannedPaths.Add(dir)) extensionDirs.Add(dir);
-                    }
-                }
 
                 foreach (var dir in extensionDirs)
                 {
@@ -2795,7 +2788,7 @@ namespace Exoforge.Unity.Editor
                 string effectiveRid = !string.IsNullOrEmpty(configuredRid) && !string.Equals(configuredRid, "auto", StringComparison.OrdinalIgnoreCase)
                     ? configuredRid
                     : (IsConnected ? ExoforgeDotnetValidator.StandardServerRid : ExoDeployer.HostRuntimeIdentifier());
-                var build = await deployer.BuildPluginAsync(targetName, effectiveRid, ExoforgeEditorConfig.DotnetPath, s => _buildLog += s + "\n");
+                var build = await deployer.BuildExtensionAsync(targetName, effectiveRid, ExoforgeEditorConfig.DotnetPath, s => _buildLog += s + "\n");
                 _buildLog = build.Output;
                 SessionState.EraseString($"Exoforge_BuildFailed_{targetName}");
                 ShowStatus($"✓ Successfully built '{targetName}'.");
@@ -2908,7 +2901,7 @@ namespace Exoforge.Unity.Editor
             {
                 var ws = ExoWorkspace.Load(ExoforgeEditorConfig.GetAbsoluteWorkspacePath());
                 var deployer = new ExoDeployer(ws);
-                string output = await deployer.GeneratePluginStubsAsync(plugin.Name, existingClient: GetClient());
+                string output = await deployer.GenerateExtensionStubsAsync(plugin.Name, existingClient: GetClient());
                 ShowStatus($"✓ Generated stubs for '{plugin.Name}' → {output}");
             }
             catch (Exception ex)
@@ -2919,12 +2912,12 @@ namespace Exoforge.Unity.Editor
 
         private async Task FetchPluginLogsAsync(string pluginId)
         {
-            string clean = ExoScaffolder.NormalizePluginName(pluginId);
+            string clean = ExoScaffolder.NormalizeExtensionName(pluginId);
             try
             {
                 var ws = ExoWorkspace.Load(ExoforgeEditorConfig.GetAbsoluteWorkspacePath());
                 var deployer = new ExoDeployer(ws);
-                var lines = await deployer.GetPluginLogsAsync(clean, 100, existingClient: IsConnected ? GetClient() : null);
+                var lines = await deployer.GetExtensionLogsAsync(clean, 100, existingClient: IsConnected ? GetClient() : null);
 
                 _pluginLogs = lines.Count == 0
                     ? "(no log lines recorded — the plugin may not have run yet)"
@@ -2953,7 +2946,7 @@ namespace Exoforge.Unity.Editor
 
                 string wsPath = ExoforgeEditorConfig.GetAbsoluteWorkspacePath();
                 var ws = ExoWorkspace.Load(wsPath);
-                if (!Directory.Exists(ws.PluginsPath)) return;
+                if (!Directory.Exists(ws.ExtensionsPath)) return;
 
                 string manifestText = File.ReadAllText(manifestPath);
                 using var doc = JsonDocument.Parse(manifestText);
@@ -2967,7 +2960,7 @@ namespace Exoforge.Unity.Editor
                 }
 
                 bool modified = false;
-                foreach (var dir in Directory.GetDirectories(ws.PluginsPath))
+                foreach (var dir in Directory.GetDirectories(ws.ExtensionsPath))
                 {
                     string unityPkgJsonPath = Path.Combine(dir, "unity", "package.json");
                     string pkgJsonPath = File.Exists(unityPkgJsonPath) ? unityPkgJsonPath : Path.Combine(dir, "package.json");

@@ -38,7 +38,7 @@ public class ManagementTests : IDisposable
         var ws = ExoWorkspace.Initialize(_tempDir, "TestGameProject");
 
         Assert.True(File.Exists(ws.ConfigPath));
-        Assert.True(Directory.Exists(ws.PluginsPath));
+        Assert.True(Directory.Exists(ws.ExtensionsPath));
         Assert.Equal("TestGameProject", ws.Config.ProjectName);
         Assert.Equal("local", ws.Config.DefaultEnvironment);
 
@@ -83,12 +83,12 @@ public class ManagementTests : IDisposable
         var ws = ExoWorkspace.Initialize(_tempDir, "TestGameProject");
         var deployer = new ExoDeployer(ws);
 
-        WriteManifest(ws.PluginsPath, "leaderboard", """
+        WriteManifest(ws.ExtensionsPath, "leaderboard", """
         {"id":"leaderboard","version":"2.0.0-local","type":"native","services":[{"name":"leaderboard"}]}
         """);
 
         // Built, never deployed: the cluster has never heard of it.
-        WriteManifest(ws.PluginsPath, "guilds", """
+        WriteManifest(ws.ExtensionsPath, "guilds", """
         {"id":"guilds","version":"1.0.0-local","type":"native","services":[{"name":"guilds"}]}
         """);
 
@@ -114,9 +114,9 @@ public class ManagementTests : IDisposable
         Assert.Equal("local@host", export.GetProperty("cluster").GetString());
     }
 
-    private static void WriteManifest(string pluginsPath, string name, string json)
+    private static void WriteManifest(string extensionsPath, string name, string json)
     {
-        string dir = Path.Combine(pluginsPath, name);
+        string dir = Path.Combine(extensionsPath, name);
         Directory.CreateDirectory(dir);
         File.WriteAllText(Path.Combine(dir, "manifest.json"), json);
     }
@@ -147,7 +147,7 @@ public class ManagementTests : IDisposable
         var ws = ExoWorkspace.Initialize(_tempDir, "OfflineGameProject");
         var deployer = new ExoDeployer(ws);
 
-        WriteManifest(ws.PluginsPath, "player_stats", """
+        WriteManifest(ws.ExtensionsPath, "player_stats", """
         {"id":"player_stats","version":"1.0.0","type":"native","services":[{"name":"player_stats","actions":[{"name":"get_stats","returns":"integer"}]}]}
         """);
 
@@ -163,16 +163,16 @@ public class ManagementTests : IDisposable
     }
 
     [Fact]
-    public void Scaffolder_Creates_Complete_Plugin_Boilerplate()
+    public void Scaffolder_Creates_Complete_Extension_Boilerplate()
     {
         var ws = ExoWorkspace.Initialize(_tempDir, "TestGameProject");
 
         // The temp workspace has no repo above it, so point the scaffolder at the real SDK.
-        string createdDir = ExoScaffolder.ScaffoldPlugin(ws.PluginsPath, "guild_system");
+        string createdDir = ExoScaffolder.ScaffoldExtension(ws.ExtensionsPath, "guild_system");
 
         Assert.True(Directory.Exists(createdDir));
 
-        // Per-plugin solution + src/ layout.
+        // Per-extension solution + src/ layout.
         string slnFile = Path.Combine(createdDir, "guild_system.sln");
         Assert.True(File.Exists(slnFile));
         Assert.Contains("src/guild_system.csproj", File.ReadAllText(slnFile));
@@ -181,23 +181,23 @@ public class ManagementTests : IDisposable
         Assert.True(File.Exists(csprojFile));
 
         string csprojText = File.ReadAllText(csprojFile);
-        // The whole point: a plugin project names the package and no path, so it builds from a feed
+        // The whole point: an extension project names the package and no path, so it builds from a feed
         // wherever it is put. The generator and the manifest plumbing arrive with the package.
         Assert.Contains("<PackageReference Include=\"Exoforge.Plugin.SDK\"", csprojText);
         Assert.DoesNotContain("ProjectReference", csprojText);
         Assert.DoesNotContain("sdk/csharp", csprojText);
 
-        string serviceFile = Path.Combine(createdDir, "src", "GuildSystemPlugin.cs");
+        string serviceFile = Path.Combine(createdDir, "src", "GuildSystemExtension.cs");
         Assert.True(File.Exists(serviceFile));
         string serviceText = File.ReadAllText(serviceFile);
-        Assert.Contains("[ExoService(\"guild_system\"", serviceText);
-        Assert.Contains("public class GuildSystemPlugin", serviceText);
+        Assert.Contains("[ExoExtension(\"guild_system\"", serviceText);
+        Assert.Contains("public class GuildSystemExtension", serviceText);
         Assert.Contains("[ExoAction]", serviceText);
-        Assert.Contains("[ExoResource(\"guild_system_items\"", serviceText);
+        Assert.Contains("[ExoResource(\"guild_system_claims\"", serviceText);
 
         // Static holder ExoServices is used for ambient context (Database, Logger, etc.), and the entry point, the dispatch table and the JSON context are
         // all generated - the scaffold writes none of them.
-        Assert.Contains("ExoServices.Logger.Info", serviceText);
+        Assert.Contains("ExoServices.Database", serviceText);
         Assert.DoesNotContain("public static void Main", serviceText);
         Assert.DoesNotContain("JsonContext", serviceText);
         Assert.False(File.Exists(Path.Combine(createdDir, "src", "GuildSystemJsonContext.cs")));
@@ -236,16 +236,16 @@ public class ManagementTests : IDisposable
     }
 
     [Fact]
-    public void BuildPlugin_Throws_When_Plugin_Directory_Missing()
+    public void BuildExtension_Throws_When_Extension_Directory_Missing()
     {
         var ws = ExoWorkspace.Initialize(_tempDir, "TestGameProject");
         var deployer = new ExoDeployer(ws);
 
-        Assert.Throws<DirectoryNotFoundException>(() => deployer.BuildPlugin("does_not_exist"));
+        Assert.Throws<DirectoryNotFoundException>(() => deployer.BuildExtension("does_not_exist"));
     }
 
     [Fact]
-    public void PluginStubs_GenerateTypedClientFromContract()
+    public void ExtensionStubs_GenerateTypedClientFromContract()
     {
         string json = """
         {
@@ -731,20 +731,20 @@ public class ManagementTests : IDisposable
         }
         """);
 
-        var report = PluginUsageReport.Parse(document.RootElement);
+        var report = ExtensionUsageReport.Parse(document.RootElement);
 
         Assert.Equal("local", report.TitleId);
         Assert.Equal("local", report.StudioId);
 
-        var plugin = Assert.Single(report.Plugins);
-        Assert.Equal("sample_plugin", plugin.PluginId);
-        Assert.Equal(2, plugin.Starts);
-        Assert.Equal(1, plugin.Restarts);
-        Assert.Equal(120, plugin.CpuMs);
-        Assert.Equal(4096, plugin.PeakRssKb);
-        Assert.Equal(60000, plugin.UptimeMs);
+        var extension = Assert.Single(report.Extensions);
+        Assert.Equal("sample_plugin", extension.ExtensionId);
+        Assert.Equal(2, extension.Starts);
+        Assert.Equal(1, extension.Restarts);
+        Assert.Equal(120, extension.CpuMs);
+        Assert.Equal(4096, extension.PeakRssKb);
+        Assert.Equal(60000, extension.UptimeMs);
 
-        var action = Assert.Single(plugin.Actions);
+        var action = Assert.Single(extension.Actions);
         Assert.Equal("ping", action.Action);
         Assert.Equal(5, action.Invocations);
         Assert.Equal(1, action.Errors);

@@ -14,7 +14,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   alias Exoforge.Std.Dashboard.ExtensionPresenter
   alias Exoforge.Std.Dashboard.RecentEvents
 
-  @max_pinned 8
+  @max_pinned 4
 
   @impl true
   def mount(params, session, socket) do
@@ -295,11 +295,11 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     cap =
       case max_val do
         i when is_integer(i) ->
-          max(1, i)
+          min(max(1, i), @max_pinned)
 
         s when is_binary(s) ->
           case Integer.parse(s) do
-            {i, _} -> max(1, i)
+            {i, _} -> min(max(1, i), @max_pinned)
             _ -> @max_pinned
           end
 
@@ -325,7 +325,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
   def handle_event("pin_extension", %{"id" => ext_id_str}, socket) do
     pinned = socket.assigns.pinned_extensions
-    max_pinned = socket.assigns.max_pinned
+    max_pinned = min(socket.assigns.max_pinned, @max_pinned)
 
     if ext_id_str in pinned do
       {:noreply, socket}
@@ -1302,8 +1302,16 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         _ -> %{actions: [], plugins: []}
       end
 
-    metered_actions = Map.get(snapshot, :actions, [])
     metered_plugins = Map.get(snapshot, :plugins, [])
+    metered_actions =
+      case Map.get(snapshot, :actions) do
+        actions when is_list(actions) and actions != [] ->
+          actions
+        _ ->
+          Enum.flat_map(metered_plugins, fn p ->
+            Enum.map(p.actions, &Map.put(&1, :service, p.plugin_id))
+          end)
+      end
 
     log_rates =
       try do
@@ -1420,43 +1428,71 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         ]
       end
 
+    actions_with_errors =
+      metered_actions
+      |> Enum.map(fn act ->
+        {"#{act.service}.#{act.action}", Map.get(act, :invocations, 0), Map.get(act, :errors, 0)}
+      end)
+      |> Enum.filter(fn {_id, _inv, err} -> err > 0 end)
+      |> Enum.sort_by(fn {_id, _inv, err} -> -err end)
+      |> Enum.take(5)
+
+    error_actions_to_plot =
+      if actions_with_errors != [] do
+        actions_with_errors
+      else
+        actions_to_plot
+      end
+
     error_max_val =
-      if actions_to_plot != [] do
-        Enum.max([5, total_errors | Enum.map(actions_to_plot, &elem(&1, 2))])
+      if error_actions_to_plot != [] do
+        Enum.max([5, total_errors | Enum.map(error_actions_to_plot, &elem(&1, 2))])
       else
         5
       end
 
     error_series =
-      actions_to_plot
-      |> Enum.with_index()
-      |> Enum.map(fn {{act_id, _inv, err}, _idx} ->
-        color = color_for_name(act_id, error_colors)
+      if error_actions_to_plot != [] do
+        error_actions_to_plot
+        |> Enum.with_index()
+        |> Enum.map(fn {{act_id, _inv, err}, _idx} ->
+          color = color_for_name(act_id, error_colors)
 
-        counts =
-          if err > 0 do
-            [0, 0, 0, 0, 0, err]
-          else
-            [0, 0, 0, 0, 0, 0]
-          end
+          counts =
+            if err > 0 do
+              [0, 0, 0, 0, 0, err]
+            else
+              [0, 0, 0, 0, 0, 0]
+            end
 
-        dots =
-          Enum.zip(x_coords, counts)
-          |> Enum.map(fn {x, c} ->
-            y = 125 - round(c / max(error_max_val, 1) * 95)
-            %{x: x, y: y, count: c}
-          end)
+          dots =
+            Enum.zip(x_coords, counts)
+            |> Enum.map(fn {x, c} ->
+              y = 125 - round(c / max(error_max_val, 1) * 95)
+              %{x: x, y: y, count: c}
+            end)
 
-        points = Enum.map_join(dots, " ", fn d -> "#{d.x},#{d.y}" end)
+          points = Enum.map_join(dots, " ", fn d -> "#{d.x},#{d.y}" end)
 
-        %{
-          id: act_id,
-          color: color,
-          points: points,
-          dots: dots,
-          latest_count: err
-        }
-      end)
+          %{
+            id: act_id,
+            color: color,
+            points: points,
+            dots: dots,
+            latest_count: err
+          }
+        end)
+      else
+        [
+          %{
+            id: "healthy",
+            color: "#10b981",
+            points: "40,125 128,125 216,125 304,125 392,125 480,125",
+            dots: Enum.map(x_coords, &%{x: &1, y: 125, count: 0}),
+            latest_count: 0
+          }
+        ]
+      end
 
     action_invocations =
       Map.new(metered_actions, fn act ->
@@ -1538,118 +1574,127 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
             </div>
           </div>
 
-          <!-- Top Navigation Bar: 1. Overview, 2. Extensions, 3. Pinned Items (fits in one row - 1, circular queue) -->
-          <nav id="nav-container" phx-hook="NavCapacity" class="flex-1 min-w-0 mx-1 flex items-center flex-nowrap overflow-x-hidden gap-0.5 bg-gray-100/90 p-0.5 rounded-xl border border-gray-200/80 shadow-inner">
-            <!-- 1. Overview Tab (Icon only + tooltip/aria) -->
-            <button
-              phx-click="switch_tab"
-              phx-value-tab="overview"
-              aria-label="Overview"
-              title="Overview"
-              class={"p-1.5 text-xs rounded-lg transition-all font-bold flex items-center justify-center flex-shrink-0 #{if @current_tab == :overview, do: "bg-white text-primary-700 shadow-sm", else: "text-gray-600 hover:text-gray-900"}"}
-            >
-              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-              </svg>
-            </button>
-
-            <!-- 2. Extensions Menu Tab (Icon only + badge + tooltip/aria) -->
-            <button
-              phx-click="switch_tab"
-              phx-value-tab="apps"
-              aria-label="Extensions"
-              title={"Extensions (#{@overview.plugins_count})"}
-              class={"p-1.5 text-xs rounded-lg transition-all font-bold flex items-center justify-center gap-1 flex-shrink-0 #{if @current_tab == :apps, do: "bg-white text-primary-700 shadow-sm", else: "text-gray-600 hover:text-gray-900"}"}
-            >
-              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-              </svg>
-              <span class="text-[9px] px-1 py-0.2 rounded-full bg-primary-100 text-primary-800 font-black">
-                <%= @overview.plugins_count %>
-              </span>
-            </button>
-
-            <!-- Separator between main tabs and pinned items -->
-            <%= if length(@pinned_extensions) > 0 do %>
-              <div class="h-4 w-px bg-gray-300/80 mx-0.5 flex-shrink-0"></div>
-            <% end %>
-
-            <!-- 3a. Pinned dropdown (small screens) -->
-            <%= if length(@pinned_extensions) > 0 do %>
-              <div class="relative md:hidden flex-shrink-0">
-                <button
-                  type="button"
-                  phx-click="toggle_pinned_menu"
-                  class="px-2 py-1 text-xs rounded-lg font-bold flex items-center justify-center gap-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-200/50"
-                >
-                  <span>Pinned</span>
-                  <span class="text-[10px] px-1.5 rounded-full bg-gray-200 text-gray-700"><%= length(@pinned_extensions) %></span>
-                  <span class="text-[9px]">▾</span>
-                </button>
-                <%= if @pinned_menu_open do %>
-                  <div class="absolute left-0 top-full mt-1 z-50 min-w-[11rem] bg-white border border-gray-200 rounded-xl shadow-lg p-1 space-y-0.5">
-                    <%= for ext_id <- Enum.take(@pinned_extensions, @max_pinned) do %>
-                      <% pext = Enum.find(@overview.extensions, fn e -> to_string(e.id) == ext_id end) %>
-                      <%= if pext do %>
-                        <button
-                          type="button"
-                          phx-click="switch_tab"
-                          phx-value-tab={ext_id}
-                          class={"w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 #{if to_string(@current_tab) == ext_id, do: "bg-primary-50 text-primary-700", else: "text-gray-700 hover:bg-gray-100"}"}
-                        >
-                          <span><%= if is_map(pext.dashboard_view) and pext.dashboard_view[:icon], do: pext.dashboard_view[:icon], else: ExtensionPresenter.icon(pext) %></span>
-                          <span class="truncate"><%= tab_short_name(pext) %></span>
-                        </button>
-                      <% end %>
-                    <% end %>
-                  </div>
+          <!-- Centered Top Navigation Bar: 1. Overview, 2. Extensions, 3. Pinned Items -->
+          <div class="flex-1 flex justify-center items-center min-w-0">
+            <% has_pinned = length(@pinned_extensions) > 0 %>
+            <nav id="nav-container" phx-hook="NavCapacity" class="inline-flex items-center flex-nowrap overflow-x-hidden gap-1 bg-gray-100/90 p-1 rounded-xl border border-gray-200/80 shadow-inner transition-all duration-200">
+              <!-- 1. Overview Tab (Named when empty, icon-only when pinned items grow the bar) -->
+              <button
+                phx-click="switch_tab"
+                phx-value-tab="overview"
+                aria-label="Overview"
+                title="Overview"
+                class={"px-2.5 py-1.5 text-xs rounded-lg transition-all font-bold flex items-center justify-center gap-1.5 flex-shrink-0 #{if @current_tab == :overview, do: "bg-white text-primary-700 shadow-sm", else: "text-gray-600 hover:text-gray-900"}"}
+              >
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                </svg>
+                <%= if not has_pinned do %>
+                  <span class="leading-none">Overview</span>
                 <% end %>
-              </div>
-            <% end %>
+              </button>
 
-            <!-- 3b. Pinned Extension Tabs (md+; can wrap to second line, up to limit) -->
-            <%= for ext_id <- Enum.take(@pinned_extensions, @max_pinned) do %>
-              <% ext = Enum.find(@overview.extensions, fn e -> to_string(e.id) == ext_id end) %>
-              <%= if ext do %>
-                <% title = tab_short_name(ext) %>
-                <% icon = if is_map(ext.dashboard_view) and ext.dashboard_view[:icon], do: ext.dashboard_view[:icon], else: ExtensionPresenter.icon(ext) %>
-                <% is_active = to_string(@current_tab) == ext_id %>
-                <div class={"group relative hidden md:inline-flex items-center justify-center rounded-lg transition-all text-xs font-bold whitespace-nowrap flex-shrink-0 #{if is_active, do: "bg-white text-primary-700 shadow-sm", else: "text-gray-600 hover:text-gray-900 hover:bg-gray-200/50"}"}>
-                  <button
-                    phx-click="switch_tab"
-                    phx-value-tab={ext_id}
-                    class="px-2.5 py-1 flex items-center justify-center gap-1 group-hover:pr-5 transition-all"
-                  >
-                    <span class="text-xs leading-none"><%= icon %></span>
-                    <span class="leading-none"><%= title %></span>
-                  </button>
+              <!-- 2. Extensions Menu Tab (Named when empty, icon-only when pinned items grow the bar) -->
+              <button
+                phx-click="switch_tab"
+                phx-value-tab="apps"
+                aria-label="Extensions"
+                title={"Extensions (#{@overview.plugins_count})"}
+                class={"px-2.5 py-1.5 text-xs rounded-lg transition-all font-bold flex items-center justify-center gap-1.5 flex-shrink-0 #{if @current_tab == :apps, do: "bg-white text-primary-700 shadow-sm", else: "text-gray-600 hover:text-gray-900"}"}
+              >
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+                <%= if not has_pinned do %>
+                  <span class="leading-none">Extensions</span>
+                <% end %>
+                <span class="text-[9px] px-1.5 py-0.5 rounded-full bg-primary-100 text-primary-800 font-black">
+                  <%= @overview.plugins_count %>
+                </span>
+              </button>
+
+              <!-- Separator between main tabs and pinned items -->
+              <%= if has_pinned do %>
+                <div class="h-4 w-px bg-gray-300/80 mx-0.5 flex-shrink-0"></div>
+              <% end %>
+
+              <!-- 3a. Pinned dropdown (small screens) -->
+              <%= if has_pinned do %>
+                <div class="relative md:hidden flex-shrink-0">
                   <button
                     type="button"
-                    phx-click="unpin_extension"
-                    phx-value-id={ext_id}
-                    title={"Unpin #{title} from top bar"}
-                    class="absolute right-1 text-gray-400 hover:text-red-500 font-bold text-[10px] transition-opacity opacity-0 group-hover:opacity-100 p-0.5 flex items-center justify-center"
+                    phx-click="toggle_pinned_menu"
+                    class="px-2 py-1 text-xs rounded-lg font-bold flex items-center justify-center gap-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-200/50"
                   >
-                    ✕
+                    <span>Pinned</span>
+                    <span class="text-[10px] px-1.5 rounded-full bg-gray-200 text-gray-700"><%= length(@pinned_extensions) %></span>
+                    <span class="text-[9px]">▾</span>
                   </button>
+                  <%= if @pinned_menu_open do %>
+                    <div class="absolute left-0 top-full mt-1 z-50 min-w-[11rem] bg-white border border-gray-200 rounded-xl shadow-lg p-1 space-y-0.5">
+                      <%= for ext_id <- Enum.take(@pinned_extensions, @max_pinned) do %>
+                        <% pext = Enum.find(@overview.extensions, fn e -> to_string(e.id) == ext_id end) %>
+                        <%= if pext do %>
+                          <button
+                            type="button"
+                            phx-click="switch_tab"
+                            phx-value-tab={ext_id}
+                            class={"w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 #{if to_string(@current_tab) == ext_id, do: "bg-primary-50 text-primary-700", else: "text-gray-700 hover:bg-gray-100"}"}
+                          >
+                            <span><%= if is_map(pext.dashboard_view) and pext.dashboard_view[:icon], do: pext.dashboard_view[:icon], else: ExtensionPresenter.icon(pext) %></span>
+                            <span class="truncate"><%= tab_short_name(pext) %></span>
+                          </button>
+                        <% end %>
+                      <% end %>
+                    </div>
+                  <% end %>
                 </div>
               <% end %>
-            <% end %>
 
-            <!-- 3c. Active Unpinned Extension Breadcrumb -->
-            <%= if to_string(@current_tab) not in ["overview", "apps"] and to_string(@current_tab) not in @pinned_extensions do %>
-              <% active_unpinned = Enum.find(@overview.extensions, fn e -> to_string(e.id) == to_string(@current_tab) end) %>
-              <%= if active_unpinned do %>
-                <% title = tab_short_name(active_unpinned) %>
-                <% icon = if is_map(active_unpinned.dashboard_view) and active_unpinned.dashboard_view[:icon], do: active_unpinned.dashboard_view[:icon], else: ExtensionPresenter.icon(active_unpinned) %>
-                <div class="h-4 w-px bg-gray-300/80 mx-0.5 flex-shrink-0"></div>
-                <div class="flex items-center justify-center rounded-lg text-xs font-bold whitespace-nowrap flex-shrink-0 bg-white text-primary-700 shadow-sm px-2.5 py-1 gap-1">
-                  <span class="text-xs leading-none"><%= icon %></span>
-                  <span class="leading-none"><%= title %></span>
-                </div>
+              <!-- 3b. Pinned Extension Tabs (md+; max 4 pinned items) -->
+              <%= for ext_id <- Enum.take(@pinned_extensions, @max_pinned) do %>
+                <% ext = Enum.find(@overview.extensions, fn e -> to_string(e.id) == ext_id end) %>
+                <%= if ext do %>
+                  <% title = tab_short_name(ext) %>
+                  <% icon = if is_map(ext.dashboard_view) and ext.dashboard_view[:icon], do: ext.dashboard_view[:icon], else: ExtensionPresenter.icon(ext) %>
+                  <% is_active = to_string(@current_tab) == ext_id %>
+                  <div class={"group relative hidden md:inline-flex items-center justify-center rounded-lg transition-all text-xs font-bold whitespace-nowrap flex-shrink-0 #{if is_active, do: "bg-white text-primary-700 shadow-sm", else: "text-gray-600 hover:text-gray-900 hover:bg-gray-200/50"}"}>
+                    <button
+                      phx-click="switch_tab"
+                      phx-value-tab={ext_id}
+                      class="px-2.5 py-1 flex items-center justify-center gap-1 group-hover:pr-5 transition-all"
+                    >
+                      <span class="text-xs leading-none"><%= icon %></span>
+                      <span class="leading-none"><%= title %></span>
+                    </button>
+                    <button
+                      type="button"
+                      phx-click="unpin_extension"
+                      phx-value-id={ext_id}
+                      title={"Unpin #{title} from top bar"}
+                      class="absolute right-1 text-gray-400 hover:text-red-500 font-bold text-[10px] transition-opacity opacity-0 group-hover:opacity-100 p-0.5 flex items-center justify-center cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                <% end %>
               <% end %>
-            <% end %>
-          </nav>
+
+              <!-- 3c. Active Unpinned Extension Breadcrumb -->
+              <%= if to_string(@current_tab) not in ["overview", "apps"] and to_string(@current_tab) not in @pinned_extensions do %>
+                <% active_unpinned = Enum.find(@overview.extensions, fn e -> to_string(e.id) == to_string(@current_tab) end) %>
+                <%= if active_unpinned do %>
+                  <% title = tab_short_name(active_unpinned) %>
+                  <% icon = if is_map(active_unpinned.dashboard_view) and active_unpinned.dashboard_view[:icon], do: active_unpinned.dashboard_view[:icon], else: ExtensionPresenter.icon(active_unpinned) %>
+                  <div class="h-4 w-px bg-gray-300/80 mx-0.5 flex-shrink-0"></div>
+                  <div class="flex items-center justify-center rounded-lg text-xs font-bold whitespace-nowrap flex-shrink-0 bg-white text-primary-700 shadow-sm px-2.5 py-1 gap-1">
+                    <span class="text-xs leading-none"><%= icon %></span>
+                    <span class="leading-none"><%= title %></span>
+                  </div>
+                <% end %>
+              <% end %>
+            </nav>
+          </div>
 
           <!-- Right Toolbar: Search & Settings, User Info & Logout -->
           <div class="flex items-center gap-2 flex-shrink-0">
@@ -2148,6 +2193,9 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                             <%= for d <- s.dots do %>
                               <circle cx={d.x} cy={d.y} r="3" fill={s.color} stroke="#ffffff" stroke-width="1" />
                             <% end %>
+                          <% end %>
+                          <%= if non_zero_errors == [] do %>
+                            <line x1="40" y1="125" x2="480" y2="125" stroke="#10b981" stroke-width="1.5" stroke-dasharray="4 4" />
                           <% end %>
                         </svg>
                       </div>

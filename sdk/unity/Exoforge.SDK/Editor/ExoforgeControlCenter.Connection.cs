@@ -795,7 +795,7 @@ public partial class ExoforgeControlCenter : EditorWindow
     private void RefreshLocalPlugins()
     {
         _localPlugins = new List<LocalPluginInfo>();
-        string pluginsDir = Workspace.PluginsPath;
+        string pluginsDir = Workspace.ExtensionsPath;
         if (!Directory.Exists(pluginsDir)) return;
 
         foreach (var dir in Directory.GetDirectories(pluginsDir))

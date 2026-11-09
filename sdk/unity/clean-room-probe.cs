@@ -47,15 +47,15 @@ public static class CleanRoomProbe
         Check(File.Exists(ws.ConfigPath), "workspace config missing at " + ws.ConfigPath);
         Debug.Log("[clean-room] workspace   = " + ws.RootPath);
 
-        // 3. A plugin can be scaffolded, and it references the published SDK explicitly.
-        string pluginDir = ExoScaffolder.ScaffoldPlugin(ws.PluginsPath, PluginName);
+        // 3. An extension can be scaffolded, and it references the published SDK explicitly.
+        string pluginDir = ExoScaffolder.ScaffoldExtension(ws.ExtensionsPath, PluginName);
         string csproj = Path.Combine(pluginDir, "src", PluginName + ".csproj");
         Check(File.ReadAllText(csproj).Contains("Exoforge.Plugin.SDK"),
             "the scaffolded project does not reference the SDK");
 
         // 4. It builds. The feed the SDK package comes from is registered by the scaffolder, from
         //    the environment - the same hook any workspace outside a checkout uses.
-        var build = new ExoDeployer(ws).BuildPlugin(
+        var build = new ExoDeployer(ws).BuildExtension(
             PluginName, null, ExoforgeEditorConfig.DotnetPath,
             line => Debug.Log("[clean-room-build] " + line));
 

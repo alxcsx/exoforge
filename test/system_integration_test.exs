@@ -66,19 +66,19 @@ defmodule Exoforge.SystemIntegrationTest do
   describe "End-to-End Multi-Plugin Workflow with Database Isolation" do
     test "verifies database isolation between auth and player_data" do
       # Auth creates a table + record in its isolated database
-      _ = ActionDispatcher.dispatch(:database, :execute, %{
+      _ = ActionDispatcher.dispatch_internal(:database, :execute, %{
         plugin: :auth,
         operation: "DROP TABLE IF EXISTS system_info"
       })
 
       {:ok, _} =
-        ActionDispatcher.dispatch(:database, :execute, %{
+        ActionDispatcher.dispatch_internal(:database, :execute, %{
           plugin: :auth,
           operation: "CREATE TABLE system_info (id text, key text, val text)"
         })
 
       {:ok, _} =
-        ActionDispatcher.dispatch(:database, :execute, %{
+        ActionDispatcher.dispatch_internal(:database, :execute, %{
           plugin: :auth,
           operation: "INSERT INTO system_info (id, key, val) VALUES ($1, $2, $3)",
           arguments: ["1", "auth_secret", "super_secret_auth_token"]
@@ -86,7 +86,7 @@ defmodule Exoforge.SystemIntegrationTest do
 
       # PlayerData queries system_info in its isolated database -> does not see Auth's record!
       {:ok, %{rows: player_system_rows}} =
-        ActionDispatcher.dispatch(:database, :execute, %{
+        ActionDispatcher.dispatch_internal(:database, :execute, %{
           plugin: :player_data,
           operation: "SELECT * FROM system_info"
         })
@@ -95,7 +95,7 @@ defmodule Exoforge.SystemIntegrationTest do
 
       # Auth queries its own system_info -> sees the record
       {:ok, %{rows: auth_system_rows}} =
-        ActionDispatcher.dispatch(:database, :execute, %{
+        ActionDispatcher.dispatch_internal(:database, :execute, %{
           plugin: :auth,
           operation: "SELECT * FROM system_info"
         })
@@ -116,10 +116,15 @@ defmodule Exoforge.SystemIntegrationTest do
 
       # 3. Create Player Profile
       assert {:ok, player_res} =
-               ActionDispatcher.dispatch(:player_data, :create_player, %{
-                 player_id: auth_result.player_id,
-                 profile: %{"name" => "King Arthur", "hp" => 100, "attack" => 25}
-               })
+               ActionDispatcher.dispatch(
+                 :player_data,
+                 :create_player,
+                 %{
+                   player_id: auth_result.player_id,
+                   profile: %{"name" => "King Arthur", "hp" => 100, "attack" => 25}
+                 },
+                 caller_scopes: auth_result.scopes
+               )
 
       assert player_res.player["name"] == "King Arthur"
 
@@ -135,14 +140,14 @@ defmodule Exoforge.SystemIntegrationTest do
 
       # 6. Verify Dashboard overview can see everything
       assert {:ok, %{data: overview}} =
-               ActionDispatcher.dispatch(:dashboard, :get_dashboard_data, %{view_id: :main})
+               ActionDispatcher.dispatch_internal(:dashboard, :get_dashboard_data, %{view_id: :main})
 
       assert overview.extensions_count >= 6
       assert overview.status == "running"
 
       # 7. Verify dynamic view resolution via dashboard_view
       assert {:ok, %{module: _}} =
-               ActionDispatcher.dispatch(:dashboard_view, :resolve_view, %{id: :player_data})
+               ActionDispatcher.dispatch_internal(:dashboard_view, :resolve_view, %{id: :player_data})
     end
   end
 end

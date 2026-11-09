@@ -620,13 +620,10 @@ defmodule Exoforge.Std.Dashboard.Layouts do
                     this.calcCapacity = () => {
                       const w = window.innerWidth;
                       // Fits within one row - 1 according to responsive breakpoint:
-                      let cap = 6;
+                      let cap = 4;
                       if (w < 640) cap = 2;
                       else if (w < 768) cap = 3;
-                      else if (w < 1024) cap = 4;
-                      else if (w < 1280) cap = 6;
-                      else if (w < 1536) cap = 8;
-                      else cap = 10;
+                      else cap = 4;
 
                       if (this._lastCap !== cap) {
                         this._lastCap = cap;

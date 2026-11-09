@@ -41,19 +41,19 @@ defmodule Exoforge.Std.PlayerData do
   @doc "Initializes the required tables in the isolated player_data database."
   def init_schema do
     _ =
-      ActionDispatcher.dispatch(:database, :execute, %{
+      ActionDispatcher.dispatch_internal(:database, :execute, %{
         plugin: :player_data,
         operation: "CREATE TABLE IF NOT EXISTS players (id text, player_id text, user_id text, profile text, state text)"
       })
 
     _ =
-      ActionDispatcher.dispatch(:database, :execute, %{
+      ActionDispatcher.dispatch_internal(:database, :execute, %{
         plugin: :player_data,
         operation: "CREATE TABLE IF NOT EXISTS player_kv (id text, player_id text, key text, value text, updated_at integer)"
       })
 
     _ =
-      ActionDispatcher.dispatch(:database, :execute, %{
+      ActionDispatcher.dispatch_internal(:database, :execute, %{
         plugin: :player_data,
         operation: "CREATE INDEX IF NOT EXISTS idx_player_kv_prefix ON player_kv (player_id, key)"
       })
@@ -78,7 +78,7 @@ defmodule Exoforge.Std.PlayerData do
     else
       query = "SELECT * FROM players WHERE player_id = $1"
 
-      case ActionDispatcher.dispatch(:database, :execute, %{
+      case ActionDispatcher.dispatch_internal(:database, :execute, %{
              plugin: :player_data,
              operation: query,
              arguments: [player_id]
@@ -117,7 +117,7 @@ defmodule Exoforge.Std.PlayerData do
     else
       query = "SELECT * FROM players WHERE player_id = $1"
 
-      case ActionDispatcher.dispatch(:database, :execute, %{
+      case ActionDispatcher.dispatch_internal(:database, :execute, %{
              plugin: :player_data,
              operation: query,
              arguments: [player_id]
@@ -134,7 +134,7 @@ defmodule Exoforge.Std.PlayerData do
             update_query = "UPDATE players SET profile = $1 WHERE player_id = $2"
 
             _ =
-              ActionDispatcher.dispatch(:database, :execute, %{
+              ActionDispatcher.dispatch_internal(:database, :execute, %{
                 plugin: :player_data,
                 operation: update_query,
                 arguments: [profile_json, player_id]
@@ -197,7 +197,7 @@ defmodule Exoforge.Std.PlayerData do
         insert_query =
           "INSERT INTO players (id, player_id, user_id, profile, state) VALUES ($1, $2, $3, $4, $5)"
 
-        case ActionDispatcher.dispatch(:database, :execute, %{
+        case ActionDispatcher.dispatch_internal(:database, :execute, %{
                plugin: :player_data,
                operation: insert_query,
                arguments: [player_id, player_id, user_id, profile_json, state]
@@ -225,7 +225,7 @@ defmodule Exoforge.Std.PlayerData do
       init_schema()
       query = "SELECT * FROM players WHERE player_id = $1"
 
-      case ActionDispatcher.dispatch(:database, :execute, %{
+      case ActionDispatcher.dispatch_internal(:database, :execute, %{
              plugin: :player_data,
              operation: query,
              arguments: [player_id]
@@ -246,7 +246,7 @@ defmodule Exoforge.Std.PlayerData do
             "UPDATE players SET user_id = $1, state = $2, profile = $3 WHERE player_id = $4"
 
           _ =
-            ActionDispatcher.dispatch(:database, :execute, %{
+            ActionDispatcher.dispatch_internal(:database, :execute, %{
               plugin: :player_data,
               operation: update_query,
               arguments: ["", "retained", profile_json, player_id]
@@ -274,7 +274,7 @@ defmodule Exoforge.Std.PlayerData do
         do: {"SELECT * FROM players", []},
         else: {"SELECT * FROM players WHERE user_id = $1", [to_string(user_id)]}
 
-    case ActionDispatcher.dispatch(:database, :execute, %{
+    case ActionDispatcher.dispatch_internal(:database, :execute, %{
            plugin: :player_data,
            operation: query,
            arguments: args
@@ -307,7 +307,7 @@ defmodule Exoforge.Std.PlayerData do
       now = System.system_time(:millisecond)
       delete_query = "DELETE FROM players WHERE player_id = $1"
 
-      case ActionDispatcher.dispatch(:database, :execute, %{
+      case ActionDispatcher.dispatch_internal(:database, :execute, %{
              plugin: :player_data,
              operation: delete_query,
              arguments: [player_id]
@@ -315,7 +315,7 @@ defmodule Exoforge.Std.PlayerData do
         {:ok, _} ->
           # Clean up fine-grained KV entries as well
           _ =
-            ActionDispatcher.dispatch(:database, :execute, %{
+            ActionDispatcher.dispatch_internal(:database, :execute, %{
               plugin: :player_data,
               operation: "DELETE FROM player_kv WHERE player_id = $1",
               arguments: [player_id]
@@ -355,7 +355,7 @@ defmodule Exoforge.Std.PlayerData do
         id = "#{player_id}:#{key}"
         query = "SELECT * FROM player_kv WHERE id = $1"
 
-        case ActionDispatcher.dispatch(:database, :execute, %{
+        case ActionDispatcher.dispatch_internal(:database, :execute, %{
                plugin: :player_data,
                operation: query,
                arguments: [id]
@@ -394,7 +394,7 @@ defmodule Exoforge.Std.PlayerData do
         # Upsert: check if key exists
         check_query = "SELECT * FROM player_kv WHERE id = $1"
 
-        case ActionDispatcher.dispatch(:database, :execute, %{
+        case ActionDispatcher.dispatch_internal(:database, :execute, %{
                plugin: :player_data,
                operation: check_query,
                arguments: [id]
@@ -403,7 +403,7 @@ defmodule Exoforge.Std.PlayerData do
             update_query = "UPDATE player_kv SET value = $1, updated_at = $2 WHERE id = $3"
 
             _ =
-              ActionDispatcher.dispatch(:database, :execute, %{
+              ActionDispatcher.dispatch_internal(:database, :execute, %{
                 plugin: :player_data,
                 operation: update_query,
                 arguments: [encoded_val, now, id]
@@ -416,7 +416,7 @@ defmodule Exoforge.Std.PlayerData do
               "INSERT INTO player_kv (id, player_id, key, value, updated_at) VALUES ($1, $2, $3, $4, $5)"
 
             _ =
-              ActionDispatcher.dispatch(:database, :execute, %{
+              ActionDispatcher.dispatch_internal(:database, :execute, %{
                 plugin: :player_data,
                 operation: insert_query,
                 arguments: [id, player_id, key, encoded_val, now]
@@ -445,7 +445,7 @@ defmodule Exoforge.Std.PlayerData do
         id = "#{player_id}:#{key}"
 
         _ =
-          ActionDispatcher.dispatch(:database, :execute, %{
+          ActionDispatcher.dispatch_internal(:database, :execute, %{
             plugin: :player_data,
             operation: "DELETE FROM player_kv WHERE id = $1",
             arguments: [id]
@@ -473,7 +473,7 @@ defmodule Exoforge.Std.PlayerData do
           {"SELECT * FROM player_kv WHERE player_id = $1", [player_id]}
         end
 
-      case ActionDispatcher.dispatch(:database, :execute, %{
+      case ActionDispatcher.dispatch_internal(:database, :execute, %{
              plugin: :player_data,
              operation: query,
              arguments: args
@@ -534,7 +534,7 @@ defmodule Exoforge.Std.PlayerData do
     if normalized == "" do
       false
     else
-      case ActionDispatcher.dispatch(:database, :execute, %{
+      case ActionDispatcher.dispatch_internal(:database, :execute, %{
              plugin: :player_data,
              operation: "SELECT * FROM players"
            }) do

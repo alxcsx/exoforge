@@ -175,7 +175,7 @@ defmodule Exoforge.Std.Dashboard.ExtensionPresenter do
             plugin_view
 
           lookup_id != nil ->
-            case Exoforge.ActionDispatcher.dispatch(:dashboard_view, :resolve_view, %{id: lookup_id}) do
+            case Exoforge.ActionDispatcher.dispatch_internal(:dashboard_view, :resolve_view, %{id: lookup_id}) do
               {:ok, %{module: mod}} when is_atom(mod) and not is_nil(mod) ->
                 if Code.ensure_loaded?(mod), do: mod, else: nil
 

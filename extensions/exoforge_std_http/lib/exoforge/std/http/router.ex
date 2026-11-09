@@ -390,7 +390,7 @@ defmodule Exoforge.Std.Http.Router do
   end
 
   defp serve_file(conn, bucket, id, filename) do
-    case ActionDispatcher.dispatch(:file_bucket, :get_file_info, %{"bucket" => bucket, "id" => id}) do
+    case ActionDispatcher.dispatch_internal(:file_bucket, :get_file_info, %{"bucket" => bucket, "id" => id}) do
       {:ok, %{file: file}} ->
         raw_path = file["disk_path"] || file[:disk_path]
         disk_path = if raw_path, do: Path.expand(raw_path), else: nil

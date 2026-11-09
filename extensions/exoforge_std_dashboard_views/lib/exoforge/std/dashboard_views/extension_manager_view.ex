@@ -274,7 +274,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
       socket
     else
       plugin =
-        case ActionDispatcher.dispatch(:extension_manager, :get_extension, %{id: id}) do
+        case ActionDispatcher.dispatch_internal(:extension_manager, :get_extension, %{id: id}) do
           {:ok, %{extension: p}} ->
             p
 
@@ -300,14 +300,14 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
 
   defp load_data(socket) do
     plugins =
-      case ActionDispatcher.dispatch(:extension_manager, :list_extensions, %{}) do
+      case ActionDispatcher.dispatch_internal(:extension_manager, :list_extensions, %{}) do
         {:ok, %{extensions: list}} -> list
         {:ok, %{plugins: list}} -> list
         _ -> []
       end
 
     sys_info =
-      case ActionDispatcher.dispatch(:extension_manager, :get_system_info, %{}) do
+      case ActionDispatcher.dispatch_internal(:extension_manager, :get_system_info, %{}) do
         {:ok, %{system: info}} -> info
         _ -> %{}
       end

@@ -60,7 +60,7 @@ defmodule Exoforge.Std.Dashboard.ProjectMetadata do
       }
     }
 
-    _ = ActionDispatcher.dispatch(:resource_store, :upsert, save_payload)
+    _ = ActionDispatcher.dispatch_internal(:resource_store, :upsert, save_payload)
 
     sync_instance_env(updated)
 
@@ -91,7 +91,7 @@ defmodule Exoforge.Std.Dashboard.ProjectMetadata do
   end
 
   defp fetch_raw_stored do
-    case ActionDispatcher.dispatch(:resource_store, :get, %{
+    case ActionDispatcher.dispatch_internal(:resource_store, :get, %{
            resource: @resource,
            id: @project_key
          }) do

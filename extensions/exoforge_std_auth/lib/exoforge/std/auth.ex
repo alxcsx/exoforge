@@ -70,19 +70,19 @@ defmodule Exoforge.Std.Auth do
   @doc "Initializes the required tables in the isolated auth database."
   def init_schema do
     _ =
-      ActionDispatcher.dispatch(:database, :execute, %{
+      ActionDispatcher.dispatch_internal(:database, :execute, %{
         plugin: :auth,
         operation: "CREATE TABLE IF NOT EXISTS #{@tokens_table} (id text, token text, player_id text, scopes text)"
       })
 
     _ =
-      ActionDispatcher.dispatch(:database, :execute, %{
+      ActionDispatcher.dispatch_internal(:database, :execute, %{
         plugin: :auth,
         operation: "CREATE TABLE IF NOT EXISTS #{@players_table} (id text, player_id text, scopes text)"
       })
 
     _ =
-      ActionDispatcher.dispatch(:database, :execute, %{
+      ActionDispatcher.dispatch_internal(:database, :execute, %{
         plugin: :auth,
         operation: "CREATE TABLE IF NOT EXISTS #{@accounts_table} (id text, player_id text, email text, password_hash text, scopes text)"
       })
@@ -91,7 +91,7 @@ defmodule Exoforge.Std.Auth do
     # that predate this one are brought forward here rather than by a schema reset.
     unless column_exists?(@players_table, "disposable") do
       _ =
-        ActionDispatcher.dispatch(:database, :execute, %{
+        ActionDispatcher.dispatch_internal(:database, :execute, %{
           plugin: :auth,
           operation: "ALTER TABLE #{@players_table} ADD COLUMN disposable integer DEFAULT 0"
         })
@@ -103,7 +103,7 @@ defmodule Exoforge.Std.Auth do
   defp column_exists?(table, column) do
     # Column inspection is the adapter's dialect, not a PRAGMA here (M33 Fix 9): PostgreSQL does
     # not answer `PRAGMA table_info`, so the check read "no such column" there forever.
-    case ActionDispatcher.dispatch(:database, :table_columns, %{plugin: :auth, table: table}) do
+    case ActionDispatcher.dispatch_internal(:database, :table_columns, %{plugin: :auth, table: table}) do
       {:ok, %{columns: columns}} -> to_string(column) in columns
       _ -> false
     end
@@ -137,7 +137,7 @@ defmodule Exoforge.Std.Auth do
           :error ->
             query = "SELECT * FROM #{@tokens_table} WHERE token = $1"
 
-            case ActionDispatcher.dispatch(:database, :execute, %{
+            case ActionDispatcher.dispatch_internal(:database, :execute, %{
                    plugin: :auth,
                    operation: query,
                    arguments: [token]
@@ -198,7 +198,7 @@ defmodule Exoforge.Std.Auth do
       else
         query = "SELECT * FROM #{@accounts_table} WHERE email = $1 OR player_id = $2"
 
-        case ActionDispatcher.dispatch(:database, :execute, %{
+        case ActionDispatcher.dispatch_internal(:database, :execute, %{
                plugin: :auth,
                operation: query,
                arguments: [clean_id, to_string(identifier)]
@@ -255,7 +255,7 @@ defmodule Exoforge.Std.Auth do
 
       true ->
         scopes =
-          case ActionDispatcher.dispatch(:database, :execute, %{
+          case ActionDispatcher.dispatch_internal(:database, :execute, %{
                  plugin: :auth,
                  operation: "SELECT * FROM #{@players_table} WHERE player_id = $1",
                  arguments: [user_id]
@@ -379,7 +379,7 @@ defmodule Exoforge.Std.Auth do
         if is_nil(raw_scopes) do
           query = "SELECT * FROM #{@players_table} WHERE player_id = $1"
 
-          case ActionDispatcher.dispatch(:database, :execute, %{
+          case ActionDispatcher.dispatch_internal(:database, :execute, %{
                  plugin: :auth,
                  operation: query,
                  arguments: [user_id]
@@ -410,7 +410,7 @@ defmodule Exoforge.Std.Auth do
     accounts_query = "SELECT * FROM #{@accounts_table} LIMIT 200"
 
     players_rows =
-      case ActionDispatcher.dispatch(:database, :execute, %{
+      case ActionDispatcher.dispatch_internal(:database, :execute, %{
              plugin: :auth,
              operation: players_query
            }) do
@@ -419,7 +419,7 @@ defmodule Exoforge.Std.Auth do
       end
 
     tokens_rows =
-      case ActionDispatcher.dispatch(:database, :execute, %{
+      case ActionDispatcher.dispatch_internal(:database, :execute, %{
              plugin: :auth,
              operation: tokens_query
            }) do
@@ -428,7 +428,7 @@ defmodule Exoforge.Std.Auth do
       end
 
     accounts_rows =
-      case ActionDispatcher.dispatch(:database, :execute, %{
+      case ActionDispatcher.dispatch_internal(:database, :execute, %{
              plugin: :auth,
              operation: accounts_query
            }) do
@@ -453,8 +453,12 @@ defmodule Exoforge.Std.Auth do
         Map.put(acc, pid, row)
       end)
 
+    {admin_email, _} = credentials(:admin, "EXOFORGE_ADMIN_EMAIL", "EXOFORGE_ADMIN_PASSWORD")
+    has_env_admin? = is_env_admin?(@admin_id)
+
     all_player_ids =
-      (Map.keys(players_by_id) ++ Map.keys(tokens_by_player) ++ Map.keys(accounts_by_id))
+      ((if has_env_admin?, do: [@admin_id], else: []) ++
+       Map.keys(players_by_id) ++ Map.keys(tokens_by_player) ++ Map.keys(accounts_by_id))
       |> Enum.reject(&(&1 in [nil, ""]))
       |> Enum.uniq()
 
@@ -466,11 +470,13 @@ defmodule Exoforge.Std.Auth do
         raw_scopes =
           Map.get(p_row, "scopes") || Map.get(p_row, :scopes) ||
             Map.get(acc_row, "scopes") || Map.get(acc_row, :scopes) ||
-            Roles.player()
+            if(pid == @admin_id, do: [Roles.admin()], else: Roles.player())
 
         scopes = parse_scopes(raw_scopes)
         tokens = Map.get(tokens_by_player, pid, [])
-        email = Map.get(acc_row, "email") || Map.get(acc_row, :email)
+        email =
+          Map.get(acc_row, "email") || Map.get(acc_row, :email) ||
+            if(pid == @admin_id, do: admin_email || "admin@exoforge.local", else: nil)
 
         token_strings =
           Enum.map(tokens, fn t ->
@@ -480,7 +486,9 @@ defmodule Exoforge.Std.Auth do
         %{
           "user_id" => pid,
           "player_id" => pid,
-          "name" => Map.get(acc_row, "name") || Map.get(acc_row, :name) || pid,
+          "name" =>
+            Map.get(acc_row, "name") || Map.get(acc_row, :name) ||
+              if(pid == @admin_id, do: "System Administrator", else: pid),
           "email" => email,
           "scopes" => scopes,
           "tokens_count" => length(tokens),
@@ -524,7 +532,7 @@ defmodule Exoforge.Std.Auth do
         pid = to_string(user_id)
 
         acc_by_pid =
-          case ActionDispatcher.dispatch(:database, :execute, %{
+          case ActionDispatcher.dispatch_internal(:database, :execute, %{
                  plugin: :auth,
                  operation: "SELECT * FROM #{@accounts_table} WHERE player_id = $1",
                  arguments: [pid]
@@ -535,7 +543,7 @@ defmodule Exoforge.Std.Auth do
 
         acc_row =
           acc_by_pid ||
-            case ActionDispatcher.dispatch(:database, :execute, %{
+            case ActionDispatcher.dispatch_internal(:database, :execute, %{
                    plugin: :auth,
                    operation: "SELECT * FROM #{@accounts_table} WHERE email = $1",
                    arguments: [String.downcase(pid)]
@@ -558,7 +566,7 @@ defmodule Exoforge.Std.Auth do
           nil ->
             pquery = "SELECT * FROM #{@players_table} WHERE player_id = $1"
 
-            case ActionDispatcher.dispatch(:database, :execute, %{
+            case ActionDispatcher.dispatch_internal(:database, :execute, %{
                    plugin: :auth,
                    operation: pquery,
                    arguments: [pid]
@@ -612,21 +620,21 @@ defmodule Exoforge.Std.Auth do
         _ = set_player_scopes(pid, scopes)
 
         _ =
-          ActionDispatcher.dispatch(:database, :execute, %{
+          ActionDispatcher.dispatch_internal(:database, :execute, %{
             plugin: :auth,
             operation: "UPDATE #{@accounts_table} SET scopes = $1 WHERE player_id = $2",
             arguments: [scopes_str, pid]
           })
 
         _ =
-          ActionDispatcher.dispatch(:database, :execute, %{
+          ActionDispatcher.dispatch_internal(:database, :execute, %{
             plugin: :auth,
             operation: "UPDATE #{@accounts_table} SET scopes = $1 WHERE email = $2",
             arguments: [scopes_str, pid]
           })
 
         _ =
-          ActionDispatcher.dispatch(:database, :execute, %{
+          ActionDispatcher.dispatch_internal(:database, :execute, %{
             plugin: :auth,
             operation: "UPDATE #{@tokens_table} SET scopes = $1 WHERE player_id = $2",
             arguments: [scopes_str, pid]
@@ -650,7 +658,7 @@ defmodule Exoforge.Std.Auth do
     dry_run = Map.get(payload, :dry_run) || Map.get(payload, "dry_run") || false
 
     ids =
-      case ActionDispatcher.dispatch(:database, :execute, %{
+      case ActionDispatcher.dispatch_internal(:database, :execute, %{
              plugin: :auth,
              operation: "SELECT player_id FROM #{@players_table} WHERE disposable = 1"
            }) do
@@ -684,35 +692,35 @@ defmodule Exoforge.Std.Auth do
         pid = to_string(user_id)
 
         _ =
-          ActionDispatcher.dispatch(:database, :execute, %{
+          ActionDispatcher.dispatch_internal(:database, :execute, %{
             plugin: :auth,
             operation: "DELETE FROM #{@players_table} WHERE player_id = $1",
             arguments: [pid]
           })
 
         _ =
-          ActionDispatcher.dispatch(:database, :execute, %{
+          ActionDispatcher.dispatch_internal(:database, :execute, %{
             plugin: :auth,
             operation: "DELETE FROM #{@tokens_table} WHERE player_id = $1",
             arguments: [pid]
           })
 
         _ =
-          ActionDispatcher.dispatch(:database, :execute, %{
+          ActionDispatcher.dispatch_internal(:database, :execute, %{
             plugin: :auth,
             operation: "DELETE FROM #{@accounts_table} WHERE player_id = $1",
             arguments: [pid]
           })
 
         _ =
-          ActionDispatcher.dispatch(:database, :execute, %{
+          ActionDispatcher.dispatch_internal(:database, :execute, %{
             plugin: :auth,
             operation: "DELETE FROM #{@accounts_table} WHERE email = $1",
             arguments: [pid]
           })
 
         # Retain player record without user linkage for data retention and telemetry compliance
-        _ = ActionDispatcher.dispatch(:player_data, :retain_player, %{player_id: pid})
+        _ = ActionDispatcher.dispatch_internal(:player_data, :retain_player, %{player_id: pid})
 
         {:ok, %{user_id: pid, player_id: pid, status: "deleted"}}
     end
@@ -720,7 +728,7 @@ defmodule Exoforge.Std.Auth do
 
   # Anonymous accounts start unnamed; the client prompts for a display name afterwards.
   defp rename_player(player_id, name) do
-    case ActionDispatcher.dispatch(:player_data, :update_player, %{
+    case ActionDispatcher.dispatch_internal(:player_data, :update_player, %{
            player_id: player_id,
            data: %{"name" => name}
          }) do
@@ -746,7 +754,7 @@ defmodule Exoforge.Std.Auth do
     Enum.each(ids, fn player_id ->
       Enum.each([@tokens_table, @accounts_table, @players_table], fn table ->
         _ =
-          ActionDispatcher.dispatch(:database, :execute, %{
+          ActionDispatcher.dispatch_internal(:database, :execute, %{
             plugin: :auth,
             operation: "DELETE FROM #{table} WHERE player_id = $1",
             arguments: [player_id]
@@ -755,7 +763,7 @@ defmodule Exoforge.Std.Auth do
 
       # The rest of a player's data belongs to other plugins; asked to clean up after itself, a
       # disposable player should not leave a profile and a leaderboard row behind.
-      _ = ActionDispatcher.dispatch(:player_data, :delete_player, %{player_id: player_id})
+      _ = ActionDispatcher.dispatch_internal(:player_data, :delete_player, %{player_id: player_id})
     end)
   end
 
@@ -771,7 +779,7 @@ defmodule Exoforge.Std.Auth do
   end
 
   defp player_name(player_id) do
-    case ActionDispatcher.dispatch(:player_data, :get_player, %{player_id: player_id}) do
+    case ActionDispatcher.dispatch_internal(:player_data, :get_player, %{player_id: player_id}) do
       {:ok, %{player: profile}} -> Map.get(profile, "name") || Map.get(profile, :name)
       _ -> nil
     end
@@ -783,7 +791,7 @@ defmodule Exoforge.Std.Auth do
   defp attach_device_id(player_id, device_id) do
     did = to_string(device_id)
 
-    case ActionDispatcher.dispatch(:player_data, :get_player, %{player_id: player_id}) do
+    case ActionDispatcher.dispatch_internal(:player_data, :get_player, %{player_id: player_id}) do
       {:ok, %{player: profile}} ->
         existing_devices = Map.get(profile, "device_ids") || []
         current_did = Map.get(profile, "device_id")
@@ -806,7 +814,7 @@ defmodule Exoforge.Std.Auth do
           }
 
           _ =
-            ActionDispatcher.dispatch(:player_data, :update_player, %{
+            ActionDispatcher.dispatch_internal(:player_data, :update_player, %{
               player_id: player_id,
               data: updated_data
             })
@@ -905,7 +913,7 @@ defmodule Exoforge.Std.Auth do
         }
 
         # Hook into player_data canonical profile store, linking player to user
-        case ActionDispatcher.dispatch(:player_data, :create_player, %{
+        case ActionDispatcher.dispatch_internal(:player_data, :create_player, %{
                player_id: user_id,
                user_id: user_id,
                profile: profile
@@ -933,7 +941,7 @@ defmodule Exoforge.Std.Auth do
 
   @doc "True when the account has a password, so `anonymous` may not reissue its token."
   def password_protected?(player_id) do
-    case ActionDispatcher.dispatch(:database, :execute, %{
+    case ActionDispatcher.dispatch_internal(:database, :execute, %{
            plugin: :auth,
            operation: "SELECT password_hash FROM #{@accounts_table} WHERE player_id = $1",
            arguments: [to_string(player_id)]
@@ -971,9 +979,10 @@ defmodule Exoforge.Std.Auth do
   """
   def ensure_admin_account do
     case credentials(:admin, "EXOFORGE_ADMIN_EMAIL", "EXOFORGE_ADMIN_PASSWORD") do
-      {email, password} when is_binary(email) and email != "" and is_binary(password) and password != "" ->
-        _ = upsert_account(@admin_id, email, password, [Roles.admin()])
-        Logger.info("[Auth] Admin credentials defined on environment: email=#{email}, password=#{password}")
+      {email, password} when is_binary(password) and password != "" ->
+        effective_email = if is_binary(email) and email != "", do: email, else: "admin@exoforge.local"
+        _ = upsert_account(@admin_id, effective_email, password, [Roles.admin()])
+        Logger.info("[Auth] Admin credentials defined on environment: email=#{effective_email}, password=#{password}")
         Logger.warning("[Auth] Admin credentials should not be defined in environment variables in production after the initial setup.")
         :ok
 
@@ -987,7 +996,7 @@ defmodule Exoforge.Std.Auth do
   end
 
   defp sync_admin_email_if_needed(email) do
-    case ActionDispatcher.dispatch(:database, :execute, %{
+    case ActionDispatcher.dispatch_internal(:database, :execute, %{
            plugin: :auth,
            operation: "SELECT * FROM #{@accounts_table} WHERE player_id = $1",
            arguments: [@admin_id]
@@ -1034,14 +1043,14 @@ defmodule Exoforge.Std.Auth do
     player_id = to_string(player_id)
 
     _ =
-      ActionDispatcher.dispatch(:database, :execute, %{
+      ActionDispatcher.dispatch_internal(:database, :execute, %{
         plugin: :auth,
         operation: "DELETE FROM #{@accounts_table} WHERE email = $1 OR player_id = $2",
         arguments: [email, player_id]
       })
 
     _ =
-      ActionDispatcher.dispatch(:database, :execute, %{
+      ActionDispatcher.dispatch_internal(:database, :execute, %{
         plugin: :auth,
         operation: "INSERT INTO #{@accounts_table} (id, player_id, email, password_hash, scopes) VALUES ($1, $2, $3, $4, $5)",
         arguments: [email, player_id, email, hash, Enum.join(scopes, ",")]
@@ -1126,7 +1135,7 @@ defmodule Exoforge.Std.Auth do
     insert_query =
       "INSERT INTO #{@tokens_table} (id, token, player_id, scopes) VALUES ($1, $2, $3, $4)"
 
-    case ActionDispatcher.dispatch(:database, :execute, %{
+    case ActionDispatcher.dispatch_internal(:database, :execute, %{
            plugin: :auth,
            operation: insert_query,
            arguments: [token, token, player_id, scopes_str]
@@ -1155,7 +1164,7 @@ defmodule Exoforge.Std.Auth do
 
     # Delete previous entry if exists
     _ =
-      ActionDispatcher.dispatch(:database, :execute, %{
+      ActionDispatcher.dispatch_internal(:database, :execute, %{
         plugin: :auth,
         operation: "DELETE FROM #{@players_table} WHERE player_id = $1",
         arguments: [player_id]
@@ -1164,7 +1173,7 @@ defmodule Exoforge.Std.Auth do
     insert_query =
       "INSERT INTO #{@players_table} (id, player_id, scopes, disposable) VALUES ($1, $2, $3, $4)"
 
-    ActionDispatcher.dispatch(:database, :execute, %{
+    ActionDispatcher.dispatch_internal(:database, :execute, %{
       plugin: :auth,
       operation: insert_query,
       arguments: [player_id, player_id, scopes_str, marked]
@@ -1172,7 +1181,7 @@ defmodule Exoforge.Std.Auth do
   end
 
   defp stored_disposable(player_id) do
-    case ActionDispatcher.dispatch(:database, :execute, %{
+    case ActionDispatcher.dispatch_internal(:database, :execute, %{
            plugin: :auth,
            operation: "SELECT disposable FROM #{@players_table} WHERE player_id = $1",
            arguments: [player_id]

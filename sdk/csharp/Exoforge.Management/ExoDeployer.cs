@@ -123,15 +123,6 @@ public class ExoDeployer
         }
     }
 
-    [Obsolete("Use UploadExtensionAsync instead. UploadPluginAsync will be removed in a future release.")]
-    public Task<string> UploadPluginAsync(
-        string pluginName,
-        string? environmentName = null,
-        ExoClient? existingClient = null,
-        CancellationToken cancellationToken = default) =>
-        UploadExtensionAsync(pluginName, environmentName, existingClient, cancellationToken);
-
-    /// <summary>
     /// <summary>
     /// Whether the cluster actually has an extension after a deploy, and at which version.
     ///
@@ -194,18 +185,6 @@ public class ExoDeployer
         }
     }
 
-    [Obsolete("Use VerifyExtensionAsync instead. VerifyPluginAsync will be removed in a future release.")]
-    public async Task<PluginDeploymentStatus> VerifyPluginAsync(
-        string pluginName,
-        string? expectedVersion = null,
-        string? environmentName = null,
-        ExoClient? existingClient = null,
-        CancellationToken cancellationToken = default)
-    {
-        var status = await VerifyExtensionAsync(pluginName, expectedVersion, environmentName, existingClient, cancellationToken).ConfigureAwait(false);
-        return (PluginDeploymentStatus)status;
-    }
-
     /// <summary>
     /// Re-boots an installed extension from the files already on the cluster. No rebuild, no re-upload.
     /// </summary>
@@ -231,14 +210,6 @@ public class ExoDeployer
             }
         }
     }
-
-    [Obsolete("Use ReloadExtensionAsync instead. ReloadPluginAsync will be removed in a future release.")]
-    public Task<JsonElement> ReloadPluginAsync(
-        string pluginName,
-        string? environmentName = null,
-        ExoClient? existingClient = null,
-        CancellationToken cancellationToken = default) =>
-        ReloadExtensionAsync(pluginName, environmentName, existingClient, cancellationToken);
 
     /// <summary>
     /// Recent log lines the extension emitted.
@@ -287,20 +258,6 @@ public class ExoDeployer
         }
     }
 
-    [Obsolete("Use GetExtensionLogsAsync instead. GetPluginLogsAsync will be removed in a future release.")]
-    public async Task<List<PluginLogLine>> GetPluginLogsAsync(
-        string pluginName,
-        int limit = 100,
-        string? environmentName = null,
-        ExoClient? existingClient = null,
-        CancellationToken cancellationToken = default)
-    {
-        var lines = await GetExtensionLogsAsync(pluginName, limit, environmentName, existingClient, cancellationToken).ConfigureAwait(false);
-        var pluginLines = new List<PluginLogLine>(lines.Count);
-        foreach (var l in lines) pluginLines.Add((PluginLogLine)l);
-        return pluginLines;
-    }
-
     /// <summary>
     /// Persisted usage for one extension or the whole title: calls by action, wall time, bytes, CPU
     /// and peak RSS. <paramref name="since"/> is Unix seconds; null means everything recorded.
@@ -312,25 +269,13 @@ public class ExoDeployer
         ExoClient? existingClient = null,
         CancellationToken cancellationToken = default)
     {
-        var report = await GetPluginUsageAsync(extensionName, since, environmentName, existingClient, cancellationToken).ConfigureAwait(false);
-        return (ExtensionUsageReport)report;
-    }
-
-    [Obsolete("Use GetExtensionUsageAsync instead. GetPluginUsageAsync will be removed in a future release.")]
-    public async Task<PluginUsageReport> GetPluginUsageAsync(
-        string? pluginName = null,
-        long? since = null,
-        string? environmentName = null,
-        ExoClient? existingClient = null,
-        CancellationToken cancellationToken = default)
-    {
         var client = existingClient ?? await CreateConnectedClientAsync(environmentName, cancellationToken).ConfigureAwait(false);
 
         try
         {
             var payload = new
             {
-                plugin_id = pluginName == null ? null : NormalizePluginName(pluginName),
+                plugin_id = extensionName == null ? null : NormalizeExtensionName(extensionName),
                 since,
             };
 
@@ -340,7 +285,7 @@ public class ExoDeployer
                 payload,
                 cancellationToken: cancellationToken).ConfigureAwait(false);
 
-            return PluginUsageReport.Parse(result);
+            return ExtensionUsageReport.Parse(result);
         }
         finally
         {
@@ -383,15 +328,6 @@ public class ExoDeployer
             }
         }
     }
-
-    [Obsolete("Use RemoveExtensionAsync instead. RemovePluginAsync will be removed in a future release.")]
-    public Task<string> RemovePluginAsync(
-        string pluginId,
-        string? environmentName = null,
-        ExoClient? existingClient = null,
-        bool deleteFiles = false,
-        CancellationToken cancellationToken = default) =>
-        RemoveExtensionAsync(pluginId, environmentName, deleteFiles, existingClient, cancellationToken);
 
     /// <summary>Fetches the raw contract export (what <c>extension_manager.export_extension_info</c> returns).</summary>
     public async Task<string> GetContractsExportJsonAsync(
@@ -472,23 +408,6 @@ public class ExoDeployer
         SyncCompanionAttributes(merged, attrDir, emit);
         return output;
     }
-
-    [Obsolete("Use GenerateExtensionStubsAsync instead. GeneratePluginStubsAsync will be removed in a future release.")]
-    public Task<string> GeneratePluginStubsAsync(
-        string pluginName,
-        ExoClient? existingClient = null,
-        Action<string>? emit = null,
-        CancellationToken cancellationToken = default) =>
-        GenerateExtensionStubsAsync(pluginName, services: null, existingClient: existingClient, emit: emit, cancellationToken: cancellationToken);
-
-    [Obsolete("Use GenerateExtensionStubsAsync instead. GeneratePluginStubsAsync will be removed in a future release.")]
-    public Task<string> GeneratePluginStubsAsync(
-        string pluginName,
-        IEnumerable<string>? services,
-        ExoClient? existingClient = null,
-        Action<string>? emit = null,
-        CancellationToken cancellationToken = default) =>
-        GenerateExtensionStubsAsync(pluginName, services, existingClient, emit, cancellationToken);
 
     public static List<string> AvailableServices(string exportJson)
     {
@@ -715,11 +634,11 @@ public class ExoDeployer
     /// </summary>
     private IEnumerable<(string Id, JsonNode Node)> LocalContracts()
     {
-        if (!Directory.Exists(_workspace.PluginsPath)) yield break;
+        if (!Directory.Exists(_workspace.ExtensionsPath)) yield break;
 
         var found = new List<(string Id, JsonNode Node)>();
 
-        foreach (string dir in Directory.GetDirectories(_workspace.PluginsPath).OrderBy(d => d, StringComparer.Ordinal))
+        foreach (string dir in Directory.GetDirectories(_workspace.ExtensionsPath).OrderBy(d => d, StringComparer.Ordinal))
         {
             string path = Path.Combine(dir, "manifest.json");
             if (!File.Exists(path)) continue;
@@ -924,7 +843,7 @@ public class ExoDeployer
         foreach (string dir in Directory.GetDirectories(extensionsDir))
         {
             string name = Path.GetFileName(dir);
-            if (FindPluginCsproj(dir, name) == null) continue;
+            if (FindExtensionCsproj(dir, name) == null) continue;
 
             string output = Path.Combine(dir, "src", "Generated", "PluginServices.g.cs");
             ExoCodeGenerator.GeneratePluginStubsToFile(merged, output, services: ReadManifestDependencies(dir), pluginId: name, codeSearchRoot: dir, log: null);
@@ -933,13 +852,6 @@ public class ExoDeployer
 
         return outputs;
     }
-
-    [Obsolete("Use GenerateAllExtensionStubsAsync instead. GenerateAllPluginStubsAsync will be removed in a future release.")]
-    public Task<List<string>> GenerateAllPluginStubsAsync(
-        string? environmentName = null,
-        ExoClient? existingClient = null,
-        CancellationToken cancellationToken = default) =>
-        GenerateAllExtensionStubsAsync(environmentName, existingClient, cancellationToken);
 
     public async Task<int> SyncContractsAsync(
         string? environmentName = null,
@@ -999,45 +911,32 @@ public class ExoDeployer
         return await client.SendActionAsync<JsonElement>("extension_manager", "list_extensions", null, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
-    [Obsolete("Use ListExtensionsAsync instead. ListPluginsAsync will be removed in a future release.")]
-    public Task<JsonElement> ListPluginsAsync(
-        string? environmentName = null,
-        CancellationToken cancellationToken = default) =>
-        ListExtensionsAsync(environmentName, cancellationToken);
-
     // -- Build --
 
+    /// <summary>
+    /// Builds a local extension in the workspace with <c>dotnet publish</c>: a framework-dependent
+    /// binary, with <c>manifest.json</c> regenerated.
+    /// The result is staged next to <c>manifest.json</c>, ready for <see cref="UploadExtensionAsync"/>.
+    /// </summary>
     public ExoExtensionBuild BuildExtension(
         string extensionName,
         string? rid = null,
         string dotnetPath = "dotnet",
-        Action<string>? log = null) =>
-        ExoExtensionBuild.FromPluginBuild(BuildPlugin(extensionName, rid, dotnetPath, log));
-
-    /// <summary>
-    /// Builds a local plugin in the workspace with <c>dotnet publish</c>: a framework-dependent
-    /// binary, with <c>manifest.json</c> regenerated.
-    /// The result is staged next to <c>manifest.json</c>, ready for <see cref="UploadPluginAsync"/>.
-    /// </summary>
-    public ExoPluginBuild BuildPlugin(
-        string pluginName,
-        string? rid = null,
-        string dotnetPath = "dotnet",
         Action<string>? log = null)
     {
-        string cleanName = NormalizePluginName(pluginName);
-        string pluginDir = Path.Combine(_workspace.ExtensionsPath, cleanName);
+        string cleanName = NormalizeExtensionName(extensionName);
+        string extensionDir = Path.Combine(_workspace.ExtensionsPath, cleanName);
 
-        if (!Directory.Exists(pluginDir))
+        if (!Directory.Exists(extensionDir))
         {
             string directDir = Path.Combine(_workspace.RootPath, cleanName);
             if (Directory.Exists(directDir))
             {
-                pluginDir = directDir;
+                extensionDir = directDir;
             }
             else
             {
-                throw new DirectoryNotFoundException($"Plugin directory not found: {pluginDir}");
+                throw new DirectoryNotFoundException($"Extension directory not found: {extensionDir}");
             }
         }
 
@@ -1048,20 +947,20 @@ public class ExoDeployer
             log?.Invoke(line);
         }
 
-        string? csproj = FindPluginCsproj(pluginDir, cleanName);
+        string? csproj = FindExtensionCsproj(extensionDir, cleanName);
         string dotnet = ResolveDotnetPath(dotnetPath);
         if (dotnet != dotnetPath)
         {
             Emit($"[build] dotnet -> {dotnet}");
         }
 
-        string fingerprint = ComputeSourceFingerprint(pluginDir);
+        string fingerprint = ComputeSourceFingerprint(extensionDir);
         // Peek, don't commit: a failed build must not burn a build number, or the numbers you see
         // in a manifest cannot be correlated with the builds that produced them.
-        int buildNumber = PeekBuildNumber(pluginDir);
+        int buildNumber = PeekBuildNumber(extensionDir);
         string buildStamp = $"{buildNumber}.{fingerprint}";
         // Refresh stubs from contracts before compiling if stubs file exists and cached contracts are available
-        string stubsFile = Path.Combine(pluginDir, "src", "Generated", "PluginServices.g.cs");
+        string stubsFile = Path.Combine(extensionDir, "src", "Generated", "PluginServices.g.cs");
         if (File.Exists(stubsFile))
         {
             try
@@ -1071,7 +970,7 @@ public class ExoDeployer
                 {
                     string contractsJson = MergeLocalContracts(cachedContracts);
                     var available = AvailableServices(contractsJson).ToHashSet(StringComparer.OrdinalIgnoreCase);
-                    var deps = ReadManifestDependencies(pluginDir);
+                    var deps = ReadManifestDependencies(extensionDir);
 
                     if (deps is { Count: > 0 } && !deps.Any(d => available.Contains(d)))
                     {
@@ -1080,7 +979,7 @@ public class ExoDeployer
                     }
                     else if (deps is { Count: > 0 })
                     {
-                        ExoCodeGenerator.GeneratePluginStubsToFile(contractsJson, stubsFile, services: deps, pluginId: cleanName, codeSearchRoot: pluginDir, log: Emit);
+                        ExoCodeGenerator.GeneratePluginStubsToFile(contractsJson, stubsFile, services: deps, pluginId: cleanName, codeSearchRoot: extensionDir, log: Emit);
                     }
                 }
             }
@@ -1092,13 +991,13 @@ public class ExoDeployer
 
         // One compiled kind. A runtime that needs its own toolchain adds that branch back alongside
         // its runner.
-        string pluginType = "native";
-        string binaryPath = PublishNative(csproj ?? throw new FileNotFoundException($"No .csproj found for '{cleanName}'."), pluginDir, cleanName, rid, dotnet, buildStamp, Emit);
+        string extensionType = "native";
+        string binaryPath = PublishNative(csproj ?? throw new FileNotFoundException($"No .csproj found for '{cleanName}'."), extensionDir, cleanName, rid, dotnet, buildStamp, Emit);
 
-        CommitBuildNumber(pluginDir, buildNumber);
+        CommitBuildNumber(extensionDir, buildNumber);
 
-        string manifestPath = Path.Combine(pluginDir, "manifest.json");
-        return new ExoPluginBuild(cleanName, pluginType, binaryPath, manifestPath, output.ToString());
+        string manifestPath = Path.Combine(extensionDir, "manifest.json");
+        return new ExoExtensionBuild(cleanName, extensionType, binaryPath, manifestPath, output.ToString());
     }
 
     /// <summary>Runs <see cref="BuildExtension"/> off the calling thread.</summary>
@@ -1109,18 +1008,6 @@ public class ExoDeployer
         Action<string>? log = null,
         CancellationToken cancellationToken = default) =>
         Task.Run(() => BuildExtension(extensionName, rid, dotnetPath, log), cancellationToken);
-
-    /// <summary>Runs <see cref="BuildPlugin"/> off the calling thread.</summary>
-    [Obsolete("Use BuildExtensionAsync instead. BuildPluginAsync will be removed in a future release.")]
-    public Task<ExoPluginBuild> BuildPluginAsync(
-        string pluginName,
-        string? rid = null,
-        string dotnetPath = "dotnet",
-        Action<string>? log = null,
-        CancellationToken cancellationToken = default)
-    {
-        return Task.Run(() => BuildPlugin(pluginName, rid, dotnetPath, log), cancellationToken);
-    }
 
     private string PublishNative(string csproj, string pluginDir, string cleanName, string? rid, string dotnetPath, string buildStamp, Action<string> emit)
     {
@@ -1232,9 +1119,9 @@ public class ExoDeployer
     }
 
     /// <summary>
-    /// Finds a plugin's project file. Newer plugins keep it under <c>src/</c>; older ones at the plugin root.
+    /// Finds an extension's project file. Newer extensions keep it under <c>src/</c>; older ones at the root.
     /// </summary>
-    private static string? FindPluginCsproj(string pluginDir, string cleanName)
+    private static string? FindExtensionCsproj(string pluginDir, string cleanName)
     {
         string inSrc = Path.Combine(pluginDir, "src", cleanName + ".csproj");
         if (File.Exists(inSrc)) return inSrc;
@@ -1669,35 +1556,6 @@ public sealed class ExtensionLogLine
 
     /// <summary>Local time for display.</summary>
     public DateTime LocalTime => DateTimeOffset.FromUnixTimeMilliseconds(At).LocalDateTime;
-
-    public static implicit operator ExtensionLogLine(PluginLogLine l) =>
-        new ExtensionLogLine(l.At, l.LevelName, l.Message);
-
-    public static implicit operator PluginLogLine(ExtensionLogLine l) =>
-        new PluginLogLine(l.At, l.LevelName, l.Message);
-}
-
-/// <summary>One log line an extension emitted, as served by <c>extension_manager.logs</c>.</summary>
-[Obsolete("Use ExtensionLogLine instead. PluginLogLine will be removed in a future release.")]
-public sealed class PluginLogLine
-{
-    public PluginLogLine(long at, string levelName, string message)
-    {
-        At = at;
-        LevelName = levelName;
-        Message = message;
-    }
-
-    /// <summary>Unix milliseconds, as recorded by the cluster.</summary>
-    public long At { get; }
-
-    /// <summary>debug | info | warning | error.</summary>
-    public string LevelName { get; }
-
-    public string Message { get; }
-
-    /// <summary>Local time for display.</summary>
-    public DateTime LocalTime => DateTimeOffset.FromUnixTimeMilliseconds(At).LocalDateTime;
 }
 
 /// <summary>
@@ -1722,71 +1580,22 @@ public sealed class ExtensionDeploymentStatus
 
     /// <summary>True when the extension is loaded and at the expected version.</summary>
     public bool IsHealthy => IsDeployed && Detail == "loaded";
-
-    public static implicit operator ExtensionDeploymentStatus(PluginDeploymentStatus s) =>
-        new ExtensionDeploymentStatus(s.IsDeployed, s.Version, s.Type, s.Detail);
-
-    public static implicit operator PluginDeploymentStatus(ExtensionDeploymentStatus s) =>
-        new PluginDeploymentStatus(s.IsDeployed, s.Version, s.Type, s.Detail);
-}
-
-/// <summary>
-/// Whether the cluster actually has a plugin after a deploy, and at which version.
-///
-/// A plain class rather than a record: this library targets netstandard2.1 so Unity can consume it,
-/// and a record would need an IsExternalInit polyfill that clashes with the one Unity provides.
-/// </summary>
-[Obsolete("Use ExtensionDeploymentStatus instead. PluginDeploymentStatus will be removed in a future release.")]
-public sealed class PluginDeploymentStatus
-{
-    public PluginDeploymentStatus(bool isDeployed, string? version, string? type, string detail)
-    {
-        IsDeployed = isDeployed;
-        Version = version;
-        Type = type;
-        Detail = detail;
-    }
-
-    public bool IsDeployed { get; }
-    public string? Version { get; }
-    public string? Type { get; }
-
-    /// <summary>Human-readable outcome, e.g. <c>loaded</c> or why it is not.</summary>
-    public string Detail { get; }
-
-    /// <summary>True when the plugin is loaded and at the expected version.</summary>
-    public bool IsHealthy => IsDeployed && Detail == "loaded";
 }
 
 /// <summary>Result of <see cref="ExoDeployer.BuildExtension"/>.</summary>
-public class ExoExtensionBuild : ExoPluginBuild
+public class ExoExtensionBuild
 {
     public ExoExtensionBuild(string name, string extensionType, string binaryPath, string manifestPath, string output)
-        : base(name, extensionType, binaryPath, manifestPath, output)
-    {
-    }
-
-    public string ExtensionType => PluginType;
-
-    public static ExoExtensionBuild FromPluginBuild(ExoPluginBuild b) =>
-        new ExoExtensionBuild(b.Name, b.PluginType, b.BinaryPath, b.ManifestPath, b.Output);
-}
-
-/// <summary>Result of <see cref="ExoDeployer.BuildPlugin"/>.</summary>
-[Obsolete("Use ExoExtensionBuild instead. ExoPluginBuild will be removed in a future release.")]
-public class ExoPluginBuild
-{
-    public ExoPluginBuild(string name, string pluginType, string binaryPath, string manifestPath, string output)
     {
         Name = name;
-        PluginType = pluginType;
+        ExtensionType = extensionType;
         BinaryPath = binaryPath;
         ManifestPath = manifestPath;
         Output = output;
     }
 
     public string Name { get; }
-    public string PluginType { get; }
+    public string ExtensionType { get; }
     public string BinaryPath { get; }
     public string ManifestPath { get; }
     public string Output { get; }

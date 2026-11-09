@@ -34,7 +34,7 @@ defmodule Exoforge.Std.Dashboard do
 
   def on_init(_manifest) do
     _ =
-      Exoforge.ActionDispatcher.dispatch(:resource_store, :migrate, %{
+      Exoforge.ActionDispatcher.dispatch_internal(:resource_store, :migrate, %{
         resource: "studio_preference"
       })
 

@@ -91,11 +91,11 @@ defmodule Exoforge.Extension do
         # 1. Statically generate the public facade exactly once
         if unquote(arity) == 1 do
           def unquote(name)(payload) do
-            Exoforge.ActionDispatcher.dispatch(__MODULE__, unquote(name), payload)
+            Exoforge.ActionDispatcher.dispatch_internal(__MODULE__, unquote(name), payload)
           end
         else
           def unquote(name)() do
-            Exoforge.ActionDispatcher.dispatch(__MODULE__, unquote(name), %{})
+            Exoforge.ActionDispatcher.dispatch_internal(__MODULE__, unquote(name), %{})
           end
         end
       end
@@ -160,7 +160,7 @@ defmodule Exoforge.Extension do
         @exo_actions MapSet.new(Map.values(action_map))
 
         def unquote(name)(payload) do
-          Exoforge.ActionDispatcher.dispatch(__MODULE__, unquote(name), payload)
+          Exoforge.ActionDispatcher.dispatch_internal(__MODULE__, unquote(name), payload)
         end
       end
 

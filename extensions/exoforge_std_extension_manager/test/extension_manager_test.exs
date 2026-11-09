@@ -66,7 +66,7 @@ defmodule Exoforge.Std.ExtensionManagerTest do
 
     test "csharp_attributes and export_extension_info include companion C# files" do
       assert {:ok, result} =
-               ActionDispatcher.dispatch(:extension_manager, :csharp_attributes, %{})
+               ActionDispatcher.dispatch_internal(:extension_manager, :csharp_attributes, %{})
 
       assert is_list(result.files)
       cron_attr = Enum.find(result.files, &(&1["filename"] == "ExoCronAttribute.cs"))

@@ -618,4 +618,4 @@ flowchart TD
 
 - [ ] **Phase 8 — Testing Pipeline & Release Gates**
   - Fast PR checks (< 90s): Elixir core & extension tests, C# SDK unit tests, Unity headless check.
-  - Gated release suite: Docker Compose cold boot, live E2E vertical slices, cluster benchmark SLA check.
+  - Gated release suite: Docker Compose cold boot, live E2E vertical slices, cluster benchmark target check.

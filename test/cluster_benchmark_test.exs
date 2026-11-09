@@ -60,7 +60,7 @@ defmodule Exoforge.ClusterBenchmarkTest do
       ---------------------------------------------------------------
        Cluster Event 50x Fanout:     #{Float.round(fanout_ms, 2)} ms
       ---------------------------------------------------------------
-       Status:                       PASSED (Production SLA Met)
+       Status:                       PASSED (Benchmark Target Met)
       ===============================================================
       """)
     end

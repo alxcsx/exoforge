@@ -242,14 +242,14 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
         end
 
       _ =
-        ActionDispatcher.dispatch(:player_data, :set_data, %{
+        ActionDispatcher.dispatch_internal(:player_data, :set_data, %{
           player_id: player_id,
           key: key,
           value: val
         })
 
       kv_data =
-        case ActionDispatcher.dispatch(:player_data, :get_all_data, %{player_id: player_id}) do
+        case ActionDispatcher.dispatch_internal(:player_data, :get_all_data, %{player_id: player_id}) do
           {:ok, %{data: data}} when is_map(data) -> data
           _ -> %{}
         end
@@ -269,10 +269,10 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
   @impl true
   def handle_event("delete_kv_state", %{"key" => key}, socket) do
     player_id = socket.assigns.selected_player_id
-    _ = ActionDispatcher.dispatch(:player_data, :delete_data, %{player_id: player_id, key: key})
+    _ = ActionDispatcher.dispatch_internal(:player_data, :delete_data, %{player_id: player_id, key: key})
 
     kv_data =
-      case ActionDispatcher.dispatch(:player_data, :get_all_data, %{player_id: player_id}) do
+      case ActionDispatcher.dispatch_internal(:player_data, :get_all_data, %{player_id: player_id}) do
         {:ok, %{data: data}} when is_map(data) -> data
         _ -> %{}
       end
@@ -319,7 +319,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
       end
 
     kv_data =
-      case ActionDispatcher.dispatch(:player_data, :get_all_data, %{player_id: id}) do
+      case ActionDispatcher.dispatch_internal(:player_data, :get_all_data, %{player_id: id}) do
         {:ok, %{data: data}} when is_map(data) -> data
         _ -> %{}
       end
@@ -364,7 +364,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
 
   defp load_players(socket) do
     players =
-      case ActionDispatcher.dispatch(:player_data, :list_players, %{filter: "all"}) do
+      case ActionDispatcher.dispatch_internal(:player_data, :list_players, %{filter: "all"}) do
         {:ok, %{players: list}} when is_list(list) -> list
         {:ok, %{rows: list}} when is_list(list) -> list
         _ -> []
@@ -374,7 +374,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
       apply_filters(players, socket.assigns.retention_filter, socket.assigns.search_query)
 
     user_names =
-      case ActionDispatcher.dispatch(:auth, :list_users, %{limit: 50}) do
+      case ActionDispatcher.dispatch_internal(:auth, :list_users, %{limit: 50}) do
         {:ok, %{users: users}} ->
           Map.new(users, fn u ->
             id = to_string(u["user_id"] || u["player_id"])

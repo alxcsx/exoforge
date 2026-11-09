@@ -115,7 +115,7 @@ test-e2e: build-extensions
 		sleep 0.2
 	done
 	echo "Running C# client E2E test against live backend..."
-	dotnet test sdk/csharp/Exoforge.Client.Tests
+	EXOFORGE_REQUIRE_E2E=1 dotnet test sdk/csharp/Exoforge.Client.Tests
 	echo "E2E vertical slice passed successfully!"
 
 # Run cluster performance benchmark

@@ -30,7 +30,7 @@ defmodule Exoforge.Std.MeteringTest do
     %{plugin: "metered_#{System.unique_integer([:positive])}"}
   end
 
-  defp usage(plugin_id), do: ActionDispatcher.dispatch(:metering, :usage, %{plugin_id: plugin_id})
+  defp usage(plugin_id), do: ActionDispatcher.dispatch_internal(:metering, :usage, %{plugin_id: plugin_id})
 
   # A spy on the database adapter: the flusher's batch size is what this milestone pins (M33 Fix 11).
   defmodule CountingSqlite do
@@ -154,7 +154,7 @@ defmodule Exoforge.Std.MeteringTest do
 
     # A `since` in the future excludes what is already stored.
     assert {:ok, future} =
-             ActionDispatcher.dispatch(:metering, :usage, %{
+             ActionDispatcher.dispatch_internal(:metering, :usage, %{
                plugin_id: id,
                since: System.system_time(:second) + 3600
              })

@@ -187,7 +187,7 @@ defmodule Exoforge.Std.Metering.Flusher do
   end
 
   defp insert(sql, args) do
-    case ActionDispatcher.dispatch(:database, :execute, %{
+    case ActionDispatcher.dispatch_internal(:database, :execute, %{
            plugin: :metering,
            operation: sql,
            arguments: args
