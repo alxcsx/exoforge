@@ -355,7 +355,7 @@ defmodule Exoforge.Std.Dashboard.ApiController do
     bucket = params["bucket"]
     payload = if bucket, do: %{"bucket" => bucket, "id" => id}, else: %{"id" => id}
 
-    case ActionDispatcher.dispatch(:file_bucket, :get_file_info, payload) do
+    case ActionDispatcher.dispatch_internal(:file_bucket, :get_file_info, payload) do
       {:ok, %{file: file}} ->
         raw_path = file["disk_path"] || file[:disk_path]
         disk_path = if raw_path, do: Path.expand(raw_path), else: nil

@@ -156,6 +156,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
        event_dock_open: false,
        events_paused: false,
        event_filter_topic: "",
+       event_kind_filter: "all",
        extensions_search: "",
        extensions_category: "all",
        cors_config: fetch_cors_config()
@@ -928,8 +929,11 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   end
 
   def handle_event("filter_event_dock", %{"topic" => topic}, socket) do
-    filtered = filter_activity_events(socket.assigns.activity_events, topic)
-    {:noreply, assign(socket, event_filter_topic: topic, filtered_activity_events: filtered)}
+    {:noreply, refilter_events(assign(socket, event_filter_topic: topic))}
+  end
+
+  def handle_event("filter_event_kind", %{"kind" => kind}, socket) do
+    {:noreply, refilter_events(assign(socket, event_kind_filter: kind))}
   end
 
   def handle_event("clear_events", _params, socket) do
@@ -952,7 +956,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   end
 
   defp fetch_cors_config do
-    case ActionDispatcher.dispatch(:http, :get_cors_config, %{}) do
+    case ActionDispatcher.dispatch_internal(:http, :get_cors_config, %{}) do
       {:ok, cfg} when is_map(cfg) -> cfg
       _ -> %{"mode" => "relaxed", "allowed_origins" => "*", "allow_credentials" => true}
     end
@@ -974,7 +978,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
           [ev_item | Enum.take(socket.assigns.activity_events, 99)]
         end
 
-      filtered = filter_activity_events(new_events, socket.assigns.event_filter_topic)
+      filtered = filter_activity_events(new_events, socket.assigns.event_filter_topic, socket.assigns.event_kind_filter)
       telemetry = fetch_telemetry_summary(socket.assigns.overview, new_events)
 
       event_str = to_string(ev_item.event)
@@ -994,6 +998,11 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
       # Highlight the latest event while the screen is active
       Process.send_after(self(), :clear_event_highlight, 2_000)
+
+      socket =
+        if String.starts_with?(event_str, "action:extension_manager."),
+          do: refresh_extension_topology(socket),
+          else: socket
 
       {:noreply,
        assign(socket,
@@ -1015,7 +1024,12 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   end
 
   def handle_info(:refresh_telemetry, socket) do
-    overview = fetch_overview()
+    # A tick moves numbers, not topology. Rebuilding the extension list re-resolved every view
+    # module through :dashboard_view.resolve_view, so an idle Studio dispatched one action (and
+    # broadcast one event) per extension every five seconds for a list that changes only on
+    # install or reload.
+    plugins = fetch_plugins()
+    overview = Map.merge(socket.assigns.overview, %{plugins: plugins, plugins_count: length(plugins)})
     telemetry = fetch_telemetry_summary(overview, socket.assigns.activity_events)
     {:noreply, assign(socket, overview: overview, telemetry: telemetry)}
   end
@@ -1030,6 +1044,14 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
   def handle_info(_msg, socket) do
     {:noreply, socket}
+  end
+
+  # Installing, removing, or reloading an extension is the only thing that changes the extension
+  # list and the modules its views resolve to, so it is the only time either is rebuilt.
+  defp refresh_extension_topology(socket) do
+    ExtensionPresenter.clear_view_cache()
+    overview = fetch_overview()
+    assign(socket, overview: overview, action_catalog: ActionForms.catalog())
   end
 
   # ---- PRIVATE HELPERS ----
@@ -1055,27 +1077,30 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     put_flash(socket, kind, message)
   end
 
+  defp fetch_plugins do
+    try do
+      :ets.tab2list(:exo_extensions_mem)
+      |> Enum.map(fn {_id, m} ->
+        %{
+          id: to_string(m.id),
+          name: to_string(m.name),
+          version: to_string(m.version),
+          type: to_string(m.type),
+          status: Map.get(m, :status, :online),
+          restarts: Map.get(m, :restarts, 0),
+          infinite_loop: Map.get(m, :infinite_loop, false),
+          crashed_recently: Map.get(m, :crashed_recently, false),
+          provides: Enum.map(m.provides || [], &ExtensionRegistry.service_alias_or_module/1),
+          dependencies: Enum.map(m.dependencies || [], &ExtensionRegistry.service_alias_or_module/1)
+        }
+      end)
+    rescue
+      _ -> []
+    end
+  end
+
   defp fetch_overview do
-    plugins =
-      try do
-        :ets.tab2list(:exo_extensions_mem)
-        |> Enum.map(fn {_id, m} ->
-          %{
-            id: to_string(m.id),
-            name: to_string(m.name),
-            version: to_string(m.version),
-            type: to_string(m.type),
-            status: Map.get(m, :status, :online),
-            restarts: Map.get(m, :restarts, 0),
-            infinite_loop: Map.get(m, :infinite_loop, false),
-            crashed_recently: Map.get(m, :crashed_recently, false),
-            provides: Enum.map(m.provides || [], &ExtensionRegistry.service_alias_or_module/1),
-            dependencies: Enum.map(m.dependencies || [], &ExtensionRegistry.service_alias_or_module/1)
-          }
-        end)
-      rescue
-        _ -> []
-      end
+    plugins = fetch_plugins()
 
     raw_extensions =
       try do
@@ -1238,20 +1263,27 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   defp humanize_plugin_name(ext_or_id), do: ExtensionPresenter.display_name(ext_or_id)
   defp tab_short_name(ext_or_id), do: ExtensionPresenter.display_name(ext_or_id)
 
-  # Resolves a custom LiveView/LiveComponent for an extension: an explicit `:module` in its
-  # dashboard_view, dynamic lookup via `:dashboard_view` service contract, or conventional module.
-  defp filter_activity_events(events, query) do
+  defp refilter_events(socket) do
+    assign(socket,
+      :filtered_activity_events,
+      filter_activity_events(
+        socket.assigns.activity_events,
+        socket.assigns.event_filter_topic,
+        socket.assigns.event_kind_filter
+      )
+    )
+  end
+
+  defp filter_activity_events(events, query, kind) do
     q = String.downcase(String.trim(query || ""))
 
-    if q == "" do
-      events
-    else
-      Enum.filter(events, fn ev ->
-        String.contains?(String.downcase(ev.event), q) or
-          String.contains?(String.downcase(to_string(ev.id)), q) or
-          (is_map(ev.payload) and String.contains?(String.downcase(Jason.encode!(ev.payload)), q))
-      end)
-    end
+    events
+    |> Enum.filter(fn ev -> kind in ["all", nil, ""] or RecentEvents.kind(ev) == kind end)
+    |> Enum.filter(fn ev ->
+      q == "" or String.contains?(String.downcase(ev.event), q) or
+        String.contains?(String.downcase(to_string(ev.id)), q) or
+        (is_map(ev.payload) and String.contains?(String.downcase(Jason.encode!(ev.payload)), q))
+    end)
   end
 
   @builtin_overview_slots [
@@ -1294,7 +1326,41 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     Enum.reject(all_possible, &(&1 in active_slot_ids))
   end
 
-  defp fetch_telemetry_summary(overview, _activity_events) do
+  # Metering rows are keyed by extension id (the mix app), the action catalog by contract service
+  # (:file_bucket). Bridge them through the extension that declares the action, so one row and one
+  # graph line share a key.
+  defp act_key(%{service: service, action: action}, overview) do
+    "#{service_key_for(overview, service, action)}.#{action}"
+  end
+
+  defp service_key_for(overview, extension_id, action) do
+    services =
+      case Enum.find(overview.extensions, &(to_string(&1.id) == to_string(extension_id))) do
+        nil -> []
+        ext -> Map.get(ext, :services) || []
+      end
+
+    declaring =
+      Enum.find(services, fn svc ->
+        Enum.any?(Map.get(svc, :actions) || [], fn act ->
+          to_string(Map.get(act, :name) || Map.get(act, "name")) == to_string(action)
+        end)
+      end)
+
+    chosen = declaring || List.first(services) || %{}
+    ExtensionPresenter.service_key(chosen[:name] || extension_id)
+  end
+
+  defp event_act_key("action:" <> rest) do
+    case String.split(rest, ".", parts: 2) do
+      [service, action] -> "#{ExtensionPresenter.service_key(service)}.#{action}"
+      _ -> rest
+    end
+  end
+
+  defp event_act_key(other), do: to_string(other)
+
+  defp fetch_telemetry_summary(overview, activity_events) do
     snapshot =
       try do
         Exoforge.Metering.snapshot()
@@ -1377,7 +1443,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     actions_to_plot =
       metered_actions
       |> Enum.map(fn act ->
-        {"#{act.service}.#{act.action}", Map.get(act, :invocations, 0), Map.get(act, :errors, 0)}
+        {act_key(act, overview), Map.get(act, :invocations, 0), Map.get(act, :errors, 0)}
       end)
       |> Enum.sort_by(fn {_id, inv, _err} -> -inv end)
       |> Enum.take(5)
@@ -1431,7 +1497,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     actions_with_errors =
       metered_actions
       |> Enum.map(fn act ->
-        {"#{act.service}.#{act.action}", Map.get(act, :invocations, 0), Map.get(act, :errors, 0)}
+        {act_key(act, overview), Map.get(act, :invocations, 0), Map.get(act, :errors, 0)}
       end)
       |> Enum.filter(fn {_id, _inv, err} -> err > 0 end)
       |> Enum.sort_by(fn {_id, _inv, err} -> -err end)
@@ -1495,14 +1561,41 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       end
 
     action_invocations =
+      Map.new(metered_actions, &{act_key(&1, overview), Map.get(&1, :invocations, 0)})
+
+    action_errors = Map.new(metered_actions, &{act_key(&1, overview), Map.get(&1, :errors, 0)})
+
+    action_stats =
       Map.new(metered_actions, fn act ->
-        {"#{act.service}.#{act.action}", Map.get(act, :invocations, 0)}
+        {act_key(act, overview),
+         %{
+           avg_ms: Float.round(Map.get(act, :avg_wall_us, 0) / 1000, 1),
+           bytes: Map.get(act, :bytes_in, 0) + Map.get(act, :bytes_out, 0)
+         }}
       end)
 
-    action_errors =
-      Map.new(metered_actions, fn act ->
-        {"#{act.service}.#{act.action}", Map.get(act, :errors, 0)}
+    action_events =
+      Enum.filter(activity_events || [], &(RecentEvents.kind(&1) == "action"))
+
+    # Newest first in the buffer, so the first error seen for a key is the last one that happened.
+    last_errors =
+      action_events
+      |> Enum.filter(fn ev ->
+        is_map(ev.payload) and
+          String.starts_with?(to_string(ev.payload[:status] || ev.payload["status"]), "error")
       end)
+      |> Enum.uniq_by(&event_act_key(&1.event))
+      |> Map.new(fn ev ->
+        {event_act_key(ev.event),
+         %{status: to_string(ev.payload[:status] || ev.payload["status"]), time: ev.time}}
+      end)
+
+    cutoff = System.system_time(:microsecond) - 300_000_000
+
+    recent_traffic =
+      action_events
+      |> Enum.filter(&(Map.get(&1, :timestamp, 0) >= cutoff))
+      |> Enum.frequencies_by(&event_act_key(&1.event))
 
     %{
       total_invocations: total_invocations,
@@ -1513,6 +1606,9 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       error_max_val: error_max_val,
       action_invocations: action_invocations,
       action_errors: action_errors,
+      action_stats: action_stats,
+      recent_traffic: recent_traffic,
+      last_errors: last_errors,
       time_labels: time_labels,
       x_coords: x_coords,
       online_count: online_count,
@@ -2719,10 +2815,12 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         events={@filtered_activity_events}
         paused={@events_paused}
         filter_topic={@event_filter_topic}
+        kind_filter={@event_kind_filter}
         on_close="close_events_modal"
         on_pause="toggle_event_pause"
         on_clear="clear_events"
         on_filter="filter_event_dock"
+        on_filter_kind="filter_event_kind"
         on_simulate="simulate_test_event"
       />
 

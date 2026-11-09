@@ -193,7 +193,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
           "content_type" => content_type
         }
 
-        case ActionDispatcher.dispatch(:file_bucket, :upload_file, payload) do
+        case ActionDispatcher.dispatch_internal(:file_bucket, :upload_file, payload) do
           {:ok, %{file: file}} ->
             socket =
               socket
@@ -275,7 +275,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
       |> then(fn p -> if content != "" and content != nil, do: Map.put(p, "content", content), else: p end)
       |> then(fn p -> if content_type != "" and content_type != nil, do: Map.put(p, "content_type", content_type), else: p end)
 
-    case ActionDispatcher.dispatch(:file_bucket, :update_file, payload) do
+    case ActionDispatcher.dispatch_internal(:file_bucket, :update_file, payload) do
       {:ok, %{file: updated_file}} ->
         socket =
           socket
@@ -302,7 +302,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
       file ->
         payload = %{"id" => file["id"], "bucket" => file["bucket"]}
 
-        case ActionDispatcher.dispatch(:file_bucket, :delete_file, payload) do
+        case ActionDispatcher.dispatch_internal(:file_bucket, :delete_file, payload) do
           {:ok, _} ->
             socket =
               socket
@@ -376,13 +376,13 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
 
   defp load_data(socket) do
     buckets =
-      case ActionDispatcher.dispatch(:file_bucket, :list_buckets, %{}) do
+      case ActionDispatcher.dispatch_internal(:file_bucket, :list_buckets, %{}) do
         {:ok, %{buckets: b}} when is_list(b) -> b
         _ -> ["default"]
       end
 
     files =
-      case ActionDispatcher.dispatch(:file_bucket, :list_files, %{"bucket" => "all", "limit" => 500}) do
+      case ActionDispatcher.dispatch_internal(:file_bucket, :list_files, %{"bucket" => "all", "limit" => 500}) do
         {:ok, %{files: f}} when is_list(f) -> f
         _ -> []
       end

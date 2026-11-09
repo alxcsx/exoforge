@@ -134,6 +134,28 @@ defmodule Exoforge.Std.Dashboard.RecentEvents do
     end
   end
 
+  @doc """
+  What produced the event: `"action"`, `"webhook"`, `"cron"` or `"event"`.
+
+  Action dispatches announce themselves as `action:<service>.<action>`; webhook and cron
+  callers tag the dispatch so the stream can be filtered by origin.
+  """
+  def kind(%{event: event} = item) do
+    key = to_string(event)
+    source =
+      case Map.get(item, :context) do
+        %{} = ctx -> to_string(ctx[:source] || ctx["source"] || "")
+        _ -> ""
+      end
+
+    cond do
+      String.starts_with?(key, "cron") or source == "cron" -> "cron"
+      String.starts_with?(key, "webhook") or source == "webhook" -> "webhook"
+      String.starts_with?(key, "action:") -> "action"
+      true -> "event"
+    end
+  end
+
   def clear do
     init_table()
     try do

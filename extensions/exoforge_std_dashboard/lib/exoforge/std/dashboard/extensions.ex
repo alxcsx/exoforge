@@ -23,18 +23,22 @@ defmodule Exoforge.Std.Dashboard.Extensions do
 
       category = ExtensionPresenter.normalize_category(Map.get(manifest, :category))
 
+      # Registry entries are not always structs (hand-registered or test manifests), so read the
+      # entry point by key: a dot-access KeyError here silently emptied the whole action catalog.
+      entry_point = Map.get(manifest, :entry_point)
+
       dashboard_view =
         cond do
           Map.get(manifest, :dashboard_view) ->
             Map.get(manifest, :dashboard_view)
 
-          is_atom(manifest.entry_point) and Code.ensure_loaded?(manifest.entry_point) and
-              function_exported?(manifest.entry_point, :dashboard_view, 0) ->
-            manifest.entry_point.dashboard_view()
+          is_atom(entry_point) and Code.ensure_loaded?(entry_point) and
+              function_exported?(entry_point, :dashboard_view, 0) ->
+            entry_point.dashboard_view()
 
-          is_atom(manifest.entry_point) and Code.ensure_loaded?(manifest.entry_point) and
-              function_exported?(manifest.entry_point, :__dashboard_view__, 0) ->
-            manifest.entry_point.__dashboard_view__()
+          is_atom(entry_point) and Code.ensure_loaded?(entry_point) and
+              function_exported?(entry_point, :__dashboard_view__, 0) ->
+            entry_point.__dashboard_view__()
 
           true ->
             nil

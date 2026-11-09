@@ -425,6 +425,13 @@ defmodule Exoforge.DashboardLiveViewTest do
       html = render_change(view, "filter_event_dock", %{"topic" => "studio_telemetry"})
       assert html =~ "studio_telemetry"
 
+      # Kind filter: the telemetry event is not a cron run, so the cron filter empties the dock.
+      html = render_click(view, "filter_event_kind", %{"kind" => "cron"})
+      assert html =~ "Waiting for live cluster events"
+      html = render_click(view, "filter_event_kind", %{"kind" => "event"})
+      refute html =~ "Waiting for live cluster events"
+      html = render_click(view, "filter_event_kind", %{"kind" => "all"})
+
       # 4. Toggle pause
       html = render_click(view, "toggle_event_pause", %{})
       assert html =~ "STREAM PAUSED" or html =~ "Resume"
@@ -1114,6 +1121,8 @@ defmodule Exoforge.DashboardLiveViewTest do
       events_modal_html = render_click(view, "open_events_modal", %{})
       assert events_modal_html =~ "Cluster Event Stream &amp; History"
       assert events_modal_html =~ "auth.login"
+      assert events_modal_html =~ "Webhooks"
+      assert events_modal_html =~ "Cron"
       render_click(view, "close_events_modal", %{})
 
       # Open Actions Detail Modal via graph Expand button (includes expanded graph + table)
@@ -1122,6 +1131,8 @@ defmodule Exoforge.DashboardLiveViewTest do
       assert detail_html =~ "Expanded Action Throughput"
       assert detail_html =~ "Filter actions by name or service..."
       assert detail_html =~ "Active Traffic"
+      assert detail_html =~ "Last 5m"
+      assert detail_html =~ "Last Error"
 
       # Open Error Breakdown mode
       err_detail_html = render_click(view, "open_actions_detail_modal", %{"mode" => "errors"})
@@ -1131,6 +1142,39 @@ defmodule Exoforge.DashboardLiveViewTest do
       # Close detail modal
       closed_html = render_click(view, "close_actions_detail_modal", %{})
       refute closed_html =~ "Action Exceptions &amp; Error Breakdown"
+    end
+
+    test "actions modal joins metering rows (extension id) to the contract service and shows last error" do
+      # Metering counts per extension id; the catalog is keyed by contract service. Both must agree
+      # on one row, otherwise every action reads 0 invocations next to a graph that shows calls.
+      Exoforge.Metering.record_invocation("exoforge_std_dashboard_views", :list_views, 2_500, :error, 0, 0)
+
+      on_exit(fn ->
+        :ets.match_delete(:exo_metering, {{:action, "exoforge_std_dashboard_views", :_, :_}, :_})
+      end)
+
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{"admin_player_id" => "admin", "admin_scopes" => ["admin"]})
+
+      {:ok, view, _html} = live(conn, "/")
+
+      ev =
+        Exoforge.Std.Dashboard.RecentEvents.record("action:dashboard_view.list_views", %{
+          service: :dashboard_view,
+          action: :list_views,
+          status: "error: :unauthorized",
+          duration_ms: 2
+        })
+
+      send(view.pid, {:studio_event, ev})
+      _ = render(view)
+
+      html = render_click(view, "open_actions_detail_modal", %{"mode" => "errors"})
+
+      assert html =~ "dashboard_view.list_views"
+      assert html =~ "error: :unauthorized"
+      assert html =~ "Last 5m"
     end
 
     test "CORS access policy controller updates highlight and disables allowed_origins when relaxed or strict" do

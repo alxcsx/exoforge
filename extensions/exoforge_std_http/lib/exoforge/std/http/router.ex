@@ -191,7 +191,7 @@ defmodule Exoforge.Std.Http.Router do
       "query" => conn.query_params
     }
 
-    result = ActionDispatcher.dispatch(service, action, payload, caller_scopes: ["webhook", "global"])
+    result = ActionDispatcher.dispatch(service, action, payload, caller_scopes: ["webhook", "global"], caller: "webhook")
     latency_us = System.monotonic_time(:microsecond) - t0
 
     case result do

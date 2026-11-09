@@ -6,6 +6,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
   import Exoforge.Std.Dashboard.Components
   import Exoforge.Std.Dashboard.InputTypes, only: [widget: 1]
   alias Exoforge.Std.Dashboard.ExtensionPresenter
+  alias Exoforge.Std.Dashboard.RecentEvents
 
   @doc """
   Command Palette (Cmd+K) modal component.
@@ -1501,7 +1502,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
   def sdk_download_modal(assigns) do
     sdk_files =
       if assigns.open do
-        case Exoforge.ActionDispatcher.dispatch(:file_bucket, :list_files, %{"bucket" => "sdk"}) do
+        case Exoforge.ActionDispatcher.dispatch_internal(:file_bucket, :list_files, %{"bucket" => "sdk"}) do
           {:ok, %{files: files}} when is_list(files) -> files
           _ -> []
         end
@@ -1689,9 +1690,12 @@ defmodule Exoforge.Std.Dashboard.Overlays do
         for svc <- catalog, act <- (Map.get(svc, :actions) || Map.get(svc, "actions") || []) do
           svc_name = to_string(Map.get(svc, :name) || Map.get(svc, "name") || "")
           act_name = to_string(Map.get(act, :name) || Map.get(act, "name") || "")
-          key = "#{svc_name}.#{act_name}"
+          key = "#{ExtensionPresenter.service_key(svc_name)}.#{act_name}"
           invocations = Map.get(telemetry[:action_invocations] || %{}, key, 0)
           errors = Map.get(telemetry[:action_errors] || %{}, key, 0)
+          stats = Map.get(telemetry[:action_stats] || %{}, key, %{avg_ms: 0.0, bytes: 0})
+          recent = Map.get(telemetry[:recent_traffic] || %{}, key, 0)
+          last_error = Map.get(telemetry[:last_errors] || %{}, key)
 
           err_rate =
             if invocations > 0 do
@@ -1706,7 +1710,10 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             key: key,
             invocations: invocations,
             errors: errors,
-            error_rate: err_rate
+            error_rate: err_rate,
+            avg_ms: stats.avg_ms,
+            recent: recent,
+            last_error: last_error
           }
         end
 
@@ -1794,7 +1801,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
           ></div>
 
           <!-- Dialog Box -->
-          <div class="relative bg-white dark:bg-gray-900 rounded-2xl max-w-4xl w-full p-6 text-left shadow-2xl border border-gray-200 z-10 animate-fade-in space-y-4">
+          <div class="relative bg-white dark:bg-gray-900 rounded-2xl max-w-6xl w-full p-6 text-left shadow-2xl border border-gray-200 z-10 animate-fade-in space-y-4">
             <!-- Modal Header with Mode Switcher -->
             <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-gray-100 gap-3">
               <div>
@@ -1851,7 +1858,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               </div>
 
               <div class="w-full bg-white rounded-xl p-2.5 border border-gray-200/90 shadow-2xs overflow-hidden">
-                <svg viewBox="0 0 760 160" class="w-full h-44 overflow-visible">
+                <svg viewBox="0 0 760 160" class="w-full h-56 overflow-visible">
                   <!-- Grid horizontal lines & Y-axis labels -->
                   <line x1="50" y1="25" x2="730" y2="25" stroke="#f1f5f9" stroke-width="1" stroke-dasharray="3 3" />
                   <text x="44" y="28" text-anchor="end" font-size="10" font-family="monospace" fill="#94a3b8"><%= @chart_max %></text>
@@ -1945,7 +1952,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             </div>
 
             <!-- Actions Table -->
-            <div class="max-h-72 overflow-y-auto border border-gray-200 rounded-xl custom-scrollbar text-xs">
+            <div class="max-h-[30rem] overflow-y-auto border border-gray-200 rounded-xl custom-scrollbar text-xs">
               <%= if Enum.empty?(@items) do %>
                 <div class="p-8 text-center text-gray-400">
                   <p>No actions match your search or filter.</p>
@@ -1957,8 +1964,10 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                       <th class="py-2.5 px-3">Service &amp; Action</th>
                       <th class="py-2.5 px-3">Scope / Transport</th>
                       <th class="py-2.5 px-3 text-right">Invocations</th>
+                      <th class="py-2.5 px-3 text-right">Last 5m</th>
+                      <th class="py-2.5 px-3 text-right">Avg</th>
                       <th class="py-2.5 px-3 text-right">Errors</th>
-                      <th class="py-2.5 px-3 text-right">Error Rate</th>
+                      <th class="py-2.5 px-3">Last Error</th>
                       <th class="py-2.5 px-3 text-right">Action</th>
                     </tr>
                   </thead>
@@ -1989,14 +1998,26 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                         <td class="py-2.5 px-3 text-right font-mono font-bold text-gray-800">
                           <%= item.invocations %>
                         </td>
+                        <td class="py-2.5 px-3 text-right font-mono text-[11px] text-gray-500" title="Dispatches captured in the live stream during the last 5 minutes">
+                          <%= item.recent %>
+                        </td>
+                        <td class="py-2.5 px-3 text-right font-mono text-[11px] text-gray-500" title="Average server-side wall time per invocation">
+                          <%= item.avg_ms %>ms
+                        </td>
                         <td class={"py-2.5 px-3 text-right font-mono font-bold #{if item.errors > 0, do: "text-red-600", else: "text-gray-400"}"}>
                           <%= item.errors %>
-                        </td>
-                        <td class="py-2.5 px-3 text-right font-mono text-[11px]">
                           <%= if item.error_rate > 0 do %>
-                            <span class="text-red-600 font-bold"><%= item.error_rate %>%</span>
+                            <span class="block text-[10px] font-normal"><%= item.error_rate %>%</span>
+                          <% end %>
+                        </td>
+                        <td class="py-2.5 px-3 font-mono text-[11px] max-w-[18rem]">
+                          <%= if item.last_error do %>
+                            <span class="block truncate text-red-600 font-semibold" title={item.last_error.status}>
+                              <%= item.last_error.status %>
+                            </span>
+                            <span class="block text-[10px] text-gray-400"><%= item.last_error.time %></span>
                           <% else %>
-                            <span class="text-emerald-600">0%</span>
+                            <span class="text-emerald-600">No errors seen</span>
                           <% end %>
                         </td>
                         <td class="py-2.5 px-3 text-right">
@@ -2030,10 +2051,12 @@ defmodule Exoforge.Std.Dashboard.Overlays do
   attr(:events, :list, default: [])
   attr(:paused, :boolean, default: false)
   attr(:filter_topic, :string, default: "")
+  attr(:kind_filter, :string, default: "all")
   attr(:on_close, :string, default: "close_events_modal")
   attr(:on_pause, :string, default: "toggle_event_pause")
   attr(:on_clear, :string, default: "clear_events")
   attr(:on_filter, :string, default: "filter_event_dock")
+  attr(:on_filter_kind, :string, default: "filter_event_kind")
   attr(:on_simulate, :string, default: "simulate_test_event")
 
   def events_modal(assigns) do
@@ -2076,15 +2099,30 @@ defmodule Exoforge.Std.Dashboard.Overlays do
 
             <!-- Controls Toolbar -->
             <div class="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-gray-50 rounded-xl border border-gray-200/80 text-xs flex-shrink-0">
-              <form id="events_modal_filter_form" phx-change={@on_filter} class="m-0">
-                <input
-                  type="text"
-                  name="topic"
-                  value={@filter_topic}
-                  placeholder="Filter event or payload..."
-                  class="px-2.5 py-1 bg-white border border-gray-300 rounded-lg text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-primary-500 w-44 sm:w-72 font-mono"
-                />
-              </form>
+              <div class="flex flex-wrap items-center gap-2">
+                <form id="events_modal_filter_form" phx-change={@on_filter} class="m-0">
+                  <input
+                    type="text"
+                    name="topic"
+                    value={@filter_topic}
+                    placeholder="Filter event or payload..."
+                    class="px-2.5 py-1.5 bg-white border border-gray-300 rounded-lg text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-primary-500 w-44 sm:w-64 font-mono"
+                  />
+                </form>
+
+                <div class="flex items-center p-1 bg-gray-200/70 rounded-xl gap-0.5">
+                  <%= for {kind, label} <- [{"all", "All"}, {"action", "Actions"}, {"event", "Events"}, {"webhook", "Webhooks"}, {"cron", "Cron"}] do %>
+                    <button
+                      type="button"
+                      phx-click={@on_filter_kind}
+                      phx-value-kind={kind}
+                      class={"px-2.5 py-1 rounded-lg font-bold text-[11px] transition-colors #{if @kind_filter == kind, do: "bg-white text-gray-900 shadow-xs", else: "text-gray-500 hover:text-gray-900"}"}
+                    >
+                      <%= label %>
+                    </button>
+                  <% end %>
+                </div>
+              </div>
 
               <div class="flex items-center gap-1.5">
                 <button
@@ -2106,7 +2144,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             </div>
 
             <!-- Events List Window -->
-            <div class="bg-gray-950 rounded-xl p-4 border border-gray-800 text-gray-100 flex-1 overflow-y-auto space-y-3 font-mono text-xs custom-scrollbar">
+            <div class="bg-gray-950 rounded-xl p-4 border border-gray-800 text-gray-100 flex-1 overflow-y-auto space-y-3 font-mono text-sm custom-scrollbar">
               <%= if Enum.empty?(@events) do %>
                 <div class="h-full flex flex-col items-center justify-center text-center space-y-1.5 py-16">
                   <span class="text-3xl">📡</span>
@@ -2117,46 +2155,54 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                 <%= for ev <- @events do %>
                   <% is_err = is_event_error?(ev) %>
                   <div class={"p-3 rounded-xl border flex flex-col gap-2 transition-all #{if is_err, do: "bg-red-950/25 border-red-800/80 hover:border-red-600", else: "bg-gray-900/90 border-gray-800/80 hover:border-gray-700"}"}>
-                    <div class="flex flex-wrap items-center justify-between gap-2 text-[11px]">
-                      <div class="flex flex-wrap items-center gap-2">
-                        <span class={"px-2 py-0.5 rounded font-bold font-mono text-[11px] border #{if is_err, do: "bg-red-950 text-red-300 border-red-800/80", else: "bg-primary-950 text-primary-300 border-primary-800/60"}"}>
-                          <%= ev.event %>
-                        </span>
-                        <%= if is_err do %>
-                          <span class="px-2 py-0.5 rounded bg-red-900/90 text-red-100 font-bold border border-red-700 text-[10px] animate-pulse">
-                            ⚠️ ERROR
+                    <div class="flex flex-wrap items-start justify-between gap-2">
+                      <div class="flex flex-col gap-1.5 min-w-0">
+                        <div class="flex flex-wrap items-center gap-2 text-xs">
+                          <span class={"px-2 py-0.5 rounded font-bold font-mono text-xs border #{if is_err, do: "bg-red-950 text-red-300 border-red-800/80", else: "bg-primary-950 text-primary-300 border-primary-800/60"}"}>
+                            <%= ev.event %>
                           </span>
-                        <% end %>
-                        <span class="text-gray-400 text-[10px]"><%= ev.time %></span>
-                        <%= if Map.get(ev, :topic) do %>
-                          <span class="px-1.5 py-0.2 rounded bg-gray-800 text-gray-400 text-[10px] border border-gray-700 font-mono">
-                            topic: <%= ev.topic %>
+                          <span class="px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 text-[11px] border border-gray-700 font-mono uppercase tracking-wide">
+                            <%= RecentEvents.kind(ev) %>
                           </span>
-                        <% end %>
-                        <%= if Map.get(ev, :source) do %>
-                          <span class="px-1.5 py-0.2 rounded bg-gray-800 text-gray-400 text-[10px] border border-gray-700 font-mono">
-                            src: <%= ev.source %>
-                          </span>
-                        <% end %>
+                          <%= if is_err do %>
+                            <span class="px-2 py-0.5 rounded bg-red-900/90 text-red-100 font-bold border border-red-700 text-[11px] animate-pulse">
+                              ⚠️ ERROR
+                            </span>
+                          <% end %>
+                          <%= if Map.get(ev, :topic) do %>
+                            <span class="px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 text-[11px] border border-gray-700 font-mono">
+                              topic: <%= ev.topic %>
+                            </span>
+                          <% end %>
+                        </div>
+                        <!-- Time on its own line, context below it: the header stays readable long after the payload grows -->
+                        <div class="flex flex-wrap items-center gap-2 text-[11px] text-gray-400">
+                          <span><%= ev.time %></span>
+                          <span class="text-gray-600 font-mono">#<%= ev.id %></span>
+                          <%= if Map.get(ev, :source) do %>
+                            <span class="px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700 font-mono">
+                              src: <%= ev.source %>
+                            </span>
+                          <% end %>
+                        </div>
                         <%= if Map.get(ev, :context) do %>
-                          <span class="px-1.5 py-0.2 rounded bg-purple-950/80 text-purple-300 text-[10px] border border-purple-800/50 font-mono">
+                          <div class="px-1.5 py-0.5 rounded bg-purple-950/80 text-purple-300 text-[11px] border border-purple-800/50 font-mono break-all">
                             ctx: <%= inspect(ev.context) %>
-                          </span>
+                          </div>
                         <% end %>
                       </div>
-                      <span class="text-[10px] text-gray-500 font-mono">#<%= ev.id %></span>
                     </div>
 
-                    <!-- Collapsible & Highlighted Payload -->
-                    <details open class="group">
-                      <summary class="cursor-pointer select-none text-[10px] text-gray-400 hover:text-gray-200 py-1 flex items-center justify-between">
+                    <!-- Collapsible & Highlighted Payload (folded by default: the stream stays scannable) -->
+                    <details class="group">
+                      <summary class="cursor-pointer select-none text-[11px] text-gray-400 hover:text-gray-200 py-1 flex items-center justify-between">
                         <span class="flex items-center gap-1.5 font-sans font-semibold">
-                          <span class="transition-transform group-open:rotate-90 inline-block text-[9px]">▶</span>
+                          <span class="transition-transform group-open:rotate-90 inline-block text-[10px]">▶</span>
                           <span>Payload (<%= if is_map(ev.payload), do: map_size(ev.payload), else: 1 %> fields)</span>
                         </span>
-                        <span class="text-[9px] text-gray-600 font-mono">JSON</span>
+                        <span class="text-[10px] text-gray-600 font-mono">JSON</span>
                       </summary>
-                      <pre class="mt-1 text-[11px] overflow-x-auto p-3 bg-black/75 rounded-lg border border-gray-800/80 font-mono leading-relaxed custom-scrollbar"><%= highlight_json(ev.payload) %></pre>
+                      <pre class="mt-1 text-[13px] overflow-x-auto p-3 bg-black/75 rounded-lg border border-gray-800/80 font-mono leading-relaxed custom-scrollbar"><%= highlight_json(ev.payload) %></pre>
                     </details>
                   </div>
                 <% end %>

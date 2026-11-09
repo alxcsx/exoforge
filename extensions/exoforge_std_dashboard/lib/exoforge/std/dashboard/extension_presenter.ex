@@ -7,6 +7,31 @@ defmodule Exoforge.Std.Dashboard.ExtensionPresenter do
   plugins. Falls back to a humanized id. There is no central name table.
   """
 
+  @view_cache :exo_dashboard_view_modules
+
+  @doc """
+  Drops cached view resolutions. Call it when an extension is installed, removed, or reloaded —
+  that is the only thing that changes which module a view id resolves to.
+  """
+  def clear_view_cache do
+    ensure_view_cache()
+    true = :ets.match_delete(@view_cache, :_)
+    :ok
+  rescue
+    _ -> :ok
+  end
+
+  @doc """
+  Canonical service key. Metering rows carry the extension id (`exoforge_std_file_bucket`), the
+  action catalog carries the contract service (`:file_bucket`); both normalize to the same key.
+  """
+  def service_key(service) do
+    service
+    |> to_string()
+    |> String.replace_prefix("exoforge_std_", "")
+    |> Exoforge.ExtensionRegistry.clean_service_name()
+  end
+
   @doc "Human-friendly name for an extension map, manifest, id, or nil."
   def display_name(nil), do: ""
 
@@ -175,24 +200,63 @@ defmodule Exoforge.Std.Dashboard.ExtensionPresenter do
             plugin_view
 
           lookup_id != nil ->
-            case Exoforge.ActionDispatcher.dispatch_internal(:dashboard_view, :resolve_view, %{id: lookup_id}) do
-              {:ok, %{module: mod}} when is_atom(mod) and not is_nil(mod) ->
-                if Code.ensure_loaded?(mod), do: mod, else: nil
-
-              _ ->
-                clean_name =
-                  lookup_id
-                  |> to_string()
-                  |> String.replace_prefix("exoforge_std_", "")
-                  |> Macro.camelize()
-
-                mod = Module.concat([Exoforge.Std.DashboardViews, clean_name <> "View"])
-                if Code.ensure_loaded?(mod), do: mod, else: nil
-            end
+            cached_view(lookup_id, fn -> resolve_view_service(lookup_id) end)
 
           true ->
             nil
         end
+    end
+  end
+
+  defp resolve_view_service(lookup_id) do
+    case Exoforge.ActionDispatcher.dispatch_internal(:dashboard_view, :resolve_view, %{id: lookup_id}) do
+      {:ok, %{module: mod}} when is_atom(mod) and not is_nil(mod) ->
+        if Code.ensure_loaded?(mod), do: mod, else: nil
+
+      _ ->
+        clean_name =
+          lookup_id
+          |> to_string()
+          |> String.replace_prefix("exoforge_std_", "")
+          |> Macro.camelize()
+
+        mod = Module.concat([Exoforge.Std.DashboardViews, clean_name <> "View"])
+        if Code.ensure_loaded?(mod), do: mod, else: nil
+    end
+  end
+
+  # Resolving a view is a module lookup, but it travels the :dashboard_view contract, so an
+  # uncached call is a full action dispatch: metering, an event broadcast, and a log append. The
+  # Studio rebuilt its extension list every five seconds and paid that per extension; the answer
+  # only changes when extensions are installed or removed, so it is cached until they are.
+  defp cached_view(lookup_id, resolve) do
+    key = lookup_id |> to_string()
+
+    case :ets.lookup(ensure_view_cache(), key) do
+      [{^key, mod}] ->
+        mod
+
+      [] ->
+        mod = resolve.()
+        :ets.insert(@view_cache, {key, mod})
+        mod
+    end
+  rescue
+    # The table is owned by whichever process created it; a lookup on a dead table just resolves.
+    _ -> resolve.()
+  end
+
+  defp ensure_view_cache do
+    case :ets.whereis(@view_cache) do
+      :undefined ->
+        try do
+          :ets.new(@view_cache, [:named_table, :public, :set, read_concurrency: true])
+        rescue
+          _ -> @view_cache
+        end
+
+      _ ->
+        @view_cache
     end
   end
 

@@ -284,7 +284,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
     raw_bucket = params["bucket"]
 
     buckets =
-      case ActionDispatcher.dispatch(:file_bucket, :list_buckets, %{}) do
+      case ActionDispatcher.dispatch_internal(:file_bucket, :list_buckets, %{}) do
         {:ok, %{buckets: b}} when is_list(b) -> b
         _ -> ["default"]
       end
@@ -297,7 +297,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
       end
 
     files =
-      case ActionDispatcher.dispatch(:file_bucket, :list_files, %{"bucket" => bucket, "limit" => 200}) do
+      case ActionDispatcher.dispatch_internal(:file_bucket, :list_files, %{"bucket" => bucket, "limit" => 200}) do
         {:ok, %{files: f}} when is_list(f) -> f
         _ -> []
       end
@@ -318,7 +318,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
   @impl true
   def handle_event("file_picker_change_bucket", %{"bucket" => bucket}, socket) do
     files =
-      case ActionDispatcher.dispatch(:file_bucket, :list_files, %{"bucket" => bucket, "limit" => 200}) do
+      case ActionDispatcher.dispatch_internal(:file_bucket, :list_files, %{"bucket" => bucket, "limit" => 200}) do
         {:ok, %{files: f}} when is_list(f) -> f
         _ -> []
       end
@@ -425,7 +425,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
       "content_type" => content_type
     }
 
-    case ActionDispatcher.dispatch(:file_bucket, :upload_file, payload) do
+    case ActionDispatcher.dispatch_internal(:file_bucket, :upload_file, payload) do
       {:ok, %{file: file}} ->
         field = to_string(socket.assigns.file_picker_field)
         target = socket.assigns.file_picker_target
