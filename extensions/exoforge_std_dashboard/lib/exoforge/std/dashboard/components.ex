@@ -198,6 +198,24 @@ defmodule Exoforge.Std.Dashboard.Components do
   end
 
   @doc """
+  SVG polyline for a per-minute series.
+
+  The charts share one geometry: x spans `x0..x1`, y is `base` at zero and `base - height` at
+  `max_val`. Used by the small throughput cards and the expanded telemetry chart.
+  """
+  def series_points(counts, x0, x1, base, height, max_val) do
+    last = max(length(counts) - 1, 1)
+
+    counts
+    |> Enum.with_index()
+    |> Enum.map_join(" ", fn {count, index} ->
+      x = x0 + round(index * (x1 - x0) / last)
+      y = base - round(count / max(max_val, 1) * height)
+      "#{x},#{max(base - height, y)}"
+    end)
+  end
+
+  @doc """
   Renders the side inspector slide-over drawer with tabs from `Exoforge.DrawerRegistry`.
   """
   attr(:open, :boolean, default: false)

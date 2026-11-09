@@ -1749,27 +1749,25 @@ namespace Exoforge.Unity.Editor
                 searchField.style.width = 180;
                 searchField.style.marginLeft = 6;
                 searchField.style.fontSize = 11;
-                searchField.RegisterCallback<KeyDownEvent>(evt =>
-                {
-                    if (evt.keyCode is KeyCode.Return or KeyCode.KeypadEnter)
-                    {
-                        _resourceSearch = searchField.value ?? "";
-                        if (!string.IsNullOrEmpty(_selectedResourceName))
-                        {
-                            _ = FetchLiveResourceDataAsync(_selectedResourceName, 1);
-                        }
-                        evt.StopPropagation();
-                    }
-                });
-
-                var searchBtn = ExoforgeUIStyle.CreateModernButton("🔍", () =>
+                void RunSearch()
                 {
                     _resourceSearch = searchField.value ?? "";
                     if (!string.IsNullOrEmpty(_selectedResourceName))
                     {
                         _ = FetchLiveResourceDataAsync(_selectedResourceName, 1);
                     }
-                }, height: 22);
+                }
+
+                searchField.RegisterCallback<KeyDownEvent>(evt =>
+                {
+                    if (evt.keyCode is KeyCode.Return or KeyCode.KeypadEnter)
+                    {
+                        RunSearch();
+                        evt.StopPropagation();
+                    }
+                });
+
+                var searchBtn = ExoforgeUIStyle.CreateModernButton("🔍", RunSearch, height: 22);
                 searchBtn.style.marginLeft = 2;
                 dataBar.Add(searchField);
                 dataBar.Add(searchBtn);

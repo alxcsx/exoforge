@@ -1175,35 +1175,27 @@ defmodule Exoforge.Std.Auth do
     search = payload |> param_value([:search, "search"]) |> to_string() |> String.trim()
     scope = payload |> param_value([:scope, "scope"]) |> to_string()
 
-    search? = search != ""
-    scope? = scope not in ["", "all"]
+    {clauses, args} =
+      [search: search, scope: if(scope in ["", "all"], do: "", else: scope)]
+      |> Enum.reject(fn {_kind, value} -> value == "" end)
+      |> Enum.map(fn
+        {:search, value} -> {&search_clause/1, "%#{String.downcase(value)}%"}
+        {:scope, value} -> {&scope_exists_clause/1, "%#{value}%"}
+      end)
+      |> Enum.with_index(1)
+      |> Enum.map(fn {{build, arg}, index} -> {build.("$#{index}"), arg} end)
+      |> Enum.unzip()
 
-    clauses =
-      cond do
-        search? and scope? ->
-          [
-            {"(LOWER(ids.player_id) LIKE $1 OR LOWER(COALESCE((SELECT MAX(acct.email) FROM #{@accounts_table} acct WHERE acct.player_id = ids.player_id), '')) LIKE $1)",
-             ["%#{String.downcase(search)}%"]},
-            {scope_exists_clause("$2"), ["%#{scope}%"]}
-          ]
+    sql = if clauses == [], do: "", else: " WHERE " <> Enum.join(clauses, " AND ")
+    %{sql: sql, args: args}
+  end
 
-        search? ->
-          [
-            {"(LOWER(ids.player_id) LIKE $1 OR LOWER(COALESCE((SELECT MAX(acct.email) FROM #{@accounts_table} acct WHERE acct.player_id = ids.player_id), '')) LIKE $1)",
-             ["%#{String.downcase(search)}%"]}
-          ]
-
-        scope? ->
-          [{scope_exists_clause("$1"), ["%#{scope}%"]}]
-
-        true ->
-          []
-      end
-
-    sql =
-      if clauses == [], do: "", else: " WHERE " <> Enum.map_join(clauses, " AND ", &elem(&1, 0))
-
-    %{sql: sql, args: Enum.flat_map(clauses, &elem(&1, 1))}
+  # Matches the id itself or the account's email, so a search works with whichever one the caller
+  # remembers.
+  defp search_clause(placeholder) do
+    "(LOWER(ids.player_id) LIKE #{placeholder} OR " <>
+      "LOWER(COALESCE((SELECT MAX(acct.email) FROM #{@accounts_table} acct " <>
+      "WHERE acct.player_id = ids.player_id), '')) LIKE #{placeholder})"
   end
 
   # Scopes are stored as a comma-joined list, so membership is a LIKE over the row (and over both

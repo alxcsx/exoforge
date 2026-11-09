@@ -23,6 +23,24 @@ defmodule Exoforge.ExtensionCase do
     :ok
   end
 
+  @doc """
+  Drops the action trace's samples and counters.
+
+  The trace is opt-in and process-wide, so a test that enables it must leave the next one a clean
+  window; this is the one place that knows the two table names.
+  """
+  def reset_action_trace do
+    for table <- [:exo_action_trace, :exo_action_trace_buckets] do
+      try do
+        :ets.delete_all_objects(table)
+      rescue
+        _ -> :ok
+      end
+    end
+
+    :ok
+  end
+
   @doc "Registers the standard database extension under its canonical id and contracts."
   def register_database(entry_point) do
     register_extension(entry_point,
@@ -45,7 +63,8 @@ defmodule Exoforge.ExtensionCase do
     id = Keyword.get(opts, :id) || derive_id(entry_point)
 
     overrides =
-      if is_atom(entry_point) and Code.ensure_loaded?(entry_point) and function_exported?(entry_point, :manifest_overrides, 0) do
+      if is_atom(entry_point) and Code.ensure_loaded?(entry_point) and
+           function_exported?(entry_point, :manifest_overrides, 0) do
         entry_point.manifest_overrides() || %{}
       else
         %{}

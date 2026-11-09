@@ -201,14 +201,7 @@ defmodule Exoforge.HttpTest do
     test "an HTTP action is attributed to the account behind its token" do
       Exoforge.ActionTrace.enable()
 
-      on_exit(fn ->
-        try do
-          :ets.delete_all_objects(:exo_action_trace)
-          :ets.delete_all_objects(:exo_action_trace_buckets)
-        rescue
-          _ -> :ok
-        end
-      end)
+      on_exit(fn -> Exoforge.ExtensionCase.reset_action_trace() end)
 
       conn =
         conn(:post, "/api/mock_admin/secret_op", "{}")

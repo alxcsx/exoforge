@@ -6,16 +6,7 @@ defmodule Exoforge.ActionTraceTest do
 
   setup do
     ActionTrace.enable()
-
-    for table <- [:exo_action_trace, :exo_action_trace_buckets] do
-      try do
-        :ets.delete_all_objects(table)
-      rescue
-        _ -> :ok
-      end
-    end
-
-    :ok
+    Exoforge.ExtensionCase.reset_action_trace()
   end
 
   test "samples carry a capped, credential-masked preview of both directions" do

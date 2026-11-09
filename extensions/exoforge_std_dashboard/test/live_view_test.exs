@@ -1284,15 +1284,7 @@ defmodule Exoforge.DashboardLiveViewTest do
         3
       )
 
-      on_exit(fn ->
-        for table <- [:exo_action_trace, :exo_action_trace_buckets] do
-          try do
-            :ets.delete_all_objects(table)
-          rescue
-            _ -> :ok
-          end
-        end
-      end)
+      on_exit(fn -> Exoforge.ExtensionCase.reset_action_trace() end)
 
       conn =
         build_conn()
@@ -1327,15 +1319,7 @@ defmodule Exoforge.DashboardLiveViewTest do
     test "an error stays unfoldable after successful traffic, with status filtering and paging" do
       Exoforge.ActionTrace.enable()
 
-      on_exit(fn ->
-        for table <- [:exo_action_trace, :exo_action_trace_buckets] do
-          try do
-            :ets.delete_all_objects(table)
-          rescue
-            _ -> :ok
-          end
-        end
-      end)
+      on_exit(fn -> Exoforge.ExtensionCase.reset_action_trace() end)
 
       Exoforge.ActionTrace.record(
         :dashboard_view,

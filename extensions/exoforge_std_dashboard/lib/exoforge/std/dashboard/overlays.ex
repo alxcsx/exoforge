@@ -1445,28 +1445,26 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                       </div>
 
                       <div class="space-y-1">
-                        <%= for act <- (svc[:actions] || svc["actions"] || []) do %>
-                          <% name = act[:name] || act["name"] %>
-                          <% params = act[:params] || act["params"] || [] %>
+                        <%= for act <- Enum.filter(@actions, &(to_string(&1.service) == to_string(svc[:name] || svc["name"]))) do %>
                           <div class="p-2 bg-white border border-gray-200 rounded-lg space-y-1">
                             <div class="flex flex-wrap items-center gap-1.5">
-                              <span class="font-mono font-bold text-gray-800"><%= name %></span>
+                              <span class="font-mono font-bold text-gray-800"><%= act.name %></span>
                               <span class="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-mono text-[10px]">
-                                <%= act[:mode] || "sync" %>
+                                <%= act.mode %>
                               </span>
                               <span class="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 font-mono text-[10px]">
-                                <%= act[:scope] || "global" %>
+                                <%= act.scope %>
                               </span>
                               <span class="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-mono text-[10px]">
-                                <%= act[:transport] || "auto" %>
+                                <%= act.transport %>
                               </span>
                             </div>
                             <p class="font-mono text-[11px] text-gray-600">
-                              <%= name %>(<%= Enum.map_join(contract_params(params), ", ", fn {param, type} -> "#{param}: #{type}" end) %>)
-                              <%= if act[:returns], do: " -> " <> inspect(act[:returns]) %>
+                              <%= act.name %>(<%= Enum.map_join(act.params, ", ", fn p -> "#{p.name}#{if p.optional, do: "?", else: ""}: #{p.type}" end) %>)
+                              <%= if act.returns, do: " -> " <> inspect(act.returns) %>
                             </p>
-                            <%= if act[:errors] not in [nil, []] do %>
-                              <p class="text-[10px] font-mono text-red-600">errors: <%= Enum.map_join(act[:errors], ", ", &inspect/1) %></p>
+                            <%= if act.errors not in [nil, []] do %>
+                              <p class="text-[10px] font-mono text-red-600">errors: <%= Enum.map_join(act.errors, ", ", &inspect/1) %></p>
                             <% end %>
                           </div>
                         <% end %>
@@ -1586,30 +1584,6 @@ defmodule Exoforge.Std.Dashboard.Overlays do
   end
 
   def module_doc(_), do: nil
-
-  # Contract actions declare params as keyword lists (`[token: :string]`); the catalog normalizes
-  # them into maps. The inspector accepts both.
-  defp contract_params(params) when is_map(params) do
-    Enum.map(params, fn {name, spec} -> {to_string(name), param_type(spec)} end)
-  end
-
-  defp contract_params(params) when is_list(params) do
-    Enum.map(params, fn
-      %{} = param -> {to_string(param[:name] || param["name"]), param_type(param)}
-      {name, spec} -> {to_string(name), param_type(spec)}
-      name -> {to_string(name), ""}
-    end)
-  end
-
-  defp contract_params(_), do: []
-
-  defp param_type(%{} = spec), do: to_string(spec[:type] || spec["type"] || "")
-
-  defp param_type(list) when is_list(list) do
-    if Keyword.keyword?(list), do: to_string(Keyword.get(list, :type, "")), else: ""
-  end
-
-  defp param_type(type), do: to_string(type)
 
   @doc """
   Renders the login modal.
@@ -1896,7 +1870,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
           key = "#{ExtensionPresenter.service_key(svc_name)}.#{act_name}"
           invocations = Map.get(telemetry[:action_invocations] || %{}, key, 0)
           errors = Map.get(telemetry[:action_errors] || %{}, key, 0)
-          stats = Map.get(telemetry[:action_stats] || %{}, key, %{avg_ms: 0.0, bytes: 0})
+          stats = Map.get(telemetry[:action_stats] || %{}, key, %{avg_ms: 0.0})
           last_error = Map.get(telemetry[:last_errors] || %{}, key)
           samples = Map.get(telemetry[:action_samples] || %{}, key, [])
 
@@ -1977,17 +1951,15 @@ defmodule Exoforge.Std.Dashboard.Overlays do
 
       expanded_series =
         Enum.map(chart_series, fn s ->
-          counts = Map.get(s, :counts, [])
-          last = max(length(counts) - 1, 1)
-
           points =
-            counts
-            |> Enum.with_index()
-            |> Enum.map_join(" ", fn {count, index} ->
-              x = 60 + round(index * 640 / last)
-              y = 135 - round(count / max(chart_max, 1) * 105)
-              "#{x},#{max(25, min(135, y))}"
-            end)
+            Exoforge.Std.Dashboard.Components.series_points(
+              Map.get(s, :counts, []),
+              60,
+              700,
+              135,
+              105,
+              chart_max
+            )
 
           Map.put(s, :expanded_points, points)
         end)

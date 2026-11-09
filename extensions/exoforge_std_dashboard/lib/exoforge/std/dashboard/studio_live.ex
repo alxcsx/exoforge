@@ -1442,7 +1442,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       caller: socket.assigns.actions_detail_caller
     )
   rescue
-    _ -> %{samples: [], total: 0, page: 1, pages: 1, truncated: false}
+    _ -> %{samples: [], total: 0, page: 1, pages: 1}
   end
 
   defp recompute_telemetry(socket) do
@@ -1577,20 +1577,6 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   end
 
   # `index` is 0 for invocations and 1 for errors in the {count, errors} buckets.
-  # SVG polyline for a per-minute series. Shared geometry with the modal's expanded chart, scaled
-  # to each viewBox: x spans [x0, x1], y is `base` at zero and `base - height` at `max_val`.
-  defp series_points(counts, x0, x1, base, height, max_val) do
-    last = max(length(counts) - 1, 1)
-
-    counts
-    |> Enum.with_index()
-    |> Enum.map_join(" ", fn {count, index} ->
-      x = x0 + round(index * (x1 - x0) / last)
-      y = base - round(count / max(max_val, 1) * height)
-      "#{x},#{y}"
-    end)
-  end
-
   defp build_series(keys, axis, window, index, palette, fallback_id) do
     if keys == [] do
       [
@@ -1598,7 +1584,6 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
           id: fallback_id,
           color: "#94a3b8",
           counts: List.duplicate(0, length(axis)),
-          latest_count: 0,
           total: 0
         }
       ]
@@ -1613,7 +1598,6 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
           id: key,
           color: color_for_name(key, palette),
           counts: counts,
-          latest_count: List.last(counts) || 0,
           total: Enum.sum(counts)
         }
       end)
@@ -1707,9 +1691,9 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     # from them, so the caller filter is a filter on real data rather than on the last five samples.
     trace =
       try do
-        Exoforge.ActionTrace.snapshot(@trace_window_minutes)
+        Exoforge.ActionTrace.snapshot()
       rescue
-        _ -> %{buckets: [], samples: []}
+        _ -> %{buckets: []}
       end
 
     axis = minute_axis(@trace_window_minutes)
@@ -1810,7 +1794,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     action_stats =
       window_totals
       |> Map.new(fn {key, {count, errors}} ->
-        {key, %{avg_ms: 0.0, bytes: 0, window: count, window_errors: errors}}
+        {key, %{avg_ms: 0.0, window: count, window_errors: errors}}
       end)
       |> Map.merge(
         Map.new(metered_actions, fn act ->
@@ -1820,7 +1804,6 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
           {key,
            %{
              avg_ms: Float.round(Map.get(act, :avg_wall_us, 0) / 1000, 1),
-             bytes: Map.get(act, :bytes_in, 0) + Map.get(act, :bytes_out, 0),
              window: count,
              window_errors: errors
            }}
@@ -2347,7 +2330,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                               stroke-width="2"
                               stroke-linecap="round"
                               stroke-linejoin="round"
-                              points={series_points(s.counts, 40, 480, 125, 95, @telemetry.action_max_val)}
+                              points={Exoforge.Std.Dashboard.Components.series_points(s.counts, 40, 480, 125, 95, @telemetry.action_max_val)}
                             />
                           <% end %>
                         </svg>
@@ -2513,7 +2496,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                               stroke-width="2"
                               stroke-linecap="round"
                               stroke-linejoin="round"
-                              points={series_points(s.counts, 40, 480, 125, 95, @telemetry.error_max_val)}
+                              points={Exoforge.Std.Dashboard.Components.series_points(s.counts, 40, 480, 125, 95, @telemetry.error_max_val)}
                             />
                           <% end %>
                           <%= if non_zero_errors == [] do %>

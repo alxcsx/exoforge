@@ -67,8 +67,12 @@ defmodule Exoforge.Std.Dashboard.Extensions do
               service: svc[:name] || svc["name"],
               doc: doc,
               mode: mode,
+              scope: to_string(Map.get(act, :scope) || Map.get(act, "scope") || "player"),
+              transport:
+                to_string(Map.get(act, :transport) || Map.get(act, "transport") || "auto"),
               params: params,
-              returns: Map.get(act, :returns) || Map.get(act, "returns")
+              returns: Map.get(act, :returns) || Map.get(act, "returns"),
+              errors: Map.get(act, :errors) || Map.get(act, "errors") || []
             }
           end)
         end)

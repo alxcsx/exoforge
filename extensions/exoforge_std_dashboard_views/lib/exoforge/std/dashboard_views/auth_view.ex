@@ -409,21 +409,19 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
     context = Map.get(ev, :context) || %{}
 
     [
-      context[:origin],
-      context["origin"],
-      context[:source],
-      context["source"],
-      payload[:player_id],
-      payload["player_id"],
-      payload[:user_id],
-      payload["user_id"],
-      payload[:email],
-      payload["email"]
+      value(context, :origin),
+      value(context, :source),
+      value(payload, :player_id),
+      value(payload, :user_id),
+      value(payload, :email)
     ]
     |> Enum.reject(&(&1 in [nil, ""]))
     |> Enum.map(&to_string/1)
     |> Enum.uniq()
   end
+
+  # Fresh events carry atom keys; the ones warmed from the database were decoded from JSON.
+  defp value(map, key), do: Map.get(map, key) || Map.get(map, to_string(key))
 
   # Opens a user's inspector drawer, resetting it to the Overview tab and picking up whatever
   # tabs plugins contribute through the `:user_inspect` hook point.

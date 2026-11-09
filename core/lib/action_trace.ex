@@ -58,8 +58,7 @@ defmodule Exoforge.ActionTrace do
     :ok
   end
 
-  @doc "True once an observer has asked for traces."
-  def enabled?, do: :persistent_term.get({__MODULE__, :enabled}, false)
+  defp enabled?, do: :persistent_term.get({__MODULE__, :enabled}, false)
 
   @doc """
   Records one invocation. Never raises into the caller: a trace is diagnostics, not a dependency.
@@ -77,29 +76,30 @@ defmodule Exoforge.ActionTrace do
       incr({minute, key, caller, :count})
       if status != "ok", do: incr({minute, key, caller, :error})
 
+      sample = %{
+        at: now,
+        key: key,
+        caller: caller,
+        status: status,
+        duration_ms: duration_ms,
+        internal: internal?,
+        request: preview(payload),
+        response: preview_result(result)
+      }
+
       seq = System.unique_integer([:monotonic])
-
-      :ets.insert(@samples, {
-        seq,
-        %{
-          at: now,
-          key: key,
-          caller: caller,
-          status: status,
-          duration_ms: duration_ms,
-          internal: internal?,
-          request: preview(payload),
-          response: preview_result(result)
-        }
-      })
-
+      :ets.insert(@samples, {seq, sample})
       remember({{:queue, key}, @per_action}, seq)
-
-      if status != "ok" do
-        remember({{:queue, key, :error}, @per_action}, seq)
-      end
-
       remember({:queue_all, @max_samples}, seq)
+
+      # A failure is kept twice: once in the action's recent samples, once in its error bucket. Each
+      # queue then owns the rows it evicts, so a burst of successes cannot erase the failures the
+      # error view exists to show.
+      if status != "ok" do
+        error_seq = System.unique_integer([:monotonic])
+        :ets.insert(@samples, {error_seq, sample})
+        remember({{:queue, key, :error}, @per_action}, error_seq)
+      end
 
       prune(minute)
     end
@@ -112,15 +112,14 @@ defmodule Exoforge.ActionTrace do
   end
 
   @doc """
-  The window: `%{window_ms, now, buckets: [{minute, key, caller, :count | :error, n}]}`.
+  The window: `%{buckets: [{minute, key, caller, :count | :error, n}]}`.
 
   Buckets are oldest-first by minute. Samples are fetched per action by `samples/2`, because they
   are paginated and a caller rarely wants every action's at once.
   """
-  def snapshot(minutes \\ @window_minutes) do
+  def snapshot do
     init_tables()
-    now = System.system_time(:millisecond)
-    oldest = (div(now, 60_000) - minutes + 1) * 60_000
+    oldest = (div(System.system_time(:millisecond), 60_000) - @window_minutes + 1) * 60_000
 
     buckets =
       @buckets
@@ -128,7 +127,7 @@ defmodule Exoforge.ActionTrace do
       |> Enum.filter(fn {{minute, _key, _caller, _kind}, _n} -> minute >= oldest end)
       |> Enum.map(fn {{minute, key, caller, kind}, n} -> {minute, key, caller, kind, n} end)
 
-    %{window_ms: minutes * 60_000, now: now, buckets: buckets}
+    %{buckets: buckets}
   end
 
   @doc """
@@ -136,7 +135,7 @@ defmodule Exoforge.ActionTrace do
 
   `:errors_only` keeps failures, `:caller` narrows to one origin, `:page` / `:per_page` page the
   result. `total` is what is still retained - the ring drops old samples, so it can be smaller than
-  the bucket counters; `truncated` says so.
+  the bucket counters.
   """
   def samples(key, opts \\ []) do
     init_tables()
@@ -155,19 +154,15 @@ defmodule Exoforge.ActionTrace do
 
     total = length(retained)
     pages = max(ceil(total / per_page), 1)
-    page = Keyword.get(opts, :page, 1) |> to_int() |> max(1) |> min(pages)
+    page = Keyword.get(opts, :page, 1) |> max(1) |> min(pages)
 
     %{
       samples: Enum.slice(retained, (page - 1) * per_page, per_page),
       total: total,
       page: page,
-      pages: pages,
-      truncated: total >= @per_action
+      pages: pages
     }
   end
-
-  @doc "One request/response preview, capped and masked. Public so tests can pin the contract."
-  def preview(value), do: preview(value, 0)
 
   ## ---- internals ----
 
@@ -192,11 +187,8 @@ defmodule Exoforge.ActionTrace do
 
   defp incr(key), do: :ets.update_counter(@buckets, key, 1, {key, 0})
 
-  # A bounded queue of sequence numbers per bucket; evicting drops the row from the samples table.
-  # Queues may hold sequence numbers another bucket already evicted, so readers lookup and skip.
-  #
-  # Errors are owned by the error queue: the per-action sample queue never drops one, otherwise a
-  # burst of successful calls would erase exactly the invocations the error view is looking for.
+  # A bounded queue of sequence numbers per bucket; evicting drops the row it owns. Rows are not
+  # shared between queues, so a dropped sequence number is never another bucket's row.
   defp remember({bucket, cap}, seq) do
     queue =
       case :ets.lookup(@samples, bucket) do
@@ -209,29 +201,13 @@ defmodule Exoforge.ActionTrace do
     :ok
   end
 
-  defp trim_queue(bucket, queue, cap) do
+  defp trim_queue(_bucket, queue, cap) do
     if :queue.len(queue) > cap do
       {{:value, dropped}, rest} = :queue.out(queue)
-
-      if owned_by?(bucket, dropped) do
-        :ets.delete(@samples, dropped)
-      end
-
-      trim_queue(bucket, rest, cap)
+      :ets.delete(@samples, dropped)
+      trim_queue(nil, rest, cap)
     else
       queue
-    end
-  end
-
-  # The global queue is a hard memory bound and owns everything in it.
-  defp owned_by?({:queue_all, _}, _seq), do: true
-  defp owned_by?({:queue, _key, :error}, _seq), do: true
-  defp owned_by?({:queue, _key}, seq), do: not error_sample?(seq)
-
-  defp error_sample?(seq) do
-    case fetch(seq) do
-      %{status: "error" <> _} -> true
-      _ -> false
     end
   end
 
@@ -251,10 +227,6 @@ defmodule Exoforge.ActionTrace do
     end
   end
 
-  defp to_int(value) when is_integer(value), do: value
-  defp to_int(value) when is_binary(value), do: String.to_integer(value)
-  defp to_int(_), do: 1
-
   # Pruned once per minute, not per call: minute buckets are the unit, so anything older than the
   # window is already invisible to `snapshot/1`.
   defp prune(minute) do
@@ -272,6 +244,8 @@ defmodule Exoforge.ActionTrace do
 
   defp status({:error, reason}), do: "error: #{inspect(reason)}"
   defp status(_), do: "ok"
+
+  defp preview(value), do: preview(value, 0)
 
   defp preview_result({:ok, value}), do: preview(value)
   defp preview_result(:ok), do: nil
