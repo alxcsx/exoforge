@@ -2146,6 +2146,15 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                               >
                                 rid <%= group.rid %>
                               </button>
+                              <button
+                                type="button"
+                                phx-click="open_timeline"
+                                phx-value-rid={group.rid}
+                                class="px-1.5 py-0.5 rounded bg-primary-50 border border-primary-200 text-primary-700 text-[10px] font-bold hover:bg-primary-100"
+                                title="Open this request's timeline"
+                              >
+                                🔭 Timeline
+                              </button>
                             <% end %>
                             <span class="text-gray-500 font-mono">last caller: <%= group.caller || "unknown" %></span>
                             <%= if length(group.callers) > 1 do %>
@@ -2395,6 +2404,15 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                                           >
                                             rid <%= sample.rid %>
                                           </button>
+                                          <button
+                                            type="button"
+                                            phx-click="open_timeline"
+                                            phx-value-rid={sample.rid}
+                                            class="px-1.5 py-0.5 rounded bg-primary-50 border border-primary-200 text-primary-700 text-[10px] font-bold hover:bg-primary-100"
+                                            title="Open this request's timeline"
+                                          >
+                                            🔭
+                                          </button>
                                         <% end %>
                                         <%= if sample[:internal] do %>
                                           <span class="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 text-[10px] font-bold border border-purple-200">internal call</span>
@@ -2496,6 +2514,186 @@ defmodule Exoforge.Std.Dashboard.Overlays do
   end
 
   defp sample_time(_), do: ""
+
+  @doc """
+  Renders one request's timeline: the calls it made, the events it raised, the log lines it wrote
+  and the failure it produced, joined on the request id (M41).
+  """
+  attr(:open, :boolean, default: false)
+  attr(:rid, :string, default: "")
+  attr(:nodes, :list, default: [])
+  attr(:on_close, :string, default: "close_timeline")
+  attr(:on_search, :string, default: "search_timeline")
+
+  def timeline_modal(assigns) do
+    ~H"""
+    <%= if @open do %>
+      <div id="timeline_modal" class="fixed inset-0 z-[60] overflow-y-auto" role="dialog" aria-modal="true">
+        <div class="min-h-screen px-4 text-center flex items-center justify-center py-8">
+          <div class="fixed inset-0 bg-black/60 backdrop-blur-sm cursor-pointer" phx-click={@on_close}></div>
+
+          <div class="relative bg-white rounded-2xl max-w-4xl w-full p-6 text-left shadow-2xl border border-gray-200 z-10 space-y-4">
+            <div class="flex items-center justify-between pb-3 border-b border-gray-100">
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center font-bold text-sm">
+                  🔭
+                </div>
+                <div>
+                  <h3 class="font-bold text-gray-900 text-base">Request Timeline</h3>
+                  <p class="text-xs text-gray-500">Calls, events, logs and failures of one request, joined by its id.</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="px-2.5 py-1 rounded-full bg-gray-100 font-mono font-bold text-[10px] text-gray-600 border border-gray-200">
+                  <%= length(@nodes) %> nodes
+                </span>
+                <button
+                  type="button"
+                  phx-click={@on_close}
+                  class="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center transition-colors text-xs font-bold"
+                  title="Close Modal (Esc)"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <form id="timeline_search_form" phx-submit={@on_search} class="flex items-center gap-2">
+              <input
+                type="text"
+                name="rid"
+                value={@rid}
+                placeholder="Paste a request id (r_…)"
+                class="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-mono placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              />
+              <button
+                type="submit"
+                class="px-3 py-2 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-xl text-xs transition-colors"
+              >
+                Trace
+              </button>
+            </form>
+
+            <%= cond do %>
+              <% @rid == "" -> %>
+                <p class="text-xs text-gray-400 italic bg-gray-50 p-3 rounded-xl border border-gray-200">
+                  A request id comes from an action result, a failure group, a trace sample or a log line. Copy one and paste it here.
+                </p>
+
+              <% @nodes == [] -> %>
+                <p class="text-xs text-gray-400 italic bg-gray-50 p-3 rounded-xl border border-gray-200">
+                  Nothing retained for <span class="font-mono"><%= @rid %></span>. The trace keeps the recent samples of each action; a request older than that window is gone from memory.
+                </p>
+
+              <% true -> %>
+                <div class="space-y-1.5 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                  <%= for node <- @nodes do %>
+                    <.timeline_node node={node} />
+                  <% end %>
+                </div>
+            <% end %>
+          </div>
+        </div>
+      </div>
+    <% end %>
+    """
+  end
+
+  attr(:node, :map, required: true)
+
+  def timeline_node(assigns) do
+    ~H"""
+    <div
+      class={"rounded-xl border p-2.5 space-y-1.5 #{timeline_node_class(@node.kind)}"}
+      style={"margin-left: #{min(Map.get(@node, :depth, 0), 8) * 14}px"}
+    >
+      <div class="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+        <div class="flex flex-wrap items-center gap-2 min-w-0">
+          <span class={"px-1.5 py-0.5 rounded text-[10px] font-bold border #{timeline_badge_class(@node.kind)}"}>
+            <%= timeline_kind_label(@node.kind) %>
+          </span>
+          <span class="font-mono font-bold text-gray-900 truncate"><%= @node.label %></span>
+
+          <%= if @node[:status] do %>
+            <span class={"px-1.5 py-0.5 rounded text-[10px] font-bold #{if String.starts_with?(@node.status, "error"), do: "text-red-700", else: "text-emerald-700"}"}>
+              <%= @node.status %>
+            </span>
+          <% end %>
+
+          <%= if @node[:duration_ms] do %>
+            <span class="text-gray-400 font-mono text-[10px]"><%= @node.duration_ms %>ms</span>
+          <% end %>
+
+          <%= if @node[:internal] do %>
+            <span class="text-purple-600 font-mono text-[10px]">internal</span>
+          <% end %>
+
+          <%= if @node[:reason] do %>
+            <span class="text-red-600 font-mono text-[11px] truncate max-w-[24rem]" title={@node.reason}><%= @node.reason %></span>
+          <% end %>
+
+          <%= if @node[:count] do %>
+            <span class="px-1.5 py-0.5 rounded bg-red-50 text-red-700 border border-red-200 text-[10px] font-bold"><%= @node.count %>×</span>
+          <% end %>
+        </div>
+        <span class="text-gray-400 font-mono text-[10px]"><%= sample_time(@node.at) %></span>
+      </div>
+
+      <%= if @node[:message] do %>
+        <p class="font-mono text-[11px] text-gray-600 whitespace-pre-wrap break-all"><%= @node.message %></p>
+      <% end %>
+
+      <%= if @node[:request] != nil or @node[:response] != nil do %>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <details class="group" open={String.starts_with?(to_string(@node[:status]), "error")}>
+            <summary class="cursor-pointer select-none text-[10px] font-bold text-gray-500 uppercase tracking-wider py-0.5">
+              <span class="transition-transform group-open:rotate-90 inline-block text-[8px]">▶</span>
+              Sent
+            </summary>
+            <pre class="mt-1 text-[11px] overflow-x-auto p-2.5 bg-gray-950 text-emerald-300 rounded-lg border border-gray-800 font-mono leading-relaxed"><%= highlight_json(@node[:request] || %{}) %></pre>
+          </details>
+
+          <details class="group" open={String.starts_with?(to_string(@node[:status]), "error")}>
+            <summary class="cursor-pointer select-none text-[10px] font-bold text-gray-500 uppercase tracking-wider py-0.5">
+              <span class="transition-transform group-open:rotate-90 inline-block text-[8px]">▶</span>
+              Received
+            </summary>
+            <pre class="mt-1 text-[11px] overflow-x-auto p-2.5 bg-gray-950 text-emerald-300 rounded-lg border border-gray-800 font-mono leading-relaxed"><%= highlight_json(@node[:response] || %{}) %></pre>
+          </details>
+        </div>
+      <% end %>
+
+      <%= if @node.kind == :event and @node[:payload] != nil do %>
+        <details class="group">
+          <summary class="cursor-pointer select-none text-[10px] font-bold text-gray-500 uppercase tracking-wider py-0.5">
+            <span class="transition-transform group-open:rotate-90 inline-block text-[8px]">▶</span>
+            Event payload
+          </summary>
+          <pre class="mt-1 text-[11px] overflow-x-auto p-2.5 bg-gray-950 text-emerald-300 rounded-lg border border-gray-800 font-mono leading-relaxed"><%= highlight_json(@node.payload) %></pre>
+        </details>
+      <% end %>
+    </div>
+    """
+  end
+
+  defp timeline_kind_label(:query), do: "QUERY"
+  defp timeline_kind_label(:host_call), do: "HOST"
+  defp timeline_kind_label(:event), do: "EVENT"
+  defp timeline_kind_label(:log), do: "LOG"
+  defp timeline_kind_label(:error), do: "ERROR"
+  defp timeline_kind_label(_action), do: "ACTION"
+
+  defp timeline_badge_class(:query), do: "bg-sky-50 text-sky-700 border-sky-200"
+  defp timeline_badge_class(:host_call), do: "bg-indigo-50 text-indigo-700 border-indigo-200"
+  defp timeline_badge_class(:event), do: "bg-primary-50 text-primary-700 border-primary-200"
+  defp timeline_badge_class(:log), do: "bg-gray-100 text-gray-600 border-gray-200"
+  defp timeline_badge_class(:error), do: "bg-red-50 text-red-700 border-red-200"
+  defp timeline_badge_class(_action), do: "bg-purple-50 text-purple-700 border-purple-200"
+
+  defp timeline_node_class(:error), do: "bg-red-50/60 border-red-200"
+  defp timeline_node_class(:event), do: "bg-primary-50/30 border-primary-200/70"
+  defp timeline_node_class(:log), do: "bg-gray-50 border-gray-200"
+  defp timeline_node_class(_kind), do: "bg-white border-gray-200"
 
   @doc """
   Renders the full cluster events history modal ("More" button on Latest Dispatched Events).
@@ -2638,6 +2836,17 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                         <div class="flex flex-wrap items-center gap-2 text-[11px] text-gray-400">
                           <span><%= ev.time %></span>
                           <span class="text-gray-600 font-mono">#<%= ev.id %></span>
+                          <%= if ev[:context] && (ev.context[:rid] || ev.context["rid"]) do %>
+                            <button
+                              type="button"
+                              phx-click="open_timeline"
+                              phx-value-rid={ev.context[:rid] || ev.context["rid"]}
+                              class="px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-300 hover:text-white text-[10px] font-bold"
+                              title="Open this event's request timeline"
+                            >
+                              🔭
+                            </button>
+                          <% end %>
                           <%= if Map.get(ev, :source) do %>
                             <span class="px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700 font-mono">
                               src: <%= ev.source %>

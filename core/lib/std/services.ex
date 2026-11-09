@@ -61,6 +61,50 @@ defmodule Exoforge.Std.Services do
     end
   end
 
+  defservice observability do
+    @moduledoc "Cluster event history, failure groups and request timelines."
+
+    @doc "The most recent cluster events, newest first."
+    action :recent_events do
+      params(limit: [type: :integer, optional: true])
+      returns(events: [:map])
+      scope("studio")
+    end
+
+    @doc "Failures grouped by fingerprint: counts, first/last seen, callers, and a sample request."
+    action :error_groups do
+      params(
+        service: [type: :string, optional: true],
+        action: [type: :string, optional: true],
+        caller: [type: :string, optional: true],
+        rid: [type: :string, optional: true],
+        limit: [type: :integer, optional: true]
+      )
+
+      returns(groups: [:map], count: :integer)
+      scope("studio")
+    end
+
+    @doc "One request's timeline (or one caller's recent activity): calls, events, logs and failures."
+    action :timeline do
+      params(
+        rid: [type: :string, optional: true],
+        player: [type: :string, optional: true],
+        since_ms: [type: :integer, optional: true],
+        limit: [type: :integer, optional: true]
+      )
+
+      returns(nodes: [:map], count: :integer)
+      scope("studio")
+    end
+
+    @doc "Drops the in-memory ring and the persisted event history."
+    action :clear_events do
+      returns(status: :string)
+      scope("admin")
+    end
+  end
+
   defservice dashboard do
     @moduledoc "Dashboard host and studio server contract."
 
@@ -85,20 +129,6 @@ defmodule Exoforge.Std.Services do
       params(view_id: [type: :atom, optional: true])
       returns(data: :map)
       scope(:server)
-    end
-
-    @doc "Failures grouped by fingerprint: counts, first/last seen, callers, and a sample request."
-    action :error_groups do
-      params(
-        service: [type: :string, optional: true],
-        action: [type: :string, optional: true],
-        caller: [type: :string, optional: true],
-        rid: [type: :string, optional: true],
-        limit: [type: :integer, optional: true]
-      )
-
-      returns(groups: [:map], count: :integer)
-      scope(:studio)
     end
 
     @doc "Retrieves global project metadata."

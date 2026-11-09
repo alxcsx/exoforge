@@ -1,7 +1,7 @@
 # Exoforge Operating Manual (`Agents.MD`)
 
 > **Branch**: `projetao_mvp`  
-> **Status**: Kernel, 14 standard extensions, C# Client & Extension SDKs, C# Management Engine (`exo` CLI), Unity SDK (`com.exoforge.sdk` v0.1.37), Producer Studio and the extension runtime are **complete** — **320 Elixir + 140 C# = 460 tests passing**, plus a live E2E vertical slice of 6 tests and Unity headless self-check (`just sample-check`).  
+> **Status**: Kernel, 15 standard extensions, C# Client & Extension SDKs, C# Management Engine (`exo` CLI), Unity SDK (`com.exoforge.sdk` v0.1.37), Producer Studio and the extension runtime are **complete** — **320 Elixir + 140 C# = 460 tests passing**, plus a live E2E vertical slice of 6 tests and Unity headless self-check (`just sample-check`).  
 > **MVP Execution Plan**: Phase 0 (ADR 001) & Phase 1 (Extension Terminology Bulldozer) **Completed**.  
 > **Verified Benchmark**: 0.07 ms fanout to 50 event subscribers over `:pg` (in-memory cluster pub/sub bus).
 
@@ -62,6 +62,8 @@ database ──▶ auth ──▶ player_data
                └──▶ ws   (:4000)
 
 dashboard (:4005) ──▶ dashboard_views
+dashboard (:4005) ──▶ observability
+observability ──▶ database
 extension_manager ──▶ (independent root)
 docs        ──▶ extension_manager
 resources   ──▶ database
@@ -83,6 +85,7 @@ file_bucket ──▶ database
 | `exoforge_std_resources` | Store | `resource_store` | `database` | Schema-driven resource tables and generic CRUD. |
 | `exoforge_std_file_bucket` | Storage / CDN | `file_bucket` | `database` | Pluggable binary/blob asset storage with tags, metadata, and HTTP file routes. |
 | `exoforge_std_metering` | Operations | `metering` | `database` | Usage metering per extension and action, persisted on the instance. |
+| `exoforge_std_observability` | Debug / History | `observability` | `database` | Cluster event history and the joins behind it: request timelines, failure groups, live-tail reads. |
 | `exoforge_std_transport` | Gateway Abstraction | `transport` | — | Common gateway abstraction, framing normalization, and RPC dispatching for network ingress. |
 | `exoforge_std_cron` | Operations | `cron` | — | Scheduled background task execution and recurring cron runner. |
 
@@ -119,6 +122,7 @@ file_bucket ──▶ database
 - **Extension Inspector**: The extension inspector is a side-tab modal — Overview, Actions, Events, Resources, Contracts, Logs, Docs. Docs come from `Code.fetch_docs` on the extension and its contract modules; Resources also renders `:extension_inspect` hooks. Logs page through the persisted buffer.
 - **Paging**: Anything that can outgrow a screen pages on the server, not in the template: the users directory (`auth.list_users` with `limit`/`offset`/`search`/`scope`), resource rows (`resource_store.list` through `ExtensionRegistry.page_resource_rows`), extension logs, and the action invocation inspector (retained samples with status filter and pages). The file bucket loads more on demand.
 - **Action & Event Throughput Pipeline**: `ActionDispatcher` records invocation counts, latencies, and status results into `Exoforge.Metering`. The Studio graphs are a real time series: `Exoforge.ActionTrace` (opt-in, memory-only, 30 one-minute buckets) counts every action per minute, per action and per caller, and the overview and popup charts render one line per action over that window. Error graphs plot series with errors and keep a dashed emerald baseline when there are none.
+- **Request Timeline**: `observability.timeline` joins one request's calls (and, for a captured request, its queries and host calls), the events it raised, its log lines and its failure on the request id; the Studio's timeline drawer opens from an error group, a trace sample or an event row, or from a pasted rid. The event history itself lives in `exoforge_std_observability`, not in the Studio: the kernel produces the bounded primitives (`ActionTrace`, `ErrorGroups`, `ExtensionLogs`, `Metering`), the extension owns the store and the query contract.
 - **User Activity Tab**: a user's inspector has an Events tab that shows only the events attributed to that account — by origin (the chain they started), by transport caller, or by the player id in the payload (login/register). It reads the same live buffer as the console, so it updates as the account acts.
 - **Invocation Inspector & Tracking Filters**: opting into the trace also keeps a bounded sample ring (previews only: size-capped, credential fields masked, never persisted). Each action row in the popup unfolds into its recent invocations with the sent payload and the received/error body. A caller dropdown filters graphs and samples by `userId`/origin (`player`, `studio`, `cron`, `webhook`, `internal`), and a per-account "tracked services" multi-select — shared by the popup, the event modal and the event dock — narrows what the graphs aggregate and what the console lists.
 - **Live Stream Modal & Syntax Highlighting**: Real-time console popups (85vh viewport) render server-side syntax-highlighted JSON (`sky-300` keys, `emerald-300` strings, `amber-300` numbers, `purple-300` literals, `rose-400 font-bold` errors). Payloads fold interactively with field counters and error badges (`is_event_error?/1`).

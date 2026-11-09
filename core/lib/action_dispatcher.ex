@@ -110,117 +110,164 @@ defmodule Exoforge.ActionDispatcher do
   end
 
   defp record_action_telemetry(service, action, payload, result, latency_us, resolved_mod, opts, internal?) do
-    if service not in [:database, :lldb] do
-      status_str =
-        case result do
-          {:ok, _} -> "ok"
-          :ok -> "ok"
-          {:error, reason} -> "error: #{inspect(reason)}"
-          _ -> "ok"
-        end
-
-      duration_ms = div(latency_us, 1000)
-
-      # 0. The console's debug window, when an observer asked for it (opt-in, memory only, bounded,
-      # payload previews masked). Kept off the event bus: payloads are not cluster events.
-      Exoforge.ActionTrace.record(
-        service,
-        action,
-        Keyword.get(opts, :caller, "client"),
-        payload,
-        result,
-        duration_ms,
-        internal?
-      )
-
-      # 0b. Group the failure by what broke, with one masked sample of the request that failed.
+    status_str =
       case result do
-        {:error, reason} ->
-          Exoforge.ErrorGroups.record(
+        {:ok, _} -> "ok"
+        :ok -> "ok"
+        {:error, reason} -> "error: #{inspect(reason)}"
+        _ -> "ok"
+      end
+
+    duration_ms = div(latency_us, 1000)
+
+    cond do
+      # The debugger reading itself is noise in the debugger.
+      service == :observability ->
+        :ok
+
+      # Queries are excluded from metering and the event feed — every action runs one or two — but
+      # they are the answer to "why was this slow", so a captured request keeps them in its trace.
+      service in [:database, :lldb] ->
+        if Exoforge.RequestContext.capturing?() do
+          Exoforge.ActionTrace.record(
             service,
             action,
             Keyword.get(opts, :caller, "client"),
-            Exoforge.RequestContext.rid(),
             payload,
-            reason
+            result,
+            duration_ms,
+            internal?,
+            :query
           )
+        end
 
-        _ ->
-          :ok
-      end
-
-      # 1. Broadcast action event over EventDispatcher (RecentEvents listens to :all on :global)
-      try do
-        Exoforge.EventDispatcher.broadcast(
-          "action:#{service}.#{action}",
-          %{
-            service: service,
-            action: action,
-            status: status_str,
-            duration_ms: duration_ms,
-            internal: internal?,
-            rid: Exoforge.RequestContext.rid()
-          },
-          topic: :global,
-          source: to_string(Keyword.get(opts, :caller, "client"))
+      true ->
+        record_action(
+          service,
+          action,
+          payload,
+          result,
+          status_str,
+          latency_us,
+          duration_ms,
+          resolved_mod,
+          opts,
+          internal?
         )
-      rescue
-        _ -> :ok
-      catch
-        _, _ -> :ok
-      end
+    end
+  end
 
-      # 2. Append to ExtensionLogs for the providing extension
-      try do
-        manifest =
-          case resolved_mod do
-            %Manifest{} = m ->
-              m
+  defp record_action(
+         service,
+         action,
+         payload,
+         result,
+         status_str,
+         latency_us,
+         duration_ms,
+         resolved_mod,
+         opts,
+         internal?
+       ) do
+    # 0. The console's debug window, when an observer asked for it (opt-in, memory only, bounded,
+    # payload previews masked). Kept off the event bus: payloads are not cluster events.
+    Exoforge.ActionTrace.record(
+      service,
+      action,
+      Keyword.get(opts, :caller, "client"),
+      payload,
+      result,
+      duration_ms,
+      internal?
+    )
 
-            mod when is_atom(mod) and not is_nil(mod) ->
-              if function_exported?(mod, :manifest, 0) do
-                mod.manifest()
-              else
-                ExtensionRegistry.fetch_service(service) || ExtensionRegistry.fetch_manifest(service)
-              end
+    # 0b. Group the failure by what broke, with one masked sample of the request that failed.
+    case result do
+      {:error, reason} ->
+        Exoforge.ErrorGroups.record(
+          service,
+          action,
+          Keyword.get(opts, :caller, "client"),
+          Exoforge.RequestContext.rid(),
+          payload,
+          reason
+        )
 
-            _ ->
+      _ ->
+        :ok
+    end
+
+    # 1. Broadcast action event over EventDispatcher (RecentEvents listens to :all on :global)
+    try do
+      Exoforge.EventDispatcher.broadcast(
+        "action:#{service}.#{action}",
+        %{
+          service: service,
+          action: action,
+          status: status_str,
+          duration_ms: duration_ms,
+          internal: internal?,
+          rid: Exoforge.RequestContext.rid()
+        },
+        topic: :global,
+        source: to_string(Keyword.get(opts, :caller, "client"))
+      )
+    rescue
+      _ -> :ok
+    catch
+      _, _ -> :ok
+    end
+
+    # 2. Append to ExtensionLogs for the providing extension
+    try do
+      manifest =
+        case resolved_mod do
+          %Manifest{} = m ->
+            m
+
+          mod when is_atom(mod) and not is_nil(mod) ->
+            if function_exported?(mod, :manifest, 0) do
+              mod.manifest()
+            else
               ExtensionRegistry.fetch_service(service) || ExtensionRegistry.fetch_manifest(service)
-          end
+            end
 
-        ext_id =
-          cond do
-            manifest && is_binary(manifest.id) -> manifest.id
-            manifest && is_atom(manifest.id) -> to_string(manifest.id)
-            true -> to_string(service)
-          end
-
-        if manifest && is_binary(manifest.id) do
-          level = if status_str == "ok", do: 1, else: 2
-
-          Exoforge.ExtensionLogs.append(
-            manifest.id,
-            level,
-            "[action] #{service}.#{action} -> #{status_str} (#{duration_ms}ms)"
-          )
+          _ ->
+            ExtensionRegistry.fetch_service(service) || ExtensionRegistry.fetch_manifest(service)
         end
 
-        # 3. Record in Metering for non-native extensions (native runner tracks its own stdio port bytes)
-        is_native =
-          case resolved_mod do
-            %Manifest{type: :native} -> true
-            _ -> false
-          end
-
-        unless is_native do
-          status_atom = if status_str == "ok", do: :ok, else: :error
-          Exoforge.Metering.record_invocation(ext_id, action, latency_us, status_atom, 0, 0)
+      ext_id =
+        cond do
+          manifest && is_binary(manifest.id) -> manifest.id
+          manifest && is_atom(manifest.id) -> to_string(manifest.id)
+          true -> to_string(service)
         end
-      rescue
-        _ -> :ok
-      catch
-        _, _ -> :ok
+
+      if manifest && is_binary(manifest.id) do
+        level = if status_str == "ok", do: 1, else: 2
+
+        Exoforge.ExtensionLogs.append(
+          manifest.id,
+          level,
+          "[action] #{service}.#{action} -> #{status_str} (#{duration_ms}ms)"
+        )
       end
+
+      # 3. Record in Metering for non-native extensions (native runner tracks its own stdio port bytes)
+      is_native =
+        case resolved_mod do
+          %Manifest{type: :native} -> true
+          _ -> false
+        end
+
+      unless is_native do
+        status_atom = if status_str == "ok", do: :ok, else: :error
+        Exoforge.Metering.record_invocation(ext_id, action, latency_us, status_atom, 0, 0)
+      end
+    rescue
+      _ -> :ok
+    catch
+      _, _ -> :ok
     end
   end
 

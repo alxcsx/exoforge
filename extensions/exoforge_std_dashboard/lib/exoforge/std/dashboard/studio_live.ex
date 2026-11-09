@@ -12,7 +12,6 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   alias Exoforge.ExtensionRegistry
   alias Exoforge.Std.Dashboard.ActionForms
   alias Exoforge.Std.Dashboard.ExtensionPresenter
-  alias Exoforge.Std.Dashboard.RecentEvents
 
   @max_pinned 4
 
@@ -51,9 +50,10 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     if connected?(socket) do
       Logger.info("[StudioLive] Connected session for #{player_id}")
 
-      # Subscribes to cluster events via RecentEvents PubSub broadcast
+      # The Studio is an event-bus client like any other: it keeps its own live tail from the
+      # kernel, and asks the observability extension for history when it mounts.
       try do
-        Phoenix.PubSub.subscribe(Exoforge.Std.Dashboard.PubSub, "studio_events")
+        Exoforge.EventDispatcher.subscribe(:all, topic: :global)
         :timer.send_interval(5000, self(), :refresh_telemetry)
       rescue
         _ -> :ok
@@ -84,21 +84,24 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
           ext.dashboard_view != nil
       end)
 
-    stored_events = RecentEvents.list(50)
+    stored_events =
+      case ActionDispatcher.dispatch_internal(:observability, :recent_events, %{limit: 50}) do
+        {:ok, %{events: events}} when is_list(events) -> events
+        _ -> []
+      end
 
     initial_events =
       if stored_events != [] do
         stored_events
       else
-        boot_ev = %{
-          id: "ev_boot_1",
-          event: "kernel:ready",
-          payload: %{node: to_string(node()), plugins: overview.plugins_count},
-          time: "Just now"
-        }
-
-        RecentEvents.record("kernel:ready", boot_ev.payload)
-        [boot_ev]
+        [
+          %{
+            id: "ev_boot_1",
+            event: "kernel:ready",
+            payload: %{node: to_string(node()), plugins: overview.plugins_count},
+            time: "Just now"
+          }
+        ]
       end
 
     default_service = List.first(action_catalog)
@@ -140,6 +143,9 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
        actions_detail_tab: "all",
        actions_detail_caller: "",
        actions_detail_expansion: nil,
+       timeline_open: false,
+       timeline_rid: "",
+       timeline_nodes: [],
        tracked_services: tracked_services,
        visualizable_extensions: visualizable_extensions,
        cmd_palette_open: false,
@@ -827,6 +833,20 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
      )}
   end
 
+  def handle_event("open_timeline", params, socket) do
+    rid = Map.get(params, "rid", "") |> to_string()
+    socket = assign(socket, timeline_open: true, timeline_rid: rid)
+    {:noreply, if(rid == "", do: socket, else: load_timeline(socket))}
+  end
+
+  def handle_event("close_timeline", _params, socket) do
+    {:noreply, assign(socket, :timeline_open, false)}
+  end
+
+  def handle_event("search_timeline", %{"rid" => rid}, socket) do
+    {:noreply, socket |> assign(timeline_rid: rid) |> load_timeline()}
+  end
+
   def handle_event("close_actions_detail_modal", _params, socket) do
     {:noreply,
      socket
@@ -1070,7 +1090,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   end
 
   def handle_event("clear_events", _params, socket) do
-    RecentEvents.clear()
+    _ = ActionDispatcher.dispatch_internal(:observability, :clear_events, %{})
     {:noreply, assign(socket, activity_events: [], filtered_activity_events: [])}
   end
 
@@ -1100,7 +1120,9 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   # ---- REAL-TIME EVENT STREAM FROM BEAM EventDispatcher ----
 
   @impl true
-  def handle_info({:studio_event, ev_item}, socket) do
+  def handle_info({:exo_event, event_key, payload, context}, socket) do
+    ev_item = event_item(event_key, payload, context)
+
     if duplicate_event?(
          socket.assigns.activity_events,
          ev_item.event,
@@ -1167,11 +1189,6 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     end
   end
 
-  def handle_info({:exo_event, event_key, payload, context}, socket) do
-    _ = RecentEvents.record(event_key, payload, context)
-    {:noreply, socket}
-  end
-
   def handle_info(:clear_event_highlight, socket) do
     {:noreply, assign(socket, :highlight_event_id, nil)}
   end
@@ -1222,6 +1239,36 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   defp color_for_name(name, palette) do
     idx = :erlang.phash2(to_string(name), length(palette))
     Enum.at(palette, idx)
+  end
+
+  defp event_item(event_key, payload, context) do
+    %{
+      id: "ev_#{System.unique_integer([:positive])}",
+      event: to_string(event_key),
+      payload: payload,
+      context: context,
+      time: Calendar.strftime(DateTime.utc_now(), "%H:%M:%S"),
+      timestamp: System.system_time(:microsecond)
+    }
+  end
+
+  # What raised an event: action dispatches announce themselves by name, and cron/webhook runs
+  # carry their origin, so a scheduler-dispatched action still counts as cron.
+  defp event_kind(%{event: event} = item) do
+    key = to_string(event)
+
+    source =
+      case Map.get(item, :context) do
+        %{} = ctx -> to_string(ctx[:source] || ctx["source"] || "")
+        _ -> ""
+      end
+
+    cond do
+      String.starts_with?(key, "cron") or source == "cron" -> "cron"
+      String.starts_with?(key, "webhook") or source == "webhook" -> "webhook"
+      String.starts_with?(key, "action:") -> "action"
+      true -> "event"
+    end
   end
 
   defp duplicate_event?(events, event_key, payload, id) do
@@ -1427,6 +1474,18 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   defp humanize_plugin_name(ext_or_id), do: ExtensionPresenter.display_name(ext_or_id)
   defp tab_short_name(ext_or_id), do: ExtensionPresenter.display_name(ext_or_id)
 
+  defp load_timeline(socket) do
+    nodes =
+      case ActionDispatcher.dispatch_internal(:observability, :timeline, %{
+             rid: socket.assigns.timeline_rid
+           }) do
+        {:ok, %{nodes: nodes}} when is_list(nodes) -> nodes
+        _ -> []
+      end
+
+    assign(socket, :timeline_nodes, nodes)
+  end
+
   defp expand_actions(socket, key, %{page: page, errors_only: errors_only?}) do
     expansion = %{
       key: key,
@@ -1479,9 +1538,9 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     q = String.downcase(String.trim(query || ""))
 
     events
-    |> Enum.filter(fn ev -> kind in ["all", nil, ""] or RecentEvents.kind(ev) == kind end)
+    |> Enum.filter(fn ev -> kind in ["all", nil, ""] or event_kind(ev) == kind end)
     |> Enum.filter(fn ev ->
-      tracked in [[], nil] or RecentEvents.kind(ev) != "action" or
+      tracked in [[], nil] or event_kind(ev) != "action" or
         action_service(trace_key(ev.event)) in tracked
     end)
     |> Enum.filter(fn ev ->
@@ -1773,7 +1832,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     time_labels = ["-30m", "-24m", "-18m", "-12m", "-6m", "now"]
     x_coords = [40, 128, 216, 304, 392, 480]
 
-    action_events = Enum.filter(activity_events || [], &(RecentEvents.kind(&1) == "action"))
+    action_events = Enum.filter(activity_events || [], &(event_kind(&1) == "action"))
 
     # Newest first in the buffer, so the first error seen for a key is the last one that happened.
     last_errors =
@@ -3039,6 +3098,14 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       />
 
       <!-- Cluster Events Stream Modal -->
+      <.timeline_modal
+        open={@timeline_open}
+        rid={@timeline_rid}
+        nodes={@timeline_nodes}
+        on_close="close_timeline"
+        on_search="search_timeline"
+      />
+
       <.events_modal
         open={@events_modal_open}
         events={@filtered_activity_events}

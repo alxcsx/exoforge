@@ -1,15 +1,18 @@
-defmodule Exoforge.Std.Dashboard.RecentEvents do
+defmodule Exoforge.Std.Observability.Events do
   @moduledoc """
-  In-memory ring buffer of recent cluster events and action dispatches.
-  Supervised background worker that stays subscribed to EventDispatcher {:all, topic: :global}
-  and persists all cluster events into ETS so the Studio overview and modals always
-  have the real, cluster-wide event stream even across LiveView reconnections.
+  The cluster-wide event history: a ring in ETS for the live tail, and the persisted store the
+  Studio and the other surfaces read through `observability.recent_events`.
+
+  One subscriber for the whole node, on the global event bus. Events are deduplicated inside a
+  short window (the same broadcast can be delivered through more than one subscription) and
+  written asynchronously to this extension's isolated database; a write failure never blocks the
+  stream. Retention, roll-ups and the cold archive build on this table (M42).
   """
   use GenServer
 
-  @table :exo_dashboard_recent_events
+  @table :exo_observability_events
   @max_events 50
-  @pubsub_topic "studio_events"
+  @db_table "events"
 
   def start_link(opts \\ []) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
@@ -21,7 +24,6 @@ defmodule Exoforge.Std.Dashboard.RecentEvents do
     ensure_schema()
     warmup_from_db()
 
-    # Subscribe to all events across all topics via the global fallback in EventDispatcher
     try do
       Exoforge.EventDispatcher.subscribe(:all, topic: :global)
     rescue
@@ -33,24 +35,14 @@ defmodule Exoforge.Std.Dashboard.RecentEvents do
 
   @impl true
   def handle_info({:exo_event, event_key, payload, context}, state) do
-    if duplicate?(event_key, payload) do
-      {:noreply, state}
-    else
-      item = record(event_key, payload, context)
-
-      try do
-        Phoenix.PubSub.broadcast(Exoforge.Std.Dashboard.PubSub, @pubsub_topic, {:studio_event, item})
-      rescue
-        _ -> :ok
-      end
-
-      {:noreply, state}
+    unless duplicate?(event_key, payload) do
+      record(event_key, payload, context)
     end
-  end
 
-  def handle_info(_msg, state) do
     {:noreply, state}
   end
+
+  def handle_info(_msg, state), do: {:noreply, state}
 
   defp duplicate?(event_key, payload) do
     key_str = to_string(event_key)
@@ -78,7 +70,7 @@ defmodule Exoforge.Std.Dashboard.RecentEvents do
     end
   end
 
-  @doc "Records a dispatched event or action invocation into the shared buffer."
+  @doc "Records one event into the ring and persists it asynchronously."
   def record(event_key, payload, context \\ %{}) do
     init_table()
     id = "ev_#{System.unique_integer([:positive])}"
@@ -105,7 +97,7 @@ defmodule Exoforge.Std.Dashboard.RecentEvents do
     item
   end
 
-  @doc "Returns the most recent events ordered newest first."
+  @doc "The most recent events, newest first."
   def list(limit \\ 50) do
     init_table()
 
@@ -116,48 +108,33 @@ defmodule Exoforge.Std.Dashboard.RecentEvents do
 
           case :ets.tab2list(@table) do
             [] -> []
-            list ->
-              list
-              |> Enum.sort_by(&elem(&1, 0))
-              |> Enum.take(limit)
-              |> Enum.map(&elem(&1, 1))
+            list -> sort_and_take(list, limit)
           end
 
         list ->
-          list
-          |> Enum.sort_by(&elem(&1, 0))
-          |> Enum.take(limit)
-          |> Enum.map(&elem(&1, 1))
+          sort_and_take(list, limit)
       end
     rescue
       _ -> []
     end
   end
 
-  @doc """
-  What produced the event: `"action"`, `"webhook"`, `"cron"` or `"event"`.
-
-  Action dispatches announce themselves as `action:<service>.<action>`; webhook and cron
-  callers tag the dispatch so the stream can be filtered by origin.
-  """
-  def kind(%{event: event} = item) do
-    key = to_string(event)
-    source =
-      case Map.get(item, :context) do
-        %{} = ctx -> to_string(ctx[:source] || ctx["source"] || "")
-        _ -> ""
-      end
-
-    cond do
-      String.starts_with?(key, "cron") or source == "cron" -> "cron"
-      String.starts_with?(key, "webhook") or source == "webhook" -> "webhook"
-      String.starts_with?(key, "action:") -> "action"
-      true -> "event"
-    end
+  @doc "The stored events of one request, oldest first."
+  def for_rid(rid) when is_binary(rid) and rid != "" do
+    list(@max_events)
+    |> Enum.filter(fn event ->
+      context = Map.get(event, :context) || %{}
+      to_string(context[:rid] || context["rid"] || "") == rid
+    end)
+    |> Enum.reverse()
   end
 
+  def for_rid(_), do: []
+
+  @doc "Drops the ring and the persisted history (a Studio/admin reset)."
   def clear do
     init_table()
+
     try do
       :ets.delete_all_objects(@table)
     rescue
@@ -167,8 +144,8 @@ defmodule Exoforge.Std.Dashboard.RecentEvents do
     Task.start(fn ->
       try do
         Exoforge.ActionDispatcher.dispatch_internal(:database, :execute, %{
-          plugin: :dashboard,
-          operation: "DELETE FROM recent_events"
+          plugin: :observability,
+          operation: "DELETE FROM #{@db_table}"
         })
       rescue
         _ -> :ok
@@ -176,6 +153,15 @@ defmodule Exoforge.Std.Dashboard.RecentEvents do
         _, _ -> :ok
       end
     end)
+
+    :ok
+  end
+
+  defp sort_and_take(list, limit) do
+    list
+    |> Enum.sort_by(&elem(&1, 0))
+    |> Enum.take(limit)
+    |> Enum.map(&elem(&1, 1))
   end
 
   defp trim do
@@ -209,19 +195,12 @@ defmodule Exoforge.Std.Dashboard.RecentEvents do
           end
 
         Exoforge.ActionDispatcher.dispatch_internal(:database, :execute, %{
-          plugin: :dashboard,
+          plugin: :observability,
           operation: """
-          INSERT INTO recent_events (id, event, payload, context, time, timestamp)
+          INSERT INTO #{@db_table} (id, event, payload, context, time, timestamp)
           VALUES ($1, $2, $3, $4, $5, $6)
           """,
-          arguments: [
-            item.id,
-            item.event,
-            payload_str,
-            context_str,
-            item.time,
-            item.timestamp
-          ]
+          arguments: [item.id, item.event, payload_str, context_str, item.time, item.timestamp]
         })
       rescue
         _ -> :ok
@@ -232,12 +211,12 @@ defmodule Exoforge.Std.Dashboard.RecentEvents do
   end
 
   defp ensure_schema do
-    case :ets.info(:exo_recent_events_schema) do
+    case :ets.info(:exo_observability_events_schema) do
       :undefined ->
         case do_create_schema() do
           :ok ->
             try do
-              :ets.new(:exo_recent_events_schema, [:named_table, :public, :set])
+              :ets.new(:exo_observability_events_schema, [:named_table, :public, :set])
             rescue
               _ -> :ok
             end
@@ -254,9 +233,9 @@ defmodule Exoforge.Std.Dashboard.RecentEvents do
   defp do_create_schema do
     try do
       case Exoforge.ActionDispatcher.dispatch_internal(:database, :execute, %{
-             plugin: :dashboard,
+             plugin: :observability,
              operation: """
-             CREATE TABLE IF NOT EXISTS recent_events (
+             CREATE TABLE IF NOT EXISTS #{@db_table} (
                id text PRIMARY KEY,
                event text,
                payload text,
@@ -282,18 +261,16 @@ defmodule Exoforge.Std.Dashboard.RecentEvents do
 
     try do
       case Exoforge.ActionDispatcher.dispatch_internal(:database, :execute, %{
-             plugin: :dashboard,
+             plugin: :observability,
              operation:
-               "SELECT id, event, payload, context, time, timestamp FROM recent_events ORDER BY timestamp DESC LIMIT #{@max_events}"
+               "SELECT id, event, payload, context, time, timestamp FROM #{@db_table} " <>
+                 "ORDER BY timestamp DESC LIMIT #{@max_events}"
            }) do
         {:ok, %{rows: rows}} when is_list(rows) ->
           Enum.each(rows, fn row ->
             case parse_db_row(row) do
-              nil ->
-                :ok
-
-              item ->
-                :ets.insert_new(@table, {-item.timestamp, item})
+              nil -> :ok
+              item -> :ets.insert_new(@table, {-item.timestamp, item})
             end
           end)
 
@@ -311,24 +288,32 @@ defmodule Exoforge.Std.Dashboard.RecentEvents do
     try do
       payload =
         case row["payload"] do
-          nil -> %{}
+          nil ->
+            %{}
+
           bin when is_binary(bin) ->
             case Jason.decode(bin) do
               {:ok, decoded} -> decoded
               _ -> bin
             end
-          other -> other
+
+          other ->
+            other
         end
 
       context =
         case row["context"] do
-          nil -> %{}
+          nil ->
+            %{}
+
           bin when is_binary(bin) ->
             case Jason.decode(bin) do
               {:ok, decoded} -> decoded
               _ -> %{}
             end
-          other -> other
+
+          other ->
+            other
         end
 
       %{

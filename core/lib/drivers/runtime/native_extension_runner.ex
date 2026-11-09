@@ -493,6 +493,21 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
 
     try do
       result = run_host_call(op, args || %{}, state.manifest)
+
+      # A captured request keeps the boundary crossing: the extension asked the host for this.
+      if Exoforge.RequestContext.capturing?() do
+        Exoforge.ActionTrace.record(
+          state.manifest.id,
+          op,
+          Exoforge.RequestContext.origin(),
+          args || %{},
+          result,
+          0,
+          true,
+          :host_call
+        )
+      end
+
       Exoforge.Metering.record_host_call(state.manifest.id, op)
       response = Jason.encode!(%{type: "host_call_result", id: id, result: sanitize(result)})
       Port.command(state.port, response <> "\n")

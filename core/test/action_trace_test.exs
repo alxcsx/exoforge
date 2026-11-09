@@ -121,6 +121,25 @@ defmodule Exoforge.ActionTraceTest do
     assert sample.caller == "client"
   end
 
+  test "a captured request records its queries; an ordinary one does not" do
+    assert {:error, :service_not_found} =
+             ActionDispatcher.dispatch(:database, :execute, %{}, caller: "alice")
+
+    assert Exoforge.ActionTrace.samples("database.execute").samples == []
+
+    previous =
+      Exoforge.RequestContext.enter(%{origin: "alice", rid: "r_capture", depth: 0, capture: :deep})
+
+    assert {:error, :service_not_found} =
+             ActionDispatcher.dispatch(:database, :execute, %{}, caller: "alice")
+
+    Exoforge.RequestContext.restore(previous)
+
+    assert %{samples: [sample]} = Exoforge.ActionTrace.samples("database.execute")
+    assert sample.kind == :query
+    assert sample.rid == "r_capture"
+  end
+
   test "for_rid returns only the samples of one request" do
     alice = %{origin: "alice", rid: "r_one", depth: 0, capture: :off}
     previous = Exoforge.RequestContext.enter(alice)

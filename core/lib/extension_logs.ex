@@ -110,7 +110,13 @@ defmodule Exoforge.ExtensionLogs do
   This is what a `rid` buys over the old "everything in the last 50 ms" heuristic: concurrent
   requests no longer read each other's logs.
   """
-  def for_rid(rid) when is_binary(rid) and rid != "" do
+  def for_rid(rid) do
+    entries_for_rid(rid)
+    |> Enum.map(fn entry -> "[#{String.upcase(entry.level_name)}] #{entry.message}" end)
+  end
+
+  @doc "The same lines as `for_rid/1`, structured for the request timeline."
+  def entries_for_rid(rid) when is_binary(rid) and rid != "" do
     ensure_table()
 
     @table
@@ -120,12 +126,12 @@ defmodule Exoforge.ExtensionLogs do
       _ -> false
     end)
     |> Enum.sort_by(fn {_id, at, _level, _message, _rid} -> at end)
-    |> Enum.map(fn {_id, _at, level, message, _rid} ->
-      "[#{String.upcase(level_name(level))}] #{message}"
+    |> Enum.map(fn {_id, at, level, message, _rid} ->
+      %{at: at, level: level, level_name: level_name(level), message: message, rid: rid}
     end)
   end
 
-  def for_rid(_), do: []
+  def entries_for_rid(_), do: []
 
   @doc "Drops every recorded line for an extension (called when it is removed)."
   def clear(extension_id) do

@@ -46,12 +46,21 @@ defmodule Exoforge.DashboardLiveViewTest do
       start_supervised!(Endpoint)
     end
 
-    unless Process.whereis(Exoforge.Std.Dashboard.RecentEvents) do
-      start_supervised!(Exoforge.Std.Dashboard.RecentEvents)
+    unless Process.whereis(Exoforge.Std.Observability.Events) do
+      start_supervised!(Exoforge.Std.Observability.Events)
     end
 
-    Exoforge.Std.Dashboard.RecentEvents.init_table()
-    Exoforge.Std.Dashboard.RecentEvents.clear()
+    _ = Exoforge.Std.Observability.Events.clear()
+
+    ExtensionRegistry.register(%Exoforge.Domain.Manifest{
+      id: :exoforge_std_observability,
+      name: "exoforge_std_observability",
+      version: "0.1.0",
+      entry_point: Exoforge.Std.Observability,
+      provides: [Exoforge.Std.Services.Observability],
+      category: "System",
+      system: true
+    })
 
     ExtensionRegistry.register(%Exoforge.Domain.Manifest{
       id: :exoforge_std_database,
@@ -652,19 +661,13 @@ defmodule Exoforge.DashboardLiveViewTest do
                  email: "#{viewer}@exoforge.test"
                })
 
-      own =
-        Exoforge.Std.Dashboard.RecentEvents.record(
-          "action:player_data.update_player",
-          %{player_id: viewer, status: "ok"},
-          %{origin: viewer, source: viewer, topic: "global"}
-        )
+      own_key = "action:player_data.update_player"
+      own_payload = %{player_id: viewer, status: "ok"}
+      own_context = %{origin: viewer, source: viewer, topic: "global", rid: "r_viewer"}
 
-      other =
-        Exoforge.Std.Dashboard.RecentEvents.record(
-          "action:someone_else.only_here",
-          %{player_id: "someone_else", status: "ok"},
-          %{origin: "someone_else", source: "someone_else", topic: "global"}
-        )
+      other_key = "action:someone_else.only_here"
+      other_payload = %{player_id: "someone_else", status: "ok"}
+      other_context = %{origin: "someone_else", source: "someone_else", topic: "global"}
 
       conn =
         build_conn()
@@ -677,8 +680,8 @@ defmodule Exoforge.DashboardLiveViewTest do
 
       assert html =~ "Events"
 
-      send(view.pid, {:studio_event, own})
-      send(view.pid, {:studio_event, other})
+      send(view.pid, {:exo_event, own_key, own_payload, own_context})
+      send(view.pid, {:exo_event, other_key, other_payload, other_context})
       _ = render(view)
 
       html =
@@ -1194,8 +1197,12 @@ defmodule Exoforge.DashboardLiveViewTest do
 
       # Broadcast a cluster event to verify live event feed update
       refute html =~ "Emit Test Event"
-      ev_item = Exoforge.Std.Dashboard.RecentEvents.record("auth.login", %{player_id: "user_42"})
-      send(view.pid, {:studio_event, ev_item})
+      send(
+        view.pid,
+        {:exo_event, "auth.login", %{player_id: "user_42"},
+         %{origin: "user_42", source: "user_42", topic: "global"}}
+      )
+
       feed_html = render(view)
       assert feed_html =~ "auth.login"
       assert feed_html =~ "Live Stream Events"
@@ -1254,15 +1261,17 @@ defmodule Exoforge.DashboardLiveViewTest do
 
       {:ok, view, _html} = live(conn, "/")
 
-      ev =
-        Exoforge.Std.Dashboard.RecentEvents.record("action:dashboard_view.list_views", %{
-          service: :dashboard_view,
-          action: :list_views,
-          status: "error: :unauthorized",
-          duration_ms: 2
-        })
+      send(
+        view.pid,
+        {:exo_event, "action:dashboard_view.list_views",
+         %{
+           service: :dashboard_view,
+           action: :list_views,
+           status: "error: :unauthorized",
+           duration_ms: 2
+         }, %{origin: "client", source: "client", topic: "global"}}
+      )
 
-      send(view.pid, {:studio_event, ev})
       _ = render(view)
 
       html = render_click(view, "open_actions_detail_modal", %{"mode" => "errors"})
@@ -1314,6 +1323,26 @@ defmodule Exoforge.DashboardLiveViewTest do
       assert html =~ "1 tracked"
       html = render_click(view, "toggle_tracked_service", %{"service" => ""})
       assert html =~ "All services"
+    end
+
+    test "the request timeline joins an action and its failure by request id" do
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{"admin_player_id" => "admin", "admin_scopes" => ["admin"]})
+
+      {:ok, view, _html} = live(conn, "/")
+
+      # Mounting enables the trace; a dispatch after that carries its rid into the trace and the
+      # failure group, which is what the timeline reads.
+      assert {:error, :service_not_found} =
+               Exoforge.ActionDispatcher.dispatch(:ghost_timeline, :do_thing, %{}, rid: "r_ui_1")
+
+      html = render_click(view, "open_timeline", %{"rid" => "r_ui_1"})
+
+      assert html =~ "Request Timeline"
+      assert html =~ "ghost_timeline.do_thing"
+      assert html =~ "ACTION"
+      assert html =~ "r_ui_1"
     end
 
     test "the error mode groups failures and shows the request id of the last one" do

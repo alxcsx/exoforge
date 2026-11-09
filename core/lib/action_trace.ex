@@ -40,7 +40,7 @@ defmodule Exoforge.ActionTrace do
   @doc """
   Records one invocation. Never raises into the caller: a trace is diagnostics, not a dependency.
   """
-  def record(service, action, caller, payload, result, duration_ms, internal? \\ false) do
+  def record(service, action, caller, payload, result, duration_ms, internal? \\ false, kind \\ :action) do
     if enabled?() do
       init_tables()
 
@@ -56,6 +56,7 @@ defmodule Exoforge.ActionTrace do
       sample = %{
         at: now,
         key: key,
+        kind: kind,
         rid: Exoforge.RequestContext.rid(),
         depth: Exoforge.RequestContext.depth() || 0,
         caller: caller,
@@ -143,6 +144,29 @@ defmodule Exoforge.ActionTrace do
       page: page,
       pages: pages
     }
+  end
+
+  @doc "Drops every sample and counter (a reset; tests and a Studio reset use it)."
+  def clear do
+    init_tables()
+    :ets.delete_all_objects(@samples)
+    :ets.delete_all_objects(@buckets)
+    :ok
+  end
+
+  @doc "The newest retained samples across every action, newest first."
+  def recent_samples(limit \\ 100) do
+    init_tables()
+
+    @samples
+    |> :ets.tab2list()
+    |> Enum.flat_map(fn
+      {seq, sample} when is_integer(seq) -> [sample]
+      _ -> []
+    end)
+    |> Enum.uniq()
+    |> Enum.sort_by(& &1.at, :desc)
+    |> Enum.take(max(limit, 1))
   end
 
   @doc """

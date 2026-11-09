@@ -8,7 +8,7 @@
 > **Benchmark**: 0.07 ms fanout to 50 event subscribers over `:pg`.
 
 Completed work is not kept here. It is in `git log`, which is the record that does not drift; this
-file is the invariants and what is next. Milestone identifiers (**M1**…**M40**) are historical and are
+file is the invariants and what is next. Milestone identifiers (**M1**…**M41**) are historical and are
 referenced from `Agents.MD`, `DX.md` and commit messages, so they stay in the table below and nowhere
 else.
 
@@ -76,6 +76,7 @@ extension_manager ─▶ (independent root)
 | **M37** | Unity SDK v0.1.30 & Extension DX Hardening — Standalone IDE solution launching (`<name>.sln`) bypassing Unity parent project evaluation; client API symmetry (`ExoServices.<Service>`); blank/minimal template scaffolding; enforced Unity player auth doctrine (`ExoforgeSDK.Auth`); cluster package version resolution & semantic version sorting in `file_bucket`; .NET 9+ SDK and runtime packs validation (`ExoforgeDotnetValidator`); global error logging (`ExoClient.OnError` -> `Debug.LogError`) and actionable `service_not_found` diagnostics |
 | **M38** | Extension Fault Isolation & Musl/Alpine RID Support (v0.1.31) — Dynamic musl/Alpine detection on cluster (`linux-musl-x64`) with `EXOFORGE_TARGET_RID` support; Unity Editor RID targeting with `linux-musl-x64` prewarming and default container targeting; supervisor fault isolation using `restart: :temporary` on extension supervisors, pre-handshake exit isolation, and crash registry tracking (`mark_crashed`) to prevent crash loop cascade to root supervisor |
 | **M39** | Studio Telemetry, Top Bar Centering & Ingress Hardening (v0.1.34) — Real-time metering pipeline feeding action throughput and non-zero error charts; centered Studio top bar with dynamic label omission and 4-item pin cap; 85vh live event stream modal with server-side syntax highlighting, payload folding, and automated error detection; unprivileged `ActionDispatcher.dispatch` deny-by-default (`[]`) with `dispatch_internal` for privileged orchestration; auth synthesis of env admin accounts in `list_users` ensuring visibility before database bootstrap |
+| **M41** | Observability Extension & Request Timeline — `exoforge_std_observability` owns the cluster event store (moved out of the Studio) and the `observability` contract (`recent_events`, `error_groups`, `timeline`, `clear_events`); the Studio keeps its own live tail from the event bus and reads history through the service; the timeline drawer joins one request's calls, events, log lines and failure by rid, opened from a failure group, a trace sample, an event row or a pasted id; trace samples carry `kind` and a captured request keeps its queries and host calls |
 | **M40** | Live Debugging Spine — `Exoforge.RequestContext` (origin, request id, depth, capture) replaces the pdict origin and stamps events, log lines, trace samples, WS/HTTP responses and native host calls; `Exoforge.ErrorGroups` groups failures by action+reason with counts, first/last seen, callers and a masked sample with its rid; `PayloadPreview` extracted from the trace; the Studio's error mode lists failure groups with copyable request ids; the `50 ms` log-window heuristic became a `rid` join |
 
 ---
@@ -626,7 +627,7 @@ flowchart TD
 
 ## 11. M40–M45: Live Debugging & Observability (Implementation Plan)
 
-Status: **M40 landed** (request ids, error groups); M41–M45 planned. A review of the current analytics/troubleshooting surfaces
+Status: **M40 and M41 landed** (request ids, error groups, observability extension, request timeline); M42–M45 planned. A review of the current analytics/troubleshooting surfaces
 (`Exoforge.Metering`, `Exoforge.ActionTrace`, `RecentEvents`, `ExtensionLogs`, the Studio's six
 surfaces) found one missing spine and three missing views:
 
@@ -640,9 +641,12 @@ and returned to the client. **The views are** one merged *Timeline*, one always-
 scoreboard, and one *Player session* history. Capture policy replaces the current all-or-nothing
 trace; error fingerprints replace flat error counters.
 
-Each milestone ships alone, in order. Nothing here adds a new extension: the Studio's data
-contract (`dashboard` service) grows three actions, and the primitives stay in core next to
-Metering and ActionTrace.
+Each milestone ships alone, in order. M41 adds one extension: **`exoforge_std_observability`**
+owns the durable event store and the query contract (`timeline`, `error_groups`, `health`,
+`events.search`). The *views* (the Overview cards, the timeline drawer, the event dock) stay in
+the dashboard, which depends on `observability` the way it depends on any service. The
+*producers* — Metering, ActionTrace, ErrorGroups, ExtensionLogs — stay in the kernel, because
+`ActionDispatcher` writes to them on every call and bootstrapping cannot depend on an extension.
 
 ### 11.1 Shared design decisions (locked before M40)
 
@@ -764,13 +768,31 @@ count.
 What landed, with two small additions to the plan: `ExtensionLogs.for_rid/1` (and the deletion of
 `since/2`) moved from M41 into M40, because it is what removes the `t0 - 50 ms` heuristic; and the
 action runner shows the rid of the dispatch it just made. `ErrorGroups` carries a monotonic
-`touched` field so ordering and eviction are deterministic inside one millisecond.
+`touched` field so ordering and eviction are deterministic inside one millisecond. The
+`dashboard.error_groups` action shipped here is **moved to `observability` in M41** (nothing
+consumes it yet), so the Studio never depends on itself for diagnostics.
 
-### 11.3 M41 — Timeline (the debugger surface)
+### 11.3 M41 — Timeline (the debugger surface) + the observability extension (Landed)
 
-Goal: one view that answers "what happened in this request", nested and ordered.
+Goal: one view that answers "what happened in this request", nested and ordered — and one place
+that owns the events it is built from.
 
-Changed/new:
+**Extraction (new `exoforge_std_observability`):**
+
+- Manifest: `system: true`, `provides: [:observability]`, dependency on `:database`; children:
+  the event store (today `Exoforge.Std.Dashboard.RecentEvents`, moved as
+  `Exoforge.Std.Observability.Events`), still in memory first, persisted in M42.
+- Move from the dashboard: `recent_events.ex` and its tests; the `dashboard.error_groups`
+  action (added in M40) becomes `observability.error_groups`; the Studio's event PubSub topic
+  stays the same name (`studio_events`), published by the moved process, so the dashboard keeps
+  its live dock without a second subscriber.
+- The dashboard declares `dependencies: [Exoforge.Std.Services.Observability, ...]` and reads
+  history/timeline through the contract; its live cards keep reading the kernel modules
+  (`Metering`, `ActionTrace`, `ErrorGroups`) — extensions may depend on the kernel.
+- Contract actions: `recent_events(limit)`, `error_groups(filters, limit)` (moved),
+  `timeline(rid | player, since, until, limit)`, `events.search(...)` (M42).
+
+Changed/new for the timeline itself:
 
 - `core/lib/action_trace.ex` — sample gains `kind: :action | :query | :host_call`; when
   `RequestContext.capturing?()`, `ActionDispatcher` also traces `:database`/`:lldb` calls
@@ -784,9 +806,10 @@ Changed/new:
   trace samples (with depth), events whose `context.rid` matches, log lines for the rid, and the
   error group when the request failed; sorted by `at`, depths drive indentation. Also
   `timeline(player:, since:, limit:)` in M42.
-- `core/lib/std/services.ex` — `action :timeline` (params `rid?`, `player?`, `since_ms?`,
-  `limit?`; returns `nodes: [:map]`, `scope :studio`).
-- `extensions/exoforge_std_dashboard/lib/.../dashboard.ex` — defaction → `Analytics`.
+- `core/lib/std/services.ex` — a `defservice observability` with `:timeline` (params `rid?`,
+  `player?`, `since_ms?`, `limit?`; returns `nodes: [:map]`, `scope :studio`).
+- `extensions/exoforge_std_observability/lib/.../analytics.ex` — the merge above; the
+  `observability` action delegates to it.
 - Studio: `timeline_modal` (overlays) — one scrollable tree of nodes (badge per kind, latency,
   indent by depth, payload folds reusing `highlight_json`), a rid input, and entry points:
   error-group sample, action sample row, event row ("open timeline"), user inspector
@@ -798,6 +821,15 @@ ordering, indentation, and that a query row is not counted as an action.
 
 Acceptance: paste a rid → full request tree, including the queries and the emitted event; a
 failed request shows its error group node.
+
+What landed: the extraction above, with the store keeping its ring and persistence but no PubSub
+(the Studio subscribes to `EventDispatcher` directly for its live tail and seeds from
+`observability.recent_events`); the `dashboard.error_groups` action moved as planned; samples now
+carry `kind`, and a captured request records its `:database`/`:lldb` calls as `:query` and native
+host calls as `:host_call` — nothing fires until capture is enabled (M44). The player-filtered
+timeline reads the retained window; M42 extends it to persisted history. Tests: observability
+suite (contract actions, join, ordering, caller filter) and a Studio test opening the drawer from
+a rid.
 
 ### 11.4 M42 — Event store: hot window, rollups, cold archive, player session
 
@@ -887,7 +919,7 @@ stays under SQLite's 999-parameter limit). Rollup counters are incremented in th
   raw rows.
 
 **Studio** — the user inspector's Events tab moves from the 100-event buffer to
-`dashboard.timeline(player:, since:, until:)` with paging and a date range; the timeline gains
+`observability.timeline(player:, since:, until:)` with paging and a date range; the timeline gains
 "older than hot" awareness: when a lookup falls outside the hot window, it says so and searches
 the archive (with a day-range limit). Deep links: `?focus=rid:<rid>`, and the command palette
 accepts `rid:…`, `player:…`, `event:…`, `since:…`.
@@ -909,12 +941,12 @@ every archive cycle.
 
 - `core/lib/metering.ex` — log-scale latency histogram (`{:action, id, action, :lat, bucket}`);
   `snapshot/1` computes p50/p95 per action (lifetime; labelled as such).
-- `core/lib/std/services.ex` — `action :health` (returns per-action
-  `%{service, action, calls_30m, errors_30m, error_rate, p50_ms, p95_ms, last_error_group}`,
-  `scope :studio`).
+- `core/lib/std/services.ex` — the `observability` service gains `action :health` (returns
+  per-action `%{service, action, calls_30m, errors_30m, error_rate, p50_ms, p95_ms,
+  last_error_group}`, `scope :studio`).
 - Studio Overview: the throughput card gains a "Needs attention" strip — crash loops (already
   detected), newest error groups, top-5 p95; each row links to the timeline/group.
-- Unity: optional read of `dashboard.health` in Control Center Metrics (only if the action is
+- Unity: optional read of `observability.health` in Control Center Metrics (only if the action is
   cheap; otherwise defer).
 
 Acceptance: p95 is visible per action; a slow action is identifiable without reading a single
@@ -979,7 +1011,7 @@ timeline links the client call to the server chain.
 | Milestone | Scope | Rough size |
 |---|---|---|
 | M40 | RequestContext, rid on every surface, ErrorGroups, Studio error list | ~600 lines + tests |
-| M41 | `kind`, query/host tracing, Analytics, timeline modal + entry points | ~400 |
+| M41 | observability extension (event store moves, contract actions), `kind`, query/host tracing, timeline modal + entry points | ~600 |
 | M42 | day-indexed event store, batched ingest, rollups, gzip archive + retention, paged queries, player session, deep links | ~500 |
 | M43 | latency histogram, p95, health action, attention strip | ~250 |
 | M44 | capture rules, deep payload ring, replay | ~350 |

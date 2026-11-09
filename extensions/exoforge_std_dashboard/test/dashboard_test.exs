@@ -261,23 +261,6 @@ defmodule Exoforge.DashboardTest do
       assert data.plugins_count >= 2
     end
 
-    test "dashboard.error_groups returns grouped failures with their request id" do
-      Exoforge.ErrorGroups.clear()
-      on_exit(fn -> Exoforge.ErrorGroups.clear() end)
-
-      assert {:error, :service_not_found} =
-               ActionDispatcher.dispatch(:ghost_service, :do_thing, %{"x" => 1})
-
-      assert {:ok, %{groups: [group], count: 1}} =
-               ActionDispatcher.dispatch_internal(:dashboard, :error_groups, %{limit: 5})
-
-      assert group.service == "ghost_service"
-      assert group.action == "do_thing"
-      assert group.reason == ":service_not_found"
-      assert group.rid =~ ~r/^r_/
-      assert group.request == %{"x" => 1}
-    end
-
     test "studio session can read APIs but cannot dispatch admin actions" do
       read =
         conn(:get, "/api/overview")

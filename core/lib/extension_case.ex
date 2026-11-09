@@ -30,15 +30,9 @@ defmodule Exoforge.ExtensionCase do
   window; this is the one place that knows the two table names.
   """
   def reset_action_trace do
-    for table <- [:exo_action_trace, :exo_action_trace_buckets] do
-      try do
-        :ets.delete_all_objects(table)
-      rescue
-        _ -> :ok
-      end
-    end
-
-    :ok
+    Exoforge.ActionTrace.clear()
+  rescue
+    _ -> :ok
   end
 
   @doc "Registers the standard database extension under its canonical id and contracts."

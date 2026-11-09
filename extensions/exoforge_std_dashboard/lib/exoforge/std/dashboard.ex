@@ -8,7 +8,11 @@ defmodule Exoforge.Std.Dashboard do
 
   @manifest %{
     system: true,
-    dependencies: [Exoforge.Std.Services.Database, Exoforge.Std.Services.ResourceStore],
+    dependencies: [
+      Exoforge.Std.Services.Database,
+      Exoforge.Std.Services.ResourceStore,
+      Exoforge.Std.Services.Observability
+    ],
     title: "Exoforge Dashboard",
     icon: "🎛️",
     category: "System"
@@ -26,8 +30,9 @@ defmodule Exoforge.Std.Dashboard do
     Application.put_env(:exoforge_std_dashboard, Exoforge.Std.Dashboard.Endpoint, endpoint_config)
 
     [
+      # Phoenix LiveView's pub/sub stays here; the event history lives in the observability
+      # extension and is read through the service contract.
       {Phoenix.PubSub, name: Exoforge.Std.Dashboard.PubSub},
-      Exoforge.Std.Dashboard.RecentEvents,
       Exoforge.Std.Dashboard.Endpoint
     ]
   end
@@ -53,23 +58,6 @@ defmodule Exoforge.Std.Dashboard do
   defaction get_dashboard_data(_payload) do
     data = Exoforge.Std.Dashboard.Router.build_overview_data()
     {:ok, %{data: data}}
-  end
-
-  @impl true
-  defaction error_groups(payload), scope: Exoforge.Auth.Roles.studio() do
-    limit =
-      case Map.get(payload, :limit) || Map.get(payload, "limit") do
-        n when is_integer(n) -> n
-        s when is_binary(s) ->
-          case Integer.parse(s) do
-            {n, _} -> n
-            :error -> 50
-          end
-        _ -> 50
-      end
-
-    groups = Exoforge.ErrorGroups.list(payload, limit)
-    {:ok, %{groups: groups, count: length(groups)}}
   end
 
   @impl true
