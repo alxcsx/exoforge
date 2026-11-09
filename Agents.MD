@@ -111,6 +111,12 @@ file_bucket ──▶ database
 - **Static Builtins vs. Mutable Persistent Volumes**: In Docker deployments, bundled system extensions are compiled into the image under `/app/builtin_extensions` (read-only), while user/game extensions uploaded via Studio or CLI land in `/app/uploaded_extensions` (configured via `UPLOADED_EXTENSIONS_PATH` or `EXOFORGE_DATA_DIR`). This guarantees Docker volume mounts over `/app/uploaded_extensions` never wipe or hide bundled extensions across image updates.
 - **Deduplication & Semver Precedence**: When an extension ID exists in multiple directories, `ManifestLoader` resolves the conflict by keeping the higher semantic version (`compare_manifest_versions`). When versions are identical, the later/uploaded directory takes precedence. Builtin extension files are protected against deletion via `ExtensionManager`.
 
+### Producer Studio Diagnostics & Operational Telemetry
+- **Centered Top Bar & Pinning**: Studio navigation is centered in the viewport. When no extensions are pinned, Overview and Extensions render full text labels; pinning extensions (capped at 4) expands the bar and dynamically omits text labels in favor of icon-only navigation.
+- **Action & Event Throughput Pipeline**: `ActionDispatcher` records invocation counts, latencies, and status results into `Exoforge.Metering` for all services. Error graphs actively plot series with `err > 0` and render a dashed emerald baseline with a clean health status when 0 errors exist.
+- **Live Stream Modal & Syntax Highlighting**: Real-time console popups (85vh viewport) render server-side syntax-highlighted JSON (`sky-300` keys, `emerald-300` strings, `amber-300` numbers, `purple-300` literals, `rose-400 font-bold` errors). Payloads fold interactively with field counters and error badges (`is_event_error?/1`).
+- **Cluster Settings & Admin Synthesis**: The settings modal provides dedicated diagnostic panes for active database driver/pool status, CORS policies, live extensions config, and authentication RBAC. Environment-configured admin credentials (`EXOFORGE_ADMIN_EMAIL` / `EXOFORGE_ADMIN_PASSWORD`) are dynamically synthesized into `auth.list_users`, ensuring the protected system administrator is permanently visible in Studio even before initial database initialization.
+
 ### Extension Runtimes
 
 | Runtime | Manifest `type` | Written in | Built by | Use for |
@@ -290,7 +296,7 @@ Gameplay must not hold a client, an endpoint, or a token. It publishes hooks (e.
 ## 3. Ponytail Engineering Principles (Points to Simplify & Polish)
 
 1. **Stdlib & OTP First**: Reach for Erlang/Elixir built-ins (`:ets`, `:pg`, `Registry`, `DynamicSupervisor`) before adding third-party dependencies.
-2. **Zero Module Coupling**: Extensions depend on **service atoms** (`:database`, `:auth`, `:player_data`), NEVER on another extension's Elixir module name. Use `ActionDispatcher.dispatch(service, action, payload)`.
+2. **Zero Module Coupling & Explicit Trust Boundaries**: Extensions depend on **service atoms** (`:database`, `:auth`, `:player_data`), NEVER on another extension's Elixir module name. Use `ActionDispatcher.dispatch(service, action, payload, caller_scopes: scopes)`. Public/unauthenticated calls without scopes default to `[]` (deny by default); in-process privileged orchestration must explicitly use `ActionDispatcher.dispatch_internal/4` or pass `internal: true`.
 3. **Pure C# Outside Mix**: External game developers and Unity designers do not have Elixir or Mix installed. All client tooling, scaffolding (`ExoScaffolder`), and code generation (`ExoCodeGenerator`) must remain pure C# (`netstandard2.1`).
 4. **C# for Game Code**: Game extensions are written in C# and compiled to a framework-dependent .NET assembly. Keep the host boundary to newline-delimited JSON — that is what makes a different runtime a runner rather than a rewrite.
 5. **No Distributed Locks**: State that has to be serialized belongs in an extension's own process. Do not introduce external distributed lock managers (no Redis locks, no ZooKeeper).
