@@ -56,6 +56,23 @@ defmodule Exoforge.Std.Dashboard do
   end
 
   @impl true
+  defaction error_groups(payload), scope: Exoforge.Auth.Roles.studio() do
+    limit =
+      case Map.get(payload, :limit) || Map.get(payload, "limit") do
+        n when is_integer(n) -> n
+        s when is_binary(s) ->
+          case Integer.parse(s) do
+            {n, _} -> n
+            :error -> 50
+          end
+        _ -> 50
+      end
+
+    groups = Exoforge.ErrorGroups.list(payload, limit)
+    {:ok, %{groups: groups, count: length(groups)}}
+  end
+
+  @impl true
   defaction get_project_metadata, scope: Exoforge.Auth.Roles.studio() do
     {:ok, Exoforge.Std.Dashboard.ProjectMetadata.get()}
   end

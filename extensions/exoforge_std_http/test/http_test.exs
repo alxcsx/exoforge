@@ -207,13 +207,16 @@ defmodule Exoforge.HttpTest do
         conn(:post, "/api/mock_admin/secret_op", "{}")
         |> put_req_header("content-type", "application/json")
         |> put_req_header("authorization", "Bearer dev:admin")
+        |> put_req_header("x-exoforge-rid", "r_http_1")
         |> Router.call(@opts)
 
       assert conn.status == 200
+      assert get_resp_header(conn, "x-exoforge-rid") == ["r_http_1"]
+      assert Jason.decode!(conn.resp_body)["rid"] == "r_http_1"
 
       # A caller passes a token, not a name: the route has to say who it was.
       samples = Exoforge.ActionTrace.samples("mock_admin.secret_op").samples
-      assert Enum.any?(samples, &(&1.caller == "admin"))
+      assert Enum.any?(samples, &(&1.caller == "admin" and &1.rid == "r_http_1"))
     end
 
     test "studio token can read routes but player token is forbidden" do

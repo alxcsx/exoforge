@@ -14,6 +14,7 @@ defmodule Exoforge.Std.Ws.SocketHandler do
   @token_key "token"
   @topic_key "topic"
   @id_key "id"
+  @rid_key "rid"
   @service_key "service"
   @action_key "action"
   @payload_key "payload"
@@ -222,24 +223,29 @@ defmodule Exoforge.Std.Ws.SocketHandler do
     service = Map.get(req, @service_key, "")
     action = Map.get(req, @action_key, "")
 
+    # One request id per action frame: the client may propose one (its own correlation id), the
+    # server sanitises or replaces it, and every result frame echoes it.
+    rid = Exoforge.RequestContext.sanitize_rid(Map.get(req, @rid_key))
+
     case Map.get(state, :auth) do
       nil ->
         if Exoforge.Std.Transport.public_action?(service, action) do
-          do_handle_action(req, %{player_id: nil, scopes: []}, state)
+          do_handle_action(req, %{player_id: nil, scopes: []}, state, rid)
         else
-          unauthenticated_action(req, state)
+          unauthenticated_action(req, state, rid)
         end
 
       auth ->
-        do_handle_action(req, auth, state)
+        do_handle_action(req, auth, state, rid)
     end
   end
 
-  defp unauthenticated_action(req, state) do
+  defp unauthenticated_action(req, state, rid) do
     reply(
       %{
         type: @frame_action_result,
         id: Map.get(req, @id_key),
+        rid: rid,
         status: @status_error,
         error: %{
           code: @code_unauthenticated,
@@ -250,7 +256,7 @@ defmodule Exoforge.Std.Ws.SocketHandler do
     )
   end
 
-  defp do_handle_action(req, auth, state) do
+  defp do_handle_action(req, auth, state, rid) do
     req_id = Map.get(req, @id_key)
     service_str = Map.get(req, @service_key, "")
     action_str = Map.get(req, @action_key, "")
@@ -271,13 +277,19 @@ defmodule Exoforge.Std.Ws.SocketHandler do
     service = parse_service(service_str)
     action = parse_action(action_str)
 
-    t0_ms = System.system_time(:millisecond)
     t0 = System.monotonic_time(:microsecond)
-    res = ActionDispatcher.dispatch(service, action, payload, caller_scopes: caller_scopes, caller: auth.player_id)
+
+    res =
+      ActionDispatcher.dispatch(service, action, payload,
+        caller_scopes: caller_scopes,
+        caller: auth.player_id,
+        rid: rid
+      )
+
     latency_us = System.monotonic_time(:microsecond) - t0
 
-    manifest = Exoforge.ExtensionRegistry.fetch_service(service) || Exoforge.ExtensionRegistry.fetch_manifest(service)
-    logs = if manifest, do: Exoforge.ExtensionLogs.since(manifest.id, t0_ms - 50), else: []
+    # The logs of this request, not of the last 50 ms: concurrent requests no longer mix.
+    logs = Exoforge.ExtensionLogs.for_rid(rid)
 
     case res do
       {:ok, data} ->
@@ -287,6 +299,7 @@ defmodule Exoforge.Std.Ws.SocketHandler do
           %{
             type: @frame_action_result,
             id: req_id,
+            rid: rid,
             status: @status_ok,
             data: data,
             logs: logs
@@ -301,6 +314,7 @@ defmodule Exoforge.Std.Ws.SocketHandler do
           %{
             type: @frame_action_result,
             id: req_id,
+            rid: rid,
             status: @status_ok,
             data: %{},
             logs: logs
@@ -315,6 +329,7 @@ defmodule Exoforge.Std.Ws.SocketHandler do
           %{
             type: @frame_action_result,
             id: req_id,
+            rid: rid,
             status: @status_error,
             error: %{
               code: to_string(reason),
@@ -332,6 +347,7 @@ defmodule Exoforge.Std.Ws.SocketHandler do
           %{
             type: @frame_action_result,
             id: req_id,
+            rid: rid,
             status: @status_error,
             error: %{
               code: "service_not_found",
@@ -349,6 +365,7 @@ defmodule Exoforge.Std.Ws.SocketHandler do
           %{
             type: @frame_action_result,
             id: req_id,
+            rid: rid,
             status: @status_error,
             error: %{
               code: "action_not_found",
@@ -366,6 +383,7 @@ defmodule Exoforge.Std.Ws.SocketHandler do
           %{
             type: @frame_action_result,
             id: req_id,
+            rid: rid,
             status: @status_error,
             error: %{
               code: to_string(code),
@@ -383,6 +401,7 @@ defmodule Exoforge.Std.Ws.SocketHandler do
           %{
             type: @frame_action_result,
             id: req_id,
+            rid: rid,
             status: @status_error,
             error: %{
               code: @code_action_failed,

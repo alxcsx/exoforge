@@ -8,7 +8,7 @@
 > **Benchmark**: 0.07 ms fanout to 50 event subscribers over `:pg`.
 
 Completed work is not kept here. It is in `git log`, which is the record that does not drift; this
-file is the invariants and what is next. Milestone identifiers (**M1**…**M37**) are historical and are
+file is the invariants and what is next. Milestone identifiers (**M1**…**M40**) are historical and are
 referenced from `Agents.MD`, `DX.md` and commit messages, so they stay in the table below and nowhere
 else.
 
@@ -76,6 +76,7 @@ extension_manager ─▶ (independent root)
 | **M37** | Unity SDK v0.1.30 & Extension DX Hardening — Standalone IDE solution launching (`<name>.sln`) bypassing Unity parent project evaluation; client API symmetry (`ExoServices.<Service>`); blank/minimal template scaffolding; enforced Unity player auth doctrine (`ExoforgeSDK.Auth`); cluster package version resolution & semantic version sorting in `file_bucket`; .NET 9+ SDK and runtime packs validation (`ExoforgeDotnetValidator`); global error logging (`ExoClient.OnError` -> `Debug.LogError`) and actionable `service_not_found` diagnostics |
 | **M38** | Extension Fault Isolation & Musl/Alpine RID Support (v0.1.31) — Dynamic musl/Alpine detection on cluster (`linux-musl-x64`) with `EXOFORGE_TARGET_RID` support; Unity Editor RID targeting with `linux-musl-x64` prewarming and default container targeting; supervisor fault isolation using `restart: :temporary` on extension supervisors, pre-handshake exit isolation, and crash registry tracking (`mark_crashed`) to prevent crash loop cascade to root supervisor |
 | **M39** | Studio Telemetry, Top Bar Centering & Ingress Hardening (v0.1.34) — Real-time metering pipeline feeding action throughput and non-zero error charts; centered Studio top bar with dynamic label omission and 4-item pin cap; 85vh live event stream modal with server-side syntax highlighting, payload folding, and automated error detection; unprivileged `ActionDispatcher.dispatch` deny-by-default (`[]`) with `dispatch_internal` for privileged orchestration; auth synthesis of env admin accounts in `list_users` ensuring visibility before database bootstrap |
+| **M40** | Live Debugging Spine — `Exoforge.RequestContext` (origin, request id, depth, capture) replaces the pdict origin and stamps events, log lines, trace samples, WS/HTTP responses and native host calls; `Exoforge.ErrorGroups` groups failures by action+reason with counts, first/last seen, callers and a masked sample with its rid; `PayloadPreview` extracted from the trace; the Studio's error mode lists failure groups with copyable request ids; the `50 ms` log-window heuristic became a `rid` join |
 
 ---
 
@@ -620,3 +621,369 @@ flowchart TD
 - [ ] **Phase 8 — Testing Pipeline & Release Gates**
   - Fast PR checks (< 90s): Elixir core & extension tests, C# SDK unit tests, Unity headless check.
   - Gated release suite: Docker Compose cold boot, live E2E vertical slices, cluster benchmark target check.
+
+---
+
+## 11. M40–M45: Live Debugging & Observability (Implementation Plan)
+
+Status: **M40 landed** (request ids, error groups); M41–M45 planned. A review of the current analytics/troubleshooting surfaces
+(`Exoforge.Metering`, `Exoforge.ActionTrace`, `RecentEvents`, `ExtensionLogs`, the Studio's six
+surfaces) found one missing spine and three missing views:
+
+> Every surface knows *something* and none of them can answer "what happened in this one request,
+> end to end". PlayFab's execution logs and event history never join either; Exoforge owns the
+> dispatch path, so it can.
+
+**The spine is a request id (`rid`).** Generated at ingress, carried in the process context,
+stamped on the action event, the trace sample, every log line, every captured query/host call,
+and returned to the client. **The views are** one merged *Timeline*, one always-on *Health*
+scoreboard, and one *Player session* history. Capture policy replaces the current all-or-nothing
+trace; error fingerprints replace flat error counters.
+
+Each milestone ships alone, in order. Nothing here adds a new extension: the Studio's data
+contract (`dashboard` service) grows three actions, and the primitives stay in core next to
+Metering and ActionTrace.
+
+### 11.1 Shared design decisions (locked before M40)
+
+**Request context** — new `core/lib/request_context.ex`, replacing the process-dictionary origin
+that currently lives inside `ActionTrace`:
+
+```elixir
+%{
+  origin: String.t() | nil,   # who started the chain (player, studio, cron, webhook, internal)
+  rid: String.t(),            # "r_" + 12 url-safe chars, server-generated unless ingress supplies one
+  depth: non_neg_integer(),   # 0 = top-level action; +1 per nested dispatch
+  capture: :off | :errors | :deep
+}
+```
+
+- API: `new_rid/0`, `origin/0`, `rid/0`, `depth/0`, `capturing?/0`, `current/0`, `enter/1`,
+  `restore/1`, `sanitize_rid/1` (accepts `[A-Za-z0-9_-]{1,64}`, otherwise generates).
+- Lifecycle: `ActionDispatcher.dispatch/4` enters a context for the duration of the action and
+  restores the previous one in `after`; nested dispatches inherit `rid`/`origin`/`capture` and
+  increment `depth`. Explicit `opts[:rid]` (ingress) wins. Everything that did
+  `ActionTrace.put_origin/restore_origin` moves here: dispatcher, `EventDispatcher.broadcast`,
+  `NativeExtensionRunner` (carry the full context, not just origin, across host calls).
+- `ActionTrace.origin/put_origin/restore_origin` are **deleted** (internal API; every caller moves).
+
+**What carries the rid**
+
+| Surface | Field | Milestone |
+|---|---|---|
+| Action event | `payload.rid` + `context.rid` | M40 |
+| Extension event | `context.rid` (EventDispatcher) | M40 |
+| Trace sample | `sample.rid`, `sample.depth` | M40 |
+| Extension log line | entry `:rid`, persisted column | M40 (memory) / M42 (column) |
+| WS `action_result` | `rid` (client-supplied echoed, else generated) | M40 |
+| HTTP action response | `x-exoforge-rid` header + `rid` in JSON | M40 |
+| Native host call | inherited context | M40 |
+| SDK error/result | `ExoActionResult.RequestId` | M45 |
+
+**Payload policy** — unchanged in spirit: previews are size-capped and credential-masked, never
+written to disk. Error groups keep one masked preview; deep capture (M44) holds full requests in
+memory only, tied to a TTL, and enables replay.
+
+**Cluster note** — trace and error groups are node-local; events are cluster-wide. True today
+(single node). M42's persisted timeline is per instance; multi-node aggregation is out of scope
+and noted in the health view.
+
+**Backward compatibility** — every wire change is an additive JSON field. Old clients ignore.
+
+### 11.2 M40 — The spine: rid + error groups (Landed)
+
+Goal: an error report becomes traceable from client to logs, and errors stop being anonymous
+counters.
+
+New modules:
+
+- `core/lib/request_context.ex` — as above.
+- `core/lib/payload_preview.ex` — `preview/1` + masking, moved verbatim from
+  `ActionTrace.preview/2`/`@sensitive`; ActionTrace and ErrorGroups both use it (deletes the
+  duplicate when ErrorGroups arrives).
+- `core/lib/error_groups.ex` — bounded ETS (`:exo_error_groups`, 200 groups):
+  - `record(service, action, caller, rid, request, reason)` —
+    fingerprint = `service.action | inspect(reason) |> String.slice(0, 200)`;
+    value = `%{count, first_seen, last_seen, service, action, fingerprint, reason, rid, caller,
+    request_preview, callers (MapSet capped 10)}`; evict the least-recently-seen group past 200.
+  - `list(filters \\ [], limit \\ 50)` — newest `last_seen` first; filters: service, action,
+    caller, rid. `clear/0`.
+  - Known ceiling (comment it): a reason containing a raw id splits groups; normalize later if
+    it bites.
+
+Changed:
+
+- `core/lib/action_dispatcher.ex` — enter/restore `RequestContext`; event payload gains
+  `rid`; trace call reads `RequestContext.rid()`/`depth()`; on `{:error, reason}` call
+  `ErrorGroups.record/6` (same `:database`/`:lldb` exclusion as metering).
+- `core/lib/action_trace.ex` — delete origin helpers and preview copy; sample gains `rid` and
+  `depth`; `samples/2` accepts `rid:` filter; add `for_rid/1` (scan of the sample table, ≤2000
+  rows — fine for a debugger).
+- `core/lib/event_dispatcher.ex` — `context.rid = RequestContext.rid()`; origin read moves.
+- `core/lib/drivers/runtime/native_extension_runner.ex` — `{:execute_action, action, payload,
+  context}` instead of origin; keep `current_context` per in-flight action (same recompute as
+  today); `answer_host_call/2` enters it.
+- `core/lib/extension_logs.ex` — ETS tuple grows `{id, at, level, message, rid}`; `append/3,4`
+  reads `RequestContext.rid()`; entries gain `:rid`; `list/2`/`page/2` pass it through.
+  Persisted column waits for M42.
+- `extensions/exoforge_std_ws/lib/exoforge/std/ws/socket_handler.ex` — compute
+  `rid = RequestContext.sanitize_rid(req["rid"])` per action; dispatch with `rid:`; every
+  `action_result` frame (success, scoped error, timeout, unknown action, unauthenticated)
+  carries `rid`.
+- `extensions/exoforge_std_http/lib/exoforge/std/http/router.ex` — read `x-exoforge-rid`
+  (sanitise), dispatch with it, echo the header and `rid` in the JSON body; webhook handler
+  passes the same header through to the dispatch.
+- `extensions/exoforge_std_dashboard/lib/.../api_controller.ex` — `/api/dispatch` accepts and
+  echoes `x-exoforge-rid` too (Unity Control Center + Studio share it).
+- `core/lib/std/services.ex` — `dashboard` gains:
+  `action :error_groups` (params `service?`, `action?`, `caller?`, `rid?`, `limit?`;
+  returns `groups: [:map]`, `scope :studio`).
+- `extensions/exoforge_std_dashboard/lib/exoforge/std/dashboard.ex` — defaction delegating to
+  `ErrorGroups.list/2`.
+- Studio (`overlays.ex`, `studio_live.ex`): error mode of the action modal lists **groups**
+  (action, reason, count, first/last seen, last caller) with an expandable sample (rid + masked
+  request); each sample's rid is copyable. Shows rid on action-runner results.
+
+Tests:
+
+- `core/test/request_context_test.exs` — rid shape/sanitisation, enter/restore, nested
+  inheritance (origin kept, depth +1), explicit caller wins, no leak after dispatch.
+- `core/test/error_groups_test.exs` — grouping, counts, first/last, masked preview, caller set,
+  eviction at 200, filters.
+- `core/test/action_trace_test.exs` — `rid`/`depth` on samples, `for_rid/1`.
+- `core/test/action_dispatcher_test.exs` — event `context.rid`, log `rid`, group fed on failure,
+  rid from `opts`.
+- `ws` test — `action_result.rid` echoed for client-supplied and generated; invalid rid replaced.
+- `http` test — header in/out, JSON `rid`.
+- dashboard live-view test — error groups render; sample shows rid.
+
+Acceptance: replay a failing HTTP call → the response's rid finds the action event, the trace
+sample, the log lines, and the error group; the Studio error tab lists the group instead of a bare
+count.
+
+What landed, with two small additions to the plan: `ExtensionLogs.for_rid/1` (and the deletion of
+`since/2`) moved from M41 into M40, because it is what removes the `t0 - 50 ms` heuristic; and the
+action runner shows the rid of the dispatch it just made. `ErrorGroups` carries a monotonic
+`touched` field so ordering and eviction are deterministic inside one millisecond.
+
+### 11.3 M41 — Timeline (the debugger surface)
+
+Goal: one view that answers "what happened in this request", nested and ordered.
+
+Changed/new:
+
+- `core/lib/action_trace.ex` — sample gains `kind: :action | :query | :host_call`; when
+  `RequestContext.capturing?()`, `ActionDispatcher` also traces `:database`/`:lldb` calls
+  (currently excluded) and the native runner records `:host_call` rows. Graphs ignore
+  `kind != :action`; the counts stay action-only.
+- `core/lib/extension_logs.ex` — `for_rid/1`: scan of the bounded per-extension bags (≤200 lines
+  × extensions) for the timeline; the SQL fallback arrives with M42's column.
+- `extensions/exoforge_std_dashboard/lib/.../recent_events.ex` — `for_rid/1`: scan of the ring
+  (≤50) until M42's indexed query exists.
+- `extensions/exoforge_std_dashboard/lib/.../analytics.ex` (new) — `timeline(rid)` merges:
+  trace samples (with depth), events whose `context.rid` matches, log lines for the rid, and the
+  error group when the request failed; sorted by `at`, depths drive indentation. Also
+  `timeline(player:, since:, limit:)` in M42.
+- `core/lib/std/services.ex` — `action :timeline` (params `rid?`, `player?`, `since_ms?`,
+  `limit?`; returns `nodes: [:map]`, `scope :studio`).
+- `extensions/exoforge_std_dashboard/lib/.../dashboard.ex` — defaction → `Analytics`.
+- Studio: `timeline_modal` (overlays) — one scrollable tree of nodes (badge per kind, latency,
+  indent by depth, payload folds reusing `highlight_json`), a rid input, and entry points:
+  error-group sample, action sample row, event row ("open timeline"), user inspector
+  (M42). Keep the event dock as the live tail; the event modal becomes a *filter* of the
+  timeline or is deleted (decide at implementation time by size — prefer delete).
+
+Tests: `analytics_test.exs` builds a fake trace/event/log set for one rid and asserts merged
+ordering, indentation, and that a query row is not counted as an action.
+
+Acceptance: paste a rid → full request tree, including the queries and the emitted event; a
+failed request shows its error group node.
+
+### 11.4 M42 — Event store: hot window, rollups, cold archive, player session
+
+Goal: "this ticket is about player X, three months ago" becomes answerable, and the event history
+has a defined lifetime instead of growing forever.
+
+PlayFab keeps 30 days and offers no export; the storage model below keeps the hot window small,
+the aggregates forever, and the raw event files indefinitely — on commodity disk, without adding a
+columnar database.
+
+#### 11.4.1 How analytics systems do it, and what of it applies here
+
+The canonical stack is four layers, and they exist because raw events are the expensive part:
+
+1. **Append-only ingest** — events are immutable facts, written once, keyed by event time.
+2. **Time-partitioned columnar storage** — sorted by time, compressed 5–20×, queried with partition
+   pruning (only the selected days are read). ClickHouse/Druid/Pinot/BigQuery/Snowflake give this
+   out of the box; at this scale, a `day` column and a per-day index/deletion gets most of it.
+3. **Tiering by age** — a hot window (days, fast, expensive), a warm layer (rollups, small), a cold
+   layer (compressed files in object storage, queried on demand). Retention is *dropping a
+   partition*, not deleting rows.
+4. **Pre-aggregation** — dashboards read hourly/daily rollups; raw events are only scanned for
+   forensics ("this rid", "this player, that day").
+
+What that means for Exoforge:
+
+- A columnar database is **not** justified yet: one node, Postgres (or SQLite in dev), and the
+  dashboard plugin is the only writer. Postgres with a `day` column, an index, and batched inserts
+  holds ~100 events/s for 30 days comfortably. The upgrade path is *format-level*: cold files are
+  the same events, so a later ClickHouse/DuckDB/Athena can read them without a re-model.
+- The long-term story is **rollups + gzipped NDJSON files**, not more rows in Postgres.
+- Payloads (the bulky, sensitive part) never persist unmasked; the row is mostly metadata.
+
+Rough sizes, with a ~400-byte row and ~10× gzip on cold files:
+
+| Rate | Raw/day | Hot 30 d (+index) | Cold/year (gz) |
+|---|---|---|---|
+| 10 ev/s | 0.35 GB | ~15 GB | ~13 GB |
+| 100 ev/s | 3.5 GB | ~150 GB | ~130 GB |
+| 1 000 ev/s | 35 GB | ~1.5 TB | ~1.3 TB |
+
+So: one node with 100 events/s and 30 hot days is fine; past that, shorten the hot window or move
+the hot tier to a columnar store — the cold format does not change either way.
+
+#### 11.4.2 What lands
+
+**Schema (dashboard plugin DB, both drivers):**
+
+```
+events(id text, at bigint, day text, event text, origin text, rid text, status text,
+       payload text, context text)            -- payload/context are masked previews
+  index (day), index (rid), index (origin, day)   -- delete-by-day + forensic lookups
+event_rollups(day text, hour integer, event text, origin text, status text, n integer,
+              primary key (day, hour, event, origin, status))
+event_archives(day text primary key, path text, rows integer, bytes integer, created_at integer)
+```
+
+- `day` is `YYYY-MM-DD` from the event time (UTC), so retention is a `DELETE ... WHERE day < ?`
+  over an indexed column, and the cold export is one file per day. (Postgres can additionally use
+  declarative partitioning or BRIN later; neither is required now.)
+- The old `recent_events` table is **replaced** (create `events`, copy the rows, drop the old
+  table) rather than kept beside it.
+
+**Ingest** — `RecentEvents` stops spawning one `Task` + one INSERT per event (current behaviour)
+and buffers: flush every 250 ms or 100 rows in a single multi-row INSERT (9 columns × 100 rows
+stays under SQLite's 999-parameter limit). Rollup counters are incremented in the same flush.
+
+**Retention and archive** — a daily maintenance task in `RecentEvents`:
+1. Create the rollups for the day being archived (idempotent; derived from `events`).
+2. Export days older than the hot window to `EXOFORGE_ARCHIVE_DIR` (default `<data>/event-archive`),
+   one `events-YYYY-MM-DD.ndjson.gz` (`:zlib`, no new dependency), and insert an `event_archives`
+   row.
+3. `DELETE FROM events WHERE day = ?` for those days. `event_rollups` and `event_archives` are kept
+   indefinitely.
+4. Config: `EXOFORGE_EVENT_HOT_DAYS` (default 30, clamp 1..365). No archive dir configured → keep
+   the hot window only, log the deletion.
+
+**Queries**
+
+- `RecentEvents.page(filter, limit, offset)` — SQL over the hot table, filters rid/origin/event/
+  status/day range, newest first; the live ETS ring stays for the tail.
+- `Events.search(%{rid:, player:, event:, since:, until:})` — hot SQL first; for days older than
+  the hot window, stream the matching archive files line by line (bounded by the day range the
+  caller selected, so a forensic lookup scans megabytes, not years). Same module powers the
+  Studio and `exo events search|export`.
+- Rollups feed the "history" charts (events/day, errors/day per action/origin) without touching
+  raw rows.
+
+**Studio** — the user inspector's Events tab moves from the 100-event buffer to
+`dashboard.timeline(player:, since:, until:)` with paging and a date range; the timeline gains
+"older than hot" awareness: when a lookup falls outside the hot window, it says so and searches
+the archive (with a day-range limit). Deep links: `?focus=rid:<rid>`, and the command palette
+accepts `rid:…`, `player:…`, `event:…`, `since:…`.
+
+**Extension logs** — persisted `rid` column (`ALTER ... ADD COLUMN`, guarded by `table_columns`),
+same retention policy (hot window, then archive alongside the day's events); `for_rid/1` prefers
+memory, then SQL.
+
+**Deletion** — `auth.delete_user` keeps working: delete hot rows by `origin`; for archived days,
+the same purge rewrites matching files (scan + drop lines for that origin). Documented ceiling:
+archive purge is a file rewrite, priced in seconds per day file.
+
+Acceptance: a player's calls, events and errors for an arbitrary day inside the hot window are
+listed, paged, and open into the timeline; a day outside it is found through the archive search;
+the hot table's size is bounded by `EXOFORGE_EVENT_HOT_DAYS`; rollups survive every restart and
+every archive cycle.
+
+### 11.5 M43 — Health: percentiles and "needs attention"
+
+- `core/lib/metering.ex` — log-scale latency histogram (`{:action, id, action, :lat, bucket}`);
+  `snapshot/1` computes p50/p95 per action (lifetime; labelled as such).
+- `core/lib/std/services.ex` — `action :health` (returns per-action
+  `%{service, action, calls_30m, errors_30m, error_rate, p50_ms, p95_ms, last_error_group}`,
+  `scope :studio`).
+- Studio Overview: the throughput card gains a "Needs attention" strip — crash loops (already
+  detected), newest error groups, top-5 p95; each row links to the timeline/group.
+- Unity: optional read of `dashboard.health` in Control Center Metrics (only if the action is
+  cheap; otherwise defer).
+
+Acceptance: p95 is visible per action; a slow action is identifiable without reading a single
+payload.
+
+### 11.6 M44 — Capture on demand and replay
+
+- `core/lib/debug_capture.ex` (new, ETS + `:persistent_term`): rules
+  `%{kind: :player | :action | :global, value, until_ms, payloads: boolean}`; `match?(origin)`.
+  `RequestContext.enter` sets `capture: :deep | :errors` from the rules and the trace is enabled
+  for that request even when the global trace is off.
+- Deep capture keeps the **full** request (not the preview) in a bounded in-memory ring
+  (50 samples × 64 KB), TTL = rule expiry; nothing persisted.
+- `dashboard.replay(source_rid)` — only for deep-captured samples: dispatch the full payload with
+  the original caller, `caller_scopes: :internal`, new rid, and a `replayed_from` marker in the
+  trace sample. UI shows "replay" only when a deep sample exists, with a side-effect warning.
+- Studio: "Capture 60s" button in the user drawer and action modal, with a visible countdown and
+  a clear/stop control.
+
+Acceptance: capture one player for a minute, see their failing call with its full request, replay
+it, and diff the two results.
+
+### 11.7 M45 — SDK and Unity editor integration
+
+- `sdk/csharp/Exoforge.Client/Protocol.cs` — `ExoActionResult.RequestId` (JSON `rid`).
+- `ExoClient` — error callbacks include the rid; `ExoforgeSDK.ExportDiagnostics()` returns the
+  last 50 calls (`at, service, action, rid, status, duration_ms`) from a bounded in-memory
+  buffer, for pasting into a bug report.
+- Unity Control Center: Event Stream shows the rid; "Copy diagnostics" button; errors logged with
+  `[Exoforge] svc.action failed (rid r_…): …`.
+- Version bumps: `sdk/csharp` package and Unity `package.json` + `ExoforgePackageVersion.cs`.
+
+Acceptance: a Unity developer reports a failure by pasting one rid or one diagnostics JSON; the
+timeline links the client call to the server chain.
+
+### 11.8 Risks and mitigations
+
+| Risk | Mitigation |
+|---|---|
+| pdict leak across requests in long-lived processes | `enter/restore` in `after`, same pattern as origin today; test that a second dispatch starts a fresh rid |
+| Native runner context interleaving | Keep today's "most recent in-flight action" recompute; host calls are attributed best-effort (documented) |
+| Fingerprint cardinality (ids inside messages) | Cap at 200 chars; normalize digits/uuids if it bites |
+| ErrorGroups cost on a hot error loop | O(1) counter per group; preview captured once per group |
+| DB-call tracing noise | Only when `capturing?()`; `kind: :query` excluded from graphs/counts |
+| Retention and archive cost | Delete by indexed `day`; one gzip file per day; rollups stay tiny |
+| Event volume on one node | `EXOFORGE_EVENT_HOT_DAYS` bounds the hot table; >~100 ev/s means a columnar hot tier, cold format unchanged |
+| Payload retention concerns | Masked previews only, memory-only; deep capture TTL + bounded ring; replay opt-in |
+| Multi-node trace is partial | Stated in the UI; aggregation deferred (events are already cluster-wide) |
+
+### 11.9 Deletion ledger (paying for the work)
+
+- `ExtensionLogs.since(t0 - 50ms)` time-window heuristic → rid join (M40/M41).
+- Studio `last_errors` map → error groups (M40).
+- `ActionTrace.origin/put_origin/restore_origin` → `RequestContext` (M40).
+- Duplicated payload masking → `PayloadPreview` (M40).
+- Event history modal as a separate surface → timeline (M41, keep the dock).
+- Unindexed, unbounded `recent_events` writes → day-indexed `events`, rollups, gzip archive (M42).
+- `avg_wall_us`-only health → p50/p95 (M43).
+
+### 11.10 Sizing and order
+
+| Milestone | Scope | Rough size |
+|---|---|---|
+| M40 | RequestContext, rid on every surface, ErrorGroups, Studio error list | ~600 lines + tests |
+| M41 | `kind`, query/host tracing, Analytics, timeline modal + entry points | ~400 |
+| M42 | day-indexed event store, batched ingest, rollups, gzip archive + retention, paged queries, player session, deep links | ~500 |
+| M43 | latency histogram, p95, health action, attention strip | ~250 |
+| M44 | capture rules, deep payload ring, replay | ~350 |
+| M45 | SDK request id, diagnostics export, Unity surfaces, version bumps | ~250 |
+
+M40 is the only milestone that touches the kernel's dispatch path; after it, every later
+milestone is additive to the Studio and the stores.

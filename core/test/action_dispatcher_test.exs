@@ -66,6 +66,7 @@ defmodule Exoforge.ActionDispatcherTest do
     unless Process.whereis(ExtensionRegistry) do
       start_supervised!(ExtensionRegistry)
     end
+
     :ok
   end
 
@@ -95,6 +96,45 @@ defmodule Exoforge.ActionDispatcherTest do
     assert {:error, :division_by_zero} = ActionDispatcher.dispatch_internal(TestService.Math, :divide, %{a: 10, b: 0})
   end
 
+  test "a dispatch stamps its request id on the event, the log, the trace and the error group" do
+    Exoforge.ExtensionCase.start_kernel()
+    Exoforge.ExtensionCase.register_extension(TestPlugin, id: "math_plugin", provides: [TestService.Math])
+    Exoforge.ErrorGroups.clear()
+    Exoforge.ActionTrace.enable()
+    _ = Exoforge.EventDispatcher.subscribe(:all, topic: :global)
+
+    on_exit(fn ->
+      Exoforge.ExtensionCase.reset_action_trace()
+      Exoforge.ErrorGroups.clear()
+    end)
+
+    assert {:error, :division_by_zero} =
+             ActionDispatcher.dispatch(TestService.Math, :divide, %{a: 1, b: 0},
+               caller: "alice",
+               rid: "r_test_1",
+               caller_scopes: [:player]
+             )
+
+    assert_receive {:exo_event, _key, payload, context}, 1_000
+    assert payload.rid == "r_test_1"
+    assert context.rid == "r_test_1"
+    assert context.origin == "alice"
+
+    # The extension's log line belongs to the request, not to a time window.
+    assert Enum.any?(Exoforge.ExtensionLogs.list("math_plugin", 50), &(&1.rid == "r_test_1"))
+
+    assert %{samples: [sample]} = Exoforge.ActionTrace.samples("#{TestService.Math}.divide")
+    assert sample.rid == "r_test_1"
+    assert sample.depth == 0
+
+    assert [group] = Exoforge.ErrorGroups.list(%{service: to_string(TestService.Math)})
+    assert group.rid == "r_test_1"
+    assert group.caller == "alice"
+    assert group.action == "divide"
+    assert group.count == 1
+    assert group.request == %{a: 1, b: 0}
+  end
+
   test "returns error when service is not found" do
     assert {:error, :service_not_found} = ActionDispatcher.dispatch(NonExistentService, :foo, %{})
   end
@@ -111,6 +151,7 @@ defmodule Exoforge.ActionDispatcherTest do
 
     test "external unauthenticated caller without scopes is denied by default with :unauthorized" do
       assert {:error, :unauthorized} = ActionDispatcher.dispatch(TestPlugin, :admin_reset, %{})
+
       assert {:error, :unauthorized} =
                ActionDispatcher.dispatch(TestPlugin, :admin_reset, %{}, caller_scopes: [])
     end

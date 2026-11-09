@@ -87,6 +87,20 @@ defmodule Exoforge.Std.Services do
       scope(:server)
     end
 
+    @doc "Failures grouped by fingerprint: counts, first/last seen, callers, and a sample request."
+    action :error_groups do
+      params(
+        service: [type: :string, optional: true],
+        action: [type: :string, optional: true],
+        caller: [type: :string, optional: true],
+        rid: [type: :string, optional: true],
+        limit: [type: :integer, optional: true]
+      )
+
+      returns(groups: [:map], count: :integer)
+      scope(:studio)
+    end
+
     @doc "Retrieves global project metadata."
     action :get_project_metadata do
       returns(
@@ -97,6 +111,7 @@ defmodule Exoforge.Std.Services do
         custom: :map,
         updated_at: :integer
       )
+
       scope(:studio)
     end
 
@@ -109,6 +124,7 @@ defmodule Exoforge.Std.Services do
         website_url: [type: :string, optional: true],
         custom: [type: :map, optional: true]
       )
+
       returns(metadata: :map)
       scope(:admin)
     end

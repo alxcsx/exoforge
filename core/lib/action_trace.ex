@@ -24,29 +24,6 @@ defmodule Exoforge.ActionTrace do
   # how a row could report errors the unfold could not show.
   @per_action 30
   @max_samples 2_000
-  @preview_bytes 512
-  @preview_items 20
-  @mask "•••"
-  @sensitive ~w(password password_hash token secret authorization api_key)
-  @origin_key :exoforge_action_origin
-
-  @doc """
-  Who originated the action currently running in this process.
-
-  An extension action triggered by a player often calls other services internally. Those nested
-  dispatches have no caller of their own, so the origin travels with the process: the top-level
-  dispatch puts it, nested ones read it, and every event broadcast inside the action carries it in
-  its context. `nil` outside any action.
-  """
-  def origin, do: Process.get(@origin_key)
-
-  @doc "Sets the origin for the current process and returns the previous one (for `restore_origin/1`)."
-  def put_origin(caller) when is_binary(caller) or is_nil(caller), do: Process.put(@origin_key, caller)
-  def put_origin(other), do: Process.put(@origin_key, to_string(other))
-
-  @doc "Restores the origin returned by `put_origin/1`."
-  def restore_origin(nil), do: Process.delete(@origin_key)
-  def restore_origin(previous), do: Process.put(@origin_key, previous)
 
   @doc "Starts recording. Idempotent; called by an observer (the Studio), not by the kernel."
   def enable do
@@ -79,11 +56,13 @@ defmodule Exoforge.ActionTrace do
       sample = %{
         at: now,
         key: key,
+        rid: Exoforge.RequestContext.rid(),
+        depth: Exoforge.RequestContext.depth() || 0,
         caller: caller,
         status: status,
         duration_ms: duration_ms,
         internal: internal?,
-        request: preview(payload),
+        request: Exoforge.PayloadPreview.preview(payload),
         response: preview_result(result)
       }
 
@@ -133,9 +112,9 @@ defmodule Exoforge.ActionTrace do
   @doc """
   One page of retained samples for an action, newest first.
 
-  `:errors_only` keeps failures, `:caller` narrows to one origin, `:page` / `:per_page` page the
-  result. `total` is what is still retained - the ring drops old samples, so it can be smaller than
-  the bucket counters.
+  `:errors_only` keeps failures, `:caller` narrows to one origin, `:rid` to one request, and
+  `:page` / `:per_page` page the result. `total` is what is still retained - the ring drops old
+  samples, so it can be smaller than the bucket counters.
   """
   def samples(key, opts \\ []) do
     init_tables()
@@ -143,6 +122,7 @@ defmodule Exoforge.ActionTrace do
     per_page = max(Keyword.get(opts, :per_page, 8), 1)
     errors_only? = Keyword.get(opts, :errors_only, false) == true
     caller = Keyword.get(opts, :caller, "")
+    rid = Keyword.get(opts, :rid, "")
 
     retained =
       key
@@ -150,6 +130,7 @@ defmodule Exoforge.ActionTrace do
       |> Enum.map(&fetch(&1))
       |> Enum.reject(&is_nil/1)
       |> Enum.filter(fn sample -> caller in ["", nil] or sample.caller == to_string(caller) end)
+      |> Enum.filter(fn sample -> rid in ["", nil] or sample.rid == to_string(rid) end)
       |> Enum.reverse()
 
     total = length(retained)
@@ -162,6 +143,28 @@ defmodule Exoforge.ActionTrace do
       page: page,
       pages: pages
     }
+  end
+
+  @doc """
+  The retained samples of one request, oldest first.
+
+  A scan of the sample table (bounded by `#{@max_samples}` rows): a debugger asking for one request
+  is not a hot path.
+  """
+  def for_rid(rid) do
+    init_tables()
+    rid = to_string(rid)
+
+    @samples
+    |> :ets.tab2list()
+    |> Enum.flat_map(fn
+      {seq, sample} when is_integer(seq) -> [sample]
+      _ -> []
+    end)
+    |> Enum.filter(&(&1.rid == rid))
+    |> Enum.sort_by(& &1.at)
+    # A failure is stored twice (sample + error bucket); one timeline row is enough.
+    |> Enum.uniq()
   end
 
   ## ---- internals ----
@@ -245,49 +248,8 @@ defmodule Exoforge.ActionTrace do
   defp status({:error, reason}), do: "error: #{inspect(reason)}"
   defp status(_), do: "ok"
 
-  defp preview(value), do: preview(value, 0)
-
-  defp preview_result({:ok, value}), do: preview(value)
+  defp preview_result({:ok, value}), do: Exoforge.PayloadPreview.preview(value)
   defp preview_result(:ok), do: nil
-  defp preview_result({:error, reason}), do: preview(reason)
-  defp preview_result(other), do: preview(other)
-
-  defp preview(_value, depth) when depth > 3, do: "…"
-
-  defp preview(value, _depth) when is_binary(value) do
-    if byte_size(value) > @preview_bytes do
-      binary_part(value, 0, @preview_bytes) <> "… (#{byte_size(value)} bytes)"
-    else
-      value
-    end
-  end
-
-  defp preview(%{__struct__: _} = value, depth), do: value |> Map.from_struct() |> preview(depth)
-
-  defp preview(value, depth) when is_map(value) do
-    value
-    |> Enum.take(@preview_items)
-    |> Map.new(fn {k, v} ->
-      if sensitive?(k), do: {k, @mask}, else: {k, preview(v, depth + 1)}
-    end)
-  end
-
-  defp preview(value, depth) when is_list(value) do
-    Enum.map(Enum.take(value, @preview_items), &preview(&1, depth + 1))
-  end
-
-  defp preview(value, _depth) when is_tuple(value), do: value |> inspect() |> truncate()
-
-  defp preview(value, _depth) when is_atom(value) or is_number(value) or is_nil(value), do: value
-
-  defp preview(value, _depth), do: value |> inspect() |> truncate()
-
-  defp truncate(string) do
-    if byte_size(string) > @preview_bytes, do: binary_part(string, 0, @preview_bytes) <> "…", else: string
-  end
-
-  defp sensitive?(key) do
-    down = key |> to_string() |> String.downcase()
-    Enum.any?(@sensitive, &String.contains?(down, &1))
-  end
+  defp preview_result({:error, reason}), do: Exoforge.PayloadPreview.preview(reason)
+  defp preview_result(other), do: Exoforge.PayloadPreview.preview(other)
 end

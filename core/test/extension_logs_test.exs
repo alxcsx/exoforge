@@ -80,4 +80,16 @@ defmodule Exoforge.ExtensionLogsTest do
     assert ExtensionLogs.append(extension, 1, %{not: "a string"}) == :ok
     assert ExtensionLogs.count(extension) == 0
   end
+
+  test "for_rid returns only the lines of one request, oldest first" do
+    context = %{origin: "alice", rid: "r_logs_1", depth: 0, capture: :off}
+    previous = Exoforge.RequestContext.enter(context)
+    :ok = Exoforge.ExtensionLogs.append(:rid_plugin, 1, "inside the request")
+    Exoforge.RequestContext.restore(previous)
+
+    :ok = Exoforge.ExtensionLogs.append(:rid_plugin, 1, "outside any request")
+
+    assert ["[INFO] inside the request"] = Exoforge.ExtensionLogs.for_rid("r_logs_1")
+    assert Exoforge.ExtensionLogs.for_rid("r_missing") == []
+  end
 end

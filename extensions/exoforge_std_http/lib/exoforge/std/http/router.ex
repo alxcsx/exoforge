@@ -191,7 +191,16 @@ defmodule Exoforge.Std.Http.Router do
       "query" => conn.query_params
     }
 
-    result = ActionDispatcher.dispatch(service, action, payload, caller_scopes: ["webhook", "global"], caller: "webhook")
+    rid = Exoforge.RequestContext.sanitize_rid(List.first(get_req_header(conn, "x-exoforge-rid")))
+    conn = conn |> put_resp_header("x-exoforge-rid", rid) |> assign(:exoforge_rid, rid)
+
+    result =
+      ActionDispatcher.dispatch(service, action, payload,
+        caller_scopes: ["webhook", "global"],
+        caller: "webhook",
+        rid: rid
+      )
+
     latency_us = System.monotonic_time(:microsecond) - t0
 
     case result do
@@ -266,6 +275,7 @@ defmodule Exoforge.Std.Http.Router do
       end
 
     public? = public_action?(service, action)
+    rid = Exoforge.RequestContext.sanitize_rid(List.first(get_req_header(conn, "x-exoforge-rid")))
 
     case authenticate_token(token_from_request(conn)) do
       {:ok, auth_info} ->
@@ -275,7 +285,8 @@ defmodule Exoforge.Std.Http.Router do
           action,
           with_identity(raw_payload, auth_info),
           auth_info.scopes,
-          auth_info[:player_id]
+          auth_info[:player_id],
+          rid
         )
 
       # A public action without a token still gets an identity, so the action's own checks
@@ -288,7 +299,8 @@ defmodule Exoforge.Std.Http.Router do
           action,
           with_identity(raw_payload, %{player_id: nil, scopes: []}),
           [],
-          nil
+          nil,
+          rid
         )
 
       :error ->
@@ -296,8 +308,7 @@ defmodule Exoforge.Std.Http.Router do
     end
   end
 
-  defp dispatch_http(conn, service, action, payload, caller_scopes, caller) do
-    t0_ms = System.system_time(:millisecond)
+  defp dispatch_http(conn, service, action, payload, caller_scopes, caller, rid) do
     t0 = System.monotonic_time(:microsecond)
 
     # The token already names the caller; passing it through is what lets the Studio attribute an
@@ -305,12 +316,15 @@ defmodule Exoforge.Std.Http.Router do
     result =
       ActionDispatcher.dispatch(service, action, payload,
         caller_scopes: caller_scopes,
-        caller: caller || "http"
+        caller: caller || "http",
+        rid: rid
       )
+
     latency_us = System.monotonic_time(:microsecond) - t0
 
-    manifest = Exoforge.ExtensionRegistry.fetch_service(service) || Exoforge.ExtensionRegistry.fetch_manifest(service)
-    logs = if manifest, do: Exoforge.ExtensionLogs.since(manifest.id, t0_ms - 50), else: []
+    # The logs of this request, and the rid on every response so a client can quote it.
+    logs = Exoforge.ExtensionLogs.for_rid(rid)
+    conn = conn |> put_resp_header("x-exoforge-rid", rid) |> assign(:exoforge_rid, rid)
 
     case result do
       {:ok, result} ->
@@ -502,6 +516,13 @@ defmodule Exoforge.Std.Http.Router do
   end
 
   defp send_json(conn, status, body) do
+    body =
+      case conn.assigns[:exoforge_rid] do
+        nil -> body
+        rid when is_map(body) -> Map.put(body, :rid, rid)
+        _rid -> body
+      end
+
     conn
     |> put_resp_content_type("application/json")
     |> send_resp(status, Jason.encode!(body))

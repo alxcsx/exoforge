@@ -21,26 +21,41 @@ defmodule Exoforge.ActionDispatcher do
 
   def dispatch(service, action, payload, opts \\ []) do
     internal? = Keyword.get(opts, :internal, false) == true
+    parent = Exoforge.RequestContext.current()
 
     # Attribution: an explicit caller wins; otherwise a nested dispatch inherits the origin of the
     # action that is already running in this process (a player's request that an extension answered
     # by calling two other services is still the player's request), and only a dispatch with neither
     # is "internal"/"client" on its own.
     caller =
-      Keyword.get(opts, :caller) || Exoforge.ActionTrace.origin() ||
+      Keyword.get(opts, :caller) || (parent && parent.origin) ||
         if(internal?, do: "internal", else: "client")
+
+    # One request id per chain: an ingress-supplied id wins at the top, nested dispatches inherit it.
+    rid =
+      case Keyword.get(opts, :rid) do
+        nil -> (parent && parent.rid) || Exoforge.RequestContext.new_rid()
+        rid -> Exoforge.RequestContext.sanitize_rid(rid)
+      end
 
     opts =
       opts
       |> Keyword.put(:caller, caller)
+      |> Keyword.put(:rid, rid)
       |> Keyword.put(:internal, internal?)
 
-    previous = Exoforge.ActionTrace.put_origin(caller)
+    previous =
+      Exoforge.RequestContext.enter(%{
+        origin: caller,
+        rid: rid,
+        depth: if(parent, do: parent.depth + 1, else: 0),
+        capture: (parent && parent.capture) || :off
+      })
 
     try do
       do_dispatch(service, action, payload, opts, internal?)
     after
-      Exoforge.ActionTrace.restore_origin(previous)
+      Exoforge.RequestContext.restore(previous)
     end
   end
 
@@ -118,6 +133,22 @@ defmodule Exoforge.ActionDispatcher do
         internal?
       )
 
+      # 0b. Group the failure by what broke, with one masked sample of the request that failed.
+      case result do
+        {:error, reason} ->
+          Exoforge.ErrorGroups.record(
+            service,
+            action,
+            Keyword.get(opts, :caller, "client"),
+            Exoforge.RequestContext.rid(),
+            payload,
+            reason
+          )
+
+        _ ->
+          :ok
+      end
+
       # 1. Broadcast action event over EventDispatcher (RecentEvents listens to :all on :global)
       try do
         Exoforge.EventDispatcher.broadcast(
@@ -127,7 +158,8 @@ defmodule Exoforge.ActionDispatcher do
             action: action,
             status: status_str,
             duration_ms: duration_ms,
-            internal: internal?
+            internal: internal?,
+            rid: Exoforge.RequestContext.rid()
           },
           topic: :global,
           source: to_string(Keyword.get(opts, :caller, "client"))

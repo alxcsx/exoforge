@@ -153,6 +153,9 @@ defmodule Exoforge.Std.Dashboard.ApiController do
   end
 
   def dispatch_action(conn, params) do
+    rid = Exoforge.RequestContext.sanitize_rid(List.first(get_req_header(conn, "x-exoforge-rid")))
+    conn = put_resp_header(conn, "x-exoforge-rid", rid)
+
     with {:ok, auth_ctx} <- verify_admin_auth(conn) do
       service = Map.get(params, "service")
       action = Map.get(params, "action")
@@ -161,22 +164,23 @@ defmodule Exoforge.Std.Dashboard.ApiController do
       if is_nil(service) or is_nil(action) do
         conn
         |> put_status(400)
-        |> json(%{status: "error", error: "service and action are required"})
+        |> json(%{status: "error", error: "service and action are required", rid: rid})
       else
         case ActionDispatcher.dispatch(service, action, payload,
                caller_scopes: auth_ctx.scopes,
-               caller: auth_ctx.player_id
+               caller: auth_ctx.player_id,
+               rid: rid
              ) do
           {:ok, result} ->
-            json(conn, %{status: "ok", data: result, caller: auth_ctx.player_id})
+            json(conn, %{status: "ok", data: result, caller: auth_ctx.player_id, rid: rid})
 
           :ok ->
-            json(conn, %{status: "ok", caller: auth_ctx.player_id})
+            json(conn, %{status: "ok", caller: auth_ctx.player_id, rid: rid})
 
           {:error, reason} ->
             conn
             |> put_status(400)
-            |> json(%{status: "error", error: inspect(reason)})
+            |> json(%{status: "error", error: inspect(reason), rid: rid})
         end
       end
     else

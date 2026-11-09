@@ -166,6 +166,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
        current_scopes: session["admin_scopes"] || [],
        action_modal_open: false,
        action_result: nil,
+       action_result_rid: nil,
        action_latency_ms: nil,
        event_dock_open: false,
        events_paused: false,
@@ -977,12 +978,14 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       scopes = socket.assigns.current_scopes
 
       start_time = System.monotonic_time(:microsecond)
+      rid = Exoforge.RequestContext.new_rid()
 
       result =
         try do
           ActionDispatcher.dispatch(svc.name, act.name, payload,
             caller_scopes: scopes,
-            caller: socket.assigns.player_id
+            caller: socket.assigns.player_id,
+            rid: rid
           )
         rescue
           e -> {:error, Exception.message(e)}
@@ -1018,6 +1021,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       {:noreply,
        assign(socket,
          action_result: result,
+         action_result_rid: rid,
          action_latency_ms: latency_ms,
          action_form_params: updated_params
        )}
@@ -1821,6 +1825,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       action_errors: action_errors,
       action_stats: action_stats,
       last_errors: last_errors,
+      error_groups: Exoforge.ErrorGroups.list(%{}, 20),
       callers: callers,
       tracked_services: tracked,
       window_minutes: @trace_window_minutes,
@@ -3000,6 +3005,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         action_params={@action_form_params}
         caller_scopes={Enum.join(@current_scopes, ", ")}
         result={@action_result}
+        rid={@action_result_rid}
         latency_ms={@action_latency_ms}
         on_close="close_action_modal"
         on_select_service="select_action_service"

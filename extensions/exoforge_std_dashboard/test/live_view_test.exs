@@ -1316,6 +1316,30 @@ defmodule Exoforge.DashboardLiveViewTest do
       assert html =~ "All services"
     end
 
+    test "the error mode groups failures and shows the request id of the last one" do
+      Exoforge.ErrorGroups.clear()
+      on_exit(fn -> Exoforge.ErrorGroups.clear() end)
+
+      assert {:error, :service_not_found} =
+               Exoforge.ActionDispatcher.dispatch(:ghost_service, :do_thing, %{"x" => 1})
+
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{
+          "admin_player_id" => "admin",
+          "admin_scopes" => ["admin"]
+        })
+
+      {:ok, view, _html} = live(conn, "/")
+
+      html = render_click(view, "open_actions_detail_modal", %{"mode" => "errors"})
+
+      assert html =~ "Failure groups"
+      assert html =~ "ghost_service.do_thing"
+      assert html =~ ":service_not_found"
+      assert html =~ "rid r_"
+    end
+
     test "an error stays unfoldable after successful traffic, with status filtering and paging" do
       Exoforge.ActionTrace.enable()
 

@@ -90,6 +90,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
   attr(:caller_scopes, :string, default: "admin, player")
   attr(:result, :any, default: nil)
   attr(:latency_ms, :any, default: nil)
+  attr(:rid, :string, default: nil)
   attr(:on_close, :string, default: "close_action_modal")
   attr(:on_select_service, :string, default: "select_action_service")
   attr(:on_select_action, :string, default: "select_action_name")
@@ -317,6 +318,16 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                       <span class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[10px] font-mono font-bold">
                         ⚡ <%= @latency_ms %> ms
                       </span>
+                    <% end %>
+                    <%= if @rid do %>
+                      <button
+                        type="button"
+                        phx-click={Phoenix.LiveView.JS.dispatch("exoforge:clip", detail: %{text: @rid})}
+                        class="px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 text-[10px] font-mono font-bold border border-purple-200 hover:bg-purple-100"
+                        title="Copy request id"
+                      >
+                        rid <%= @rid %>
+                      </button>
                     <% end %>
                   </div>
                 </div>
@@ -2090,6 +2101,66 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               <% end %>
             </div>
 
+            <!-- Failure groups: what broke, grouped, with a request id to open the story -->
+            <%= if @is_error_mode do %>
+              <% groups = @telemetry[:error_groups] || [] %>
+              <div class="p-3 bg-white rounded-xl border border-gray-200 space-y-2">
+                <div class="flex items-center justify-between">
+                  <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                    Failure groups (<%= length(groups) %>)
+                  </span>
+                  <span class="text-[10px] text-gray-400">Grouped by action and reason, newest first</span>
+                </div>
+
+                <%= if groups == [] do %>
+                  <p class="text-[11px] text-gray-400 italic">No failures recorded since the last restart.</p>
+                <% else %>
+                  <div class="max-h-64 overflow-y-auto custom-scrollbar space-y-1.5">
+                    <%= for group <- groups do %>
+                      <details class="group rounded-lg border border-gray-200 bg-gray-50/60">
+                        <summary class="cursor-pointer select-none p-2 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                          <div class="flex items-center gap-2 min-w-0">
+                            <span class="px-1.5 py-0.5 rounded bg-red-50 text-red-700 font-bold border border-red-200 text-[10px]">
+                              <%= group.count %>×
+                            </span>
+                            <span class="font-mono font-bold text-gray-900">
+                              <%= ExtensionPresenter.service_key(group.service) %>.<%= group.action %>
+                            </span>
+                            <span class="font-mono text-red-600 truncate max-w-[22rem]" title={group.reason}>
+                              <%= group.reason %>
+                            </span>
+                          </div>
+                          <span class="text-[10px] text-gray-400 font-mono">
+                            last <%= sample_time(group.last_seen) %> · first <%= sample_time(group.first_seen) %>
+                          </span>
+                        </summary>
+
+                        <div class="p-2.5 pt-0 space-y-1.5">
+                          <div class="flex flex-wrap items-center gap-2 text-[11px]">
+                            <%= if group.rid do %>
+                              <button
+                                type="button"
+                                phx-click={Phoenix.LiveView.JS.dispatch("exoforge:clip", detail: %{text: group.rid})}
+                                class="px-1.5 py-0.5 rounded bg-white border border-purple-200 text-purple-700 font-mono text-[10px] hover:bg-purple-50"
+                                title="Copy the request id of the last failure"
+                              >
+                                rid <%= group.rid %>
+                              </button>
+                            <% end %>
+                            <span class="text-gray-500 font-mono">last caller: <%= group.caller || "unknown" %></span>
+                            <%= if length(group.callers) > 1 do %>
+                              <span class="text-gray-400 font-mono">+<%= length(group.callers) - 1 %> more similar</span>
+                            <% end %>
+                          </div>
+                          <pre class="p-2.5 bg-gray-950 text-emerald-300 rounded-lg font-mono text-[10px] overflow-x-auto"><%= highlight_json(group.request || %{}) %></pre>
+                        </div>
+                      </details>
+                    <% end %>
+                  </div>
+                <% end %>
+              </div>
+            <% end %>
+
             <!-- Controls: Search and Filter Tabs -->
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 text-xs">
               <div class="flex items-center gap-1.5 p-1 bg-gray-100 rounded-xl">
@@ -2315,6 +2386,16 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                                           <%= sample.status %>
                                         </span>
                                         <span class="text-gray-600">caller: <%= sample.caller %></span>
+                                        <%= if sample[:rid] do %>
+                                          <button
+                                            type="button"
+                                            phx-click={Phoenix.LiveView.JS.dispatch("exoforge:clip", detail: %{text: sample.rid})}
+                                            class="px-1.5 py-0.5 rounded bg-white border border-purple-200 text-purple-700 text-[10px] hover:bg-purple-50"
+                                            title="Copy request id"
+                                          >
+                                            rid <%= sample.rid %>
+                                          </button>
+                                        <% end %>
                                         <%= if sample[:internal] do %>
                                           <span class="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 text-[10px] font-bold border border-purple-200">internal call</span>
                                         <% end %>

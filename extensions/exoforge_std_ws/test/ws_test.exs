@@ -134,6 +134,7 @@ defmodule Exoforge.Std.WsTest do
       Jason.encode!(%{
         "type" => "action",
         "id" => "req-42",
+        "rid" => "r_client_42",
         "service" => "Exoforge.Std.WsTest.DummyService.Mock",
         "action" => "greet",
         "payload" => %{"name" => "Alex"}
@@ -144,6 +145,7 @@ defmodule Exoforge.Std.WsTest do
     resp = Jason.decode!(resp_json)
     assert resp["type"] == "action_result"
     assert resp["id"] == "req-42"
+    assert resp["rid"] == "r_client_42"
     assert resp["status"] == "ok"
     assert resp["data"] == %{"message" => "Hello, Alex!"}
   end
@@ -205,6 +207,7 @@ defmodule Exoforge.Std.WsTest do
     resp = Jason.decode!(resp_json)
     assert resp["type"] == "action_result"
     assert resp["id"] == "req-101"
+    assert resp["rid"] =~ ~r/^r_/
     assert resp["status"] == "error"
     assert resp["error"]["code"] == "unauthenticated"
   end

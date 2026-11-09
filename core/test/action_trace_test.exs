@@ -82,28 +82,57 @@ defmodule Exoforge.ActionTraceTest do
     assert Enum.all?(alice.samples, &(&1.caller == "alice"))
   end
 
-  test "a nested internal dispatch is attributed to the origin that triggered it" do
-    previous = ActionTrace.put_origin("player_7")
+  test "a nested internal dispatch inherits the request and its origin" do
+    parent = %{origin: "player_7", rid: "r_parent", depth: 0, capture: :off}
+    previous = Exoforge.RequestContext.enter(parent)
 
     assert {:error, :service_not_found} = ActionDispatcher.dispatch_internal(:nobody, :nothing, %{})
 
-    ActionTrace.restore_origin(previous)
+    Exoforge.RequestContext.restore(previous)
 
     assert %{samples: [sample]} = ActionTrace.samples("nobody.nothing")
     assert sample.caller == "player_7"
     assert sample.internal == true
+    assert sample.rid == "r_parent"
+    assert sample.depth == 1
   end
 
-  test "an explicit caller wins over an inherited origin, and is restored afterwards" do
-    previous = ActionTrace.put_origin("player_7")
+  test "an explicit caller wins over an inherited origin" do
+    parent = %{origin: "player_7", rid: "r_parent", depth: 0, capture: :off}
+    previous = Exoforge.RequestContext.enter(parent)
 
     assert {:error, :service_not_found} =
              ActionDispatcher.dispatch(:nobody, :nothing, %{}, caller: "admin_1")
 
-    ActionTrace.restore_origin(previous)
+    Exoforge.RequestContext.restore(previous)
 
     assert %{samples: [sample]} = ActionTrace.samples("nobody.nothing")
     assert sample.caller == "admin_1"
     assert sample.internal == false
+    assert sample.rid == "r_parent"
+  end
+
+  test "a top-level dispatch starts its own request" do
+    assert {:error, :service_not_found} = ActionDispatcher.dispatch(:nobody, :nothing, %{})
+
+    assert %{samples: [sample]} = ActionTrace.samples("nobody.nothing")
+    assert sample.rid =~ ~r/^r_/
+    assert sample.depth == 0
+    assert sample.caller == "client"
+  end
+
+  test "for_rid returns only the samples of one request" do
+    alice = %{origin: "alice", rid: "r_one", depth: 0, capture: :off}
+    previous = Exoforge.RequestContext.enter(alice)
+    ActionTrace.record(:auth, :login, "alice", %{}, {:ok, %{}}, 1)
+    Exoforge.RequestContext.restore(previous)
+
+    previous = Exoforge.RequestContext.enter(%{alice | rid: "r_two"})
+    ActionTrace.record(:auth, :login, "alice", %{}, {:error, :nope}, 1)
+    Exoforge.RequestContext.restore(previous)
+
+    assert [%{rid: "r_one", status: "ok"}] = ActionTrace.for_rid("r_one")
+    assert [%{rid: "r_two", status: "error: :nope"}] = ActionTrace.for_rid("r_two")
+    assert ActionTrace.for_rid("r_missing") == []
   end
 end

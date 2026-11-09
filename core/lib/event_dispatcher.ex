@@ -46,8 +46,10 @@ defmodule Exoforge.EventDispatcher do
     context = %{
       source: Keyword.get(opts, :source),
       # Who caused this, when it happened inside an action (a player's request, a cron run, a
-      # webhook). Events emitted by an extension keep their `source` and gain the origin.
-      origin: Exoforge.ActionTrace.origin(),
+      # webhook), and which request. Events emitted by an extension keep their `source` and gain
+      # both.
+      origin: Exoforge.RequestContext.origin(),
+      rid: Exoforge.RequestContext.rid(),
       topic: to_string(topic),
       scope: Keyword.get(opts, :scope, :server),
       event: event_key

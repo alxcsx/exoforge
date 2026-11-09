@@ -11,7 +11,13 @@ defmodule Exoforge.ExtensionLogs do
   @max_lines 200
 
   @type level :: 0 | 1 | 2 | 3
-  @type entry :: %{at: integer(), level: level(), level_name: String.t(), message: String.t()}
+  @type entry :: %{
+          at: integer(),
+          level: level(),
+          level_name: String.t(),
+          message: String.t(),
+          rid: String.t() | nil
+        }
 
   @doc "The per-extension ceiling on lines per second; `append/3` refuses the rest of the second past it."
   def rate_limit, do: @max_per_second
@@ -31,13 +37,14 @@ defmodule Exoforge.ExtensionLogs do
     id = to_string(extension_id)
 
     if allowed?(id, now_ms) do
-      if :ets.select_count(table, [{{id, :_, :_, :_}, [], [true]}]) >= @max_lines do
+      if :ets.select_count(table, [{{id, :_, :_, :_, :_}, [], [true]}]) >= @max_lines do
         drop_oldest(table, id)
       end
 
       at = System.system_time(:millisecond)
       lvl = normalize_level(level)
-      :ets.insert(table, {id, at, lvl, message})
+      rid = Exoforge.RequestContext.rid()
+      :ets.insert(table, {id, at, lvl, message, rid})
       persist_async(id, at, lvl, message)
       :ok
     else
@@ -59,8 +66,13 @@ defmodule Exoforge.ExtensionLogs do
           load_from_db(id, limit)
 
         cached ->
-          Enum.map(cached, fn {_id, at, level, message} ->
-            %{at: at, level: level, level_name: level_name(level), message: message}
+          Enum.map(cached, fn
+            {_id, at, level, message, rid} ->
+              %{at: at, level: level, level_name: level_name(level), message: message, rid: rid}
+
+            # Lines written before the rid column existed.
+            {_id, at, level, message} ->
+              %{at: at, level: level, level_name: level_name(level), message: message, rid: nil}
           end)
       end
 
@@ -92,12 +104,28 @@ defmodule Exoforge.ExtensionLogs do
     }
   end
 
-  @doc "Returns recent log lines for an extension since timestamp `since_ms`."
-  def since(extension_id, since_ms) do
-    list(extension_id, 50)
-    |> Enum.filter(&(&1.at >= since_ms))
-    |> Enum.map(&"[#{String.upcase(&1.level_name)}] #{&1.message}")
+  @doc """
+  The lines emitted during one request, oldest first, formatted for a client response.
+
+  This is what a `rid` buys over the old "everything in the last 50 ms" heuristic: concurrent
+  requests no longer read each other's logs.
+  """
+  def for_rid(rid) when is_binary(rid) and rid != "" do
+    ensure_table()
+
+    @table
+    |> :ets.tab2list()
+    |> Enum.filter(fn
+      {_id, _at, _level, _message, ^rid} -> true
+      _ -> false
+    end)
+    |> Enum.sort_by(fn {_id, at, _level, _message, _rid} -> at end)
+    |> Enum.map(fn {_id, _at, level, message, _rid} ->
+      "[#{String.upcase(level_name(level))}] #{message}"
+    end)
   end
+
+  def for_rid(_), do: []
 
   @doc "Drops every recorded line for an extension (called when it is removed)."
   def clear(extension_id) do
@@ -124,7 +152,7 @@ defmodule Exoforge.ExtensionLogs do
 
   @doc "How many lines are currently held for an extension."
   def count(extension_id) do
-    :ets.select_count(ensure_table(), [{{to_string(extension_id), :_, :_, :_}, [], [true]}])
+    :ets.select_count(ensure_table(), [{{to_string(extension_id), :_, :_, :_, :_}, [], [true]}])
   end
 
   defp ensure_table do
@@ -180,7 +208,7 @@ defmodule Exoforge.ExtensionLogs do
   end
 
   defp drop_oldest(table, id) do
-    case table |> :ets.lookup(id) |> Enum.min_by(fn {_id, at, _level, _msg} -> at end, fn -> nil end) do
+    case table |> :ets.lookup(id) |> Enum.min_by(fn tuple -> elem(tuple, 1) end, fn -> nil end) do
       nil -> :ok
       oldest -> :ets.delete_object(table, oldest)
     end
@@ -245,7 +273,8 @@ defmodule Exoforge.ExtensionLogs do
               at: at,
               level: level,
               level_name: to_string(row["level_name"] || level_name(level)),
-              message: to_string(row["message"] || "")
+              message: to_string(row["message"] || ""),
+              rid: Map.get(row, "rid")
             }
           end)
 

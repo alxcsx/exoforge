@@ -120,11 +120,11 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
     case WorkerRegistry.lookup(extension_id, {@runner_key, idx}) do
       {:ok, pid} ->
         try do
-          # The origin (who triggered this action) rides along: the extension may call other
-          # services from inside it, and those nested calls must still answer "who asked".
+          # The request context rides along: the extension may call other services or log from
+          # inside this action, and those must still answer "who asked, and in which request".
           GenServer.call(
             pid,
-            {:execute_action, to_string(action), payload, Exoforge.ActionTrace.origin()},
+            {:execute_action, to_string(action), payload, Exoforge.RequestContext.current()},
             timeout
           )
         catch
@@ -183,7 +183,7 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
        buffer: "",
        pending: %{},
        seq: 0,
-       current_origin: nil,
+       current_context: nil,
        handshake: nil,
        handshake_timer: handshake_timer,
        worker_idx: idx
@@ -205,24 +205,24 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
     handle_call({:execute_action, action, payload, nil}, from, state)
   end
 
-  def handle_call({:execute_action, action, payload, origin}, from, state) do
+  def handle_call({:execute_action, action, payload, context}, from, state) do
     seq = state.seq + 1
     request = Jason.encode!(%{type: "action", id: seq, action: action, payload: payload || %{}})
 
     Port.command(state.port, request <> "\n")
 
     # The pending entry carries what metering needs: who to reply to, and the clock and request
-    # size the reply will be measured against. The origin is what a host call made while this
-    # action runs is attributed to.
+    # size the reply will be measured against. The context is what a host call or a log line made
+    # while this action runs is attributed to.
     entry = %{
       from: from,
       action: action,
-      origin: origin,
+      context: context,
       t0: System.monotonic_time(:microsecond),
       bytes_in: byte_size(request)
     }
 
-    {:noreply, %{state | seq: seq, pending: Map.put(state.pending, seq, entry), current_origin: origin}}
+    {:noreply, %{state | seq: seq, pending: Map.put(state.pending, seq, entry), current_context: context}}
   end
 
   @impl true
@@ -424,7 +424,14 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
   end
 
   defp log_from_extension(msg, state) do
-    record_log(state.manifest.id, Map.get(msg, "level", 1), Map.get(msg, "message", ""))
+    # A log line belongs to the request that is running: enter it so the line carries its rid.
+    previous = Exoforge.RequestContext.enter(state.current_context)
+
+    try do
+      record_log(state.manifest.id, Map.get(msg, "level", 1), Map.get(msg, "message", ""))
+    after
+      Exoforge.RequestContext.restore(previous)
+    end
   end
 
   defp record_log(extension_id, level, message) do
@@ -458,13 +465,13 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
         GenServer.reply(entry.from, reply)
 
         # Attribute outgoing host calls to the most recent action still in flight.
-        current_origin =
+        current_context =
           case pending |> Map.values() |> Enum.max_by(& &1.t0, fn -> nil end) do
             nil -> nil
-            newest -> newest.origin
+            newest -> newest.context
           end
 
-        %{state | pending: pending, current_origin: current_origin}
+        %{state | pending: pending, current_context: current_context}
     end
   end
 
@@ -482,7 +489,7 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
   end
 
   defp answer_host_call(%{"id" => id, "op" => op, "args" => args}, state) do
-    previous = Exoforge.ActionTrace.put_origin(state.current_origin)
+    previous = Exoforge.RequestContext.enter(state.current_context)
 
     try do
       result = run_host_call(op, args || %{}, state.manifest)
@@ -490,7 +497,7 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
       response = Jason.encode!(%{type: "host_call_result", id: id, result: sanitize(result)})
       Port.command(state.port, response <> "\n")
     after
-      Exoforge.ActionTrace.restore_origin(previous)
+      Exoforge.RequestContext.restore(previous)
     end
   end
 
