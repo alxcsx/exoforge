@@ -153,7 +153,9 @@ defmodule Exoforge.Std.Ws.SocketHandler do
       payload: payload,
       # Who triggered it, when the event happened inside an action. Optional on the wire: older
       # clients ignore it, and clients that show it can answer "who did this".
-      origin: Map.get(context, :origin)
+      origin: Map.get(context, :origin),
+      # The request that raised it - the id the Studio timeline joins. Absent outside any request.
+      rid: Map.get(context, :rid)
     }
 
     {:push, {:text, Jason.encode!(frame)}, state}
@@ -293,7 +295,9 @@ defmodule Exoforge.Std.Ws.SocketHandler do
 
     case res do
       {:ok, data} ->
-        Logger.info("[WS:Action] #{service}.#{action} by #{auth.player_id} -> OK (#{latency_us}µs)")
+        Logger.info(
+          "[WS:Action] #{service}.#{action} by #{auth.player_id} -> OK (#{latency_us}µs)"
+        )
 
         reply(
           %{
@@ -308,7 +312,9 @@ defmodule Exoforge.Std.Ws.SocketHandler do
         )
 
       :ok ->
-        Logger.info("[WS:Action] #{service}.#{action} by #{auth.player_id} -> OK (#{latency_us}µs)")
+        Logger.info(
+          "[WS:Action] #{service}.#{action} by #{auth.player_id} -> OK (#{latency_us}µs)"
+        )
 
         reply(
           %{
@@ -323,7 +329,9 @@ defmodule Exoforge.Std.Ws.SocketHandler do
         )
 
       {:error, reason} when reason in [:unauthorized, :forbidden_scope] ->
-        Logger.warning("[WS:Action] #{service}.#{action} by #{auth.player_id} -> #{reason} (#{latency_us}µs)")
+        Logger.warning(
+          "[WS:Action] #{service}.#{action} by #{auth.player_id} -> #{reason} (#{latency_us}µs)"
+        )
 
         reply(
           %{
@@ -341,7 +349,9 @@ defmodule Exoforge.Std.Ws.SocketHandler do
         )
 
       {:error, :service_not_found} ->
-        Logger.warning("[WS:Action] #{service}.#{action} by #{auth.player_id} -> service_not_found (#{latency_us}µs)")
+        Logger.warning(
+          "[WS:Action] #{service}.#{action} by #{auth.player_id} -> service_not_found (#{latency_us}µs)"
+        )
 
         reply(
           %{
@@ -351,7 +361,8 @@ defmodule Exoforge.Std.Ws.SocketHandler do
             status: @status_error,
             error: %{
               code: "service_not_found",
-              message: "Service '#{service}' was not found on the remote server. Ensure the extension providing '#{service}' is deployed and running."
+              message:
+                "Service '#{service}' was not found on the remote server. Ensure the extension providing '#{service}' is deployed and running."
             },
             logs: logs
           },
@@ -359,7 +370,9 @@ defmodule Exoforge.Std.Ws.SocketHandler do
         )
 
       {:error, {:action_not_found, missing_action}} ->
-        Logger.warning("[WS:Action] #{service}.#{action} by #{auth.player_id} -> action_not_found (#{latency_us}µs)")
+        Logger.warning(
+          "[WS:Action] #{service}.#{action} by #{auth.player_id} -> action_not_found (#{latency_us}µs)"
+        )
 
         reply(
           %{
@@ -377,7 +390,9 @@ defmodule Exoforge.Std.Ws.SocketHandler do
         )
 
       {:error, {code, message}} when (is_atom(code) or is_binary(code)) and is_binary(message) ->
-        Logger.warning("[WS:Action] #{service}.#{action} by #{auth.player_id} -> error: #{code}: #{message} (#{latency_us}µs)")
+        Logger.warning(
+          "[WS:Action] #{service}.#{action} by #{auth.player_id} -> error: #{code}: #{message} (#{latency_us}µs)"
+        )
 
         reply(
           %{
@@ -395,7 +410,9 @@ defmodule Exoforge.Std.Ws.SocketHandler do
         )
 
       {:error, reason} ->
-        Logger.warning("[WS:Action] #{service}.#{action} by #{auth.player_id} -> error: #{inspect(reason)} (#{latency_us}µs)")
+        Logger.warning(
+          "[WS:Action] #{service}.#{action} by #{auth.player_id} -> error: #{inspect(reason)} (#{latency_us}µs)"
+        )
 
         reply(
           %{

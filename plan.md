@@ -1,14 +1,14 @@
 # Exoforge Architecture & Plan (`plan.md`)
 
 > **Status**: Kernel, 14 standard extensions, C# Client SDK, C# Extension SDK, C# Management Engine (`exo`
-> CLI), Unity SDK (`com.exoforge.sdk` v0.1.31), Producer Studio, clustering, CI/CD pipeline, and Arch Linux staging deploy are
+> CLI), Unity SDK (`com.exoforge.sdk` v0.1.38), Producer Studio, clustering, CI/CD pipeline, and Arch Linux staging deploy are
 > **complete** — **320 Elixir + 133 C# = 453 tests passing**, plus a live E2E vertical slice of 6 tests
 > against a running server and Unity headless check (`just sample-check`).
 > **MVP Status**: Phase 0 (ADR 001 Architecture Decision Record) & Phase 1 (Extension Terminology Bulldozer) **Completed**.
 > **Benchmark**: 0.07 ms fanout to 50 event subscribers over `:pg`.
 
 Completed work is not kept here. It is in `git log`, which is the record that does not drift; this
-file is the invariants and what is next. Milestone identifiers (**M1**…**M44**) are historical and are
+file is the invariants and what is next. Milestone identifiers (**M1**…**M45**) are historical and are
 referenced from `Agents.MD`, `DX.md` and commit messages, so they stay in the table below and nowhere
 else.
 
@@ -76,6 +76,7 @@ extension_manager ─▶ (independent root)
 | **M37** | Unity SDK v0.1.30 & Extension DX Hardening — Standalone IDE solution launching (`<name>.sln`) bypassing Unity parent project evaluation; client API symmetry (`ExoServices.<Service>`); blank/minimal template scaffolding; enforced Unity player auth doctrine (`ExoforgeSDK.Auth`); cluster package version resolution & semantic version sorting in `file_bucket`; .NET 9+ SDK and runtime packs validation (`ExoforgeDotnetValidator`); global error logging (`ExoClient.OnError` -> `Debug.LogError`) and actionable `service_not_found` diagnostics |
 | **M38** | Extension Fault Isolation & Musl/Alpine RID Support (v0.1.31) — Dynamic musl/Alpine detection on cluster (`linux-musl-x64`) with `EXOFORGE_TARGET_RID` support; Unity Editor RID targeting with `linux-musl-x64` prewarming and default container targeting; supervisor fault isolation using `restart: :temporary` on extension supervisors, pre-handshake exit isolation, and crash registry tracking (`mark_crashed`) to prevent crash loop cascade to root supervisor |
 | **M39** | Studio Telemetry, Top Bar Centering & Ingress Hardening (v0.1.34) — Real-time metering pipeline feeding action throughput and non-zero error charts; centered Studio top bar with dynamic label omission and 4-item pin cap; 85vh live event stream modal with server-side syntax highlighting, payload folding, and automated error detection; unprivileged `ActionDispatcher.dispatch` deny-by-default (`[]`) with `dispatch_internal` for privileged orchestration; auth synthesis of env admin accounts in `list_users` ensuring visibility before database bootstrap |
+| **M45** | Client Diagnostics & Request Ids (v0.1.38) — `ExoActionResult.RequestId` and `ExoEventFrame.RequestId` read the additive `rid` field; a failure's `ExoActionException` carries the rid and the server logs log it, the WS event frame carries the rid of the request that raised it; `ExoClient` keeps the last 50 calls in memory and `ExoforgeSDK.ExportDiagnostics()` emits them as JSON; the Control Center Event Stream shows each event's rid and copies the diagnostics with one button |
 | **M44** | Capture on Demand & Replay — `Exoforge.DebugCapture` keeps expiring rules (player, action or global) in `persistent_term`; a matched top-level dispatch inherits `capture: :deep`, traces even when the global trace is off, and keeps the full request in a bounded in-memory ring (50 × 64 KB, too-large payloads marked, never persisted); `observability.replay` re-dispatches a captured request as its original caller under a new rid; the Studio timeline hosts the capture form, the countdown/stop list and a replay button per captured call, and the user drawer starts a 60-second capture for that account |
 | **M43** | Action Health & Percentiles — `Exoforge.Metering` records a log-scale latency histogram and reports p50/p95 per action; `observability.health` joins the 30-minute trace rates with those percentiles and composes a "needs attention" list (newest failures, slow actions, restarting extensions); the Overview throughput card renders that strip with a timeline link per failure, and the actions modal gains a p95 column |
 | **M42** | Event Retention, Rollups & Archive — the event store grows a day column, indexes and batched ingest; hourly rollups survive the raw rows; every day older than `EXOFORGE_EVENT_HOT_DAYS` (default 30) is exported to `events-YYYY-MM-DD.ndjson.gz`, catalogued in `event_archives`, and only then deleted (a failed export keeps the rows); `observability.events` pages the hot table and falls back to a capped archive scan for older ranges; the user inspector's Events tab reads that history with paging and an archive toggle; `auth.delete_user` purges the caller's hot events |
@@ -630,7 +631,7 @@ flowchart TD
 
 ## 11. M40–M45: Live Debugging & Observability (Implementation Plan)
 
-Status: **M40–M44 landed** (request ids, error groups, observability extension, request timeline, event retention/archive, action health, capture/replay); M45 planned. A review of the current analytics/troubleshooting surfaces
+Status: **M40–M45 landed** (request ids, error groups, observability extension, request timeline, event retention/archive, action health, capture/replay, client diagnostics). A review of the current analytics/troubleshooting surfaces
 (`Exoforge.Metering`, `Exoforge.ActionTrace`, `RecentEvents`, `ExtensionLogs`, the Studio's six
 surfaces) found one missing spine and three missing views:
 
@@ -995,7 +996,7 @@ planned `replayed_from` marker on the new trace sample was not added, the respon
 same thing. Payloads above 64 KB are recorded as `too_large` and refused for replay. The capture
 controls live in the timeline modal and the user drawer; the action modal has none.
 
-### 11.7 M45 — SDK and Unity editor integration
+### 11.7 M45 — SDK and Unity editor integration (Landed)
 
 - `sdk/csharp/Exoforge.Client/Protocol.cs` — `ExoActionResult.RequestId` (JSON `rid`).
 - `ExoClient` — error callbacks include the rid; `ExoforgeSDK.ExportDiagnostics()` returns the
@@ -1007,6 +1008,13 @@ controls live in the timeline modal and the user drawer; the action modal has no
 
 Acceptance: a Unity developer reports a failure by pasting one rid or one diagnostics JSON; the
 timeline links the client call to the server chain.
+
+What landed: the rid arrives in the action result body on the socket and in the `x-exoforge-rid`
+response header on HTTP (the body carries it too), so one reader handles both transports. The
+diagnostics ring is static and process-wide (`ExoClient.ExportDiagnostics()`), which is the right
+scope for "what did this editor session just do". `sdk/csharp` has no package version of its own -
+the client ships inside the Unity package - so the bump is `package.json` and
+`ExoforgePackageVersion.cs` only.
 
 ### 11.8 Risks and mitigations
 

@@ -121,7 +121,9 @@ defmodule Exoforge.Std.WsTest do
     {:ok, state} = SocketHandler.init([])
 
     ping_msg = Jason.encode!(%{"type" => "ping"})
-    assert {:push, {:text, resp_json}, _new_state} = SocketHandler.handle_in({ping_msg, :text}, state)
+
+    assert {:push, {:text, resp_json}, _new_state} =
+             SocketHandler.handle_in({ping_msg, :text}, state)
 
     assert %{"type" => "pong"} = Jason.decode!(resp_json)
   end
@@ -140,7 +142,8 @@ defmodule Exoforge.Std.WsTest do
         "payload" => %{"name" => "Alex"}
       })
 
-    assert {:push, {:text, resp_json}, _new_state} = SocketHandler.handle_in({action_msg, :text}, state)
+    assert {:push, {:text, resp_json}, _new_state} =
+             SocketHandler.handle_in({action_msg, :text}, state)
 
     resp = Jason.decode!(resp_json)
     assert resp["type"] == "action_result"
@@ -156,11 +159,23 @@ defmodule Exoforge.Std.WsTest do
 
     # 1. Subscribe to topic
     sub_msg = Jason.encode!(%{"type" => "subscribe", "topic" => "room:test"})
-    assert {:push, {:text, sub_resp}, sub_state} = SocketHandler.handle_in({sub_msg, :text}, state)
+
+    assert {:push, {:text, sub_resp}, sub_state} =
+             SocketHandler.handle_in({sub_msg, :text}, state)
+
     assert %{"type" => "subscribed", "topic" => "room:test"} = Jason.decode!(sub_resp)
 
-    # 2. Broadcast event via EventDispatcher
+    # 2. Broadcast event via EventDispatcher, inside a request so the frame carries its id
+    previous =
+      Exoforge.RequestContext.enter(%{
+        origin: "tester",
+        rid: "r_ws_event",
+        depth: 0,
+        capture: :off
+      })
+
     EventDispatcher.broadcast(:player_spawned, %{id: 99, x: 10.5}, topic: "room:test")
+    Exoforge.RequestContext.restore(previous)
 
     # 3. Handle info received by socket handler process
     assert_receive {:exo_event, :player_spawned, payload, context}
@@ -173,17 +188,24 @@ defmodule Exoforge.Std.WsTest do
     assert event_frame["event"] == "player_spawned"
     assert event_frame["topic"] == "room:test"
     assert event_frame["payload"] == %{"id" => 99, "x" => 10.5}
+    assert event_frame["rid"] == "r_ws_event"
+    assert event_frame["origin"] == "tester"
 
     # 4. Unsubscribe
     unsub_msg = Jason.encode!(%{"type" => "unsubscribe", "topic" => "room:test"})
-    assert {:push, {:text, unsub_resp}, unsub_state} = SocketHandler.handle_in({unsub_msg, :text}, sub_state)
+
+    assert {:push, {:text, unsub_resp}, unsub_state} =
+             SocketHandler.handle_in({unsub_msg, :text}, sub_state)
+
     assert %{"type" => "unsubscribed", "topic" => "room:test"} = Jason.decode!(unsub_resp)
     assert MapSet.size(unsub_state.subscriptions) == 0
   end
 
   test "WebSocket handles invalid JSON gracefully" do
     {:ok, state} = SocketHandler.init([])
-    assert {:push, {:text, resp_json}, _state} = SocketHandler.handle_in({"invalid{json", :text}, state)
+
+    assert {:push, {:text, resp_json}, _state} =
+             SocketHandler.handle_in({"invalid{json", :text}, state)
 
     resp = Jason.decode!(resp_json)
     assert resp["type"] == "error"
@@ -202,7 +224,8 @@ defmodule Exoforge.Std.WsTest do
         "payload" => %{"user_id" => "bad_actor"}
       })
 
-    assert {:push, {:text, resp_json}, _state} = SocketHandler.handle_in({action_msg, :text}, state)
+    assert {:push, {:text, resp_json}, _state} =
+             SocketHandler.handle_in({action_msg, :text}, state)
 
     resp = Jason.decode!(resp_json)
     assert resp["type"] == "action_result"
@@ -216,7 +239,10 @@ defmodule Exoforge.Std.WsTest do
     {:ok, state} = SocketHandler.init([])
 
     auth_msg = Jason.encode!(%{"type" => "auth", "token" => "guest"})
-    assert {:push, {:text, auth_resp}, auth_state} = SocketHandler.handle_in({auth_msg, :text}, state)
+
+    assert {:push, {:text, auth_resp}, auth_state} =
+             SocketHandler.handle_in({auth_msg, :text}, state)
+
     assert %{"status" => "ok"} = Jason.decode!(auth_resp)
 
     action_msg =
@@ -228,7 +254,8 @@ defmodule Exoforge.Std.WsTest do
         "payload" => %{"user_id" => "bad_actor"}
       })
 
-    assert {:push, {:text, resp_json}, _state} = SocketHandler.handle_in({action_msg, :text}, auth_state)
+    assert {:push, {:text, resp_json}, _state} =
+             SocketHandler.handle_in({action_msg, :text}, auth_state)
 
     resp = Jason.decode!(resp_json)
     assert resp["type"] == "action_result"
@@ -241,7 +268,10 @@ defmodule Exoforge.Std.WsTest do
     {:ok, state} = SocketHandler.init([])
 
     auth_msg = Jason.encode!(%{"type" => "auth", "token" => "dev:admin"})
-    assert {:push, {:text, auth_resp}, auth_state} = SocketHandler.handle_in({auth_msg, :text}, state)
+
+    assert {:push, {:text, auth_resp}, auth_state} =
+             SocketHandler.handle_in({auth_msg, :text}, state)
+
     assert %{"status" => "ok"} = Jason.decode!(auth_resp)
 
     action_msg =
@@ -253,7 +283,8 @@ defmodule Exoforge.Std.WsTest do
         "payload" => %{"user_id" => "bad_actor"}
       })
 
-    assert {:push, {:text, resp_json}, _state} = SocketHandler.handle_in({action_msg, :text}, auth_state)
+    assert {:push, {:text, resp_json}, _state} =
+             SocketHandler.handle_in({action_msg, :text}, auth_state)
 
     resp = Jason.decode!(resp_json)
     assert resp["type"] == "action_result"

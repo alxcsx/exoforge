@@ -252,7 +252,7 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
     private int _selectedActionIndex = 0;
 
     // Live Events
-    private sealed record LoggedEvent(DateTime At, string Topic, string EventName, string RawJson, string? Origin);
+    private sealed record LoggedEvent(DateTime At, string Topic, string EventName, string RawJson, string? Origin, string? Rid);
     private List<LoggedEvent> _eventLog = new();
 
     // Network callbacks arrive on background threads; OnGUI enumerates _eventLog on the main one.

@@ -61,6 +61,55 @@ public class TransportTests
     }
 
     [Fact]
+    public async Task Records_each_call_with_its_request_id_for_a_bug_report()
+    {
+        ExoClient.ClearDiagnostics();
+        await using var server = StubWebSocketServer.Start();
+        using var client = NewClient();
+
+        await client.ConnectAsync(server.Uri);
+
+        var call = client.SendActionAsync<JsonElement>("demo", "ping", new { value = 1 });
+        string frame = await server.NextReceivedAsync(TimeSpan.FromSeconds(5));
+
+        await server.SendAsync(
+            "{\"type\":\"action_result\",\"id\":\"" + RequestId(frame) +
+            "\",\"rid\":\"r_client_1\",\"status\":\"ok\",\"data\":{\"pong\":true}}");
+
+        await PumpAsync(call, client, TimeSpan.FromSeconds(5));
+
+        string diagnostics = ExoClient.ExportDiagnostics();
+        Assert.Contains("\"service\": \"demo\"", diagnostics);
+        Assert.Contains("\"action\": \"ping\"", diagnostics);
+        Assert.Contains("\"rid\": \"r_client_1\"", diagnostics);
+        Assert.Contains("\"status\": \"ok\"", diagnostics);
+    }
+
+    [Fact]
+    public async Task A_failure_carries_the_request_id_and_is_recorded_as_an_error()
+    {
+        ExoClient.ClearDiagnostics();
+        await using var server = StubWebSocketServer.Start();
+        using var client = NewClient();
+
+        await client.ConnectAsync(server.Uri);
+
+        var call = client.SendActionAsync<JsonElement>("demo", "explode", new { });
+        string frame = await server.NextReceivedAsync(TimeSpan.FromSeconds(5));
+
+        await server.SendAsync(
+            "{\"type\":\"action_result\",\"id\":\"" + RequestId(frame) +
+            "\",\"rid\":\"r_client_2\",\"status\":\"error\",\"error\":{\"code\":\"boom\",\"message\":\"it broke\"}}");
+
+        var failure = await Assert.ThrowsAsync<ExoActionException>(
+            () => PumpAsync(call, client, TimeSpan.FromSeconds(5)));
+
+        Assert.Equal("r_client_2", failure.RequestId);
+        Assert.Contains("(rid r_client_2)", failure.Message);
+        Assert.Contains("\"status\": \"error\"", ExoClient.ExportDiagnostics());
+    }
+
+    [Fact]
     public async Task Drops_the_connection_when_the_server_aborts_it()
     {
         await using var server = StubWebSocketServer.Start();

@@ -36,6 +36,13 @@ public class ExoActionResult : ExoMessage
     [JsonPropertyName("id")]
     public string Id { get; set; } = string.Empty;
 
+    /// <summary>
+    /// The server's id for this call (r_...). Quote it in a bug report: it joins this call to the
+    /// server's trace, logs and events. Absent on servers that predate request ids.
+    /// </summary>
+    [JsonPropertyName("rid")]
+    public string? RequestId { get; set; }
+
     [JsonPropertyName("status")]
     public string Status { get; set; } = string.Empty;
 
@@ -151,6 +158,13 @@ public class ExoEventFrame : ExoMessage
     /// </summary>
     [JsonPropertyName("origin")]
     public string? Origin { get; set; }
+
+    /// <summary>
+    /// The request id of the action that raised this event, when it was raised inside one. The same
+    /// id the Studio timeline joins; absent on events raised outside any request.
+    /// </summary>
+    [JsonPropertyName("rid")]
+    public string? RequestId { get; set; }
 
     /// <summary>
     /// Deserializes the payload to the specified strongly-typed model.

@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -67,6 +70,45 @@ public class ExoClient : IDisposable
     /// Global log handler, typically configured by ExoforgeSDK to route returned action/server logs to UnityEngine.Debug.Log.
     /// </summary>
     public static Action<string>? OnLog { get; set; }
+
+    private const int DiagnosticsCapacity = 50;
+    private static readonly List<ExoDiagnostic> _diagnostics = new();
+
+    /// <summary>
+    /// The last 50 calls this process made, as indented JSON. Paste it into a bug report: each entry
+    /// carries the server's request id, and the server joins that id to its trace, logs and events.
+    /// </summary>
+    public static string ExportDiagnostics()
+    {
+        lock (_diagnostics)
+        {
+            return JsonSerializer.Serialize(_diagnostics, new JsonSerializerOptions { WriteIndented = true });
+        }
+    }
+
+    /// <summary>Forgets the recorded calls.</summary>
+    public static void ClearDiagnostics()
+    {
+        lock (_diagnostics) _diagnostics.Clear();
+    }
+
+    private static void RecordDiagnostic(string service, string action, string? rid, string status, long durationMs)
+    {
+        lock (_diagnostics)
+        {
+            _diagnostics.Add(new ExoDiagnostic
+            {
+                At = DateTime.UtcNow,
+                Service = service,
+                Action = action,
+                Rid = rid,
+                Status = status,
+                DurationMs = durationMs
+            });
+
+            if (_diagnostics.Count > DiagnosticsCapacity) _diagnostics.RemoveAt(0);
+        }
+    }
 
     private readonly List<string> _lastActionLogs = new();
     /// <summary>Logs emitted by the server/extension during the most recent action execution.</summary>
@@ -275,6 +317,7 @@ public class ExoClient : IDisposable
         await ConnectIfNeededAsync().ConfigureAwait(false);
 
         string reqId = $"req_{Interlocked.Increment(ref _requestIdCounter)}";
+        var startedAt = Stopwatch.StartNew();
 
         var request = new ExoActionRequest
         {
@@ -313,6 +356,8 @@ public class ExoClient : IDisposable
 
             ExoActionResult result = await tcs.Task.ConfigureAwait(false);
 
+            RecordDiagnostic(service, action, result.RequestId, result.IsSuccess ? "ok" : "error", startedAt.ElapsedMilliseconds);
+
             lock (_lastActionLogs)
             {
                 _lastActionLogs.Clear();
@@ -330,7 +375,7 @@ public class ExoClient : IDisposable
             {
                 string errCode = result.Error?.Code ?? "unknown_error";
                 string errMsg = result.Error?.Message ?? "Action failed on server";
-                var ex = CreateActionException(service, action, errCode, errMsg);
+                var ex = CreateActionException(service, action, errCode, errMsg, result.RequestId);
                 OnError?.Invoke(ex.Message, ex);
                 throw ex;
             }
@@ -360,6 +405,7 @@ public class ExoClient : IDisposable
         }
 
         var endpoint = new Uri(HttpBaseUri, $"/api/{service}/{action}");
+        var startedAt = Stopwatch.StartNew();
         using var request = new HttpRequestMessage(HttpMethod.Post, endpoint);
 
         if (!string.IsNullOrEmpty(AuthToken))
@@ -405,7 +451,19 @@ public class ExoClient : IDisposable
             }
         }
 
+        string? rid = response.Headers.TryGetValues("x-exoforge-rid", out var ridHeaders)
+            ? ridHeaders.FirstOrDefault()
+            : null;
+
+        if (string.IsNullOrEmpty(rid) && root.TryGetProperty("rid", out var ridProp) && ridProp.ValueKind == JsonValueKind.String)
+        {
+            rid = ridProp.GetString();
+        }
+
         string status = root.TryGetProperty("status", out var sProp) ? sProp.GetString() ?? "" : "";
+
+        RecordDiagnostic(service, action, rid, status == "ok" && response.IsSuccessStatusCode ? "ok" : "error", startedAt.ElapsedMilliseconds);
+
         if (status == "error" || !response.IsSuccessStatusCode || status != "ok")
         {
             string errCode = "http_error";
@@ -426,7 +484,7 @@ public class ExoClient : IDisposable
                     if (errProp.TryGetProperty("message", out var mProp)) errMsg = mProp.GetString() ?? errMsg;
                 }
             }
-            var ex = CreateActionException(service, action, errCode, errMsg);
+            var ex = CreateActionException(service, action, errCode, errMsg, rid);
             OnError?.Invoke(ex.Message, ex);
             throw ex;
         }
@@ -435,14 +493,15 @@ public class ExoClient : IDisposable
         return DeserializeResult<TResult>(dataElement);
     }
 
-    private static ExoActionException CreateActionException(string service, string action, string errCode, string errMsg)
+    private static ExoActionException CreateActionException(string service, string action, string errCode, string errMsg, string? rid = null)
     {
         if (errCode == "service_not_found" || errMsg == "service_not_found" || errMsg == ":service_not_found" ||
             errMsg.Contains("was not found on the remote server") || errMsg.Contains("service_not_found"))
         {
             return new ExoActionException(
                 "service_not_found",
-                $"Service '{service}' (called via '{service}.{action}') was not found on the remote server. Ensure the extension providing '{service}' is deployed and running.");
+                $"Service '{service}' (called via '{service}.{action}') was not found on the remote server. Ensure the extension providing '{service}' is deployed and running.",
+                rid);
         }
 
         if (errCode == "action_not_found" || errMsg == "action_not_found" ||
@@ -450,10 +509,11 @@ public class ExoClient : IDisposable
         {
             return new ExoActionException(
                 "action_not_found",
-                $"Action '{action}' was not found on remote service '{service}'. Ensure the deployed version of '{service}' matches your generated client stubs.");
+                $"Action '{action}' was not found on remote service '{service}'. Ensure the deployed version of '{service}' matches your generated client stubs.",
+                rid);
         }
 
-        return new ExoActionException(errCode, errMsg);
+        return new ExoActionException(errCode, errMsg, rid);
     }
 
     private static TResult DeserializeResult<TResult>(JsonElement data)
@@ -884,8 +944,38 @@ public class ExoActionException : Exception
 {
     public string Code { get; }
 
-    public ExoActionException(string code, string message) : base($"[{code}] {message}")
+    /// <summary>
+    /// The server's request id for the failed call, when the server sent one. The Studio timeline
+    /// joins it to the trace, logs and events of the request.
+    /// </summary>
+    public string? RequestId { get; }
+
+    public ExoActionException(string code, string message, string? requestId = null)
+        : base($"[{code}] {message}" + (requestId == null ? "" : $" (rid {requestId})"))
     {
         Code = code;
+        RequestId = requestId;
     }
+}
+
+/// <summary>One entry in the client's bounded call history, for a bug report.</summary>
+public class ExoDiagnostic
+{
+    [JsonPropertyName("at")]
+    public DateTime At { get; set; }
+
+    [JsonPropertyName("service")]
+    public string Service { get; set; } = string.Empty;
+
+    [JsonPropertyName("action")]
+    public string Action { get; set; } = string.Empty;
+
+    [JsonPropertyName("rid")]
+    public string? Rid { get; set; }
+
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = string.Empty;
+
+    [JsonPropertyName("duration_ms")]
+    public long DurationMs { get; set; }
 }

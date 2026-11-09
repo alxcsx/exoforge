@@ -127,6 +127,12 @@ namespace Exoforge.Client.Unity
             }
         }
 
+        /// <summary>
+        /// The last 50 calls this session made, as JSON. Paste it into a bug report: every entry
+        /// carries the server's request id, which the Studio timeline joins to the whole request.
+        /// </summary>
+        public static string ExportDiagnostics() => ExoClient.ExportDiagnostics();
+
         /// <summary>Connects to the cluster (idempotent) and returns the client.</summary>
         public static async Task<ExoClient> ConnectAsync()
         {
@@ -226,6 +232,9 @@ namespace Exoforge.Client.Unity
 
         /// <summary>Closes the socket and releases realtime resources.</summary>
         public static Task DisconnectAsync() => ExoforgeSDK.DisconnectAsync();
+
+        /// <summary>The last 50 calls this session made, as JSON, for a bug report.</summary>
+        public static string ExportDiagnostics() => ExoforgeSDK.ExportDiagnostics();
 
         /// <summary>Event that fires on connection state transitions.</summary>
         public static event Action<ExoforgeConnectionState>? StateChanged

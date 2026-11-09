@@ -56,6 +56,16 @@ public class ProtocolAndDispatcherTests
     }
 
     [Fact]
+    public void CanDeserializeActionResult_WithRequestId()
+    {
+        string json = "{\"type\":\"action_result\",\"id\":\"req_4\",\"rid\":\"r_abc123\",\"status\":\"ok\",\"data\":1}";
+        var result = JsonSerializer.Deserialize<ExoActionResult>(json);
+
+        Assert.NotNull(result);
+        Assert.Equal("r_abc123", result.RequestId);
+    }
+
+    [Fact]
     public void CanDeserializeActionResult_WithStringError()
     {
         string json = "{\"type\":\"action_result\",\"id\":\"req_3\",\"status\":\"error\",\"error\":\"Something unexpected went wrong\"}";
@@ -71,13 +81,15 @@ public class ProtocolAndDispatcherTests
     [Fact]
     public void CanDeserializeEventFrame()
     {
-        string json = "{\"type\":\"event\",\"event\":\"value_changed\",\"topic\":\"sample:events\",\"origin\":\"player_42\",\"payload\":{\"counter_id\":2,\"new_value\":25}}";
+        string json = "{\"type\":\"event\",\"event\":\"value_changed\",\"topic\":\"sample:events\",\"origin\":\"player_42\",\"rid\":\"r_evt1\",\"payload\":{\"counter_id\":2,\"new_value\":25}}";
         var frame = JsonSerializer.Deserialize<ExoEventFrame>(json);
 
         Assert.NotNull(frame);
         Assert.Equal("event", frame.Type);
         Assert.Equal("value_changed", frame.Event);
         Assert.Equal("sample:events", frame.Topic);
+        Assert.Equal("player_42", frame.Origin);
+        Assert.Equal("r_evt1", frame.RequestId);
         Assert.Equal("player_42", frame.Origin);
 
         var payload = frame.DeserializePayload<CounterEventPayload>();

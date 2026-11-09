@@ -61,6 +61,13 @@ public partial class ExoforgeControlCenter : EditorWindow
             _eventLog.Clear();
             _selectedEvent = null;
         }
+
+        // One button turns "it broke" into a report: the last 50 calls with the server's request ids.
+        if (GUILayout.Button("Copy diagnostics", EditorStyles.miniButton, GUILayout.Width(120)))
+        {
+            EditorGUIUtility.systemCopyBuffer = ExoClient.ExportDiagnostics();
+            ShowStatus("Copied the last 50 calls as JSON (each carries its request id).", MessageType.Info);
+        }
         EditorGUILayout.EndHorizontal();
 
         // Search & kind filters
@@ -123,6 +130,15 @@ public partial class ExoforgeControlCenter : EditorWindow
                     EditorGUILayout.LabelField($"← {evt.Origin}", originStyle, GUILayout.Width(110));
                 }
 
+                if (!string.IsNullOrEmpty(evt.Rid))
+                {
+                    var ridStyle = new GUIStyle(EditorStyles.miniLabel)
+                    {
+                        normal = { textColor = ExoforgeUIStyle.TextMuted }
+                    };
+                    EditorGUILayout.LabelField(evt.Rid, ridStyle, GUILayout.Width(115));
+                }
+
                 if (GUILayout.Button(isSelected ? "Selected" : "Inspect", EditorStyles.miniButton, GUILayout.Width(60)))
                 {
                     _selectedEvent = evt;
@@ -139,11 +155,19 @@ public partial class ExoforgeControlCenter : EditorWindow
         EditorGUILayout.BeginHorizontal();
         EditorGUILayout.LabelField(_selectedEvent != null
             ? $"Payload: {_selectedEvent.Topic} -> {_selectedEvent.EventName}" +
-              (string.IsNullOrEmpty(_selectedEvent.Origin) ? "" : $"  (triggered by {_selectedEvent.Origin})")
+              (string.IsNullOrEmpty(_selectedEvent.Origin) ? "" : $"  (triggered by {_selectedEvent.Origin})") +
+              (string.IsNullOrEmpty(_selectedEvent.Rid) ? "" : $"  ·  {_selectedEvent.Rid}")
             : "Event Payload Inspector", EditorStyles.boldLabel);
 
         if (_selectedEvent != null)
         {
+            if (!string.IsNullOrEmpty(_selectedEvent.Rid) &&
+                GUILayout.Button("Copy rid", EditorStyles.miniButton, GUILayout.Width(70)))
+            {
+                EditorGUIUtility.systemCopyBuffer = _selectedEvent.Rid;
+                ShowStatus("Copied the request id: paste it into the Studio timeline.", MessageType.Info);
+            }
+
             if (GUILayout.Button("Copy JSON", EditorStyles.miniButton, GUILayout.Width(80)))
             {
                 EditorGUIUtility.systemCopyBuffer = _selectedEvent.RawJson;
