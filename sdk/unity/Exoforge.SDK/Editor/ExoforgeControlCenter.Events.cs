@@ -22,6 +22,26 @@ public partial class ExoforgeControlCenter : EditorWindow
     // Tab 2: Live Events Pub/Sub
     // =========================================================================
 
+    /// <summary>
+    /// What raised an event: actions announce themselves by name, and cron/webhook runs carry their
+    /// origin (an action dispatched by the scheduler is still a cron run).
+    /// </summary>
+    private static string EventKind(LoggedEvent evt)
+    {
+        string name = evt.EventName ?? "";
+        string origin = evt.Origin ?? "";
+
+        if (string.Equals(origin, "cron", StringComparison.OrdinalIgnoreCase) ||
+            name.StartsWith("cron", StringComparison.OrdinalIgnoreCase)) return "cron";
+
+        if (string.Equals(origin, "webhook", StringComparison.OrdinalIgnoreCase) ||
+            name.StartsWith("webhook", StringComparison.OrdinalIgnoreCase)) return "webhook";
+
+        if (name.StartsWith("action:", StringComparison.OrdinalIgnoreCase)) return "action";
+
+        return "event";
+    }
+
     private void DrawLiveEvents()
     {
         if (DrawClusterGate()) return;
@@ -43,22 +63,41 @@ public partial class ExoforgeControlCenter : EditorWindow
         }
         EditorGUILayout.EndHorizontal();
 
-        // Search Filter
+        // Search & kind filters
         EditorGUILayout.BeginHorizontal();
         _eventFilter = EditorGUILayout.TextField("Filter", _eventFilter);
         if (!string.IsNullOrEmpty(_eventFilter) && GUILayout.Button("✕", EditorStyles.miniButton, GUILayout.Width(22)))
         {
             _eventFilter = "";
         }
+
+        // The type is in the event name (action:<service>.<action>) and in the origin (cron/webhook),
+        // so the filter reads it rather than asking the user to remember prefixes.
+        _eventKindIndex = EditorGUILayout.Popup(
+            _eventKindIndex,
+            new[] { "All types", "Actions", "Events", "Webhooks", "Cron" },
+            EditorStyles.miniButton,
+            GUILayout.Width(110));
         EditorGUILayout.EndHorizontal();
 
         // Event List
         _eventScroll = EditorGUILayout.BeginScrollView(_eventScroll, GUILayout.Height(210));
 
-        var filtered = string.IsNullOrWhiteSpace(_eventFilter)
-            ? _eventLog
-            : _eventLog.Where(e => e.Topic.Contains(_eventFilter, StringComparison.OrdinalIgnoreCase) ||
-                                   e.EventName.Contains(_eventFilter, StringComparison.OrdinalIgnoreCase)).ToList();
+        string kindFilter = _eventKindIndex switch
+        {
+            1 => "action",
+            2 => "event",
+            3 => "webhook",
+            4 => "cron",
+            _ => ""
+        };
+
+        var filtered = _eventLog
+            .Where(e => string.IsNullOrWhiteSpace(_eventFilter) ||
+                        e.Topic.Contains(_eventFilter, StringComparison.OrdinalIgnoreCase) ||
+                        e.EventName.Contains(_eventFilter, StringComparison.OrdinalIgnoreCase))
+            .Where(e => kindFilter == "" || EventKind(e) == kindFilter)
+            .ToList();
 
         if (filtered.Count == 0)
         {
@@ -73,8 +112,16 @@ public partial class ExoforgeControlCenter : EditorWindow
 
                 EditorGUILayout.BeginHorizontal(rowStyle);
                 EditorGUILayout.LabelField(evt.At.ToString("HH:mm:ss.fff"), EditorStyles.miniLabel, GUILayout.Width(80));
-                EditorGUILayout.LabelField(evt.Topic, EditorStyles.miniBoldLabel, GUILayout.Width(130));
+                EditorGUILayout.LabelField(evt.Topic, EditorStyles.miniBoldLabel, GUILayout.Width(110));
                 EditorGUILayout.LabelField(evt.EventName);
+                if (!string.IsNullOrEmpty(evt.Origin))
+                {
+                    var originStyle = new GUIStyle(EditorStyles.miniLabel)
+                    {
+                        normal = { textColor = ExoforgeUIStyle.TextMuted }
+                    };
+                    EditorGUILayout.LabelField($"← {evt.Origin}", originStyle, GUILayout.Width(110));
+                }
 
                 if (GUILayout.Button(isSelected ? "Selected" : "Inspect", EditorStyles.miniButton, GUILayout.Width(60)))
                 {
@@ -91,7 +138,8 @@ public partial class ExoforgeControlCenter : EditorWindow
         // Event Detail Inspector
         EditorGUILayout.BeginHorizontal();
         EditorGUILayout.LabelField(_selectedEvent != null
-            ? $"Payload: {_selectedEvent.Topic} -> {_selectedEvent.EventName}"
+            ? $"Payload: {_selectedEvent.Topic} -> {_selectedEvent.EventName}" +
+              (string.IsNullOrEmpty(_selectedEvent.Origin) ? "" : $"  (triggered by {_selectedEvent.Origin})")
             : "Event Payload Inspector", EditorStyles.boldLabel);
 
         if (_selectedEvent != null)

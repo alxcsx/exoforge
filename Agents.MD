@@ -1,7 +1,7 @@
 # Exoforge Operating Manual (`Agents.MD`)
 
 > **Branch**: `projetao_mvp`  
-> **Status**: Kernel, 14 standard extensions, C# Client & Extension SDKs, C# Management Engine (`exo` CLI), Unity SDK (`com.exoforge.sdk` v0.1.34), Producer Studio and the extension runtime are **complete** — **320 Elixir + 140 C# = 460 tests passing**, plus a live E2E vertical slice of 6 tests and Unity headless self-check (`just sample-check`).  
+> **Status**: Kernel, 14 standard extensions, C# Client & Extension SDKs, C# Management Engine (`exo` CLI), Unity SDK (`com.exoforge.sdk` v0.1.36), Producer Studio and the extension runtime are **complete** — **320 Elixir + 140 C# = 460 tests passing**, plus a live E2E vertical slice of 6 tests and Unity headless self-check (`just sample-check`).  
 > **MVP Execution Plan**: Phase 0 (ADR 001) & Phase 1 (Extension Terminology Bulldozer) **Completed**.  
 > **Verified Benchmark**: 0.07 ms fanout to 50 event subscribers over `:pg` (in-memory cluster pub/sub bus).
 
@@ -280,6 +280,7 @@ var board   = await ExoServices.SnakeLeaderboard.GetLeaderboardAsync(10);
   `Client.<Service>()` available as aliases.
 - `ExoTokenStore` is public but **low-level** — use `ExoforgeSDK.Auth`. Exposed only for custom
   credential storage and tooling.
+- **Event attribution**: `ExoEventFrame.Origin` carries who triggered an event (`player_id`, `studio`, `cron`, `webhook`, `internal`) when it happened inside an action. Optional on the wire, so older servers and clients stay compatible; the Unity Control Center's Event Stream filters by kind and shows the origin per row.
 - `ExoforgeSDK.ConnectAsync()` — idempotent connect. `ExoforgeManager` is created on demand if no
   Exoforge prefab is in the scene, so a game needs no scene wiring to use the SDK.
 - **Standalone IDE Extension Solutions**: The Unity Studio "Edit" button opens the extension's dedicated

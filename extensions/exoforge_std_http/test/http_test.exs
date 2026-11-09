@@ -198,6 +198,31 @@ defmodule Exoforge.HttpTest do
       assert body["data"]["secret"] == "classified"
     end
 
+    test "an HTTP action is attributed to the account behind its token" do
+      Exoforge.ActionTrace.enable()
+
+      on_exit(fn ->
+        try do
+          :ets.delete_all_objects(:exo_action_trace)
+          :ets.delete_all_objects(:exo_action_trace_buckets)
+        rescue
+          _ -> :ok
+        end
+      end)
+
+      conn =
+        conn(:post, "/api/mock_admin/secret_op", "{}")
+        |> put_req_header("content-type", "application/json")
+        |> put_req_header("authorization", "Bearer dev:admin")
+        |> Router.call(@opts)
+
+      assert conn.status == 200
+
+      # A caller passes a token, not a name: the route has to say who it was.
+      samples = Exoforge.ActionTrace.samples("mock_admin.secret_op").samples
+      assert Enum.any?(samples, &(&1.caller == "admin"))
+    end
+
     test "studio token can read routes but player token is forbidden" do
       {:ok, studio} = Exoforge.Std.Auth.issue_token("stu_http", ["studio"])
       {:ok, player} = Exoforge.Std.Auth.issue_token("ply_http", ["player"])

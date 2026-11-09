@@ -534,7 +534,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         catch { raw = evt.Payload.ToString() ?? "{}"; }
 
         EnsureCollectionsInitialized();
-        _pendingEvents.Enqueue(new LoggedEvent(DateTime.UtcNow, evt.Topic, evt.Event, raw));
+        _pendingEvents.Enqueue(new LoggedEvent(DateTime.UtcNow, evt.Topic, evt.Event, raw, evt.Origin));
     }
 
     private async Task RefreshRemoteInfoAsync()

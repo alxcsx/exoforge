@@ -149,7 +149,10 @@ defmodule Exoforge.Std.Ws.SocketHandler do
       type: @frame_event,
       event: event_name,
       topic: to_string(context.topic),
-      payload: payload
+      payload: payload,
+      # Who triggered it, when the event happened inside an action. Optional on the wire: older
+      # clients ignore it, and clients that show it can answer "who did this".
+      origin: Map.get(context, :origin)
     }
 
     {:push, {:text, Jason.encode!(frame)}, state}

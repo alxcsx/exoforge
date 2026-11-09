@@ -274,24 +274,39 @@ defmodule Exoforge.Std.Http.Router do
           service,
           action,
           with_identity(raw_payload, auth_info),
-          auth_info.scopes
+          auth_info.scopes,
+          auth_info[:player_id]
         )
 
       # A public action without a token still gets an identity, so the action's own checks
       # (register scopes, anonymous takeover) see an external caller rather than the dispatcher's
       # implicit full trust (M33 Fix 1).
       :error when public? ->
-        dispatch_http(conn, service, action, with_identity(raw_payload, %{player_id: nil, scopes: []}), [])
+        dispatch_http(
+          conn,
+          service,
+          action,
+          with_identity(raw_payload, %{player_id: nil, scopes: []}),
+          [],
+          nil
+        )
 
       :error ->
         unauthenticated(conn)
     end
   end
 
-  defp dispatch_http(conn, service, action, payload, caller_scopes) do
+  defp dispatch_http(conn, service, action, payload, caller_scopes, caller) do
     t0_ms = System.system_time(:millisecond)
     t0 = System.monotonic_time(:microsecond)
-    result = ActionDispatcher.dispatch(service, action, payload, caller_scopes: caller_scopes)
+
+    # The token already names the caller; passing it through is what lets the Studio attribute an
+    # HTTP action (the Unity SDK and Studio both use this route) to the player who asked for it.
+    result =
+      ActionDispatcher.dispatch(service, action, payload,
+        caller_scopes: caller_scopes,
+        caller: caller || "http"
+      )
     latency_us = System.monotonic_time(:microsecond) - t0
 
     manifest = Exoforge.ExtensionRegistry.fetch_service(service) || Exoforge.ExtensionRegistry.fetch_manifest(service)

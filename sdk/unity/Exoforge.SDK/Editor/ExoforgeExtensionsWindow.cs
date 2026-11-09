@@ -31,7 +31,7 @@ namespace Exoforge.Unity.Editor
 
         private string _searchFilter = "";
         private string? _selectedPluginId;
-        private int _selectedDetailTab = 0; // 0: Overview, 1: Resources, 2: Actions, 3: Events, 4: Webhooks, 5+: Custom
+        private int _selectedDetailTab = 0; // 0: Overview, 1: Resources, 2: Actions, 3: Events, 4: Webhooks, 5: Contracts, 6+: Custom
         private bool _isLoading;
         private bool _isBuilding;
         private string _buildLog = "";
@@ -49,6 +49,9 @@ namespace Exoforge.Unity.Editor
         // Resource Management State
         private string? _selectedResourceName;
         private List<JsonElement> _liveResourceRows = new();
+        private int _liveResourceRowsTotal;
+        private int _liveResourceRowsPage = 1;
+        private const int ResourcePageSize = 50;
         private JsonElement? _selectedResourceRow;
         private bool _isLoadingResources;
         private bool _showAddRecordForm;
@@ -112,7 +115,7 @@ namespace Exoforge.Unity.Editor
             var hooks = GetCustomEditorsForPlugin(pluginId);
             if (preferCustomEditor && hooks.Count > 0)
             {
-                window._selectedDetailTab = 5;
+                window._selectedDetailTab = 6;
             }
             else
             {
@@ -1012,7 +1015,7 @@ namespace Exoforge.Unity.Editor
 
             // 2. Navigation Tab Strip
             var customEditors = GetCustomEditorsForPlugin(selected.Id);
-            var tabs = new List<string> { "Overview", "Resources 🗄️", "Actions ⚡", "Events 📡", "Webhooks 🌐" };
+            var tabs = new List<string> { "Overview", "Resources 🗄️", "Actions ⚡", "Events 📡", "Webhooks 🌐", "Contracts 📜" };
             foreach (var hook in customEditors)
             {
                 tabs.Add($"✨ {hook.DisplayName}");
@@ -1087,10 +1090,14 @@ namespace Exoforge.Unity.Editor
             {
                 contentContainer.Add(BuildWebhooksTab(selected, manifest));
             }
+            else if (_selectedDetailTab == 5)
+            {
+                contentContainer.Add(BuildContractsTab(manifest));
+            }
             else
             {
                 // Custom Editor Hook execution via IMGUIContainer
-                int customIndex = _selectedDetailTab - 5;
+                int customIndex = _selectedDetailTab - 6;
                 if (customIndex >= 0 && customIndex < customEditors.Count)
                 {
                     var hook = customEditors[customIndex];
@@ -1529,7 +1536,8 @@ namespace Exoforge.Unity.Editor
                 _selectedResourceName = evt.newValue;
                 _selectedResourceRow = null;
                 _showAddRecordForm = false;
-                if (IsConnected) _ = FetchLiveResourceDataAsync(_selectedResourceName);
+                _liveResourceRowsPage = 1;
+                if (IsConnected) _ = FetchLiveResourceDataAsync(_selectedResourceName, 1);
                 else RebuildDetailPaneOnly();
             });
             resToolbar.Add(dropdown);
@@ -1735,6 +1743,37 @@ namespace Exoforge.Unity.Editor
 
             if (!isSingleton)
             {
+                // Searching belongs to the store, like paging: it filters the whole table, not the
+                // page that happens to be loaded.
+                var searchField = new TextField { value = _resourceSearch };
+                searchField.style.width = 180;
+                searchField.style.marginLeft = 6;
+                searchField.style.fontSize = 11;
+                searchField.RegisterCallback<KeyDownEvent>(evt =>
+                {
+                    if (evt.keyCode is KeyCode.Return or KeyCode.KeypadEnter)
+                    {
+                        _resourceSearch = searchField.value ?? "";
+                        if (!string.IsNullOrEmpty(_selectedResourceName))
+                        {
+                            _ = FetchLiveResourceDataAsync(_selectedResourceName, 1);
+                        }
+                        evt.StopPropagation();
+                    }
+                });
+
+                var searchBtn = ExoforgeUIStyle.CreateModernButton("🔍", () =>
+                {
+                    _resourceSearch = searchField.value ?? "";
+                    if (!string.IsNullOrEmpty(_selectedResourceName))
+                    {
+                        _ = FetchLiveResourceDataAsync(_selectedResourceName, 1);
+                    }
+                }, height: 22);
+                searchBtn.style.marginLeft = 2;
+                dataBar.Add(searchField);
+                dataBar.Add(searchBtn);
+
                 var addRecordBtn = ExoforgeUIStyle.CreateModernButton(
                     _showAddRecordForm ? "Cancel Add" : "➕ Insert Record",
                     () =>
@@ -1762,10 +1801,32 @@ namespace Exoforge.Unity.Editor
             barSpacer.style.flexGrow = 1;
             dataBar.Add(barSpacer);
 
-            var countLabel = new Label($"{_liveResourceRows.Count} record(s)");
+            int pages = Math.Max(1, (_liveResourceRowsTotal + ResourcePageSize - 1) / ResourcePageSize);
+
+            var countLabel = new Label(
+                pages > 1
+                    ? $"Page {_liveResourceRowsPage} of {pages} • {_liveResourceRowsTotal} record(s)"
+                    : $"{_liveResourceRowsTotal} record(s)");
             countLabel.style.fontSize = 11;
             countLabel.style.color = ExoforgeUIStyle.TextSecondary;
             dataBar.Add(countLabel);
+
+            if (pages > 1)
+            {
+                var prevBtn = ExoforgeUIStyle.CreateModernButton(
+                    "‹", () => { if (IsConnected) _ = FetchLiveResourceDataAsync(_selectedResourceName!, _liveResourceRowsPage - 1); },
+                    height: 20);
+                prevBtn.SetEnabled(_liveResourceRowsPage > 1);
+                prevBtn.style.marginLeft = 6;
+                dataBar.Add(prevBtn);
+
+                var nextBtn = ExoforgeUIStyle.CreateModernButton(
+                    "›", () => { if (IsConnected) _ = FetchLiveResourceDataAsync(_selectedResourceName!, _liveResourceRowsPage + 1); },
+                    height: 20);
+                nextBtn.SetEnabled(_liveResourceRowsPage < pages);
+                nextBtn.style.marginLeft = 2;
+                dataBar.Add(nextBtn);
+            }
 
             root.Add(dataBar);
 
@@ -2197,6 +2258,176 @@ namespace Exoforge.Unity.Editor
         // Tab 3: Events & Tab 4: Webhooks
         // =========================================================================
 
+        private VisualElement BuildContractsTab(JsonElement manifest)
+        {
+            var scroll = new ScrollView();
+            scroll.style.flexGrow = 1;
+
+            var services = new List<JsonElement>();
+            if (manifest.ValueKind == JsonValueKind.Object &&
+                manifest.TryGetProperty("services", out var servicesArr) &&
+                servicesArr.ValueKind == JsonValueKind.Array)
+            {
+                services.AddRange(servicesArr.EnumerateArray());
+            }
+
+            if (services.Count == 0)
+            {
+                var empty = new Label("This extension provides no service contract.");
+                empty.style.color = ExoforgeUIStyle.TextMuted;
+                empty.style.fontSize = 12;
+                empty.style.marginTop = 20;
+                empty.style.alignSelf = Align.Center;
+                scroll.Add(empty);
+                return scroll;
+            }
+
+            foreach (var svc in services)
+            {
+                string serviceName = svc.TryGetProperty("name", out var sn) ? sn.GetString() ?? "" : "";
+                string contract = svc.TryGetProperty("__contract__", out var c) ? c.GetString() ?? "" : "";
+
+                var card = new VisualElement();
+                ExoforgeUIStyle.ApplyCard(card);
+                card.style.marginBottom = 8;
+                card.style.paddingLeft = 10;
+                card.style.paddingRight = 10;
+                card.style.paddingTop = 8;
+                card.style.paddingBottom = 8;
+
+                var header = new VisualElement();
+                header.style.flexDirection = FlexDirection.Row;
+                header.style.alignItems = Align.Center;
+
+                var nameLabel = new Label($"📜 {serviceName}");
+                nameLabel.style.fontSize = 13;
+                nameLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+                nameLabel.style.color = ExoforgeUIStyle.TextPrimary;
+                nameLabel.style.flexGrow = 1;
+                header.Add(nameLabel);
+
+                if (!string.IsNullOrEmpty(contract))
+                {
+                    header.Add(ExoforgeUIStyle.CreatePill(contract, ExoforgeUIStyle.TextSecondary, ExoforgeUIStyle.BgWindow, 9));
+                }
+
+                card.Add(header);
+
+                if (svc.TryGetProperty("actions", out var actionsArr) && actionsArr.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var act in actionsArr.EnumerateArray())
+                    {
+                        string actionName = act.TryGetProperty("name", out var an) ? an.GetString() ?? "" : "";
+                        string mode = act.TryGetProperty("mode", out var m) ? m.GetString() ?? "sync" : "sync";
+                        string scope = act.TryGetProperty("scope", out var sc) ? sc.GetString() ?? "global" : "global";
+                        string transport = act.TryGetProperty("transport", out var tr) ? tr.GetString() ?? "auto" : "auto";
+                        string doc = act.TryGetProperty("doc", out var d) && d.ValueKind == JsonValueKind.String ? d.GetString() ?? "" : "";
+
+                        var actionRow = new VisualElement();
+                        actionRow.style.marginTop = 6;
+                        actionRow.style.paddingTop = 6;
+                        actionRow.style.borderTopWidth = 1;
+                        actionRow.style.borderTopColor = ExoforgeUIStyle.BorderSubtle;
+
+                        var signature = new VisualElement();
+                        signature.style.flexDirection = FlexDirection.Row;
+                        signature.style.alignItems = Align.Center;
+                        signature.style.flexWrap = Wrap.Wrap;
+
+                        var actionLabel = new Label($"{actionName}({string.Join(", ", ReadContractParams(act))})");
+                        actionLabel.style.fontSize = 11;
+                        actionLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+                        actionLabel.style.color = ExoforgeUIStyle.TextPrimary;
+                        actionLabel.style.marginRight = 8;
+                        signature.Add(actionLabel);
+
+                        signature.Add(ExoforgeUIStyle.CreatePill(mode, ExoforgeUIStyle.TextSecondary, ExoforgeUIStyle.BgWindow, 9));
+                        signature.Add(ExoforgeUIStyle.CreatePill(scope, ExoforgeUIStyle.AccentPurple, ExoforgeUIStyle.AccentPurpleBg, 9));
+                        if (!string.Equals(transport, "auto", StringComparison.OrdinalIgnoreCase))
+                        {
+                            signature.Add(ExoforgeUIStyle.CreatePill(transport, ExoforgeUIStyle.AccentBlue, ExoforgeUIStyle.AccentBlueBg, 9));
+                        }
+
+                        if (act.TryGetProperty("returns", out var returns) && returns.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined))
+                        {
+                            signature.Add(ExoforgeUIStyle.CreatePill($"→ {returns}", ExoforgeUIStyle.AccentGreen, ExoforgeUIStyle.AccentGreenBg, 9));
+                        }
+
+                        actionRow.Add(signature);
+
+                        if (!string.IsNullOrWhiteSpace(doc))
+                        {
+                            var docLabel = new Label(doc);
+                            docLabel.style.fontSize = 10;
+                            docLabel.style.color = ExoforgeUIStyle.TextSecondary;
+                            docLabel.style.marginTop = 2;
+                            docLabel.style.whiteSpace = WhiteSpace.Normal;
+                            actionRow.Add(docLabel);
+                        }
+
+                        card.Add(actionRow);
+                    }
+                }
+
+                scroll.Add(card);
+            }
+
+            return scroll;
+        }
+
+        /// <summary>
+        /// A contract's parameter list, from either shape the cluster export can produce: a map of
+        /// <c>name → type</c> (Elixir keyword params) or an array of specs (normalized catalog).
+        /// </summary>
+        private static IEnumerable<string> ReadContractParams(JsonElement action)
+        {
+            if (!action.TryGetProperty("params", out var p)) yield break;
+
+            if (p.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var prop in p.EnumerateObject())
+                {
+                    yield return $"{prop.Name}: {ContractParamType(prop.Value)}";
+                }
+            }
+            else if (p.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in p.EnumerateArray())
+                {
+                    if (item.ValueKind == JsonValueKind.Object)
+                    {
+                        string name = item.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
+                        bool optional = item.TryGetProperty("optional", out var o) && o.ValueKind == JsonValueKind.True;
+                        string type = item.TryGetProperty("type", out var t) ? ContractParamType(t) : "";
+                        yield return $"{name}{(optional ? "?" : "")}: {type}";
+                    }
+                    else if (item.ValueKind == JsonValueKind.String)
+                    {
+                        yield return item.GetString() ?? "";
+                    }
+                }
+            }
+        }
+
+        private static string ContractParamType(JsonElement spec)
+        {
+            switch (spec.ValueKind)
+            {
+                case JsonValueKind.String:
+                    return spec.GetString() ?? "";
+                case JsonValueKind.Object:
+                    return spec.TryGetProperty("type", out var t) ? ContractParamType(t) : "";
+                case JsonValueKind.Array:
+                    foreach (var item in spec.EnumerateArray())
+                    {
+                        if (item.ValueKind == JsonValueKind.String) return item.GetString() ?? "";
+                    }
+                    return "";
+                default:
+                    return spec.ToString();
+            }
+        }
+
         private VisualElement BuildEventsTab(JsonElement manifest)
         {
             var scroll = new ScrollView();
@@ -2530,20 +2761,28 @@ namespace Exoforge.Unity.Editor
             }
         }
 
-        private async Task FetchLiveResourceDataAsync(string resourceName)
+        private async Task FetchLiveResourceDataAsync(string resourceName, int page = 1)
         {
             var client = GetClient();
             if (client == null || !client.IsConnected) return;
 
+            page = Math.Max(page, 1);
             _isLoadingResources = true;
             try
             {
-                // Query resource_store.list
+                // Query one page of resource_store.list: a resource can hold thousands of rows, and
+                // the grid is a scan surface, not an export.
                 var payload = new Dictionary<string, object>
                 {
                     ["resource"] = resourceName,
-                    ["limit"] = 50
+                    ["limit"] = ResourcePageSize,
+                    ["offset"] = (page - 1) * ResourcePageSize
                 };
+
+                if (!string.IsNullOrWhiteSpace(_resourceSearch))
+                {
+                    payload["search"] = _resourceSearch;
+                }
 
                 var res = await client.SendActionAsync<JsonElement>("resource_store", "list", payload);
                 var rowsList = new List<JsonElement>();
@@ -2556,7 +2795,15 @@ namespace Exoforge.Unity.Editor
                     }
                 }
 
+                int total = rowsList.Count;
+                if (res.ValueKind == JsonValueKind.Object && res.TryGetProperty("total", out var totalProp) && totalProp.ValueKind == JsonValueKind.Number)
+                {
+                    total = totalProp.GetInt32();
+                }
+
                 _liveResourceRows = rowsList;
+                _liveResourceRowsTotal = total;
+                _liveResourceRowsPage = page;
                 if (_liveResourceRows.Count > 0 && !_selectedResourceRow.HasValue)
                 {
                     _selectedResourceRow = _liveResourceRows[0];

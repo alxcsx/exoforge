@@ -145,6 +145,14 @@ public class ExoEventFrame : ExoMessage
     public JsonElement Payload { get; set; }
 
     /// <summary>
+    /// Who triggered the event, when it happened inside an action (a player id, a studio account,
+    /// <c>cron</c>, <c>webhook</c> or <c>internal</c>). Absent on events raised outside any action and
+    /// on servers that predate attribution, so treat it as optional.
+    /// </summary>
+    [JsonPropertyName("origin")]
+    public string? Origin { get; set; }
+
+    /// <summary>
     /// Deserializes the payload to the specified strongly-typed model.
     /// </summary>
     public T? DeserializePayload<T>(JsonSerializerOptions? options = null)

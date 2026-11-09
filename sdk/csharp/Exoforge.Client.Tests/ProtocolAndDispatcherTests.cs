@@ -71,13 +71,14 @@ public class ProtocolAndDispatcherTests
     [Fact]
     public void CanDeserializeEventFrame()
     {
-        string json = "{\"type\":\"event\",\"event\":\"value_changed\",\"topic\":\"sample:events\",\"payload\":{\"counter_id\":2,\"new_value\":25}}";
+        string json = "{\"type\":\"event\",\"event\":\"value_changed\",\"topic\":\"sample:events\",\"origin\":\"player_42\",\"payload\":{\"counter_id\":2,\"new_value\":25}}";
         var frame = JsonSerializer.Deserialize<ExoEventFrame>(json);
 
         Assert.NotNull(frame);
         Assert.Equal("event", frame.Type);
         Assert.Equal("value_changed", frame.Event);
         Assert.Equal("sample:events", frame.Topic);
+        Assert.Equal("player_42", frame.Origin);
 
         var payload = frame.DeserializePayload<CounterEventPayload>();
         Assert.NotNull(payload);

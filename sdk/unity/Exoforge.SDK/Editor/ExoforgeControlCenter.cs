@@ -252,7 +252,7 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
     private int _selectedActionIndex = 0;
 
     // Live Events
-    private sealed record LoggedEvent(DateTime At, string Topic, string EventName, string RawJson);
+    private sealed record LoggedEvent(DateTime At, string Topic, string EventName, string RawJson, string? Origin);
     private List<LoggedEvent> _eventLog = new();
 
     // Network callbacks arrive on background threads; OnGUI enumerates _eventLog on the main one.
@@ -261,6 +261,7 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
     private bool _eventPaused;
     private bool _eventAutoScroll = true;
     private string _eventFilter = "";
+    private int _eventKindIndex; // 0 all, 1 actions, 2 events, 3 webhooks, 4 cron
     private Vector2 _eventScroll;
     private LoggedEvent? _selectedEvent;
     private Vector2 _eventDetailScroll;
