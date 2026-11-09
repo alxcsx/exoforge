@@ -2,6 +2,7 @@ defmodule Exoforge.ActionTraceTest do
   use ExUnit.Case, async: false
 
   alias Exoforge.ActionTrace
+  alias Exoforge.ActionDispatcher
 
   setup do
     ActionTrace.enable()
@@ -22,7 +23,7 @@ defmodule Exoforge.ActionTraceTest do
 
     ActionTrace.record(:auth, :login, "player_1", request, {:ok, %{player_id: "p1"}}, 12)
 
-    assert %{samples: [sample]} = ActionTrace.snapshot()
+    assert %{samples: [sample], total: 1} = ActionTrace.samples("auth.login")
     assert sample.key == "auth.login"
     assert sample.caller == "player_1"
     assert sample.status == "ok"
@@ -51,8 +52,67 @@ defmodule Exoforge.ActionTraceTest do
   test "the error status names the reason, so the console can show what came back" do
     ActionTrace.record(:file_bucket, :list_files, "webhook", %{}, {:error, :unauthorized}, 0)
 
-    assert %{samples: [sample]} = ActionTrace.snapshot()
+    assert %{samples: [sample]} = ActionTrace.samples("file_bucket.list_files")
     assert sample.status == "error: :unauthorized"
     assert sample.response == :unauthorized
+  end
+
+  test "errors are retained even after successful traffic fills the samples ring" do
+    ActionTrace.record(:resource_store, :get, "alice", %{}, {:error, :not_found}, 1)
+
+    for _ <- 1..60 do
+      ActionTrace.record(:resource_store, :get, "alice", %{}, {:ok, %{}}, 1)
+    end
+
+    # The per-action ring keeps only the newest samples, but the error bucket survives long enough
+    # to be unfolded: "7 errors" and an empty list is the bug this pins.
+    %{samples: samples, total: total} = ActionTrace.samples("resource_store.get", errors_only: true)
+    assert total >= 1
+    assert Enum.all?(samples, &String.starts_with?(&1.status, "error"))
+  end
+
+  test "samples page and filter by caller" do
+    for i <- 1..12 do
+      caller = if rem(i, 2) == 0, do: "alice", else: "bob"
+      ActionTrace.record(:auth, :register, caller, %{"n" => i}, {:ok, %{}}, i)
+    end
+
+    first = ActionTrace.samples("auth.register", per_page: 5)
+    assert first.page == 1
+    assert length(first.samples) == 5
+    assert first.pages == 3
+    assert hd(first.samples).request == %{"n" => 12}
+
+    third = ActionTrace.samples("auth.register", per_page: 5, page: 3)
+    assert length(third.samples) == 2
+
+    alice = ActionTrace.samples("auth.register", caller: "alice", per_page: 10)
+    assert alice.total == 6
+    assert Enum.all?(alice.samples, &(&1.caller == "alice"))
+  end
+
+  test "a nested internal dispatch is attributed to the origin that triggered it" do
+    previous = ActionTrace.put_origin("player_7")
+
+    assert {:error, :service_not_found} = ActionDispatcher.dispatch_internal(:nobody, :nothing, %{})
+
+    ActionTrace.restore_origin(previous)
+
+    assert %{samples: [sample]} = ActionTrace.samples("nobody.nothing")
+    assert sample.caller == "player_7"
+    assert sample.internal == true
+  end
+
+  test "an explicit caller wins over an inherited origin, and is restored afterwards" do
+    previous = ActionTrace.put_origin("player_7")
+
+    assert {:error, :service_not_found} =
+             ActionDispatcher.dispatch(:nobody, :nothing, %{}, caller: "admin_1")
+
+    ActionTrace.restore_origin(previous)
+
+    assert %{samples: [sample]} = ActionTrace.samples("nobody.nothing")
+    assert sample.caller == "admin_1"
+    assert sample.internal == false
   end
 end

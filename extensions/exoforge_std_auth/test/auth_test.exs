@@ -100,7 +100,9 @@ defmodule Exoforge.AuthTest do
     end
 
     test "handles dev tokens" do
-      assert {:ok, result} = ActionDispatcher.dispatch(:auth, :authenticate, %{token: "dev:hero_99"})
+      assert {:ok, result} =
+               ActionDispatcher.dispatch(:auth, :authenticate, %{token: "dev:hero_99"})
+
       assert result.player_id == "hero_99"
       assert "admin" in result.scopes
     end
@@ -122,7 +124,8 @@ defmodule Exoforge.AuthTest do
       assert {:error, :invalid_token} =
                ActionDispatcher.dispatch(:auth, :authenticate, %{token: "non_existent_token"})
 
-      assert {:error, :invalid_token} = ActionDispatcher.dispatch(:auth, :authenticate, %{token: ""})
+      assert {:error, :invalid_token} =
+               ActionDispatcher.dispatch(:auth, :authenticate, %{token: ""})
     end
   end
 
@@ -179,12 +182,16 @@ defmodule Exoforge.AuthTest do
                ActionDispatcher.dispatch(:auth, :list_users, %{}, caller_scopes: ["player"])
 
       assert {:error, :forbidden_scope} =
-               ActionDispatcher.dispatch(:auth, :issue_token, %{player_id: "someone"}, caller_scopes: ["player"])
+               ActionDispatcher.dispatch(:auth, :issue_token, %{player_id: "someone"},
+                 caller_scopes: ["player"]
+               )
     end
 
     test "an unauthenticated caller without scopes is denied by default" do
       assert {:error, :unauthorized} = ActionDispatcher.dispatch(:auth, :list_users, %{})
-      assert {:error, :unauthorized} = ActionDispatcher.dispatch(:auth, :issue_token, %{player_id: "someone"})
+
+      assert {:error, :unauthorized} =
+               ActionDispatcher.dispatch(:auth, :issue_token, %{player_id: "someone"})
     end
 
     test "an explicit in-process / internal caller keeps working" do
@@ -204,7 +211,9 @@ defmodule Exoforge.AuthTest do
 
       assert result.scopes == ["player"]
 
-      assert {:ok, authed} = ActionDispatcher.dispatch(:auth, :authenticate, %{token: result.token})
+      assert {:ok, authed} =
+               ActionDispatcher.dispatch(:auth, :authenticate, %{token: result.token})
+
       refute "admin" in authed.scopes
     end
 
@@ -235,13 +244,17 @@ defmodule Exoforge.AuthTest do
       assert result.player["name"] == "Sir Lancelot"
 
       # Verify token authenticates successfully
-      assert {:ok, auth_res} = ActionDispatcher.dispatch(:auth, :authenticate, %{token: result.token})
+      assert {:ok, auth_res} =
+               ActionDispatcher.dispatch(:auth, :authenticate, %{token: result.token})
+
       assert auth_res.player_id == "p_lancelot"
       assert "knight" in auth_res.scopes
 
       # Verify player profile was hooked and stored in player_data
       assert {:ok, %{player: profile}} =
-               ActionDispatcher.dispatch_internal(:player_data, :get_player, %{player_id: "p_lancelot"})
+               ActionDispatcher.dispatch_internal(:player_data, :get_player, %{
+                 player_id: "p_lancelot"
+               })
 
       assert profile["name"] == "Sir Lancelot"
       assert profile["email"] == "lance@camelot.io"
@@ -249,13 +262,22 @@ defmodule Exoforge.AuthTest do
 
     test "list_users action returns registered users and active token counts" do
       # Register two users
-      {:ok, _u1} = ActionDispatcher.dispatch(:auth, :register, %{player_id: "user_alpha", scopes: ["player", "admin"]})
-      {:ok, _u2} = ActionDispatcher.dispatch(:auth, :register, %{player_id: "user_beta", scopes: ["player"]})
+      {:ok, _u1} =
+        ActionDispatcher.dispatch(:auth, :register, %{
+          player_id: "user_alpha",
+          scopes: ["player", "admin"]
+        })
+
+      {:ok, _u2} =
+        ActionDispatcher.dispatch(:auth, :register, %{player_id: "user_beta", scopes: ["player"]})
 
       # Issue additional token for user_alpha
-      {:ok, _t2} = ActionDispatcher.dispatch_internal(:auth, :issue_token, %{player_id: "user_alpha"})
+      {:ok, _t2} =
+        ActionDispatcher.dispatch_internal(:auth, :issue_token, %{player_id: "user_alpha"})
 
-      assert {:ok, %{users: users, count: count}} = ActionDispatcher.dispatch_internal(:auth, :list_users, %{})
+      assert {:ok, %{users: users, count: count}} =
+               ActionDispatcher.dispatch_internal(:auth, :list_users, %{})
+
       assert count >= 2
 
       alpha = Enum.find(users, &(&1["player_id"] == "user_alpha"))
@@ -295,20 +317,32 @@ defmodule Exoforge.AuthTest do
       {:ok, _} = Auth.set_player_scopes("stu_scope", ["studio"])
 
       assert {:ok, %{authorized: true}} =
-               ActionDispatcher.dispatch(:auth, :verify_scope, %{player_id: "stu_scope", required_scope: "player"})
+               ActionDispatcher.dispatch(:auth, :verify_scope, %{
+                 player_id: "stu_scope",
+                 required_scope: "player"
+               })
 
       assert {:ok, %{authorized: true}} =
-               ActionDispatcher.dispatch(:auth, :verify_scope, %{player_id: "stu_scope", required_scope: "studio"})
+               ActionDispatcher.dispatch(:auth, :verify_scope, %{
+                 player_id: "stu_scope",
+                 required_scope: "studio"
+               })
 
       assert {:ok, %{authorized: false}} =
-               ActionDispatcher.dispatch(:auth, :verify_scope, %{player_id: "stu_scope", required_scope: "admin"})
+               ActionDispatcher.dispatch(:auth, :verify_scope, %{
+                 player_id: "stu_scope",
+                 required_scope: "admin"
+               })
     end
 
     test "login returns a studio role for studio accounts" do
       {:ok, _} = Auth.upsert_account("studio", "studio@exoforge.test", "pw", ["studio"])
 
       assert {:ok, %{role: :studio, scopes: scopes}} =
-               ActionDispatcher.dispatch(:auth, :login, %{email: "studio@exoforge.test", password: "pw"})
+               ActionDispatcher.dispatch(:auth, :login, %{
+                 email: "studio@exoforge.test",
+                 password: "pw"
+               })
 
       assert "studio" in scopes
     end
@@ -321,7 +355,10 @@ defmodule Exoforge.AuthTest do
       assert :ok = Auth.ensure_admin_account()
 
       assert {:ok, %{player_id: "admin", token: token, scopes: scopes}} =
-               ActionDispatcher.dispatch(:auth, :login, %{email: "root@exoforge.test", password: "s3cret"})
+               ActionDispatcher.dispatch(:auth, :login, %{
+                 email: "root@exoforge.test",
+                 password: "s3cret"
+               })
 
       assert is_binary(token)
       assert "admin" in scopes
@@ -366,10 +403,16 @@ defmodule Exoforge.AuthTest do
       assert :ok = Auth.ensure_admin_account()
 
       assert {:error, :invalid_credentials} =
-               ActionDispatcher.dispatch(:auth, :login, %{email: "root2@exoforge.test", password: "wrong"})
+               ActionDispatcher.dispatch(:auth, :login, %{
+                 email: "root2@exoforge.test",
+                 password: "wrong"
+               })
 
       assert {:error, :invalid_credentials} =
-               ActionDispatcher.dispatch(:auth, :login, %{email: "nobody@exoforge.test", password: "right"})
+               ActionDispatcher.dispatch(:auth, :login, %{
+                 email: "nobody@exoforge.test",
+                 password: "right"
+               })
     end
 
     test "boot reconciles the admin with the environment and removes it when unconfigured" do
@@ -392,15 +435,71 @@ defmodule Exoforge.AuthTest do
       System.put_env("EXOFORGE_ADMIN_PASSWORD", "")
       assert :ok = Auth.ensure_admin_account()
       assert {:error, :invalid_credentials} = login("root@exoforge.test", "second_pass")
-      assert {:error, :invalid_token} = ActionDispatcher.dispatch(:auth, :authenticate, %{token: token})
+
+      assert {:error, :invalid_token} =
+               ActionDispatcher.dispatch(:auth, :authenticate, %{token: token})
+
       refute Enum.any?(users(), &(&1["player_id"] == "admin"))
 
       # Restored under the same constant id, so the player is the same player.
       System.put_env("EXOFORGE_ADMIN_EMAIL", "root@exoforge.test")
       System.put_env("EXOFORGE_ADMIN_PASSWORD", "third_pass")
       assert :ok = Auth.ensure_admin_account()
-      assert {:ok, %{player_id: "admin", scopes: scopes}} = login("root@exoforge.test", "third_pass")
+
+      assert {:ok, %{player_id: "admin", scopes: scopes}} =
+               login("root@exoforge.test", "third_pass")
+
       assert "admin" in scopes
+    end
+  end
+
+  describe "User directory paging" do
+    test "list_users pages in the query and filters by search and scope" do
+      # Unique prefix: the database is shared by this file's tests, so nothing may assume it is empty.
+      prefix = "page#{System.unique_integer([:positive])}"
+
+      for i <- 1..30 do
+        Auth.upsert_account("#{prefix}_#{i}", "#{prefix}_#{i}@exoforge.test", "pw", ["player"])
+      end
+
+      {:ok, %{users: first, count: 30}} =
+        ActionDispatcher.dispatch_internal(:auth, :list_users, %{
+          search: prefix,
+          scope: "player",
+          limit: 10,
+          offset: 0
+        })
+
+      assert length(first) == 10
+
+      {:ok, %{users: second}} =
+        ActionDispatcher.dispatch_internal(:auth, :list_users, %{
+          search: prefix,
+          scope: "player",
+          limit: 10,
+          offset: 10
+        })
+
+      assert length(second) == 10
+
+      assert MapSet.disjoint?(
+               MapSet.new(Enum.map(first, & &1["player_id"])),
+               MapSet.new(Enum.map(second, & &1["player_id"]))
+             )
+
+      # Search matches the email too, and composes with the scope filter.
+      {:ok, %{users: searched, count: 1}} =
+        ActionDispatcher.dispatch_internal(:auth, :list_users, %{
+          search: "#{prefix}_7@",
+          scope: "player"
+        })
+
+      assert Enum.map(searched, & &1["player_id"]) == ["#{prefix}_7"]
+
+      {:ok, %{users: admins, count: 0}} =
+        ActionDispatcher.dispatch_internal(:auth, :list_users, %{search: prefix, scope: "admin"})
+
+      assert admins == []
     end
   end
 
@@ -413,7 +512,8 @@ defmodule Exoforge.AuthTest do
         scopes: ["player"]
       }
 
-      assert {:ok, %{player_id: "user_pw_test"}} = ActionDispatcher.dispatch(:auth, :register, payload)
+      assert {:ok, %{player_id: "user_pw_test"}} =
+               ActionDispatcher.dispatch(:auth, :register, payload)
 
       assert {:ok, %{player_id: "user_pw_test", token: token}} =
                ActionDispatcher.dispatch(:auth, :login, %{
@@ -538,7 +638,10 @@ defmodule Exoforge.AuthTest do
 
       # The passwordless path still reissues.
       assert {:ok, %{player_id: "protected_user"}} =
-               ActionDispatcher.dispatch(:auth, :login, %{email: "protected@exoforge.test", password: "secret123"})
+               ActionDispatcher.dispatch(:auth, :login, %{
+                 email: "protected@exoforge.test",
+                 password: "secret123"
+               })
     end
 
     test "enters an unnamed account for a device, then names it" do
@@ -572,7 +675,10 @@ defmodule Exoforge.AuthTest do
       assert {:ok, _} = ActionDispatcher.dispatch(:auth, :anonymous, %{player_id: device})
 
       assert {:error, :invalid_attributes} =
-               ActionDispatcher.dispatch_internal(:auth, :set_display_name, %{player_id: device, name: "   "})
+               ActionDispatcher.dispatch_internal(:auth, :set_display_name, %{
+                 player_id: device,
+                 name: "   "
+               })
     end
 
     test "set_display_name requires an identity" do
@@ -605,7 +711,9 @@ defmodule Exoforge.AuthTest do
              })
 
     assert {:ok, %{purged: 1, dry_run: true}} =
-             ActionDispatcher.dispatch(:auth, :purge_disposable, %{dry_run: true}, caller_scopes: ["studio"])
+             ActionDispatcher.dispatch(:auth, :purge_disposable, %{dry_run: true},
+               caller_scopes: ["studio"]
+             )
 
     # A dry run reports without removing.
     assert player_row(disp)

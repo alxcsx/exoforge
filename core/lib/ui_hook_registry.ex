@@ -15,6 +15,8 @@ defmodule Exoforge.UIHookRegistry do
       `:module` (a LiveComponent) that renders the tab body.
     * `:resource_column` - Rendering for a resource column `role` (e.g. `"user_id"`). A spec
       carries the `role`, plus `target`/`focus` for a deep link into another tab.
+    * `:extension_inspect` - Panels in an extension's inspector (its Resources tab). A spec may
+      carry `:module` (a LiveComponent receiving `extension`) or an `:element` microfrontend.
     * Custom domain hook points.
   """
 
@@ -47,14 +49,18 @@ defmodule Exoforge.UIHookRegistry do
 
     mod =
       cond do
-        is_atom(raw_mod) -> raw_mod
+        is_atom(raw_mod) ->
+          raw_mod
+
         is_binary(raw_mod) ->
           try do
             String.to_existing_atom(raw_mod)
           rescue
             _ -> nil
           end
-        true -> nil
+
+        true ->
+          nil
       end
 
     spec

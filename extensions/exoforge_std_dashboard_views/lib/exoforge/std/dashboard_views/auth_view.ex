@@ -13,6 +13,9 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
      assign(socket,
        users: [],
        filtered_users: [],
+       users_total: 0,
+       user_page: 1,
+       user_pages: 1,
        search_query: "",
        scope_filter: "all",
        show_register_modal: false,
@@ -64,8 +67,21 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
 
     socket =
       socket
-      |> assign(search_query: query)
-      |> apply_filters()
+      |> assign(search_query: query, user_page: 1)
+      |> load_users()
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("user_page", %{"page" => page}, socket) do
+    target =
+      if page == "next", do: socket.assigns.user_page + 1, else: socket.assigns.user_page - 1
+
+    socket =
+      socket
+      |> assign(user_page: max(target, 1))
+      |> load_users()
 
     {:noreply, socket}
   end
@@ -74,8 +90,8 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
   def handle_event("filter_scope", %{"scope" => scope}, socket) do
     socket =
       socket
-      |> assign(scope_filter: scope)
-      |> apply_filters()
+      |> assign(scope_filter: scope, user_page: 1)
+      |> load_users()
 
     {:noreply, socket}
   end
@@ -118,14 +134,17 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
   def handle_event("submit_register", %{"register" => params}, socket) do
     payload = UserForms.registration_payload(params)
 
-    case ActionDispatcher.dispatch(:auth, :register, payload, caller_scopes: caller_scopes(socket)) do
+    case ActionDispatcher.dispatch(:auth, :register, payload,
+           caller_scopes: caller_scopes(socket)
+         ) do
       {:ok, result} ->
         socket =
           socket
           |> assign(
             show_register_modal: false,
             error_message: nil,
-            action_notification: "User '#{UserForms.display_name(payload.name, result.player_id)}' successfully created!",
+            action_notification:
+              "User '#{UserForms.display_name(payload.name, result.player_id)}' successfully created!",
             issued_token_info: %{
               name: UserForms.display_name(payload.name, result.player_id),
               player_id: result.player_id,
@@ -171,7 +190,9 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
         {:noreply, assign(socket, reset_password_error: message)}
 
       {:ok, payload} ->
-        case ActionDispatcher.dispatch(:auth, :reset_password, payload, caller_scopes: caller_scopes(socket)) do
+        case ActionDispatcher.dispatch(:auth, :reset_password, payload,
+               caller_scopes: caller_scopes(socket)
+             ) do
           {:ok, _} ->
             socket =
               socket
@@ -236,7 +257,9 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
              user_id: pid,
              role: role,
              scopes: scopes
-           }, caller_scopes: caller_scopes(socket)) do
+           },
+           caller_scopes: caller_scopes(socket)
+         ) do
       {:ok, _} ->
         socket =
           socket
@@ -250,7 +273,8 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
         {:noreply, socket}
 
       {:error, :protected_admin_account} ->
-        {:noreply, assign(socket, roles_error: "Cannot alter roles of the protected environment admin.")}
+        {:noreply,
+         assign(socket, roles_error: "Cannot alter roles of the protected environment admin.")}
 
       {:error, reason} ->
         {:noreply, assign(socket, roles_error: "Failed to update roles: #{inspect(reason)}")}
@@ -259,7 +283,9 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
 
   @impl true
   def handle_event("delete_user", %{"player_id" => player_id}, socket) do
-    case ActionDispatcher.dispatch(:auth, :delete_user, %{player_id: player_id}, caller_scopes: caller_scopes(socket)) do
+    case ActionDispatcher.dispatch(:auth, :delete_user, %{player_id: player_id},
+           caller_scopes: caller_scopes(socket)
+         ) do
       {:ok, _} ->
         socket =
           socket
@@ -285,7 +311,8 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
          )}
 
       {:error, reason} ->
-        {:noreply, assign(socket, action_notification: "Failed to delete account: #{inspect(reason)}")}
+        {:noreply,
+         assign(socket, action_notification: "Failed to delete account: #{inspect(reason)}")}
     end
   end
 
@@ -299,7 +326,9 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
     user = Enum.find(socket.assigns.users, &(&1["player_id"] == player_id))
     scopes = if user, do: user["scopes"], else: ["player"]
 
-    case ActionDispatcher.dispatch(:auth, :issue_token, %{player_id: player_id, scopes: scopes}, caller_scopes: caller_scopes(socket)) do
+    case ActionDispatcher.dispatch(:auth, :issue_token, %{player_id: player_id, scopes: scopes},
+           caller_scopes: caller_scopes(socket)
+         ) do
       {:ok, result} ->
         socket =
           socket
@@ -333,6 +362,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
   @impl true
   def handle_event("close_focus", _params, socket) do
     tab = (socket.assigns[:extension] && socket.assigns.extension.id) || "exoforge_std_auth"
+
     {:noreply,
      socket
      |> assign(:selected_user, nil)
@@ -382,48 +412,41 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
     end
   end
 
+  # 25 accounts a page: a game directory is not a list you scroll to the end of.
+  @per_page 25
+
   defp load_users(socket) do
-    case ActionDispatcher.dispatch_internal(:auth, :list_users, %{limit: 50}) do
-      {:ok, %{users: users}} ->
-        socket
-        |> assign(users: users)
-        |> apply_filters()
+    page = max(socket.assigns.user_page, 1)
+
+    payload = %{
+      limit: @per_page,
+      offset: (page - 1) * @per_page,
+      search: socket.assigns.search_query,
+      scope: socket.assigns.scope_filter
+    }
+
+    case ActionDispatcher.dispatch_internal(:auth, :list_users, payload) do
+      {:ok, %{users: users, count: total}} ->
+        pages = max(ceil(total / @per_page), 1)
+
+        assign(socket,
+          users: users,
+          filtered_users: users,
+          users_total: total,
+          user_pages: pages,
+          user_page: min(page, pages)
+        )
 
       _ ->
-        socket
-        |> assign(users: [])
-        |> apply_filters()
+        assign(socket, users: [], filtered_users: [], users_total: 0, user_pages: 1, user_page: 1)
     end
-  end
-
-  defp apply_filters(socket) do
-    query = String.downcase(String.trim(socket.assigns.search_query))
-    filter = socket.assigns.scope_filter
-
-    filtered =
-      Enum.filter(socket.assigns.users, fn user ->
-        pid = String.downcase(to_string(user["player_id"] || ""))
-        scopes = Enum.map(user["scopes"] || [], &to_string/1)
-
-        matches_query =
-          query == "" or
-            String.contains?(pid, query) or
-            Enum.any?(scopes, &String.contains?(String.downcase(&1), query))
-
-        matches_filter =
-          filter == "all" or Enum.member?(scopes, filter)
-
-        matches_query and matches_filter
-      end)
-
-    assign(socket, filtered_users: filtered)
   end
 
   ## ---- TEMPLATE RENDERING ----
 
   @impl true
   def render(assigns) do
-    total_users = length(assigns.users)
+    total_users = assigns.users_total
     total_tokens = Enum.sum(Enum.map(assigns.users, & &1["tokens_count"]))
     admin_count = Enum.count(assigns.users, &("admin" in &1["scopes"]))
     player_count = Enum.count(assigns.users, &("player" in &1["scopes"]))
@@ -559,7 +582,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
           </div>
         </div>
 
-        <div class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title="Active bearer tokens">
+        <div class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title="Active bearer tokens (this page)">
           <div class="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl shrink-0">
             🎟️
           </div>
@@ -572,7 +595,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
           </div>
         </div>
 
-        <div class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title="Admin & superuser scopes">
+        <div class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title="Admin & superuser scopes (this page)">
           <div class="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-xl shrink-0">
             👑
           </div>
@@ -585,7 +608,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
           </div>
         </div>
 
-        <div class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title="Verified gameplay accounts">
+        <div class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title="Verified gameplay accounts (this page)">
           <div class="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl shrink-0">
             🎮
           </div>
@@ -632,6 +655,36 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
         </div>
       </div>
 
+      <div class="flex items-center justify-between px-1 text-xs text-gray-500">
+        <span>
+          <%= if @user_pages > 1 do %>
+            Page <%= @user_page %> of <%= @user_pages %> &bull; <%= @users_total %> accounts
+          <% else %>
+            <%= @users_total %> account(s)
+          <% end %>
+        </span>
+        <%= if @user_pages > 1 do %>
+          <div class="flex items-center gap-1.5">
+            <button
+              type="button"
+              phx-click="user_page"
+              phx-value-page="prev"
+              phx-target={@myself}
+              disabled={@user_page <= 1}
+              class="px-2.5 py-1 rounded-lg bg-white border border-gray-200 text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed"
+            >‹ Prev</button>
+            <button
+              type="button"
+              phx-click="user_page"
+              phx-value-page="next"
+              phx-target={@myself}
+              disabled={@user_page >= @user_pages}
+              class="px-2.5 py-1 rounded-lg bg-white border border-gray-200 text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed"
+            >Next ›</button>
+          </div>
+        <% end %>
+      </div>
+
       <!-- Users Directory Table -->
       <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
         <%= if @filtered_users == [] do %>
@@ -641,13 +694,13 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
             </div>
             <h3 class="text-sm font-bold text-gray-900">No accounts found</h3>
             <p class="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
-              <%= if @users == [] do %>
+              <%= if @search_query == "" and @scope_filter == "all" do %>
                 No user identities have been registered in the auth database yet. Click "Register User" above to create the first account.
               <% else %>
                 No accounts match the search query or scope filter. Try clearing your filters.
               <% end %>
             </p>
-            <%= if @users == [] do %>
+            <%= if @search_query == "" and @scope_filter == "all" do %>
               <button
                 phx-click="open_register_modal"
                 phx-target={@myself}

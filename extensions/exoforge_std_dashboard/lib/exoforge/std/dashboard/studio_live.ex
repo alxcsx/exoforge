@@ -139,7 +139,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
        actions_detail_search: "",
        actions_detail_tab: "all",
        actions_detail_caller: "",
-       actions_detail_expanded: nil,
+       actions_detail_expansion: nil,
        tracked_services: tracked_services,
        visualizable_extensions: visualizable_extensions,
        cmd_palette_open: false,
@@ -150,6 +150,8 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
        settings_hooks: Exoforge.UIHookRegistry.list_hooks(:settings),
        guide_subpage: "flow",
        inspecting_extension: nil,
+       inspect_tab: "overview",
+       inspect_logs_page: 1,
        app_drawer_open: false,
        activity_events: initial_events,
        filtered_activity_events: initial_events,
@@ -206,6 +208,8 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       |> assign(:guide_subpage, guide_subpage)
       |> assign(:focus, focus)
       |> assign(:inspecting_extension, focused_extension(focus, extensions))
+      |> assign(:inspect_tab, "overview")
+      |> assign(:inspect_logs_page, 1)
       |> assign(:pinned_menu_open, false)
       |> maybe_refresh_tab_data(tab)
 
@@ -739,6 +743,19 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     {:noreply, push_patch(socket, to: focus_url(socket.assigns.current_tab, "ext", id))}
   end
 
+  def handle_event("set_inspect_tab", %{"tab" => tab}, socket) do
+    {:noreply, assign(socket, :inspect_tab, tab)}
+  end
+
+  def handle_event("inspect_logs_page", %{"page" => page}, socket) do
+    target =
+      if page == "next",
+        do: socket.assigns.inspect_logs_page + 1,
+        else: max(socket.assigns.inspect_logs_page - 1, 1)
+
+    {:noreply, assign(socket, :inspect_logs_page, target)}
+  end
+
   def handle_event("close_inspect_extension", _params, socket) do
     {:noreply,
      socket
@@ -805,7 +822,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
        actions_detail_modal: mode,
        actions_detail_search: "",
        actions_detail_tab: tab,
-       actions_detail_expanded: nil
+       actions_detail_expansion: nil
      )}
   end
 
@@ -813,7 +830,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     {:noreply,
      socket
      |> push_event("close-popup", %{})
-     |> assign(actions_detail_modal: nil, actions_detail_expanded: nil)}
+     |> assign(actions_detail_modal: nil, actions_detail_expansion: nil)}
   end
 
   def handle_event("search_actions_detail", %{"query" => query}, socket) do
@@ -825,13 +842,55 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   end
 
   def handle_event("filter_actions_detail_caller", %{"caller" => caller}, socket) do
-    {:noreply, recompute_telemetry(assign(socket, :actions_detail_caller, caller))}
+    socket = recompute_telemetry(assign(socket, :actions_detail_caller, caller))
+
+    # The unfolded list is caller-filtered too, so it has to be re-read.
+    socket =
+      case socket.assigns.actions_detail_expansion do
+        nil -> socket
+        expansion -> expand_actions(socket, expansion.key, %{expansion | page: 1})
+      end
+
+    {:noreply, socket}
   end
 
-  # One row unfolds at a time: the table is a scan surface, not a tree.
+  # One row unfolds at a time: the table is a scan surface, not a tree. The unfolded list is a
+  # page of retained samples, so a row that reports errors can always show them.
   def handle_event("toggle_action_detail", %{"key" => key}, socket) do
-    expanded = if socket.assigns.actions_detail_expanded == key, do: nil, else: key
-    {:noreply, assign(socket, :actions_detail_expanded, expanded)}
+    if match?(%{key: ^key}, socket.assigns.actions_detail_expansion) do
+      {:noreply, assign(socket, :actions_detail_expansion, nil)}
+    else
+      # In error mode the useful first look is the failures.
+      errors_only? = socket.assigns.actions_detail_modal == "errors"
+      {:noreply, expand_actions(socket, key, %{page: 1, errors_only: errors_only?})}
+    end
+  end
+
+  def handle_event("page_action_detail", %{"page" => page}, socket) do
+    case socket.assigns.actions_detail_expansion do
+      nil ->
+        {:noreply, socket}
+
+      expansion ->
+        result = expansion.result
+        target = if page == "next", do: result.page + 1, else: result.page - 1
+        {:noreply, expand_actions(socket, expansion.key, %{expansion | page: target})}
+    end
+  end
+
+  def handle_event("filter_action_detail_status", %{"errors" => errors}, socket) do
+    case socket.assigns.actions_detail_expansion do
+      nil ->
+        {:noreply, socket}
+
+      expansion ->
+        {:noreply,
+         expand_actions(socket, expansion.key, %{
+           expansion
+           | page: 1,
+             errors_only: errors == "true"
+         })}
+    end
   end
 
   # What is tracked is a per-account preference: a producer debugging one service should not have
@@ -1364,6 +1423,28 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   defp humanize_plugin_name(ext_or_id), do: ExtensionPresenter.display_name(ext_or_id)
   defp tab_short_name(ext_or_id), do: ExtensionPresenter.display_name(ext_or_id)
 
+  defp expand_actions(socket, key, %{page: page, errors_only: errors_only?}) do
+    expansion = %{
+      key: key,
+      page: page,
+      errors_only: errors_only?,
+      result: sample_page(socket, key, page, errors_only?)
+    }
+
+    assign(socket, :actions_detail_expansion, expansion)
+  end
+
+  defp sample_page(socket, key, page, errors_only?) do
+    Exoforge.ActionTrace.samples(key,
+      page: page,
+      per_page: 8,
+      errors_only: errors_only?,
+      caller: socket.assigns.actions_detail_caller
+    )
+  rescue
+    _ -> %{samples: [], total: 0, page: 1, pages: 1, truncated: false}
+  end
+
   defp recompute_telemetry(socket) do
     assign(
       socket,
@@ -1695,19 +1776,11 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     error_max_val = error_series |> Enum.flat_map(& &1.counts) |> Enum.max(fn -> 0 end) |> max(5)
 
     callers =
-      (Enum.map(trace.buckets, &elem(&1, 2)) ++ Enum.map(trace.samples, & &1.caller))
+      trace.buckets
+      |> Enum.map(&elem(&1, 2))
       |> Enum.reject(&(&1 in [nil, ""]))
       |> Enum.uniq()
       |> Enum.sort()
-
-    action_samples =
-      trace.samples
-      |> Enum.filter(fn sample ->
-        key = normalize_action_key(sample.key)
-        tracked?.(key) and (caller in [nil, ""] or sample.caller == caller)
-      end)
-      |> Enum.group_by(&normalize_action_key(&1.key))
-      |> Map.new(fn {key, samples} -> {key, Enum.take(samples, 6)} end)
 
     time_labels = ["-30m", "-24m", "-18m", "-12m", "-6m", "now"]
     x_coords = [40, 128, 216, 304, 392, 480]
@@ -1765,7 +1838,6 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       action_errors: action_errors,
       action_stats: action_stats,
       last_errors: last_errors,
-      action_samples: action_samples,
       callers: callers,
       tracked_services: tracked,
       window_minutes: @trace_window_minutes,
@@ -1840,7 +1912,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                 phx-value-tab="overview"
                 aria-label="Overview"
                 title="Overview"
-                class={"px-2.5 py-1.5 text-xs rounded-lg transition-all font-bold flex items-center justify-center gap-1.5 flex-shrink-0 #{if @current_tab == :overview, do: "bg-white text-primary-700 shadow-sm", else: "text-gray-600 hover:text-gray-900"}"}
+                class={"px-2.5 py-1.5 text-xs rounded-lg transition-all font-bold flex items-center justify-center gap-1.5 flex-shrink-0 #{if @current_tab == :overview, do: "bg-primary-600 text-white shadow-sm", else: "text-gray-600 hover:text-gray-900"}"}
               >
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
@@ -1856,7 +1928,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                 phx-value-tab="apps"
                 aria-label="Extensions"
                 title={"Extensions (#{@overview.plugins_count})"}
-                class={"px-2.5 py-1.5 text-xs rounded-lg transition-all font-bold flex items-center justify-center gap-1.5 flex-shrink-0 #{if @current_tab == :apps, do: "bg-white text-primary-700 shadow-sm", else: "text-gray-600 hover:text-gray-900"}"}
+                class={"px-2.5 py-1.5 text-xs rounded-lg transition-all font-bold flex items-center justify-center gap-1.5 flex-shrink-0 #{if @current_tab == :apps, do: "bg-primary-600 text-white shadow-sm", else: "text-gray-600 hover:text-gray-900"}"}
               >
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
@@ -1914,7 +1986,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                   <% title = tab_short_name(ext) %>
                   <% icon = if is_map(ext.dashboard_view) and ext.dashboard_view[:icon], do: ext.dashboard_view[:icon], else: ExtensionPresenter.icon(ext) %>
                   <% is_active = to_string(@current_tab) == ext_id %>
-                  <div class={"group relative hidden md:inline-flex items-center justify-center rounded-lg transition-all text-xs font-bold whitespace-nowrap flex-shrink-0 #{if is_active, do: "bg-white text-primary-700 shadow-sm", else: "text-gray-600 hover:text-gray-900 hover:bg-gray-200/50"}"}>
+                  <div class={"group relative hidden md:inline-flex items-center justify-center rounded-lg transition-all text-xs font-bold whitespace-nowrap flex-shrink-0 #{if is_active, do: "bg-primary-600 text-white shadow-sm", else: "text-gray-600 hover:text-gray-900 hover:bg-gray-200/50"}"}>
                     <button
                       phx-click="switch_tab"
                       phx-value-tab={ext_id}
@@ -1943,7 +2015,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                   <% title = tab_short_name(active_unpinned) %>
                   <% icon = if is_map(active_unpinned.dashboard_view) and active_unpinned.dashboard_view[:icon], do: active_unpinned.dashboard_view[:icon], else: ExtensionPresenter.icon(active_unpinned) %>
                   <div class="h-4 w-px bg-gray-300/80 mx-0.5 flex-shrink-0"></div>
-                  <div class="flex items-center justify-center rounded-lg text-xs font-bold whitespace-nowrap flex-shrink-0 bg-white text-primary-700 shadow-sm px-2.5 py-1 gap-1">
+                  <div class="flex items-center justify-center rounded-lg text-xs font-bold whitespace-nowrap flex-shrink-0 bg-primary-600 text-white shadow-sm px-2.5 py-1 gap-1">
                     <span class="text-xs leading-none"><%= icon %></span>
                     <span class="leading-none"><%= title %></span>
                   </div>
@@ -1968,7 +2040,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
             <button
               type="button"
               phx-click="open_settings"
-              class={"w-9 h-9 rounded-xl flex items-center justify-center transition-all text-sm border #{if @settings_open, do: "bg-white text-primary-700 border-primary-300 shadow-sm font-bold ring-2 ring-primary-500/20", else: "bg-gray-100 hover:bg-gray-200/80 text-gray-600 border-gray-200/60"}"}
+              class={"w-9 h-9 rounded-xl flex items-center justify-center transition-all text-sm border #{if @settings_open, do: "bg-primary-600 text-white border-primary-600 shadow-sm font-bold ring-2 ring-primary-500/20", else: "bg-gray-100 hover:bg-gray-200/80 text-gray-600 border-gray-200/60"}"}
               title="Project Settings"
             >
               ⚙️
@@ -2726,7 +2798,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                     <button
                       type="button"
                       phx-click="open_sdk_modal"
-                      class="w-full py-2.5 px-4 rounded-xl bg-white text-purple-700 hover:bg-purple-50 font-black text-xs shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
+                      class="w-full py-2.5 px-4 rounded-xl bg-primary-600 text-white hover:bg-primary-500 font-black text-xs shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
                     >
                       <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -2920,7 +2992,11 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       <!-- Headless Service & Plugin Inspector Modal -->
       <.plugin_inspector_modal
         extension={@inspecting_extension}
+        tab={@inspect_tab}
+        logs_page={@inspect_logs_page}
         auth_token={@auth_token}
+        on_tab="set_inspect_tab"
+        on_logs_page="inspect_logs_page"
         on_close="close_inspect_extension"
       />
 
@@ -2957,7 +3033,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         catalog={@action_catalog}
         telemetry={@telemetry}
         caller={@actions_detail_caller}
-        expanded={@actions_detail_expanded}
+        expansion={@actions_detail_expansion}
         services={Enum.map(@action_catalog, & &1.name)}
         tracked_services={@tracked_services}
         on_close="close_actions_detail_modal"
@@ -2965,6 +3041,8 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         on_filter_tab="filter_actions_detail_tab"
         on_filter_caller="filter_actions_detail_caller"
         on_toggle_row="toggle_action_detail"
+        on_page="page_action_detail"
+        on_filter_status="filter_action_detail_status"
         on_toggle_service="toggle_tracked_service"
         on_run_action="open_action_modal"
         on_switch_mode="open_actions_detail_modal"

@@ -9,6 +9,9 @@ defmodule Exoforge.Std.Dashboard.ResourceLive do
   alias Exoforge.ExtensionRegistry
   alias Exoforge.DrawerRegistry
 
+  # 25 rows a page: a resource can hold thousands, and the browser is a scan surface.
+  @per_page 25
+
   @impl true
   def mount(%{"name" => name}, _session, socket) do
     resource_info =
@@ -35,7 +38,8 @@ defmodule Exoforge.Std.Dashboard.ResourceLive do
         end)
       end
 
-    rows = fetch_resource_rows(name)
+    %{rows: rows, total: total} =
+      Exoforge.ExtensionRegistry.page_resource_rows(name, limit: @per_page, offset: 0)
 
     {:ok,
      assign(socket,
@@ -43,6 +47,9 @@ defmodule Exoforge.Std.Dashboard.ResourceLive do
        resource: res,
        columns: table_columns,
        rows: rows,
+       row_total: total,
+       row_page: 1,
+       row_pages: max(ceil(total / @per_page), 1),
        drawer_open: false,
        inspected_row: nil,
        drawer_tabs: drawer_tabs,
@@ -73,7 +80,9 @@ defmodule Exoforge.Std.Dashboard.ResourceLive do
 
   @impl true
   def handle_event("inspect_row", %{"id" => id}, socket) do
-    path = "/resources/#{socket.assigns.resource_name}?focus=row:#{URI.encode_www_form(to_string(id))}"
+    path =
+      "/resources/#{socket.assigns.resource_name}?focus=row:#{URI.encode_www_form(to_string(id))}"
+
     {:noreply, push_patch(socket, to: path)}
   end
 
@@ -87,7 +96,8 @@ defmodule Exoforge.Std.Dashboard.ResourceLive do
 
   def handle_event("export_csv", _params, socket) do
     cols = socket.assigns.columns
-    rows = socket.assigns.rows
+    # Exports cover the resource, not just the page on screen.
+    rows = fetch_resource_rows(socket.assigns.resource_name)
 
     header = Enum.map_join(cols, ",", &"\"#{&1.key}\"")
 
@@ -112,7 +122,7 @@ defmodule Exoforge.Std.Dashboard.ResourceLive do
   end
 
   def handle_event("export_json", _params, socket) do
-    json_data = Jason.encode!(socket.assigns.rows, pretty: true)
+    json_data = Jason.encode!(fetch_resource_rows(socket.assigns.resource_name), pretty: true)
 
     {:noreply,
      assign(socket,
@@ -127,7 +137,11 @@ defmodule Exoforge.Std.Dashboard.ResourceLive do
     {:noreply, assign(socket, export_modal_open: false)}
   end
 
-  def handle_event("studio_dispatch", %{"service" => service, "action" => action} = params, socket) do
+  def handle_event(
+        "studio_dispatch",
+        %{"service" => service, "action" => action} = params,
+        socket
+      ) do
     payload = Map.get(params, "payload") || %{}
     scopes = socket.assigns[:current_scopes] || [Exoforge.Auth.Roles.studio()]
 
@@ -139,6 +153,31 @@ defmodule Exoforge.Std.Dashboard.ResourceLive do
       end
 
     {:reply, result, socket}
+  end
+
+  def handle_event("resource_page", %{"page" => page}, socket) do
+    target = if page == "next", do: socket.assigns.row_page + 1, else: socket.assigns.row_page - 1
+    {:noreply, load_page(socket, target)}
+  end
+
+  defp load_page(socket, page) do
+    page = max(page, 1)
+    offset = (page - 1) * @per_page
+
+    case Exoforge.ExtensionRegistry.page_resource_rows(socket.assigns.resource_name,
+           limit: @per_page,
+           offset: offset
+         ) do
+      %{rows: rows, total: total} ->
+        pages = max(ceil(total / @per_page), 1)
+
+        assign(socket,
+          rows: rows,
+          row_total: total,
+          row_page: min(page, pages),
+          row_pages: pages
+        )
+    end
   end
 
   defp fetch_resource_rows(resource_name) do
@@ -178,6 +217,34 @@ defmodule Exoforge.Std.Dashboard.ResourceLive do
             &larr; Back to Studio
           </a>
         </div>
+      </div>
+
+      <div class="flex items-center justify-between text-xs text-gray-500">
+        <span>
+          <%= if @row_total > @per_page do %>
+            Page <%= @row_page %> of <%= @row_pages %> &bull; <%= @row_total %> records
+          <% else %>
+            <%= @row_total %> record(s)
+          <% end %>
+        </span>
+        <%= if @row_pages > 1 do %>
+          <div class="flex items-center gap-1.5">
+            <button
+              type="button"
+              phx-click="resource_page"
+              phx-value-page="prev"
+              disabled={@row_page <= 1}
+              class="px-2.5 py-1 rounded-lg bg-white border border-gray-200 text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed"
+            >‹ Prev</button>
+            <button
+              type="button"
+              phx-click="resource_page"
+              phx-value-page="next"
+              disabled={@row_page >= @row_pages}
+              class="px-2.5 py-1 rounded-lg bg-white border border-gray-200 text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed"
+            >Next ›</button>
+          </div>
+        <% end %>
       </div>
 
       <.data_table

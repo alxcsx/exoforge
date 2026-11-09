@@ -44,6 +44,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
        new_bucket_name: "",
        action_notification: nil,
        modal_error: nil,
+       files_total: 0,
        loaded: false
      )}
   end
@@ -128,10 +129,25 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
     {:noreply, load_data(socket)}
   end
 
+  # A bucket can hold more than the first page; the tree keeps what is already loaded and asks for
+  # the next slice, so grouping stays intact.
+  def handle_event("load_more_files", _params, socket) do
+    {more, total} = list_files(length(socket.assigns.files))
+
+    socket =
+      socket
+      |> assign(files: socket.assigns.files ++ more, files_total: total)
+      |> apply_filters()
+
+    {:noreply, socket}
+  end
+
   def handle_event("open_upload_modal", params, socket) do
     target_bucket =
       params["bucket"] ||
-        (if socket.assigns.selected_bucket != "all", do: socket.assigns.selected_bucket, else: "default")
+        if socket.assigns.selected_bucket != "all",
+          do: socket.assigns.selected_bucket,
+          else: "default"
 
     {:noreply,
      assign(socket,
@@ -152,7 +168,11 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
     filename = params["filename"] || "file"
     base64 = params["base64"] || ""
     content_type = params["content_type"] || ""
-    preview = if String.starts_with?(content_type, "image/"), do: "data:#{content_type};base64,#{base64}", else: ""
+
+    preview =
+      if String.starts_with?(content_type, "image/"),
+        do: "data:#{content_type};base64,#{base64}",
+        else: ""
 
     updated_form =
       socket.assigns.upload_form
@@ -239,7 +259,11 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
     filename = params["filename"] || socket.assigns.modify_form["filename"]
     base64 = params["base64"] || ""
     content_type = params["content_type"] || socket.assigns.modify_form["content_type"]
-    preview = if String.starts_with?(content_type, "image/"), do: "data:#{content_type};base64,#{base64}", else: ""
+
+    preview =
+      if String.starts_with?(content_type, "image/"),
+        do: "data:#{content_type};base64,#{base64}",
+        else: ""
 
     updated_form =
       socket.assigns.modify_form
@@ -272,8 +296,14 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
         "bucket" => bucket,
         "filename" => filename
       }
-      |> then(fn p -> if content != "" and content != nil, do: Map.put(p, "content", content), else: p end)
-      |> then(fn p -> if content_type != "" and content_type != nil, do: Map.put(p, "content_type", content_type), else: p end)
+      |> then(fn p ->
+        if content != "" and content != nil, do: Map.put(p, "content", content), else: p
+      end)
+      |> then(fn p ->
+        if content_type != "" and content_type != nil,
+          do: Map.put(p, "content_type", content_type),
+          else: p
+      end)
 
     case ActionDispatcher.dispatch_internal(:file_bucket, :update_file, payload) do
       {:ok, %{file: updated_file}} ->
@@ -291,7 +321,8 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
   end
 
   def handle_event("open_delete_modal", _params, socket) do
-    {:noreply, assign(socket, show_delete_modal: true, delete_file_target: socket.assigns.selected_file)}
+    {:noreply,
+     assign(socket, show_delete_modal: true, delete_file_target: socket.assigns.selected_file)}
   end
 
   def handle_event("confirm_delete", _params, socket) do
@@ -381,11 +412,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
         _ -> ["default"]
       end
 
-    files =
-      case ActionDispatcher.dispatch_internal(:file_bucket, :list_files, %{"bucket" => "all", "limit" => 500}) do
-        {:ok, %{files: f}} when is_list(f) -> f
-        _ -> []
-      end
+    {files, files_total} = list_files(0)
 
     expanded =
       Map.merge(
@@ -405,10 +432,25 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
     |> assign(
       buckets: buckets,
       files: files,
+      files_total: files_total,
       expanded_buckets: expanded,
       selected_file: selected_file
     )
     |> apply_filters()
+  end
+
+  # 200 per request: enough that a normal bucket is one page, small enough that a huge one stays
+  # responsive.
+  @page_size 200
+
+  defp list_files(offset) do
+    payload = %{"bucket" => "all", "limit" => @page_size, "offset" => offset}
+
+    case ActionDispatcher.dispatch_internal(:file_bucket, :list_files, payload) do
+      {:ok, %{files: files, total: total}} when is_list(files) -> {files, total}
+      {:ok, %{files: files}} when is_list(files) -> {files, length(files)}
+      _ -> {[], 0}
+    end
   end
 
   defp apply_filters(socket) do
@@ -429,32 +471,44 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
   end
 
   defp match_type?(_file, "all"), do: true
+
   defp match_type?(file, "image") do
     ct = to_string(file["content_type"] || "")
     ext = Path.extname(file["filename"] || "") |> String.downcase()
     String.starts_with?(ct, "image/") or ext in [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"]
   end
+
   defp match_type?(file, "bundle") do
     ext = Path.extname(file["filename"] || "") |> String.downcase()
     ext in [".bundle", ".bin"] or has_bundle_tag?(file)
   end
+
   defp match_type?(file, "audio") do
     ct = to_string(file["content_type"] || "")
     ext = Path.extname(file["filename"] || "") |> String.downcase()
-    String.starts_with?(ct, "audio/") or String.starts_with?(ct, "video/") or ext in [".mp3", ".wav", ".ogg", ".mp4", ".webm"]
+
+    String.starts_with?(ct, "audio/") or String.starts_with?(ct, "video/") or
+      ext in [".mp3", ".wav", ".ogg", ".mp4", ".webm"]
   end
+
   defp match_type?(file, "document") do
     ct = to_string(file["content_type"] || "")
     ext = Path.extname(file["filename"] || "") |> String.downcase()
-    String.starts_with?(ct, "text/") or ct == "application/json" or ext in [".txt", ".json", ".csv", ".pdf", ".xml"]
+
+    String.starts_with?(ct, "text/") or ct == "application/json" or
+      ext in [".txt", ".json", ".csv", ".pdf", ".xml"]
   end
+
   defp match_type?(file, "other") do
-    not match_type?(file, "image") and not match_type?(file, "bundle") and not match_type?(file, "audio") and not match_type?(file, "document")
+    not match_type?(file, "image") and not match_type?(file, "bundle") and
+      not match_type?(file, "audio") and not match_type?(file, "document")
   end
 
   defp match_search?(_file, ""), do: true
+
   defp match_search?(file, search) do
     meta_str = inspect(file["metadata"] || "")
+
     String.contains?(String.downcase(to_string(file["filename"] || "")), search) or
       String.contains?(String.downcase(to_string(file["id"] || "")), search) or
       String.contains?(String.downcase(to_string(file["bucket"] || "")), search) or
@@ -466,6 +520,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
   end
 
   defp format_bytes(nil), do: "0 B"
+
   defp format_bytes(bytes) when is_integer(bytes) do
     cond do
       bytes < 1024 -> "#{bytes} B"
@@ -474,6 +529,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
       true -> "#{Float.round(bytes / (1024 * 1024 * 1024), 2)} GB"
     end
   end
+
   defp format_bytes(_), do: "0 B"
 
   defp file_icon(file) do
@@ -481,14 +537,30 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
     ext = Path.extname(file["filename"] || "") |> String.downcase()
 
     cond do
-      ext in [".bundle", ".bin"] or has_bundle_tag?(file) -> "📦"
-      String.starts_with?(ct, "image/") or ext in [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"] -> "🖼️"
-      String.starts_with?(ct, "audio/") or ext in [".mp3", ".wav", ".ogg"] -> "🎵"
-      String.starts_with?(ct, "video/") or ext in [".mp4", ".webm"] -> "🎬"
-      ct == "application/json" or ext == ".json" -> "⚙️"
-      ext in [".txt", ".csv", ".pdf"] -> "📄"
-      ext in [".zip", ".gz", ".tar"] -> "📦"
-      true -> "📎"
+      ext in [".bundle", ".bin"] or has_bundle_tag?(file) ->
+        "📦"
+
+      String.starts_with?(ct, "image/") or
+          ext in [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"] ->
+        "🖼️"
+
+      String.starts_with?(ct, "audio/") or ext in [".mp3", ".wav", ".ogg"] ->
+        "🎵"
+
+      String.starts_with?(ct, "video/") or ext in [".mp4", ".webm"] ->
+        "🎬"
+
+      ct == "application/json" or ext == ".json" ->
+        "⚙️"
+
+      ext in [".txt", ".csv", ".pdf"] ->
+        "📄"
+
+      ext in [".zip", ".gz", ".tar"] ->
+        "📦"
+
+      true ->
+        "📎"
     end
   end
 
@@ -574,7 +646,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
           </div>
           <div class="bg-gray-50/70 p-3 rounded-xl border border-gray-100">
             <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Total Files</span>
-            <p class="text-base font-bold text-gray-900 mt-0.5"><%= length(@files) %></p>
+            <p class="text-base font-bold text-gray-900 mt-0.5"><%= @files_total %></p>
           </div>
           <div class="bg-gray-50/70 p-3 rounded-xl border border-gray-100">
             <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Total Storage</span>
@@ -672,8 +744,18 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
           <div class="p-3.5 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
             <div class="flex items-center gap-2">
               <span class="text-xs font-bold text-gray-700 uppercase tracking-wider">
-                Files (<%= length(@filtered_files) %>)
+                Files (<%= length(@filtered_files) %><%= if length(@files) < @files_total, do: " of #{@files_total} loaded" %>)
               </span>
+              <%= if length(@files) < @files_total do %>
+                <button
+                  type="button"
+                  phx-click="load_more_files"
+                  phx-target={@myself}
+                  class="px-2 py-0.5 text-[10px] font-bold text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-100 rounded-lg transition-colors"
+                >
+                  Load more
+                </button>
+              <% end %>
               <%= if @selected_bucket != "all" do %>
                 <span class="text-[10px] font-mono text-violet-700 bg-violet-50 px-2 py-0.5 rounded-full border border-violet-100">
                   /<%= @selected_bucket %>

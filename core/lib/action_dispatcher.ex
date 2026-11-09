@@ -20,6 +20,31 @@ defmodule Exoforge.ActionDispatcher do
   end
 
   def dispatch(service, action, payload, opts \\ []) do
+    internal? = Keyword.get(opts, :internal, false) == true
+
+    # Attribution: an explicit caller wins; otherwise a nested dispatch inherits the origin of the
+    # action that is already running in this process (a player's request that an extension answered
+    # by calling two other services is still the player's request), and only a dispatch with neither
+    # is "internal"/"client" on its own.
+    caller =
+      Keyword.get(opts, :caller) || Exoforge.ActionTrace.origin() ||
+        if(internal?, do: "internal", else: "client")
+
+    opts =
+      opts
+      |> Keyword.put(:caller, caller)
+      |> Keyword.put(:internal, internal?)
+
+    previous = Exoforge.ActionTrace.put_origin(caller)
+
+    try do
+      do_dispatch(service, action, payload, opts, internal?)
+    after
+      Exoforge.ActionTrace.restore_origin(previous)
+    end
+  end
+
+  defp do_dispatch(service, action, payload, opts, internal?) do
     t0 = System.monotonic_time(:microsecond)
     context = Keyword.get(opts, :context, :global)
     service_atom = to_atom_safe(service)
@@ -64,12 +89,12 @@ defmodule Exoforge.ActionDispatcher do
       end
 
     latency_us = System.monotonic_time(:microsecond) - t0
-    record_action_telemetry(service_atom, action_atom, payload, result, latency_us, resolved_mod, opts)
+    record_action_telemetry(service_atom, action_atom, payload, result, latency_us, resolved_mod, opts, internal?)
 
     result
   end
 
-  defp record_action_telemetry(service, action, payload, result, latency_us, resolved_mod, opts) do
+  defp record_action_telemetry(service, action, payload, result, latency_us, resolved_mod, opts, internal?) do
     if service not in [:database, :lldb] do
       status_str =
         case result do
@@ -83,11 +108,15 @@ defmodule Exoforge.ActionDispatcher do
 
       # 0. The console's debug window, when an observer asked for it (opt-in, memory only, bounded,
       # payload previews masked). Kept off the event bus: payloads are not cluster events.
-      caller =
-        Keyword.get(opts, :caller) ||
-          if(Keyword.get(opts, :internal, false), do: "internal", else: "client")
-
-      Exoforge.ActionTrace.record(service, action, caller, payload, result, duration_ms)
+      Exoforge.ActionTrace.record(
+        service,
+        action,
+        Keyword.get(opts, :caller, "client"),
+        payload,
+        result,
+        duration_ms,
+        internal?
+      )
 
       # 1. Broadcast action event over EventDispatcher (RecentEvents listens to :all on :global)
       try do
@@ -97,7 +126,8 @@ defmodule Exoforge.ActionDispatcher do
             service: service,
             action: action,
             status: status_str,
-            duration_ms: duration_ms
+            duration_ms: duration_ms,
+            internal: internal?
           },
           topic: :global,
           source: to_string(Keyword.get(opts, :caller, "client"))

@@ -73,18 +73,23 @@ defmodule Exoforge.ExtensionRegistry do
     ts = System.system_time(:second)
     safe(:insert, [:exo_extension_status_mem, {manifest_id, {:crashed, reason, ts}}])
     id_atom = Exoforge.Atoms.existing(manifest_id, manifest_id)
+
     if id_atom != manifest_id do
       safe(:insert, [:exo_extension_status_mem, {id_atom, {:crashed, reason, ts}}])
     end
+
     :ok
   end
 
   @doc "Returns crash details for an extension if it crashed, or nil otherwise."
   def get_crash_info(manifest_id) do
     case safe(:lookup, [:exo_extension_status_mem, manifest_id]) do
-      [{_, {:crashed, reason, _ts}} | _] -> {:crashed, reason}
+      [{_, {:crashed, reason, _ts}} | _] ->
+        {:crashed, reason}
+
       _ ->
         id_atom = Exoforge.Atoms.existing(manifest_id, manifest_id)
+
         if id_atom != manifest_id do
           case safe(:lookup, [:exo_extension_status_mem, id_atom]) do
             [{_, {:crashed, reason, _ts}} | _] -> {:crashed, reason}
@@ -100,9 +105,11 @@ defmodule Exoforge.ExtensionRegistry do
   def clear_crash_status(manifest_id) do
     safe(:delete, [:exo_extension_status_mem, manifest_id])
     id_atom = Exoforge.Atoms.existing(manifest_id, manifest_id)
+
     if id_atom != manifest_id do
       safe(:delete, [:exo_extension_status_mem, id_atom])
     end
+
     :ok
   end
 
@@ -243,6 +250,42 @@ defmodule Exoforge.ExtensionRegistry do
     end
   end
 
+  @doc """
+  One page of a resource's rows, plus the total the store reports.
+
+  Paging belongs to the store (`limit`/`offset`/`search`); this only shapes the answer for viewers
+  that must not load an unbounded row set.
+  """
+  def page_resource_rows(resource_name, opts \\ []) do
+    limit = Keyword.get(opts, :limit, 25)
+    offset = Keyword.get(opts, :offset, 0)
+    search = Keyword.get(opts, :search, "")
+
+    payload = %{
+      resource: to_string(resource_name),
+      limit: limit,
+      offset: offset,
+      search: search
+    }
+
+    case Exoforge.ActionDispatcher.dispatch(
+           :resource_store,
+           :list,
+           Map.merge(payload, %{_auth: %{scopes: :internal}}),
+           caller_scopes: :internal
+         ) do
+      {:ok, %{rows: rows, total: total}} when is_list(rows) ->
+        %{rows: normalize_resource_rows(resource_name, rows), total: total}
+
+      {:ok, %{rows: rows}} when is_list(rows) ->
+        %{rows: normalize_resource_rows(resource_name, rows), total: length(rows)}
+
+      _ ->
+        rows = legacy_resource_rows(resource_name)
+        %{rows: rows |> Enum.drop(offset) |> Enum.take(limit), total: length(rows)}
+    end
+  end
+
   defp normalize_resource_rows(resource_name, rows) do
     pk_key =
       case fetch_resource(resource_name) do
@@ -363,6 +406,7 @@ defmodule Exoforge.ExtensionRegistry do
 
       true ->
         str = to_string(ref)
+
         cond do
           String.starts_with?(str, "Elixir.Exoforge.Std.Services.") ->
             Macro.underscore(Module.split(ref) |> List.last())

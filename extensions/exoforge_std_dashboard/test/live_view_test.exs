@@ -344,7 +344,9 @@ defmodule Exoforge.DashboardLiveViewTest do
 
       # Simulate kernel broadcasting an event on the studio topic the dock subscribes to
       # (M33 Fix 32: gameplay topics no longer reach the Studio).
-      EventDispatcher.broadcast(:player_created, %{player_id: "p_live_999", name: "Nova"}, topic: "studio")
+      EventDispatcher.broadcast(:player_created, %{player_id: "p_live_999", name: "Nova"},
+        topic: "studio"
+      )
 
       # Allow message to be processed by LiveView
       :timer.sleep(50)
@@ -527,7 +529,11 @@ defmodule Exoforge.DashboardLiveViewTest do
         |> render_submit(%{"values" => %{"id" => "g1", "player_id" => "p1"}})
 
       assert html =~ "g1"
-      assert Enum.any?(ExtensionRegistry.fetch_resource_rows("user_ref_rows"), &(&1["id"] == "g1"))
+
+      assert Enum.any?(
+               ExtensionRegistry.fetch_resource_rows("user_ref_rows"),
+               &(&1["id"] == "g1")
+             )
 
       # And it can be edited, which is the other half of what the tab was missing.
       html = view |> element("button[phx-click=open_focus]") |> render_click()
@@ -740,6 +746,7 @@ defmodule Exoforge.DashboardLiveViewTest do
 
     test "inbound sign-in flash toasts auto-dismiss" do
       session = %{"admin_player_id" => "admin", "admin_scopes" => ["admin"]}
+
       conn =
         build_conn()
         |> Plug.Test.init_test_session(session)
@@ -980,6 +987,19 @@ defmodule Exoforge.DashboardLiveViewTest do
       inspect_html = render_click(view, "inspect_extension", %{"id" => "exoforge_std_auth"})
       assert inspect_html =~ "exoforge_std_auth"
 
+      # The inspector is tabbed: actions, events, resources, contracts, logs, docs.
+      assert inspect_html =~ "Contracts"
+      assert inspect_html =~ "Docs"
+
+      actions_html = render_click(view, "set_inspect_tab", %{"tab" => "actions"})
+      assert actions_html =~ "auth.login"
+
+      contracts_html = render_click(view, "set_inspect_tab", %{"tab" => "contracts"})
+      assert contracts_html =~ "scope"
+
+      logs_html = render_click(view, "set_inspect_tab", %{"tab" => "logs"})
+      assert logs_html =~ "Page 1 of"
+
       # Test unpinning
       unpin_html = render_click(view, "unpin_extension", %{"id" => "exoforge_std_auth"})
       assert unpin_html =~ "Pin"
@@ -1092,6 +1112,7 @@ defmodule Exoforge.DashboardLiveViewTest do
       # Test removing a slot and re-adding it
       removed_html =
         render_click(view, "remove_overview_slot", %{"id" => "quickstart"})
+
       refute removed_html =~ ~s(id="slot-quickstart")
 
       order_after_remove = Exoforge.Std.Dashboard.Preferences.overview_order(admin_id)
@@ -1099,6 +1120,7 @@ defmodule Exoforge.DashboardLiveViewTest do
 
       added_html =
         render_click(view, "add_overview_slot", %{"id" => "quickstart"})
+
       assert added_html =~ ~s(id="slot-quickstart")
       order_after_add = Exoforge.Std.Dashboard.Preferences.overview_order(admin_id)
       assert "quickstart" in order_after_add
@@ -1113,7 +1135,9 @@ defmodule Exoforge.DashboardLiveViewTest do
       assert sdk_html =~ "Unity Package Manager (UPM)"
 
       # Verify 0 error labels are hidden from Error Graph
-      assert html =~ "Errors detected" or html =~ "Zero errors detected across all monitored actions"
+      assert html =~ "Errors detected" or
+               html =~ "Zero errors detected across all monitored actions"
+
       refute html =~ "(0 errors)"
 
       # Broadcast a cluster event to verify live event feed update
@@ -1156,7 +1180,14 @@ defmodule Exoforge.DashboardLiveViewTest do
     test "actions modal joins metering rows (extension id) to the contract service and shows last error" do
       # Metering counts per extension id; the catalog is keyed by contract service. Both must agree
       # on one row, otherwise every action reads 0 invocations next to a graph that shows calls.
-      Exoforge.Metering.record_invocation("exoforge_std_dashboard_views", :list_views, 2_500, :error, 0, 0)
+      Exoforge.Metering.record_invocation(
+        "exoforge_std_dashboard_views",
+        :list_views,
+        2_500,
+        :error,
+        0,
+        0
+      )
 
       on_exit(fn ->
         :ets.match_delete(:exo_metering, {{:action, "exoforge_std_dashboard_views", :_, :_}, :_})
@@ -1164,7 +1195,10 @@ defmodule Exoforge.DashboardLiveViewTest do
 
       conn =
         build_conn()
-        |> Plug.Test.init_test_session(%{"admin_player_id" => "admin", "admin_scopes" => ["admin"]})
+        |> Plug.Test.init_test_session(%{
+          "admin_player_id" => "admin",
+          "admin_scopes" => ["admin"]
+        })
 
       {:ok, view, _html} = live(conn, "/")
 
@@ -1210,7 +1244,10 @@ defmodule Exoforge.DashboardLiveViewTest do
 
       conn =
         build_conn()
-        |> Plug.Test.init_test_session(%{"admin_player_id" => "admin", "admin_scopes" => ["admin"]})
+        |> Plug.Test.init_test_session(%{
+          "admin_player_id" => "admin",
+          "admin_scopes" => ["admin"]
+        })
 
       {:ok, view, _html} = live(conn, "/")
 
@@ -1226,13 +1263,72 @@ defmodule Exoforge.DashboardLiveViewTest do
 
       # A caller filter that matches nobody empties the unfolded invocation list, not the table.
       html = render_change(view, "filter_actions_detail_caller", %{"caller" => "someone_else"})
-      assert html =~ "No invocations captured in the traced window"
+      assert html =~ "No invocations retained in this window"
 
       # Tracking one service hides the others from the graph/console aggregation.
       html = render_click(view, "toggle_tracked_service", %{"service" => "auth"})
       assert html =~ "1 tracked"
       html = render_click(view, "toggle_tracked_service", %{"service" => ""})
       assert html =~ "All services"
+    end
+
+    test "an error stays unfoldable after successful traffic, with status filtering and paging" do
+      Exoforge.ActionTrace.enable()
+
+      on_exit(fn ->
+        for table <- [:exo_action_trace, :exo_action_trace_buckets] do
+          try do
+            :ets.delete_all_objects(table)
+          rescue
+            _ -> :ok
+          end
+        end
+      end)
+
+      Exoforge.ActionTrace.record(
+        :dashboard_view,
+        :list_views,
+        "player_42",
+        %{"n" => 0},
+        {:error, :unauthorized},
+        1
+      )
+
+      for i <- 1..20 do
+        Exoforge.ActionTrace.record(
+          :dashboard_view,
+          :list_views,
+          "player_42",
+          %{"n" => i},
+          {:ok, %{}},
+          1
+        )
+      end
+
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{
+          "admin_player_id" => "admin",
+          "admin_scopes" => ["admin"]
+        })
+
+      {:ok, view, _html} = live(conn, "/")
+
+      # Errors mode opens the row on its failures - the reason the row is listed at all.
+      html = render_click(view, "open_actions_detail_modal", %{"mode" => "errors"})
+      html = render_click(view, "toggle_action_detail", %{"key" => "dashboard_view.list_views"})
+
+      assert html =~ "error: :unauthorized"
+
+      # All invocations are one click away, eight per page.
+      html = render_click(view, "filter_action_detail_status", %{"errors" => "false"})
+      assert html =~ "Page 1 of 3"
+
+      html = render_click(view, "page_action_detail", %{"page" => "next"})
+      assert html =~ "Page 2 of 3"
+
+      html = render_click(view, "filter_action_detail_status", %{"errors" => "true"})
+      assert html =~ "error: :unauthorized"
     end
 
     test "CORS access policy controller updates highlight and disables allowed_origins when relaxed or strict" do

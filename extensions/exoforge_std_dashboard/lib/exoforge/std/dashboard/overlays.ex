@@ -6,7 +6,6 @@ defmodule Exoforge.Std.Dashboard.Overlays do
   import Exoforge.Std.Dashboard.Components
   import Exoforge.Std.Dashboard.InputTypes, only: [widget: 1]
   alias Exoforge.Std.Dashboard.ExtensionPresenter
-  alias Exoforge.Std.Dashboard.RecentEvents
 
   @doc """
   Command Palette (Cmd+K) modal component.
@@ -541,6 +540,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
       |> assign_new(:events_paused, fn -> false end)
       |> assign_new(:event_filter_topic, fn -> "" end)
       |> assign_new(:on_close, fn -> "close_settings" end)
+
     ~H"""
     <div class="flex flex-col md:flex-row min-h-[380px] md:h-[540px] md:max-h-[calc(85vh-7rem)] -mx-6 -my-4 divide-y md:divide-y-0 md:divide-x divide-gray-100 text-xs">
         <!-- Left Sidebar Navigation -->
@@ -554,7 +554,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   type="button"
                   phx-click="set_settings_tab"
                   phx-value-tab="project"
-                  class={"w-full text-left px-2.5 py-2 rounded-xl font-bold flex items-center gap-2 transition-all #{if @settings_tab == "project", do: "bg-white text-primary-700 shadow-sm border border-gray-200/80", else: "text-gray-600 hover:text-gray-900 hover:bg-white/60"}"}
+                  class={"w-full text-left px-2.5 py-2 rounded-xl font-bold flex items-center gap-2 transition-all #{if @settings_tab == "project", do: "bg-primary-600 text-white shadow-sm border border-primary-600", else: "text-gray-600 hover:text-gray-900 hover:bg-gray-100"}"}
                 >
                   <span>⚙️</span>
                   <span>Metadata</span>
@@ -563,7 +563,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   type="button"
                   phx-click="set_settings_tab"
                   phx-value-tab="visual"
-                  class={"w-full text-left px-2.5 py-2 rounded-xl font-bold flex items-center gap-2 transition-all #{if @settings_tab == "visual", do: "bg-white text-primary-700 shadow-sm border border-gray-200/80", else: "text-gray-600 hover:text-gray-900 hover:bg-white/60"}"}
+                  class={"w-full text-left px-2.5 py-2 rounded-xl font-bold flex items-center gap-2 transition-all #{if @settings_tab == "visual", do: "bg-primary-600 text-white shadow-sm border border-primary-600", else: "text-gray-600 hover:text-gray-900 hover:bg-gray-100"}"}
                 >
                   <span>🌓</span>
                   <span>Visual Settings</span>
@@ -572,7 +572,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   type="button"
                   phx-click="set_settings_tab"
                   phx-value-tab="console"
-                  class={"w-full text-left px-2.5 py-2 rounded-xl font-bold flex items-center gap-2 transition-all #{if @settings_tab == "console", do: "bg-white text-primary-700 shadow-sm border border-gray-200/80", else: "text-gray-600 hover:text-gray-900 hover:bg-white/60"}"}
+                  class={"w-full text-left px-2.5 py-2 rounded-xl font-bold flex items-center gap-2 transition-all #{if @settings_tab == "console", do: "bg-primary-600 text-white shadow-sm border border-primary-600", else: "text-gray-600 hover:text-gray-900 hover:bg-gray-100"}"}
                 >
                   <span>📟</span>
                   <span>Live Console</span>
@@ -597,7 +597,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                       type="button"
                       phx-click="set_settings_tab"
                       phx-value-tab={to_string(hook.id)}
-                      class={"w-full text-left px-2.5 py-2 rounded-xl font-bold flex items-center gap-2 transition-all #{if @settings_tab == to_string(hook.id), do: "bg-white text-primary-700 shadow-sm border border-gray-200/80", else: "text-gray-600 hover:text-gray-900 hover:bg-white/60"}"}
+                      class={"w-full text-left px-2.5 py-2 rounded-xl font-bold flex items-center gap-2 transition-all #{if @settings_tab == to_string(hook.id), do: "bg-primary-600 text-white shadow-sm border border-primary-600", else: "text-gray-600 hover:text-gray-900 hover:bg-gray-100"}"}
                     >
                       <span><%= hook.icon %></span>
                       <span class="truncate"><%= hook.title %></span>
@@ -1186,145 +1186,380 @@ defmodule Exoforge.Std.Dashboard.Overlays do
   end
 
   @doc """
-  Renders the modal for inspecting a plugin, including services, dependencies, and actions.
+  Renders the extension inspector: side tabs over actions, events, resources, contracts, logs and
+  source documentation.
   """
   attr(:extension, :map, default: nil)
+  attr(:tab, :string, default: "overview")
+  attr(:logs_page, :integer, default: 1)
   attr(:auth_token, :string, default: nil)
+  attr(:on_tab, :string, default: "set_inspect_tab")
+  attr(:on_logs_page, :string, default: "inspect_logs_page")
   attr(:on_close, :string, default: "close_inspect_extension")
 
   def plugin_inspector_modal(assigns) do
+    ext = assigns.extension
+
+    services = (ext && (ext[:services] || ext["services"])) || []
+    actions = (ext && (ext[:actions] || ext["actions"])) || []
+    events = (ext && (ext[:events] || ext["events"])) || []
+    resources = (ext && (ext[:resources] || ext["resources"])) || []
+
+    hooks =
+      if ext do
+        Exoforge.UIHookRegistry.list_hooks(:extension_inspect)
+        |> Enum.filter(&(to_string(&1[:plugin_id]) == to_string(ext.id)))
+      else
+        []
+      end
+
+    logs =
+      if ext,
+        do: Exoforge.ExtensionLogs.page(ext.id, page: assigns.logs_page, per_page: 25),
+        else: %{entries: [], total: 0, page: 1, pages: 1}
+
+    service_docs =
+      for svc <- services,
+          contract = svc[:__contract__] || svc["__contract__"],
+          is_atom(contract) do
+        {svc[:name] || svc["name"], contract, module_doc(contract)}
+      end
+
+    assigns =
+      assigns
+      |> assign(:services, services)
+      |> assign(:actions, actions)
+      |> assign(:events, events)
+      |> assign(:resources, resources)
+      |> assign(:hooks, hooks)
+      |> assign(:logs, logs)
+      |> assign(:service_docs, service_docs)
+      |> assign(:tabs, [
+        %{id: "overview", title: "Overview", icon: "🧩"},
+        %{id: "actions", title: "Actions", icon: "⚡"},
+        %{id: "events", title: "Events", icon: "📡"},
+        %{id: "resources", title: "Resources", icon: "🗃️"},
+        %{id: "contracts", title: "Contracts", icon: "📜"},
+        %{id: "logs", title: "Logs", icon: "🧾"},
+        %{id: "docs", title: "Docs", icon: "📖"}
+      ])
+
     ~H"""
     <%= if @extension do %>
       <.inspect_popup
         open={true}
-        icon={(is_map(@extension.dashboard_view) && @extension.dashboard_view[:icon]) || ExtensionPresenter.icon(@extension)}
+        icon={extension_icon(@extension)}
         title={display_name(@extension)}
         subtitle={"Extension #{@extension.id} (v#{@extension.version})"}
+        tabs={@tabs}
+        active_tab={@tab}
+        on_select_tab={@on_tab}
         on_close={@on_close}
-        width="max-w-2xl"
+        width="max-w-5xl"
       >
         <div class="space-y-4 text-xs">
-          <div class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
-            <span class="w-12 h-12 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center text-2xl">
-              <%= (is_map(@extension.dashboard_view) && @extension.dashboard_view[:icon]) || ExtensionPresenter.icon(@extension) %>
-            </span>
-            <div class="flex-1">
-              <div class="flex items-center justify-between">
-                <h4 class="font-bold text-gray-900 text-sm"><%= display_name(@extension) %></h4>
-                <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">
-                  <%= @extension.status %>
+          <!-- Content -->
+          <div class="space-y-4">
+            <%= if @tab == "overview" do %>
+              <div class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
+                <span class="w-12 h-12 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center text-2xl">
+                  <%= extension_icon(@extension) %>
                 </span>
+                <div class="flex-1 min-w-0">
+                  <h4 class="font-bold text-gray-900 text-sm"><%= display_name(@extension) %></h4>
+                  <p class="text-[11px] text-gray-500 font-mono mt-0.5 truncate">
+                    <%= @extension.id %> &bull; v<%= @extension.version %> &bull; <%= @extension.type %>
+                  </p>
+                </div>
               </div>
-              <p class="text-[11px] text-gray-500 font-mono mt-0.5"><%= @extension.id %> &bull; <%= @extension.type %></p>
-            </div>
-          </div>
 
-          <!-- HTTP Gateway Swagger Documentation -->
-          <%= if provides_service?(@extension, :http) do %>
-            <div class="p-3.5 bg-emerald-50/80 border border-emerald-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <span class="font-bold text-emerald-900 text-xs flex items-center gap-1.5">
-                  <span>📖</span>
-                  <span>Interactive Swagger / OpenAPI Explorer</span>
-                </span>
-                <p class="text-[11px] text-emerald-700 mt-0.5">Explore REST routes, view OpenAPI 3.0 schema, and test endpoints live with pre-authorized session token.</p>
-              </div>
-              <a
-                href={"http://localhost:#{Exoforge.Endpoints.http_port()}/api/docs" <> if(@auth_token, do: "?token=" <> URI.encode_www_form(@auth_token), else: "")}
-                target="_blank"
-                class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center justify-center gap-1 shadow-xs whitespace-nowrap flex-shrink-0"
-              >
-                <span>Open Swagger</span>
-                <span>↗</span>
-              </a>
-            </div>
-          <% end %>
-
-          <!-- Provides & Dependencies -->
-          <div class="grid grid-cols-2 gap-3">
-            <div class="p-3 bg-gray-50 rounded-xl border border-gray-200 space-y-1">
-              <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Provides Services</span>
-              <div class="flex flex-wrap gap-1 pt-1">
-                <%= for s <- @extension.provides do %>
-                  <span class="px-2 py-0.5 rounded bg-purple-50 text-purple-700 font-mono font-bold text-[10px]">
-                    <%= s %>
-                  </span>
-                <% end %>
-              </div>
-            </div>
-            <div class="p-3 bg-gray-50 rounded-xl border border-gray-200 space-y-1">
-              <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Dependencies</span>
-              <div class="flex flex-wrap gap-1 pt-1">
-                <%= if Enum.empty?(@extension.dependencies) do %>
-                  <span class="text-gray-400 italic text-[11px]">None (Root service)</span>
-                <% else %>
-                  <%= for d <- @extension.dependencies do %>
-                    <span class="px-2 py-0.5 rounded bg-gray-200 text-gray-700 font-mono text-[10px]">
-                      <%= d %>
-                    </span>
-                  <% end %>
-                <% end %>
-              </div>
-            </div>
-          </div>
-
-          <!-- Services and Actions -->
-          <div class="space-y-2">
-            <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-              Exported Actions (<%= length(@extension.actions) %>)
-            </span>
-            <%= if Enum.empty?(@extension.actions) do %>
-              <p class="p-3 bg-gray-50 rounded-xl text-gray-400 italic">No actions exposed by this extension.</p>
-            <% else %>
-              <div class="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                <%= for act <- @extension.actions do %>
-                  <div class="flex items-center justify-between p-2.5 bg-gray-50 border border-gray-200 rounded-lg">
-                    <div>
-                      <span class="font-mono font-bold text-gray-900"><%= act.service %>.<%= act.name %></span>
-                      <%= if act.doc do %>
-                        <p class="text-[10px] text-gray-500 mt-0.5"><%= act.doc %></p>
+              <div class="grid grid-cols-2 gap-3">
+                <div class="p-3 bg-gray-50 rounded-xl border border-gray-200 space-y-1">
+                  <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Provides</span>
+                  <div class="flex flex-wrap gap-1 pt-1">
+                    <%= for s <- @extension.provides do %>
+                      <span class="px-2 py-0.5 rounded bg-purple-50 text-purple-700 font-mono font-bold text-[10px]"><%= s %></span>
+                    <% end %>
+                  </div>
+                </div>
+                <div class="p-3 bg-gray-50 rounded-xl border border-gray-200 space-y-1">
+                  <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Depends On</span>
+                  <div class="flex flex-wrap gap-1 pt-1">
+                    <%= if Enum.empty?(@extension.dependencies) do %>
+                      <span class="text-gray-400 italic text-[11px]">None (root service)</span>
+                    <% else %>
+                      <%= for d <- @extension.dependencies do %>
+                        <span class="px-2 py-0.5 rounded bg-gray-200 text-gray-700 font-mono text-[10px]"><%= d %></span>
                       <% end %>
-                    </div>
-                    <button
-                      type="button"
-                      phx-click="open_action_modal"
-                      phx-value-service={act.service}
-                      phx-value-action={act.name}
-                      class="px-2.5 py-1 text-[11px] font-bold text-white bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors flex items-center gap-1 shadow-xs"
-                    >
-                      <span>⚡ Run</span>
-                    </button>
+                    <% end %>
+                  </div>
+                </div>
+              </div>
+
+              <%= if provides_service?(@extension, :http) do %>
+                <div class="p-3.5 bg-emerald-50/80 border border-emerald-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <span class="font-bold text-emerald-900 text-xs flex items-center gap-1.5">
+                      <span>📖</span><span>Interactive Swagger / OpenAPI Explorer</span>
+                    </span>
+                    <p class="text-[11px] text-emerald-700 mt-0.5">Explore REST routes and test endpoints with the session token.</p>
+                  </div>
+                  <a
+                    href={"http://localhost:#{Exoforge.Endpoints.http_port()}/api/docs" <> if(@auth_token, do: "?token=" <> URI.encode_www_form(@auth_token), else: "")}
+                    target="_blank"
+                    class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center justify-center gap-1 shadow-xs whitespace-nowrap flex-shrink-0"
+                  >
+                    <span>Open Swagger</span><span>↗</span>
+                  </a>
+                </div>
+              <% end %>
+
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <%= for {label, value} <- [{"Actions", length(@actions)}, {"Events", length(@events)}, {"Resources", length(@resources)}, {"Contracts", length(@services)}] do %>
+                  <div class="p-2.5 bg-white border border-gray-200 rounded-lg">
+                    <span class="text-[10px] font-bold text-gray-400 uppercase block"><%= label %></span>
+                    <p class="text-sm font-bold text-gray-800 font-mono mt-0.5"><%= value %></p>
                   </div>
                 <% end %>
               </div>
             <% end %>
-          </div>
 
-          <!-- Recent Logs -->
-          <div class="space-y-2">
-            <div class="flex items-center justify-between">
-              <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                Recent Logs
-              </span>
-              <span class="text-[10px] text-gray-400 font-mono">Persisted</span>
-            </div>
-            <% logs = Exoforge.ExtensionLogs.list(@extension.id, 20) %>
-            <%= if Enum.empty?(logs) do %>
-              <p class="p-3 bg-gray-50 rounded-xl text-gray-400 italic font-mono text-[11px]">No logs recorded for this extension.</p>
-            <% else %>
-              <div class="space-y-1 max-h-48 overflow-y-auto p-2.5 bg-gray-900 text-gray-200 rounded-xl font-mono text-[11px]">
-                <%= for l <- logs do %>
-                  <div class="flex items-start gap-2 py-0.5 border-b border-gray-800/50 last:border-0">
-                    <span class={case l.level_name do
-                      "error" -> "text-red-400 font-bold"
-                      "warning" -> "text-yellow-400 font-bold"
-                      "debug" -> "text-blue-400 font-bold"
-                      _ -> "text-emerald-400 font-bold"
-                    end}>
-                      [<%= String.upcase(l.level_name) %>]
-                    </span>
-                    <span class="text-gray-300 break-all"><%= l.message %></span>
+            <%= if @tab == "actions" do %>
+              <%= if Enum.empty?(@actions) do %>
+                <p class="p-3 bg-gray-50 rounded-xl text-gray-400 italic">No actions exposed by this extension.</p>
+              <% else %>
+                <div class="space-y-1.5">
+                  <%= for act <- @actions do %>
+                    <div class="p-2.5 bg-gray-50 border border-gray-200 rounded-lg space-y-1">
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="font-mono font-bold text-gray-900"><%= act.service %>.<%= act.name %></span>
+                        <button
+                          type="button"
+                          phx-click="open_action_modal"
+                          phx-value-service={act.service}
+                          phx-value-action={act.name}
+                          class="px-2.5 py-1 text-[11px] font-bold text-white bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors flex items-center gap-1 shadow-xs"
+                        >
+                          <span>⚡ Run</span>
+                        </button>
+                      </div>
+                      <p class="text-[11px] text-gray-500"><%= act.doc || "No description" %></p>
+                      <div class="flex flex-wrap items-center gap-1.5">
+                        <span class="px-1.5 py-0.5 rounded bg-gray-200 text-gray-600 font-mono text-[10px]"><%= Map.get(act, :mode) || "sync" %></span>
+                        <%= for p <- Map.get(act, :params) || [] do %>
+                          <span class="px-1.5 py-0.5 rounded bg-white border border-gray-200 text-gray-600 font-mono text-[10px]">
+                            <%= p[:name] %><%= if p[:optional], do: "?", else: "" %>: <%= p[:type] %>
+                          </span>
+                        <% end %>
+                      </div>
+                    </div>
+                  <% end %>
+                </div>
+              <% end %>
+            <% end %>
+
+            <%= if @tab == "events" do %>
+              <%= if Enum.empty?(@events) do %>
+                <p class="p-3 bg-gray-50 rounded-xl text-gray-400 italic">This extension does not declare events.</p>
+              <% else %>
+                <div class="space-y-1.5">
+                  <%= for event <- @events do %>
+                    <div class="p-2.5 bg-gray-50 border border-gray-200 rounded-lg space-y-1">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <span class="font-mono font-bold text-gray-900"><%= event[:name] || event["name"] %></span>
+                        <%= if event[:scope] || event["scope"] do %>
+                          <span class="px-1.5 py-0.5 rounded bg-gray-200 text-gray-600 font-mono text-[10px]">scope: <%= event[:scope] || event["scope"] %></span>
+                        <% end %>
+                        <%= if event[:topic] || event["topic"] do %>
+                          <span class="px-1.5 py-0.5 rounded bg-gray-200 text-gray-600 font-mono text-[10px]">topic: <%= event[:topic] || event["topic"] %></span>
+                        <% end %>
+                      </div>
+                      <p class="text-[11px] text-gray-500"><%= event[:doc] || event["doc"] || "No description" %></p>
+                      <%= if (event[:payload] || event["payload"]) not in [nil, %{}, []] do %>
+                        <pre class="text-[10px] p-2 bg-gray-950 text-emerald-300 rounded-lg overflow-x-auto font-mono"><%= inspect(event[:payload] || event["payload"]) %></pre>
+                      <% end %>
+                    </div>
+                  <% end %>
+                </div>
+              <% end %>
+            <% end %>
+
+            <%= if @tab == "resources" do %>
+              <%= if Enum.empty?(@resources) do %>
+                <p class="p-3 bg-gray-50 rounded-xl text-gray-400 italic">No resources declared.</p>
+              <% else %>
+                <div class="space-y-2">
+                  <%= for res <- @resources do %>
+                    <div class="p-2.5 bg-gray-50 border border-gray-200 rounded-lg space-y-1.5">
+                      <div class="flex items-center justify-between">
+                        <span class="font-mono font-bold text-gray-900"><%= res[:name] || res["name"] %></span>
+                        <span class="text-[10px] font-mono text-gray-500">pk: <%= res[:primary_key] || res["primary_key"] || :id %></span>
+                      </div>
+                      <div class="flex flex-wrap gap-1">
+                        <%= for col <- (res[:columns] || res["columns"] || []) do %>
+                          <span class="px-1.5 py-0.5 rounded bg-white border border-gray-200 text-gray-600 font-mono text-[10px]">
+                            <%= col[:name] || col["name"] %>: <%= col[:type] || col["type"] %>
+                          </span>
+                        <% end %>
+                      </div>
+                    </div>
+                  <% end %>
+                </div>
+              <% end %>
+
+              <!-- Resources are a hook point: an extension can contribute its own inspector panel -->
+              <%= for hook <- @hooks do %>
+                <div class="pt-2 border-t border-gray-100 space-y-2">
+                  <div>
+                    <h4 class="text-xs font-bold text-gray-900 flex items-center gap-2">
+                      <span><%= hook.icon %></span>
+                      <span><%= hook.title %></span>
+                    </h4>
+                    <p class="text-[11px] text-gray-500 mt-0.5">Contributed by <%= hook[:plugin_id] %>.</p>
                   </div>
+                  <%= cond do %>
+                    <% hook[:element] || hook["element"] || hook[:type] == "iframe" -> %>
+                      <Exoforge.Std.Dashboard.Microfrontend.render_widget spec={hook} context={%{tab: "extension_inspect"}} />
+                    <% hook[:module] && Code.ensure_loaded?(hook[:module]) -> %>
+                      <.live_component module={hook[:module]} id={"inspect_#{hook.id}"} extension={@extension} />
+                    <% true -> %>
+                      <p class="text-[11px] text-gray-400 italic">
+                        <%= hook[:description] || "This extension registers an inspector panel without a component." %>
+                      </p>
+                  <% end %>
+                </div>
+              <% end %>
+            <% end %>
+
+            <%= if @tab == "contracts" do %>
+              <%= if Enum.empty?(@services) do %>
+                <p class="p-3 bg-gray-50 rounded-xl text-gray-400 italic">This extension provides no service contract.</p>
+              <% else %>
+                <div class="space-y-2">
+                  <%= for svc <- @services do %>
+                    <% contract = svc[:__contract__] || svc["__contract__"] %>
+                    <div class="p-2.5 bg-gray-50 border border-gray-200 rounded-lg space-y-2">
+                      <div class="flex flex-wrap items-center justify-between gap-2">
+                        <span class="font-mono font-bold text-gray-900"><%= svc[:name] || svc["name"] %></span>
+                        <span class="text-[10px] font-mono text-gray-500"><%= if is_atom(contract), do: inspect(contract), else: "manifest contract" %></span>
+                      </div>
+
+                      <div class="space-y-1">
+                        <%= for act <- (svc[:actions] || svc["actions"] || []) do %>
+                          <% name = act[:name] || act["name"] %>
+                          <% params = act[:params] || act["params"] || [] %>
+                          <div class="p-2 bg-white border border-gray-200 rounded-lg space-y-1">
+                            <div class="flex flex-wrap items-center gap-1.5">
+                              <span class="font-mono font-bold text-gray-800"><%= name %></span>
+                              <span class="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-mono text-[10px]">
+                                <%= act[:mode] || "sync" %>
+                              </span>
+                              <span class="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 font-mono text-[10px]">
+                                <%= act[:scope] || "global" %>
+                              </span>
+                              <span class="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-mono text-[10px]">
+                                <%= act[:transport] || "auto" %>
+                              </span>
+                            </div>
+                            <p class="font-mono text-[11px] text-gray-600">
+                              <%= name %>(<%= Enum.map_join(contract_params(params), ", ", fn {param, type} -> "#{param}: #{type}" end) %>)
+                              <%= if act[:returns], do: " -> " <> inspect(act[:returns]) %>
+                            </p>
+                            <%= if act[:errors] not in [nil, []] do %>
+                              <p class="text-[10px] font-mono text-red-600">errors: <%= Enum.map_join(act[:errors], ", ", &inspect/1) %></p>
+                            <% end %>
+                          </div>
+                        <% end %>
+                      </div>
+                    </div>
+                  <% end %>
+                </div>
+              <% end %>
+            <% end %>
+
+            <%= if @tab == "logs" do %>
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                  Logs (<%= @logs.total %>)
+                </span>
+                <div class="flex items-center gap-2 text-[11px] text-gray-500">
+                  <span>Page <%= @logs.page %> of <%= @logs.pages %></span>
+                  <button
+                    type="button"
+                    phx-click={@on_logs_page}
+                    phx-value-page="prev"
+                    disabled={@logs.page <= 1}
+                    class="px-2 py-1 rounded-lg bg-white border border-gray-200 text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >‹</button>
+                  <button
+                    type="button"
+                    phx-click={@on_logs_page}
+                    phx-value-page="next"
+                    disabled={@logs.page >= @logs.pages}
+                    class="px-2 py-1 rounded-lg bg-white border border-gray-200 text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >›</button>
+                </div>
+              </div>
+
+              <%= if Enum.empty?(@logs.entries) do %>
+                <p class="p-3 bg-gray-50 rounded-xl text-gray-400 italic font-mono text-[11px]">No logs recorded for this extension.</p>
+              <% else %>
+                <div class="space-y-1 p-2.5 bg-gray-900 text-gray-200 rounded-xl font-mono text-[11px]">
+                  <%= for l <- @logs.entries do %>
+                    <div class="flex items-start gap-2 py-0.5 border-b border-gray-800/50 last:border-0">
+                      <span class="text-gray-500 shrink-0"><%= sample_time(l.at) %></span>
+                      <span class={case l.level_name do
+                        "error" -> "text-red-400 font-bold"
+                        "warning" -> "text-yellow-400 font-bold"
+                        "debug" -> "text-blue-400 font-bold"
+                        _ -> "text-emerald-400 font-bold"
+                      end}>
+                        [<%= String.upcase(l.level_name) %>]
+                      </span>
+                      <span class="text-gray-300 break-all"><%= l.message %></span>
+                    </div>
+                  <% end %>
+                </div>
+              <% end %>
+            <% end %>
+
+            <%= if @tab == "docs" do %>
+              <% about = module_doc(@extension[:entry_point]) %>
+              <div class="space-y-4">
+                <div>
+                  <h4 class="text-xs font-bold text-gray-900 flex items-center gap-2">
+                    <span>📖</span>
+                    <span><%= display_name(@extension) %></span>
+                  </h4>
+                  <p class="text-[11px] text-gray-500 mt-0.5">Extracted from the extension and contract source documentation.</p>
+                </div>
+
+                <%= if about do %>
+                  <pre class="whitespace-pre-wrap p-3 bg-gray-50 border border-gray-200 rounded-xl text-[11px] text-gray-700 font-sans leading-relaxed"><%= about %></pre>
+                <% end %>
+
+                <%= for {service_name, contract, doc} <- @service_docs do %>
+                  <div class="p-3 bg-gray-50 border border-gray-200 rounded-xl space-y-2">
+                    <div class="flex items-center justify-between">
+                      <span class="font-mono font-bold text-gray-900"><%= service_name %></span>
+                      <span class="text-[10px] font-mono text-gray-500"><%= inspect(contract) %></span>
+                    </div>
+                    <%= if doc do %>
+                      <pre class="whitespace-pre-wrap text-[11px] text-gray-600 font-sans leading-relaxed"><%= doc %></pre>
+                    <% end %>
+                    <%= for act <- Enum.filter(@actions, &(to_string(&1.service) == to_string(service_name))) do %>
+                      <div class="pt-1 border-t border-gray-200/70">
+                        <span class="font-mono font-bold text-gray-800 text-[11px]"><%= act.name %></span>
+                        <p class="text-[11px] text-gray-500 mt-0.5 whitespace-pre-wrap"><%= act.doc || "No documentation." %></p>
+                      </div>
+                    <% end %>
+                  </div>
+                <% end %>
+
+                <%= if about == nil and @service_docs == [] do %>
+                  <p class="p-3 bg-gray-50 rounded-xl text-gray-400 italic">
+                    No source documentation is available for this extension. Native extensions document their actions in the manifest.
+                  </p>
                 <% end %>
               </div>
             <% end %>
@@ -1334,6 +1569,47 @@ defmodule Exoforge.Std.Dashboard.Overlays do
     <% end %>
     """
   end
+
+  defp extension_icon(extension) do
+    (is_map(extension[:dashboard_view]) && extension[:dashboard_view][:icon]) ||
+      ExtensionPresenter.icon(extension)
+  end
+
+  @doc "The module doc of a loaded Elixir module, or nil. Used by the inspector's Docs tab."
+  def module_doc(module) when is_atom(module) and not is_nil(module) do
+    case Code.fetch_docs(module) do
+      {:docs_v1, _, _, _, %{"en" => doc}, _, _} -> doc
+      _ -> nil
+    end
+  rescue
+    _ -> nil
+  end
+
+  def module_doc(_), do: nil
+
+  # Contract actions declare params as keyword lists (`[token: :string]`); the catalog normalizes
+  # them into maps. The inspector accepts both.
+  defp contract_params(params) when is_map(params) do
+    Enum.map(params, fn {name, spec} -> {to_string(name), param_type(spec)} end)
+  end
+
+  defp contract_params(params) when is_list(params) do
+    Enum.map(params, fn
+      %{} = param -> {to_string(param[:name] || param["name"]), param_type(param)}
+      {name, spec} -> {to_string(name), param_type(spec)}
+      name -> {to_string(name), ""}
+    end)
+  end
+
+  defp contract_params(_), do: []
+
+  defp param_type(%{} = spec), do: to_string(spec[:type] || spec["type"] || "")
+
+  defp param_type(list) when is_list(list) do
+    if Keyword.keyword?(list), do: to_string(Keyword.get(list, :type, "")), else: ""
+  end
+
+  defp param_type(type), do: to_string(type)
 
   @doc """
   Renders the login modal.
@@ -1414,7 +1690,9 @@ defmodule Exoforge.Std.Dashboard.Overlays do
   def sdk_download_modal(assigns) do
     sdk_files =
       if assigns.open do
-        case Exoforge.ActionDispatcher.dispatch_internal(:file_bucket, :list_files, %{"bucket" => "sdk"}) do
+        case Exoforge.ActionDispatcher.dispatch_internal(:file_bucket, :list_files, %{
+               "bucket" => "sdk"
+             }) do
           {:ok, %{files: files}} when is_list(files) -> files
           _ -> []
         end
@@ -1423,9 +1701,13 @@ defmodule Exoforge.Std.Dashboard.Overlays do
       end
 
     sorted_files =
-      Enum.sort_by(sdk_files, fn f ->
-        f["created_at"] || f[:created_at] || f["filename"] || ""
-      end, :desc)
+      Enum.sort_by(
+        sdk_files,
+        fn f ->
+          f["created_at"] || f[:created_at] || f["filename"] || ""
+        end,
+        :desc
+      )
 
     latest_file = List.first(sorted_files)
     older_files = Enum.drop(sorted_files, 1)
@@ -1582,13 +1864,15 @@ defmodule Exoforge.Std.Dashboard.Overlays do
   attr(:search, :string, default: "")
   attr(:filter_tab, :string, default: "all")
   attr(:caller, :string, default: "")
-  attr(:expanded, :string, default: nil)
+  attr(:expansion, :map, default: nil)
   attr(:services, :list, default: [])
   attr(:tracked_services, :list, default: [])
   attr(:catalog, :list, default: [])
   attr(:telemetry, :map, default: %{})
   attr(:on_filter_caller, :string, default: "filter_actions_detail_caller")
   attr(:on_toggle_row, :string, default: "toggle_action_detail")
+  attr(:on_page, :string, default: "page_action_detail")
+  attr(:on_filter_status, :string, default: "filter_action_detail_status")
   attr(:on_toggle_service, :string, default: "toggle_tracked_service")
   attr(:on_close, :string, default: "close_actions_detail_modal")
   attr(:on_search, :string, default: "search_actions_detail")
@@ -1606,7 +1890,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
 
       # Flatten catalog into a list of {svc, act, key}
       all_items =
-        for svc <- catalog, act <- (Map.get(svc, :actions) || Map.get(svc, "actions") || []) do
+        for svc <- catalog, act <- Map.get(svc, :actions) || Map.get(svc, "actions") || [] do
           svc_name = to_string(Map.get(svc, :name) || Map.get(svc, "name") || "")
           act_name = to_string(Map.get(act, :name) || Map.get(act, "name") || "")
           key = "#{ExtensionPresenter.service_key(svc_name)}.#{act_name}"
@@ -1646,8 +1930,12 @@ defmodule Exoforge.Std.Dashboard.Overlays do
           if q == "" do
             true
           else
-            svc_name = to_string(Map.get(item.service, :name) || Map.get(item.service, "name") || "")
-            act_name = to_string(Map.get(item.action, :name) || Map.get(item.action, "name") || "")
+            svc_name =
+              to_string(Map.get(item.service, :name) || Map.get(item.service, "name") || "")
+
+            act_name =
+              to_string(Map.get(item.action, :name) || Map.get(item.action, "name") || "")
+
             String.contains?(String.downcase(item.key), q) or
               String.contains?(String.downcase(svc_name), q) or
               String.contains?(String.downcase(act_name), q)
@@ -1660,17 +1948,16 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             _ -> true
           end
         end)
-        |> Enum.sort_by(
-          fn item ->
-            if assigns.mode == "errors" do
-              {-item.errors, -item.invocations, item.key}
-            else
-              {-item.invocations, -item.errors, item.key}
-            end
+        |> Enum.sort_by(fn item ->
+          if assigns.mode == "errors" do
+            {-item.errors, -item.invocations, item.key}
+          else
+            {-item.invocations, -item.errors, item.key}
           end
-        )
+        end)
 
       is_error_mode = assigns.mode == "errors"
+
       chart_series =
         if is_error_mode do
           Enum.filter(telemetry[:error_series] || [], &((&1[:total] || 0) > 0))
@@ -1744,7 +2031,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                     type="button"
                     phx-click={@on_switch_mode}
                     phx-value-mode="actions"
-                    class={"px-2.5 py-1 rounded-lg font-bold transition-all flex items-center gap-1 #{if not @is_error_mode, do: "bg-white text-primary-700 shadow-xs", else: "text-gray-500 hover:text-gray-900"}"}
+                    class={"px-2.5 py-1 rounded-lg font-bold transition-all flex items-center gap-1 #{if not @is_error_mode, do: "bg-primary-600 text-white shadow-xs", else: "text-gray-500 hover:text-gray-900"}"}
                   >
                     <span>📈 Throughput</span>
                   </button>
@@ -1752,7 +2039,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                     type="button"
                     phx-click={@on_switch_mode}
                     phx-value-mode="errors"
-                    class={"px-2.5 py-1 rounded-lg font-bold transition-all flex items-center gap-1 #{if @is_error_mode, do: "bg-white text-red-700 shadow-xs", else: "text-gray-500 hover:text-gray-900"}"}
+                    class={"px-2.5 py-1 rounded-lg font-bold transition-all flex items-center gap-1 #{if @is_error_mode, do: "bg-red-600 text-white shadow-xs", else: "text-gray-500 hover:text-gray-900"}"}
                   >
                     <span>⚠️ Errors</span>
                   </button>
@@ -1838,7 +2125,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   type="button"
                   phx-click={@on_filter_tab}
                   phx-value-tab="all"
-                  class={"px-3 py-1.5 rounded-lg font-bold text-xs transition-colors #{if @filter_tab == "all", do: "bg-white text-gray-900 shadow-xs", else: "text-gray-500 hover:text-gray-900"}"}
+                  class={"px-3 py-1.5 rounded-lg font-bold text-xs transition-colors #{if @filter_tab == "all", do: "bg-primary-600 text-white shadow-xs", else: "text-gray-500 hover:text-gray-900"}"}
                 >
                   All (<%= @total_count %>)
                 </button>
@@ -1846,7 +2133,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   type="button"
                   phx-click={@on_filter_tab}
                   phx-value-tab="active"
-                  class={"px-3 py-1.5 rounded-lg font-bold text-xs transition-colors #{if @filter_tab == "active", do: "bg-white text-emerald-700 shadow-xs", else: "text-gray-500 hover:text-gray-900"}"}
+                  class={"px-3 py-1.5 rounded-lg font-bold text-xs transition-colors #{if @filter_tab == "active", do: "bg-emerald-600 text-white shadow-xs", else: "text-gray-500 hover:text-gray-900"}"}
                 >
                   Active Traffic
                 </button>
@@ -1854,7 +2141,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   type="button"
                   phx-click={@on_filter_tab}
                   phx-value-tab="errors_only"
-                  class={"px-3 py-1.5 rounded-lg font-bold text-xs transition-colors #{if @filter_tab == "errors_only", do: "bg-white text-red-700 shadow-xs", else: "text-gray-500 hover:text-gray-900"}"}
+                  class={"px-3 py-1.5 rounded-lg font-bold text-xs transition-colors #{if @filter_tab == "errors_only", do: "bg-red-600 text-white shadow-xs", else: "text-gray-500 hover:text-gray-900"}"}
                 >
                   With Errors
                 </button>
@@ -1921,14 +2208,14 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   <tbody class="divide-y divide-gray-100 text-xs">
                     <%= for item <- @items do %>
                       <tr
-                        class={"transition-colors cursor-pointer #{if @expanded == item.key, do: "bg-primary-50/40", else: "hover:bg-gray-50/80"}"}
+                        class={"transition-colors cursor-pointer #{if @expansion && @expansion.key == item.key, do: "bg-primary-50/40", else: "hover:bg-gray-50/80"}"}
                         phx-click={@on_toggle_row}
                         phx-value-key={item.key}
                       >
                         <td class="py-2.5 px-3">
                           <div class="flex items-center gap-2">
                             <span class="w-3 text-[10px] text-gray-400 shrink-0">
-                              <%= if @expanded == item.key, do: "▾", else: "▸" %>
+                              <%= if @expansion && @expansion.key == item.key, do: "▾", else: "▸" %>
                             </span>
                             <span class="w-6 h-6 rounded-md bg-purple-50 text-purple-700 flex items-center justify-center text-xs shrink-0">
                               <%= Map.get(item.service, :icon) || "⚡" %>
@@ -1987,25 +2274,78 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                         </td>
                       </tr>
 
-                      <!-- Unfolded row: what was actually sent and what came back -->
-                      <%= if @expanded == item.key do %>
+                      <!-- Unfolded row: what was actually sent and what came back, page by page -->
+                      <%= if @expansion && @expansion.key == item.key do %>
+                        <% page = @expansion.result %>
                         <tr class="bg-gray-50/80">
                           <td colspan="8" class="px-4 py-3 border-l-2 border-primary-400">
-                            <%= if item.samples == [] do %>
+                            <div class="flex flex-wrap items-center justify-between gap-2 pb-2">
+                              <div class="flex items-center gap-1.5 p-1 bg-gray-200 rounded-xl">
+                                <button
+                                  type="button"
+                                  phx-click={@on_filter_status}
+                                  phx-value-errors="false"
+                                  class={"px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors #{if not @expansion.errors_only, do: "bg-primary-600 text-white shadow-xs", else: "text-gray-600 hover:text-gray-900"}"}
+                                >
+                                  All invocations<%= if not @expansion.errors_only, do: " (#{page.total})" %>
+                                </button>
+                                <button
+                                  type="button"
+                                  phx-click={@on_filter_status}
+                                  phx-value-errors="true"
+                                  class={"px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors #{if @expansion.errors_only, do: "bg-red-600 text-white shadow-xs", else: "text-gray-600 hover:text-gray-900"}"}
+                                >
+                                  Errors<%= if @expansion.errors_only, do: " (#{page.total})" %>
+                                </button>
+                              </div>
+
+                              <div class="flex items-center gap-2 text-[11px] text-gray-500">
+                                <span>
+                                  <%= cond do %>
+                                    <% page.total == 0 -> %>Nothing retained<%= if @caller != "", do: " for #{@caller}" %>
+                                    <% page.total <= 8 -> %><%= page.total %> retained<%= if @caller != "", do: " for #{@caller}" %>
+                                    <% true -> %>Page <%= page.page %> of <%= page.pages %>, newest first
+                                  <% end %>
+                                </span>
+                                <button
+                                  type="button"
+                                  phx-click={@on_page}
+                                  phx-value-page="prev"
+                                  disabled={page.page <= 1}
+                                  class="px-2 py-1 rounded-lg bg-white border border-gray-200 text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                                >
+                                  ‹
+                                </button>
+                                <button
+                                  type="button"
+                                  phx-click={@on_page}
+                                  phx-value-page="next"
+                                  disabled={page.page >= page.pages}
+                                  class="px-2 py-1 rounded-lg bg-white border border-gray-200 text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                                >
+                                  ›
+                                </button>
+                              </div>
+                            </div>
+
+                            <%= if page.samples == [] do %>
                               <p class="text-[11px] text-gray-400">
-                                No invocations captured in the traced window<%= if @caller != "", do: " for #{@caller}" %>.
+                                No invocations retained in this window<%= if @caller != "", do: " for #{@caller}" %>. The trace keeps the most recent samples per action and all recent failures.
                               </p>
                             <% else %>
                               <div class="space-y-2">
-                                <%= for sample <- item.samples do %>
+                                <%= for sample <- page.samples do %>
                                   <% errored? = String.starts_with?(sample.status, "error") %>
                                   <div class={"rounded-xl border p-2.5 space-y-1.5 bg-white #{if errored?, do: "border-red-200", else: "border-gray-200"}"}>
                                     <div class="flex flex-wrap items-center justify-between gap-2 text-[11px]">
-                                      <div class="flex items-center gap-2 font-mono">
+                                      <div class="flex flex-wrap items-center gap-2 font-mono">
                                         <span class={"px-1.5 py-0.5 rounded font-bold border #{if errored?, do: "bg-red-50 text-red-700 border-red-200", else: "bg-emerald-50 text-emerald-700 border-emerald-200"}"}>
                                           <%= sample.status %>
                                         </span>
                                         <span class="text-gray-600">caller: <%= sample.caller %></span>
+                                        <%= if sample[:internal] do %>
+                                          <span class="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 text-[10px] font-bold border border-purple-200">internal call</span>
+                                        <% end %>
                                         <span class="text-gray-400"><%= sample.duration_ms %>ms</span>
                                       </div>
                                       <span class="text-[10px] text-gray-400 font-mono"><%= sample_time(sample.at) %></span>
@@ -2179,13 +2519,13 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   on_toggle={@on_toggle_service}
                 />
 
-                <div class="flex items-center p-1 bg-gray-200/70 rounded-xl gap-0.5">
+                <div class="flex items-center p-1 bg-gray-200 rounded-xl gap-0.5">
                   <%= for {kind, label} <- [{"all", "All"}, {"action", "Actions"}, {"event", "Events"}, {"webhook", "Webhooks"}, {"cron", "Cron"}] do %>
                     <button
                       type="button"
                       phx-click={@on_filter_kind}
                       phx-value-kind={kind}
-                      class={"px-2.5 py-1 rounded-lg font-bold text-[11px] transition-colors #{if @kind_filter == kind, do: "bg-white text-gray-900 shadow-xs", else: "text-gray-500 hover:text-gray-900"}"}
+                      class={"px-2.5 py-1 rounded-lg font-bold text-[11px] transition-colors #{if @kind_filter == kind, do: "bg-primary-600 text-white shadow-xs", else: "text-gray-500 hover:text-gray-900"}"}
                     >
                       <%= label %>
                     </button>
@@ -2229,9 +2569,6 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                         <div class="flex flex-wrap items-center gap-2 text-xs">
                           <span class={"px-2 py-0.5 rounded font-bold font-mono text-xs border #{if is_err, do: "bg-red-950 text-red-300 border-red-800/80", else: "bg-primary-950 text-primary-300 border-primary-800/60"}"}>
                             <%= ev.event %>
-                          </span>
-                          <span class="px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 text-[11px] border border-gray-700 font-mono uppercase tracking-wide">
-                            <%= RecentEvents.kind(ev) %>
                           </span>
                           <%= if is_err do %>
                             <span class="px-2 py-0.5 rounded bg-red-900/90 text-red-100 font-bold border border-red-700 text-[11px] animate-pulse">
@@ -2292,9 +2629,11 @@ defmodule Exoforge.Std.Dashboard.Overlays do
       case ev.payload do
         %{} = m ->
           status = to_string(m["status"] || m[:status] || "")
+
           String.contains?(status, "error") or
             Map.has_key?(m, "error") or Map.has_key?(m, :error) or
             Map.has_key?(m, "exception") or Map.has_key?(m, :exception)
+
         _ ->
           false
       end
@@ -2313,7 +2652,10 @@ defmodule Exoforge.Std.Dashboard.Overlays do
 
     highlighted =
       escaped
-      |> String.replace(~r/(&quot;[^&]+&quot;)(:)/, "<span class=\"text-sky-300 font-semibold\">\\1</span>\\2")
+      |> String.replace(
+        ~r/(&quot;[^&]+&quot;)(:)/,
+        "<span class=\"text-sky-300 font-semibold\">\\1</span>\\2"
+      )
       |> then(fn str ->
         Regex.replace(~r/(: )(&quot;[^&]*&quot;)/, str, fn _, p1, p2 ->
           color =
@@ -2327,7 +2669,10 @@ defmodule Exoforge.Std.Dashboard.Overlays do
         end)
       end)
       |> String.replace(~r/(: )(-?\d+\.?\d*)/, "\\1<span class=\"text-amber-300\">\\2</span>")
-      |> String.replace(~r/\b(true|false|null)\b/, "<span class=\"text-purple-300 font-semibold\">\\1</span>")
+      |> String.replace(
+        ~r/\b(true|false|null)\b/,
+        "<span class=\"text-purple-300 font-semibold\">\\1</span>"
+      )
 
     Phoenix.HTML.raw(highlighted)
   end

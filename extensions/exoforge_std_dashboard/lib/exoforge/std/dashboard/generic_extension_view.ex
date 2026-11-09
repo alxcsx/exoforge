@@ -13,6 +13,10 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
   import Exoforge.Std.Dashboard.Components
   import Exoforge.Std.Dashboard.InputTypes, only: [widget: 1]
 
+  # 25 rows a page. Searching and paging both belong to the store, so they compose: the page is a
+  # page of the matches, not a page that happened to match.
+  @resource_per_page 25
+
   @impl true
   def mount(socket) do
     {:ok,
@@ -23,6 +27,9 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
        selected_resource_name: nil,
        resource_rows: [],
        filtered_resource_rows: [],
+       resource_total: 0,
+       resource_page: 1,
+       resource_pages: 1,
        resource_search: "",
        drawer_open: false,
        inspected_row: nil,
@@ -97,7 +104,9 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
 
   defp open_row(socket, id) do
     current = socket.assigns[:inspected_row]
-    current_id = current && (current[:id] || current["id"] || current[:player_id] || current["player_id"])
+
+    current_id =
+      current && (current[:id] || current["id"] || current[:player_id] || current["player_id"])
 
     if current && to_string(current_id) == to_string(id) do
       socket
@@ -125,6 +134,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
   def handle_event("close_focus", _params, socket) do
     tab = (socket.assigns[:extension] && socket.assigns.extension.id) || "overview"
     path = if tab in ["overview", :overview], do: "/", else: "/tab/#{tab}"
+
     {:noreply,
      socket
      |> assign(drawer_open: false, inspected_row: nil)
@@ -238,9 +248,20 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
     socket =
       socket
       |> assign(:resource_search, query)
-      |> apply_resource_search()
+      |> assign(:resource_page, 1)
+      |> load_resource_data()
 
     {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("resource_page", %{"page" => page}, socket) do
+    target =
+      if page == "next",
+        do: socket.assigns.resource_page + 1,
+        else: socket.assigns.resource_page - 1
+
+    {:noreply, load_resource_data(assign(socket, :resource_page, max(target, 1)))}
   end
 
   @impl true
@@ -254,7 +275,10 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
   def handle_event("new_resource", _params, socket) do
     columns = current_resource_columns(socket)
 
-    {:noreply, assign(socket, resource_form: %{mode: :new, values: ResourceForms.defaults(columns), errors: %{}})}
+    {:noreply,
+     assign(socket,
+       resource_form: %{mode: :new, values: ResourceForms.defaults(columns), errors: %{}}
+     )}
   end
 
   @impl true
@@ -297,7 +321,10 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
       end
 
     files =
-      case ActionDispatcher.dispatch_internal(:file_bucket, :list_files, %{"bucket" => bucket, "limit" => 200}) do
+      case ActionDispatcher.dispatch_internal(:file_bucket, :list_files, %{
+             "bucket" => bucket,
+             "limit" => 200
+           }) do
         {:ok, %{files: f}} when is_list(f) -> f
         _ -> []
       end
@@ -318,7 +345,10 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
   @impl true
   def handle_event("file_picker_change_bucket", %{"bucket" => bucket}, socket) do
     files =
-      case ActionDispatcher.dispatch_internal(:file_bucket, :list_files, %{"bucket" => bucket, "limit" => 200}) do
+      case ActionDispatcher.dispatch_internal(:file_bucket, :list_files, %{
+             "bucket" => bucket,
+             "limit" => 200
+           }) do
         {:ok, %{files: f}} when is_list(f) -> f
         _ -> []
       end
@@ -416,8 +446,13 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
   end
 
   @impl true
-  def handle_event("file_picker_uploaded", %{"filename" => filename, "base64" => base64, "content_type" => content_type}, socket) do
+  def handle_event(
+        "file_picker_uploaded",
+        %{"filename" => filename, "base64" => base64, "content_type" => content_type},
+        socket
+      ) do
     bucket = socket.assigns.file_picker_bucket || "default"
+
     payload = %{
       "bucket" => bucket,
       "filename" => filename,
@@ -468,7 +503,8 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
 
     case ResourceForms.errors(values, columns) do
       errors when errors != %{} ->
-        {:noreply, assign(socket, singleton_form: %{form | values: values, errors: errors, saved: false})}
+        {:noreply,
+         assign(socket, singleton_form: %{form | values: values, errors: errors, saved: false})}
 
       _ ->
         attributes = ResourceForms.attributes(values, columns)
@@ -486,7 +522,12 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
           {:error, reason} ->
             {:noreply,
              assign(socket,
-               singleton_form: %{form | values: values, errors: %{"_form" => inspect(reason)}, saved: false}
+               singleton_form: %{
+                 form
+                 | values: values,
+                   errors: %{"_form" => inspect(reason)},
+                   saved: false
+               }
              )}
         end
     end
@@ -548,7 +589,8 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
   @impl true
   def handle_event("export_csv", _params, socket) do
     res_name = socket.assigns.selected_resource_name || "data"
-    rows = socket.assigns.resource_rows
+    # Exports cover the resource, not just the page on screen.
+    rows = ExtensionRegistry.fetch_resource_rows(res_name)
     cols = current_resource_columns(socket)
 
     header = Enum.map_join(cols, ",", &"\"#{&1[:label] || &1[:key]}\"")
@@ -577,7 +619,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
   @impl true
   def handle_event("export_json", _params, socket) do
     res_name = socket.assigns.selected_resource_name || "data"
-    json_data = Jason.encode!(socket.assigns.resource_rows, pretty: true)
+    json_data = Jason.encode!(ExtensionRegistry.fetch_resource_rows(res_name), pretty: true)
 
     {:noreply,
      assign(socket,
@@ -617,16 +659,19 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
         assign(socket, resource_rows: [], filtered_resource_rows: [], singleton_form: nil)
 
       name ->
-        rows = ExtensionRegistry.fetch_resource_rows(name)
+        page = Map.get(socket.assigns, :resource_page, 1)
+        %{rows: rows, total: total} = resource_page(name, page, socket.assigns.resource_search)
         columns = current_resource_columns(socket)
 
         socket =
           if singleton_resource?(socket) do
             row = List.first(rows)
+
             values =
               if row && map_size(row) > 0 do
                 defaults = ResourceForms.defaults(columns)
                 row_vals = ResourceForms.values_for(row, columns)
+
                 Enum.reduce(defaults, row_vals, fn {k, def_v}, acc ->
                   case Map.get(acc, k) do
                     nil -> Map.put(acc, k, def_v)
@@ -637,16 +682,32 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
               else
                 ResourceForms.defaults(columns)
               end
+
             saved_indicator = socket.assigns[:singleton_saved] || false
             assign(socket, singleton_form: %{values: values, errors: %{}, saved: saved_indicator})
           else
             assign(socket, singleton_form: nil)
           end
 
+        pages = max(ceil(total / @resource_per_page), 1)
+
         socket
         |> assign(:resource_rows, rows)
+        |> assign(:resource_total, total)
+        |> assign(:resource_page, min(page, pages))
+        |> assign(:resource_pages, pages)
         |> apply_resource_search()
     end
+  end
+
+  defp resource_page(name, page, search) do
+    ExtensionRegistry.page_resource_rows(name,
+      limit: @resource_per_page,
+      offset: (max(page, 1) - 1) * @resource_per_page,
+      search: search
+    )
+  rescue
+    _ -> %{rows: [], total: 0}
   end
 
   defp apply_resource_search(socket) do
@@ -693,7 +754,10 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
 
   defp singleton_resource?(assigns) when is_map(assigns) do
     res = current_resource(assigns)
-    res != nil and (res[:singleton] == true or res["singleton"] == true or to_string(res[:kind] || res["kind"]) == "singleton")
+
+    res != nil and
+      (res[:singleton] == true or res["singleton"] == true or
+         to_string(res[:kind] || res["kind"]) == "singleton")
   end
 
   # A column role (e.g. "user_id") turns a plain string into a deep link. The target is
@@ -971,7 +1035,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
               phx-click="switch_subtab"
               phx-value-tab="resources"
               phx-target={@myself}
-              class={"px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 #{if @subtab == "resources", do: "bg-white text-purple-700 shadow-sm", else: "text-gray-600 hover:text-gray-900"}"}
+              class={"px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 #{if @subtab == "resources", do: "bg-primary-600 text-white shadow-sm", else: "text-gray-600 hover:text-gray-900"}"}
             >
               <span>📦 Data</span>
               <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-blue-100 text-blue-800"><%= length(@resources) %></span>
@@ -983,7 +1047,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
               phx-click="switch_subtab"
               phx-value-tab="actions"
               phx-target={@myself}
-              class={"px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 #{if @subtab == "actions", do: "bg-white text-purple-700 shadow-sm", else: "text-gray-600 hover:text-gray-900"}"}
+              class={"px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 #{if @subtab == "actions", do: "bg-primary-600 text-white shadow-sm", else: "text-gray-600 hover:text-gray-900"}"}
             >
               <span>⚡ Actions</span>
               <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-purple-100 text-purple-800"><%= length(@actions) %></span>
@@ -995,7 +1059,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
               phx-click="switch_subtab"
               phx-value-tab="events"
               phx-target={@myself}
-              class={"px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 #{if @subtab == "events", do: "bg-white text-purple-700 shadow-sm", else: "text-gray-600 hover:text-gray-900"}"}
+              class={"px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 #{if @subtab == "events", do: "bg-primary-600 text-white shadow-sm", else: "text-gray-600 hover:text-gray-900"}"}
             >
               <span>📡 Telemetry</span>
               <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800"><%= length(@events) %></span>
@@ -1006,7 +1070,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
             phx-click="switch_subtab"
             phx-value-tab="contract"
             phx-target={@myself}
-            class={"px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 #{if @subtab == "contract", do: "bg-white text-purple-700 shadow-sm", else: "text-gray-600 hover:text-gray-900"}"}
+            class={"px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 #{if @subtab == "contract", do: "bg-primary-600 text-white shadow-sm", else: "text-gray-600 hover:text-gray-900"}"}
           >
             <span>🛡️ Contract</span>
           </button>
@@ -1201,6 +1265,28 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                     class="px-3 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500"
                   />
                 </form>
+
+                <%= if @resource_pages > 1 do %>
+                  <div class="flex items-center gap-1.5 text-[11px] text-gray-500">
+                    <span><%= @resource_page %>/<%= @resource_pages %> of <%= @resource_total %></span>
+                    <button
+                      type="button"
+                      phx-click="resource_page"
+                      phx-value-page="prev"
+                      phx-target={@myself}
+                      disabled={@resource_page <= 1}
+                      class="px-2 py-1 rounded-lg bg-white border border-gray-200 text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >‹</button>
+                    <button
+                      type="button"
+                      phx-click="resource_page"
+                      phx-value-page="next"
+                      phx-target={@myself}
+                      disabled={@resource_page >= @resource_pages}
+                      class="px-2 py-1 rounded-lg bg-white border border-gray-200 text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >›</button>
+                  </div>
+                <% end %>
 
                 <button
                   type="button"

@@ -72,19 +72,22 @@ defmodule Exoforge.Std.Auth do
     _ =
       ActionDispatcher.dispatch_internal(:database, :execute, %{
         plugin: :auth,
-        operation: "CREATE TABLE IF NOT EXISTS #{@tokens_table} (id text, token text, player_id text, scopes text)"
+        operation:
+          "CREATE TABLE IF NOT EXISTS #{@tokens_table} (id text, token text, player_id text, scopes text)"
       })
 
     _ =
       ActionDispatcher.dispatch_internal(:database, :execute, %{
         plugin: :auth,
-        operation: "CREATE TABLE IF NOT EXISTS #{@players_table} (id text, player_id text, scopes text)"
+        operation:
+          "CREATE TABLE IF NOT EXISTS #{@players_table} (id text, player_id text, scopes text)"
       })
 
     _ =
       ActionDispatcher.dispatch_internal(:database, :execute, %{
         plugin: :auth,
-        operation: "CREATE TABLE IF NOT EXISTS #{@accounts_table} (id text, player_id text, email text, password_hash text, scopes text)"
+        operation:
+          "CREATE TABLE IF NOT EXISTS #{@accounts_table} (id text, player_id text, email text, password_hash text, scopes text)"
       })
 
     # `CREATE TABLE IF NOT EXISTS` does not add a column to a table that already exists, so databases
@@ -103,7 +106,10 @@ defmodule Exoforge.Std.Auth do
   defp column_exists?(table, column) do
     # Column inspection is the adapter's dialect, not a PRAGMA here (M33 Fix 9): PostgreSQL does
     # not answer `PRAGMA table_info`, so the check read "no such column" there forever.
-    case ActionDispatcher.dispatch_internal(:database, :table_columns, %{plugin: :auth, table: table}) do
+    case ActionDispatcher.dispatch_internal(:database, :table_columns, %{
+           plugin: :auth,
+           table: table
+         }) do
       {:ok, %{columns: columns}} -> to_string(column) in columns
       _ -> false
     end
@@ -128,12 +134,14 @@ defmodule Exoforge.Std.Auth do
       token == Roles.guest() ->
         scopes = [Roles.guest()]
 
-        {:ok, %{user_id: "guest_anon", player_id: "guest_anon", scopes: scopes, role: role(scopes)}}
+        {:ok,
+         %{user_id: "guest_anon", player_id: "guest_anon", scopes: scopes, role: role(scopes)}}
 
       true ->
         case Exoforge.Std.Auth.Cache.get(token) do
           {:ok, cached_result} ->
             {:ok, cached_result}
+
           :error ->
             query = "SELECT * FROM #{@tokens_table} WHERE token = $1"
 
@@ -191,11 +199,19 @@ defmodule Exoforge.Std.Auth do
 
           if matching_row do
             player_id = Map.get(matching_row, "player_id") || Map.get(matching_row, :player_id)
-            scopes = parse_scopes(Map.get(matching_row, "scopes") || Map.get(matching_row, :scopes) || Roles.player())
+
+            scopes =
+              parse_scopes(
+                Map.get(matching_row, "scopes") || Map.get(matching_row, :scopes) ||
+                  Roles.player()
+              )
 
             case generate_and_store_token(player_id, scopes) do
               {:ok, token} ->
-                Exoforge.EventDispatcher.broadcast(:"auth.login", %{player_id: player_id, role: to_string(role(scopes))}, topic: "auth")
+                Exoforge.EventDispatcher.broadcast(
+                  :"auth.login",
+                  %{player_id: player_id, role: to_string(role(scopes))}, topic: "auth")
+
                 {:ok, %{player_id: player_id, token: token, scopes: scopes, role: role(scopes)}}
 
               error ->
@@ -294,15 +310,20 @@ defmodule Exoforge.Std.Auth do
           true ->
             device_id =
               Map.get(payload, :device_id) || Map.get(payload, "device_id") ||
-                (if String.starts_with?(player_id, "did_"), do: player_id, else: nil)
+                if String.starts_with?(player_id, "did_"), do: player_id, else: nil
 
             attach_device_id(player_id, device_id)
 
             case anonymous_token(player_id) do
               {:ok, result} ->
-                Exoforge.EventDispatcher.broadcast(:"auth.anonymous", %{player_id: player_id}, topic: "auth")
+                Exoforge.EventDispatcher.broadcast(:"auth.anonymous", %{player_id: player_id},
+                  topic: "auth"
+                )
+
                 {:ok, Map.put(result, :name, player_name(player_id))}
-              error -> error
+
+              error ->
+                error
             end
         end
 
@@ -380,36 +401,16 @@ defmodule Exoforge.Std.Auth do
   defaction list_users(payload), scope: Exoforge.Auth.Roles.studio() do
     init_schema()
 
-    players_query = "SELECT * FROM #{@players_table} LIMIT 100"
-    tokens_query = "SELECT * FROM #{@tokens_table} LIMIT 1000"
-    accounts_query = "SELECT * FROM #{@accounts_table} LIMIT 200"
+    ids_filter = user_ids_where(payload)
 
-    players_rows =
-      case ActionDispatcher.dispatch_internal(:database, :execute, %{
-             plugin: :auth,
-             operation: players_query
-           }) do
-        {:ok, %{rows: rows}} when is_list(rows) -> rows
-        _ -> []
-      end
+    union =
+      "SELECT player_id FROM #{@players_table} UNION SELECT player_id FROM #{@accounts_table} UNION SELECT player_id FROM #{@tokens_table}"
 
-    tokens_rows =
-      case ActionDispatcher.dispatch_internal(:database, :execute, %{
-             plugin: :auth,
-             operation: tokens_query
-           }) do
-        {:ok, %{rows: rows}} when is_list(rows) -> rows
-        _ -> []
-      end
+    {ids, total} = page_user_ids(union, ids_filter, payload)
 
-    accounts_rows =
-      case ActionDispatcher.dispatch_internal(:database, :execute, %{
-             plugin: :auth,
-             operation: accounts_query
-           }) do
-        {:ok, %{rows: rows}} when is_list(rows) -> rows
-        _ -> []
-      end
+    players_rows = rows_in(@players_table, ids)
+    tokens_rows = rows_in(@tokens_table, ids)
+    accounts_rows = rows_in(@accounts_table, ids)
 
     tokens_by_player =
       Enum.group_by(tokens_rows, fn row ->
@@ -428,13 +429,8 @@ defmodule Exoforge.Std.Auth do
         Map.put(acc, pid, row)
       end)
 
-    all_player_ids =
-      (Map.keys(players_by_id) ++ Map.keys(tokens_by_player) ++ Map.keys(accounts_by_id))
-      |> Enum.reject(&(&1 in [nil, ""]))
-      |> Enum.uniq()
-
     users =
-      Enum.map(all_player_ids, fn pid ->
+      Enum.map(ids, fn pid ->
         p_row = Map.get(players_by_id, pid, %{})
         acc_row = Map.get(accounts_by_id, pid, %{})
 
@@ -463,14 +459,6 @@ defmodule Exoforge.Std.Auth do
           "is_protected" => protected_account?(pid)
         }
       end)
-
-    # A page, not the whole directory (M33 Fix 33): the Studio asks for a bounded list; count says
-    # how many exist in total. Unlimited remains possible by passing a big limit.
-    limit = Map.get(payload, :limit) || Map.get(payload, "limit")
-    total = length(users)
-
-    users =
-      if is_integer(limit) and limit > 0, do: Enum.take(users, limit), else: users
 
     {:ok, %{users: users, count: total}}
   end
@@ -524,7 +512,9 @@ defmodule Exoforge.Std.Auth do
             actual_pid = Map.get(acc_row, "player_id") || Map.get(acc_row, :player_id) || pid
 
             scopes =
-              parse_scopes(Map.get(acc_row, "scopes") || Map.get(acc_row, :scopes) || Roles.player())
+              parse_scopes(
+                Map.get(acc_row, "scopes") || Map.get(acc_row, :scopes) || Roles.player()
+              )
 
             _ = upsert_account(actual_pid, email, password, scopes)
             {:ok, %{user_id: actual_pid, player_id: actual_pid, status: "password_reset"}}
@@ -539,7 +529,9 @@ defmodule Exoforge.Std.Auth do
                  }) do
               {:ok, %{rows: [prow | _]}} ->
                 scopes =
-                  parse_scopes(Map.get(prow, "scopes") || Map.get(prow, :scopes) || Roles.player())
+                  parse_scopes(
+                    Map.get(prow, "scopes") || Map.get(prow, :scopes) || Roles.player()
+                  )
 
                 _ = upsert_account(pid, "#{pid}@player.exoforge.io", password, scopes)
                 {:ok, %{user_id: pid, player_id: pid, status: "password_reset"}}
@@ -729,14 +721,18 @@ defmodule Exoforge.Std.Auth do
 
       # The rest of a player's data belongs to other plugins; asked to clean up after itself, a
       # disposable player should not leave a profile and a leaderboard row behind.
-      _ = ActionDispatcher.dispatch_internal(:player_data, :delete_player, %{player_id: player_id})
+      _ =
+        ActionDispatcher.dispatch_internal(:player_data, :delete_player, %{player_id: player_id})
     end)
   end
 
   defp register_unnamed(payload) do
     case do_register_player(payload, allow_empty_name: true) do
       {:ok, %{player: profile} = result} ->
-        Exoforge.EventDispatcher.broadcast(:"auth.anonymous", %{player_id: result.player_id}, topic: "auth")
+        Exoforge.EventDispatcher.broadcast(:"auth.anonymous", %{player_id: result.player_id},
+          topic: "auth"
+        )
+
         {:ok, Map.put(result, :name, Map.get(profile, "name") || "")}
 
       error ->
@@ -840,9 +836,10 @@ defmodule Exoforge.Std.Auth do
 
     raw_device_id =
       Map.get(payload, :device_id) || Map.get(payload, "device_id") ||
-        (if is_binary(user_id) and String.starts_with?(user_id, "did_"), do: user_id, else: nil)
+        if is_binary(user_id) and String.starts_with?(user_id, "did_"), do: user_id, else: nil
 
-    device_id_str = if raw_device_id && raw_device_id != "", do: to_string(raw_device_id), else: nil
+    device_id_str =
+      if raw_device_id && raw_device_id != "", do: to_string(raw_device_id), else: nil
 
     if raw_password && raw_password != "" do
       _ = upsert_account(user_id, email, raw_password, scopes)
@@ -874,7 +871,7 @@ defmodule Exoforge.Std.Auth do
           "time_in_game" => "0m",
           "status" => "Active",
           "device_id" => device_id_str,
-          "device_ids" => (if device_id_str, do: [device_id_str], else: []),
+          "device_ids" => if(device_id_str, do: [device_id_str], else: []),
           "attributes" => attrs
         }
 
@@ -888,8 +885,18 @@ defmodule Exoforge.Std.Auth do
             {:error, reason}
 
           _ ->
-            Exoforge.EventDispatcher.broadcast(:"auth.register", %{player_id: user_id, email: email, role: to_string(role(scopes))}, topic: "auth")
-            {:ok, %{user_id: user_id, player_id: user_id, token: token, scopes: scopes, player: profile}}
+            Exoforge.EventDispatcher.broadcast(
+              :"auth.register",
+              %{player_id: user_id, email: email, role: to_string(role(scopes))}, topic: "auth")
+
+            {:ok,
+             %{
+               user_id: user_id,
+               player_id: user_id,
+               token: token,
+               scopes: scopes,
+               player: profile
+             }}
         end
 
       {:error, reason} ->
@@ -955,7 +962,11 @@ defmodule Exoforge.Std.Auth do
       {email, password}
       when is_binary(email) and email != "" and is_binary(password) and password != "" ->
         _ = upsert_account(@admin_id, email, password, [Roles.admin()])
-        Logger.info("[Auth] Administrator account #{@admin_id} reconciled for #{String.downcase(email)}")
+
+        Logger.info(
+          "[Auth] Administrator account #{@admin_id} reconciled for #{String.downcase(email)}"
+        )
+
         :ok
 
       _ ->
@@ -1016,7 +1027,8 @@ defmodule Exoforge.Std.Auth do
     _ =
       ActionDispatcher.dispatch_internal(:database, :execute, %{
         plugin: :auth,
-        operation: "INSERT INTO #{@accounts_table} (id, player_id, email, password_hash, scopes) VALUES ($1, $2, $3, $4, $5)",
+        operation:
+          "INSERT INTO #{@accounts_table} (id, player_id, email, password_hash, scopes) VALUES ($1, $2, $3, $4, $5)",
         arguments: [email, player_id, email, hash, Enum.join(scopes, ",")]
       })
 
@@ -1157,6 +1169,111 @@ defmodule Exoforge.Std.Auth do
 
   defp as_flag(value), do: if(value in [true, "true", "1", 1], do: 1, else: 0)
 
+  # Paging and filtering belong in the query, not to the caller: the directory can hold thousands
+  # of players, and a page of an unordered in-memory list is a page of a different list every call.
+  defp user_ids_where(payload) do
+    search = payload |> param_value([:search, "search"]) |> to_string() |> String.trim()
+    scope = payload |> param_value([:scope, "scope"]) |> to_string()
+
+    search? = search != ""
+    scope? = scope not in ["", "all"]
+
+    clauses =
+      cond do
+        search? and scope? ->
+          [
+            {"(LOWER(ids.player_id) LIKE $1 OR LOWER(COALESCE((SELECT MAX(acct.email) FROM #{@accounts_table} acct WHERE acct.player_id = ids.player_id), '')) LIKE $1)",
+             ["%#{String.downcase(search)}%"]},
+            {scope_exists_clause("$2"), ["%#{scope}%"]}
+          ]
+
+        search? ->
+          [
+            {"(LOWER(ids.player_id) LIKE $1 OR LOWER(COALESCE((SELECT MAX(acct.email) FROM #{@accounts_table} acct WHERE acct.player_id = ids.player_id), '')) LIKE $1)",
+             ["%#{String.downcase(search)}%"]}
+          ]
+
+        scope? ->
+          [{scope_exists_clause("$1"), ["%#{scope}%"]}]
+
+        true ->
+          []
+      end
+
+    sql =
+      if clauses == [], do: "", else: " WHERE " <> Enum.map_join(clauses, " AND ", &elem(&1, 0))
+
+    %{sql: sql, args: Enum.flat_map(clauses, &elem(&1, 1))}
+  end
+
+  # Scopes are stored as a comma-joined list, so membership is a LIKE over the row (and over both
+  # tables that can carry them).
+  defp scope_exists_clause(placeholder) do
+    "(EXISTS (SELECT 1 FROM #{@players_table} p WHERE p.player_id = ids.player_id AND p.scopes LIKE #{placeholder}) OR " <>
+      "EXISTS (SELECT 1 FROM #{@accounts_table} a WHERE a.player_id = ids.player_id AND a.scopes LIKE #{placeholder}))"
+  end
+
+  defp page_user_ids(union, ids_filter, payload) do
+    limit = int_value(param_value(payload, [:limit, "limit"]), nil)
+    offset = max(int_value(param_value(payload, [:offset, "offset"]), 0), 0)
+
+    total =
+      case run_query("SELECT COUNT(*) AS n FROM (#{union}) ids#{ids_filter.sql}", ids_filter.args) do
+        [row | _] -> int_value(row["n"] || row[:n], 0)
+        [] -> 0
+      end
+
+    page_sql =
+      if is_integer(limit) and limit > 0 do
+        " ORDER BY player_id LIMIT #{limit} OFFSET #{offset}"
+      else
+        " ORDER BY player_id"
+      end
+
+    ids =
+      "SELECT player_id FROM (#{union}) ids#{ids_filter.sql}#{page_sql}"
+      |> run_query(ids_filter.args)
+      |> Enum.map(&to_string(&1["player_id"] || &1[:player_id]))
+
+    {ids, total}
+  end
+
+  defp rows_in(_table, []), do: []
+
+  defp rows_in(table, ids) do
+    placeholders = Enum.map_join(1..length(ids), ", ", &"$#{&1}")
+    run_query("SELECT * FROM #{table} WHERE player_id IN (#{placeholders})", ids)
+  end
+
+  defp run_query(sql, args) do
+    case ActionDispatcher.dispatch_internal(:database, :execute, %{
+           plugin: :auth,
+           operation: sql,
+           arguments: args
+         }) do
+      {:ok, %{rows: rows}} when is_list(rows) -> rows
+      _ -> []
+    end
+  end
+
+  defp param_value(payload, keys) when is_map(payload) do
+    Enum.find_value(keys, fn key -> Map.get(payload, key) end)
+  end
+
+  defp param_value(_, _), do: nil
+
+  defp int_value(nil, default), do: default
+  defp int_value(value, _default) when is_integer(value), do: value
+
+  defp int_value(value, default) when is_binary(value) do
+    case Integer.parse(value) do
+      {n, _} -> n
+      :error -> default
+    end
+  end
+
+  defp int_value(_value, default), do: default
+
   ## ---- PRIVATE HELPERS ----
 
   defp extract_token(payload) when is_binary(payload), do: payload
@@ -1209,7 +1326,6 @@ defmodule Exoforge.Std.Auth do
   defp parse_scopes(_), do: Roles.scopes_for_role("player")
 end
 
-
 defmodule Exoforge.Std.Auth.Cache do
   use GenServer
 
@@ -1234,6 +1350,7 @@ defmodule Exoforge.Std.Auth.Cache do
     rescue
       ArgumentError -> :ok
     end
+
     :ok
   end
 
@@ -1243,6 +1360,7 @@ defmodule Exoforge.Std.Auth.Cache do
     rescue
       ArgumentError -> :ok
     end
+
     :ok
   end
 

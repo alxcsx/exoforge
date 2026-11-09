@@ -17,9 +17,15 @@ defmodule Exoforge.Std.Dashboard.Extensions do
     |> Enum.map(fn manifest ->
       provides = Map.get(manifest, :provides, [])
       clean_provides = Enum.map(provides, &ExtensionRegistry.service_alias_or_module/1)
-      clean_dependencies = Enum.map(Map.get(manifest, :dependencies, []), &ExtensionRegistry.service_alias_or_module/1)
 
-      services = Enum.map(ExtensionRegistry.manifest_services(manifest), &normalize_service_metadata/1)
+      clean_dependencies =
+        Enum.map(
+          Map.get(manifest, :dependencies, []),
+          &ExtensionRegistry.service_alias_or_module/1
+        )
+
+      services =
+        Enum.map(ExtensionRegistry.manifest_services(manifest), &normalize_service_metadata/1)
 
       category = ExtensionPresenter.normalize_category(Map.get(manifest, :category))
 
@@ -49,7 +55,9 @@ defmodule Exoforge.Std.Dashboard.Extensions do
           actions = Map.get(svc, :actions) || Map.get(svc, "actions") || []
 
           Enum.map(actions, fn act ->
-            params = normalize_action_params(Map.get(act, :params) || Map.get(act, "params") || [])
+            params =
+              normalize_action_params(Map.get(act, :params) || Map.get(act, "params") || [])
+
             name = to_string(Map.get(act, :name) || Map.get(act, "name"))
             doc = Map.get(act, :doc) || Map.get(act, "doc") || "No description provided."
             mode = to_string(Map.get(act, :mode) || Map.get(act, "mode") || "sync")
@@ -65,8 +73,13 @@ defmodule Exoforge.Std.Dashboard.Extensions do
           end)
         end)
 
-      all_resources = Enum.flat_map(services, fn s -> Map.get(s, :resources) || Map.get(s, "resources") || [] end)
-      all_events = Enum.flat_map(services, fn s -> Map.get(s, :events) || Map.get(s, "events") || [] end)
+      all_resources =
+        Enum.flat_map(services, fn s ->
+          Map.get(s, :resources) || Map.get(s, "resources") || []
+        end)
+
+      all_events =
+        Enum.flat_map(services, fn s -> Map.get(s, :events) || Map.get(s, "events") || [] end)
 
       # Plugins do not have UI by default. Only plugins declaring an explicit dashboard_view
       # are classified as having visual controls / dashboard views.
@@ -76,6 +89,7 @@ defmodule Exoforge.Std.Dashboard.Extensions do
       dv_icon = is_map(dashboard_view) && (dashboard_view[:icon] || dashboard_view["icon"])
       title = Map.get(manifest, :title) || dv_title || to_string(manifest.name || manifest.id)
       raw_icon = Map.get(manifest, :icon) || dv_icon
+
       icon =
         if is_binary(raw_icon) and raw_icon not in ["", "🧩"] do
           raw_icon
@@ -86,6 +100,7 @@ defmodule Exoforge.Std.Dashboard.Extensions do
       %{
         id: manifest.id,
         name: manifest.name,
+        entry_point: Map.get(manifest, :entry_point),
         version: to_string(manifest.version),
         type: Map.get(manifest, :type, :native),
         status: :active,
@@ -156,12 +171,24 @@ defmodule Exoforge.Std.Dashboard.Extensions do
 
           doc =
             case v do
-              m when is_map(m) -> Map.get(m, :doc) || Map.get(m, "doc") || Map.get(m, :description) || Map.get(m, "description")
-              l when is_list(l) -> Keyword.get(l, :doc) || Keyword.get(l, :description)
-              _ -> nil
+              m when is_map(m) ->
+                Map.get(m, :doc) || Map.get(m, "doc") || Map.get(m, :description) ||
+                  Map.get(m, "description")
+
+              l when is_list(l) ->
+                Keyword.get(l, :doc) || Keyword.get(l, :description)
+
+              _ ->
+                nil
             end
 
-          %{name: to_string(k), type: type, optional: !!optional, input: input_override(v), doc: doc}
+          %{
+            name: to_string(k),
+            type: type,
+            optional: !!optional,
+            input: input_override(v),
+            doc: doc
+          }
         end)
 
       is_list(params) and Keyword.keyword?(params) ->
@@ -184,12 +211,24 @@ defmodule Exoforge.Std.Dashboard.Extensions do
 
           doc =
             case v do
-              m when is_map(m) -> Map.get(m, :doc) || Map.get(m, "doc") || Map.get(m, :description) || Map.get(m, "description")
-              l when is_list(l) -> Keyword.get(l, :doc) || Keyword.get(l, :description)
-              _ -> nil
+              m when is_map(m) ->
+                Map.get(m, :doc) || Map.get(m, "doc") || Map.get(m, :description) ||
+                  Map.get(m, "description")
+
+              l when is_list(l) ->
+                Keyword.get(l, :doc) || Keyword.get(l, :description)
+
+              _ ->
+                nil
             end
 
-          %{name: to_string(k), type: type, optional: !!optional, input: input_override(v), doc: doc}
+          %{
+            name: to_string(k),
+            type: type,
+            optional: !!optional,
+            input: input_override(v),
+            doc: doc
+          }
         end)
 
       is_list(params) ->
@@ -213,9 +252,15 @@ defmodule Exoforge.Std.Dashboard.Extensions do
 
             doc =
               case v do
-                m when is_map(m) -> Map.get(m, :doc) || Map.get(m, "doc") || Map.get(m, :description) || Map.get(m, "description")
-                l when is_list(l) -> Keyword.get(l, :doc) || Keyword.get(l, :description)
-                _ -> nil
+                m when is_map(m) ->
+                  Map.get(m, :doc) || Map.get(m, "doc") || Map.get(m, :description) ||
+                    Map.get(m, "description")
+
+                l when is_list(l) ->
+                  Keyword.get(l, :doc) || Keyword.get(l, :description)
+
+                _ ->
+                  nil
               end
 
             %{name: to_string(k), type: type, optional: !!optional, doc: doc}
@@ -224,7 +269,10 @@ defmodule Exoforge.Std.Dashboard.Extensions do
             name = Map.get(item, :name) || Map.get(item, "name") || "param"
             type = Map.get(item, :type) || Map.get(item, "type") || :string
             optional = Map.get(item, :optional, false) || Map.get(item, "optional", false)
-            doc = Map.get(item, :doc) || Map.get(item, "doc") || Map.get(item, :description) || Map.get(item, "description")
+
+            doc =
+              Map.get(item, :doc) || Map.get(item, "doc") || Map.get(item, :description) ||
+                Map.get(item, "description")
 
             %{
               name: to_string(name),

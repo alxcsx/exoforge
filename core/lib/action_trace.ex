@@ -20,11 +20,33 @@ defmodule Exoforge.ActionTrace do
   @buckets :exo_action_trace_buckets
 
   @window_minutes 30
-  @max_samples 500
+  # Per action, and in total. One noisy action must not evict another's errors - that is exactly
+  # how a row could report errors the unfold could not show.
+  @per_action 30
+  @max_samples 2_000
   @preview_bytes 512
   @preview_items 20
   @mask "•••"
   @sensitive ~w(password password_hash token secret authorization api_key)
+  @origin_key :exoforge_action_origin
+
+  @doc """
+  Who originated the action currently running in this process.
+
+  An extension action triggered by a player often calls other services internally. Those nested
+  dispatches have no caller of their own, so the origin travels with the process: the top-level
+  dispatch puts it, nested ones read it, and every event broadcast inside the action carries it in
+  its context. `nil` outside any action.
+  """
+  def origin, do: Process.get(@origin_key)
+
+  @doc "Sets the origin for the current process and returns the previous one (for `restore_origin/1`)."
+  def put_origin(caller) when is_binary(caller) or is_nil(caller), do: Process.put(@origin_key, caller)
+  def put_origin(other), do: Process.put(@origin_key, to_string(other))
+
+  @doc "Restores the origin returned by `put_origin/1`."
+  def restore_origin(nil), do: Process.delete(@origin_key)
+  def restore_origin(previous), do: Process.put(@origin_key, previous)
 
   @doc "Starts recording. Idempotent; called by an observer (the Studio), not by the kernel."
   def enable do
@@ -42,7 +64,7 @@ defmodule Exoforge.ActionTrace do
   @doc """
   Records one invocation. Never raises into the caller: a trace is diagnostics, not a dependency.
   """
-  def record(service, action, caller, payload, result, duration_ms) do
+  def record(service, action, caller, payload, result, duration_ms, internal? \\ false) do
     if enabled?() do
       init_tables()
 
@@ -55,20 +77,30 @@ defmodule Exoforge.ActionTrace do
       incr({minute, key, caller, :count})
       if status != "ok", do: incr({minute, key, caller, :error})
 
+      seq = System.unique_integer([:monotonic])
+
       :ets.insert(@samples, {
-        System.unique_integer([:monotonic]),
+        seq,
         %{
           at: now,
           key: key,
           caller: caller,
           status: status,
           duration_ms: duration_ms,
+          internal: internal?,
           request: preview(payload),
           response: preview_result(result)
         }
       })
 
-      trim_samples()
+      remember({{:queue, key}, @per_action}, seq)
+
+      if status != "ok" do
+        remember({{:queue, key, :error}, @per_action}, seq)
+      end
+
+      remember({:queue_all, @max_samples}, seq)
+
       prune(minute)
     end
 
@@ -80,9 +112,10 @@ defmodule Exoforge.ActionTrace do
   end
 
   @doc """
-  The window: `%{window_ms, buckets: [{minute, key, caller, :count | :error, n}], samples: [sample]}`.
+  The window: `%{window_ms, now, buckets: [{minute, key, caller, :count | :error, n}]}`.
 
-  Buckets are oldest-first by minute; samples are newest-first.
+  Buckets are oldest-first by minute. Samples are fetched per action by `samples/2`, because they
+  are paginated and a caller rarely wants every action's at once.
   """
   def snapshot(minutes \\ @window_minutes) do
     init_tables()
@@ -95,13 +128,42 @@ defmodule Exoforge.ActionTrace do
       |> Enum.filter(fn {{minute, _key, _caller, _kind}, _n} -> minute >= oldest end)
       |> Enum.map(fn {{minute, key, caller, kind}, n} -> {minute, key, caller, kind, n} end)
 
-    samples =
-      @samples
-      |> :ets.tab2list()
-      |> Enum.map(&elem(&1, 1))
-      |> Enum.sort_by(& &1.at, :desc)
+    %{window_ms: minutes * 60_000, now: now, buckets: buckets}
+  end
 
-    %{window_ms: minutes * 60_000, now: now, buckets: buckets, samples: samples}
+  @doc """
+  One page of retained samples for an action, newest first.
+
+  `:errors_only` keeps failures, `:caller` narrows to one origin, `:page` / `:per_page` page the
+  result. `total` is what is still retained - the ring drops old samples, so it can be smaller than
+  the bucket counters; `truncated` says so.
+  """
+  def samples(key, opts \\ []) do
+    init_tables()
+
+    per_page = max(Keyword.get(opts, :per_page, 8), 1)
+    errors_only? = Keyword.get(opts, :errors_only, false) == true
+    caller = Keyword.get(opts, :caller, "")
+
+    retained =
+      key
+      |> retained_seqs(errors_only?)
+      |> Enum.map(&fetch(&1))
+      |> Enum.reject(&is_nil/1)
+      |> Enum.filter(fn sample -> caller in ["", nil] or sample.caller == to_string(caller) end)
+      |> Enum.reverse()
+
+    total = length(retained)
+    pages = max(ceil(total / per_page), 1)
+    page = Keyword.get(opts, :page, 1) |> to_int() |> max(1) |> min(pages)
+
+    %{
+      samples: Enum.slice(retained, (page - 1) * per_page, per_page),
+      total: total,
+      page: page,
+      pages: pages,
+      truncated: total >= @per_action
+    }
   end
 
   @doc "One request/response preview, capped and masked. Public so tests can pin the contract."
@@ -130,14 +192,68 @@ defmodule Exoforge.ActionTrace do
 
   defp incr(key), do: :ets.update_counter(@buckets, key, 1, {key, 0})
 
-  defp trim_samples do
-    if :ets.info(@samples, :size) > @max_samples do
-      case :ets.first(@samples) do
-        :"$end_of_table" -> :ok
-        oldest -> :ets.delete(@samples, oldest)
+  # A bounded queue of sequence numbers per bucket; evicting drops the row from the samples table.
+  # Queues may hold sequence numbers another bucket already evicted, so readers lookup and skip.
+  #
+  # Errors are owned by the error queue: the per-action sample queue never drops one, otherwise a
+  # burst of successful calls would erase exactly the invocations the error view is looking for.
+  defp remember({bucket, cap}, seq) do
+    queue =
+      case :ets.lookup(@samples, bucket) do
+        [{^bucket, queue}] -> :queue.in(seq, queue)
+        [] -> :queue.from_list([seq])
       end
+
+    queue = trim_queue(bucket, queue, cap)
+    :ets.insert(@samples, {bucket, queue})
+    :ok
+  end
+
+  defp trim_queue(bucket, queue, cap) do
+    if :queue.len(queue) > cap do
+      {{:value, dropped}, rest} = :queue.out(queue)
+
+      if owned_by?(bucket, dropped) do
+        :ets.delete(@samples, dropped)
+      end
+
+      trim_queue(bucket, rest, cap)
+    else
+      queue
     end
   end
+
+  # The global queue is a hard memory bound and owns everything in it.
+  defp owned_by?({:queue_all, _}, _seq), do: true
+  defp owned_by?({:queue, _key, :error}, _seq), do: true
+  defp owned_by?({:queue, _key}, seq), do: not error_sample?(seq)
+
+  defp error_sample?(seq) do
+    case fetch(seq) do
+      %{status: "error" <> _} -> true
+      _ -> false
+    end
+  end
+
+  defp retained_seqs(key, errors_only?) do
+    bucket = if errors_only?, do: {:queue, key, :error}, else: {:queue, key}
+
+    case :ets.lookup(@samples, bucket) do
+      [{^bucket, queue}] -> :queue.to_list(queue)
+      [] -> []
+    end
+  end
+
+  defp fetch(seq) do
+    case :ets.lookup(@samples, seq) do
+      [{^seq, sample}] -> sample
+      [] -> nil
+    end
+  end
+
+  defp to_int(value) when is_integer(value), do: value
+  defp to_int(value) when is_binary(value), do: String.to_integer(value)
+  defp to_int(_), do: 1
 
   # Pruned once per minute, not per call: minute buckets are the unit, so anything older than the
   # window is already invisible to `snapshot/1`.

@@ -69,6 +69,29 @@ defmodule Exoforge.ExtensionLogs do
     |> Enum.take(-max(limit, 1))
   end
 
+  @doc """
+  Newest-first page of recent lines, for a paged viewer.
+
+  Resolves to `%{entries, total, page, pages}`; `total` is what is retained (in memory or loaded
+  from the persisted table), not a lifetime count.
+  """
+  def page(extension_id, opts \\ []) do
+    per_page = max(Keyword.get(opts, :per_page, 25), 1)
+    requested = max(Keyword.get(opts, :page, 1), 1)
+
+    entries = list(extension_id, 2_000) |> Enum.reverse()
+    total = length(entries)
+    pages = max(ceil(total / per_page), 1)
+    page = min(requested, pages)
+
+    %{
+      entries: Enum.slice(entries, (page - 1) * per_page, per_page),
+      total: total,
+      page: page,
+      pages: pages
+    }
+  end
+
   @doc "Returns recent log lines for an extension since timestamp `since_ms`."
   def since(extension_id, since_ms) do
     list(extension_id, 50)
@@ -209,13 +232,15 @@ defmodule Exoforge.ExtensionLogs do
 
       case Exoforge.ActionDispatcher.dispatch_internal(:database, :execute, %{
              plugin: :extension_logs,
-             operation: "SELECT level, level_name, message, timestamp FROM extension_logs WHERE extension_id = $1 ORDER BY timestamp DESC LIMIT $2",
+             operation:
+               "SELECT level, level_name, message, timestamp FROM extension_logs WHERE extension_id = $1 ORDER BY timestamp DESC LIMIT $2",
              arguments: [to_string(extension_id), limit]
            }) do
         {:ok, %{rows: rows}} when is_list(rows) ->
           Enum.map(rows, fn row ->
             at = String.to_integer(to_string(row["timestamp"] || "0"))
             level = String.to_integer(to_string(row["level"] || "1"))
+
             %{
               at: at,
               level: level,

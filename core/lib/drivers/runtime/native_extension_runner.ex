@@ -120,7 +120,13 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
     case WorkerRegistry.lookup(extension_id, {@runner_key, idx}) do
       {:ok, pid} ->
         try do
-          GenServer.call(pid, {:execute_action, to_string(action), payload}, timeout)
+          # The origin (who triggered this action) rides along: the extension may call other
+          # services from inside it, and those nested calls must still answer "who asked".
+          GenServer.call(
+            pid,
+            {:execute_action, to_string(action), payload, Exoforge.ActionTrace.origin()},
+            timeout
+          )
         catch
           :exit, {:timeout, _} -> {:error, :timeout}
           :exit, reason -> {:error, {:extension_crashed, reason}}
@@ -177,6 +183,7 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
        buffer: "",
        pending: %{},
        seq: 0,
+       current_origin: nil,
        handshake: nil,
        handshake_timer: handshake_timer,
        worker_idx: idx
@@ -195,21 +202,27 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
   end
 
   def handle_call({:execute_action, action, payload}, from, state) do
+    handle_call({:execute_action, action, payload, nil}, from, state)
+  end
+
+  def handle_call({:execute_action, action, payload, origin}, from, state) do
     seq = state.seq + 1
     request = Jason.encode!(%{type: "action", id: seq, action: action, payload: payload || %{}})
 
     Port.command(state.port, request <> "\n")
 
     # The pending entry carries what metering needs: who to reply to, and the clock and request
-    # size the reply will be measured against.
+    # size the reply will be measured against. The origin is what a host call made while this
+    # action runs is attributed to.
     entry = %{
       from: from,
       action: action,
+      origin: origin,
       t0: System.monotonic_time(:microsecond),
       bytes_in: byte_size(request)
     }
 
-    {:noreply, %{state | seq: seq, pending: Map.put(state.pending, seq, entry)}}
+    {:noreply, %{state | seq: seq, pending: Map.put(state.pending, seq, entry), current_origin: origin}}
   end
 
   @impl true
@@ -443,7 +456,15 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
 
         record_call(state.manifest.id, entry, if(status == "ok", do: :ok, else: :error), bytes_out)
         GenServer.reply(entry.from, reply)
-        %{state | pending: pending}
+
+        # Attribute outgoing host calls to the most recent action still in flight.
+        current_origin =
+          case pending |> Map.values() |> Enum.max_by(& &1.t0, fn -> nil end) do
+            nil -> nil
+            newest -> newest.origin
+          end
+
+        %{state | pending: pending, current_origin: current_origin}
     end
   end
 
@@ -461,10 +482,16 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
   end
 
   defp answer_host_call(%{"id" => id, "op" => op, "args" => args}, state) do
-    result = run_host_call(op, args || %{}, state.manifest)
-    Exoforge.Metering.record_host_call(state.manifest.id, op)
-    response = Jason.encode!(%{type: "host_call_result", id: id, result: sanitize(result)})
-    Port.command(state.port, response <> "\n")
+    previous = Exoforge.ActionTrace.put_origin(state.current_origin)
+
+    try do
+      result = run_host_call(op, args || %{}, state.manifest)
+      Exoforge.Metering.record_host_call(state.manifest.id, op)
+      response = Jason.encode!(%{type: "host_call_result", id: id, result: sanitize(result)})
+      Port.command(state.port, response <> "\n")
+    after
+      Exoforge.ActionTrace.restore_origin(previous)
+    end
   end
 
   defp answer_host_call(_, _state), do: :ok

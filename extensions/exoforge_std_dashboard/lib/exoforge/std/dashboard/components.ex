@@ -176,7 +176,8 @@ defmodule Exoforge.Std.Dashboard.Components do
 
     case col[:type] do
       :badge ->
-        safe_val = Phoenix.HTML.html_escape(to_string(val || "active")) |> Phoenix.HTML.safe_to_string()
+        safe_val =
+          Phoenix.HTML.html_escape(to_string(val || "active")) |> Phoenix.HTML.safe_to_string()
 
         Phoenix.HTML.raw("""
         <span class="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -440,7 +441,7 @@ defmodule Exoforge.Std.Dashboard.Components do
                     phx-click={@on_select_tab}
                     phx-value-tab={to_string(tab[:id])}
                     phx-target={@target}
-                    class={"w-full text-left px-2.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all #{if to_string(tab[:id]) == to_string(@active_tab), do: "bg-white text-violet-700 shadow-sm border border-gray-200/80", else: "text-gray-600 hover:text-gray-900 hover:bg-white/60"}"}
+                    class={"w-full text-left px-2.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all #{if to_string(tab[:id]) == to_string(@active_tab), do: "bg-primary-600 text-white shadow-sm border border-primary-600", else: "text-gray-600 hover:text-gray-900 hover:bg-white/60"}"}
                   >
                     <span :if={tab[:icon]}><%= tab[:icon] %></span>
                     <span class="truncate"><%= tab[:title] || tab[:label] || tab[:id] %></span>

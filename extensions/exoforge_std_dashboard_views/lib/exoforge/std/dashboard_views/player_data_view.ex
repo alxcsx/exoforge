@@ -506,7 +506,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
             phx-click="set_retention_filter"
             phx-value-filter="all"
             phx-target={@myself}
-            class={"px-3 py-1.5 text-xs font-bold rounded-lg transition-all #{if @retention_filter == "all", do: "bg-white text-gray-900 shadow-xs", else: "text-gray-500 hover:text-gray-800"}"}
+            class={"px-3 py-1.5 text-xs font-bold rounded-lg transition-all #{if @retention_filter == "all", do: "bg-primary-600 text-white shadow-xs", else: "text-gray-500 hover:text-gray-800"}"}
           >
             All (<%= length(@players) %>)
           </button>
@@ -514,7 +514,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
             phx-click="set_retention_filter"
             phx-value-filter="valid"
             phx-target={@myself}
-            class={"px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 #{if @retention_filter == "valid", do: "bg-white text-emerald-700 shadow-xs", else: "text-gray-500 hover:text-gray-800"}"}
+            class={"px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 #{if @retention_filter == "valid", do: "bg-emerald-600 text-white shadow-xs", else: "text-gray-500 hover:text-gray-800"}"}
           >
             <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
             Active (<%= @valid_count %>)

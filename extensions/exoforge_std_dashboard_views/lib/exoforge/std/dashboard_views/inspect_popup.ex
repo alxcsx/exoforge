@@ -59,7 +59,7 @@ defmodule Exoforge.Std.DashboardViews.InspectPopup do
                     phx-click={@on_select_tab}
                     phx-value-tab={to_string(tab[:id])}
                     phx-target={@target}
-                    class={"w-full text-left px-2.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all #{if to_string(tab[:id]) == to_string(@active_tab), do: "bg-white text-violet-700 shadow-sm border border-gray-200/80", else: "text-gray-600 hover:text-gray-900 hover:bg-white/60"}"}
+                    class={"w-full text-left px-2.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all #{if to_string(tab[:id]) == to_string(@active_tab), do: "bg-primary-600 text-white shadow-sm border border-primary-600", else: "text-gray-600 hover:text-gray-900 hover:bg-gray-100"}"}
                   >
                     <span :if={tab[:icon]}><%= tab[:icon] %></span>
                     <span class="truncate"><%= tab[:title] || tab[:label] || tab[:id] %></span>
