@@ -80,7 +80,7 @@ defmodule Exoforge.Std.Database.Manager do
   def handle_call({:ensure_database, plugin_id}, _from, state) do
     clean = Database.clean_id(plugin_id)
 
-    case state.adapter.ensure_database(clean, state.config) do
+    case safely(fn -> state.adapter.ensure_database(clean, state.config) end) do
       {:ok, result} ->
         new_dbs = MapSet.put(state.databases, clean)
         {:reply, {:ok, result}, %{state | databases: new_dbs}}
@@ -96,7 +96,7 @@ defmodule Exoforge.Std.Database.Manager do
     # Ensure the database exists on first use, not on every query (M33 Fix 7): provisioning DDL on
     # each request was a round trip to the server per query, and the manager already remembers.
     state = ensure_once(clean, state)
-    result = state.adapter.execute(clean, query, args, state.config)
+    result = safely(fn -> state.adapter.execute(clean, query, args, state.config) end)
     {:reply, result, state}
   end
 
@@ -105,26 +105,27 @@ defmodule Exoforge.Std.Database.Manager do
     clean = Database.clean_id(plugin_id)
     # Column inspection wants the table to exist; same first-use rule as execute.
     state = ensure_once(clean, state)
-    {:reply, state.adapter.table_columns(clean, table, state.config), state}
+    result = safely(fn -> state.adapter.table_columns(clean, table, state.config) end)
+    {:reply, result, state}
   end
 
   @impl true
   def handle_call({:connection_config, plugin_id}, _from, state) do
     clean = Database.clean_id(plugin_id)
-    result = state.adapter.connection_config(clean, state.config)
+    result = safely(fn -> state.adapter.connection_config(clean, state.config) end)
     {:reply, result, state}
   end
 
   @impl true
   def handle_call(:health_check, _from, state) do
-    result = state.adapter.health_check(state.config)
+    result = safely(fn -> state.adapter.health_check(state.config) end)
     {:reply, result, state}
   end
 
   @impl true
   def handle_call({:reset, plugin_id}, _from, state) do
     clean = Database.clean_id(plugin_id)
-    result = state.adapter.reset(clean, state.config)
+    result = safely(fn -> state.adapter.reset(clean, state.config) end)
     {:reply, result, state}
   end
 
@@ -140,13 +141,30 @@ defmodule Exoforge.Std.Database.Manager do
 
   ## Helpers
 
+  # The adapter is this GenServer's only contact with the outside world, and it raises when that
+  # world is unavailable: Postgrex raises DBConnection.ConnectionError on a dropped connection or a
+  # checkout timeout. Unhandled, one bad query took down the single Manager every extension shares,
+  # and every caller - the resource store included - got {:extension_exited, ...} instead of the
+  # database error that caused it, then kept getting it while the Manager restarted.
+  defp safely(fun) do
+    fun.()
+  rescue
+    e ->
+      Logger.error("[Database] adapter failure: " <> Exception.format(:error, e, __STACKTRACE__))
+      {:error, {:database_error, Exception.message(e)}}
+  catch
+    :exit, reason ->
+      Logger.error("[Database] adapter exit: #{inspect(reason)}")
+      {:error, {:database_error, reason}}
+  end
+
   # Provisioning is remembered, so a second query for a known database skips the DDL round trip
   # (M33 Fix 7). A failed provision is not remembered, so the next call retries it.
   defp ensure_once(clean, state) do
     if MapSet.member?(state.databases, clean) do
       state
     else
-      case state.adapter.ensure_database(clean, state.config) do
+      case safely(fn -> state.adapter.ensure_database(clean, state.config) end) do
         {:ok, _} -> %{state | databases: MapSet.put(state.databases, clean)}
         _ -> state
       end

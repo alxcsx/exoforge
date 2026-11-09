@@ -143,11 +143,20 @@ defmodule Exoforge.AuthTest do
                })
     end
 
-    test "admin override allows any scope" do
-      assert {:ok, %{authorized: true}} =
+    test "the administrator's scopes come from its stored row, like anyone else's" do
+      assert {:ok, %{authorized: false}} =
                ActionDispatcher.dispatch(:auth, :verify_scope, %{
                  player_id: "admin",
                  required_scope: "anything"
+               })
+
+      with_admin_env("root@exoforge.test", "s3cret")
+      assert :ok = Auth.ensure_admin_account()
+
+      assert {:ok, %{authorized: true}} =
+               ActionDispatcher.dispatch(:auth, :verify_scope, %{
+                 player_id: "admin",
+                 required_scope: "admin"
                })
     end
 
@@ -339,7 +348,7 @@ defmodule Exoforge.AuthTest do
                ActionDispatcher.dispatch(:auth, :login, %{player_id: "admin", password: "admin"})
     end
 
-    test "ensure_admin_account logs credentials and warns about production environment" do
+    test "ensure_admin_account never logs the configured password" do
       with_admin_env("env_admin@test.local", "supersecret")
 
       log =
@@ -347,9 +356,8 @@ defmodule Exoforge.AuthTest do
           assert :ok = Auth.ensure_admin_account()
         end)
 
-      assert log =~ "email=env_admin@test.local"
-      assert log =~ "password=supersecret"
-      assert log =~ "should not be defined in environment variables in production after the initial setup"
+      assert log =~ "env_admin@test.local"
+      refute log =~ "supersecret"
     end
 
     test "login rejects a wrong password or unknown account" do
@@ -364,37 +372,35 @@ defmodule Exoforge.AuthTest do
                ActionDispatcher.dispatch(:auth, :login, %{email: "nobody@exoforge.test", password: "right"})
     end
 
-    test "admin password can be replaced by changing env, and survives when env password is removed" do
-      # 1. Initially set to initial_pass
-      with_admin_env("admin", "initial_pass")
+    test "boot reconciles the admin with the environment and removes it when unconfigured" do
+      with_admin_env("root@exoforge.test", "first_pass")
       assert :ok = Auth.ensure_admin_account()
-      assert {:ok, %{player_id: "admin"}} =
-               ActionDispatcher.dispatch(:auth, :login, %{email: "admin", password: "initial_pass"})
+      assert {:ok, %{player_id: "admin"}} = login("root@exoforge.test", "first_pass")
 
-      # 2. Replaced by just changing the env
-      System.put_env("EXOFORGE_ADMIN_PASSWORD", "new_env_pass")
-      assert {:ok, %{player_id: "admin"}} =
-               ActionDispatcher.dispatch(:auth, :login, %{email: "admin", password: "new_env_pass"})
-      assert {:error, :invalid_credentials} =
-               ActionDispatcher.dispatch(:auth, :login, %{email: "admin", password: "initial_pass"})
+      # A changed environment takes effect at the next boot, not mid-session.
+      System.put_env("EXOFORGE_ADMIN_PASSWORD", "second_pass")
+      assert {:error, :invalid_credentials} = login("root@exoforge.test", "second_pass")
+      assert :ok = Auth.ensure_admin_account()
+      assert {:ok, %{player_id: "admin"}} = login("root@exoforge.test", "second_pass")
+      assert {:error, :invalid_credentials} = login("root@exoforge.test", "first_pass")
 
-      # 3. Removed from env (explicitly empty): persists and works with last configured password
+      # Unconfigured means removed, including the sessions cached for it.
+      {:ok, %{token: token}} = login("root@exoforge.test", "second_pass")
+      assert {:ok, _} = ActionDispatcher.dispatch(:auth, :authenticate, %{token: token})
+
+      System.put_env("EXOFORGE_ADMIN_EMAIL", "")
       System.put_env("EXOFORGE_ADMIN_PASSWORD", "")
-      assert {:ok, %{player_id: "admin"}} =
-               ActionDispatcher.dispatch(:auth, :login, %{email: "admin", password: "new_env_pass"})
+      assert :ok = Auth.ensure_admin_account()
+      assert {:error, :invalid_credentials} = login("root@exoforge.test", "second_pass")
+      assert {:error, :invalid_token} = ActionDispatcher.dispatch(:auth, :authenticate, %{token: token})
+      refute Enum.any?(users(), &(&1["player_id"] == "admin"))
 
-      # 4. When removed from env, password reset via API is allowed
-      assert {:ok, %{status: "password_reset"}} =
-               ActionDispatcher.dispatch(:auth, :reset_password, %{player_id: "admin", password: "api_reset_pass"}, caller_scopes: ["admin"])
-      assert {:ok, %{player_id: "admin"}} =
-               ActionDispatcher.dispatch(:auth, :login, %{email: "admin", password: "api_reset_pass"})
-
-      # 5. When env is set again, it overrides/replaces the reset password
-      System.put_env("EXOFORGE_ADMIN_PASSWORD", "final_env_pass")
-      assert {:ok, %{player_id: "admin"}} =
-               ActionDispatcher.dispatch(:auth, :login, %{email: "admin", password: "final_env_pass"})
-      assert {:error, :invalid_credentials} =
-               ActionDispatcher.dispatch(:auth, :login, %{email: "admin", password: "api_reset_pass"})
+      # Restored under the same constant id, so the player is the same player.
+      System.put_env("EXOFORGE_ADMIN_EMAIL", "root@exoforge.test")
+      System.put_env("EXOFORGE_ADMIN_PASSWORD", "third_pass")
+      assert :ok = Auth.ensure_admin_account()
+      assert {:ok, %{player_id: "admin", scopes: scopes}} = login("root@exoforge.test", "third_pass")
+      assert "admin" in scopes
     end
   end
 
@@ -479,15 +485,17 @@ defmodule Exoforge.AuthTest do
                ActionDispatcher.dispatch(:auth, :authenticate, %{token: token})
     end
 
-    test "protected env admin cannot be deleted, roles modified, or password reset via user actions" do
+    test "the administrator is an ordinary account except that user actions cannot remove it" do
       with_admin_env("envadmin@exoforge.test", "adm_pass")
       assert :ok = Auth.ensure_admin_account()
 
-      assert {:error, :protected_admin_account} =
-               ActionDispatcher.dispatch_internal(:auth, :delete_user, %{player_id: "admin"})
+      admin = Enum.find(users(), &(&1["player_id"] == "admin"))
+      assert admin, "the boot-configured administrator is a listed account, not a synthesized row"
+      assert admin["is_protected"] == true
+      assert "admin" in admin["scopes"]
 
       assert {:error, :protected_admin_account} =
-               ActionDispatcher.dispatch_internal(:auth, :delete_user, %{player_id: "envadmin@exoforge.test"})
+               ActionDispatcher.dispatch_internal(:auth, :delete_user, %{player_id: "admin"})
 
       assert {:error, :protected_admin_account} =
                ActionDispatcher.dispatch_internal(:auth, :update_user_roles, %{
@@ -500,6 +508,18 @@ defmodule Exoforge.AuthTest do
                  player_id: "admin",
                  password: "hacked"
                })
+
+      # Every other account is removable.
+      assert {:ok, _} =
+               ActionDispatcher.dispatch(:auth, :register, %{
+                 player_id: "not_admin",
+                 email: "not-admin@exoforge.test"
+               })
+
+      assert Enum.find(users(), &(&1["player_id"] == "not_admin"))["is_protected"] == false
+
+      assert {:ok, %{status: "deleted"}} =
+               ActionDispatcher.dispatch_internal(:auth, :delete_user, %{player_id: "not_admin"})
     end
   end
 
@@ -621,6 +641,17 @@ defmodule Exoforge.AuthTest do
       {:ok, %{rows: [row | _]}} -> row["n"] || row[:n]
       _ -> 0
     end
+  end
+
+  defp login(email, password) do
+    ActionDispatcher.dispatch(:auth, :login, %{email: email, password: password})
+  end
+
+  defp users do
+    {:ok, %{users: users}} =
+      ActionDispatcher.dispatch(:auth, :list_users, %{}, caller_scopes: ["studio"])
+
+    users
   end
 
   defp with_admin_env(email, password) do

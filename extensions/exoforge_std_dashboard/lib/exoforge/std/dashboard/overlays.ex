@@ -496,7 +496,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
       open={@open}
       max_width="max-w-4xl"
       title="Project Settings & Topology"
-      subtitle={"#{@project_name} cluster configuration & plugin options"}
+      subtitle={"#{@project_name} cluster configuration & extension options"}
       on_close={@on_close}
     >
       {project_settings_panel(assigns)}
@@ -553,33 +553,6 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                 <button
                   type="button"
                   phx-click="set_settings_tab"
-                  phx-value-tab="database"
-                  class={"w-full text-left px-2.5 py-2 rounded-xl font-bold flex items-center gap-2 transition-all #{if @settings_tab == "database", do: "bg-white text-primary-700 shadow-sm border border-gray-200/80", else: "text-gray-600 hover:text-gray-900 hover:bg-white/60"}"}
-                >
-                  <span>🗄️</span>
-                  <span>Database</span>
-                </button>
-                <button
-                  type="button"
-                  phx-click="set_settings_tab"
-                  phx-value-tab="auth"
-                  class={"w-full text-left px-2.5 py-2 rounded-xl font-bold flex items-center gap-2 transition-all #{if @settings_tab == "auth", do: "bg-white text-primary-700 shadow-sm border border-gray-200/80", else: "text-gray-600 hover:text-gray-900 hover:bg-white/60"}"}
-                >
-                  <span>🔐</span>
-                  <span>Authentication</span>
-                </button>
-                <button
-                  type="button"
-                  phx-click="set_settings_tab"
-                  phx-value-tab="cors"
-                  class={"w-full text-left px-2.5 py-2 rounded-xl font-bold flex items-center gap-2 transition-all #{if @settings_tab in ["cors", "http"], do: "bg-white text-primary-700 shadow-sm border border-gray-200/80", else: "text-gray-600 hover:text-gray-900 hover:bg-white/60"}"}
-                >
-                  <span>🌐</span>
-                  <span>HTTP &amp; CORS</span>
-                </button>
-                <button
-                  type="button"
-                  phx-click="set_settings_tab"
                   phx-value-tab="visual"
                   class={"w-full text-left px-2.5 py-2 rounded-xl font-bold flex items-center gap-2 transition-all #{if @settings_tab == "visual", do: "bg-white text-primary-700 shadow-sm border border-gray-200/80", else: "text-gray-600 hover:text-gray-900 hover:bg-white/60"}"}
                 >
@@ -595,29 +568,20 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   <span>📟</span>
                   <span>Live Console</span>
                 </button>
-                <button
-                  type="button"
-                  phx-click="set_settings_tab"
-                  phx-value-tab="extensions_config"
-                  class={"w-full text-left px-2.5 py-2 rounded-xl font-bold flex items-center gap-2 transition-all #{if @settings_tab == "extensions_config", do: "bg-white text-primary-700 shadow-sm border border-gray-200/80", else: "text-gray-600 hover:text-gray-900 hover:bg-white/60"}"}
-                >
-                  <span>🧩</span>
-                  <span>Extensions</span>
-                </button>
               </div>
             </div>
 
-            <!-- Plugin Settings Tabs -->
+            <!-- Extension Settings Tabs -->
             <div>
               <div class="flex items-center justify-between px-2">
-                <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Plugin Settings</span>
+                <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Extension Settings</span>
                 <span class="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-gray-200/80 text-gray-600">
                   <%= length(@settings_hooks) %>
                 </span>
               </div>
               <div class="mt-1.5 space-y-0.5">
                 <%= if Enum.empty?(@settings_hooks) do %>
-                  <p class="px-2 py-1 text-[11px] text-gray-400 italic">No plugin settings registered</p>
+                  <p class="px-2 py-1 text-[11px] text-gray-400 italic">No extension settings registered</p>
                 <% else %>
                   <%= for hook <- @settings_hooks do %>
                     <button
@@ -861,11 +825,12 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   <div class="p-3 bg-white border border-gray-200 rounded-lg">
                     <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Admin Principal</span>
                     <div class="flex items-center gap-2 mt-1">
-                      <span class="font-mono font-bold text-gray-900 text-xs"><%= admin_email %></span>
+                      <span class="font-mono font-bold text-gray-900 text-xs">admin</span>
                       <span class="px-1.5 py-0.2 rounded bg-purple-50 text-purple-700 font-mono text-[9px] font-bold border border-purple-200">Protected</span>
                     </div>
                     <p class="text-[10px] text-gray-500 mt-1">
-                      Defined via environment variables. Protected against external deletion.
+                      Ordinary account with the fixed id <code class="font-mono">admin</code>, reconciled from
+                      <code class="font-mono"><%= admin_email %></code> on boot and removed when the credentials are unset.
                     </p>
                   </div>
 
@@ -1058,68 +1023,6 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             </div>
           <% end %>
 
-          <%= if @settings_tab == "extensions_config" do %>
-            <div class="space-y-4">
-              <div class="flex items-center justify-between pb-2 border-b border-gray-100">
-                <div>
-                  <h4 class="text-sm font-bold text-gray-900 flex items-center gap-2">
-                    <span>🧩</span>
-                    <span>Installed Extension Runtime</span>
-                  </h4>
-                  <p class="text-xs text-gray-500 mt-0.5">Cluster-wide status, lifecycle control, and service inspection for all extensions.</p>
-                </div>
-                <span class="px-2.5 py-1 text-[10px] font-bold rounded-full bg-primary-50 text-primary-700 border border-primary-200">
-                  <%= length(@overview.extensions) %> Installed
-                </span>
-              </div>
-
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[380px] overflow-y-auto custom-scrollbar p-0.5">
-                <%= for ext <- @overview.extensions do %>
-                  <% icon = (is_map(ext.dashboard_view) && ext.dashboard_view[:icon]) || ExtensionPresenter.icon(ext) %>
-                  <% is_native = ext.type in [:native, "native"] %>
-                  <div class="p-3.5 bg-gray-50/80 hover:bg-gray-50 rounded-xl border border-gray-200 transition-all flex flex-col justify-between space-y-3">
-                    <div class="flex items-start justify-between gap-2">
-                      <div class="flex items-center gap-2.5 min-w-0">
-                        <span class="w-9 h-9 rounded-xl bg-white border border-gray-200 text-lg flex items-center justify-center shrink-0 shadow-2xs">
-                          <%= icon %>
-                        </span>
-                        <div class="min-w-0">
-                          <h5 class="font-bold text-gray-900 text-xs truncate"><%= display_name(ext) %></h5>
-                          <p class="text-[10px] font-mono text-gray-400 truncate"><%= ext.id %> &bull; v<%= ext.version %></p>
-                        </div>
-                      </div>
-                      <span class={"px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider shrink-0 border #{if is_native, do: "bg-purple-50 text-purple-700 border-purple-200", else: "bg-emerald-50 text-emerald-700 border-emerald-200"}"}>
-                        <%= if is_native, do: "C# Native", else: "Elixir OTP" %>
-                      </span>
-                    </div>
-
-                    <div class="flex items-center justify-between pt-1 border-t border-gray-200/60 text-[10px]">
-                      <span class="text-gray-500 font-medium">Category: <strong class="text-gray-700"><%= ext.category || "General" %></strong></span>
-                      <div class="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          phx-click="inspect_extension"
-                          phx-value-id={ext.id}
-                          class="px-2 py-1 bg-white hover:bg-gray-100 text-gray-700 font-bold rounded-md border border-gray-200 transition-colors cursor-pointer"
-                        >
-                          Inspect
-                        </button>
-                        <button
-                          type="button"
-                          phx-click="inspect_extension_logs"
-                          phx-value-id={ext.id}
-                          class="px-2 py-1 bg-white hover:bg-gray-100 text-primary-700 font-bold rounded-md border border-gray-200 transition-colors cursor-pointer"
-                        >
-                          Logs
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                <% end %>
-              </div>
-            </div>
-          <% end %>
-
           <%= if @settings_tab in ["http", "cors"] do %>
             <% mode = to_string(@cors_config["mode"] || @cors_config[:mode] || "relaxed") %>
             <% origins = to_string(@cors_config["allowed_origins"] || @cors_config[:allowed_origins] || "*") %>
@@ -1231,7 +1134,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
           <% end %>
 
           <!-- Dynamic Plugin Settings Tab Fallback -->
-          <%= if @settings_tab not in ["project", "visual", "console", "database", "auth", "http", "cors", "extensions_config"] do %>
+          <%= if @settings_tab not in ["project", "visual", "console", "database", "auth", "http", "cors"] do %>
             <% active_hook = Enum.find(@settings_hooks, fn h -> to_string(h.id) == @settings_tab end) %>
             <%= if active_hook do %>
               <%= cond do %>

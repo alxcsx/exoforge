@@ -28,12 +28,18 @@ defmodule Exoforge.Std.Database do
   Shared by the manager and both adapters, so a plugin's storage cannot land in a differently
   named database depending on which backend is active.
   """
-  def clean_id(plugin_id) do
+  def clean_id(plugin_id) when is_binary(plugin_id) do
     plugin_id
-    |> to_string()
     |> String.replace(~r/[^a-zA-Z0-9_]/, "_")
     |> String.downcase()
   end
+
+  def clean_id(plugin_id) when is_atom(plugin_id) or is_integer(plugin_id),
+    do: clean_id(to_string(plugin_id))
+
+  # Callers are extensions, so a missing payload field can arrive as nil or a map. That is not a
+  # plugin name, and `to_string/1` on it would raise inside the Manager and take the Manager down.
+  def clean_id(_), do: "default"
 
   def children do
     [

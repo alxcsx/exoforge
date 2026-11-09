@@ -952,6 +952,14 @@ defmodule Exoforge.DashboardLiveViewTest do
       assert settings_html =~ "Commit Hash"
       assert settings_html =~ Exoforge.BuildInfo.version()
 
+      # Extension-owned settings belong to the extensions that own them, not to Cluster & Core:
+      # one tab per concern, no duplicate hardcoded entries next to the extension's own hook.
+      refute settings_html =~ ~s(phx-value-tab="database")
+      refute settings_html =~ ~s(phx-value-tab="auth")
+      refute settings_html =~ ~s(phx-value-tab="cors")
+      refute settings_html =~ ~s(phx-value-tab="extensions_config")
+      assert settings_html =~ "No extension settings registered"
+
       visual_html = render_click(view, "set_settings_tab", %{"tab" => "visual"})
       assert visual_html =~ "Studio Color Theme"
       assert visual_html =~ "Toggle Theme"

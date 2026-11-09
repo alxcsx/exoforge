@@ -38,6 +38,11 @@ defmodule Exoforge.Std.Resources do
 
   @cache :exo_resource_migrated
 
+  # These columns are stored as text (`sql_type/1`), so their values cross the database boundary as
+  # JSON. A map or a list bound straight to a text column is a bind/encode error in the adapter -
+  # which is why a `:map` column's empty default looked like a missing value.
+  @json_column_types [:map, :term, :list]
+
   ## ---- LIFECYCLE ----
 
   def on_init(_manifest) do
@@ -620,7 +625,7 @@ defmodule Exoforge.Std.Resources do
 
     pairs =
       attrs
-      |> Enum.map(fn {k, v} -> {to_string(k), v} end)
+      |> Enum.map(fn {k, v} -> {to_string(k), encode_value(res, to_string(k), v)} end)
       |> Enum.filter(fn {k, _v} -> k in allowed end)
 
     stray = Enum.find(pairs, &out_of_choices?(&1, res))
@@ -637,6 +642,26 @@ defmodule Exoforge.Std.Resources do
       true ->
         {:ok, pairs}
     end
+  end
+
+  defp encode_value(res, name, value) do
+    if column_type(res, name) in @json_column_types and (is_map(value) or is_list(value)) do
+      case Jason.encode(value) do
+        {:ok, json} -> json
+        # ponytail: a term that is not JSON-encodable is inspected rather than dropped;
+        # a binary/term column that needs fidelity should store base64 itself.
+        _ -> inspect(value)
+      end
+    else
+      value
+    end
+  end
+
+  defp column_type(res, name) do
+    column = Enum.find(res.columns || [], &(to_string(&1.name || &1["name"]) == name))
+    type = (column && (column[:type] || column["type"])) || :string
+    # Resources declared by a native extension arrive from manifest.json, where types are strings.
+    if is_binary(type), do: Exoforge.Atoms.existing(type, type), else: type
   end
 
   defp out_of_choices?({name, value}, res) do
@@ -734,6 +759,8 @@ defmodule Exoforge.Std.Resources do
   defp to_int(n, _default) when is_binary(n), do: String.to_integer(n)
   defp to_int(_n, default), do: default
 
+  # Native extensions declare column types in JSON, so both an atom and its string are accepted.
+  defp sql_type(type) when is_binary(type), do: sql_type(Exoforge.Atoms.existing(type, type))
   defp sql_type(:integer), do: "integer"
   defp sql_type(:float), do: "real"
   defp sql_type(:boolean), do: "boolean"

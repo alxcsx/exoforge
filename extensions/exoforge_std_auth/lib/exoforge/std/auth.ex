@@ -175,60 +175,38 @@ defmodule Exoforge.Std.Auth do
       {:error, :invalid_credentials}
     else
       clean_id = String.downcase(to_string(identifier))
-      {admin_email, env_password} = credentials(:admin, "EXOFORGE_ADMIN_EMAIL", "EXOFORGE_ADMIN_PASSWORD")
-      admin_match? = clean_id == @admin_id or (is_binary(admin_email) and clean_id == String.downcase(to_string(admin_email)))
+      query = "SELECT * FROM #{@accounts_table} WHERE email = $1 OR player_id = $2"
 
-      # If the admin password is actively configured in the env, it immediately overrides and replaces any stored password
-      if admin_match? and is_binary(env_password) and env_password != "" do
-        if password == env_password do
-          effective_email = if is_binary(admin_email) and admin_email != "", do: admin_email, else: @admin_id
-          _ = upsert_account(@admin_id, effective_email, env_password, [Roles.admin()])
+      case ActionDispatcher.dispatch_internal(:database, :execute, %{
+             plugin: :auth,
+             operation: query,
+             arguments: [clean_id, to_string(identifier)]
+           }) do
+        {:ok, %{rows: rows}} when is_list(rows) and rows != [] ->
+          matching_row =
+            Enum.find(rows, fn row ->
+              hash = Map.get(row, "password_hash") || Map.get(row, :password_hash)
+              verify_password(password, hash)
+            end)
 
-          case generate_and_store_token(@admin_id, [Roles.admin()]) do
-            {:ok, token} ->
-              Exoforge.EventDispatcher.broadcast(:"auth.login", %{player_id: @admin_id, role: "admin"}, topic: "auth")
-              {:ok, %{player_id: @admin_id, token: token, scopes: [Roles.admin()], role: role([Roles.admin()])}}
+          if matching_row do
+            player_id = Map.get(matching_row, "player_id") || Map.get(matching_row, :player_id)
+            scopes = parse_scopes(Map.get(matching_row, "scopes") || Map.get(matching_row, :scopes) || Roles.player())
 
-            error ->
-              error
-          end
-        else
-          {:error, :invalid_credentials}
-        end
-      else
-        query = "SELECT * FROM #{@accounts_table} WHERE email = $1 OR player_id = $2"
+            case generate_and_store_token(player_id, scopes) do
+              {:ok, token} ->
+                Exoforge.EventDispatcher.broadcast(:"auth.login", %{player_id: player_id, role: to_string(role(scopes))}, topic: "auth")
+                {:ok, %{player_id: player_id, token: token, scopes: scopes, role: role(scopes)}}
 
-        case ActionDispatcher.dispatch_internal(:database, :execute, %{
-               plugin: :auth,
-               operation: query,
-               arguments: [clean_id, to_string(identifier)]
-             }) do
-          {:ok, %{rows: rows}} when is_list(rows) and rows != [] ->
-            matching_row =
-              Enum.find(rows, fn row ->
-                hash = Map.get(row, "password_hash") || Map.get(row, :password_hash)
-                verify_password(password, hash)
-              end)
-
-            if matching_row do
-              player_id = Map.get(matching_row, "player_id") || Map.get(matching_row, :player_id)
-              scopes = parse_scopes(Map.get(matching_row, "scopes") || Map.get(matching_row, :scopes) || Roles.player())
-
-              case generate_and_store_token(player_id, scopes) do
-                {:ok, token} ->
-                  Exoforge.EventDispatcher.broadcast(:"auth.login", %{player_id: player_id, role: to_string(role(scopes))}, topic: "auth")
-                  {:ok, %{player_id: player_id, token: token, scopes: scopes, role: role(scopes)}}
-
-                error ->
-                  error
-              end
-            else
-              {:error, :invalid_credentials}
+              error ->
+                error
             end
-
-          _ ->
+          else
             {:error, :invalid_credentials}
-        end
+          end
+
+        _ ->
+          {:error, :invalid_credentials}
       end
     end
   end
@@ -244,9 +222,6 @@ defmodule Exoforge.Std.Auth do
     cond do
       is_nil(user_id) or is_nil(required) ->
         {:error, :unauthorized}
-
-      user_id == @admin_id ->
-        {:ok, %{authorized: true}}
 
       # dev_admin_* ids only exist while dev tokens do (M33 Fix 4): in production, where
       # `allow_dev_tokens?` is false, the prefix must not answer yes to anything.
@@ -453,12 +428,8 @@ defmodule Exoforge.Std.Auth do
         Map.put(acc, pid, row)
       end)
 
-    {admin_email, _} = credentials(:admin, "EXOFORGE_ADMIN_EMAIL", "EXOFORGE_ADMIN_PASSWORD")
-    has_env_admin? = is_env_admin?(@admin_id)
-
     all_player_ids =
-      ((if has_env_admin?, do: [@admin_id], else: []) ++
-       Map.keys(players_by_id) ++ Map.keys(tokens_by_player) ++ Map.keys(accounts_by_id))
+      (Map.keys(players_by_id) ++ Map.keys(tokens_by_player) ++ Map.keys(accounts_by_id))
       |> Enum.reject(&(&1 in [nil, ""]))
       |> Enum.uniq()
 
@@ -469,14 +440,11 @@ defmodule Exoforge.Std.Auth do
 
         raw_scopes =
           Map.get(p_row, "scopes") || Map.get(p_row, :scopes) ||
-            Map.get(acc_row, "scopes") || Map.get(acc_row, :scopes) ||
-            if(pid == @admin_id, do: [Roles.admin()], else: Roles.player())
+            Map.get(acc_row, "scopes") || Map.get(acc_row, :scopes) || Roles.player()
 
         scopes = parse_scopes(raw_scopes)
         tokens = Map.get(tokens_by_player, pid, [])
-        email =
-          Map.get(acc_row, "email") || Map.get(acc_row, :email) ||
-            if(pid == @admin_id, do: admin_email || "admin@exoforge.local", else: nil)
+        email = Map.get(acc_row, "email") || Map.get(acc_row, :email)
 
         token_strings =
           Enum.map(tokens, fn t ->
@@ -486,15 +454,13 @@ defmodule Exoforge.Std.Auth do
         %{
           "user_id" => pid,
           "player_id" => pid,
-          "name" =>
-            Map.get(acc_row, "name") || Map.get(acc_row, :name) ||
-              if(pid == @admin_id, do: "System Administrator", else: pid),
+          "name" => Map.get(acc_row, "name") || Map.get(acc_row, :name) || pid,
           "email" => email,
           "scopes" => scopes,
           "tokens_count" => length(tokens),
           "active_tokens" => token_strings,
           "status" => "Active",
-          "is_protected" => is_env_admin?(pid)
+          "is_protected" => protected_account?(pid)
         }
       end)
 
@@ -521,7 +487,7 @@ defmodule Exoforge.Std.Auth do
       is_nil(user_id) or user_id == "" ->
         {:error, :user_not_found}
 
-      is_env_admin?(user_id) ->
+      protected_account?(user_id) ->
         {:error, :protected_admin_account}
 
       is_nil(password) or password == "" ->
@@ -598,7 +564,7 @@ defmodule Exoforge.Std.Auth do
       is_nil(user_id) or user_id == "" ->
         {:error, :user_not_found}
 
-      is_env_admin?(user_id) ->
+      protected_account?(user_id) ->
         {:error, :protected_admin_account}
 
       is_nil(raw_scopes) ->
@@ -684,7 +650,7 @@ defmodule Exoforge.Std.Auth do
       is_nil(user_id) or user_id == "" ->
         {:error, :user_not_found}
 
-      is_env_admin?(user_id) ->
+      protected_account?(user_id) ->
         {:error, :protected_admin_account}
 
       true ->
@@ -931,13 +897,14 @@ defmodule Exoforge.Std.Auth do
     end
   end
 
-  @doc "Checks if a player ID belongs to the protected env-configured admin."
-  def is_env_admin?(player_id) do
-    pid = to_string(player_id)
-    {env_email, env_password} = credentials(:admin, "EXOFORGE_ADMIN_EMAIL", "EXOFORGE_ADMIN_PASSWORD")
-    is_admin = pid == @admin_id or (is_binary(env_email) and env_email != "" and pid == env_email)
-    is_admin and is_binary(env_password) and env_password != ""
-  end
+  @doc """
+  True for the account user actions may not delete, re-scope, or re-password.
+
+  Only the administrator is protected, and it is recognized by its constant id — not by the
+  current environment, so the protection does not blink on and off while a boot reconciles the
+  credentials.
+  """
+  def protected_account?(player_id), do: to_string(player_id) == @admin_id
 
   @doc "True when the account has a password, so `anonymous` may not reissue its token."
   def password_protected?(player_id) do
@@ -970,49 +937,46 @@ defmodule Exoforge.Std.Auth do
   @doc "Numeric rank required by a declared scope."
   def scope_rank(scope), do: Exoforge.Auth.Roles.rank(scope)
 
-  ## ---- ADMIN BOOTSTRAP (first access) ----
+  ## ---- ADMIN ACCOUNT ----
 
   @doc """
-  Ensures the admin account configured via `config :exoforge, :admin`
-  (or EXOFORGE_ADMIN_EMAIL / EXOFORGE_ADMIN_PASSWORD) exists.
-  Called at plugin boot so the dashboard is reachable on first access.
+  Reconciles the administrator account with the environment. Called on boot.
+
+  The administrator is an ordinary account, not a special case: `id` is the constant `"admin"`,
+  the credentials come from `config :exoforge, :admin` (or EXOFORGE_ADMIN_EMAIL /
+  EXOFORGE_ADMIN_PASSWORD), and when those are configured it is created or updated like any other
+  account. When they are not configured it is removed, together with its tokens: a credential that
+  is no longer set must not keep working. The id, not the email, is what survives — a removed and
+  re-configured administrator comes back as the same player. The one privilege it retains is that
+  user actions cannot delete or re-scope it (`protected_account?/1`).
   """
   def ensure_admin_account do
     case credentials(:admin, "EXOFORGE_ADMIN_EMAIL", "EXOFORGE_ADMIN_PASSWORD") do
-      {email, password} when is_binary(password) and password != "" ->
-        effective_email = if is_binary(email) and email != "", do: email, else: "admin@exoforge.local"
-        _ = upsert_account(@admin_id, effective_email, password, [Roles.admin()])
-        Logger.info("[Auth] Admin credentials defined on environment: email=#{effective_email}, password=#{password}")
-        Logger.warning("[Auth] Admin credentials should not be defined in environment variables in production after the initial setup.")
-        :ok
-
-      {email, _} when is_binary(email) and email != "" ->
-        sync_admin_email_if_needed(email)
+      {email, password}
+      when is_binary(email) and email != "" and is_binary(password) and password != "" ->
+        _ = upsert_account(@admin_id, email, password, [Roles.admin()])
+        Logger.info("[Auth] Administrator account #{@admin_id} reconciled for #{String.downcase(email)}")
         :ok
 
       _ ->
-        :ok
+        remove_account(@admin_id)
     end
   end
 
-  defp sync_admin_email_if_needed(email) do
-    case ActionDispatcher.dispatch_internal(:database, :execute, %{
-           plugin: :auth,
-           operation: "SELECT * FROM #{@accounts_table} WHERE player_id = $1",
-           arguments: [@admin_id]
-         }) do
-      {:ok, %{rows: [row | _]}} ->
-        current_email = Map.get(row, "email") || Map.get(row, :email)
-
-        if String.downcase(to_string(current_email)) != String.downcase(to_string(email)) do
-          hash = Map.get(row, "password_hash") || Map.get(row, :password_hash)
-          scopes = parse_scopes(Map.get(row, "scopes") || Map.get(row, :scopes) || Roles.admin())
-          _ = upsert_account_with_hash(@admin_id, email, hash, scopes)
-        end
-
-      _ ->
-        :ok
+  # Deleting rows is not enough: `authenticate` answers from the token cache before it looks at the
+  # tokens table, so a removed account's sessions have to leave the cache too.
+  defp remove_account(player_id) do
+    for table <- [@players_table, @accounts_table, @tokens_table] do
+      _ =
+        ActionDispatcher.dispatch_internal(:database, :execute, %{
+          plugin: :auth,
+          operation: "DELETE FROM #{table} WHERE player_id = $1",
+          arguments: [player_id]
+        })
     end
+
+    _ = Exoforge.Std.Auth.Cache.flush()
+    :ok
   end
 
   @doc """

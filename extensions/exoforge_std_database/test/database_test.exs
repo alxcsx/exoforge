@@ -245,5 +245,56 @@ defmodule Exoforge.DatabaseTest do
       assert {:error, :positional_args_must_be_list} =
                Database.execute(plugin, "SELECT * FROM t WHERE id = $1", %{"id" => "x"})
     end
+
+    test "an adapter failure is an error tuple, not a Manager crash" do
+      defmodule RaisingSqlite do
+        @behaviour Exoforge.Std.Database.Adapter
+        alias Exoforge.Std.Database.Adapters.Sqlite
+
+        @impl true
+        def ensure_database(id, config), do: Sqlite.ensure_database(id, config)
+
+        # Postgrex raises DBConnection.ConnectionError when its connection is gone; a raise is the
+        # same shape of failure.
+        @impl true
+        def execute(_id, _query, _args, _config), do: raise("connection closed")
+
+        @impl true
+        defdelegate table_columns(id, t, c), to: Sqlite
+        @impl true
+        defdelegate connection_config(id, c), to: Sqlite
+        @impl true
+        defdelegate health_check(c), to: Sqlite
+        @impl true
+        defdelegate reset(id, c), to: Sqlite
+      end
+
+      manager = Process.whereis(Manager)
+      Manager.set_adapter(RaisingSqlite)
+
+      on_exit(fn ->
+        case Process.whereis(Manager) do
+          pid when is_pid(pid) -> GenServer.call(pid, {:set_adapter, Exoforge.Std.Database.Adapters.Sqlite})
+          _ -> :ok
+        end
+      end)
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          # The resource store used to receive {:extension_exited, ...} here: the raise took down
+          # the shared Manager and every queued caller with it.
+          assert {:error, {:database_error, "connection closed"}} =
+                   Manager.execute(:broken, "SELECT 1")
+        end)
+
+      assert log =~ "adapter failure"
+
+      # Same process: it reported the database error instead of dying and restarting.
+      assert Process.whereis(Manager) == manager
+
+      Manager.set_adapter(Exoforge.Std.Database.Adapters.Sqlite)
+      plugin = :"recovered_#{System.unique_integer([:positive])}"
+      assert {:ok, _} = Database.execute(plugin, "CREATE TABLE t (id text)")
+    end
   end
 end

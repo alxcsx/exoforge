@@ -41,6 +41,22 @@ defmodule Exoforge.Std.ResourcesTest do
     end
   end
 
+  # A resource with structured columns: they are stored as text, so the store owns the JSON.
+  defmodule ConfigContract do
+    import Exoforge.Contracts.Service
+
+    defservice game_config do
+      resource :game_config do
+        source({:table, "game_config"})
+        primary_key(:id)
+
+        column(:id, :string)
+        column(:settings, :map)
+        column(:tags, :list)
+      end
+    end
+  end
+
   defmodule ScoresContract do
     import Exoforge.Contracts.Service
 
@@ -77,6 +93,11 @@ defmodule Exoforge.Std.ResourcesTest do
       provides: [WidgetsContract.Widgets]
     )
 
+    Exoforge.ExtensionCase.register_extension(Resources,
+      id: :config_plugin,
+      provides: [ConfigContract.GameConfig]
+    )
+
     Resources.run_migrations()
 
     # One SQLite file for the whole suite, so a row written by one test is visible to the next: the
@@ -87,6 +108,22 @@ defmodule Exoforge.Std.ResourcesTest do
   end
 
   defp dispatch(action, payload), do: ActionDispatcher.dispatch_internal(:resource_store, action, payload)
+
+  test "structured values are written as JSON text instead of failing at the adapter" do
+    assert {:ok, %{row: row}} =
+             dispatch(:create, %{
+               resource: "game_config",
+               attributes: %{"id" => "cfg", "settings" => %{"volume" => 3}, "tags" => ["a", "b"]}
+             })
+
+    # These columns are text (`sql_type/1`); binding a map or a list is what raised inside the
+    # database manager before, surfacing to callers as {:extension_exited, ...}.
+    assert Jason.decode!(row["settings"]) == %{"volume" => 3}
+    assert Jason.decode!(row["tags"]) == ["a", "b"]
+
+    assert {:ok, %{row: fetched}} = dispatch(:get, %{resource: "game_config", id: "cfg"})
+    assert Jason.decode!(fetched["settings"]) == %{"volume" => 3}
+  end
 
   test "migrate creates the backing table" do
     assert {:ok, %{migrated: n}} = dispatch(:migrate, %{})
