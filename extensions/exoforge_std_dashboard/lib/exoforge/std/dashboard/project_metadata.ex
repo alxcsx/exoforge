@@ -93,9 +93,10 @@ defmodule Exoforge.Std.Dashboard.ProjectMetadata do
   defp fetch_raw_stored do
     case ActionDispatcher.dispatch_internal(:resource_store, :get, %{
            resource: @resource,
-           id: @project_key
+           id: @project_key,
+           optional: true
          }) do
-      {:ok, %{row: row}} ->
+      {:ok, %{row: row}} when is_map(row) ->
         raw = Map.get(row, "data") || Map.get(row, :data) || "{}"
 
         case Jason.decode(raw) do

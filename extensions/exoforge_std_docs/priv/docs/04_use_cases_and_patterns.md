@@ -15,7 +15,7 @@ Exoforge combines **long-running stateful native C# processes**, **isolated rela
 | **Execution Lifecycle** | Serverless functions (JS sandbox or BYO Azure Functions). Suffixes 1–3s cold starts. | Ephemeral containers. 15-second timeout, killed after idle. | **Long-lived native .NET OS processes**. Zero cold starts; sub-millisecond dispatch. |
 | **In-Memory State** | None. Stateless between calls; static variables wiped. | None. Workers rotate unpredictably; ephemeral memory. | **Persistent C# RAM state**. Maintain queues, active room lobbies, and tick-loops in memory. |
 | **Data Storage** | Per-player JSON blobs (`GetUserData`). No SQL queries across players. Rate-limited to ~10 writes/sec. | JSON Cloud Save. Strict per-key size limits; no cross-player relational queries. | **Isolated SQLite / PostgreSQL tables**. Full SQL queries (`Exo.Database.Query<T>`), foreign keys, and indexes. |
-| **Real-Time Push** | Polling or external SignalR/PubNub subscription. | Polling or external WebSockets setup. | **Built-in `:pg` Pub/Sub Bus**. 0.07 ms fanout to thousands of Unity clients via `Exo.Events.EmitAsync`. |
+| **Real-Time Push** | Polling or external SignalR/PubNub subscription. | Polling or external WebSockets setup. | **Built-in `:pg` Pub/Sub Bus**. 0.07 ms in-cluster fanout to 50 subscribers (benchmarked), then the WebSocket gateway pushes to clients. |
 | **LiveOps & Tuning** | Manual JSON editing in "Title Data" without schemas or form validation. | Remote Config raw keys and values. | **Auto-generated Studio UI**. `[ExoResource]` & `[ExoSingletonResource]` generate full forms, tables, and inspection drawers. |
 | **Scheduled Tasks** | Azure Scheduled Tasks with cold start overhead and execution timeouts. | None native. Requires external cron runner calling webhooks. | **First-class `[ExoCron]` attribute**. Runs in-process under cluster supervision. |
 | **External Webhooks** | Clunky Azure API Management proxying. | Rejects calls without Unity Player Bearer token. | **First-class `[ExoWebhook]` attribute**. Direct Stripe, Steam, Discord webhooks with signature checks. |
@@ -30,7 +30,7 @@ In PlayFab and UGS, player inventory is locked in private per-player storage. Bu
 2. Spin up and pay for an external PostgreSQL/MongoDB database on AWS/Azure and write a separate microservice just to manage listings.
 
 ### The Exoforge Pattern
-In Exoforge, an extension's storage is an isolated relational database. Declare an `[ExoResource]` record representing a market listing. Use `Exo.Database.Query<T>` to query items across all players with standard SQL sorting, filtering, and paging. Use `[Inject("player_data")]` or transaction logic to atomically exchange currency and item ownership, and emit an `[ExoEvent]` so the seller receives a real-time notification over WebSocket when their item sells.
+In Exoforge, an extension's storage is an isolated relational database. Declare an `[ExoResource]` record representing a market listing. Use `Exo.Database.Query<T>` to query items across all players with standard SQL sorting, filtering, and paging. Reach another service through its generated stub (`Exo.<Service>`) or with `Exo.Actions.CallActionAsync<T>`; the store serialises the writes, so a listing and its payment move together. Emit an `[ExoEvent]` so the seller receives a real-time notification over WebSocket when their item sells.
 
 ```csharp
 using System;
@@ -41,9 +41,6 @@ using Exoforge.Plugin.SDK;
 [ExoService("marketplace_service", Title = "Auction House", Icon = "⚖️")]
 public class MarketplaceExtension
 {
-    [Inject("player_data")]
-    public PlayerDataServiceClient PlayerData { get; set; } = null!;
-
     [ExoAction(Scope = "player")]
     public CreateListingResponse ListItem(CreateListingRequest req)
     {
@@ -79,7 +76,7 @@ public class MarketplaceExtension
         if (listing == null)
             throw new ExoActionException("listing_not_found", "Item has already been purchased or expired.");
 
-        // Deduct currency & transfer item atomically
+        // Transfer ownership: remove the listing (your schema's payment rows move in the same action)
         Exo.Database.Execute("DELETE FROM market_listings WHERE id = $1", req.ListingId);
 
         // Real-time seller notification pushed over WebSocket
@@ -366,10 +363,7 @@ using Exoforge.Plugin.SDK;
 [ExoService("billing_service", Title = "Payments & Store", Icon = "💳")]
 public class BillingExtension
 {
-    [Inject("player_data")]
-    public PlayerDataServiceClient PlayerData { get; set; } = null!;
-
-    // External HTTP POST webhook (e.g. https://api.yourgame.com/ext/billing_service/webhook/stripe)
+    // External HTTP POST webhook: POST /api/webhooks/billing_service/stripe on the cluster
     [ExoWebhook("stripe")]
     public async Task<WebhookResult> HandleStripeWebhook(WebhookPayload payload)
     {

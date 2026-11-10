@@ -91,8 +91,8 @@ defmodule Exoforge.Std.Dashboard.Preferences do
   def put_tracked_services(_player_id, _services), do: :ok
 
   defp fetch_prefs(player_id) do
-    case store(:get, %{resource: @resource, id: player_id}) do
-      {:ok, %{row: row}} ->
+    case store(:get, %{resource: @resource, id: player_id, optional: true}) do
+      {:ok, %{row: row}} when is_map(row) ->
         raw = Map.get(row, "data") || Map.get(row, :data) || "[]"
 
         case Jason.decode(raw) do

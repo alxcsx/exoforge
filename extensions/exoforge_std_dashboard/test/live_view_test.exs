@@ -782,6 +782,30 @@ defmodule Exoforge.DashboardLiveViewTest do
       assert html =~ "WebSocket Gateway"
     end
 
+    test "identical live events are two rows, not one" do
+      session = %{"admin_player_id" => "dup_events_user", "admin_scopes" => ["admin"]}
+      conn = build_conn() |> Plug.Test.init_test_session(session)
+      {:ok, view, _html} = live(conn, "/")
+
+      count = fn html ->
+        [_, n] = Regex.run(~r/Live Stream Events \((\d+)\)/, html)
+        String.to_integer(n)
+      end
+
+      before = count.(render(view))
+
+      for _ <- 1..2 do
+        send(
+          view.pid,
+          {:exo_event, "auth.login", %{player_id: "same_player"},
+           %{origin: "same_player", topic: "global"}}
+        )
+      end
+
+      # Two players logging in with the same payload are two events; the stream must not dedupe.
+      assert count.(render(view)) == before + 2
+    end
+
     test "toast notices auto-dismiss" do
       session = %{"admin_player_id" => "toast_user", "admin_scopes" => ["admin"]}
       Exoforge.Std.Dashboard.Preferences.put_pinned("toast_user", [])
@@ -1335,9 +1359,10 @@ defmodule Exoforge.DashboardLiveViewTest do
       assert html =~ "•••"
       refute html =~ "hunter2"
 
-      # A caller filter that matches nobody empties the unfolded invocation list, not the table.
+      # A caller filter that matches nobody drops the row: the table says what that caller did,
+      # and they did nothing.
       html = render_change(view, "filter_actions_detail_caller", %{"caller" => "someone_else"})
-      assert html =~ "No invocations retained in this window"
+      assert html =~ "No actions match your search or filter"
 
       # Tracking one service hides the others from the graph/console aggregation.
       html = render_click(view, "toggle_tracked_service", %{"service" => "auth"})
@@ -1362,6 +1387,66 @@ defmodule Exoforge.DashboardLiveViewTest do
       assert html =~ "Needs attention"
       assert html =~ "attention_ghost.boom"
       assert html =~ "phx-value-rid"
+    end
+
+    test "the caller filter narrows the invocations table" do
+      session = %{"admin_player_id" => "caller_filter_user", "admin_scopes" => ["admin"]}
+      conn = build_conn() |> Plug.Test.init_test_session(session)
+      {:ok, view, _html} = live(conn, "/")
+
+      # Two actions by two callers, on a clean trace: other tests record samples too.
+      Exoforge.ActionTrace.clear()
+      on_exit(fn -> Exoforge.ExtensionCase.reset_action_trace() end)
+
+      Exoforge.ActionTrace.record(:database, :execute, "bob", %{}, {:ok, %{}}, 4)
+      Exoforge.ActionTrace.record(:auth, :list_users, "alice", %{}, {:ok, %{}}, 4)
+
+      html = render_click(view, "open_actions_detail_modal", %{"mode" => "actions"})
+      assert html =~ "auth.list_users"
+      assert html =~ "database.execute"
+
+      # Selecting a caller keeps that caller's rows and drops the rest.
+      html = render_click(view, "filter_actions_detail_caller", %{"caller" => "alice"})
+      assert html =~ "auth.list_users"
+      refute html =~ "database.execute"
+
+      html = render_click(view, "filter_actions_detail_caller", %{"caller" => "bob"})
+      assert html =~ "database.execute"
+      refute html =~ "auth.list_users"
+    end
+
+    test "the invocations table puts the most recently called action first" do
+      catalog = [
+        %{name: "a", title: "A", icon: "⚡", actions: [%{name: "one", scope: "player"}]},
+        %{name: "b", title: "B", icon: "⚡", actions: [%{name: "two", scope: "player"}]}
+      ]
+
+      # `b.two` was called far more often, but `a.one` ran last: recency wins.
+      telemetry = %{
+        action_invocations: %{"a.one" => 1, "b.two" => 50},
+        action_errors: %{},
+        action_stats: %{
+          "a.one" => %{avg_ms: 1.0, window: 1, window_errors: 0},
+          "b.two" => %{avg_ms: 1.0, window: 50, window_errors: 0}
+        },
+        last_seen: %{"a.one" => 2_000, "b.two" => 1_000},
+        last_errors: %{},
+        error_groups: [],
+        action_series: [],
+        error_series: [],
+        callers: ["alice", "bob"]
+      }
+
+      html =
+        render_component(&Exoforge.Std.Dashboard.Overlays.actions_detail_modal/1, %{
+          id: "actions_detail_test",
+          open: true,
+          mode: "actions",
+          catalog: catalog,
+          telemetry: telemetry
+        })
+
+      assert pos(html, ~s{phx-value-key="a.one"}) < pos(html, ~s{phx-value-key="b.two"})
     end
 
     test "the request timeline joins an action and its failure by request id" do
@@ -1391,7 +1476,7 @@ defmodule Exoforge.DashboardLiveViewTest do
       assert html =~ "ACTION"
       assert html =~ "r_ui_1"
       assert html =~ "Deep capture"
-      assert html =~ "↻ Replay"
+      assert html =~ "Replay"
 
       [sample] = Enum.filter(Exoforge.ActionTrace.recent_samples(20), &(&1.rid == "r_ui_1"))
       html = render_click(view, "replay_action", %{"id" => to_string(sample.id)})
@@ -1606,6 +1691,13 @@ defmodule Exoforge.DashboardLiveViewTest do
       assert use_cases_html =~ "Auction House &amp; P2P"
       assert use_cases_html =~ "In-Memory Matchmaker"
       assert use_cases_html =~ "Stateless Extensions, Resilient State in DB"
+    end
+  end
+
+  defp pos(html, needle) do
+    case :binary.match(html, needle) do
+      {pos, _} -> pos
+      :nomatch -> nil
     end
   end
 end

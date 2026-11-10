@@ -7,11 +7,15 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   use Phoenix.LiveView
   require Logger
   import Exoforge.Std.Dashboard.Overlays
+  import Exoforge.Std.Dashboard.Components, only: [icon: 1]
   alias Exoforge.ActionDispatcher
   alias Exoforge.EventDispatcher
   alias Exoforge.ExtensionRegistry
   alias Exoforge.Std.Dashboard.ActionForms
   alias Exoforge.Std.Dashboard.ExtensionPresenter
+
+  # How long a notice lives: the server timer, the browser hook and the CSS progress bar agree.
+  @toast_ms 3_500
 
   @max_pinned 4
 
@@ -66,7 +70,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       # Automatically schedule dismissal for any inbound flash (e.g. login/action redirects)
       for kind <- [:info, :error] do
         if Phoenix.Flash.get(socket.assigns.flash, kind) do
-          Process.send_after(self(), {:clear_toast, kind}, 2_500)
+          Process.send_after(self(), {:clear_toast, kind}, @toast_ms)
         end
       end
     end
@@ -164,11 +168,9 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
        inspecting_extension: nil,
        inspect_tab: "overview",
        inspect_logs_page: 1,
-       app_drawer_open: false,
        activity_events: initial_events,
        filtered_activity_events: initial_events,
        highlight_event_id: nil,
-       quick_toast: nil,
        action_catalog: action_catalog,
        selected_action_service: default_service_name,
        selected_action_name: default_action_name,
@@ -450,8 +452,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
            sdk_modal_open: false,
            action_modal_open: false,
            actions_detail_modal: nil,
-           events_modal_open: false,
-           app_drawer_open: false
+           events_modal_open: false
          )}
 
       true ->
@@ -673,12 +674,6 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     end
   end
 
-  def handle_event("reorder_overview_grid", %{"order" => order}, socket) when is_list(order) do
-    clean_order = Enum.map(order, &to_string/1)
-    Exoforge.Std.Dashboard.Preferences.put_overview_order(socket.assigns.player_id, clean_order)
-    {:noreply, assign(socket, :overview_grid_order, clean_order)}
-  end
-
   def handle_event("reset_overview_grid", _params, socket) do
     Exoforge.Std.Dashboard.Preferences.put_overview_order(socket.assigns.player_id, [])
     {:noreply, assign(socket, :overview_grid_order, [])}
@@ -789,10 +784,6 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
      |> assign(:focus, nil)
      |> assign(:inspecting_extension, nil)
      |> push_patch(to: tab_path(socket.assigns.current_tab))}
-  end
-
-  def handle_event("quick_action", %{"action" => action}, socket) do
-    handle_quick_action(action, socket)
   end
 
   # ---- ACTION EXECUTION MODAL ----
@@ -1174,70 +1165,64 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   def handle_info({:exo_event, event_key, payload, context}, socket) do
     ev_item = event_item(event_key, payload, context)
 
-    if duplicate_event?(
-         socket.assigns.activity_events,
-         ev_item.event,
-         ev_item.payload,
-         ev_item[:id]
-       ) do
-      {:noreply, socket}
-    else
-      new_events =
-        if socket.assigns.events_paused do
-          socket.assigns.activity_events
-        else
-          [ev_item | Enum.take(socket.assigns.activity_events, 99)]
-        end
+    # Every delivery is a row. Identical events are still two events - two players logging in with
+    # the same payload, two cron ticks - so nothing is deduplicated here; the bus already delivers
+    # each subscriber one copy.
+    new_events =
+      if socket.assigns.events_paused do
+        socket.assigns.activity_events
+      else
+        [ev_item | Enum.take(socket.assigns.activity_events, 99)]
+      end
 
-      filtered =
-        filter_activity_events(
-          new_events,
-          socket.assigns.event_filter_topic,
-          socket.assigns.event_kind_filter,
-          socket.assigns.tracked_services
+    filtered =
+      filter_activity_events(
+        new_events,
+        socket.assigns.event_filter_topic,
+        socket.assigns.event_kind_filter,
+        socket.assigns.tracked_services
+      )
+
+    telemetry =
+      fetch_telemetry_summary(
+        socket.assigns.overview,
+        new_events,
+        socket.assigns.actions_detail_caller,
+        socket.assigns.tracked_services
+      )
+
+    event_str = to_string(ev_item.event)
+    payload = ev_item[:payload] || %{}
+    meta = (is_map(payload) && (payload[:metadata] || payload["metadata"])) || nil
+
+    socket =
+      if event_str in ["project.metadata_updated", "system.project_metadata_updated"] and
+           is_map(meta) do
+        assign(socket,
+          project_name:
+            meta["project_name"] || meta[:project_name] || socket.assigns.project_name,
+          studio_name: meta["studio_name"] || meta[:studio_name] || socket.assigns.studio_name,
+          project_metadata: meta
         )
+      else
+        socket
+      end
 
-      telemetry =
-        fetch_telemetry_summary(
-          socket.assigns.overview,
-          new_events,
-          socket.assigns.actions_detail_caller,
-          socket.assigns.tracked_services
-        )
+    # Highlight the latest event while the screen is active
+    Process.send_after(self(), :clear_event_highlight, 2_000)
 
-      event_str = to_string(ev_item.event)
-      payload = ev_item[:payload] || %{}
-      meta = (is_map(payload) && (payload[:metadata] || payload["metadata"])) || nil
+    socket =
+      if String.starts_with?(event_str, "action:extension_manager."),
+        do: refresh_extension_topology(socket),
+        else: socket
 
-      socket =
-        if event_str in ["project.metadata_updated", "system.project_metadata_updated"] and
-             is_map(meta) do
-          assign(socket,
-            project_name:
-              meta["project_name"] || meta[:project_name] || socket.assigns.project_name,
-            studio_name: meta["studio_name"] || meta[:studio_name] || socket.assigns.studio_name,
-            project_metadata: meta
-          )
-        else
-          socket
-        end
-
-      # Highlight the latest event while the screen is active
-      Process.send_after(self(), :clear_event_highlight, 2_000)
-
-      socket =
-        if String.starts_with?(event_str, "action:extension_manager."),
-          do: refresh_extension_topology(socket),
-          else: socket
-
-      {:noreply,
-       assign(socket,
-         activity_events: new_events,
-         filtered_activity_events: filtered,
-         telemetry: telemetry,
-         highlight_event_id: ev_item[:id]
-       )}
-    end
+    {:noreply,
+     assign(socket,
+       activity_events: new_events,
+       filtered_activity_events: filtered,
+       telemetry: telemetry,
+       highlight_event_id: ev_item[:id]
+     )}
   end
 
   def handle_info(:clear_event_highlight, socket) do
@@ -1309,6 +1294,10 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     }
   end
 
+  # Who raised an event: the request context's origin, which for an action is its caller.
+  defp event_origin(%{context: %{} = ctx}), do: to_string(ctx[:origin] || ctx["origin"] || "")
+  defp event_origin(_), do: ""
+
   # What raised an event: action dispatches announce themselves by name, and cron/webhook runs
   # carry their origin, so a scheduler-dispatched action still counts as cron.
   defp event_kind(%{event: event} = item) do
@@ -1328,19 +1317,10 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     end
   end
 
-  defp duplicate_event?(events, event_key, payload, id) do
-    key_str = to_string(event_key)
-
-    Enum.any?(Enum.take(events, 10), fn e ->
-      (id != nil and e[:id] == id) or
-        (to_string(e[:event]) == key_str and e[:payload] == payload)
-    end)
-  end
-
   # Shows a flash and schedules its automatic dismissal, so notices behave like
   # a real toast instead of lingering until the next interaction.
   defp show_toast(socket, kind, message) do
-    Process.send_after(self(), {:clear_toast, kind}, 2_500)
+    Process.send_after(self(), {:clear_toast, kind}, @toast_ms)
     put_flash(socket, kind, message)
   end
 
@@ -1865,6 +1845,20 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         Map.put(acc, key, {total_count + count, total_error + errors})
       end)
 
+    # The minute each action was last called in this window. Recency is what the table sorts by,
+    # and with a caller selected it is that caller's recency, not everyone's.
+    last_seen =
+      Enum.reduce(trace.buckets, %{}, fn {minute, key, caller_name, kind, _n}, acc ->
+        key = normalize_action_key(key)
+        selected? = caller in [nil, ""] or caller_name == caller
+
+        if tracked?.(key) and selected? and kind == :count do
+          Map.update(acc, key, minute, &max(&1, minute))
+        else
+          acc
+        end
+      end)
+
     plotted =
       window_totals
       |> Enum.map(fn {key, {count, errors}} -> {key, count, errors} end)
@@ -1911,7 +1905,11 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     time_labels = ["-30m", "-24m", "-18m", "-12m", "-6m", "now"]
     x_coords = [40, 128, 216, 304, 392, 480]
 
-    action_events = Enum.filter(activity_events || [], &(event_kind(&1) == "action"))
+    # With a caller selected, the failure column and the failure groups answer for that caller.
+    action_events =
+      Enum.filter(activity_events || [], fn ev ->
+        event_kind(ev) == "action" and (caller in [nil, ""] or event_origin(ev) == caller)
+      end)
 
     # Newest first in the buffer, so the first error seen for a key is the last one that happened.
     last_errors =
@@ -1964,8 +1962,13 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       action_invocations: action_invocations,
       action_errors: action_errors,
       action_stats: action_stats,
+      last_seen: last_seen,
       last_errors: last_errors,
-      error_groups: Exoforge.ErrorGroups.list(%{}, 20),
+      error_groups:
+        Exoforge.ErrorGroups.list(
+          if(caller in [nil, ""], do: %{}, else: %{caller: caller}),
+          20
+        ),
       callers: callers,
       tracked_services: tracked,
       window_minutes: @trace_window_minutes,
@@ -2045,9 +2048,9 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
                 </svg>
-                <%= if not has_pinned do %>
-                  <span class="leading-none">Overview</span>
-                <% end %>
+                <span class={"overflow-hidden whitespace-nowrap leading-none transition-all duration-200 ease-out #{if has_pinned, do: "max-w-0 opacity-0", else: "max-w-24 opacity-100"}"}>
+                  Overview
+                </span>
               </button>
 
               <!-- 2. Extensions Menu Tab (Named when empty, icon-only when pinned items grow the bar) -->
@@ -2061,9 +2064,9 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                 </svg>
-                <%= if not has_pinned do %>
-                  <span class="leading-none">Extensions</span>
-                <% end %>
+                <span class={"overflow-hidden whitespace-nowrap leading-none transition-all duration-200 ease-out #{if has_pinned, do: "max-w-0 opacity-0", else: "max-w-24 opacity-100"}"}>
+                  Extensions
+                </span>
                 <span class="text-[9px] px-1.5 py-0.5 rounded-full bg-primary-100 text-primary-800 font-black">
                   <%= @overview.plugins_count %>
                 </span>
@@ -2114,11 +2117,11 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                   <% title = tab_short_name(ext) %>
                   <% icon = if is_map(ext.dashboard_view) and ext.dashboard_view[:icon], do: ext.dashboard_view[:icon], else: ExtensionPresenter.icon(ext) %>
                   <% is_active = to_string(@current_tab) == ext_id %>
-                  <div class={"group relative hidden md:inline-flex items-center justify-center rounded-lg transition-all text-xs font-bold whitespace-nowrap flex-shrink-0 #{if is_active, do: "bg-primary-600 text-white shadow-sm", else: "text-gray-600 hover:text-gray-900 hover:bg-gray-200/50"}"}>
+                  <div class={"group relative hidden md:inline-flex items-center justify-center rounded-lg animate-tab-in transition-all duration-200 text-xs font-bold whitespace-nowrap flex-shrink-0 hover:scale-[1.03] #{if is_active, do: "bg-primary-600 text-white shadow-sm", else: "text-gray-600 hover:text-gray-900 hover:bg-gray-200/50"}"}>
                     <button
                       phx-click="switch_tab"
                       phx-value-tab={ext_id}
-                      class="px-2.5 py-1 flex items-center justify-center gap-1 group-hover:pr-5 transition-all"
+                      class="px-2.5 py-1 flex items-center justify-center gap-1 group-hover:pr-5 transition-[padding] duration-200"
                     >
                       <span class="text-xs leading-none"><%= icon %></span>
                       <span class="leading-none"><%= title %></span>
@@ -2128,9 +2131,10 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                       phx-click="unpin_extension"
                       phx-value-id={ext_id}
                       title={"Unpin #{title} from top bar"}
-                      class="absolute right-1 text-gray-400 hover:text-red-500 font-bold text-[10px] transition-opacity opacity-0 group-hover:opacity-100 p-0.5 flex items-center justify-center cursor-pointer"
+                      aria-label={"Unpin #{title}"}
+                      class="absolute right-1 text-gray-400 hover:text-red-500 transition-opacity opacity-0 group-hover:opacity-100 p-0.5 flex items-center justify-center cursor-pointer"
                     >
-                      ✕
+                      <.icon name={:close} class="w-3 h-3" />
                     </button>
                   </div>
                 <% end %>
@@ -2171,7 +2175,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
               class={"w-9 h-9 rounded-xl flex items-center justify-center transition-all text-sm border #{if @settings_open, do: "bg-primary-600 text-white border-primary-600 shadow-sm font-bold ring-2 ring-primary-500/20", else: "bg-gray-100 hover:bg-gray-200/80 text-gray-600 border-gray-200/60"}"}
               title="Project Settings"
             >
-              ⚙️
+              <.icon name={:gear} class="w-4 h-4" />
             </button>
 
             <!-- User Profile & Logout / Login -->
@@ -2483,10 +2487,11 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                                   type="button"
                                   phx-click="open_timeline"
                                   phx-value-rid={item.rid}
-                                  class="px-1 rounded bg-white border border-primary-200 text-primary-700 text-[10px] font-bold hover:bg-primary-50 shrink-0"
+                                  aria-label="Open this failure's request timeline"
+                                  class="px-1 py-0.5 rounded bg-white border border-primary-200 text-primary-700 hover:bg-primary-50 shrink-0"
                                   title="Open this failure's request timeline"
                                 >
-                                  🔭
+                                  <.icon name={:timeline} class="w-3 h-3" />
                                 </button>
                               <% end %>
                             </span>

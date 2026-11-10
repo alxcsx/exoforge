@@ -821,7 +821,7 @@ defmodule Exoforge.Std.Docs.View do
                 <td class="py-3 px-4 text-gray-600">Requires client polling or third-party SignalR / PubNub integration.</td>
                 <td class="py-3 px-4 text-gray-600">Requires client polling or external WebSocket server setup.</td>
                 <td class="py-3 px-4 bg-primary-50/50 font-medium text-gray-900">
-                  <span class="text-emerald-600 font-bold">✓ Built-in :pg Pub/Sub Bus.</span> 0.07 ms fanout to thousands of clients via <code class="font-mono text-primary-700 font-bold">Exo.Events.EmitAsync</code>.
+                  <span class="text-emerald-600 font-bold">✓ Built-in :pg Pub/Sub Bus.</span> 0.07 ms in-cluster fanout to 50 subscribers (benchmarked); the WebSocket gateway pushes to clients.
                 </td>
               </tr>
               <tr>

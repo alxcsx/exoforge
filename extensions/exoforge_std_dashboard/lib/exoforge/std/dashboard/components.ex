@@ -344,6 +344,59 @@ defmodule Exoforge.Std.Dashboard.Components do
   end
 
   @doc """
+  A line icon from the Studio's small icon set. Buttons use these instead of emoji: an emoji is a
+  font glyph that changes shape per platform and reads as decoration, an icon is a control.
+  """
+  attr(:name, :atom, required: true)
+  attr(:class, :string, default: "w-4 h-4")
+  attr(:stroke_width, :string, default: "1.8")
+
+  @icons %{
+    timeline:
+      "M2.04 12.32a1.01 1.01 0 010-.64C3.42 7.51 7.36 4.5 12 4.5s8.57 3.01 9.96 7.18c.07.21.07.43 0 .64C20.58 16.49 16.64 19.5 12 19.5s-8.57-3.01-9.96-7.18z M15 12a3 3 0 11-6 0 3 3 0 016 0z",
+    replay: "M3 3v6h6 M3.51 15a9 9 0 102.13-9.36L3 9",
+    capture: "M12 3v3 M12 18v3 M3 12h3 M18 12h3 M12 8a4 4 0 100 8 4 4 0 000-8z",
+    bolt: "M13 2L3 14h6l-2 8 10-12h-6l2-8z",
+    pin: "M12 17v5 M9 3h6l-1 7 4 4H6l4-4-1-7z",
+    search: "M21 21l-6-6 M17 11a6 6 0 11-12 0 6 6 0 0112 0z",
+    download: "M12 3v12 M7 11l5 5 5-5 M4 20h16",
+    close: "M6 6l12 12 M18 6L6 18",
+    check: "M4 12l5 5L20 6",
+    alert: "M12 9v4 M12 17h.01 M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z",
+    moon:
+      "M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z",
+    sun:
+      "M12 4V2 M12 22v-2 M4 12H2 M22 12h-2 M5.64 5.64L4.22 4.22 M19.78 19.78l-1.42-1.42 M5.64 18.36l-1.42 1.42 M19.78 4.22l-1.42 1.42 M12 7a5 5 0 100 10 5 5 0 000-10z",
+    gear:
+      "M12 15a3 3 0 100-6 3 3 0 000 6z M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 008 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 003.6 15a1.65 1.65 0 00-1.51-1H2a2 2 0 110-4h.09A1.65 1.65 0 003.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6 1.65 1.65 0 0010 3.09V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0020.4 9c.14.36.48.62.87.7H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z",
+    trash: "M3 6h18 M8 6V4h8v2 M6 6l1 14h10l1-14 M10 11v6 M14 11v6",
+    save: "M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z M17 21v-8H7v8 M7 3v5h8",
+    folder: "M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z",
+    graph: "M3 3v18h18 M7 14l4-4 3 3 5-6",
+    console:
+      "M4 17l6-6-6-6 M12 19h8"
+  }
+
+  def icon(assigns) do
+    assigns = assign(assigns, :path, Map.get(@icons, assigns.name, @icons.close))
+
+    ~H"""
+    <svg
+      class={@class}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      stroke-width={@stroke_width}
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <path d={@path} />
+    </svg>
+    """
+  end
+
+  @doc """
   Renders a modal dialog: one shell for every dialog, so the header, the close button and the
   scroll behaviour are the same everywhere. Escape closes it (the global key handler reads
   `data-exo-modal` / `data-close-event`), and so does the backdrop.

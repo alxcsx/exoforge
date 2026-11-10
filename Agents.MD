@@ -185,9 +185,9 @@ newline-delimited JSON over stdio. It opens with a `hello` frame declaring the p
 frames it handles, and the SDK answers with its own before the first action is read, so a version or
 capability mismatch is refused with a reason instead of fed frames that cannot be parsed.
 Host capabilities are accessed directly via the static `Exo` holder (`Exo.Database`,
-`Exo.Log`, `Exo.Events`, `Exo.Services`) with tree-shaking, or injected into the extension class via
-`[Inject]` (`IDatabase`, `ILogger`, `IEventDispatcher`, …); `HostBridge` is the low-level layer
-underneath them.
+`Exo.Logger`, `Exo.Events`, `Exo.Actions`, `Exo.Services`) with tree-shaking, or injected into the
+extension instance's writable properties by type (`IDatabase`, `ILogger`, `IEventDispatcher`,
+`IActionDispatcher`, `IPluginContext`); `HostBridge` is the low-level layer underneath them.
 
 **The extension wire protocol.** One definition, implemented by
 `Exoforge.Drivers.Runtime.ExtensionProtocol` on the host and `ExtensionHost`/`HostBridge` in the SDK;
@@ -220,7 +220,7 @@ Extension payloads are **records**, not raw `JsonObject`/`JsonElement` — and t
 rather than the runtime. A record has a *name*, and that name is what the manifest, the generated
 client stub and the Studio describe; an anonymous object would serialise fine and be describable by
 nobody. The SDK owns the JSON: action arguments and results, stored records, and event payloads are typed, and
-`IDatabase` (accessed via `Exo.Database` or `[Inject]`) is a typed key/value store with a typed SQL runner.
+`IDatabase` (accessed via `Exo.Database`, or a writable `IDatabase` property the host fills by type) is a typed key/value store with a typed SQL runner.
 Singleton configuration resources are declared with `[ExoSingletonResource]` and queried via `First<T>()`.
 
 There is no `Main` to write and no `JsonSerializerContext` to declare — the generator emits the entry
@@ -251,8 +251,9 @@ Action declarations follow conventions, so the attribute is usually bare:
 Extensions call other services through **generated, region-agnostic stubs**: `exo extension stubs <name>`
 reads the cluster contract export and writes `src/Generated/ExtensionServices.g.cs` (typed
 request/response records + a typed client per service). Only the services in the extension's
-`manifest.json` dependencies are generated (`--services a,b` overrides), so the file stays small. The host injects those clients (`[Inject("player_data")]
-PlayerDataServiceClient PlayerData`), so extension code only deals with services and never touches
+`manifest.json` dependencies are generated (`--services a,b` overrides), so the file stays small. The
+stubs are reached through the generated holder (`Exo.PlayerData.GetProfileAsync(...)`, or
+`Exo.Services.PlayerData`), so extension code only deals with services and never touches
 `IActionDispatcher`. The stubs depend on the service *contract*, never on the extension that implements it.
 
 `ActionDispatcher` stays runtime-agnostic: every non-Elixir extension gets a generated proxy module

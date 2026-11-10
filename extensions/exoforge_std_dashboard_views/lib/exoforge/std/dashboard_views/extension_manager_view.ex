@@ -24,7 +24,6 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
        filtered_plugins: [],
        system_info: %{},
        search_query: "",
-       type_filter: "all",
        selected_plugin: nil,
        active_drawer_tab: "overview",
        show_upload_modal: false,
@@ -70,16 +69,6 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
     socket =
       socket
       |> assign(search_query: query)
-      |> apply_filters()
-
-    {:noreply, socket}
-  end
-
-  @impl true
-  def handle_event("filter_type", %{"type" => type}, socket) do
-    socket =
-      socket
-      |> assign(type_filter: type)
       |> apply_filters()
 
     {:noreply, socket}

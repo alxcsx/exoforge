@@ -7,6 +7,7 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
   All `phx-click` handlers bubble to the parent LiveView.
   """
   use Phoenix.Component
+  import Exoforge.Std.Dashboard.Components, only: [icon: 1]
 
   alias Exoforge.Std.Dashboard.ExtensionPresenter
 
@@ -99,7 +100,7 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
               class="px-2.5 py-1 text-[11px] font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg flex items-center gap-1 transition-colors"
               title="Unpin from top bar"
             >
-              <span>📌</span> <span>Pinned</span>
+              <.icon name={:pin} class="w-3 h-3" /> <span>Pinned</span>
             </button>
           <% else %>
             <button
@@ -109,7 +110,7 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
               class="px-2.5 py-1 text-[11px] font-semibold text-gray-600 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg flex items-center gap-1 transition-colors"
               title="Pin to top bar"
             >
-              <span>📌</span> <span>Pin</span>
+              <.icon name={:pin} class="w-3 h-3" /> <span>Pin</span>
             </button>
           <% end %>
 
@@ -378,7 +379,7 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
                                       class="px-2 py-1 text-[10px] font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg flex items-center gap-1 transition-colors"
                                       title="Unpin from top bar"
                                     >
-                                      <span>📌</span> <span>Pinned</span>
+                                      <.icon name={:pin} class="w-3 h-3" /> <span>Pinned</span>
                                     </button>
                                   <% else %>
                                     <button
@@ -388,7 +389,7 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
                                       class="px-2 py-1 text-[10px] font-semibold text-gray-600 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg flex items-center gap-1 transition-colors"
                                       title="Pin to top bar"
                                     >
-                                      <span>📌</span> <span>Pin</span>
+                                      <.icon name={:pin} class="w-3 h-3" /> <span>Pin</span>
                                     </button>
                                   <% end %>
 
@@ -399,7 +400,7 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
                                     class="px-2 py-1 text-[10px] font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-lg transition-colors flex items-center gap-1"
                                     title="Inspect extension contracts"
                                   >
-                                    <span>🔍 Inspect</span>
+                                    <.icon name={:search} class="w-3 h-3" /> <span>Inspect</span>
                                   </button>
 
                                   <button

@@ -948,3 +948,47 @@ details.exo-menu > .exo-menu-panel {
     animation: none !important;
   }
 }
+
+/* ============================================================================
+ * Navigation Tabs
+ * A pinned tab grows in when it arrives; the label widths are animated by the
+ * template, so the bar expands and contracts instead of snapping.
+ * ============================================================================ */
+@keyframes exoTabIn {
+  from {
+    opacity: 0;
+    transform: translateY(-0.25rem) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-tab-in {
+  animation: exoTabIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ============================================================================
+ * Timeline Error Callout
+ * Explicit in both themes. The tinted-background remap is class-based and a
+ * template that slips past it produced a near-white box with light red text
+ * on the dark theme; this class cannot.
+ * ============================================================================ */
+.exo-timeline-error {
+  background-color: rgba(239, 68, 68, 0.12) !important;
+  border: 1px solid rgba(239, 68, 68, 0.45) !important;
+  border-left: 4px solid #ef4444 !important;
+}
+
+html.light .exo-timeline-error {
+  background-color: #fff1f2 !important;
+  border-color: #fda4af !important;
+  border-left-color: #e11d48 !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-tab-in {
+    animation: none !important;
+  }
+}

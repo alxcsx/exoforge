@@ -1193,7 +1193,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                       type="submit"
                       class="px-4 py-2 text-xs font-bold text-white bg-purple-600 rounded-xl hover:bg-purple-700 transition-colors shadow-sm flex items-center gap-1.5 active:scale-95"
                     >
-                      <span>⚡ Run Action</span>
+                      <.icon name={:bolt} class="w-3.5 h-3.5" /> <span>Run Action</span>
                     </button>
 
                     <%= if result_info do %>
@@ -1325,7 +1325,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                       data-confirm={"Delete all data for resource '#{@selected_resource_name}'? This cannot be undone."}
                       class="exo-menu-item exo-menu-danger"
                     >
-                      <span>🗑</span> <span>Clear Resource</span>
+                      <.icon name={:trash} class="w-3 h-3" /> <span>Clear Resource</span>
                     </button>
                   </div>
                 </details>
@@ -1389,7 +1389,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                       type="submit"
                       class="px-5 py-2 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-xl transition-colors shadow-sm flex items-center gap-1.5"
                     >
-                      <span>💾 Save Settings</span>
+                      <.icon name={:save} class="w-3.5 h-3.5" /> <span>Save Settings</span>
                     </button>
                   </div>
                 </form>

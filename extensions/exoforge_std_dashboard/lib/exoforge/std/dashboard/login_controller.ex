@@ -88,8 +88,11 @@ defmodule Exoforge.Std.Dashboard.LoginController do
         onclick="toggleLoginTheme()"
         class="fixed top-4 right-4 w-9 h-9 rounded-xl bg-white border border-gray-200 text-gray-600 hover:text-gray-900 flex items-center justify-center shadow-sm transition-colors"
         title="Toggle Dark / Light Theme"
+        aria-label="Toggle Dark / Light Theme"
       >
-        🌓
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 4V2 M12 22v-2 M4 12H2 M22 12h-2 M5.64 5.64L4.22 4.22 M19.78 19.78l-1.42-1.42 M5.64 18.36l-1.42 1.42 M19.78 4.22l-1.42 1.42 M12 7a5 5 0 100 10 5 5 0 000-10z" />
+        </svg>
       </button>
 
       <div class="w-full max-w-sm bg-white rounded-2xl shadow-card border border-gray-200 p-8">

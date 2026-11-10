@@ -1256,10 +1256,13 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                 phx-click="capture_player"
                 phx-value-player={@selected_user["player_id"]}
                 phx-target={@myself}
-                class="px-2.5 py-1.5 text-xs font-bold text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-200 rounded-xl transition-colors"
+                class="px-2.5 py-1.5 text-xs font-bold text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-200 rounded-xl transition-colors inline-flex items-center gap-1.5"
                 title="Keep this account's full action payloads in memory for 60 seconds"
               >
-                🔬 Capture 60s
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 3v3 M12 18v3 M3 12h3 M18 12h3 M12 8a4 4 0 100 8 4 4 0 000-8z" />
+                </svg>
+                Capture 60s
               </button>
               <button
                 type="button"
@@ -1398,10 +1401,13 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                                 type="button"
                                 phx-click="open_timeline"
                                 phx-value-rid={ev.rid}
-                                class="px-1.5 py-0.5 rounded bg-primary-50 border border-primary-200 text-primary-700 text-[10px] font-bold hover:bg-primary-100"
+                                class="px-1 py-0.5 rounded bg-primary-50 border border-primary-200 text-primary-700 hover:bg-primary-100"
+                                aria-label="Open this event's request timeline"
                                 title="Open this event's request timeline"
                               >
-                                🔭
+                                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                  <path d="M2.04 12.32a1.01 1.01 0 010-.64C3.42 7.51 7.36 4.5 12 4.5s8.57 3.01 9.96 7.18c.07.21.07.43 0 .64C20.58 16.49 16.64 19.5 12 19.5s-8.57-3.01-9.96-7.18z M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
                               </button>
                             <% end %>
                           </div>

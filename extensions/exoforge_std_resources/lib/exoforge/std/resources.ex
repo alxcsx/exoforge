@@ -230,10 +230,10 @@ defmodule Exoforge.Std.Resources do
           {:ok, %{row: row}}
 
         {:ok, _} ->
-          if is_singleton?(res) do
-            create_default_singleton(info, target_id)
-          else
-            {:error, :not_found}
+          cond do
+            is_singleton?(res) -> create_default_singleton(info, target_id)
+            optional?(payload) -> {:ok, %{row: nil}}
+            true -> {:error, :not_found}
           end
 
         error ->
@@ -677,6 +677,8 @@ defmodule Exoforge.Std.Resources do
       _ -> {:error, :resource_not_found}
     end
   end
+
+  defp optional?(payload), do: param(payload, :optional) in [true, "true"]
 
   defp resource_name(payload), do: param(payload, :resource) |> to_string()
 

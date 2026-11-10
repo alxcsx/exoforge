@@ -412,4 +412,28 @@ defmodule Exoforge.Std.DocsTest do
       assert html =~ "0.07 ms verified SLA"
     end
   end
+
+  test "the manual PDF keeps its text on the page and in ASCII" do
+    pdf = Exoforge.Std.Docs.PdfManual.generate()
+
+    assert String.starts_with?(pdf, "%PDF-1.4")
+
+    text_streams =
+      Regex.scan(~r/>>\nstream\n(.*?)\nendstream/s, pdf, capture: :all_but_first)
+      |> Enum.map(fn [body] -> :zlib.uncompress(body) end)
+
+    assert text_streams != []
+
+    # A code block taller than a page used to be drawn off the bottom of it; the footer sits at
+    # y=30, so nothing else may fall below the bottom margin.
+    rows =
+      for stream <- text_streams,
+          [_, _, y] <- Regex.scan(~r/([\d.]+) ([\d.-]+) Td/, stream),
+          do: y |> Float.parse() |> elem(0)
+
+    assert Enum.min(rows) >= 30.0
+
+    # The standard fonts are WinAnsi: a UTF-8 bullet would reach the reader as mojibake.
+    assert Enum.all?(text_streams, &(not String.match?(&1, ~r/[^\x00-\x7F]/)))
+  end
 end

@@ -694,7 +694,9 @@ defmodule Exoforge.Std.Services do
 
     @doc "Fetches one row by primary key."
     action :get do
-      params(resource: :string, id: :term)
+      # `optional: true` turns a missing row into `{:ok, %{row: nil}}` instead of an error: a
+      # lookup that is allowed to miss must not land in the error groups.
+      params(resource: :string, id: :term, optional: [type: :boolean, optional: true])
       returns(row: :map)
       errors([:not_found])
     end

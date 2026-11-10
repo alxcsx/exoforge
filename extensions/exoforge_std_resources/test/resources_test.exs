@@ -149,6 +149,11 @@ defmodule Exoforge.Std.ResourcesTest do
 
     assert {:ok, %{deleted: true}} = dispatch(:delete, %{resource: "widget", id: "w1"})
     assert {:error, :not_found} = dispatch(:get, %{resource: "widget", id: "w1"})
+
+    # A caller that is allowed to miss asks for it: the same lookup answers with an empty row
+    # instead of an error, so a preference read on first boot is not a failure.
+    assert {:ok, %{row: nil}} =
+             dispatch(:get, %{resource: "widget", id: "w1", optional: true})
   end
 
   test "list supports filter, search, sort and pagination" do

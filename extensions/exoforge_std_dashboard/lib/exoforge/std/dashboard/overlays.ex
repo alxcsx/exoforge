@@ -427,7 +427,8 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               class="px-2.5 py-1 bg-primary-600 hover:bg-primary-500 text-white rounded-lg font-bold text-xs transition-colors flex items-center gap-1 shadow-sm"
               title="Broadcast simulated event to cluster"
             >
-              <span>⚡ Simulate Event</span>
+              <.icon name={:bolt} class="w-3 h-3" />
+              <span>Simulate Event</span>
             </button>
 
             <button
@@ -473,10 +474,10 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                         type="button"
                         phx-click="open_timeline"
                         phx-value-rid={rid}
-                        class="px-1.5 py-0.5 rounded bg-primary-950/80 border border-primary-700/60 text-primary-200 hover:text-white hover:border-primary-500 text-[10px] font-bold font-mono"
+                        class="px-1.5 py-0.5 rounded bg-primary-950/80 border border-primary-700/60 text-primary-200 hover:text-white hover:border-primary-500 text-[10px] font-bold font-mono inline-flex items-center gap-1"
                         title="Open this event's request timeline"
                       >
-                        🔭 <%= rid %>
+                        <.icon name={:timeline} class="w-3 h-3" /> <%= rid %>
                       </button>
                     <% end %>
                     <.event_context context={ev[:context]} />
@@ -1050,10 +1051,10 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                               type="button"
                               phx-click="open_timeline"
                               phx-value-rid={rid}
-                              class="px-1.5 py-0.5 rounded bg-primary-950/80 border border-primary-700/60 text-primary-200 hover:text-white hover:border-primary-500 text-[10px] font-bold font-mono"
+                              class="px-1.5 py-0.5 rounded bg-primary-950/80 border border-primary-700/60 text-primary-200 hover:text-white hover:border-primary-500 text-[10px] font-bold font-mono inline-flex items-center gap-1"
                               title="Open this event's request timeline"
                             >
-                              🔭 <%= rid %>
+                              <.icon name={:timeline} class="w-3 h-3" /> <%= rid %>
                             </button>
                           <% end %>
                           <.event_context context={ev[:context]} />
@@ -1907,15 +1908,22 @@ defmodule Exoforge.Std.Dashboard.Overlays do
       telemetry = assigns[:telemetry] || %{}
       catalog = assigns[:catalog] || []
 
+      # With a caller selected the table answers "what did this caller do", so its numbers are that
+      # caller's window counts and the rows with no activity for them disappear. Without one it
+      # answers "what ever happened", so the lifetime counters are the right ones.
+      caller_scoped? = assigns[:caller] not in [nil, ""]
+
       # Flatten catalog into a list of {svc, act, key}
       all_items =
         for svc <- catalog, act <- Map.get(svc, :actions) || Map.get(svc, "actions") || [] do
           svc_name = to_string(Map.get(svc, :name) || Map.get(svc, "name") || "")
           act_name = to_string(Map.get(act, :name) || Map.get(act, "name") || "")
           key = "#{ExtensionPresenter.service_key(svc_name)}.#{act_name}"
-          invocations = Map.get(telemetry[:action_invocations] || %{}, key, 0)
-          errors = Map.get(telemetry[:action_errors] || %{}, key, 0)
+          lifetime_invocations = Map.get(telemetry[:action_invocations] || %{}, key, 0)
+          lifetime_errors = Map.get(telemetry[:action_errors] || %{}, key, 0)
           stats = Map.get(telemetry[:action_stats] || %{}, key, %{avg_ms: 0.0})
+          invocations = if caller_scoped?, do: Map.get(stats, :window, 0), else: lifetime_invocations
+          errors = if caller_scoped?, do: Map.get(stats, :window_errors, 0), else: lifetime_errors
           last_error = Map.get(telemetry[:last_errors] || %{}, key)
           samples = Map.get(telemetry[:action_samples] || %{}, key, [])
 
@@ -1938,6 +1946,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             p95_ms: Map.get(stats, :p95_ms),
             window: Map.get(stats, :window, 0),
             window_errors: Map.get(stats, :window_errors, 0),
+            last_seen: Map.get(telemetry[:last_seen] || %{}, key),
             samples: samples,
             last_error: last_error
           }
@@ -1945,8 +1954,10 @@ defmodule Exoforge.Std.Dashboard.Overlays do
 
       q = String.downcase(String.trim(assigns.search || ""))
 
+      caller_items = Enum.filter(all_items, fn item -> not caller_scoped? or item.window > 0 end)
+
       filtered =
-        all_items
+        caller_items
         |> Enum.filter(fn item ->
           if q == "" do
             true
@@ -1969,11 +1980,15 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             _ -> true
           end
         end)
+        # Most recent first: a table of what just ran is what an operator scans during an incident.
+        # Lifetime volume is the tiebreak, and the error view puts the loudest failure on top.
         |> Enum.sort_by(fn item ->
+          recency = -(item.last_seen || 0)
+
           if assigns.mode == "errors" do
-            {-item.errors, -item.invocations, item.key}
+            {-item.errors, recency, item.key}
           else
-            {-item.invocations, -item.errors, item.key}
+            {recency, -item.invocations, item.key}
           end
         end)
 
@@ -2014,7 +2029,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
       assigns =
         assigns
         |> assign(:items, filtered)
-        |> assign(:total_count, length(all_items))
+        |> assign(:total_count, length(caller_items))
         |> assign(:is_error_mode, is_error_mode)
         |> assign(:chart_max, chart_max)
         |> assign(:expanded_x_coords, expanded_x_coords)
@@ -2059,7 +2074,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                     phx-value-mode="actions"
                     class={"px-2.5 py-1 rounded-lg font-bold transition-all flex items-center gap-1 #{if not @is_error_mode, do: "bg-primary-600 text-white shadow-xs", else: "text-gray-500 hover:text-gray-900"}"}
                   >
-                    <span>📈 Throughput</span>
+                    <.icon name={:graph} class="w-3 h-3" /> <span>Throughput</span>
                   </button>
                   <button
                     type="button"
@@ -2067,7 +2082,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                     phx-value-mode="errors"
                     class={"px-2.5 py-1 rounded-lg font-bold transition-all flex items-center gap-1 #{if @is_error_mode, do: "bg-red-600 text-white shadow-xs", else: "text-gray-500 hover:text-gray-900"}"}
                   >
-                    <span>⚠️ Errors</span>
+                    <.icon name={:alert} class="w-3 h-3" /> <span>Errors</span>
                   </button>
                 </div>
 
@@ -2125,9 +2140,9 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                 </svg>
               </div>
 
-              <!-- Expanded Color Legend -->
+              <!-- Expanded Color Legend: a fixed slot, because its line count changes with the data -->
               <%= if @expanded_series != [] do %>
-                <div class="flex flex-wrap items-center gap-x-4 gap-y-1.5 pt-1 text-[11px]">
+                <div class="flex flex-wrap items-center gap-x-4 gap-y-1.5 pt-1 text-[11px] min-h-[2.25rem]">
                   <%= for s <- @expanded_series do %>
                     <div class="flex items-center gap-1.5">
                       <span class="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs" style={"background-color: #{Map.get(s, :color, "#8b5cf6")}"}></span>
@@ -2158,7 +2173,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                 <%= if groups == [] do %>
                   <p class="text-[11px] text-gray-400 italic">No failures recorded since the last restart.</p>
                 <% else %>
-                  <div class="max-h-64 overflow-y-auto custom-scrollbar space-y-1.5">
+                  <div class="max-h-64 min-h-[4rem] overflow-y-auto custom-scrollbar space-y-1.5">
                     <%= for group <- groups do %>
                       <details class="group rounded-lg border border-gray-200 bg-gray-50/60">
                         <summary class="cursor-pointer select-none p-2 flex flex-wrap items-center justify-between gap-2 text-[11px]">
@@ -2193,10 +2208,10 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                                 type="button"
                                 phx-click="open_timeline"
                                 phx-value-rid={group.rid}
-                                class="px-1.5 py-0.5 rounded bg-primary-50 border border-primary-200 text-primary-700 text-[10px] font-bold hover:bg-primary-100"
+                                class="px-1.5 py-0.5 rounded bg-primary-50 border border-primary-200 text-primary-700 text-[10px] font-bold hover:bg-primary-100 inline-flex items-center gap-1"
                                 title="Open this request's timeline"
                               >
-                                🔭 Timeline
+                                <.icon name={:timeline} class="w-3 h-3" /> Timeline
                               </button>
                             <% end %>
                             <span class="text-gray-500 font-mono">last caller: <%= group.caller || "unknown" %></span>
@@ -2276,12 +2291,12 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               />
 
               <span class="text-[11px] text-gray-400">
-                Graphs and captured invocations cover the last <%= @telemetry[:window_minutes] || 30 %> minutes<%= if @caller != "", do: " for #{@caller}" %>. Select a row to unfold it.
+                The table, the graphs and the captured invocations follow the caller and cover the last <%= @telemetry[:window_minutes] || 30 %> minutes<%= if @caller != "", do: " for #{@caller}" %>. Select a row to unfold it.
               </span>
             </div>
 
             <!-- Actions Table -->
-            <div class="max-h-[30rem] overflow-y-auto border border-gray-200 rounded-xl custom-scrollbar text-xs">
+            <div class="max-h-[30rem] min-h-[22rem] overflow-y-auto border border-gray-200 rounded-xl custom-scrollbar text-xs">
               <%= if Enum.empty?(@items) do %>
                 <div class="p-8 text-center text-gray-400">
                   <p>No actions match your search or filter.</p>
@@ -2292,8 +2307,10 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                     <tr>
                       <th class="py-2.5 px-3">Service &amp; Action</th>
                       <th class="py-2.5 px-3">Scope / Transport</th>
-                      <th class="py-2.5 px-3 text-right">Invocations</th>
-                      <th class="py-2.5 px-3 text-right">30m</th>
+                      <th class="py-2.5 px-3 text-right">
+                        Calls<%= if @caller != "", do: " · 30m" %>
+                      </th>
+                      <th class="py-2.5 px-3 text-right">30m / last</th>
                       <th class="py-2.5 px-3 text-right">Avg</th>
                       <th class="py-2.5 px-3 text-right">p95</th>
                       <th class="py-2.5 px-3 text-right">Errors</th>
@@ -2336,7 +2353,10 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                           <%= item.invocations %>
                         </td>
                         <td class="py-2.5 px-3 text-right font-mono text-[11px] text-gray-500" title="Invocations in the traced window (respects the caller filter)">
-                          <%= item.window %>
+                          <span class="block"><%= item.window %></span>
+                          <span class="block text-[10px] text-gray-400">
+                            <%= if item.last_seen, do: sample_time(item.last_seen), else: "—" %>
+                          </span>
                         </td>
                         <td class="py-2.5 px-3 text-right font-mono text-[11px] text-gray-500" title="Average server-side wall time per invocation">
                           <%= item.avg_ms %>ms
@@ -2368,7 +2388,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                             phx-value-action={to_string(Map.get(item.action, :name, ""))}
                             class="px-2.5 py-1 text-[11px] font-bold text-primary-700 bg-primary-50 hover:bg-primary-100 rounded-lg transition-colors inline-flex items-center gap-1 shadow-2xs"
                           >
-                            <span>⚡ Run</span>
+                            <.icon name={:bolt} class="w-3 h-3" /> Run
                           </button>
                         </td>
                       </tr>
@@ -2455,10 +2475,11 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                                             type="button"
                                             phx-click="open_timeline"
                                             phx-value-rid={sample.rid}
-                                            class="px-1.5 py-0.5 rounded bg-primary-50 border border-primary-200 text-primary-700 text-[10px] font-bold hover:bg-primary-100"
+                                            aria-label="Open this request's timeline"
+                                            class="px-1 py-0.5 rounded bg-primary-50 border border-primary-200 text-primary-700 hover:bg-primary-100"
                                             title="Open this request's timeline"
                                           >
-                                            🔭
+                                            <.icon name={:timeline} class="w-3 h-3" />
                                           </button>
                                         <% end %>
                                         <%= if sample[:internal] do %>
@@ -2594,8 +2615,8 @@ defmodule Exoforge.Std.Dashboard.Overlays do
           <div class="relative bg-white rounded-2xl max-w-4xl w-full p-6 text-left shadow-2xl border border-gray-200 ring-1 ring-black/5 z-10 space-y-4 max-h-[calc(100vh-3rem)] overflow-y-auto custom-scrollbar">
             <div class="flex items-center justify-between pb-3 border-b border-gray-100">
               <div class="flex items-center gap-2.5">
-                <div class="w-9 h-9 rounded-xl bg-primary-50 text-primary-700 ring-1 ring-primary-200/60 flex items-center justify-center font-bold text-base shrink-0">
-                  🔭
+                <div class="w-9 h-9 rounded-xl bg-primary-50 text-primary-700 ring-1 ring-primary-200/60 flex items-center justify-center shrink-0">
+                  <.icon name={:timeline} class="w-5 h-5" />
                 </div>
                 <div>
                   <h3 class="font-bold text-gray-900 text-base">Request Timeline</h3>
@@ -2662,9 +2683,9 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                 />
                 <button
                   type="submit"
-                  class="px-2.5 py-1.5 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg text-xs"
+                  class="px-2.5 py-1.5 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg text-xs inline-flex items-center gap-1.5"
                 >
-                  🔬 Capture
+                  <.icon name={:capture} class="w-3.5 h-3.5" /> Capture
                 </button>
               </form>
 
@@ -2701,9 +2722,9 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                       type="button"
                       phx-click="open_timeline"
                       phx-value-rid={@replay.rid}
-                      class="px-1.5 py-0.5 rounded bg-white border border-emerald-200 text-emerald-700 font-mono text-[10px] font-bold"
+                      class="px-1.5 py-0.5 rounded bg-white border border-emerald-200 text-emerald-700 font-mono text-[10px] font-bold inline-flex items-center gap-1"
                     >
-                      🔭 Open the new request
+                      <.icon name={:timeline} class="w-3 h-3" /> Open the new request
                     </button>
                   <% end %>
                 </div>
@@ -2782,10 +2803,10 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               type="button"
               phx-click={@on_replay}
               phx-value-id={@node.id}
-              class="px-1.5 py-0.5 rounded bg-gray-100 hover:bg-gray-200 text-gray-600 text-[10px] font-bold"
+              class="px-1.5 py-0.5 rounded bg-gray-100 hover:bg-gray-200 text-gray-600 text-[10px] font-bold inline-flex items-center gap-1"
               title="Replay this request as its original caller (side effects repeat)"
             >
-              ↻ Replay
+              <.icon name={:replay} class="w-3 h-3" /> Replay
             </button>
           <% end %>
           <span class="text-gray-400 font-mono text-[10px]"><%= sample_time(@node.at) %></span>
@@ -2843,7 +2864,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
   defp timeline_badge_class(:error), do: "bg-red-50 text-red-700 border-red-200"
   defp timeline_badge_class(_action), do: "bg-purple-50 text-purple-700 border-purple-200"
 
-  defp timeline_node_class(:error), do: "bg-red-50/60 border-red-300 border-l-4"
+  defp timeline_node_class(:error), do: "exo-timeline-error"
   defp timeline_node_class(:event), do: "bg-primary-50/30 border-primary-200/70"
   defp timeline_node_class(:log), do: "bg-gray-50 border-gray-200"
   defp timeline_node_class(_kind), do: "bg-white border-gray-200"
@@ -3021,11 +3042,6 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                               ⚠️ ERROR
                             </span>
                           <% end %>
-                          <%= if Map.get(ev, :topic) do %>
-                            <span class="px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 text-[11px] border border-gray-700 font-mono">
-                              topic: <%= ev.topic %>
-                            </span>
-                          <% end %>
                         </div>
                         <!-- Time and the event's context as named values: the request id is the door to its timeline -->
                         <div class="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-400">
@@ -3036,10 +3052,10 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                               type="button"
                               phx-click="open_timeline"
                               phx-value-rid={rid}
-                              class="px-1.5 py-0.5 rounded bg-primary-950/80 border border-primary-700/60 text-primary-200 hover:text-white hover:border-primary-500 text-[10px] font-bold font-mono"
+                              class="px-1.5 py-0.5 rounded bg-primary-950/80 border border-primary-700/60 text-primary-200 hover:text-white hover:border-primary-500 text-[10px] font-bold font-mono inline-flex items-center gap-1"
                               title="Open this event's request timeline"
                             >
-                              🔭 <%= rid %>
+                              <.icon name={:timeline} class="w-3 h-3" /> <%= rid %>
                             </button>
                           <% end %>
                           <.event_context context={ev[:context]} />
