@@ -378,9 +378,9 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
     ~H"""
     <div class="space-y-6" id={@id}>
       <!-- Top Header & Actions -->
-      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-gray-200/80 shadow-sm">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm">
         <div class="flex items-center gap-4">
-          <div class="w-12 h-12 rounded-2xl bg-violet-100 text-violet-700 flex items-center justify-center text-2xl shadow-inner">
+          <div class="w-12 h-12 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center text-2xl shadow-inner">
             📦
           </div>
           <div>
@@ -423,7 +423,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
           <button
             phx-click="open_upload_modal"
             phx-target={@myself}
-            class="px-4 py-2 text-sm font-semibold text-white bg-violet-600 rounded-xl hover:bg-violet-700 transition-colors shadow-sm flex items-center gap-2"
+            class="px-4 py-2 text-sm font-semibold text-white bg-primary-600 rounded-xl hover:bg-primary-700 transition-colors shadow-sm flex items-center gap-2"
           >
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
@@ -435,12 +435,12 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
 
       <!-- Action Success / Notification Banner -->
       <%= if @upload_success || @restart_status || @action_notification do %>
-        <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 shadow-sm flex items-center justify-between">
+        <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 shadow-sm flex items-center justify-between">
           <div class="flex items-center gap-3">
             <div class="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shrink-0">
               ✓
             </div>
-            <p class="text-xs font-bold text-emerald-800 dark:text-emerald-300">
+            <p class="text-xs font-bold text-emerald-800">
               <%= @upload_success || @restart_status || @action_notification %>
             </p>
           </div>
@@ -457,21 +457,21 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
       <!-- Metric Cards Grid -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <!-- 1. Installed Extensions -->
-        <div class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title="Modular service extensions">
-          <div class="w-11 h-11 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center text-xl shrink-0">
+        <div class="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title="Modular service extensions">
+          <div class="w-11 h-11 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center text-xl shrink-0">
             📦
           </div>
           <div class="min-w-0 flex-1">
             <div class="text-xs font-semibold text-gray-500 truncate">Installed Extensions</div>
             <div class="flex items-center gap-2 mt-0.5">
               <span class="text-xl font-black text-gray-900"><%= @total_extensions %></span>
-              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-50 text-violet-700">Active</span>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary-50 text-primary-700">Active</span>
             </div>
           </div>
         </div>
 
         <!-- 2. BEAM Memory & Processes -->
-        <div class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title="Erlang memory allocated">
+        <div class="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title="Erlang memory allocated">
           <div class="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl shrink-0">
             ⚡
           </div>
@@ -487,7 +487,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
         </div>
 
         <!-- 3. Cluster Node & Uptime -->
-        <div class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title={"Node: #{@node_name}"}>
+        <div class="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title={"Node: #{@node_name}"}>
           <div class="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl shrink-0">
             🌐
           </div>
@@ -501,15 +501,15 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
         </div>
 
         <!-- 4. Version & Engine -->
-        <div class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title={"OTP #{@otp_release} • Built #{Map.get(@system_info, "build_date", "—")}"}>
-          <div class="w-11 h-11 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center text-xl shrink-0">
+        <div class="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title={"OTP #{@otp_release} • Built #{Map.get(@system_info, "build_date", "—")}"}>
+          <div class="w-11 h-11 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center text-xl shrink-0">
             ⚙️
           </div>
           <div class="min-w-0 flex-1">
             <div class="text-xs font-semibold text-gray-500 truncate">Cluster Build</div>
             <div class="flex items-center gap-2 mt-0.5">
               <span class="text-lg font-black font-mono text-gray-900">v<%= Map.get(@system_info, "version", "0.1.0") %></span>
-              <span class="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-purple-50 text-purple-700">
+              <span class="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-primary-50 text-primary-700">
                 #<%= Map.get(@system_info, "commit_hash", "dev") %>
               </span>
             </div>
@@ -518,7 +518,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
       </div>
 
       <!-- Filters & Search Toolbar -->
-      <div class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div class="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div class="flex items-center gap-3 flex-1 max-w-lg">
           <form id="extension-search-form" phx-change="search" phx-submit="search" phx-target={@myself} class="relative w-full">
             <input
@@ -527,7 +527,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
               value={@search_query}
               phx-debounce="150"
               name="query"
-              class="w-full pl-9 pr-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:bg-white transition-all"
+              class="w-full pl-9 pr-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all"
             />
             <svg class="w-4 h-4 text-gray-400 absolute left-3 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -539,9 +539,9 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
           <button
             phx-click="open_dependency_graph"
             phx-target={@myself}
-            class="px-3 py-1.5 text-xs font-semibold text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 rounded-lg transition-colors flex items-center gap-1.5"
+            class="px-3 py-1.5 text-xs font-semibold text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-200 rounded-lg transition-colors flex items-center gap-1.5"
           >
-            <svg class="w-3.5 h-3.5 text-violet-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg class="w-3.5 h-3.5 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
             </svg>
             Show Dependency Graph
@@ -550,10 +550,10 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
       </div>
 
       <!-- Extensions Directory Table -->
-      <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
+      <div class="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
         <%= if @filtered_plugins == [] do %>
           <div class="p-12 text-center">
-            <div class="w-12 h-12 rounded-2xl bg-gray-100 text-gray-400 mx-auto flex items-center justify-center text-xl mb-3">
+            <div class="w-12 h-12 rounded-xl bg-gray-100 text-gray-400 mx-auto flex items-center justify-center text-xl mb-3">
               📦
             </div>
             <h3 class="text-sm font-bold text-gray-900">No extensions match your query</h3>
@@ -575,10 +575,10 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
               </thead>
               <tbody class="divide-y divide-gray-100 text-sm">
                 <%= for plugin <- @filtered_plugins do %>
-                  <tr class="hover:bg-violet-50/20 transition-colors group">
+                  <tr class="hover:bg-primary-50/20 transition-colors group">
                     <td class="py-3 px-4">
                       <div class="flex items-center gap-3">
-                        <div class="w-8 h-8 rounded-lg bg-violet-100 text-violet-800 flex items-center justify-center font-bold text-sm shrink-0">
+                        <div class="w-8 h-8 rounded-lg bg-primary-100 text-primary-800 flex items-center justify-center font-bold text-sm shrink-0">
                           📦
                         </div>
                         <div>
@@ -597,7 +597,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
                     <td class="py-3 px-4">
                       <div class="flex flex-wrap gap-1">
                         <%= for s <- plugin["provides"] || [] do %>
-                          <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold font-mono bg-violet-50 text-violet-700 border border-violet-200">
+                          <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold font-mono bg-primary-50 text-primary-700 border border-primary-200">
                             :<%= s %>
                           </span>
                         <% end %>
@@ -610,7 +610,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
                     <td class="py-3 px-4">
                       <div class="flex flex-wrap gap-1">
                         <%= for d <- plugin["dependencies"] || [] do %>
-                          <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold font-mono bg-gray-100 text-gray-600">
+                          <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-semibold font-mono bg-gray-100 text-gray-600">
                             :<%= d %>
                           </span>
                         <% end %>
@@ -711,7 +711,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
                       <span class="text-xs font-bold text-gray-700 uppercase tracking-wider block mb-2">Provided Service Contracts</span>
                       <div class="flex flex-wrap gap-1.5">
                         <%= for svc <- @selected_plugin["provides"] || [] do %>
-                          <span class="px-2.5 py-1 bg-violet-50 text-violet-800 border border-violet-200 rounded-lg text-xs font-mono font-bold">
+                          <span class="px-2.5 py-1 bg-primary-50 text-primary-800 border border-primary-200 rounded-lg text-xs font-mono font-bold">
                             :<%= svc %>
                           </span>
                         <% end %>
@@ -737,7 +737,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
                 <%= if @active_drawer_tab == "csharp" do %>
                   <div class="space-y-3">
                     <p class="text-xs text-gray-500">
-                      Invoke this extension directly from Unity or C# clients using <code class="font-mono text-violet-700 font-bold">Exoforge.Client</code>:
+                      Invoke this extension directly from Unity or C# clients using <code class="font-mono text-primary-700 font-bold">Exoforge.Client</code>:
                     </p>
                     <pre class="bg-gray-900 text-gray-100 p-4 rounded-xl font-mono text-xs overflow-x-auto select-all leading-relaxed"><%= csharp_snippet(@selected_plugin) %></pre>
                   </div>
@@ -772,7 +772,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
       <%= if @show_upload_modal do %>
         <div class="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div class="fixed inset-0" phx-click="close_upload_modal" phx-target={@myself}></div>
-          <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-200 relative animate-in fade-in duration-150">
+          <div class="bg-white rounded-xl max-w-lg w-full p-6 shadow-2xl border border-gray-200 relative animate-in fade-in duration-150">
             <button
               phx-click="close_upload_modal"
               phx-target={@myself}
@@ -782,7 +782,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
             </button>
 
             <div class="flex items-center gap-3 mb-5">
-              <div class="w-10 h-10 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center text-xl">
+              <div class="w-10 h-10 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center text-xl">
                 ⚡
               </div>
               <div>
@@ -802,26 +802,26 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
               <div>
                 <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Extension Type</label>
                 <div class="grid grid-cols-2 gap-3">
-                  <label class={"flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition-colors #{if @upload_form["type"] != "elixir", do: "border-violet-500 bg-violet-50/50 text-violet-900", else: "border-gray-200 bg-gray-50 text-gray-700"}"}>
+                  <label class={"flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition-colors #{if @upload_form["type"] != "elixir", do: "border-primary-500 bg-primary-50/50 text-primary-900", else: "border-gray-200 bg-gray-50 text-gray-700"}"}>
                     <input
                       type="radio"
                       name="upload[type]"
                       value="native"
                       checked={@upload_form["type"] != "elixir"}
-                      class="text-violet-600 focus:ring-violet-500"
+                      class="text-primary-600 focus:ring-primary-500"
                     />
                     <div>
                       <span class="text-xs font-bold block">C# Native</span>
                       <span class="text-[10px] text-gray-500">A compiled extension binary</span>
                     </div>
                   </label>
-                  <label class={"flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition-colors #{if @upload_form["type"] == "elixir", do: "border-violet-500 bg-violet-50/50 text-violet-900", else: "border-gray-200 bg-gray-50 text-gray-700"}"}>
+                  <label class={"flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition-colors #{if @upload_form["type"] == "elixir", do: "border-primary-500 bg-primary-50/50 text-primary-900", else: "border-gray-200 bg-gray-50 text-gray-700"}"}>
                     <input
                       type="radio"
                       name="upload[type]"
                       value="elixir"
                       checked={@upload_form["type"] == "elixir"}
-                      class="text-violet-600 focus:ring-violet-500"
+                      class="text-primary-600 focus:ring-primary-500"
                     />
                     <div>
                       <span class="text-xs font-bold block">Elixir Extension</span>
@@ -838,7 +838,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
                   name="upload[name]"
                   value={@upload_form["name"]}
                   placeholder={if @upload_form["type"] == "elixir", do: "e.g. custom_quest", else: "e.g. my_extension"}
-                  class="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:bg-white font-mono"
+                  class="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white font-mono"
                 />
               </div>
 
@@ -853,14 +853,14 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
                     name="upload[elixir_code]"
                     rows="6"
                     placeholder={"defmodule MyExtension do\n  use Exoforge.Extension, provides: [:my_service]\n\n  defaction ping(payload) do\n    {:ok, %{pong: payload}}\n  end\nend"}
-                    class="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:bg-white font-mono"
+                    class="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white font-mono"
                   ><%= @upload_form["elixir_code"] %></textarea>
                 </div>
               <% else %>
                 <!-- Extension Binary Dropzone / Selector -->
                 <div>
                   <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Extension Binary</label>
-                  <div class="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:border-violet-400 transition-colors bg-gray-50/50">
+                  <div class="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:border-primary-400 transition-colors bg-gray-50/50">
                     <input
                       type="file"
                       id="extension_file_picker"
@@ -879,7 +879,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
                           reader.readAsDataURL(file);
                         }
                       "
-                      class="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100 cursor-pointer"
+                      class="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 cursor-pointer"
                     />
                     <%= if @upload_file_info do %>
                       <p class="text-xs text-emerald-600 font-bold mt-2">
@@ -896,7 +896,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
                     name="upload[binary]"
                     rows="3"
                     placeholder="Base64-encoded extension binary"
-                    class="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:bg-white font-mono"
+                    class="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white font-mono"
                   ><%= @upload_form["binary"] %></textarea>
                   <p class="text-[11px] text-gray-400 mt-0.5">The published extension binary - the file beside its manifest.json.</p>
                 </div>
@@ -908,7 +908,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
                   name="upload[manifest_json]"
                   rows="2"
                   placeholder='{"version": "0.1.0", "category": "Gameplay"}'
-                  class="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:bg-white font-mono"
+                  class="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white font-mono"
                 ><%= @upload_form["manifest_json"] %></textarea>
               </div>
 
@@ -924,7 +924,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
                 <button
                   type="submit"
                   phx-disable-with="Uploading..."
-                  class="px-5 py-2 text-xs font-bold text-white bg-violet-600 rounded-xl hover:bg-violet-700 transition-colors shadow-sm"
+                  class="px-5 py-2 text-xs font-bold text-white bg-primary-600 rounded-xl hover:bg-primary-700 transition-colors shadow-sm"
                 >
                   Upload &amp; Hot-Load Extension
                 </button>
@@ -938,7 +938,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
       <%= if @show_restart_modal do %>
         <div class="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div class="fixed inset-0" phx-click="close_restart_modal" phx-target={@myself}></div>
-          <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-200 relative animate-in fade-in duration-150">
+          <div class="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl border border-gray-200 relative animate-in fade-in duration-150">
             <div class="flex items-center gap-3 mb-4">
               <div class="w-10 h-10 rounded-xl bg-red-100 text-red-700 flex items-center justify-center text-xl shrink-0">
                 ⚠️

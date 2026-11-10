@@ -78,8 +78,7 @@ defmodule Exoforge.Std.Dashboard.LoginController do
       <link rel="stylesheet" href="/vendor/exoforge-studio.css" />
       <script src="/vendor/tailwind.js"></script>
       <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-        body { font-family: 'Inter', sans-serif; }
+        body { font-family: var(--exo-font); }
       </style>
     </head>
     <body class="min-h-screen bg-[#f3f4f6] flex flex-col items-center justify-center p-4 relative">
@@ -95,11 +94,11 @@ defmodule Exoforge.Std.Dashboard.LoginController do
         </svg>
       </button>
 
-      <div class="w-full max-w-sm bg-white rounded-2xl shadow-card border border-gray-200 p-8">
+      <div class="w-full max-w-sm bg-white rounded-xl shadow-card border border-gray-200 p-8">
         <div class="flex items-center gap-3 mb-6">
           <img src="/favicon.svg" alt="Exoforge" class="w-9 h-9 rounded-xl shadow-sm" />
           <div class="flex items-center">
-            <span class="text-2xl font-extrabold tracking-tight text-purple-600">EXO</span>
+            <span class="text-2xl font-extrabold tracking-tight text-primary-600">EXO</span>
             <span class="text-2xl font-extrabold tracking-tight text-gray-900">FORGE</span>
           </div>
         </div>
@@ -112,16 +111,16 @@ defmodule Exoforge.Std.Dashboard.LoginController do
             <label class="block text-xs font-bold text-gray-600 mb-1.5" for="email">Email / Account ID</label>
             <input id="email" name="email" type="text" required autocomplete="username"
                    placeholder="admin@exoforge.local"
-                   class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 focus:outline-none focus:border-purple-500" />
+                   class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 focus:outline-none focus:border-primary-500" />
           </div>
           <div>
             <label class="block text-xs font-bold text-gray-600 mb-1.5" for="password">Password</label>
             <input id="password" name="password" type="password" required autocomplete="current-password"
                    placeholder="••••••••"
-                   class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 focus:outline-none focus:border-purple-500" />
+                   class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 focus:outline-none focus:border-primary-500" />
           </div>
           <button type="submit"
-                  class="w-full rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold py-2.5 transition-colors shadow-sm">
+                  class="w-full rounded-xl bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold py-2.5 transition-colors shadow-sm">
             Sign in
           </button>
         </form>

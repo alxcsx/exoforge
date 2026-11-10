@@ -861,7 +861,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                   onerror="this.style.display='none'"
                 />
                 <div class="truncate">
-                  <span class="font-mono text-xs font-bold text-violet-700 bg-violet-50 px-2 py-0.5 rounded border border-violet-100"><%= @value %></span>
+                  <span class="font-mono text-xs font-bold text-primary-700 bg-primary-50 px-2 py-0.5 rounded border border-primary-100"><%= @value %></span>
                   <div class="text-[10px] text-gray-400 mt-0.5">Bucket: <%= @bucket %></div>
                 </div>
               </div>
@@ -869,7 +869,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                 <a
                   href={"/api/files/#{@bucket}/#{@value}"}
                   target="_blank"
-                  class="text-[11px] font-bold text-violet-600 hover:text-violet-800 px-2 py-1 bg-violet-50 hover:bg-violet-100 rounded-lg transition-colors"
+                  class="text-[11px] font-bold text-primary-600 hover:text-primary-800 px-2 py-1 bg-primary-50 hover:bg-primary-100 rounded-lg transition-colors"
                 >
                   ↗ Open
                 </a>
@@ -906,7 +906,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                 phx-value-target={@target}
                 phx-value-bucket={@bucket}
                 phx-target={@myself}
-                class="px-3 py-1.5 text-xs font-bold text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 rounded-xl transition-colors shadow-2xs flex items-center gap-1.5"
+                class="px-3 py-1.5 text-xs font-bold text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-200 rounded-xl transition-colors shadow-2xs flex items-center gap-1.5"
               >
                 <span>🗂️</span>
                 <span>Select from Bucket</span>
@@ -921,7 +921,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
           <%= if @column.choices != [] do %>
             <select
               name={"values[#{@key}]"}
-              class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent font-mono bg-white"
+              class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono bg-white"
             >
               <%= for choice <- @column.choices do %>
                 <option value={choice} selected={to_string(@value) == to_string(choice)}>
@@ -938,7 +938,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                   name={"values[#{@key}]"}
                   value="true"
                   checked={@value in ["true", true]}
-                  class="w-4 h-4 text-violet-600 rounded border-gray-300 focus:ring-violet-500"
+                  class="w-4 h-4 text-primary-600 rounded border-gray-300 focus:ring-primary-500"
                 />
               <% :integer -> %>
                 <input
@@ -947,7 +947,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                   name={"values[#{@key}]"}
                   value={@value}
                   readonly={@locked}
-                  class={"w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent font-mono #{if @locked, do: "bg-gray-50 text-gray-400"}"}
+                  class={"w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono #{if @locked, do: "bg-gray-50 text-gray-400"}"}
                 />
               <% :float -> %>
                 <input
@@ -956,7 +956,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                   name={"values[#{@key}]"}
                   value={@value}
                   readonly={@locked}
-                  class={"w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent font-mono #{if @locked, do: "bg-gray-50 text-gray-400"}"}
+                  class={"w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono #{if @locked, do: "bg-gray-50 text-gray-400"}"}
                 />
               <% _ -> %>
                 <input
@@ -964,7 +964,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                   name={"values[#{@key}]"}
                   value={@value}
                   readonly={@locked}
-                  class={"w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent font-mono #{if @locked, do: "bg-gray-50 text-gray-400"}"}
+                  class={"w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono #{if @locked, do: "bg-gray-50 text-gray-400"}"}
                 />
             <% end %>
           <% end %>
@@ -996,15 +996,15 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
     ~H"""
     <div class="space-y-6" id={@id}>
       <!-- Extension Visual Header -->
-      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-gray-200/80 shadow-sm">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm">
         <div class="flex items-center gap-4">
-          <div class="w-12 h-12 rounded-2xl bg-purple-100 text-purple-700 flex items-center justify-center text-2xl shadow-inner">
+          <div class="w-12 h-12 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center text-2xl shadow-inner">
             <%= @icon %>
           </div>
           <div>
             <div class="flex items-center gap-2.5">
               <h2 class="text-xl font-bold text-gray-900"><%= Phoenix.Naming.humanize(to_string(@extension.name)) %></h2>
-              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-800">
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-primary-100 text-primary-800">
                 v<%= to_string(@extension.version) %>
               </span>
               <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
@@ -1018,7 +1018,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
               </summary>
               <div class="exo-fold-body">
                 <p class="text-xs text-gray-500">
-                  Provides: <code class="text-purple-700 font-bold"><%= Enum.join(@extension.provides, ", ") %></code>
+                  Provides: <code class="text-primary-700 font-bold"><%= Enum.join(@extension.provides, ", ") %></code>
                   <%= if @extension.dependencies != [] do %>
                     • Depends on: <code class="text-gray-600"><%= Enum.join(@extension.dependencies, ", ") %></code>
                   <% end %>
@@ -1050,7 +1050,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
               class={"px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 #{if @subtab == "actions", do: "bg-primary-600 text-white shadow-sm", else: "text-gray-600 hover:text-gray-900"}"}
             >
               <span>⚡ Actions</span>
-              <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-purple-100 text-purple-800"><%= length(@actions) %></span>
+              <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-primary-100 text-primary-800"><%= length(@actions) %></span>
             </button>
           <% end %>
 
@@ -1092,10 +1092,10 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
               <% act_form = Map.get(@action_forms, act[:name], %{}) %>
               <% result_info = Map.get(@action_results, act[:name]) %>
 
-              <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-5 space-y-4 hover:border-purple-200 transition-colors">
+              <div class="bg-white rounded-xl border border-gray-200/80 shadow-sm p-5 space-y-4 hover:border-primary-200 transition-colors">
                 <div class="flex items-start justify-between">
                   <div class="flex items-center gap-2.5">
-                    <span class="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold text-sm">
+                    <span class="w-8 h-8 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center font-bold text-sm">
                       ⚡
                     </span>
                     <div>
@@ -1103,7 +1103,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                       <span class="text-[11px] font-mono text-gray-400"><%= act[:name] %></span>
                     </div>
                   </div>
-                  <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-gray-100 text-gray-700">
+                  <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-gray-100 text-gray-700">
                     <%= act[:mode] %>
                   </span>
                 </div>
@@ -1128,7 +1128,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                         <div>
                           <div class="flex items-center justify-between mb-1">
                             <label class="text-[11px] font-bold text-gray-700 font-mono"><%= p_name %></label>
-                            <span class="text-[10px] text-purple-600 font-mono"><%= p_type %></span>
+                            <span class="text-[10px] text-primary-600 font-mono"><%= p_type %></span>
                           </div>
 
                           <% custom_spec = Exoforge.Std.Dashboard.InputTypes.resolve(p) %>
@@ -1140,7 +1140,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                             <% :boolean -> %>
                               <select
                                 name={"param_#{p_name}"}
-                                class="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono"
+                                class="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono"
                               >
                                 <option value="true" selected={val in ["true", true]}>true</option>
                                 <option value="false" selected={val in ["false", false]}>false</option>
@@ -1150,7 +1150,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                               <textarea
                                 name={"param_#{p_name}"}
                                 rows="2"
-                                class="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono"
+                                class="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono"
                               ><%= val %></textarea>
 
                             <% _ -> %>
@@ -1159,7 +1159,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                                 step={if p_type == :float, do: "0.1", else: "1"}
                                 name={"param_#{p_name}"}
                                 value={val}
-                                class="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono"
+                                class="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono"
                               />
                             <% end %>
                           <% end %>
@@ -1176,7 +1176,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                     </summary>
                     <div class="exo-fold-body space-y-2">
                       <div class="text-[11px] text-gray-400">
-                        Service: <code class="text-purple-700 font-semibold"><%= act[:service] %></code>
+                        Service: <code class="text-primary-700 font-semibold"><%= act[:service] %></code>
                       </div>
                       <div>
                         <label class="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Caller Scopes</label>
@@ -1191,7 +1191,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                   <div class="pt-2 flex items-center justify-between">
                     <button
                       type="submit"
-                      class="px-4 py-2 text-xs font-bold text-white bg-purple-600 rounded-xl hover:bg-purple-700 transition-colors shadow-sm flex items-center gap-1.5 active:scale-95"
+                      class="px-4 py-2 text-xs font-bold text-white bg-primary-600 rounded-xl hover:bg-primary-700 transition-colors shadow-sm flex items-center gap-1.5 active:scale-95"
                     >
                       <.icon name={:bolt} class="w-3.5 h-3.5" /> <span>Run Action</span>
                     </button>
@@ -1236,7 +1236,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
       <%= if @subtab == "resources" do %>
         <div class="space-y-4">
           <!-- Resource Switcher & Toolbar -->
-          <div class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div class="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div class="flex items-center gap-2">
               <span class="text-xs font-bold text-gray-500 uppercase tracking-wider mr-1">Resource:</span>
               <%= for res <- @resources do %>
@@ -1246,7 +1246,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                   phx-click="select_resource"
                   phx-value-name={res_name}
                   phx-target={@myself}
-                  class={"px-3 py-1.5 text-xs font-bold rounded-lg transition-colors #{if to_string(@selected_resource_name) == res_name, do: "bg-purple-600 text-white shadow-sm", else: "bg-gray-100 text-gray-600 hover:bg-gray-200"}"}
+                  class={"px-3 py-1.5 text-xs font-bold rounded-lg transition-colors #{if to_string(@selected_resource_name) == res_name, do: "bg-primary-600 text-white shadow-sm", else: "bg-gray-100 text-gray-600 hover:bg-gray-200"}"}
                 >
                   <%= Phoenix.Naming.humanize(res_name) %>
                 </button>
@@ -1262,7 +1262,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                     value={@resource_search}
                     phx-debounce="200"
                     name="query"
-                    class="px-3 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    class="px-3 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
                   />
                 </form>
 
@@ -1332,7 +1332,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
               </div>
             <% else %>
               <div class="flex items-center gap-2">
-                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary-50 text-primary-700 border border-primary-200">
                   ⚙️ Singleton Config
                 </span>
               </div>
@@ -1341,12 +1341,12 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
 
           <%= if singleton_resource?(assigns) do %>
             <!-- Singleton Resource Direct Configuration Card -->
-            <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-6 space-y-6">
+            <div class="bg-white rounded-xl border border-gray-200/80 shadow-sm p-6 space-y-6">
               <div class="flex items-center justify-between border-b border-gray-100 pb-4">
                 <div>
                   <h3 class="text-base font-bold text-gray-900 flex items-center gap-2">
                     <span><%= Phoenix.Naming.humanize(to_string(@selected_resource_name)) %></span>
-                    <span class="text-xs font-mono font-normal text-purple-600 bg-purple-50 px-2 py-0.5 rounded-md">singleton</span>
+                    <span class="text-xs font-mono font-normal text-primary-600 bg-primary-50 px-2 py-0.5 rounded-lg">singleton</span>
                   </h3>
                   <p class="text-xs text-gray-500 mt-1">
                     This resource contains a single instance configuration. Updating values persists directly into cluster storage.
@@ -1387,7 +1387,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                   <div class="pt-3">
                     <button
                       type="submit"
-                      class="px-5 py-2 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-xl transition-colors shadow-sm flex items-center gap-1.5"
+                      class="px-5 py-2 text-xs font-bold text-white bg-primary-600 hover:bg-primary-700 rounded-xl transition-colors shadow-sm flex items-center gap-1.5"
                     >
                       <.icon name={:save} class="w-3.5 h-3.5" /> <span>Save Settings</span>
                     </button>
@@ -1397,13 +1397,13 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
             </div>
           <% else %>
             <!-- Declarative Resource Table -->
-            <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
+            <div class="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
               <%= if @filtered_resource_rows == [] do %>
                 <div class="p-12 text-center space-y-2">
                   <span class="text-3xl block">📦</span>
                   <h3 class="text-sm font-bold text-gray-900">No records found</h3>
                   <p class="text-xs text-gray-500 max-w-sm mx-auto">
-                    No rows currently stored in resource <code class="font-mono text-purple-700 font-bold"><%= @selected_resource_name %></code>.
+                    No rows currently stored in resource <code class="font-mono text-primary-700 font-bold"><%= @selected_resource_name %></code>.
                   </p>
                 </div>
               <% else %>
@@ -1420,7 +1420,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                     <tbody class="divide-y divide-gray-100">
                       <%= for row <- @filtered_resource_rows do %>
                         <% row_id = Map.get(row, :id) || Map.get(row, "id") || Map.get(row, :player_id) || Map.get(row, "player_id") || "item" %>
-                        <tr class="hover:bg-purple-50/30 transition-colors group">
+                        <tr class="hover:bg-primary-50/30 transition-colors group">
                           <%= for col <- @columns do %>
                             <% val = Map.get(row, col[:key]) || Map.get(row, to_string(col[:key])) || "" %>
                             <td class="py-3 px-4">
@@ -1430,7 +1430,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                                     <a
                                       href={"/api/files/#{col[:bucket] || "default"}/#{val}"}
                                       target="_blank"
-                                      class="inline-flex items-center gap-1.5 font-mono text-xs font-semibold text-violet-700 bg-violet-50 hover:bg-violet-100 hover:text-violet-900 px-2 py-0.5 rounded-lg border border-violet-200 transition-colors"
+                                      class="inline-flex items-center gap-1.5 font-mono text-xs font-semibold text-primary-700 bg-primary-50 hover:bg-primary-100 hover:text-primary-900 px-2 py-0.5 rounded-lg border border-primary-200 transition-colors"
                                       title={"View file " <> to_string(val)}
                                     >
                                       <span>📎</span>
@@ -1467,7 +1467,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                               phx-click="open_focus"
                               phx-value-kind="row"
                               phx-value-id={to_string(row_id)}
-                              class="px-2.5 py-1 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition-colors"
+                              class="px-2.5 py-1 text-xs font-semibold text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-200 rounded-lg transition-colors"
                             >
                               Inspect
                             </button>
@@ -1496,10 +1496,10 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <%= for ev <- @events do %>
               <% ev_name = to_string(ev[:name] || ev["name"]) %>
-              <div class="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm space-y-3">
+              <div class="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
                 <div class="flex items-center justify-between">
-                  <span class="font-mono font-bold text-purple-700 text-sm"><%= ev_name %></span>
-                  <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase bg-gray-100 text-gray-700">
+                  <span class="font-mono font-bold text-primary-700 text-sm"><%= ev_name %></span>
+                  <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase bg-gray-100 text-gray-700">
                     <%= ev[:scope] || "server" %>
                   </span>
                 </div>
@@ -1512,7 +1512,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                     phx-click="simulate_event"
                     phx-value-event={ev_name}
                     phx-target={@myself}
-                    class="px-3 py-1 text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition-colors"
+                    class="px-3 py-1 text-xs font-bold text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-200 rounded-lg transition-colors"
                   >
                     ⚡ Simulate Broadcast
                   </button>
@@ -1525,12 +1525,12 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
 
       <!-- SUBTAB 4: CONTRACT SPECIFICATION -->
       <%= if @subtab == "contract" do %>
-        <div class="bg-white p-6 rounded-2xl border border-gray-200/80 shadow-sm space-y-4">
+        <div class="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
           <h3 class="text-sm font-bold text-gray-900">Contract & Architecture Specification</h3>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
             <div class="p-4 bg-gray-50 rounded-xl border border-gray-100 space-y-2">
               <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Extension Identity</span>
-              <p><strong>ID:</strong> <code class="font-mono text-purple-700"><%= @extension.id %></code></p>
+              <p><strong>ID:</strong> <code class="font-mono text-primary-700"><%= @extension.id %></code></p>
               <p><strong>Entry Point:</strong> <code class="font-mono text-gray-700"><%= inspect(@extension[:entry_point] || @extension.id) %></code></p>
               <p><strong>Runtime Engine:</strong> <%= @extension.type %></p>
             </div>
@@ -1604,7 +1604,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                   </div>
 
                   <%= if column.badge and value not in [nil, ""] do %>
-                    <span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-violet-100 text-violet-800 shrink-0">
+                    <span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-primary-100 text-primary-800 shrink-0">
                       <%= value %>
                     </span>
                   <% else %>
@@ -1620,7 +1620,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
               type="button"
               phx-click="edit_resource"
               phx-target={@myself}
-              class="px-4 py-2 text-xs font-bold text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 rounded-xl transition-colors"
+              class="px-4 py-2 text-xs font-bold text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-200 rounded-xl transition-colors"
             >
               Edit
             </button>
@@ -1644,7 +1644,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
       <%= if @resource_form do %>
         <div class="fixed inset-0 z-[70] overflow-y-auto bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6">
           <div class="fixed inset-0" phx-click="close_resource_form" phx-target={@myself}></div>
-          <div class="relative bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-200 ring-1 ring-black/5 space-y-4 max-h-[calc(100vh-3rem)] overflow-y-auto custom-scrollbar animate-fade-in">
+          <div class="relative bg-white rounded-xl max-w-lg w-full p-6 shadow-2xl border border-gray-200 ring-1 ring-black/5 space-y-4 max-h-[calc(100vh-3rem)] overflow-y-auto custom-scrollbar animate-fade-in">
             <div class="flex items-start justify-between">
               <div>
                 <h3 class="text-base font-bold text-gray-900">
@@ -1694,7 +1694,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
               <div class="pt-2 flex items-center gap-2">
                 <button
                   type="submit"
-                  class="px-4 py-2 text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 rounded-xl transition-colors shadow-sm"
+                  class="px-4 py-2 text-xs font-bold text-white bg-primary-600 hover:bg-primary-700 rounded-xl transition-colors shadow-sm"
                 >
                   Save
                 </button>
@@ -1716,7 +1716,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
       <%= if @export_modal_open do %>
         <div class="fixed inset-0 z-[70] overflow-y-auto bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6">
           <div class="fixed inset-0" phx-click="close_export_modal" phx-target={@myself}></div>
-          <div class="relative bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-gray-200 ring-1 ring-black/5 space-y-4 max-h-[calc(100vh-3rem)] overflow-y-auto custom-scrollbar animate-fade-in">
+          <div class="relative bg-white rounded-xl max-w-xl w-full p-6 shadow-2xl border border-gray-200 ring-1 ring-black/5 space-y-4 max-h-[calc(100vh-3rem)] overflow-y-auto custom-scrollbar animate-fade-in">
             <div class="flex items-center justify-between">
               <h3 class="text-base font-bold text-gray-900">Export <%= @export_format %> Data (<%= @export_filename %>)</h3>
               <button
@@ -1748,7 +1748,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
               <button
                 type="button"
                 phx-click={Phoenix.LiveView.JS.dispatch("exoforge:clip", detail: %{text: @export_content})}
-                class="px-4 py-2 text-xs font-bold text-white bg-purple-600 rounded-xl hover:bg-purple-700"
+                class="px-4 py-2 text-xs font-bold text-white bg-primary-600 rounded-xl hover:bg-primary-700"
               >
                 Copy to Clipboard
               </button>
@@ -1761,13 +1761,13 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
       <%= if @file_picker_open do %>
         <div class="fixed inset-0 z-[70] overflow-y-auto bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6">
           <div class="fixed inset-0" phx-click="close_file_picker" phx-target={@myself}></div>
-          <div class="relative bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-gray-200 ring-1 ring-black/5 space-y-4 max-h-[calc(100vh-3rem)] overflow-y-auto custom-scrollbar animate-fade-in">
+          <div class="relative bg-white rounded-xl max-w-2xl w-full p-6 shadow-2xl border border-gray-200 ring-1 ring-black/5 space-y-4 max-h-[calc(100vh-3rem)] overflow-y-auto custom-scrollbar animate-fade-in">
             <div class="flex items-center justify-between border-b border-gray-100 pb-3">
               <div class="flex items-center gap-2">
                 <span class="text-xl">🗂️</span>
                 <div>
                   <h3 class="text-sm font-bold text-gray-900">Select File from Bucket</h3>
-                  <p class="text-xs text-gray-400">Selecting for field <code class="font-mono text-violet-700 font-bold"><%= @file_picker_field %></code></p>
+                  <p class="text-xs text-gray-400">Selecting for field <code class="font-mono text-primary-700 font-bold"><%= @file_picker_field %></code></p>
                 </div>
               </div>
               <button
@@ -1790,7 +1790,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                     phx-click="file_picker_change_bucket"
                     phx-value-bucket={b}
                     phx-target={@myself}
-                    class={"px-3 py-1 text-xs font-semibold rounded-lg border transition-colors shrink-0 #{if @file_picker_bucket == b, do: "bg-violet-600 text-white border-violet-600", else: "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}"}
+                    class={"px-3 py-1 text-xs font-semibold rounded-lg border transition-colors shrink-0 #{if @file_picker_bucket == b, do: "bg-primary-600 text-white border-primary-600", else: "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}"}
                   >
                     📁 <%= b %>
                   </button>
@@ -1804,7 +1804,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                   placeholder="Search files..."
                   value={@file_picker_search}
                   phx-debounce="150"
-                  class="w-full text-xs pl-7 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  class="w-full text-xs pl-7 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
                 />
                 <span class="absolute left-2.5 top-2 text-xs text-gray-400">🔍</span>
               </form>
@@ -1823,7 +1823,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                     phx-click="file_picker_select"
                     phx-value-id={file["id"]}
                     phx-target={@myself}
-                    class="p-2.5 rounded-xl border border-gray-200 hover:border-violet-400 hover:bg-violet-50/30 cursor-pointer transition-all flex flex-col justify-between group bg-white shadow-2xs"
+                    class="p-2.5 rounded-xl border border-gray-200 hover:border-primary-400 hover:bg-primary-50/30 cursor-pointer transition-all flex flex-col justify-between group bg-white shadow-2xs"
                   >
                     <div class="h-20 bg-gray-50 rounded-lg mb-2 flex items-center justify-center overflow-hidden border border-gray-100">
                       <%= if is_img do %>
@@ -1844,7 +1844,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                       phx-click="file_picker_select"
                       phx-value-id={file["id"]}
                       phx-target={@myself}
-                      class="mt-2 w-full py-1 text-[11px] font-bold text-violet-700 bg-violet-50 group-hover:bg-violet-600 group-hover:text-white rounded-lg transition-colors text-center"
+                      class="mt-2 w-full py-1 text-[11px] font-bold text-primary-700 bg-primary-50 group-hover:bg-primary-600 group-hover:text-white rounded-lg transition-colors text-center"
                     >
                       Select
                     </button>
@@ -1859,7 +1859,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                 <input type="hidden" id="picker_upload_filename" name="filename" value="" />
                 <input type="hidden" id="picker_upload_content_type" name="content_type" value="" />
                 <input type="hidden" id="picker_upload_base64" name="base64" value="" />
-                <label class="text-xs font-bold text-violet-700 hover:text-violet-800 cursor-pointer flex items-center gap-1.5 bg-violet-50 px-3 py-1.5 rounded-xl border border-violet-100">
+                <label class="text-xs font-bold text-primary-700 hover:text-primary-800 cursor-pointer flex items-center gap-1.5 bg-primary-50 px-3 py-1.5 rounded-xl border border-primary-100">
                   <span>⬆️ Upload & Select</span>
                   <input
                     type="file"

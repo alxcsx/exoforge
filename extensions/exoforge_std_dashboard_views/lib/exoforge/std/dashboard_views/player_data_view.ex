@@ -458,20 +458,20 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
 
       <!-- Top Stats & Header -->
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div class="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-3.5" title={"#{@valid_count} Active • #{@retained_count} Retained"}>
-          <div class="w-11 h-11 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center text-xl shrink-0">
+        <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-3.5" title={"#{@valid_count} Active • #{@retained_count} Retained"}>
+          <div class="w-11 h-11 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center text-xl shrink-0">
             👥
           </div>
           <div class="min-w-0 flex-1">
             <p class="text-xs font-semibold text-gray-500 truncate">Registered Players</p>
             <div class="flex items-center gap-2 mt-0.5">
               <span class="text-xl font-black text-gray-900"><%= length(@players) %></span>
-              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-50 text-violet-700"><%= @valid_count %> Active</span>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary-50 text-primary-700"><%= @valid_count %> Active</span>
             </div>
           </div>
         </div>
 
-        <div class="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-3.5" title="Authorised client ingress active">
+        <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-3.5" title="Authorised client ingress active">
           <div class="w-11 h-11 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-xl shrink-0">
             🔐
           </div>
@@ -484,7 +484,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
           </div>
         </div>
 
-        <div class="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-3.5" title="Telemetry kept, user unlinked">
+        <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-3.5" title="Telemetry kept, user unlinked">
           <div class="w-11 h-11 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-xl shrink-0">
             📁
           </div>
@@ -499,7 +499,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
       </div>
 
       <!-- Action Toolbar with Filter Tabs -->
-      <div class="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+      <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
         <!-- Retention Filter Tabs -->
         <div class="flex items-center gap-1.5 w-full md:w-auto bg-gray-100/90 p-1 rounded-xl">
           <button
@@ -537,7 +537,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
             placeholder="Search by Player ID, User ID, Device ID, or Name..."
             value={@search_query}
             phx-debounce="250"
-            class="w-full pl-9 pr-4 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:bg-white transition-all"
+            class="w-full pl-9 pr-4 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all"
           />
           <svg class="w-4 h-4 text-gray-400 absolute left-3 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -558,7 +558,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
           <button
             phx-click="open_create_modal"
             phx-target={@myself}
-            class="px-4 py-2 text-xs font-semibold text-white bg-violet-600 hover:bg-violet-700 rounded-xl transition-colors shadow-sm flex items-center gap-2"
+            class="px-4 py-2 text-xs font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded-xl transition-colors shadow-sm flex items-center gap-2"
           >
             <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -569,7 +569,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
       </div>
 
       <!-- Players List Table -->
-      <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div class="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
           <h4 class="text-xs font-bold text-gray-700 uppercase tracking-wider">
             Matching Players (<%= length(@filtered_players) %>)
@@ -578,7 +578,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
 
         <%= if @filtered_players == [] do %>
           <div class="p-12 text-center">
-            <div class="w-12 h-12 rounded-2xl bg-gray-100 text-gray-400 flex items-center justify-center mx-auto mb-3">
+            <div class="w-12 h-12 rounded-xl bg-gray-100 text-gray-400 flex items-center justify-center mx-auto mb-3">
               <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
@@ -588,7 +588,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
             <button
               phx-click="open_create_modal"
               phx-target={@myself}
-              class="mt-4 px-4 py-2 text-xs font-bold text-violet-700 bg-violet-50 hover:bg-violet-100 rounded-xl transition-colors inline-flex items-center gap-1.5"
+              class="mt-4 px-4 py-2 text-xs font-bold text-primary-700 bg-primary-50 hover:bg-primary-100 rounded-xl transition-colors inline-flex items-center gap-1.5"
             >
               <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -605,7 +605,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
 
               <div class="p-4 hover:bg-gray-50/80 transition-colors flex items-center justify-between gap-4">
                 <div class="flex items-center gap-3">
-                  <div class={"w-9 h-9 rounded-xl font-bold text-xs flex items-center justify-center shrink-0 border #{if is_linked, do: "bg-violet-50 text-violet-600 border-violet-100", else: "bg-amber-50 text-amber-600 border-amber-200"}"}>
+                  <div class={"w-9 h-9 rounded-xl font-bold text-xs flex items-center justify-center shrink-0 border #{if is_linked, do: "bg-primary-50 text-primary-600 border-primary-100", else: "bg-amber-50 text-amber-600 border-amber-200"}"}>
                     <%= String.slice(pid, 0, 2) |> String.upcase() %>
                   </div>
                   <div>
@@ -621,7 +621,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
                         </span>
                       <% end %>
                       <%= if did = (player[:device_id] || player["device_id"]) do %>
-                        <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-purple-50 text-purple-700 border border-purple-200" title={"Attached Device ID: #{did}"}>
+                        <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-primary-50 text-primary-700 border border-primary-200" title={"Attached Device ID: #{did}"}>
                           📱 <%= did %>
                         </span>
                       <% end %>
@@ -640,7 +640,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
                     phx-click="open_focus"
                     phx-value-kind="player"
                     phx-value-id={pid}
-                    class="px-3 py-1.5 text-xs font-semibold text-violet-700 bg-violet-50 hover:bg-violet-100 rounded-lg transition-colors"
+                    class="px-3 py-1.5 text-xs font-semibold text-primary-700 bg-primary-50 hover:bg-primary-100 rounded-lg transition-colors"
                   >
                     Inspect Profile &amp; KV
                   </button>
@@ -718,12 +718,12 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
           <% end %>
 
           <%= if p_dids != [] do %>
-            <div class="px-3 py-2 bg-purple-50/70 border border-purple-100 rounded-xl text-xs text-purple-900 flex items-center justify-between mb-3">
+            <div class="px-3 py-2 bg-primary-50/70 border border-primary-100 rounded-xl text-xs text-primary-900 flex items-center justify-between mb-3">
               <span class="font-semibold flex items-center gap-1.5">
                 <span>📱</span>
                 <span>Attached Device IDs:</span>
               </span>
-              <span class="font-mono text-[11px] text-purple-700 font-bold truncate max-w-sm" title={Enum.join(p_dids, ", ")}>
+              <span class="font-mono text-[11px] text-primary-700 font-bold truncate max-w-sm" title={Enum.join(p_dids, ", ")}>
                 <%= Enum.join(p_dids, ", ") %>
               </span>
             </div>
@@ -743,7 +743,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
                   <div class="space-y-1.5 max-h-56 overflow-y-auto pr-1">
                     <%= for {k, v} <- @player_kv_data do %>
                       <div class="flex items-center justify-between p-2 bg-white rounded-lg border border-gray-200 text-xs">
-                        <span class="font-mono font-bold text-purple-800"><%= k %></span>
+                        <span class="font-mono font-bold text-primary-800"><%= k %></span>
                         <div class="flex items-center gap-2">
                           <span class="font-mono text-gray-600 truncate max-w-xs"><%= inspect(v) %></span>
                           <button
@@ -769,18 +769,18 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
                     name="key"
                     placeholder="Key (e.g. inventory)"
                     required
-                    class="flex-1 px-2.5 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-mono"
+                    class="flex-1 px-2.5 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-500 font-mono"
                   />
                   <input
                     type="text"
                     name="value"
                     placeholder='JSON Value (e.g. {"gold": 100})'
                     required
-                    class="flex-1 px-2.5 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-mono"
+                    class="flex-1 px-2.5 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-500 font-mono"
                   />
                   <button
                     type="submit"
-                    class="px-3 py-1.5 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors whitespace-nowrap"
+                    class="px-3 py-1.5 text-xs font-bold text-white bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors whitespace-nowrap"
                   >
                     Set KV
                   </button>
@@ -797,7 +797,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
                   <textarea
                     name="profile_raw"
                     rows="8"
-                    class="w-full p-3 text-xs bg-gray-900 text-emerald-400 font-mono rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500"
+                    class="w-full p-3 text-xs bg-gray-900 text-emerald-400 font-mono rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
                   ><%= @edit_profile_raw %></textarea>
                 </div>
 
@@ -838,7 +838,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
                     <button
                       type="submit"
                       phx-disable-with="Saving..."
-                      class="px-5 py-2 text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 rounded-xl shadow-sm transition-colors"
+                      class="px-5 py-2 text-xs font-bold text-white bg-primary-600 hover:bg-primary-700 rounded-xl shadow-sm transition-colors"
                     >
                       Save Changes
                     </button>
@@ -880,7 +880,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
       <%= if @show_create_modal do %>
         <div class="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div class="fixed inset-0" phx-click="close_create_modal" phx-target={@myself}></div>
-          <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-200 relative animate-in fade-in duration-150">
+          <div class="bg-white rounded-xl max-w-lg w-full p-6 shadow-2xl border border-gray-200 relative animate-in fade-in duration-150">
             <button
               phx-click="close_create_modal"
               phx-target={@myself}
@@ -890,7 +890,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
             </button>
 
             <div class="flex items-center gap-3 mb-4">
-              <div class="w-10 h-10 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center">
+              <div class="w-10 h-10 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center">
                 <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                 </svg>
@@ -916,7 +916,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
                   value={@create_form["player_id"]}
                   placeholder="e.g. player_123"
                   required
-                  class="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:bg-white font-mono"
+                  class="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white font-mono"
                 />
               </div>
 
@@ -927,7 +927,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
                   name="create[user_id]"
                   value={@create_form["user_id"]}
                   placeholder="e.g. u_123 (leave empty to create unlinked/retained)"
-                  class="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:bg-white font-mono"
+                  class="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white font-mono"
                 />
                 <p class="text-[11px] text-gray-400 mt-1">Leave blank to create as an inaccessible retained player record.</p>
               </div>
@@ -937,7 +937,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
                 <textarea
                   name="create[profile_json]"
                   rows="4"
-                  class="w-full p-3 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:bg-white font-mono"
+                  class="w-full p-3 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white font-mono"
                 ><%= @create_form["profile_json"] %></textarea>
               </div>
 
@@ -953,7 +953,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
                 <button
                   type="submit"
                   phx-disable-with="Creating..."
-                  class="px-5 py-2 text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 rounded-xl shadow-sm transition-colors"
+                  class="px-5 py-2 text-xs font-bold text-white bg-primary-600 hover:bg-primary-700 rounded-xl shadow-sm transition-colors"
                 >
                   Create Profile
                 </button>

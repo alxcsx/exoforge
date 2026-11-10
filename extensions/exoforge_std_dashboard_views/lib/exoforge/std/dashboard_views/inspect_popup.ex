@@ -28,7 +28,7 @@ defmodule Exoforge.Std.DashboardViews.InspectPopup do
       >
         <div class="fixed inset-0" phx-click={@on_close} phx-target={@target}></div>
 
-        <div class={"relative bg-white rounded-2xl #{@width} w-full shadow-2xl border border-gray-200 ring-1 ring-black/5 animate-fade-in overflow-hidden flex flex-col max-h-[calc(100vh-3.5rem)]"}>
+        <div class={"relative bg-white rounded-xl #{@width} w-full shadow-2xl border border-gray-200 ring-1 ring-black/5 animate-fade-in overflow-hidden flex flex-col max-h-[calc(100vh-3.5rem)]"}>
           <button
             type="button"
             phx-click={@on_close}
@@ -39,7 +39,7 @@ defmodule Exoforge.Std.DashboardViews.InspectPopup do
           </button>
 
           <div class="flex items-center gap-3 px-6 py-4 border-b border-gray-100">
-            <div class="w-10 h-10 rounded-xl bg-primary-50 text-primary-700 ring-1 ring-primary-200/60 flex items-center justify-center text-xl shrink-0">
+            <div class="w-10 h-10 rounded-xl bg-primary-50 text-primary-700 border border-primary-200 flex items-center justify-center text-xl shrink-0">
               <%= @icon %>
             </div>
             <div class="min-w-0">

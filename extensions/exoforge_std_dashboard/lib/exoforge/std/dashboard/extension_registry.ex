@@ -45,12 +45,12 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
       role="button"
       tabindex="0"
       title={"Open #{ExtensionPresenter.display_name(@ext)} Control Panel"}
-      class="h-full bg-white p-5 rounded-2xl border border-gray-200/90 hover:border-primary-500 hover:ring-2 hover:ring-primary-500/20 shadow-sm hover:shadow-lg transition-all flex flex-col justify-between space-y-4 group cursor-pointer relative overflow-hidden"
+      class="h-full bg-white p-5 rounded-xl border border-gray-200/90 hover:border-primary-500 hover:ring-2 hover:ring-primary-500/20 shadow-sm hover:shadow-lg transition-all flex flex-col justify-between space-y-4 group cursor-pointer relative overflow-hidden"
     >
       <div class="space-y-3">
         <div class="flex items-start justify-between gap-2">
           <div class="flex items-center gap-3 min-w-0">
-            <span class="w-10 h-10 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center text-xl shadow-xs shrink-0 group-hover:bg-primary-100 group-hover:scale-105 transition-all">
+            <span class="w-10 h-10 rounded-xl bg-primary-50 text-primary-700 flex items-center justify-center text-xl shadow-xs shrink-0 group-hover:bg-primary-100 group-hover:scale-105 transition-all">
               <%= ExtensionPresenter.icon(@ext) %>
             </span>
             <div class="min-w-0">
@@ -78,13 +78,13 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
 
         <!-- Technical Badges -->
         <div class="flex flex-wrap items-center gap-1.5 text-[10px] text-gray-600 font-semibold">
-          <span class="flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-50 text-purple-700">
+          <span class="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-primary-50 text-primary-700">
             <span>⚡</span> <%= @ext.actions_count %> actions
           </span>
-          <span class="flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 text-blue-700">
+          <span class="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700">
             <span>📦</span> <%= @ext.resources_count %> resources
           </span>
-          <span class="flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700">
+          <span class="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700">
             <span>📡</span> <%= @ext.events_count %> events
           </span>
         </div>
@@ -97,7 +97,7 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
               type="button"
               phx-click="unpin_extension"
               phx-value-id={to_string(@ext.id)}
-              class="px-2.5 py-1 text-[11px] font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg flex items-center gap-1 transition-colors"
+              class="px-2.5 py-1 text-[11px] font-semibold text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-200 rounded-lg flex items-center gap-1 transition-colors"
               title="Unpin from top bar"
             >
               <.icon name={:pin} class="w-3 h-3" /> <span>Pinned</span>
@@ -211,7 +211,7 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
                end) %>
           <div class="space-y-6">
             <!-- Header with Title, Search & Category Filters -->
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-gray-200/90 shadow-sm">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-gray-200/90 shadow-sm">
               <div>
                 <h3 class="text-xl font-bold text-gray-900 flex items-center gap-2">
                   <span>🧩</span>
@@ -259,8 +259,8 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
 
             <!-- Empty State -->
             <%= if Enum.empty?(filtered_exts) do %>
-              <div class="bg-white p-12 rounded-2xl border border-gray-200 text-center space-y-3">
-                <div class="w-12 h-12 rounded-2xl bg-gray-100 text-gray-400 mx-auto flex items-center justify-center text-xl">
+              <div class="bg-white p-12 rounded-xl border border-gray-200 text-center space-y-3">
+                <div class="w-12 h-12 rounded-xl bg-gray-100 text-gray-400 mx-auto flex items-center justify-center text-xl">
                   🔍
                 </div>
                 <h4 class="text-base font-bold text-gray-800">No extensions match your filter</h4>
@@ -280,14 +280,14 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
                 <div class="flex items-center gap-2">
                   <span class="text-base">🎛️</span>
                   <h4 class="text-base font-bold text-gray-900">Studio Extensions &amp; Visual Controls</h4>
-                  <span class="text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                  <span class="text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 border border-primary-200">
                     <%= length(ui_exts) %>
                   </span>
                   <span class="hidden sm:inline text-xs text-gray-400">— extensions with interactive dashboards and designer consoles</span>
                 </div>
 
                 <%= if Enum.empty?(ui_exts) do %>
-                  <p class="p-6 bg-white border border-gray-200 rounded-2xl text-xs text-gray-400 italic">No visual control extensions found matching filter.</p>
+                  <p class="p-6 bg-white border border-gray-200 rounded-xl text-xs text-gray-400 italic">No visual control extensions found matching filter.</p>
                 <% else %>
                   <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 auto-rows-fr">
                     <%= for ext <- ui_exts do %>
@@ -308,9 +308,9 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
                 </div>
 
                 <%= if Enum.empty?(system_exts) do %>
-                  <p class="p-6 bg-white border border-gray-200 rounded-2xl text-xs text-gray-400 italic">No system extensions found matching filter.</p>
+                  <p class="p-6 bg-white border border-gray-200 rounded-xl text-xs text-gray-400 italic">No system extensions found matching filter.</p>
                 <% else %>
-                  <div class="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden">
+                  <div class="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
                     <div class="overflow-x-auto">
                       <table class="w-full text-left border-collapse text-xs">
                         <thead>
@@ -342,14 +342,14 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
                                       <%= if custom_ui?(ext) do %>
                                         <span class="text-[10px] text-primary-600 opacity-80 shrink-0" title="Ships its own UI">✦</span>
                                       <% end %>
-                                      <span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-gray-100 text-gray-600 border border-gray-200">System</span>
+                                      <span class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-gray-100 text-gray-600 border border-gray-200">System</span>
                                     </div>
                                     <span class="text-[10px] font-mono text-gray-400 block truncate"><%= ext.id %></span>
                                   </div>
                                 </div>
                               </td>
                               <td class="py-3 px-4">
-                                <span class="text-[11px] font-medium text-gray-600 bg-gray-100/80 px-2 py-0.5 rounded-md">
+                                <span class="text-[11px] font-medium text-gray-600 bg-gray-100/80 px-2 py-0.5 rounded-lg">
                                   <%= ExtensionPresenter.normalize_category(ext[:category]) %>
                                 </span>
                               </td>
@@ -358,7 +358,7 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
                               </td>
                               <td class="py-3 px-4">
                                 <div class="flex flex-wrap items-center gap-1 text-[10px] font-semibold">
-                                  <span class="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 font-mono">
+                                  <span class="px-1.5 py-0.5 rounded bg-primary-50 text-primary-700 font-mono">
                                     ⚡ <%= ext.actions_count %>
                                   </span>
                                   <span class="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-mono">
@@ -376,7 +376,7 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
                                       type="button"
                                       phx-click="unpin_extension"
                                       phx-value-id={to_string(ext.id)}
-                                      class="px-2 py-1 text-[10px] font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg flex items-center gap-1 transition-colors"
+                                      class="px-2 py-1 text-[10px] font-semibold text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-200 rounded-lg flex items-center gap-1 transition-colors"
                                       title="Unpin from top bar"
                                     >
                                       <.icon name={:pin} class="w-3 h-3" /> <span>Pinned</span>

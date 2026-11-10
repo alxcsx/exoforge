@@ -20,7 +20,7 @@ defmodule Exoforge.Std.Dashboard.Components do
   def metric_card(assigns) do
     ~H"""
     <div
-      class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-card hover:border-purple-300 transition-all flex items-center gap-3.5"
+      class="bg-white p-4 rounded-xl border border-gray-200/80 shadow-card hover:border-primary-300 transition-all flex items-center gap-3.5"
       title={@subtitle}
     >
       <div class="w-11 h-11 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center shrink-0 text-lg border border-primary-200">
@@ -102,7 +102,7 @@ defmodule Exoforge.Std.Dashboard.Components do
           "bg-red-50 text-red-700 border-red-200"
 
         s when s in ["native", "c#", "dotnet"] ->
-          "bg-violet-50 text-violet-700 border-violet-200"
+          "bg-primary-50 text-primary-700 border-primary-200"
 
         s when s in ["beam", "elixir", "standard"] ->
           "bg-primary-50 text-primary-800 border-primary-200"
@@ -133,7 +133,7 @@ defmodule Exoforge.Std.Dashboard.Components do
 
   def data_table(assigns) do
     ~H"""
-    <div class="overflow-x-auto rounded-2xl border border-gray-200/80 bg-white shadow-card">
+    <div class="overflow-x-auto rounded-xl border border-gray-200/80 bg-white shadow-card">
       <table class="w-full text-left text-xs border-collapse">
         <thead>
           <tr class="border-b border-gray-100 bg-gray-50/70 text-gray-500 font-bold uppercase tracking-wider text-[10px]">
@@ -428,11 +428,11 @@ defmodule Exoforge.Std.Dashboard.Components do
             phx-click={@on_close}
           ></div>
 
-          <div class={"relative bg-white rounded-2xl #{@max_width} w-full text-left shadow-2xl border border-gray-200 ring-1 ring-black/5 z-10 animate-fade-in flex flex-col max-h-[calc(100vh-2.5rem)] sm:max-h-[calc(100vh-4rem)] overflow-hidden"}>
+          <div class={"relative bg-white rounded-xl #{@max_width} w-full text-left shadow-2xl border border-gray-200 ring-1 ring-black/5 z-10 animate-fade-in flex flex-col max-h-[calc(100vh-2.5rem)] sm:max-h-[calc(100vh-4rem)] overflow-hidden"}>
             <div class="flex items-start justify-between gap-3 px-5 sm:px-6 py-4 border-b border-gray-100 shrink-0">
               <div class="flex items-center gap-3 min-w-0">
                 <%= if @icon do %>
-                  <div class="w-9 h-9 rounded-xl bg-primary-50 text-primary-700 flex items-center justify-center text-base shrink-0 ring-1 ring-primary-200/60">
+                  <div class="w-9 h-9 rounded-xl bg-primary-50 text-primary-700 flex items-center justify-center text-base shrink-0 border border-primary-200">
                     <%= @icon %>
                   </div>
                 <% end %>
@@ -496,7 +496,7 @@ defmodule Exoforge.Std.Dashboard.Components do
       >
         <div class="fixed inset-0" phx-click={@on_close} phx-target={@target}></div>
 
-        <div class={"relative bg-white rounded-2xl #{@width} w-full shadow-2xl border border-gray-200 ring-1 ring-black/5 animate-fade-in overflow-hidden flex flex-col max-h-[calc(100vh-3.5rem)]"}>
+        <div class={"relative bg-white rounded-xl #{@width} w-full shadow-2xl border border-gray-200 ring-1 ring-black/5 animate-fade-in overflow-hidden flex flex-col max-h-[calc(100vh-3.5rem)]"}>
           <button
             type="button"
             phx-click={@on_close}
@@ -508,7 +508,7 @@ defmodule Exoforge.Std.Dashboard.Components do
           </button>
 
           <div class="flex items-center gap-3 px-6 py-4 border-b border-gray-100 shrink-0">
-            <div class="w-10 h-10 rounded-xl bg-primary-50 text-primary-700 ring-1 ring-primary-200/60 flex items-center justify-center text-xl shrink-0">
+            <div class="w-10 h-10 rounded-xl bg-primary-50 text-primary-700 border border-primary-200 flex items-center justify-center text-xl shrink-0">
               <%= @icon %>
             </div>
             <div class="min-w-0 pr-8">

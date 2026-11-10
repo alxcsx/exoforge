@@ -69,12 +69,9 @@ defmodule Exoforge.Std.Dashboard.Layouts do
             };
           }
         </script>
-        <link rel="preconnect" href="https://fonts.googleapis.com">
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap">
         <style>
           body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
+            font-family: var(--exo-font);
           }
           .pulse-live {
             box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6);
@@ -490,11 +487,11 @@ defmodule Exoforge.Std.Dashboard.Layouts do
                   var current = idx + 1;
                   var details = card.closest("details");
                   if (current === stepIndex) {
-                    card.classList.add("ring-2", "ring-violet-500", "bg-violet-50/30");
+                    card.classList.add("ring-2", "ring-primary-500", "bg-primary-50/30");
                     if (details) details.open = true;
                     card.scrollIntoView({ behavior: "smooth", block: "nearest" });
                   } else {
-                    card.classList.remove("ring-2", "ring-violet-500", "bg-violet-50/30");
+                    card.classList.remove("ring-2", "ring-primary-500", "bg-primary-50/30");
                   }
                 });
 
@@ -529,9 +526,9 @@ defmodule Exoforge.Std.Dashboard.Layouts do
               var btn = document.getElementById("pkg-btn-" + cat);
               if (btn) {
                 if (cat === category) {
-                  btn.classList.add("ring-2", "ring-offset-1", "ring-violet-500");
+                  btn.classList.add("ring-2", "ring-offset-1", "ring-primary-500");
                 } else {
-                  btn.classList.remove("ring-2", "ring-offset-1", "ring-violet-500");
+                  btn.classList.remove("ring-2", "ring-offset-1", "ring-primary-500");
                 }
               }
             });

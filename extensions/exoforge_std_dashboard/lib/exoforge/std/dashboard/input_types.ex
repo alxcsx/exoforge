@@ -298,7 +298,7 @@ defmodule Exoforge.Std.Dashboard.InputTypes do
 
     ~H"""
     <div class="flex items-center gap-2">
-      <div class="relative w-8 h-8 rounded-lg overflow-hidden border border-gray-200 shadow-2xs shrink-0 cursor-pointer hover:border-purple-400 transition-colors">
+      <div class="relative w-8 h-8 rounded-lg overflow-hidden border border-gray-200 shadow-2xs shrink-0 cursor-pointer hover:border-primary-400 transition-colors">
         <input
           type="color"
           value={@hex_color}
@@ -397,7 +397,7 @@ defmodule Exoforge.Std.Dashboard.InputTypes do
 
   defp input_class(nil),
     do:
-      "rounded-xl border border-gray-200 bg-gray-50 text-xs font-mono text-gray-800 px-2 py-1.5 focus:border-purple-400 focus:bg-white focus:outline-none"
+      "rounded-xl border border-gray-200 bg-gray-50 text-xs font-mono text-gray-800 px-2 py-1.5 focus:border-primary-400 focus:bg-white focus:outline-none"
 
   defp input_class(class), do: class
 

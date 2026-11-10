@@ -191,17 +191,17 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
 
     ~H"""
     <div class="fixed inset-0 z-50 overflow-hidden bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-5">
-      <div class="bg-slate-950 rounded-3xl max-w-7xl w-full p-5 shadow-2xl border border-slate-800 relative animate-in fade-in zoom-in-95 duration-150 flex flex-col h-[94vh] text-white">
+      <div class="bg-slate-950 rounded-xl max-w-7xl w-full p-5 shadow-2xl border border-slate-800 relative animate-in fade-in zoom-in-95 duration-150 flex flex-col h-[94vh] text-white">
         <!-- Modal Header -->
         <div class="flex items-center justify-between pb-4 border-b border-slate-800">
           <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-2xl bg-violet-500/20 text-violet-400 border border-violet-500/30 flex items-center justify-center text-xl shadow-inner">
+            <div class="w-10 h-10 rounded-xl bg-primary-500/20 text-primary-400 border border-primary-500/30 flex items-center justify-center text-xl shadow-inner">
               🕸️
             </div>
             <div>
               <div class="flex items-center gap-2">
                 <h3 class="text-lg font-black text-white tracking-tight">Extension Dependency Architecture</h3>
-                <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-violet-400/20 text-violet-300 border border-violet-400/30">
+                <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-primary-400/20 text-primary-300 border border-primary-400/30">
                   DAG Engine
                 </span>
                 <span class="text-[10px] font-mono text-slate-400">
@@ -220,16 +220,16 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
             <div class="hidden sm:flex items-center gap-1.5 p-1 bg-slate-900 rounded-xl border border-slate-800 text-xs font-semibold">
               <button
                 type="button"
-                onclick="document.getElementById('dep-graph-svg-view').classList.remove('hidden'); document.getElementById('dep-graph-matrix-view').classList.add('hidden'); document.getElementById('btn-dag-graph').classList.add('bg-violet-600', 'text-white'); document.getElementById('btn-dag-graph').classList.remove('text-slate-400'); document.getElementById('btn-dag-matrix').classList.remove('bg-violet-600', 'text-white'); document.getElementById('btn-dag-matrix').classList.add('text-slate-400');"
+                onclick="document.getElementById('dep-graph-svg-view').classList.remove('hidden'); document.getElementById('dep-graph-matrix-view').classList.add('hidden'); document.getElementById('btn-dag-graph').classList.add('bg-primary-600', 'text-white'); document.getElementById('btn-dag-graph').classList.remove('text-slate-400'); document.getElementById('btn-dag-matrix').classList.remove('bg-primary-600', 'text-white'); document.getElementById('btn-dag-matrix').classList.add('text-slate-400');"
                 id="btn-dag-graph"
-                class="px-3 py-1.5 rounded-lg bg-violet-600 text-white shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                class="px-3 py-1.5 rounded-lg bg-primary-600 text-white shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
               >
                 <span>🕸️</span>
                 <span>DAG Graph</span>
               </button>
               <button
                 type="button"
-                onclick="document.getElementById('dep-graph-matrix-view').classList.remove('hidden'); document.getElementById('dep-graph-svg-view').classList.add('hidden'); document.getElementById('btn-dag-matrix').classList.add('bg-violet-600', 'text-white'); document.getElementById('btn-dag-matrix').classList.remove('text-slate-400'); document.getElementById('btn-dag-graph').classList.remove('bg-violet-600', 'text-white'); document.getElementById('btn-dag-graph').classList.add('text-slate-400');"
+                onclick="document.getElementById('dep-graph-matrix-view').classList.remove('hidden'); document.getElementById('dep-graph-svg-view').classList.add('hidden'); document.getElementById('btn-dag-matrix').classList.add('bg-primary-600', 'text-white'); document.getElementById('btn-dag-matrix').classList.remove('text-slate-400'); document.getElementById('btn-dag-graph').classList.remove('bg-primary-600', 'text-white'); document.getElementById('btn-dag-graph').classList.add('text-slate-400');"
                 id="btn-dag-matrix"
                 class="px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition-all flex items-center gap-1.5 cursor-pointer"
               >
@@ -251,7 +251,7 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
         </div>
 
         <!-- VIEW 1: INTERACTIVE SVG DAG GRAPH CANVAS -->
-        <div id="dep-graph-svg-view" class="overflow-auto py-3 flex-1 border border-slate-800/80 rounded-2xl bg-slate-950 relative shadow-inner">
+        <div id="dep-graph-svg-view" class="overflow-auto py-3 flex-1 border border-slate-800/80 rounded-xl bg-slate-950 relative shadow-inner">
           <svg
             width={@canvas_width}
             height={@canvas_height}
@@ -452,7 +452,7 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
             <%= for tier_name <- @graph_tiers do %>
               <% tier_nodes = Enum.filter(@graph_nodes, &(&1.tier == tier_name)) %>
-              <div class="bg-slate-900 rounded-2xl p-3.5 border border-slate-800 flex flex-col">
+              <div class="bg-slate-900 rounded-xl p-3.5 border border-slate-800 flex flex-col">
                 <div class="flex items-center justify-between mb-3 px-1">
                   <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider font-mono"><%= tier_name %></span>
                   <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-mono"><%= length(tier_nodes) %></span>
@@ -467,25 +467,25 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
                       phx-click="select_graph_plugin"
                       phx-value-id={node.id}
                       phx-target={@target}
-                      class={"p-3 rounded-2xl border cursor-pointer transition-all #{cond do
-                        is_selected -> "bg-violet-900/90 text-white border-violet-400 shadow-md ring-2 ring-violet-400"
+                      class={"p-3 rounded-xl border cursor-pointer transition-all #{cond do
+                        is_selected -> "bg-primary-900/90 text-white border-primary-400 shadow-md ring-2 ring-primary-400"
                         is_dependency -> "bg-amber-950/60 border-amber-400 text-amber-200 ring-1 ring-amber-400"
                         is_dependent -> "bg-emerald-950/60 border-emerald-400 text-emerald-200 ring-1 ring-emerald-400"
-                        true -> "bg-slate-950 border-slate-800 hover:border-violet-400 text-slate-200"
+                        true -> "bg-slate-950 border-slate-800 hover:border-primary-400 text-slate-200"
                       end}"}
                     >
                       <div class="flex items-center justify-between">
                         <span class="font-bold text-xs truncate max-w-[140px]" title={node.name}>
                           <%= node.icon %> <%= node.name %>
                         </span>
-                        <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
+                        <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
                           <%= if node.dependencies == [], do: "Root", else: "#{length(node.dependencies)} deps" %>
                         </span>
                       </div>
 
                       <div class="mt-2 flex flex-wrap gap-1">
                         <%= for s <- node.provides do %>
-                          <span class="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-300 border border-violet-500/30">
+                          <span class="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-primary-500/20 text-primary-300 border border-primary-500/30">
                             :<%= s %>
                           </span>
                         <% end %>
@@ -500,17 +500,17 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
 
         <!-- Node Inspector & Dependency Ledger -->
         <%= if @selected_node do %>
-          <div class="mt-3 bg-slate-900 border border-violet-500/40 rounded-2xl p-4 animate-in fade-in duration-150">
+          <div class="mt-3 bg-slate-900 border border-primary-500/40 rounded-xl p-4 animate-in fade-in duration-150">
             <div class="flex items-center justify-between mb-3">
               <div class="flex items-center gap-2">
                 <span class="text-xl"><%= @selected_node.icon %></span>
                 <span class="text-base font-bold text-white font-mono"><%= @selected_node.name %></span>
-                <span class="text-xs text-violet-400 font-mono">(<%= @selected_node.id %>)</span>
-                <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-violet-400/20 text-violet-300 border border-violet-400/30">
+                <span class="text-xs text-primary-400 font-mono">(<%= @selected_node.id %>)</span>
+                <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-primary-400/20 text-primary-300 border border-primary-400/30">
                   <%= @selected_node.tier %>
                 </span>
               </div>
-              <button phx-click="select_graph_plugin" phx-value-id={@selected_node.id} phx-target={@target} class="text-xs font-semibold text-violet-400 hover:text-violet-300 cursor-pointer">
+              <button phx-click="select_graph_plugin" phx-value-id={@selected_node.id} phx-target={@target} class="text-xs font-semibold text-primary-400 hover:text-primary-300 cursor-pointer">
                 Clear selection
               </button>
             </div>
@@ -562,7 +562,7 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
         <!-- Modal Footer -->
         <div class="pt-3 border-t border-slate-800 flex items-center justify-between">
           <div class="flex items-center gap-4 text-[11px] text-slate-400">
-            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-violet-500 inline-block"></span> Selected</span>
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-primary-500 inline-block"></span> Selected</span>
             <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block"></span> Upstream Dependency</span>
             <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block"></span> Downstream Dependent</span>
           </div>
