@@ -2440,11 +2440,47 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                       </div>
                     </div>
 
-                    <div class="flex items-baseline gap-3">
-                      <span class="text-3xl font-black text-gray-900 tracking-tight"><%= @telemetry.total_invocations %></span>
-                      <span class="text-xs font-semibold text-gray-500 bg-gray-100 px-2.5 py-0.5 rounded-full font-mono">
-                        action calls
-                      </span>
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                      <div class="flex items-baseline gap-3">
+                        <span class="text-3xl font-black text-gray-900 tracking-tight"><%= @telemetry.total_invocations %></span>
+                        <span class="text-xs font-semibold text-gray-500 bg-gray-100 px-2.5 py-0.5 rounded-full font-mono">
+                          action calls
+                        </span>
+                      </div>
+
+                      <!-- Needs attention: alongside the count, not below it, so the card stays short -->
+                      <%= if @health.attention != [] do %>
+                        <div class="flex flex-wrap items-center gap-1.5">
+                          <span class="text-[10px] font-bold uppercase tracking-wider text-amber-700 flex items-center gap-1.5">
+                            <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                            Needs attention
+                          </span>
+                          <%= for item <- @health.attention do %>
+                            <span
+                              class="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-50/70 border border-amber-200/70 text-[10px] max-w-[15rem]"
+                              title={"#{item.label} — #{item.detail}"}
+                            >
+                              <span><%= case item.kind do
+                                "extension" -> "🧩"
+                                "error" -> "⚠️"
+                                _ -> "🐢"
+                              end %></span>
+                              <span class="font-mono font-bold text-gray-900 truncate"><%= item.label %></span>
+                              <%= if item[:rid] do %>
+                                <button
+                                  type="button"
+                                  phx-click="open_timeline"
+                                  phx-value-rid={item.rid}
+                                  class="px-1 rounded bg-white border border-primary-200 text-primary-700 text-[10px] font-bold hover:bg-primary-50 shrink-0"
+                                  title="Open this failure's request timeline"
+                                >
+                                  🔭
+                                </button>
+                              <% end %>
+                            </span>
+                          <% end %>
+                        </div>
+                      <% end %>
                     </div>
 
                     <!-- Time-Series Multi-Line SVG Chart -->
@@ -2492,40 +2528,6 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                         <% end %>
                       </div>
                     </div>
-
-                    <!-- Needs attention: the two or three rows worth a producer's time -->
-                    <%= if @health.attention != [] do %>
-                      <div class="space-y-1.5 pt-2 border-t border-gray-100">
-                        <div class="text-[10px] font-bold uppercase tracking-wider text-amber-700 flex items-center gap-1.5">
-                          <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-                          <span>Needs attention</span>
-                        </div>
-                        <%= for item <- @health.attention do %>
-                          <div class="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-amber-50/70 border border-amber-200/70 text-[11px]">
-                            <div class="flex items-center gap-2 min-w-0">
-                              <span><%= case item.kind do
-                                "extension" -> "🧩"
-                                "error" -> "⚠️"
-                                _ -> "🐢"
-                              end %></span>
-                              <span class="font-mono font-bold text-gray-900 truncate"><%= item.label %></span>
-                              <span class="text-gray-500 truncate"><%= item.detail %></span>
-                            </div>
-                            <%= if item[:rid] do %>
-                              <button
-                                type="button"
-                                phx-click="open_timeline"
-                                phx-value-rid={item.rid}
-                                class="px-1.5 py-0.5 rounded bg-white border border-primary-200 text-primary-700 text-[10px] font-bold hover:bg-primary-50 shrink-0"
-                                title="Open this failure's request timeline"
-                              >
-                                🔭
-                              </button>
-                            <% end %>
-                          </div>
-                        <% end %>
-                      </div>
-                    <% end %>
 
                     <!-- Recent Dispatched Event with Live Stream Event Count and "More" Modal Button -->
                     <div class="space-y-2 pt-2 border-t border-gray-100">

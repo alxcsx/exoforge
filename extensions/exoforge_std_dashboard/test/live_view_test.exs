@@ -1210,7 +1210,7 @@ defmodule Exoforge.DashboardLiveViewTest do
       send(
         view.pid,
         {:exo_event, "auth.login", %{player_id: "user_42"},
-         %{origin: "user_42", source: "user_42", topic: "global"}}
+         %{origin: "user_42", source: "studio_console", topic: "global", rid: "r_evt_ui"}}
       )
 
       feed_html = render(view)
@@ -1224,6 +1224,16 @@ defmodule Exoforge.DashboardLiveViewTest do
       assert events_modal_html =~ "auth.login"
       assert events_modal_html =~ "Webhooks"
       assert events_modal_html =~ "Cron"
+
+      html = render(view)
+      # The context is named values, and its request id is a labelled door to the timeline.
+      assert html =~ "origin:"
+      assert html =~ "studio_console"
+      assert html =~ "r_evt_ui"
+
+      html = render_click(view, "open_timeline", %{"rid" => "r_evt_ui"})
+      assert html =~ "Request Timeline"
+      render_click(view, "close_timeline", %{})
       render_click(view, "close_events_modal", %{})
 
       # Open Actions Detail Modal via graph Expand button (includes expanded graph + table)

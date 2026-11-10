@@ -338,6 +338,9 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
                                   <div class="min-w-0">
                                     <div class="font-bold text-gray-900 group-hover:text-primary-700 transition-colors flex items-center gap-1.5">
                                       <span><%= ExtensionPresenter.display_name(ext) %></span>
+                                      <%= if custom_ui?(ext) do %>
+                                        <span class="text-[10px] text-primary-600 opacity-80 shrink-0" title="Ships its own UI">✦</span>
+                                      <% end %>
                                       <span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-gray-100 text-gray-600 border border-gray-200">System</span>
                                     </div>
                                     <span class="text-[10px] font-mono text-gray-400 block truncate"><%= ext.id %></span>

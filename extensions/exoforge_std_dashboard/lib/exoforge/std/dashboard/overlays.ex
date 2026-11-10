@@ -448,15 +448,24 @@ defmodule Exoforge.Std.Dashboard.Overlays do
           <% else %>
             <%= for ev <- @events do %>
               <div class="p-3 bg-gray-900/90 rounded-xl border border-gray-800/80 flex flex-col gap-1.5 hover:border-gray-700 transition-colors">
-                <div class="flex items-center justify-between text-[11px]">
-                  <div class="flex items-center gap-2">
+                <div class="flex flex-wrap items-center justify-between gap-1.5 text-[11px]">
+                  <div class="flex flex-wrap items-center gap-1.5">
                     <span class="px-2 py-0.5 rounded bg-primary-950 text-primary-300 font-bold border border-primary-800/60 font-mono">
                       <%= ev.event %>
                     </span>
                     <span class="text-gray-500 text-[10px]"><%= ev.time %></span>
-                    <%= if Map.get(ev, :context) do %>
-                      <span class="text-gray-600 text-[10px] hidden sm:inline">ctx: <%= inspect(ev.context) %></span>
+                    <%= if rid = event_rid(ev[:context]) do %>
+                      <button
+                        type="button"
+                        phx-click="open_timeline"
+                        phx-value-rid={rid}
+                        class="px-1.5 py-0.5 rounded bg-primary-950/80 border border-primary-700/60 text-primary-200 hover:text-white hover:border-primary-500 text-[10px] font-bold font-mono"
+                        title="Open this event's request timeline"
+                      >
+                        🔭 <%= rid %>
+                      </button>
                     <% end %>
+                    <.event_context context={ev[:context]} />
                   </div>
                   <span class="text-[10px] text-gray-500 font-mono">#<%= ev.id %></span>
                 </div>
@@ -1012,8 +1021,8 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   <%= for ev <- @activity_events do %>
                     <% is_err = is_event_error?(ev) %>
                     <div class={"p-2.5 rounded-lg border flex flex-col gap-1.5 transition-all #{if is_err, do: "bg-red-950/25 border-red-800/80", else: "bg-gray-900/90 border-gray-800/80 hover:border-gray-700"}"}>
-                      <div class="flex items-center justify-between text-[11px]">
-                        <div class="flex items-center gap-2">
+                      <div class="flex flex-wrap items-center justify-between gap-1.5 text-[11px]">
+                        <div class="flex flex-wrap items-center gap-1.5">
                           <span class={"px-2 py-0.5 rounded font-bold font-mono text-[10px] border #{if is_err, do: "bg-red-950 text-red-300 border-red-800/80", else: "bg-primary-950 text-primary-300 border-primary-800/60"}"}>
                             <%= ev.event %>
                           </span>
@@ -1021,9 +1030,18 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                             <span class="px-1.5 py-0.2 rounded bg-red-900 text-red-200 font-bold text-[9px]">ERROR</span>
                           <% end %>
                           <span class="text-gray-400 text-[10px]"><%= ev.time %></span>
-                          <%= if Map.get(ev, :context) do %>
-                            <span class="text-gray-500 text-[10px] hidden sm:inline font-mono">ctx: <%= inspect(ev.context) %></span>
+                          <%= if rid = event_rid(ev[:context]) do %>
+                            <button
+                              type="button"
+                              phx-click="open_timeline"
+                              phx-value-rid={rid}
+                              class="px-1.5 py-0.5 rounded bg-primary-950/80 border border-primary-700/60 text-primary-200 hover:text-white hover:border-primary-500 text-[10px] font-bold font-mono"
+                              title="Open this event's request timeline"
+                            >
+                              🔭 <%= rid %>
+                            </button>
                           <% end %>
+                          <.event_context context={ev[:context]} />
                         </div>
                         <span class="text-[10px] text-gray-500 font-mono">#<%= ev.id %></span>
                       </div>
@@ -2721,7 +2739,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
           <% end %>
 
           <%= if @node[:reason] do %>
-            <span class="text-red-600 font-mono text-[11px] truncate max-w-[24rem]" title={@node.reason}><%= @node.reason %></span>
+            <span class="text-red-700 font-mono font-bold text-[11px] truncate max-w-[24rem]" title={@node.reason}><%= @node.reason %></span>
           <% end %>
 
           <%= if @node[:count] do %>
@@ -2795,10 +2813,45 @@ defmodule Exoforge.Std.Dashboard.Overlays do
   defp timeline_badge_class(:error), do: "bg-red-50 text-red-700 border-red-200"
   defp timeline_badge_class(_action), do: "bg-purple-50 text-purple-700 border-purple-200"
 
-  defp timeline_node_class(:error), do: "bg-red-50/60 border-red-200"
+  defp timeline_node_class(:error), do: "bg-red-50/60 border-red-300 border-l-4"
   defp timeline_node_class(:event), do: "bg-primary-50/30 border-primary-200/70"
   defp timeline_node_class(:log), do: "bg-gray-50 border-gray-200"
   defp timeline_node_class(_kind), do: "bg-white border-gray-200"
+
+  @doc """
+  An event's context as labelled chips: origin, source, scope, topic and anything else the bus
+  attaches. The event name and the request id are the row's own controls, so they are not repeated.
+  """
+  attr(:context, :map, default: nil)
+
+  def event_context(assigns) do
+    ~H"""
+    <%= for {key, value} <- event_context_props(@context) do %>
+      <span class="px-1.5 py-0.5 rounded bg-gray-800/90 text-gray-400 border border-gray-700/80 font-mono text-[10px] max-w-[16rem] truncate" title={"#{key}: #{value}"}>
+        <span class="text-gray-500"><%= key %>:</span> <%= value %>
+      </span>
+    <% end %>
+    """
+  end
+
+  defp event_context_props(context) when is_map(context) do
+    context
+    |> Enum.reject(fn {key, value} ->
+      to_string(key) in ["event", "rid"] or value in [nil, "", []]
+    end)
+    |> Enum.map(fn {key, value} -> {to_string(key), context_value(value)} end)
+    |> Enum.sort_by(&elem(&1, 0))
+  end
+
+  defp event_context_props(_context), do: []
+
+  defp event_rid(context) when is_map(context), do: context[:rid] || context["rid"]
+  defp event_rid(_context), do: nil
+
+  defp context_value(value) when is_binary(value), do: value
+  defp context_value(value) when is_atom(value) and not is_nil(value), do: to_string(value)
+  defp context_value(value) when is_list(value) or is_map(value), do: inspect(value)
+  defp context_value(value), do: to_string(value)
 
   @doc """
   Renders the full cluster events history modal ("More" button on Latest Dispatched Events).
@@ -2937,32 +2990,23 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                             </span>
                           <% end %>
                         </div>
-                        <!-- Time on its own line, context below it: the header stays readable long after the payload grows -->
-                        <div class="flex flex-wrap items-center gap-2 text-[11px] text-gray-400">
+                        <!-- Time and the event's context as named values: the request id is the door to its timeline -->
+                        <div class="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-400">
                           <span><%= ev.time %></span>
                           <span class="text-gray-600 font-mono">#<%= ev.id %></span>
-                          <%= if ev[:context] && (ev.context[:rid] || ev.context["rid"]) do %>
+                          <%= if rid = event_rid(ev[:context]) do %>
                             <button
                               type="button"
                               phx-click="open_timeline"
-                              phx-value-rid={ev.context[:rid] || ev.context["rid"]}
-                              class="px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-300 hover:text-white text-[10px] font-bold"
+                              phx-value-rid={rid}
+                              class="px-1.5 py-0.5 rounded bg-primary-950/80 border border-primary-700/60 text-primary-200 hover:text-white hover:border-primary-500 text-[10px] font-bold font-mono"
                               title="Open this event's request timeline"
                             >
-                              🔭
+                              🔭 <%= rid %>
                             </button>
                           <% end %>
-                          <%= if Map.get(ev, :source) do %>
-                            <span class="px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700 font-mono">
-                              src: <%= ev.source %>
-                            </span>
-                          <% end %>
+                          <.event_context context={ev[:context]} />
                         </div>
-                        <%= if Map.get(ev, :context) do %>
-                          <div class="px-1.5 py-0.5 rounded bg-purple-950/80 text-purple-300 text-[11px] border border-purple-800/50 font-mono break-all">
-                            ctx: <%= inspect(ev.context) %>
-                          </div>
-                        <% end %>
                       </div>
                     </div>
 
