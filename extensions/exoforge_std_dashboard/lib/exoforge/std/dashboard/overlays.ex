@@ -20,14 +20,20 @@ defmodule Exoforge.Std.Dashboard.Overlays do
   def command_palette(assigns) do
     ~H"""
     <%= if @open do %>
-      <div class="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
-        <div class="min-h-screen px-4 text-center flex items-start justify-center pt-20">
+      <div
+        data-exo-modal
+        data-close-event={@on_close}
+        class="fixed inset-0 z-[70] overflow-y-auto"
+        role="dialog"
+        aria-modal="true"
+      >
+        <div class="min-h-screen px-4 text-center flex items-start justify-center pt-[12vh]">
           <div
-            class="fixed inset-0 bg-gray-900/40 backdrop-blur-sm transition-opacity"
+            class="fixed inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity"
             phx-click={@on_close}
           ></div>
 
-          <div class="relative bg-white rounded-2xl max-w-xl w-full text-left shadow-2xl border border-gray-200 z-10 overflow-hidden">
+          <div class="relative bg-white rounded-2xl max-w-xl w-full text-left shadow-2xl border border-gray-200 ring-1 ring-black/5 z-10 overflow-hidden animate-fade-in">
             <div class="p-3 border-b border-gray-100 flex items-center gap-2">
               <svg class="w-5 h-5 text-gray-400 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -115,20 +121,27 @@ defmodule Exoforge.Std.Dashboard.Overlays do
 
     ~H"""
     <%= if @open do %>
-      <div id="action_runner_modal" class="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
-        <div class="min-h-screen px-4 text-center flex items-center justify-center py-8">
+      <div
+        id="action_runner_modal"
+        data-exo-modal
+        data-close-event={@on_close}
+        class="fixed inset-0 z-[70] overflow-y-auto"
+        role="dialog"
+        aria-modal="true"
+      >
+        <div class="min-h-screen px-4 text-center flex items-center justify-center py-6">
           <!-- Backdrop -->
           <div
-            class="fixed inset-0 bg-gray-900/40 backdrop-blur-sm transition-opacity animate-fade-in"
+            class="fixed inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity"
             phx-click={@on_close}
           ></div>
 
           <!-- Dialog Box -->
-          <div class="relative bg-white rounded-2xl max-w-xl w-full p-6 text-left shadow-2xl border border-gray-100 z-10 animate-fade-in space-y-4">
+          <div class="relative bg-white rounded-2xl max-w-xl w-full p-6 text-left shadow-2xl border border-gray-200 ring-1 ring-black/5 z-10 animate-fade-in space-y-4 max-h-[calc(100vh-3rem)] overflow-y-auto custom-scrollbar">
             <!-- Modal Header -->
             <div class="flex items-center justify-between pb-3 border-b border-gray-100">
               <div class="flex items-center gap-2.5">
-                <div class="w-8 h-8 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center font-bold text-sm">
+                <div class="w-9 h-9 rounded-xl bg-primary-50 text-primary-700 ring-1 ring-primary-200/60 flex items-center justify-center font-bold text-base shrink-0">
                   ⚡
                 </div>
                 <div>
@@ -139,7 +152,8 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               <button
                 type="button"
                 phx-click={@on_close}
-                class="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center transition-colors text-xs font-bold"
+                class="w-8 h-8 shrink-0 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800 flex items-center justify-center transition-colors text-xs font-bold"
+                title="Close (Esc)"
               >
                 ✕
               </button>
@@ -522,6 +536,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
     <.modal
       id={@id}
       open={@open}
+      icon="⚙️"
       max_width="max-w-4xl"
       title="Project Settings & Topology"
       subtitle={"#{@project_name} cluster configuration & extension options"}
@@ -1725,6 +1740,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
     <.modal
       id="sdk_download_modal"
       open={@open}
+      icon="📦"
       max_width="max-w-2xl"
       title="Download Engine & Client SDKs"
       subtitle="Connect Unity or custom C# game clients to this Exoforge cluster."
@@ -2005,16 +2021,23 @@ defmodule Exoforge.Std.Dashboard.Overlays do
         |> assign(:expanded_series, expanded_series)
 
       ~H"""
-      <div id="actions_detail_modal" class="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
-        <div class="min-h-screen px-4 text-center flex items-center justify-center py-8">
+      <div
+        id="actions_detail_modal"
+        data-exo-modal
+        data-close-event={@on_close}
+        class="fixed inset-0 z-[70] overflow-y-auto"
+        role="dialog"
+        aria-modal="true"
+      >
+        <div class="min-h-screen px-4 text-center flex items-center justify-center py-6">
           <!-- Backdrop -->
           <div
-            class="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity cursor-pointer"
+            class="fixed inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity cursor-pointer"
             phx-click={@on_close}
           ></div>
 
           <!-- Dialog Box -->
-          <div class="relative bg-white dark:bg-gray-900 rounded-2xl max-w-6xl w-full p-6 text-left shadow-2xl border border-gray-200 z-10 animate-fade-in space-y-4">
+          <div class="relative bg-white rounded-2xl max-w-6xl w-full p-6 text-left shadow-2xl border border-gray-200 ring-1 ring-black/5 z-10 animate-fade-in space-y-4 max-h-[calc(100vh-3rem)] overflow-y-auto custom-scrollbar">
             <!-- Modal Header with Mode Switcher -->
             <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-gray-100 gap-3">
               <div>
@@ -2051,8 +2074,8 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                 <button
                   type="button"
                   phx-click={@on_close}
-                  class="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center transition-colors text-xs font-bold"
-                  title="Close Modal (Esc)"
+                  class="w-8 h-8 shrink-0 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800 flex items-center justify-center transition-colors text-xs font-bold"
+                  title="Close (Esc)"
                 >
                   ✕
                 </button>
@@ -2073,19 +2096,19 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               <div class="w-full bg-white rounded-xl p-2.5 border border-gray-200/90 shadow-2xs overflow-hidden">
                 <svg viewBox="0 0 760 160" class="w-full h-56 overflow-visible">
                   <!-- Grid horizontal lines & Y-axis labels -->
-                  <line x1="50" y1="25" x2="730" y2="25" stroke="#f1f5f9" stroke-width="1" stroke-dasharray="3 3" />
-                  <text x="44" y="28" text-anchor="end" font-size="10" font-family="monospace" fill="#94a3b8"><%= @chart_max %></text>
+                  <line x1="50" y1="25" x2="730" y2="25" stroke="var(--exo-border)" stroke-width="1" stroke-dasharray="3 3" />
+                  <text x="44" y="28" text-anchor="end" font-size="10" font-family="monospace" fill="var(--exo-text-muted)"><%= @chart_max %></text>
 
-                  <line x1="50" y1="80" x2="730" y2="80" stroke="#f1f5f9" stroke-width="1" stroke-dasharray="3 3" />
-                  <text x="44" y="83" text-anchor="end" font-size="10" font-family="monospace" fill="#94a3b8"><%= round(@chart_max / 2) %></text>
+                  <line x1="50" y1="80" x2="730" y2="80" stroke="var(--exo-border)" stroke-width="1" stroke-dasharray="3 3" />
+                  <text x="44" y="83" text-anchor="end" font-size="10" font-family="monospace" fill="var(--exo-text-muted)"><%= round(@chart_max / 2) %></text>
 
-                  <line x1="50" y1="135" x2="730" y2="135" stroke="#e2e8f0" stroke-width="1.5" />
-                  <text x="44" y="138" text-anchor="end" font-size="10" font-family="monospace" fill="#94a3b8">0</text>
+                  <line x1="50" y1="135" x2="730" y2="135" stroke="var(--exo-border-strong, var(--exo-border))" stroke-width="1.5" />
+                  <text x="44" y="138" text-anchor="end" font-size="10" font-family="monospace" fill="var(--exo-text-muted)">0</text>
 
                   <!-- X-axis ticks & Time labels -->
                   <%= for {lbl, x} <- Enum.zip(Map.get(@telemetry, :time_labels, []), @expanded_x_coords) do %>
-                    <line x1={x} y1="135" x2={x} y2="140" stroke="#cbd5e1" stroke-width="1" />
-                    <text x={x} y="152" text-anchor="middle" font-size="10" font-family="monospace" fill="#94a3b8"><%= lbl %></text>
+                    <line x1={x} y1="135" x2={x} y2="140" stroke="var(--exo-border-strong, var(--exo-border))" stroke-width="1" />
+                    <text x={x} y="152" text-anchor="middle" font-size="10" font-family="monospace" fill="var(--exo-text-muted)"><%= lbl %></text>
                   <% end %>
 
                   <!-- Multi-line series with high-resolution coordinates -->
@@ -2557,14 +2580,21 @@ defmodule Exoforge.Std.Dashboard.Overlays do
   def timeline_modal(assigns) do
     ~H"""
     <%= if @open do %>
-      <div id="timeline_modal" class="fixed inset-0 z-[60] overflow-y-auto" role="dialog" aria-modal="true">
+      <div
+        id="timeline_modal"
+        data-exo-modal
+        data-close-event={@on_close}
+        class="fixed inset-0 z-[80] overflow-y-auto"
+        role="dialog"
+        aria-modal="true"
+      >
         <div class="min-h-screen px-4 text-center flex items-center justify-center py-8">
-          <div class="fixed inset-0 bg-black/60 backdrop-blur-sm cursor-pointer" phx-click={@on_close}></div>
+          <div class="fixed inset-0 bg-slate-950/60 backdrop-blur-sm cursor-pointer" phx-click={@on_close}></div>
 
-          <div class="relative bg-white rounded-2xl max-w-4xl w-full p-6 text-left shadow-2xl border border-gray-200 z-10 space-y-4">
+          <div class="relative bg-white rounded-2xl max-w-4xl w-full p-6 text-left shadow-2xl border border-gray-200 ring-1 ring-black/5 z-10 space-y-4 max-h-[calc(100vh-3rem)] overflow-y-auto custom-scrollbar">
             <div class="flex items-center justify-between pb-3 border-b border-gray-100">
               <div class="flex items-center gap-2.5">
-                <div class="w-8 h-8 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center font-bold text-sm">
+                <div class="w-9 h-9 rounded-xl bg-primary-50 text-primary-700 ring-1 ring-primary-200/60 flex items-center justify-center font-bold text-base shrink-0">
                   🔭
                 </div>
                 <div>
@@ -2579,8 +2609,8 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                 <button
                   type="button"
                   phx-click={@on_close}
-                  class="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center transition-colors text-xs font-bold"
-                  title="Close Modal (Esc)"
+                  class="w-8 h-8 shrink-0 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800 flex items-center justify-center transition-colors text-xs font-bold"
+                  title="Close (Esc)"
                 >
                   ✕
                 </button>
@@ -2874,19 +2904,26 @@ defmodule Exoforge.Std.Dashboard.Overlays do
   def events_modal(assigns) do
     ~H"""
     <%= if @open do %>
-      <div id="events_history_modal" class="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
+      <div
+        id="events_history_modal"
+        data-exo-modal
+        data-close-event={@on_close}
+        class="fixed inset-0 z-[70] overflow-y-auto"
+        role="dialog"
+        aria-modal="true"
+      >
         <div class="min-h-screen px-4 text-center flex items-center justify-center py-6">
           <!-- Backdrop -->
           <div
-            class="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
+            class="fixed inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity"
             phx-click={@on_close}
           ></div>
 
           <!-- Dialog Box -->
-          <div class="relative bg-white rounded-2xl max-w-5xl w-full p-6 text-left shadow-2xl border border-gray-200 z-10 animate-fade-in flex flex-col h-[85vh] space-y-4">
+          <div class="relative bg-white rounded-2xl max-w-5xl w-full p-6 text-left shadow-2xl border border-gray-200 ring-1 ring-black/5 z-10 animate-fade-in flex flex-col h-[85vh] space-y-4">
             <div class="flex items-center justify-between pb-3 border-b border-gray-100 flex-shrink-0">
               <div class="flex items-center gap-2.5">
-                <div class="w-8 h-8 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center font-bold text-sm">
+                <div class="w-9 h-9 rounded-xl bg-primary-50 text-primary-700 ring-1 ring-primary-200/60 flex items-center justify-center font-bold text-base shrink-0">
                   📡
                 </div>
                 <div>
@@ -2901,8 +2938,8 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                 <button
                   type="button"
                   phx-click={@on_close}
-                  class="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center transition-colors text-xs font-bold cursor-pointer"
-                  title="Close Modal (Esc)"
+                  class="w-8 h-8 shrink-0 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800 flex items-center justify-center transition-colors text-xs font-bold cursor-pointer"
+                  title="Close (Esc)"
                 >
                   ✕
                 </button>

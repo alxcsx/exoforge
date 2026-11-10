@@ -1642,8 +1642,9 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
         column gains an input and nothing here has to know what the column means.
       -->
       <%= if @resource_form do %>
-        <div class="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-200 space-y-4">
+        <div class="fixed inset-0 z-[70] overflow-y-auto bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6">
+          <div class="fixed inset-0" phx-click="close_resource_form" phx-target={@myself}></div>
+          <div class="relative bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-200 ring-1 ring-black/5 space-y-4 max-h-[calc(100vh-3rem)] overflow-y-auto custom-scrollbar animate-fade-in">
             <div class="flex items-start justify-between">
               <div>
                 <h3 class="text-base font-bold text-gray-900">
@@ -1659,7 +1660,8 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                 type="button"
                 phx-click="close_resource_form"
                 phx-target={@myself}
-                class="text-gray-400 hover:text-gray-600 font-bold"
+                class="w-8 h-8 shrink-0 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-400 hover:text-gray-700 flex items-center justify-center transition-colors text-xs font-bold"
+                title="Close"
               >
                 ✕
               </button>
@@ -1712,15 +1714,17 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
       <% end %>
 
       <%= if @export_modal_open do %>
-        <div class="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div class="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-gray-200 space-y-4">
+        <div class="fixed inset-0 z-[70] overflow-y-auto bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6">
+          <div class="fixed inset-0" phx-click="close_export_modal" phx-target={@myself}></div>
+          <div class="relative bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-gray-200 ring-1 ring-black/5 space-y-4 max-h-[calc(100vh-3rem)] overflow-y-auto custom-scrollbar animate-fade-in">
             <div class="flex items-center justify-between">
               <h3 class="text-base font-bold text-gray-900">Export <%= @export_format %> Data (<%= @export_filename %>)</h3>
               <button
                 type="button"
                 phx-click="close_export_modal"
                 phx-target={@myself}
-                class="text-gray-400 hover:text-gray-600 font-bold"
+                class="w-8 h-8 shrink-0 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-400 hover:text-gray-700 flex items-center justify-center transition-colors text-xs font-bold"
+                title="Close"
               >
                 ✕
               </button>
@@ -1755,8 +1759,9 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
 
       <!-- File Bucket Picker Modal -->
       <%= if @file_picker_open do %>
-        <div class="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-gray-200 space-y-4">
+        <div class="fixed inset-0 z-[70] overflow-y-auto bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6">
+          <div class="fixed inset-0" phx-click="close_file_picker" phx-target={@myself}></div>
+          <div class="relative bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-gray-200 ring-1 ring-black/5 space-y-4 max-h-[calc(100vh-3rem)] overflow-y-auto custom-scrollbar animate-fade-in">
             <div class="flex items-center justify-between border-b border-gray-100 pb-3">
               <div class="flex items-center gap-2">
                 <span class="text-xl">🗂️</span>
@@ -1765,7 +1770,15 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                   <p class="text-xs text-gray-400">Selecting for field <code class="font-mono text-violet-700 font-bold"><%= @file_picker_field %></code></p>
                 </div>
               </div>
-              <button phx-click="close_file_picker" phx-target={@myself} class="text-gray-400 hover:text-gray-600 font-bold text-sm">✕</button>
+              <button
+                type="button"
+                phx-click="close_file_picker"
+                phx-target={@myself}
+                class="w-8 h-8 shrink-0 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-400 hover:text-gray-700 flex items-center justify-center transition-colors text-xs font-bold"
+                title="Close"
+              >
+                ✕
+              </button>
             </div>
 
             <!-- Bucket tabs & Search -->

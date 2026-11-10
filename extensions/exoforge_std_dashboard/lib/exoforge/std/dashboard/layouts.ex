@@ -560,9 +560,21 @@ defmodule Exoforge.Std.Dashboard.Layouts do
 
           document.addEventListener("keydown", function(e) {
             if (e.key === "Escape") {
-              window.ExoGraphEngine.clearSpotlight();
+              if (window.ExoGraphEngine) window.ExoGraphEngine.clearSpotlight();
               var modal = document.getElementById("arch-graph-modal");
               if (modal) modal.classList.add("hidden");
+            }
+
+            // Escape closes the dialog on top - the last visible one in the DOM. The dialog names
+            // its own close event, so the shell does not have to be known here.
+            if (e.key === "Escape" && window._studioDispatcher) {
+              var open = Array.prototype.slice.call(document.querySelectorAll("[data-exo-modal]"))
+                .filter(function(el) { return el.offsetParent !== null; });
+              var top = open[open.length - 1];
+              if (top && top.dataset.closeEvent) {
+                e.preventDefault();
+                window._studioDispatcher.pushEvent(top.dataset.closeEvent, {});
+              }
             }
           });
 

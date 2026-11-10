@@ -44,7 +44,7 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
       role="button"
       tabindex="0"
       title={"Open #{ExtensionPresenter.display_name(@ext)} Control Panel"}
-      class="bg-white p-5 rounded-2xl border border-gray-200/90 hover:border-primary-500 hover:ring-2 hover:ring-primary-500/20 shadow-sm hover:shadow-lg transition-all flex flex-col justify-between space-y-4 group cursor-pointer relative overflow-hidden"
+      class="h-full bg-white p-5 rounded-2xl border border-gray-200/90 hover:border-primary-500 hover:ring-2 hover:ring-primary-500/20 shadow-sm hover:shadow-lg transition-all flex flex-col justify-between space-y-4 group cursor-pointer relative overflow-hidden"
     >
       <div class="space-y-3">
         <div class="flex items-start justify-between gap-2">
@@ -288,7 +288,7 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
                 <%= if Enum.empty?(ui_exts) do %>
                   <p class="p-6 bg-white border border-gray-200 rounded-2xl text-xs text-gray-400 italic">No visual control extensions found matching filter.</p>
                 <% else %>
-                  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 auto-rows-fr">
                     <%= for ext <- ui_exts do %>
                       <.extension_card ext={ext} pinned={to_string(ext.id) in @pinned_extensions} />
                     <% end %>

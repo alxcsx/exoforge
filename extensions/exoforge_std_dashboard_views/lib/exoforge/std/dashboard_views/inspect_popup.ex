@@ -22,24 +22,24 @@ defmodule Exoforge.Std.DashboardViews.InspectPopup do
     ~H"""
     <%= if @open do %>
       <div
-        class="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+        class="fixed inset-0 z-[70] overflow-y-auto bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6"
         role="dialog"
         aria-modal="true"
       >
         <div class="fixed inset-0" phx-click={@on_close} phx-target={@target}></div>
 
-        <div class={"relative bg-white rounded-2xl #{@width} w-full shadow-2xl border border-gray-200 animate-in fade-in duration-150 overflow-hidden"}>
+        <div class={"relative bg-white rounded-2xl #{@width} w-full shadow-2xl border border-gray-200 ring-1 ring-black/5 animate-fade-in overflow-hidden flex flex-col max-h-[calc(100vh-3.5rem)]"}>
           <button
             type="button"
             phx-click={@on_close}
             phx-target={@target}
-            class="absolute top-4 right-5 z-10 text-gray-400 hover:text-gray-600 text-lg font-bold"
+            class="absolute top-4 right-5 z-10 w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-400 hover:text-gray-700 flex items-center justify-center transition-colors text-xs font-bold"
           >
             ✕
           </button>
 
           <div class="flex items-center gap-3 px-6 py-4 border-b border-gray-100">
-            <div class="w-10 h-10 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center text-xl shrink-0">
+            <div class="w-10 h-10 rounded-xl bg-primary-50 text-primary-700 ring-1 ring-primary-200/60 flex items-center justify-center text-xl shrink-0">
               <%= @icon %>
             </div>
             <div class="min-w-0">
@@ -50,7 +50,7 @@ defmodule Exoforge.Std.DashboardViews.InspectPopup do
             </div>
           </div>
 
-          <div class="flex flex-col md:flex-row min-h-[360px] divide-y md:divide-y-0 md:divide-x divide-gray-100">
+          <div class="flex flex-col md:flex-row min-h-[360px] flex-1 min-h-0 divide-y md:divide-y-0 md:divide-x divide-gray-100 overflow-hidden">
             <%= if @tabs != [] do %>
               <div class="w-full md:w-48 p-2 bg-gray-50/70 space-y-0.5 shrink-0">
                 <%= for tab <- @tabs do %>

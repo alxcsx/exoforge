@@ -2214,30 +2214,42 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         </div>
       </header>
 
-      <!-- Floating Toast Notifications (completely outside document flow to avoid layout shifts) -->
-      <div id="studio-toasts" class="fixed top-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none max-w-sm w-full">
+      <!-- Floating Toast Notifications: out of the document flow, one row each, colour as an accent -->
+      <div
+        id="studio-toasts"
+        class="fixed top-20 right-4 z-[100] flex flex-col items-end gap-2 pointer-events-none w-[min(22rem,calc(100vw-2rem))]"
+        aria-live="polite"
+      >
         <%= for {kind, msg} <- [{:info, Phoenix.Flash.get(@flash, :info) || Phoenix.Flash.get(@flash, "info")}, {:error, Phoenix.Flash.get(@flash, :error) || Phoenix.Flash.get(@flash, "error")}], msg do %>
+          <% info? = kind in [:info, "info"] %>
+          <% kind_str = to_string(kind) %>
           <div
-            id={"toast-#{kind}"}
+            id={"toast-#{kind_str}"}
             phx-hook="AutoDismissToast"
-            data-kind={kind}
+            data-kind={kind_str}
             phx-click="dismiss_toast"
-            phx-value-kind={kind}
-            onclick="this.remove()"
-            role="alert"
+            phx-value-kind={kind_str}
+            role="status"
             title="Click to dismiss"
-            class={"relative overflow-hidden pointer-events-auto p-3.5 rounded-xl text-xs font-bold flex items-center gap-3 shadow-xl cursor-pointer select-none transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] #{if kind in [:info, "info"], do: "bg-emerald-600 text-white shadow-emerald-900/20", else: "bg-red-600 text-white shadow-red-900/20"}"}
+            class={"relative pointer-events-auto w-full overflow-hidden rounded-xl border bg-white shadow-lg pl-3 pr-2 py-2.5 flex items-start gap-2.5 cursor-pointer select-none animate-toast-in #{if info?, do: "border-emerald-200", else: "border-red-200"}"}
           >
-            <span class="text-sm font-black pointer-events-none"><%= if kind in [:info, "info"], do: "✓", else: "!" %></span>
-            <span class="flex-1 leading-snug pointer-events-none"><%= msg %></span>
+            <span class={"mt-px w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black shrink-0 #{if info?, do: "bg-emerald-100 text-emerald-700", else: "bg-red-100 text-red-700"}"}>
+              <%= if info?, do: "✓", else: "!" %>
+            </span>
+            <div class="min-w-0 flex-1">
+              <p class={"text-[9px] font-bold uppercase tracking-wider #{if info?, do: "text-emerald-600", else: "text-red-600"}"}>
+                <%= if info?, do: "Notice", else: "Error" %>
+              </p>
+              <p class="text-xs font-semibold text-gray-800 leading-snug break-words"><%= msg %></p>
+            </div>
             <button
               type="button"
-              class="opacity-80 hover:opacity-100 text-base font-black leading-none p-1 pointer-events-none"
+              class="w-6 h-6 shrink-0 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 flex items-center justify-center text-sm font-bold pointer-events-none"
               title="Dismiss"
             >
               &times;
             </button>
-            <div class="toast-progress-bar"></div>
+            <div class={"toast-progress-bar #{if info?, do: "text-emerald-500", else: "text-red-500"}"}></div>
           </div>
         <% end %>
       </div>
@@ -2300,7 +2312,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
             </div>
           </div>
 
-          <div id="overview-bento-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 auto-rows-min [grid-auto-flow:dense]">
+          <div id="overview-bento-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 auto-rows-fr [grid-auto-flow:dense]">
             <%= for {slot_id, idx} <- Enum.with_index(@overview_slot_ids) do %>
               <%= case slot_id do %>
                 <% "quickstart" -> %>
@@ -2309,7 +2321,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                     id="slot-quickstart"
                     data-slot-id="quickstart"
                     data-slot-span="1x4"
-                    class={"col-span-1 md:col-span-2 lg:col-span-4 bg-gradient-to-r from-primary-950 via-primary-900 to-indigo-950 rounded-2xl p-6 text-white shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 border #{if @grid_edit_mode, do: "border-primary-400 ring-2 ring-primary-500/20", else: "border-primary-500/30"}"}
+                    class={"col-span-1 md:col-span-2 lg:col-span-4 h-full bg-gradient-to-r from-primary-950 via-primary-900 to-indigo-950 rounded-2xl p-6 text-white shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 border #{if @grid_edit_mode, do: "border-primary-400 ring-2 ring-primary-500/20", else: "border-primary-500/30"}"}
                   >
                     <div class="space-y-1.5 flex-1 min-w-0">
                       <div class="flex items-center gap-2">
@@ -2378,7 +2390,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                     id="slot-event_graph"
                     data-slot-id="event_graph"
                     data-slot-span="2x2"
-                    class={"lg:col-span-2 lg:row-span-2 bg-white p-6 rounded-2xl border shadow-card flex flex-col space-y-4 #{if @grid_edit_mode, do: "border-primary-400 ring-2 ring-primary-500/20", else: "border-gray-200"}"}
+                    class={"lg:col-span-2 lg:row-span-2 h-full min-h-0 bg-white p-6 rounded-2xl border shadow-card flex flex-col space-y-4 #{if @grid_edit_mode, do: "border-primary-400 ring-2 ring-primary-500/20", else: "border-gray-200"}"}
                   >
                     <div class="flex items-start justify-between gap-3">
                       <div>
@@ -2488,19 +2500,19 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                       <div class="w-full bg-gray-50/50 rounded-xl p-2 border border-gray-100">
                         <svg viewBox="0 0 500 155" class="w-full h-36 overflow-visible">
                           <!-- Grid horizontal lines & Y-axis labels -->
-                          <line x1="40" y1="30" x2="480" y2="30" stroke="#f1f5f9" stroke-width="1" stroke-dasharray="3 3" />
-                          <text x="34" y="33" text-anchor="end" font-size="9" font-family="monospace" fill="#94a3b8"><%= @telemetry.action_max_val %></text>
+                          <line x1="40" y1="30" x2="480" y2="30" stroke="var(--exo-border)" stroke-width="1" stroke-dasharray="3 3" />
+                          <text x="34" y="33" text-anchor="end" font-size="9" font-family="monospace" fill="var(--exo-text-muted)"><%= @telemetry.action_max_val %></text>
 
-                          <line x1="40" y1="77" x2="480" y2="77" stroke="#f1f5f9" stroke-width="1" stroke-dasharray="3 3" />
-                          <text x="34" y="80" text-anchor="end" font-size="9" font-family="monospace" fill="#94a3b8"><%= round(@telemetry.action_max_val / 2) %></text>
+                          <line x1="40" y1="77" x2="480" y2="77" stroke="var(--exo-border)" stroke-width="1" stroke-dasharray="3 3" />
+                          <text x="34" y="80" text-anchor="end" font-size="9" font-family="monospace" fill="var(--exo-text-muted)"><%= round(@telemetry.action_max_val / 2) %></text>
 
-                          <line x1="40" y1="125" x2="480" y2="125" stroke="#e2e8f0" stroke-width="1.5" />
-                          <text x="34" y="128" text-anchor="end" font-size="9" font-family="monospace" fill="#94a3b8">0</text>
+                          <line x1="40" y1="125" x2="480" y2="125" stroke="var(--exo-border-strong, var(--exo-border))" stroke-width="1.5" />
+                          <text x="34" y="128" text-anchor="end" font-size="9" font-family="monospace" fill="var(--exo-text-muted)">0</text>
 
                           <!-- X-axis ticks & Time labels -->
                           <%= for {lbl, x} <- Enum.zip(@telemetry.time_labels, @telemetry.x_coords) do %>
-                            <line x1={x} y1="125" x2={x} y2="129" stroke="#cbd5e1" stroke-width="1" />
-                            <text x={x} y="142" text-anchor="middle" font-size="9" font-family="monospace" fill="#94a3b8"><%= lbl %></text>
+                            <line x1={x} y1="125" x2={x} y2="129" stroke="var(--exo-border-strong, var(--exo-border))" stroke-width="1" />
+                            <text x={x} y="142" text-anchor="middle" font-size="9" font-family="monospace" fill="var(--exo-text-muted)"><%= lbl %></text>
                           <% end %>
 
                           <!-- One line per action: one point per minute, the last 30 minutes -->
@@ -2578,7 +2590,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                     id="slot-error_graph"
                     data-slot-id="error_graph"
                     data-slot-span="2x2"
-                    class={"lg:col-span-2 lg:row-span-2 bg-white p-6 rounded-2xl border shadow-card flex flex-col space-y-4 #{if @grid_edit_mode, do: "border-primary-400 ring-2 ring-primary-500/20", else: "border-gray-200"}"}
+                    class={"lg:col-span-2 lg:row-span-2 h-full min-h-0 bg-white p-6 rounded-2xl border shadow-card flex flex-col space-y-4 #{if @grid_edit_mode, do: "border-primary-400 ring-2 ring-primary-500/20", else: "border-gray-200"}"}
                   >
                     <div class="flex items-start justify-between gap-3">
                       <div>
@@ -2654,19 +2666,19 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                       <div class="w-full bg-gray-50/50 rounded-xl p-2 border border-gray-100">
                         <svg viewBox="0 0 500 155" class="w-full h-36 overflow-visible">
                           <!-- Grid horizontal lines & Y-axis labels -->
-                          <line x1="40" y1="30" x2="480" y2="30" stroke="#f1f5f9" stroke-width="1" stroke-dasharray="3 3" />
-                          <text x="34" y="33" text-anchor="end" font-size="9" font-family="monospace" fill="#94a3b8"><%= @telemetry.error_max_val %></text>
+                          <line x1="40" y1="30" x2="480" y2="30" stroke="var(--exo-border)" stroke-width="1" stroke-dasharray="3 3" />
+                          <text x="34" y="33" text-anchor="end" font-size="9" font-family="monospace" fill="var(--exo-text-muted)"><%= @telemetry.error_max_val %></text>
 
-                          <line x1="40" y1="77" x2="480" y2="77" stroke="#f1f5f9" stroke-width="1" stroke-dasharray="3 3" />
-                          <text x="34" y="80" text-anchor="end" font-size="9" font-family="monospace" fill="#94a3b8"><%= round(@telemetry.error_max_val / 2) %></text>
+                          <line x1="40" y1="77" x2="480" y2="77" stroke="var(--exo-border)" stroke-width="1" stroke-dasharray="3 3" />
+                          <text x="34" y="80" text-anchor="end" font-size="9" font-family="monospace" fill="var(--exo-text-muted)"><%= round(@telemetry.error_max_val / 2) %></text>
 
-                          <line x1="40" y1="125" x2="480" y2="125" stroke="#e2e8f0" stroke-width="1.5" />
-                          <text x="34" y="128" text-anchor="end" font-size="9" font-family="monospace" fill="#94a3b8">0</text>
+                          <line x1="40" y1="125" x2="480" y2="125" stroke="var(--exo-border-strong, var(--exo-border))" stroke-width="1.5" />
+                          <text x="34" y="128" text-anchor="end" font-size="9" font-family="monospace" fill="var(--exo-text-muted)">0</text>
 
                           <!-- X-axis ticks & Time labels -->
                           <%= for {lbl, x} <- Enum.zip(@telemetry.time_labels, @telemetry.x_coords) do %>
-                            <line x1={x} y1="125" x2={x} y2="129" stroke="#cbd5e1" stroke-width="1" />
-                            <text x={x} y="142" text-anchor="middle" font-size="9" font-family="monospace" fill="#94a3b8"><%= lbl %></text>
+                            <line x1={x} y1="125" x2={x} y2="129" stroke="var(--exo-border-strong, var(--exo-border))" stroke-width="1" />
+                            <text x={x} y="142" text-anchor="middle" font-size="9" font-family="monospace" fill="var(--exo-text-muted)"><%= lbl %></text>
                           <% end %>
 
                           <!-- One error line per action, one point per minute -->
@@ -2730,7 +2742,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                     id="slot-server_state"
                     data-slot-id="server_state"
                     data-slot-span="1x1"
-                    class={"lg:col-span-1 bg-white p-5 rounded-2xl border shadow-card flex flex-col justify-between space-y-4 #{if @grid_edit_mode, do: "border-primary-400 ring-2 ring-primary-500/20", else: "border-gray-200"}"}
+                    class={"lg:col-span-1 h-full bg-white p-5 rounded-2xl border shadow-card flex flex-col justify-between space-y-4 #{if @grid_edit_mode, do: "border-primary-400 ring-2 ring-primary-500/20", else: "border-gray-200"}"}
                   >
                     <div class="flex items-start justify-between gap-2">
                       <div class="flex items-center gap-2">
@@ -2803,7 +2815,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                     id="slot-extension_health"
                     data-slot-id="extension_health"
                     data-slot-span="2x1"
-                    class={"lg:col-span-2 bg-white p-5 rounded-2xl border shadow-card flex flex-col justify-between space-y-4 #{if @grid_edit_mode, do: "border-primary-400 ring-2 ring-primary-500/20", else: if(@telemetry.faulty_count > 0, do: "border-amber-300", else: "border-gray-200")}"}
+                    class={"lg:col-span-2 h-full bg-white p-5 rounded-2xl border shadow-card flex flex-col justify-between space-y-4 #{if @grid_edit_mode, do: "border-primary-400 ring-2 ring-primary-500/20", else: if(@telemetry.faulty_count > 0, do: "border-amber-300", else: "border-gray-200")}"}
                   >
                     <div class="flex items-start justify-between gap-2">
                       <div>
@@ -2903,7 +2915,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                     id="slot-download_sdk"
                     data-slot-id="download_sdk"
                     data-slot-span="1x1"
-                    class={"lg:col-span-1 bg-gradient-to-br from-purple-600 to-indigo-700 text-white p-5 rounded-2xl border shadow-lg flex flex-col justify-between space-y-4 #{if @grid_edit_mode, do: "border-white ring-2 ring-white/40", else: "border-purple-500"}"}
+                    class={"lg:col-span-1 h-full bg-gradient-to-br from-purple-600 to-indigo-700 text-white p-5 rounded-2xl border shadow-lg flex flex-col justify-between space-y-4 #{if @grid_edit_mode, do: "border-white ring-2 ring-white/40", else: "border-purple-500"}"}
                   >
                     <div class="flex items-start justify-between gap-2">
                       <div class="flex items-center gap-2">
@@ -2979,7 +2991,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                     <div
                       id={"slot-#{slot_id}"}
                       data-slot-id={slot_id}
-                      class={"bg-white p-6 rounded-2xl border shadow-card space-y-4 #{widget_width_class(widget)} #{if @grid_edit_mode, do: "border-primary-400 ring-2 ring-primary-500/20", else: "border-gray-200"}"}
+                      class={"h-full bg-white p-6 rounded-2xl border shadow-card space-y-4 #{widget_width_class(widget)} #{if @grid_edit_mode, do: "border-primary-400 ring-2 ring-primary-500/20", else: "border-gray-200"}"}
                     >
                       <div class="flex items-center justify-between gap-2">
                         <div>
