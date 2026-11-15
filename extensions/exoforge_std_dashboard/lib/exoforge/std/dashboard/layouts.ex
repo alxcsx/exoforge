@@ -626,28 +626,63 @@ defmodule Exoforge.Std.Dashboard.Layouts do
                 },
                 NavCapacity: {
                   mounted() {
+                    // Capacity is how many pinned tabs fit in the bar. Estimating it from the
+                    // viewport was wrong twice over: the nav shares a row with the brand and the
+                    // toolbar (1024px left it 537px for 623px of tabs), and the gaps, separator
+                    // and overflow button are not a formula. So read the rendered DOM: it either
+                    // overflows or it does not, and one tab at a time is the right correction.
+                    //
+                    // The loop has to drive itself. Pushing a capacity the server already holds
+                    // produces no patch, so `updated()` never fires and nothing would ever correct
+                    // the initial guess of 4.
                     this.calcCapacity = () => {
-                      const w = window.innerWidth;
-                      // Fits within one row - 1 according to responsive breakpoint:
-                      let cap = 4;
-                      if (w < 640) cap = 2;
-                      else if (w < 768) cap = 3;
-                      else cap = 4;
+                      const nav = this.el;
+                      const overflow = nav.scrollWidth - nav.clientWidth;
+                      let cap = this._lastCap === undefined ? 4 : this._lastCap;
+                      let changed = false;
+
+                      if (this._lastCap !== undefined) {
+                        if (overflow > 1 && cap > 0) {
+                          cap -= 1;
+                          changed = true;
+                        } else if (overflow <= 0 && cap < 4) {
+                          const tab = nav.querySelector('.animate-tab-in');
+                          const tabWidth = tab ? tab.getBoundingClientRect().width : 96;
+                          if (nav.clientWidth - nav.scrollWidth >= tabWidth + 4) {
+                            cap += 1;
+                            changed = true;
+                          }
+                        }
+                      }
 
                       if (this._lastCap !== cap) {
                         this._lastCap = cap;
-                        this.pushEvent("set_nav_capacity", { max_pinned: cap, screen_width: w });
+                        this.pushEvent("set_nav_capacity", {
+                          max_pinned: cap,
+                          screen_width: window.innerWidth,
+                        });
+                      }
+
+                      if (changed || this._lastCap === undefined || cap !== this._settled) {
+                        this._settled = cap;
+                        clearTimeout(this._timer);
+                        this._timer = setTimeout(this.calcCapacity, 150);
                       }
                     };
 
                     this.calcCapacity();
                     this.resizeHandler = () => {
-                      if (this._timer) clearTimeout(this._timer);
+                      this._lastCap = undefined;
+                      clearTimeout(this._timer);
                       this._timer = setTimeout(this.calcCapacity, 150);
                     };
                     window.addEventListener('resize', this.resizeHandler);
                   },
+                  updated() {
+                    this.calcCapacity();
+                  },
                   destroyed() {
+                    clearTimeout(this._timer);
                     if (this.resizeHandler) window.removeEventListener('resize', this.resizeHandler);
                   }
                 },

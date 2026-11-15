@@ -328,11 +328,11 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     cap =
       case max_val do
         i when is_integer(i) ->
-          min(max(1, i), @max_pinned)
+          min(max(0, i), @max_pinned)
 
         s when is_binary(s) ->
           case Integer.parse(s) do
-            {i, _} -> min(max(1, i), @max_pinned)
+            {i, _} -> min(max(0, i), @max_pinned)
             _ -> @max_pinned
           end
 
@@ -2035,8 +2035,10 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
             </div>
           </div>
 
-          <!-- Centered Top Navigation Bar: 1. Overview, 2. Extensions, 3. Pinned Items -->
-          <div class="flex-1 flex justify-center items-center min-w-0">
+          <!-- Centered Top Navigation Bar: 1. Overview, 2. Extensions, 3. Pinned Items.
+               Below lg the bar takes its own row: sharing one with the brand and the toolbar left
+               it 152px of a 375px screen and 313px of a 768px one, clipping tabs either way. -->
+          <div class="order-last w-full flex justify-center items-center min-w-0 lg:order-none lg:w-auto lg:flex-1">
             <% has_pinned = length(@pinned_extensions) > 0 %>
             <nav id="nav-container" phx-hook="NavCapacity" class="inline-flex items-center flex-nowrap overflow-x-hidden gap-1 bg-gray-100/90 p-1 rounded-xl border border-gray-200/80 shadow-inner">
               <!-- 1. Overview Tab (Named when empty, icon-only when pinned items grow the bar) -->
@@ -2074,14 +2076,16 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                 </span>
               </button>
 
-              <!-- Separator between main tabs and pinned items -->
-              <%= if has_pinned do %>
+              <!-- Separator between main tabs and pinned items (only when a pinned tab is inline) -->
+              <%= if has_pinned and @max_pinned > 0 do %>
                 <div class="h-4 w-px bg-gray-300/80 mx-0.5 flex-shrink-0"></div>
               <% end %>
 
-              <!-- 3a. Pinned dropdown (small screens) -->
-              <%= if has_pinned do %>
-                <div class="relative md:hidden flex-shrink-0">
+              <!-- 3a. Overflow menu: every pin that did not fit inline, at any width. It used to be
+                   md:hidden, which meant a cramped desktop bar (cap below the pin count) hid pins
+                   with nowhere to reach them. -->
+              <%= if has_pinned and length(@pinned_extensions) > @max_pinned do %>
+                <div class="relative flex-shrink-0">
                   <button
                     type="button"
                     phx-click="toggle_pinned_menu"
@@ -2092,7 +2096,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                     <span class="text-[10px]">▾</span>
                   </button>
                   <%= if @pinned_menu_open do %>
-                    <div class="absolute left-0 top-full mt-1 z-50 min-w-[11rem] bg-white border border-gray-200 rounded-xl shadow-lg p-1 space-y-0.5">
+                    <div class="absolute right-0 top-full mt-1 z-50 min-w-[11rem] max-w-[calc(100vw-1rem)] bg-white border border-gray-200 rounded-xl shadow-lg p-1 space-y-0.5">
                       <%= for ext_id <- @pinned_extensions do %>
                         <% pext = Enum.find(@overview.extensions, fn e -> to_string(e.id) == ext_id end) %>
                         <%= if pext do %>
@@ -2112,14 +2116,14 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                 </div>
               <% end %>
 
-              <!-- 3b. Pinned Extension Tabs (md+; max 4 pinned items) -->
+              <!-- 3b. Pinned Extension Tabs — as many as NavCapacity measured room for -->
               <%= for ext_id <- Enum.take(@pinned_extensions, @max_pinned) do %>
                 <% ext = Enum.find(@overview.extensions, fn e -> to_string(e.id) == ext_id end) %>
                 <%= if ext do %>
                   <% title = tab_short_name(ext) %>
                   <% icon = if is_map(ext.dashboard_view) and ext.dashboard_view[:icon], do: ext.dashboard_view[:icon], else: ExtensionPresenter.icon(ext) %>
                   <% is_active = to_string(@current_tab) == ext_id %>
-                  <div class={"group relative hidden md:inline-flex items-center justify-center rounded-lg animate-tab-in transition-colors text-xs font-bold whitespace-nowrap flex-shrink-0 #{if is_active, do: "bg-primary-600 text-white shadow-sm", else: "text-gray-600 hover:text-gray-900 hover:bg-gray-200/50"}"}>
+                  <div class={"group relative inline-flex items-center justify-center rounded-lg animate-tab-in transition-colors text-xs font-bold whitespace-nowrap flex-shrink-0 #{if is_active, do: "bg-primary-600 text-white shadow-sm", else: "text-gray-600 hover:text-gray-900 hover:bg-gray-200/50"}"}>
                     <button
                       phx-click="switch_tab"
                       phx-value-tab={ext_id}
