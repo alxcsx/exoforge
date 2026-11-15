@@ -393,7 +393,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
     ~H"""
     <div class="space-y-6" id={@id}>
       <!-- Top Header & Actions -->
-      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm">
+      <div class="exo-card flex flex-col md:flex-row md:items-center justify-between gap-4 p-6">
         <div class="flex items-center gap-4">
           <div class="w-12 h-12 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center shadow-inner">
             <.studio_icon icon="box" class="w-6 h-6" />
@@ -472,7 +472,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
       <!-- Metric Cards Grid -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <!-- 1. Installed Extensions -->
-        <div class="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title="Modular service extensions">
+        <div class="exo-card p-4 flex items-center gap-3.5" title="Modular service extensions">
           <div class="w-11 h-11 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center shrink-0">
             <.studio_icon icon="box" class="w-5 h-5" />
           </div>
@@ -486,7 +486,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
         </div>
 
         <!-- 2. BEAM Memory & Processes -->
-        <div class="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title="Erlang memory allocated">
+        <div class="exo-card p-4 flex items-center gap-3.5" title="Erlang memory allocated">
           <div class="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
             <.studio_icon icon="bolt" class="w-5 h-5" />
           </div>
@@ -502,7 +502,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
         </div>
 
         <!-- 3. Cluster Node & Uptime -->
-        <div class="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title={"Node: #{@node_name}"}>
+        <div class="exo-card p-4 flex items-center gap-3.5" title={"Node: #{@node_name}"}>
           <div class="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
             <.studio_icon icon="globe" class="w-5 h-5" />
           </div>
@@ -516,7 +516,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
         </div>
 
         <!-- 4. Version & Engine -->
-        <div class="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title={"OTP #{@otp_release} • Built #{Map.get(@system_info, "build_date", "—")}"}>
+        <div class="exo-card p-4 flex items-center gap-3.5" title={"OTP #{@otp_release} • Built #{Map.get(@system_info, "build_date", "—")}"}>
           <div class="w-11 h-11 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center shrink-0">
             <.studio_icon icon="gear" class="w-5 h-5" />
           </div>
@@ -533,7 +533,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
       </div>
 
       <!-- Filters & Search Toolbar -->
-      <div class="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div class="exo-card p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div class="flex items-center gap-3 flex-1 max-w-lg">
           <form id="extension-search-form" phx-change="search" phx-submit="search" phx-target={@myself} class="relative w-full">
             <input
@@ -787,7 +787,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
       <%= if @show_upload_modal do %>
         <div class="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div class="fixed inset-0" phx-click="close_upload_modal" phx-target={@myself}></div>
-          <div class="bg-white rounded-xl max-w-lg w-full p-6 shadow-2xl border border-gray-200 relative animate-in fade-in duration-150">
+          <div class="exo-card max-w-lg w-full p-6 shadow-2xl relative animate-in fade-in duration-150">
             <button
               phx-click="close_upload_modal"
               phx-target={@myself}
@@ -953,7 +953,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
       <%= if @show_restart_modal do %>
         <div class="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div class="fixed inset-0" phx-click="close_restart_modal" phx-target={@myself}></div>
-          <div class="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl border border-gray-200 relative animate-in fade-in duration-150">
+          <div class="exo-card max-w-md w-full p-6 shadow-2xl relative animate-in fade-in duration-150">
             <div class="flex items-center gap-3 mb-4">
               <div class="w-10 h-10 rounded-xl bg-red-100 text-red-700 flex items-center justify-center shrink-0">
                 <.studio_icon icon="alert" class="w-5 h-5" />

@@ -476,7 +476,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
 
       <!-- Top Stats & Header -->
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-3.5" title={"#{@valid_count} Active • #{@retained_count} Retained"}>
+        <div class="exo-card p-4 flex items-center gap-3.5" title={"#{@valid_count} Active • #{@retained_count} Retained"}>
           <div class="w-11 h-11 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center shrink-0">
             <.studio_icon icon="users" class="w-5 h-5" />
           </div>
@@ -489,7 +489,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
           </div>
         </div>
 
-        <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-3.5" title="Authorised client ingress active">
+        <div class="exo-card p-4 flex items-center gap-3.5" title="Authorised client ingress active">
           <div class="w-11 h-11 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
             <.studio_icon icon="lock" class="w-5 h-5" />
           </div>
@@ -502,7 +502,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
           </div>
         </div>
 
-        <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-3.5" title="Telemetry kept, user unlinked">
+        <div class="exo-card p-4 flex items-center gap-3.5" title="Telemetry kept, user unlinked">
           <div class="w-11 h-11 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
             <.studio_icon icon="archive" class="w-5 h-5" />
           </div>
@@ -517,7 +517,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
       </div>
 
       <!-- Action Toolbar with Filter Tabs -->
-      <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+      <div class="exo-card p-4 flex flex-col md:flex-row items-center justify-between gap-4">
         <!-- Retention Filter Tabs -->
         <div class="flex items-center gap-1.5 w-full md:w-auto bg-gray-100/90 p-1 rounded-xl">
           <button
@@ -760,7 +760,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
                 <% else %>
                   <div class="space-y-1.5 max-h-56 overflow-y-auto pr-1">
                     <%= for {k, v} <- @player_kv_data do %>
-                      <div class="flex items-center justify-between p-2 bg-white rounded-lg border border-gray-200 text-xs">
+                      <div class="exo-card flex items-center justify-between p-2 text-xs">
                         <span class="font-mono font-bold text-primary-800"><%= k %></span>
                         <div class="flex items-center gap-2">
                           <span class="font-mono text-gray-600 truncate max-w-xs"><%= inspect(v) %></span>
@@ -898,7 +898,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
       <%= if @show_create_modal do %>
         <div class="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div class="fixed inset-0" phx-click="close_create_modal" phx-target={@myself}></div>
-          <div class="bg-white rounded-xl max-w-lg w-full p-6 shadow-2xl border border-gray-200 relative animate-in fade-in duration-150">
+          <div class="exo-card max-w-lg w-full p-6 shadow-2xl relative animate-in fade-in duration-150">
             <button
               phx-click="close_create_modal"
               phx-target={@myself}

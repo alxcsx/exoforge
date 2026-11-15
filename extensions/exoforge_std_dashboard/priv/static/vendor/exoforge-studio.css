@@ -535,7 +535,8 @@ html:not(.light) textarea::placeholder {
 html:not(.light) .shadow-sm,
 html:not(.light) .shadow,
 html:not(.light) .shadow-md,
-html:not(.light) .shadow-card {
+html:not(.light) .shadow-card,
+html:not(.light) .exo-card {
   box-shadow: none !important;
 }
 

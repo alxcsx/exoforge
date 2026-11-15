@@ -20,7 +20,7 @@ defmodule Exoforge.Std.Dashboard.Components do
   def metric_card(assigns) do
     ~H"""
     <div
-      class="bg-white p-4 rounded-xl border border-gray-200/80 shadow-card hover:border-primary-300 transition-all flex items-center gap-3.5"
+      class="exo-card p-4 hover:border-primary-300 transition-all flex items-center gap-3.5"
       title={@subtitle}
     >
       <div class="w-11 h-11 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center shrink-0 text-lg border border-primary-200">

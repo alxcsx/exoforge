@@ -97,7 +97,7 @@ defmodule Exoforge.Std.Dashboard.LoginController do
         </svg>
       </button>
 
-      <div class="w-full max-w-sm bg-white rounded-xl shadow-card border border-gray-200 p-8">
+      <div class="exo-card w-full max-w-sm p-8">
         <div class="flex items-center gap-3 mb-6">
           <img src="/favicon.svg" alt="Exoforge" class="w-9 h-9 rounded-xl shadow-sm" />
           <div class="flex items-center">

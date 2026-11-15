@@ -2096,7 +2096,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                     <span class="text-[10px]">▾</span>
                   </button>
                   <%= if @pinned_menu_open do %>
-                    <div class="absolute right-0 top-full mt-1 z-50 min-w-[11rem] max-w-[calc(100vw-1rem)] bg-white border border-gray-200 rounded-xl shadow-lg p-1 space-y-0.5">
+                    <div class="exo-card absolute right-0 top-full mt-1 z-50 min-w-[11rem] max-w-[calc(100vw-1rem)] shadow-lg p-1 space-y-0.5">
                       <%= for ext_id <- @pinned_extensions do %>
                         <% pext = Enum.find(@overview.extensions, fn e -> to_string(e.id) == ext_id end) %>
                         <%= if pext do %>
@@ -2269,7 +2269,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
         <!-- OVERVIEW TAB: 4-Slot Rearrangeable Grid -->
         <%= if @current_tab == :overview do %>
-          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-gray-200/90 shadow-sm">
+          <div class="exo-card flex flex-col md:flex-row md:items-center justify-between gap-4 p-6">
             <div>
               <h2 class="text-xl font-bold text-gray-900 flex items-center gap-2">
                 <.icon name="chart" class="w-5 h-5" />
@@ -3090,7 +3090,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
             <% dv = active_ext[:dashboard_view] %>
             <%= cond do %>
               <% is_map(dv) and (dv[:element] || dv["element"] || dv[:type] == "iframe" || dv["type"] == "iframe") -> %>
-                <div class="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm min-h-[600px]">
+                <div class="exo-card p-6 min-h-[600px]">
                   <Exoforge.Std.Dashboard.Microfrontend.render_widget
                     spec={Map.merge(dv, %{plugin_id: active_ext.id})}
                     context={%{focus: @focus, current_scopes: @current_scopes}}
@@ -3121,7 +3121,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                 />
             <% end %>
           <% else %>
-            <div class="bg-white p-12 rounded-xl border border-gray-200 text-center space-y-3">
+            <div class="exo-card p-12 text-center space-y-3">
               <div class="w-12 h-12 rounded-xl bg-gray-100 text-gray-400 mx-auto flex items-center justify-center">
                 <.icon name="box" class="w-6 h-6" />
               </div>

@@ -46,7 +46,7 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
       role="button"
       tabindex="0"
       title={"Open #{ExtensionPresenter.display_name(@ext)} Control Panel"}
-      class="h-full bg-white p-5 rounded-xl border border-gray-200/90 hover:border-primary-500 hover:ring-2 hover:ring-primary-500/20 shadow-sm hover:shadow-lg transition-all flex flex-col justify-between space-y-4 group cursor-pointer relative overflow-hidden"
+      class="exo-card h-full p-5 hover:border-primary-500 hover:ring-2 hover:ring-primary-500/20 hover:shadow-lg transition-all flex flex-col justify-between space-y-4 group cursor-pointer relative overflow-hidden"
     >
       <div class="space-y-3">
         <div class="flex items-start justify-between gap-2">
@@ -214,7 +214,7 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
                end) %>
           <div class="space-y-6">
             <!-- Header with Title, Search & Category Filters -->
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-gray-200/90 shadow-sm">
+            <div class="exo-card flex flex-col md:flex-row md:items-center justify-between gap-4 p-6">
               <div>
                 <h3 class="text-xl font-bold text-gray-900 flex items-center gap-2">
                   <.icon name="box" class="w-5 h-5" />
@@ -262,7 +262,7 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
 
             <!-- Empty State -->
             <%= if Enum.empty?(filtered_exts) do %>
-              <div class="bg-white p-12 rounded-xl border border-gray-200 text-center space-y-3">
+              <div class="exo-card p-12 text-center space-y-3">
                 <div class="w-12 h-12 rounded-xl bg-gray-100 text-gray-400 mx-auto flex items-center justify-center">
                   <.icon name="search" class="w-6 h-6" />
                 </div>

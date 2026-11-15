@@ -996,7 +996,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
     ~H"""
     <div class="space-y-6" id={@id}>
       <!-- Extension Visual Header -->
-      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm">
+      <div class="exo-card flex flex-col md:flex-row md:items-center justify-between gap-4 p-6">
         <div class="flex items-center gap-4">
           <div class="w-12 h-12 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center text-2xl shadow-inner">
             <%= @icon %>
@@ -1092,7 +1092,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
               <% act_form = Map.get(@action_forms, act[:name], %{}) %>
               <% result_info = Map.get(@action_results, act[:name]) %>
 
-              <div class="bg-white rounded-xl border border-gray-200/80 shadow-sm p-5 space-y-4 hover:border-primary-200 transition-colors">
+              <div class="exo-card p-5 space-y-4 hover:border-primary-200 transition-colors">
                 <div class="flex items-start justify-between">
                   <div class="flex items-center gap-2.5">
                     <span class="w-8 h-8 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center">
@@ -1236,7 +1236,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
       <%= if @subtab == "resources" do %>
         <div class="space-y-4">
           <!-- Resource Switcher & Toolbar -->
-          <div class="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div class="exo-card p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div class="flex items-center gap-2">
               <span class="text-xs font-bold text-gray-500 uppercase tracking-wider mr-1">Resource:</span>
               <%= for res <- @resources do %>
@@ -1341,7 +1341,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
 
           <%= if singleton_resource?(assigns) do %>
             <!-- Singleton Resource Direct Configuration Card -->
-            <div class="bg-white rounded-xl border border-gray-200/80 shadow-sm p-6 space-y-6">
+            <div class="exo-card p-6 space-y-6">
               <div class="flex items-center justify-between border-b border-gray-100 pb-4">
                 <div>
                   <h3 class="text-base font-bold text-gray-900 flex items-center gap-2">
@@ -1496,7 +1496,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <%= for ev <- @events do %>
               <% ev_name = to_string(ev[:name] || ev["name"]) %>
-              <div class="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
+              <div class="exo-card p-5 space-y-3">
                 <div class="flex items-center justify-between">
                   <span class="font-mono font-bold text-primary-700 text-sm"><%= ev_name %></span>
                   <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase bg-gray-100 text-gray-700">
@@ -1525,7 +1525,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
 
       <!-- SUBTAB 4: CONTRACT SPECIFICATION -->
       <%= if @subtab == "contract" do %>
-        <div class="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
+        <div class="exo-card p-6 space-y-4">
           <h3 class="text-sm font-bold text-gray-900">Contract & Architecture Specification</h3>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
             <div class="p-4 bg-gray-50 rounded-xl border border-gray-100 space-y-2">
@@ -1644,7 +1644,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
       <%= if @resource_form do %>
         <div class="fixed inset-0 z-[70] overflow-y-auto bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6">
           <div class="fixed inset-0" phx-click="close_resource_form" phx-target={@myself}></div>
-          <div class="relative bg-white rounded-xl max-w-lg w-full p-6 shadow-2xl border border-gray-200 ring-1 ring-black/5 space-y-4 max-h-[calc(100vh-3rem)] overflow-y-auto custom-scrollbar animate-fade-in">
+          <div class="exo-card relative max-w-lg w-full p-6 shadow-2xl ring-1 ring-black/5 space-y-4 max-h-[calc(100vh-3rem)] overflow-y-auto custom-scrollbar animate-fade-in">
             <div class="flex items-start justify-between">
               <div>
                 <h3 class="text-base font-bold text-gray-900">
@@ -1716,7 +1716,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
       <%= if @export_modal_open do %>
         <div class="fixed inset-0 z-[70] overflow-y-auto bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6">
           <div class="fixed inset-0" phx-click="close_export_modal" phx-target={@myself}></div>
-          <div class="relative bg-white rounded-xl max-w-xl w-full p-6 shadow-2xl border border-gray-200 ring-1 ring-black/5 space-y-4 max-h-[calc(100vh-3rem)] overflow-y-auto custom-scrollbar animate-fade-in">
+          <div class="exo-card relative max-w-xl w-full p-6 shadow-2xl ring-1 ring-black/5 space-y-4 max-h-[calc(100vh-3rem)] overflow-y-auto custom-scrollbar animate-fade-in">
             <div class="flex items-center justify-between">
               <h3 class="text-base font-bold text-gray-900">Export <%= @export_format %> Data (<%= @export_filename %>)</h3>
               <button
@@ -1761,7 +1761,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
       <%= if @file_picker_open do %>
         <div class="fixed inset-0 z-[70] overflow-y-auto bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6">
           <div class="fixed inset-0" phx-click="close_file_picker" phx-target={@myself}></div>
-          <div class="relative bg-white rounded-xl max-w-2xl w-full p-6 shadow-2xl border border-gray-200 ring-1 ring-black/5 space-y-4 max-h-[calc(100vh-3rem)] overflow-y-auto custom-scrollbar animate-fade-in">
+          <div class="exo-card relative max-w-2xl w-full p-6 shadow-2xl ring-1 ring-black/5 space-y-4 max-h-[calc(100vh-3rem)] overflow-y-auto custom-scrollbar animate-fade-in">
             <div class="flex items-center justify-between border-b border-gray-100 pb-3">
               <div class="flex items-center gap-2">
                 <.icon name="folder" class="w-5 h-5 text-primary-600" />

@@ -137,7 +137,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
           ></div>
 
           <!-- Dialog Box -->
-          <div class="relative bg-white rounded-xl max-w-xl w-full p-6 text-left shadow-2xl border border-gray-200 ring-1 ring-black/5 z-10 animate-fade-in space-y-4 max-h-[calc(100vh-3rem)] overflow-y-auto custom-scrollbar">
+          <div class="exo-card relative max-w-xl w-full p-6 text-left shadow-2xl ring-1 ring-black/5 z-10 animate-fade-in space-y-4 max-h-[calc(100vh-3rem)] overflow-y-auto custom-scrollbar">
             <!-- Modal Header -->
             <div class="flex items-center justify-between pb-3 border-b border-gray-100">
               <div class="flex items-center gap-2.5">
@@ -788,7 +788,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
 
               <div class="space-y-3 bg-gray-50 p-4 rounded-xl border border-gray-200/80">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div class="p-3 bg-white border border-gray-200 rounded-lg">
+                  <div class="exo-card p-3">
                     <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Storage Engine</span>
                     <div class="flex items-center gap-2 mt-1">
                       <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -801,7 +801,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                     </p>
                   </div>
 
-                  <div class="p-3 bg-white border border-gray-200 rounded-lg">
+                  <div class="exo-card p-3">
                     <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Extension Isolation</span>
                     <div class="flex items-center gap-2 mt-1">
                       <span class="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-200">
@@ -814,7 +814,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   </div>
                 </div>
 
-                <div class="p-3 bg-white border border-gray-200 rounded-lg space-y-2">
+                <div class="exo-card p-3 space-y-2">
                   <span class="font-bold text-gray-800 text-xs block">Cluster Database Diagnostics</span>
                   <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px]">
                     <div class="p-2 bg-gray-50 rounded border border-gray-100">
@@ -871,7 +871,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
 
               <div class="space-y-3 bg-gray-50 p-4 rounded-xl border border-gray-200/80">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div class="p-3 bg-white border border-gray-200 rounded-lg">
+                  <div class="exo-card p-3">
                     <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Admin Principal</span>
                     <div class="flex items-center gap-2 mt-1">
                       <span class="font-mono font-bold text-gray-900 text-xs">admin</span>
@@ -883,7 +883,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                     </p>
                   </div>
 
-                  <div class="p-3 bg-white border border-gray-200 rounded-lg">
+                  <div class="exo-card p-3">
                     <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Device Key Derivation</span>
                     <div class="flex items-center gap-2 mt-1">
                       <span class="font-bold text-emerald-700 text-xs">ExoDeviceId (PlayFab Pattern)</span>
@@ -894,7 +894,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   </div>
                 </div>
 
-                <div class="p-3 bg-white border border-gray-200 rounded-lg space-y-1.5">
+                <div class="exo-card p-3 space-y-1.5">
                   <span class="font-bold text-gray-800 text-xs block">Authorization Scope Hierarchy</span>
                   <div class="flex flex-wrap gap-1.5">
                     <span class="px-2 py-0.5 rounded bg-primary-50 text-primary-700 text-[10px] font-mono">admin &rarr; admin, studio, service, player, guest</span>
@@ -1220,11 +1220,11 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                     </div>
 
                     <div class="bg-gray-50 p-4 rounded-xl border border-gray-200/80 space-y-2">
-                      <div class="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
+                      <div class="exo-card flex items-center justify-between p-3">
                         <span class="font-bold text-gray-800">Hook ID</span>
                         <span class="font-mono text-primary-700 font-bold"><%= active_hook.id %></span>
                       </div>
-                      <div class="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
+                      <div class="exo-card flex items-center justify-between p-3">
                         <span class="font-bold text-gray-800">Origin Plugin</span>
                         <span class="font-mono text-gray-600"><%= active_hook[:plugin_id] || "n/a" %></span>
                       </div>
@@ -1499,7 +1499,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
 
                       <div class="space-y-1">
                         <%= for act <- Enum.filter(@actions, &(to_string(&1.service) == to_string(svc[:name] || svc["name"]))) do %>
-                          <div class="p-2 bg-white border border-gray-200 rounded-lg space-y-1">
+                          <div class="exo-card p-2 space-y-1">
                             <div class="flex flex-wrap items-center gap-1.5">
                               <span class="font-mono font-bold text-gray-800"><%= act.name %></span>
                               <span class="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-mono text-[10px]">
@@ -2063,7 +2063,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
           ></div>
 
           <!-- Dialog Box -->
-          <div class="relative bg-white rounded-xl max-w-6xl w-full p-6 text-left shadow-2xl border border-gray-200 ring-1 ring-black/5 z-10 animate-fade-in space-y-4 max-h-[calc(100vh-3rem)] overflow-y-auto custom-scrollbar">
+          <div class="exo-card relative max-w-6xl w-full p-6 text-left shadow-2xl ring-1 ring-black/5 z-10 animate-fade-in space-y-4 max-h-[calc(100vh-3rem)] overflow-y-auto custom-scrollbar">
             <!-- Modal Header with Mode Switcher -->
             <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-gray-100 gap-3">
               <div>
@@ -2173,7 +2173,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             <!-- Failure groups: what broke, grouped, with a request id to open the story -->
             <%= if @is_error_mode do %>
               <% groups = @telemetry[:error_groups] || [] %>
-              <div class="p-3 bg-white rounded-xl border border-gray-200 space-y-2">
+              <div class="exo-card p-3 space-y-2">
                 <div class="flex items-center justify-between">
                   <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
                     Failure groups (<%= length(groups) %>)
@@ -2623,7 +2623,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
         <div class="min-h-screen px-4 text-center flex items-center justify-center py-8">
           <div class="fixed inset-0 bg-slate-950/60 backdrop-blur-sm cursor-pointer" phx-click={@on_close}></div>
 
-          <div class="relative bg-white rounded-xl max-w-4xl w-full p-6 text-left shadow-2xl border border-gray-200 ring-1 ring-black/5 z-10 space-y-4 max-h-[calc(100vh-3rem)] overflow-y-auto custom-scrollbar">
+          <div class="exo-card relative max-w-4xl w-full p-6 text-left shadow-2xl ring-1 ring-black/5 z-10 space-y-4 max-h-[calc(100vh-3rem)] overflow-y-auto custom-scrollbar">
             <div class="flex items-center justify-between pb-3 border-b border-gray-100">
               <div class="flex items-center gap-2.5">
                 <div class="w-9 h-9 rounded-xl bg-primary-50 text-primary-700 border border-primary-200 flex items-center justify-center shrink-0">
@@ -2952,7 +2952,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
           ></div>
 
           <!-- Dialog Box -->
-          <div class="relative bg-white rounded-xl max-w-5xl w-full p-6 text-left shadow-2xl border border-gray-200 ring-1 ring-black/5 z-10 animate-fade-in flex flex-col h-[85vh] space-y-4">
+          <div class="exo-card relative max-w-5xl w-full p-6 text-left shadow-2xl ring-1 ring-black/5 z-10 animate-fade-in flex flex-col h-[85vh] space-y-4">
             <div class="flex items-center justify-between pb-3 border-b border-gray-100 flex-shrink-0">
               <div class="flex items-center gap-2.5">
                 <div class="w-9 h-9 rounded-xl bg-primary-50 text-primary-700 border border-primary-200 flex items-center justify-center shrink-0">

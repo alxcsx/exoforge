@@ -584,7 +584,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
     ~H"""
     <div class="space-y-6" id={@id}>
       <!-- Top Header & Actions -->
-      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm">
+      <div class="exo-card flex flex-col md:flex-row md:items-center justify-between gap-4 p-6">
         <div class="flex items-center gap-4">
           <div class="w-12 h-12 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center shadow-inner">
             <.studio_icon icon="shield" class="w-6 h-6" />
@@ -692,7 +692,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
 
       <!-- Metric Cards Grid -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div class="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title="Distinct identity profiles">
+        <div class="exo-card p-4 flex items-center gap-3.5" title="Distinct identity profiles">
           <div class="w-11 h-11 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center shrink-0">
             <.studio_icon icon="users" class="w-5 h-5" />
           </div>
@@ -705,7 +705,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
           </div>
         </div>
 
-        <div class="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title="Active bearer tokens (this page)">
+        <div class="exo-card p-4 flex items-center gap-3.5" title="Active bearer tokens (this page)">
           <div class="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
             <.studio_icon icon="key" class="w-5 h-5" />
           </div>
@@ -718,7 +718,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
           </div>
         </div>
 
-        <div class="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title="Admin & superuser scopes (this page)">
+        <div class="exo-card p-4 flex items-center gap-3.5" title="Admin & superuser scopes (this page)">
           <div class="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
             <.studio_icon icon="crown" class="w-5 h-5" />
           </div>
@@ -731,7 +731,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
           </div>
         </div>
 
-        <div class="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title="Verified gameplay accounts (this page)">
+        <div class="exo-card p-4 flex items-center gap-3.5" title="Verified gameplay accounts (this page)">
           <div class="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
             <.studio_icon icon="gamepad" class="w-5 h-5" />
           </div>
@@ -746,7 +746,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
       </div>
 
       <!-- Filters & Search Toolbar -->
-      <div class="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div class="exo-card p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div class="flex items-center gap-3 flex-1 max-w-md">
           <form id="auth-search-form" phx-change="search" phx-submit="search" phx-target={@myself} class="relative w-full">
             <input
@@ -982,7 +982,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
       <%= if @show_register_modal do %>
         <div class="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div class="fixed inset-0" phx-click="close_register_modal" phx-target={@myself}></div>
-          <div class="bg-white rounded-xl max-w-lg w-full p-6 shadow-2xl border border-gray-200 relative animate-in fade-in duration-150">
+          <div class="exo-card max-w-lg w-full p-6 shadow-2xl relative animate-in fade-in duration-150">
             <button
               phx-click="close_register_modal"
               phx-target={@myself}
@@ -1095,7 +1095,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
       <%= if @show_reset_password_modal and @reset_password_user do %>
         <div class="fixed inset-0 z-[60] overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div class="fixed inset-0" phx-click="close_reset_password_modal" phx-target={@myself}></div>
-          <div class="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl border border-gray-200 relative animate-in fade-in duration-150">
+          <div class="exo-card max-w-md w-full p-6 shadow-2xl relative animate-in fade-in duration-150">
             <button
               phx-click="close_reset_password_modal"
               phx-target={@myself}
@@ -1159,7 +1159,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
       <%= if @show_roles_modal and @roles_user do %>
         <div class="fixed inset-0 z-[60] overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div class="fixed inset-0" phx-click="close_roles_modal" phx-target={@myself}></div>
-          <div class="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl border border-gray-200 relative animate-in fade-in duration-150">
+          <div class="exo-card max-w-md w-full p-6 shadow-2xl relative animate-in fade-in duration-150">
             <button
               phx-click="close_roles_modal"
               phx-target={@myself}
