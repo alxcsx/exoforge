@@ -340,25 +340,17 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
           @max_pinned
       end
 
-    pinned = socket.assigns.pinned_extensions
-
-    new_pinned =
-      if length(pinned) > cap do
-        Enum.take(pinned, -cap)
-      else
-        pinned
-      end
-
-    if new_pinned != pinned do
-      Exoforge.Std.Dashboard.Preferences.put_pinned(socket.assigns.player_id, new_pinned)
-    end
-
-    {:noreply, assign(socket, max_pinned: cap, pinned_extensions: new_pinned)}
+    # Capacity is how many tabs fit in the bar, not how many the user may pin. Shrinking the
+    # window used to rewrite the stored list, so pins silently disappeared for good; the bar
+    # takes the first `max_pinned` for display and the dropdown carries the rest.
+    {:noreply, assign(socket, max_pinned: cap)}
   end
 
   def handle_event("pin_extension", %{"id" => ext_id_str}, socket) do
     pinned = socket.assigns.pinned_extensions
-    max_pinned = min(socket.assigns.max_pinned, @max_pinned)
+    # The absolute cap, not the viewport cap: pinning on a narrow window must not rotate the
+    # queue that a wide window would have shown.
+    max_pinned = @max_pinned
 
     if ext_id_str in pinned do
       {:noreply, socket}
@@ -2101,7 +2093,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                   </button>
                   <%= if @pinned_menu_open do %>
                     <div class="absolute left-0 top-full mt-1 z-50 min-w-[11rem] bg-white border border-gray-200 rounded-xl shadow-lg p-1 space-y-0.5">
-                      <%= for ext_id <- Enum.take(@pinned_extensions, @max_pinned) do %>
+                      <%= for ext_id <- @pinned_extensions do %>
                         <% pext = Enum.find(@overview.extensions, fn e -> to_string(e.id) == ext_id end) %>
                         <%= if pext do %>
                           <button
