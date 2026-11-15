@@ -212,14 +212,14 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
 
                  {rank, ExtensionPresenter.display_name(ext)}
                end) %>
-          <div class="space-y-6">
-            <!-- Header with Title, Search & Category Filters -->
-            <div class="exo-card flex flex-col md:flex-row md:items-center justify-between gap-4 p-6">
+          <div class="space-y-5">
+            <!-- Header with Title & Search (Flat on Canvas) -->
+            <div class="exo-page-header">
               <div>
-                <h3 class="text-xl font-bold text-gray-900 flex items-center gap-2">
-                  <.icon name="box" class="w-5 h-5" />
+                <h1 class="exo-page-title flex items-center gap-2">
+                  <.icon name="box" class="w-4 h-4 text-gray-400" />
                   <span>Extension Registry</span>
-                </h3>
+                </h1>
               </div>
 
               <!-- Live Search Bar -->
@@ -234,28 +234,28 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
                       name="query"
                       value={@search}
                       placeholder="Search extensions, services..."
-                      class="w-full pl-9 pr-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-primary-500 font-medium"
+                      class="exo-input pl-9"
                     />
                   </div>
                 </form>
               </div>
             </div>
 
-            <!-- Category Filter Pills -->
-            <div class="flex items-center gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
+            <!-- Category Underline Tabs -->
+            <div class="exo-tabs" role="tablist">
               <%= for {cat_id, label, icon, count} <- extension_categories(@extensions) do %>
                 <% is_active = @category == cat_id or (@category != "all" and ExtensionPresenter.normalize_category(@category) == label) %>
                 <button
                   type="button"
+                  role="tab"
+                  aria-selected={to_string(is_active)}
                   phx-click="filter_extension_category"
                   phx-value-category={cat_id}
-                  class={"px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap #{if is_active, do: "bg-primary-600 text-white shadow-sm", else: "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200/80"}"}
+                  class={"exo-tab #{if is_active, do: "exo-tab-active"}"}
                 >
                   <span :if={icon}><%= icon %></span>
                   <span><%= label %></span>
-                  <span class={"text-[10px] px-1.5 py-0.2 rounded-full font-mono #{if is_active, do: "bg-white/20 text-white", else: "bg-gray-100 text-gray-600"}"}>
-                    <%= count %>
-                  </span>
+                  <span class="exo-tab-count"><%= count %></span>
                 </button>
               <% end %>
             </div>
@@ -263,16 +263,16 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
             <!-- Empty State -->
             <%= if Enum.empty?(filtered_exts) do %>
               <div class="exo-card p-12 text-center space-y-3">
-                <div class="w-12 h-12 rounded-xl bg-gray-100 text-gray-400 mx-auto flex items-center justify-center">
-                  <.icon name="search" class="w-6 h-6" />
+                <div class="w-10 h-10 rounded-xl bg-gray-100 text-gray-400 mx-auto flex items-center justify-center">
+                  <.icon name="search" class="w-5 h-5" />
                 </div>
-                <h4 class="text-base font-bold text-gray-800">No extensions match your filter</h4>
-                <p class="text-xs text-gray-400">Try changing the category or clearing the search query.</p>
+                <h4 class="text-sm font-semibold text-gray-900">No extensions match your filter</h4>
+                <p class="text-xs text-gray-500">Try changing the category or clearing the search query.</p>
                 <button
                   type="button"
                   phx-click="filter_extension_category"
                   phx-value-category="all"
-                  class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition-colors"
+                  class="exo-btn exo-btn-secondary"
                 >
                   Reset Filters
                 </button>

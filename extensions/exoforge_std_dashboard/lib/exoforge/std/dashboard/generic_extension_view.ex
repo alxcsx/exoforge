@@ -844,24 +844,24 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
 
     ~H"""
     <div>
-      <label class="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1">
+      <label class="exo-label">
         <%= @column.label %><%= if @column.primary_key, do: " · key" %>
       </label>
 
       <%= if @is_file_ref do %>
         <input type="hidden" name={"values[#{@key}]"} value={@value} />
-        <div class="p-3 bg-gray-50 border border-gray-200 rounded-xl space-y-2">
+        <div class="p-3 bg-gray-50 border border-gray-200 rounded-lg space-y-2">
           <%= if @value != "" and @value != nil do %>
-            <div class="flex items-center justify-between gap-3 bg-white p-2.5 rounded-lg border border-gray-100 shadow-2xs">
+            <div class="flex items-center justify-between gap-3 bg-white p-2 rounded-lg border border-gray-200/80">
               <div class="flex items-center gap-2.5 min-w-0">
                 <img
                   src={"/api/files/#{@bucket}/#{@value}"}
-                  class="w-10 h-10 object-contain rounded-lg border border-gray-100 bg-gray-50 shrink-0"
+                  class="w-9 h-9 object-contain rounded-lg border border-gray-200/80 bg-gray-50 shrink-0"
                   alt="Preview"
                   onerror="this.style.display='none'"
                 />
                 <div class="truncate">
-                  <span class="font-mono text-xs font-bold text-primary-700 bg-primary-50 px-2 py-0.5 rounded border border-primary-100"><%= @value %></span>
+                  <span class="font-mono text-xs font-medium text-primary-700 bg-primary-50 px-2 py-0.5 rounded border border-primary-200"><%= @value %></span>
                   <div class="text-[10px] text-gray-400 mt-0.5">Bucket: <%= @bucket %></div>
                 </div>
               </div>
@@ -869,9 +869,9 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                 <a
                   href={"/api/files/#{@bucket}/#{@value}"}
                   target="_blank"
-                  class="text-[11px] font-bold text-primary-600 hover:text-primary-800 px-2 py-1 bg-primary-50 hover:bg-primary-100 rounded-lg transition-colors"
+                  class="exo-btn exo-btn-sm exo-btn-ghost"
                 >
-                  ↗ Open
+                  Open
                 </a>
                 <button
                   type="button"
@@ -880,7 +880,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                   phx-value-target={@target}
                   phx-value-bucket={@bucket}
                   phx-target={@myself}
-                  class="text-[11px] font-bold text-gray-700 hover:text-gray-900 px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                  class="exo-btn exo-btn-sm exo-btn-secondary"
                 >
                   Change
                 </button>
@@ -890,9 +890,10 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                   phx-value-field={@key}
                   phx-value-target={@target}
                   phx-target={@myself}
-                  class="text-[11px] font-bold text-red-600 hover:text-red-800 px-2 py-1 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                  class="exo-btn exo-btn-sm exo-btn-danger"
+                  title="Clear"
                 >
-                  ✕
+                  <.icon name="close" class="w-3.5 h-3.5" />
                 </button>
               </div>
             </div>
@@ -906,7 +907,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                 phx-value-target={@target}
                 phx-value-bucket={@bucket}
                 phx-target={@myself}
-                class="px-3 py-1.5 text-xs font-bold text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-200 rounded-xl transition-colors shadow-2xs flex items-center gap-1.5"
+                class="exo-btn exo-btn-sm exo-btn-secondary"
               >
                 <.icon name="folder" class="w-3.5 h-3.5" />
                 <span>Select from Bucket</span>
@@ -921,7 +922,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
           <%= if @column.choices != [] do %>
             <select
               name={"values[#{@key}]"}
-              class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono bg-white"
+              class="exo-select font-mono"
             >
               <%= for choice <- @column.choices do %>
                 <option value={choice} selected={to_string(@value) == to_string(choice)}>
@@ -947,7 +948,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                   name={"values[#{@key}]"}
                   value={@value}
                   readonly={@locked}
-                  class={"w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono #{if @locked, do: "bg-gray-50 text-gray-400"}"}
+                  class={"exo-input font-mono #{if @locked, do: "opacity-70"}"}
                 />
               <% :float -> %>
                 <input
@@ -956,7 +957,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                   name={"values[#{@key}]"}
                   value={@value}
                   readonly={@locked}
-                  class={"w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono #{if @locked, do: "bg-gray-50 text-gray-400"}"}
+                  class={"exo-input font-mono #{if @locked, do: "opacity-70"}"}
                 />
               <% _ -> %>
                 <input
@@ -964,7 +965,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                   name={"values[#{@key}]"}
                   value={@value}
                   readonly={@locked}
-                  class={"w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono #{if @locked, do: "bg-gray-50 text-gray-400"}"}
+                  class={"exo-input font-mono #{if @locked, do: "opacity-70"}"}
                 />
             <% end %>
           <% end %>
@@ -994,87 +995,92 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
       |> assign(:columns, columns)
 
     ~H"""
-    <div class="space-y-6" id={@id}>
-      <!-- Extension Visual Header -->
-      <div class="exo-card flex flex-col md:flex-row md:items-center justify-between gap-4 p-6">
-        <div class="flex items-center gap-4">
-          <div class="w-12 h-12 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center text-2xl shadow-inner">
-            <%= @icon %>
+    <div class="space-y-5" id={@id}>
+      <!-- Extension Header (Flat on Canvas) -->
+      <div class="exo-page-header">
+        <div class="min-w-0">
+          <div class="flex flex-wrap items-center gap-2.5">
+            <span class="text-base shrink-0"><%= @icon %></span>
+            <h1 class="exo-page-title truncate"><%= Phoenix.Naming.humanize(to_string(@extension.name)) %></h1>
+            <span class="exo-badge bg-primary-50 text-primary-700 border-primary-200 font-mono">
+              v<%= to_string(@extension.version) %>
+            </span>
+            <span class="exo-badge bg-emerald-50 text-emerald-700 border-emerald-200">
+              <%= @extension.type %>
+            </span>
           </div>
-          <div>
-            <div class="flex items-center gap-2.5">
-              <h2 class="text-xl font-bold text-gray-900"><%= Phoenix.Naming.humanize(to_string(@extension.name)) %></h2>
-              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-primary-100 text-primary-800">
-                v<%= to_string(@extension.version) %>
-              </span>
-              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
-                <%= @extension.type %>
-              </span>
-            </div>
-            <details class="exo-fold mt-1">
-              <summary>
-                <span>Service Topology</span>
-                <span class="exo-chevron">▸</span>
-              </summary>
-              <div class="exo-fold-body">
-                <p class="text-xs text-gray-500">
-                  Provides: <code class="text-primary-700 font-bold"><%= Enum.join(@extension.provides, ", ") %></code>
-                  <%= if @extension.dependencies != [] do %>
-                    • Depends on: <code class="text-gray-600"><%= Enum.join(@extension.dependencies, ", ") %></code>
-                  <% end %>
-                </p>
-              </div>
-            </details>
-          </div>
+          <p class="exo-page-subtitle">
+            Provides: <code class="font-mono text-primary-700 font-medium"><%= Enum.join(@extension.provides, ", ") %></code>
+            <%= if @extension.dependencies != [] do %>
+              <span class="mx-1.5 text-gray-300">•</span>
+              Depends on: <code class="font-mono text-gray-600"><%= Enum.join(@extension.dependencies, ", ") %></code>
+            <% end %>
+          </p>
         </div>
+      </div>
 
-        <!-- Subtab Switcher -->
-        <div class="flex items-center gap-1.5 bg-gray-100/80 p-1.5 rounded-xl border border-gray-200/60 overflow-x-auto">
-          <%= if @resources != [] do %>
-            <button
-              phx-click="switch_subtab"
-              phx-value-tab="resources"
-              phx-target={@myself}
-              class={"px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 #{if @subtab == "resources", do: "bg-primary-600 text-white shadow-sm", else: "text-gray-600 hover:text-gray-900"}"}
-            >
-              <span class="inline-flex items-center gap-1"><.icon name="box" class="w-3 h-3" /> Data</span>
-              <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-blue-100 text-blue-800"><%= length(@resources) %></span>
-            </button>
-          <% end %>
-
-          <%= if @actions != [] do %>
-            <button
-              phx-click="switch_subtab"
-              phx-value-tab="actions"
-              phx-target={@myself}
-              class={"px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 #{if @subtab == "actions", do: "bg-primary-600 text-white shadow-sm", else: "text-gray-600 hover:text-gray-900"}"}
-            >
-              <span class="inline-flex items-center gap-1"><.icon name="bolt" class="w-3 h-3" /> Actions</span>
-              <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-primary-100 text-primary-800"><%= length(@actions) %></span>
-            </button>
-          <% end %>
-
-          <%= if @events != [] do %>
-            <button
-              phx-click="switch_subtab"
-              phx-value-tab="events"
-              phx-target={@myself}
-              class={"px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 #{if @subtab == "events", do: "bg-primary-600 text-white shadow-sm", else: "text-gray-600 hover:text-gray-900"}"}
-            >
-              <span class="inline-flex items-center gap-1"><.icon name="radio" class="w-3 h-3" /> Telemetry</span>
-              <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800"><%= length(@events) %></span>
-            </button>
-          <% end %>
-
+      <!-- Underline Subtab Switcher -->
+      <div class="exo-tabs" role="tablist">
+        <%= if @resources != [] do %>
           <button
+            type="button"
+            role="tab"
+            aria-selected={to_string(@subtab == "resources")}
             phx-click="switch_subtab"
-            phx-value-tab="contract"
+            phx-value-tab="resources"
             phx-target={@myself}
-            class={"px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 #{if @subtab == "contract", do: "bg-primary-600 text-white shadow-sm", else: "text-gray-600 hover:text-gray-900"}"}
+            class={"exo-tab #{if @subtab == "resources", do: "exo-tab-active"}"}
           >
-            <span class="inline-flex items-center gap-1"><.icon name="shield" class="w-3 h-3" /> Contract</span>
+            <.icon name="box" class="w-3.5 h-3.5" />
+            <span>Data</span>
+            <span class="exo-tab-count"><%= length(@resources) %></span>
           </button>
-        </div>
+        <% end %>
+
+        <%= if @actions != [] do %>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={to_string(@subtab == "actions")}
+            phx-click="switch_subtab"
+            phx-value-tab="actions"
+            phx-target={@myself}
+            class={"exo-tab #{if @subtab == "actions", do: "exo-tab-active"}"}
+          >
+            <.icon name="bolt" class="w-3.5 h-3.5" />
+            <span>Actions</span>
+            <span class="exo-tab-count"><%= length(@actions) %></span>
+          </button>
+        <% end %>
+
+        <%= if @events != [] do %>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={to_string(@subtab == "events")}
+            phx-click="switch_subtab"
+            phx-value-tab="events"
+            phx-target={@myself}
+            class={"exo-tab #{if @subtab == "events", do: "exo-tab-active"}"}
+          >
+            <.icon name="radio" class="w-3.5 h-3.5" />
+            <span>Telemetry</span>
+            <span class="exo-tab-count"><%= length(@events) %></span>
+          </button>
+        <% end %>
+
+        <button
+          type="button"
+          role="tab"
+          aria-selected={to_string(@subtab == "contract")}
+          phx-click="switch_subtab"
+          phx-value-tab="contract"
+          phx-target={@myself}
+          class={"exo-tab #{if @subtab == "contract", do: "exo-tab-active"}"}
+        >
+          <.icon name="shield" class="w-3.5 h-3.5" />
+          <span>Contract</span>
+        </button>
       </div>
 
       <!-- SUBTAB 1: ACTIONS & VISUAL CONTROLS -->
@@ -1082,33 +1088,28 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
         <div class="space-y-4">
           <div class="flex items-center justify-between">
             <div>
-              <h3 class="text-sm font-bold text-gray-900">Interactive Action Control Panel</h3>
-              <p class="text-xs text-gray-400 mt-0.5">Execute typed backend RPCs with parameter inputs and live latency profiling</p>
+              <h3 class="text-sm font-semibold text-gray-900">Interactive Action Control Panel</h3>
+              <p class="text-xs text-gray-500 mt-0.5">Execute typed backend RPCs with parameter inputs and live latency profiling</p>
             </div>
           </div>
 
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <%= for act <- @actions do %>
               <% act_form = Map.get(@action_forms, act[:name], %{}) %>
               <% result_info = Map.get(@action_results, act[:name]) %>
 
-              <div class="exo-card p-5 space-y-4 hover:border-primary-200 transition-colors">
-                <div class="flex items-start justify-between">
-                  <div class="flex items-center gap-2.5">
-                    <span class="w-8 h-8 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center">
-                      <.icon name="bolt" class="w-4 h-4" />
-                    </span>
-                    <div>
-                      <h4 class="font-bold text-gray-900 text-sm"><%= Phoenix.Naming.humanize(to_string(act[:name])) %></h4>
-                      <span class="text-[11px] font-mono text-gray-400"><%= act[:name] %></span>
-                    </div>
+              <div class="exo-card p-5 space-y-3.5 hover:border-primary-300 transition-colors">
+                <div class="flex items-start justify-between gap-2">
+                  <div class="min-w-0">
+                    <h4 class="font-semibold text-gray-900 text-sm tracking-tight"><%= Phoenix.Naming.humanize(to_string(act[:name])) %></h4>
+                    <span class="text-[11px] font-mono text-gray-400"><%= act[:name] %></span>
                   </div>
-                  <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-gray-100 text-gray-700">
+                  <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-medium uppercase tracking-wider bg-gray-100 text-gray-700 shrink-0">
                     <%= act[:mode] %>
                   </span>
                 </div>
 
-                <p class="text-xs text-gray-600 bg-gray-50/60 p-2.5 rounded-xl border border-gray-100">
+                <p class="text-xs text-gray-500 leading-relaxed">
                   <%= act[:doc] %>
                 </p>
 
@@ -1119,7 +1120,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
 
                   <!-- Parameter Inputs -->
                   <%= if (act[:params] || []) != [] do %>
-                    <div class="space-y-2 pt-1">
+                    <div class="space-y-2.5 pt-1">
                       <%= for p <- act[:params] do %>
                         <% p_name = p[:name] || p["name"] %>
                         <% p_type = p[:type] || p["type"] %>
@@ -1127,7 +1128,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
 
                         <div>
                           <div class="flex items-center justify-between mb-1">
-                            <label class="text-[11px] font-bold text-gray-700 font-mono"><%= p_name %></label>
+                            <label class="text-xs font-medium text-gray-700 font-mono"><%= p_name %></label>
                             <span class="text-[10px] text-primary-600 font-mono"><%= p_type %></span>
                           </div>
 
@@ -1140,7 +1141,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                             <% :boolean -> %>
                               <select
                                 name={"param_#{p_name}"}
-                                class="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono"
+                                class="exo-select font-mono"
                               >
                                 <option value="true" selected={val in ["true", true]}>true</option>
                                 <option value="false" selected={val in ["false", false]}>false</option>
@@ -1150,7 +1151,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                               <textarea
                                 name={"param_#{p_name}"}
                                 rows="2"
-                                class="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono"
+                                class="exo-textarea font-mono"
                               ><%= val %></textarea>
 
                             <% _ -> %>
@@ -1159,7 +1160,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                                 step={if p_type == :float, do: "0.1", else: "1"}
                                 name={"param_#{p_name}"}
                                 value={val}
-                                class="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono"
+                                class="exo-input font-mono"
                               />
                             <% end %>
                           <% end %>
@@ -1176,11 +1177,11 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                     </summary>
                     <div class="exo-fold-body space-y-2">
                       <div class="text-[11px] text-gray-400">
-                        Service: <code class="text-primary-700 font-semibold"><%= act[:service] %></code>
+                        Service: <code class="text-primary-700 font-medium"><%= act[:service] %></code>
                       </div>
                       <div>
-                        <label class="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Caller Scopes</label>
-                        <div class="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 font-mono text-gray-500">
+                        <label class="exo-label">Caller Scopes</label>
+                        <div class="exo-input font-mono text-gray-500">
                           <%= Enum.join(@current_scopes || [], ", ") %>
                         </div>
                       </div>
@@ -1188,16 +1189,16 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                   </details>
 
                   <!-- Run Button -->
-                  <div class="pt-2 flex items-center justify-between">
+                  <div class="pt-1 flex items-center justify-between">
                     <button
                       type="submit"
-                      class="px-4 py-2 text-xs font-bold text-white bg-primary-600 rounded-xl hover:bg-primary-700 transition-colors shadow-sm flex items-center gap-1.5 active:scale-95"
+                      class="exo-btn exo-btn-primary"
                     >
                       <.icon name={:bolt} class="w-3.5 h-3.5" /> <span>Run Action</span>
                     </button>
 
                     <%= if result_info do %>
-                      <span class="inline-flex items-center gap-1 text-[11px] font-mono text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-200 font-bold">
+                      <span class="inline-flex items-center gap-1 text-[11px] font-mono text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-200 font-medium tabular-nums">
                         <%= result_info.latency_ms %> ms
                       </span>
                     <% end %>
@@ -1206,10 +1207,10 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
 
                 <!-- Action Result Box -->
                 <%= if result_info do %>
-                  <div class="mt-3 pt-3 border-t border-gray-100 space-y-1.5">
+                  <div class="mt-3 pt-3 border-t border-gray-200/80 space-y-1.5">
                     <div class="flex items-center justify-between text-[11px]">
-                      <span class="font-bold text-gray-600">Response (<%= result_info.time %>):</span>
-                      <span class={"font-bold px-1.5 py-0.5 rounded text-[10px] #{case result_info.result do
+                      <span class="font-medium text-gray-600 tabular-nums">Response (<%= result_info.time %>)</span>
+                      <span class={"font-medium px-1.5 py-0.5 rounded text-[10px] #{case result_info.result do
                         {:ok, _} -> "bg-emerald-100 text-emerald-800"
                         _ -> "bg-red-100 text-red-800"
                       end}"}>
@@ -1219,7 +1220,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                         end %>
                       </span>
                     </div>
-                    <pre class="text-[11px] font-mono bg-gray-900 text-emerald-400 p-3 rounded-xl overflow-x-auto max-h-40"><%= case result_info.result do
+                    <pre class="exo-terminal text-[11px] font-mono bg-gray-900 text-emerald-400 p-3 rounded-lg overflow-x-auto max-h-40"><%= case result_info.result do
                       {:ok, payload} -> Jason.encode!(payload, pretty: true)
                       {:error, reason} -> inspect(reason)
                       other -> inspect(other)
@@ -1236,17 +1237,17 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
       <%= if @subtab == "resources" do %>
         <div class="space-y-4">
           <!-- Resource Switcher & Toolbar -->
-          <div class="exo-card p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div class="flex items-center gap-2">
-              <span class="text-xs font-bold text-gray-500 uppercase tracking-wider mr-1">Resource:</span>
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div class="exo-tabs flex-1">
               <%= for res <- @resources do %>
                 <% res_name = to_string(res[:name] || res["name"]) %>
+                <% active? = to_string(@selected_resource_name) == res_name %>
                 <button
                   type="button"
                   phx-click="select_resource"
                   phx-value-name={res_name}
                   phx-target={@myself}
-                  class={"px-3 py-1.5 text-xs font-bold rounded-lg transition-colors #{if to_string(@selected_resource_name) == res_name, do: "bg-primary-600 text-white shadow-sm", else: "bg-gray-100 text-gray-600 hover:bg-gray-200"}"}
+                  class={"exo-tab #{if active?, do: "exo-tab-active"}"}
                 >
                   <%= Phoenix.Naming.humanize(res_name) %>
                 </button>
@@ -1254,7 +1255,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
             </div>
 
             <%= if not singleton_resource?(assigns) do %>
-              <div class="flex items-center gap-2">
+              <div class="flex items-center gap-2 shrink-0">
                 <form id="resource-search-form" phx-change="search_resource" phx-submit="search_resource" phx-target={@myself}>
                   <input
                     type="search"
@@ -1262,12 +1263,12 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                     value={@resource_search}
                     phx-debounce="200"
                     name="query"
-                    class="px-3 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    class="exo-input w-48"
                   />
                 </form>
 
                 <%= if @resource_pages > 1 do %>
-                  <div class="flex items-center gap-1.5 text-[11px] text-gray-500">
+                  <div class="flex items-center gap-1.5 text-[11px] text-gray-500 tabular-nums">
                     <span><%= @resource_page %>/<%= @resource_pages %> of <%= @resource_total %></span>
                     <button
                       type="button"
@@ -1275,7 +1276,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                       phx-value-page="prev"
                       phx-target={@myself}
                       disabled={@resource_page <= 1}
-                      class="px-2 py-1 rounded-lg bg-white border border-gray-200 text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                      class="exo-btn exo-btn-sm exo-btn-secondary"
                     >‹</button>
                     <button
                       type="button"
@@ -1283,7 +1284,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                       phx-value-page="next"
                       phx-target={@myself}
                       disabled={@resource_page >= @resource_pages}
-                      class="px-2 py-1 rounded-lg bg-white border border-gray-200 text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                      class="exo-btn exo-btn-sm exo-btn-secondary"
                     >›</button>
                   </div>
                 <% end %>
@@ -1292,13 +1293,13 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                   type="button"
                   phx-click="new_resource"
                   phx-target={@myself}
-                  class="px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl hover:bg-emerald-100 shadow-xs flex items-center gap-1"
+                  class="exo-btn exo-btn-primary"
                 >
                   <span>＋ New</span>
                 </button>
 
-                <details class="exo-menu">
-                  <summary class="px-2.5 py-1.5 text-xs font-bold text-gray-600 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl cursor-pointer">
+                <details class="exo-menu relative">
+                  <summary title="More actions">
                     ⋯
                   </summary>
                   <div class="exo-menu-panel">
@@ -1332,7 +1333,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
               </div>
             <% else %>
               <div class="flex items-center gap-2">
-                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary-50 text-primary-700 border border-primary-200">
+                <span class="exo-badge bg-primary-50 text-primary-700 border-primary-200">
                   Singleton Config
                 </span>
               </div>
@@ -1615,12 +1616,12 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
             </div>
           <% end %>
 
-          <div class="pt-4 border-t border-gray-100 flex items-center gap-2">
+          <div class="pt-4 border-t border-gray-200/80 flex items-center gap-2">
             <button
               type="button"
               phx-click="edit_resource"
               phx-target={@myself}
-              class="px-4 py-2 text-xs font-bold text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-200 rounded-xl transition-colors"
+              class="exo-btn exo-btn-primary"
             >
               Edit
             </button>
@@ -1628,7 +1629,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
             <button
               type="button"
               phx-click="close_focus"
-              class="flex-1 py-2 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+              class="exo-btn exo-btn-secondary flex-1"
             >
               Close Inspector
             </button>
@@ -1636,22 +1637,27 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
         </.inspect_popup>
       <% end %>
 
-      <!-- CSV / JSON Export Modal -->
       <!--
         The row form. Every field comes from the plugin's declared schema, so a record that gains a
         column gains an input and nothing here has to know what the column means.
       -->
       <%= if @resource_form do %>
-        <div class="fixed inset-0 z-[70] overflow-y-auto bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6">
+        <div
+          data-exo-modal
+          data-close-event="close_resource_form"
+          class="exo-modal-backdrop z-[70]"
+          role="dialog"
+          aria-modal="true"
+        >
           <div class="fixed inset-0" phx-click="close_resource_form" phx-target={@myself}></div>
-          <div class="exo-card relative max-w-lg w-full p-6 shadow-2xl ring-1 ring-black/5 space-y-4 max-h-[calc(100vh-3rem)] overflow-y-auto custom-scrollbar animate-fade-in">
-            <div class="flex items-start justify-between">
-              <div>
-                <h3 class="text-base font-bold text-gray-900">
+          <div class="exo-modal-panel max-w-lg z-10">
+            <div class="exo-modal-header">
+              <div class="min-w-0">
+                <h3 class="exo-modal-title truncate">
                   <%= if @resource_form.mode == :new, do: "New", else: "Edit" %>
                   <%= Phoenix.Naming.humanize(to_string(@selected_resource_name)) %>
                 </h3>
-                <p class="text-xs text-gray-500 mt-0.5">
+                <p class="exo-modal-subtitle truncate">
                   Fields come from the schema this plugin declares.
                 </p>
               </div>
@@ -1660,10 +1666,10 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                 type="button"
                 phx-click="close_resource_form"
                 phx-target={@myself}
-                class="w-8 h-8 shrink-0 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-400 hover:text-gray-700 flex items-center justify-center transition-colors text-xs font-bold"
-                title="Close"
+                class="exo-btn exo-btn-icon shrink-0"
+                title="Close (Esc)"
               >
-                ✕
+                <.icon name="close" class="w-4 h-4" />
               </button>
             </div>
 
@@ -1671,41 +1677,42 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
               phx-submit="submit_resource_form"
               phx-change="resource_form_change"
               phx-target={@myself}
-              class="space-y-3"
+              class="flex flex-col min-h-0 flex-1"
             >
-              <%= for column <- current_resource_columns(assigns) do %>
-                <% key = to_string(column.key) %>
-                <% value = Map.get(@resource_form.values, key, "") %>
-                <% locked = column.primary_key and @resource_form.mode == :edit %>
+              <div class="exo-modal-body custom-scrollbar space-y-3">
+                <%= for column <- current_resource_columns(assigns) do %>
+                  <% key = to_string(column.key) %>
+                  <% value = Map.get(@resource_form.values, key, "") %>
+                  <% locked = column.primary_key and @resource_form.mode == :edit %>
 
-                <.column_input column={column} value={value} locked={locked} target="resource_form" myself={@myself} />
+                  <.column_input column={column} value={value} locked={locked} target="resource_form" myself={@myself} />
 
-                <%= if error = @resource_form.errors[key] do %>
-                  <p class="text-[11px] text-red-600 mt-1 font-semibold"><%= error %></p>
+                  <%= if error = @resource_form.errors[key] do %>
+                    <p class="text-[11px] text-red-600 mt-1 font-medium"><%= error %></p>
+                  <% end %>
                 <% end %>
-              <% end %>
 
-              <%= if error = @resource_form.errors["_form"] do %>
-                <p class="text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl p-3 font-mono">
-                  <%= error %>
-                </p>
-              <% end %>
+                <%= if error = @resource_form.errors["_form"] do %>
+                  <p class="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg p-3 font-mono">
+                    <%= error %>
+                  </p>
+                <% end %>
+              </div>
 
-              <div class="pt-2 flex items-center gap-2">
-                <button
-                  type="submit"
-                  class="px-4 py-2 text-xs font-bold text-white bg-primary-600 hover:bg-primary-700 rounded-xl transition-colors shadow-sm"
-                >
-                  Save
-                </button>
-
+              <div class="exo-modal-footer">
                 <button
                   type="button"
                   phx-click="close_resource_form"
                   phx-target={@myself}
-                  class="px-4 py-2 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+                  class="exo-btn exo-btn-secondary"
                 >
                   Cancel
+                </button>
+                <button
+                  type="submit"
+                  class="exo-btn exo-btn-primary"
+                >
+                  Save
                 </button>
               </div>
             </form>
@@ -1714,41 +1721,49 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
       <% end %>
 
       <%= if @export_modal_open do %>
-        <div class="fixed inset-0 z-[70] overflow-y-auto bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6">
+        <div
+          data-exo-modal
+          data-close-event="close_export_modal"
+          class="exo-modal-backdrop z-[70]"
+          role="dialog"
+          aria-modal="true"
+        >
           <div class="fixed inset-0" phx-click="close_export_modal" phx-target={@myself}></div>
-          <div class="exo-card relative max-w-xl w-full p-6 shadow-2xl ring-1 ring-black/5 space-y-4 max-h-[calc(100vh-3rem)] overflow-y-auto custom-scrollbar animate-fade-in">
-            <div class="flex items-center justify-between">
-              <h3 class="text-base font-bold text-gray-900">Export <%= @export_format %> Data (<%= @export_filename %>)</h3>
+          <div class="exo-modal-panel max-w-xl z-10">
+            <div class="exo-modal-header">
+              <h3 class="exo-modal-title truncate">Export <%= @export_format %> Data (<%= @export_filename %>)</h3>
               <button
                 type="button"
                 phx-click="close_export_modal"
                 phx-target={@myself}
-                class="w-8 h-8 shrink-0 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-400 hover:text-gray-700 flex items-center justify-center transition-colors text-xs font-bold"
-                title="Close"
+                class="exo-btn exo-btn-icon shrink-0"
+                title="Close (Esc)"
               >
-                ✕
+                <.icon name="close" class="w-4 h-4" />
               </button>
             </div>
 
-            <textarea
-              readonly
-              rows="8"
-              class="w-full text-xs font-mono bg-gray-50 border border-gray-200 rounded-xl p-3 focus:outline-none"
-            ><%= @export_content %></textarea>
+            <div class="exo-modal-body custom-scrollbar">
+              <textarea
+                readonly
+                rows="8"
+                class="exo-textarea font-mono"
+              ><%= @export_content %></textarea>
+            </div>
 
-            <div class="flex items-center justify-end gap-3 pt-2">
+            <div class="exo-modal-footer">
               <button
                 type="button"
                 phx-click="close_export_modal"
                 phx-target={@myself}
-                class="px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900"
+                class="exo-btn exo-btn-secondary"
               >
                 Close
               </button>
               <button
                 type="button"
                 phx-click={Phoenix.LiveView.JS.dispatch("exoforge:clip", detail: %{text: @export_content})}
-                class="px-4 py-2 text-xs font-bold text-white bg-primary-600 rounded-xl hover:bg-primary-700"
+                class="exo-btn exo-btn-primary"
               >
                 Copy to Clipboard
               </button>
@@ -1759,108 +1774,116 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
 
       <!-- File Bucket Picker Modal -->
       <%= if @file_picker_open do %>
-        <div class="fixed inset-0 z-[70] overflow-y-auto bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6">
+        <div
+          data-exo-modal
+          data-close-event="close_file_picker"
+          class="exo-modal-backdrop z-[70]"
+          role="dialog"
+          aria-modal="true"
+        >
           <div class="fixed inset-0" phx-click="close_file_picker" phx-target={@myself}></div>
-          <div class="exo-card relative max-w-2xl w-full p-6 shadow-2xl ring-1 ring-black/5 space-y-4 max-h-[calc(100vh-3rem)] overflow-y-auto custom-scrollbar animate-fade-in">
-            <div class="flex items-center justify-between border-b border-gray-100 pb-3">
-              <div class="flex items-center gap-2">
-                <.icon name="folder" class="w-5 h-5 text-primary-600" />
-                <div>
-                  <h3 class="text-sm font-bold text-gray-900">Select File from Bucket</h3>
-                  <p class="text-xs text-gray-400">Selecting for field <code class="font-mono text-primary-700 font-bold"><%= @file_picker_field %></code></p>
+          <div class="exo-modal-panel max-w-2xl z-10">
+            <div class="exo-modal-header">
+              <div class="flex items-center gap-2.5 min-w-0">
+                <.icon name="folder" class="w-4 h-4 text-primary-600 shrink-0" />
+                <div class="min-w-0">
+                  <h3 class="exo-modal-title truncate">Select File from Bucket</h3>
+                  <p class="exo-modal-subtitle truncate">Selecting for field <code class="font-mono text-primary-700 font-medium"><%= @file_picker_field %></code></p>
                 </div>
               </div>
               <button
                 type="button"
                 phx-click="close_file_picker"
                 phx-target={@myself}
-                class="w-8 h-8 shrink-0 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-400 hover:text-gray-700 flex items-center justify-center transition-colors text-xs font-bold"
-                title="Close"
+                class="exo-btn exo-btn-icon shrink-0"
+                title="Close (Esc)"
               >
-                ✕
+                <.icon name="close" class="w-4 h-4" />
               </button>
             </div>
 
-            <!-- Bucket tabs & Search -->
-            <div class="flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div class="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto">
-                <%= for b <- @file_picker_buckets do %>
-                  <button
-                    type="button"
-                    phx-click="file_picker_change_bucket"
-                    phx-value-bucket={b}
-                    phx-target={@myself}
-                    class={"px-3 py-1 text-xs font-semibold rounded-lg border transition-colors shrink-0 #{if @file_picker_bucket == b, do: "bg-primary-600 text-white border-primary-600", else: "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}"}
-                  >
-                    <%= b %>
-                  </button>
-                <% end %>
-              </div>
-
-              <form id="file-picker-search-form" phx-change="file_picker_search" phx-submit="file_picker_search" phx-target={@myself} class="relative w-full sm:w-56">
-                <input
-                  type="search"
-                  name="query"
-                  placeholder="Search files..."
-                  value={@file_picker_search}
-                  phx-debounce="150"
-                  class="w-full text-xs pl-7 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
-                <span class="absolute left-2.5 top-2 text-gray-400"><.icon name="search" class="w-3 h-3" /></span>
-              </form>
-            </div>
-
-            <!-- File Grid / List -->
-            <div class="max-h-80 overflow-y-auto p-1 grid grid-cols-2 sm:grid-cols-3 gap-3">
-              <%= if @file_picker_filtered_files == [] do %>
-                <div class="col-span-full py-12 text-center text-xs text-gray-400">
-                  No files found in bucket <strong class="text-gray-700"><%= @file_picker_bucket %></strong>.
-                </div>
-              <% else %>
-                <%= for file <- @file_picker_filtered_files do %>
-                  <% is_img = String.starts_with?(to_string(file["content_type"] || ""), "image/") or Path.extname(file["filename"] || "") in [".png", ".jpg", ".jpeg", ".webp", ".svg"] %>
-                  <div
-                    phx-click="file_picker_select"
-                    phx-value-id={file["id"]}
-                    phx-target={@myself}
-                    class="p-2.5 rounded-xl border border-gray-200 hover:border-primary-400 hover:bg-primary-50/30 cursor-pointer transition-all flex flex-col justify-between group bg-white shadow-2xs"
-                  >
-                    <div class="h-20 bg-gray-50 rounded-lg mb-2 flex items-center justify-center overflow-hidden border border-gray-100">
-                      <%= if is_img do %>
-                        <img src={file["url"]} class="max-h-full max-w-full object-contain" alt="" />
-                      <% else %>
-                        <.icon name="file" class="w-6 h-6 text-gray-300" />
-                      <% end %>
-                    </div>
-                    <div>
-                      <p class="text-xs font-bold text-gray-800 truncate" title={file["filename"]}><%= file["filename"] %></p>
-                      <div class="flex items-center justify-between text-[10px] text-gray-400 mt-1">
-                        <code class="font-mono truncate"><%= file["id"] %></code>
-                        <span><%= if file["size_bytes"], do: "#{Float.round(file["size_bytes"] / 1024, 1)} KB", else: "" %></span>
-                      </div>
-                    </div>
+            <div class="exo-modal-body custom-scrollbar space-y-4">
+              <!-- Bucket tabs & Search -->
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div class="exo-tabs flex-1">
+                  <%= for b <- @file_picker_buckets do %>
                     <button
                       type="button"
+                      phx-click="file_picker_change_bucket"
+                      phx-value-bucket={b}
+                      phx-target={@myself}
+                      class={"exo-tab #{if @file_picker_bucket == b, do: "exo-tab-active"}"}
+                    >
+                      <%= b %>
+                    </button>
+                  <% end %>
+                </div>
+
+                <form id="file-picker-search-form" phx-change="file_picker_search" phx-submit="file_picker_search" phx-target={@myself} class="relative w-full sm:w-56">
+                  <input
+                    type="search"
+                    name="query"
+                    placeholder="Search files..."
+                    value={@file_picker_search}
+                    phx-debounce="150"
+                    class="exo-input pl-7"
+                  />
+                  <span class="absolute left-2.5 top-2 text-gray-400"><.icon name="search" class="w-3 h-3" /></span>
+                </form>
+              </div>
+
+              <!-- File Grid / List -->
+              <div class="max-h-80 overflow-y-auto p-1 grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <%= if @file_picker_filtered_files == [] do %>
+                  <div class="col-span-full py-12 text-center text-xs text-gray-400">
+                    No files found in bucket <strong class="text-gray-700"><%= @file_picker_bucket %></strong>.
+                  </div>
+                <% else %>
+                  <%= for file <- @file_picker_filtered_files do %>
+                    <% is_img = String.starts_with?(to_string(file["content_type"] || ""), "image/") or Path.extname(file["filename"] || "") in [".png", ".jpg", ".jpeg", ".webp", ".svg"] %>
+                    <div
                       phx-click="file_picker_select"
                       phx-value-id={file["id"]}
                       phx-target={@myself}
-                      class="mt-2 w-full py-1 text-[11px] font-bold text-primary-700 bg-primary-50 group-hover:bg-primary-600 group-hover:text-white rounded-lg transition-colors text-center"
+                      class="p-2.5 rounded-xl border border-gray-200 hover:border-primary-400 hover:bg-primary-50/30 cursor-pointer transition-all flex flex-col justify-between group bg-white shadow-2xs"
                     >
-                      Select
-                    </button>
-                  </div>
+                      <div class="h-20 bg-gray-50 rounded-lg mb-2 flex items-center justify-center overflow-hidden border border-gray-100">
+                        <%= if is_img do %>
+                          <img src={file["url"]} class="max-h-full max-w-full object-contain" alt="" />
+                        <% else %>
+                          <.icon name="file" class="w-6 h-6 text-gray-300" />
+                        <% end %>
+                      </div>
+                      <div>
+                        <p class="text-xs font-medium text-gray-800 truncate" title={file["filename"]}><%= file["filename"] %></p>
+                        <div class="flex items-center justify-between text-[10px] text-gray-400 mt-1 tabular-nums">
+                          <code class="font-mono truncate"><%= file["id"] %></code>
+                          <span><%= if file["size_bytes"], do: "#{Float.round(file["size_bytes"] / 1024, 1)} KB", else: "" %></span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        phx-click="file_picker_select"
+                        phx-value-id={file["id"]}
+                        phx-target={@myself}
+                        class="mt-2 w-full exo-btn exo-btn-sm exo-btn-secondary group-hover:bg-primary-600 group-hover:text-white group-hover:border-primary-600"
+                      >
+                        Select
+                      </button>
+                    </div>
+                  <% end %>
                 <% end %>
-              <% end %>
+              </div>
             </div>
 
-            <div class="flex items-center justify-between pt-3 border-t border-gray-100">
+            <div class="exo-modal-footer justify-between">
               <!-- Quick upload inside picker -->
               <form id="picker_quick_upload_form" phx-submit="file_picker_uploaded" phx-target={@myself} class="m-0 p-0 inline">
                 <input type="hidden" id="picker_upload_filename" name="filename" value="" />
                 <input type="hidden" id="picker_upload_content_type" name="content_type" value="" />
                 <input type="hidden" id="picker_upload_base64" name="base64" value="" />
-                <label class="text-xs font-bold text-primary-700 hover:text-primary-800 cursor-pointer flex items-center gap-1.5 bg-primary-50 px-3 py-1.5 rounded-xl border border-primary-100">
-                  <span class="inline-flex items-center gap-1.5"><.icon name="upload" class="w-3.5 h-3.5" /> Upload & Select</span>
+                <label class="exo-btn exo-btn-secondary cursor-pointer">
+                  <span class="inline-flex items-center gap-1.5"><.icon name="upload" class="w-3.5 h-3.5" /> Upload &amp; Select</span>
                   <input
                     type="file"
                     class="hidden"
@@ -1887,7 +1910,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                 type="button"
                 phx-click="close_file_picker"
                 phx-target={@myself}
-                class="px-4 py-1.5 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+                class="exo-btn exo-btn-secondary"
               >
                 Cancel
               </button>

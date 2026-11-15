@@ -204,7 +204,7 @@ defmodule Exoforge.Std.Docs.Markdown do
 
     classes =
       case level do
-        1 -> "text-2xl font-black text-gray-900 tracking-tight mt-6 mb-3 pb-2 border-b border-gray-100"
+        1 -> "text-2xl font-semibold text-gray-900 tracking-tight mt-6 mb-3 pb-2 border-b border-gray-100"
         2 -> "text-lg font-bold text-gray-900 tracking-tight mt-5 mb-2"
         3 -> "text-sm font-bold text-gray-800 tracking-tight mt-4 mb-1.5"
         4 -> "text-xs font-bold text-gray-700 uppercase tracking-wider mt-3 mb-1"

@@ -139,23 +139,21 @@ defmodule Exoforge.Std.Dashboard.Overlays do
           <!-- Dialog Box -->
           <div class="exo-card relative max-w-xl w-full p-6 text-left shadow-2xl ring-1 ring-black/5 z-10 animate-fade-in space-y-4 max-h-[calc(100vh-3rem)] overflow-y-auto custom-scrollbar">
             <!-- Modal Header -->
-            <div class="flex items-center justify-between pb-3 border-b border-gray-100">
+            <div class="flex items-center justify-between pb-3 border-b border-gray-200/80">
               <div class="flex items-center gap-2.5">
-                <div class="w-9 h-9 rounded-xl bg-primary-50 text-primary-700 border border-primary-200 flex items-center justify-center shrink-0">
-                  <.icon name="bolt" class="w-4 h-4" />
-                </div>
+                <.icon name="bolt" class="w-4 h-4 text-primary-600 shrink-0" />
                 <div>
-                  <h3 class="font-bold text-gray-900 text-base">Action Dispatcher &amp; Form Generator</h3>
-                  <p class="text-xs text-gray-500">Execute backend service actions across installed plugins</p>
+                  <h3 class="exo-modal-title">Action Dispatcher &amp; Form Generator</h3>
+                  <p class="exo-modal-subtitle">Execute backend service actions across installed plugins</p>
                 </div>
               </div>
               <button
                 type="button"
                 phx-click={@on_close}
-                class="w-8 h-8 shrink-0 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800 flex items-center justify-center transition-colors text-xs font-bold"
+                class="exo-btn exo-btn-icon shrink-0"
                 title="Close (Esc)"
               >
-                ✕
+                <.icon name="close" class="w-4 h-4" />
               </button>
             </div>
 
@@ -446,10 +444,10 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             <button
               type="button"
               phx-click={@on_toggle}
-              class="w-7 h-7 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white flex items-center justify-center transition-colors text-xs font-bold"
+              class="w-7 h-7 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white flex items-center justify-center transition-colors"
               title="Close Event Console"
             >
-              ✕
+              <.icon name="close" class="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
@@ -2100,10 +2098,10 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                 <button
                   type="button"
                   phx-click={@on_close}
-                  class="w-8 h-8 shrink-0 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800 flex items-center justify-center transition-colors text-xs font-bold"
+                  class="exo-btn exo-btn-icon shrink-0"
                   title="Close (Esc)"
                 >
-                  ✕
+                  <.icon name="close" class="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -2641,10 +2639,10 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                 <button
                   type="button"
                   phx-click={@on_close}
-                  class="w-8 h-8 shrink-0 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800 flex items-center justify-center transition-colors text-xs font-bold"
+                  class="exo-btn exo-btn-icon shrink-0"
                   title="Close (Esc)"
                 >
-                  ✕
+                  <.icon name="close" class="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -2953,27 +2951,25 @@ defmodule Exoforge.Std.Dashboard.Overlays do
 
           <!-- Dialog Box -->
           <div class="exo-card relative max-w-5xl w-full p-6 text-left shadow-2xl ring-1 ring-black/5 z-10 animate-fade-in flex flex-col h-[85vh] space-y-4">
-            <div class="flex items-center justify-between pb-3 border-b border-gray-100 flex-shrink-0">
+            <div class="flex items-center justify-between pb-3 border-b border-gray-200/80 flex-shrink-0">
               <div class="flex items-center gap-2.5">
-                <div class="w-9 h-9 rounded-xl bg-primary-50 text-primary-700 border border-primary-200 flex items-center justify-center shrink-0">
-                  <.icon name="radio" class="w-4 h-4" />
-                </div>
+                <.icon name="radio" class="w-4 h-4 text-primary-600 shrink-0" />
                 <div>
-                  <h3 class="font-bold text-gray-900 text-base">Cluster Event Stream &amp; History</h3>
-                  <p class="text-xs text-gray-500">Live pub/sub stream captured across all nodes via EventDispatcher (:pg)</p>
+                  <h3 class="exo-modal-title">Cluster Event Stream &amp; History</h3>
+                  <p class="exo-modal-subtitle">Live pub/sub stream captured across all nodes via EventDispatcher (:pg)</p>
                 </div>
               </div>
               <div class="flex items-center gap-2">
-                <span class="px-2.5 py-1 rounded-full bg-gray-100 font-mono font-bold text-[10px] text-gray-600 border border-gray-200">
+                <span class="px-2.5 py-0.5 rounded-full bg-gray-100 font-mono font-medium text-[10px] text-gray-600 border border-gray-200 tabular-nums">
                   <%= length(@events) %> captured
                 </span>
                 <button
                   type="button"
                   phx-click={@on_close}
-                  class="w-8 h-8 shrink-0 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800 flex items-center justify-center transition-colors text-xs font-bold cursor-pointer"
+                  class="exo-btn exo-btn-icon shrink-0"
                   title="Close (Esc)"
                 >
-                  ✕
+                  <.icon name="close" class="w-4 h-4" />
                 </button>
               </div>
             </div>

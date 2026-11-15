@@ -188,38 +188,38 @@ defmodule Exoforge.Std.Dashboard.ResourceLive do
   def render(assigns) do
     ~H"""
     <div class="max-w-7xl mx-auto p-6 space-y-6">
-      <div class="flex items-center justify-between">
+      <div class="exo-page-header">
         <div>
-          <h2 class="text-lg font-black text-gray-900 tracking-tight flex items-center gap-2">
+          <h1 class="exo-page-title flex items-center gap-2">
             <span>Declarative Resource:</span>
-            <code class="text-primary-600 bg-primary-50 px-2 py-0.5 rounded-lg text-sm"><%= @resource_name %></code>
-          </h2>
-          <p class="text-xs text-gray-500 mt-1">
-            Primary Key: <code><%= @resource[:primary_key] || "id" %></code> • Supervised by Exoforge Kernel
+            <code class="text-primary-600 bg-primary-50 px-2 py-0.5 rounded-lg text-sm font-mono"><%= @resource_name %></code>
+          </h1>
+          <p class="exo-page-subtitle">
+            Primary Key: <code class="font-mono"><%= @resource[:primary_key] || "id" %></code> • Supervised by Exoforge Kernel
           </p>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="exo-page-actions">
           <button
             type="button"
             phx-click="export_csv"
-            class="text-xs font-bold text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
+            class="exo-btn exo-btn-secondary"
           >
-            <span class="inline-flex items-center gap-1"><.icon name="download" class="w-3 h-3" /> Export CSV</span>
+            <.icon name="download" class="w-3.5 h-3.5" /> Export CSV
           </button>
           <button
             type="button"
             phx-click="export_json"
-            class="text-xs font-bold text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
+            class="exo-btn exo-btn-secondary"
           >
-            <span class="inline-flex items-center gap-1"><.icon name="download" class="w-3 h-3" /> Export JSON</span>
+            <.icon name="download" class="w-3.5 h-3.5" /> Export JSON
           </button>
-          <a href="/" class="text-xs font-bold text-gray-600 hover:text-gray-900 bg-white border border-gray-200 px-3 py-1.5 rounded-xl shadow-xs">
+          <a href="/" class="exo-btn exo-btn-secondary">
             &larr; Back to Studio
           </a>
         </div>
       </div>
 
-      <div class="flex items-center justify-between text-xs text-gray-500">
+      <div class="flex items-center justify-between text-xs text-gray-500 tabular-nums">
         <span>
           <%= if @row_total > @per_page do %>
             Page <%= @row_page %> of <%= @row_pages %> &bull; <%= @row_total %> records
@@ -234,14 +234,14 @@ defmodule Exoforge.Std.Dashboard.ResourceLive do
               phx-click="resource_page"
               phx-value-page="prev"
               disabled={@row_page <= 1}
-              class="px-2.5 py-1 rounded-lg bg-white border border-gray-200 text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed"
+              class="exo-btn exo-btn-sm exo-btn-secondary"
             >‹ Prev</button>
             <button
               type="button"
               phx-click="resource_page"
               phx-value-page="next"
               disabled={@row_page >= @row_pages}
-              class="px-2.5 py-1 rounded-lg bg-white border border-gray-200 text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed"
+              class="exo-btn exo-btn-sm exo-btn-secondary"
             >Next ›</button>
           </div>
         <% end %>

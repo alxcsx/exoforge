@@ -108,27 +108,24 @@ defmodule Exoforge.Std.Docs.View do
       </style>
 
       <!-- Top Guide Navigation Sub-Menu (Hidden on Print) -->
-      <div class="print:hidden flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-xl border border-gray-200/90 shadow-2xs">
-        <div class="flex items-center gap-2">
-          <span class="w-8 h-8 rounded-xl bg-primary-50 text-primary-700 flex items-center justify-center font-bold text-sm">
-            <.studio_icon icon="book" class="w-3.5 h-3.5" />
-          </span>
+      <div class="print:hidden exo-page-header">
+        <div class="flex items-center gap-3">
           <div>
-            <span class="font-extrabold text-sm text-gray-900 block leading-tight">Exoforge Developer Guide</span>
-            <span class="text-[10px] text-gray-400">Architecture, C# attributes reference &amp; dynamic cluster catalog</span>
+            <span class="exo-page-title block">Exoforge Developer Guide</span>
+            <span class="exo-page-subtitle">Architecture, C# attributes reference &amp; dynamic cluster catalog</span>
           </div>
         </div>
 
-        <div class="flex flex-wrap items-center gap-2">
-          <!-- Subpage Pills -->
-          <div class="flex flex-wrap items-center gap-1 p-1 bg-gray-100/80 rounded-xl text-xs font-semibold">
+        <div class="exo-page-actions flex-wrap">
+          <!-- Subpage Underline Tabs -->
+          <div class="exo-tabs border-b-0">
             <button
               type="button"
               phx-click="set_guide_subpage"
               phx-target={@myself}
               phx-value-subpage="flow"
               onclick="window.scrollTo({top: 0, behavior: 'smooth'})"
-              class={"px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 #{if @subpage == "flow", do: "bg-white text-primary-700 shadow-xs font-bold", else: "text-gray-600 hover:text-gray-900"}"}
+              class={"exo-tab #{if @subpage == "flow", do: "exo-tab-active"}"}
             >
               <.studio_icon icon="play" class="w-3.5 h-3.5" />
               <span>Quickstart Flow</span>
@@ -139,7 +136,7 @@ defmodule Exoforge.Std.Docs.View do
               phx-target={@myself}
               phx-value-subpage="use_cases"
               onclick="window.scrollTo({top: 0, behavior: 'smooth'})"
-              class={"px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 #{if @subpage == "use_cases", do: "bg-white text-primary-700 shadow-xs font-bold", else: "text-gray-600 hover:text-gray-900"}"}
+              class={"exo-tab #{if @subpage == "use_cases", do: "exo-tab-active"}"}
             >
               <.studio_icon icon="target" class="w-3.5 h-3.5" />
               <span>What You Can Build</span>
@@ -150,7 +147,7 @@ defmodule Exoforge.Std.Docs.View do
               phx-target={@myself}
               phx-value-subpage="attributes"
               onclick="window.scrollTo({top: 0, behavior: 'smooth'})"
-              class={"px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 #{if @subpage == "attributes", do: "bg-white text-primary-700 shadow-xs font-bold", else: "text-gray-600 hover:text-gray-900"}"}
+              class={"exo-tab #{if @subpage == "attributes", do: "exo-tab-active"}"}
             >
               <.studio_icon icon="box" class="w-3.5 h-3.5" />
               <span>C# Attributes</span>
@@ -161,7 +158,7 @@ defmodule Exoforge.Std.Docs.View do
               phx-target={@myself}
               phx-value-subpage="architecture"
               onclick="window.scrollTo({top: 0, behavior: 'smooth'})"
-              class={"px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 #{if @subpage == "architecture", do: "bg-white text-primary-700 shadow-xs font-bold", else: "text-gray-600 hover:text-gray-900"}"}
+              class={"exo-tab #{if @subpage == "architecture", do: "exo-tab-active"}"}
             >
               <.studio_icon icon="box" class="w-3.5 h-3.5" />
               <span>Architecture</span>
@@ -172,7 +169,7 @@ defmodule Exoforge.Std.Docs.View do
               phx-target={@myself}
               phx-value-subpage="catalog"
               onclick="window.scrollTo({top: 0, behavior: 'smooth'})"
-              class={"px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 #{if @subpage == "catalog", do: "bg-white text-primary-700 shadow-xs font-bold", else: "text-gray-600 hover:text-gray-900"}"}
+              class={"exo-tab #{if @subpage == "catalog", do: "exo-tab-active"}"}
             >
               <.studio_icon icon="bolt" class="w-3.5 h-3.5" />
               <span>Live API Reference</span>
@@ -184,11 +181,9 @@ defmodule Exoforge.Std.Docs.View do
             href="/api/docs/manual.pdf"
             download="exoforge-developer-manual.pdf"
             title="Download Exoforge Developer Manual as a PDF"
-            class="px-3.5 py-1.5 rounded-xl bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer no-underline"
+            class="exo-btn exo-btn-secondary exo-btn-sm no-underline"
           >
-            <svg class="w-3.5 h-3.5 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
+            <.studio_icon icon="download" class="w-3.5 h-3.5" />
             <span>Export to PDF</span>
           </a>
         </div>
@@ -296,7 +291,7 @@ defmodule Exoforge.Std.Docs.View do
               <span class="text-xs text-primary-200">➔</span>
             </button>
           </div>
-          <h1 class="text-3xl lg:text-4xl font-extrabold tracking-tight text-white leading-tight">
+          <h1 class="text-3xl lg:text-4xl font-semibold tracking-tight text-white leading-tight">
             Creating Your First Online Multiplayer Feature
           </h1>
           <p class="text-base text-gray-300 leading-relaxed">
@@ -307,7 +302,7 @@ defmodule Exoforge.Std.Docs.View do
           <div class="print:hidden pt-2 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
             <a href="#step-auth" class="group p-3 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 hover:border-white/25 transition-all space-y-1 block">
               <div class="flex items-center justify-between">
-                <span class="w-6 h-6 rounded-lg bg-primary-500 text-white flex items-center justify-center text-[11px] font-black shadow-xs">1</span>
+                <span class="w-6 h-6 rounded-lg bg-primary-500 text-white flex items-center justify-center text-[11px] font-semibold shadow-xs">1</span>
                 <span class="text-[10px] font-semibold text-primary-200 uppercase tracking-wider">Start</span>
               </div>
               <div class="font-bold text-xs text-white group-hover:text-primary-200 transition-colors">Connect &amp; Auth</div>
@@ -316,7 +311,7 @@ defmodule Exoforge.Std.Docs.View do
 
             <a href="#step-scaffold" class="group p-3 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 hover:border-white/25 transition-all space-y-1 block">
               <div class="flex items-center justify-between">
-                <span class="w-6 h-6 rounded-lg bg-primary-500 text-white flex items-center justify-center text-[11px] font-black shadow-xs">2</span>
+                <span class="w-6 h-6 rounded-lg bg-primary-500 text-white flex items-center justify-center text-[11px] font-semibold shadow-xs">2</span>
                 <span class="text-[10px] font-semibold text-primary-200 uppercase tracking-wider">C#</span>
               </div>
               <div class="font-bold text-xs text-white group-hover:text-primary-200 transition-colors">Create Extension</div>
@@ -325,7 +320,7 @@ defmodule Exoforge.Std.Docs.View do
 
             <a href="#step-deploy" class="group p-3 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 hover:border-white/25 transition-all space-y-1 block">
               <div class="flex items-center justify-between">
-                <span class="w-6 h-6 rounded-lg bg-primary-500 text-white flex items-center justify-center text-[11px] font-black shadow-xs">3</span>
+                <span class="w-6 h-6 rounded-lg bg-primary-500 text-white flex items-center justify-center text-[11px] font-semibold shadow-xs">3</span>
                 <span class="text-[10px] font-semibold text-primary-200 uppercase tracking-wider">Hot</span>
               </div>
               <div class="font-bold text-xs text-white group-hover:text-primary-200 transition-colors">Build &amp; Deploy</div>
@@ -334,7 +329,7 @@ defmodule Exoforge.Std.Docs.View do
 
             <a href="#step-stubs" class="group p-3 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 hover:border-white/25 transition-all space-y-1 block">
               <div class="flex items-center justify-between">
-                <span class="w-6 h-6 rounded-lg bg-primary-500 text-white flex items-center justify-center text-[11px] font-black shadow-xs">4</span>
+                <span class="w-6 h-6 rounded-lg bg-primary-500 text-white flex items-center justify-center text-[11px] font-semibold shadow-xs">4</span>
                 <span class="text-[10px] font-semibold text-primary-200 uppercase tracking-wider">Sync</span>
               </div>
               <div class="font-bold text-xs text-white group-hover:text-primary-200 transition-colors">Sync Client Stubs</div>
@@ -343,7 +338,7 @@ defmodule Exoforge.Std.Docs.View do
 
             <a href="#step-gameplay" class="group p-3 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 hover:border-white/25 transition-all space-y-1 block col-span-2 sm:col-span-1">
               <div class="flex items-center justify-between">
-                <span class="w-6 h-6 rounded-lg bg-primary-500 text-white flex items-center justify-center text-[11px] font-black shadow-xs">5</span>
+                <span class="w-6 h-6 rounded-lg bg-primary-500 text-white flex items-center justify-center text-[11px] font-semibold shadow-xs">5</span>
                 <span class="text-[10px] font-semibold text-primary-200 uppercase tracking-wider">Call</span>
               </div>
               <div class="font-bold text-xs text-white group-hover:text-primary-200 transition-colors">Call from Unity</div>
@@ -390,7 +385,7 @@ defmodule Exoforge.Std.Docs.View do
       <section id="step-auth" data-guide-section class="bg-white rounded-xl border border-gray-200/90 p-8 shadow-sm space-y-6 print:border-gray-300 print:shadow-none print:break-inside-avoid">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-4">
           <div class="flex items-start gap-4">
-            <div class="w-10 h-10 rounded-xl bg-primary-600 text-white font-extrabold flex items-center justify-center shrink-0 shadow-md">
+            <div class="w-10 h-10 rounded-xl bg-primary-600 text-white font-semibold flex items-center justify-center shrink-0 shadow-md">
               1
             </div>
             <div class="space-y-1">
@@ -451,7 +446,7 @@ defmodule Exoforge.Std.Docs.View do
       <!-- STEP 2: Scaffold Extension -->
       <section id="step-scaffold" data-guide-section class="bg-white rounded-xl border border-gray-200/90 p-8 shadow-sm space-y-6 print:border-gray-300 print:shadow-none print:break-inside-avoid">
         <div class="flex items-start gap-4">
-          <div class="w-10 h-10 rounded-xl bg-primary-600 text-white font-extrabold flex items-center justify-center shrink-0 shadow-md">
+          <div class="w-10 h-10 rounded-xl bg-primary-600 text-white font-semibold flex items-center justify-center shrink-0 shadow-md">
             2
           </div>
           <div class="space-y-1">
@@ -493,7 +488,7 @@ defmodule Exoforge.Std.Docs.View do
       <!-- STEP 3: Build & Deploy -->
       <section id="step-deploy" data-guide-section class="bg-white rounded-xl border border-gray-200/90 p-8 shadow-sm space-y-6 print:border-gray-300 print:shadow-none print:break-inside-avoid">
         <div class="flex items-start gap-4">
-          <div class="w-10 h-10 rounded-xl bg-primary-600 text-white font-extrabold flex items-center justify-center shrink-0 shadow-md">
+          <div class="w-10 h-10 rounded-xl bg-primary-600 text-white font-semibold flex items-center justify-center shrink-0 shadow-md">
             3
           </div>
           <div class="space-y-1">
@@ -547,7 +542,7 @@ defmodule Exoforge.Std.Docs.View do
       <!-- STEP 4: Generate Client Stubs -->
       <section id="step-stubs" data-guide-section class="bg-white rounded-xl border border-gray-200/90 p-8 shadow-sm space-y-6 print:border-gray-300 print:shadow-none print:break-inside-avoid">
         <div class="flex items-start gap-4">
-          <div class="w-10 h-10 rounded-xl bg-primary-600 text-white font-extrabold flex items-center justify-center shrink-0 shadow-md">
+          <div class="w-10 h-10 rounded-xl bg-primary-600 text-white font-semibold flex items-center justify-center shrink-0 shadow-md">
             4
           </div>
           <div class="space-y-1">
@@ -577,7 +572,7 @@ defmodule Exoforge.Std.Docs.View do
       <!-- STEP 5: Call from Unity Gameplay Code -->
       <section id="step-gameplay" data-guide-section class="bg-white rounded-xl border border-gray-200/90 p-8 shadow-sm space-y-6 print:border-gray-300 print:shadow-none print:break-inside-avoid">
         <div class="flex items-start gap-4">
-          <div class="w-10 h-10 rounded-xl bg-primary-600 text-white font-extrabold flex items-center justify-center shrink-0 shadow-md">
+          <div class="w-10 h-10 rounded-xl bg-primary-600 text-white font-semibold flex items-center justify-center shrink-0 shadow-md">
             5
           </div>
           <div class="space-y-1">
@@ -626,7 +621,7 @@ defmodule Exoforge.Std.Docs.View do
                 <.studio_icon icon="target" class="w-3.5 h-3.5" />
                 <span>Architectural Blueprints</span>
               </div>
-              <h3 class="text-base font-extrabold text-white">What You Can Build with Exoforge</h3>
+              <h3 class="text-base font-semibold text-white">What You Can Build with Exoforge</h3>
               <p class="text-xs text-gray-300 leading-relaxed">
                 Explore 6 production-grade C# patterns (Auction House, In-Memory Matchmaker, World Boss LiveOps, Guilds, Stripe Webhooks) and see how Exoforge eliminates PlayFab/UGS workarounds.
               </p>
@@ -650,7 +645,7 @@ defmodule Exoforge.Std.Docs.View do
                 <.studio_icon icon="bolt" class="w-3.5 h-3.5" />
                 <span>Live Action Catalog</span>
               </div>
-              <h3 class="text-base font-extrabold text-white">Explore All Registered Services &amp; Actions</h3>
+              <h3 class="text-base font-semibold text-white">Explore All Registered Services &amp; Actions</h3>
               <p class="text-xs text-gray-300 leading-relaxed">
                 Inspect live cluster contracts, action signatures, parameters, authorization scopes, and copy-pasteable Unity SDK calling code in the dedicated API Reference.
               </p>
@@ -691,7 +686,7 @@ defmodule Exoforge.Std.Docs.View do
             <div class="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold uppercase tracking-wider">
               <span>Architecture Patterns &amp; Blueprints</span>
             </div>
-            <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">What You Can Build with Exoforge</h1>
+            <h1 class="text-2xl font-semibold text-gray-900 tracking-tight">What You Can Build with Exoforge</h1>
             <p class="text-xs text-gray-500 leading-relaxed max-w-3xl">
               Break free from the constraints of serverless BaaS (PlayFab, Unity Gaming Services). Build stateful, realtime, relational multiplayer services in clean C# with isolated databases, actor supervision, and sub-millisecond pub/sub.
             </p>
@@ -733,7 +728,7 @@ defmodule Exoforge.Std.Docs.View do
         <div class="border-b border-gray-100 pb-4">
           <div class="flex items-center gap-2">
             <span class="text-xl"><.studio_icon icon="sliders" class="w-3.5 h-3.5" /></span>
-            <h2 class="text-xl font-extrabold text-gray-900 tracking-tight">The Paradigm Shift: Exoforge vs. Legacy BaaS</h2>
+            <h2 class="text-xl font-semibold text-gray-900 tracking-tight">The Paradigm Shift: Exoforge vs. Legacy BaaS</h2>
           </div>
           <p class="text-xs text-gray-500 mt-1">
             Why gameplay features that feel hacky or cost prohibitive on PlayFab or Unity Gaming Services (UGS) are first-class primitives in Exoforge.
@@ -821,7 +816,7 @@ defmodule Exoforge.Std.Docs.View do
             </span>
             <div>
               <div class="flex items-center gap-2">
-                <h2 class="text-xl font-extrabold text-gray-900">Blueprint 1: Cross-Player Economy (Auction House &amp; P2P)</h2>
+                <h2 class="text-xl font-semibold text-gray-900">Blueprint 1: Cross-Player Economy (Auction House &amp; P2P)</h2>
                 <span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold uppercase tracking-wider">Economy</span>
               </div>
               <p class="text-xs text-gray-500 mt-0.5">Global player-driven marketplace with atomic currency exchange and instant push notifications.</p>
@@ -873,7 +868,7 @@ defmodule Exoforge.Std.Docs.View do
             </span>
             <div>
               <div class="flex items-center gap-2">
-                <h2 class="text-xl font-extrabold text-gray-900">Blueprint 2: Stateful In-Memory Matchmaking &amp; Turn-Based Rooms</h2>
+                <h2 class="text-xl font-semibold text-gray-900">Blueprint 2: Stateful In-Memory Matchmaking &amp; Turn-Based Rooms</h2>
                 <span class="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-bold uppercase tracking-wider">Multiplayer</span>
               </div>
               <p class="text-xs text-gray-500 mt-0.5">High-speed ELO queue and turn-based room state held in C# memory with zero polling.</p>
@@ -928,7 +923,7 @@ defmodule Exoforge.Std.Docs.View do
             </span>
             <div>
               <div class="flex items-center gap-2">
-                <h2 class="text-xl font-extrabold text-gray-900">Blueprint 3: Designer-Friendly LiveOps &amp; Global Boss Events</h2>
+                <h2 class="text-xl font-semibold text-gray-900">Blueprint 3: Designer-Friendly LiveOps &amp; Global Boss Events</h2>
                 <span class="px-2 py-0.5 rounded-full bg-primary-100 text-primary-800 text-[10px] font-bold uppercase tracking-wider">LiveOps</span>
               </div>
               <p class="text-xs text-gray-500 mt-0.5">Studio-tunable game balance, gacha rates, and server-wide boss battles with zero engineering glue.</p>
@@ -983,7 +978,7 @@ defmodule Exoforge.Std.Docs.View do
             </span>
             <div>
               <div class="flex items-center gap-2">
-                <h2 class="text-xl font-extrabold text-gray-900">Blueprint 4: Guilds, Clans &amp; Real-Time Social Feeds</h2>
+                <h2 class="text-xl font-semibold text-gray-900">Blueprint 4: Guilds, Clans &amp; Real-Time Social Feeds</h2>
                 <span class="px-2 py-0.5 rounded-full bg-primary-100 text-primary-800 text-[10px] font-bold uppercase tracking-wider">Social</span>
               </div>
               <p class="text-xs text-gray-500 mt-0.5">Relational guild rosters, shared vaults, and topic-scoped WebSocket event feeds.</p>
@@ -1038,7 +1033,7 @@ defmodule Exoforge.Std.Docs.View do
             </span>
             <div>
               <div class="flex items-center gap-2">
-                <h2 class="text-xl font-extrabold text-gray-900">Blueprint 5: Automated Season Rollovers &amp; Leaderboards</h2>
+                <h2 class="text-xl font-semibold text-gray-900">Blueprint 5: Automated Season Rollovers &amp; Leaderboards</h2>
                 <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold uppercase tracking-wider">Operations</span>
               </div>
               <p class="text-xs text-gray-500 mt-0.5">Automated background resets, rank archiving, and rewards in a single atomic SQL transaction.</p>
@@ -1092,7 +1087,7 @@ defmodule Exoforge.Std.Docs.View do
             </span>
             <div>
               <div class="flex items-center gap-2">
-                <h2 class="text-xl font-extrabold text-gray-900">Blueprint 6: Web Store Checkout, Stripe Webhooks &amp; Instant Delivery</h2>
+                <h2 class="text-xl font-semibold text-gray-900">Blueprint 6: Web Store Checkout, Stripe Webhooks &amp; Instant Delivery</h2>
                 <span class="px-2 py-0.5 rounded-full bg-red-100 text-red-800 text-[10px] font-bold uppercase tracking-wider">Payments</span>
               </div>
               <p class="text-xs text-gray-500 mt-0.5">Secure external HTTP webhooks with HMAC validation and instant WebSocket delivery to Unity.</p>
@@ -1142,7 +1137,7 @@ defmodule Exoforge.Std.Docs.View do
         <div class="border-b border-gray-100 pb-4">
           <div class="flex items-center gap-2">
             <span class="text-xl"><.studio_icon icon="target" class="w-3.5 h-3.5" /></span>
-            <h2 class="text-xl font-extrabold text-gray-900 tracking-tight">Exoforge Architecture Tips &amp; Golden Rules</h2>
+            <h2 class="text-xl font-semibold text-gray-900 tracking-tight">Exoforge Architecture Tips &amp; Golden Rules</h2>
           </div>
           <p class="text-xs text-gray-500 mt-1">
             Five core engineering principles for designing scalable, maintainable multiplayer game backends.
@@ -1151,7 +1146,7 @@ defmodule Exoforge.Std.Docs.View do
 
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 text-xs text-gray-600">
           <div class="p-5 rounded-xl bg-gray-50 border border-gray-200/80 space-y-2">
-            <div class="w-8 h-8 rounded-xl bg-primary-100 text-primary-700 font-black flex items-center justify-center text-sm shadow-xs">
+            <div class="w-8 h-8 rounded-xl bg-primary-100 text-primary-700 font-semibold flex items-center justify-center text-sm shadow-xs">
               1
             </div>
             <h3 class="font-bold text-gray-900 text-sm">Stateless Extensions, Resilient State in DB &amp; Workers</h3>
@@ -1161,7 +1156,7 @@ defmodule Exoforge.Std.Docs.View do
           </div>
 
           <div class="p-5 rounded-xl bg-gray-50 border border-gray-200/80 space-y-2">
-            <div class="w-8 h-8 rounded-xl bg-primary-100 text-primary-700 font-black flex items-center justify-center text-sm shadow-xs">
+            <div class="w-8 h-8 rounded-xl bg-primary-100 text-primary-700 font-semibold flex items-center justify-center text-sm shadow-xs">
               2
             </div>
             <h3 class="font-bold text-gray-900 text-sm">Let [ExoResource] Build Your UI</h3>
@@ -1171,7 +1166,7 @@ defmodule Exoforge.Std.Docs.View do
           </div>
 
           <div class="p-5 rounded-xl bg-gray-50 border border-gray-200/80 space-y-2">
-            <div class="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 font-black flex items-center justify-center text-sm shadow-xs">
+            <div class="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 font-semibold flex items-center justify-center text-sm shadow-xs">
               3
             </div>
             <h3 class="font-bold text-gray-900 text-sm">Decouple via Stubs &amp; Events</h3>
@@ -1181,7 +1176,7 @@ defmodule Exoforge.Std.Docs.View do
           </div>
 
           <div class="p-5 rounded-xl bg-gray-50 border border-gray-200/80 space-y-2">
-            <div class="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 font-black flex items-center justify-center text-sm shadow-xs">
+            <div class="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 font-semibold flex items-center justify-center text-sm shadow-xs">
               4
             </div>
             <h3 class="font-bold text-gray-900 text-sm">Never Poll from Unity</h3>
@@ -1191,7 +1186,7 @@ defmodule Exoforge.Std.Docs.View do
           </div>
 
           <div class="p-5 rounded-xl bg-gray-50 border border-gray-200/80 space-y-2 col-span-1 md:col-span-2 lg:col-span-1">
-            <div class="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 font-black flex items-center justify-center text-sm shadow-xs">
+            <div class="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 font-semibold flex items-center justify-center text-sm shadow-xs">
               5
             </div>
             <h3 class="font-bold text-gray-900 text-sm">Standard C# Exceptions &amp; Custom Error Codes</h3>
@@ -1217,7 +1212,7 @@ defmodule Exoforge.Std.Docs.View do
             <.studio_icon icon="box" class="w-3.5 h-3.5" />
           </span>
           <div>
-            <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">C# Attributes Reference</h1>
+            <h1 class="text-2xl font-semibold text-gray-900 tracking-tight">C# Attributes Reference</h1>
             <p class="text-xs text-gray-500 mt-0.5">
               Comprehensive reference for all core attributes provided by the Exoforge Extension SDK.
             </p>
@@ -1262,7 +1257,7 @@ defmodule Exoforge.Std.Docs.View do
             </span>
             <div>
               <div class="flex items-center gap-2">
-                <h2 class="text-xl font-extrabold text-gray-900 font-mono">[ExoExtension] / [ExoService]</h2>
+                <h2 class="text-xl font-semibold text-gray-900 font-mono">[ExoExtension] / [ExoService]</h2>
                 <span class="px-2 py-0.5 rounded-full bg-primary-100 text-primary-800 text-[10px] font-bold uppercase tracking-wider">Service Root</span>
               </div>
               <p class="text-xs text-gray-500 mt-0.5">Identifies a C# class or interface as a cluster-supervised native headless service.</p>
@@ -1366,7 +1361,7 @@ defmodule Exoforge.Std.Docs.View do
             </span>
             <div>
               <div class="flex items-center gap-2">
-                <h2 class="text-xl font-extrabold text-gray-900 font-mono">[ExoAction]</h2>
+                <h2 class="text-xl font-semibold text-gray-900 font-mono">[ExoAction]</h2>
                 <span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold uppercase tracking-wider">RPC Action</span>
               </div>
               <p class="text-xs text-gray-500 mt-0.5">Exposes public class methods as callable RPC endpoints over WebSocket and HTTP.</p>
@@ -1503,7 +1498,7 @@ defmodule Exoforge.Std.Docs.View do
             </span>
             <div>
               <div class="flex items-center gap-2">
-                <h2 class="text-xl font-extrabold text-gray-900 font-mono">[ExoCron]</h2>
+                <h2 class="text-xl font-semibold text-gray-900 font-mono">[ExoCron]</h2>
                 <span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold uppercase tracking-wider">Recurring Task</span>
               </div>
               <p class="text-xs text-gray-500 mt-0.5">Executes scheduled recurring background jobs via the cluster supervisor and scheduler.</p>
@@ -1579,7 +1574,7 @@ defmodule Exoforge.Std.Docs.View do
             </span>
             <div>
               <div class="flex items-center gap-2">
-                <h2 class="text-xl font-extrabold text-gray-900 font-mono">[ExoEvent]</h2>
+                <h2 class="text-xl font-semibold text-gray-900 font-mono">[ExoEvent]</h2>
                 <span class="px-2 py-0.5 rounded-full bg-primary-100 text-primary-800 text-[10px] font-bold uppercase tracking-wider">Cluster Pub/Sub</span>
               </div>
               <p class="text-xs text-gray-500 mt-0.5">Declares a record or class as a cluster pub/sub event schema contract.</p>
@@ -1669,7 +1664,7 @@ defmodule Exoforge.Std.Docs.View do
             </span>
             <div>
               <div class="flex items-center gap-2">
-                <h2 class="text-xl font-extrabold text-gray-900 font-mono">[ExoResource] &amp; [ExoColumn]</h2>
+                <h2 class="text-xl font-semibold text-gray-900 font-mono">[ExoResource] &amp; [ExoColumn]</h2>
                 <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold uppercase tracking-wider">Database Entity</span>
               </div>
               <p class="text-xs text-gray-500 mt-0.5">Declares typed entity records and columns mapped directly to SQLite / PostgreSQL storage.</p>
@@ -1857,7 +1852,7 @@ defmodule Exoforge.Std.Docs.View do
             </span>
             <div>
               <div class="flex items-center gap-2">
-                <h2 class="text-xl font-extrabold text-gray-900 font-mono">[ExoDependency]</h2>
+                <h2 class="text-xl font-semibold text-gray-900 font-mono">[ExoDependency]</h2>
                 <span class="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-bold uppercase tracking-wider">Topological Dependency</span>
               </div>
               <p class="text-xs text-gray-500 mt-0.5">Declares explicit service dependencies determining DAG boot order and client stub scope.</p>
@@ -1887,7 +1882,7 @@ defmodule Exoforge.Std.Docs.View do
             </span>
             <div>
               <div class="flex items-center gap-2">
-                <h2 class="text-xl font-extrabold text-gray-900 font-mono">[ExoWebhook]</h2>
+                <h2 class="text-xl font-semibold text-gray-900 font-mono">[ExoWebhook]</h2>
                 <span class="px-2 py-0.5 rounded-full bg-red-100 text-red-800 text-[10px] font-bold uppercase tracking-wider">External HTTP Hook</span>
               </div>
               <p class="text-xs text-gray-500 mt-0.5">Exposes endpoints for external provider webhooks (e.g. Stripe, GitHub, Discord).</p>
@@ -1916,7 +1911,7 @@ defmodule Exoforge.Std.Docs.View do
             </span>
             <div>
               <div class="flex items-center gap-2">
-                <h2 class="text-xl font-extrabold text-gray-900 font-mono">Static Exo.* Capabilities</h2>
+                <h2 class="text-xl font-semibold text-gray-900 font-mono">Static Exo.* Capabilities</h2>
                 <span class="px-2 py-0.5 rounded-full bg-primary-100 text-primary-800 text-[10px] font-bold uppercase tracking-wider">Host Bridge</span>
               </div>
               <p class="text-xs text-gray-500 mt-0.5">High-performance ambient static access to host capabilities without service reflection.</p>
@@ -2098,7 +2093,7 @@ defmodule Exoforge.Std.Docs.View do
                     <.studio_icon icon={svc[:icon] || "gear"} class="w-5 h-5" />
                   </span>
                   <div>
-                    <h3 class="font-extrabold text-gray-900 text-sm tracking-tight font-mono">
+                    <h3 class="font-semibold text-gray-900 text-sm tracking-tight font-mono">
                       <%= svc[:name] %>
                     </h3>
                     <%= if svc[:title] do %>

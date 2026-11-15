@@ -194,7 +194,11 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
       })
 
     ~H"""
-    <div class="fixed inset-0 z-50 overflow-hidden bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-5">
+    <div
+      class="fixed inset-0 z-50 overflow-hidden bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-5"
+      data-exo-modal
+      data-close-event="close_dependency_graph"
+    >
       <div class="bg-slate-950 rounded-xl max-w-7xl w-full p-5 shadow-2xl border border-slate-800 relative animate-in fade-in zoom-in-95 duration-150 flex flex-col h-[94vh] text-white">
         <!-- Modal Header -->
         <div class="flex items-center justify-between pb-4 border-b border-slate-800">
@@ -204,8 +208,8 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
             </div>
             <div>
               <div class="flex items-center gap-2">
-                <h3 class="text-lg font-black text-white tracking-tight">Extension Dependency Architecture</h3>
-                <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-primary-400/20 text-primary-300 border border-primary-400/30">
+                <h3 class="text-lg font-semibold text-white tracking-tight">Extension Dependency Architecture</h3>
+                <span class="text-[10px] font-mono font-medium px-2 py-0.5 rounded-full bg-primary-400/20 text-primary-300 border border-primary-400/30">
                   DAG Engine
                 </span>
                 <span class="text-[10px] font-mono text-slate-400">
@@ -221,7 +225,7 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
           <!-- Controls & Close -->
           <div class="flex items-center gap-3">
             <!-- View Switcher -->
-            <div class="hidden sm:flex items-center gap-1.5 p-1 bg-slate-900 rounded-xl border border-slate-800 text-xs font-semibold">
+            <div class="hidden sm:flex items-center gap-1.5 p-1 bg-slate-900 rounded-xl border border-slate-800 text-xs font-medium">
               <button
                 type="button"
                 onclick="document.getElementById('dep-graph-svg-view').classList.remove('hidden'); document.getElementById('dep-graph-matrix-view').classList.add('hidden'); document.getElementById('btn-dag-graph').classList.add('bg-primary-600', 'text-white'); document.getElementById('btn-dag-graph').classList.remove('text-slate-400'); document.getElementById('btn-dag-matrix').classList.remove('bg-primary-600', 'text-white'); document.getElementById('btn-dag-matrix').classList.add('text-slate-400');"
@@ -244,12 +248,14 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
 
             <!-- Close Modal -->
             <button
+              type="button"
               phx-click="close_dependency_graph"
               phx-target={@target}
-              class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center font-bold text-sm transition-colors cursor-pointer"
+              class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
               title="Close Modal"
+              aria-label="Close"
             >
-              ✕
+              <.studio_icon icon="close" class="w-4 h-4" />
             </button>
           </div>
         </div>

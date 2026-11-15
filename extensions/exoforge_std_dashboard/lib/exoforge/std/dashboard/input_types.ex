@@ -397,7 +397,7 @@ defmodule Exoforge.Std.Dashboard.InputTypes do
 
   defp input_class(nil),
     do:
-      "rounded-xl border border-gray-200 bg-gray-50 text-xs font-mono text-gray-800 px-2 py-1.5 focus:border-primary-400 focus:bg-white focus:outline-none"
+      "exo-input font-mono"
 
   defp input_class(class), do: class
 

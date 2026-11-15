@@ -2023,14 +2023,14 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
             <img src="/favicon.svg" alt="Exoforge" class="w-8 h-8 rounded-xl shadow-xs" />
             <div>
               <div class="flex items-center">
-                <span class="font-black text-gray-900 tracking-tight text-lg leading-none flex items-center">
+                <span class="font-semibold text-gray-900 tracking-tight text-base leading-none flex items-center">
                   <span class="text-primary-600">EXO</span><span>FORGE</span>
                 </span>
               </div>
               <div class="flex items-center gap-1.5 mt-0.5 text-[11px] leading-tight text-gray-500">
-                <span class="font-bold text-gray-700 max-w-[120px] truncate"><%= @project_name %></span>
+                <span class="font-medium text-gray-700 max-w-[120px] truncate"><%= @project_name %></span>
                 <span class="text-gray-300">/</span>
-                <span class="text-gray-500 font-medium truncate"><%= @studio_name %></span>
+                <span class="text-gray-500 truncate"><%= @studio_name %></span>
               </div>
             </div>
           </div>
@@ -2071,7 +2071,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                 <span class={"overflow-hidden whitespace-nowrap leading-none transition-all duration-200 ease-out #{if has_pinned, do: "max-w-0 opacity-0", else: "max-w-24 opacity-100"}"}>
                   Extensions
                 </span>
-                <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-primary-100 text-primary-800 font-black">
+                <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-primary-100 text-primary-800 font-medium tabular-nums">
                   <%= @overview.plugins_count %>
                 </span>
               </button>
@@ -2243,7 +2243,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
             title="Click to dismiss"
             class={"relative pointer-events-auto w-full overflow-hidden rounded-xl border bg-white shadow-lg pl-3 pr-2 py-2.5 flex items-start gap-2.5 cursor-pointer select-none animate-toast-in #{if info?, do: "border-emerald-200", else: "border-red-200"}"}
           >
-            <span class={"mt-px w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black shrink-0 #{if info?, do: "bg-emerald-100 text-emerald-700", else: "bg-red-100 text-red-700"}"}>
+            <span class={"mt-px w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-semibold shrink-0 #{if info?, do: "bg-emerald-100 text-emerald-700", else: "bg-red-100 text-red-700"}"}>
               <%= if info?, do: "✓", else: "!" %>
             </span>
             <div class="min-w-0 flex-1">
@@ -2269,14 +2269,14 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
         <!-- OVERVIEW TAB: 4-Slot Rearrangeable Grid -->
         <%= if @current_tab == :overview do %>
-          <div class="exo-card flex flex-col md:flex-row md:items-center justify-between gap-4 p-6">
-            <div>
-              <h2 class="text-xl font-bold text-gray-900 flex items-center gap-2">
-                <.icon name="chart" class="w-5 h-5" />
+          <div class="exo-page-header">
+            <div class="min-w-0">
+              <h1 class="exo-page-title flex items-center gap-2">
+                <.icon name="chart" class="w-4 h-4 text-gray-400" />
                 <span>Project Overview</span>
-              </h2>
+              </h1>
             </div>
-            <div class="flex items-center gap-2 flex-wrap">
+            <div class="exo-page-actions">
               <%= if @grid_edit_mode do %>
                 <%= if @unadded_slots != [] do %>
                   <div class="flex items-center gap-1.5 flex-wrap">
@@ -2285,7 +2285,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                         type="button"
                         phx-click="add_overview_slot"
                         phx-value-id={missing_id}
-                        class="px-2.5 py-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl transition-colors shadow-xs flex items-center gap-1"
+                        class="exo-btn exo-btn-sm exo-btn-secondary text-emerald-700"
                         title={"Add #{slot_title(missing_id)} back to grid"}
                       >
                         <span>+ Add</span>
@@ -2298,7 +2298,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                   <button
                     type="button"
                     phx-click="reset_overview_grid"
-                    class="px-2.5 py-1.5 text-[11px] font-bold text-gray-600 hover:text-red-600 bg-white hover:bg-red-50 border border-gray-200 rounded-xl transition-colors shadow-xs"
+                    class="exo-btn exo-btn-sm exo-btn-danger"
                   >
                     ↺ Reset Grid
                   </button>
@@ -2306,7 +2306,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                 <button
                   type="button"
                   phx-click="toggle_grid_edit_mode"
-                  class="px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-xs flex items-center gap-1.5"
+                  class="exo-btn exo-btn-sm exo-btn-primary"
                 >
                   <span>✓ Done Editing</span>
                 </button>
@@ -2314,7 +2314,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                 <button
                   type="button"
                   phx-click="toggle_grid_edit_mode"
-                  class="px-3 py-1.5 text-xs font-bold text-gray-700 hover:text-gray-900 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl transition-colors shadow-xs flex items-center gap-1.5"
+                  class="exo-btn exo-btn-sm exo-btn-secondary"
                 >
                   <span>✎ Edit Grid Order</span>
                 </button>
@@ -2465,7 +2465,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
                     <div class="flex flex-wrap items-center justify-between gap-2">
                       <div class="flex items-baseline gap-3">
-                        <span class="text-3xl font-black text-gray-900 tracking-tight"><%= @telemetry.total_invocations %></span>
+                        <span class="text-2xl font-semibold text-gray-900 tracking-tight tabular-nums"><%= @telemetry.total_invocations %></span>
                         <span class="text-xs font-semibold text-gray-500 bg-gray-100 px-2.5 py-0.5 rounded-full font-mono">
                           action calls
                         </span>
@@ -2661,7 +2661,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                     </div>
 
                     <div class="flex items-baseline gap-3">
-                      <span class={"text-3xl font-black tracking-tight #{if @telemetry.total_errors > 0, do: "text-red-600", else: "text-gray-900"}"}>
+                      <span class={"text-2xl font-semibold tracking-tight tabular-nums #{if @telemetry.total_errors > 0, do: "text-red-600", else: "text-gray-900"}"}>
                         <%= @telemetry.total_errors %>
                       </span>
                       <span class={"text-xs font-semibold px-2 py-0.5 rounded-full #{if @telemetry.total_errors > 0, do: "bg-red-50 text-red-700", else: "bg-emerald-50 text-emerald-700"}"}>
@@ -2803,7 +2803,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
                     <div>
                       <div class="flex items-center gap-2">
-                        <span class="text-2xl font-black text-gray-900">Healthy</span>
+                        <span class="text-2xl font-semibold tracking-tight text-gray-900">Healthy</span>
                         <span class="px-2 py-0.5 text-[10px] font-bold bg-emerald-50 text-emerald-700 rounded-full border border-emerald-200">ONLINE</span>
                       </div>
                       <p class="text-[11px] text-gray-500 font-mono truncate mt-1" title={to_string(node())}>
@@ -2886,15 +2886,15 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                       <div class="p-3 rounded-xl bg-emerald-50/80 border border-emerald-200 flex items-center justify-between">
                         <div>
                           <span class="block text-[10px] font-bold uppercase tracking-wider text-emerald-700">Online</span>
-                          <span class="text-2xl font-black text-emerald-800"><%= @telemetry.online_count %></span>
+                          <span class="text-2xl font-semibold tabular-nums text-emerald-800"><%= @telemetry.online_count %></span>
                         </div>
                         <.icon name="box" class="w-5 h-5" />
                       </div>
 
                       <div class={"p-3 rounded-xl border flex items-center justify-between #{if @telemetry.faulty_count > 0, do: "bg-red-50 border-red-300", else: "bg-gray-50 border-gray-200"}"}>
                         <div>
-                          <span class={"block text-[10px] font-bold uppercase tracking-wider #{if @telemetry.faulty_count > 0, do: "text-red-700", else: "text-gray-500"}"}>Faulty / Loop</span>
-                          <span class={"text-2xl font-black #{if @telemetry.faulty_count > 0, do: "text-red-700", else: "text-gray-800"}"}><%= @telemetry.faulty_count %></span>
+                          <span class={"block text-[10px] font-medium uppercase tracking-wider #{if @telemetry.faulty_count > 0, do: "text-red-700", else: "text-gray-500"}"}>Faulty / Loop</span>
+                          <span class={"text-2xl font-semibold tabular-nums #{if @telemetry.faulty_count > 0, do: "text-red-700", else: "text-gray-800"}"}><%= @telemetry.faulty_count %></span>
                         </div>
                         <%= if @telemetry.faulty_count > 0, do: ~H(<.icon name="alert" class="w-5 h-5 text-red-600" />), else: ~H(<.icon name="check" class="w-5 h-5 text-emerald-600" />) %>
                       </div>
@@ -2975,14 +2975,14 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                     </div>
 
                     <div>
-                      <p class="text-sm font-extrabold text-white leading-snug">Unity &amp; C# SDK Packages</p>
+                      <p class="text-sm font-semibold text-white leading-snug">Unity &amp; C# SDK Packages</p>
                       <p class="text-[11px] text-primary-100 mt-1">Download client libraries, UPM tarballs, and setup guides.</p>
                     </div>
 
                     <button
                       type="button"
                       phx-click="open_sdk_modal"
-                      class="w-full py-2.5 px-4 rounded-lg bg-white text-primary-900 hover:bg-primary-50 font-black text-xs shadow-sm transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                      class="w-full py-2.5 px-4 rounded-lg bg-white text-primary-900 hover:bg-primary-50 font-semibold text-xs shadow-sm transition-colors flex items-center justify-center gap-2 cursor-pointer"
                     >
                       <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>

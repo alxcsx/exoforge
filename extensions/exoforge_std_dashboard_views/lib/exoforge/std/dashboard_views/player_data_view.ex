@@ -476,75 +476,60 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
 
       <!-- Top Stats & Header -->
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div class="exo-card p-4 flex items-center gap-3.5" title={"#{@valid_count} Active • #{@retained_count} Retained"}>
-          <div class="w-11 h-11 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center shrink-0">
-            <.studio_icon icon="users" class="w-5 h-5" />
+        <div class="exo-metric-card" title={"#{@valid_count} Active • #{@retained_count} Retained"}>
+          <div class="exo-metric-label">
+            <span>Registered Players</span>
+            <span class="exo-badge bg-primary-50 text-primary-700"><%= @valid_count %> Active</span>
           </div>
-          <div class="min-w-0 flex-1">
-            <p class="text-xs font-semibold text-gray-500 truncate">Registered Players</p>
-            <div class="flex items-center gap-2 mt-0.5">
-              <span class="text-xl font-black text-gray-900"><%= length(@players) %></span>
-              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary-50 text-primary-700"><%= @valid_count %> Active</span>
-            </div>
-          </div>
+          <div class="exo-metric-value"><%= length(@players) %></div>
         </div>
 
-        <div class="exo-card p-4 flex items-center gap-3.5" title="Authorised client ingress active">
-          <div class="w-11 h-11 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-            <.studio_icon icon="lock" class="w-5 h-5" />
+        <div class="exo-metric-card" title="Authorised client ingress active">
+          <div class="exo-metric-label">
+            <span>User Linked Accounts</span>
+            <span class="exo-badge bg-emerald-50 text-emerald-700">Linked</span>
           </div>
-          <div class="min-w-0 flex-1">
-            <p class="text-xs font-semibold text-gray-500 truncate">User Linked Accounts</p>
-            <div class="flex items-center gap-2 mt-0.5">
-              <span class="text-xl font-black text-emerald-600"><%= @valid_count %></span>
-              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">Linked</span>
-            </div>
-          </div>
+          <div class="exo-metric-value text-emerald-600"><%= @valid_count %></div>
         </div>
 
-        <div class="exo-card p-4 flex items-center gap-3.5" title="Telemetry kept, user unlinked">
-          <div class="w-11 h-11 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
-            <.studio_icon icon="archive" class="w-5 h-5" />
+        <div class="exo-metric-card" title="Telemetry kept, user unlinked">
+          <div class="exo-metric-label">
+            <span>GDPR &amp; Retained Data</span>
+            <span class="exo-badge bg-amber-50 text-amber-700">Retained</span>
           </div>
-          <div class="min-w-0 flex-1">
-            <p class="text-xs font-semibold text-gray-500 truncate">GDPR &amp; Retained Data</p>
-            <div class="flex items-center gap-2 mt-0.5">
-              <span class="text-xl font-black text-amber-600"><%= @retained_count %></span>
-              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">Retained</span>
-            </div>
-          </div>
+          <div class="exo-metric-value text-amber-600"><%= @retained_count %></div>
         </div>
       </div>
 
       <!-- Action Toolbar with Filter Tabs -->
-      <div class="exo-card p-4 flex flex-col md:flex-row items-center justify-between gap-4">
+      <div class="exo-card px-4 pt-3 pb-3 flex flex-col md:flex-row items-center justify-between gap-4">
         <!-- Retention Filter Tabs -->
-        <div class="flex items-center gap-1.5 w-full md:w-auto bg-gray-100/90 p-1 rounded-xl">
+        <div class="exo-tabs w-full md:w-auto border-b-0">
           <button
             phx-click="set_retention_filter"
             phx-value-filter="all"
             phx-target={@myself}
-            class={"px-3 py-1.5 text-xs font-bold rounded-lg transition-all #{if @retention_filter == "all", do: "bg-primary-600 text-white shadow-xs", else: "text-gray-500 hover:text-gray-800"}"}
+            class={"exo-tab #{if @retention_filter == "all", do: "exo-tab-active"}"}
           >
-            All (<%= length(@players) %>)
+            All <span class="exo-tab-count"><%= length(@players) %></span>
           </button>
           <button
             phx-click="set_retention_filter"
             phx-value-filter="valid"
             phx-target={@myself}
-            class={"px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 #{if @retention_filter == "valid", do: "bg-emerald-600 text-white shadow-xs", else: "text-gray-500 hover:text-gray-800"}"}
+            class={"exo-tab #{if @retention_filter == "valid", do: "exo-tab-active"}"}
           >
             <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-            Active (<%= @valid_count %>)
+            Active <span class="exo-tab-count"><%= @valid_count %></span>
           </button>
           <button
             phx-click="set_retention_filter"
             phx-value-filter="retained"
             phx-target={@myself}
-            class={"px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 #{if @retention_filter == "retained", do: "bg-white text-amber-700 shadow-xs", else: "text-gray-500 hover:text-gray-800"}"}
+            class={"exo-tab #{if @retention_filter == "retained", do: "exo-tab-active"}"}
           >
             <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-            Retained (<%= @retained_count %>)
+            Retained <span class="exo-tab-count"><%= @retained_count %></span>
           </button>
         </div>
 
@@ -555,9 +540,9 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
             placeholder="Search by Player ID, User ID, Device ID, or Name..."
             value={@search_query}
             phx-debounce="250"
-            class="w-full pl-9 pr-4 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all"
+            class="exo-input pl-9"
           />
-          <svg class="w-4 h-4 text-gray-400 absolute left-3 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg class="w-4 h-4 text-gray-400 absolute left-3 top-2.5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
         </form>
@@ -566,21 +551,17 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
           <button
             phx-click="refresh_players"
             phx-target={@myself}
-            class="px-3.5 py-2 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 rounded-xl border border-gray-200 transition-colors flex items-center gap-2 shadow-sm"
+            class="exo-btn exo-btn-secondary exo-btn-sm"
           >
-            <svg class="w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
+            <.studio_icon icon="refresh" class="w-3.5 h-3.5" />
             Refresh
           </button>
           <button
             phx-click="open_create_modal"
             phx-target={@myself}
-            class="px-4 py-2 text-xs font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded-xl transition-colors shadow-sm flex items-center gap-2"
+            class="exo-btn exo-btn-primary exo-btn-sm"
           >
-            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-            </svg>
+            <.studio_icon icon="plus" class="w-3.5 h-3.5" />
             New Player Profile
           </button>
         </div>
@@ -769,10 +750,11 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
                             phx-click="delete_kv_state"
                             phx-value-key={k}
                             phx-target={@myself}
-                            class="text-gray-400 hover:text-red-500 font-bold text-xs"
+                            class="exo-btn-icon text-gray-400 hover:text-red-500"
                             title="Delete Key"
+                            aria-label="Delete Key"
                           >
-                            ✕
+                            <.studio_icon icon="close" class="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </div>
@@ -896,82 +878,84 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
 
       <!-- Create Player Modal -->
       <%= if @show_create_modal do %>
-        <div class="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+        <div
+          class="exo-modal-backdrop"
+          data-exo-modal
+          data-close-event="close_create_modal"
+        >
           <div class="fixed inset-0" phx-click="close_create_modal" phx-target={@myself}></div>
-          <div class="exo-card max-w-lg w-full p-6 shadow-2xl relative animate-in fade-in duration-150">
-            <button
-              phx-click="close_create_modal"
-              phx-target={@myself}
-              class="absolute top-5 right-5 text-gray-400 hover:text-gray-600 text-lg font-bold"
-            >
-              ✕
-            </button>
-
-            <div class="flex items-center gap-3 mb-4">
-              <div class="w-10 h-10 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center">
-                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                </svg>
-              </div>
+          <div class="exo-modal-panel max-w-lg animate-in fade-in duration-150">
+            <div class="exo-modal-header">
               <div>
-                <h3 class="text-base font-bold text-gray-900">Create New Player Profile</h3>
-                <p class="text-xs text-gray-500">Optionally linked to a user account, or created as retained telemetry.</p>
+                <h3 class="exo-modal-title">Create New Player Profile</h3>
+                <p class="exo-modal-subtitle">Optionally linked to a user account, or created as retained telemetry.</p>
               </div>
+              <button
+                type="button"
+                phx-click="close_create_modal"
+                phx-target={@myself}
+                aria-label="Close"
+                class="exo-btn-icon"
+              >
+                <.studio_icon icon="close" class="w-4 h-4" />
+              </button>
             </div>
 
-            <%= if @create_error do %>
-              <div class="exo-callout-danger mb-4 p-3 rounded-xl text-xs font-medium">
-                <%= @create_error %>
-              </div>
-            <% end %>
+            <form phx-submit="submit_create_player" phx-change="change_create_form" phx-target={@myself}>
+              <div class="exo-modal-body space-y-4">
+                <%= if @create_error do %>
+                  <div class="exo-callout-danger p-3 rounded-lg text-xs font-medium">
+                    <%= @create_error %>
+                  </div>
+                <% end %>
 
-            <form phx-submit="submit_create_player" phx-change="change_create_form" phx-target={@myself} class="space-y-4">
-              <div>
-                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Player Identifier</label>
-                <input
-                  type="text"
-                  name="create[player_id]"
-                  value={@create_form["player_id"]}
-                  placeholder="e.g. player_123"
-                  required
-                  class="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white font-mono"
-                />
+                <div>
+                  <label class="exo-label">Player Identifier</label>
+                  <input
+                    type="text"
+                    name="create[player_id]"
+                    value={@create_form["player_id"]}
+                    placeholder="e.g. player_123"
+                    required
+                    class="exo-input font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label class="exo-label">User ID (Linked Account)</label>
+                  <input
+                    type="text"
+                    name="create[user_id]"
+                    value={@create_form["user_id"]}
+                    placeholder="e.g. u_123 (leave empty to create unlinked/retained)"
+                    class="exo-input font-mono"
+                  />
+                  <p class="text-[11px] text-gray-400 mt-1">Leave blank to create as an inaccessible retained player record.</p>
+                </div>
+
+                <div>
+                  <label class="exo-label">Initial Profile Attributes (JSON)</label>
+                  <textarea
+                    name="create[profile_json]"
+                    rows="4"
+                    class="exo-textarea font-mono text-xs"
+                  ><%= @create_form["profile_json"] %></textarea>
+                </div>
               </div>
 
-              <div>
-                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">User ID (Linked Account)</label>
-                <input
-                  type="text"
-                  name="create[user_id]"
-                  value={@create_form["user_id"]}
-                  placeholder="e.g. u_123 (leave empty to create unlinked/retained)"
-                  class="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white font-mono"
-                />
-                <p class="text-[11px] text-gray-400 mt-1">Leave blank to create as an inaccessible retained player record.</p>
-              </div>
-
-              <div>
-                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Initial Profile Attributes (JSON)</label>
-                <textarea
-                  name="create[profile_json]"
-                  rows="4"
-                  class="w-full p-3 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white font-mono"
-                ><%= @create_form["profile_json"] %></textarea>
-              </div>
-
-              <div class="pt-3 border-t border-gray-100 flex items-center justify-end gap-2">
+              <div class="exo-modal-footer">
                 <button
                   type="button"
                   phx-click="close_create_modal"
                   phx-target={@myself}
-                  class="px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900"
+                  class="exo-btn exo-btn-ghost"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   phx-disable-with="Creating..."
-                  class="px-5 py-2 text-xs font-bold text-white bg-primary-600 hover:bg-primary-700 rounded-xl shadow-sm transition-colors"
+                  class="exo-btn exo-btn-primary"
                 >
                   Create Profile
                 </button>

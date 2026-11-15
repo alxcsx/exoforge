@@ -101,8 +101,8 @@ defmodule Exoforge.Std.Dashboard.LoginController do
         <div class="flex items-center gap-3 mb-6">
           <img src="/favicon.svg" alt="Exoforge" class="w-9 h-9 rounded-xl shadow-sm" />
           <div class="flex items-center">
-            <span class="text-2xl font-extrabold tracking-tight text-primary-600">EXO</span>
-            <span class="text-2xl font-extrabold tracking-tight text-gray-900">FORGE</span>
+            <span class="text-2xl font-semibold tracking-tight text-primary-600">EXO</span>
+            <span class="text-2xl font-semibold tracking-tight text-gray-900">FORGE</span>
           </div>
         </div>
         <h1 class="text-lg font-bold text-gray-900 mb-1">Sign in to the Studio</h1>

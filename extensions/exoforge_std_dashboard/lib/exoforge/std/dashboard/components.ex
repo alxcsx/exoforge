@@ -6,7 +6,78 @@ defmodule Exoforge.Std.Dashboard.Components do
   use Phoenix.Component
 
   @doc """
-  Renders a compact, icon-forward status card with title, value, and optional badge.
+  Renders a flat-on-canvas page header (Vercel / GitHub style) with title, subtitle, optional
+  badges, and right-aligned action controls.
+  """
+  attr(:title, :string, required: true)
+  attr(:subtitle, :string, default: nil)
+  attr(:icon, :string, default: nil)
+  slot(:badges)
+  slot(:actions)
+
+  def page_header(assigns) do
+    ~H"""
+    <div class="exo-page-header">
+      <div class="min-w-0">
+        <div class="flex flex-wrap items-center gap-2">
+          <%= if @icon do %>
+            <span class="text-gray-400 shrink-0"><.studio_icon icon={@icon} class="w-4 h-4" /></span>
+          <% end %>
+          <h1 class="exo-page-title truncate"><%= @title %></h1>
+          <%= render_slot(@badges) %>
+        </div>
+        <%= if @subtitle do %>
+          <p class="exo-page-subtitle"><%= @subtitle %></p>
+        <% end %>
+      </div>
+      <%= if @actions != [] do %>
+        <div class="exo-page-actions shrink-0">
+          <%= render_slot(@actions) %>
+        </div>
+      <% end %>
+    </div>
+    """
+  end
+
+  @doc """
+  Renders GitHub / Vercel style underline tabs with optional count badges.
+  Each tab item is a map with `:id`, `:label`, and optional `:count` or `:icon`.
+  """
+  attr(:tabs, :list, required: true)
+  attr(:active, :string, required: true)
+  attr(:on_select, :string, required: true)
+  attr(:param, :string, default: "tab")
+  attr(:target, :any, default: nil)
+
+  def underline_tabs(assigns) do
+    ~H"""
+    <div class="exo-tabs" role="tablist">
+      <%= for tab <- @tabs do %>
+        <% tab_id = to_string(tab[:id] || tab["id"]) %>
+        <% active? = tab_id == to_string(@active) %>
+        <% rest = Map.new([{String.to_atom("phx-value-#{@param}"), tab_id}]) %>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={to_string(active?)}
+          phx-click={@on_select}
+          phx-target={@target}
+          {rest}
+          class={"exo-tab #{if active?, do: "exo-tab-active"}"}
+        >
+          <.studio_icon :if={tab[:icon]} icon={tab[:icon]} class="w-3.5 h-3.5" />
+          <span><%= tab[:label] || tab["label"] %></span>
+          <%= if not is_nil(tab[:count]) do %>
+            <span class="exo-tab-count"><%= tab[:count] %></span>
+          <% end %>
+        </button>
+      <% end %>
+    </div>
+    """
+  end
+
+  @doc """
+  Renders a data-first typographic metric card with muted label, tabular-nums value, and optional delta.
   """
   attr(:title, :string, required: true)
   attr(:value, :string, required: true)
@@ -19,34 +90,32 @@ defmodule Exoforge.Std.Dashboard.Components do
 
   def metric_card(assigns) do
     ~H"""
-    <div
-      class="exo-card p-4 hover:border-primary-300 transition-all flex items-center gap-3.5"
-      title={@subtitle}
-    >
-      <div class="w-11 h-11 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center shrink-0 text-lg border border-primary-200">
-        <%= cond do %>
-          <% @icon_svg -> %>
-            <%= Phoenix.HTML.raw(Exoforge.Std.Dashboard.IconSanitizer.sanitize(@icon_svg)) %>
-          <% @icon -> %>
-            <span><%= @icon %></span>
-          <% true -> %>
-            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-            </svg>
-        <% end %>
-      </div>
-      <div class="min-w-0 flex-1">
-        <div class="flex items-center justify-between gap-2">
-          <span class="text-[11px] font-bold text-gray-500 uppercase tracking-wider truncate"><%= @title %></span>
+    <div class="exo-metric-card" title={@subtitle}>
+      <div class="exo-metric-label">
+        <span class="truncate"><%= @title %></span>
+        <div class="flex items-center gap-1.5 shrink-0">
           <%= if @delta do %>
-            <span class={"text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 border #{if @delta_positive, do: "bg-emerald-50 text-emerald-700 border-emerald-200", else: "bg-red-50 text-red-700 border-red-200"}"}>
+            <span class={"text-[11px] font-medium px-1.5 py-0.5 rounded-full border tabular-nums #{if @delta_positive, do: "bg-emerald-50 text-emerald-700 border-emerald-200", else: "bg-red-50 text-red-700 border-red-200"}"}>
               <%= @delta %>
             </span>
           <% end %>
+          <%= cond do %>
+            <% @icon_svg -> %>
+              <span class="w-4 h-4 text-gray-400 inline-flex items-center justify-center">
+                <%= Phoenix.HTML.raw(Exoforge.Std.Dashboard.IconSanitizer.sanitize(@icon_svg)) %>
+              </span>
+            <% @icon -> %>
+              <span class="text-xs text-gray-400"><.studio_icon icon={@icon} class="w-3.5 h-3.5" /></span>
+            <% true -> %>
+          <% end %>
         </div>
-        <div class="text-lg font-extrabold text-gray-900 tracking-tight truncate mt-0.5"><%= @value %></div>
-        <%= render_slot(@inner_block) %>
       </div>
+      <div class="exo-metric-value truncate"><%= @value %></div>
+      <%= if @inner_block != [] do %>
+        <div class="exo-metric-meta">
+          <%= render_slot(@inner_block) %>
+        </div>
+      <% end %>
     </div>
     """
   end
@@ -115,7 +184,7 @@ defmodule Exoforge.Std.Dashboard.Components do
     assigns = assign(assigns, :computed_label, label)
 
     ~H"""
-    <span class={"inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border shadow-xs #{@badge_classes}"}>
+    <span class={"inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full border #{@badge_classes}"}>
       <span class="w-1.5 h-1.5 rounded-full bg-current opacity-80"></span>
       <span><%= @computed_label %></span>
     </span>
@@ -136,7 +205,7 @@ defmodule Exoforge.Std.Dashboard.Components do
     <div class="overflow-x-auto rounded-xl border border-gray-200/80 bg-white shadow-card">
       <table class="w-full text-left text-xs border-collapse">
         <thead>
-          <tr class="border-b border-gray-100 bg-gray-50/70 text-gray-500 font-bold uppercase tracking-wider text-[10px]">
+          <tr class="border-b border-gray-200/80 bg-gray-50/70 text-gray-500 font-medium uppercase tracking-wider text-[10px]">
             <%= for col <- @columns do %>
               <th class="py-3 px-4"><%= col.label %></th>
             <% end %>
@@ -230,7 +299,13 @@ defmodule Exoforge.Std.Dashboard.Components do
   def side_drawer(assigns) do
     ~H"""
     <%= if @open do %>
-      <div class="fixed inset-0 z-[70] overflow-hidden" role="dialog" aria-modal="true">
+      <div
+        data-exo-modal
+        data-close-event={@on_close}
+        class="fixed inset-0 z-[70] overflow-hidden"
+        role="dialog"
+        aria-modal="true"
+      >
         <!-- Backdrop -->
         <div
           class="fixed inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity animate-fade-in"
@@ -240,41 +315,44 @@ defmodule Exoforge.Std.Dashboard.Components do
         <div class="fixed inset-y-0 right-0 max-w-full flex pl-10">
           <div class="w-screen max-w-2xl bg-white shadow-2xl flex flex-col border-l border-gray-200 ring-1 ring-black/5 animate-slide-left">
             <!-- Drawer Header -->
-            <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-              <div>
-                <h3 class="font-bold text-gray-900 text-base flex items-center gap-2">
-                  <span><%= @title %></span>
+            <div class="px-5 py-3.5 border-b border-gray-200/80 flex items-center justify-between gap-3">
+              <div class="min-w-0">
+                <h3 class="font-semibold text-gray-900 text-sm tracking-tight truncate">
+                  <%= @title %>
                 </h3>
-                <p class="text-xs text-gray-500 mt-0.5"><%= @subtitle %></p>
+                <p class="text-xs text-gray-500 mt-0.5 truncate"><%= @subtitle %></p>
               </div>
               <button
                 type="button"
                 phx-click={@on_close}
-                class="w-8 h-8 shrink-0 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800 flex items-center justify-center transition-colors text-xs font-bold"
+                class="exo-btn exo-btn-icon shrink-0"
                 title="Close (Esc)"
               >
-                ✕
+                <.icon name="close" class="w-4 h-4" />
               </button>
             </div>
 
             <!-- Drawer Tabs -->
             <%= if not Enum.empty?(@tabs) do %>
-              <div class="flex items-center gap-1 px-6 py-2 border-b border-gray-100 bg-white overflow-x-auto custom-scrollbar">
-                <%= for tab <- @tabs do %>
-                  <button
-                    type="button"
-                    phx-click={@on_select_tab}
-                    phx-value-tab={tab.id}
-                    class={"px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap #{if to_string(tab.id) == to_string(@active_tab), do: "bg-primary-50 text-primary-800 border border-primary-200", else: "text-gray-500 hover:text-gray-900 hover:bg-gray-50"}"}
-                  >
-                    <%= tab.label %>
-                  </button>
-                <% end %>
+              <div class="px-5 bg-white">
+                <div class="exo-tabs">
+                  <%= for tab <- @tabs do %>
+                    <% active? = to_string(tab.id) == to_string(@active_tab) %>
+                    <button
+                      type="button"
+                      phx-click={@on_select_tab}
+                      phx-value-tab={tab.id}
+                      class={"exo-tab #{if active?, do: "exo-tab-active"}"}
+                    >
+                      <%= tab.label %>
+                    </button>
+                  <% end %>
+                </div>
               </div>
             <% end %>
 
             <!-- Drawer Content Body -->
-            <div class="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+            <div class="flex-1 overflow-y-auto overscroll-contain p-5 space-y-5 custom-scrollbar">
               <%= render_slot(@inner_block) %>
             </div>
           </div>
@@ -499,36 +577,34 @@ defmodule Exoforge.Std.Dashboard.Components do
           ></div>
 
           <div class={"relative bg-white rounded-xl #{@max_width} w-full text-left shadow-2xl border border-gray-200 ring-1 ring-black/5 z-10 animate-fade-in flex flex-col max-h-[calc(100vh-2.5rem)] sm:max-h-[calc(100vh-4rem)] overflow-hidden"}>
-            <div class="flex items-start justify-between gap-3 px-5 sm:px-6 py-4 border-b border-gray-100 shrink-0">
-              <div class="flex items-center gap-3 min-w-0">
+            <div class="exo-modal-header">
+              <div class="flex items-center gap-2.5 min-w-0">
                 <%= if @icon do %>
-                  <div class="w-9 h-9 rounded-xl bg-primary-50 text-primary-700 flex items-center justify-center shrink-0 border border-primary-200">
-                    <.studio_icon icon={@icon} class="w-5 h-5" />
-                  </div>
+                  <span class="text-primary-600 shrink-0"><.studio_icon icon={@icon} class="w-4 h-4" /></span>
                 <% end %>
                 <div class="min-w-0">
-                  <h3 class="font-bold text-gray-900 text-base leading-tight truncate"><%= @title %></h3>
+                  <h3 class="exo-modal-title truncate"><%= @title %></h3>
                   <%= if @subtitle do %>
-                    <p class="text-[11px] text-gray-500 mt-0.5 truncate"><%= @subtitle %></p>
+                    <p class="exo-modal-subtitle truncate"><%= @subtitle %></p>
                   <% end %>
                 </div>
               </div>
               <button
                 type="button"
                 phx-click={@on_close}
-                class="w-8 h-8 shrink-0 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800 flex items-center justify-center transition-colors text-xs font-bold"
+                class="exo-btn exo-btn-icon shrink-0"
                 title="Close (Esc)"
               >
-                ✕
+                <.icon name="close" class="w-4 h-4" />
               </button>
             </div>
 
-            <div class="px-5 sm:px-6 py-4 overflow-y-auto min-h-0 flex-1 custom-scrollbar">
+            <div class="exo-modal-body custom-scrollbar">
               <%= render_slot(@inner_block) %>
             </div>
 
             <%= if @footer != [] do %>
-              <div class="px-5 sm:px-6 py-3 border-t border-gray-100 bg-gray-50/60 flex items-center justify-end gap-2 shrink-0">
+              <div class="exo-modal-footer">
                 <%= render_slot(@footer) %>
               </div>
             <% end %>
@@ -560,6 +636,8 @@ defmodule Exoforge.Std.Dashboard.Components do
     ~H"""
     <%= if @open do %>
       <div
+        data-exo-modal
+        data-close-event={@on_close}
         class="fixed inset-0 z-[70] overflow-y-auto bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6"
         role="dialog"
         aria-modal="true"
@@ -567,38 +645,38 @@ defmodule Exoforge.Std.Dashboard.Components do
         <div class="fixed inset-0" phx-click={@on_close} phx-target={@target}></div>
 
         <div class={"relative bg-white rounded-xl #{@width} w-full shadow-2xl border border-gray-200 ring-1 ring-black/5 animate-fade-in overflow-hidden flex flex-col max-h-[calc(100vh-3.5rem)]"}>
-          <button
-            type="button"
-            phx-click={@on_close}
-            phx-target={@target}
-            class="absolute top-4 right-5 z-10 w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-400 hover:text-gray-700 flex items-center justify-center transition-colors text-xs font-bold"
-            title="Close"
-          >
-            ✕
-          </button>
-
-          <div class="flex items-center gap-3 px-6 py-4 border-b border-gray-100 shrink-0">
-            <div class="w-10 h-10 rounded-xl bg-primary-50 text-primary-700 border border-primary-200 flex items-center justify-center shrink-0">
-              <.studio_icon icon={@icon} class="w-5 h-5" />
+          <div class="exo-modal-header">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <span class="text-primary-600 shrink-0"><.studio_icon icon={@icon} class="w-4 h-4" /></span>
+              <div class="min-w-0">
+                <h3 class="exo-modal-title truncate"><%= @title %></h3>
+                <%= if @subtitle do %>
+                  <p class="exo-modal-subtitle truncate"><%= @subtitle %></p>
+                <% end %>
+              </div>
             </div>
-            <div class="min-w-0 pr-8">
-              <h3 class="text-base font-bold text-gray-900 truncate"><%= @title %></h3>
-              <%= if @subtitle do %>
-                <p class="text-xs text-gray-500 truncate"><%= @subtitle %></p>
-              <% end %>
-            </div>
+            <button
+              type="button"
+              phx-click={@on_close}
+              phx-target={@target}
+              class="exo-btn exo-btn-icon shrink-0"
+              title="Close (Esc)"
+            >
+              <.icon name="close" class="w-4 h-4" />
+            </button>
           </div>
 
-          <div class="flex flex-col md:flex-row min-h-[360px] flex-1 min-h-0 divide-y md:divide-y-0 md:divide-x divide-gray-100 overflow-hidden">
+          <div class="flex flex-col md:flex-row min-h-[360px] flex-1 min-h-0 divide-y md:divide-y-0 md:divide-x divide-gray-200/80 overflow-hidden">
             <%= if @tabs != [] do %>
               <div class="w-full md:w-48 p-2 bg-gray-50/70 space-y-0.5 shrink-0 overflow-y-auto custom-scrollbar">
                 <%= for tab <- @tabs do %>
+                  <% active? = to_string(tab[:id]) == to_string(@active_tab) %>
                   <button
                     type="button"
                     phx-click={@on_select_tab}
                     phx-value-tab={to_string(tab[:id])}
                     phx-target={@target}
-                    class={"w-full text-left px-2.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all #{if to_string(tab[:id]) == to_string(@active_tab), do: "bg-primary-600 text-white shadow-sm border border-primary-600", else: "text-gray-600 hover:text-gray-900 hover:bg-white/60"}"}
+                    class={"w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors #{if active?, do: "bg-white text-gray-900 shadow-2xs border border-gray-200/80", else: "text-gray-600 hover:text-gray-900 hover:bg-gray-100/70"}"}
                   >
                     <.studio_icon :if={tab[:icon]} icon={tab[:icon]} class="w-3.5 h-3.5" />
                     <span class="truncate"><%= tab[:title] || tab[:label] || tab[:id] %></span>
@@ -607,7 +685,7 @@ defmodule Exoforge.Std.Dashboard.Components do
               </div>
             <% end %>
 
-            <div class="flex-1 p-5 min-w-0 space-y-4 overflow-y-auto custom-scrollbar">
+            <div class="flex-1 p-5 min-w-0 space-y-4 overflow-y-auto overscroll-contain custom-scrollbar">
               <%= render_slot(@inner_block) %>
             </div>
           </div>

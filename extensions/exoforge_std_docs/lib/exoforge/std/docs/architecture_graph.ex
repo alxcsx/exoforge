@@ -631,7 +631,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
                 </span>
                 <span class="text-xs text-slate-400">Microkernel &amp; Pluggable Extensions</span>
               </div>
-              <h3 class="text-lg font-black tracking-tight text-white">
+              <h3 class="text-lg font-semibold tracking-tight text-white">
                 Immutable Kernel Core + Pluggable Extensions
               </h3>
               <p class="text-xs text-slate-300 leading-relaxed">
@@ -846,7 +846,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
           <%= for step <- @action_workflow_steps do %>
             <div class="flex items-start gap-4 relative z-10" data-workflow-type="action" data-step-num={step.step} data-actor-node={step.actor_node}>
               <!-- Concentric Step Circle Badge on Vertical Pipeline -->
-              <div class={"w-8 h-8 rounded-full border-2 flex items-center justify-center text-xs font-black shadow-sm shrink-0 z-10 #{case step.color do
+              <div class={"w-8 h-8 rounded-full border-2 flex items-center justify-center text-xs font-semibold shadow-sm shrink-0 z-10 #{case step.color do
                 "blue" -> "bg-blue-600 text-white border-blue-200"
                 "violet" -> "bg-primary-600 text-white border-primary-200"
                 "amber" -> "bg-amber-500 text-white border-amber-200"
@@ -924,7 +924,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
           <%= for step <- @event_workflow_steps do %>
             <div class="flex items-start gap-4 relative z-10" data-workflow-type="event" data-step-num={step.step} data-actor-node={step.actor_node}>
               <!-- Concentric Step Circle Badge -->
-              <div class={"w-8 h-8 rounded-full border-2 flex items-center justify-center text-xs font-black shadow-sm shrink-0 z-10 #{case step.color do
+              <div class={"w-8 h-8 rounded-full border-2 flex items-center justify-center text-xs font-semibold shadow-sm shrink-0 z-10 #{case step.color do
                 "blue" -> "bg-blue-600 text-white border-blue-200"
                 "violet" -> "bg-primary-600 text-white border-primary-200"
                 "amber" -> "bg-amber-500 text-white border-amber-200"
@@ -1092,7 +1092,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
             </div>
             <div>
               <div class="flex items-center gap-2">
-                <h3 class="drawer-title text-base font-black text-white tracking-tight">
+                <h3 class="drawer-title text-base font-semibold text-white tracking-tight">
                   ActionDispatcher
                 </h3>
               </div>

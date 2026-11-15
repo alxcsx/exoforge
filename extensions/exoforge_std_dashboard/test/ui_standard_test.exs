@@ -43,6 +43,9 @@ defmodule Exoforge.Std.Dashboard.UiStandardTest do
   # Brand colour is an accent, not a background wash.
   @gradients ~r/\bbg-gradient-/
 
+  # Three-weight typographic hierarchy: 400 / 500 / 600 (no black/extrabold).
+  @banned_weights ~r/\bfont-(?:black|extrabold)\b/
+
   test "templates use one hue name per colour" do
     assert_violations(
       @alias_hues,
@@ -72,6 +75,13 @@ defmodule Exoforge.Std.Dashboard.UiStandardTest do
     assert_violations(
       @gradients,
       "gradient background (hero highlights use .exo-hero / .exo-hero-accent from the CSS)"
+    )
+  end
+
+  test "templates respect the three-weight typography scale" do
+    assert_violations(
+      @banned_weights,
+      "heavy font weight (use font-normal, font-medium, or font-semibold)"
     )
   end
 

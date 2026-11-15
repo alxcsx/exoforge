@@ -98,8 +98,11 @@ One easing, three durations.
 - **`text-xs` (12 px) is the floor** for anything a user reads.
 - `text-[10px]` only for uppercase tracked micro-labels (badges, column headers, units).
   `text-[8px]`, `text-[9px]`, `text-[13px]` are banned — the test fails on them.
-- Body `text-xs`/`text-sm`; page titles `text-lg`/`text-xl`. Card headings are `text-sm` bold with a
+- Body `text-xs`/`text-sm`; page titles `text-lg`/`text-xl` (`font-semibold`). Card headings are `text-sm` semibold with a
   `text-xs` muted subtitle — that is what `.exo-title` / `.exo-subtitle` are.
+- **Three-weight hierarchy**: `font-normal` (`400`) for body/inputs, `font-medium` (`500`) for controls, labels, buttons, tabs, and badges, and `font-semibold` (`600`) for headings and KPI values. `font-black` and `font-extrabold` are banned — the test fails on them.
+- **Natural case `.exo-label`**: field labels use natural case (`font-medium text-xs`), reserving `text-[10px] uppercase tracking-wider` for table headers (`<th>`) and eyebrow tags.
+- **`tabular-nums`** on metric values, counters, and numeric table columns.
 - The font is the `--exo-font` system stack. No webfont: it loads instantly, works offline, and
   reads native on each OS.
 
@@ -122,8 +125,13 @@ The palette is the product's; the tells are in how it is applied. In priority or
    filter). A decorative halo is a border.
 5. **One accent per view.** A screen gets one hue doing accent work, plus status colours in badges.
    Charts are exempt — data series need distinct hues.
-6. **Cards calm down.** One border, one radius, one padding step. Reach for `.exo-card` instead of
-   re-stacking `bg-white border rounded-xl p-6 shadow-card` per view.
+6. **Cards, headers & navigation.**
+   - Page headers use `.exo-page-header` / `.exo-page-title` / `.exo-page-subtitle` / `.exo-page-actions` — flat on canvas with a bottom divider, never wrapped in an `.exo-card` or paired with a 48px icon tile.
+   - Metric tiles use `.exo-metric-card` / `.exo-metric-label` / `.exo-metric-value` — data-first typographic cards with `tabular-nums` (`600`), no decorative icon boxes.
+   - Secondary sub-tabs and filter bars use underline tabs (`.exo-tabs` / `.exo-tab` / `.exo-tab-active`), not segmented pill bars.
+   - Modals share `.exo-modal-backdrop` (`data-exo-modal`, `data-close-event`), `.exo-modal-panel`, `.exo-modal-header`, `.exo-modal-title`, `.exo-modal-subtitle`, `.exo-modal-body`, `.exo-modal-footer`, and SVG close icons (`exo-btn-icon`).
+   - Buttons use `.exo-btn` (`exo-btn-primary`, `exo-btn-secondary`, `exo-btn-ghost`, `exo-btn-danger`, `exo-btn-danger-solid`, `exo-btn-sm`, `exo-btn-lg`, `exo-btn-icon`); form controls use `.exo-input`, `.exo-select`, `.exo-textarea`, and `.exo-label`.
+   - Cards use `.exo-card` (with optional `.exo-card-header`, `.exo-card-body`, `.exo-card-footer`) instead of re-stacking `bg-white border rounded-xl p-6 shadow-card` per view.
 7. **Icons in Studio chrome, glyphs on extension surfaces.** Studio-owned UI (nav, modals,
    settings, stat tiles, empty states, buttons) uses the icon set (`Components.icon/1`, and
    `DashboardViews.Icons.studio_icon/1` for the views package). Emoji are kept where the content is
@@ -147,6 +155,7 @@ The palette is the product's; the tells are in how it is applied. In priority or
 | `dark:` variants | a second dark-mode mechanism |
 | `rounded-2xl/3xl/md/sm` | radius drift |
 | `text-[8px]/[9px]/[13px]` | the type floor |
+| `font-black` / `font-extrabold` | heavy weight bloat (use `font-medium` or `font-semibold`) |
 | `bg-gradient-` | background washes (heroes use `.exo-hero`) |
 | Emoji in Studio chrome | a font glyph where a control icon belongs |
 | Tinted backgrounds not in the remap | **the actual theming bug** — light box, light text |

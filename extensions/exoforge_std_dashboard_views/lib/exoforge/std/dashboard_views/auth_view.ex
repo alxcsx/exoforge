@@ -584,43 +584,35 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
     ~H"""
     <div class="space-y-6" id={@id}>
       <!-- Top Header & Actions -->
-      <div class="exo-card flex flex-col md:flex-row md:items-center justify-between gap-4 p-6">
-        <div class="flex items-center gap-4">
-          <div class="w-12 h-12 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center shadow-inner">
-            <.studio_icon icon="shield" class="w-6 h-6" />
+      <div class="exo-page-header">
+        <div>
+          <div class="flex items-center gap-2.5">
+            <h2 class="exo-page-title">Users & Authentication</h2>
+            <span class="exo-badge bg-emerald-100 text-emerald-700">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+              Extension Live
+            </span>
           </div>
-          <div>
-            <div class="flex items-center gap-3">
-              <h2 class="text-xl font-bold text-gray-900">Users & Authentication</h2>
-              <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
-                Extension Live
-              </span>
-            </div>
-            <p class="text-sm text-gray-500 mt-0.5">
-              Inspect registered accounts, manage security scopes, and issue bearer tokens for client sessions.
-            </p>
-          </div>
+          <p class="exo-page-subtitle">
+            Inspect registered accounts, manage security scopes, and issue bearer tokens for client sessions.
+          </p>
         </div>
 
-        <div class="flex items-center gap-3">
+        <div class="exo-page-actions">
           <button
             phx-click="refresh"
             phx-target={@myself}
-            class="px-3.5 py-2 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors shadow-sm flex items-center gap-2"
+            class="exo-btn exo-btn-secondary"
           >
-            <svg class="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
+            <.studio_icon icon="refresh" class="w-3.5 h-3.5" />
             Refresh
           </button>
           <button
             phx-click="open_register_modal"
             phx-target={@myself}
-            class="px-4 py-2 text-sm font-semibold text-white bg-primary-600 rounded-xl hover:bg-primary-700 transition-colors shadow-sm flex items-center gap-2"
+            class="exo-btn exo-btn-primary"
           >
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-            </svg>
+            <.studio_icon icon="plus" class="w-3.5 h-3.5" />
             Register User
           </button>
         </div>
@@ -640,9 +632,10 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
           <button
             phx-click="dismiss_notification"
             phx-target={@myself}
-            class="text-emerald-500 hover:text-emerald-800 text-sm font-bold p-1"
+            aria-label="Dismiss"
+            class="exo-btn-icon text-emerald-600 hover:text-emerald-800"
           >
-            ✕
+            <.studio_icon icon="close" class="w-3.5 h-3.5" />
           </button>
         </div>
       <% end %>
@@ -682,9 +675,10 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
             <button
               phx-click="dismiss_token_banner"
               phx-target={@myself}
-              class="text-primary-400 hover:text-primary-700 text-sm font-bold p-1"
+              aria-label="Dismiss"
+              class="exo-btn-icon text-primary-500 hover:text-primary-700"
             >
-              ✕
+              <.studio_icon icon="close" class="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
@@ -692,56 +686,36 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
 
       <!-- Metric Cards Grid -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div class="exo-card p-4 flex items-center gap-3.5" title="Distinct identity profiles">
-          <div class="w-11 h-11 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center shrink-0">
-            <.studio_icon icon="users" class="w-5 h-5" />
+        <div class="exo-metric-card" title="Distinct identity profiles">
+          <div class="exo-metric-label">
+            <span>Registered Accounts</span>
+            <span class="exo-badge bg-primary-50 text-primary-700">Auth DB</span>
           </div>
-          <div class="min-w-0 flex-1">
-            <div class="text-xs font-semibold text-gray-500 truncate">Registered Accounts</div>
-            <div class="flex items-center gap-2 mt-0.5">
-              <span class="text-xl font-black text-gray-900"><%= @total_users %></span>
-              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary-50 text-primary-700">Auth DB</span>
-            </div>
-          </div>
+          <div class="exo-metric-value"><%= @total_users %></div>
         </div>
 
-        <div class="exo-card p-4 flex items-center gap-3.5" title="Active bearer tokens (this page)">
-          <div class="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-            <.studio_icon icon="key" class="w-5 h-5" />
+        <div class="exo-metric-card" title="Active bearer tokens (this page)">
+          <div class="exo-metric-label">
+            <span>Active Tokens</span>
+            <span class="exo-badge bg-emerald-50 text-emerald-700">In Pool</span>
           </div>
-          <div class="min-w-0 flex-1">
-            <div class="text-xs font-semibold text-gray-500 truncate">Active Tokens</div>
-            <div class="flex items-center gap-2 mt-0.5">
-              <span class="text-xl font-black text-gray-900"><%= @total_tokens %></span>
-              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">In Pool</span>
-            </div>
-          </div>
+          <div class="exo-metric-value"><%= @total_tokens %></div>
         </div>
 
-        <div class="exo-card p-4 flex items-center gap-3.5" title="Admin & superuser scopes (this page)">
-          <div class="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-            <.studio_icon icon="crown" class="w-5 h-5" />
+        <div class="exo-metric-card" title="Admin & superuser scopes (this page)">
+          <div class="exo-metric-label">
+            <span>Admin Roles</span>
+            <span class="exo-badge bg-amber-50 text-amber-700">Elevated</span>
           </div>
-          <div class="min-w-0 flex-1">
-            <div class="text-xs font-semibold text-gray-500 truncate">Admin Roles</div>
-            <div class="flex items-center gap-2 mt-0.5">
-              <span class="text-xl font-black text-gray-900"><%= @admin_count %></span>
-              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">Elevated</span>
-            </div>
-          </div>
+          <div class="exo-metric-value"><%= @admin_count %></div>
         </div>
 
-        <div class="exo-card p-4 flex items-center gap-3.5" title="Verified gameplay accounts (this page)">
-          <div class="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-            <.studio_icon icon="gamepad" class="w-5 h-5" />
+        <div class="exo-metric-card" title="Verified gameplay accounts (this page)">
+          <div class="exo-metric-label">
+            <span>Player Scopes</span>
+            <span class="exo-badge bg-blue-50 text-blue-700">Standard</span>
           </div>
-          <div class="min-w-0 flex-1">
-            <div class="text-xs font-semibold text-gray-500 truncate">Player Scopes</div>
-            <div class="flex items-center gap-2 mt-0.5">
-              <span class="text-xl font-black text-gray-900"><%= @player_count %></span>
-              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">Standard</span>
-            </div>
-          </div>
+          <div class="exo-metric-value"><%= @player_count %></div>
         </div>
       </div>
 
@@ -980,108 +954,109 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
 
       <!-- Register User Modal -->
       <%= if @show_register_modal do %>
-        <div class="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+        <div
+          class="exo-modal-backdrop"
+          data-exo-modal
+          data-close-event="close_register_modal"
+        >
           <div class="fixed inset-0" phx-click="close_register_modal" phx-target={@myself}></div>
-          <div class="exo-card max-w-lg w-full p-6 shadow-2xl relative animate-in fade-in duration-150">
-            <button
-              phx-click="close_register_modal"
-              phx-target={@myself}
-              class="absolute top-5 right-5 text-gray-400 hover:text-gray-600 text-lg font-bold"
-            >
-              ✕
-            </button>
-
-            <div class="flex items-center gap-3 mb-5">
-              <div class="w-10 h-10 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center">
-                <.studio_icon icon="user" class="w-5 h-5" />
-              </div>
+          <div class="exo-modal-panel max-w-lg animate-in fade-in duration-150">
+            <div class="exo-modal-header">
               <div>
-                <h3 class="text-lg font-bold text-gray-900">Register New User Account</h3>
-                <p class="text-xs text-gray-500">Creates an identity credential in the Auth database and canonical profile store.</p>
+                <h3 class="exo-modal-title">Register New User Account</h3>
+                <p class="exo-modal-subtitle">Creates an identity credential in the Auth database and canonical profile store.</p>
               </div>
+              <button
+                type="button"
+                phx-click="close_register_modal"
+                phx-target={@myself}
+                aria-label="Close"
+                class="exo-btn-icon"
+              >
+                <.studio_icon icon="close" class="w-4 h-4" />
+              </button>
             </div>
 
-            <%= if @error_message do %>
-              <div class="exo-callout-danger mb-4 p-3 rounded-xl text-xs font-medium">
-                <%= @error_message %>
-              </div>
-            <% end %>
+            <form phx-submit="submit_register" phx-change="change_register_form" phx-target={@myself}>
+              <div class="exo-modal-body space-y-4">
+                <%= if @error_message do %>
+                  <div class="exo-callout-danger p-3 rounded-lg text-xs font-medium">
+                    <%= @error_message %>
+                  </div>
+                <% end %>
 
-            <form phx-submit="submit_register" phx-change="change_register_form" phx-target={@myself} class="space-y-4">
-              <div>
-                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">User ID</label>
-                <input
-                  type="text"
-                  name="register[user_id]"
-                  value={@register_form["user_id"] || @register_form["player_id"]}
-                  placeholder="e.g. u_94812 (leave blank to auto-generate)"
-                  class="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white font-mono"
-                />
-              </div>
-
-              <div class="grid grid-cols-2 gap-3">
                 <div>
-                  <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Display Name</label>
+                  <label class="exo-label">User ID</label>
                   <input
                     type="text"
-                    name="register[name]"
-                    value={@register_form["name"]}
-                    placeholder="e.g. ShadowBlade"
-                    class="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white"
+                    name="register[user_id]"
+                    value={@register_form["user_id"] || @register_form["player_id"]}
+                    placeholder="e.g. u_94812 (leave blank to auto-generate)"
+                    class="exo-input font-mono"
                   />
                 </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="exo-label">Display Name</label>
+                    <input
+                      type="text"
+                      name="register[name]"
+                      value={@register_form["name"]}
+                      placeholder="e.g. ShadowBlade"
+                      class="exo-input"
+                    />
+                  </div>
+                  <div>
+                    <label class="exo-label">Email</label>
+                    <input
+                      type="email"
+                      name="register[email]"
+                      value={@register_form["email"]}
+                      placeholder="e.g. player@domain.com"
+                      class="exo-input"
+                    />
+                  </div>
+                </div>
+
                 <div>
-                  <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Email</label>
+                  <label class="exo-label">Initial Password (Optional)</label>
                   <input
-                    type="email"
-                    name="register[email]"
-                    value={@register_form["email"]}
-                    placeholder="e.g. player@domain.com"
-                    class="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white"
+                    type="password"
+                    name="register[password]"
+                    value={@register_form["password"]}
+                    placeholder="Set password for email/password login (optional)"
+                    class="exo-input"
                   />
+                  <p class="text-[11px] text-gray-400 mt-1">If set, the user can log into Exoforge Studio or APIs using email + password.</p>
+                </div>
+
+                <div>
+                  <label class="exo-label">Account Role & Scopes</label>
+                  <select name="register[role]" class="exo-select">
+                    <option value="player" selected={@register_form["role"] == "player"}>Player / Standard User (Default game access)</option>
+                    <option value="studio" selected={@register_form["role"] == "studio"}>Studio / Developer (Producer Studio & Tools)</option>
+                    <option value="service" selected={@register_form["role"] == "service"}>Service / Worker (Internal server communications)</option>
+                    <option value="admin" selected={@register_form["role"] == "admin"}>Administrator (Full access to all scopes)</option>
+                    <option value="guest" selected={@register_form["role"] == "guest"}>Guest (Limited anonymous read-only)</option>
+                  </select>
+                  <p class="text-[11px] text-gray-400 mt-1">Multi-scope security profile assigned to this user upon creation.</p>
                 </div>
               </div>
 
-              <div>
-                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Initial Password (Optional)</label>
-                <input
-                  type="password"
-                  name="register[password]"
-                  value={@register_form["password"]}
-                  placeholder="Set password for email/password login (optional)"
-                  class="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white"
-                />
-                <p class="text-[11px] text-gray-400 mt-1">If set, the user can log into Exoforge Studio or APIs using email + password.</p>
-              </div>
-
-              <div>
-                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Account Role & Scopes</label>
-                <select
-                  name="register[role]"
-                  class="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white font-medium text-gray-900"
-                >
-                  <option value="player" selected={@register_form["role"] == "player"}>Player / Standard User (Default game access)</option>
-                  <option value="studio" selected={@register_form["role"] == "studio"}>Studio / Developer (Producer Studio & Tools)</option>
-                  <option value="service" selected={@register_form["role"] == "service"}>Service / Worker (Internal server communications)</option>
-                  <option value="admin" selected={@register_form["role"] == "admin"}>Administrator (Full access to all scopes)</option>
-                  <option value="guest" selected={@register_form["role"] == "guest"}>Guest (Limited anonymous read-only)</option>
-                </select>
-                <p class="text-[11px] text-gray-400 mt-1">Multi-scope security profile assigned to this user upon creation.</p>
-              </div>
-
-              <div class="pt-4 flex items-center justify-end gap-3 border-t border-gray-100">
+              <div class="exo-modal-footer">
                 <button
                   type="button"
                   phx-click="close_register_modal"
                   phx-target={@myself}
-                  class="px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900 transition-colors"
+                  class="exo-btn exo-btn-ghost"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   phx-disable-with="Creating..."
-                  class="px-5 py-2 text-xs font-bold text-white bg-primary-600 rounded-xl hover:bg-primary-700 transition-colors shadow-sm"
+                  class="exo-btn exo-btn-primary"
                 >
                   Create Account &amp; Issue Token
                 </button>
@@ -1093,59 +1068,63 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
 
       <!-- Reset Password Modal -->
       <%= if @show_reset_password_modal and @reset_password_user do %>
-        <div class="fixed inset-0 z-[60] overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+        <div
+          class="exo-modal-backdrop z-[60]"
+          data-exo-modal
+          data-close-event="close_reset_password_modal"
+        >
           <div class="fixed inset-0" phx-click="close_reset_password_modal" phx-target={@myself}></div>
-          <div class="exo-card max-w-md w-full p-6 shadow-2xl relative animate-in fade-in duration-150">
-            <button
-              phx-click="close_reset_password_modal"
-              phx-target={@myself}
-              class="absolute top-5 right-5 text-gray-400 hover:text-gray-600 text-lg font-bold"
-            >
-              ✕
-            </button>
-
-            <div class="flex items-center gap-3 mb-4">
-              <div class="w-10 h-10 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center">
-                <.studio_icon icon="key" class="w-5 h-5" />
-              </div>
+          <div class="exo-modal-panel max-w-md animate-in fade-in duration-150">
+            <div class="exo-modal-header">
               <div>
-                <h3 class="text-base font-bold text-gray-900">Reset User Password</h3>
-                <p class="text-xs text-gray-500">
-                  Account: <span class="font-bold text-gray-800"><%= @reset_password_user["name"] || @reset_password_user["player_id"] %></span>
+                <h3 class="exo-modal-title">Reset User Password</h3>
+                <p class="exo-modal-subtitle">
+                  Account: <span class="font-medium text-gray-800"><%= @reset_password_user["name"] || @reset_password_user["player_id"] %></span>
                 </p>
               </div>
+              <button
+                type="button"
+                phx-click="close_reset_password_modal"
+                phx-target={@myself}
+                aria-label="Close"
+                class="exo-btn-icon"
+              >
+                <.studio_icon icon="close" class="w-4 h-4" />
+              </button>
             </div>
 
-            <%= if @reset_password_error do %>
-              <div class="exo-callout-danger mb-4 p-3 rounded-xl text-xs font-medium">
-                <%= @reset_password_error %>
-              </div>
-            <% end %>
+            <form phx-submit="submit_reset_password" phx-target={@myself}>
+              <div class="exo-modal-body space-y-4">
+                <%= if @reset_password_error do %>
+                  <div class="exo-callout-danger p-3 rounded-lg text-xs font-medium">
+                    <%= @reset_password_error %>
+                  </div>
+                <% end %>
 
-            <form phx-submit="submit_reset_password" phx-target={@myself} class="space-y-4">
-              <div>
-                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">New Password</label>
-                <input
-                  type="password"
-                  name="reset[password]"
-                  required
-                  placeholder="Enter new password"
-                  class="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white"
-                />
+                <div>
+                  <label class="exo-label">New Password</label>
+                  <input
+                    type="password"
+                    name="reset[password]"
+                    required
+                    placeholder="Enter new password"
+                    class="exo-input"
+                  />
+                </div>
               </div>
 
-              <div class="pt-3 border-t border-gray-100 flex items-center justify-end gap-2">
+              <div class="exo-modal-footer">
                 <button
                   type="button"
                   phx-click="close_reset_password_modal"
                   phx-target={@myself}
-                  class="px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900"
+                  class="exo-btn exo-btn-ghost"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  class="px-5 py-2 text-xs font-bold text-white bg-primary-600 hover:bg-primary-700 rounded-xl shadow-sm transition-colors"
+                  class="exo-btn exo-btn-primary"
                 >
                   Save New Password
                 </button>
@@ -1157,77 +1136,81 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
 
       <!-- Change Roles Modal -->
       <%= if @show_roles_modal and @roles_user do %>
-        <div class="fixed inset-0 z-[60] overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+        <div
+          class="exo-modal-backdrop z-[60]"
+          data-exo-modal
+          data-close-event="close_roles_modal"
+        >
           <div class="fixed inset-0" phx-click="close_roles_modal" phx-target={@myself}></div>
-          <div class="exo-card max-w-md w-full p-6 shadow-2xl relative animate-in fade-in duration-150">
-            <button
-              phx-click="close_roles_modal"
-              phx-target={@myself}
-              class="absolute top-5 right-5 text-gray-400 hover:text-gray-600 text-lg font-bold"
-            >
-              ✕
-            </button>
-
-            <div class="flex items-center gap-3 mb-4">
-              <div class="w-10 h-10 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center">
-                <.studio_icon icon="shield" class="w-5 h-5" />
-              </div>
+          <div class="exo-modal-panel max-w-md animate-in fade-in duration-150">
+            <div class="exo-modal-header">
               <div>
-                <h3 class="text-base font-bold text-gray-900">Change Account Roles</h3>
-                <p class="text-xs text-gray-500">
-                  User: <span class="font-bold text-gray-800"><%= @roles_user["name"] || @roles_user["user_id"] || @roles_user["player_id"] %></span>
+                <h3 class="exo-modal-title">Change Account Roles</h3>
+                <p class="exo-modal-subtitle">
+                  User: <span class="font-medium text-gray-800"><%= @roles_user["name"] || @roles_user["user_id"] || @roles_user["player_id"] %></span>
                 </p>
               </div>
+              <button
+                type="button"
+                phx-click="close_roles_modal"
+                phx-target={@myself}
+                aria-label="Close"
+                class="exo-btn-icon"
+              >
+                <.studio_icon icon="close" class="w-4 h-4" />
+              </button>
             </div>
 
-            <%= if @roles_error do %>
-              <div class="exo-callout-danger mb-4 p-3 rounded-xl text-xs font-medium">
-                <%= @roles_error %>
-              </div>
-            <% end %>
+            <form phx-submit="submit_roles" phx-target={@myself}>
+              <div class="exo-modal-body space-y-4">
+                <%= if @roles_error do %>
+                  <div class="exo-callout-danger p-3 rounded-lg text-xs font-medium">
+                    <%= @roles_error %>
+                  </div>
+                <% end %>
 
-            <form phx-submit="submit_roles" phx-target={@myself} class="space-y-4">
-              <div>
-                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Authorisation Role</label>
-                <select
-                  name="role"
-                  phx-change="select_role"
-                  phx-target={@myself}
-                  class="w-full px-3 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white"
-                >
-                  <option value="player" selected={@selected_role == "player"}>Player / Standard User</option>
-                  <option value="studio" selected={@selected_role == "studio"}>Studio / Developer</option>
-                  <option value="service" selected={@selected_role == "service"}>Service / Worker</option>
-                  <option value="admin" selected={@selected_role == "admin"}>Administrator (All scopes)</option>
-                  <option value="guest" selected={@selected_role == "guest"}>Guest (Limited access)</option>
-                </select>
-              </div>
+                <div>
+                  <label class="exo-label">Authorisation Role</label>
+                  <select
+                    name="role"
+                    phx-change="select_role"
+                    phx-target={@myself}
+                    class="exo-select"
+                  >
+                    <option value="player" selected={@selected_role == "player"}>Player / Standard User</option>
+                    <option value="studio" selected={@selected_role == "studio"}>Studio / Developer</option>
+                    <option value="service" selected={@selected_role == "service"}>Service / Worker</option>
+                    <option value="admin" selected={@selected_role == "admin"}>Administrator (All scopes)</option>
+                    <option value="guest" selected={@selected_role == "guest"}>Guest (Limited access)</option>
+                  </select>
+                </div>
 
-              <!-- Granted Multi-Scopes Pill List -->
-              <div class="p-3 bg-primary-50/70 border border-primary-200 rounded-xl space-y-1.5">
-                <p class="text-[11px] font-bold text-primary-900 uppercase tracking-wider">Multi-Scopes Granted by this Role:</p>
-                <div class="flex flex-wrap gap-1.5 pt-1">
-                  <%= for scope <- @roles_form_scopes do %>
-                    <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-mono font-bold bg-white text-primary-800 border border-primary-200 shadow-2xs">
-                      <%= scope %>
-                    </span>
-                  <% end %>
+                <!-- Granted Multi-Scopes Pill List -->
+                <div class="p-3 bg-primary-50/70 border border-primary-200 rounded-lg space-y-1.5">
+                  <p class="text-[11px] font-semibold text-primary-900 uppercase tracking-wider">Multi-Scopes Granted by this Role:</p>
+                  <div class="flex flex-wrap gap-1.5 pt-1">
+                    <%= for scope <- @roles_form_scopes do %>
+                      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-medium bg-white text-primary-800 border border-primary-200">
+                        <%= scope %>
+                      </span>
+                    <% end %>
+                  </div>
                 </div>
               </div>
 
-              <div class="pt-3 border-t border-gray-100 flex items-center justify-end gap-2">
+              <div class="exo-modal-footer">
                 <button
                   type="button"
                   phx-click="close_roles_modal"
                   phx-target={@myself}
-                  class="px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900"
+                  class="exo-btn exo-btn-ghost"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   phx-disable-with="Updating..."
-                  class="px-5 py-2 text-xs font-bold text-white bg-primary-600 hover:bg-primary-700 rounded-xl shadow-sm transition-colors"
+                  class="exo-btn exo-btn-primary"
                 >
                   Update Roles
                 </button>

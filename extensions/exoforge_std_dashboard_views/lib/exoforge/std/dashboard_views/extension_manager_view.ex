@@ -393,56 +393,46 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
     ~H"""
     <div class="space-y-6" id={@id}>
       <!-- Top Header & Actions -->
-      <div class="exo-card flex flex-col md:flex-row md:items-center justify-between gap-4 p-6">
-        <div class="flex items-center gap-4">
-          <div class="w-12 h-12 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center shadow-inner">
-            <.studio_icon icon="box" class="w-6 h-6" />
+      <div class="exo-page-header">
+        <div>
+          <div class="flex items-center gap-2.5">
+            <h2 class="exo-page-title">Extension Manager &amp; Cluster Runtime</h2>
+            <span class="exo-badge bg-emerald-100 text-emerald-700">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+              Extension Live
+            </span>
           </div>
-          <div>
-            <div class="flex items-center gap-3">
-              <h2 class="text-xl font-bold text-gray-900">Extension Manager &amp; Cluster Runtime</h2>
-              <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
-                Extension Live
-              </span>
-            </div>
-            <p class="text-sm text-gray-500 mt-0.5">
-              Manage runtime lifecycle, inspect contracts &amp; actor schemas, and load native C# and Elixir extensions.
-            </p>
-          </div>
+          <p class="exo-page-subtitle">
+            Manage runtime lifecycle, inspect contracts &amp; actor schemas, and load native C# and Elixir extensions.
+          </p>
         </div>
 
-        <div class="flex items-center gap-3">
+        <div class="exo-page-actions">
           <button
             phx-click="refresh"
             phx-target={@myself}
-            class="px-3.5 py-2 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors shadow-sm flex items-center gap-2"
+            class="exo-btn exo-btn-secondary"
           >
-            <svg class="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
+            <.studio_icon icon="refresh" class="w-3.5 h-3.5" />
             Refresh
           </button>
 
           <button
             phx-click="open_restart_modal"
             phx-target={@myself}
-            class="px-3.5 py-2 text-sm font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl hover:bg-amber-100 transition-colors shadow-sm flex items-center gap-2"
+            class="exo-btn bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100"
             title="Hot-reload extension supervision trees and clear cache"
           >
-            <svg class="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
+            <.studio_icon icon="refresh" class="w-3.5 h-3.5" />
             Restart Cluster
           </button>
 
           <button
             phx-click="open_upload_modal"
             phx-target={@myself}
-            class="px-4 py-2 text-sm font-semibold text-white bg-primary-600 rounded-xl hover:bg-primary-700 transition-colors shadow-sm flex items-center gap-2"
+            class="exo-btn exo-btn-primary"
           >
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-            </svg>
+            <.studio_icon icon="upload" class="w-3.5 h-3.5" />
             Upload Extension
           </button>
         </div>
@@ -452,19 +442,20 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
       <%= if @upload_success || @restart_status || @action_notification do %>
         <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 shadow-sm flex items-center justify-between">
           <div class="flex items-center gap-3">
-            <div class="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shrink-0">
+            <div class="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-semibold text-sm shrink-0">
               ✓
             </div>
-            <p class="text-xs font-bold text-emerald-800">
+            <p class="text-xs font-semibold text-emerald-800">
               <%= @upload_success || @restart_status || @action_notification %>
             </p>
           </div>
           <button
             phx-click="dismiss_notification"
             phx-target={@myself}
-            class="text-emerald-500 hover:text-emerald-800 text-sm font-bold p-1"
+            aria-label="Dismiss"
+            class="exo-btn-icon text-emerald-600 hover:text-emerald-800"
           >
-            ✕
+            <.studio_icon icon="close" class="w-3.5 h-3.5" />
           </button>
         </div>
       <% end %>
@@ -472,63 +463,43 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
       <!-- Metric Cards Grid -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <!-- 1. Installed Extensions -->
-        <div class="exo-card p-4 flex items-center gap-3.5" title="Modular service extensions">
-          <div class="w-11 h-11 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center shrink-0">
-            <.studio_icon icon="box" class="w-5 h-5" />
+        <div class="exo-metric-card" title="Modular service extensions">
+          <div class="exo-metric-label">
+            <span>Installed Extensions</span>
+            <span class="exo-badge bg-primary-50 text-primary-700">Active</span>
           </div>
-          <div class="min-w-0 flex-1">
-            <div class="text-xs font-semibold text-gray-500 truncate">Installed Extensions</div>
-            <div class="flex items-center gap-2 mt-0.5">
-              <span class="text-xl font-black text-gray-900"><%= @total_extensions %></span>
-              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary-50 text-primary-700">Active</span>
-            </div>
-          </div>
+          <div class="exo-metric-value"><%= @total_extensions %></div>
         </div>
 
         <!-- 2. BEAM Memory & Processes -->
-        <div class="exo-card p-4 flex items-center gap-3.5" title="Erlang memory allocated">
-          <div class="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-            <.studio_icon icon="bolt" class="w-5 h-5" />
+        <div class="exo-metric-card" title="Erlang memory allocated">
+          <div class="exo-metric-label">
+            <span>BEAM Memory &amp; Load</span>
+            <span class="exo-badge bg-emerald-50 text-emerald-700">
+              <%= Map.get(@system_info, "process_count", "—") %> procs
+            </span>
           </div>
-          <div class="min-w-0 flex-1">
-            <div class="text-xs font-semibold text-gray-500 truncate">BEAM Memory &amp; Load</div>
-            <div class="flex items-center gap-2 mt-0.5">
-              <span class="text-xl font-black text-gray-900"><%= @memory_mb %> MB</span>
-              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">
-                <%= Map.get(@system_info, "process_count", "—") %> procs
-              </span>
-            </div>
-          </div>
+          <div class="exo-metric-value"><%= @memory_mb %> MB</div>
         </div>
 
         <!-- 3. Cluster Node & Uptime -->
-        <div class="exo-card p-4 flex items-center gap-3.5" title={"Node: #{@node_name}"}>
-          <div class="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-            <.studio_icon icon="globe" class="w-5 h-5" />
+        <div class="exo-metric-card" title={"Node: #{@node_name}"}>
+          <div class="exo-metric-label">
+            <span>Cluster Node</span>
+            <span class="exo-badge bg-blue-50 text-blue-700"><%= @uptime %></span>
           </div>
-          <div class="min-w-0 flex-1">
-            <div class="text-xs font-semibold text-gray-500 truncate">Cluster Node</div>
-            <div class="flex items-center gap-2 mt-0.5">
-              <span class="text-sm font-black font-mono text-gray-900 truncate max-w-[120px]"><%= @node_name %></span>
-              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700"><%= @uptime %></span>
-            </div>
-          </div>
+          <div class="exo-metric-value text-base font-mono truncate"><%= @node_name %></div>
         </div>
 
         <!-- 4. Version & Engine -->
-        <div class="exo-card p-4 flex items-center gap-3.5" title={"OTP #{@otp_release} • Built #{Map.get(@system_info, "build_date", "—")}"}>
-          <div class="w-11 h-11 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center shrink-0">
-            <.studio_icon icon="gear" class="w-5 h-5" />
+        <div class="exo-metric-card" title={"OTP #{@otp_release} • Built #{Map.get(@system_info, "build_date", "—")}"}>
+          <div class="exo-metric-label">
+            <span>Cluster Build</span>
+            <span class="exo-badge font-mono bg-primary-50 text-primary-700">
+              #<%= Map.get(@system_info, "commit_hash", "dev") %>
+            </span>
           </div>
-          <div class="min-w-0 flex-1">
-            <div class="text-xs font-semibold text-gray-500 truncate">Cluster Build</div>
-            <div class="flex items-center gap-2 mt-0.5">
-              <span class="text-lg font-black font-mono text-gray-900">v<%= Map.get(@system_info, "version", "0.1.0") %></span>
-              <span class="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-primary-50 text-primary-700">
-                #<%= Map.get(@system_info, "commit_hash", "dev") %>
-              </span>
-            </div>
-          </div>
+          <div class="exo-metric-value text-lg font-mono">v<%= Map.get(@system_info, "version", "0.1.0") %></div>
         </div>
       </div>
 
@@ -785,161 +756,165 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
 
       <!-- Upload Extension Modal -->
       <%= if @show_upload_modal do %>
-        <div class="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+        <div
+          class="exo-modal-backdrop"
+          data-exo-modal
+          data-close-event="close_upload_modal"
+        >
           <div class="fixed inset-0" phx-click="close_upload_modal" phx-target={@myself}></div>
-          <div class="exo-card max-w-lg w-full p-6 shadow-2xl relative animate-in fade-in duration-150">
-            <button
-              phx-click="close_upload_modal"
-              phx-target={@myself}
-              class="absolute top-5 right-5 text-gray-400 hover:text-gray-600 text-lg font-bold"
-            >
-              ✕
-            </button>
-
-            <div class="flex items-center gap-3 mb-5">
-              <div class="w-10 h-10 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center">
-                <.studio_icon icon="upload" class="w-5 h-5" />
-              </div>
+          <div class="exo-modal-panel max-w-lg animate-in fade-in duration-150">
+            <div class="exo-modal-header">
               <div>
-                <h3 class="text-lg font-bold text-gray-900"><%= if @upload_form["type"] == "elixir", do: "Upload Elixir Extension", else: "Upload C# Extension" %></h3>
-                <p class="text-xs text-gray-500">Deploy a compiled native extension binary or live Elixir extension into the runtime.</p>
+                <h3 class="exo-modal-title"><%= if @upload_form["type"] == "elixir", do: "Upload Elixir Extension", else: "Upload C# Extension" %></h3>
+                <p class="exo-modal-subtitle">Deploy a compiled native extension binary or live Elixir extension into the runtime.</p>
               </div>
+              <button
+                type="button"
+                phx-click="close_upload_modal"
+                phx-target={@myself}
+                aria-label="Close"
+                class="exo-btn-icon"
+              >
+                <.studio_icon icon="close" class="w-4 h-4" />
+              </button>
             </div>
 
-            <%= if @upload_error do %>
-              <div class="exo-callout-danger mb-4 p-3 rounded-xl text-xs font-medium">
-                <%= @upload_error %>
-              </div>
-            <% end %>
-
-            <form id="upload_plugin_form" phx-submit="submit_upload" phx-change="change_upload_form" phx-target={@myself} class="space-y-4">
-              <!-- Extension Type Selector -->
-              <div>
-                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Extension Type</label>
-                <div class="grid grid-cols-2 gap-3">
-                  <label class={"flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition-colors #{if @upload_form["type"] != "elixir", do: "border-primary-500 bg-primary-50/50 text-primary-900", else: "border-gray-200 bg-gray-50 text-gray-700"}"}>
-                    <input
-                      type="radio"
-                      name="upload[type]"
-                      value="native"
-                      checked={@upload_form["type"] != "elixir"}
-                      class="text-primary-600 focus:ring-primary-500"
-                    />
-                    <div>
-                      <span class="text-xs font-bold block">C# Native</span>
-                      <span class="text-[10px] text-gray-500">A compiled extension binary</span>
-                    </div>
-                  </label>
-                  <label class={"flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition-colors #{if @upload_form["type"] == "elixir", do: "border-primary-500 bg-primary-50/50 text-primary-900", else: "border-gray-200 bg-gray-50 text-gray-700"}"}>
-                    <input
-                      type="radio"
-                      name="upload[type]"
-                      value="elixir"
-                      checked={@upload_form["type"] == "elixir"}
-                      class="text-primary-600 focus:ring-primary-500"
-                    />
-                    <div>
-                      <span class="text-xs font-bold block">Elixir Extension</span>
-                      <span class="text-[10px] text-gray-500">Live source module (.ex)</span>
-                    </div>
-                  </label>
-                </div>
-              </div>
-
-              <div>
-                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Extension Name / Identifier</label>
-                <input
-                  type="text"
-                  name="upload[name]"
-                  value={@upload_form["name"]}
-                  placeholder={if @upload_form["type"] == "elixir", do: "e.g. custom_quest", else: "e.g. my_extension"}
-                  class="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white font-mono"
-                />
-              </div>
-
-              <%= if @upload_form["type"] == "elixir" do %>
-                <!-- Elixir Module Code Input -->
-                <div>
-                  <div class="flex items-center justify-between mb-1">
-                    <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider">Elixir Source Code (.ex)</label>
-                    <span class="text-[11px] text-gray-400 font-mono">use Exoforge.Extension</span>
+            <form id="upload_plugin_form" phx-submit="submit_upload" phx-change="change_upload_form" phx-target={@myself}>
+              <div class="exo-modal-body space-y-4">
+                <%= if @upload_error do %>
+                  <div class="exo-callout-danger p-3 rounded-lg text-xs font-medium">
+                    <%= @upload_error %>
                   </div>
-                  <textarea
-                    name="upload[elixir_code]"
-                    rows="6"
-                    placeholder={"defmodule MyExtension do\n  use Exoforge.Extension, provides: [:my_service]\n\n  defaction ping(payload) do\n    {:ok, %{pong: payload}}\n  end\nend"}
-                    class="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white font-mono"
-                  ><%= @upload_form["elixir_code"] %></textarea>
-                </div>
-              <% else %>
-                <!-- Extension Binary Dropzone / Selector -->
+                <% end %>
+
+                <!-- Extension Type Selector -->
                 <div>
-                  <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Extension Binary</label>
-                  <div class="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:border-primary-400 transition-colors bg-gray-50/50">
-                    <input
-                      type="file"
-                      id="extension_file_picker"
-                      onchange="
-                        const file = this.files[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onload = (e) => {
-                            const base64 = e.target.result.split(',')[1];
-                            const input = document.getElementById('binary_base64_input');
-                            if (input) {
-                              input.value = base64;
-                              input.dispatchEvent(new Event('input', {bubbles: true}));
-                            }
-                          };
-                          reader.readAsDataURL(file);
-                        }
-                      "
-                      class="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 cursor-pointer"
-                    />
-                    <%= if @upload_file_info do %>
-                      <p class="text-xs text-emerald-600 font-bold mt-2">
-                        Selected: <%= @upload_file_info.filename %> (<%= Float.round(@upload_file_info.size_bytes / 1024, 1) %> KB)
-                      </p>
-                    <% end %>
+                  <label class="exo-label">Extension Type</label>
+                  <div class="grid grid-cols-2 gap-3">
+                    <label class={"flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-colors #{if @upload_form["type"] != "elixir", do: "border-primary-500 bg-primary-50/50 text-primary-900", else: "border-gray-200 bg-gray-50 text-gray-700"}"}>
+                      <input
+                        type="radio"
+                        name="upload[type]"
+                        value="native"
+                        checked={@upload_form["type"] != "elixir"}
+                        class="text-primary-600 focus:ring-primary-500"
+                      />
+                      <div>
+                        <span class="text-xs font-semibold block">C# Native</span>
+                        <span class="text-[10px] text-gray-500">A compiled extension binary</span>
+                      </div>
+                    </label>
+                    <label class={"flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-colors #{if @upload_form["type"] == "elixir", do: "border-primary-500 bg-primary-50/50 text-primary-900", else: "border-gray-200 bg-gray-50 text-gray-700"}"}>
+                      <input
+                        type="radio"
+                        name="upload[type]"
+                        value="elixir"
+                        checked={@upload_form["type"] == "elixir"}
+                        class="text-primary-600 focus:ring-primary-500"
+                      />
+                      <div>
+                        <span class="text-xs font-semibold block">Elixir Extension</span>
+                        <span class="text-[10px] text-gray-500">Live source module (.ex)</span>
+                      </div>
+                    </label>
                   </div>
                 </div>
 
                 <div>
-                  <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Or Paste Base64 Binary Data</label>
-                  <textarea
-                    id="binary_base64_input"
-                    name="upload[binary]"
-                    rows="3"
-                    placeholder="Base64-encoded extension binary"
-                    class="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white font-mono"
-                  ><%= @upload_form["binary"] %></textarea>
-                  <p class="text-[11px] text-gray-400 mt-0.5">The published extension binary - the file beside its manifest.json.</p>
+                  <label class="exo-label">Extension Name / Identifier</label>
+                  <input
+                    type="text"
+                    name="upload[name]"
+                    value={@upload_form["name"]}
+                    placeholder={if @upload_form["type"] == "elixir", do: "e.g. custom_quest", else: "e.g. my_extension"}
+                    class="exo-input font-mono"
+                  />
                 </div>
-              <% end %>
 
-              <div>
-                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Optional Manifest Metadata (JSON)</label>
-                <textarea
-                  name="upload[manifest_json]"
-                  rows="2"
-                  placeholder='{"version": "0.1.0", "category": "Gameplay"}'
-                  class="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white font-mono"
-                ><%= @upload_form["manifest_json"] %></textarea>
+                <%= if @upload_form["type"] == "elixir" do %>
+                  <!-- Elixir Module Code Input -->
+                  <div>
+                    <div class="flex items-center justify-between mb-1">
+                      <label class="exo-label mb-0">Elixir Source Code (.ex)</label>
+                      <span class="text-[11px] text-gray-400 font-mono">use Exoforge.Extension</span>
+                    </div>
+                    <textarea
+                      name="upload[elixir_code]"
+                      rows="6"
+                      placeholder={"defmodule MyExtension do\n  use Exoforge.Extension, provides: [:my_service]\n\n  defaction ping(payload) do\n    {:ok, %{pong: payload}}\n  end\nend"}
+                      class="exo-textarea font-mono text-xs"
+                    ><%= @upload_form["elixir_code"] %></textarea>
+                  </div>
+                <% else %>
+                  <!-- Extension Binary Dropzone / Selector -->
+                  <div>
+                    <label class="exo-label">Extension Binary</label>
+                    <div class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-primary-400 transition-colors bg-gray-50/50">
+                      <input
+                        type="file"
+                        id="extension_file_picker"
+                        onchange="
+                          const file = this.files[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = (e) => {
+                              const base64 = e.target.result.split(',')[1];
+                              const input = document.getElementById('binary_base64_input');
+                              if (input) {
+                                input.value = base64;
+                                input.dispatchEvent(new Event('input', {bubbles: true}));
+                              }
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        "
+                        class="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 cursor-pointer"
+                      />
+                      <%= if @upload_file_info do %>
+                        <p class="text-xs text-emerald-600 font-medium mt-2">
+                          Selected: <%= @upload_file_info.filename %> (<%= Float.round(@upload_file_info.size_bytes / 1024, 1) %> KB)
+                        </p>
+                      <% end %>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label class="exo-label">Or Paste Base64 Binary Data</label>
+                    <textarea
+                      id="binary_base64_input"
+                      name="upload[binary]"
+                      rows="3"
+                      placeholder="Base64-encoded extension binary"
+                      class="exo-textarea font-mono text-xs"
+                    ><%= @upload_form["binary"] %></textarea>
+                    <p class="text-[11px] text-gray-400 mt-0.5">The published extension binary - the file beside its manifest.json.</p>
+                  </div>
+                <% end %>
+
+                <div>
+                  <label class="exo-label">Optional Manifest Metadata (JSON)</label>
+                  <textarea
+                    name="upload[manifest_json]"
+                    rows="2"
+                    placeholder='{"version": "0.1.0", "category": "Gameplay"}'
+                    class="exo-textarea font-mono text-xs"
+                  ><%= @upload_form["manifest_json"] %></textarea>
+                </div>
               </div>
 
-              <div class="pt-4 flex items-center justify-end gap-3 border-t border-gray-100">
+              <div class="exo-modal-footer">
                 <button
                   type="button"
                   phx-click="close_upload_modal"
                   phx-target={@myself}
-                  class="px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900 transition-colors"
+                  class="exo-btn exo-btn-ghost"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   phx-disable-with="Uploading..."
-                  class="px-5 py-2 text-xs font-bold text-white bg-primary-600 rounded-xl hover:bg-primary-700 transition-colors shadow-sm"
+                  class="exo-btn exo-btn-primary"
                 >
                   Upload &amp; Hot-Load Extension
                 </button>
@@ -951,29 +926,41 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
 
       <!-- Restart Confirmation Modal -->
       <%= if @show_restart_modal do %>
-        <div class="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+        <div
+          class="exo-modal-backdrop"
+          data-exo-modal
+          data-close-event="close_restart_modal"
+        >
           <div class="fixed inset-0" phx-click="close_restart_modal" phx-target={@myself}></div>
-          <div class="exo-card max-w-md w-full p-6 shadow-2xl relative animate-in fade-in duration-150">
-            <div class="flex items-center gap-3 mb-4">
-              <div class="w-10 h-10 rounded-xl bg-red-100 text-red-700 flex items-center justify-center shrink-0">
-                <.studio_icon icon="alert" class="w-5 h-5" />
-              </div>
+          <div class="exo-modal-panel max-w-md animate-in fade-in duration-150">
+            <div class="exo-modal-header">
               <div>
-                <h3 class="text-base font-bold text-gray-900">Restart Cluster Supervision?</h3>
-                <p class="text-xs text-gray-500">Hot-reloads all extension supervision trees and manifests.</p>
+                <h3 class="exo-modal-title">Restart Cluster Supervision?</h3>
+                <p class="exo-modal-subtitle">Hot-reloads all extension supervision trees and manifests.</p>
               </div>
-            </div>
-
-            <p class="text-xs text-gray-600 mb-5 leading-relaxed bg-amber-50 p-3 rounded-xl border border-amber-200">
-              This action re-executes topological sorting, re-initializes extension worker registries, and hot-swaps updated extension binaries into memory.
-            </p>
-
-            <div class="flex items-center justify-end gap-3">
               <button
                 type="button"
                 phx-click="close_restart_modal"
                 phx-target={@myself}
-                class="px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900 transition-colors"
+                aria-label="Close"
+                class="exo-btn-icon"
+              >
+                <.studio_icon icon="close" class="w-4 h-4" />
+              </button>
+            </div>
+
+            <div class="exo-modal-body">
+              <p class="text-xs text-gray-600 leading-relaxed bg-amber-50 p-3 rounded-lg border border-amber-200">
+                This action re-executes topological sorting, re-initializes extension worker registries, and hot-swaps updated extension binaries into memory.
+              </p>
+            </div>
+
+            <div class="exo-modal-footer">
+              <button
+                type="button"
+                phx-click="close_restart_modal"
+                phx-target={@myself}
+                class="exo-btn exo-btn-ghost"
               >
                 Cancel
               </button>
@@ -981,7 +968,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
                 type="button"
                 phx-click="confirm_restart"
                 phx-target={@myself}
-                class="px-5 py-2 text-xs font-bold text-white bg-red-600 rounded-xl hover:bg-red-700 transition-colors shadow-sm"
+                class="exo-btn exo-btn-danger-solid"
               >
                 Yes, Restart Runtime
               </button>
