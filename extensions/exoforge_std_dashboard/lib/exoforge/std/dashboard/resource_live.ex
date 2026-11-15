@@ -204,14 +204,14 @@ defmodule Exoforge.Std.Dashboard.ResourceLive do
             phx-click="export_csv"
             class="text-xs font-bold text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
           >
-            <span>⬇ Export CSV</span>
+            <span class="inline-flex items-center gap-1"><.icon name="download" class="w-3 h-3" /> Export CSV</span>
           </button>
           <button
             type="button"
             phx-click="export_json"
             class="text-xs font-bold text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
           >
-            <span>⬇ Export JSON</span>
+            <span class="inline-flex items-center gap-1"><.icon name="download" class="w-3 h-3" /> Export JSON</span>
           </button>
           <a href="/" class="text-xs font-bold text-gray-600 hover:text-gray-900 bg-white border border-gray-200 px-3 py-1.5 rounded-xl shadow-xs">
             &larr; Back to Studio

@@ -908,7 +908,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                 phx-target={@myself}
                 class="px-3 py-1.5 text-xs font-bold text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-200 rounded-xl transition-colors shadow-2xs flex items-center gap-1.5"
               >
-                <span>🗂️</span>
+                <.icon name="folder" class="w-3.5 h-3.5" />
                 <span>Select from Bucket</span>
               </button>
             </div>
@@ -1037,7 +1037,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
               phx-target={@myself}
               class={"px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 #{if @subtab == "resources", do: "bg-primary-600 text-white shadow-sm", else: "text-gray-600 hover:text-gray-900"}"}
             >
-              <span>📦 Data</span>
+              <span class="inline-flex items-center gap-1"><.icon name="box" class="w-3 h-3" /> Data</span>
               <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-blue-100 text-blue-800"><%= length(@resources) %></span>
             </button>
           <% end %>
@@ -1049,7 +1049,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
               phx-target={@myself}
               class={"px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 #{if @subtab == "actions", do: "bg-primary-600 text-white shadow-sm", else: "text-gray-600 hover:text-gray-900"}"}
             >
-              <span>⚡ Actions</span>
+              <span class="inline-flex items-center gap-1"><.icon name="bolt" class="w-3 h-3" /> Actions</span>
               <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-primary-100 text-primary-800"><%= length(@actions) %></span>
             </button>
           <% end %>
@@ -1061,7 +1061,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
               phx-target={@myself}
               class={"px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 #{if @subtab == "events", do: "bg-primary-600 text-white shadow-sm", else: "text-gray-600 hover:text-gray-900"}"}
             >
-              <span>📡 Telemetry</span>
+              <span class="inline-flex items-center gap-1"><.icon name="radio" class="w-3 h-3" /> Telemetry</span>
               <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800"><%= length(@events) %></span>
             </button>
           <% end %>
@@ -1072,7 +1072,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
             phx-target={@myself}
             class={"px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 #{if @subtab == "contract", do: "bg-primary-600 text-white shadow-sm", else: "text-gray-600 hover:text-gray-900"}"}
           >
-            <span>🛡️ Contract</span>
+            <span class="inline-flex items-center gap-1"><.icon name="shield" class="w-3 h-3" /> Contract</span>
           </button>
         </div>
       </div>
@@ -1095,8 +1095,8 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
               <div class="bg-white rounded-xl border border-gray-200/80 shadow-sm p-5 space-y-4 hover:border-primary-200 transition-colors">
                 <div class="flex items-start justify-between">
                   <div class="flex items-center gap-2.5">
-                    <span class="w-8 h-8 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center font-bold text-sm">
-                      ⚡
+                    <span class="w-8 h-8 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center">
+                      <.icon name="bolt" class="w-4 h-4" />
                     </span>
                     <div>
                       <h4 class="font-bold text-gray-900 text-sm"><%= Phoenix.Naming.humanize(to_string(act[:name])) %></h4>
@@ -1198,7 +1198,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
 
                     <%= if result_info do %>
                       <span class="inline-flex items-center gap-1 text-[11px] font-mono text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-200 font-bold">
-                        ⚡ <%= result_info.latency_ms %> ms
+                        <%= result_info.latency_ms %> ms
                       </span>
                     <% end %>
                   </div>
@@ -1308,7 +1308,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                       phx-target={@myself}
                       class="exo-menu-item"
                     >
-                      <span>⬇</span> <span>Export CSV</span>
+                      <.icon name="download" class="w-3 h-3" /> <span>Export CSV</span>
                     </button>
                     <button
                       type="button"
@@ -1316,7 +1316,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                       phx-target={@myself}
                       class="exo-menu-item"
                     >
-                      <span>⬇</span> <span>Export JSON</span>
+                      <.icon name="download" class="w-3 h-3" /> <span>Export JSON</span>
                     </button>
                     <button
                       type="button"
@@ -1333,7 +1333,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
             <% else %>
               <div class="flex items-center gap-2">
                 <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary-50 text-primary-700 border border-primary-200">
-                  ⚙️ Singleton Config
+                  Singleton Config
                 </span>
               </div>
             <% end %>
@@ -1400,7 +1400,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
             <div class="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
               <%= if @filtered_resource_rows == [] do %>
                 <div class="p-12 text-center space-y-2">
-                  <span class="text-3xl block">📦</span>
+                  <.icon name="box" class="w-8 h-8 mx-auto" />
                   <h3 class="text-sm font-bold text-gray-900">No records found</h3>
                   <p class="text-xs text-gray-500 max-w-sm mx-auto">
                     No rows currently stored in resource <code class="font-mono text-primary-700 font-bold"><%= @selected_resource_name %></code>.
@@ -1433,7 +1433,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                                       class="inline-flex items-center gap-1.5 font-mono text-xs font-semibold text-primary-700 bg-primary-50 hover:bg-primary-100 hover:text-primary-900 px-2 py-0.5 rounded-lg border border-primary-200 transition-colors"
                                       title={"View file " <> to_string(val)}
                                     >
-                                      <span>📎</span>
+                                      <.icon name="paperclip" class="w-3 h-3" />
                                       <span><%= to_string(val) %></span>
                                       <span class="text-[10px]">↗</span>
                                     </a>
@@ -1514,7 +1514,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                     phx-target={@myself}
                     class="px-3 py-1 text-xs font-bold text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-200 rounded-lg transition-colors"
                   >
-                    ⚡ Simulate Broadcast
+                    Simulate Broadcast
                   </button>
                 </div>
               </div>
@@ -1548,7 +1548,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
       <%= if @drawer_open and @inspected_row do %>
         <.inspect_popup
           open={true}
-          icon="📦"
+          icon="box"
           title={to_string(Map.get(@inspected_row, :id) || Map.get(@inspected_row, "id") || "Record")}
           subtitle={"Resource: #{@selected_resource_name}"}
           tabs={@drawer_tabs}
@@ -1764,7 +1764,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
           <div class="relative bg-white rounded-xl max-w-2xl w-full p-6 shadow-2xl border border-gray-200 ring-1 ring-black/5 space-y-4 max-h-[calc(100vh-3rem)] overflow-y-auto custom-scrollbar animate-fade-in">
             <div class="flex items-center justify-between border-b border-gray-100 pb-3">
               <div class="flex items-center gap-2">
-                <span class="text-xl">🗂️</span>
+                <.icon name="folder" class="w-5 h-5 text-primary-600" />
                 <div>
                   <h3 class="text-sm font-bold text-gray-900">Select File from Bucket</h3>
                   <p class="text-xs text-gray-400">Selecting for field <code class="font-mono text-primary-700 font-bold"><%= @file_picker_field %></code></p>
@@ -1792,7 +1792,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                     phx-target={@myself}
                     class={"px-3 py-1 text-xs font-semibold rounded-lg border transition-colors shrink-0 #{if @file_picker_bucket == b, do: "bg-primary-600 text-white border-primary-600", else: "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}"}
                   >
-                    📁 <%= b %>
+                    <%= b %>
                   </button>
                 <% end %>
               </div>
@@ -1806,7 +1806,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                   phx-debounce="150"
                   class="w-full text-xs pl-7 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
                 />
-                <span class="absolute left-2.5 top-2 text-xs text-gray-400">🔍</span>
+                <span class="absolute left-2.5 top-2 text-gray-400"><.icon name="search" class="w-3 h-3" /></span>
               </form>
             </div>
 
@@ -1829,7 +1829,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                       <%= if is_img do %>
                         <img src={file["url"]} class="max-h-full max-w-full object-contain" alt="" />
                       <% else %>
-                        <span class="text-2xl">📄</span>
+                        <.icon name="file" class="w-6 h-6 text-gray-300" />
                       <% end %>
                     </div>
                     <div>
@@ -1860,7 +1860,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                 <input type="hidden" id="picker_upload_content_type" name="content_type" value="" />
                 <input type="hidden" id="picker_upload_base64" name="base64" value="" />
                 <label class="text-xs font-bold text-primary-700 hover:text-primary-800 cursor-pointer flex items-center gap-1.5 bg-primary-50 px-3 py-1.5 rounded-xl border border-primary-100">
-                  <span>⬆️ Upload & Select</span>
+                  <span class="inline-flex items-center gap-1.5"><.icon name="upload" class="w-3.5 h-3.5" /> Upload & Select</span>
                   <input
                     type="file"
                     class="hidden"

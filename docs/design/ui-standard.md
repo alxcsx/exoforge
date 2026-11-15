@@ -111,19 +111,29 @@ The palette is the product's; the tells are in how it is applied. In priority or
 
 1. **Flat surfaces, border first.** Dark separates layers by tone; light by border plus the soft
    card shadow. Not both as decoration.
-2. **Depth budget.** `shadow-2xl` only on true top layers (modal, drawer, toast, popover). Cards use
+2. **Highlighted surfaces earn their wash.** The overview heroes (Quickstart banner, Client SDKs)
+   and primary CTAs carry a filled background — that is what makes them read as calls to action.
+   They get it from `.exo-hero` / `.exo-hero-accent`, never from `bg-gradient-*` utilities, which
+   stay banned in templates. Everything else is a flat surface with a border.
+3. **Depth budget.** `shadow-2xl` only on true top layers (modal, drawer, toast, popover). Cards use
    `--exo-shadow-card` in light; on dark the remap zeroes `shadow-sm/md/card` because a drop shadow
    on a dark surface is haze.
-3. **Ring budget.** `ring-*` for `focus-visible` and explicit selection only (grid edit mode, active
+4. **Ring budget.** `ring-*` for `focus-visible` and explicit selection only (grid edit mode, active
    filter). A decorative halo is a border.
-4. **No gradients.** Brand colour is an accent, not a background wash. The two gradient banners were
-   replaced with flat `bg-white` cards and a `border-primary-200` edge.
 5. **One accent per view.** A screen gets one hue doing accent work, plus status colours in badges.
    Charts are exempt — data series need distinct hues.
 6. **Cards calm down.** One border, one radius, one padding step. Reach for `.exo-card` instead of
    re-stacking `bg-white border rounded-xl p-6 shadow-card` per view.
-7. **Icons over emoji** in navigation, card headers and buttons (`Components.icon/1`). Empty states
-   may keep emoji. No new emoji in interactive UI — still being migrated, not yet enforced.
+7. **Icons in Studio chrome, glyphs on extension surfaces.** Studio-owned UI (nav, modals,
+   settings, stat tiles, empty states, buttons) uses the icon set (`Components.icon/1`, and
+   `DashboardViews.Icons.studio_icon/1` for the views package). Emoji are kept where the content is
+   user- or extension-generated: an extension's own manifest icon on its card, its pinned top-bar
+   tab, and friendly empty states. `studio_icon` renders a set name as SVG and passes anything else
+   (an extension's chosen glyph) through as text.
+8. **Top bar behaviour.** The nav is centred and its shape is driven by `NavCapacity`: a pinned tab
+   grows in, labels collapse to icons once anything is pinned (cap 4 / 3 / 2 by breakpoint), and the
+   active tab is a filled `bg-primary-600` pill. Tabs transition colour only — no scale-on-hover,
+   no `transition-all` on the container, so the bar cannot twitch as the pin count changes.
 
 ---
 
@@ -137,7 +147,8 @@ The palette is the product's; the tells are in how it is applied. In priority or
 | `dark:` variants | a second dark-mode mechanism |
 | `rounded-2xl/3xl/md/sm` | radius drift |
 | `text-[8px]/[9px]/[13px]` | the type floor |
-| `bg-gradient-` | background washes |
+| `bg-gradient-` | background washes (heroes use `.exo-hero`) |
+| Emoji in Studio chrome | a font glyph where a control icon belongs |
 | Tinted backgrounds not in the remap | **the actual theming bug** — light box, light text |
 
 It is a grep over `class=` attributes, not a parser. A violation fails with a `file:line` and the

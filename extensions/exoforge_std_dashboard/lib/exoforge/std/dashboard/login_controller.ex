@@ -14,7 +14,8 @@ defmodule Exoforge.Std.Dashboard.LoginController do
     else
       # If the session carried a stale or player-only login, clear it so it doesn't loop.
       conn =
-        if present?(get_session(conn, "admin_player_id")) or present?(get_session(conn, "admin_user_id")) do
+        if present?(get_session(conn, "admin_player_id")) or
+             present?(get_session(conn, "admin_user_id")) do
           clear_session(conn)
         else
           conn
@@ -29,7 +30,8 @@ defmodule Exoforge.Std.Dashboard.LoginController do
   defp authenticated?(conn) do
     scopes = get_session(conn, "admin_scopes") || []
 
-    (present?(get_session(conn, "admin_player_id")) or present?(get_session(conn, "admin_user_id"))) and
+    (present?(get_session(conn, "admin_player_id")) or
+       present?(get_session(conn, "admin_user_id"))) and
       Exoforge.Auth.Roles.rank_of(scopes) >= 2
   end
 
@@ -41,7 +43,8 @@ defmodule Exoforge.Std.Dashboard.LoginController do
     # The error travels in the URL; it never travels into the HTML unescaped (M33 Fix 25).
     error_html =
       if error,
-        do: ~s(<div class="error p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-semibold mb-4">#{Plug.HTML.html_escape(to_string(error))}</div>),
+        do:
+          ~s(<div class="error p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-semibold mb-4">#{Plug.HTML.html_escape(to_string(error))}</div>),
         else: ""
 
     """

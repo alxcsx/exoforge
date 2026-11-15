@@ -14,7 +14,7 @@ defmodule Exoforge.Std.Dashboard do
       Exoforge.Std.Services.Observability
     ],
     title: "Exoforge Dashboard",
-    icon: "🎛️",
+    icon: "⚙️",
     category: "System"
   }
 

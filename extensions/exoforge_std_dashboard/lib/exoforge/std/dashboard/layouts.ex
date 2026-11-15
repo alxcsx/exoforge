@@ -153,7 +153,7 @@ defmodule Exoforge.Std.Dashboard.Layouts do
               btn.classList.add('text-emerald-400', 'border-emerald-500/50');
               setTimeout(function() {
                 if (textSpan) textSpan.textContent = prevText || 'Copy';
-                if (iconSpan) iconSpan.textContent = prevIcon || '📋';
+                if (iconSpan) iconSpan.textContent = prevIcon || '✓';
                 btn.classList.remove('text-emerald-400', 'border-emerald-500/50');
               }, 2000);
             });

@@ -10,7 +10,7 @@ defmodule Exoforge.Std.DashboardViews do
   @manifest %{
     dependencies: [Exoforge.Std.Services.Dashboard],
     title: "Studio Views",
-    icon: "🎨",
+    icon: "⚙️",
     category: "System",
     system: true,
     dashboard_view: nil

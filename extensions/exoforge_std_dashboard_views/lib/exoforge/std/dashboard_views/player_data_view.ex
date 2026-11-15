@@ -8,6 +8,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
   and fine-grained Key-Value JSON storage inspection.
   """
   use Phoenix.LiveComponent
+  import Exoforge.Std.DashboardViews.Icons, only: [studio_icon: 1]
   alias Exoforge.ActionDispatcher
 
   @impl true
@@ -46,7 +47,8 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
     socket = assign(socket, assigns)
 
     socket =
-      if connected?(socket) and (not Map.get(socket.assigns, :loaded, false) or assigns[:refresh] == true) do
+      if connected?(socket) and
+           (not Map.get(socket.assigns, :loaded, false) or assigns[:refresh] == true) do
         load_players(socket)
         |> assign(:loaded, true)
       else
@@ -128,7 +130,9 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
               profile: profile_map
             }
 
-            case ActionDispatcher.dispatch(:player_data, :create_player, payload, caller_scopes: caller_scopes(socket)) do
+            case ActionDispatcher.dispatch(:player_data, :create_player, payload,
+                   caller_scopes: caller_scopes(socket)
+                 ) do
               {:ok, _result} ->
                 socket =
                   socket
@@ -190,7 +194,9 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
 
   @impl true
   def handle_event("retain_player", %{"id" => player_id}, socket) do
-    case ActionDispatcher.dispatch(:player_data, :retain_player, %{player_id: player_id}, caller_scopes: caller_scopes(socket)) do
+    case ActionDispatcher.dispatch(:player_data, :retain_player, %{player_id: player_id},
+           caller_scopes: caller_scopes(socket)
+         ) do
       {:ok, _} ->
         socket =
           socket
@@ -210,7 +216,9 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
 
   @impl true
   def handle_event("delete_player", %{"id" => player_id}, socket) do
-    case ActionDispatcher.dispatch(:player_data, :delete_player, %{player_id: player_id}, caller_scopes: caller_scopes(socket)) do
+    case ActionDispatcher.dispatch(:player_data, :delete_player, %{player_id: player_id},
+           caller_scopes: caller_scopes(socket)
+         ) do
       {:ok, _} ->
         socket =
           socket
@@ -249,7 +257,9 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
         })
 
       kv_data =
-        case ActionDispatcher.dispatch_internal(:player_data, :get_all_data, %{player_id: player_id}) do
+        case ActionDispatcher.dispatch_internal(:player_data, :get_all_data, %{
+               player_id: player_id
+             }) do
           {:ok, %{data: data}} when is_map(data) -> data
           _ -> %{}
         end
@@ -269,7 +279,12 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
   @impl true
   def handle_event("delete_kv_state", %{"key" => key}, socket) do
     player_id = socket.assigns.selected_player_id
-    _ = ActionDispatcher.dispatch_internal(:player_data, :delete_data, %{player_id: player_id, key: key})
+
+    _ =
+      ActionDispatcher.dispatch_internal(:player_data, :delete_data, %{
+        player_id: player_id,
+        key: key
+      })
 
     kv_data =
       case ActionDispatcher.dispatch_internal(:player_data, :get_all_data, %{player_id: player_id}) do
@@ -277,7 +292,8 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
         _ -> %{}
       end
 
-    {:noreply, assign(socket, player_kv_data: kv_data, action_notification: "Key '#{key}' removed.")}
+    {:noreply,
+     assign(socket, player_kv_data: kv_data, action_notification: "Key '#{key}' removed.")}
   end
 
   @impl true
@@ -287,7 +303,9 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
 
   @impl true
   def handle_event("close_focus", _params, socket) do
-    tab = (socket.assigns[:extension] && socket.assigns.extension.id) || "exoforge_std_player_data"
+    tab =
+      (socket.assigns[:extension] && socket.assigns.extension.id) || "exoforge_std_player_data"
+
     {:noreply,
      socket
      |> assign(selected_player: nil, selected_player_id: nil, player_kv_data: %{})
@@ -329,8 +347,8 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
     hooks =
       if Enum.empty?(hooks) do
         [
-          %{id: :kv_store, title: "Key-Value Database", icon: "🔑", order: 10},
-          %{id: :profile, title: "Profile (Raw JSON)", icon: "👤", order: 20}
+          %{id: :kv_store, title: "Key-Value Database", icon: "key", order: 10},
+          %{id: :profile, title: "Profile (Raw JSON)", icon: "user", order: 20}
         ]
       else
         hooks
@@ -459,8 +477,8 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
       <!-- Top Stats & Header -->
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-3.5" title={"#{@valid_count} Active • #{@retained_count} Retained"}>
-          <div class="w-11 h-11 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center text-xl shrink-0">
-            👥
+          <div class="w-11 h-11 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center shrink-0">
+            <.studio_icon icon="users" class="w-5 h-5" />
           </div>
           <div class="min-w-0 flex-1">
             <p class="text-xs font-semibold text-gray-500 truncate">Registered Players</p>
@@ -472,8 +490,8 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
         </div>
 
         <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-3.5" title="Authorised client ingress active">
-          <div class="w-11 h-11 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-xl shrink-0">
-            🔐
+          <div class="w-11 h-11 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+            <.studio_icon icon="lock" class="w-5 h-5" />
           </div>
           <div class="min-w-0 flex-1">
             <p class="text-xs font-semibold text-gray-500 truncate">User Linked Accounts</p>
@@ -485,8 +503,8 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
         </div>
 
         <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-3.5" title="Telemetry kept, user unlinked">
-          <div class="w-11 h-11 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-xl shrink-0">
-            📁
+          <div class="w-11 h-11 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+            <.studio_icon icon="archive" class="w-5 h-5" />
           </div>
           <div class="min-w-0 flex-1">
             <p class="text-xs font-semibold text-gray-500 truncate">GDPR &amp; Retained Data</p>
@@ -622,7 +640,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
                       <% end %>
                       <%= if did = (player[:device_id] || player["device_id"]) do %>
                         <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-primary-50 text-primary-700 border border-primary-200" title={"Attached Device ID: #{did}"}>
-                          📱 <%= did %>
+                          <%= did %>
                         </span>
                       <% end %>
                     </div>
@@ -660,7 +678,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
                           class="exo-menu-item"
                           title="Unlink User & Retain Telemetry"
                         >
-                          <span>📁</span> <span>Retain</span>
+                          <.studio_icon icon="archive" class="w-3 h-3" /> <span>Retain</span>
                         </button>
                       <% end %>
                       <button
@@ -672,7 +690,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
                         class="exo-menu-item exo-menu-danger"
                         title="Hard Delete"
                       >
-                        <span>🗑</span> <span>Hard Delete</span>
+                        <.studio_icon icon="trash" class="w-3 h-3" /> <span>Hard Delete</span>
                       </button>
                     </div>
                   </details>
@@ -691,7 +709,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
         <% p_dids = @selected_player[:device_ids] || @selected_player["device_ids"] || (if p_did, do: [p_did], else: []) %>
         <Exoforge.Std.DashboardViews.InspectPopup.inspect_popup
           open={true}
-          icon="👤"
+          icon="user"
           title={p_name}
           subtitle={
             cond do
@@ -720,7 +738,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
           <%= if p_dids != [] do %>
             <div class="px-3 py-2 bg-primary-50/70 border border-primary-100 rounded-xl text-xs text-primary-900 flex items-center justify-between mb-3">
               <span class="font-semibold flex items-center gap-1.5">
-                <span>📱</span>
+                <.studio_icon icon="mobile" class="w-3.5 h-3.5" />
                 <span>Attached Device IDs:</span>
               </span>
               <span class="font-mono text-[11px] text-primary-700 font-bold truncate max-w-sm" title={Enum.join(p_dids, ", ")}>

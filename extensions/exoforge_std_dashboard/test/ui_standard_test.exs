@@ -65,7 +65,59 @@ defmodule Exoforge.Std.Dashboard.UiStandardTest do
   end
 
   test "templates do not use gradient backgrounds" do
-    assert_violations(@gradients, "gradient background (use a flat surface and a border)")
+    assert_violations(
+      @gradients,
+      "gradient background (hero highlights use .exo-hero / .exo-hero-accent from the CSS)"
+    )
+  end
+
+  # Emoji in Studio-owned chrome (nav, modals, buttons, stat tiles, headers) — an SVG from the
+  # icon set instead. Emoji stay where the content is user- or extension-generated: the
+  # presenter's extension identity icons, manifest-declared icons, and the fallbacks an
+  # extension's own author would have picked.
+  @emoji ~r/[\x{1F000}-\x{1FAFF}\x{2300}-\x{23FF}\x{2600}-\x{26FF}\x{2700}-\x{27BF}\x{2B00}-\x{2BFF}\x{FE0F}\x{200D}]/u
+  # Keyboard/typographic glyphs that belong in chrome: ✓ ✕ ✎ ✦ ➔ ⌘ ⏎ ← → ↑ ↓ ▸ ▾ · —
+  @text_glyphs ~r/[✓✕✎✦➔⌘⏎←→↑↓▸▾·—]/u
+
+  test "studio chrome uses the icon set, emoji only on extension surfaces" do
+    violations =
+      for path <- @sources,
+          {line, number} <- path |> File.read!() |> String.split("\n") |> Enum.with_index(1),
+          stripped = String.replace(line, @text_glyphs, ""),
+          Regex.match?(@emoji, stripped),
+          not allowed_emoji?(path, line),
+          do:
+            "#{Path.basename(path)}:#{number} emoji in studio chrome (use Components.icon / Icons.studio_icon)\n    #{String.trim(line)}"
+
+    assert violations == [],
+           "emoji in studio chrome\n\n  " <> Enum.join(Enum.uniq(violations), "\n  ")
+  end
+
+  defp allowed_emoji?(path, line) do
+    basename = Path.basename(path)
+
+    cond do
+      # the presenter's whole job is extension identity icons
+      basename == "extension_presenter.ex" ->
+        true
+
+      # manifest-declared icons render on the extension's own card, where its glyph belongs
+      basename in ["dashboard.ex", "dashboard_views.ex"] and String.contains?(line, "icon: \"") ->
+        true
+
+      # extension-chosen icon handling: manifest / dashboard_view / service icons + fallbacks
+      String.contains?(line, [
+        "dashboard_view[",
+        "|| \"🧩\"",
+        "nodeIcon",
+        "service, :icon",
+        "raw_icon"
+      ]) ->
+        true
+
+      true ->
+        false
+    end
   end
 
   test "every tinted background a template uses is remapped for the dark theme" do

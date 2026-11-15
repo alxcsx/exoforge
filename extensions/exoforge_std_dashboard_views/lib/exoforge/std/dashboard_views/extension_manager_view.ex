@@ -12,6 +12,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
   - Remove dynamically installed extensions safely
   """
   use Phoenix.LiveComponent
+  import Exoforge.Std.DashboardViews.Icons, only: [studio_icon: 1]
 
   alias Exoforge.ActionDispatcher
   alias Exoforge.Std.DashboardViews.ExtensionUpload
@@ -86,7 +87,10 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
 
   @impl true
   def handle_event("close_focus", _params, socket) do
-    tab = (socket.assigns[:extension] && socket.assigns.extension.id) || "exoforge_std_extension_manager"
+    tab =
+      (socket.assigns[:extension] && socket.assigns.extension.id) ||
+        "exoforge_std_extension_manager"
+
     {:noreply,
      socket
      |> assign(selected_plugin: nil)
@@ -159,16 +163,20 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
         {:noreply, assign(socket, upload_error: message)}
 
       {:ok, payload} ->
-        case ActionDispatcher.dispatch(:extension_manager, :upload_extension, payload, caller_scopes: caller_scopes(socket)) do
+        case ActionDispatcher.dispatch(:extension_manager, :upload_extension, payload,
+               caller_scopes: caller_scopes(socket)
+             ) do
           {:ok, result} ->
             ext_id = result[:extension_id] || result[:plugin_id]
+
             socket =
               socket
               |> assign(
                 show_upload_modal: false,
                 upload_error: nil,
                 upload_file_info: nil,
-                upload_success: "Extension '#{ext_id}' (#{result[:type] || payload.type}) successfully uploaded and initialized!"
+                upload_success:
+                  "Extension '#{ext_id}' (#{result[:type] || payload.type}) successfully uploaded and initialized!"
               )
               |> load_data()
 
@@ -182,7 +190,9 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
 
   @impl true
   def handle_event("remove_plugin", %{"id" => id}, socket) do
-    case ActionDispatcher.dispatch(:extension_manager, :remove_extension, %{id: id}, caller_scopes: caller_scopes(socket)) do
+    case ActionDispatcher.dispatch(:extension_manager, :remove_extension, %{id: id},
+           caller_scopes: caller_scopes(socket)
+         ) do
       {:ok, _result} ->
         socket =
           socket
@@ -195,7 +205,8 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
         {:noreply, socket}
 
       {:error, reason} ->
-        {:noreply, assign(socket, action_notification: "Failed to remove extension: #{inspect(reason)}")}
+        {:noreply,
+         assign(socket, action_notification: "Failed to remove extension: #{inspect(reason)}")}
     end
   end
 
@@ -214,14 +225,18 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
 
   @impl true
   def handle_event("confirm_restart", _params, socket) do
-    case ActionDispatcher.dispatch(:extension_manager, :restart_system, %{}, caller_scopes: caller_scopes(socket)) do
+    case ActionDispatcher.dispatch(:extension_manager, :restart_system, %{},
+           caller_scopes: caller_scopes(socket)
+         ) do
       {:ok, result} ->
         count = result[:extensions_count] || result[:plugins_count] || 0
+
         socket =
           socket
           |> assign(
             show_restart_modal: false,
-            restart_status: "Runtime cluster restarted. #{count} extensions reloaded successfully."
+            restart_status:
+              "Runtime cluster restarted. #{count} extensions reloaded successfully."
           )
           |> load_data()
 
@@ -380,8 +395,8 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
       <!-- Top Header & Actions -->
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm">
         <div class="flex items-center gap-4">
-          <div class="w-12 h-12 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center text-2xl shadow-inner">
-            📦
+          <div class="w-12 h-12 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center shadow-inner">
+            <.studio_icon icon="box" class="w-6 h-6" />
           </div>
           <div>
             <div class="flex items-center gap-3">
@@ -458,8 +473,8 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <!-- 1. Installed Extensions -->
         <div class="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title="Modular service extensions">
-          <div class="w-11 h-11 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center text-xl shrink-0">
-            📦
+          <div class="w-11 h-11 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center shrink-0">
+            <.studio_icon icon="box" class="w-5 h-5" />
           </div>
           <div class="min-w-0 flex-1">
             <div class="text-xs font-semibold text-gray-500 truncate">Installed Extensions</div>
@@ -472,8 +487,8 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
 
         <!-- 2. BEAM Memory & Processes -->
         <div class="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title="Erlang memory allocated">
-          <div class="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl shrink-0">
-            ⚡
+          <div class="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+            <.studio_icon icon="bolt" class="w-5 h-5" />
           </div>
           <div class="min-w-0 flex-1">
             <div class="text-xs font-semibold text-gray-500 truncate">BEAM Memory &amp; Load</div>
@@ -488,8 +503,8 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
 
         <!-- 3. Cluster Node & Uptime -->
         <div class="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title={"Node: #{@node_name}"}>
-          <div class="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl shrink-0">
-            🌐
+          <div class="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+            <.studio_icon icon="globe" class="w-5 h-5" />
           </div>
           <div class="min-w-0 flex-1">
             <div class="text-xs font-semibold text-gray-500 truncate">Cluster Node</div>
@@ -502,8 +517,8 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
 
         <!-- 4. Version & Engine -->
         <div class="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title={"OTP #{@otp_release} • Built #{Map.get(@system_info, "build_date", "—")}"}>
-          <div class="w-11 h-11 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center text-xl shrink-0">
-            ⚙️
+          <div class="w-11 h-11 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center shrink-0">
+            <.studio_icon icon="gear" class="w-5 h-5" />
           </div>
           <div class="min-w-0 flex-1">
             <div class="text-xs font-semibold text-gray-500 truncate">Cluster Build</div>
@@ -553,8 +568,8 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
       <div class="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
         <%= if @filtered_plugins == [] do %>
           <div class="p-12 text-center">
-            <div class="w-12 h-12 rounded-xl bg-gray-100 text-gray-400 mx-auto flex items-center justify-center text-xl mb-3">
-              📦
+            <div class="w-12 h-12 rounded-xl bg-gray-100 text-gray-400 mx-auto flex items-center justify-center mb-3">
+              <.studio_icon icon="box" class="w-6 h-6" />
             </div>
             <h3 class="text-sm font-bold text-gray-900">No extensions match your query</h3>
             <p class="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
@@ -578,8 +593,8 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
                   <tr class="hover:bg-primary-50/20 transition-colors group">
                     <td class="py-3 px-4">
                       <div class="flex items-center gap-3">
-                        <div class="w-8 h-8 rounded-lg bg-primary-100 text-primary-800 flex items-center justify-center font-bold text-sm shrink-0">
-                          📦
+                        <div class="w-8 h-8 rounded-lg bg-primary-100 text-primary-800 flex items-center justify-center shrink-0">
+                          <.studio_icon icon="box" class="w-4 h-4" />
                         </div>
                         <div>
                           <div class="font-bold text-gray-900 flex items-center gap-1.5">
@@ -646,7 +661,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
                               title="Unload and remove extension from cluster"
                               class="exo-menu-item exo-menu-danger"
                             >
-                              <span>🗑</span> <span>Remove</span>
+                              <.studio_icon icon="trash" class="w-3 h-3" /> <span>Remove</span>
                             </button>
                           </div>
                         </details>
@@ -664,7 +679,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
       <%= if @selected_plugin do %>
         <Exoforge.Std.DashboardViews.InspectPopup.inspect_popup
           open={true}
-          icon="📦"
+          icon="box"
           title={@selected_plugin["name"]}
           subtitle={"#{@selected_plugin["id"]} (v#{@selected_plugin["version"]})"}
           tabs={pm_inspect_tabs()}
@@ -782,8 +797,8 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
             </button>
 
             <div class="flex items-center gap-3 mb-5">
-              <div class="w-10 h-10 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center text-xl">
-                ⚡
+              <div class="w-10 h-10 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center">
+                <.studio_icon icon="upload" class="w-5 h-5" />
               </div>
               <div>
                 <h3 class="text-lg font-bold text-gray-900"><%= if @upload_form["type"] == "elixir", do: "Upload Elixir Extension", else: "Upload C# Extension" %></h3>
@@ -940,8 +955,8 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
           <div class="fixed inset-0" phx-click="close_restart_modal" phx-target={@myself}></div>
           <div class="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl border border-gray-200 relative animate-in fade-in duration-150">
             <div class="flex items-center gap-3 mb-4">
-              <div class="w-10 h-10 rounded-xl bg-red-100 text-red-700 flex items-center justify-center text-xl shrink-0">
-                ⚠️
+              <div class="w-10 h-10 rounded-xl bg-red-100 text-red-700 flex items-center justify-center shrink-0">
+                <.studio_icon icon="alert" class="w-5 h-5" />
               </div>
               <div>
                 <h3 class="text-base font-bold text-gray-900">Restart Cluster Supervision?</h3>

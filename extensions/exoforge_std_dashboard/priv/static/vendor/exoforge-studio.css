@@ -543,6 +543,21 @@ html:not(.light) .shadow-lg {
   box-shadow: var(--exo-shadow-sm) !important;
 }
 
+/* --- Hero highlight --------------------------------------------------------
+ * The two overview hero cards (Quickstart banner, Client SDKs) are the one place
+ * a gradient is allowed — they carry it through this class, not through
+ * bg-gradient-* utilities, which stay banned in templates.
+ * ------------------------------------------------------------------------- */
+.exo-hero {
+  background-image: linear-gradient(to right, #2e1065 0%, #4c1d95 50%, #2e1065 100%);
+  color: #ffffff;
+}
+
+.exo-hero-accent {
+  background-image: linear-gradient(to bottom right, #7c3aed, #6d28d9);
+  color: #ffffff;
+}
+
 /* --- Intentionally-dark chrome -------------------------------------------
  * Log consoles, code blocks and the event dock are dark in both themes. They
  * use the gray-800/900/950 and slate-800/900/950 families, which this remap

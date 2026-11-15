@@ -11,11 +11,12 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
 
   alias Exoforge.Std.Dashboard.ExtensionPresenter
 
-  defp custom_ui?(ext), do: ext[:custom_view_module] != nil || ExtensionPresenter.view_module(ext) != nil
+  defp custom_ui?(ext),
+    do: ext[:custom_view_module] != nil || ExtensionPresenter.view_module(ext) != nil
 
   # Category pills are standardized and derived from extension metadata.
   defp extension_categories(extensions) do
-    all_cat = [{"all", "All Extensions", "🌐", length(extensions)}]
+    all_cat = [{"all", "All Extensions", nil, length(extensions)}]
     standard_order = ["Gameplay", "Players", "Storage", "Network", "System"]
 
     pills =
@@ -68,7 +69,7 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
           <div class="flex flex-col items-end gap-1 shrink-0">
             <%= if @ext.system do %>
               <span class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-gray-100 text-gray-600 border border-gray-200" title="System extension">
-                ⚙️ System
+                System
               </span>
             <% else %>
               <span class="w-2 h-2 rounded-full bg-emerald-500 mt-1.5" title="Active"></span>
@@ -79,13 +80,13 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
         <!-- Technical Badges -->
         <div class="flex flex-wrap items-center gap-1.5 text-[10px] text-gray-600 font-semibold">
           <span class="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-primary-50 text-primary-700">
-            <span>⚡</span> <%= @ext.actions_count %> actions
+            <.icon name="bolt" class="w-2.5 h-2.5" /> <%= @ext.actions_count %> actions
           </span>
           <span class="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700">
-            <span>📦</span> <%= @ext.resources_count %> resources
+            <.icon name="box" class="w-2.5 h-2.5" /> <%= @ext.resources_count %> resources
           </span>
           <span class="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700">
-            <span>📡</span> <%= @ext.events_count %> events
+            <.icon name="radio" class="w-2.5 h-2.5" /> <%= @ext.events_count %> events
           </span>
         </div>
       </div>
@@ -121,7 +122,7 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
             class="px-2.5 py-1 text-[11px] font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-lg transition-colors flex items-center gap-1"
             title="Inspect extension contracts & metadata"
           >
-            <span>🔍</span>
+            <.icon name="search" class="w-3 h-3" />
             <span>Inspect</span>
           </button>
         </div>
@@ -135,7 +136,7 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
               class="text-gray-500 hover:text-primary-700 font-bold flex items-center gap-1 transition-colors text-[11px]"
               title="Execute action in modal runner"
             >
-              <span>⚡ Run</span>
+              <span class="inline-flex items-center gap-1"><.icon name="bolt" class="w-3 h-3" /> Run</span>
             </button>
           <% end %>
           <button
@@ -161,7 +162,9 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
     |> Enum.filter(fn ext ->
       cat_match =
         case category do
-          "all" -> true
+          "all" ->
+            true
+
           cat ->
             ExtensionPresenter.normalize_category(ext[:category]) ==
               ExtensionPresenter.normalize_category(cat)
@@ -214,7 +217,7 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-gray-200/90 shadow-sm">
               <div>
                 <h3 class="text-xl font-bold text-gray-900 flex items-center gap-2">
-                  <span>🧩</span>
+                  <.icon name="box" class="w-5 h-5" />
                   <span>Extension Registry</span>
                 </h3>
               </div>
@@ -224,7 +227,7 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
                 <form id="extensions_search_form" phx-change="search_extensions" class="m-0">
                   <div class="relative">
                     <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400">
-                      🔍
+                      <.icon name="search" class="w-3.5 h-3.5" />
                     </span>
                     <input
                       type="text"
@@ -248,7 +251,7 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
                   phx-value-category={cat_id}
                   class={"px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap #{if is_active, do: "bg-primary-600 text-white shadow-sm", else: "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200/80"}"}
                 >
-                  <span><%= icon %></span>
+                  <span :if={icon}><%= icon %></span>
                   <span><%= label %></span>
                   <span class={"text-[10px] px-1.5 py-0.2 rounded-full font-mono #{if is_active, do: "bg-white/20 text-white", else: "bg-gray-100 text-gray-600"}"}>
                     <%= count %>
@@ -260,8 +263,8 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
             <!-- Empty State -->
             <%= if Enum.empty?(filtered_exts) do %>
               <div class="bg-white p-12 rounded-xl border border-gray-200 text-center space-y-3">
-                <div class="w-12 h-12 rounded-xl bg-gray-100 text-gray-400 mx-auto flex items-center justify-center text-xl">
-                  🔍
+                <div class="w-12 h-12 rounded-xl bg-gray-100 text-gray-400 mx-auto flex items-center justify-center">
+                  <.icon name="search" class="w-6 h-6" />
                 </div>
                 <h4 class="text-base font-bold text-gray-800">No extensions match your filter</h4>
                 <p class="text-xs text-gray-400">Try changing the category or clearing the search query.</p>
@@ -278,7 +281,7 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
               <!-- SECTION 1: STUDIO EXTENSIONS & VISUAL CONTROLS -->
               <div class="space-y-3">
                 <div class="flex items-center gap-2">
-                  <span class="text-base">🎛️</span>
+                  <.icon name="sliders" class="w-4 h-4 text-gray-400" />
                   <h4 class="text-base font-bold text-gray-900">Studio Extensions &amp; Visual Controls</h4>
                   <span class="text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 border border-primary-200">
                     <%= length(ui_exts) %>
@@ -300,7 +303,7 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
               <!-- SECTION 2: SYSTEM EXTENSIONS & HEADLESS SERVICES (Table View) -->
               <div class="space-y-3 pt-4 border-t border-gray-200/80">
                 <div class="flex items-center gap-2">
-                  <span class="text-sm">⚙️</span>
+                  <.icon name="gear" class="w-3.5 h-3.5 text-gray-400" />
                   <h4 class="text-sm font-bold text-gray-700">System Extensions &amp; Headless Services</h4>
                   <span class="text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 border border-gray-200">
                     <%= length(system_exts) %>
@@ -359,13 +362,13 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
                               <td class="py-3 px-4">
                                 <div class="flex flex-wrap items-center gap-1 text-[10px] font-semibold">
                                   <span class="px-1.5 py-0.5 rounded bg-primary-50 text-primary-700 font-mono">
-                                    ⚡ <%= ext.actions_count %>
+                                    <%= ext.actions_count %>a
                                   </span>
                                   <span class="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-mono">
-                                    📦 <%= ext.resources_count %>
+                                    <%= ext.resources_count %>r
                                   </span>
                                   <span class="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-mono">
-                                    📡 <%= ext.events_count %>
+                                    <%= ext.events_count %>e
                                   </span>
                                 </div>
                               </td>

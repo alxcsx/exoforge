@@ -5,9 +5,10 @@ defmodule Exoforge.Std.DashboardViews.InspectPopup do
   same backdrop, same close affordances, same tab placement.
   """
   use Phoenix.Component
+  import Exoforge.Std.DashboardViews.Icons, only: [studio_icon: 1]
 
   attr(:open, :boolean, default: false)
-  attr(:icon, :string, default: "🔍")
+  attr(:icon, :string, default: "search")
   attr(:title, :string, default: "Inspector")
   attr(:subtitle, :string, default: nil)
   attr(:tabs, :list, default: [])
@@ -39,8 +40,8 @@ defmodule Exoforge.Std.DashboardViews.InspectPopup do
           </button>
 
           <div class="flex items-center gap-3 px-6 py-4 border-b border-gray-100">
-            <div class="w-10 h-10 rounded-xl bg-primary-50 text-primary-700 border border-primary-200 flex items-center justify-center text-xl shrink-0">
-              <%= @icon %>
+            <div class="w-10 h-10 rounded-xl bg-primary-50 text-primary-700 border border-primary-200 flex items-center justify-center shrink-0">
+              <.studio_icon icon={@icon} class="w-5 h-5" />
             </div>
             <div class="min-w-0">
               <h3 class="text-base font-bold text-gray-900 truncate"><%= @title %></h3>
@@ -61,7 +62,7 @@ defmodule Exoforge.Std.DashboardViews.InspectPopup do
                     phx-target={@target}
                     class={"w-full text-left px-2.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all #{if to_string(tab[:id]) == to_string(@active_tab), do: "bg-primary-600 text-white shadow-sm border border-primary-600", else: "text-gray-600 hover:text-gray-900 hover:bg-gray-100"}"}
                   >
-                    <span :if={tab[:icon]}><%= tab[:icon] %></span>
+                    <.studio_icon :if={tab[:icon]} icon={tab[:icon]} class="w-3.5 h-3.5" />
                     <span class="truncate"><%= tab[:title] || tab[:label] || tab[:id] %></span>
                   </button>
                 <% end %>

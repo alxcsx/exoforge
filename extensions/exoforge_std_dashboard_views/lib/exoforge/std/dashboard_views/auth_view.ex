@@ -4,6 +4,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
   for the Authentication and Identity service (:auth).
   """
   use Phoenix.LiveComponent
+  import Exoforge.Std.DashboardViews.Icons, only: [studio_icon: 1]
   alias Exoforge.ActionDispatcher
   alias Exoforge.Std.DashboardViews.UserForms
 
@@ -364,15 +365,22 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
   @impl true
   def handle_event("switch_user_inspect_tab", %{"tab" => tab}, socket) do
     socket = assign(socket, :user_inspect_tab, tab)
-    socket = if tab == "events", do: socket |> assign(user_events_page: 1) |> load_user_events(), else: socket
+
+    socket =
+      if tab == "events",
+        do: socket |> assign(user_events_page: 1) |> load_user_events(),
+        else: socket
+
     {:noreply, socket}
   end
 
   def handle_event("user_events_page", %{"page" => page}, socket) do
-    target = if page == "next", do: socket.assigns.user_events_page + 1, else: socket.assigns.user_events_page - 1
+    target =
+      if page == "next",
+        do: socket.assigns.user_events_page + 1,
+        else: socket.assigns.user_events_page - 1
 
-    {:noreply,
-     socket |> assign(user_events_page: max(target, 1)) |> load_user_events()}
+    {:noreply, socket |> assign(user_events_page: max(target, 1)) |> load_user_events()}
   end
 
   def handle_event("toggle_user_events_archive", _params, socket) do
@@ -396,7 +404,11 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
       })
 
     {:noreply,
-     assign(socket, :capture_notice, "Capturing #{player} for 60s — full payloads stay in memory.")}
+     assign(
+       socket,
+       :capture_notice,
+       "Capturing #{player} for 60s — full payloads stay in memory."
+     )}
   end
 
   def handle_event("stop_capture_player", %{"player" => player}, socket) do
@@ -456,7 +468,8 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
         offset: (page - 1) * @user_events_per_page
       }
 
-      payload = if socket.assigns.user_events_archive, do: Map.put(payload, :since_ms, 1), else: payload
+      payload =
+        if socket.assigns.user_events_archive, do: Map.put(payload, :since_ms, 1), else: payload
 
       case ActionDispatcher.dispatch_internal(:observability, :events, payload) do
         {:ok, %{events: events, total: total} = result} ->
@@ -471,7 +484,12 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
           )
 
         _ ->
-          assign(socket, user_events: [], user_events_total: 0, user_events_pages: 1, user_events_capped: false)
+          assign(socket,
+            user_events: [],
+            user_events_total: 0,
+            user_events_pages: 1,
+            user_events_capped: false
+          )
       end
     end
   end
@@ -479,8 +497,8 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
   # Overview and Events are always present; hooked tabs come after them.
   defp user_inspect_tabs(hooks) do
     [
-      %{id: :overview, title: "Overview", icon: "🧭"},
-      %{id: :events, title: "Events", icon: "📡"}
+      %{id: :overview, title: "Overview", icon: "compass"},
+      %{id: :events, title: "Events", icon: "radio"}
     ] ++ hooks
   end
 
@@ -568,8 +586,8 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
       <!-- Top Header & Actions -->
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm">
         <div class="flex items-center gap-4">
-          <div class="w-12 h-12 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center text-2xl shadow-inner">
-            🛡️
+          <div class="w-12 h-12 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center shadow-inner">
+            <.studio_icon icon="shield" class="w-6 h-6" />
           </div>
           <div>
             <div class="flex items-center gap-3">
@@ -634,8 +652,8 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
         <div class="bg-primary-500/10 border border-primary-500/20 rounded-xl p-5 shadow-sm">
           <div class="flex items-start justify-between">
             <div class="flex items-start gap-3">
-              <div class="w-8 h-8 rounded-lg bg-primary-600 text-white flex items-center justify-center font-bold text-sm shrink-0 mt-0.5">
-                🔑
+              <div class="w-8 h-8 rounded-lg bg-primary-600 text-white flex items-center justify-center shrink-0 mt-0.5">
+                <.studio_icon icon="key" class="w-4 h-4" />
               </div>
               <div class="space-y-1">
                 <h4 class="text-sm font-bold text-primary-900">
@@ -675,8 +693,8 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
       <!-- Metric Cards Grid -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div class="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title="Distinct identity profiles">
-          <div class="w-11 h-11 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center text-xl shrink-0">
-            👥
+          <div class="w-11 h-11 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center shrink-0">
+            <.studio_icon icon="users" class="w-5 h-5" />
           </div>
           <div class="min-w-0 flex-1">
             <div class="text-xs font-semibold text-gray-500 truncate">Registered Accounts</div>
@@ -688,8 +706,8 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
         </div>
 
         <div class="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title="Active bearer tokens (this page)">
-          <div class="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl shrink-0">
-            🎟️
+          <div class="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+            <.studio_icon icon="key" class="w-5 h-5" />
           </div>
           <div class="min-w-0 flex-1">
             <div class="text-xs font-semibold text-gray-500 truncate">Active Tokens</div>
@@ -701,8 +719,8 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
         </div>
 
         <div class="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title="Admin & superuser scopes (this page)">
-          <div class="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-xl shrink-0">
-            👑
+          <div class="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+            <.studio_icon icon="crown" class="w-5 h-5" />
           </div>
           <div class="min-w-0 flex-1">
             <div class="text-xs font-semibold text-gray-500 truncate">Admin Roles</div>
@@ -714,8 +732,8 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
         </div>
 
         <div class="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm flex items-center gap-3.5" title="Verified gameplay accounts (this page)">
-          <div class="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl shrink-0">
-            🎮
+          <div class="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+            <.studio_icon icon="gamepad" class="w-5 h-5" />
           </div>
           <div class="min-w-0 flex-1">
             <div class="text-xs font-semibold text-gray-500 truncate">Player Scopes</div>
@@ -794,8 +812,8 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
       <div class="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
         <%= if @filtered_users == [] do %>
           <div class="p-12 text-center">
-            <div class="w-12 h-12 rounded-xl bg-gray-100 text-gray-400 mx-auto flex items-center justify-center text-xl mb-3">
-              🔍
+            <div class="w-12 h-12 rounded-xl bg-gray-100 text-gray-400 mx-auto flex items-center justify-center mb-3">
+              <.studio_icon icon="search" class="w-6 h-6" />
             </div>
             <h3 class="text-sm font-bold text-gray-900">No accounts found</h3>
             <p class="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
@@ -841,7 +859,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                             <span class="font-bold text-gray-900"><%= user["name"] || user["email"] || user["user_id"] || user["player_id"] %></span>
                             <%= if is_protected do %>
                               <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300" title="Created via environment variables. Cannot be modified or deleted via UI.">
-                                🔒 Env Admin
+                                Env Admin
                               </span>
                             <% end %>
                             <button
@@ -849,7 +867,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                               title="Copy User ID"
                               class="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-primary-600 transition-opacity text-xs"
                             >
-                              📋
+                              <.studio_icon icon="clipboard" class="w-3 h-3" />
                             </button>
                           </div>
                           <span class="text-xs text-gray-500 font-medium mt-0.5"><%= user["email"] || user["user_id"] || user["player_id"] %></span>
@@ -908,12 +926,12 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                               title="Issue new bearer token"
                               class="exo-menu-item"
                             >
-                              <span>🎟️</span> <span>+ Token</span>
+                              <.studio_icon icon="key" class="w-3 h-3" /> <span>+ Token</span>
                             </button>
 
                             <%= if is_protected do %>
                               <div class="px-3 py-1.5 text-[11px] text-gray-400 italic">
-                                🔒 Protected Env Admin
+                                Protected Env Admin
                               </div>
                             <% else %>
                               <button
@@ -924,7 +942,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                                 title="Edit user scopes and roles"
                                 class="exo-menu-item"
                               >
-                                <span>🛡️</span> <span>Roles</span>
+                                <.studio_icon icon="shield" class="w-3 h-3" /> <span>Roles</span>
                               </button>
                               <button
                                 type="button"
@@ -934,7 +952,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                                 title="Set or reset account password"
                                 class="exo-menu-item"
                               >
-                                <span>🔑</span> <span>Reset PW</span>
+                                <.studio_icon icon="key" class="w-3 h-3" /> <span>Reset PW</span>
                               </button>
                               <button
                                 type="button"
@@ -945,7 +963,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                                 title="Delete user account"
                                 class="exo-menu-item exo-menu-danger"
                               >
-                                <span>🗑</span> <span>Delete</span>
+                                <.studio_icon icon="trash" class="w-3 h-3" /> <span>Delete</span>
                               </button>
                             <% end %>
                           </div>
@@ -974,8 +992,8 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
             </button>
 
             <div class="flex items-center gap-3 mb-5">
-              <div class="w-10 h-10 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center text-xl">
-                👤
+              <div class="w-10 h-10 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center">
+                <.studio_icon icon="user" class="w-5 h-5" />
               </div>
               <div>
                 <h3 class="text-lg font-bold text-gray-900">Register New User Account</h3>
@@ -1087,8 +1105,8 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
             </button>
 
             <div class="flex items-center gap-3 mb-4">
-              <div class="w-10 h-10 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center text-xl">
-                🔑
+              <div class="w-10 h-10 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center">
+                <.studio_icon icon="key" class="w-5 h-5" />
               </div>
               <div>
                 <h3 class="text-base font-bold text-gray-900">Reset User Password</h3>
@@ -1151,8 +1169,8 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
             </button>
 
             <div class="flex items-center gap-3 mb-4">
-              <div class="w-10 h-10 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center text-xl">
-                🛡️
+              <div class="w-10 h-10 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center">
+                <.studio_icon icon="shield" class="w-5 h-5" />
               </div>
               <div>
                 <h3 class="text-base font-bold text-gray-900">Change Account Roles</h3>
@@ -1224,7 +1242,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
         <% sel_is_protected = @selected_user["is_protected"] == true %>
         <Exoforge.Std.DashboardViews.InspectPopup.inspect_popup
           open={true}
-          icon="👤"
+          icon="user"
           title={@selected_user["name"] || @selected_user["player_id"]}
           subtitle="Identity details & security tokens"
           tabs={user_inspect_tabs(@user_inspect_hooks)}
@@ -1236,7 +1254,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
           <%= if @user_inspect_tab in ["overview", "", nil] do %>
             <%= if sel_is_protected do %>
               <div class="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-center gap-2">
-                <span>🔒</span>
+                <.studio_icon icon="lock" class="w-3.5 h-3.5" />
                 <span>This account is hardcoded via environment variables and cannot be altered or deleted.</span>
               </div>
             <% end %>
@@ -1313,7 +1331,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                 phx-target={@myself}
                 class="w-full py-2 text-xs font-bold text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-200 rounded-xl transition-colors text-center"
               >
-                🔑 Reset Password
+                Reset Password
               </button>
             <% end %>
 
@@ -1374,7 +1392,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                       class={"px-1.5 py-0.5 rounded font-bold border #{if @user_events_archive, do: "bg-primary-50 border-primary-200 text-primary-700", else: "bg-gray-100 border-gray-200 text-gray-600"}"}
                       title="Search archived days too (capped)"
                     >
-                      📦 Archive
+                      Archive
                     </button>
                   </div>
                 </div>

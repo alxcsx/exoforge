@@ -852,7 +852,11 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
      |> assign(:captures, fetch_captures())}
   end
 
-  def handle_event("capture_timeline", %{"kind" => kind, "value" => value, "seconds" => seconds}, socket) do
+  def handle_event(
+        "capture_timeline",
+        %{"kind" => kind, "value" => value, "seconds" => seconds},
+        socket
+      ) do
     {:noreply, assign(capture(socket, kind, value, seconds), :captures, fetch_captures())}
   end
 
@@ -1413,13 +1417,13 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     base_navs = [
       %{
         id: "overview",
-        title: "📊 Go to Overview",
+        title: "Go to Overview",
         subtitle: "Platform architecture and kernel metrics",
         type: "navigation"
       },
       %{
         id: "apps",
-        title: "🧩 Go to Extensions Registry",
+        title: "Go to Extensions Registry",
         subtitle: "Browse and pin installed extensions",
         type: "navigation"
       }
@@ -1452,13 +1456,13 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     tool_items = [
       %{
         id: "open_action_runner",
-        title: "⚡ Action Runner: Dispatch Extension Actions",
+        title: "Action Runner: Dispatch Extension Actions",
         subtitle: "Interactive form to execute backend RPCs",
         type: "action"
       },
       %{
         id: "toggle_event_dock",
-        title: "📡 Event Console: Live Cluster Event Stream",
+        title: "Event Console: Live Cluster Event Stream",
         subtitle: "Real-time telemetry from :pg and EventDispatcher",
         type: "action"
       }
@@ -1470,7 +1474,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         Enum.map(svc.actions, fn act ->
           %{
             id: "rpc:#{svc.name}.#{act.name}",
-            title: "⚡ Action: #{svc.name}.#{act.name}",
+            title: "Action: #{svc.name}.#{act.name}",
             subtitle: act.doc,
             type: "action"
           }
@@ -1485,7 +1489,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
         %{
           id: "res_#{name}",
-          title: "📦 Resource: #{name}",
+          title: "Resource: #{name}",
           subtitle: "Primary Key: #{res[:primary_key] || res["primary_key"]}",
           type: "resource"
         }
@@ -1549,7 +1553,13 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   defp us_to_ms(us) when is_integer(us), do: Float.round(us / 1000, 1)
 
   defp capture(socket, kind, value, seconds) do
-    _ = ActionDispatcher.dispatch_internal(:observability, :capture, %{kind: kind, value: value, seconds: seconds})
+    _ =
+      ActionDispatcher.dispatch_internal(:observability, :capture, %{
+        kind: kind,
+        value: value,
+        seconds: seconds
+      })
+
     socket
   end
 
@@ -2036,14 +2046,14 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
           <!-- Centered Top Navigation Bar: 1. Overview, 2. Extensions, 3. Pinned Items -->
           <div class="flex-1 flex justify-center items-center min-w-0">
             <% has_pinned = length(@pinned_extensions) > 0 %>
-            <nav id="nav-container" phx-hook="NavCapacity" class="inline-flex items-center flex-nowrap overflow-x-hidden gap-1 bg-gray-100/90 p-1 rounded-xl border border-gray-200/80 shadow-inner transition-all duration-200">
+            <nav id="nav-container" phx-hook="NavCapacity" class="inline-flex items-center flex-nowrap overflow-x-hidden gap-1 bg-gray-100/90 p-1 rounded-xl border border-gray-200/80 shadow-inner">
               <!-- 1. Overview Tab (Named when empty, icon-only when pinned items grow the bar) -->
               <button
                 phx-click="switch_tab"
                 phx-value-tab="overview"
                 aria-label="Overview"
                 title="Overview"
-                class={"px-2.5 py-1.5 text-xs rounded-lg transition-all font-bold flex items-center justify-center gap-1.5 flex-shrink-0 #{if @current_tab == :overview, do: "bg-primary-600 text-white shadow-sm", else: "text-gray-600 hover:text-gray-900"}"}
+                class={"px-2.5 py-1.5 text-xs rounded-lg transition-colors font-bold flex items-center justify-center gap-1.5 flex-shrink-0 #{if @current_tab == :overview, do: "bg-primary-600 text-white shadow-sm", else: "text-gray-600 hover:text-gray-900 hover:bg-gray-200/50"}"}
               >
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
@@ -2059,7 +2069,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                 phx-value-tab="apps"
                 aria-label="Extensions"
                 title={"Extensions (#{@overview.plugins_count})"}
-                class={"px-2.5 py-1.5 text-xs rounded-lg transition-all font-bold flex items-center justify-center gap-1.5 flex-shrink-0 #{if @current_tab == :apps, do: "bg-primary-600 text-white shadow-sm", else: "text-gray-600 hover:text-gray-900"}"}
+                class={"px-2.5 py-1.5 text-xs rounded-lg transition-colors font-bold flex items-center justify-center gap-1.5 flex-shrink-0 #{if @current_tab == :apps, do: "bg-primary-600 text-white shadow-sm", else: "text-gray-600 hover:text-gray-900 hover:bg-gray-200/50"}"}
               >
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
@@ -2117,7 +2127,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                   <% title = tab_short_name(ext) %>
                   <% icon = if is_map(ext.dashboard_view) and ext.dashboard_view[:icon], do: ext.dashboard_view[:icon], else: ExtensionPresenter.icon(ext) %>
                   <% is_active = to_string(@current_tab) == ext_id %>
-                  <div class={"group relative hidden md:inline-flex items-center justify-center rounded-lg animate-tab-in transition-all duration-200 text-xs font-bold whitespace-nowrap flex-shrink-0 hover:scale-[1.03] #{if is_active, do: "bg-primary-600 text-white shadow-sm", else: "text-gray-600 hover:text-gray-900 hover:bg-gray-200/50"}"}>
+                  <div class={"group relative hidden md:inline-flex items-center justify-center rounded-lg animate-tab-in transition-colors text-xs font-bold whitespace-nowrap flex-shrink-0 #{if is_active, do: "bg-primary-600 text-white shadow-sm", else: "text-gray-600 hover:text-gray-900 hover:bg-gray-200/50"}"}>
                     <button
                       phx-click="switch_tab"
                       phx-value-tab={ext_id}
@@ -2147,7 +2157,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                   <% title = tab_short_name(active_unpinned) %>
                   <% icon = if is_map(active_unpinned.dashboard_view) and active_unpinned.dashboard_view[:icon], do: active_unpinned.dashboard_view[:icon], else: ExtensionPresenter.icon(active_unpinned) %>
                   <div class="h-4 w-px bg-gray-300/80 mx-0.5 flex-shrink-0"></div>
-                  <div class="flex items-center justify-center rounded-lg text-xs font-bold whitespace-nowrap flex-shrink-0 bg-primary-600 text-white shadow-sm px-2.5 py-1 gap-1">
+                  <div class="flex items-center justify-center rounded-lg text-xs font-bold whitespace-nowrap flex-shrink-0 bg-primary-600 text-white shadow-sm px-2.5 py-1 gap-1 transition-colors">
                     <span class="text-xs leading-none"><%= icon %></span>
                     <span class="leading-none"><%= title %></span>
                   </div>
@@ -2172,7 +2182,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
             <button
               type="button"
               phx-click="open_settings"
-              class={"w-9 h-9 rounded-xl flex items-center justify-center transition-all text-sm border #{if @settings_open, do: "bg-primary-600 text-white border-primary-600 shadow-sm font-bold ring-2 ring-primary-500/20", else: "bg-gray-100 hover:bg-gray-200/80 text-gray-600 border-gray-200/60"}"}
+              class={"w-9 h-9 rounded-xl flex items-center justify-center transition-colors text-sm border #{if @settings_open, do: "bg-primary-600 text-white border-primary-600 shadow-sm font-bold ring-2 ring-primary-500/20", else: "bg-gray-100 hover:bg-gray-200/80 text-gray-600 border-gray-200/60"}"}
               title="Project Settings"
             >
               <.icon name={:gear} class="w-4 h-4" />
@@ -2266,7 +2276,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
           <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-gray-200/90 shadow-sm">
             <div>
               <h2 class="text-xl font-bold text-gray-900 flex items-center gap-2">
-                <span>📊</span>
+                <.icon name="chart" class="w-5 h-5" />
                 <span>Project Overview</span>
               </h2>
             </div>
@@ -2325,24 +2335,24 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                     id="slot-quickstart"
                     data-slot-id="quickstart"
                     data-slot-span="1x4"
-                    class={"col-span-1 md:col-span-2 lg:col-span-4 h-full bg-white rounded-xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 border #{if @grid_edit_mode, do: "border-primary-400 ring-2 ring-primary-500/20", else: "border-primary-200"}"}
+                    class={"col-span-1 md:col-span-2 lg:col-span-4 h-full exo-hero rounded-xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border #{if @grid_edit_mode, do: "border-primary-400 ring-2 ring-primary-500/20", else: "border-primary-500/30"}"}
                   >
                     <div class="space-y-1.5 flex-1 min-w-0">
                       <div class="flex items-center gap-2">
-                        <span class="text-[10px] px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 border border-primary-200 font-bold uppercase tracking-wider">Quickstart Flow</span>
-                        <span class="font-bold text-sm text-gray-900">New to Exoforge? Complete Developer Guide &amp; API Reference</span>
+                        <span class="text-[10px] px-2 py-0.5 rounded-full bg-primary-500/30 text-primary-200 border border-primary-400/30 font-bold uppercase tracking-wider">Quickstart Flow</span>
+                        <span class="font-bold text-sm">New to Exoforge? Complete Developer Guide &amp; API Reference</span>
                         <%= if @grid_edit_mode do %>
-                          <span class="px-2 py-0.5 text-[10px] font-mono font-bold bg-gray-100 text-gray-700 rounded-lg border border-gray-200">1×4</span>
+                          <span class="px-2 py-0.5 text-[10px] font-mono font-bold bg-white/20 text-white rounded-lg border border-white/20">1×4</span>
                         <% end %>
                       </div>
-                      <p class="text-xs text-gray-600 leading-relaxed max-w-2xl">
+                      <p class="text-xs text-primary-200/90 leading-relaxed max-w-2xl">
                         Master the complete development flow: Connect &amp; Auth ➔ Scaffold Extension ➔ Hot-Deploy ➔ Sync Stubs ➔ Call from Unity.
                       </p>
                     </div>
 
                     <div class="flex items-center gap-2 self-start md:self-auto shrink-0">
                       <%= if @grid_edit_mode do %>
-                        <div class="flex items-center gap-1 bg-gray-100 p-1 rounded-xl border border-gray-200 mr-2">
+                        <div class="flex items-center gap-1 bg-white/10 p-1 rounded-xl border border-white/10 mr-2">
                           <button
                             type="button"
                             phx-click="move_overview_slot"
@@ -2350,7 +2360,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                             phx-value-dir="prev"
                             disabled={idx == 0}
                             title="Move slot left"
-                            class="w-6 h-6 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-200 disabled:opacity-30 flex items-center justify-center text-xs"
+                            class="w-6 h-6 rounded-lg border border-white/20 text-white hover:bg-white/20 disabled:opacity-30 flex items-center justify-center text-xs"
                           >
                             &larr;
                           </button>
@@ -2361,7 +2371,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                             phx-value-dir="next"
                             disabled={idx == length(@overview_slot_ids) - 1}
                             title="Move slot right"
-                            class="w-6 h-6 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-200 disabled:opacity-30 flex items-center justify-center text-xs"
+                            class="w-6 h-6 rounded-lg border border-white/20 text-white hover:bg-white/20 disabled:opacity-30 flex items-center justify-center text-xs"
                           >
                             &rarr;
                           </button>
@@ -2370,7 +2380,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                             phx-click="remove_overview_slot"
                             phx-value-id="quickstart"
                             title="Remove Quickstart from grid"
-                            class="w-6 h-6 rounded-lg border border-red-300 text-red-600 hover:text-white hover:bg-red-600 flex items-center justify-center text-xs font-bold transition-colors"
+                            class="w-6 h-6 rounded-lg border border-red-400 text-red-200 hover:text-white hover:bg-red-600 flex items-center justify-center text-xs font-bold transition-colors"
                           >
                             ✕
                           </button>
@@ -2381,9 +2391,10 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                         type="button"
                         phx-click="switch_tab"
                         phx-value-tab="exoforge_std_docs"
-                        class="px-4 py-2 bg-primary-600 text-white hover:bg-primary-700 font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap"
+                        class="px-4 py-2 bg-white/20 hover:bg-white/30 text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap border border-white/25"
                       >
-                        <span>📖 Open Quickstart Guide</span>
+                        <.icon name="book" class="w-3.5 h-3.5" />
+                        <span>Open Quickstart Guide</span>
                         <span>→</span>
                       </button>
                     </div>
@@ -2476,11 +2487,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                               class="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-50/70 border border-amber-200/70 text-[10px] max-w-[15rem]"
                               title={"#{item.label} — #{item.detail}"}
                             >
-                              <span><%= case item.kind do
-                                "extension" -> "🧩"
-                                "error" -> "⚠️"
-                                _ -> "🐢"
-                              end %></span>
+                              <.icon name={Map.get(%{"extension" => "box", "error" => "alert"}, item.kind, "bolt")} class="w-3 h-3" />
                               <span class="font-mono font-bold text-gray-900 truncate"><%= item.label %></span>
                               <%= if item[:rid] do %>
                                 <button
@@ -2570,10 +2577,10 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                         </div>
                       <% else %>
                         <% is_highlighted = (@highlight_event_id != nil and @highlight_event_id == latest_ev[:id]) %>
-                        <div class={"flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-all duration-300 group border #{if is_highlighted, do: "event-flash-highlight bg-primary-50/90 border-primary-400 ring-2 ring-primary-400/30 text-primary-900 shadow-sm", else: "bg-gray-50 hover:bg-gray-100 border-gray-200 text-gray-900"}"}>
+                        <div class={"flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-colors group border #{if is_highlighted, do: "event-flash-highlight bg-primary-50/90 border-primary-400 ring-2 ring-primary-400/30 text-primary-900 shadow-sm", else: "bg-gray-50 hover:bg-gray-100 border-gray-200 text-gray-900"}"}>
                           <div class="flex items-center gap-2 min-w-0">
                             <span class={"w-2 h-2 rounded-full shrink-0 #{if is_highlighted, do: "bg-primary-500 animate-ping", else: (if String.starts_with?(to_string(latest_ev.event), "action:"), do: "bg-blue-500", else: "bg-emerald-500 animate-pulse")}"}></span>
-                            <span class="font-mono font-bold truncate">📡 <%= latest_ev.event %></span>
+                            <span class="font-mono font-bold truncate"><%= latest_ev.event %></span>
                             <%= if is_map(latest_ev[:payload]) and map_size(latest_ev.payload) > 0 do %>
                               <span class={"text-[11px] font-mono truncate hidden sm:inline #{if is_highlighted, do: "text-primary-700", else: "text-gray-400"}"}>
                                 <%= if latest_ev.payload[:status], do: "#{latest_ev.payload.status} • #{latest_ev.payload[:latency_ms] || 0}ms", else: (latest_ev.payload |> Map.keys() |> Enum.take(3) |> Enum.join(", ")) %>
@@ -2751,8 +2758,8 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                   >
                     <div class="flex items-start justify-between gap-2">
                       <div class="flex items-center gap-2">
-                        <span class="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-sm font-bold border border-emerald-200">
-                          🟢
+                        <span class="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-200">
+                          <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
                         </span>
                         <div>
                           <h3 class="font-bold text-gray-900 text-xs uppercase tracking-wider">Server State</h3>
@@ -2885,7 +2892,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                           <span class="block text-[10px] font-bold uppercase tracking-wider text-emerald-700">Online</span>
                           <span class="text-2xl font-black text-emerald-800"><%= @telemetry.online_count %></span>
                         </div>
-                        <span class="text-lg">🧩</span>
+                        <.icon name="box" class="w-5 h-5" />
                       </div>
 
                       <div class={"p-3 rounded-xl border flex items-center justify-between #{if @telemetry.faulty_count > 0, do: "bg-red-50 border-red-300", else: "bg-gray-50 border-gray-200"}"}>
@@ -2893,7 +2900,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                           <span class={"block text-[10px] font-bold uppercase tracking-wider #{if @telemetry.faulty_count > 0, do: "text-red-700", else: "text-gray-500"}"}>Faulty / Loop</span>
                           <span class={"text-2xl font-black #{if @telemetry.faulty_count > 0, do: "text-red-700", else: "text-gray-800"}"}><%= @telemetry.faulty_count %></span>
                         </div>
-                        <span class="text-lg"><%= if @telemetry.faulty_count > 0, do: "⚠️", else: "✓" %></span>
+                        <%= if @telemetry.faulty_count > 0, do: ~H(<.icon name="alert" class="w-5 h-5 text-red-600" />), else: ~H(<.icon name="check" class="w-5 h-5 text-emerald-600" />) %>
                       </div>
                     </div>
 
@@ -2901,7 +2908,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                       <div class="space-y-1.5">
                         <%= for f <- @telemetry.faulty_extensions do %>
                           <div class="px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-center justify-between gap-2">
-                            <span class="font-bold truncate">⚠️ <%= f.name %></span>
+                            <span class="font-bold truncate"><%= f.name %></span>
                             <span class="font-mono text-[11px] text-amber-800 shrink-0"><%= f.reason %></span>
                           </div>
                         <% end %>
@@ -2920,17 +2927,17 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                     id="slot-download_sdk"
                     data-slot-id="download_sdk"
                     data-slot-span="1x1"
-                    class={"lg:col-span-1 h-full bg-white p-5 rounded-xl border flex flex-col justify-between space-y-4 #{if @grid_edit_mode, do: "border-primary-400 ring-2 ring-primary-500/20", else: "border-gray-200"}"}
+                    class={"lg:col-span-1 h-full exo-hero-accent p-5 rounded-xl border shadow-lg flex flex-col justify-between space-y-4 #{if @grid_edit_mode, do: "border-white ring-2 ring-white/40", else: "border-primary-500"}"}
                   >
                     <div class="flex items-start justify-between gap-2">
                       <div class="flex items-center gap-2">
-                        <span class="w-8 h-8 rounded-lg bg-primary-50 border border-primary-200 flex items-center justify-center text-base">
-                          📦
+                        <span class="w-8 h-8 rounded-xl bg-white/15 flex items-center justify-center">
+                          <.icon name="download" class="w-4 h-4" />
                         </span>
                         <div>
-                          <h3 class="font-bold text-gray-900 text-xs uppercase tracking-wider">Client SDKs</h3>
+                          <h3 class="font-bold text-white text-xs uppercase tracking-wider">Client SDKs</h3>
                           <%= if @grid_edit_mode do %>
-                            <span class="text-[10px] font-mono text-gray-500">1×1 Action</span>
+                            <span class="text-[10px] font-mono text-primary-200">1×1 Action</span>
                           <% end %>
                         </div>
                       </div>
@@ -2943,7 +2950,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                             phx-value-dir="prev"
                             disabled={idx == 0}
                             title="Move slot left"
-                            class="w-6 h-6 rounded-lg border border-gray-300 text-gray-500 hover:text-gray-900 hover:bg-gray-100 disabled:opacity-30 flex items-center justify-center text-xs"
+                            class="w-6 h-6 rounded-lg border border-white/20 text-white/80 hover:text-white hover:bg-white/10 disabled:opacity-30 flex items-center justify-center text-xs"
                           >
                             &larr;
                           </button>
@@ -2954,7 +2961,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                             phx-value-dir="next"
                             disabled={idx == length(@overview_slot_ids) - 1}
                             title="Move slot right"
-                            class="w-6 h-6 rounded-lg border border-gray-300 text-gray-500 hover:text-gray-900 hover:bg-gray-100 disabled:opacity-30 flex items-center justify-center text-xs"
+                            class="w-6 h-6 rounded-lg border border-white/20 text-white/80 hover:text-white hover:bg-white/10 disabled:opacity-30 flex items-center justify-center text-xs"
                           >
                             &rarr;
                           </button>
@@ -2963,7 +2970,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                             phx-click="remove_overview_slot"
                             phx-value-id="download_sdk"
                             title="Remove card from grid"
-                            class="w-6 h-6 rounded-lg border border-red-300 text-red-600 hover:text-white hover:bg-red-600 flex items-center justify-center text-xs font-bold transition-colors"
+                            class="w-6 h-6 rounded-lg border border-red-300 text-red-200 hover:text-white hover:bg-red-600 flex items-center justify-center text-xs font-bold transition-colors"
                           >
                             ✕
                           </button>
@@ -2972,14 +2979,14 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                     </div>
 
                     <div>
-                      <p class="text-sm font-extrabold text-gray-900 leading-snug">Unity &amp; C# SDK Packages</p>
-                      <p class="text-[11px] text-gray-600 mt-1">Download client libraries, UPM tarballs, and setup guides.</p>
+                      <p class="text-sm font-extrabold text-white leading-snug">Unity &amp; C# SDK Packages</p>
+                      <p class="text-[11px] text-primary-100 mt-1">Download client libraries, UPM tarballs, and setup guides.</p>
                     </div>
 
                     <button
                       type="button"
                       phx-click="open_sdk_modal"
-                      class="w-full py-2.5 px-4 rounded-lg bg-primary-600 text-white hover:bg-primary-700 font-black text-xs shadow-sm transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                      class="w-full py-2.5 px-4 rounded-lg bg-white text-primary-900 hover:bg-primary-50 font-black text-xs shadow-sm transition-colors flex items-center justify-center gap-2 cursor-pointer"
                     >
                       <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -3119,8 +3126,8 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
             <% end %>
           <% else %>
             <div class="bg-white p-12 rounded-xl border border-gray-200 text-center space-y-3">
-              <div class="w-12 h-12 rounded-xl bg-gray-100 text-gray-400 mx-auto flex items-center justify-center text-xl">
-                🧩
+              <div class="w-12 h-12 rounded-xl bg-gray-100 text-gray-400 mx-auto flex items-center justify-center">
+                <.icon name="box" class="w-6 h-6" />
               </div>
               <h3 class="text-base font-bold text-gray-900">Extension Not Found</h3>
               <p class="text-xs text-gray-500 max-w-md mx-auto">

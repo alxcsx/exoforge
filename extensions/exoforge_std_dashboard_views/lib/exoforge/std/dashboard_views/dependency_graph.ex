@@ -8,10 +8,12 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
   `target` is the parent LiveComponent's `@myself`, so the `phx-target` clicks route back.
   """
   use Phoenix.Component
+  import Exoforge.Std.DashboardViews.Icons, only: [studio_icon: 1]
 
   defp get_val(map, key) when is_map(map) do
     Map.get(map, to_string(key)) || Map.get(map, String.to_atom(to_string(key)))
   end
+
   defp get_val(_other, _key), do: nil
 
   defp build_dependency_graph(plugins) when is_list(plugins) do
@@ -20,6 +22,7 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
       Enum.reduce(plugins, %{}, fn p, acc ->
         provides = get_val(p, :provides) || []
         pid = to_string(get_val(p, :id) || "")
+
         Enum.reduce(provides, acc, fn svc, m ->
           clean_svc = svc |> to_string() |> String.replace_prefix(":", "") |> String.downcase()
           Map.put(m, clean_svc, pid)
@@ -33,7 +36,7 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
       provides = get_val(p, :provides) || []
       tier = to_string(get_val(p, :category) || "Extension")
       type = to_string(get_val(p, :type) || "elixir")
-      icon = to_string(get_val(p, :icon) || "🧩")
+      icon = to_string(get_val(p, :icon) || "box")
 
       resolved_deps =
         Enum.map(deps, fn d ->
@@ -77,6 +80,7 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
       }
     end)
   end
+
   defp build_dependency_graph(_), do: []
 
   defp compute_graph_layout(graph_nodes, graph_tiers) do
@@ -195,8 +199,8 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
         <!-- Modal Header -->
         <div class="flex items-center justify-between pb-4 border-b border-slate-800">
           <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-xl bg-primary-500/20 text-primary-400 border border-primary-500/30 flex items-center justify-center text-xl shadow-inner">
-              🕸️
+            <div class="w-10 h-10 rounded-xl bg-primary-500/20 text-primary-400 border border-primary-500/30 flex items-center justify-center shadow-inner">
+              <.studio_icon icon="graph" class="w-5 h-5" />
             </div>
             <div>
               <div class="flex items-center gap-2">
@@ -224,7 +228,7 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
                 id="btn-dag-graph"
                 class="px-3 py-1.5 rounded-lg bg-primary-600 text-white shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
               >
-                <span>🕸️</span>
+                <.studio_icon icon="graph" class="w-3.5 h-3.5" />
                 <span>DAG Graph</span>
               </button>
               <button
@@ -233,7 +237,7 @@ defmodule Exoforge.Std.DashboardViews.DependencyGraph do
                 id="btn-dag-matrix"
                 class="px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition-all flex items-center gap-1.5 cursor-pointer"
               >
-                <span>📊</span>
+                <.studio_icon icon="chart" class="w-3.5 h-3.5" />
                 <span>Tier Columns</span>
               </button>
             </div>
