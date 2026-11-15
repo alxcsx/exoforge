@@ -1002,7 +1002,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
             </div>
 
             <%= if @error_message do %>
-              <div class="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-medium">
+              <div class="exo-callout-danger mb-4 p-3 rounded-xl text-xs font-medium">
                 <%= @error_message %>
               </div>
             <% end %>
@@ -1117,7 +1117,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
             </div>
 
             <%= if @reset_password_error do %>
-              <div class="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-medium">
+              <div class="exo-callout-danger mb-4 p-3 rounded-xl text-xs font-medium">
                 <%= @reset_password_error %>
               </div>
             <% end %>
@@ -1181,7 +1181,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
             </div>
 
             <%= if @roles_error do %>
-              <div class="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-medium">
+              <div class="exo-callout-danger mb-4 p-3 rounded-xl text-xs font-medium">
                 <%= @roles_error %>
               </div>
             <% end %>

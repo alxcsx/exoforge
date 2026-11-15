@@ -44,7 +44,7 @@ defmodule Exoforge.Std.Dashboard.LoginController do
     error_html =
       if error,
         do:
-          ~s(<div class="error p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-semibold mb-4">#{Plug.HTML.html_escape(to_string(error))}</div>),
+          ~s(<div class="exo-callout-danger error p-3 rounded-xl text-xs font-semibold mb-4">#{Plug.HTML.html_escape(to_string(error))}</div>),
         else: ""
 
     """

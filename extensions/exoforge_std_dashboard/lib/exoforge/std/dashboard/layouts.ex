@@ -714,7 +714,7 @@ defmodule Exoforge.Std.Dashboard.Layouts do
                       .catch((err) => {
                         console.error("[Exoforge MFE] Error loading module:", entry, err);
                         this.el.innerHTML = `
-                          <div class="p-6 bg-red-50 border border-red-200 rounded-xl text-red-700">
+                          <div class="exo-callout-danger p-6 rounded-xl">
                             <h3 class="font-bold text-sm">Failed to load plugin microfrontend</h3>
                             <p class="text-xs mt-1 text-red-600 font-mono">${err && err.message ? err.message : String(err)}</p>
                             <p class="text-[11px] text-gray-500 mt-2 font-mono">Entry: ${entry}</p>

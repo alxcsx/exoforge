@@ -324,8 +324,8 @@ defmodule Exoforge.Std.Docs.Markdown do
 
       :caution ->
         """
-        <div class="p-4 my-3 rounded-xl bg-red-50 border border-red-200/80 text-red-900 text-xs space-y-1">
-          <div class="font-bold flex items-center gap-1.5 text-red-800 text-[11px] uppercase tracking-wider">
+        <div class="p-4 my-3 rounded-xl exo-callout-danger text-xs space-y-1">
+          <div class="font-bold flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
             #{icon("alert")} <span>Caution</span>
           </div>
           <div class="leading-relaxed">#{body}</div>

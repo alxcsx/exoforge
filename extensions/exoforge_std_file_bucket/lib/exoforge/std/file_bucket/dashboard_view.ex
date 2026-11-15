@@ -1079,7 +1079,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
             </div>
 
             <%= if @modal_error do %>
-              <div class="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-semibold">
+              <div class="exo-callout-danger p-3 rounded-xl text-xs font-semibold">
                 <%= @modal_error %>
               </div>
             <% end %>

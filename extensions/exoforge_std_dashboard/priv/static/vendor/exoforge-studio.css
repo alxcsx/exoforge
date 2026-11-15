@@ -570,6 +570,36 @@ html:not(.light) .shadow-lg {
   color: #ffffff;
 }
 
+/* --- Callouts -------------------------------------------------------------
+ * Danger callouts used to be `bg-red-50 border-red-200 text-red-950`: a near-white pink box
+ * with near-black-red text. Legible, but it reads as a template banner and the surface glares
+ * in the light theme. The ink is a real red now (a 3px rule at #dc2626), the surface is a step
+ * deeper, and the pair is defined once instead of restated per template.
+ * ------------------------------------------------------------------------- */
+.exo-callout-danger {
+  background-color: #fee2e2;
+  border: 1px solid #fca5a5;
+  border-left: 3px solid #dc2626;
+  color: #7f1d1d;
+}
+
+html:not(.light) .exo-callout-danger {
+  background-color: rgba(239, 68, 68, 0.14);
+  border-color: rgba(239, 68, 68, 0.4);
+  border-left-color: #ef4444;
+  color: #fca5a5;
+}
+
+.exo-callout-danger strong,
+.exo-callout-danger b {
+  color: #991b1b;
+}
+
+html:not(.light) .exo-callout-danger strong,
+html:not(.light) .exo-callout-danger b {
+  color: #fecaca;
+}
+
 /* --- Intentionally-dark chrome -------------------------------------------
  * Log consoles, code blocks and the event dock are dark in both themes. They
  * use the gray-800/900/950 and slate-800/900/950 families, which this remap

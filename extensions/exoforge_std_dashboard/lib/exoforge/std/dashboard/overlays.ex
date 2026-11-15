@@ -1660,7 +1660,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
     >
       <div class="space-y-4 text-xs">
         <%= if @error do %>
-          <div class="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-semibold">
+          <div class="exo-callout-danger p-3 rounded-xl text-xs font-semibold">
             <%= @error %>
           </div>
         <% end %>

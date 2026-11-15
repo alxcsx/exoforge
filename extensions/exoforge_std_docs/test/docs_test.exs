@@ -229,8 +229,12 @@ defmodule Exoforge.Std.DocsTest do
       """)
 
       assert html =~ "Architecture"
-      assert html =~ "html:not(.light) :not(pre) > code"
-      assert html =~ "pre code"
+      # The guide keeps its print stylesheet but not a second dark-mode remap: that lives in
+      # exoforge-studio.css and only there, or the docs page disagrees with the rest of the
+      # Studio (it did — text-red-800 was #fecdd3 here and #fca5a5 in the shared sheet).
+      assert html =~ "@media print"
+      refute html =~ "html:not(.light) :not(pre) > code"
+      refute html =~ "html:not(.light) .prose strong"
     end
 
     test "subpage flow does not duplicate the action catalog" do

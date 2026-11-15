@@ -807,7 +807,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
             </div>
 
             <%= if @upload_error do %>
-              <div class="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-medium">
+              <div class="exo-callout-danger mb-4 p-3 rounded-xl text-xs font-medium">
                 <%= @upload_error %>
               </div>
             <% end %>

@@ -730,7 +730,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
           target={@myself}
         >
           <%= if @edit_error do %>
-            <div class="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-medium">
+            <div class="exo-callout-danger p-3 rounded-xl text-xs font-medium">
               <%= @edit_error %>
             </div>
           <% end %>
@@ -920,7 +920,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
             </div>
 
             <%= if @create_error do %>
-              <div class="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-medium">
+              <div class="exo-callout-danger mb-4 p-3 rounded-xl text-xs font-medium">
                 <%= @create_error %>
               </div>
             <% end %>

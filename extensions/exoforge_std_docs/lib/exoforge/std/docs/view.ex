@@ -87,7 +87,7 @@ defmodule Exoforge.Std.Docs.View do
 
     ~H"""
     <div id="developer-guide-container" phx-hook="GuideNavigator" class="space-y-6 max-w-6xl mx-auto pb-16 print:p-0 print:max-w-none print:pb-0">
-      <!-- Print & Dark Theme Badges Stylesheet -->
+      <!-- Print stylesheet. Dark mode lives in exoforge-studio.css. -->
       <style>
         @media print {
           body { background: white !important; color: black !important; font-size: 11pt !important; }
@@ -100,53 +100,11 @@ defmodule Exoforge.Std.Docs.View do
           pre, code { white-space: pre-wrap !important; word-break: break-word !important; }
         }
 
-        /* High-contrast badges & code tags in dark theme (especially Architecture & Catalog) */
-        html:not(.light) :not(pre) > code {
-          background-color: rgba(139, 92, 246, 0.18) !important;
-          color: #ddd6fe !important;
-          border: 1px solid rgba(139, 92, 246, 0.35) !important;
-          font-weight: 600 !important;
-        }
+        /* The dark-theme remap lives in exoforge-studio.css and only there. This block used to
+           repeat it for the guide with different values — text-red-800 was #fecdd3 here and
+           #fca5a5 there — so the docs page quietly disagreed with the rest of the Studio. */
 
-        html:not(.light) .prose :not(pre) > code,
-        html:not(.light) table code {
-          background-color: rgba(139, 92, 246, 0.22) !important;
-          color: #e9d5ff !important;
-          border: 1px solid rgba(139, 92, 246, 0.4) !important;
-          padding: 0.125rem 0.375rem !important;
-          border-radius: 0.375rem !important;
-          font-weight: 600 !important;
-        }
-
-        html:not(.light) .prose strong {
-          color: #f3f4f6 !important;
-        }
-
-        /* High-contrast callouts and disclaimers in dark theme */
-        html:not(.light) .text-red-950, html:not(.light) .text-red-900 { color: #fca5a5 !important; }
-        html:not(.light) .text-red-800 { color: #fecdd3 !important; }
-        html:not(.light) .text-emerald-950, html:not(.light) .text-emerald-900 { color: #6ee7b7 !important; }
-        html:not(.light) .text-emerald-800 { color: #a7f3d0 !important; }
-        html:not(.light) .text-amber-950, html:not(.light) .text-amber-900 { color: #fcd34d !important; }
-        html:not(.light) .text-amber-800 { color: #fde68a !important; }
-        html:not(.light) .text-blue-950, html:not(.light) .text-blue-900 { color: #93c5fd !important; }
-        html:not(.light) .text-blue-800 { color: #bfdbfe !important; }
-
-        /* Prevent background/border bleed onto preformatted code blocks */
-        pre code,
-        .prose pre code,
-        html:not(.light) pre code,
-        html:not(.light) .prose pre code {
-          background: transparent !important;
-          background-color: transparent !important;
-          border: none !important;
-          padding: 0 !important;
-          border-radius: 0 !important;
-          box-shadow: none !important;
-          display: block !important;
-          font-weight: 400 !important;
-          color: inherit !important;
-        }
+        /* The `pre code` reset is in exoforge-studio.css — one copy. */
       </style>
 
       <!-- Top Guide Navigation Sub-Menu (Hidden on Print) -->
@@ -877,11 +835,11 @@ defmodule Exoforge.Std.Docs.View do
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-          <div class="p-4 rounded-xl bg-red-50 border border-red-200 text-red-950 space-y-1.5">
-            <div class="font-bold text-red-900 flex items-center gap-1.5">
+          <div class="p-4 rounded-xl exo-callout-danger space-y-1.5">
+            <div class="font-bold flex items-center gap-1.5">
               <.studio_icon icon="close" class="w-3.5 h-3.5" /> <span>Why This Is Hacky in PlayFab &amp; UGS:</span>
             </div>
-            <p class="leading-relaxed text-red-800 text-[11px]">
+            <p class="leading-relaxed  text-[11px]">
               Player inventory is locked inside isolated private JSON stores. Querying listings across players requires abusing PlayFab Shared Group Data (which has severe lock contention and race conditions) or hosting and paying for an external PostgreSQL database on AWS.
             </p>
           </div>
@@ -929,11 +887,11 @@ defmodule Exoforge.Std.Docs.View do
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-          <div class="p-4 rounded-xl bg-red-50 border border-red-200 text-red-950 space-y-1.5">
-            <div class="font-bold text-red-900 flex items-center gap-1.5">
+          <div class="p-4 rounded-xl exo-callout-danger space-y-1.5">
+            <div class="font-bold flex items-center gap-1.5">
               <.studio_icon icon="close" class="w-3.5 h-3.5" /> <span>Why This Is Hacky in PlayFab &amp; UGS:</span>
             </div>
-            <p class="leading-relaxed text-red-800 text-[11px]">
+            <p class="leading-relaxed  text-[11px]">
               Cloud Code workers are stateless; memory is wiped after each invocation. Custom matchmaking queues or turn-based room states must be written to external databases on every move, and clients must poll every 2–5 seconds waiting for a match.
             </p>
           </div>
@@ -984,11 +942,11 @@ defmodule Exoforge.Std.Docs.View do
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-          <div class="p-4 rounded-xl bg-red-50 border border-red-200 text-red-950 space-y-1.5">
-            <div class="font-bold text-red-900 flex items-center gap-1.5">
+          <div class="p-4 rounded-xl exo-callout-danger space-y-1.5">
+            <div class="font-bold flex items-center gap-1.5">
               <.studio_icon icon="close" class="w-3.5 h-3.5" /> <span>Why This Is Hacky in PlayFab &amp; UGS:</span>
             </div>
-            <p class="leading-relaxed text-red-800 text-[11px]">
+            <p class="leading-relaxed  text-[11px]">
               Tuning drop rates or setting up a shared World Boss in PlayFab requires editing unvalidated JSON in "Title Data". One syntax error can break production, and coordinating a 10,000,000 HP boss requires solving race conditions across global JSON blobs.
             </p>
           </div>
@@ -1039,11 +997,11 @@ defmodule Exoforge.Std.Docs.View do
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-          <div class="p-4 rounded-xl bg-red-50 border border-red-200 text-red-950 space-y-1.5">
-            <div class="font-bold text-red-900 flex items-center gap-1.5">
+          <div class="p-4 rounded-xl exo-callout-danger space-y-1.5">
+            <div class="font-bold flex items-center gap-1.5">
               <.studio_icon icon="close" class="w-3.5 h-3.5" /> <span>Why This Is Hacky in PlayFab &amp; UGS:</span>
             </div>
-            <p class="leading-relaxed text-red-800 text-[11px]">
+            <p class="leading-relaxed  text-[11px]">
               Guilds in PlayFab require stitching together Entity Groups, custom JSON files, and third-party chat solutions like Photon or PubNub. Adding member roles and shared bank vaults requires multiple API calls, manual security checks, and continuous polling.
             </p>
           </div>
@@ -1093,11 +1051,11 @@ defmodule Exoforge.Std.Docs.View do
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-          <div class="p-4 rounded-xl bg-red-50 border border-red-200 text-red-950 space-y-1.5">
-            <div class="font-bold text-red-900 flex items-center gap-1.5">
+          <div class="p-4 rounded-xl exo-callout-danger space-y-1.5">
+            <div class="font-bold flex items-center gap-1.5">
               <.studio_icon icon="close" class="w-3.5 h-3.5" /> <span>Why This Is Hacky in PlayFab &amp; UGS:</span>
             </div>
-            <p class="leading-relaxed text-red-800 text-[11px]">
+            <p class="leading-relaxed  text-[11px]">
               Cloud Code has no native cron triggers, and PlayFab Scheduled Tasks time out when iterating through large player lists. Studios maintain complex external AWS Lambda or Azure Functions infrastructure with batching loops and pagination.
             </p>
           </div>
@@ -1147,11 +1105,11 @@ defmodule Exoforge.Std.Docs.View do
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-          <div class="p-4 rounded-xl bg-red-50 border border-red-200 text-red-950 space-y-1.5">
-            <div class="font-bold text-red-900 flex items-center gap-1.5">
+          <div class="p-4 rounded-xl exo-callout-danger space-y-1.5">
+            <div class="font-bold flex items-center gap-1.5">
               <.studio_icon icon="close" class="w-3.5 h-3.5" /> <span>Why This Is Hacky in PlayFab &amp; UGS:</span>
             </div>
-            <p class="leading-relaxed text-red-800 text-[11px]">
+            <p class="leading-relaxed  text-[11px]">
               Unity Cloud Code endpoints reject requests lacking a Unity Player Bearer token, making it impossible to receive raw webhooks from Stripe, Shopify, or Steam without an external proxy server. In PlayFab, developers must configure Azure API Management or AWS API Gateway.
             </p>
           </div>
