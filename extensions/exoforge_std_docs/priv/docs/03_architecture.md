@@ -26,7 +26,7 @@ Communication between the host cluster supervisor (Elixir BEAM) and the native C
 
 ### Handshake & Fault Isolation Guarantees
 1. **5-Second Handshake**: If an extension does not answer `hello` with valid capabilities within 5 seconds, the host refuses the extension with a clear log reason.
-2. **Crash Recovery**: If an OS worker process crashes, the `ExtensionSupervisor` catches the exit signal, clears pending in-flight requests with a 503 error, and re-spawns a clean worker process without bringing down the cluster.
+2. **Crash Recovery**: If an OS worker process crashes, the runner is a supervised child, so `ExtensionSupervisor` (`:one_for_one`) restarts it without touching the rest of the cluster. Every request still waiting on the dead process is answered with `{:error, {:extension_crashed, reason}}` rather than left hanging, and the registry records the crash (`ExtensionRegistry.mark_crashed/2`) so the Studio can show it.
 
 ---
 
@@ -35,9 +35,9 @@ Communication between the host cluster supervisor (Elixir BEAM) and the native C
 Game extensions in Exoforge are native C# compiled to a **framework-dependent single file**:
 
 - **Zero Reflection at Runtime**: The `Exoforge.Plugin.Generator` Roslyn source generator runs during compilation. It emits the dispatch table (`ExoforgeDispatch`) and entry point (`ExoforgeEntryPoint`), so the runtime invokes actions via direct static delegates without `System.Reflection`.
-- **Ahead-Of-Time (AOT) IL Trimming**: All unused Base Class Library (BCL) classes and metadata are stripped out. The compiled binary is only a few hundred kilobytes.
+- **Framework-Dependent, Not Trimmed**: The extension carries its own IL and dependencies and takes the runtime from the host, so the published binary is a few hundred kilobytes without any trimming. `Directory.Build.targets` strips `PublishAot`, `PublishTrimmed`, `SelfContained` and `PublishSingleFile` on purpose: trimming an extension that is reflected over by the host is a class of bug worth not having, and a framework-dependent file deploys to any host image that already has .NET.
 - **Pure C# Records**: Data contracts are typed C# records with parameter names matching action arguments. The SDK owns JSON serialization, and generated stubs preserve end-to-end typing from server to client.
-- **Multi-Engine Isolated Storage**: Extensions access the database through `Exo.Database`, which automatically scopes queries and KV storage to the extension's private schema (`ext_<extension_name>`), preventing cross-service data corruption.
+- **Multi-Engine Isolated Storage**: Extensions access the database through `Exo.Database`, which scopes queries and KV storage to the extension's own schema — `plugin_<extension_id>`, inside a per-instance database named `exoforge_<extension_id>`. Both prefixes are configurable (`:schema_prefix`, `:db_prefix`), so an operator can separate tenants without touching extension code.
 
 ---
 

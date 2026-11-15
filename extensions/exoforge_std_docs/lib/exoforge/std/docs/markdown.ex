@@ -5,7 +5,19 @@ defmodule Exoforge.Std.Docs.Markdown do
   tables, links, images, and GitHub-style callout alerts.
   """
 
-  @doc "Renders a Markdown binary string into HTML (safe Phoenix.HTML.raw)."
+  # Raw-HTML sibling of Icons.studio_icon/1 for the heredocs this renderer emits.
+  defp icon(name, class \\ "w-3.5 h-3.5") do
+    case Exoforge.Std.Docs.Icons.path(name) do
+      nil ->
+        ""
+
+      path ->
+        ~s(<svg class="#{class}" fill="none" viewBox="0 0 24 24" stroke="currentColor" ) <>
+          ~s(stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">) <>
+          ~s(<path d="#{path}" /></svg>)
+    end
+  end
+
   def to_html(markdown) when is_binary(markdown) do
     lines = String.split(markdown, ~r/\r?\n/)
     {html_blocks, _state} = parse_lines(lines, [], :normal)
@@ -227,14 +239,14 @@ defmodule Exoforge.Std.Docs.Markdown do
       end
 
     copy_btn = """
-    <button type=\"button\" onclick=\"window.exoCopyCode && window.exoCopyCode(this)\" class=\"absolute top-2 right-14 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white border border-gray-700 flex items-center gap-1 cursor-pointer print:hidden shadow-xs\" title=\"Copy code\"><span class=\"copy-icon\">📋</span><span class=\"copy-text\">Copy</span></button>
+    <button type=\"button\" onclick=\"window.exoCopyCode && window.exoCopyCode(this)\" class=\"absolute top-2 right-14 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white border border-gray-700 flex items-center gap-1 cursor-pointer print:hidden shadow-xs\" title=\"Copy code\"><span class=\"copy-icon\">#{icon("clipboard")}</span><span class=\"copy-text\">Copy</span></button>
     """
 
     """
-    <div class="relative group my-3">
+    <div class="relative group my-3 min-w-0 max-w-full">
       #{copy_btn}
       #{lang_badge}
-      <pre class="bg-gray-950 text-gray-200 p-4 rounded-2xl font-mono text-xs md:text-[13px] overflow-x-auto border border-gray-800 leading-relaxed shadow-sm print:bg-gray-100 print:text-gray-900 print:border-gray-300"><code>#{highlighted}</code></pre>
+      <pre class="bg-gray-950 text-gray-200 p-4 rounded-xl font-mono text-xs md:text-xs overflow-x-auto max-w-full border border-gray-800 leading-relaxed shadow-sm print:bg-gray-100 print:text-gray-900 print:border-gray-300"><code>#{highlighted}</code></pre>
     </div>
     """
   end
@@ -272,9 +284,9 @@ defmodule Exoforge.Std.Docs.Markdown do
     case alert_type do
       :note ->
         """
-        <div class="p-4 my-3 rounded-2xl bg-blue-50 border border-blue-200/80 text-blue-900 text-xs space-y-1">
+        <div class="p-4 my-3 rounded-xl bg-blue-50 border border-blue-200/80 text-blue-900 text-xs space-y-1">
           <div class="font-bold flex items-center gap-1.5 text-blue-800 text-[11px] uppercase tracking-wider">
-            <span>ℹ️</span> <span>Note</span>
+            #{icon("book")} <span>Note</span>
           </div>
           <div class="leading-relaxed">#{body}</div>
         </div>
@@ -282,9 +294,9 @@ defmodule Exoforge.Std.Docs.Markdown do
 
       :tip ->
         """
-        <div class="p-4 my-3 rounded-2xl bg-emerald-50 border border-emerald-200/80 text-emerald-900 text-xs space-y-1">
+        <div class="p-4 my-3 rounded-xl bg-emerald-50 border border-emerald-200/80 text-emerald-900 text-xs space-y-1">
           <div class="font-bold flex items-center gap-1.5 text-emerald-800 text-[11px] uppercase tracking-wider">
-            <span>💡</span> <span>Tip</span>
+            #{icon("target")} <span>Tip</span>
           </div>
           <div class="leading-relaxed">#{body}</div>
         </div>
@@ -292,9 +304,9 @@ defmodule Exoforge.Std.Docs.Markdown do
 
       :important ->
         """
-        <div class="p-4 my-3 rounded-2xl bg-indigo-50 border border-indigo-200/80 text-indigo-900 text-xs space-y-1">
-          <div class="font-bold flex items-center gap-1.5 text-indigo-800 text-[11px] uppercase tracking-wider">
-            <span>⭐</span> <span>Important</span>
+        <div class="p-4 my-3 rounded-xl bg-primary-50 border border-primary-200/80 text-primary-900 text-xs space-y-1">
+          <div class="font-bold flex items-center gap-1.5 text-primary-800 text-[11px] uppercase tracking-wider">
+            #{icon("target")} <span>Important</span>
           </div>
           <div class="leading-relaxed">#{body}</div>
         </div>
@@ -302,9 +314,9 @@ defmodule Exoforge.Std.Docs.Markdown do
 
       :warning ->
         """
-        <div class="p-4 my-3 rounded-2xl bg-amber-50 border border-amber-200/80 text-amber-900 text-xs space-y-1">
+        <div class="p-4 my-3 rounded-xl bg-amber-50 border border-amber-200/80 text-amber-900 text-xs space-y-1">
           <div class="font-bold flex items-center gap-1.5 text-amber-800 text-[11px] uppercase tracking-wider">
-            <span>⚠️</span> <span>Warning</span>
+            #{icon("alert")} <span>Warning</span>
           </div>
           <div class="leading-relaxed">#{body}</div>
         </div>
@@ -312,9 +324,9 @@ defmodule Exoforge.Std.Docs.Markdown do
 
       :caution ->
         """
-        <div class="p-4 my-3 rounded-2xl bg-rose-50 border border-rose-200/80 text-rose-900 text-xs space-y-1">
-          <div class="font-bold flex items-center gap-1.5 text-rose-800 text-[11px] uppercase tracking-wider">
-            <span>🚨</span> <span>Caution</span>
+        <div class="p-4 my-3 rounded-xl bg-red-50 border border-red-200/80 text-red-900 text-xs space-y-1">
+          <div class="font-bold flex items-center gap-1.5 text-red-800 text-[11px] uppercase tracking-wider">
+            #{icon("alert")} <span>Caution</span>
           </div>
           <div class="leading-relaxed">#{body}</div>
         </div>
@@ -440,7 +452,7 @@ defmodule Exoforge.Std.Docs.Markdown do
     Regex.replace(~r/!\[([^\]]*)\]\(([^)]+)\)/, text, fn _match, alt, url ->
       safe_alt = Plug.HTML.html_escape(alt)
       safe_url = Plug.HTML.html_escape(url)
-      "<img src=\"#{safe_url}\" alt=\"#{safe_alt}\" class=\"max-w-full rounded-2xl shadow-sm border border-gray-200 my-3\" />"
+      "<img src=\"#{safe_url}\" alt=\"#{safe_alt}\" class=\"max-w-full rounded-xl shadow-sm border border-gray-200 my-3\" />"
     end)
   end
 
@@ -493,13 +505,13 @@ defmodule Exoforge.Std.Docs.Markdown do
           "<span class=\"text-emerald-300\">#{Plug.HTML.html_escape(part)}</span>"
 
         String.starts_with?(part, "[") and String.ends_with?(part, "]") ->
-          "<span class=\"text-yellow-300 font-semibold\">#{Plug.HTML.html_escape(part)}</span>"
+          "<span class=\"text-amber-300 font-semibold\">#{Plug.HTML.html_escape(part)}</span>"
 
         part in @csharp_keywords ->
-          "<span class=\"text-purple-400 font-semibold\">#{Plug.HTML.html_escape(part)}</span>"
+          "<span class=\"text-primary-400 font-semibold\">#{Plug.HTML.html_escape(part)}</span>"
 
         part in @csharp_types ->
-          "<span class=\"text-cyan-300 font-bold\">#{Plug.HTML.html_escape(part)}</span>"
+          "<span class=\"text-blue-300 font-bold\">#{Plug.HTML.html_escape(part)}</span>"
 
         Regex.match?(~r/^\d+(?:\.\d+)?f?$/, part) ->
           "<span class=\"text-amber-300 font-mono\">#{Plug.HTML.html_escape(part)}</span>"
@@ -528,13 +540,13 @@ defmodule Exoforge.Std.Docs.Markdown do
           "<span class=\"text-emerald-300\">#{Plug.HTML.html_escape(part)}</span>"
 
         String.starts_with?(part, ":") ->
-          "<span class=\"text-yellow-300\">#{Plug.HTML.html_escape(part)}</span>"
+          "<span class=\"text-amber-300\">#{Plug.HTML.html_escape(part)}</span>"
 
         part in @elixir_keywords ->
-          "<span class=\"text-purple-400 font-semibold\">#{Plug.HTML.html_escape(part)}</span>"
+          "<span class=\"text-primary-400 font-semibold\">#{Plug.HTML.html_escape(part)}</span>"
 
         Regex.match?(~r/^[A-Z]/, part) ->
-          "<span class=\"text-cyan-300 font-bold\">#{Plug.HTML.html_escape(part)}</span>"
+          "<span class=\"text-blue-300 font-bold\">#{Plug.HTML.html_escape(part)}</span>"
 
         Regex.match?(~r/^\d+$/, part) ->
           "<span class=\"text-amber-300 font-mono\">#{Plug.HTML.html_escape(part)}</span>"
@@ -557,7 +569,7 @@ defmodule Exoforge.Std.Docs.Markdown do
       cond do
         String.ends_with?(trimmed, ":") ->
           key = String.trim_trailing(trimmed, ":")
-          "<span class=\"text-purple-300 font-semibold\">#{Plug.HTML.html_escape(key)}</span>:"
+          "<span class=\"text-primary-300 font-semibold\">#{Plug.HTML.html_escape(key)}</span>:"
 
         String.starts_with?(trimmed, "\"") and String.ends_with?(trimmed, "\"") ->
           "<span class=\"text-emerald-300\">#{Plug.HTML.html_escape(part)}</span>"
@@ -566,7 +578,7 @@ defmodule Exoforge.Std.Docs.Markdown do
           "<span class=\"text-amber-300 font-bold\">#{Plug.HTML.html_escape(part)}</span>"
 
         Regex.match?(~r/^-?\d+(?:\.\d+)?$/, trimmed) ->
-          "<span class=\"text-cyan-300 font-mono\">#{Plug.HTML.html_escape(part)}</span>"
+          "<span class=\"text-blue-300 font-mono\">#{Plug.HTML.html_escape(part)}</span>"
 
         true ->
           Plug.HTML.html_escape(part)

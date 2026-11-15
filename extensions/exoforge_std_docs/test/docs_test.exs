@@ -83,8 +83,8 @@ defmodule Exoforge.Std.DocsTest do
       html = Markdown.to_html(md) |> Phoenix.HTML.safe_to_string()
 
       assert html =~ "<pre"
-      assert html =~ "text-purple-400 font-semibold\">public</span>"
-      assert html =~ "text-yellow-300 font-semibold\">[ExoAction]</span>"
+      assert html =~ "text-primary-400 font-semibold\">public</span>"
+      assert html =~ "text-amber-300 font-semibold\">[ExoAction]</span>"
     end
   end
 

@@ -5,6 +5,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
   Visualizer for Exoforge.
   """
   use Phoenix.Component
+  import Exoforge.Std.Docs.Icons, only: [studio_icon: 1]
 
   # ---- Subsystems & Components Specification ----
 
@@ -15,7 +16,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       title: "Unity Client SDK",
       subtitle: "com.exoforge.sdk",
       desc: "Client runtime with async/await stubs, device anonymous auth, and reactive event hooks.",
-      icon: "🕹️",
+      icon: "🕹",
       package: "Client Ingress",
       group: "client",
       category: "client",
@@ -51,7 +52,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       title: "Producer Studio",
       subtitle: "LiveView Dashboard :4005",
       desc: "Web-based actor inspector, live cluster metrics, extension lifecycle manager, and dev guide.",
-      icon: "🎛️",
+      icon: "🎛",
       package: "Studio Operations",
       group: "client",
       category: "studio",
@@ -181,7 +182,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       title: "ExtensionSupervisor",
       subtitle: "Topological DAG Tree",
       desc: "Starts extensions in topological dependency order, isolates worker failures, and restarts crashed actors.",
-      icon: "🛡️",
+      icon: "🛡",
       package: "Kernel Core",
       group: "kernel",
       category: "kernel",
@@ -201,7 +202,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       title: "Native C# Game Worker",
       subtitle: ".NET Single-File Process",
       desc: "Framework-dependent single-file binary with AOT trimming, zero reflection, and static dispatch delegates.",
-      icon: "⚙️",
+      icon: "⚙",
       package: "Extension Workers",
       group: "extension",
       category: "extension",
@@ -257,7 +258,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       title: "Database Manager",
       subtitle: ":database service",
       desc: "Multi-engine database service managing connection pools and per-extension schema isolation.",
-      icon: "🗄️",
+      icon: "🗄",
       package: "Data & Storage",
       group: "storage",
       category: "extension",
@@ -583,8 +584,8 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       <!-- Section Header -->
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-200">
         <div>
-          <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-200 text-[10px] font-bold">
-            <span class="w-1.5 h-1.5 rounded-full bg-violet-600 animate-pulse"></span>
+          <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-primary-50 text-primary-700 border border-primary-200 text-[10px] font-bold">
+            
             <span>Progressive Disclosure Architecture &amp; Execution Pipeline</span>
           </div>
           <h2 class="text-xl font-bold text-gray-900 tracking-tight mt-1">
@@ -599,20 +600,20 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
         <div class="flex items-center gap-2 p-1 bg-gray-100 rounded-xl border border-gray-200/80 text-xs font-semibold self-start sm:self-auto">
           <button
             type="button"
-            onclick="document.getElementById('arch-view-graph').classList.remove('hidden'); document.getElementById('arch-view-workflow').classList.add('hidden'); document.getElementById('btn-tab-graph').classList.add('bg-white', 'text-violet-700', 'shadow-xs'); document.getElementById('btn-tab-workflow').classList.remove('bg-white', 'text-violet-700', 'shadow-xs');"
+            onclick="document.getElementById('arch-view-graph').classList.remove('hidden'); document.getElementById('arch-view-workflow').classList.add('hidden'); document.getElementById('btn-tab-graph').classList.add('bg-white', 'text-primary-700', 'shadow-xs'); document.getElementById('btn-tab-workflow').classList.remove('bg-white', 'text-primary-700', 'shadow-xs');"
             id="btn-tab-graph"
-            class="px-3.5 py-1.5 rounded-lg bg-white text-violet-700 shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+            class="px-3.5 py-1.5 rounded-lg bg-white text-primary-700 shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
           >
-            <span>🕸️</span>
+            <.studio_icon icon="graph" class="w-3.5 h-3.5" />
             <span>Network Architecture</span>
           </button>
           <button
             type="button"
-            onclick="document.getElementById('arch-view-workflow').classList.remove('hidden'); document.getElementById('arch-view-graph').classList.add('hidden'); document.getElementById('btn-tab-workflow').classList.add('bg-white', 'text-violet-700', 'shadow-xs'); document.getElementById('btn-tab-graph').classList.remove('bg-white', 'text-violet-700', 'shadow-xs');"
+            onclick="document.getElementById('arch-view-workflow').classList.remove('hidden'); document.getElementById('arch-view-graph').classList.add('hidden'); document.getElementById('btn-tab-workflow').classList.add('bg-white', 'text-primary-700', 'shadow-xs'); document.getElementById('btn-tab-graph').classList.remove('bg-white', 'text-primary-700', 'shadow-xs');"
             id="btn-tab-workflow"
             class="px-3.5 py-1.5 rounded-lg text-gray-600 hover:text-gray-900 transition-all flex items-center gap-1.5 cursor-pointer"
           >
-            <span>⚡</span>
+            <.studio_icon icon="bolt" class="w-3.5 h-3.5" />
             <span>Sequential Workflow Cascade</span>
           </button>
         </div>
@@ -621,7 +622,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       <!-- VIEW 1: NETWORK ARCHITECTURE COMPONENT DIAGRAM -->
       <div id="arch-view-graph" class="space-y-4">
         <!-- Core Philosophy: Microkernel & Pluggable Extensions -->
-        <div class="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 text-white border border-slate-800 shadow-xl relative overflow-hidden">
+        <div class="exo-hero rounded-xl p-6 text-white border border-slate-800 shadow-xl relative overflow-hidden">
           <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div class="space-y-2 max-w-2xl">
               <div class="flex items-center gap-2">
@@ -639,9 +640,9 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
             </div>
 
             <!-- Rule of Thumb Card -->
-            <div class="bg-slate-800/90 p-4 rounded-2xl border border-slate-700 md:max-w-xs shrink-0 space-y-2 text-xs">
+            <div class="bg-slate-800/90 p-4 rounded-xl border border-slate-700 md:max-w-xs shrink-0 space-y-2 text-xs">
               <div class="font-bold text-amber-400 flex items-center gap-1.5">
-                <span>💡</span>
+                <.studio_icon icon="target" class="w-3.5 h-3.5" />
                 <span>Rule of Thumb</span>
               </div>
               <div class="text-slate-300 leading-snug">
@@ -653,7 +654,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
         </div>
 
         <!-- Diagram Toolbar: Filters, Zoom, Progressive Disclosure & Fullscreen -->
-        <div class="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-gray-200/80 shadow-2xs">
+        <div class="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-xl border border-gray-200/80 shadow-2xs">
           <!-- Layer Filter Pills -->
           <div class="flex flex-wrap items-center gap-1.5 text-xs font-semibold">
             <span class="text-gray-400 text-[11px] mr-1 hidden sm:inline">Highlight Layer:</span>
@@ -671,25 +672,25 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
               id="pkg-btn-kernel"
               class="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-all cursor-pointer text-xs flex items-center gap-1"
             >
-              <span>⚡</span>
+              <.studio_icon icon="bolt" class="w-3.5 h-3.5" />
               <span>Kernel Core</span>
             </button>
             <button
               type="button"
               onclick="window.exoHighlightPackage('extension')"
               id="pkg-btn-extension"
-              class="px-2.5 py-1 rounded-lg bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100 transition-all cursor-pointer text-xs flex items-center gap-1"
+              class="px-2.5 py-1 rounded-lg bg-primary-50 text-primary-700 border border-primary-200 hover:bg-primary-100 transition-all cursor-pointer text-xs flex items-center gap-1"
             >
-              <span>🧩</span>
+              <.studio_icon icon="box" class="w-3.5 h-3.5" />
               <span>Extensions</span>
             </button>
             <button
               type="button"
               onclick="window.exoHighlightPackage('internal')"
               id="pkg-btn-internal"
-              class="px-2.5 py-1 rounded-lg bg-cyan-50 text-cyan-700 border border-cyan-200 hover:bg-cyan-100 transition-all cursor-pointer text-xs flex items-center gap-1"
+              class="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-all cursor-pointer text-xs flex items-center gap-1"
             >
-              <span>💾</span>
+              <.studio_icon icon="save" class="w-3.5 h-3.5" />
               <span>Storage</span>
             </button>
           </div>
@@ -747,9 +748,9 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
             <button
               type="button"
               onclick="document.getElementById('arch-graph-modal').classList.remove('hidden'); setTimeout(function() { window.ExoGraphEngine.fit('modal-arch-graph'); }, 50);"
-              class="px-3 py-1.5 rounded-xl bg-violet-50 hover:bg-violet-100 text-violet-700 border border-violet-200 transition-all cursor-pointer text-xs font-bold flex items-center gap-1.5 shadow-2xs"
+              class="px-3 py-1.5 rounded-xl bg-primary-50 hover:bg-primary-100 text-primary-700 border border-primary-200 transition-all cursor-pointer text-xs font-bold flex items-center gap-1.5 shadow-2xs"
             >
-              <span>⛶</span>
+              <.studio_icon icon="monitor" class="w-3.5 h-3.5" />
               <span>Maximize Diagram</span>
             </button>
           </div>
@@ -760,7 +761,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
           id="arch-graph-container"
           phx-hook="ArchGraph"
           onmouseenter="window.ExoGraphEngine && window.ExoGraphEngine.initPanZoom('arch-graph')"
-          class="border border-slate-800 rounded-3xl bg-slate-950 overflow-hidden relative shadow-2xl h-[680px] select-none cursor-grab"
+          class="border border-slate-800 rounded-xl bg-slate-950 overflow-hidden relative shadow-2xl h-[680px] select-none cursor-grab"
         >
           <!-- Canvas Background Click Area (clears spotlight) -->
           <div class="graph-canvas-bg absolute inset-0 z-0"></div>
@@ -775,7 +776,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
 
           <!-- Hint Pill -->
           <div class="absolute bottom-3 left-4 z-20 pointer-events-none text-[11px] font-mono text-slate-400 bg-slate-900/80 px-3 py-1 rounded-full border border-slate-800 backdrop-blur-sm flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full bg-violet-400 animate-pulse"></span>
+            
             <span>Click any node to spotlight 1-hop dependencies • Drag to pan • Scroll to zoom</span>
           </div>
 
@@ -787,7 +788,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       <!-- VIEW 2: SEQUENTIAL CASCADE WORKFLOW (INBOUND RPC & REALTIME PUB/SUB) -->
       <div id="arch-view-workflow" class="hidden space-y-6">
         <!-- Interactive Workflow Stepper Bar -->
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-gray-200/80 shadow-2xs">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-gray-200/80 shadow-2xs">
           <div>
             <h3 class="text-sm font-bold text-gray-900">Execution Pipeline Stepper</h3>
             <p class="text-xs text-gray-500">Interactive step-by-step trace of packets across boundaries.</p>
@@ -798,20 +799,20 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
             <div class="flex items-center gap-1.5 p-1 bg-gray-100 rounded-xl border border-gray-200 text-xs font-semibold">
               <button
                 type="button"
-                onclick="document.getElementById('cascade-action-workflow').classList.remove('hidden'); document.getElementById('cascade-event-workflow').classList.add('hidden'); document.getElementById('btn-wf-action').classList.add('bg-white', 'text-violet-700', 'shadow-xs'); document.getElementById('btn-wf-event').classList.remove('bg-white', 'text-violet-700', 'shadow-xs'); window._wfType = 'action'; window.ExoGraphEngine.stepWorkflow(1, 'action');"
+                onclick="document.getElementById('cascade-action-workflow').classList.remove('hidden'); document.getElementById('cascade-event-workflow').classList.add('hidden'); document.getElementById('btn-wf-action').classList.add('bg-white', 'text-primary-700', 'shadow-xs'); document.getElementById('btn-wf-event').classList.remove('bg-white', 'text-primary-700', 'shadow-xs'); window._wfType = 'action'; window.ExoGraphEngine.stepWorkflow(1, 'action');"
                 id="btn-wf-action"
-                class="px-3 py-1.5 rounded-lg bg-white text-violet-700 shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+                class="px-3 py-1.5 rounded-lg bg-white text-primary-700 shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
               >
-                <span>🎯</span>
+                <.studio_icon icon="target" class="w-3.5 h-3.5" />
                 <span>Action RPC (6 Steps)</span>
               </button>
               <button
                 type="button"
-                onclick="document.getElementById('cascade-event-workflow').classList.remove('hidden'); document.getElementById('cascade-action-workflow').classList.add('hidden'); document.getElementById('btn-wf-event').classList.add('bg-white', 'text-violet-700', 'shadow-xs'); document.getElementById('btn-wf-action').classList.remove('bg-white', 'text-violet-700', 'shadow-xs'); window._wfType = 'event'; window.ExoGraphEngine.stepWorkflow(1, 'event');"
+                onclick="document.getElementById('cascade-event-workflow').classList.remove('hidden'); document.getElementById('cascade-action-workflow').classList.add('hidden'); document.getElementById('btn-wf-event').classList.add('bg-white', 'text-primary-700', 'shadow-xs'); document.getElementById('btn-wf-action').classList.remove('bg-white', 'text-primary-700', 'shadow-xs'); window._wfType = 'event'; window.ExoGraphEngine.stepWorkflow(1, 'event');"
                 id="btn-wf-event"
                 class="px-3 py-1.5 rounded-lg text-gray-600 hover:text-gray-900 transition-all cursor-pointer flex items-center gap-1.5"
               >
-                <span>📡</span>
+                <.studio_icon icon="radio" class="w-3.5 h-3.5" />
                 <span>Event Pub/Sub (4 Steps)</span>
               </button>
             </div>
@@ -825,11 +826,11 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
               >
                 ◀ Prev
               </button>
-              <span id="trace-step-counter" class="px-2.5 text-xs font-mono font-bold text-violet-700">Step 1</span>
+              <span id="trace-step-counter" class="px-2.5 text-xs font-mono font-bold text-primary-700">Step 1</span>
               <button
                 type="button"
                 onclick="window._activeStep = Math.min(6, (window._activeStep || 1) + 1); window.ExoGraphEngine.stepWorkflow(window._activeStep, window._wfType || 'action');"
-                class="px-2.5 py-1 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold shadow-2xs cursor-pointer"
+                class="px-2.5 py-1 rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold shadow-2xs cursor-pointer"
               >
                 Next ▶
               </button>
@@ -840,48 +841,48 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
         <!-- 1. ACTION RPC SEQUENTIAL CASCADE -->
         <div id="cascade-action-workflow" class="space-y-4 relative">
           <!-- Pixel-Perfect Centered Vertical Pipeline Line (Center at 16px) -->
-          <div class="absolute left-4 -translate-x-1/2 top-4 bottom-4 w-0.5 bg-gradient-to-b from-blue-400 via-violet-400 to-emerald-400 z-0"></div>
+          <div class="absolute left-4 -translate-x-1/2 top-4 bottom-4 w-0.5 bg-primary-400/60 z-0"></div>
 
           <%= for step <- @action_workflow_steps do %>
             <div class="flex items-start gap-4 relative z-10" data-workflow-type="action" data-step-num={step.step} data-actor-node={step.actor_node}>
               <!-- Concentric Step Circle Badge on Vertical Pipeline -->
               <div class={"w-8 h-8 rounded-full border-2 flex items-center justify-center text-xs font-black shadow-sm shrink-0 z-10 #{case step.color do
                 "blue" -> "bg-blue-600 text-white border-blue-200"
-                "violet" -> "bg-violet-600 text-white border-violet-200"
+                "violet" -> "bg-primary-600 text-white border-primary-200"
                 "amber" -> "bg-amber-500 text-white border-amber-200"
                 "emerald" -> "bg-emerald-600 text-white border-emerald-200"
-                "cyan" -> "bg-cyan-600 text-white border-cyan-200"
+                "cyan" -> "bg-blue-600 text-white border-blue-200"
               end}"}>
                 <%= step.step %>
               </div>
 
               <!-- Expandable Accordion Card -->
-              <details class="group flex-1 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden transition-all duration-200 hover:border-violet-300">
+              <details class="group flex-1 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden transition-all duration-200 hover:border-primary-300">
                 <summary class="p-4 flex items-center justify-between gap-3 cursor-pointer select-none list-none">
                   <div class="flex items-center gap-3">
                     <div>
                       <div class="flex items-center gap-2">
                         <span class="font-bold text-gray-900 text-sm"><%= step.title %></span>
-                        <span class={"text-[9px] font-mono font-bold px-1.5 py-0.5 rounded uppercase #{case step.color do
+                        <span class={"text-[10px] font-mono font-bold px-1.5 py-0.5 rounded uppercase #{case step.color do
                           "blue" -> "bg-blue-50 text-blue-700 border border-blue-200"
-                          "violet" -> "bg-violet-50 text-violet-700 border border-violet-200"
+                          "violet" -> "bg-primary-50 text-primary-700 border border-primary-200"
                           "amber" -> "bg-amber-50 text-amber-700 border border-amber-200"
                           "emerald" -> "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                          "cyan" -> "bg-cyan-50 text-cyan-700 border border-cyan-200"
+                          "cyan" -> "bg-blue-50 text-blue-700 border border-blue-200"
                         end}"}>
                           <%= step.badge %>
                         </span>
                       </div>
                       <div class="text-xs text-gray-500 mt-0.5 font-mono">
                         <span class="font-semibold text-gray-700"><%= step.actor %>:</span>
-                        <span class="text-violet-600"><%= step.action %></span>
+                        <span class="text-primary-600"><%= step.action %></span>
                       </div>
                     </div>
                   </div>
 
                   <div class="flex items-center gap-3">
                     <span class="text-[11px] font-mono font-bold text-gray-500 bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-200">
-                      ⏱️ <%= step.latency %>
+                      <.studio_icon icon="timeline" class="w-3.5 h-3.5" /> <%= step.latency %>
                     </span>
                     <svg class="w-5 h-5 text-gray-400 group-open:rotate-180 transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
@@ -903,7 +904,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
                         onclick="window.exoCopyCode && window.exoCopyCode(this)"
                         class="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-gray-200 hover:bg-gray-300 text-gray-700 flex items-center gap-1 cursor-pointer"
                       >
-                        <span class="copy-icon">📋</span>
+                        <span class="copy-icon"><.studio_icon icon="clipboard" class="w-3.5 h-3.5" /></span>
                         <span class="copy-text">Copy</span>
                       </button>
                     </div>
@@ -918,14 +919,14 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
         <!-- 2. EVENT PUB/SUB SEQUENTIAL CASCADE -->
         <div id="cascade-event-workflow" class="hidden space-y-4 relative">
           <!-- Pixel-Perfect Centered Vertical Pipeline Line (Center at 16px) -->
-          <div class="absolute left-4 -translate-x-1/2 top-4 bottom-4 w-0.5 bg-gradient-to-b from-emerald-400 via-amber-400 to-blue-400 z-0"></div>
+          <div class="absolute left-4 -translate-x-1/2 top-4 bottom-4 w-0.5 bg-emerald-400/60 z-0"></div>
 
           <%= for step <- @event_workflow_steps do %>
             <div class="flex items-start gap-4 relative z-10" data-workflow-type="event" data-step-num={step.step} data-actor-node={step.actor_node}>
               <!-- Concentric Step Circle Badge -->
               <div class={"w-8 h-8 rounded-full border-2 flex items-center justify-center text-xs font-black shadow-sm shrink-0 z-10 #{case step.color do
                 "blue" -> "bg-blue-600 text-white border-blue-200"
-                "violet" -> "bg-violet-600 text-white border-violet-200"
+                "violet" -> "bg-primary-600 text-white border-primary-200"
                 "amber" -> "bg-amber-500 text-white border-amber-200"
                 "emerald" -> "bg-emerald-600 text-white border-emerald-200"
               end}"}>
@@ -933,15 +934,15 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
               </div>
 
               <!-- Expandable Accordion Card -->
-              <details class="group flex-1 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden transition-all duration-200 hover:border-violet-300">
+              <details class="group flex-1 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden transition-all duration-200 hover:border-primary-300">
                 <summary class="p-4 flex items-center justify-between gap-3 cursor-pointer select-none list-none">
                   <div class="flex items-center gap-3">
                     <div>
                       <div class="flex items-center gap-2">
                         <span class="font-bold text-gray-900 text-sm"><%= step.title %></span>
-                        <span class={"text-[9px] font-mono font-bold px-1.5 py-0.5 rounded uppercase #{case step.color do
+                        <span class={"text-[10px] font-mono font-bold px-1.5 py-0.5 rounded uppercase #{case step.color do
                           "blue" -> "bg-blue-50 text-blue-700 border border-blue-200"
-                          "violet" -> "bg-violet-50 text-violet-700 border border-violet-200"
+                          "violet" -> "bg-primary-50 text-primary-700 border border-primary-200"
                           "amber" -> "bg-amber-50 text-amber-700 border border-amber-200"
                           "emerald" -> "bg-emerald-50 text-emerald-700 border border-emerald-200"
                         end}"}>
@@ -957,7 +958,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
 
                   <div class="flex items-center gap-3">
                     <span class="text-[11px] font-mono font-bold text-gray-500 bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-200">
-                      ⏱️ <%= step.latency %>
+                      <.studio_icon icon="timeline" class="w-3.5 h-3.5" /> <%= step.latency %>
                     </span>
                     <svg class="w-5 h-5 text-gray-400 group-open:rotate-180 transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
@@ -979,7 +980,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
                         onclick="window.exoCopyCode && window.exoCopyCode(this)"
                         class="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-gray-200 hover:bg-gray-300 text-gray-700 flex items-center gap-1 cursor-pointer"
                       >
-                        <span class="copy-icon">📋</span>
+                        <span class="copy-icon"><.studio_icon icon="clipboard" class="w-3.5 h-3.5" /></span>
                         <span class="copy-text">Copy</span>
                       </button>
                     </div>
@@ -994,11 +995,11 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
 
       <!-- FULLSCREEN MODAL POPUP FOR ARCHITECTURE DIAGRAM -->
       <div id="arch-graph-modal" class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex flex-col p-4 sm:p-6 animate-in fade-in duration-150">
-        <div class="bg-slate-950 rounded-3xl border border-slate-800 flex-1 flex flex-col overflow-hidden shadow-2xl relative">
+        <div class="bg-slate-950 rounded-xl border border-slate-800 flex-1 flex flex-col overflow-hidden shadow-2xl relative">
           <!-- Modal Header -->
           <div class="flex items-center justify-between p-4 px-6 border-b border-slate-800 bg-slate-900/80">
             <div class="flex items-center gap-3">
-              <span class="text-xl">🕸️</span>
+              <span class="text-xl"><.studio_icon icon="graph" class="w-3.5 h-3.5" /></span>
               <div>
                 <h3 class="text-base font-bold text-white tracking-tight">Exoforge UML Architecture Diagram</h3>
                 <p class="text-xs text-slate-400">Progressive Disclosure, 1-Hop Spotlighting, and Interconnect Topology</p>
@@ -1079,15 +1080,15 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
     ~H"""
     <div
       id={@drawer_id}
-      class="graph-docked-drawer absolute top-4 right-4 bottom-4 w-80 sm:w-96 bg-slate-900/95 border border-slate-700/80 rounded-3xl shadow-2xl p-6 text-white flex flex-col justify-between z-30 translate-x-full transition-transform duration-300 backdrop-blur-md hidden"
+      class="graph-docked-drawer absolute top-4 right-4 bottom-4 w-80 sm:w-96 bg-slate-900/95 border border-slate-700/80 rounded-xl shadow-2xl p-6 text-white flex flex-col justify-between z-30 translate-x-full transition-transform duration-300 backdrop-blur-md hidden"
       onclick="event.stopPropagation()"
     >
       <div class="space-y-5">
         <!-- Close button & Header -->
         <div class="flex items-start justify-between gap-3 border-b border-slate-800 pb-4">
           <div class="flex items-center gap-3">
-            <div class="drawer-icon w-12 h-12 rounded-2xl bg-slate-800/90 border border-slate-700 flex items-center justify-center text-2xl shrink-0 shadow-inner">
-              🎯
+            <div class="drawer-icon w-12 h-12 rounded-xl bg-slate-800/90 border border-slate-700 flex items-center justify-center text-2xl shrink-0 shadow-inner">
+              <.studio_icon icon="target" class="w-3.5 h-3.5" />
             </div>
             <div>
               <div class="flex items-center gap-2">
@@ -1095,7 +1096,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
                   ActionDispatcher
                 </h3>
               </div>
-              <div class="drawer-subtitle text-xs font-mono font-semibold text-violet-400 mt-0.5">
+              <div class="drawer-subtitle text-xs font-mono font-semibold text-primary-400 mt-0.5">
                 Scope &amp; Route Engine
               </div>
             </div>
@@ -1121,7 +1122,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
         </div>
 
         <!-- Description -->
-        <div class="bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800/80">
+        <div class="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800/80">
           <div class="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider mb-1">
             Subsystem Role &amp; Responsibility
           </div>
@@ -1133,7 +1134,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
         <!-- Protocol & Transport -->
         <div class="bg-slate-800/40 p-3 rounded-xl border border-slate-700/60 flex items-center justify-between">
           <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Interconnect</span>
-          <span class="drawer-protocol text-xs font-bold text-violet-300 font-mono">
+          <span class="drawer-protocol text-xs font-bold text-primary-300 font-mono">
             In-Memory Zero-Copy
           </span>
         </div>
@@ -1165,7 +1166,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
         <button
           type="button"
           onclick="window.ExoGraphEngine.clearSpotlight()"
-          class="text-violet-400 hover:text-violet-300 font-semibold cursor-pointer"
+          class="text-primary-400 hover:text-primary-300 font-semibold cursor-pointer"
         >
           Dismiss
         </button>
@@ -1240,7 +1241,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
         <g class="uml-package-box" data-category="kernel" data-subsystem="kernel">
           <rect x="20" y="350" width="1040" height="150" rx="20" fill="#181308" fill-opacity="0.8" stroke="#f59e0b" stroke-width="2" filter={"url(##{@prefix}kernel-glow)"} />
           <path d="M 20 374 L 175 374 L 187 362 L 187 350 L 20 350 Z" fill="#451a03" />
-          <text x="30" y="366" fill="#fde047" font-size="9.5" font-weight="black" font-family="monospace">⚡ package Kernel Core</text>
+          <text x="30" y="366" fill="#fde047" font-size="9.5" font-weight="black" font-family="monospace"><.studio_icon icon="bolt" class="w-3.5 h-3.5" /> package Kernel Core</text>
         </g>
 
         <!-- Package 4: Extension Workers -->
@@ -1416,14 +1417,14 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
         "<span class=\"text-slate-500 italic\">#{line}</span>"
 
       String.starts_with?(trimmed, "[") and String.ends_with?(trimmed, "]") ->
-        "<span class=\"text-violet-400 font-semibold\">#{line}</span>"
+        "<span class=\"text-primary-400 font-semibold\">#{line}</span>"
 
       true ->
         line
         # JSON keys: &quot;key&quot;:
         |> String.replace(
           ~r/&quot;([a-zA-Z0-9_]+)&quot;(?=\s*:)/,
-          "<span class=\"text-sky-300 font-semibold\">&quot;\\1&quot;</span>"
+          "<span class=\"text-blue-300 font-semibold\">&quot;\\1&quot;</span>"
         )
         # JSON string values: : &quot;value&quot;
         |> String.replace(
@@ -1438,12 +1439,12 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
         # JSON booleans & null
         |> String.replace(
           ~r/(:\s*)(true|false|null)/,
-          "\\1<span class=\"text-purple-300 font-bold\">\\2</span>"
+          "\\1<span class=\"text-primary-300 font-bold\">\\2</span>"
         )
         # SQL keywords
         |> String.replace(
           ~r/\b(INSERT INTO|VALUES|ON CONFLICT|DO UPDATE SET|SELECT|FROM|WHERE)\b/,
-          "<span class=\"text-violet-400 font-bold\">\\1</span>"
+          "<span class=\"text-primary-400 font-bold\">\\1</span>"
         )
     end
   end

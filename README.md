@@ -135,7 +135,8 @@ exo status                      # Inspect cluster health and telemetry
 ### 3. Unity & C# Client Golden Path
 
 ```csharp
-using Exoforge.SDK;
+using Exoforge.Client.Unity;
+using Exoforge.Client;
 
 // Stage 1: Anonymous device-based sign-in with automatic token persistence
 var session = await ExoforgeSDK.Auth.LoginAnonymously();

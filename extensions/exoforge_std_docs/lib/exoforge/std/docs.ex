@@ -105,7 +105,7 @@ defmodule Exoforge.Std.Docs do
           extension_title: ext["title"] || ext["name"],
           name: svc["name"] || svc[:name],
           title: svc["title"] || svc[:title] || Macro.camelize(to_string(svc["name"] || svc[:name])),
-          icon: svc["icon"] || svc[:icon] || ext["icon"] || "⚙️",
+          icon: svc["icon"] || svc[:icon] || ext["icon"] || "⚙",
           actions: normalize_actions(svc["actions"] || svc[:actions] || [])
         }
       end)
@@ -126,7 +126,7 @@ defmodule Exoforge.Std.Docs do
           extension_title: m.title || to_string(m.name || m.id),
           name: to_string(svc.name),
           title: svc[:title] || Macro.camelize(to_string(svc.name)),
-          icon: svc[:icon] || m.icon || "⚙️",
+          icon: svc[:icon] || m.icon || "⚙",
           actions: normalize_actions(svc[:actions] || [])
         }
       end)

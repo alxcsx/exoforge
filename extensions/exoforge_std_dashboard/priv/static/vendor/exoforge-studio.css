@@ -285,8 +285,13 @@ html:not(.light) .bg-primary-200,
 html:not(.light) .bg-primary-500\/10,
 html:not(.light) .bg-primary-500\/20,
 html:not(.light) .bg-primary-500\/30,
-html:not(.light) .bg-primary-400\/20 {
+html:not(.light) .bg-primary-400\/20,
+html:not(.light) .bg-primary-600\/10 {
   background-color: rgba(139, 92, 246, 0.18) !important;
+}
+
+html:not(.light) .bg-primary-400\/60 {
+  background-color: rgba(139, 92, 246, 0.6) !important;
 }
 
 html:not(.light) .hover\:bg-primary-50:hover,
@@ -367,6 +372,8 @@ html:not(.light) .bg-emerald-50\/90,
 html:not(.light) .bg-emerald-100,
 html:not(.light) .bg-emerald-200,
 html:not(.light) .bg-emerald-400\/15,
+html:not(.light) .bg-emerald-400\/60,
+html:not(.light) .bg-emerald-100\/50,
 html:not(.light) .bg-emerald-500\/10,
 html:not(.light) .hover\:bg-emerald-100:hover {
   background-color: rgba(16, 185, 129, 0.14) !important;
@@ -408,6 +415,9 @@ html:not(.light) .bg-amber-100,
 html:not(.light) .bg-amber-100\/70,
 html:not(.light) .bg-amber-200,
 html:not(.light) .bg-amber-400\/15,
+html:not(.light) .bg-amber-400\/20,
+html:not(.light) .bg-amber-500\/10,
+html:not(.light) .bg-amber-500\/15,
 html:not(.light) .bg-amber-500\/20,
 html:not(.light) .hover\:bg-amber-100:hover {
   background-color: rgba(245, 158, 11, 0.14) !important;
@@ -491,7 +501,8 @@ html:not(.light) .bg-blue-50\/70,
 html:not(.light) .bg-blue-50\/80,
 html:not(.light) .bg-blue-50\/90,
 html:not(.light) .bg-blue-100,
-html:not(.light) .bg-blue-200 {
+html:not(.light) .bg-blue-200,
+html:not(.light) .hover\:bg-blue-100:hover {
   background-color: rgba(59, 130, 246, 0.15) !important;
 }
 
@@ -583,6 +594,14 @@ html:not(.light) .shadow-lg {
  * Ensures all documentation badges (especially in Architecture & Catalog) have
  * optimal contrast against dark surfaces.
  * ============================================================================ */
+/* Inline code is a single unbreakable token by default, so one long identifier
+ * (`await ExoforgeSDK.Auth.SetDisplayName("Viper")`) sets a min-content width that a flex or
+ * grid item cannot shrink below — on a 375px screen that pushed the docs page out to 556px and
+ * every code sample defeated its own `overflow-x-auto`. Inline code wraps; pre does not. */
+:not(pre) > code {
+  overflow-wrap: anywhere;
+}
+
 html:not(.light) :not(pre) > code {
   background-color: rgba(139, 92, 246, 0.18) !important;
   color: #ddd6fe !important;

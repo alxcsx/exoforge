@@ -204,7 +204,7 @@ public class WorldBossExtension
     [ExoAction(Scope = "player")]
     public async Task<AttackBossResponse> AttackBoss(AttackBossRequest req)
     {
-        var config = Exo.Database.First<WorldBossConfig>("world_boss_config");
+        var config = Exo.Database.First<WorldBossConfig>();   // T's own table, from [ExoSingletonResource]
         if (config == null || !config.IsEventActive)
             throw new ExoActionException("event_inactive", "The World Boss is currently sleeping.");
 

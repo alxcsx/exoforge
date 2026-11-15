@@ -16,15 +16,19 @@ defmodule Exoforge.Std.Dashboard.UiStandardTest do
 
   @dashboard_lib Path.expand("../lib", __DIR__)
   @views_lib Path.expand("../../exoforge_std_dashboard_views/lib", __DIR__)
+  @docs_lib Path.expand("../../exoforge_std_docs/lib", __DIR__)
   @css Path.expand("../priv/static/vendor/exoforge-studio.css", __DIR__)
 
-  @sources Path.wildcard(Path.join(@dashboard_lib, "**/*.ex")) ++
-             Path.wildcard(Path.join(@views_lib, "**/*.ex"))
+  # Every extension that renders Studio chrome. The docs extension is the third surface and had
+  # drifted furthest (87 rounded-2xl, 36 dark: variants) because this test did not look at it.
+  @sources Enum.flat_map([@dashboard_lib, @views_lib, @docs_lib], fn dir ->
+             Path.wildcard(Path.join(dir, "**/*.ex"))
+           end)
 
   # Hues the standard retired. One hue, one name: primary / emerald / amber /
   # red / blue. Anything else renders as a second name for a colour we already
   # have, and picks up a different dark-mode tint.
-  @alias_hues ~r/\b(?:bg|text|border|ring|from|to|via|divide|fill|stroke|shadow)-(?:purple|violet|indigo|sky|cyan|rose|yellow|green|pink|fuchsia)-\d/
+  @alias_hues ~r/\b(?:bg|text|border|ring|from|to|via|divide|fill|stroke|shadow)-(?:purple|violet|indigo|sky|cyan|teal|rose|yellow|green|pink|fuchsia)-\d/
 
   # A second dark-mode mechanism. The remap is the only one.
   @dark_variant ~r/\bdark:(?:hover:)?[a-z]/
@@ -93,30 +97,49 @@ defmodule Exoforge.Std.Dashboard.UiStandardTest do
            "emoji in studio chrome\n\n  " <> Enum.join(Enum.uniq(violations), "\n  ")
   end
 
+  # An emoji in an icon *data* field is identity — an extension's own manifest icon, a service's
+  # declared glyph, an architecture node's symbol. An emoji in markup is chrome and belongs to the
+  # icon set. That is the whole distinction; it needs no per-file exceptions.
+  @icon_data ~r/(?:icon:|Icon\s*=)/
+
   defp allowed_emoji?(path, line) do
-    basename = Path.basename(path)
-
-    cond do
-      # the presenter's whole job is extension identity icons
-      basename == "extension_presenter.ex" ->
-        true
-
-      # manifest-declared icons render on the extension's own card, where its glyph belongs
-      basename in ["dashboard.ex", "dashboard_views.ex"] and String.contains?(line, "icon: \"") ->
-        true
-
-      # extension-chosen icon handling: manifest / dashboard_view / service icons + fallbacks
+    # the presenter's whole job is extension identity icons
+    Path.basename(path) == "extension_presenter.ex" or
+      Regex.match?(@icon_data, line) or
       String.contains?(line, [
         "dashboard_view[",
         "|| \"🧩\"",
         "nodeIcon",
         "service, :icon",
         "raw_icon"
-      ]) ->
-        true
+      ])
+  end
 
-      true ->
-        false
+  # The three UI extensions are compile-independent, so the icon map is data copied three times.
+  # Copied data drifts; comparing the literals makes a divergence fail here instead of showing up
+  # as a missing icon in one surface.
+  test "the three copies of the icon set have not drifted" do
+    sets =
+      Enum.flat_map([@dashboard_lib, @views_lib, @docs_lib], fn dir ->
+        dir
+        |> Path.join("**/*.ex")
+        |> Path.wildcard()
+        |> Enum.flat_map(fn file ->
+          case Regex.run(~r/@icons %\{(.*?)\n  \}/s, File.read!(file)) do
+            [_, body] -> [{Path.basename(file), String.replace(body, ~r/\s+/, " ")}]
+            nil -> []
+          end
+        end)
+      end)
+
+    assert length(sets) == 3,
+           "expected three icon sets, found #{inspect(Enum.map(sets, &elem(&1, 0)))}"
+
+    [{first, reference} | rest] = sets
+
+    for {name, body} <- rest do
+      assert body == reference,
+             "#{name} icon set differs from #{first} — the copies must stay identical"
     end
   end
 

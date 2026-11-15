@@ -18,7 +18,7 @@ Sign in anonymously using device credentials or authenticate players with seamle
 
 ```csharp
 using UnityEngine;
-using Exoforge.SDK;
+using Exoforge.Client.Unity;
 
 public class GameInitializer : MonoBehaviour
 {
@@ -97,7 +97,7 @@ Whenever an extension action or schema changes, update your typed code contracts
 Click **Sync Client** in the Unity toolbar (or the Exoforge Studio menu). This queries live cluster contracts and generates `Assets/Exoforge/Generated/ExoforgeServices.g.cs`. Your Unity project immediately gains strongly-typed static accessors (`ExoServices.GameplayCalculator`) and client extensions (`ExoforgeSDK.Client.GameplayCalculator()`) for every action (both main-thread callbacks and async overloads) and typed models for every return record!
 
 ### Extension-to-Extension Stubs (Server)
-Run `exo extension stubs <name>` to generate typed client stubs for services declared in your extension's `manifest.json` dependencies, writing to `src/Generated/ExtensionServices.g.cs`.
+Run `exo extension stubs <name>` to generate typed client stubs for services declared in your extension's `manifest.json` dependencies, writing to `src/Generated/PluginServices.g.cs`.
 
 ---
 
