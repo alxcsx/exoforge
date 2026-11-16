@@ -47,7 +47,7 @@ public class HandshakeTests
         string written = Encoding.UTF8.GetString(output.ToArray());
         Assert.Contains("\"type\":\"hello\"", written);
         Assert.Contains("\"protocol\":1", written);
-        Assert.Contains("\"capabilities\":[\"action\",\"event\",\"host_call_result\"]", written);
+        Assert.Contains("\"capabilities\":[\"action\",\"event\",\"host_call_result\",\"lifecycle\"]", written);
     }
 
     [Fact]

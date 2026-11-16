@@ -1,9 +1,9 @@
 # M46: SDK, CLI & Cluster DX Hardening Plan
 
-> **Status**: Completed (Tracks A–F, H; Track G AllowPlayerRead shipped; Track G seed hook deferred)  
+> **Status**: Completed (Tracks A–H; `AllowPlayerRead` and `OnExtensionStart()` lifecycle hook shipped)  
 > **Created**: 2026-11-16  
 > **Scope**: Fixes and ergonomics improvements identified from real Unity SDK (`0.1.39`) + C# extension + cluster usage.  
-> **Result**: Unity SDK/CLI `0.1.40`; 432 Elixir + 128 C# unit tests green. The `[ExoSeed]` lifecycle hook is the only deferred item.
+> **Result**: Unity SDK `0.1.41` / CLI `0.1.40`; 436 Elixir + 132 C# unit tests green. The `OnExtensionStart()` lifecycle hook is implemented via the optional `lifecycle` frame.
 
 ---
 

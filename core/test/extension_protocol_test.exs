@@ -11,16 +11,38 @@ defmodule Exoforge.Drivers.Runtime.ExtensionProtocolTest do
              "type" => "hello",
              "protocol" => 1,
              "host" => "exoforge",
-             "capabilities" => ["action_result", "host_call", "host_log"]
+             "capabilities" => ["action_result", "host_call", "host_log", "lifecycle_result"]
            }
   end
 
   test "accepts an extension that speaks the protocol and handles what the host sends" do
-    assert {:ok, %{protocol: 1, capabilities: ["action", "event", "host_call_result"]}} =
+    assert {:ok, %{protocol: 1, capabilities: ["action", "event", "host_call_result"], lifecycle: false}} =
              ExtensionProtocol.accept_hello(%{
                "protocol" => 1,
                "capabilities" => ["action", "event", "host_call_result"]
              })
+  end
+
+  test "accepts the optional lifecycle capability without requiring it" do
+    assert {:ok, %{lifecycle: true}} =
+             ExtensionProtocol.accept_hello(%{
+               "protocol" => 1,
+               "capabilities" => ["action", "event", "host_call_result", "lifecycle"]
+             })
+  end
+
+  test "lifecycle frames carry an id and an explicit result" do
+    assert Jason.decode!(ExtensionProtocol.lifecycle_frame(7)) == %{"type" => "lifecycle", "id" => 7}
+
+    assert :ok = ExtensionProtocol.accept_lifecycle_result(%{"status" => "ok"})
+
+    assert {:error, %{code: "startup_failed", message: "boom"}} =
+             ExtensionProtocol.accept_lifecycle_result(%{
+               "status" => "error",
+               "error" => %{"code" => "startup_failed", "message" => "boom"}
+             })
+
+    assert {:error, %{code: "startup_failed"}} = ExtensionProtocol.accept_lifecycle_result(%{})
   end
 
   test "refuses an extension that speaks another protocol" do

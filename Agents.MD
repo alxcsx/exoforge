@@ -1,7 +1,7 @@
 # Exoforge Operating Manual (`Agents.MD`)
 
 > **Branch**: `projetao_mvp`  
-> **Status**: Kernel, 15 standard extensions, C# Client & Extension SDKs, C# Management Engine (`exo` CLI), Unity SDK (`com.exoforge.sdk` v0.1.40), Producer Studio and the extension runtime are **complete** — **432 Elixir + 128 C# = 560 unit tests passing**, plus a live E2E vertical slice of 6 tests and Unity headless self-check (`just sample-check`).  
+> **Status**: Kernel, 15 standard extensions, C# Client & Extension SDKs, C# Management Engine (`exo` CLI), Unity SDK (`com.exoforge.sdk` v0.1.41), Producer Studio and the extension runtime are **complete** — **436 Elixir + 132 C# = 568 unit tests passing**, plus a live E2E vertical slice of 6 tests and Unity headless self-check (`just sample-check`).  
 > **MVP Execution Plan**: Phase 0 (ADR 001) & Phase 1 (Extension Terminology Bulldozer) **Completed**.  
 > **Verified Benchmark**: 0.07 ms fanout to 50 event subscribers over `:pg` (in-memory cluster pub/sub bus).
 
@@ -202,11 +202,16 @@ newline-delimited JSON with a `type`:
 | `event` | host → extension | `event`, `payload` |
 | `host_call` / `host_call_result` | extension → host / back | `id`, `op`, `args` / `result` |
 | `host_log` | extension → host | `level`, `message` |
+| `lifecycle` / `lifecycle_result` | host → extension / back | `id` / `status`, `error` |
 
 Protocol `1`, handshake timeout five seconds. Capabilities are the frame types a side can
-*receive*: the host declares `action_result`, `host_call`, `host_log`; an extension must declare
-`action` and `event`. A protocol mismatch, a missing capability, or no answer at all is one log
-line and a refusal - never a retry.
+*receive*: the host declares `action_result`, `host_call`, `host_log`, `lifecycle_result`; an
+extension must declare `action` and `event`, and may declare `lifecycle`. An extension that
+declares `lifecycle` is asked to run its optional parameterless `OnExtensionStart()` hook (void or
+`Task`) once after the handshake; `lifecycle_result` reports `ok` or a structured error. An
+extension that does not declare it is never sent the frame, so protocol 1 stays compatible in both
+directions. A protocol mismatch, a missing capability, or no answer at all is one log line and a
+refusal - never a retry.
 
 **Inbound events**: the runner subscribes to the events an extension declares in its manifest (with their declared
 topic) and forwards them as `{"type":"event"}` frames. The extension handles them in an optional

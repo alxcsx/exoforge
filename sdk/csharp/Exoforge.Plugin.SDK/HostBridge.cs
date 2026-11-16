@@ -28,7 +28,7 @@ public static class HostBridge
 
     /// <summary>The frames this SDK can receive; declared to the host in the hello reply.</summary>
     public static readonly IReadOnlyList<string> PluginCapabilities =
-        new[] { "action", "event", "host_call_result" };
+        new[] { "action", "event", "host_call_result", "lifecycle" };
 
     private static int _hostProtocol;
     private static IReadOnlyList<string>? _hostCapabilities;

@@ -71,6 +71,34 @@ defmodule Exoforge.NativeExtensionRunnerTest do
   while IFS= read -r _line; do :; done
   """
 
+  @lifecycle_stub """
+  #!/usr/bin/env bash
+  while IFS= read -r line; do
+    id=$(printf '%s' "$line" | sed -n 's/.*"id":\\([0-9]*\\).*/\\1/p')
+    case "$line" in
+      *'"type":"hello"'*)
+        printf '{"type":"hello","protocol":1,"plugin":"stub_plugin","capabilities":["action","event","host_call_result","lifecycle"]}\\n' ;;
+      *'"type":"lifecycle"'*)
+        printf '{"type":"lifecycle_result","id":1,"status":"ok"}\\n' ;;
+      *'"action":"ping"'*)
+        printf '{"type":"action_result","id":%s,"status":"ok","data":42}\\n' "$id" ;;
+    esac
+  done
+  """
+
+  @lifecycle_error_stub """
+  #!/usr/bin/env bash
+  while IFS= read -r line; do
+    case "$line" in
+      *'"type":"hello"'*)
+        printf '{"type":"hello","protocol":1,"plugin":"stub_plugin","capabilities":["action","event","host_call_result","lifecycle"]}\\n' ;;
+      *'"type":"lifecycle"'*)
+        printf '{"type":"lifecycle_result","id":1,"status":"error","error":{"code":"startup_failed","message":"seed failed"}}\\n'
+        exit 0 ;;
+    esac
+  done
+  """
+
   setup do
     unless Process.whereis(Exoforge.ExtensionRegistry) do
       start_supervised!(Exoforge.ExtensionRegistry)
@@ -123,6 +151,14 @@ defmodule Exoforge.NativeExtensionRunnerTest do
     File.write!(path, body)
     File.chmod!(path, 0o755)
     path
+  end
+
+  defp wait_until(fun, attempts \\ 100) do
+    cond do
+      fun.() -> :ok
+      attempts == 0 -> flunk("condition did not become true")
+      true -> Process.sleep(10) && wait_until(fun, attempts - 1)
+    end
   end
 
   test "executes an action and returns its result", %{manifest: manifest, binary: binary} do
@@ -295,6 +331,24 @@ defmodule Exoforge.NativeExtensionRunnerTest do
     pid = start_runner(manifest, write_variant(manifest, @no_handshake), 100)
 
     assert_receive {:EXIT, ^pid, {:shutdown, {:extension_incompatible, :no_handshake}}}, 1_000
+  end
+
+  test "runs the optional startup hook before the first action", %{manifest: manifest} do
+    pid = start_runner(manifest, write_variant(manifest, @lifecycle_stub))
+    wait_until(fn -> :sys.get_state(pid).lifecycle == :ready end)
+
+    assert {:ok, 42} = GenServer.call(pid, {:execute_action, "ping", %{}}, 5_000)
+    GenServer.stop(pid)
+  end
+
+  test "a failed startup hook marks the extension crashed and stops it", %{manifest: manifest} do
+    Process.flag(:trap_exit, true)
+    pid = start_runner(manifest, write_variant(manifest, @lifecycle_error_stub))
+
+    assert_receive {:EXIT, ^pid, {:shutdown, {:startup_failed, "startup_failed"}}}, 1_000
+
+    assert {:crashed, {:startup_failed, %{code: "startup_failed", message: "seed failed"}}} =
+             Exoforge.ExtensionRegistry.get_crash_info(manifest.id)
   end
 
   test "fails loudly when the binary is missing", %{manifest: manifest} do

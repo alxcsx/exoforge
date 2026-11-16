@@ -62,8 +62,12 @@ public static class PluginHost
     private static long _nextHostCallId;
     private static object? _instance;
     private static MethodInfo? _eventHandler;
+    private static MethodInfo? _startupHandler;
     private static IExoforgeDispatch? _dispatch;
     private static IPluginContext? _currentContext;
+    private static bool _lifecycleComplete;
+    private static string? _lifecycleCode;
+    private static string? _lifecycleMessage;
 
     /// <summary>The ambient plugin context for the currently executing plugin.</summary>
     public static IPluginContext CurrentContext
@@ -181,6 +185,9 @@ public static class PluginHost
         _nextHostCallId = 0;
         _instance = instance;
         _dispatch = dispatch;
+        _lifecycleComplete = false;
+        _lifecycleCode = null;
+        _lifecycleMessage = null;
         var pluginType = instance.GetType();
 
         CurrentContext = new HostPluginContext(ResolvePluginId(pluginType));
@@ -189,6 +196,7 @@ public static class PluginHost
         // A generated table needs no reflection. The reflection path stays as the fallback for a
         // plugin that has not been through the generator - including this SDK's own tests.
         _eventHandler = dispatch is null ? FindEventHandler(pluginType) : null;
+        _startupHandler = FindStartupHandler(pluginType);
         var actions = dispatch is null ? BuildActionTable(pluginType) : null;
 
         while (true)
@@ -209,6 +217,10 @@ public static class PluginHost
             if (IsFrameOfType(line, "hello"))
             {
                 HandleHello(line);
+            }
+            else if (IsFrameOfType(line, "lifecycle"))
+            {
+                HandleLifecycle(line);
             }
             else if (IsEventFrame(line))
             {
@@ -315,6 +327,93 @@ public static class PluginHost
         }
 
         return capabilities;
+    }
+
+    /// <summary>
+    /// Finds the optional <c>OnExtensionStart()</c> hook: a parameterless instance or static method
+    /// returning <c>void</c> or <c>Task</c>. No attribute and no generated table are required.
+    /// </summary>
+    [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = "Run<T> roots PublicMethods/NonPublicMethods on the plugin type.")]
+    private static MethodInfo? FindStartupHandler(Type pluginType)
+    {
+        const BindingFlags flags =
+            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
+
+        foreach (var method in pluginType.GetMethods(flags))
+        {
+            if (method.Name != "OnExtensionStart") continue;
+            if (method.GetParameters().Length != 0) continue;
+
+            Type returnType = method.ReturnType;
+            if (returnType == typeof(void) || typeof(Task).IsAssignableFrom(returnType))
+            {
+                return method;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Runs the optional startup hook exactly once per process and answers the host explicitly.
+    /// A duplicate frame re-sends the cached result instead of running the hook again.
+    /// </summary>
+    private static void HandleLifecycle(string line)
+    {
+        long id = 0;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(line);
+            if (doc.RootElement.TryGetProperty("id", out var idProp) && idProp.ValueKind == JsonValueKind.Number)
+            {
+                id = idProp.GetInt64();
+            }
+        }
+        catch (JsonException)
+        {
+            // The host sent a malformed lifecycle frame; answer with id 0 below.
+        }
+
+        if (_lifecycleComplete)
+        {
+            Write(LifecycleResponse(id));
+            return;
+        }
+
+        _lifecycleComplete = true;
+
+        try
+        {
+            if (_startupHandler != null)
+            {
+                object? target = _startupHandler.IsStatic ? null : _instance;
+                object? result = _startupHandler.Invoke(target, null);
+                AwaitResult(result);
+            }
+
+            _lifecycleCode = null;
+            _lifecycleMessage = null;
+        }
+        catch (Exception ex)
+        {
+            Exception cause = Cause(ex);
+            WriteHostLog(3, cause.ToString());
+            _lifecycleCode = cause is ExoActionException actionEx ? actionEx.Code : "startup_failed";
+            _lifecycleMessage = cause.Message;
+        }
+
+        Write(LifecycleResponse(id));
+    }
+
+    private static string LifecycleResponse(long id)
+    {
+        if (_lifecycleCode == null)
+        {
+            return $"{{\"type\":\"lifecycle_result\",\"id\":{id},\"status\":\"ok\"}}";
+        }
+
+        return $"{{\"type\":\"lifecycle_result\",\"id\":{id},\"status\":\"error\",\"error\":{{\"code\":{JsonEncode(_lifecycleCode)},\"message\":{JsonEncode(_lifecycleMessage ?? "")}}}}}";
     }
 
     /// <summary>Dispatches an inbound host event to the plugin's <c>OnEvent</c> handler.</summary>

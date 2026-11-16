@@ -16,12 +16,21 @@ defmodule Exoforge.Drivers.Runtime.ExtensionProtocol do
       host      -> extension {"type":"host_call_result","id":7,"result":true}
       extension -> host      {"type":"host_log","level":3,"message":"..."}
       host      -> extension {"type":"event","event":"value_changed","payload":{...}}
+      host      -> extension {"type":"lifecycle","id":1}
+      extension -> host      {"type":"lifecycle_result","id":1,"status":"ok"}
+
+  The lifecycle frame is optional and additive: an extension that declares the `lifecycle`
+  capability is asked to run its `OnExtensionStart` hook after the handshake. An extension that
+  does not declare it is never sent the frame, so protocol 1 remains compatible in both
+  directions.
   """
 
   @protocol 1
-  @host_capabilities ~w(action_result host_call host_log)
+  @host_capabilities ~w(action_result host_call host_log lifecycle_result)
   @extension_capabilities ~w(action event)
+  @optional_extension_capabilities ~w(lifecycle)
   @handshake_timeout_ms 5_000
+  @lifecycle_timeout_ms 10_000
 
   @doc "The protocol version this host speaks."
   def protocol, do: @protocol
@@ -32,8 +41,14 @@ defmodule Exoforge.Drivers.Runtime.ExtensionProtocol do
   @doc "The frame types an extension must be able to receive for the host to run it."
   def extension_capabilities, do: @extension_capabilities
 
+  @doc "The optional frames an extension may declare it can receive."
+  def optional_extension_capabilities, do: @optional_extension_capabilities
+
   @doc "How long an extension has to answer the hello before it is refused."
   def handshake_timeout_ms, do: @handshake_timeout_ms
+
+  @doc "How long an extension has to finish its optional startup hook."
+  def lifecycle_timeout_ms, do: @lifecycle_timeout_ms
 
   @doc "The host's opening frame, ready to write to the port as one line."
   def hello_frame do
@@ -56,9 +71,19 @@ defmodule Exoforge.Drivers.Runtime.ExtensionProtocol do
     missing = @extension_capabilities -- capabilities
 
     cond do
-      protocol != @protocol -> {:refuse, {:protocol_mismatch, protocol}}
-      missing != [] -> {:refuse, {:missing_capabilities, missing}}
-      true -> {:ok, %{protocol: protocol, capabilities: capabilities}}
+      protocol != @protocol ->
+        {:refuse, {:protocol_mismatch, protocol}}
+
+      missing != [] ->
+        {:refuse, {:missing_capabilities, missing}}
+
+      true ->
+        {:ok,
+         %{
+           protocol: protocol,
+           capabilities: capabilities,
+           lifecycle: "lifecycle" in capabilities
+         }}
     end
   end
 
@@ -69,6 +94,33 @@ defmodule Exoforge.Drivers.Runtime.ExtensionProtocol do
   def accept_hello(msg) when is_map(msg) do
     {:refuse, {:protocol_mismatch, Map.get(msg, "protocol")}}
   end
+
+  @doc "The host's request to run the extension's startup hook."
+  def lifecycle_frame(id \\ 1) do
+    Jason.encode!(%{type: "lifecycle", id: id})
+  end
+
+  @doc """
+  Validates an extension's lifecycle result.
+
+  Returns `:ok` or `{:error, %{code: ..., message: ...}}`. A malformed frame is an error, not a
+  success: the host must not consider a half-started extension ready.
+  """
+  def accept_lifecycle_result(%{"status" => "ok"}), do: :ok
+
+  def accept_lifecycle_result(%{"status" => "error", "error" => %{} = error}) do
+    {:error,
+     %{
+       code: to_string(Map.get(error, "code", "startup_failed")),
+       message: to_string(Map.get(error, "message", "extension startup failed"))
+     }}
+  end
+
+  def accept_lifecycle_result(%{"status" => "error", "error" => error}) do
+    {:error, %{code: "startup_failed", message: to_string(error)}}
+  end
+
+  def accept_lifecycle_result(_), do: {:error, %{code: "startup_failed", message: "invalid lifecycle_result"}}
 
   @doc "A refusal reason as a sentence a developer can act on."
   def refusal({:protocol_mismatch, version}),

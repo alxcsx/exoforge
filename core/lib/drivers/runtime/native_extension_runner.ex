@@ -206,6 +206,8 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
        current_context: nil,
        handshake: nil,
        handshake_timer: handshake_timer,
+       lifecycle: nil,
+       lifecycle_timer: nil,
        worker_idx: idx,
        stderr_path: stderr_path
      }}
@@ -220,6 +222,16 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
       end
 
     {:reply, os_pid, state}
+  end
+
+  # An extension that is still running its startup hook is not ready for gameplay. Refuse the
+  # action instead of racing the hook; the caller can retry after the extension reports ready.
+  def handle_call({:execute_action, _action, _payload}, _from, %{lifecycle: :pending} = state) do
+    {:reply, {:error, {:extension_starting, state.manifest.id}}, state}
+  end
+
+  def handle_call({:execute_action, _action, _payload, _context}, _from, %{lifecycle: :pending} = state) do
+    {:reply, {:error, {:extension_starting, state.manifest.id}}, state}
   end
 
   def handle_call({:execute_action, action, payload}, from, state) do
@@ -304,6 +316,12 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
   def handle_info(:handshake_timeout, %{handshake: nil} = state), do: refuse(state, :no_handshake)
   def handle_info(:handshake_timeout, state), do: {:noreply, state}
 
+  def handle_info(:lifecycle_timeout, %{lifecycle: :pending} = state) do
+    fail_lifecycle(state, "timeout", "the startup hook did not finish")
+  end
+
+  def handle_info(:lifecycle_timeout, state), do: {:noreply, state}
+
   def handle_info(:sample_os, state) do
     case Port.info(state.port, :os_pid) do
       {:os_pid, os_pid} -> Exoforge.Metering.sample_os(state.manifest.id, os_pid)
@@ -318,6 +336,7 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
 
   @impl true
   def terminate(_reason, state) do
+    if timer = Map.get(state, :lifecycle_timer), do: Process.cancel_timer(timer)
     port = Map.get(state, :port)
 
     if port do
@@ -409,6 +428,9 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
         log_from_extension(msg, state)
         state
 
+      {:ok, %{"type" => "lifecycle_result"} = msg} ->
+        handle_lifecycle_result(msg, state)
+
       {:ok, _other} ->
         state
 
@@ -434,11 +456,55 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
             "(#{Enum.join(handshake.capabilities, ", ")})"
         )
 
-        %{state | handshake: handshake, handshake_timer: nil}
+        state
+        |> Map.put(:handshake, handshake)
+        |> Map.put(:handshake_timer, nil)
+        |> start_lifecycle()
 
       {:refuse, reason} ->
         refuse(state, reason)
     end
+  end
+
+  # Optional and negotiated: only an extension that declared `lifecycle` receives the frame.
+  # Extensions that did not declare it keep the pre-hook behavior and are immediately ready.
+  defp start_lifecycle(%{handshake: %{lifecycle: true}} = state) do
+    Port.command(state.port, ExtensionProtocol.lifecycle_frame() <> "\n")
+    timer = Process.send_after(self(), :lifecycle_timeout, ExtensionProtocol.lifecycle_timeout_ms())
+    %{state | lifecycle: :pending, lifecycle_timer: timer}
+  end
+
+  defp start_lifecycle(state), do: %{state | lifecycle: :ready}
+
+  defp handle_lifecycle_result(_msg, %{lifecycle: lifecycle} = state) when lifecycle != :pending do
+    state
+  end
+
+  defp handle_lifecycle_result(msg, state) do
+    if state.lifecycle_timer, do: Process.cancel_timer(state.lifecycle_timer)
+
+    case ExtensionProtocol.accept_lifecycle_result(msg) do
+      :ok ->
+        %{state | lifecycle: :ready, lifecycle_timer: nil}
+
+      {:error, %{code: code, message: message}} ->
+        fail_lifecycle(state, code, message)
+    end
+  end
+
+  defp fail_lifecycle(state, code, message) do
+    Logger.error(
+      "[NativeExtensionRunner] #{state.manifest.id} failed its startup hook (#{code}): #{message}. " <>
+        "The extension has been marked as crashed; fix OnExtensionStart and redeploy."
+    )
+
+    ExtensionRegistry.mark_crashed(state.manifest.id, {:startup_failed, %{code: code, message: message}})
+
+    Enum.each(state.pending, fn {_id, entry} ->
+      GenServer.reply(entry.from, {:error, {:extension_crashed, {:startup_failed, code}}})
+    end)
+
+    {:stop, {:shutdown, {:startup_failed, code}}, %{state | pending: %{}, lifecycle: {:error, code}}}
   end
 
   defp refuse(state, reason) do
