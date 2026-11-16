@@ -1,0 +1,1870 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EXOFORGE — Você descreve a sua ideia. Nós forjamos o resto.</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --exo-bg: #141417; --exo-surface-muted: #18181d; --exo-surface-subtle: #1e1e24; --exo-surface: #262630; --exo-surface-elevated: #2e2e3a;
+      --exo-header-bg: rgba(24, 24, 29, 0.94); --exo-border: #2e2e38; --exo-border-subtle: #24242c; --exo-border-strong: #3a3a46;
+      --exo-primary-50: rgba(139, 92, 246, 0.12); --exo-primary-100: rgba(139, 92, 246, 0.2); --exo-primary: #8b5cf6; --exo-primary-hover: #7c3aed;
+      --exo-status-healthy: #10b981; --exo-status-healthy-bg: rgba(16, 185, 129, 0.14);
+      --exo-status-warning: #f59e0b; --exo-status-warning-bg: rgba(245, 158, 11, 0.14);
+      --exo-status-error: #ef4444; --exo-status-error-bg: rgba(239, 68, 68, 0.14);
+      --exo-info: #3b82f6; --exo-info-bg: rgba(59, 130, 246, 0.15);
+      --exo-text: #f3f4f6; --exo-text-muted: #9ca3af; --exo-text-subtle: #6b7280;
+      --exo-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
+      --exo-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --exo-radius-sm: 0.25rem; --exo-radius-md: 0.375rem; --exo-radius-lg: 0.5rem; --exo-radius-xl: 0.75rem;
+      --exo-ease: cubic-bezier(0.16, 1, 0.3, 1);
+      --exo-shadow-md: 0 6px 16px -2px rgba(0,0,0,0.45), 0 2px 6px -1px rgba(0,0,0,0.3);
+      --exo-shadow-card: 0 4px 14px -2px rgba(0,0,0,0.35), 0 1px 3px 0 rgba(0,0,0,0.25);
+      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #0d0d10; color: var(--exo-text); font-family: var(--exo-font); line-height: 1.5; }
+    .tabular { font-variant-numeric: tabular-nums; }
+    .deck-viewport { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+    .stage { width: 1280px; height: 720px; padding: 22px 34px 62px; background: var(--exo-bg); border: 1px solid var(--exo-border-subtle); position: relative; transform-origin: center center; overflow: hidden; box-shadow: 0 24px 72px rgba(0,0,0,0.65); }
+    body.export-mode .stage { border: none; box-shadow: none; padding: 22px 34px 50px; }
+    .slides-root { position: relative; width: 1212px; height: 636px; }
+
+    /* Slide Engine */
+    .slide { position: absolute; inset: 0; opacity: 0; pointer-events: none; transform: translateX(18px); transition-property: opacity, transform; transition-duration: 320ms; transition-timing-function: var(--exo-ease); }
+    .slide.active { opacity: 1; pointer-events: auto; transform: translateX(0); }
+    .slide-header { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid var(--exo-border); min-height: 50px; }
+    .slide-category { display: block; font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--exo-primary); line-height: 1.2; margin-bottom: 2px; }
+    .slide-title { font-size: 1.4375rem; font-weight: 600; color: var(--exo-text); line-height: 1.15; letter-spacing: -0.015em; }
+    .slide-step-pill { font-size: 0.75rem; font-weight: 500; color: var(--exo-text-muted); background: var(--exo-surface-subtle); border: 1px solid var(--exo-border); padding: 4px 10px; border-radius: 9999px; line-height: 1.25; }
+
+    /* Step Visibility & Highlighting */
+    [data-show-from] { opacity: 0; transform: translateY(10px); pointer-events: none; transition-property: opacity, transform, border-color, background-color, box-shadow; transition-duration: 280ms; transition-timing-function: var(--exo-ease); }
+    .slide[data-current-step="1"] [data-show-from="1"],
+    .slide[data-current-step="2"] :is([data-show-from="1"], [data-show-from="2"]),
+    .slide[data-current-step="3"] :is([data-show-from="1"], [data-show-from="2"], [data-show-from="3"]),
+    .slide[data-current-step="4"] :is([data-show-from="1"], [data-show-from="2"], [data-show-from="3"], [data-show-from="4"]),
+    .slide[data-current-step="5"] [data-show-from] { opacity: 1; transform: translateY(0); pointer-events: auto; }
+
+    [data-highlight-on] { transition-property: border-color, background-color, box-shadow; transition-duration: 250ms; transition-timing-function: var(--exo-ease); }
+    .slide[data-current-step="0"] [data-highlight-on="0"],
+    .slide[data-current-step="1"] [data-highlight-on="1"] { border-color: var(--exo-primary); box-shadow: 0 0 20px rgba(139,92,246,0.35); background: var(--exo-surface-elevated); }
+    .slide[data-current-step="2"] [data-highlight-on="2"],
+    .slide[data-current-step="3"] [data-highlight-on="3"] { border-color: var(--exo-status-healthy); box-shadow: 0 0 20px rgba(16,185,129,0.35); background: var(--exo-surface-elevated); }
+
+    /* Badges & Elements */
+    .persona-frame { border-radius: var(--exo-radius-xl); border: 1px solid var(--exo-border); overflow: hidden; background: var(--exo-surface-subtle); box-shadow: 0 0 0 1px rgba(255,255,255,0.05), var(--exo-shadow-card); }
+    .persona-frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .badge-pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 9999px; font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; line-height: 1.2; }
+    .badge-pill.violet { background: var(--exo-primary-50); border: 1px solid var(--exo-primary); color: #ddd6fe; }
+    .badge-pill.emerald { background: var(--exo-status-healthy-bg); border: 1px solid var(--exo-status-healthy); color: #6ee7b7; }
+    .badge-pill.amber { background: var(--exo-status-warning-bg); border: 1px solid var(--exo-status-warning); color: #fde68a; }
+    .badge-pill.rose { background: var(--exo-status-error-bg); border: 1px solid var(--exo-status-error); color: #fca5a5; }
+    .badge-pill.blue { background: var(--exo-info-bg); border: 1px solid var(--exo-info); color: #93c5fd; }
+    .badge-pill.org { background: rgba(249, 115, 22, 0.15); border: 1px solid #f97316; color: #fb923c; }
+    .tool-pill { display: inline-flex; align-items: center; padding: 2px 7px; border-radius: var(--exo-radius-sm); font-size: 0.6875rem; font-family: var(--exo-font-mono); background: var(--exo-surface-subtle); border: 1px solid var(--exo-border-strong); color: #d1d5db; }
+
+    /* Slide 0 Layout Components */
+    .s0-grid { display: grid; grid-template-columns: 440px 1fr; gap: 20px; height: 554px; }
+    .s0-card-persona { background: var(--exo-surface-muted); border: 1px solid var(--exo-border); border-radius: var(--exo-radius-xl); padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .s0-img-box { flex: 1; height: 390px; border-radius: var(--exo-radius-lg); overflow: hidden; border: 1px solid var(--exo-border); }
+    .s0-persona-info { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: var(--exo-surface-subtle); border: 1px solid var(--exo-border); border-radius: var(--exo-radius-md); }
+    .s0-col-right { display: flex; flex-direction: column; gap: 14px; height: 554px; }
+    .s0-feature-card { background: var(--exo-surface); border: 1.5px solid #38bdf8; border-radius: var(--exo-radius-xl); padding: 16px 18px; display: flex; flex-direction: column; justify-content: space-between; height: 260px; box-shadow: var(--exo-shadow-card); }
+    .s0-dev-card { flex: 1; background: var(--exo-surface-muted); border: 1.5px solid var(--exo-status-healthy); border-radius: var(--exo-radius-xl); padding: 16px 18px; display: flex; flex-direction: column; justify-content: space-between; }
+    .s0-dev-title { font-size: 0.75rem; font-weight: 800; color: #34d399; letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 4px; }
+    .s0-flow-nodes { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 4px 0; }
+    .s0-flow-node { flex: 1; background: #18181d; border: 1px solid var(--exo-border); border-radius: var(--exo-radius-md); padding: 8px 10px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+    .s0-feature-card .s0-flow-node { border-color: rgba(56, 189, 248, 0.4); }
+    .s0-dev-card .s0-flow-node { border-color: var(--exo-border); }
+    .s0-flow-arrow { color: #38bdf8; font-weight: 800; font-size: 1.15rem; flex-shrink: 0; line-height: 1; }
+    .s0-flow-arrow.emerald { color: #10b981; }
+
+    /* Slide 1 Flowchart */
+    .s2-grid { display: grid; grid-template-columns: 380px 1fr; gap: 20px; height: 554px; }
+    .s2-col-left { background: var(--exo-surface-muted); border: 1px solid var(--exo-border); border-radius: var(--exo-radius-xl); padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+    .s2-img-box { flex: 1; border-radius: var(--exo-radius-lg); overflow: hidden; border: 1px solid var(--exo-border); }
+    .s2-flow-board { background: var(--exo-surface-muted); border: 1px solid var(--exo-border); border-radius: var(--exo-radius-xl); padding: 16px 22px; display: flex; flex-direction: column; justify-content: space-between; position: relative; }
+    .s2-flow-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--exo-border); padding-bottom: 10px; }
+    .s2-flow-canvas { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; padding: 6px 0; }
+    .flow-node { background: var(--exo-surface); border: 1.5px solid var(--exo-border-strong); border-radius: var(--exo-radius-lg); padding: 10px 18px; text-align: center; min-width: 280px; box-shadow: var(--exo-shadow-card); }
+    .flow-node.start { border-color: var(--exo-primary); box-shadow: 0 0 18px rgba(139,92,246,0.22); }
+    .flow-node.decision { border-color: var(--exo-status-warning); background: rgba(245,158,11,0.08); min-width: 250px; }
+    .flow-node.reject { border-color: var(--exo-status-error); background: rgba(239,68,68,0.1); min-width: 195px; padding: 9px 14px; }
+    .flow-node.action { border-color: var(--exo-status-healthy); background: rgba(16,185,129,0.08); min-width: 320px; box-shadow: 0 0 18px rgba(16,185,129,0.2); }
+    .flow-branch-row { display: flex; align-items: center; justify-content: center; gap: 10px; }
+    .flow-h-conn { display: flex; align-items: center; gap: 4px; color: #fca5a5; font-size: 0.6875rem; font-weight: 700; }
+    .flow-v-conn { display: flex; flex-direction: column; align-items: center; gap: 2px; height: 28px; justify-content: center; font-size: 0.6875rem; font-weight: 700; }
+    .flow-split-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; width: 100%; max-width: 520px; }
+    .flow-leaf { background: var(--exo-surface); border: 1.5px solid var(--exo-status-healthy); border-radius: var(--exo-radius-md); padding: 9px 12px; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.8125rem; font-weight: 600; color: #6ee7b7; }
+    .s2-flow-footer { background: var(--exo-surface-subtle); border: 1px solid var(--exo-border); border-radius: var(--exo-radius-md); padding: 8px 14px; display: flex; align-items: center; justify-content: space-between; font-size: 0.75rem; color: #6ee7b7; font-weight: 600; }
+
+    /* Slide 2 4-Papéis */
+    .s1-container { display: flex; flex-direction: column; gap: 12px; height: 554px; }
+    .s1-timeline { display: flex; align-items: center; justify-content: space-between; background: var(--exo-surface-subtle); border: 1px solid var(--exo-border); border-radius: var(--exo-radius-md); padding: 8px 16px; font-size: 0.75rem; line-height: 1.25; }
+    .s1-track { height: 6px; background: var(--exo-surface); border-radius: 9999px; margin: 0 14px; flex: 1; overflow: hidden; }
+    .s1-bar { height: 100%; width: 0%; transition-property: width, background-color; transition-duration: 320ms; transition-timing-function: var(--exo-ease); }
+    .slide[data-current-step="0"] .s1-bar { width: 0%; background: var(--exo-status-warning); }
+    .slide[data-current-step="1"] .s1-bar { width: 25%; background: var(--exo-status-warning); }
+    .slide[data-current-step="2"] .s1-bar { width: 50%; background: #f97316; }
+    .slide[data-current-step="3"] .s1-bar { width: 75%; background: #ea580c; }
+    .slide[data-current-step="4"] .s1-bar { width: 100%; background: var(--exo-status-error); }
+    .s1-tl-label { display: none; }
+    .slide[data-current-step="0"] .s1-tl-0, .slide[data-current-step="1"] .s1-tl-1, .slide[data-current-step="2"] .s1-tl-2,
+    .slide[data-current-step="3"] .s1-tl-3, .slide[data-current-step="4"] .s1-tl-4 { display: inline; }
+    .s1-anchor-card { display: flex; align-items: center; gap: 16px; background: var(--exo-surface-muted); border: 1px solid var(--exo-border); border-radius: var(--exo-radius-xl); padding: 10px 18px; }
+    .s1-grid-hats { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 12px; flex: 1; }
+    .s1-hat-card { background: var(--exo-surface); border: 1px solid var(--exo-border); border-radius: var(--exo-radius-lg); padding: 12px 14px; display: flex; flex-direction: column; justify-content: space-between; gap: 6px; }
+    .code-micro { background: #0f0f13; border: 1px solid var(--exo-border-subtle); border-radius: var(--exo-radius-sm); padding: 6px 9px; font-family: var(--exo-font-mono); font-size: 0.6875rem; line-height: 1.4; color: #cbd5e1; white-space: pre; overflow: hidden; }
+    .tok-kw { color: #fbbf24; font-weight: 600; }
+    .tok-purple { color: #c084fc; font-weight: 600; }
+    .tok-sky { color: #38bdf8; }
+    .tok-em { color: #34d399; }
+    .tok-rose { color: #fb7185; font-weight: 600; }
+    .tok-org { color: #fb923c; font-weight: 600; }
+    .tok-str { color: #fde68a; }
+    .tok-muted { color: #9ca3af; }
+
+    /* Slide 3 (O Custo Real) */
+    .s3-cost-grid { display: grid; grid-template-columns: 440px 1fr; gap: 20px; height: 554px; }
+    .s3-cost-left { display: flex; flex-direction: column; gap: 14px; height: 554px; }
+    .s3-cost-portrait { height: 210px; border-radius: var(--exo-radius-xl); overflow: hidden; border: 1.5px solid var(--exo-status-error); }
+    .s3-cost-breakdown { flex: 1; background: var(--exo-surface-muted); border: 1.5px solid var(--exo-status-error); border-radius: var(--exo-radius-xl); padding: 14px 16px; display: flex; flex-direction: column; justify-content: space-between; }
+    .s3-cost-row { display: flex; align-items: center; justify-content: space-between; background: var(--exo-surface-subtle); border: 1px solid var(--exo-border); border-radius: var(--exo-radius-md); padding: 7px 11px; }
+    .s3-cost-total-row { background: var(--exo-status-error-bg); border: 1.5px solid var(--exo-status-error); border-radius: var(--exo-radius-md); padding: 9px 12px; display: flex; align-items: center; gap: 8px; font-weight: 800; color: #fca5a5; font-size: 0.75rem; }
+
+    .s3-cost-right { background: var(--exo-surface-muted); border: 1.5px solid var(--exo-status-error); border-radius: var(--exo-radius-xl); padding: 16px 20px; display: flex; flex-direction: column; justify-content: space-between; height: 554px; }
+    .s3-prop-track { height: 34px; background: var(--exo-surface); border-radius: var(--exo-radius-md); overflow: hidden; display: flex; border: 1px solid var(--exo-border); }
+    .s3-prop-green { width: 10%; background: #10b981; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.75rem; color: #fff; }
+    .s3-prop-red { width: 90%; background: #ef4444; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.75rem; color: #fff; }
+    .s3-evidence-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 10px 0; flex: 1; }
+    .s3-evidence-card { background: var(--exo-surface-subtle); border-radius: var(--exo-radius-lg); padding: 16px 18px; display: flex; flex-direction: column; justify-content: space-between; text-decoration: none; transition-property: border-color, background-color; transition-duration: 150ms; }
+    .s3-evidence-card.blue { border: 1px solid rgba(56, 189, 248, 0.65); }
+    .s3-evidence-card.blue:hover { border-color: #38bdf8; background: var(--exo-surface); }
+    .s3-evidence-card.purple { border: 1px solid rgba(139, 92, 246, 0.65); }
+    .s3-evidence-card.purple:hover { border-color: var(--exo-primary); background: var(--exo-surface); }
+    .s3-synthesis-strip { background: var(--exo-surface-subtle); border: 1px solid rgba(239, 68, 68, 0.5); border-radius: var(--exo-radius-md); padding: 10px 14px; display: flex; align-items: center; gap: 10px; font-size: 0.75rem; font-weight: 700; color: #fca5a5; }
+
+    /* Unity Editor Full Window (Slides 4 & 5) */
+    .unity-shell { width: 1212px; height: 554px; background: #18181d; border: 1.5px solid var(--exo-border-strong); border-radius: var(--exo-radius-xl); display: flex; flex-direction: column; overflow: hidden; position: relative; box-shadow: var(--exo-shadow-card); }
+    .unity-topbar { height: 36px; background: #202026; border-bottom: 1px solid var(--exo-border); display: flex; align-items: center; justify-content: space-between; padding: 0 14px; flex-shrink: 0; }
+    .unity-dots { display: flex; gap: 6px; align-items: center; }
+    .unity-dot { width: 9px; height: 9px; border-radius: 50%; }
+    .unity-dot.red { background: #ef4444; }
+    .unity-dot.yellow { background: #fbbf24; }
+    .unity-dot.green { background: #10b981; }
+    .unity-title { font-size: 0.75rem; font-weight: 700; color: #f3f4f6; margin-left: 10px; }
+    .unity-play-controls { display: flex; align-items: center; gap: 8px; background: #262630; border: 1px solid #3a3a46; border-radius: 6px; padding: 2px 8px; }
+    .unity-play-btn { width: 24px; height: 18px; background: rgba(56, 189, 248, 0.2); border: 1px solid #38bdf8; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #38bdf8; font-size: 0.625rem; }
+    .unity-pause-btn, .unity-step-btn { color: #9ca3af; font-size: 0.625rem; display: flex; align-items: center; justify-content: center; }
+    .unity-topbar-right { display: flex; align-items: center; gap: 8px; }
+    .unity-pill-layers { background: #22222b; border: 1px solid #3a3a46; border-radius: 4px; padding: 2px 10px; font-size: 0.625rem; font-weight: 600; color: #9ca3af; }
+    .unity-pill-layout { background: #22222b; border: 1px solid #8b5cf6; border-radius: 4px; padding: 2px 10px; font-size: 0.625rem; font-weight: 700; color: #ddd6fe; }
+
+    /* Unity Workspace Layout */
+    .unity-body { flex: 1; display: grid; grid-template-columns: 730px 1fr; gap: 12px; padding: 10px 12px; height: 518px; box-sizing: border-box; min-height: 0; }
+    .unity-left-pane { display: flex; flex-direction: column; gap: 10px; height: 100%; min-height: 0; }
+    .unity-top-row { display: grid; grid-template-columns: 195px 1fr; gap: 10px; height: 356px; min-height: 0; }
+
+    /* Hierarchy */
+    .unity-hierarchy { background: #141417; border: 1px solid var(--exo-border); border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; }
+    .unity-panel-header { background: #1e1e24; border-bottom: 1px solid var(--exo-border); padding: 5px 10px; font-size: 0.625rem; font-weight: 700; color: #9ca3af; letter-spacing: 0.5px; text-transform: uppercase; }
+    .unity-hierarchy-tree { padding: 8px 10px; display: flex; flex-direction: column; gap: 5px; flex: 1; font-size: 0.6875rem; }
+    .unity-hierarchy-badge { background: #18181d; border-top: 1px solid #262632; padding: 6px 8px; font-size: 0.625rem; color: #9ca3af; text-align: center; }
+
+    /* Game View Mockup */
+    .unity-gameview { background: #181820; border: 1px solid var(--exo-border); border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; }
+    .unity-tabs-bar { background: #141417; border-bottom: 1px solid var(--exo-border); padding: 4px 8px; display: flex; align-items: center; justify-content: space-between; }
+    .unity-game-canvas { flex: 1; background: #0f1219; border: 1px solid #222838; border-radius: 6px; margin: 6px; padding: 8px 12px; display: flex; flex-direction: column; justify-content: space-between; }
+    .rpg-top-hud { background: #161c2c; border: 1px solid #283248; border-radius: 6px; padding: 4px 10px; display: flex; align-items: center; justify-content: space-between; }
+    .rpg-shop-card { background: #151b2a; border: 1.5px solid #eab308; border-radius: 8px; padding: 8px 14px; display: flex; flex-direction: column; align-items: center; gap: 4px; box-shadow: 0 0 16px rgba(234, 179, 8, 0.15); }
+    .rpg-buy-btn { background: linear-gradient(180deg, #10b981 0%, #059669 100%); border: 2px solid #34d399; border-radius: 6px; padding: 6px 16px; font-size: 0.8125rem; font-weight: 800; color: #ffffff; letter-spacing: 0.5px; box-shadow: 0 0 14px rgba(16,185,129,0.35); text-align: center; width: 85%; }
+
+    /* Project / Assets Bottom Row */
+    .unity-bottom-row { height: 132px; background: #141417; border: 1px solid var(--exo-border); border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
+    .unity-project-body { padding: 6px 10px; display: flex; gap: 12px; align-items: center; flex: 1; }
+    .unity-exo-folder-card { flex: 1; background: rgba(139, 92, 246, 0.12); border: 1.5px solid #8b5cf6; border-radius: 6px; padding: 6px 10px; display: flex; flex-direction: column; justify-content: space-between; height: 100%; }
+
+    /* Right Column: Exoforge Studio */
+    .unity-studio-pane { background: #1e1e24; border: 1px solid var(--exo-border); border-radius: 8px; display: flex; flex-direction: column; justify-content: space-between; padding: 10px 12px; height: 100%; box-sizing: border-box; }
+    .unity-ext-card { background: #18181d; border: 1px solid var(--exo-border); border-radius: 6px; padding: 6px 10px; display: flex; align-items: center; justify-content: space-between; }
+    .unity-btn-new-ext-highlight { width: 100%; background: #7c3aed; border: 2px solid #c084fc; border-radius: 6px; padding: 8px; font-size: 0.8125rem; font-weight: 800; color: #ffffff; display: flex; align-items: center; justify-content: center; gap: 6px; box-shadow: 0 0 16px rgba(124,58,237,0.5); outline: 2px dashed #10b981; outline-offset: 2px; cursor: pointer; }
+    .unity-btn-new-ext-plain { width: 100%; background: #6d28d9; border: 1.5px solid #8b5cf6; border-radius: 6px; padding: 8px; font-size: 0.8125rem; font-weight: 800; color: #ffffff; display: flex; align-items: center; justify-content: center; gap: 6px; }
+
+    /* Floating Toasts for Slide 4 */
+    .unity-toast { background: rgba(20, 20, 23, 0.95); border-radius: 6px; padding: 7px 10px; display: flex; align-items: center; gap: 10px; box-shadow: 0 4px 14px rgba(0,0,0,0.4); }
+    .unity-toast.purple { border: 1.5px solid #8b5cf6; }
+    .unity-toast.green { border: 1.5px solid #10b981; }
+
+    /* Slide 5 Centered Modal & Scrim */
+    .slide5-wrapper { position: relative; width: 1212px; height: 554px; overflow: hidden; border-radius: var(--exo-radius-xl); border: 1.5px solid var(--exo-border-strong); background: #0e0e12; }
+    .slide5-bg-dimmed { position: absolute; inset: 0; opacity: 0.28; filter: blur(1.5px); pointer-events: none; }
+    .slide5-scrim { position: absolute; inset: 0; background: rgba(10, 10, 14, 0.52); pointer-events: none; }
+    .slide5-content { position: relative; z-index: 2; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 12px; box-sizing: border-box; }
+    .slide5-modal { width: 620px; background: var(--exo-surface-subtle); border: 2px solid var(--exo-primary); border-radius: 12px; padding: 14px 18px; box-shadow: 0 0 35px rgba(139, 92, 246, 0.35); display: flex; flex-direction: column; gap: 7px; }
+    .slide5-toasts-row { display: flex; gap: 12px; width: 620px; }
+
+    /* Slide 6 (C# Solution) */
+    .s3-container { display: grid; grid-template-columns: 586px 75px 1fr; gap: 0; height: 554px; align-items: center; position: relative; }
+    .s3-code-panel { background: #0f0f13; border: 1px solid var(--exo-border-strong); border-radius: var(--exo-radius-xl); padding: 12px 14px; height: 500px; display: flex; flex-direction: column; gap: 8px; box-shadow: var(--exo-shadow-card); }
+    .s3-code-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--exo-border); padding-bottom: 8px; }
+    .s3-dots { display: flex; gap: 5px; }
+    .s3-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .s3-code-body { flex: 1; font-family: var(--exo-font-mono); font-size: 0.71875rem; line-height: 1.38; color: #e2e8f0; overflow: hidden; white-space: pre; }
+    .code-ln { color: #4b5563; user-select: none; display: inline-block; width: 18px; text-align: right; margin-right: 6px; }
+    .code-hl { display: inline; border-radius: var(--exo-radius-sm); padding: 0 3px; box-decoration-break: clone; -webkit-box-decoration-break: clone; transition-property: background-color, color, box-shadow; transition-duration: 250ms; }
+    
+    .slide:is([data-current-step="1"], [data-current-step="2"], [data-current-step="3"], [data-current-step="4"], [data-current-step="5"]) .code-hl-1 { background: rgba(251, 191, 36, 0.25); color: #ffffff; box-shadow: 0 0 10px rgba(251, 191, 36, 0.45); }
+    .slide:is([data-current-step="2"], [data-current-step="3"], [data-current-step="4"], [data-current-step="5"]) .code-hl-2 { background: rgba(56, 189, 248, 0.25); color: #ffffff; box-shadow: 0 0 10px rgba(56, 189, 248, 0.45); }
+    .slide:is([data-current-step="3"], [data-current-step="4"], [data-current-step="5"]) .code-hl-3 { background: rgba(239, 68, 68, 0.28); color: #ffffff; box-shadow: 0 0 10px rgba(239, 68, 68, 0.45); }
+    .slide:is([data-current-step="4"], [data-current-step="5"]) .code-hl-4 { background: rgba(249, 115, 22, 0.25); color: #ffffff; box-shadow: 0 0 10px rgba(249, 115, 22, 0.45); }
+    .slide[data-current-step="5"] .code-hl-5 { background: rgba(16, 185, 129, 0.25); color: #ffffff; box-shadow: 0 0 10px rgba(16, 185, 129, 0.45); }
+
+    .s3-arrows-svg { width: 75px; height: 500px; pointer-events: none; }
+    .s3-arrow-path { fill: none; stroke: var(--exo-border-strong); stroke-width: 2; stroke-dasharray: 4 3; opacity: 0.35; transition-property: stroke, opacity, stroke-width, filter; transition-duration: 250ms; }
+    .slide:is([data-current-step="1"], [data-current-step="2"], [data-current-step="3"], [data-current-step="4"], [data-current-step="5"]) .s3-arrow-1 { stroke: #fbbf24; stroke-width: 2.5; stroke-dasharray: none; opacity: 1; filter: drop-shadow(0 0 4px rgba(251, 191, 36, 0.6)); }
+    .slide:is([data-current-step="2"], [data-current-step="3"], [data-current-step="4"], [data-current-step="5"]) .s3-arrow-2 { stroke: #38bdf8; stroke-width: 2.5; stroke-dasharray: none; opacity: 1; filter: drop-shadow(0 0 4px rgba(56, 189, 248, 0.6)); }
+    .slide:is([data-current-step="3"], [data-current-step="4"], [data-current-step="5"]) .s3-arrow-3 { stroke: #ef4444; stroke-width: 2.5; stroke-dasharray: none; opacity: 1; filter: drop-shadow(0 0 4px rgba(239, 68, 68, 0.6)); }
+    .slide:is([data-current-step="4"], [data-current-step="5"]) .s3-arrow-4 { stroke: #f97316; stroke-width: 2.5; stroke-dasharray: none; opacity: 1; filter: drop-shadow(0 0 4px rgba(249, 115, 22, 0.6)); }
+    .slide[data-current-step="5"] .s3-arrow-5 { stroke: #10b981; stroke-width: 2.5; stroke-dasharray: none; opacity: 1; filter: drop-shadow(0 0 4px rgba(16, 185, 129, 0.6)); }
+
+    .s3-cards-col { display: flex; flex-direction: column; gap: 7px; height: 500px; justify-content: space-between; }
+    .s3-callout { background: var(--exo-surface-muted); border: 1px solid var(--exo-border); border-radius: var(--exo-radius-lg); padding: 8px 12px; opacity: 0.35; transition-property: opacity, border-color, background-color, box-shadow; transition-duration: 250ms; }
+    .slide:is([data-current-step="1"], [data-current-step="2"], [data-current-step="3"], [data-current-step="4"], [data-current-step="5"]) .s3-c1 { opacity: 1; background: var(--exo-surface); border-color: #fbbf24; box-shadow: 0 0 16px rgba(251, 191, 36, 0.25); }
+    .slide:is([data-current-step="2"], [data-current-step="3"], [data-current-step="4"], [data-current-step="5"]) .s3-c2 { opacity: 1; background: var(--exo-surface); border-color: #38bdf8; box-shadow: 0 0 16px rgba(56, 189, 248, 0.25); }
+    .slide:is([data-current-step="3"], [data-current-step="4"], [data-current-step="5"]) .s3-c3 { opacity: 1; background: var(--exo-surface); border-color: #ef4444; box-shadow: 0 0 16px rgba(239, 68, 68, 0.25); }
+    .slide:is([data-current-step="4"], [data-current-step="5"]) .s3-c4 { opacity: 1; background: var(--exo-surface); border-color: #f97316; box-shadow: 0 0 16px rgba(249, 115, 22, 0.25); }
+    .slide[data-current-step="5"] .s3-c5 { opacity: 1; background: var(--exo-surface-elevated); border-color: #10b981; box-shadow: 0 0 16px rgba(16, 185, 129, 0.25); }
+
+    /* Slide 7 (Operação Gerenciada) */
+    .s4-container { display: flex; flex-direction: column; gap: 12px; height: 554px; }
+    .s4-grid-factory { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 12px; flex: 1; }
+    .s4-factory-card { background: var(--exo-surface-muted); border: 1px solid var(--exo-border); border-radius: var(--exo-radius-xl); padding: 13px 16px; display: flex; flex-direction: column; justify-content: space-between; gap: 6px; }
+    .s4-catalog-row { display: flex; align-items: center; justify-content: space-between; background: var(--exo-surface-subtle); padding: 5px 10px; border-radius: var(--exo-radius-sm); border: 1px solid var(--exo-border); font-size: 0.75rem; }
+    .s4-log-table { display: flex; flex-direction: column; gap: 4px; background: var(--exo-surface-subtle); padding: 7px 9px; border-radius: var(--exo-radius-md); border: 1px solid var(--exo-border); }
+    .s4-log-row { display: grid; grid-template-columns: 84px 1fr auto; align-items: center; gap: 8px; padding: 4px 8px; background: var(--exo-surface); border: 1px solid var(--exo-border-subtle); border-radius: var(--exo-radius-sm); font-size: 0.6875rem; }
+    .s4-log-step { font-weight: 700; font-family: var(--exo-font-mono); color: #93c5fd; }
+    .s4-graph-box { background: #101015; border: 1px solid var(--exo-border); border-radius: var(--exo-radius-md); padding: 4px 8px; display: flex; flex-direction: column; }
+    .s4-uptime-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; background: var(--exo-surface-subtle); padding: 6px 10px; border-radius: var(--exo-radius-sm); border: 1px solid var(--exo-border); font-size: 0.7125rem; }
+    .cite-tag { font-size: 0.625rem; color: var(--exo-text-muted); line-height: 1.25; }
+    a.cite-tag { display: inline-flex; align-items: center; gap: 3px; color: var(--exo-text-muted); text-decoration: none; border-bottom: 1px dotted rgba(139,92,246,0.45); transition-property: color, border-color; transition-duration: 150ms; cursor: pointer; }
+    a.cite-tag:hover { color: #e9d5ff; border-bottom-color: var(--exo-primary); }
+    .cite-tag strong { color: #ddd6fe; font-weight: 600; }
+
+    /* Slide 8 (Impacto no Negócio) */
+    .s5-container { display: flex; flex-direction: column; gap: 14px; height: 554px; }
+    .s5-scorecard { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; flex: 1; }
+    .s5-col { background: var(--exo-surface-muted); border: 1px solid var(--exo-border); border-radius: var(--exo-radius-xl); padding: 22px 26px; display: flex; flex-direction: column; justify-content: space-between; }
+    .s5-col.trad { border-top: 4px solid var(--exo-status-error); }
+    .s5-col.exo { border-top: 4px solid var(--exo-primary); background: rgba(139,92,246,0.08); box-shadow: 0 0 30px rgba(139,92,246,0.15); }
+    .s5-banner { background: rgba(139,92,246,0.16); border: 2px solid var(--exo-primary); border-radius: var(--exo-radius-xl); padding: 16px 22px; display: flex; align-items: center; justify-content: space-between; gap: 18px; box-shadow: 0 0 35px rgba(139,92,246,0.25); }
+
+    /* Slide 9 (Bibliografia) */
+    .s6-bib-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; height: 554px; }
+    .s6-bib-col { background: var(--exo-surface-muted); border: 1px solid var(--exo-border); border-radius: var(--exo-radius-xl); padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+    .s6-bib-list { display: flex; flex-direction: column; gap: 8px; flex: 1; justify-content: space-between; }
+    .s6-bib-item { display: flex; flex-direction: column; gap: 2px; background: var(--exo-surface-subtle); border: 1px solid var(--exo-border); border-radius: var(--exo-radius-md); padding: 8px 11px; text-decoration: none; transition-property: border-color, background-color; transition-duration: 150ms; }
+    .s6-bib-item:hover { border-color: var(--exo-primary); background: var(--exo-surface); }
+    .s6-bib-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 0.75rem; font-weight: 700; color: #ddd6fe; }
+    .s6-bib-desc { font-size: 0.675rem; color: var(--exo-text-muted); line-height: 1.3; }
+    .s6-bib-url { font-size: 0.6875rem; font-family: var(--exo-font-mono); color: #93c5fd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* Presenter HUD & Notes */
+    .presenter-hud { position: absolute; left: 0; right: 0; bottom: 0; height: 48px; background: var(--exo-header-bg); border-top: 1px solid var(--exo-border); padding: 0 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; z-index: 30; backdrop-filter: blur(12px); }
+    body.export-mode .presenter-hud, body.export-mode .notes-drawer { display: none !important; }
+    .export-breadcrumb { display: none; position: absolute; left: 34px; right: 34px; bottom: 16px; align-items: center; justify-content: space-between; font-size: 0.75rem; color: var(--exo-text-subtle); z-index: 10; }
+    body.export-mode .export-breadcrumb { display: flex; }
+    .hud-group { display: flex; align-items: center; gap: 8px; }
+    .hud-brand { display: flex; align-items: center; gap: 8px; font-size: 0.75rem; font-weight: 700; color: var(--exo-text); letter-spacing: 0.05em; }
+    .hud-counter { font-size: 0.75rem; color: var(--exo-text-muted); font-family: var(--exo-font-mono); padding: 3px 8px; background: var(--exo-surface-subtle); border: 1px solid var(--exo-border); border-radius: var(--exo-radius-sm); }
+    .hud-progress { width: 140px; height: 4px; background: var(--exo-surface); border-radius: 9999px; overflow: hidden; }
+    .hud-progress-fill { height: 100%; width: 0%; background: var(--exo-primary); transition-property: width; transition-duration: 240ms; transition-timing-function: var(--exo-ease); }
+    .hud-btn { background: var(--exo-surface-subtle); color: var(--exo-text); border: 1px solid var(--exo-border-strong); border-radius: var(--exo-radius-md); padding: 5px 10px; font-size: 0.75rem; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; line-height: 1.2; transition-property: transform, background-color, border-color, color; transition-duration: 150ms; transition-timing-function: ease-out; }
+    .hud-btn:hover:not(:disabled) { background: var(--exo-surface-elevated); border-color: var(--exo-primary); }
+    .hud-btn.active { background: var(--exo-primary-100); border-color: var(--exo-primary); color: #ddd6fe; }
+    .hud-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    button:not(:disabled):active { transform: scale(0.96); }
+
+    .notes-drawer { position: absolute; left: 34px; right: 34px; bottom: 56px; background: rgba(20,20,25,0.96); border: 1px solid var(--exo-primary); border-radius: var(--exo-radius-lg); padding: 14px 18px; box-shadow: var(--exo-shadow-md); z-index: 25; opacity: 0; transform: translateY(12px); pointer-events: none; transition-property: opacity, transform; transition-duration: 200ms; transition-timing-function: var(--exo-ease); max-height: 160px; overflow-y: auto; }
+    .notes-drawer.open { opacity: 1; transform: translateY(0); pointer-events: auto; }
+    .notes-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; font-size: 0.75rem; color: #ddd6fe; font-weight: 600; }
+    .notes-body { font-size: 0.875rem; color: var(--exo-text); line-height: 1.5; }
+
+    body.no-transitions, body.no-transitions * { transition-duration: 0ms !important; transition-delay: 0ms !important; }
+    @media (prefers-reduced-motion: reduce) {
+      .slide, [data-show-from], [data-highlight-on], .s1-bar, .s3-arrow-path, .notes-drawer, .hud-progress-fill, button { transform: none !important; transition-property: opacity, background-color, border-color !important; transition-duration: 150ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="deck-viewport">
+    <main class="stage" id="stage">
+      <div class="slides-root" id="slides-root">
+
+        <!-- SLIDE 0: ATO I · O PEDIDO DO DESIGN (2 beats: 0, 1) -->
+        <section class="slide active" data-slide="0" data-steps="2" data-current-step="0" id="slide-0">
+          <header class="slide-header">
+            <div>
+              <span class="slide-category">ATO I · O PEDIDO DO DESIGN</span>
+              <h2 class="slide-title">A Ilusão do Offline: Uma feature simples que deveria levar 2 horas.</h2>
+            </div>
+            <div class="slide-step-pill" id="pill-0">Etapa 1 de 2</div>
+          </header>
+          <div class="s0-grid">
+            <div class="s0-card-persona">
+              <div class="s0-img-box persona-frame">
+                <img src="assets/persona-flow.png" alt="Lucas sorrindo criando o jogo no fluxo" />
+              </div>
+              <div class="s0-persona-info">
+                <div>
+                  <strong style="color:var(--exo-text);font-size:0.9375rem">Lucas · Dev de Gameplay</strong>
+                  <div style="color:var(--exo-text-muted);font-size:0.75rem">Time indie de 8 pessoas (sem infra) · Foco em gameplay</div>
+                  <div style="font-size:0.7rem;color:var(--exo-text-subtle);margin-top:2px">Contratado para desenhar mecânicas e diversão.</div>
+                </div>
+                <span class="badge-pill emerald">Foco no Jogo</span>
+              </div>
+            </div>
+            <div class="s0-col-right">
+              <div class="s0-feature-card">
+                <div style="display:flex;align-items:center;justify-content:space-between">
+                  <span class="badge-pill blue">PEDIDO DO GAME DESIGN</span>
+                  <span class="badge-pill emerald">Meta: ~2h em C#</span>
+                </div>
+                <div>
+                  <h3 style="font-size:1.125rem;font-weight:700;color:var(--exo-text)">Comprar Espada Lendária · 500 Ouro</h3>
+                </div>
+                <!-- Top Flowchart: 3 Horizontal Nodes Connected by Arrows -->
+                <div class="s0-flow-nodes">
+                  <div class="s0-flow-node">
+                    <span class="badge-pill blue" style="font-size:0.625rem;padding:2px 7px">PASSO 1</span>
+                    <strong style="font-size:0.8125rem;color:var(--exo-text)">Validar Saldo</strong>
+                    <span style="font-size:0.6875rem;color:var(--exo-text-muted)">Tem 500 Ouro?</span>
+                  </div>
+                  <span class="s0-flow-arrow">→</span>
+                  <div class="s0-flow-node">
+                    <span class="badge-pill blue" style="font-size:0.625rem;padding:2px 7px">PASSO 2</span>
+                    <strong style="font-size:0.8125rem;color:var(--exo-text)">Descontar &amp; Entregar</strong>
+                    <span style="font-size:0.6875rem;color:var(--exo-text-muted)">−500 Ouro + Espada</span>
+                  </div>
+                  <span class="s0-flow-arrow">→</span>
+                  <div class="s0-flow-node">
+                    <span class="badge-pill blue" style="font-size:0.625rem;padding:2px 7px">PASSO 3</span>
+                    <strong style="font-size:0.8125rem;color:var(--exo-text)">Notificar Jogador</strong>
+                    <span style="font-size:0.6875rem;color:var(--exo-text-muted)">Atualiza a loja</span>
+                  </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;background:var(--exo-surface-subtle);border:1px solid var(--exo-border);border-radius:var(--exo-radius-md);padding:6px 12px">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><polyline points="20 6 9 17 4 12"/></svg>
+                  <span style="font-size:0.6875rem;font-weight:600;color:var(--exo-text-muted)">Na Unity local, parece tarefa simples de uma tarde.</span>
+                </div>
+              </div>
+
+              <!-- Bottom Flowchart Card: Fluxo Familiar na Unity (Revela no Beat 1) -->
+              <div class="s0-dev-card" data-show-from="1">
+                <div>
+                  <div class="s0-dev-title">FLUXO FAMILIAR NA UNITY (SEM SERVIDORES)</div>
+                </div>
+                <!-- Bottom Flowchart: 3 Horizontal Nodes Connected by Arrows -->
+                <div class="s0-flow-nodes">
+                  <div class="s0-flow-node">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle"><rect x="2" y="6" width="20" height="12" rx="4"/><line x1="6" y1="12" x2="10" y2="12"/><line x1="8" y1="10" x2="8" y2="14"/><circle cx="15" cy="11" r="1" fill="#34d399"/><circle cx="18" cy="13" r="1" fill="#34d399"/></svg>
+                    <strong style="font-size:0.8125rem;color:#34d399">1. Cena na Unity</strong>
+                    <span style="font-size:0.6875rem;color:#cbd5e1">UI e botão &quot;Comprar&quot; já montados no Editor</span>
+                  </div>
+                  <span class="s0-flow-arrow emerald">→</span>
+                  <div class="s0-flow-node">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="#34d399" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                    <strong style="font-size:0.8125rem;color:#34d399">2. C# Conhecido</strong>
+                    <span style="font-size:0.6875rem;color:#cbd5e1">Dados simples do jogador e lógica direta em C# 9</span>
+                  </div>
+                  <span class="s0-flow-arrow emerald">→</span>
+                  <div class="s0-flow-node">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle"><polyline points="20 6 9 17 4 12"/></svg>
+                    <strong style="font-size:0.8125rem;color:#34d399">3. Roda Local</strong>
+                    <span style="font-size:0.6875rem;color:#cbd5e1">Testado na hora em 1 tarde (~2h)</span>
+                  </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;background:var(--exo-surface-subtle);border:1px solid rgba(245,158,11,0.4);border-radius:var(--exo-radius-md);padding:8px 12px">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><circle cx="12" cy="17" r="0.75" fill="#fbbf24"/></svg>
+                  <span style="font-size:0.75rem;font-weight:600;color:#fde68a">Mas o jogo é multiplayer: para monetizar sem trapaças, a regra precisa rodar no servidor.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- SLIDE 1: ATO I · A REGRA DO JOGO (3 beats: 2..4) -->
+        <section class="slide" data-slide="1" data-steps="3" data-current-step="0" id="slide-1">
+          <header class="slide-header">
+            <div>
+              <span class="slide-category">ATO I · A REGRA DO JOGO</span>
+              <h2 class="slide-title">A Lógica Essencial: No Editor, a compra cabe em 3 passos.</h2>
+            </div>
+            <div class="slide-step-pill" id="pill-1">Etapa 1 de 3</div>
+          </header>
+          <div class="s2-grid">
+            <div class="s2-col-left">
+              <div class="s2-img-box persona-frame">
+                <img src="assets/persona-shipping.png" alt="Lucas focado e tranquilo desenvolvendo na Unity" />
+              </div>
+              <div style="display:flex;flex-direction:column;gap:6px;background:var(--exo-surface-subtle);padding:10px 14px;border:1px solid var(--exo-border);border-radius:var(--exo-radius-md)">
+                <div style="display:flex;align-items:center;justify-content:space-between">
+                  <div>
+                    <strong style="font-size:0.9375rem;color:var(--exo-text)">O Trabalho Real do Estúdio</strong>
+                    <div style="font-size:0.75rem;color:var(--exo-text-muted)">Apenas a lógica que gera diversão e receita.</div>
+                  </div>
+                  <span class="badge-pill emerald">Estado de Fluxo</span>
+                </div>
+                <a class="cite-tag" href="https://queue.acm.org/detail.cfm?id=3595878" target="_blank" rel="noopener noreferrer"><strong>Pesquisa DevEx (ACM Queue, 2023):</strong> fluxo contínuo eleva entregas ↗</a>
+              </div>
+            </div>
+            <div class="s2-flow-board">
+              <div class="s2-flow-header">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span class="badge-pill violet">REGRA DE NEGÓCIO (GAMEPLAY)</span>
+                  <span style="font-size:0.8125rem;font-weight:600;color:var(--exo-text)">Loja de Itens · Compra em Tempo Real</span>
+                </div>
+                <span style="font-size:0.75rem;color:#6ee7b7;font-weight:600">Regra Pura</span>
+              </div>
+
+              <div class="s2-flow-canvas">
+                <!-- Node 1: Entrada (Beat 2 / Step 0) -->
+                <div class="flow-node start">
+                  <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:3px">
+                    <span class="badge-pill violet" style="font-size:0.625rem">Entrada</span>
+                    <span class="badge-pill violet" style="font-size:0.625rem">Cliente (Unity)</span>
+                  </div>
+                  <div style="font-size:1rem;font-weight:600;color:var(--exo-text)">1. Jogador Clica &quot;Comprar&quot;</div>
+                  <div style="font-size:0.75rem;color:#fde68a">Espada Lendária · 500 Ouro</div>
+                </div>
+
+                <!-- Step 1: Decisão Saldo (Beat 3) -->
+                <div class="flow-v-conn" data-show-from="1" style="color:#a78bfa">↓</div>
+                <div class="flow-branch-row" data-show-from="1">
+                  <div class="flow-node decision">
+                    <div style="font-size:0.625rem;color:#fde68a;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;margin-bottom:3px">Fronteira: Regra do Jogo ↔ Validação no Servidor</div>
+                    <div style="font-size:0.9375rem;font-weight:600;color:var(--exo-text)">2. Saldo ≥ 500 Ouro?</div>
+                  </div>
+                  <div class="flow-h-conn">
+                    <span>── NÃO ──►</span>
+                    <div class="flow-node reject">
+                      <div style="font-size:0.8125rem;font-weight:700;color:#fca5a5">Compra Recusada</div>
+                      <div style="font-size:0.6875rem;color:var(--exo-text-muted)">Saldo insuficiente</div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Step 2: Entrega (Beat 4) -->
+                <div class="flow-v-conn" data-show-from="2" style="color:#34d399">↓ SIM</div>
+                <div class="flow-node action" data-show-from="2">
+                  <div style="font-size:0.6875rem;color:#6ee7b7;font-weight:700;letter-spacing:0.04em;text-transform:uppercase">ENTREGA</div>
+                  <div style="font-size:0.9375rem;font-weight:600;color:var(--exo-text)">3. Desconta 500 Ouro · Entrega Espada</div>
+                </div>
+                <div class="flow-v-conn" data-show-from="2" style="color:#34d399;height:16px">↓</div>
+                <div class="flow-split-row" data-show-from="2">
+                  <div class="flow-leaf" style="flex-direction:column;gap:2px;padding:7px 10px">
+                    <div style="display:flex;align-items:center;gap:6px">
+                      <span>Salvo no Inventário</span>
+                    </div>
+                    <span style="font-size:0.625rem;color:var(--exo-text-muted);font-weight:600">Responsabilidade do Servidor (Banco)</span>
+                  </div>
+                  <div class="flow-leaf" style="flex-direction:column;gap:2px;padding:7px 10px">
+                    <div style="display:flex;align-items:center;gap:6px">
+                      <span>Jogador Notificado</span>
+                    </div>
+                    <span style="font-size:0.625rem;color:var(--exo-text-muted);font-weight:600">Resposta ao Cliente (Unity)</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="s2-flow-footer">
+                <span style="font-size:0.75rem;color:#34d399;font-weight:700">Ponto de ruptura: salvar inventário e validar saldo exigem servidor.</span>
+                <span class="badge-pill emerald">Foco 100%</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- SLIDE 2: ATO II · ONDE O TEMPO VAZA (5 beats: 5..9) -->
+        <section class="slide" data-slide="2" data-steps="5" data-current-step="0" id="slide-2">
+          <header class="slide-header">
+            <div>
+              <span class="slide-category">ATO II · ONDE O TEMPO VAZA</span>
+              <h2 class="slide-title">A Armadilha do Multiplayer: 1 Dev Forçado a Virar 4.</h2>
+            </div>
+            <div class="slide-step-pill" id="pill-2">Etapa 1 de 5</div>
+          </header>
+          <div class="s1-container">
+            <div class="s1-timeline tabular">
+              <span style="color:var(--exo-text-muted);font-weight:600">Sobrecarga de Infraestrutura:</span>
+              <div class="s1-track"><div class="s1-bar"></div></div>
+              <strong>
+                <span class="s1-tl-label s1-tl-0" style="color:var(--exo-status-warning)">0 de 4 papéis fora do jogo (0%)</span>
+                <span class="s1-tl-label s1-tl-1" style="color:var(--exo-status-warning)">1 de 4 papéis fora do jogo (25%) · +DBA</span>
+                <span class="s1-tl-label s1-tl-2" style="color:#f97316">2 de 4 papéis fora do jogo (50%) · +Backend</span>
+                <span class="s1-tl-label s1-tl-3" style="color:#ea580c">3 de 4 papéis fora do jogo (75%) · +Segurança</span>
+                <span class="s1-tl-label s1-tl-4" style="color:var(--exo-status-error)">4 de 4 papéis fora do jogo (100%) · 90% fora do gameplay</span>
+              </strong>
+            </div>
+
+            <div class="s1-anchor-card">
+              <div style="width:110px;height:80px;border-radius:var(--exo-radius-md);overflow:hidden;border:1px solid var(--exo-border);flex-shrink:0" class="persona-frame">
+                <img src="assets/persona-overwhelmed.png" alt="Lucas sobrecarregado pela troca de contexto" />
+              </div>
+              <div style="flex:1">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:2px">
+                  <h3 style="font-size:1.0625rem;font-weight:600;color:var(--exo-text)">Lucas · Sobrecarga de Infraestrutura</h3>
+                  <span class="badge-pill rose">4 papéis fora do jogo</span>
+                </div>
+                <p style="font-size:0.78rem;color:var(--exo-text-muted)"><a class="cite-tag" href="https://ics.uci.edu/~gmark/CHI2005.pdf" target="_blank" rel="noopener noreferrer"><strong>Mark et al. (ACM CHI 2005):</strong> 25m26s p/ retomar tarefa após troca ↗</a> · <a class="cite-tag" href="https://link.springer.com/article/10.1007/s11219-010-9104-9" target="_blank" rel="noopener noreferrer"><strong>Parnin &amp; Rugaber (2011):</strong> só 10% retomam em &lt;1 min ↗</a></p>
+              </div>
+              <div style="text-align:right">
+                <div style="font-size:0.65rem;color:var(--exo-text-muted)">Teoria da Carga Cognitiva</div>
+                <div style="font-size:0.9375rem;font-weight:700;color:var(--exo-status-error)">4 Papéis Extras</div>
+              </div>
+            </div>
+
+            <div class="s1-grid-hats">
+              <!-- Papel 1: DBA -->
+              <div class="s1-hat-card" data-show-from="1">
+                <div style="display:flex;align-items:center;justify-content:space-between">
+                  <span class="badge-pill amber">PAPEL 1 · DBA</span>
+                  <div style="display:flex;gap:4px"><span class="tool-pill">PostgreSQL</span><span class="tool-pill">SQL</span></div>
+                </div>
+                <div style="font-size:0.8125rem;font-weight:700;color:var(--exo-text)">Administrador de Banco de Dados</div>
+                <div class="code-micro"><span class="tok-kw">BEGIN TRANSACTION</span>;
+<span class="tok-kw">UPDATE</span> <span class="tok-sky">wallets</span> <span class="tok-kw">SET</span> <span class="tok-sky">gold</span> = gold - <span class="tok-em">500</span> <span class="tok-kw">WHERE</span> <span class="tok-sky">id</span> = <span class="tok-em">$1</span>;
+<span class="tok-kw">INSERT INTO</span> <span class="tok-sky">inventory</span> <span class="tok-kw">VALUES</span> (<span class="tok-em">$1</span>, <span class="tok-str">'espada'</span>);</div>
+                <div style="display:flex;flex-direction:column;gap:4px">
+                  <p style="font-size:0.7rem;color:var(--exo-text-muted)">Tabelas, transações e migrações (~45 linhas).</p>
+                  <a class="cite-tag" href="https://arxiv.org/abs/2009.02440" target="_blank" rel="noopener noreferrer"><strong>Politowski et al. (2021 · 200 jogos):</strong> erros técnicos travam produção ↗</a>
+                </div>
+              </div>
+
+              <!-- Papel 2: Backend -->
+              <div class="s1-hat-card" data-show-from="2">
+                <div style="display:flex;align-items:center;justify-content:space-between">
+                  <span class="badge-pill blue">PAPEL 2 · BACKEND</span>
+                  <div style="display:flex;gap:4px"><span class="tool-pill">REST</span><span class="tool-pill">HTTP</span><span class="tool-pill">JSON</span></div>
+                </div>
+                <div style="font-size:0.8125rem;font-weight:700;color:var(--exo-text)">Engenheiro de Backend</div>
+                <div class="code-micro"><span class="tok-em">POST</span> <span class="tok-sky">/api/v1/shop/buy</span> <span class="tok-muted">HTTP/1.1</span>
+<span class="tok-purple">Content-Type:</span> <span class="tok-str">application/json</span>
+{<span class="tok-sky">&quot;itemId&quot;</span>: <span class="tok-kw">&quot;espada_lendaria&quot;</span>, <span class="tok-sky">&quot;price&quot;</span>: <span class="tok-em">500</span>}</div>
+                <div style="display:flex;flex-direction:column;gap:4px">
+                  <p style="font-size:0.7rem;color:var(--exo-text-muted)">Rotas HTTP, APIs e JSON manual (~50 linhas).</p>
+                  <a class="cite-tag" href="https://create.unity.com/hubfs/Redistributable%20Assets/Unity_Gaming_Report_2024.pdf" target="_blank" rel="noopener noreferrer"><strong>Unity Gaming Report (2024):</strong> 37% travam ao integrar sistemas ↗</a>
+                </div>
+              </div>
+
+              <!-- Papel 3: Segurança -->
+              <div class="s1-hat-card" data-show-from="3">
+                <div style="display:flex;align-items:center;justify-content:space-between">
+                  <span class="badge-pill rose">PAPEL 3 · SEGURANÇA</span>
+                  <div style="display:flex;gap:4px"><span class="tool-pill">Auth</span><span class="tool-pill">Anti-Cheat</span></div>
+                </div>
+                <div style="font-size:0.8125rem;font-weight:700;color:var(--exo-text)">Segurança e Anti-Cheat</div>
+                <div class="code-micro"><span class="tok-rose">Authorization:</span> <span class="tok-kw">Bearer eyJhbGciOiJIUzI1Ni...</span>
+<span class="tok-purple">if</span> (!<span class="tok-sky">VerifyToken</span>(tok) || scope != <span class="tok-str">&quot;player&quot;</span>) <span class="tok-purple">return</span> <span class="tok-em">403</span>;
+<span class="tok-purple">if</span> (req.Price &lt;= <span class="tok-em">0</span>) <span class="tok-sky">RejectFraud</span>(req);</div>
+                <div style="display:flex;flex-direction:column;gap:4px">
+                  <p style="font-size:0.7rem;color:var(--exo-text-muted)">Sessão, escopo e anti-cheat no servidor (~40 linhas).</p>
+                  <a class="cite-tag" href="https://www.forbes.com/sites/panosmourdoukoutas/2018/04/30/report-cheating-is-becoming-a-big-problem-in-online-gaming/" target="_blank" rel="noopener noreferrer"><strong>Irdeto/Forbes:</strong> 77% largam cheats; 48% compram menos ↗</a>
+                </div>
+              </div>
+
+              <!-- Papel 4: DevOps -->
+              <div class="s1-hat-card" data-show-from="4">
+                <div style="display:flex;align-items:center;justify-content:space-between">
+                  <span class="badge-pill org">PAPEL 4 · DEVOPS</span>
+                  <div style="display:flex;gap:4px"><span class="tool-pill">Containers</span><span class="tool-pill">Nuvem</span></div>
+                </div>
+                <div style="font-size:0.8125rem;font-weight:700;color:var(--exo-text)">Operações e Nuvem (DevOps)</div>
+                <div class="code-micro"><span class="tok-org">FROM</span> <span class="tok-sky">mcr.microsoft.com/dotnet/aspnet:9.0</span>
+<span class="tok-org">EXPOSE</span> <span class="tok-kw">8080 443</span>
+<span class="tok-org">ENTRYPOINT</span> [<span class="tok-em">&quot;dotnet&quot;</span>, <span class="tok-em">&quot;GameShop.dll&quot;</span>]</div>
+                <div style="display:flex;flex-direction:column;gap:4px">
+                  <p style="font-size:0.7rem;color:var(--exo-text-muted)">Containers, portas e deploy em nuvem (~45 linhas).</p>
+                  <a class="cite-tag" href="https://reg.gdconf.com/state-of-game-industry-2024" target="_blank" rel="noopener noreferrer"><strong>GDC (2024):</strong> custo restringe live-service a 16% ↗</a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- SLIDE 3: ATO II · O CUSTO REAL (1 beat: 10) -->
+        <section class="slide" data-slide="3" data-steps="1" data-current-step="0" id="slide-3">
+          <header class="slide-header">
+            <div>
+              <span class="slide-category">ATO II · O CUSTO REAL</span>
+              <h2 class="slide-title">O Gargalo Real: 90% do Tempo Gasto Fora do Gameplay.</h2>
+            </div>
+            <div class="slide-step-pill" id="pill-3">Slide 4 de 10</div>
+          </header>
+          <div class="s3-cost-grid">
+            <!-- Coluna Esquerda (Retrato + Soma dos 4 Papéis) -->
+            <div class="s3-cost-left">
+              <div class="s3-cost-portrait persona-frame">
+                <img src="assets/persona-overwhelmed.png" alt="Lucas sobrecarregado pela complexidade de infraestrutura" />
+              </div>
+              <div class="s3-cost-breakdown">
+                <div style="font-size:0.75rem;font-weight:800;color:#f87171;letter-spacing:0.05em;text-transform:uppercase">A Soma dos 4 Papéis Fora do Jogo</div>
+                <div class="s3-cost-row">
+                  <div style="display:flex;align-items:center;gap:8px;font-size:0.75rem;font-weight:600;color:var(--exo-text)">
+                    <span style="color:#fbbf24">1.</span> <span>DBA (PostgreSQL &amp; SQL)</span>
+                  </div>
+                  <span class="badge-pill amber" style="font-size:0.6875rem">~45 linhas</span>
+                </div>
+                <div class="s3-cost-row">
+                  <div style="display:flex;align-items:center;gap:8px;font-size:0.75rem;font-weight:600;color:var(--exo-text)">
+                    <span style="color:#38bdf8">2.</span> <span>Backend (REST, HTTP &amp; JSON)</span>
+                  </div>
+                  <span class="badge-pill blue" style="font-size:0.6875rem">~50 linhas</span>
+                </div>
+                <div class="s3-cost-row">
+                  <div style="display:flex;align-items:center;gap:8px;font-size:0.75rem;font-weight:600;color:var(--exo-text)">
+                    <span style="color:#ef4444">3.</span> <span>Segurança (Auth &amp; Anti-Cheat)</span>
+                  </div>
+                  <span class="badge-pill rose" style="font-size:0.6875rem">~40 linhas</span>
+                </div>
+                <div class="s3-cost-row">
+                  <div style="display:flex;align-items:center;gap:8px;font-size:0.75rem;font-weight:600;color:var(--exo-text)">
+                    <span style="color:#f97316">4.</span> <span>DevOps (Docker, Portas &amp; Nuvem)</span>
+                  </div>
+                  <span class="badge-pill org" style="font-size:0.6875rem">~45 linhas</span>
+                </div>
+                <div class="s3-cost-total-row">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><circle cx="12" cy="17" r="0.75" fill="#ef4444"/></svg>
+                  <span>Total fora do gameplay: ~180 linhas em 4 camadas</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Coluna Direita (Proporção Consolidada + 2 Cartões de Evidência) -->
+            <div class="s3-cost-right">
+              <div style="font-size:0.8125rem;font-weight:800;color:#f87171;letter-spacing:0.05em;text-transform:uppercase">Desproporção Entre Gameplay e Infraestrutura</div>
+
+              <!-- Barra de Proporção Consolidada -->
+              <div>
+                <div style="display:flex;justify-content:space-between;font-size:0.75rem;font-weight:700;margin-bottom:6px">
+                  <span style="color:#34d399">~21 linhas de Jogo (10%)</span>
+                  <span style="color:#fca5a5">~180 linhas de Infraestrutura (90% fora do gameplay)</span>
+                </div>
+                <div class="s3-prop-track">
+                  <div class="s3-prop-green" style="width:10%" title="~21 linhas de Jogo (10%)">21</div>
+                  <div class="s3-prop-red" style="width:90%" title="~180 linhas de Infraestrutura (90% fora do gameplay)">Banco de Dados · API · Anti-Cheat · Nuvem (~180 linhas)</div>
+                </div>
+              </div>
+
+              <!-- 2 Cartões de Evidências Específicas de Jogos -->
+              <div class="s3-evidence-grid">
+                <a class="s3-evidence-card blue" href="https://create.unity.com/hubfs/Redistributable%20Assets/Unity_Gaming_Report_2024.pdf" target="_blank" rel="noopener noreferrer">
+                  <div>
+                    <span style="font-size:0.6875rem;font-weight:700;color:#38bdf8;letter-spacing:0.04em;text-transform:uppercase">UNITY GAMING REPORT (2024 · ESTÚDIOS GLOBAIS) ↗</span>
+                    <div style="font-size:1.45rem;font-weight:800;color:var(--exo-text);margin:6px 0 2px" class="tabular">218 → 304 dias</div>
+                    <div style="font-size:0.8125rem;font-weight:700;color:#7dd3fc;margin-bottom:8px">+39% no prazo de lançamento</div>
+                    <p style="font-size:0.75rem;color:#cbd5e1;line-height:1.4">Pesquisa anual da Unity com estúdios: 68% desenvolvem jogos online e 37% atrasam integrando sistemas externos.</p>
+                  </div>
+                  <div style="font-size:0.625rem;font-family:var(--exo-font-mono);color:#9ca3af;margin-top:8px">create.unity.com/gaming-report-2024</div>
+                </a>
+
+                <a class="s3-evidence-card purple" href="https://arxiv.org/abs/2009.02440" target="_blank" rel="noopener noreferrer">
+                  <div>
+                    <span style="font-size:0.6875rem;font-weight:700;color:#a78bfa;letter-spacing:0.04em;text-transform:uppercase">POLITOWSKI ET AL. (2021 · ESTUDO ACADÊMICO) ↗</span>
+                    <div style="font-size:1.35rem;font-weight:800;color:var(--exo-text);margin:6px 0 2px" class="tabular">927 falhas em 200 jogos</div>
+                    <div style="font-size:0.8125rem;font-weight:700;color:#ddd6fe;margin-bottom:8px">Postmortems públicos (1997–2019)</div>
+                    <p style="font-size:0.75rem;color:#cbd5e1;line-height:1.4">Relatos reais de equipes após o lançamento mostram sobrecarga técnica e gargalos liderando atrasos e cortes.</p>
+                  </div>
+                  <div style="font-size:0.625rem;font-family:var(--exo-font-mono);color:#9ca3af;margin-top:8px">arxiv.org/abs/2009.02440 (Peer-reviewed)</div>
+                </a>
+              </div>
+
+              <!-- Faixa de Síntese Inferior -->
+              <div class="s3-synthesis-strip">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <span>Resultado: Features de 2 horas viram semanas travadas em banco, APIs e DevOps.</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- SLIDE 4: ATO III · DA UNITY PARA A NUVEM (1/2) (1 beat: 11) -->
+        <section class="slide" data-slide="4" data-steps="1" data-current-step="0" id="slide-4">
+          <header class="slide-header">
+            <div>
+              <span class="slide-category">ATO III · DA UNITY PARA A NUVEM (1/2)</span>
+              <h2 class="slide-title">Sem sair da Unity: 1 clique para iniciar o serviço.</h2>
+            </div>
+            <div class="slide-step-pill" id="pill-4">Slide 5 de 10</div>
+          </header>
+          <div style="width:1212px;height:554px;display:flex;overflow:hidden">
+
+            <div class="unity-shell">
+              <!-- Topbar do Unity -->
+              <div class="unity-topbar">
+                <div style="display:flex;align-items:center">
+                  <div class="unity-dots">
+                    <div class="unity-dot red"></div>
+                    <div class="unity-dot yellow"></div>
+                    <div class="unity-dot green"></div>
+                  </div>
+                  <span class="unity-title">MyFantasyRPG — LojaUI.unity — Unity 6</span>
+                </div>
+
+                <!-- Toolbar do Unity (Centro: Play / Pause / Step) -->
+                <div class="unity-play-controls">
+                  <div class="unity-play-btn" title="Play"><svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>
+                  <div class="unity-pause-btn" title="Pause"><svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></div>
+                  <div class="unity-step-btn" title="Step"><svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 4 15 12 5 20 5 4"/><rect x="17" y="4" width="2" height="16" rx="1"/></svg></div>
+                </div>
+
+                <!-- Toolbar Direita (Layers e Layout: Exoforge) -->
+                <div class="unity-topbar-right">
+                  <div class="unity-pill-layers">Layers</div>
+                  <div class="unity-pill-layout">Layout: Exoforge</div>
+                </div>
+              </div>
+
+              <!-- Unity Workspace Layout -->
+              <div class="unity-body">
+                <!-- Left Pane: Hierarchy + Game View + Project -->
+                <div class="unity-left-pane">
+                  <!-- Top Row: Hierarchy + Game View -->
+                  <div class="unity-top-row">
+                    <!-- Coluna 1: HIERARCHY -->
+                    <div class="unity-hierarchy">
+                      <div class="unity-panel-header">HIERARCHY</div>
+                      <div class="unity-hierarchy-tree">
+                        <div style="color:#a78bfa;font-weight:700">▾ LojaUI (Scene)</div>
+                        <div style="margin-left:10px;color:#9ca3af">Main Camera</div>
+                        <div style="margin-left:10px;color:#9ca3af">Directional Light</div>
+                        <div style="color:#a78bfa;font-weight:700;margin-top:2px">▾ Canvas</div>
+                        <div style="margin-left:10px;color:#cbd5e1">LojaPanel</div>
+                        <div style="margin-left:4px;background:rgba(56,189,248,0.18);border:1.2px solid #38bdf8;border-radius:4px;padding:2px 8px;color:#38bdf8;font-weight:700;display:inline-block">BtnComprarEspada</div>
+                      </div>
+                      <div class="unity-hierarchy-badge">UI selecionada na cena</div>
+                    </div>
+
+                    <!-- Coluna 2: GAME VIEW (Mockup de Jogo RPG!) -->
+                    <div class="unity-gameview">
+                      <!-- Abas no topo -->
+                      <div class="unity-tabs-bar">
+                        <div style="display:flex;gap:4px">
+                          <span style="padding:2px 8px;font-size:0.625rem;font-weight:600;color:#6b7280">Scene</span>
+                          <span style="background:#202434;border:1.5px solid #38bdf8;border-radius:4px;padding:2px 10px;font-size:0.65rem;font-weight:700;color:#38bdf8">Game</span>
+                        </div>
+                        <span style="display:inline-flex;align-items:center;gap:5px;font-size:0.625rem;font-weight:600;color:#9ca3af;background:#141417;border:1px solid #2e2e38;padding:2px 8px;border-radius:9999px">
+                          <span style="width:5px;height:5px;border-radius:50%;background:#10b981"></span> 16:9 · Play
+                        </span>
+                      </div>
+
+                      <!-- Canvas do Jogo Mockup -->
+                      <div class="unity-game-canvas">
+                        <!-- Barra superior do jogo: OURO: 1.250 e NÍVEL 12 -->
+                        <div class="rpg-top-hud">
+                          <div style="display:flex;align-items:center;gap:6px">
+                            <span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:#fbbf24;color:#78350f;font-size:0.625rem;font-weight:900">G</span>
+                            <span style="font-size:0.75rem;font-weight:800;color:#fbbf24" class="tabular">OURO: 1.250</span>
+                          </div>
+                          <span style="font-size:0.71875rem;font-weight:700;color:#94a3b8;letter-spacing:0.5px">Loja do Ferreiro</span>
+                          <span style="background:rgba(139,92,246,0.2);border:1px solid #8b5cf6;border-radius:9999px;padding:2px 8px;font-size:0.625rem;font-weight:800;color:#ddd6fe" class="tabular">NÍVEL 12</span>
+                        </div>
+
+                        <!-- Card central do item da Loja -->
+                        <div class="rpg-shop-card">
+                          <span style="background:rgba(234,179,8,0.15);border:1px solid #eab308;border-radius:9999px;padding:2px 8px;font-size:0.625rem;font-weight:800;color:#fde047;letter-spacing:0.5px">ITEM EM DESTAQUE</span>
+                          <div style="width:40px;height:40px;border-radius:8px;background:#1e263c;border:1.5px solid #fbbf24;display:flex;align-items:center;justify-content:center;margin:2px 0">
+                            <svg width="24" height="24" viewBox="0 0 24 24" stroke="#fbbf24" stroke-linecap="round" stroke-linejoin="round" fill="none">
+                              <path d="M12 2 L14.5 6 L14 14 L12 15 L10 14 L9.5 6 Z" fill="#fbbf24" fill-opacity="0.25" stroke="#fbbf24" stroke-width="1.5"/>
+                              <line x1="12" y1="4" x2="12" y2="13" stroke="#fbbf24" stroke-width="1"/>
+                              <path d="M6 14.5 C8 13.5 16 13.5 18 14.5" stroke="#fbbf24" stroke-width="2"/>
+                              <circle cx="6" cy="14.5" r="1" fill="#fbbf24"/>
+                              <circle cx="18" cy="14.5" r="1" fill="#fbbf24"/>
+                              <line x1="12" y1="15" x2="12" y2="20" stroke="#fbbf24" stroke-width="2"/>
+                              <circle cx="12" cy="21.5" r="1.5" fill="#fbbf24"/>
+                            </svg>
+                          </div>
+                          <strong style="font-size:0.9375rem;font-weight:800;color:#f3f4f6">Espada Lendária</strong>
+                          <span style="font-size:0.6875rem;font-weight:600;color:#a78bfa">Dano +45 · Raridade Épica</span>
+                          <div class="rpg-buy-btn">COMPRAR · <span class="tabular">500 OURO</span></div>
+                          <span style="font-size:0.625rem;color:#94a3b8">O clique chama BtnComprarEspada.OnClick()</span>
+                          <span style="font-size:0.625rem;color:#64748b">Canvas UI 16:9 · Cena ativa LojaUI.unity</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Barra Inferior: PROJECT / ASSETS -->
+                  <div class="unity-bottom-row">
+                    <div class="unity-tabs-bar">
+                      <div style="display:flex;gap:4px">
+                        <span style="background:#1e1e24;border:1.2px solid #38bdf8;border-radius:4px;padding:1px 8px;font-size:0.625rem;font-weight:700;color:#38bdf8">Project</span>
+                        <span style="padding:1px 8px;font-size:0.625rem;color:#9ca3af;display:inline-flex;align-items:center;gap:4px" class="tabular">
+                          <span style="width:4px;height:4px;border-radius:50%;background:#10b981"></span> Console (0 erros)
+                        </span>
+                      </div>
+                      <span style="font-size:0.625rem;color:#6b7280;font-family:var(--exo-font-mono)">Exoforge SDK v0.1.38</span>
+                    </div>
+                    <div class="unity-project-body">
+                      <!-- Pastas do Projeto -->
+                      <div style="font-size:0.6875rem;color:#9ca3af;display:flex;flex-direction:column;gap:3px;width:210px">
+                        <div><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:4px"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Assets /</div>
+                        <div style="margin-left:10px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:4px"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Scenes / LojaUI.unity</div>
+                        <div style="margin-left:10px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:4px"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Scripts /</div>
+                        <div style="margin-left:16px"><span style="background:#1c202a;border:1px solid #38bdf8;border-radius:3px;padding:1px 6px;color:#7dd3fc;font-weight:600"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:4px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>LojaController.cs</span></div>
+                      </div>
+
+                      <!-- Pasta destacada Exoforge / Extensions -->
+                      <div class="unity-exo-folder-card">
+                        <div style="display:flex;align-items:center;justify-content:space-between">
+                          <span style="background:rgba(139,92,246,0.25);border:1px solid #a78bfa;border-radius:9999px;padding:2px 7px;font-size:0.625rem;font-weight:800;color:#ddd6fe;letter-spacing:0.5px">PASTA EXCLUSIVA EXOFORGE</span>
+                          <span style="font-size:0.625rem;color:#a78bfa">Workspace do Jogo</span>
+                        </div>
+                        <div style="font-size:0.75rem;font-weight:700;color:#f3f4f6"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c084fc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:5px"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Exoforge / Extensions /</div>
+                        <div style="font-size:0.625rem;color:#cbd5e1;line-height:1.25">Onde os módulos C# nascem e compilam nativamente.</div>
+                        <div style="font-size:0.625rem;color:#9ca3af;line-height:1.25">Totalmente integrado ao assembly do Unity sem abrir IDE externa.</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Coluna 3: EXOFORGE STUDIO (DOCKED) -->
+                <div class="unity-studio-pane">
+                  <div>
+                    <!-- Cabeçalho Exoforge Studio ▸ Extensions -->
+                    <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--exo-border);padding-bottom:6px;margin-bottom:8px">
+                      <strong style="font-size:0.8125rem;font-weight:700;color:#f3f4f6">Exoforge Studio ▸ Extensions</strong>
+                      <span style="display:inline-flex;align-items:center;gap:4px;background:rgba(16,185,129,0.15);border:1px solid #10b981;padding:2px 8px;border-radius:9999px;font-size:0.625rem;font-weight:700;color:#34d399">
+                        <span style="width:5px;height:5px;border-radius:50%;background:#10b981"></span> Cluster Conectado
+                      </span>
+                    </div>
+
+                    <div style="font-size:0.625rem;font-weight:700;color:#a78bfa;letter-spacing:0.5px;text-transform:uppercase;margin-bottom:6px">EXTENSÕES NO WORKSPACE DO JOGO</div>
+
+                    <!-- Extensão 1: player_profile -->
+                    <div class="unity-ext-card" style="margin-bottom:6px">
+                      <div style="display:flex;align-items:center;gap:8px">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="5" rx="2"/><rect x="2" y="10" width="20" height="5" rx="2"/><rect x="2" y="17" width="20" height="5" rx="2"/><circle cx="6" cy="5.5" r="1" fill="#38bdf8"/><circle cx="6" cy="12.5" r="1" fill="#38bdf8"/><circle cx="6" cy="19.5" r="1" fill="#38bdf8"/></svg>
+                        <div>
+                          <strong style="font-size:0.75rem;color:#f3f4f6">player_profile</strong>
+                          <div style="font-size:0.625rem;color:#9ca3af">Autenticação, sessões e perfil de jogadores</div>
+                        </div>
+                      </div>
+                      <div style="display:flex;align-items:center;gap:4px">
+                        <span style="background:#202026;border-radius:3px;padding:1px 5px;font-size:0.625rem;color:#9ca3af;font-weight:600">C# Nativo</span>
+                        <span style="background:rgba(16,185,129,0.15);border:1px solid #10b981;border-radius:9999px;padding:1px 6px;font-size:0.625rem;font-weight:700;color:#34d399">✓ Ativo</span>
+                      </div>
+                    </div>
+
+                    <!-- Extensão 2: match_events -->
+                    <div class="unity-ext-card" style="margin-bottom:8px">
+                      <div style="display:flex;align-items:center;gap:8px">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="#a78bfa" stroke="#a78bfa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                        <div>
+                          <strong style="font-size:0.75rem;color:#f3f4f6">match_events</strong>
+                          <div style="font-size:0.625rem;color:#9ca3af">Telemetria e eventos de partida em tempo real</div>
+                        </div>
+                      </div>
+                      <div style="display:flex;align-items:center;gap:4px">
+                        <span style="background:#202026;border-radius:3px;padding:1px 5px;font-size:0.625rem;color:#9ca3af;font-weight:600">C# Nativo</span>
+                        <span style="background:rgba(16,185,129,0.15);border:1px solid #10b981;border-radius:9999px;padding:1px 6px;font-size:0.625rem;font-weight:700;color:#34d399">✓ Ativo</span>
+                      </div>
+                    </div>
+
+                    <!-- Botão + New Extension -->
+                    
+                    <div style="position:relative;margin:10px 0 6px">
+                      <div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:#10b981;border:1px solid #34d399;border-radius:9999px;padding:1px 8px;font-size:0.625rem;font-weight:800;color:#ffffff;z-index:2;box-shadow:0 0 8px rgba(16,185,129,0.5)">CLIQUE AQUI</div>
+                      <button type="button" class="unity-btn-new-ext-highlight">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="#ffffff"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                        <span>+ New Extension</span>
+                      </button>
+                    </div>
+                    
+
+                    <!-- Placeholder slot -->
+                    <div style="background:#141417;border:1px dashed #262632;border-radius:6px;padding:5px 8px;font-size:0.625rem;color:#6b7280;text-align:center;margin-bottom:8px">+ Nova extensão aparecerá aqui após criada</div>
+                  </div>
+
+                  <!-- Base da Coluna Direita: Toasts Flutuantes Compactos (Slide 4) -->
+                  
+                  <div style="display:flex;flex-direction:column;gap:6px">
+                    <!-- Toast 1: 100% dentro da Unity -->
+                    <div class="unity-toast purple">
+                      <div style="color:#a78bfa;flex-shrink:0;display:flex;align-items:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="#a78bfa" stroke="#a78bfa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
+                      <div>
+                        <strong style="font-size:0.75rem;font-weight:800;color:#ddd6fe;display:block">100% dentro da Unity</strong>
+                        <span style="font-size:0.65625rem;color:#cbd5e1">Sem terminal, Docker ou console da nuvem.</span>
+                      </div>
+                    </div>
+                    <!-- Toast 2: 1 clique em + New Extension -->
+                    <div class="unity-toast green">
+                      <div style="color:#10b981;flex-shrink:0;display:flex;align-items:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+                      <div>
+                        <strong style="font-size:0.75rem;font-weight:800;color:#34d399;display:block">1 clique em + New Extension</strong>
+                        <span style="font-size:0.65625rem;color:#cbd5e1">Inicia o serviço C# já conectado ao jogo.</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                </div>
+              </div>
+            </div>
+  
+          </div>
+        </section>
+
+        <!-- SLIDE 5: ATO III · DA UNITY PARA A NUVEM (2/2) (1 beat: 12) -->
+        <section class="slide" data-slide="5" data-steps="1" data-current-step="0" id="slide-5">
+          <header class="slide-header">
+            <div>
+              <span class="slide-category">ATO III · DA UNITY PARA A NUVEM (2/2)</span>
+              <h2 class="slide-title">Um template pronto gera o serviço online na hora.</h2>
+            </div>
+            <div class="slide-step-pill" id="pill-5">Slide 6 de 10</div>
+          </header>
+          <div class="slide5-wrapper">
+            <!-- Fundo escurecido da Unity inteira (com o jogo mockup visível suavemente atrás) -->
+            <div class="slide5-bg-dimmed" style="opacity: 0.28">
+
+            <div class="unity-shell">
+              <!-- Topbar do Unity -->
+              <div class="unity-topbar">
+                <div style="display:flex;align-items:center">
+                  <div class="unity-dots">
+                    <div class="unity-dot red"></div>
+                    <div class="unity-dot yellow"></div>
+                    <div class="unity-dot green"></div>
+                  </div>
+                  <span class="unity-title">MyFantasyRPG — LojaUI.unity — Unity 6</span>
+                </div>
+
+                <!-- Toolbar do Unity (Centro: Play / Pause / Step) -->
+                <div class="unity-play-controls">
+                  <div class="unity-play-btn" title="Play"><svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>
+                  <div class="unity-pause-btn" title="Pause"><svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></div>
+                  <div class="unity-step-btn" title="Step"><svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 4 15 12 5 20 5 4"/><rect x="17" y="4" width="2" height="16" rx="1"/></svg></div>
+                </div>
+
+                <!-- Toolbar Direita (Layers e Layout: Exoforge) -->
+                <div class="unity-topbar-right">
+                  <div class="unity-pill-layers">Layers</div>
+                  <div class="unity-pill-layout">Layout: Exoforge</div>
+                </div>
+              </div>
+
+              <!-- Unity Workspace Layout -->
+              <div class="unity-body">
+                <!-- Left Pane: Hierarchy + Game View + Project -->
+                <div class="unity-left-pane">
+                  <!-- Top Row: Hierarchy + Game View -->
+                  <div class="unity-top-row">
+                    <!-- Coluna 1: HIERARCHY -->
+                    <div class="unity-hierarchy">
+                      <div class="unity-panel-header">HIERARCHY</div>
+                      <div class="unity-hierarchy-tree">
+                        <div style="color:#a78bfa;font-weight:700">▾ LojaUI (Scene)</div>
+                        <div style="margin-left:10px;color:#9ca3af">Main Camera</div>
+                        <div style="margin-left:10px;color:#9ca3af">Directional Light</div>
+                        <div style="color:#a78bfa;font-weight:700;margin-top:2px">▾ Canvas</div>
+                        <div style="margin-left:10px;color:#cbd5e1">LojaPanel</div>
+                        <div style="margin-left:4px;background:rgba(56,189,248,0.18);border:1.2px solid #38bdf8;border-radius:4px;padding:2px 8px;color:#38bdf8;font-weight:700;display:inline-block">BtnComprarEspada</div>
+                      </div>
+                      <div class="unity-hierarchy-badge">UI selecionada na cena</div>
+                    </div>
+
+                    <!-- Coluna 2: GAME VIEW (Mockup de Jogo RPG!) -->
+                    <div class="unity-gameview">
+                      <!-- Abas no topo -->
+                      <div class="unity-tabs-bar">
+                        <div style="display:flex;gap:4px">
+                          <span style="padding:2px 8px;font-size:0.625rem;font-weight:600;color:#6b7280">Scene</span>
+                          <span style="background:#202434;border:1.5px solid #38bdf8;border-radius:4px;padding:2px 10px;font-size:0.65rem;font-weight:700;color:#38bdf8">Game</span>
+                        </div>
+                        <span style="display:inline-flex;align-items:center;gap:5px;font-size:0.625rem;font-weight:600;color:#9ca3af;background:#141417;border:1px solid #2e2e38;padding:2px 8px;border-radius:9999px">
+                          <span style="width:5px;height:5px;border-radius:50%;background:#10b981"></span> 16:9 · Play
+                        </span>
+                      </div>
+
+                      <!-- Canvas do Jogo Mockup -->
+                      <div class="unity-game-canvas">
+                        <!-- Barra superior do jogo: OURO: 1.250 e NÍVEL 12 -->
+                        <div class="rpg-top-hud">
+                          <div style="display:flex;align-items:center;gap:6px">
+                            <span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:#fbbf24;color:#78350f;font-size:0.625rem;font-weight:900">G</span>
+                            <span style="font-size:0.75rem;font-weight:800;color:#fbbf24" class="tabular">OURO: 1.250</span>
+                          </div>
+                          <span style="font-size:0.71875rem;font-weight:700;color:#94a3b8;letter-spacing:0.5px">Loja do Ferreiro</span>
+                          <span style="background:rgba(139,92,246,0.2);border:1px solid #8b5cf6;border-radius:9999px;padding:2px 8px;font-size:0.625rem;font-weight:800;color:#ddd6fe" class="tabular">NÍVEL 12</span>
+                        </div>
+
+                        <!-- Card central do item da Loja -->
+                        <div class="rpg-shop-card">
+                          <span style="background:rgba(234,179,8,0.15);border:1px solid #eab308;border-radius:9999px;padding:2px 8px;font-size:0.625rem;font-weight:800;color:#fde047;letter-spacing:0.5px">ITEM EM DESTAQUE</span>
+                          <div style="width:40px;height:40px;border-radius:8px;background:#1e263c;border:1.5px solid #fbbf24;display:flex;align-items:center;justify-content:center;margin:2px 0">
+                            <svg width="24" height="24" viewBox="0 0 24 24" stroke="#fbbf24" stroke-linecap="round" stroke-linejoin="round" fill="none">
+                              <path d="M12 2 L14.5 6 L14 14 L12 15 L10 14 L9.5 6 Z" fill="#fbbf24" fill-opacity="0.25" stroke="#fbbf24" stroke-width="1.5"/>
+                              <line x1="12" y1="4" x2="12" y2="13" stroke="#fbbf24" stroke-width="1"/>
+                              <path d="M6 14.5 C8 13.5 16 13.5 18 14.5" stroke="#fbbf24" stroke-width="2"/>
+                              <circle cx="6" cy="14.5" r="1" fill="#fbbf24"/>
+                              <circle cx="18" cy="14.5" r="1" fill="#fbbf24"/>
+                              <line x1="12" y1="15" x2="12" y2="20" stroke="#fbbf24" stroke-width="2"/>
+                              <circle cx="12" cy="21.5" r="1.5" fill="#fbbf24"/>
+                            </svg>
+                          </div>
+                          <strong style="font-size:0.9375rem;font-weight:800;color:#f3f4f6">Espada Lendária</strong>
+                          <span style="font-size:0.6875rem;font-weight:600;color:#a78bfa">Dano +45 · Raridade Épica</span>
+                          <div class="rpg-buy-btn">COMPRAR · <span class="tabular">500 OURO</span></div>
+                          <span style="font-size:0.625rem;color:#94a3b8">O clique chama BtnComprarEspada.OnClick()</span>
+                          <span style="font-size:0.625rem;color:#64748b">Canvas UI 16:9 · Cena ativa LojaUI.unity</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Barra Inferior: PROJECT / ASSETS -->
+                  <div class="unity-bottom-row">
+                    <div class="unity-tabs-bar">
+                      <div style="display:flex;gap:4px">
+                        <span style="background:#1e1e24;border:1.2px solid #38bdf8;border-radius:4px;padding:1px 8px;font-size:0.625rem;font-weight:700;color:#38bdf8">Project</span>
+                        <span style="padding:1px 8px;font-size:0.625rem;color:#9ca3af;display:inline-flex;align-items:center;gap:4px" class="tabular">
+                          <span style="width:4px;height:4px;border-radius:50%;background:#10b981"></span> Console (0 erros)
+                        </span>
+                      </div>
+                      <span style="font-size:0.625rem;color:#6b7280;font-family:var(--exo-font-mono)">Exoforge SDK v0.1.38</span>
+                    </div>
+                    <div class="unity-project-body">
+                      <!-- Pastas do Projeto -->
+                      <div style="font-size:0.6875rem;color:#9ca3af;display:flex;flex-direction:column;gap:3px;width:210px">
+                        <div><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:4px"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Assets /</div>
+                        <div style="margin-left:10px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:4px"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Scenes / LojaUI.unity</div>
+                        <div style="margin-left:10px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:4px"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Scripts /</div>
+                        <div style="margin-left:16px"><span style="background:#1c202a;border:1px solid #38bdf8;border-radius:3px;padding:1px 6px;color:#7dd3fc;font-weight:600"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:4px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>LojaController.cs</span></div>
+                      </div>
+
+                      <!-- Pasta destacada Exoforge / Extensions -->
+                      <div class="unity-exo-folder-card">
+                        <div style="display:flex;align-items:center;justify-content:space-between">
+                          <span style="background:rgba(139,92,246,0.25);border:1px solid #a78bfa;border-radius:9999px;padding:2px 7px;font-size:0.625rem;font-weight:800;color:#ddd6fe;letter-spacing:0.5px">PASTA EXCLUSIVA EXOFORGE</span>
+                          <span style="font-size:0.625rem;color:#a78bfa">Workspace do Jogo</span>
+                        </div>
+                        <div style="font-size:0.75rem;font-weight:700;color:#f3f4f6"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c084fc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:5px"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Exoforge / Extensions /</div>
+                        <div style="font-size:0.625rem;color:#cbd5e1;line-height:1.25">Onde os módulos C# nascem e compilam nativamente.</div>
+                        <div style="font-size:0.625rem;color:#9ca3af;line-height:1.25">Totalmente integrado ao assembly do Unity sem abrir IDE externa.</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Coluna 3: EXOFORGE STUDIO (DOCKED) -->
+                <div class="unity-studio-pane">
+                  <div>
+                    <!-- Cabeçalho Exoforge Studio ▸ Extensions -->
+                    <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--exo-border);padding-bottom:6px;margin-bottom:8px">
+                      <strong style="font-size:0.8125rem;font-weight:700;color:#f3f4f6">Exoforge Studio ▸ Extensions</strong>
+                      <span style="display:inline-flex;align-items:center;gap:4px;background:rgba(16,185,129,0.15);border:1px solid #10b981;padding:2px 8px;border-radius:9999px;font-size:0.625rem;font-weight:700;color:#34d399">
+                        <span style="width:5px;height:5px;border-radius:50%;background:#10b981"></span> Cluster Conectado
+                      </span>
+                    </div>
+
+                    <div style="font-size:0.625rem;font-weight:700;color:#a78bfa;letter-spacing:0.5px;text-transform:uppercase;margin-bottom:6px">EXTENSÕES NO WORKSPACE DO JOGO</div>
+
+                    <!-- Extensão 1: player_profile -->
+                    <div class="unity-ext-card" style="margin-bottom:6px">
+                      <div style="display:flex;align-items:center;gap:8px">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="5" rx="2"/><rect x="2" y="10" width="20" height="5" rx="2"/><rect x="2" y="17" width="20" height="5" rx="2"/><circle cx="6" cy="5.5" r="1" fill="#38bdf8"/><circle cx="6" cy="12.5" r="1" fill="#38bdf8"/><circle cx="6" cy="19.5" r="1" fill="#38bdf8"/></svg>
+                        <div>
+                          <strong style="font-size:0.75rem;color:#f3f4f6">player_profile</strong>
+                          <div style="font-size:0.625rem;color:#9ca3af">Autenticação, sessões e perfil de jogadores</div>
+                        </div>
+                      </div>
+                      <div style="display:flex;align-items:center;gap:4px">
+                        <span style="background:#202026;border-radius:3px;padding:1px 5px;font-size:0.625rem;color:#9ca3af;font-weight:600">C# Nativo</span>
+                        <span style="background:rgba(16,185,129,0.15);border:1px solid #10b981;border-radius:9999px;padding:1px 6px;font-size:0.625rem;font-weight:700;color:#34d399">✓ Ativo</span>
+                      </div>
+                    </div>
+
+                    <!-- Extensão 2: match_events -->
+                    <div class="unity-ext-card" style="margin-bottom:8px">
+                      <div style="display:flex;align-items:center;gap:8px">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="#a78bfa" stroke="#a78bfa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                        <div>
+                          <strong style="font-size:0.75rem;color:#f3f4f6">match_events</strong>
+                          <div style="font-size:0.625rem;color:#9ca3af">Telemetria e eventos de partida em tempo real</div>
+                        </div>
+                      </div>
+                      <div style="display:flex;align-items:center;gap:4px">
+                        <span style="background:#202026;border-radius:3px;padding:1px 5px;font-size:0.625rem;color:#9ca3af;font-weight:600">C# Nativo</span>
+                        <span style="background:rgba(16,185,129,0.15);border:1px solid #10b981;border-radius:9999px;padding:1px 6px;font-size:0.625rem;font-weight:700;color:#34d399">✓ Ativo</span>
+                      </div>
+                    </div>
+
+                    <!-- Botão + New Extension -->
+                    
+                    <div style="margin:8px 0 6px">
+                      <button type="button" class="unity-btn-new-ext-plain">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="#ffffff"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                        <span>+ New Extension</span>
+                      </button>
+                    </div>
+                    
+
+                    <!-- Placeholder slot -->
+                    <div style="background:#141417;border:1px dashed #262632;border-radius:6px;padding:5px 8px;font-size:0.625rem;color:#6b7280;text-align:center;margin-bottom:8px">+ Nova extensão aparecerá aqui após criada</div>
+                  </div>
+
+                  <!-- Base da Coluna Direita: Toasts Flutuantes Compactos (Slide 4) -->
+                  
+                </div>
+              </div>
+            </div>
+  
+            </div>
+            <!-- Dimming Overlay adicional para destaque suave do modal -->
+            <div class="slide5-scrim"></div>
+
+            <!-- Conteúdo centralizado: Modal + Toasts -->
+            <div class="slide5-content">
+              <!-- Popup Modal Create New Extension centralizado -->
+              <div class="slide5-modal">
+                <!-- Header do Modal -->
+                <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--exo-border);padding-bottom:6px">
+                  <div>
+                    <div style="font-size:1.0625rem;font-weight:800;color:var(--exo-text);line-height:1.2">Create New Extension</div>
+                    <div style="font-size:0.6875rem;color:var(--exo-text-muted)">Gere um módulo C# pronto direto no workspace do jogo.</div>
+                  </div>
+                  <span class="badge-pill violet" style="font-size:0.625rem">POPUP NA UNITY</span>
+                </div>
+
+                <!-- Campo 1: Extension Name -->
+                <div>
+                  <div style="font-size:0.625rem;font-weight:700;color:#a78bfa;letter-spacing:0.04em;text-transform:uppercase;margin-bottom:3px">EXTENSION NAME (ID DO SERVIÇO)</div>
+                  <div style="background:#141417;border:1.5px solid #38bdf8;border-radius:6px;padding:5px 12px;font-family:var(--exo-font-mono);font-size:0.75rem;font-weight:700;color:#38bdf8">loja_itens</div>
+                </div>
+
+                <!-- Campo 2: Template da Extensão -->
+                <div>
+                  <div style="font-size:0.625rem;font-weight:700;color:#a78bfa;letter-spacing:0.04em;text-transform:uppercase;margin-bottom:3px">TEMPLATE DA EXTENSÃO</div>
+                  <!-- Opção 1: Persistent Data (Resource & DB) - RECOMENDADO -->
+                  <div style="background:rgba(16,185,129,0.14);border:2px solid #10b981;border-radius:8px;padding:6px 12px;display:flex;flex-direction:column;gap:2px;margin-bottom:5px">
+                    <div style="display:flex;align-items:center;justify-content:space-between">
+                      <strong style="font-size:0.75rem;color:#34d399">Persistent Data (Resource &amp; DB)</strong>
+                      <span class="badge-pill emerald" style="font-size:0.625rem;padding:1px 6px">RECOMENDADO</span>
+                    </div>
+                    <div style="font-size:0.65625rem;color:#cbd5e1;line-height:1.25">Gera serviço com [ExoResource] e banco transacional em C#.</div>
+                    <div style="font-size:0.625rem;font-weight:600;color:#9ca3af">Ideal para lojas de itens, inventários, carteiras e dados de jogador.</div>
+                  </div>
+
+                  <!-- Opções compactas 2, 3, 4 -->
+                  <div style="display:flex;flex-direction:column;gap:3px">
+                    <div style="background:#18181d;border:1px solid var(--exo-border);border-radius:4px;padding:3px 8px;font-size:0.65625rem;color:#d1d5db;display:flex;align-items:center;justify-content:space-between">
+                      <span>Basic Service</span>
+                      <span style="font-size:0.625rem;color:#6b7280">· Ações RPC simples sem persistência em banco</span>
+                    </div>
+                    <div style="background:#18181d;border:1px solid var(--exo-border);border-radius:4px;padding:3px 8px;font-size:0.65625rem;color:#d1d5db;display:flex;align-items:center;justify-content:space-between">
+                      <span>Config &amp; State</span>
+                      <span style="font-size:0.625rem;color:#6b7280">· Singleton de configuração com cache em memória</span>
+                    </div>
+                    <div style="background:#18181d;border:1px solid var(--exo-border);border-radius:4px;padding:3px 8px;font-size:0.65625rem;color:#d1d5db;display:flex;align-items:center;justify-content:space-between">
+                      <span>Event Producer</span>
+                      <span style="font-size:0.625rem;color:#6b7280">· Publicação de eventos pub/sub em tempo real</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Botão Roxo: Create Extension -->
+                <button type="button" style="width:100%;background:#8b5cf6;border:1.5px solid #c084fc;border-radius:6px;padding:7px;font-size:0.8125rem;font-weight:800;color:#ffffff;text-align:center;box-shadow:0 0 16px rgba(139,92,246,0.4);cursor:pointer">Create Extension</button>
+
+                <!-- Card de Sucesso -->
+                <div style="background:#141417;border:1.5px solid #10b981;border-radius:6px;padding:6px 10px;display:flex;align-items:center;gap:8px">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><polyline points="20 6 9 17 4 12"/></svg>
+                  <div>
+                    <strong style="font-size:0.71875rem;color:#34d399">Extensão Criada com Sucesso</strong>
+                    <div style="font-size:0.65625rem;color:#f3f4f6">Gera <strong>LojaDeItens.cs</strong> pronto na Unity — sem Docker nem YAML.</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Faixa Inferior: 2 Toasts Flutuantes Lado a Lado -->
+              <div class="slide5-toasts-row">
+                <!-- Toast 1: Template Persistent Data -->
+                <div style="flex:1;background:rgba(20,20,23,0.95);border:1.5px solid #10b981;border-radius:8px;padding:8px 12px;display:flex;align-items:center;gap:8px;box-shadow:0 4px 14px rgba(0,0,0,0.4)">
+                  <div style="color:#10b981;flex-shrink:0;display:flex;align-items:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+                  <div>
+                    <strong style="font-size:0.71875rem;font-weight:800;color:#34d399;display:block">Template Persistent Data → Banco e API já prontos</strong>
+                    <span style="font-size:0.625rem;color:#cbd5e1">Estrutura transacional pronta para itens e ouro.</span>
+                  </div>
+                </div>
+
+                <!-- Toast 2: Gera LojaDeItens.cs -->
+                <div style="flex:1;background:rgba(20,20,23,0.95);border:1.5px solid #8b5cf6;border-radius:8px;padding:8px 12px;display:flex;align-items:center;gap:8px;box-shadow:0 4px 14px rgba(0,0,0,0.4)">
+                  <div style="color:#a78bfa;flex-shrink:0;display:flex;align-items:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="#a78bfa" stroke="#a78bfa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
+                  <div>
+                    <strong style="font-size:0.71875rem;font-weight:800;color:#ddd6fe;display:block">Gera LojaDeItens.cs na Unity</strong>
+                    <span style="font-size:0.625rem;color:#cbd5e1">Código C# pronto para a regra do jogo, sem SQL nem YAML.</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- SLIDE 6: ATO III · A SOLUÇÃO EM C# (6 beats: 13..18) -->
+        <section class="slide" data-slide="6" data-steps="6" data-current-step="0" id="slide-6">
+          <header class="slide-header">
+            <div>
+              <span class="slide-category">ATO III · A SOLUÇÃO EM C#</span>
+              <h2 class="slide-title">A Solução em Código: 21 Linhas de C# Substituem 4 Profissões.</h2>
+            </div>
+            <div class="slide-step-pill" id="pill-6">Etapa 1 de 6</div>
+          </header>
+          <div class="s3-container">
+            <div class="s3-code-panel">
+              <div class="s3-code-header">
+                <div class="s3-dots"><div class="s3-dot" style="background:#ef4444"></div><div class="s3-dot" style="background:#f59e0b"></div><div class="s3-dot" style="background:#10b981"></div></div>
+                <span style="font-size:0.75rem;color:var(--exo-text-muted);font-family:var(--exo-font-mono)">LojaDeItens.cs · C# 9 Unity + Exoforge SDK (21 linhas)</span>
+                <span class="badge-pill emerald" style="font-size:0.625rem">21 Linhas Válidas</span>
+              </div>
+              <div class="s3-code-body"><code><span class="code-ln">01</span><span class="code-hl code-hl-4" data-hl="4"><span class="tok-org">[ExoService(</span><span class="tok-str">&quot;loja_itens&quot;</span><span class="tok-org">)]</span></span>
+<span class="code-ln">02</span><span class="tok-purple">public class</span> <span class="tok-sky">LojaDeItens</span>
+<span class="code-ln">03</span>{
+<span class="code-ln">04</span>  <span class="code-hl code-hl-2" data-hl="2"><span class="tok-sky">[ExoAction(</span></span><span class="code-hl code-hl-3" data-hl="3"><span class="tok-rose">Scope = </span><span class="tok-str">&quot;player&quot;</span></span><span class="code-hl code-hl-2" data-hl="2"><span class="tok-sky">)]</span></span>
+<span class="code-ln">05</span>  <span class="tok-purple">public</span> <span class="tok-sky">Inventario</span> <span class="tok-em">ComprarEspada</span>()
+<span class="code-ln">06</span>  {
+<span class="code-hl code-hl-5" data-hl="5"><span class="code-ln">07</span>    <span class="tok-purple">var</span> inv = <span class="tok-em">Exo.Database.Get</span>&lt;<span class="tok-sky">Inventario</span>&gt;(<span class="tok-em">Exo.Context.CallerPlayerId</span>);
+<span class="code-ln">08</span>    <span class="tok-purple">if</span> (inv.Ouro &lt; <span class="tok-em">500</span>) <span class="tok-purple">throw new</span> <span class="tok-sky">ExoActionException</span>(<span class="tok-str">&quot;Sem ouro!&quot;</span>);
+<span class="code-ln">09</span>    inv.Ouro -= <span class="tok-em">500</span>;
+<span class="code-ln">10</span>    inv.Itens.Add(<span class="tok-str">&quot;espada_lendaria&quot;</span>);
+<span class="code-ln">11</span>    <span class="tok-em">Exo.Database.Put</span>(inv);
+<span class="code-ln">12</span>    <span class="tok-purple">return</span> inv;</span>
+<span class="code-ln">13</span>  }
+<span class="code-ln">14</span>}
+<span class="code-hl code-hl-1" data-hl="1"><span class="code-ln">15</span><span class="tok-kw">[ExoResource]</span>
+<span class="code-ln">16</span><span class="tok-purple">public struct</span> <span class="tok-sky">Inventario</span>
+<span class="code-ln">17</span>{
+<span class="code-ln">18</span>  <span class="tok-purple">public string</span> Id;
+<span class="code-ln">19</span>  <span class="tok-purple">public int</span> Ouro;
+<span class="code-ln">20</span>  <span class="tok-purple">public List&lt;string&gt;</span> Itens;
+<span class="code-ln">21</span>}</span></code></div>
+              <div style="display:flex;align-items:center;justify-content:center;padding:7px 10px;background:#141417;border:1px solid var(--exo-border);border-radius:var(--exo-radius-md);margin-top:auto">
+                <span style="font-size:0.6875rem;font-weight:700;color:#34d399">21 Linhas (vs. ~180 manuais) · Code Red (2022): código enxuto evita 15x mais bugs</span>
+              </div>
+            </div>
+
+            <!-- SVG Connector Arrows (smooth beziers in 75px wide corridor) -->
+            <svg class="s3-arrows-svg" viewBox="0 0 75 500" id="svg-slide6-arrows">
+              <defs>
+                <marker id="arr-orange" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 1 L 8 5 L 0 9 z" fill="#f97316" /></marker>
+                <marker id="arr-sky" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 1 L 8 5 L 0 9 z" fill="#38bdf8" /></marker>
+                <marker id="arr-rose" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 1 L 8 5 L 0 9 z" fill="#ef4444" /></marker>
+                <marker id="arr-emerald" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 1 L 8 5 L 0 9 z" fill="#10b981" /></marker>
+                <marker id="arr-amber" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 1 L 8 5 L 0 9 z" fill="#fbbf24" /></marker>
+              </defs>
+              <path class="s3-arrow-path s3-arrow-4" d="M 0 48 C 35 48, 35 39, 68 39" marker-end="url(#arr-orange)" />
+              <path class="s3-arrow-path s3-arrow-2" d="M 0 96 C 35 96, 35 134, 68 134" marker-end="url(#arr-sky)" />
+              <path class="s3-arrow-path s3-arrow-3" d="M 0 100 C 35 100, 35 232, 68 232" marker-end="url(#arr-rose)" />
+              <path class="s3-arrow-path s3-arrow-5" d="M 0 190 C 35 190, 35 336, 68 336" marker-end="url(#arr-emerald)" />
+              <path class="s3-arrow-path s3-arrow-1" d="M 0 335 C 35 335, 35 450, 68 450" marker-end="url(#arr-amber)" />
+            </svg>
+
+            <!-- 5 Callout Cards (ordered top-to-bottom matching code lines) -->
+            <div class="s3-cards-col">
+              <div class="s3-callout s3-c4">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
+                  <span class="badge-pill org">ELIMINA PAPEL DEVOPS</span>
+                  <span style="font-size:0.6875rem;color:var(--exo-text-muted)">[ExoService] · Linha 1</span>
+                </div>
+                <h4 style="font-size:0.9375rem;font-weight:700;color:var(--exo-text)">Publicação na Nuvem em 1 Clique</h4>
+                <p style="font-size:0.75rem;color:var(--exo-text-muted)">Publica direto da Unity, sem containers ou pipelines.</p>
+              </div>
+              <div class="s3-callout s3-c2">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
+                  <span class="badge-pill blue">ELIMINA PAPEL BACKEND</span>
+                  <span style="font-size:0.6875rem;color:var(--exo-text-muted)">[ExoAction] · Linha 4 · Nome inferido</span>
+                </div>
+                <h4 style="font-size:0.9375rem;font-weight:700;color:var(--exo-text)">Conexão Automática com a Unity</h4>
+                <p style="font-size:0.75rem;color:var(--exo-text-muted)">Expõe a ação para a Unity sem rotas manuais.</p>
+              </div>
+              <div class="s3-callout s3-c3">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
+                  <span class="badge-pill rose">ELIMINA PAPEL SEGURANÇA</span>
+                  <a class="cite-tag" href="https://www.forbes.com/sites/panosmourdoukoutas/2018/04/30/report-cheating-is-becoming-a-big-problem-in-online-gaming/" target="_blank" rel="noopener noreferrer"><strong>Scope = &quot;player&quot;</strong> · Irdeto/Forbes: 77% largam cheats ↗</a>
+                </div>
+                <h4 style="font-size:0.9375rem;font-weight:700;color:var(--exo-text)">Proteção Anti-Cheat por Padrão</h4>
+                <p style="font-size:0.75rem;color:var(--exo-text-muted)">Só o jogador autenticado altera seu saldo.</p>
+              </div>
+              <div class="s3-callout s3-c5">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
+                  <span class="badge-pill emerald">CORE GAMEPLAY · C# 9</span>
+                  <a class="cite-tag" href="https://arxiv.org/abs/2203.04374" target="_blank" rel="noopener noreferrer"><strong>Linhas 7–12 · Code Red 2022 (39 empresas) ↗</strong></a>
+                </div>
+                <h4 style="font-size:0.9375rem;font-weight:800;color:var(--exo-text)">Foco 100% no Gameplay</h4>
+                <p style="font-size:0.75rem;color:#d1d5db">Código enxuto só no jogo evita 15x mais bugs e +124% de atraso.</p>
+                <div style="font-size:0.6875rem;font-weight:600;color:#34d399;margin-top:2px">Apenas a regra do ouro e da espada — o resto é gerenciado pelo Exoforge.</div>
+              </div>
+              <div class="s3-callout s3-c1">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
+                  <span class="badge-pill amber">ELIMINA PAPEL DBA</span>
+                  <span style="font-size:0.6875rem;color:var(--exo-text-muted)">[ExoResource] · Linhas 15–21</span>
+                </div>
+                <h4 style="font-size:0.9375rem;font-weight:700;color:var(--exo-text)">Persistência Segura Sem SQL</h4>
+                <p style="font-size:0.75rem;color:var(--exo-text-muted)">Salva ouro e itens em banco transacional, sem SQL.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- SLIDE 7: ATO III · OPERAÇÃO GERENCIADA (4 beats: 19..22) -->
+        <section class="slide" data-slide="7" data-steps="4" data-current-step="0" id="slide-7">
+          <header class="slide-header">
+            <div>
+              <span class="slide-category">ATO III · OPERAÇÃO GERENCIADA</span>
+              <h2 class="slide-title">Operação Enterprise: Painel, Logs e Escala sem Escrever Infra.</h2>
+            </div>
+            <div class="slide-step-pill" id="pill-7">Etapa 1 de 4</div>
+          </header>
+          <div class="s4-container">
+            <div style="background:var(--exo-surface-subtle);border:1px solid var(--exo-border);border-radius:var(--exo-radius-md);padding:6px 14px;font-size:0.75rem;color:#ddd6fe;display:flex;align-items:center;justify-content:space-between">
+              <span>Ao delegar a infraestrutura ao Exoforge, o estúdio já começa com operação completa desde o Dia 1:</span>
+              <span class="badge-pill violet">Zero Código Extra</span>
+            </div>
+
+            <div class="s4-grid-factory">
+              <!-- Card 1: Studio (Beat 19 / Step 0) -->
+              <div class="s4-factory-card" data-highlight-on="0">
+                <div>
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><span class="badge-pill blue">Interface Pronta · Dia 1</span><span class="badge-pill blue" style="font-size:0.625rem">Painel Nativo</span></div>
+                  <h3 style="font-size:1rem;font-weight:600;color:var(--exo-text);margin-bottom:2px">Painel Ao Vivo (Producer Studio)</h3>
+                  <p style="font-size:0.7125rem;color:var(--exo-text-muted)">Game designers consultam e ajustam itens do jogo ao vivo, sem criar painel interno.</p>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:5px">
+                  <div class="s4-catalog-row"><span style="font-family:var(--exo-font-mono)">espada_lendaria</span><span style="color:#fde68a;font-weight:600" class="tabular">500 Ouro</span><span style="color:#6ee7b7">● Ativo</span></div>
+                  <div class="s4-catalog-row"><span style="font-family:var(--exo-font-mono)">escudo_guardiao</span><span style="color:#fde68a;font-weight:600" class="tabular">350 Ouro</span><span style="color:#6ee7b7">● Ativo</span></div>
+                  <div class="s4-catalog-row"><span style="font-family:var(--exo-font-mono)">pocao_vida_gg</span><span style="color:#fde68a;font-weight:600" class="tabular">50 Ouro</span><span style="color:#6ee7b7">● Ativo</span></div>
+                </div>
+                <a class="cite-tag" href="https://teamtopologies.com/book" target="_blank" rel="noopener noreferrer"><strong>Team Topologies (Skelton &amp; Pais, 2019):</strong> plataforma pronta evita sobrecarga do time ↗</a>
+              </div>
+
+              <!-- Card 2: Logs em Fluxo (Beat 20 / Step 1) -->
+              <div class="s4-factory-card" data-show-from="1" data-highlight-on="1">
+                <div>
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><span class="badge-pill emerald">Logs em Fluxo</span><span class="badge-pill emerald">Replay 1 Clique</span></div>
+                  <h3 style="font-size:1rem;font-weight:600;color:var(--exo-text);margin-bottom:2px">Tabela de Logs Seguindo o Fluxo</h3>
+                </div>
+                <div class="s4-log-table">
+                  <div class="s4-log-row"><span class="s4-log-step">1. Pedido →</span><span>Lucas clicou &quot;Comprar Espada&quot;</span><span style="color:#6ee7b7;font-weight:600">✓ Recebido</span></div>
+                  <div class="s4-log-row"><span class="s4-log-step" style="color:#fde68a">2. Saldo ↓</span><span>Carteira: <span class="tabular">500 Ouro</span> descontados</span><span style="color:#6ee7b7;font-weight:600">✓ Validado</span></div>
+                  <div class="s4-log-row"><span class="s4-log-step" style="color:#6ee7b7">3. Entrega ✓</span><span>Espada salva no inventário</span><span class="badge-pill emerald" style="font-size:0.625rem;padding:2px 8px;display:inline-flex;align-items:center;gap:3px"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>Replay</span></div>
+                </div>
+                <a class="cite-tag" href="https://queue.acm.org/detail.cfm?id=3595878" target="_blank" rel="noopener noreferrer"><strong>DevEx (Noda et al., ACM Queue 2023):</strong> feedback rápido mantém produtividade do time ↗</a>
+              </div>
+
+              <!-- Card 3: Grafo de Escalabilidade (Beat 21 / Step 2) -->
+              <div class="s4-factory-card" data-show-from="2" data-highlight-on="2">
+                <div>
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><span class="badge-pill violet">Escala Automática</span><span class="badge-pill violet">Sem Config Manual</span></div>
+                  <h3 style="font-size:1rem;font-weight:600;color:var(--exo-text);margin-bottom:2px">Exoforge: Auto-scale (100 a 100k+ online)</h3>
+                </div>
+                <div class="s4-graph-box">
+                  <svg viewBox="0 0 510 105" style="width:100%;height:96px;display:block">
+                    <!-- Axes & Grid -->
+                    <line x1="34" y1="84" x2="494" y2="84" stroke="#2e2e38" stroke-width="1.2"/>
+                    <line x1="34" y1="12" x2="34" y2="84" stroke="#2e2e38" stroke-width="1.2"/>
+                    <text x="16" y="48" font-size="8.5" fill="#9ca3af" text-anchor="middle" transform="rotate(-90 16 48)">Capacidade</text>
+                    <!-- Traditional failing line -->
+                    <path d="M 46 74 L 170 60 L 290 42 L 325 76" fill="none" stroke="#ef4444" stroke-width="2" stroke-dasharray="4 3"/>
+                    <circle cx="325" cy="76" r="3.5" fill="#ef4444"/>
+                    <text x="334" y="79" font-size="9" font-weight="700" fill="#fca5a5">✕ Servidor comum cai no pico</text>
+                    <!-- Exoforge scaling graph -->
+                    <path d="M 46 74 L 180 54 L 320 34 L 465 16" fill="none" stroke="#10b981" stroke-width="2.5"/>
+                    <circle cx="46" cy="74" r="4" fill="#38bdf8" stroke="#141417" stroke-width="1.5"/>
+                    <circle cx="180" cy="54" r="4.5" fill="#8b5cf6" stroke="#141417" stroke-width="1.5"/>
+                    <circle cx="320" cy="34" r="5" fill="#10b981" stroke="#141417" stroke-width="1.5"/>
+                    <circle cx="465" cy="16" r="5.5" fill="#34d399" stroke="#ffffff" stroke-width="1.5"/>
+                    <text x="58" y="96" font-size="8.5" fill="#93c5fd" text-anchor="middle">100</text>
+                    <text x="180" y="96" font-size="8.5" fill="#ddd6fe" text-anchor="middle">10 mil</text>
+                    <text x="320" y="96" font-size="8.5" fill="#6ee7b7" text-anchor="middle">50 mil</text>
+                    <text x="458" y="96" font-size="8.5" font-weight="700" fill="#34d399" text-anchor="middle">100 mil+ online ✓</text>
+                    <text x="392" y="18" font-size="9" font-weight="700" fill="#6ee7b7" text-anchor="end">Exoforge escala só</text>
+                  </svg>
+                </div>
+                <a class="cite-tag" href="https://create.unity.com/hubfs/Redistributable%20Assets/Unity_Gaming_Report_2024.pdf" target="_blank" rel="noopener noreferrer"><strong>Unity Gaming Report (2024):</strong> 68% criam multiplayer; 37% travam ao integrar ↗</a>
+              </div>
+
+              <!-- Card 4: Downtime Zero (Beat 22 / Step 3) -->
+              <div class="s4-factory-card" data-show-from="3" data-highlight-on="3">
+                <div>
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><span class="badge-pill amber">Sem Quedas</span><span class="badge-pill emerald">Upload &lt; 1s</span></div>
+                  <h3 style="font-size:1rem;font-weight:600;color:var(--exo-text);margin-bottom:2px">Zero Downtime: atualizações ao vivo sem derrubar jogadores.</h3>
+                  <p style="font-size:0.7125rem;color:var(--exo-text-muted)"><strong>Downtime</strong> = tempo em que o jogo precisa fechar para atualizar.</p>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:5px">
+                  <div class="s4-uptime-row">
+                    <div><strong style="color:var(--exo-text)">Tempo de Upload</strong> <span style="color:var(--exo-text-muted)">(enviar correção):</span></div>
+                    <span style="color:#6ee7b7;font-weight:700">&lt; 1 seg vs. horas</span>
+                  </div>
+                  <div class="s4-uptime-row">
+                    <div><strong style="color:var(--exo-text)">Tempo Fora do Ar</strong> <span style="color:var(--exo-text-muted)">(jogo fechado):</span></div>
+                    <span style="color:#6ee7b7;font-weight:700">0s · Ninguém cai</span>
+                  </div>
+                </div>
+                <a class="cite-tag" href="https://arxiv.org/abs/2203.04374" target="_blank" rel="noopener noreferrer"><strong>Tornhill &amp; Borg (2022 · 39 sistemas):</strong> código enxuto sem infra complexa reduz falhas em 15x ↗</a>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- SLIDE 8: ATO III · IMPACTO NO NEGÓCIO (2 beats: 23, 24) -->
+        <section class="slide" data-slide="8" data-steps="2" data-current-step="0" id="slide-8">
+          <header class="slide-header">
+            <div>
+              <span class="slide-category">ATO III · IMPACTO NO NEGÓCIO</span>
+              <h2 class="slide-title">O Retorno Econômico: De Semanas Perdidas para Lançamento no Mesmo Dia.</h2>
+            </div>
+            <div class="slide-step-pill" id="pill-8">Etapa 1 de 2</div>
+          </header>
+          <div class="s5-container">
+            <div class="s5-scorecard">
+              <!-- Left: Tradicional -->
+              <div class="s5-col trad">
+                <div>
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><span class="badge-pill rose">Jeito Tradicional</span><span class="badge-pill rose" style="font-size:0.625rem">ALTO ATRITO &amp; CUSTO</span></div>
+                  <h3 style="font-size:1.1875rem;font-weight:700;color:#f87171;margin-bottom:6px">~180 linhas de infra e troca de contexto</h3>
+                  <div style="display:flex;flex-direction:column;gap:7px;margin-top:10px">
+                    <div style="display:flex;align-items:center;gap:8px;font-size:0.78rem;color:var(--exo-text-muted)"><span style="color:var(--exo-status-error);font-weight:700">✕</span> <span>4 papéis extras fora do jogo: DBA, Backend, Segurança e DevOps (<a class="cite-tag" href="https://reg.gdconf.com/state-of-game-industry-2024" target="_blank" rel="noopener noreferrer">GDC 2024: só 16% live-service ↗</a>)</span></div>
+                    <div style="display:flex;align-items:center;gap:8px;font-size:0.78rem;color:var(--exo-text-muted)"><span style="color:var(--exo-status-error);font-weight:700">✕</span> <span>25m26s para retomar foco por interrupção (<a class="cite-tag" href="https://ics.uci.edu/~gmark/CHI2005.pdf" target="_blank" rel="noopener noreferrer">Mark et al., ACM CHI 2005 ↗</a>)</span></div>
+                    <div style="display:flex;align-items:center;gap:8px;font-size:0.78rem;color:var(--exo-text-muted)"><span style="color:var(--exo-status-error);font-weight:700">✕</span> <span>15x mais bugs e +124% de atraso (<a class="cite-tag" href="https://arxiv.org/abs/2203.04374" target="_blank" rel="noopener noreferrer">Code Red 2022 · 39 sistemas ↗</a>)</span></div>
+                  </div>
+                </div>
+                <a href="https://create.unity.com/hubfs/Redistributable%20Assets/Unity_Gaming_Report_2024.pdf" target="_blank" rel="noopener noreferrer" style="text-decoration:none;background:var(--exo-surface-subtle);border:1px solid var(--exo-border);border-radius:var(--exo-radius-lg);padding:12px;text-align:center;display:block">
+                  <div style="font-size:0.6875rem;color:var(--exo-text-muted);text-transform:uppercase;letter-spacing:0.05em">Unity Gaming Report (2024): case Triangle Factory reduz de semanas para dias · ciclos +39% (218 → 304d) ↗</div>
+                  <div style="font-size:2.35rem;font-weight:700;color:var(--exo-status-error);line-height:1.1">Dias a Semanas</div>
+                </a>
+              </div>
+
+              <!-- Right: Exoforge -->
+              <div class="s5-col exo">
+                <div>
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><span class="badge-pill emerald">Com Exoforge</span><span class="badge-pill emerald">FOCO TOTAL NO JOGO</span></div>
+                  <h3 style="font-size:1.1875rem;font-weight:700;color:#34d399;margin-bottom:6px">21 linhas em 1 arquivo (C# na Unity)</h3>
+                  <div style="display:flex;flex-direction:column;gap:7px;margin-top:10px">
+                    <div style="display:flex;align-items:center;gap:8px;font-size:0.78rem;color:#ddd6fe"><span style="color:var(--exo-status-healthy);font-weight:700">✓</span> Operação de infra gerenciada pelo Exoforge desde o Dia 1</div>
+                    <div style="display:flex;align-items:center;gap:8px;font-size:0.78rem;color:#ddd6fe"><span style="color:var(--exo-status-healthy);font-weight:700">✓</span> <span>89% menos código mantido · fluxo contínuo (<a class="cite-tag" href="https://queue.acm.org/detail.cfm?id=3595878" target="_blank" rel="noopener noreferrer">DevEx, ACM Queue 2023 ↗</a>)</span></div>
+                    <div style="display:flex;align-items:center;gap:8px;font-size:0.78rem;color:#ddd6fe"><span style="color:var(--exo-status-healthy);font-weight:700">✓</span> <span>Equipe extra de infraestrutura: Zero (<a class="cite-tag" href="https://teamtopologies.com/book" target="_blank" rel="noopener noreferrer">Team Topologies, 2019 ↗</a>)</span></div>
+                  </div>
+                </div>
+                <a href="https://arxiv.org/abs/2203.04374" target="_blank" rel="noopener noreferrer" style="text-decoration:none;background:rgba(139,92,246,0.18);border:1px solid var(--exo-primary);border-radius:var(--exo-radius-lg);padding:12px;text-align:center;display:block">
+                  <div style="font-size:0.6875rem;color:#ddd6fe;text-transform:uppercase;letter-spacing:0.05em">Code Red (2022 · 39 sistemas): código enxuto no jogo + infra em plataforma evitam +124% de atraso e 15x mais bugs ↗</div>
+                  <div style="font-size:2.35rem;font-weight:700;color:#6ee7b7;line-height:1.1">No Mesmo Dia</div>
+                </a>
+              </div>
+            </div>
+
+            <!-- Final Hero Banner (Beat 24) -->
+            <div class="s5-banner" data-show-from="1">
+              <div style="width:68px;height:68px;border-radius:var(--exo-radius-md);overflow:hidden;border:1px solid var(--exo-primary);flex-shrink:0" class="persona-frame">
+                <img src="assets/persona-shipping.png" alt="Lançamento com sucesso" />
+              </div>
+              <div style="flex:1">
+                <h3 style="font-size:1.1875rem;font-weight:700;color:#fff;margin-bottom:2px">
+                  EXOFORGE — Você descreve a sua ideia. Nós forjamos o resto.
+                </h3>
+                <p style="font-size:0.8125rem;color:#ddd6fe">
+                  Da regra da Loja de Itens ao jogo no ar — com operação de infra gerenciada pelo Exoforge.
+                </p>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:6px">
+                <span class="badge-pill emerald">Escala Automática</span>
+                <span class="badge-pill violet">Zero Tempo Fora do Ar</span>
+                <span class="badge-pill blue">Devs de Infra: Zero</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- SLIDE 9: BIBLIOGRAFIA & FONTES VERIFICÁVEIS (1 beat: 25) -->
+        <section class="slide" data-slide="9" data-steps="1" data-current-step="0" id="slide-9">
+          <header class="slide-header">
+            <div>
+              <span class="slide-category">APÊNDICE · FONTES VERIFICÁVEIS</span>
+              <h2 class="slide-title">Bibliografia &amp; Fontes Verificáveis</h2>
+            </div>
+            <div class="slide-step-pill" id="pill-9">Slide 10 de 10</div>
+          </header>
+          <div class="s6-bib-grid">
+            <!-- Coluna 1: Relatórios da Indústria & Jogos -->
+            <div class="s6-bib-col">
+              <div style="display:flex;align-items:center;justify-content:space-between">
+                <span class="badge-pill blue">Relatórios de Jogos &amp; Indústria (5)</span>
+                <span style="font-size:0.6875rem;color:var(--exo-text-muted)">5 fontes verificadas ↗</span>
+              </div>
+              <div class="s6-bib-list">
+                <a class="s6-bib-item" href="https://create.unity.com/hubfs/Redistributable%20Assets/Unity_Gaming_Report_2024.pdf" target="_blank" rel="noopener noreferrer">
+                  <div class="s6-bib-head"><span>1. Unity Gaming Report (2024)</span><span>Slides 3, 4, 8, 9 ↗</span></div>
+                  <div class="s6-bib-desc">68% multiplayer; ciclos +39% (218→304d); 37% travam integrando; semanas → dias.</div>
+                  <div class="s6-bib-url">create.unity.com/hubfs/Redistributable%20Assets/Unity_Gaming_Report_2024.pdf</div>
+                </a>
+                <a class="s6-bib-item" href="https://reg.gdconf.com/state-of-game-industry-2024" target="_blank" rel="noopener noreferrer">
+                  <div class="s6-bib-head"><span>2. GDC State of the Game Industry (2024)</span><span>Slides 3, 9 ↗</span></div>
+                  <div class="s6-bib-desc">Custo e complexidade restringem live-service a apenas 16% dos estúdios.</div>
+                  <div class="s6-bib-url">reg.gdconf.com/state-of-game-industry-2024</div>
+                </a>
+                <a class="s6-bib-item" href="https://www.forbes.com/sites/panosmourdoukoutas/2018/04/30/report-cheating-is-becoming-a-big-problem-in-online-gaming/" target="_blank" rel="noopener noreferrer">
+                  <div class="s6-bib-head"><span>3. Irdeto Global Gaming Survey / Forbes (2018)</span><span>Slides 3, 7 ↗</span></div>
+                  <div class="s6-bib-desc">77% abandonam jogos multiplayer com cheats e 48% compram menos itens.</div>
+                  <div class="s6-bib-url">forbes.com/sites/panosmourdoukoutas/2018/04/30/report-cheating-is-becoming-a-big-problem-in-online-gaming/</div>
+                </a>
+                <a class="s6-bib-item" href="https://stripe.com/files/reports/the-developer-coefficient.pdf" target="_blank" rel="noopener noreferrer">
+                  <div class="s6-bib-head"><span>4. Stripe &amp; Harris Poll (2018)</span><span>Base Histórica ↗</span></div>
+                  <div class="s6-bib-desc">17,3h/sem (42% da semana) gastas em manutenção e dívida técnica.</div>
+                  <div class="s6-bib-url">stripe.com/files/reports/the-developer-coefficient.pdf</div>
+                </a>
+                <a class="s6-bib-item" href="https://about.gitlab.com/developer-survey/" target="_blank" rel="noopener noreferrer">
+                  <div class="s6-bib-head"><span>5. GitLab Global DevSecOps (2024)</span><span>Base Histórica ↗</span></div>
+                  <div class="s6-bib-desc">76%–79% do ciclo fora de escrita de código novo (+5.300 devs).</div>
+                  <div class="s6-bib-url">about.gitlab.com/developer-survey/</div>
+                </a>
+              </div>
+            </div>
+
+            <!-- Coluna 2: Artigos Científicos & Engenharia -->
+            <div class="s6-bib-col">
+              <div style="display:flex;align-items:center;justify-content:space-between">
+                <span class="badge-pill violet">Artigos Científicos &amp; Engenharia (5)</span>
+                <span style="font-size:0.6875rem;color:var(--exo-text-muted)">5 estudos revisados ↗</span>
+              </div>
+              <div class="s6-bib-list">
+                <a class="s6-bib-item" href="https://arxiv.org/abs/2009.02440" target="_blank" rel="noopener noreferrer">
+                  <div class="s6-bib-head"><span>6. Politowski et al. (2021 · 200 Jogos)</span><span>Slides 3, 4 ↗</span></div>
+                  <div class="s6-bib-desc">927 problemas em postmortems reais de jogos (produção e sobrecarga).</div>
+                  <div class="s6-bib-url">arxiv.org/abs/2009.02440</div>
+                </a>
+                <a class="s6-bib-item" href="https://arxiv.org/abs/2203.04374" target="_blank" rel="noopener noreferrer">
+                  <div class="s6-bib-head"><span>7. Tornhill &amp; Borg — Code Red ('22)</span><span>Slides 7, 8, 9 ↗</span></div>
+                  <div class="s6-bib-desc">Código inchado e complexo gera 15x mais bugs e +124% de atraso (39 sistemas).</div>
+                  <div class="s6-bib-url">arxiv.org/abs/2203.04374</div>
+                </a>
+                <a class="s6-bib-item" href="https://ics.uci.edu/~gmark/CHI2005.pdf" target="_blank" rel="noopener noreferrer">
+                  <div class="s6-bib-head"><span>8. Mark, Gonzalez &amp; Harris (CHI '05/'08)</span><span>Slides 3, 9 ↗</span></div>
+                  <div class="s6-bib-desc">25m26s para retomar tarefa após interrupção (+ estresse medido).</div>
+                  <div class="s6-bib-url">ics.uci.edu/~gmark/CHI2005.pdf</div>
+                </a>
+                <a class="s6-bib-item" href="https://link.springer.com/article/10.1007/s11219-010-9104-9" target="_blank" rel="noopener noreferrer">
+                  <div class="s6-bib-head"><span>9. Parnin &amp; Rugaber (2011 · SQJ)</span><span>Slide 3 ↗</span></div>
+                  <div class="s6-bib-desc">Só 10% retomam código em &lt; 1m (10.000 sessões gravadas).</div>
+                  <div class="s6-bib-url">link.springer.com/article/10.1007/s11219-010-9104-9</div>
+                </a>
+                <a class="s6-bib-item" href="https://queue.acm.org/detail.cfm?id=3595878" target="_blank" rel="noopener noreferrer">
+                  <div class="s6-bib-head"><span>10. Noda ('23), Leroy ('09) &amp; Team Topologies</span><span>Slides 2, 8, 9 ↗</span></div>
+                  <div class="s6-bib-desc">DevEx (fluxo + feedback), resíduo de atenção e plataforma pronta.</div>
+                  <div class="s6-bib-url">queue.acm.org/detail.cfm?id=3595878</div>
+                </a>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+
+      <!-- Presenter HUD -->
+      <footer class="presenter-hud">
+        <div class="hud-group">
+          <span class="hud-brand">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--exo-primary)"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+            EXOFORGE
+          </span>
+          <span class="hud-counter tabular" id="hud-counter">Etapa 1 / 26 · Slide 1 / 10</span>
+          <div class="hud-progress"><div class="hud-progress-fill" id="hud-progress-fill"></div></div>
+        </div>
+        <div class="hud-group">
+          <button class="hud-btn" id="btn-prev" title="Etapa anterior (Seta Esquerda)">◀ Anterior</button>
+          <button class="hud-btn" id="btn-next" title="Próxima etapa (Espaço ou Seta Direita)">Próximo ▶</button>
+          <button class="hud-btn" id="btn-play" title="Reprodução automática (P)">Reproduzir (P)</button>
+          <button class="hud-btn" id="btn-replay" title="Reiniciar pitch (R)">Reiniciar (R)</button>
+          <button class="hud-btn" id="btn-notes" title="Abrir notas do apresentador (N)">Notas (N)</button>
+        </div>
+      </footer>
+
+      <!-- Export Mode Breadcrumb -->
+      <div class="export-breadcrumb">
+        <span>EXOFORGE PITCH DECK</span>
+        <span id="export-step-label" class="tabular">Etapa 1 / 26 · Slide 1 / 10</span>
+      </div>
+
+      <!-- Speaker Notes Drawer -->
+      <aside class="notes-drawer" id="notes-drawer" aria-live="polite">
+        <div class="notes-head">
+          <span id="notes-beat-title">Notas do Apresentador</span>
+          <button class="hud-btn" id="btn-notes-close" style="padding:2px 8px;font-size:0.6875rem">Fechar</button>
+        </div>
+        <div class="notes-body" id="notes-body"></div>
+      </aside>
+    </main>
+  </div>
+
+  <script>
+    (function () {
+      const BEAT_META = [
+        // Slide 0: ATO I · O PEDIDO DO DESIGN (2 beats: 0, 1) -> Slide 1
+        { slideIndex: 0, stepIndex: 0, holdSeconds: 2.8, label: "Slide 1: ATO I · O Pedido do Game Design (Fluxograma)",
+          notes: "Lucas é programador de gameplay em um estúdio indie de 8 pessoas, sem equipe de infraestrutura dedicada. O pedido do game design é simples: criar a Loja de Itens para comprar a Espada Lendária por 500 Ouro. Na máquina local dentro da Unity, parece uma tarefa direta de uma tarde (~2h)." },
+        { slideIndex: 0, stepIndex: 1, holdSeconds: 3.2, label: "Slide 1: ATO I · Fluxo Familiar na Unity & C#",
+          notes: "No contexto que o dev domina — Unity e C# —, o início é tranquilo: a cena está montada, o código é familiar e a regra funciona localmente. Mas o jogo é multiplayer: para monetizar sem trapaças, a regra precisa rodar no servidor." },
+
+        // Slide 1: ATO I · A REGRA DO JOGO (3 beats: 2..4) -> Slide 2
+        { slideIndex: 1, stepIndex: 0, holdSeconds: 2.6, label: "Slide 2: ATO I · Regra do Jogo (1. Jogador Clica Comprar)",
+          notes: "Aqui está o trabalho real do estúdio: a regra que gera diversão e receita. O fluxo da regra de negócio começa quando o jogador clica em Comprar a Espada Lendária por 500 Ouro." },
+        { slideIndex: 1, stepIndex: 1, holdSeconds: 2.6, label: "Slide 2: ATO I · Regra do Jogo (2. Saldo & Fronteira do Servidor)",
+          notes: "O segundo passo valida a condição de saldo no servidor: se o jogador tiver menos de 500 Ouro, a compra é recusada imediatamente, marcando a fronteira clara entre a regra de jogo e a validação no backend." },
+        { slideIndex: 1, stepIndex: 2, holdSeconds: 2.8, label: "Slide 2: ATO I · Regra do Jogo (3. Entrega & Servidor vs Cliente)",
+          notes: "Com saldo confirmado, 500 Ouro são descontados e a espada é salva no inventário no servidor, enquanto a resposta é enviada ao cliente na Unity. Ponto de ruptura: salvar inventário e validar saldo exigem servidor." },
+
+        // Slide 2: ATO II · ONDE O TEMPO VAZA (5 beats: 5..9) -> Slide 3
+        { slideIndex: 2, stepIndex: 0, holdSeconds: 2.5, label: "Slide 3: ATO II · Onde o Tempo Vaza (Sobrecarga de Infra)",
+          notes: "Para colocar o jogo online, o problema cresce: sem infraestrutura pronta, Lucas acumula 4 papéis fora do gameplay. Cada interrupção custa 25m26s para retomar o foco (Mark et al., ACM CHI 2005) e só 10% retomam em menos de 1 minuto (Parnin & Rugaber, 2011)." },
+        { slideIndex: 2, stepIndex: 1, holdSeconds: 2.8, label: "Slide 3: ATO II · Papel 1 · DBA (PostgreSQL · SQL)",
+          notes: "Primeiro papel: DBA. Lucas precisa criar tabelas SQL, transações atômicas e migrações (~45 linhas). O estudo de Politowski et al. (2021) com 200 jogos comprova que erros técnicos e de persistência lideram atrasos na produção." },
+        { slideIndex: 2, stepIndex: 2, holdSeconds: 2.8, label: "Slide 3: ATO II · Papel 2 · Backend (REST · HTTP · JSON)",
+          notes: "Segundo papel: Engenheiro de Backend. Criar rotas HTTP manuais, traduzir JSON e sincronizar cliente e servidor (~50 linhas). O Unity Gaming Report (2024) documenta que 37% dos estúdios travam na integração de sistemas externos." },
+        { slideIndex: 2, stepIndex: 3, holdSeconds: 2.8, label: "Slide 3: ATO II · Papel 3 · Segurança (Anti-Cheat · Auth)",
+          notes: "Terceiro papel: Segurança e Anti-Cheat (~40 linhas). Na pesquisa Irdeto/Forbes, 77% dos jogadores abandonam jogos multiplayer com cheats e 48% compram menos itens. Lucas precisa programar validação de sessão e travas anti-fraude na mão." },
+        { slideIndex: 2, stepIndex: 4, holdSeconds: 2.8, label: "Slide 3: ATO II · Papel 4 · DevOps & Nuvem (Containers)",
+          notes: "Quarto papel: DevOps e Nuvem (~45 linhas). Criar Dockerfiles, expor portas e gerenciar servidores. No relatório GDC State of Industry (2024), os custos de infraestrutura restringem live-service a apenas 16% dos estúdios." },
+
+        // Slide 3: ATO II · O CUSTO REAL (1 beat: 10) -> Slide 4
+        { slideIndex: 3, stepIndex: 0, holdSeconds: 3.5, label: "Slide 4: ATO II · O Custo Real (Contexto de Indústria & Estudo)",
+          notes: "A soma dos 4 papéis fora do jogo revela a desproporção: apenas ~21 linhas de gameplay (10%) contra ~180 linhas de infraestrutura manual (90% fora do gameplay). O Unity Gaming Report (2024) mostra que os prazos de lançamento subiram 39% (218 para 304 dias) e Politowski et al. (2021) catalogaram 927 problemas de produção em postmortems de 200 jogos. Resultado: Features de 2 horas viram semanas travadas em banco, APIs e DevOps." },
+
+        // Slide 4: ATO III · DA UNITY PARA A NUVEM (1/2) (1 beat: 11) -> Slide 5
+        { slideIndex: 4, stepIndex: 0, holdSeconds: 3.0, label: "Slide 5: ATO III · Unity Editor · Ênfase em + New Extension",
+          notes: "No Unity Editor, o desenvolvedor acessa a aba Exoforge Studio > Extensions e clica em '+ New Extension'. Sem sair da Unity e sem abrir terminais, o fluxo de criação de backend começa direto na interface que o dev já domina." },
+
+        // Slide 5: ATO III · DA UNITY PARA A NUVEM (2/2) (1 beat: 12) -> Slide 6
+        { slideIndex: 5, stepIndex: 0, holdSeconds: 3.2, label: "Slide 6: ATO III · Popup Create New Extension & Template",
+          notes: "No modal Create New Extension, o desenvolvedor digita 'loja_itens' e seleciona o template 'Persistent Data (Resource & DB)'. Com um clique em 'Create Extension', o arquivo LojaDeItens.cs é gerado no projeto da Unity com a estrutura pronta para persistência e API." },
+
+        // Slide 6: ATO III · A SOLUÇÃO EM C# (6 beats: 13..18) -> Slide 7
+        { slideIndex: 6, stepIndex: 0, holdSeconds: 2.5, label: "Slide 7: ATO III · LojaDeItens.cs (21 Linhas em C# 9)",
+          notes: "A solução com Exoforge: exatamente 21 linhas de código em C# 9 idiomático de Unity. O dev escreve apenas a classe da loja e a struct do inventário dentro do mesmo arquivo, sem sair do ambiente da Unity." },
+        { slideIndex: 6, stepIndex: 1, holdSeconds: 2.8, label: "Slide 7: ATO III · [ExoResource] · Elimina Papel DBA",
+          notes: "Nas linhas 15 a 21, [ExoResource] na struct Inventario elimina o papel de DBA: cria tabelas e persiste dados de forma transacional sem precisar escrever uma linha de SQL nem migrações manuais." },
+        { slideIndex: 6, stepIndex: 2, holdSeconds: 2.8, label: "Slide 7: ATO III · [ExoAction] · Elimina Papel Backend",
+          notes: "Na linha 4, [ExoAction] elimina o papel de Backend: infere o nome da ação e expõe o canal RPC tipado para a Unity, sem rotas HTTP manuais nem serialização manual de JSON." },
+        { slideIndex: 6, stepIndex: 3, holdSeconds: 2.8, label: 'Slide 7: ATO III · Scope = "player" · Elimina Segurança',
+          notes: "Ainda na linha 4, Scope = 'player' elimina o papel de Segurança: garante no servidor que apenas o jogador autenticado altere seu saldo, protegendo contra trapaças (alerta Irdeto/Forbes)." },
+        { slideIndex: 6, stepIndex: 4, holdSeconds: 2.8, label: "Slide 7: ATO III · [ExoService] · Elimina Papel DevOps",
+          notes: "Na linha 1, [ExoService] elimina o papel de DevOps: publica o serviço na nuvem em 1 clique direto da Unity, sem tocar em Docker, portas de rede ou servidores Linux." },
+        { slideIndex: 6, stepIndex: 5, holdSeconds: 3.0, label: "Slide 7: ATO III · Core Gameplay em C# 9 (Unity)",
+          notes: "Sobram apenas as linhas 7 a 12 com a regra pura do gameplay. No estudo Code Red (Tornhill & Borg, 2022 em 39 empresas), código enxuto e sem complexidade acidental evita 15x mais defeitos e elimina +124% de atrasos nas entregas." },
+
+        // Slide 7: ATO III · OPERAÇÃO GERENCIADA (4 beats: 19..22) -> Slide 8
+        { slideIndex: 7, stepIndex: 0, holdSeconds: 2.8, label: "Slide 8: ATO III · Producer Studio (Painel Ao Vivo)",
+          notes: "Ao adotar o Exoforge, o estúdio já começa com operação gerenciada no Dia 1 (Team Topologies, 2019): o Producer Studio oferece interface nativa para game designers ajustarem catálogo e saldos sem precisar pedir telas internas ao time." },
+        { slideIndex: 7, stepIndex: 1, holdSeconds: 3.0, label: "Slide 8: ATO III · Tabela de Logs em Fluxo & Replay",
+          notes: "Cada ação do jogador gera logs estruturados no fluxo da regra — pedido, validação de saldo e entrega —, com reexecução (Replay) em 1 clique, garantindo feedback imediato (DevEx, ACM Queue 2023)." },
+        { slideIndex: 7, stepIndex: 2, holdSeconds: 3.0, label: "Slide 8: ATO III · Grafo de Escalabilidade Automática",
+          notes: "Com 68% dos estúdios criando jogos multiplayer (Unity Report 2024), servidores tradicionais caem no pico de lançamento. Exoforge: Auto-scale (100 a 100k+ online) sem configuração manual." },
+        { slideIndex: 7, stepIndex: 3, holdSeconds: 3.0, label: "Slide 8: ATO III · Upload < 1s & Zero Tempo Fora do Ar",
+          notes: "Zero Downtime: atualizações ao vivo sem derrubar jogadores. Com o Exoforge, o upload de correções leva menos de 1 segundo e o tempo fora do ar é zero: nenhum jogador cai da partida durante atualizações ao vivo." },
+
+        // Slide 8: ATO III · IMPACTO NO NEGÓCIO (2 beats: 23, 24) -> Slide 9
+        { slideIndex: 8, stepIndex: 0, holdSeconds: 3.0, label: "Slide 9: ATO III · Impacto no Negócio (Placar Executivo)",
+          notes: "No modelo tradicional, o estúdio gasta de dias a semanas construindo ~180 linhas de infraestrutura manual. Com o Exoforge, a regra de gameplay vai ao ar no mesmo dia com 21 linhas em 1 arquivo C# na Unity (89% menos código mantido), com zero equipe extra de infraestrutura." },
+        { slideIndex: 8, stepIndex: 1, holdSeconds: 3.5, label: "Slide 9: ATO III · Visão Final (Você descreve a sua ideia)",
+          notes: "EXOFORGE — Você descreve a sua ideia. Nós forjamos o resto. Da regra da Loja de Itens ao jogo em produção na nuvem, com operação de infra gerenciada pelo Exoforge." },
+
+        // Slide 9: APÊNDICE · FONTES VERIFICÁVEIS (1 beat: 25) -> Slide 10
+        { slideIndex: 9, stepIndex: 0, holdSeconds: 4.0, label: "Slide 10: Apêndice · 10 Fontes Verificáveis",
+          notes: "Todas as 10 evidências citadas no pitch são públicas e verificáveis: 5 relatórios consolidados da indústria de jogos e tecnologia (Unity Report, GDC, Irdeto/Forbes, Stripe, GitLab) e 5 artigos científicos revisados por pares (Politowski et al., Code Red, Mark et al., Parnin & Rugaber, DevEx)." }
+      ];
+
+      const slides = Array.from(document.querySelectorAll(".slide"));
+      const stage = document.getElementById("stage");
+      const hudCounter = document.getElementById("hud-counter");
+      const hudFill = document.getElementById("hud-progress-fill");
+      const exportStepLabel = document.getElementById("export-step-label");
+      const notesDrawer = document.getElementById("notes-drawer");
+      const notesTitle = document.getElementById("notes-beat-title");
+      const notesBody = document.getElementById("notes-body");
+      const btnPrev = document.getElementById("btn-prev");
+      const btnNext = document.getElementById("btn-next");
+      const btnPlay = document.getElementById("btn-play");
+      const btnReplay = document.getElementById("btn-replay");
+      const btnNotes = document.getElementById("btn-notes");
+      const btnNotesClose = document.getElementById("btn-notes-close");
+
+      let currentBeatIdx = 0;
+      let autoplayTimer = null;
+      let notesOpen = false;
+
+      function fitStage() {
+        const vw = window.innerWidth, vh = window.innerHeight;
+        const scale = Math.min(vw / 1280, vh / 720);
+        stage.style.transform = `scale(${scale})`;
+      }
+      window.addEventListener("resize", fitStage);
+      fitStage();
+
+      if (new URLSearchParams(window.location.search).get("export") === "1") {
+        document.body.classList.add("export-mode");
+      }
+
+      function findBeatIndex(slideIndex, stepIndex) {
+        const idx = BEAT_META.findIndex((b) => b.slideIndex === slideIndex && b.stepIndex === stepIndex);
+        return idx >= 0 ? idx : 0;
+      }
+
+      function renderBeat(idx, instant = false) {
+        currentBeatIdx = Math.max(0, Math.min(BEAT_META.length - 1, idx));
+        const beat = BEAT_META[currentBeatIdx];
+        if (instant) document.body.classList.add("no-transitions");
+
+        slides.forEach((s, i) => {
+          const isActive = i === beat.slideIndex;
+          s.classList.toggle("active", isActive);
+          if (isActive) {
+            s.setAttribute("data-current-step", String(beat.stepIndex));
+          } else if (i < beat.slideIndex) {
+            const maxStep = Number(s.getAttribute("data-steps") || "1") - 1;
+            s.setAttribute("data-current-step", String(maxStep));
+          } else {
+            s.setAttribute("data-current-step", "0");
+          }
+        });
+
+        const slideEl = slides[beat.slideIndex];
+        const totalStepsInSlide = Number(slideEl.getAttribute("data-steps") || "1");
+        const pill = document.getElementById(`pill-${beat.slideIndex}`);
+        if (pill) {
+          if (totalStepsInSlide === 1) {
+            pill.textContent = `Slide ${beat.slideIndex + 1} de ${slides.length}`;
+          } else {
+            pill.textContent = `Etapa ${beat.stepIndex + 1} de ${totalStepsInSlide}`;
+          }
+        }
+
+        const counterText = `Etapa ${currentBeatIdx + 1} / ${BEAT_META.length} · Slide ${beat.slideIndex + 1} / ${slides.length}`;
+        hudCounter.textContent = counterText;
+        exportStepLabel.textContent = counterText;
+        hudFill.style.width = `${((currentBeatIdx + 1) / BEAT_META.length) * 100}%`;
+
+        btnPrev.disabled = currentBeatIdx === 0;
+        btnNext.disabled = currentBeatIdx === BEAT_META.length - 1;
+        notesTitle.textContent = `Notas do Apresentador — ${beat.label}`;
+        notesBody.textContent = beat.notes;
+
+        if (instant) {
+          void document.body.offsetHeight;
+          document.body.classList.remove("no-transitions");
+        }
+      }
+
+      function nextBeat() {
+        if (currentBeatIdx < BEAT_META.length - 1) {
+          renderBeat(currentBeatIdx + 1, false);
+          return true;
+        }
+        return false;
+      }
+
+      function prevBeat() {
+        if (currentBeatIdx > 0) {
+          renderBeat(currentBeatIdx - 1, false);
+          return true;
+        }
+        return false;
+      }
+
+      function stopAutoplay() {
+        if (autoplayTimer) {
+          clearTimeout(autoplayTimer);
+          autoplayTimer = null;
+        }
+        btnPlay.classList.remove("active");
+        btnPlay.textContent = "Reproduzir (P)";
+      }
+
+      function scheduleNextAutoplay() {
+        const beat = BEAT_META[currentBeatIdx];
+        autoplayTimer = setTimeout(() => {
+          if (nextBeat()) {
+            scheduleNextAutoplay();
+          } else {
+            stopAutoplay();
+          }
+        }, beat.holdSeconds * 1000);
+      }
+
+      function toggleAutoplay() {
+        if (autoplayTimer) {
+          stopAutoplay();
+        } else {
+          if (currentBeatIdx === BEAT_META.length - 1) renderBeat(0, true);
+          btnPlay.classList.add("active");
+          btnPlay.textContent = "Pausar (P)";
+          scheduleNextAutoplay();
+        }
+      }
+
+      function toggleNotes(force) {
+        notesOpen = typeof force === "boolean" ? force : !notesOpen;
+        notesDrawer.classList.toggle("open", notesOpen);
+        btnNotes.classList.toggle("active", notesOpen);
+      }
+
+      btnPrev.addEventListener("click", (e) => { e.stopPropagation(); stopAutoplay(); prevBeat(); });
+      btnNext.addEventListener("click", (e) => { e.stopPropagation(); stopAutoplay(); nextBeat(); });
+      btnPlay.addEventListener("click", (e) => { e.stopPropagation(); toggleAutoplay(); });
+      btnReplay.addEventListener("click", (e) => { e.stopPropagation(); stopAutoplay(); renderBeat(0, false); });
+      btnNotes.addEventListener("click", (e) => { e.stopPropagation(); toggleNotes(); });
+      btnNotesClose.addEventListener("click", (e) => { e.stopPropagation(); toggleNotes(false); });
+
+      document.getElementById("slides-root").addEventListener("click", (e) => {
+        if (e.target.closest("button, a")) return;
+        stopAutoplay();
+        nextBeat();
+      });
+
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "ArrowRight" || e.key === " ") {
+          e.preventDefault(); stopAutoplay(); nextBeat();
+        } else if (e.key === "ArrowLeft") {
+          e.preventDefault(); stopAutoplay(); prevBeat();
+        } else if (e.key === "p" || e.key === "P") {
+          e.preventDefault(); toggleAutoplay();
+        } else if (e.key === "n" || e.key === "N") {
+          e.preventDefault(); toggleNotes();
+        } else if (e.key === "r" || e.key === "R") {
+          e.preventDefault(); stopAutoplay(); renderBeat(0, false);
+        } else if (e.key === "Home") {
+          e.preventDefault(); stopAutoplay(); renderBeat(0, false);
+        } else if (e.key === "End") {
+          e.preventDefault(); stopAutoplay(); renderBeat(BEAT_META.length - 1, false);
+        }
+      });
+
+      window.__exoPitch = {
+        getSteps: () => BEAT_META.map(({ slideIndex, stepIndex, holdSeconds, label }) => ({
+          slideIndex, stepIndex, holdSeconds, label
+        })),
+        goTo: (slideIndex, stepIndex, instant = false) => {
+          stopAutoplay();
+          renderBeat(findBeatIndex(slideIndex, stepIndex), Boolean(instant));
+        },
+        getCurrent: () => {
+          const beat = BEAT_META[currentBeatIdx];
+          return {
+            slideIndex: beat.slideIndex,
+            stepIndex: beat.stepIndex,
+            totalSlides: slides.length,
+            totalSteps: BEAT_META.length
+          };
+        }
+      };
+
+      renderBeat(0, true);
+    })();
+  </script>
+</body>
+</html>
