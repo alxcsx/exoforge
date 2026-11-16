@@ -199,6 +199,7 @@ public static class Program
               --env <name>     Target environment
               --out <path>     Output file (defaults to the workspace's generated path)
               --file <json>    Generate from a saved export instead of the live cluster
+              --include-studio Include studio/admin actions in the generated client bindings
             """);
             return 0;
         }
@@ -206,12 +207,13 @@ public static class Program
         string dir = cli.Value("dir") ?? Directory.GetCurrentDirectory();
         string? fileInput = cli.Value("file");
         string? outPath = cli.Value("out");
+        bool includeStudio = cli.Has("include-studio");
 
         if (!string.IsNullOrEmpty(fileInput) && File.Exists(fileInput))
         {
             Console.WriteLine($"[Exoforge] Generating strongly-typed C# client bindings from '{fileInput}'...");
             string targetPath = outPath ?? Path.Combine(dir, "Generated", "ExoforgeServices.g.cs");
-            ExoCodeGenerator.GenerateToFile(File.ReadAllText(fileInput), targetPath);
+            ExoCodeGenerator.GenerateToFile(File.ReadAllText(fileInput), targetPath, includeStudio: includeStudio);
             Success($"[Exoforge] Generated strongly-typed C# client bindings at:\n  {targetPath}");
             return 0;
         }
@@ -220,7 +222,11 @@ public static class Program
         var deployer = new ExoDeployer(ws);
 
         Console.WriteLine("[Exoforge] Synchronizing backend contracts (cluster / workspace cache)...");
-        int changed = await deployer.SyncContractsAsync(cli.Value("env"), outPath, emit: msg => Console.WriteLine($"[Exoforge] {msg}")).ConfigureAwait(false);
+        int changed = await deployer.SyncContractsAsync(
+            cli.Value("env"),
+            outPath,
+            emit: msg => Console.WriteLine($"[Exoforge] {msg}"),
+            includeStudio: includeStudio).ConfigureAwait(false);
         if (changed > 0)
         {
             Success($"[Exoforge] Updated strongly-typed C# client bindings at:\n  {outPath ?? ws.GeneratedPath}");

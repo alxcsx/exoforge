@@ -103,11 +103,14 @@ public static class ExoCodeGenerator
         "ushort", "using", "virtual", "void", "volatile", "while"
     };
 
-    public static string GenerateFromExportJson(string json, string targetNamespace = "Exoforge.Client")
+    public static string GenerateFromExportJson(
+        string json,
+        string targetNamespace = "Exoforge.Client",
+        bool includeStudio = false)
     {
         using var doc = JsonDocument.Parse(json);
         var services = ParseServices(doc.RootElement);
-        return Generate(services, targetNamespace);
+        return Generate(services, targetNamespace, includeStudio);
     }
 
     public const string ContractMetadataPrefix = "// @exoforge-contract: ";
@@ -260,7 +263,8 @@ public static class ExoCodeGenerator
         string outputPath,
         string targetNamespace = "Exoforge.Client",
         string? codeSearchRoot = null,
-        Action<string>? log = null)
+        Action<string>? log = null,
+        bool includeStudio = false)
     {
         using var doc = JsonDocument.Parse(json);
         var services = ParseServices(doc.RootElement);
@@ -275,7 +279,12 @@ public static class ExoCodeGenerator
             {
                 if (!currentNames.Contains(prevSvc.Name))
                 {
-                    if (services.Count == 0 || IsServiceReferencedInCode(prevSvc, searchRoot, outputPath))
+                    // A preserved stub follows the same client/staff split as a fresh one. Otherwise
+                    // a studio-only service that game code once referenced would keep reappearing
+                    // after the generator stopped emitting it.
+                    bool mayPreserve = includeStudio || IsClientVisibleService(prevSvc);
+
+                    if (mayPreserve && (services.Count == 0 || IsServiceReferencedInCode(prevSvc, searchRoot, outputPath)))
                     {
                         services.Add(prevSvc);
                         currentNames.Add(prevSvc.Name);
@@ -286,7 +295,7 @@ public static class ExoCodeGenerator
             services = services.OrderBy(s => s.Name, StringComparer.Ordinal).ToList();
         }
 
-        string code = Generate(services, targetNamespace);
+        string code = Generate(services, targetNamespace, includeStudio);
         string? dir = Path.GetDirectoryName(outputPath);
         if (!string.IsNullOrEmpty(dir))
         {
@@ -1228,9 +1237,17 @@ public static class ExoCodeGenerator
             ? name.Substring(0, name.Length - 1)
             : name;
 
-    public static string Generate(IEnumerable<ServiceContractModel> services, string targetNamespace = "Exoforge.Client")
+    public static string Generate(
+        IEnumerable<ServiceContractModel> services,
+        string targetNamespace = "Exoforge.Client",
+        bool includeStudio = false)
     {
-        var serviceList = services.ToList();
+        // The Unity client facade is the game's surface: player/global actions only, plus any
+        // service that still has at least one of them. Studio/admin actions and system-only
+        // services are reachable through the raw client or includeStudio, not through ExoServices.
+        var serviceList = includeStudio
+            ? services.ToList()
+            : services.Select(ClientVisibleService).Where(s => s != null).Select(s => s!).ToList();
         var sb = new StringBuilder();
         var emittedModels = new HashSet<string>(StringComparer.Ordinal);
         var actionRespNames = new Dictionary<ActionContractModel, string>();
@@ -1812,20 +1829,55 @@ public static class ExoCodeGenerator
         return act.ReturnsList ? $"List<{element}>" : element;
     }
 
+    /// <summary>
+    /// The client subset of one service: player/global actions only, or null when none remain.
+    /// Events stay with a kept service; a service dropped here has no client surface at all.
+    /// </summary>
+    private static ServiceContractModel? ClientVisibleService(ServiceContractModel service)
+    {
+        var actions = service.Actions.Where(IsClientAction).ToList();
+        if (actions.Count == 0) return null;
+
+        return new ServiceContractModel
+        {
+            Name = service.Name,
+            Doc = service.Doc,
+            Actions = actions,
+            Events = service.Events,
+            Resources = service.Resources,
+            CustomInputs = service.CustomInputs
+        };
+    }
+
+    private static bool IsClientVisibleService(ServiceContractModel service) =>
+        service.Actions.Any(IsClientAction);
+
+    /// <summary>
+    /// Scopes a game client may call. <c>player</c> and <c>global</c> are the client surface;
+    /// <c>studio</c>, <c>admin</c>, <c>server</c>, <c>service</c> and <c>webhook</c> are not.
+    /// </summary>
+    private static bool IsClientAction(ActionContractModel action)
+    {
+        string scope = (action.Scope ?? "").Trim().ToLowerInvariant();
+        return scope is "" or "player" or "global";
+    }
+
     private static string MapTypeToCSharp(string type)
     {
         string lower = type.ToLowerInvariant().Trim();
         return lower switch
         {
             "string" or "binary" or "text" => "string",
-            "integer" or "int" => "long",
-            "int32" => "int",
-            "int64" => "long",
+            // "integer" is the Elixir/BEAM integer and stays 64-bit. "int"/"int32" come from C#
+            // Int32 manifests and must keep their width instead of widening to long.
+            "int" or "int32" => "int",
+            "integer" or "int64" => "long",
             "float" or "double" or "number" => "double",
             "boolean" or "bool" => "bool",
             "map" or "object" or "term" => "JsonElement",
             "list_string" or "[:string]" => "List<string>",
-            "list_int" or "[:integer]" => "List<long>",
+            "list_int" or "[:int]" or "[:int32]" => "List<int>",
+            "[:integer]" or "list_integer" or "[:int64]" => "List<long>",
             "list_map" or "[:map]" => "List<JsonElement>",
             _ => "JsonElement"
         };

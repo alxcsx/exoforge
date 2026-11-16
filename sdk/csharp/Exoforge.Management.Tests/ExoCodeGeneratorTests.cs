@@ -142,7 +142,7 @@ public class ExoCodeGeneratorTests
             File.WriteAllText(gameScript, "using Exoforge.Client;\npublic class GameController { void Run(ExoClient c) { c.SnakeLeaderboard().GetScoresAsync(); } }");
 
             // 3. New export from remote server where snake_leaderboard is missing (e.g. only auth is present)
-            string newExport = "{\"export\":{\"plugins\":[{\"id\":\"auth\",\"name\":\"auth\",\"services\":[{\"name\":\"auth\",\"actions\":[]}]}]}}";
+            string newExport = "{\"export\":{\"plugins\":[{\"id\":\"auth\",\"name\":\"auth\",\"services\":[{\"name\":\"auth\",\"actions\":[{\"name\":\"login\",\"scope\":\"player\",\"params\":[]}]}]}]}}";
             bool changed = ExoCodeGenerator.GenerateToFile(newExport, outputFile, codeSearchRoot: assetsDir);
 
             string updatedCode = File.ReadAllText(outputFile);
@@ -172,5 +172,161 @@ public class ExoCodeGeneratorTests
         Assert.Contains("public static class ExoServices", code);
         Assert.Contains("Type.GetType(\"Exoforge.Client.Unity.ExoforgeSDK, Exoforge.SDK\")", code);
         Assert.Contains("foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())", code);
+    }
+
+    [Fact]
+    public void Generate_Default_Facade_Keeps_Player_And_Global_Actions_Only()
+    {
+        string exportJson = """
+        {
+            "export": {
+                "plugins": [
+                    {
+                        "id": "resource_store",
+                        "services": [
+                            {
+                                "name": "resource_store",
+                                "actions": [
+                                    { "name": "list", "scope": "player", "params": [] },
+                                    { "name": "create", "scope": "studio", "params": [] }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "id": "auth",
+                        "services": [
+                            {
+                                "name": "auth",
+                                "actions": [
+                                    { "name": "login", "scope": "player", "params": [] },
+                                    { "name": "list_users", "scope": "studio", "params": [] }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "id": "database",
+                        "services": [
+                            {
+                                "name": "database",
+                                "actions": [
+                                    { "name": "execute", "scope": "server", "params": [] }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+        """;
+
+        string code = ExoCodeGenerator.GenerateFromExportJson(exportJson);
+
+        // resource_store is not hard-denylisted: its player action keeps it, its studio action does not.
+        Assert.Contains("public class ResourceStoreServiceClient", code);
+        Assert.Contains("ListAsync(", code);
+        Assert.DoesNotContain("CreateAsync(", code);
+        Assert.Contains("public static ResourceStoreServiceClient ResourceStore", code);
+
+        // Mixed service: player action stays, admin/studio action goes.
+        Assert.Contains("public class AuthServiceClient", code);
+        Assert.Contains("LoginAsync(", code);
+        Assert.DoesNotContain("ListUsersAsync(", code);
+
+        // No player/global action: the service has no client surface.
+        Assert.DoesNotContain("DatabaseServiceClient", code);
+
+        string staff = ExoCodeGenerator.GenerateFromExportJson(exportJson, includeStudio: true);
+        Assert.Contains("public class DatabaseServiceClient", staff);
+        Assert.Contains("ExecuteAsync(", staff);
+        Assert.Contains("CreateAsync(", staff);
+        Assert.Contains("ListUsersAsync(", staff);
+    }
+
+    [Fact]
+    public void Generate_Default_Facade_Drops_Empty_And_Staff_Only_Services()
+    {
+        string exportJson = """
+        {
+            "export": {
+                "plugins": [
+                    {
+                        "id": "admin",
+                        "services": [
+                            {
+                                "name": "admin_tools",
+                                "actions": [
+                                    { "name": "reset", "scope": "admin", "params": [] },
+                                    { "name": "deploy", "scope": "studio", "params": [] }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "id": "empty",
+                        "services": [ { "name": "empty_service", "actions": [] } ]
+                    }
+                ]
+            }
+        }
+        """;
+
+        string code = ExoCodeGenerator.GenerateFromExportJson(exportJson);
+        Assert.DoesNotContain("AdminToolsServiceClient", code);
+        Assert.DoesNotContain("EmptyServiceServiceClient", code);
+
+        string staff = ExoCodeGenerator.GenerateFromExportJson(exportJson, includeStudio: true);
+        Assert.Contains("AdminToolsServiceClient", staff);
+        Assert.Contains("ResetAsync(", staff);
+        Assert.Contains("DeployAsync(", staff);
+    }
+
+    [Fact]
+    public void MapTypeToCSharp_Preserves_Int_Width_And_BEAM_Integer()
+    {
+        var services = new List<ServiceContractModel>
+        {
+            new ServiceContractModel
+            {
+                Name = "numeric",
+                Actions = new List<ActionContractModel>
+                {
+                    new ActionContractModel
+                    {
+                        Name = "send",
+                        Scope = "player",
+                        Params = new List<ParamModel>
+                        {
+                            new ParamModel { Name = "small", Type = "int" },
+                            new ParamModel { Name = "small32", Type = "int32" },
+                            new ParamModel { Name = "beam", Type = "integer" },
+                            new ParamModel { Name = "large", Type = "int64" },
+                            new ParamModel { Name = "small_list", Type = "list_int" },
+                            new ParamModel { Name = "int_list", Type = "[:int]" },
+                            new ParamModel { Name = "beam_list", Type = "[:integer]" }
+                        },
+                        ReturnFields = new List<ParamModel>
+                        {
+                            new ParamModel { Name = "small", Type = "int" },
+                            new ParamModel { Name = "beam", Type = "integer" }
+                        }
+                    }
+                }
+            }
+        };
+
+        string code = ExoCodeGenerator.Generate(services);
+
+        Assert.Contains("public int Small { get; set; }", code);
+        Assert.Contains("public int Small32 { get; set; }", code);
+        Assert.Contains("public long Beam { get; set; }", code);
+        Assert.Contains("public long Large { get; set; }", code);
+        Assert.Contains("public List<int> SmallList { get; set; }", code);
+        Assert.Contains("public List<int> IntList { get; set; }", code);
+        Assert.Contains("public List<long> BeamList { get; set; }", code);
+        Assert.Contains("public Task<NumericSendResponse> SendAsync(int small, int small32, long beam, long large, List<int> smallList, List<int> intList, List<long> beamList, CancellationToken cancellationToken = default)", code);
+        Assert.Contains("public int Small { get; set; }", code);
+        Assert.Contains("public long Beam { get; set; }", code);
     }
 }

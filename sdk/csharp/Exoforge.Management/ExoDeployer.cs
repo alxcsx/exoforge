@@ -859,6 +859,7 @@ public class ExoDeployer
         string? outputPathOverride = null,
         ExoClient? existingClient = null,
         Action<string>? emit = null,
+        bool includeStudio = false,
         CancellationToken cancellationToken = default)
     {
         string exportJson;
@@ -891,7 +892,13 @@ public class ExoDeployer
         {
             SyncCompanionAttributes(rawJson, Path.Combine(targetDir, "Attributes"), emit);
         }
-        bool changed = ExoCodeGenerator.GenerateToFile(rawJson, targetPath, _workspace.Config.Codegen.Namespace, codeSearchRoot: _workspace.RootPath, log: emit);
+        bool changed = ExoCodeGenerator.GenerateToFile(
+            rawJson,
+            targetPath,
+            _workspace.Config.Codegen.Namespace,
+            codeSearchRoot: _workspace.RootPath,
+            log: emit,
+            includeStudio: includeStudio);
 
         return changed ? 1 : 0;
     }
