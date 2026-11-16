@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
     <RootNamespace>Exoforge.CLI</RootNamespace>
     <AssemblyName>exo</AssemblyName>
-    <Version>0.1.39</Version>
+    <Version>0.1.40</Version>
   </PropertyGroup>
 
   <ItemGroup>

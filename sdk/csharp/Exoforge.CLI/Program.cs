@@ -97,7 +97,7 @@ public static class Program
         var asm = typeof(Program).Assembly;
         var info = (System.Reflection.AssemblyInformationalVersionAttribute?)Attribute.GetCustomAttribute(
             asm, typeof(System.Reflection.AssemblyInformationalVersionAttribute));
-        string raw = info?.InformationalVersion ?? asm.GetName().Version?.ToString(3) ?? "0.1.39";
+        string raw = info?.InformationalVersion ?? asm.GetName().Version?.ToString(3) ?? "0.1.40";
         int plus = raw.IndexOf('+');
         return plus > 0 ? raw[..plus] : raw;
     }

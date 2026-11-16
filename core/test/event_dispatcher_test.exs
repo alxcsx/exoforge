@@ -3,7 +3,10 @@ defmodule Exoforge.EventDispatcherTest do
   alias Exoforge.EventDispatcher
 
   setup do
-    start_supervised!({Registry, keys: :duplicate, name: EventDispatcher.registry_name()})
+    unless Process.whereis(EventDispatcher.registry_name()) do
+      start_supervised!({Registry, keys: :duplicate, name: EventDispatcher.registry_name()})
+    end
+
     :ok
   end
 

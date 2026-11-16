@@ -5,7 +5,10 @@ defmodule Exoforge.ExtensionRegistryTest do
   alias Exoforge.ExtensionRegistry
 
   setup do
-    start_supervised!(ExtensionRegistry)
+    unless Process.whereis(ExtensionRegistry) do
+      start_supervised!(ExtensionRegistry)
+    end
+
     :ok
   end
 

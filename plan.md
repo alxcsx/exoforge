@@ -1,8 +1,8 @@
 # Exoforge Architecture & Plan (`plan.md`)
 
 > **Status**: Kernel, 14 standard extensions, C# Client SDK, C# Extension SDK, C# Management Engine (`exo`
-> CLI), Unity SDK (`com.exoforge.sdk` v0.1.38), Producer Studio, clustering, CI/CD pipeline, and Arch Linux staging deploy are
-> **complete** — **320 Elixir + 133 C# = 453 tests passing**, plus a live E2E vertical slice of 6 tests
+> CLI), Unity SDK (`com.exoforge.sdk` v0.1.40), Producer Studio, clustering, CI/CD pipeline, and Arch Linux staging deploy are
+> **complete** — **432 Elixir + 128 C# = 560 unit tests passing**, plus a live E2E vertical slice of 6 tests
 > against a running server and Unity headless check (`just sample-check`).
 > **MVP Status**: Phase 0 (ADR 001 Architecture Decision Record) & Phase 1 (Extension Terminology Bulldozer) **Completed**.
 > **Benchmark**: 0.07 ms fanout to 50 event subscribers over `:pg`.

@@ -10,9 +10,18 @@ defmodule Exoforge.ExtensionPipelineTest do
   alias Exoforge.ExtensionRegistry
 
   setup do
-    start_supervised!(Exoforge.EventDispatcher)
-    start_supervised!(ExtensionRegistry)
-    start_supervised!(Exoforge.ExtensionSupervisor)
+    unless Process.whereis(Exoforge.EventDispatcher.registry_name()) do
+      start_supervised!(Exoforge.EventDispatcher)
+    end
+
+    unless Process.whereis(ExtensionRegistry) do
+      start_supervised!(ExtensionRegistry)
+    end
+
+    unless Process.whereis(Exoforge.ExtensionSupervisor) do
+      start_supervised!(Exoforge.ExtensionSupervisor)
+    end
+
     :ok
   end
 

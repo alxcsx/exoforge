@@ -55,7 +55,10 @@ defmodule Exoforge.Std.CronTest do
         provides: [:cron]
       })
 
-      start_supervised!({Scheduler, []})
+      unless Process.whereis(Scheduler) do
+        start_supervised!({Scheduler, []})
+      end
+
       :ok
     end
 
