@@ -178,10 +178,10 @@ defmodule Exoforge.AuthTest do
 
   describe "Sensitive actions are staff-gated over transports (M33 Fix 3)" do
     test "a player-scoped caller cannot reach them" do
-      assert {:error, :forbidden_scope} =
+      assert {:error, {:forbidden_scope, _}} =
                ActionDispatcher.dispatch(:auth, :list_users, %{}, caller_scopes: ["player"])
 
-      assert {:error, :forbidden_scope} =
+      assert {:error, {:forbidden_scope, _}} =
                ActionDispatcher.dispatch(:auth, :issue_token, %{player_id: "someone"},
                  caller_scopes: ["player"]
                )

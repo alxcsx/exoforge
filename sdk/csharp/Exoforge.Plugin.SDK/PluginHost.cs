@@ -711,6 +711,32 @@ public static class PluginHost
 
     private sealed class NativeTransport : IPluginTransport
     {
+        private static void ThrowIfDbError(string table, string? raw)
+        {
+            if (string.IsNullOrEmpty(raw)) return;
+
+            if (raw.StartsWith("{") && raw.Contains("\"ok\":false"))
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(raw);
+                    if (doc.RootElement.ValueKind == JsonValueKind.Object &&
+                        doc.RootElement.TryGetProperty("ok", out var okProp) &&
+                        !okProp.GetBoolean())
+                    {
+                        string error = doc.RootElement.TryGetProperty("error", out var errProp)
+                            ? (errProp.ValueKind == JsonValueKind.String ? errProp.GetString()! : errProp.GetRawText())
+                            : raw;
+                        throw new ExoDatabaseException(table, error);
+                    }
+                }
+                catch (JsonException)
+                {
+                    // ignore malformed json
+                }
+            }
+        }
+
         public bool EmitEvent(string topic, string evt, string payloadJson) =>
             HostCall("emit_event", $"{{\"topic\":{JsonEncode(topic)},\"event\":{JsonEncode(evt)},\"payload\":{payloadJson}}}") != "false";
 
@@ -720,17 +746,41 @@ public static class PluginHost
         public void Log(int level, string message) =>
             HostCall("log", $"{{\"level\":{level},\"message\":{JsonEncode(message)}}}");
 
-        public string? DbGet(string table, string key) =>
-            HostCall("db_get", $"{{\"table\":{JsonEncode(table)},\"key\":{JsonEncode(key)}}}");
+        public string? DbGet(string table, string key)
+        {
+            string? raw = HostCall("db_get", $"{{\"table\":{JsonEncode(table)},\"key\":{JsonEncode(key)}}}");
+            ThrowIfDbError(table, raw);
+            return raw;
+        }
 
-        public string? DbAll(string table) =>
-            HostCall("db_all", $"{{\"table\":{JsonEncode(table)}}}");
+        public string? DbAll(string table)
+        {
+            string? raw = HostCall("db_all", $"{{\"table\":{JsonEncode(table)}}}");
+            ThrowIfDbError(table, raw);
+            return raw;
+        }
 
-        public bool DbPut(string table, string key, string valueJson) =>
-            HostCall("db_put", $"{{\"table\":{JsonEncode(table)},\"key\":{JsonEncode(key)},\"value\":{valueJson}}}") != "false";
+        public bool DbPut(string table, string key, string valueJson)
+        {
+            string? raw = HostCall("db_put", $"{{\"table\":{JsonEncode(table)},\"key\":{JsonEncode(key)},\"value\":{valueJson}}}");
+            ThrowIfDbError(table, raw);
+            if (raw == "false")
+            {
+                throw new ExoDatabaseException(table, "Database put operation failed");
+            }
+            return raw != "false";
+        }
 
-        public bool DbDelete(string table, string key) =>
-            HostCall("db_delete", $"{{\"table\":{JsonEncode(table)},\"key\":{JsonEncode(key)}}}") != "false";
+        public bool DbDelete(string table, string key)
+        {
+            string? raw = HostCall("db_delete", $"{{\"table\":{JsonEncode(table)},\"key\":{JsonEncode(key)}}}");
+            ThrowIfDbError(table, raw);
+            if (raw == "false")
+            {
+                throw new ExoDatabaseException(table, "Database delete operation failed");
+            }
+            return raw != "false";
+        }
 
         public long ClockNow()
         {

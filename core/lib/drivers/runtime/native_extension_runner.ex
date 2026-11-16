@@ -22,10 +22,10 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
 
   @runner_key :native_runner
 
-  # The OS already accounts for a process's CPU and peak memory, so metering samples it instead of
-  # instrumenting the extension. Five seconds is often enough for a billing-quality number and cheap
-  # enough to leave on; `VmHWM` is a high-water mark, so a peak between samples is never lost.
+  # OS sample interval and stderr tail capture limits
   @os_sample_ms 5_000
+  @max_stderr_bytes 64 * 1024
+  @max_stderr_lines 20
 
   @doc "Prepares the manifest by ensuring the proxy module is created and set as entry_point."
   def prepare_manifest(%Manifest{} = manifest) do
@@ -152,12 +152,32 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
     Process.flag(:trap_exit, true)
     Logger.debug("[NativeExtensionRunner] Starting native extension #{manifest.id} (worker #{idx}) from #{binary_path}")
 
+    stderr_path =
+      Path.join(
+        System.tmp_dir!(),
+        "exoforge_ext_stderr_#{manifest.id}_#{idx}_#{System.unique_integer([:positive])}.log"
+      )
+
+    _ = File.touch(stderr_path)
+
+    {spawn_exec, spawn_args} =
+      case :os.type() do
+        {:win32, _} ->
+          cmd = System.find_executable("cmd.exe") || "cmd.exe"
+          {cmd, ["/c", "\"#{binary_path}\" 2>\"#{stderr_path}\""]}
+
+        _ ->
+          sh = System.find_executable("sh") || "/bin/sh"
+          {sh, ["-c", "exec \"$0\" 2>\"$1\"", binary_path, stderr_path]}
+      end
+
     port =
-      Port.open({:spawn_executable, binary_path}, [
+      Port.open({:spawn_executable, spawn_exec}, [
         :binary,
         :exit_status,
         :use_stdio,
-        :hide
+        :hide,
+        {:args, spawn_args}
       ])
 
     # Only worker 1 subscribes to events and records start metrics to prevent duplicate broadcasts/metering
@@ -186,7 +206,8 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
        current_context: nil,
        handshake: nil,
        handshake_timer: handshake_timer,
-       worker_idx: idx
+       worker_idx: idx,
+       stderr_path: stderr_path
      }}
   end
 
@@ -247,18 +268,22 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
 
   def handle_info({port, {:exit_status, status}}, %{port: port} = state) do
     if is_nil(state.handshake) do
+      stderr_tail = read_stderr_tail(state.stderr_path)
+      stderr_msg = format_stderr_msg(stderr_tail, " (no stderr captured)")
+
       Logger.error(
         "[NativeExtensionRunner] #{state.manifest.id} exited before the protocol handshake (exit status #{status}). " <>
           "This usually indicates: 1) LIBC/RID MISMATCH: The binary was compiled for glibc (e.g. linux-x64) instead of musl (e.g. linux-musl-x64) for Alpine Linux; " <>
           "2) RUNTIME PACK: The required .NET runtime is missing from the container image; or 3) MISSING DEPENDENCY. " <>
-          "The extension has been marked as crashed and isolated to protect the cluster supervision tree."
+          "The extension has been marked as crashed and isolated to protect the cluster supervision tree. " <>
+          stderr_msg <> "\nRun: exo extension logs #{state.manifest.id}"
       )
 
-      ExtensionRegistry.mark_crashed(state.manifest.id, {:exit_before_handshake, status})
+      ExtensionRegistry.mark_crashed(state.manifest.id, {:exit_before_handshake, status, stderr_tail})
 
       Enum.each(state.pending, fn {_id, entry} ->
         record_call(state.manifest.id, entry, :exited, 0)
-        GenServer.reply(entry.from, {:error, {:extension_crashed, {:exit_before_handshake, status}}})
+        GenServer.reply(entry.from, {:error, {:extension_crashed, {:exit_before_handshake, status, stderr_tail}}})
       end)
 
       {:stop, {:shutdown, {:extension_exited, status}}, %{state | pending: %{}}}
@@ -292,29 +317,33 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
   def handle_info(_msg, state), do: {:noreply, state}
 
   @impl true
-  def terminate(_reason, %{port: port} = _state) do
-    try do
-      case Port.info(port, :os_pid) do
-        {:os_pid, pid} when is_integer(pid) and pid > 0 ->
-          kill_os_process(pid)
+  def terminate(_reason, state) do
+    port = Map.get(state, :port)
 
-        _ ->
-          :ok
+    if port do
+      try do
+        case Port.info(port, :os_pid) do
+          {:os_pid, pid} when is_integer(pid) and pid > 0 ->
+            kill_os_process(pid)
+
+          _ ->
+            :ok
+        end
+      catch
+        _, _ -> :ok
       end
-    catch
-      _, _ -> :ok
+
+      try do
+        Port.close(port)
+      catch
+        _, _ -> :ok
+      end
     end
 
-    try do
-      Port.close(port)
-    catch
-      _, _ -> :ok
-    end
+    cleanup_stderr(state)
 
     :ok
   end
-
-  def terminate(_reason, _state), do: :ok
 
   defp kill_os_process(pid) do
     case :os.type() do
@@ -384,8 +413,12 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
         state
 
       {:error, reason} ->
-        Logger.warning("[NativeExtensionRunner] Bad frame from #{state.manifest.id}: #{inspect(reason)}")
-        state
+        if is_nil(state.handshake) do
+          state
+        else
+          Logger.warning("[NativeExtensionRunner] Bad frame from #{state.manifest.id}: #{inspect(reason)}")
+          state
+        end
     end
   end
 
@@ -409,9 +442,12 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
   end
 
   defp refuse(state, reason) do
+    stderr_tail = read_stderr_tail(state.stderr_path)
+    stderr_msg = format_stderr_msg(stderr_tail, "")
+
     Logger.error(
       "[NativeExtensionRunner] Refusing #{state.manifest.id}: #{ExtensionProtocol.refusal(reason)}. " <>
-        "Rebuild the extension against the current SDK, or update the image."
+        "Rebuild the extension against the current SDK, or update the image." <> stderr_msg
     )
 
     ExtensionRegistry.mark_crashed(state.manifest.id, {:handshake_refused, reason})
@@ -533,25 +569,32 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
   end
 
   defp run_host_call("db_put", args, manifest) do
-    db_put(manifest, Map.get(args, "table"), Map.get(args, "key"), Map.get(args, "value"))
+    case db_put(manifest, Map.get(args, "table"), Map.get(args, "key"), Map.get(args, "value")) do
+      {:ok, _} -> true
+      {:error, reason} -> %{ok: false, error: inspect(reason)}
+    end
   end
 
   defp run_host_call("db_get", args, manifest) do
     case db_get(manifest, Map.get(args, "table"), Map.get(args, "key")) do
       {:ok, record} -> record
-      _ -> nil
+      {:error, :not_found} -> nil
+      {:error, reason} -> %{ok: false, error: inspect(reason)}
     end
   end
 
   defp run_host_call("db_all", args, manifest) do
     case db_all(manifest, Map.get(args, "table")) do
       {:ok, rows} when is_list(rows) -> rows
-      _ -> []
+      {:error, reason} -> %{ok: false, error: inspect(reason)}
     end
   end
 
   defp run_host_call("db_delete", args, manifest) do
-    db_delete(manifest, Map.get(args, "table"), Map.get(args, "key"))
+    case db_delete(manifest, Map.get(args, "table"), Map.get(args, "key")) do
+      {:ok, _} -> true
+      {:error, reason} -> %{ok: false, error: inspect(reason)}
+    end
   end
 
   defp run_host_call("call_action", args, manifest) do
@@ -597,44 +640,55 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
 
   defp db_put(manifest, table, key, value) do
     case ActionDispatcher.dispatch_internal(:database, :execute, %{
+           plugin: manifest.id,
            extension: manifest.id,
            operation: %{action: :put, table: table, id: key, data: value}
          }) do
-      {:ok, _} -> true
-      _ -> false
+      {:ok, res} -> {:ok, res}
+      {:error, reason} -> {:error, reason}
+      other -> {:error, other}
     end
   end
 
   defp db_get(manifest, table, key) do
     case ActionDispatcher.dispatch_internal(:database, :execute, %{
+           plugin: manifest.id,
            extension: manifest.id,
            operation: %{action: :get, table: table, id: key}
          }) do
       {:ok, %{rows: [record]}} -> {:ok, record}
       {:ok, %{"rows" => [record]}} -> {:ok, record}
+      {:ok, %{rows: []}} -> {:error, :not_found}
+      {:ok, %{"rows" => []}} -> {:error, :not_found}
+      {:ok, []} -> {:error, :not_found}
+      {:error, reason} -> {:error, reason}
       _ -> {:error, :not_found}
     end
   end
 
   defp db_all(manifest, table) do
     case ActionDispatcher.dispatch_internal(:database, :execute, %{
+           plugin: manifest.id,
            extension: manifest.id,
            operation: %{action: :all, table: table}
          }) do
       {:ok, %{rows: rows}} when is_list(rows) -> {:ok, rows}
       {:ok, %{"rows" => rows}} when is_list(rows) -> {:ok, rows}
       {:ok, rows} when is_list(rows) -> {:ok, rows}
-      error -> error
+      {:error, reason} -> {:error, reason}
+      error -> {:error, error}
     end
   end
 
   defp db_delete(manifest, table, key) do
     case ActionDispatcher.dispatch_internal(:database, :execute, %{
+           plugin: manifest.id,
            extension: manifest.id,
            operation: %{action: :delete, table: table, id: key}
          }) do
-      {:ok, _} -> true
-      _ -> false
+      {:ok, res} -> {:ok, res}
+      {:error, reason} -> {:error, reason}
+      other -> {:error, other}
     end
   end
 
@@ -690,4 +744,64 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
       manifest.id
     end
   end
+
+  defp cleanup_stderr(%{stderr_path: stderr_path}) when is_binary(stderr_path) do
+    _ = File.rm(stderr_path)
+    :ok
+  rescue
+    _ -> :ok
+  end
+
+  defp cleanup_stderr(_state), do: :ok
+
+  defp read_stderr_tail(nil), do: []
+
+  defp read_stderr_tail(stderr_path) do
+    case File.stat(stderr_path) do
+      {:ok, %{size: size}} when size > 0 ->
+        offset = max(0, size - @max_stderr_bytes)
+        bytes_to_read = min(size, @max_stderr_bytes)
+
+        case :file.open(to_charlist(stderr_path), [:read, :binary]) do
+          {:ok, file} ->
+            try do
+              case :file.pread(file, offset, bytes_to_read) do
+                {:ok, content} ->
+                  content
+                  |> String.trim_trailing()
+                  |> case do
+                    "" ->
+                      []
+
+                    trimmed ->
+                      trimmed
+                      |> String.split(~r/\r?\n/)
+                      |> Enum.take(-@max_stderr_lines)
+                  end
+
+                _ ->
+                  []
+              end
+            after
+              :file.close(file)
+            end
+
+          _ ->
+            []
+        end
+
+      _ ->
+        []
+    end
+  rescue
+    _ -> []
+  end
+
+  defp format_stderr_msg([], fallback), do: fallback
+
+  defp format_stderr_msg(stderr_tail, _fallback) when is_list(stderr_tail) and stderr_tail != [] do
+    "\nCaptured stderr (last #{length(stderr_tail)} lines):\n" <> Enum.join(stderr_tail, "\n")
+  end
+
+  defp format_stderr_msg(_tail, fallback), do: fallback
 end

@@ -33,6 +33,12 @@ public class FrameLoopPlugin
     [ExoAction("fail_with_invalid_operation", Mode = ActionMode.Sync)]
     public void FailWithInvalidOperation() =>
         throw new System.InvalidOperationException("Bad state reached");
+
+    [ExoAction("trigger_db_error", Mode = ActionMode.Sync)]
+    public void TriggerDbError()
+    {
+        HostBridge.DbGet("missing_table", "k");
+    }
 }
 
 /// <summary>
@@ -117,5 +123,45 @@ public class FrameLoopTests
         Assert.Contains("\"status\":\"error\"", written);
         Assert.Contains("\"code\":\"invalid_operation\"", written);
         Assert.Contains("\"message\":\"Bad state reached\"", written);
+    }
+
+    [Fact]
+    public void An_action_triggering_database_error_throws_and_reports_error()
+    {
+        var plugin = new FrameLoopPlugin();
+        var output = new MemoryStream();
+        var input = new StringReader(string.Join("\n", new[]
+        {
+            "{\"type\":\"action\",\"id\":44,\"action\":\"trigger_db_error\",\"payload\":{}}",
+            "{\"type\":\"host_call_result\",\"id\":1,\"result\":{\"ok\":false,\"error\":\"table missing\"}}",
+            ""
+        }));
+
+        PluginHost.RunInstance(plugin, input, output, null);
+
+        string written = System.Text.Encoding.UTF8.GetString(output.ToArray());
+        Assert.Contains("\"type\":\"action_result\"", written);
+        Assert.Contains("\"id\":44", written);
+        Assert.Contains("\"status\":\"error\"", written);
+    }
+
+    [Fact]
+    public void An_action_triggering_database_error_with_non_string_error_reports_error()
+    {
+        var plugin = new FrameLoopPlugin();
+        var output = new MemoryStream();
+        var input = new StringReader(string.Join("\n", new[]
+        {
+            "{\"type\":\"action\",\"id\":45,\"action\":\"trigger_db_error\",\"payload\":{}}",
+            "{\"type\":\"host_call_result\",\"id\":1,\"result\":{\"ok\":false,\"error\":{\"code\":\"missing_table\",\"id\":42}}}",
+            ""
+        }));
+
+        PluginHost.RunInstance(plugin, input, output, null);
+
+        string written = System.Text.Encoding.UTF8.GetString(output.ToArray());
+        Assert.Contains("\"type\":\"action_result\"", written);
+        Assert.Contains("\"id\":45", written);
+        Assert.Contains("\"status\":\"error\"", written);
     }
 }

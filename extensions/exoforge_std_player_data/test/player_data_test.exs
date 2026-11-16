@@ -344,10 +344,10 @@ defmodule Exoforge.PlayerDataTest do
       assert {:error, :unauthorized} =
                ActionDispatcher.dispatch(:player_data, :list_players, %{})
 
-      assert {:error, :forbidden_scope} =
+      assert {:error, {:forbidden_scope, _}} =
                ActionDispatcher.dispatch(:player_data, :list_players, %{}, caller_scopes: ["player"])
 
-      assert {:error, :forbidden_scope} =
+      assert {:error, {:forbidden_scope, _}} =
                ActionDispatcher.dispatch(:player_data, :delete_player, %{player_id: "someone"}, caller_scopes: ["player"])
 
       # The Studio is staff; its calls are unaffected.

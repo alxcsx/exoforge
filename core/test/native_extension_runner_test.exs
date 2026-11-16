@@ -30,6 +30,10 @@ defmodule Exoforge.NativeExtensionRunnerTest do
         # No reply at all: the process goes away without saying anything, which is what a segfault,
         # an OOM kill or an Environment.Exit looks like from the host's side.
         exit 1 ;;
+      *'"action":"stderr_noise"'*)
+        echo "debug noise from native extension" >&2
+        printf '{"type":"action_result","id":%s,"status":"ok","data":"clean_result"}\\n' "$id"
+        echo "more debug noise on stderr" >&2 ;;
       *'"action":"call_declared"'*)
         printf '{"type":"host_call","id":1,"op":"call_action","args":{"service":"database","action":"ping","payload":{}}}\\n'
         IFS= read -r reply
@@ -305,6 +309,7 @@ defmodule Exoforge.NativeExtensionRunnerTest do
     #!/usr/bin/env bash
     exit 2
     """
+
     variant = write_variant(manifest, exit_immediately)
 
     Process.flag(:trap_exit, true)
@@ -314,10 +319,97 @@ defmodule Exoforge.NativeExtensionRunnerTest do
     assert_receive {:EXIT, ^pid, {:shutdown, {:extension_exited, 2}}}, 1_000
 
     # Extension status is recorded in ExtensionRegistry
-    assert {:crashed, {:exit_before_handshake, 2}} = Exoforge.ExtensionRegistry.get_crash_info(manifest.id)
+    assert {:crashed, {:exit_before_handshake, 2, _}} = Exoforge.ExtensionRegistry.get_crash_info(manifest.id)
 
     # Action invocation returns the crash error immediately
-    assert {:error, {:extension_crashed, {:exit_before_handshake, 2}}} =
+    assert {:error, {:extension_crashed, {:exit_before_handshake, 2, _}}} =
              NativeExtensionRunner.execute_action(manifest.id, "ping", %{})
+  end
+
+  test "captures stderr on pre-handshake exit and includes it in crash info", %{manifest: manifest} do
+    crash_script = """
+    #!/usr/bin/env bash
+    echo "Fatal error: missing dependency libhostfxr.so" >&2
+    echo "Stack trace: at System.Runtime.Loader.AssemblyLoadContext" >&2
+    exit 134
+    """
+
+    variant = write_variant(manifest, crash_script)
+
+    Process.flag(:trap_exit, true)
+    pid = start_runner(manifest, variant)
+
+    assert_receive {:EXIT, ^pid, {:shutdown, {:extension_exited, 134}}}, 1_000
+
+    assert {:crashed, {:exit_before_handshake, 134, stderr_tail}} =
+             Exoforge.ExtensionRegistry.get_crash_info(manifest.id)
+
+    assert is_list(stderr_tail)
+    assert Enum.any?(stderr_tail, &(&1 =~ "missing dependency libhostfxr.so"))
+    assert Enum.any?(stderr_tail, &(&1 =~ "Stack trace: at System.Runtime.Loader"))
+  end
+
+  test "an extension writing to stderr after handshake does not corrupt NDJSON protocol", %{
+    manifest: manifest,
+    binary: binary
+  } do
+    pid = start_runner(manifest, binary)
+
+    # The action emits lines to stderr before and after the NDJSON action_result frame
+    assert {:ok, "clean_result"} =
+             GenServer.call(pid, {:execute_action, "stderr_noise", %{}}, 5_000)
+
+    # Subsequent actions continue to succeed without protocol stream corruption
+    assert {:ok, 42} = GenServer.call(pid, {:execute_action, "ping", %{}}, 5_000)
+
+    GenServer.stop(pid)
+  end
+
+  test "cleans up temporary stderr file on termination", %{manifest: manifest, binary: binary} do
+    test_manifest = %{manifest | id: :"cleanup_test_#{System.unique_integer([:positive])}"}
+    pid = start_runner(test_manifest, binary)
+
+    # Temporary stderr file must exist while process is running
+    temp_pattern = Path.join(System.tmp_dir!(), "exoforge_ext_stderr_#{test_manifest.id}_*")
+    matching_files = Path.wildcard(temp_pattern)
+    assert length(matching_files) == 1
+    [stderr_file] = matching_files
+    assert File.exists?(stderr_file)
+
+    # Stop runner
+    GenServer.stop(pid)
+
+    # Temporary stderr file must be removed
+    refute File.exists?(stderr_file)
+    assert Path.wildcard(temp_pattern) == []
+  end
+
+  test "cleans up temporary stderr file on handshake timeout", %{manifest: manifest} do
+    test_manifest = %{manifest | id: :"timeout_cleanup_#{System.unique_integer([:positive])}"}
+
+    script = """
+    #!/usr/bin/env bash
+    echo "Extension started, hanging before hello..." >&2
+    while IFS= read -r _line; do :; done
+    """
+
+    variant = write_variant(test_manifest, script)
+
+    Process.flag(:trap_exit, true)
+    pid = start_runner(test_manifest, variant, 100)
+
+    # Temporary stderr file exists while running
+    temp_pattern = Path.join(System.tmp_dir!(), "exoforge_ext_stderr_#{test_manifest.id}_*")
+    matching_files = Path.wildcard(temp_pattern)
+    assert length(matching_files) == 1
+    [stderr_file] = matching_files
+    assert File.exists?(stderr_file)
+
+    # Wait for handshake refusal shutdown
+    assert_receive {:EXIT, ^pid, {:shutdown, {:extension_incompatible, :no_handshake}}}, 1_000
+
+    # Temporary stderr file must be cleaned up
+    refute File.exists?(stderr_file)
+    assert Path.wildcard(temp_pattern) == []
   end
 end

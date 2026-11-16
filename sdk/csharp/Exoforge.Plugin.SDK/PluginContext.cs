@@ -69,15 +69,43 @@ public class HostDatabase : IDatabase
         PluginId = pluginId;
     }
 
+    private static void CheckDbError(string table, string? json)
+    {
+        if (string.IsNullOrEmpty(json)) return;
+
+        if (json.StartsWith("{") && json.Contains("\"ok\":false"))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.ValueKind == JsonValueKind.Object &&
+                    doc.RootElement.TryGetProperty("ok", out var okProp) &&
+                    !okProp.GetBoolean())
+                {
+                    string error = doc.RootElement.TryGetProperty("error", out var errProp)
+                        ? (errProp.ValueKind == JsonValueKind.String ? errProp.GetString()! : errProp.GetRawText())
+                        : json;
+                    throw new ExoDatabaseException(table, error);
+                }
+            }
+            catch (JsonException)
+            {
+                // ignore malformed json
+            }
+        }
+    }
+
     public T? Get<T>(string table, string key)
     {
         string? json = HostBridge.DbGet(table, key);
+        CheckDbError(table, json);
         return string.IsNullOrEmpty(json) ? default : PluginJson.Deserialize<T>(json);
     }
 
     public IReadOnlyList<T> All<T>(string table)
     {
         string? json = HostBridge.DbAll(table);
+        CheckDbError(table, json);
         if (string.IsNullOrEmpty(json)) return Array.Empty<T>();
 
         var rows = new List<T>();
@@ -99,12 +127,20 @@ public class HostDatabase : IDatabase
 
     public void Put<T>(string table, string key, T value)
     {
-        HostBridge.DbPut(table, key, PluginJson.Serialize(value));
+        bool ok = HostBridge.DbPut(table, key, PluginJson.Serialize(value));
+        if (!ok)
+        {
+            throw new ExoDatabaseException(table, "Database put operation failed");
+        }
     }
 
     public void Delete(string table, string key)
     {
-        HostBridge.DbDelete(table, key);
+        bool ok = HostBridge.DbDelete(table, key);
+        if (!ok)
+        {
+            throw new ExoDatabaseException(table, "Database delete operation failed");
+        }
     }
 
     public IReadOnlyList<T> Query<T>(string sql, params object?[] args)

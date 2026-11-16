@@ -57,16 +57,23 @@ defmodule Exoforge.Std.Resources do
   def run_migrations(target \\ nil) do
     ensure_cache()
 
-    ExtensionRegistry.all_resources()
-    |> Enum.filter(fn info ->
-      target == nil or to_string(info.resource.name) == to_string(target)
-    end)
-    |> Enum.reduce(0, fn info, acc ->
+    resources =
+      ExtensionRegistry.all_resources()
+      |> Enum.filter(fn info ->
+        target == nil or to_string(info.resource.name) == to_string(target)
+      end)
+
+    Enum.reduce_while(resources, {:ok, 0}, fn info, {:ok, acc} ->
       case migrate_resource(info) do
-        :ok -> acc + 1
-        _ -> acc
+        :ok -> {:cont, {:ok, acc + 1}}
+        :skip -> {:cont, {:ok, acc}}
+        {:error, reason} -> {:halt, {:error, reason}}
       end
     end)
+    |> case do
+      {:ok, count} -> count
+      {:error, reason} -> {:error, reason}
+    end
   end
 
   defp migrate_resource(%{plugin_id: pid, resource: res}) do
@@ -76,11 +83,17 @@ defmodule Exoforge.Std.Resources do
 
       table ->
         key = {pid, table}
-        _ = db(pid, "CREATE TABLE IF NOT EXISTS #{table} (#{column_defs(res)})")
-        repair_primary_key(pid, table, res)
-        reconcile_columns(pid, table, res)
-        mark_migrated(key)
-        :ok
+
+        case db(pid, "CREATE TABLE IF NOT EXISTS #{table} (#{column_defs(res)})") do
+          {:ok, _} ->
+            repair_primary_key(pid, table, res)
+            reconcile_columns(pid, table, res)
+            mark_migrated(key)
+            :ok
+
+          {:error, reason} ->
+            {:error, reason}
+        end
     end
   end
 
@@ -188,7 +201,11 @@ defmodule Exoforge.Std.Resources do
   @impl true
   defaction migrate(payload), scope: Exoforge.Auth.Roles.studio() do
     target = param(payload, :resource)
-    {:ok, %{migrated: run_migrations(target)}}
+
+    case run_migrations(target) do
+      {:error, reason} -> {:error, reason}
+      count when is_integer(count) -> {:ok, %{migrated: count}}
+    end
   end
 
   @impl true

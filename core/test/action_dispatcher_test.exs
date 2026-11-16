@@ -157,7 +157,7 @@ defmodule Exoforge.ActionDispatcherTest do
     end
 
     test "external caller with insufficient scope is rejected with :forbidden_scope" do
-      assert {:error, :forbidden_scope} =
+      assert {:error, {:forbidden_scope, %{required: :admin, caller_scopes: ["player"]}}} =
                ActionDispatcher.dispatch(TestPlugin, :admin_reset, %{}, caller_scopes: ["player"])
     end
 
@@ -174,7 +174,7 @@ defmodule Exoforge.ActionDispatcherTest do
 
       payload_with_player = %{"_auth" => %{"scopes" => ["player"]}}
 
-      assert {:error, :forbidden_scope} =
+      assert {:error, {:forbidden_scope, %{required: :admin, caller_scopes: ["player"]}}} =
                ActionDispatcher.dispatch(TestPlugin, :admin_reset, payload_with_player)
     end
   end
@@ -193,6 +193,41 @@ defmodule Exoforge.ActionDispatcherTest do
     test "accepts false boolean parameters" do
       assert {:ok, %{enabled: false}} =
                ActionDispatcher.dispatch_internal(TestPlugin, :flag, %{enabled: false}, require_params: true)
+    end
+
+    test "database execute contract accepts term operations (maps and strings)" do
+      defmodule MockDatabasePlugin do
+        use Exoforge.Extension, provides: [Exoforge.Std.Services.Database]
+
+        @impl true
+        defaction execute(payload), scope: :server do
+          {:ok, %{rows: [%{dispatched_payload: payload}]}}
+        end
+      end
+
+      manifest = %Manifest{
+        id: :mock_db,
+        name: "mock_db",
+        version: "1.0.0",
+        entry_point: MockDatabasePlugin,
+        provides: [Exoforge.Std.Services.Database]
+      }
+
+      assert :ok = ExtensionRegistry.register(manifest)
+
+      # String operation (SQL query)
+      assert {:ok, _} =
+               ActionDispatcher.dispatch_internal(:database, :execute, %{
+                 plugin: :my_ext,
+                 operation: "SELECT 1"
+               })
+
+      # Map operation (KV operation: put, get, all, delete)
+      assert {:ok, _} =
+               ActionDispatcher.dispatch_internal(:database, :execute, %{
+                 plugin: :my_ext,
+                 operation: %{action: :get, table: "scores", id: "p1"}
+               })
     end
   end
 end

@@ -232,6 +232,10 @@ defmodule Exoforge.Std.Http.Router do
         Logger.warning("[HTTP:Webhook] #{service}.#{action} -> 401 unauthorized (#{latency_us}µs)")
         send_json(conn, 401, %{status: "error", error: "unauthorized"})
 
+      {:error, {:forbidden_scope, details}} ->
+        Logger.warning("[HTTP:Webhook] #{service}.#{action} -> 403 forbidden_scope (#{latency_us}µs)")
+        send_json(conn, 403, %{status: "error", error: "forbidden_scope", required_scope: details.required, caller_scopes: details.caller_scopes})
+
       {:error, :forbidden_scope} ->
         Logger.warning("[HTTP:Webhook] #{service}.#{action} -> 403 forbidden_scope (#{latency_us}µs)")
         send_json(conn, 403, %{status: "error", error: "forbidden_scope"})
@@ -346,6 +350,10 @@ defmodule Exoforge.Std.Http.Router do
       {:error, :unauthorized} ->
         Logger.warning("[HTTP:Action] #{service}.#{action} -> 401 unauthorized (#{latency_us}µs)")
         send_json(conn, 401, %{status: "error", error: "unauthorized", logs: logs})
+
+      {:error, {:forbidden_scope, details}} ->
+        Logger.warning("[HTTP:Action] #{service}.#{action} -> 403 forbidden_scope (#{latency_us}µs)")
+        send_json(conn, 403, %{status: "error", error: "forbidden_scope", required_scope: details.required, caller_scopes: details.caller_scopes, logs: logs})
 
       {:error, :forbidden_scope} ->
         Logger.warning("[HTTP:Action] #{service}.#{action} -> 403 forbidden_scope (#{latency_us}µs)")

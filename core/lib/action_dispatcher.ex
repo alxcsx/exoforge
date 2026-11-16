@@ -54,7 +54,8 @@ defmodule Exoforge.ActionDispatcher do
         origin: caller,
         rid: rid,
         depth: if(parent, do: parent.depth + 1, else: 0),
-        capture: capture
+        capture: capture,
+        internal: internal?
       })
 
     try do
@@ -96,9 +97,7 @@ defmodule Exoforge.ActionDispatcher do
               end
 
             {:error, _} = param_err ->
-              Logger.warning(
-                "[Action] invalid parameters for #{inspect(resolved_mod)}.#{action}: #{inspect(param_err)}"
-              )
+              Logger.warning("[Action] invalid parameters for #{inspect(resolved_mod)}.#{action}: #{inspect(param_err)}")
 
               param_err
           end
@@ -320,9 +319,7 @@ defmodule Exoforge.ActionDispatcher do
 
         %Manifest{entry_point: entry_point} ->
           if depth > 10 do
-            Logger.warning(
-              "[Action] service resolution depth exceeded for #{inspect(mod)}, defaulting to #{inspect(entry_point)}"
-            )
+            Logger.warning("[Action] service resolution depth exceeded for #{inspect(mod)}, defaulting to #{inspect(entry_point)}")
 
             entry_point
           else
@@ -331,9 +328,7 @@ defmodule Exoforge.ActionDispatcher do
 
         next_mod when is_atom(next_mod) ->
           if depth > 10 do
-            Logger.warning(
-              "[Action] service resolution depth exceeded for #{inspect(mod)}, defaulting to #{inspect(next_mod)}"
-            )
+            Logger.warning("[Action] service resolution depth exceeded for #{inspect(mod)}, defaulting to #{inspect(next_mod)}")
 
             resolve_module(next_mod, ctx)
           else
@@ -448,8 +443,8 @@ defmodule Exoforge.ActionDispatcher do
   defp authorize_scope(scope, _caller_scopes) when scope in [:global, nil], do: :ok
   defp authorize_scope(_declared, :internal), do: :ok
 
-  defp authorize_scope(:server, _caller_scopes) do
-    {:error, :forbidden_scope}
+  defp authorize_scope(:server, caller_scopes) do
+    {:error, {:forbidden_scope, %{required: :server, caller_scopes: normalize_scopes(caller_scopes)}}}
   end
 
   # Role hierarchy: admin > studio > player > guest. A caller may run an action
@@ -465,13 +460,17 @@ defmodule Exoforge.ActionDispatcher do
 
       cond do
         not known? ->
-          if declared_str in scopes_str, do: :ok, else: {:error, :forbidden_scope}
+          if declared_str in scopes_str do
+            :ok
+          else
+            {:error, {:forbidden_scope, %{required: declared, caller_scopes: scopes_str}}}
+          end
 
         Exoforge.Auth.Roles.satisfies?(scopes_str, declared_str) ->
           :ok
 
         true ->
-          {:error, :forbidden_scope}
+          {:error, {:forbidden_scope, %{required: declared, caller_scopes: scopes_str}}}
       end
     end
   end

@@ -241,7 +241,7 @@ defmodule Exoforge.Std.ExtensionManagerTest do
     end
 
     test "scope authorization enforces admin scope on mutating actions" do
-      assert {:error, :forbidden_scope} =
+      assert {:error, {:forbidden_scope, _}} =
                ActionDispatcher.dispatch(
                  :extension_manager,
                  :remove_extension,
@@ -249,7 +249,7 @@ defmodule Exoforge.Std.ExtensionManagerTest do
                  caller_scopes: ["player"]
                )
 
-      assert {:error, :forbidden_scope} =
+      assert {:error, {:forbidden_scope, _}} =
                ActionDispatcher.dispatch(
                  :extension_manager,
                  :upload_extension,

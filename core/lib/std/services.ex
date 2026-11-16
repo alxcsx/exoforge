@@ -10,7 +10,7 @@ defmodule Exoforge.Std.Services do
       scope(:server)
 
       params(
-        operation: :string,
+        operation: [type: :term],
         arguments: [type: :term, optional: true],
         plugin: [type: :term, optional: true]
       )
@@ -674,6 +674,7 @@ defmodule Exoforge.Std.Services do
 
     @doc "Creates/updates the tables backing all declared resources (additive migrations)."
     action :migrate do
+      scope(:studio)
       params(resource: [type: :string, optional: true])
       returns(migrated: :integer)
     end
@@ -703,6 +704,7 @@ defmodule Exoforge.Std.Services do
 
     @doc "Creates a row."
     action :create do
+      scope(:studio)
       params(resource: :string, attributes: :map)
       returns(row: :map)
       errors([:invalid_attributes])
@@ -710,6 +712,7 @@ defmodule Exoforge.Std.Services do
 
     @doc "Updates a row by primary key."
     action :update do
+      scope(:studio)
       params(resource: :string, id: :term, attributes: :map)
       returns(row: :map)
       errors([:not_found])
@@ -717,18 +720,21 @@ defmodule Exoforge.Std.Services do
 
     @doc "Deletes a row by primary key."
     action :delete do
+      scope(:studio)
       params(resource: :string, id: :term)
       returns(deleted: :boolean)
     end
 
     @doc "Inserts or updates a row on conflict."
     action :upsert do
+      scope(:studio)
       params(resource: :string, attributes: :map)
       returns(row: :map)
     end
 
     @doc "Removes every row of a resource, table-backed or KV-backed, without dropping the table."
     action :clear do
+      scope(:studio)
       params(resource: [type: :string, optional: true])
       returns(cleared: :integer)
     end

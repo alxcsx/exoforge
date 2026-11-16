@@ -222,13 +222,38 @@ defmodule Exoforge.ExtensionRegistry do
     end
   end
 
-  @doc "Fetches a specific resource declaration by name."
+  @doc """
+  Fetches a specific resource declaration by name.
+
+  A caller may identify it by the resource name or by its backing table; they differ whenever a
+  manifest declares `source: {:table, "other_name"}`. The resource map can be atom-keyed (Elixir
+  contract) or string-keyed and list-shaped (JSON manifest sanitized in the registry), so every
+  source shape is matched here.
+  """
   def fetch_resource(resource_name) do
-    case Enum.find(all_resources(), fn r -> to_string(r.resource.name) == to_string(resource_name) end) do
+    name_str = to_string(resource_name)
+
+    case Enum.find(all_resources(), &resource_matches?(&1.resource, name_str)) do
       nil -> {:error, :not_found}
       found -> {:ok, found}
     end
   end
+
+  defp resource_matches?(resource, name_str) do
+    [
+      Map.get(resource, :name) || Map.get(resource, "name"),
+      Map.get(resource, :table) || Map.get(resource, "table"),
+      resource_source_table(Map.get(resource, :source) || Map.get(resource, "source"))
+    ]
+    |> Enum.any?(fn value -> not is_nil(value) and to_string(value) == name_str end)
+  end
+
+  defp resource_source_table({:table, table}), do: table
+  defp resource_source_table([:table, table]), do: table
+  defp resource_source_table(["table", table]), do: table
+  defp resource_source_table(%{table: table}), do: table
+  defp resource_source_table(%{"table" => table}), do: table
+  defp resource_source_table(_), do: nil
 
   @doc "Dynamically retrieves data rows for any declared resource via the resource store."
   def fetch_resource_rows(resource_name, caller_scopes \\ :internal) do

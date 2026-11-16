@@ -562,16 +562,42 @@ defmodule Exoforge.Std.ExtensionManager do
       [loaded_manifest | _] ->
         ExtensionRegistry.register(loaded_manifest)
 
-        if Process.whereis(Exoforge.ExtensionSupervisor) != nil do
-          ExtensionBootstrapper.boot_extension(loaded_manifest)
-          {:ok, %{extension_id: clean_name, type: to_string(type), status: "installed"}}
-        else
-          {:ok, %{extension_id: clean_name, type: to_string(type), status: "installed"}}
+        migration_result =
+          if ExtensionRegistry.fetch_service(:resource_store) != nil and declares_resources?(loaded_manifest) do
+            Exoforge.ActionDispatcher.dispatch_internal(:resource_store, :migrate, %{})
+          else
+            {:ok, :noop}
+          end
+
+        case migration_result do
+          {:error, reason} ->
+            ExtensionRegistry.unregister(loaded_manifest.id)
+            {:error, {:migration_failed, reason}}
+
+          _ ->
+            if Process.whereis(Exoforge.ExtensionSupervisor) != nil do
+              ExtensionBootstrapper.boot_extension(loaded_manifest)
+              {:ok, %{extension_id: clean_name, type: to_string(type), status: "installed"}}
+            else
+              {:ok, %{extension_id: clean_name, type: to_string(type), status: "installed"}}
+            end
         end
 
       _ ->
         {:ok, %{extension_id: clean_name, type: to_string(type), status: "saved_pending_restart"}}
     end
+  end
+
+  defp declares_resources?(manifest) do
+    root_res = Map.get(manifest, :resources, []) || Map.get(manifest, "resources", [])
+    services = ExtensionRegistry.manifest_services(manifest)
+
+    service_res =
+      Enum.flat_map(services, fn svc ->
+        Map.get(svc, :resources, []) || Map.get(svc, "resources", [])
+      end)
+
+    root_res != [] or service_res != []
   end
 
   defp calculate_extension_size(m) do
@@ -609,6 +635,7 @@ defmodule Exoforge.Std.ExtensionManager do
 
         true ->
           title = Macro.camelize(name)
+
           %{
             "id" => name,
             "title" => title,
@@ -737,9 +764,14 @@ defmodule Exoforge.Std.ExtensionManager do
           "linux"
         end
 
-      {:unix, :darwin} -> "osx"
-      {:win32, _} -> "win"
-      {family, name} -> "#{family}-#{name}"
+      {:unix, :darwin} ->
+        "osx"
+
+      {:win32, _} ->
+        "win"
+
+      {family, name} ->
+        "#{family}-#{name}"
     end
   end
 
@@ -752,6 +784,7 @@ defmodule Exoforge.Std.ExtensionManager do
 
   defp cluster_arch do
     arch_str = to_string(:erlang.system_info(:system_architecture))
+
     cond do
       String.contains?(arch_str, "aarch64") or String.contains?(arch_str, "arm64") -> "arm64"
       String.contains?(arch_str, "x86_64") or String.contains?(arch_str, "amd64") -> "x64"

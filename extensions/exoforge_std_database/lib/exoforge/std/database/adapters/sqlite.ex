@@ -35,6 +35,10 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
 
   @impl true
   def reset(plugin_id, config) do
+    # An open SQLite handle keeps the old inode alive after File.rm/1. The next query would then
+    # write through that handle (or fail as readonly) while the new file on disk stays empty. Stop
+    # the pooled connection first so reset gives the caller a genuinely fresh database.
+    stop_connection(plugin_id)
     _ = File.rm(db_path(plugin_id, config))
     :ok
   end
@@ -105,16 +109,6 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
     end
   end
 
-  # A missing table in a plugin's isolated database means "no data" for reads.
-  # Writes to a missing table still surface the error.
-  defp table_error(reason, true) when is_binary(reason) do
-    if String.contains?(reason, "no such table") do
-      {:ok, %{rows: [], num_rows: 0}}
-    else
-      {:error, reason}
-    end
-  end
-
   defp table_error(reason, _read?), do: {:error, reason}
 
   # A map's values have no order, so binding them to positional parameters would make the query's
@@ -138,62 +132,65 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
     record = Map.put(data, "id", id)
 
     Exoforge.Std.Database.Adapters.Sqlite.Connection.run(plugin_id, config, fn conn ->
-        case real_table_info(conn, tbl) do
-          {:ok, %{columns: cols, pk: pk_col}} ->
-            data_with_pk = Map.put(data, pk_col, id)
+      case real_table_info(conn, tbl) do
+        {:ok, %{columns: cols, pk: pk_col}} ->
+          data_with_pk = Map.put(data, pk_col, id)
 
-            valid_pairs =
-              Enum.flat_map(cols, fn col ->
-                case Map.fetch(data_with_pk, col) do
-                  {:ok, val} ->
-                    [{col, val}]
+          valid_pairs =
+            Enum.flat_map(cols, fn col ->
+              case Map.fetch(data_with_pk, col) do
+                {:ok, val} ->
+                  [{col, val}]
 
-                  :error ->
-                    case Map.fetch(data_with_pk, String.to_atom(col)) do
-                      {:ok, val} -> [{col, val}]
-                      :error -> []
-                    end
-                end
+                :error ->
+                  case Map.fetch(data_with_pk, String.to_atom(col)) do
+                    {:ok, val} -> [{col, val}]
+                    :error -> []
+                  end
+              end
+            end)
+
+          if valid_pairs == [] do
+            put_into_kv(conn, tbl, id, record)
+          else
+            safe_tbl = String.replace(tbl, "\"", "")
+            safe_pk = String.replace(pk_col, "\"", "")
+            {names, values} = Enum.unzip(valid_pairs)
+            placeholders = Enum.map_join(1..length(names), ", ", &"$#{&1}")
+
+            updates =
+              names
+              |> Enum.reject(&(&1 == pk_col))
+              |> Enum.map_join(", ", fn col ->
+                "\"#{String.replace(col, "\"", "")}\" = excluded.\"#{String.replace(col, "\"", "")}\""
               end)
 
-            if valid_pairs == [] do
-              put_into_kv(conn, tbl, id, record)
-            else
-              safe_tbl = String.replace(tbl, "\"", "")
-              safe_pk = String.replace(pk_col, "\"", "")
-              {names, values} = Enum.unzip(valid_pairs)
-              placeholders = Enum.map_join(1..length(names), ", ", &"$#{&1}")
+            sql =
+              "INSERT INTO \"#{safe_tbl}\" (" <>
+                Enum.map_join(names, ", ", &"\"#{String.replace(&1, "\"", "")}\"") <>
+                ") VALUES (#{placeholders}) " <>
+                if(updates == "",
+                  do: "ON CONFLICT(\"#{safe_pk}\") DO NOTHING",
+                  else: "ON CONFLICT(\"#{safe_pk}\") DO UPDATE SET #{updates}"
+                )
 
-              updates =
-                names
-                |> Enum.reject(&(&1 == pk_col))
-                |> Enum.map_join(", ", fn col ->
-                  "\"#{String.replace(col, "\"", "")}\" = excluded.\"#{String.replace(col, "\"", "")}\""
-                end)
+            case run_sql(conn, sql, values) do
+              {:ok, _} ->
+                _ = run_sql(conn, "DELETE FROM kv WHERE tbl = $1 AND id = $2", [tbl, id])
+                {:ok, %{rows: [record], num_rows: 1}}
 
-              sql =
-                "INSERT INTO \"#{safe_tbl}\" (" <>
-                  Enum.map_join(names, ", ", &"\"#{String.replace(&1, "\"", "")}\"") <>
-                  ") VALUES (#{placeholders}) " <>
-                  if(updates == "",
-                    do: "ON CONFLICT(\"#{safe_pk}\") DO NOTHING",
-                    else: "ON CONFLICT(\"#{safe_pk}\") DO UPDATE SET #{updates}"
-                  )
-
-              case run_sql(conn, sql, values) do
-                {:ok, _} ->
-                  _ = run_sql(conn, "DELETE FROM kv WHERE tbl = $1 AND id = $2", [tbl, id])
-                  {:ok, %{rows: [record], num_rows: 1}}
-
-                error ->
-                  error
-              end
+              error ->
+                error
             end
+          end
 
-          :error ->
+        :error ->
+          if declared_resource_table?(tbl) do
+            {:error, {:missing_resource_table, tbl}}
+          else
             put_into_kv(conn, tbl, id, record)
-        end
-
+          end
+      end
     end)
   end
 
@@ -202,23 +199,26 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
     id = to_string(command[:id])
 
     Exoforge.Std.Database.Adapters.Sqlite.Connection.run(plugin_id, config, fn conn ->
-        case real_table_info(conn, tbl) do
-          {:ok, %{pk: pk_col}} ->
-            safe_tbl = String.replace(tbl, "\"", "")
-            safe_pk = String.replace(pk_col, "\"", "")
+      case real_table_info(conn, tbl) do
+        {:ok, %{pk: pk_col}} ->
+          safe_tbl = String.replace(tbl, "\"", "")
+          safe_pk = String.replace(pk_col, "\"", "")
 
-            case run_sql(conn, "SELECT * FROM \"#{safe_tbl}\" WHERE \"#{safe_pk}\" = $1", [id]) do
-              {:ok, %{rows: [row | _]}} ->
-                {:ok, %{rows: [row], num_rows: 1}}
+          case run_sql(conn, "SELECT * FROM \"#{safe_tbl}\" WHERE \"#{safe_pk}\" = $1", [id]) do
+            {:ok, %{rows: [row | _]}} ->
+              {:ok, %{rows: [row], num_rows: 1}}
 
-              _ ->
-                get_from_kv(conn, tbl, id)
-            end
+            _ ->
+              get_from_kv(conn, tbl, id)
+          end
 
-          :error ->
+        :error ->
+          if declared_resource_table?(tbl) do
+            {:error, {:missing_resource_table, tbl}}
+          else
             get_from_kv(conn, tbl, id)
-        end
-
+          end
+      end
     end)
   end
 
@@ -227,21 +227,20 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
     id = to_string(command[:id])
 
     Exoforge.Std.Database.Adapters.Sqlite.Connection.run(plugin_id, config, fn conn ->
-        case real_table_info(conn, tbl) do
-          {:ok, %{pk: pk_col}} ->
-            safe_tbl = String.replace(tbl, "\"", "")
-            safe_pk = String.replace(pk_col, "\"", "")
-            _ = run_sql(conn, "DELETE FROM \"#{safe_tbl}\" WHERE \"#{safe_pk}\" = $1", [id])
-            _ = run_sql(conn, "DELETE FROM kv WHERE tbl = $1 AND id = $2", [tbl, id])
-            {:ok, %{rows: [], num_rows: 1}}
+      case real_table_info(conn, tbl) do
+        {:ok, %{pk: pk_col}} ->
+          safe_tbl = String.replace(tbl, "\"", "")
+          safe_pk = String.replace(pk_col, "\"", "")
+          _ = run_sql(conn, "DELETE FROM \"#{safe_tbl}\" WHERE \"#{safe_pk}\" = $1", [id])
+          _ = run_sql(conn, "DELETE FROM kv WHERE tbl = $1 AND id = $2", [tbl, id])
+          {:ok, %{rows: [], num_rows: 1}}
 
-          :error ->
-            case run_sql(conn, "DELETE FROM kv WHERE tbl = $1 AND id = $2", [tbl, id]) do
-              {:ok, result} -> {:ok, %{result | rows: []}}
-              error -> error
-            end
-        end
-
+        :error ->
+          case run_sql(conn, "DELETE FROM kv WHERE tbl = $1 AND id = $2", [tbl, id]) do
+            {:ok, result} -> {:ok, %{result | rows: []}}
+            error -> error
+          end
+      end
     end)
   end
 
@@ -249,16 +248,19 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
     tbl = to_string(command[:table])
 
     Exoforge.Std.Database.Adapters.Sqlite.Connection.run(plugin_id, config, fn conn ->
-        case real_table_info(conn, tbl) do
-          {:ok, _} ->
-            safe_tbl = String.replace(tbl, "\"", "")
+      case real_table_info(conn, tbl) do
+        {:ok, _} ->
+          safe_tbl = String.replace(tbl, "\"", "")
 
-            case run_sql(conn, "SELECT * FROM \"#{safe_tbl}\"", []) do
-              {:ok, %{rows: rows}} -> {:ok, %{rows: rows, num_rows: length(rows)}}
-              error -> error
-            end
+          case run_sql(conn, "SELECT * FROM \"#{safe_tbl}\"", []) do
+            {:ok, %{rows: rows}} -> {:ok, %{rows: rows, num_rows: length(rows)}}
+            error -> error
+          end
 
-          :error ->
+        :error ->
+          if declared_resource_table?(tbl) do
+            {:error, {:missing_resource_table, tbl}}
+          else
             case run_sql(conn, "SELECT data FROM kv WHERE tbl = $1", [tbl]) do
               {:ok, %{rows: rows}} ->
                 decoded = Enum.map(rows, &decode(&1["data"]))
@@ -267,10 +269,58 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
               error ->
                 error
             end
-        end
-
+          end
+      end
     end)
   end
+
+  defp stop_connection(plugin_id) do
+    with sup when is_pid(sup) <- Process.whereis(Exoforge.Std.Database.PoolSupervisor),
+         [{pid, _}] <- Registry.lookup(Exoforge.Std.Database.PoolRegistry, {:sqlite, plugin_id}) do
+      _ = DynamicSupervisor.terminate_child(sup, pid)
+      :ok
+    else
+      _ -> :ok
+    end
+  rescue
+    _ -> :ok
+  end
+
+  defp declared_resource_table?(tbl) do
+    table = to_string(tbl)
+
+    case Exoforge.ExtensionRegistry.fetch_resource(table) do
+      {:ok, %{resource: res}} -> table_source(res) == table
+      _ -> false
+    end
+  rescue
+    _ -> false
+  end
+
+  # A resource can be declared by its name while its table has another name, and manifests may
+  # carry the source as an atom tuple/list or a JSON object. Match every shape the registry's
+  # sanitizer can produce.
+  defp table_source(res) when is_map(res) do
+    source =
+      Map.get(res, :source) ||
+        Map.get(res, "source")
+
+    source_table(source) ||
+      table_name(Map.get(res, :table) || Map.get(res, "table"))
+  end
+
+  defp table_source(_), do: nil
+
+  defp source_table({:table, table}), do: table_name(table)
+  defp source_table([:table, table]), do: table_name(table)
+  defp source_table(["table", table]), do: table_name(table)
+  defp source_table(%{table: table}), do: table_name(table)
+  defp source_table(%{"table" => table}), do: table_name(table)
+  defp source_table(_), do: nil
+
+  defp table_name(table) when is_binary(table) and table != "", do: table
+  defp table_name(table) when is_atom(table) and not is_nil(table), do: to_string(table)
+  defp table_name(_), do: nil
 
   defp real_table_info(_conn, "kv"), do: :error
 
@@ -338,19 +388,22 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
   defp database_name(plugin_id), do: "exoforge_#{Exoforge.Std.Database.clean_id(plugin_id)}"
 end
 
-
 defmodule Exoforge.Std.Database.Adapters.Sqlite.Connection do
   use GenServer
+
   def ensure_started(plugin_id, config) do
     if Process.whereis(Exoforge.Std.Database.PoolRegistry) == nil do
       Registry.start_link(keys: :unique, name: Exoforge.Std.Database.PoolRegistry)
     end
+
     if Process.whereis(Exoforge.Std.Database.PoolSupervisor) == nil do
       DynamicSupervisor.start_link(name: Exoforge.Std.Database.PoolSupervisor, strategy: :one_for_one)
     end
 
     case Registry.lookup(Exoforge.Std.Database.PoolRegistry, {:sqlite, plugin_id}) do
-      [{pid, _}] -> {:ok, pid}
+      [{pid, _}] ->
+        {:ok, pid}
+
       [] ->
         case DynamicSupervisor.start_child(
                Exoforge.Std.Database.PoolSupervisor,
@@ -382,6 +435,7 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite.Connection do
         kv_ddl = "CREATE TABLE IF NOT EXISTS kv (tbl text, id text, data text, PRIMARY KEY (tbl, id))"
         _ = Exqlite.Sqlite3.execute(conn, kv_ddl)
         {:ok, %{conn: conn}}
+
       error ->
         {:stop, error}
     end

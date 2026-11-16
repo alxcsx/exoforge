@@ -5,7 +5,10 @@ defmodule Exoforge.DatabaseTest do
   alias Exoforge.Std.Database.Manager
 
   setup do
-    start_supervised!({Manager, [driver: :sqlite]})
+    unless Process.whereis(Manager) do
+      start_supervised!({Manager, [driver: :sqlite]})
+    end
+
     Database.reset!(:auth)
     Database.reset!(:player_data)
     Database.reset!(:combat)
@@ -31,9 +34,8 @@ defmodule Exoforge.DatabaseTest do
       assert hd(auth_users)["username"] == "alice"
 
       # 2. Plugin :player_data tries to select from users
-      # In player_data's isolated database, the table is empty or has no rows
-      {:ok, %{rows: player_data_users}} = Database.execute(:player_data, "SELECT * FROM users")
-      assert player_data_users == []
+      # In player_data's isolated database, the table does not exist yet
+      assert {:error, _} = Database.execute(:player_data, "SELECT * FROM users")
 
       # 3. Plugin :player_data creates its own users table with different data
       assert {:ok, _} =
@@ -138,6 +140,54 @@ defmodule Exoforge.DatabaseTest do
       assert {:ok, _} = Database.delete(:auth, "sessions", "sess_123")
       assert {:error, :not_found} = Database.get(:auth, "sessions", "sess_123")
     end
+
+    test "declared resource table returns missing_resource_table error if not created on get, put, all" do
+      unless Process.whereis(Exoforge.ExtensionRegistry) do
+        start_supervised!(Exoforge.ExtensionRegistry)
+      end
+
+      manifest = %Exoforge.Domain.Manifest{
+        id: :unmigrated_plugin,
+        name: "unmigrated_plugin",
+        version: "1.0.0",
+        entry_point: nil,
+        services: [
+          %{
+            name: :unmigrated_svc,
+            resources: [
+              %{name: "unmigrated_scores", source: {:table, "unmigrated_scores"}},
+              %{name: "atom_scores", source: {:table, :atom_score_table}},
+              %{name: "named_records", source: {:table, "actual_records_table"}}
+            ]
+          }
+        ]
+      }
+
+      Exoforge.ExtensionRegistry.register(manifest)
+
+      assert {:error, {:missing_resource_table, "unmigrated_scores"}} =
+               Database.get(:unmigrated_plugin, "unmigrated_scores", "p1")
+
+      assert {:error, {:missing_resource_table, "unmigrated_scores"}} =
+               Database.put(:unmigrated_plugin, "unmigrated_scores", "p1", %{"score" => 100})
+
+      assert {:error, {:missing_resource_table, "unmigrated_scores"}} =
+               Database.all(:unmigrated_plugin, "unmigrated_scores")
+
+      # An atom table source is still a declared resource table.
+      assert {:error, {:missing_resource_table, "atom_score_table"}} =
+               Database.all(:unmigrated_plugin, "atom_score_table")
+
+      # A resource name that differs from its backing table is found by the table name.
+      assert {:ok, found} = Exoforge.ExtensionRegistry.fetch_resource("actual_records_table")
+      assert to_string(found.resource.name) == "named_records"
+
+      assert {:error, {:missing_resource_table, "actual_records_table"}} =
+               Database.all(:unmigrated_plugin, "actual_records_table")
+
+      # Normal undeclared KV table does not return missing_resource_table
+      assert {:error, :not_found} = Database.get(:unmigrated_plugin, "random_kv_table", "p1")
+    end
   end
 
   describe "Service Contracts & Connection Config" do
@@ -157,7 +207,6 @@ defmodule Exoforge.DatabaseTest do
       assert {:ok, %{status: "ok"}} = Database.health_check()
     end
   end
-
 
   describe "M33 hardening" do
     test "a plugin's database is provisioned once, not per query (M33 Fix 7)" do

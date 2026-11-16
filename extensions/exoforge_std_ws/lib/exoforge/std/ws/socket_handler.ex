@@ -328,6 +328,28 @@ defmodule Exoforge.Std.Ws.SocketHandler do
           state
         )
 
+      {:error, {:forbidden_scope, details}} ->
+        Logger.warning(
+          "[WS:Action] #{service}.#{action} by #{auth.player_id} -> forbidden_scope (#{latency_us}µs)"
+        )
+
+        reply(
+          %{
+            type: @frame_action_result,
+            id: req_id,
+            rid: rid,
+            status: @status_error,
+            error: %{
+              code: "forbidden_scope",
+              message: "Scope authorization failed",
+              required_scope: details.required,
+              caller_scopes: details.caller_scopes
+            },
+            logs: logs
+          },
+          state
+        )
+
       {:error, reason} when reason in [:unauthorized, :forbidden_scope] ->
         Logger.warning(
           "[WS:Action] #{service}.#{action} by #{auth.player_id} -> #{reason} (#{latency_us}µs)"
