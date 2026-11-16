@@ -29,6 +29,12 @@ public static class Program
             return 0;
         }
 
+        if (command is "version" or "--version" or "-v")
+        {
+            Console.WriteLine($"exo {GetCliVersion()}");
+            return 0;
+        }
+
         var cli = CliArgs.Parse(args, 1);
 
         try
@@ -85,6 +91,16 @@ public static class Program
     }
 
     // ---- usage -------------------------------------------------------------------------
+
+    private static string GetCliVersion()
+    {
+        var asm = typeof(Program).Assembly;
+        var info = (System.Reflection.AssemblyInformationalVersionAttribute?)Attribute.GetCustomAttribute(
+            asm, typeof(System.Reflection.AssemblyInformationalVersionAttribute));
+        string raw = info?.InformationalVersion ?? asm.GetName().Version?.ToString(3) ?? "0.1.39";
+        int plus = raw.IndexOf('+');
+        return plus > 0 ? raw[..plus] : raw;
+    }
 
     private static void PrintUsage()
     {
