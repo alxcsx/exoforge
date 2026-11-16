@@ -362,7 +362,24 @@ build-unity-sdk root=".":
 	mkdir -p "$root/sdk/unity/Exoforge.SDK/Editor/Plugins/NuGet~"
 	cp "$root/dist/nuget/"*.nupkg "$root/sdk/unity/Exoforge.SDK/Editor/Plugins/NuGet~/"
 
-	echo "[build-unity-sdk] sdk/unity/Exoforge.SDK Runtime/Plugins + Editor/Plugins + NuGet~ staged"
+	# Publish the CLI into Editor/Cli~ for zero-dependency agent tooling inside Unity projects
+	cli_proj="$out/Exoforge.CLI/Exoforge.CLI.csproj"
+	[ -f "$cli_proj" ] || cli_proj="$out/Exoforge.Cli/Exoforge.CLI.csproj"
+	rm -rf "$root/sdk/unity/Exoforge.SDK/Editor/Cli~"
+	dotnet publish "$cli_proj" -c Release --no-self-contained -o "$root/sdk/unity/Exoforge.SDK/Editor/Cli~" --nologo -v q
+	{
+		echo '#!/usr/bin/env bash'
+		echo 'set -euo pipefail'
+		echo 'DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"'
+		echo 'exec dotnet "$DIR/exo.dll" "$@"'
+	} > "$root/sdk/unity/Exoforge.SDK/Editor/Cli~/exo"
+	chmod +x "$root/sdk/unity/Exoforge.SDK/Editor/Cli~/exo"
+	{
+		echo '@echo off'
+		echo 'dotnet "%~dp0exo.dll" %*'
+	} > "$root/sdk/unity/Exoforge.SDK/Editor/Cli~/exo.cmd"
+
+	echo "[build-unity-sdk] sdk/unity/Exoforge.SDK Runtime/Plugins + Editor/Plugins + NuGet~ + Cli~ staged"
 
 
 # Pack the plugin SDK into the local feed. The package carries the attributes a plugin compiles

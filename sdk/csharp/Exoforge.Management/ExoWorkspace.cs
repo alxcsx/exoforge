@@ -92,6 +92,11 @@ public class ExoWorkspace
         // (exoforge.json + plugins) sits outside Assets/ so dotnet tooling is unconstrained.
         if (normPath.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase))
         {
+            if (Directory.Exists(Path.Combine(RootPath, "Assets")))
+            {
+                return Path.GetFullPath(Path.Combine(RootPath, normPath));
+            }
+
             string projectRoot = Directory.GetParent(RootPath)?.FullName ?? RootPath;
 
             if (Directory.Exists(Path.Combine(projectRoot, "Assets")))
@@ -110,13 +115,51 @@ public class ExoWorkspace
         Config = config;
     }
 
+    public static string? FindRoot(string startPath)
+    {
+        string current = Path.GetFullPath(startPath);
+        var dir = new DirectoryInfo(current);
+
+        while (dir != null)
+        {
+            string direct = Path.Combine(dir.FullName, ConfigFileName);
+            if (File.Exists(direct))
+            {
+                return dir.FullName;
+            }
+
+            string projectSub = Path.Combine(dir.FullName, "Exoforge", ConfigFileName);
+            if (File.Exists(projectSub))
+            {
+                return Path.Combine(dir.FullName, "Exoforge");
+            }
+
+            string unitySub = Path.Combine(dir.FullName, "Assets", "Exoforge", ConfigFileName);
+            if (File.Exists(unitySub))
+            {
+                return Path.Combine(dir.FullName, "Assets", "Exoforge");
+            }
+
+            string legacySub = Path.Combine(dir.FullName, "exoforge", ConfigFileName);
+            if (File.Exists(legacySub))
+            {
+                return Path.Combine(dir.FullName, "exoforge");
+            }
+
+            dir = dir.Parent;
+        }
+
+        return null;
+    }
+
     public static bool Exists(string rootPath)
     {
         string fullRoot = Path.GetFullPath(rootPath);
         return File.Exists(Path.Combine(fullRoot, ConfigFileName)) ||
                File.Exists(Path.Combine(fullRoot, "Exoforge", ConfigFileName)) ||
                File.Exists(Path.Combine(fullRoot, "Assets", "Exoforge", ConfigFileName)) ||
-               File.Exists(Path.Combine(fullRoot, "exoforge", ConfigFileName));
+               File.Exists(Path.Combine(fullRoot, "exoforge", ConfigFileName)) ||
+               FindRoot(fullRoot) != null;
     }
 
     public static ExoWorkspace Load(string rootPath)
@@ -126,29 +169,28 @@ public class ExoWorkspace
 
         if (!File.Exists(configPath))
         {
-            // First check standard Unity path: rootPath/Assets/Exoforge/exoforge.json
+            // Project-level workspace: rootPath/Exoforge/exoforge.json
+            string projectSubPath = Path.Combine(fullRoot, "Exoforge", ConfigFileName);
             string unitySubPath = Path.Combine(fullRoot, "Assets", "Exoforge", ConfigFileName);
-            if (File.Exists(unitySubPath))
+            string legacySubPath = Path.Combine(fullRoot, "exoforge", ConfigFileName);
+
+            string? subPath =
+                File.Exists(projectSubPath) ? projectSubPath :
+                File.Exists(unitySubPath) ? unitySubPath :
+                File.Exists(legacySubPath) ? legacySubPath : null;
+
+            if (subPath != null)
             {
-                configPath = unitySubPath;
+                configPath = subPath;
                 fullRoot = Path.GetDirectoryName(configPath)!;
             }
             else
             {
-                // Project-level workspace: rootPath/Exoforge/exoforge.json
-                string projectSubPath = Path.Combine(fullRoot, "Exoforge", ConfigFileName);
-
-                // Legacy: rootPath/exoforge/exoforge.json
-                string legacySubPath = Path.Combine(fullRoot, "exoforge", ConfigFileName);
-
-                string? subPath =
-                    File.Exists(projectSubPath) ? projectSubPath :
-                    File.Exists(legacySubPath) ? legacySubPath : null;
-
-                if (subPath != null)
+                string? discovered = FindRoot(fullRoot);
+                if (discovered != null)
                 {
-                    configPath = subPath;
-                    fullRoot = Path.GetDirectoryName(configPath)!;
+                    fullRoot = discovered;
+                    configPath = Path.Combine(fullRoot, ConfigFileName);
                 }
             }
         }

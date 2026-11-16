@@ -7,6 +7,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Exoforge.Client;
@@ -911,6 +912,384 @@ public class ExoDeployer
         return await client.SendActionAsync<JsonElement>("extension_manager", "list_extensions", null, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Invokes any action on a service with optional payload and returns the raw response.
+    /// </summary>
+    public async Task<JsonElement> CallActionAsync(
+        string service,
+        string action,
+        JsonObject? payload = null,
+        string? environmentName = null,
+        ExoClient? existingClient = null,
+        CancellationToken ct = default)
+    {
+        var client = existingClient ?? await CreateConnectedClientAsync(environmentName, ct).ConfigureAwait(false);
+        try
+        {
+            return await client.SendActionAsync<JsonElement>(service, action, payload, cancellationToken: ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            if (existingClient == null)
+            {
+                client.Dispose();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Connects to the cluster, optionally logs in or authenticates, queries system status,
+    /// and optionally saves the connection settings to exoforge.json and Assets/Resources/exoforge.json.
+    /// </summary>
+    public async Task<ExoConnectionVerificationResult> ConnectAndVerifyAsync(
+        string? environmentName = null,
+        string? wsUrlOverride = null,
+        string? httpUrlOverride = null,
+        string? tokenOverride = null,
+        string? email = null,
+        string? password = null,
+        bool save = false,
+        CancellationToken ct = default)
+    {
+        string targetEnvName = environmentName ?? _workspace.Config.DefaultEnvironment;
+        var env = _workspace.GetActiveEnvironment(targetEnvName);
+
+        string effectiveWsUrl = wsUrlOverride ?? env.WsUrl;
+        string effectiveHttpUrl = httpUrlOverride ?? env.HttpUrl;
+        string? effectiveToken = tokenOverride ?? env.Token;
+
+        var client = new ExoClient();
+        bool connected = false;
+        bool authenticated = false;
+        bool tokenSaved = false;
+        JsonElement systemStatus = default;
+
+        try
+        {
+            if (!string.IsNullOrEmpty(effectiveHttpUrl))
+            {
+                client.HttpBaseUri = new Uri(effectiveHttpUrl);
+            }
+
+            await client.ConnectAsync(new Uri(effectiveWsUrl), ct).ConfigureAwait(false);
+            connected = true;
+
+            if (!string.IsNullOrEmpty(email) && !string.IsNullOrEmpty(password))
+            {
+                var loginPayload = new JsonObject
+                {
+                    ["email"] = email,
+                    ["password"] = password
+                };
+
+                var loginResult = await client.SendActionAsync<JsonElement>("auth", "login", loginPayload, cancellationToken: ct).ConfigureAwait(false);
+
+                string? acquiredToken = null;
+                if (loginResult.ValueKind == JsonValueKind.Object && loginResult.TryGetProperty("token", out var tokProp))
+                {
+                    acquiredToken = tokProp.GetString();
+                }
+
+                if (string.IsNullOrEmpty(acquiredToken))
+                {
+                    throw new InvalidOperationException("Cluster login succeeded, but no token was returned in the payload.");
+                }
+
+                var auth = await client.AuthenticateAsync(acquiredToken, cancellationToken: ct).ConfigureAwait(false);
+                if (!auth.IsSuccess)
+                {
+                    throw new InvalidOperationException($"Authentication failed with acquired token: {auth.Error}");
+                }
+
+                authenticated = true;
+                effectiveToken = acquiredToken;
+            }
+            else if (!string.IsNullOrEmpty(effectiveToken))
+            {
+                var auth = await client.AuthenticateAsync(effectiveToken, cancellationToken: ct).ConfigureAwait(false);
+                if (!auth.IsSuccess)
+                {
+                    throw new InvalidOperationException($"Authentication failed: {auth.Error}");
+                }
+
+                authenticated = true;
+            }
+
+            systemStatus = await client.SendActionAsync<JsonElement>(
+                "extension_manager", "get_system_info", null, cancellationToken: ct).ConfigureAwait(false);
+
+            if (save)
+            {
+                if (!_workspace.Config.Environments.TryGetValue(targetEnvName, out var envConfig))
+                {
+                    envConfig = new ExoEnvironmentConfig();
+                    _workspace.Config.Environments[targetEnvName] = envConfig;
+                }
+
+                envConfig.WsUrl = effectiveWsUrl;
+                envConfig.HttpUrl = effectiveHttpUrl;
+                if (!string.IsNullOrEmpty(effectiveToken))
+                {
+                    envConfig.Token = effectiveToken;
+                    tokenSaved = true;
+                }
+
+                _workspace.Save();
+                SyncRuntimeConfigIfUnityProject(targetEnvName, effectiveWsUrl, effectiveHttpUrl);
+            }
+
+            return new ExoConnectionVerificationResult
+            {
+                Connected = connected,
+                Environment = targetEnvName,
+                WsUrl = effectiveWsUrl,
+                HttpUrl = effectiveHttpUrl,
+                Authenticated = authenticated,
+                TokenSaved = tokenSaved,
+                Status = systemStatus
+            };
+        }
+        finally
+        {
+            client.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Synchronizes Assets/Resources/exoforge.json if the workspace belongs to a Unity project.
+    /// </summary>
+    public bool SyncRuntimeConfigIfUnityProject(string envName, string wsUrl, string httpUrl)
+    {
+        string projectRoot = _workspace.RootPath;
+        if (!Directory.Exists(Path.Combine(projectRoot, "Assets")))
+        {
+            var parent = Directory.GetParent(projectRoot);
+            if (parent != null && Directory.Exists(Path.Combine(parent.FullName, "Assets")))
+            {
+                projectRoot = parent.FullName;
+            }
+        }
+
+        if (Directory.Exists(Path.Combine(projectRoot, "Assets")))
+        {
+            string rtDir = Path.Combine(projectRoot, "Assets", "Resources");
+            string rtPath = Path.Combine(rtDir, "exoforge.json");
+            Directory.CreateDirectory(rtDir);
+
+            var payload = new Dictionary<string, object>
+            {
+                ["default_environment"] = envName,
+                ["environments"] = new Dictionary<string, object>
+                {
+                    [envName] = new Dictionary<string, string>
+                    {
+                        ["ws_url"] = wsUrl,
+                        ["http_url"] = httpUrl
+                    }
+                }
+            };
+
+            File.WriteAllText(rtPath, JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Fetches the contracts export (from live cluster or cached/local contracts) merged with local extensions.
+    /// </summary>
+    public async Task<JsonElement> GetContractsExportAsync(
+        string? environmentName = null,
+        CancellationToken ct = default)
+    {
+        string exportJson;
+        try
+        {
+            exportJson = await GetContractsExportJsonAsync(environmentName, cancellationToken: ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            exportJson = LoadCachedOrEmptyContracts();
+        }
+
+        string merged = MergeLocalContracts(exportJson);
+        using var doc = JsonDocument.Parse(merged);
+        return doc.RootElement.Clone();
+    }
+
+    /// <summary>
+    /// Extracts all resource tables declared in cluster and local contracts.
+    /// </summary>
+    public async Task<List<ExoResourceTableInfo>> ListResourceTablesAsync(
+        string? environmentName = null,
+        CancellationToken ct = default)
+    {
+        var export = await GetContractsExportAsync(environmentName, ct).ConfigureAwait(false);
+        var tables = new List<ExoResourceTableInfo>();
+
+        JsonElement exportRoot = export;
+        if (export.ValueKind == JsonValueKind.Object && export.TryGetProperty("export", out var expProp))
+        {
+            exportRoot = expProp;
+        }
+
+        JsonElement extensions = default;
+        bool hasExtensions = false;
+        if (exportRoot.ValueKind == JsonValueKind.Object)
+        {
+            if (exportRoot.TryGetProperty("extensions", out var exts) && exts.ValueKind == JsonValueKind.Array)
+            {
+                extensions = exts;
+                hasExtensions = true;
+            }
+            else if (exportRoot.TryGetProperty("plugins", out var plgs) && plgs.ValueKind == JsonValueKind.Array)
+            {
+                extensions = plgs;
+                hasExtensions = true;
+            }
+        }
+
+        if (hasExtensions)
+        {
+            foreach (var ext in extensions.EnumerateArray())
+            {
+                string extId = ext.TryGetProperty("id", out var idProp) ? idProp.GetString() ?? "" : "";
+                string extName = ext.TryGetProperty("name", out var nProp) ? nProp.GetString() ?? extId : extId;
+
+                // 1. Resources declared under services
+                if (ext.TryGetProperty("services", out var services) && services.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var svc in services.EnumerateArray())
+                    {
+                        string svcName = svc.TryGetProperty("name", out var sn) ? sn.GetString() ?? extName : extName;
+
+                        if (svc.TryGetProperty("resources", out var resArr) && resArr.ValueKind == JsonValueKind.Array)
+                        {
+                            foreach (var res in resArr.EnumerateArray())
+                            {
+                                tables.Add(ParseResourceElement(svcName, res));
+                            }
+                        }
+                    }
+                }
+
+                // 2. Direct resources on extension
+                if (ext.TryGetProperty("resources", out var directRes) && directRes.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var res in directRes.EnumerateArray())
+                    {
+                        tables.Add(ParseResourceElement(extName, res));
+                    }
+                }
+            }
+        }
+
+        return tables;
+    }
+
+    private static ExoResourceTableInfo ParseResourceElement(string serviceName, JsonElement res)
+    {
+        string name = res.TryGetProperty("name", out var rn) ? rn.GetString() ?? "" : "";
+        string? source = null;
+        if (res.TryGetProperty("source", out var sProp))
+        {
+            source = sProp.ValueKind == JsonValueKind.String ? sProp.GetString() : sProp.ToString();
+        }
+
+        string pk = "id";
+        if (res.TryGetProperty("primary_key", out var pkProp) && pkProp.ValueKind == JsonValueKind.String)
+        {
+            pk = pkProp.GetString() ?? "id";
+        }
+        else if (res.TryGetProperty("primaryKey", out var pkProp2) && pkProp2.ValueKind == JsonValueKind.String)
+        {
+            pk = pkProp2.GetString() ?? "id";
+        }
+
+        bool singleton = false;
+        if (res.TryGetProperty("singleton", out var singProp) && singProp.ValueKind is JsonValueKind.True or JsonValueKind.False)
+        {
+            singleton = singProp.GetBoolean();
+        }
+        else if (res.TryGetProperty("kind", out var kindProp) && kindProp.GetString() == "singleton")
+        {
+            singleton = true;
+        }
+
+        var cols = new List<ExoResourceColumnInfo>();
+        if (res.TryGetProperty("columns", out var colsProp) && colsProp.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var col in colsProp.EnumerateArray())
+            {
+                string cn = col.TryGetProperty("name", out var cnp) ? cnp.GetString() ?? "" : "";
+                string ct = col.TryGetProperty("type", out var ctp) ? ctp.GetString() ?? "string" : "string";
+                if (!string.IsNullOrEmpty(cn))
+                {
+                    cols.Add(new ExoResourceColumnInfo { Name = cn, Type = ct });
+                }
+            }
+        }
+
+        return new ExoResourceTableInfo
+        {
+            Service = serviceName,
+            Name = name,
+            Source = source,
+            PrimaryKey = pk,
+            Singleton = singleton,
+            Columns = cols
+        };
+    }
+
+    /// <summary>
+    /// Invokes an action on the standard <c>resource_store</c> extension.
+    /// </summary>
+    public async Task<JsonElement> CallResourceStoreAsync(
+        string action,
+        string? resourceName = null,
+        string? id = null,
+        JsonObject? attributes = null,
+        int? limit = null,
+        int? offset = null,
+        string? search = null,
+        string? environmentName = null,
+        CancellationToken ct = default)
+    {
+        var payload = new JsonObject();
+        if (!string.IsNullOrEmpty(resourceName))
+        {
+            payload["resource"] = resourceName;
+        }
+
+        if (!string.IsNullOrEmpty(id))
+        {
+            payload["id"] = id;
+        }
+
+        if (attributes != null)
+        {
+            payload["attributes"] = attributes.DeepClone();
+        }
+
+        if (limit.HasValue)
+        {
+            payload["limit"] = limit.Value;
+        }
+
+        if (offset.HasValue)
+        {
+            payload["offset"] = offset.Value;
+        }
+
+        if (!string.IsNullOrEmpty(search))
+        {
+            payload["search"] = search;
+        }
+
+        return await CallActionAsync("resource_store", action, payload, environmentName, ct: ct).ConfigureAwait(false);
+    }
+
     // -- Build --
 
     /// <summary>
@@ -1599,4 +1978,59 @@ public class ExoExtensionBuild
     public string BinaryPath { get; }
     public string ManifestPath { get; }
     public string Output { get; }
+}
+
+public class ExoConnectionVerificationResult
+{
+    [JsonPropertyName("connected")]
+    public bool Connected { get; set; }
+
+    [JsonPropertyName("environment")]
+    public string Environment { get; set; } = "";
+
+    [JsonPropertyName("ws_url")]
+    public string WsUrl { get; set; } = "";
+
+    [JsonPropertyName("http_url")]
+    public string HttpUrl { get; set; } = "";
+
+    [JsonPropertyName("authenticated")]
+    public bool Authenticated { get; set; }
+
+    [JsonPropertyName("token_saved")]
+    public bool TokenSaved { get; set; }
+
+    [JsonPropertyName("status")]
+    public JsonElement Status { get; set; }
+}
+
+public class ExoResourceTableInfo
+{
+    [JsonPropertyName("service")]
+    public string Service { get; set; } = "";
+
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = "";
+
+    [JsonPropertyName("source")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Source { get; set; }
+
+    [JsonPropertyName("primary_key")]
+    public string PrimaryKey { get; set; } = "id";
+
+    [JsonPropertyName("singleton")]
+    public bool Singleton { get; set; }
+
+    [JsonPropertyName("columns")]
+    public List<ExoResourceColumnInfo> Columns { get; set; } = new();
+}
+
+public class ExoResourceColumnInfo
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = "";
+
+    [JsonPropertyName("type")]
+    public string Type { get; set; } = "string";
 }

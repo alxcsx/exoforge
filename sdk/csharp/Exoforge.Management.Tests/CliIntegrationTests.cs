@@ -1,6 +1,8 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -9,6 +11,7 @@ namespace Exoforge.Management.Tests;
 public class CliIntegrationTests : IDisposable
 {
     private readonly string _tempDir;
+    private static readonly SemaphoreSlim CliLock = new(1, 1);
 
     public CliIntegrationTests()
     {
@@ -29,6 +32,33 @@ public class CliIntegrationTests : IDisposable
         {
             // Ignore cleanup errors
         }
+    }
+
+    private static async Task<(int ExitCode, string StdOut)> RunCliAsync(params string[] args)
+    {
+        await CliLock.WaitAsync();
+        var originalOut = Console.Out;
+        using var sw = new StringWriter();
+        try
+        {
+            Console.SetOut(sw);
+            int code = await Exoforge.CLI.Program.Main(args);
+            return (code, sw.ToString());
+        }
+        finally
+        {
+            Console.SetOut(originalOut);
+            CliLock.Release();
+        }
+    }
+
+    private static string ExtractJson(string text)
+    {
+        int start = text.IndexOfAny(new[] { '{', '[' });
+        if (start < 0) return text;
+        int end = text.LastIndexOfAny(new[] { '}', ']' });
+        if (end < start) return text;
+        return text.Substring(start, end - start + 1);
     }
 
     [Fact]
@@ -130,6 +160,133 @@ public class CliIntegrationTests : IDisposable
             Assert.Equal(0, proc.ExitCode);
             Assert.Contains("EXOFORGE DEVELOPER CLI", output);
             Assert.Contains("Usage: exo <command>", output);
+        }
+    }
+
+    [Fact]
+    public async Task Cli_Env_Add_And_List_With_Json_Flag()
+    {
+        await Exoforge.CLI.Program.Main(new[] { "init", "--dir", _tempDir, "--name", "EnvTestGame" });
+
+        var (addCode, addOut) = await RunCliAsync(
+            "env", "add", "staging",
+            "--ws", "ws://localhost:5000/ws",
+            "--http", "http://localhost:5001",
+            "--default",
+            "--dir", _tempDir,
+            "--json"
+        );
+
+        Assert.Equal(0, addCode);
+        using (var addDoc = JsonDocument.Parse(ExtractJson(addOut)))
+        {
+            var root = addDoc.RootElement;
+            Assert.Equal("ok", root.GetProperty("status").GetString());
+            Assert.Equal("staging", root.GetProperty("environment").GetString());
+            Assert.True(root.GetProperty("is_default").GetBoolean());
+            Assert.Equal("ws://localhost:5000/ws", root.GetProperty("ws_url").GetString());
+            Assert.Equal("http://localhost:5001", root.GetProperty("http_url").GetString());
+        }
+
+        var (listCode, listOut) = await RunCliAsync(
+            "env", "list",
+            "--dir", _tempDir,
+            "--json"
+        );
+
+        Assert.Equal(0, listCode);
+        using (var listDoc = JsonDocument.Parse(ExtractJson(listOut)))
+        {
+            var root = listDoc.RootElement;
+            Assert.Equal("staging", root.GetProperty("default_environment").GetString());
+            var envs = root.GetProperty("environments");
+            Assert.Equal(JsonValueKind.Array, envs.ValueKind);
+
+            bool foundStaging = false;
+            foreach (var env in envs.EnumerateArray())
+            {
+                if (env.GetProperty("name").GetString() == "staging")
+                {
+                    foundStaging = true;
+                    Assert.True(env.GetProperty("is_default").GetBoolean());
+                    Assert.Equal("ws://localhost:5000/ws", env.GetProperty("ws_url").GetString());
+                    Assert.Equal("http://localhost:5001", env.GetProperty("http_url").GetString());
+                }
+            }
+            Assert.True(foundStaging);
+        }
+
+        var ws = ExoWorkspace.Load(_tempDir);
+        Assert.Equal("staging", ws.Config.DefaultEnvironment);
+        Assert.True(ws.Config.Environments.ContainsKey("staging"));
+    }
+
+    [Fact]
+    public async Task Cli_Agents_Install_And_Status_With_Json_Flag()
+    {
+        string tempUnityProject = Path.Combine(_tempDir, "SampleUnityGame");
+        Directory.CreateDirectory(tempUnityProject);
+        Directory.CreateDirectory(Path.Combine(tempUnityProject, "Assets"));
+
+        var (installCode, installOut) = await RunCliAsync(
+            "agents", "install",
+            "--dir", tempUnityProject,
+            "--target", "all",
+            "--json"
+        );
+
+        Assert.Equal(0, installCode);
+        using (var installDoc = JsonDocument.Parse(ExtractJson(installOut)))
+        {
+            var root = installDoc.RootElement;
+            Assert.Equal(Path.GetFullPath(tempUnityProject), Path.GetFullPath(root.GetProperty("project_root").GetString()!));
+            Assert.True(root.GetProperty("installed_skills").GetArrayLength() > 0);
+        }
+
+        // Verify creation of skills files across all targets (.agents, .claude, .gemini)
+        string skillFileAgents = Path.Combine(tempUnityProject, ".agents", "skills", "exoforge-extensions", "SKILL.md");
+        string skillFileClaude = Path.Combine(tempUnityProject, ".claude", "skills", "exoforge-extensions", "SKILL.md");
+        string skillFileGemini = Path.Combine(tempUnityProject, ".gemini", "skills", "exoforge-extensions", "SKILL.md");
+        string agentsMdFile = Path.Combine(tempUnityProject, "AGENTS.md");
+        string exoWrapperFile = Path.Combine(tempUnityProject, "exo");
+        string exoCmdWrapperFile = Path.Combine(tempUnityProject, "exo.cmd");
+
+        Assert.True(File.Exists(skillFileAgents), "Expected .agents/skills/exoforge-extensions/SKILL.md to exist");
+        Assert.True(File.Exists(skillFileClaude), "Expected .claude/skills/exoforge-extensions/SKILL.md to exist");
+        Assert.True(File.Exists(skillFileGemini), "Expected .gemini/skills/exoforge-extensions/SKILL.md to exist");
+        Assert.True(File.Exists(agentsMdFile), "Expected AGENTS.md to exist");
+        Assert.True(File.Exists(exoWrapperFile), "Expected exo wrapper script to exist");
+        Assert.True(File.Exists(exoCmdWrapperFile), "Expected exo.cmd wrapper script to exist");
+
+        string wrapperContent = File.ReadAllText(exoWrapperFile);
+        Assert.Contains("exo.dll", wrapperContent);
+
+        var (statusCode, statusOut) = await RunCliAsync(
+            "agents", "status",
+            "--dir", tempUnityProject,
+            "--json"
+        );
+
+        Assert.Equal(0, statusCode);
+        using (var statusDoc = JsonDocument.Parse(ExtractJson(statusOut)))
+        {
+            var root = statusDoc.RootElement;
+            Assert.True(root.GetProperty("agents_guide_installed").GetBoolean());
+            Assert.True(root.GetProperty("wrapper_installed").GetBoolean());
+            Assert.True(root.GetProperty("cli_available").GetBoolean());
+
+            var installedSkills = root.GetProperty("installed_skills");
+            Assert.True(installedSkills.GetArrayLength() > 0);
+            bool hasExtSkill = false;
+            foreach (var skill in installedSkills.EnumerateArray())
+            {
+                if (skill.GetString() == "exoforge-extensions")
+                {
+                    hasExtSkill = true;
+                    break;
+                }
+            }
+            Assert.True(hasExtSkill);
         }
     }
 }

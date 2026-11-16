@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using Exoforge.Management;
@@ -36,6 +37,24 @@ public static class Program
             {
                 case "init":
                     return HandleInit(cli);
+
+                case "env":
+                    return HandleEnv(cli);
+
+                case "connect":
+                    return await HandleConnectAsync(cli).ConfigureAwait(false);
+
+                case "resource":
+                    return await HandleResourceAsync(cli).ConfigureAwait(false);
+
+                case "contracts":
+                    return await HandleContractsAsync(cli).ConfigureAwait(false);
+
+                case "call":
+                    return await HandleCallAsync(cli).ConfigureAwait(false);
+
+                case "agents":
+                    return HandleAgents(cli);
 
                 case "extension":
                     return await HandleExtensionAsync(cli).ConfigureAwait(false);
@@ -78,19 +97,25 @@ public static class Program
 
         Commands:
           init                       Initialize the workspace and exoforge.json
+          connect                    Verify connection to cluster or authenticate session
+          env <subcommand>           Manage cluster environments in exoforge.json (list, add, use)
           extension <subcommand>     Create, build, deploy and inspect extensions
+          resource <subcommand>      Manage resource tables and entities (list, get, create, etc.)
+          contracts                  Inspect available service contracts, actions and schemas
+          call <service> <action>    Invoke an action directly over RPC
           sync                       Download live contracts and generate the typed C# client
           stubs                      Alias for sync (updates C# client stubs)
+          agents <subcommand>        Install and inspect AI agent skills, AGENTS.md, and wrappers
           repair                     Sanitize and repair client stubs in-place
           status                     Inspect live cluster health and metrics
 
         Options:
           --dir <path>               Workspace root (defaults to the current directory)
           --env <environment>        Target environment from exoforge.json (default: 'local')
-          --json                     Machine-readable output (extension list, logs, status)
+          --json                     Machine-readable output (JSON)
           -h, --help                 Help for a command, e.g. `exo extension push --help`
 
-        Run `exo extension --help` for the extension subcommands.
+        Run `exo <command> --help` for the options of one command.
         """);
     }
 
@@ -254,6 +279,954 @@ public static class Program
 
         var status = await deployer.GetSystemStatusAsync(cli.Value("env")).ConfigureAwait(false);
         Console.WriteLine(PrettyJson(status));
+        return 0;
+    }
+
+    private static string MaskToken(string? tok)
+    {
+        if (string.IsNullOrEmpty(tok)) return "(none)";
+        if (tok.Length <= 8) return "******";
+        return tok.Substring(0, 4) + "..." + tok.Substring(tok.Length - 4);
+    }
+
+    // ---- env ---------------------------------------------------------------------------
+
+    private static int HandleEnv(CliArgs cli)
+    {
+        if (cli.WantsHelp && cli.Positional.Count == 0)
+        {
+            PrintEnvUsage();
+            return 0;
+        }
+
+        if (cli.Positional.Count == 0)
+        {
+            Error("Missing env subcommand (list, add, use).");
+            Console.WriteLine();
+            PrintEnvUsage();
+            return 1;
+        }
+
+        string sub = cli.Positional[0].ToLowerInvariant();
+        var rest = CliArgs.From(cli.Positional.Skip(1).ToList(), cli);
+
+        switch (sub)
+        {
+            case "list":
+                return HandleEnvList(rest);
+            case "add":
+                return HandleEnvAdd(rest);
+            case "use":
+                return HandleEnvUse(rest);
+            default:
+                Error($"Unknown env subcommand: {sub}");
+                Console.WriteLine();
+                PrintEnvUsage();
+                return 1;
+        }
+    }
+
+    private static void PrintEnvUsage()
+    {
+        Console.WriteLine("""
+        Usage: exo env <subcommand> [options]
+
+        Subcommands:
+          list                                          List all environments configured in exoforge.json
+          add <name> --ws <url> --http <url> [options]  Add or update an environment
+          use <name>                                    Set default active environment
+
+        Options for 'add':
+          --ws <url>        WebSocket cluster URL (e.g., ws://localhost:4000/ws)
+          --http <url>      HTTP REST/OpenAPI base URL (e.g., http://localhost:4001)
+          --token <tok>     Cluster authentication token
+          --default         Mark this environment as default
+
+        Common options:
+          --dir <path>      Workspace directory (defaults to current directory)
+          --json            Machine-readable JSON output
+          -h, --help        Show command help
+        """);
+    }
+
+    private static int HandleEnvList(CliArgs cli)
+    {
+        if (cli.WantsHelp)
+        {
+            Console.WriteLine("Usage: exo env list [--dir <path>] [--json]");
+            return 0;
+        }
+
+        var ws = ExoWorkspace.Load(cli.Value("dir") ?? Directory.GetCurrentDirectory());
+
+        if (cli.Json)
+        {
+            var envs = ws.Config.Environments.Select(kv => new
+            {
+                name = kv.Key,
+                is_default = string.Equals(kv.Key, ws.Config.DefaultEnvironment, StringComparison.OrdinalIgnoreCase),
+                ws_url = kv.Value.WsUrl,
+                http_url = kv.Value.HttpUrl,
+                token = MaskToken(kv.Value.Token)
+            }).ToList();
+
+            Console.WriteLine(JsonSerializer.Serialize(new
+            {
+                default_environment = ws.Config.DefaultEnvironment,
+                environments = envs
+            }, JsonOptions));
+            return 0;
+        }
+
+        Console.WriteLine($"Environments in {ws.ConfigPath} (default: '{ws.Config.DefaultEnvironment}'):\n");
+        foreach (var kv in ws.Config.Environments)
+        {
+            bool isDef = string.Equals(kv.Key, ws.Config.DefaultEnvironment, StringComparison.OrdinalIgnoreCase);
+            string marker = isDef ? "* " : "  ";
+            Console.WriteLine($"{marker}{kv.Key}{(isDef ? " (active)" : "")}");
+            Console.WriteLine($"    WS:    {kv.Value.WsUrl}");
+            Console.WriteLine($"    HTTP:  {kv.Value.HttpUrl}");
+            Console.WriteLine($"    Token: {MaskToken(kv.Value.Token)}");
+        }
+        return 0;
+    }
+
+    private static int HandleEnvAdd(CliArgs cli)
+    {
+        if (cli.WantsHelp || cli.Positional.Count == 0)
+        {
+            Console.WriteLine("Usage: exo env add <name> --ws <url> --http <url> [--token <tok>] [--default] [--dir <path>] [--json]");
+            return cli.WantsHelp ? 0 : 1;
+        }
+
+        string name = cli.Positional[0];
+        string? wsUrl = cli.Value("ws");
+        string? httpUrl = cli.Value("http");
+        string? token = cli.Value("token");
+        bool isDefault = cli.Has("default");
+
+        if (string.IsNullOrEmpty(wsUrl))
+        {
+            return Missing("--ws URL", "exo env add <name> --ws <url> --http <url> [options]");
+        }
+        if (string.IsNullOrEmpty(httpUrl))
+        {
+            return Missing("--http URL", "exo env add <name> --ws <url> --http <url> [options]");
+        }
+
+        var ws = ExoWorkspace.Load(cli.Value("dir") ?? Directory.GetCurrentDirectory());
+        ws.Config.Environments[name] = new ExoEnvironmentConfig
+        {
+            WsUrl = wsUrl,
+            HttpUrl = httpUrl,
+            Token = token ?? ""
+        };
+
+        if (isDefault || string.IsNullOrEmpty(ws.Config.DefaultEnvironment))
+        {
+            ws.Config.DefaultEnvironment = name;
+        }
+
+        ws.Save();
+
+        var deployer = new ExoDeployer(ws);
+        deployer.SyncRuntimeConfigIfUnityProject(ws.Config.DefaultEnvironment, ws.GetActiveEnvironment().WsUrl, ws.GetActiveEnvironment().HttpUrl);
+
+        if (cli.Json)
+        {
+            Console.WriteLine(JsonSerializer.Serialize(new
+            {
+                status = "ok",
+                environment = name,
+                is_default = ws.Config.DefaultEnvironment == name,
+                ws_url = wsUrl,
+                http_url = httpUrl
+            }, JsonOptions));
+            return 0;
+        }
+
+        Success($"[Exoforge] Environment '{name}' saved in {ws.ConfigPath}");
+        if (ws.Config.DefaultEnvironment == name)
+        {
+            Console.WriteLine("  Marked as default active environment.");
+        }
+        return 0;
+    }
+
+    private static int HandleEnvUse(CliArgs cli)
+    {
+        if (cli.WantsHelp || cli.Positional.Count == 0)
+        {
+            Console.WriteLine("Usage: exo env use <name> [--dir <path>] [--json]");
+            return cli.WantsHelp ? 0 : 1;
+        }
+
+        string name = cli.Positional[0];
+        var ws = ExoWorkspace.Load(cli.Value("dir") ?? Directory.GetCurrentDirectory());
+
+        if (!ws.Config.Environments.TryGetValue(name, out var envConfig))
+        {
+            Error($"Environment '{name}' does not exist in exoforge.json.");
+            Console.WriteLine("Run `exo env list` to see configured environments.");
+            return 1;
+        }
+
+        ws.Config.DefaultEnvironment = name;
+        ws.Save();
+
+        var deployer = new ExoDeployer(ws);
+        bool synced = deployer.SyncRuntimeConfigIfUnityProject(name, envConfig.WsUrl, envConfig.HttpUrl);
+
+        if (cli.Json)
+        {
+            Console.WriteLine(JsonSerializer.Serialize(new
+            {
+                status = "ok",
+                default_environment = name,
+                runtime_config_synced = synced
+            }, JsonOptions));
+            return 0;
+        }
+
+        Success($"[Exoforge] Active environment set to '{name}'.");
+        if (synced)
+        {
+            Console.WriteLine("  Synchronized Assets/Resources/exoforge.json with new endpoints.");
+        }
+        return 0;
+    }
+
+    // ---- connect -----------------------------------------------------------------------
+
+    private static async Task<int> HandleConnectAsync(CliArgs cli)
+    {
+        if (cli.WantsHelp)
+        {
+            Console.WriteLine("""
+            Usage: exo connect [options]
+
+            Verifies cluster connectivity, validates credentials or performs login,
+            and optionally updates exoforge.json and runtime config.
+
+            Options:
+              --env <name>       Target environment (defaults to default_environment)
+              --ws <url>         Override WebSocket endpoint
+              --http <url>       Override HTTP base endpoint
+              --token <tok>      Cluster authentication token
+              --email <email>    Login email (used with --password)
+              --password <pass>  Login password (used with --email)
+              --save             Save validated endpoints & token to exoforge.json and Assets/Resources/exoforge.json
+              --dir <path>       Workspace directory
+              --json             Machine-readable JSON output
+            """);
+            return 0;
+        }
+
+        var ws = ExoWorkspace.Load(cli.Value("dir") ?? Directory.GetCurrentDirectory());
+        var deployer = new ExoDeployer(ws);
+
+        string? envName = cli.Value("env");
+        string? wsUrl = cli.Value("ws");
+        string? httpUrl = cli.Value("http");
+        string? token = cli.Value("token");
+        string? email = cli.Value("email");
+        string? password = cli.Value("password");
+        bool save = cli.Has("save");
+
+        if (!cli.Json)
+        {
+            Console.WriteLine($"[Exoforge] Connecting to cluster ({envName ?? ws.Config.DefaultEnvironment})...");
+        }
+
+        var res = await deployer.ConnectAndVerifyAsync(
+            environmentName: envName,
+            wsUrlOverride: wsUrl,
+            httpUrlOverride: httpUrl,
+            tokenOverride: token,
+            email: email,
+            password: password,
+            save: save
+        ).ConfigureAwait(false);
+
+        if (cli.Json)
+        {
+            Console.WriteLine(JsonSerializer.Serialize(res, JsonOptions));
+            return 0;
+        }
+
+        Success("[Exoforge] Connected to cluster successfully!");
+        Console.WriteLine($"  Environment:    {res.Environment}");
+        Console.WriteLine($"  WebSocket URL:  {res.WsUrl}");
+        Console.WriteLine($"  HTTP Base URL:  {res.HttpUrl}");
+        Console.WriteLine($"  Authenticated:  {(res.Authenticated ? "Yes" : "No")}");
+        Console.WriteLine($"  Settings Saved: {(save ? "Yes" : "No (pass --save to persist)")}");
+        if (res.Status.ValueKind == JsonValueKind.Object)
+        {
+            string? clusterName = ReadString(res.Status, "cluster");
+            if (!string.IsNullOrEmpty(clusterName))
+            {
+                Console.WriteLine($"  Cluster Node:   {clusterName}");
+            }
+        }
+        return 0;
+    }
+
+    // ---- resource ----------------------------------------------------------------------
+
+    private static async Task<int> HandleResourceAsync(CliArgs cli)
+    {
+        if (cli.WantsHelp && cli.Positional.Count == 0)
+        {
+            PrintResourceUsage();
+            return 0;
+        }
+
+        if (cli.Positional.Count == 0)
+        {
+            Error("Missing resource subcommand.");
+            Console.WriteLine();
+            PrintResourceUsage();
+            return 1;
+        }
+
+        string sub = cli.Positional[0].ToLowerInvariant();
+        var rest = CliArgs.From(cli.Positional.Skip(1).ToList(), cli);
+
+        var ws = ExoWorkspace.Load(cli.Value("dir") ?? Directory.GetCurrentDirectory());
+        var deployer = new ExoDeployer(ws);
+        string? env = cli.Value("env");
+
+        switch (sub)
+        {
+            case "tables":
+                return await HandleResourceTablesAsync(deployer, rest, env).ConfigureAwait(false);
+
+            case "list":
+                return await HandleResourceListAsync(deployer, rest, env).ConfigureAwait(false);
+
+            case "get":
+                return await HandleResourceGetAsync(deployer, rest, env).ConfigureAwait(false);
+
+            case "create":
+                return await HandleResourceCreateAsync(deployer, rest, env).ConfigureAwait(false);
+
+            case "update":
+                return await HandleResourceUpdateAsync(deployer, rest, env).ConfigureAwait(false);
+
+            case "upsert":
+                return await HandleResourceUpsertAsync(deployer, rest, env).ConfigureAwait(false);
+
+            case "delete":
+                return await HandleResourceDeleteAsync(deployer, rest, env).ConfigureAwait(false);
+
+            case "clear":
+                return await HandleResourceClearAsync(deployer, rest, env).ConfigureAwait(false);
+
+            case "migrate":
+                return await HandleResourceMigrateAsync(deployer, rest, env).ConfigureAwait(false);
+
+            default:
+                Error($"Unknown resource subcommand: {sub}");
+                Console.WriteLine();
+                PrintResourceUsage();
+                return 1;
+        }
+    }
+
+    private static void PrintResourceUsage()
+    {
+        Console.WriteLine("""
+        Usage: exo resource <subcommand> [options]
+
+        Subcommands:
+          tables                                  List all resource tables discovered in contracts
+          list <table> [options]                  Query rows from a resource table
+          get <table> <id>                        Fetch a single row by primary key
+          create <table> --data <json>            Insert a new record
+          update <table> <id> --data <json>       Update an existing record
+          upsert <table> --data <json>            Insert or update record
+          delete <table> <id>                     Delete a record
+          clear <table> --yes                     Delete all records from table (requires --yes)
+          migrate [<table>]                       Reconcile database schemas for resource(s)
+
+        Options for 'list':
+          --limit <n>     Max rows to return (default: 20)
+          --offset <n>    Offset pagination (default: 0)
+          --search <q>    Search query filter
+
+        Common options:
+          --dir <path>    Workspace root
+          --env <name>    Target environment
+          --json          Machine-readable JSON output
+          -h, --help      Command help
+        """);
+    }
+
+    private static async Task<int> HandleResourceTablesAsync(ExoDeployer deployer, CliArgs cli, string? env)
+    {
+        if (cli.WantsHelp)
+        {
+            Console.WriteLine("Usage: exo resource tables [--dir <path>] [--env <name>] [--json]");
+            return 0;
+        }
+
+        var tables = await deployer.ListResourceTablesAsync(env).ConfigureAwait(false);
+
+        if (cli.Json)
+        {
+            Console.WriteLine(JsonSerializer.Serialize(new { tables }, JsonOptions));
+            return 0;
+        }
+
+        if (tables.Count == 0)
+        {
+            Console.WriteLine("No resource tables discovered.");
+            return 0;
+        }
+
+        Console.WriteLine($"{"Table",-24} {"Service",-20} {"PK",-8} {"Singleton",-10} Columns");
+        Console.WriteLine(new string('-', 85));
+        foreach (var t in tables)
+        {
+            string cols = string.Join(", ", t.Columns.Select(c => $"{c.Name}:{c.Type}"));
+            Console.WriteLine($"{t.Name,-24} {t.Service,-20} {t.PrimaryKey,-8} {(t.Singleton ? "true" : "false"),-10} {cols}");
+        }
+        return 0;
+    }
+
+    private static async Task<int> HandleResourceListAsync(ExoDeployer deployer, CliArgs cli, string? env)
+    {
+        if (cli.WantsHelp || cli.Positional.Count == 0)
+        {
+            Console.WriteLine("Usage: exo resource list <table> [--limit <n>] [--offset <n>] [--search <q>] [--env <name>] [--json]");
+            return cli.WantsHelp ? 0 : 1;
+        }
+
+        string table = cli.Positional[0];
+        int? limit = cli.Has("limit") ? cli.IntValue("limit", 20) : null;
+        int? offset = cli.Has("offset") ? cli.IntValue("offset", 0) : null;
+        string? search = cli.Value("search");
+
+        var res = await deployer.CallResourceStoreAsync("list", table, limit: limit, offset: offset, search: search, environmentName: env).ConfigureAwait(false);
+        Console.WriteLine(PrettyJson(res));
+        return 0;
+    }
+
+    private static async Task<int> HandleResourceGetAsync(ExoDeployer deployer, CliArgs cli, string? env)
+    {
+        if (cli.WantsHelp || cli.Positional.Count == 0)
+        {
+            Console.WriteLine("Usage: exo resource get <table> [id] [--env <name>] [--json]");
+            return cli.WantsHelp ? 0 : 1;
+        }
+
+        string table = cli.Positional[0];
+        string? id = cli.Positional.Count > 1 ? cli.Positional[1] : null;
+
+        var res = await deployer.CallResourceStoreAsync("get", table, id: id, environmentName: env).ConfigureAwait(false);
+        Console.WriteLine(PrettyJson(res));
+        return 0;
+    }
+
+    private static async Task<int> HandleResourceCreateAsync(ExoDeployer deployer, CliArgs cli, string? env)
+    {
+        if (cli.WantsHelp || cli.Positional.Count == 0)
+        {
+            Console.WriteLine("Usage: exo resource create <table> --data <json> [--env <name>] [--json]");
+            return cli.WantsHelp ? 0 : 1;
+        }
+
+        string table = cli.Positional[0];
+        string? dataStr = cli.Value("data");
+        if (string.IsNullOrEmpty(dataStr))
+        {
+            return Missing("--data '<json>'", "exo resource create <table> --data '<json>'");
+        }
+
+        JsonObject? data;
+        try
+        {
+            data = JsonNode.Parse(dataStr)?.AsObject();
+        }
+        catch (Exception ex)
+        {
+            Error($"Invalid JSON in --data: {ex.Message}");
+            return 1;
+        }
+
+        var res = await deployer.CallResourceStoreAsync("create", table, attributes: data, environmentName: env).ConfigureAwait(false);
+        Console.WriteLine(PrettyJson(res));
+        return 0;
+    }
+
+    private static async Task<int> HandleResourceUpdateAsync(ExoDeployer deployer, CliArgs cli, string? env)
+    {
+        if (cli.WantsHelp || cli.Positional.Count < 2)
+        {
+            Console.WriteLine("Usage: exo resource update <table> <id> --data <json> [--env <name>] [--json]");
+            return cli.WantsHelp ? 0 : 1;
+        }
+
+        string table = cli.Positional[0];
+        string id = cli.Positional[1];
+        string? dataStr = cli.Value("data");
+        if (string.IsNullOrEmpty(dataStr))
+        {
+            return Missing("--data '<json>'", "exo resource update <table> <id> --data '<json>'");
+        }
+
+        JsonObject? data;
+        try
+        {
+            data = JsonNode.Parse(dataStr)?.AsObject();
+        }
+        catch (Exception ex)
+        {
+            Error($"Invalid JSON in --data: {ex.Message}");
+            return 1;
+        }
+
+        var res = await deployer.CallResourceStoreAsync("update", table, id: id, attributes: data, environmentName: env).ConfigureAwait(false);
+        Console.WriteLine(PrettyJson(res));
+        return 0;
+    }
+
+    private static async Task<int> HandleResourceUpsertAsync(ExoDeployer deployer, CliArgs cli, string? env)
+    {
+        if (cli.WantsHelp || cli.Positional.Count == 0)
+        {
+            Console.WriteLine("Usage: exo resource upsert <table> --data <json> [--env <name>] [--json]");
+            return cli.WantsHelp ? 0 : 1;
+        }
+
+        string table = cli.Positional[0];
+        string? dataStr = cli.Value("data");
+        if (string.IsNullOrEmpty(dataStr))
+        {
+            return Missing("--data '<json>'", "exo resource upsert <table> --data '<json>'");
+        }
+
+        JsonObject? data;
+        try
+        {
+            data = JsonNode.Parse(dataStr)?.AsObject();
+        }
+        catch (Exception ex)
+        {
+            Error($"Invalid JSON in --data: {ex.Message}");
+            return 1;
+        }
+
+        var res = await deployer.CallResourceStoreAsync("upsert", table, attributes: data, environmentName: env).ConfigureAwait(false);
+        Console.WriteLine(PrettyJson(res));
+        return 0;
+    }
+
+    private static async Task<int> HandleResourceDeleteAsync(ExoDeployer deployer, CliArgs cli, string? env)
+    {
+        if (cli.WantsHelp || cli.Positional.Count < 2)
+        {
+            Console.WriteLine("Usage: exo resource delete <table> <id> [--env <name>] [--json]");
+            return cli.WantsHelp ? 0 : 1;
+        }
+
+        string table = cli.Positional[0];
+        string id = cli.Positional[1];
+
+        var res = await deployer.CallResourceStoreAsync("delete", table, id: id, environmentName: env).ConfigureAwait(false);
+        Console.WriteLine(PrettyJson(res));
+        return 0;
+    }
+
+    private static async Task<int> HandleResourceClearAsync(ExoDeployer deployer, CliArgs cli, string? env)
+    {
+        if (cli.WantsHelp || cli.Positional.Count == 0)
+        {
+            Console.WriteLine("Usage: exo resource clear <table> --yes [--env <name>] [--json]");
+            return cli.WantsHelp ? 0 : 1;
+        }
+
+        string table = cli.Positional[0];
+        if (!cli.Has("yes"))
+        {
+            Error($"Clearing table '{table}' will delete all its rows permanently. Pass --yes to confirm.");
+            return 1;
+        }
+
+        var res = await deployer.CallResourceStoreAsync("clear", table, environmentName: env).ConfigureAwait(false);
+        Console.WriteLine(PrettyJson(res));
+        return 0;
+    }
+
+    private static async Task<int> HandleResourceMigrateAsync(ExoDeployer deployer, CliArgs cli, string? env)
+    {
+        if (cli.WantsHelp)
+        {
+            Console.WriteLine("Usage: exo resource migrate [<table>] [--env <name>] [--json]");
+            return 0;
+        }
+
+        string? table = cli.Positional.Count > 0 ? cli.Positional[0] : null;
+
+        var res = await deployer.CallResourceStoreAsync("migrate", table, environmentName: env).ConfigureAwait(false);
+        Console.WriteLine(PrettyJson(res));
+        return 0;
+    }
+
+    // ---- contracts ---------------------------------------------------------------------
+
+    private static async Task<int> HandleContractsAsync(CliArgs cli)
+    {
+        if (cli.WantsHelp)
+        {
+            Console.WriteLine("""
+            Usage: exo contracts [options]
+
+            Displays services, actions, events, and resources declared across cluster and local contracts.
+
+            Options:
+              --service <name>   Filter by service name
+              --dir <path>       Workspace root
+              --env <name>       Target environment
+              --json             Machine-readable JSON output
+            """);
+            return 0;
+        }
+
+        var ws = ExoWorkspace.Load(cli.Value("dir") ?? Directory.GetCurrentDirectory());
+        var deployer = new ExoDeployer(ws);
+        string? serviceFilter = cli.Value("service");
+
+        var contractsDoc = await deployer.GetContractsExportAsync(cli.Value("env")).ConfigureAwait(false);
+
+        if (cli.Json)
+        {
+            if (!string.IsNullOrEmpty(serviceFilter))
+            {
+                var filtered = FilterContractsByService(contractsDoc, serviceFilter);
+                Console.WriteLine(PrettyJson(filtered));
+            }
+            else
+            {
+                Console.WriteLine(PrettyJson(contractsDoc));
+            }
+            return 0;
+        }
+
+        PrintContractsSummary(contractsDoc, serviceFilter);
+        return 0;
+    }
+
+    private static JsonElement FilterContractsByService(JsonElement root, string serviceName)
+    {
+        JsonElement exportRoot = root;
+        if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("export", out var expProp))
+        {
+            exportRoot = expProp;
+        }
+
+        JsonElement extensions = default;
+        bool hasExts = false;
+        if (exportRoot.ValueKind == JsonValueKind.Object)
+        {
+            if (exportRoot.TryGetProperty("extensions", out var exts) && exts.ValueKind == JsonValueKind.Array)
+            {
+                extensions = exts;
+                hasExts = true;
+            }
+            else if (exportRoot.TryGetProperty("plugins", out var plgs) && plgs.ValueKind == JsonValueKind.Array)
+            {
+                extensions = plgs;
+                hasExts = true;
+            }
+        }
+
+        if (hasExts)
+        {
+            foreach (var ext in extensions.EnumerateArray())
+            {
+                if (ext.TryGetProperty("services", out var services) && services.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var svc in services.EnumerateArray())
+                    {
+                        string name = svc.TryGetProperty("name", out var np) ? np.GetString() ?? "" : "";
+                        if (string.Equals(name, serviceName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            return svc.Clone();
+                        }
+                    }
+                }
+
+                string extId = ext.TryGetProperty("id", out var idProp) ? idProp.GetString() ?? "" : "";
+                string extName = ext.TryGetProperty("name", out var nProp) ? nProp.GetString() ?? extId : extId;
+                if (string.Equals(extId, serviceName, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(extName, serviceName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return ext.Clone();
+                }
+            }
+        }
+
+        return root;
+    }
+
+    private static void PrintContractsSummary(JsonElement root, string? serviceFilter)
+    {
+        JsonElement exportRoot = root;
+        if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("export", out var expProp))
+        {
+            exportRoot = expProp;
+        }
+
+        JsonElement extensions = default;
+        bool hasExts = false;
+        if (exportRoot.ValueKind == JsonValueKind.Object)
+        {
+            if (exportRoot.TryGetProperty("extensions", out var exts) && exts.ValueKind == JsonValueKind.Array)
+            {
+                extensions = exts;
+                hasExts = true;
+            }
+            else if (exportRoot.TryGetProperty("plugins", out var plgs) && plgs.ValueKind == JsonValueKind.Array)
+            {
+                extensions = plgs;
+                hasExts = true;
+            }
+        }
+
+        if (!hasExts)
+        {
+            Console.WriteLine("No extensions or services found in contracts export.");
+            return;
+        }
+
+        int count = 0;
+        foreach (var ext in extensions.EnumerateArray())
+        {
+            string extId = ext.TryGetProperty("id", out var idProp) ? idProp.GetString() ?? "" : "";
+            string extName = ext.TryGetProperty("name", out var nProp) ? nProp.GetString() ?? extId : extId;
+            string title = ext.TryGetProperty("title", out var tProp) ? tProp.GetString() ?? extName : extName;
+            string category = ext.TryGetProperty("category", out var cProp) ? cProp.GetString() ?? "General" : "General";
+
+            if (ext.TryGetProperty("services", out var services) && services.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var svc in services.EnumerateArray())
+                {
+                    string svcName = svc.TryGetProperty("name", out var np) ? np.GetString() ?? extName : extName;
+                    if (!string.IsNullOrEmpty(serviceFilter) && !string.Equals(svcName, serviceFilter, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    count++;
+                    Console.WriteLine($"Service: {svcName}  [{category}] ({title})");
+
+                    if (svc.TryGetProperty("actions", out var actions) && actions.ValueKind == JsonValueKind.Array)
+                    {
+                        Console.WriteLine("  Actions:");
+                        foreach (var act in actions.EnumerateArray())
+                        {
+                            string actName = act.TryGetProperty("name", out var an) ? an.GetString() ?? "" : "";
+                            string scope = act.TryGetProperty("scope", out var sc) ? sc.GetString() ?? "player" : "player";
+                            Console.WriteLine($"    - {actName,-24} (scope: {scope})");
+                        }
+                    }
+
+                    if (svc.TryGetProperty("events", out var evts) && evts.ValueKind == JsonValueKind.Array)
+                    {
+                        Console.WriteLine("  Events:");
+                        foreach (var evt in evts.EnumerateArray())
+                        {
+                            string evtName = evt.TryGetProperty("name", out var en) ? en.GetString() ?? "" : "";
+                            Console.WriteLine($"    - {evtName}");
+                        }
+                    }
+
+                    if (svc.TryGetProperty("resources", out var resArr) && resArr.ValueKind == JsonValueKind.Array)
+                    {
+                        Console.WriteLine("  Resources:");
+                        foreach (var res in resArr.EnumerateArray())
+                        {
+                            string rn = res.TryGetProperty("name", out var rnp) ? rnp.GetString() ?? "" : "";
+                            string pk = res.TryGetProperty("primary_key", out var pkp) ? pkp.GetString() ?? "id" : "id";
+                            Console.WriteLine($"    - {rn} (primary key: {pk})");
+                        }
+                    }
+
+                    Console.WriteLine();
+                }
+            }
+        }
+
+        if (count == 0)
+        {
+            if (!string.IsNullOrEmpty(serviceFilter))
+                Console.WriteLine($"Service '{serviceFilter}' not found in contracts.");
+            else
+                Console.WriteLine("No services found in contracts.");
+        }
+    }
+
+    // ---- call --------------------------------------------------------------------------
+
+    private static async Task<int> HandleCallAsync(CliArgs cli)
+    {
+        if (cli.WantsHelp || cli.Positional.Count < 2)
+        {
+            Console.WriteLine("""
+            Usage: exo call <service> <action> [--data <json>] [options]
+
+            Executes an action directly on the active cluster over RPC.
+
+            Options:
+              --data <json>      Payload parameters as JSON object
+              --dir <path>       Workspace directory
+              --env <name>       Target environment
+              --json             Format response as JSON (default: true)
+            """);
+            return cli.WantsHelp ? 0 : 1;
+        }
+
+        string service = cli.Positional[0];
+        string action = cli.Positional[1];
+
+        JsonObject? payload = null;
+        string? dataStr = cli.Value("data");
+        if (!string.IsNullOrEmpty(dataStr))
+        {
+            try
+            {
+                payload = JsonNode.Parse(dataStr)?.AsObject();
+            }
+            catch (Exception ex)
+            {
+                Error($"Invalid JSON passed to --data: {ex.Message}");
+                return 1;
+            }
+        }
+
+        var ws = ExoWorkspace.Load(cli.Value("dir") ?? Directory.GetCurrentDirectory());
+        var deployer = new ExoDeployer(ws);
+
+        var result = await deployer.CallActionAsync(service, action, payload, cli.Value("env")).ConfigureAwait(false);
+        Console.WriteLine(PrettyJson(result));
+        return 0;
+    }
+
+    // ---- agents ------------------------------------------------------------------------
+
+    private static int HandleAgents(CliArgs cli)
+    {
+        if (cli.WantsHelp && cli.Positional.Count == 0)
+        {
+            PrintAgentsUsage();
+            return 0;
+        }
+
+        if (cli.Positional.Count == 0)
+        {
+            Error("Missing agents subcommand (install, status).");
+            Console.WriteLine();
+            PrintAgentsUsage();
+            return 1;
+        }
+
+        string sub = cli.Positional[0].ToLowerInvariant();
+        var rest = CliArgs.From(cli.Positional.Skip(1).ToList(), cli);
+
+        switch (sub)
+        {
+            case "install":
+                return HandleAgentsInstall(rest);
+            case "status":
+                return HandleAgentsStatus(rest);
+            default:
+                Error($"Unknown agents subcommand: {sub}");
+                Console.WriteLine();
+                PrintAgentsUsage();
+                return 1;
+        }
+    }
+
+    private static void PrintAgentsUsage()
+    {
+        Console.WriteLine("""
+        Usage: exo agents <subcommand> [options]
+
+        Subcommands:
+          install    Install agent skills, AGENTS.md guide, and project root CLI wrappers
+          status     Inspect installed agent tooling, skills, and CLI wrappers
+
+        Options for 'install':
+          --target <target>   Skills directory target: 'all' (default), 'agents', 'claude', or 'gemini'
+
+        Common options:
+          --dir <path>        Project root directory (defaults to current directory)
+          --json              Machine-readable JSON output
+          -h, --help          Show help
+        """);
+    }
+
+    private static int HandleAgentsInstall(CliArgs cli)
+    {
+        if (cli.WantsHelp)
+        {
+            Console.WriteLine("Usage: exo agents install [--dir <path>] [--target all|agents|claude|gemini] [--json]");
+            return 0;
+        }
+
+        string dir = cli.Value("dir") ?? Directory.GetCurrentDirectory();
+        string target = cli.Value("target") ?? "all";
+
+        var res = ExoAgentInstaller.Install(dir, target);
+
+        if (cli.Json)
+        {
+            Console.WriteLine(JsonSerializer.Serialize(res, JsonOptions));
+            return 0;
+        }
+
+        Success($"[Exoforge] Agent tooling installed in {res.ProjectRoot}");
+        Console.WriteLine($"  Package:    {res.PackageRoot}");
+        Console.WriteLine($"  Skills:     {res.InstalledSkills.Count} installed ({string.Join(", ", res.InstalledSkills)})");
+        Console.WriteLine($"  Files:      {res.UpdatedFiles.Count} written/updated");
+        Console.WriteLine($"  CLI binary: {(res.CliAvailable ? "Available" : "Missing from package")}");
+        Console.WriteLine("  Installed:  ./exo, ./exo.cmd, AGENTS.md, skills folders");
+        return 0;
+    }
+
+    private static int HandleAgentsStatus(CliArgs cli)
+    {
+        if (cli.WantsHelp)
+        {
+            Console.WriteLine("Usage: exo agents status [--dir <path>] [--json]");
+            return 0;
+        }
+
+        string dir = cli.Value("dir") ?? Directory.GetCurrentDirectory();
+        var status = ExoAgentInstaller.GetStatus(dir);
+
+        if (cli.Json)
+        {
+            Console.WriteLine(JsonSerializer.Serialize(status, JsonOptions));
+            return 0;
+        }
+
+        Console.WriteLine($"Exoforge Agent Setup Status: {(status.CliAvailable && status.AgentsGuideInstalled ? "Ready" : "Incomplete")}");
+        Console.WriteLine($"Project Root: {status.ProjectRoot}");
+        if (!string.IsNullOrEmpty(status.PackageRoot))
+        {
+            Console.WriteLine($"Package Root: {status.PackageRoot}");
+        }
+        Console.WriteLine();
+        foreach (var check in status.Checks)
+        {
+            Console.WriteLine($"  {check}");
+        }
+        if (status.InstalledSkills.Count > 0)
+        {
+            Console.WriteLine($"\nInstalled Skills ({status.InstalledSkills.Count}): {string.Join(", ", status.InstalledSkills)}");
+        }
         return 0;
     }
 

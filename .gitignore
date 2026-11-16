@@ -36,10 +36,12 @@ sdk/unity/Exoforge.SDK/*/Plugins/Tools~/**/*.dll
 sdk/unity/Exoforge.SDK/*/Plugins/Tools~/**/*.pdb
 !sdk/unity/Exoforge.SDK/*/Plugins/*.meta
 
-# `*~` also matches the SDK's Unity-ignored Tools~ and Samples~ directories; keep those tracked.
+# `*~` also matches the SDK's Unity-ignored directories; keep those tracked.
 !**/Samples~/
 !**/Tools~/
 !**/Tools~
+!**/Agents~/
+!**/Cli~/
 
 # The sample's copy of the Unity package, placed by `just unity-sync`. The sample names no path
 # outside itself, so the package is copied in - and being a copy, it is output, not source.
