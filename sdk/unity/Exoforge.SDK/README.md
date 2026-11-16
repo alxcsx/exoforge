@@ -35,16 +35,16 @@ public class DailyRewardsExtension
     [ExoAction]
     public DailyRewardsReward ClaimDailyReward(int level)
     {
-        var playerId = ExoServices.Context.CurrentPlayerId;
+        var playerId = Exo.Context.CallerPlayerId;
         if (string.IsNullOrEmpty(playerId))
             throw new ExoActionException("unauthorized", "Player session is required.");
 
-        var existing = ExoServices.Database.Get<DailyRewardsClaim>(playerId);
+        var existing = Exo.Database.Get<DailyRewardsClaim>(playerId);
         if (existing != null)
             throw new ExoActionException("already_claimed", "Daily reward has already been claimed.");
 
         var reward = new DailyRewardsReward("coins", 10 + level);
-        ExoServices.Database.Put(new DailyRewardsClaim(playerId, DateTime.UtcNow));
+        Exo.Database.Put(new DailyRewardsClaim(playerId, DateTime.UtcNow));
         return reward;
     }
 }

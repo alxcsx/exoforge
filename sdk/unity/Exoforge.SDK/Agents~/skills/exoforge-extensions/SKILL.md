@@ -45,7 +45,7 @@ public partial class DailyRewardsExtension
     [ExoAction(Scope = "player")]
     public ClaimResult ClaimReward(int streakDay)
     {
-        string playerId = Exo.Context.CurrentPlayerId;
+        string playerId = Exo.Context.CallerPlayerId;
         if (string.IsNullOrEmpty(playerId))
         {
             throw new ExoActionException("unauthorized", "Valid player session is required.");
@@ -76,7 +76,7 @@ public record ClaimResult(bool Success, int Amount);
 - `[ExoService("name")]`: Registers the class as a service contract with the host.
 - `[ExoAction(Scope = "player")]`: Exposes a public method as an RPC action. `Scope = "player"` requires a valid authenticated player session; `Scope = "admin"` restricts access to administrator credentials; default or omitting scope permits public calls.
 - `Exo.Database`: Typed storage interface (`Get<T>`, `Put`, `Query<T>`, `Execute`).
-- `Exo.Context`: Provides runtime metadata such as `CurrentPlayerId` and caller context.
+- `Exo.Context`: Provides runtime metadata such as `CallerPlayerId` and caller context.
 - `Exo.Events`: Publishes events to the cluster pub/sub bus (`Publish`).
 
 ## 4. Building the Extension

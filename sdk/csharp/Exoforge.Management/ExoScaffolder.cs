@@ -376,7 +376,7 @@ public class {{className}}Extension
     [ExoAction]
     public string Ping()
     {
-        ExoServices.Logger.Info("[{{serviceName}}] ping");
+        Exo.Logger.Info("[{{serviceName}}] ping");
         return "pong";
     }
 }
@@ -397,18 +397,18 @@ public class {{className}}Extension
     [ExoAction]
     public {{className}}Reward ClaimDailyReward()
     {
-        var playerId = ExoServices.Context.CallerPlayerId;
+        var playerId = Exo.Context.CallerPlayerId;
         if (string.IsNullOrEmpty(playerId))
             throw new ExoActionException("unauthorized", "Player must be authenticated to claim rewards.");
 
         var today = DateTime.UtcNow.ToString("yyyy-MM-dd");
 
-        var lastClaim = ExoServices.Database.Get<{{className}}Claim>(playerId);
+        var lastClaim = Exo.Database.Get<{{className}}Claim>(playerId);
         if (lastClaim != null && lastClaim.ClaimDate == today)
             throw new ExoActionException("already_claimed", "Daily reward already claimed today. Come back tomorrow!");
 
         var reward = new {{className}}Reward("coins", 100);
-        ExoServices.Database.Put(new {{className}}Claim(playerId, today, reward.Amount));
+        Exo.Database.Put(new {{className}}Claim(playerId, today, reward.Amount));
 
         return reward;
     }
@@ -438,17 +438,17 @@ public class {{className}}Extension
 {
     [ExoAction]
     public {{className}}Item? GetItem(string id) =>
-        ExoServices.Database.Get<{{className}}Item>(id);
+        Exo.Database.Get<{{className}}Item>(id);
 
     [ExoAction]
     public IReadOnlyList<{{className}}Item> ListItems() =>
-        ExoServices.Database.All<{{className}}Item>();
+        Exo.Database.All<{{className}}Item>();
 
     [ExoAction]
     public {{className}}Item SaveItem(string id, int quantity)
     {
         var item = new {{className}}Item(id, quantity);
-        ExoServices.Database.Put(item);
+        Exo.Database.Put(item);
         return item;
     }
 }
@@ -473,13 +473,13 @@ public class {{className}}Extension
 {
     [ExoAction]
     public {{className}}Config GetConfig() =>
-        ExoServices.Database.First<{{className}}Config>() ?? new {{className}}Config("normal", 3);
+        Exo.Database.First<{{className}}Config>() ?? new {{className}}Config("normal", 3);
 
     [ExoAction]
     public {{className}}Config UpdateConfig(string difficulty, int maxLives)
     {
         var config = new {{className}}Config(difficulty, maxLives);
-        ExoServices.Database.Put(config);
+        Exo.Database.Put(config);
         return config;
     }
 }
@@ -507,8 +507,8 @@ public class {{className}}Extension
     [ExoAction]
     public async Task GreetPlayerAsync(string name)
     {
-        var playerId = ExoServices.Context.CallerPlayerId ?? "anonymous";
-        await ExoServices.Events.EmitAsync(new {{className}}PlayerGreeted(playerId, name, DateTimeOffset.UtcNow.ToUnixTimeSeconds()));
+        var playerId = Exo.Context.CallerPlayerId ?? "anonymous";
+        await Exo.Events.EmitAsync(new {{className}}PlayerGreeted(playerId, name, DateTimeOffset.UtcNow.ToUnixTimeSeconds()));
     }
 }
 
