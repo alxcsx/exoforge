@@ -51,7 +51,8 @@ internal sealed record ResourceModel(
     List<string> Actions,
     List<ColumnModel> Columns,
     string? TypeName,
-    bool Singleton = false);
+    bool Singleton = false,
+    bool AllowPlayerRead = false);
 
 internal sealed record CronModel(
     string Name,
@@ -218,6 +219,10 @@ internal static class ManifestEmitter
                 if (resource.Singleton)
                 {
                     sb.Append("\"singleton\": true, \"kind\": \"singleton\", ");
+                }
+                if (resource.AllowPlayerRead)
+                {
+                    sb.Append("\"allow_player_read\": true, ");
                 }
                 // The shape `Exoforge.Std.Resources.normalize_source/1` reads. A bare string would not
                 // match, and a resource with no source is stored as an opaque key-value document.

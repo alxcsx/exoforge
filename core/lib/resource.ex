@@ -27,7 +27,17 @@ defmodule Exoforge.Resource do
   defmacro __using__(opts) do
     quote location: :keep do
       import Exoforge.Resource,
-        only: [column: 2, column: 3, primary_key: 1, drawer: 1, doc: 1, actions: 1, source: 1]
+        only: [
+          column: 2,
+          column: 3,
+          primary_key: 1,
+          drawer: 1,
+          doc: 1,
+          actions: 1,
+          source: 1,
+          allow_player_read: 0,
+          allow_player_read: 1
+        ]
 
       Module.register_attribute(__MODULE__, :exo_columns, accumulate: true)
       @exo_primary_key Keyword.get(unquote(opts), :primary_key, :id)
@@ -35,6 +45,7 @@ defmodule Exoforge.Resource do
       @exo_resource_name Keyword.get(unquote(opts), :name, nil)
       @exo_actions Keyword.get(unquote(opts), :actions, [])
       @exo_source Keyword.get(unquote(opts), :source, nil)
+      @exo_allow_player_read Keyword.get(unquote(opts), :allow_player_read, false)
       @exo_singleton Keyword.get(unquote(opts), :singleton, Keyword.get(unquote(opts), :kind) == :singleton)
       @exo_kind Keyword.get(unquote(opts), :kind, if(Keyword.get(unquote(opts), :singleton), do: :singleton, else: :standard))
 
@@ -63,6 +74,13 @@ defmodule Exoforge.Resource do
   defmacro source(src) do
     quote do
       @exo_source unquote(src)
+    end
+  end
+
+  @doc "Marks every row of this resource readable by player-scoped callers."
+  defmacro allow_player_read(value \\ true) do
+    quote do
+      @exo_allow_player_read unquote(value)
     end
   end
 
@@ -99,6 +117,7 @@ defmodule Exoforge.Resource do
     drawer = Module.get_attribute(env.module, :exo_drawer) || [:overview, :attributes]
     actions = Module.get_attribute(env.module, :exo_actions) || []
     source = Module.get_attribute(env.module, :exo_source)
+    allow_player_read = Module.get_attribute(env.module, :exo_allow_player_read) || false
 
     explicit_name = Module.get_attribute(env.module, :exo_resource_name)
     resource_name = explicit_name || default_resource_name(env.module)
@@ -124,7 +143,8 @@ defmodule Exoforge.Resource do
           source: unquote(Macro.escape(source)),
           columns: unquote(Macro.escape(columns)),
           singleton: unquote(singleton),
-          kind: unquote(kind)
+          kind: unquote(kind),
+          allow_player_read: unquote(allow_player_read)
         }
       end
 

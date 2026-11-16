@@ -439,12 +439,13 @@ namespace Exoforge.Plugin.SDK
             AddResource(primary.Resources, new ResourceModel(
                 resName,
                 NamedString(attr, "Source") ?? resName,
-                NamedString(attr, "PrimaryKey") ?? "id",
+                ToSnakeCase(NamedString(attr, "PrimaryKey") ?? "id"),
                 NamedStringArray(attr, "DrawerTabs") ?? new[] { "overview" },
                 ActionNames(primary),
                 columns,
                 declared.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                isSingleton));
+                isSingleton,
+                NamedBool(attr, "AllowPlayerRead")));
         }
 
         foreach (var candidate in AllTypes(compilation.Assembly.GlobalNamespace))
@@ -883,18 +884,20 @@ namespace Exoforge.Plugin.SDK
         return new ResourceModel(
             resName,
             NamedString(resAttr, "Source") ?? resName,
-            primaryKey!,
+            ToSnakeCase(primaryKey!),
             NamedStringArray(resAttr, "DrawerTabs") ?? new[] { "overview", "attributes" },
             serviceActions,
             columns,
             resourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-            isSingleton);
+            isSingleton,
+            NamedBool(resAttr, "AllowPlayerRead"));
     }
 
     private static List<ColumnModel> ColumnsFor(INamedTypeSymbol type, AttributeData? resourceAttr, out string? primaryKey)
     {
         var columns = new List<ColumnModel>();
-        primaryKey = NamedString(resourceAttr, "PrimaryKey");
+        var rawPk = NamedString(resourceAttr, "PrimaryKey");
+        primaryKey = rawPk is not null ? ToSnakeCase(rawPk) : null;
 
         foreach (var member in type.GetMembers())
         {
@@ -936,7 +939,7 @@ namespace Exoforge.Plugin.SDK
             {
                 var targetResAttr = FindAttribute(refNamed.GetAttributes(), ResourceAttribute);
                 string targetTable = NamedString(targetResAttr, "Name") ?? PositionalString(targetResAttr, 0) ?? ToSnakeCase(refNamed.Name);
-                string targetPk = NamedString(targetResAttr, "PrimaryKey") ?? "id";
+                string targetPk = ToSnakeCase(NamedString(targetResAttr, "PrimaryKey") ?? "id");
                 references = $"{targetTable}.{targetPk}";
 
                 if (string.IsNullOrEmpty(role) && (targetTable.Contains("player") || targetTable.Contains("user") || colName.Contains("player_id") || colName.Contains("user_id")))

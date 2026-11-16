@@ -136,6 +136,10 @@ public class PluginSdkTests
         Assert.Equal("players", resAttr.Name);
         Assert.Equal(nameof(PlayerRecord.PlayerId), resAttr.PrimaryKey);
         Assert.Equal(new[] { "overview", "inventory" }, resAttr.DrawerTabs);
+        Assert.False(resAttr.AllowPlayerRead);
+
+        var publicResource = new ExoResourceAttribute("public_players") { AllowPlayerRead = true };
+        Assert.True(publicResource.AllowPlayerRead);
 
         var player = new PlayerRecord(101, "Hero", 5, "online");
         Assert.Equal(101, player.PlayerId);

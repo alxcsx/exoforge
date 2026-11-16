@@ -209,10 +209,11 @@ defmodule Exoforge.Std.Resources do
   end
 
   @impl true
-  defaction list(payload), scope: Exoforge.Auth.Roles.studio() do
+  defaction list(payload), scope: Exoforge.Auth.Roles.player() do
     name = resource_name(payload)
 
-    with {:ok, info} <- resource_info(name) do
+    with {:ok, info} <- resource_info(name),
+         :ok <- authorize_read(info, payload) do
       ensure_migrated(info)
 
       case normalize_source(info.resource) do
@@ -225,11 +226,12 @@ defmodule Exoforge.Std.Resources do
   end
 
   @impl true
-  defaction get(payload), scope: Exoforge.Auth.Roles.studio() do
+  defaction get(payload), scope: Exoforge.Auth.Roles.player() do
     name = resource_name(payload)
     id = param(payload, :id)
 
-    with {:ok, info} <- resource_info(name) do
+    with {:ok, info} <- resource_info(name),
+         :ok <- authorize_read(info, payload) do
       ensure_migrated(info)
       res = info.resource
       table = table_for(res)
@@ -693,6 +695,42 @@ defmodule Exoforge.Std.Resources do
       {:ok, info} -> {:ok, info}
       _ -> {:error, :resource_not_found}
     end
+  end
+
+  # Reads are player-callable at the dispatcher, but the row set is not public unless the resource
+  # opts in. Staff and internal callers can always read; a player can read only a resource marked
+  # `allow_player_read`. Writes stay studio-scoped.
+  defp authorize_read(info, payload) do
+    cond do
+      allow_player_read?(info.resource) -> :ok
+      internal_request?() -> :ok
+      staff_scopes?(caller_scopes(payload)) -> :ok
+      true -> {:error, :forbidden_scope}
+    end
+  end
+
+  defp allow_player_read?(res) do
+    (Map.get(res, :allow_player_read) || Map.get(res, "allow_player_read")) == true
+  end
+
+  defp internal_request? do
+    case Exoforge.RequestContext.current() do
+      %{internal: true} -> true
+      _ -> false
+    end
+  end
+
+  defp caller_scopes(payload) do
+    case param(payload, :_auth) do
+      auth when is_map(auth) -> Map.get(auth, :scopes) || Map.get(auth, "scopes") || []
+      _ -> []
+    end
+  end
+
+  defp staff_scopes?(:internal), do: true
+
+  defp staff_scopes?(scopes) do
+    Exoforge.Auth.Roles.satisfies?(scopes, Exoforge.Auth.Roles.studio())
   end
 
   defp optional?(payload), do: param(payload, :optional) in [true, "true"]

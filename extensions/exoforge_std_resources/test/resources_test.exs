@@ -57,6 +57,29 @@ defmodule Exoforge.Std.ResourcesTest do
     end
   end
 
+  defmodule PublicCatalogContract do
+    import Exoforge.Contracts.Service
+
+    defservice public_catalog do
+      resource :public_item do
+        source({:table, "public_items"})
+        primary_key(:id)
+        allow_player_read(true)
+
+        column(:id, :string, sortable: true)
+        column(:name, :string, filterable: true)
+      end
+
+      resource :private_item do
+        source({:table, "private_items"})
+        primary_key(:id)
+
+        column(:id, :string)
+        column(:secret, :string)
+      end
+    end
+  end
+
   defmodule ScoresContract do
     import Exoforge.Contracts.Service
 
@@ -74,7 +97,10 @@ defmodule Exoforge.Std.ResourcesTest do
 
   setup do
     Exoforge.ExtensionCase.start_kernel()
-    start_supervised!({DbManager, [driver: :sqlite]})
+
+    unless Process.whereis(DbManager) do
+      start_supervised!({DbManager, [driver: :sqlite]})
+    end
 
     Exoforge.ExtensionCase.register_database(Exoforge.Std.Database)
 
@@ -96,6 +122,11 @@ defmodule Exoforge.Std.ResourcesTest do
     Exoforge.ExtensionCase.register_extension(Resources,
       id: :config_plugin,
       provides: [ConfigContract.GameConfig]
+    )
+
+    Exoforge.ExtensionCase.register_extension(Resources,
+      id: :public_catalog_plugin,
+      provides: [PublicCatalogContract.PublicCatalog]
     )
 
     Resources.run_migrations()
@@ -331,14 +362,83 @@ defmodule Exoforge.Std.ResourcesTest do
   end
 
   test "resource_store actions reject callers below studio scope" do
-    assert {:error, :forbidden_scope} =
-             ActionDispatcher.dispatch(:resource_store, :list, %{resource: "widget"},
-               caller_scopes: ["guest"]
-             )
+    assert {:error, {:forbidden_scope, _}} =
+             ActionDispatcher.dispatch(:resource_store, :list, %{resource: "widget"}, caller_scopes: ["guest"])
 
     assert {:ok, _} =
-             ActionDispatcher.dispatch(:resource_store, :list, %{resource: "widget"},
+             ActionDispatcher.dispatch(
+               :resource_store,
+               :list,
+               %{resource: "widget", _auth: %{scopes: ["studio"]}},
                caller_scopes: ["studio"]
+             )
+  end
+
+  test "allow_player_read exposes only opted-in resources to player reads" do
+    dispatch(:clear, %{resource: "public_item"})
+    dispatch(:clear, %{resource: "private_item"})
+
+    assert {:ok, _} =
+             dispatch(:create, %{
+               resource: "public_item",
+               attributes: %{"id" => "pub_1", "name" => "Public"}
+             })
+
+    assert {:ok, _} =
+             dispatch(:create, %{
+               resource: "private_item",
+               attributes: %{"id" => "priv_1", "secret" => "hidden"}
+             })
+
+    # Player can read the opted-in resource.
+    assert {:ok, %{rows: rows}} =
+             ActionDispatcher.dispatch(
+               :resource_store,
+               :list,
+               %{resource: "public_item", _auth: %{scopes: ["player"]}},
+               caller_scopes: ["player"]
+             )
+
+    assert Enum.any?(rows, &(&1["id"] == "pub_1"))
+
+    assert {:ok, %{row: row}} =
+             ActionDispatcher.dispatch(
+               :resource_store,
+               :get,
+               %{resource: "public_item", id: "pub_1", _auth: %{scopes: ["player"]}},
+               caller_scopes: ["player"]
+             )
+
+    assert row["name"] == "Public"
+
+    # Player cannot read a resource that did not opt in.
+    assert {:error, :forbidden_scope} =
+             ActionDispatcher.dispatch(
+               :resource_store,
+               :list,
+               %{resource: "private_item", _auth: %{scopes: ["player"]}},
+               caller_scopes: ["player"]
+             )
+
+    # Staff can read it.
+    assert {:ok, _} =
+             ActionDispatcher.dispatch(
+               :resource_store,
+               :list,
+               %{resource: "private_item", _auth: %{scopes: ["studio"]}},
+               caller_scopes: ["studio"]
+             )
+
+    # Internal callers can read it.
+    assert {:ok, _} = dispatch(:list, %{resource: "private_item"})
+
+    # Writes stay studio-scoped even for a public resource.
+    assert {:error, {:forbidden_scope, %{required: "studio"}}} =
+             ActionDispatcher.dispatch(
+               :resource_store,
+               :create,
+               %{resource: "public_item", attributes: %{"id" => "pub_2"}, _auth: %{scopes: ["player"]}},
+               caller_scopes: ["player"]
              )
   end
 end

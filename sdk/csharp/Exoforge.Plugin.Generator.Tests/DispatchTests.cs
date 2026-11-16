@@ -27,7 +27,7 @@ public interface IContractPing
 /// declares services on itself and implements one declared contract, and it is <c>partial</c> so the
 /// generator can add the contracts it declares as interfaces it implements.
 /// </summary>
-[ExoService("dispatch_sample", Version = "2.0.0", Category = "Test", Title = "Dispatch Sample", Icon = "🧪", Resources = new[] { typeof(UserRecord), typeof(PostRecord) })]
+[ExoService("dispatch_sample", Version = "2.0.0", Category = "Test", Title = "Dispatch Sample", Icon = "🧪", Resources = new[] { typeof(UserRecord), typeof(PostRecord), typeof(PascalKeyRecord), typeof(PublicUserRecord) })]
 [ExoService("dispatch_admin", Category = "Test", Title = "Dispatch Admin", Icon = "🛠️")]
 [ExoExtension("dispatch_extension", Category = "Test", Title = "Dispatch Extension", Icon = "🧩")]
 public partial class DispatchSamplePlugin : IContractPing, ISharedContract
@@ -142,6 +142,12 @@ public record PostRecord(
     [property: ExoColumn(ReferencesType = typeof(UserRecord), Role = ExoRole.UserId)] string AuthorId,
     [property: ExoColumn(Label = "Title")] string Title
 );
+
+[ExoResource("cased_resources", PrimaryKey = "PascalKey")]
+public record PascalKeyRecord(string PascalKey, string Value);
+
+[ExoResource("public_users", PrimaryKey = "user_id", AllowPlayerRead = true)]
+public record PublicUserRecord(string UserId, string Name);
 
 /// <summary>
 /// The generator emits <c>Exoforge.Generated.ExoforgeDispatch</c> for this assembly, and the host
@@ -431,6 +437,21 @@ public class DispatchTests
     }
 
     [Fact]
+    public void Manifest_Emits_AllowPlayerRead_Only_For_Opted_In_Resources()
+    {
+        JsonNode manifest = Manifest();
+        var resources = Service(manifest, "dispatch_sample")["resources"]!.AsArray();
+
+        var publicResource = resources.FirstOrDefault(r => r?["name"]?.GetValue<string>() == "public_users");
+        Assert.NotNull(publicResource);
+        Assert.True(publicResource!["allow_player_read"]?.GetValue<bool>());
+
+        var privateResource = resources.FirstOrDefault(r => r?["name"]?.GetValue<string>() == "users");
+        Assert.NotNull(privateResource);
+        Assert.Null(privateResource!["allow_player_read"]);
+    }
+
+    [Fact]
     public void Manifest_Includes_Inferred_ForeignKey_And_References_From_ReferencesType()
     {
         JsonNode manifest = Manifest();
@@ -445,6 +466,17 @@ public class DispatchTests
         Assert.True(authorCol!["foreign_key"]?.GetValue<bool>());
         Assert.Equal("users.user_id", authorCol["references"]?.GetValue<string>());
         Assert.Equal("user_id", authorCol["role"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void Manifest_Normalizes_PrimaryKey_To_SnakeCase()
+    {
+        JsonNode manifest = Manifest();
+        var resources = Service(manifest, "dispatch_sample")["resources"]!.AsArray();
+        var cased = resources.FirstOrDefault(r => r?["name"]?.GetValue<string>() == "cased_resources");
+
+        Assert.NotNull(cased);
+        Assert.Equal("pascal_key", cased!["primary_key"]?.GetValue<string>());
     }
 
     [Fact]

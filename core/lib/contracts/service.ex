@@ -46,10 +46,12 @@ defmodule Exoforge.Contracts.Service do
     meta = parse_block(block)
 
     mode = Map.get(meta, :mode) || :sync
+
     scope =
       meta
       |> Map.get(:scope, :global)
       |> Exoforge.Auth.Roles.validate_action_scope!("action #{name}")
+
     transport = Map.get(meta, :transport) || :auto
     params = Map.get(meta, :params) || []
     returns = Map.get(meta, :returns)
@@ -180,7 +182,8 @@ defmodule Exoforge.Contracts.Service do
         actions: unquote(Macro.escape(parsed[:actions])),
         source: unquote(parsed[:source]),
         singleton: unquote(parsed[:singleton]),
-        kind: unquote(parsed[:kind])
+        kind: unquote(parsed[:kind]),
+        allow_player_read: unquote(parsed[:allow_player_read])
       }
     end
   end
@@ -199,9 +202,14 @@ defmodule Exoforge.Contracts.Service do
             name = Keyword.get(unquote(opts), :name, res.name)
             singleton = Keyword.get(unquote(opts), :singleton, res[:singleton] || false)
             kind = Keyword.get(unquote(opts), :kind, res[:kind] || if(singleton, do: :singleton, else: :standard))
+
+            allow_player_read =
+              Keyword.get(unquote(opts), :allow_player_read, Map.get(res, :allow_player_read, false))
+
             %{res | name: name, actions: actions}
             |> Map.put(:singleton, singleton)
             |> Map.put(:kind, kind)
+            |> Map.put(:allow_player_read, allow_player_read)
 
           true ->
             res_name =
@@ -221,7 +229,8 @@ defmodule Exoforge.Contracts.Service do
               drawer: Keyword.get(unquote(opts), :drawer, [:overview, :attributes]),
               actions: Keyword.get(unquote(opts), :actions, []),
               singleton: singleton,
-              kind: kind
+              kind: kind,
+              allow_player_read: Keyword.get(unquote(opts), :allow_player_read, false)
             }
         end
 
@@ -246,7 +255,8 @@ defmodule Exoforge.Contracts.Service do
       source: nil,
       doc: nil,
       singleton: false,
-      kind: :standard
+      kind: :standard,
+      allow_player_read: false
     }
   end
 
@@ -306,6 +316,12 @@ defmodule Exoforge.Contracts.Service do
 
         {:source, _, [src]} ->
           Map.put(acc, :source, src)
+
+        {:allow_player_read, _, [value]} ->
+          Map.put(acc, :allow_player_read, value == true)
+
+        {:allow_player_read, _, []} ->
+          Map.put(acc, :allow_player_read, true)
 
         {:singleton, _, [is_single]} ->
           acc

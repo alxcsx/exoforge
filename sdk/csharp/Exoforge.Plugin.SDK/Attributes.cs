@@ -203,6 +203,13 @@ public class ExoResourceAttribute : Attribute
     /// </summary>
     public bool Singleton { get; set; }
 
+    /// <summary>
+    /// Allows player-scoped callers to read this resource through <c>resource_store.list</c> and
+    /// <c>resource_store.get</c>. The whole resource becomes readable, not just the caller's rows;
+    /// enable it only for data that is public by design (leaderboards, catalogues, config).
+    /// </summary>
+    public bool AllowPlayerRead { get; set; }
+
     public ExoResourceAttribute()
     {
     }

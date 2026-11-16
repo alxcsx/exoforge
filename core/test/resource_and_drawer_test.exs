@@ -86,4 +86,20 @@ defmodule Exoforge.ResourceAndDrawerTest do
     assert players_res.name == :players
     assert players_res.primary_key == :player_id
   end
+
+  test "resource_store actions declare player reads and studio writes" do
+    metadata = Exoforge.Std.Services.ResourceStore.__service_metadata__()
+    assert length(metadata.actions) == 8
+
+    action_names = Enum.map(metadata.actions, & &1.name)
+    assert Enum.sort(action_names) == [:clear, :create, :delete, :get, :list, :migrate, :update, :upsert]
+
+    # Reads are player-callable and gated per-resource inside the action; writes remain studio.
+    for action <- metadata.actions do
+      expected = if action.name in [:get, :list], do: :player, else: :studio
+
+      assert action.scope == expected,
+             "Expected action #{action.name} to have scope #{inspect(expected)}, got #{inspect(action.scope)}"
+    end
+  end
 end
