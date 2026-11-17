@@ -11,6 +11,17 @@ public class FrameLoopPlugin
 
     public string? HostResult { get; private set; }
 
+    public int EventsHandled { get; private set; }
+
+    public string? EventHostResult { get; private set; }
+
+    /// <summary>An event handler that itself asks the host a question: the re-entrancy the loop must avoid.</summary>
+    public void OnEvent(string name, System.Text.Json.JsonElement payload)
+    {
+        EventsHandled++;
+        EventHostResult = HostBridge.DbGet("events", name);
+    }
+
     [ExoAction("count", Mode = ActionMode.Sync)]
     public int Count()
     {
@@ -20,6 +31,14 @@ public class FrameLoopPlugin
 
     [ExoAction("with_host_call", Mode = ActionMode.Sync)]
     public string WithHostCall()
+    {
+        Dispatched++;
+        HostResult = HostBridge.DbGet("t", "k");
+        return HostResult ?? "null";
+    }
+
+    [ExoAction("with_host_call_and_event", Mode = ActionMode.Sync)]
+    public string WithHostCallAndEvent()
     {
         Dispatched++;
         HostResult = HostBridge.DbGet("t", "k");
@@ -89,6 +108,30 @@ public class FrameLoopTests
 
         Assert.Equal(2, plugin.Dispatched);
         Assert.Equal("{\"v\":1}", plugin.HostResult);
+    }
+
+    [Fact]
+    public void An_event_arriving_during_a_host_call_is_handled_after_the_call_completes()
+    {
+        var plugin = new FrameLoopPlugin();
+
+        // The event is delivered while the action is blocked on its host call. Dispatching it inline
+        // re-entered OnEvent, whose own host call consumed (and dropped) the outer reply. It must
+        // instead run after the action returns, and its own host call must still be answered.
+        var input = new StringReader(string.Join("\n", new[]
+        {
+            "{\"type\":\"action\",\"id\":1,\"action\":\"with_host_call_and_event\",\"payload\":{}}",
+            "{\"type\":\"event\",\"event\":\"score_updated\",\"payload\":{\"value\":7}}",
+            "{\"type\":\"host_call_result\",\"id\":1,\"result\":{\"outer\":true}}",
+            "{\"type\":\"host_call_result\",\"id\":2,\"result\":{\"event\":true}}",
+            ""
+        }));
+
+        PluginHost.RunInstance(plugin, input);
+
+        Assert.Equal("{\"outer\":true}", plugin.HostResult);
+        Assert.Equal(1, plugin.EventsHandled);
+        Assert.Equal("{\"event\":true}", plugin.EventHostResult);
     }
 
     [Fact]

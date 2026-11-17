@@ -56,7 +56,14 @@ public static class PluginHost
     public const int ProtocolVersion = 1;
 
     private static readonly object WriteLock = new();
-    private static readonly Queue<string> BufferedActions = new();
+
+    // Frames that arrived while an action was blocked on a host call. One queue, because an event
+    // and an action that overtake each other must replay in the order the host wrote them.
+    private static readonly Queue<string> BufferedFrames = new();
+
+    // A host_call_result whose id is not the one being awaited. Keeping it (rather than dropping
+    // it) means a reply can never be lost, whatever the wait nesting.
+    private static readonly Dictionary<long, string?> BufferedHostCallResults = new();
     private static Stream? _stdout;
     private static TextReader? _stdin;
     private static long _nextHostCallId;
@@ -181,7 +188,8 @@ public static class PluginHost
         _stdin = reader;
         HostBridge.UseTransport(new NativeTransport());
 
-        BufferedActions.Clear();
+        BufferedFrames.Clear();
+        BufferedHostCallResults.Clear();
         _nextHostCallId = 0;
         _instance = instance;
         _dispatch = dispatch;
@@ -201,8 +209,9 @@ public static class PluginHost
 
         while (true)
         {
-            // A frame buffered while an action was blocked on a host call replays here (M33 Fix 6).
-            string? line = BufferedActions.Count > 0 ? BufferedActions.Dequeue() : reader.ReadLine();
+            // A frame buffered while an action was blocked on a host call replays here, before the
+            // next one is read: the action (and any event it raised) has finished by now.
+            string? line = BufferedFrames.Count > 0 ? BufferedFrames.Dequeue() : reader.ReadLine();
 
             if (line is null)
             {
@@ -760,6 +769,13 @@ public static class PluginHost
         }
 
         long id = ++_nextHostCallId;
+
+        if (BufferedHostCallResults.TryGetValue(id, out string? early))
+        {
+            BufferedHostCallResults.Remove(id);
+            return early;
+        }
+
         Write($"{{\"type\":\"host_call\",\"id\":{id},\"op\":{JsonEncode(op)},\"args\":{argsJson}}}");
 
         TextReader? reader = _stdin;
@@ -778,24 +794,30 @@ public static class PluginHost
                 {
                     switch (frameType.GetString())
                     {
-                        // Events may arrive while an action is blocked on a host call; handle them
-                        // here too so they are not dropped.
+                        // Events and actions may arrive while an action is blocked on a host call.
+                        // Queue them for the main loop instead of dispatching here: an OnEvent that
+                        // makes its own host call would otherwise re-enter this loop and drop the
+                        // outer reply.
                         case "event":
-                            DispatchEvent(line);
-                            continue;
-
-                        // Same for an action frame: buffered, not dropped; the main loop replays it
-                        // once the blocking call returns (M33 Fix 6).
                         case "action":
-                            BufferedActions.Enqueue(line);
+                            BufferedFrames.Enqueue(line);
                             continue;
 
                         case "host_call_result"
-                            when root.TryGetProperty("id", out var idProp) && idProp.GetInt64() == id:
-                            return root.TryGetProperty("result", out var resultProp) &&
-                                   resultProp.ValueKind != JsonValueKind.Null
+                            when root.TryGetProperty("id", out var idProp):
+                        {
+                            long resultId = idProp.GetInt64();
+                            string? raw = root.TryGetProperty("result", out var resultProp) &&
+                                          resultProp.ValueKind != JsonValueKind.Null
                                 ? resultProp.GetRawText()
                                 : null;
+
+                            if (resultId == id) return raw;
+
+                            // A reply this call is not waiting for: keep it rather than drop it.
+                            BufferedHostCallResults[resultId] = raw;
+                            continue;
+                        }
                     }
                 }
             }
