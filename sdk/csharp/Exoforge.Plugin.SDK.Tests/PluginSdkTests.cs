@@ -1,5 +1,7 @@
 using System;
 using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using Exoforge.Plugin.SDK;
 using Xunit;
@@ -65,6 +67,20 @@ public class InjectedServiceClient
     public InjectedServiceClient(IActionDispatcher dispatcher) => Dispatcher = dispatcher;
 
     public IActionDispatcher Dispatcher { get; }
+}
+
+/// <summary>A stored settings record: SQLite holds its booleans as 1/0, or as text in older rows.</summary>
+public record BooleanSettingsRow
+{
+    public string PlayerId { get; init; } = "";
+    public bool ColorBlind { get; init; }
+    public bool? Muted { get; init; }
+}
+
+[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
+[JsonSerializable(typeof(BooleanSettingsRow))]
+internal partial class BooleanSettingsRowContext : JsonSerializerContext
+{
 }
 
 public class PluginSdkTests
@@ -183,6 +199,104 @@ public class PluginSdkTests
         {
             HostBridge.UseTransport(null);
         }
+    }
+
+    [Fact]
+    public void Database_Query_DecodesSqliteBooleanSpellings()
+    {
+        var transport = new FakeTransport
+        {
+            Response = """
+            {"rows":[
+                {"player_id":"p1","color_blind":1,"muted":0},
+                {"player_id":"p2","color_blind":"true","muted":"false"},
+                {"player_id":"p3","color_blind":0,"muted":null}
+            ],"num_rows":3}
+            """
+        };
+
+        HostBridge.UseTransport(transport);
+        try
+        {
+            var rows = new HostDatabase("player_settings")
+                .Query<BooleanSettingsRow>("SELECT * FROM player_settings");
+
+            Assert.Equal(3, rows.Count);
+            Assert.True(rows[0].ColorBlind);
+            Assert.False(rows[0].Muted);
+            Assert.True(rows[1].ColorBlind);
+            Assert.False(rows[1].Muted);
+            Assert.False(rows[2].ColorBlind);
+            Assert.Null(rows[2].Muted);
+        }
+        finally
+        {
+            HostBridge.UseTransport(null);
+        }
+    }
+
+    [Fact]
+    public void Database_Query_DecodesBooleans_WithSourceGeneratedContext()
+    {
+        PluginJson.UseContext(new BooleanSettingsRowContext());
+
+        var transport = new FakeTransport
+        {
+            Response = "{\"rows\":[{\"player_id\":\"p1\",\"color_blind\":1,\"muted\":\"false\"}]}"
+        };
+
+        HostBridge.UseTransport(transport);
+        try
+        {
+            var rows = new HostDatabase("player_settings")
+                .Query<BooleanSettingsRow>("SELECT * FROM player_settings");
+
+            Assert.Single(rows);
+            Assert.True(rows[0].ColorBlind);
+            Assert.False(rows[0].Muted);
+        }
+        finally
+        {
+            HostBridge.UseTransport(null);
+            PluginJson.UseContext(null);
+        }
+    }
+
+    [Fact]
+    public void Database_GetAndAll_DecodeSqliteBooleanSpellings()
+    {
+        var transport = new FakeTransport
+        {
+            DbGetResponse = "{\"player_id\":\"p1\",\"color_blind\":1,\"muted\":\"true\"}",
+            DbAllResponse = "[{\"player_id\":\"p2\",\"color_blind\":\"false\",\"muted\":0}]"
+        };
+
+        HostBridge.UseTransport(transport);
+        try
+        {
+            var db = new HostDatabase("player_settings");
+
+            var one = db.Get<BooleanSettingsRow>("player_settings", "p1");
+            Assert.NotNull(one);
+            Assert.True(one!.ColorBlind);
+            Assert.True(one.Muted);
+
+            var all = db.All<BooleanSettingsRow>("player_settings");
+            Assert.Single(all);
+            Assert.False(all[0].ColorBlind);
+            Assert.False(all[0].Muted);
+        }
+        finally
+        {
+            HostBridge.UseTransport(null);
+        }
+    }
+
+    [Fact]
+    public void ActionPayloads_StillRequireJsonBooleans()
+    {
+        Assert.Throws<JsonException>(() =>
+            PluginJson.Deserialize<BooleanSettingsRow>("{\"player_id\":\"p1\",\"color_blind\":1}"));
     }
 
     [Fact]
@@ -330,8 +444,10 @@ public class PluginSdkTests
         }
 
         public void Log(int level, string message) { }
-        public string? DbGet(string table, string key) => null;
-        public string? DbAll(string table) => null;
+        public string? DbGetResponse { get; set; }
+        public string? DbAllResponse { get; set; }
+        public string? DbGet(string table, string key) => DbGetResponse;
+        public string? DbAll(string table) => DbAllResponse;
         public bool DbPut(string table, string key, string valueJson) => false;
         public bool DbDelete(string table, string key) => false;
         public long ClockNow() => 0;

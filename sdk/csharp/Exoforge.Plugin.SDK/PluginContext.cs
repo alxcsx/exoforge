@@ -99,7 +99,7 @@ public class HostDatabase : IDatabase
     {
         string? json = HostBridge.DbGet(table, key);
         CheckDbError(table, json);
-        return string.IsNullOrEmpty(json) ? default : PluginJson.Deserialize<T>(json);
+        return string.IsNullOrEmpty(json) ? default : PluginJson.DeserializeDatabaseRow<T>(json);
     }
 
     public IReadOnlyList<T> All<T>(string table)
@@ -115,7 +115,7 @@ public class HostDatabase : IDatabase
         {
             foreach (var row in doc.RootElement.EnumerateArray())
             {
-                if (PluginJson.Deserialize(row.GetRawText(), typeof(T)) is T value)
+                if (PluginJson.DeserializeDatabaseRow(row.GetRawText(), typeof(T)) is T value)
                 {
                     rows.Add(value);
                 }
@@ -151,7 +151,7 @@ public class HostDatabase : IDatabase
         var list = new List<T>();
         foreach (var row in rows.Value.EnumerateArray())
         {
-            if (PluginJson.Deserialize(row.GetRawText(), typeof(T)) is T value)
+            if (PluginJson.DeserializeDatabaseRow(row.GetRawText(), typeof(T)) is T value)
             {
                 list.Add(value);
             }

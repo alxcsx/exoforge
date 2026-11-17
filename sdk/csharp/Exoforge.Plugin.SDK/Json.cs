@@ -54,6 +54,13 @@ public static class PluginJson
     private static JsonSerializerOptions? _options;
     private static readonly List<JsonSerializerContext> Contexts = new();
 
+    /// <summary>
+    /// Options for database rows only. They add <see cref="DatabaseBooleanConverter"/> on top of the
+    /// normal typed options, so stored booleans decode while action payloads still require JSON
+    /// booleans.
+    /// </summary>
+    private static JsonSerializerOptions _rowOptions = BuildRowOptions();
+
     /// <summary>Registers the source-generated context(s) used for typed (de)serialization. Replaces any previous registration.</summary>
     public static void UseContext(JsonSerializerContext? context)
     {
@@ -79,6 +86,7 @@ public static class PluginJson
         if (Contexts.Count == 0)
         {
             _options = null;
+            _rowOptions = BuildRowOptions();
             return;
         }
 
@@ -96,6 +104,35 @@ public static class PluginJson
             PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
             PropertyNameCaseInsensitive = true,
         };
+        _rowOptions = BuildRowOptions();
+    }
+
+    /// <summary>
+    /// The typed options plus the lenient boolean converter. Reflection stays the fallback for a
+    /// record the registered context does not cover, as it is for <see cref="Deserialize(string, Type)"/>.
+    /// </summary>
+    private static JsonSerializerOptions BuildRowOptions()
+    {
+        JsonSerializerOptions options;
+
+        if (Contexts.Count == 0)
+        {
+            options = new JsonSerializerOptions(ReflectionOptions);
+        }
+        else
+        {
+            var resolvers = new List<IJsonTypeInfoResolver>(Contexts) { new DefaultJsonTypeInfoResolver() };
+
+            options = new JsonSerializerOptions
+            {
+                TypeInfoResolver = JsonTypeInfoResolver.Combine(resolvers.ToArray()),
+                PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+                PropertyNameCaseInsensitive = true,
+            };
+        }
+
+        options.Converters.Add(new DatabaseBooleanConverter());
+        return options;
     }
 
     /// <summary>Serializes a value to JSON, mapping lists and arrays to JSON arrays.</summary>
@@ -177,6 +214,16 @@ public static class PluginJson
 
     /// <summary>Deserializes JSON into <typeparamref name="T"/>.</summary>
     public static T? Deserialize<T>(string json) => (T?)Deserialize(json, typeof(T));
+
+    /// <summary>Deserializes one stored row into <paramref name="type"/>.</summary>
+    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "A row type the registered context does not cover falls back to reflection; a plugin is framework-dependent.")]
+    [UnconditionalSuppressMessage("AOT", "IL3050", Justification = "A row type the registered context does not cover falls back to reflection; a plugin is framework-dependent.")]
+    public static object? DeserializeDatabaseRow(string json, Type type) =>
+        JsonSerializer.Deserialize(json, type, _rowOptions);
+
+    /// <summary>Deserializes one stored row into <typeparamref name="T"/>.</summary>
+    public static T? DeserializeDatabaseRow<T>(string json) =>
+        (T?)DeserializeDatabaseRow(json, typeof(T));
 
     /// <summary>
     /// Why a non-finite number cannot be sent, and what to do instead.
@@ -267,4 +314,87 @@ public static class PluginJson
         $"Could not serialize '{type.FullName}'. Reflection is available, so the value is the problem " +
         "rather than the deployment: look for a reference cycle, a property whose getter throws, or a " +
         "type with no readable properties.";
+}
+
+/// <summary>
+/// Reads a stored boolean from what SQLite actually holds: 1/0, or the text "true"/"false" written
+/// before booleans were bound as integers. Registered on the database-row options only; an action
+/// argument or event payload still has to be a JSON boolean.
+/// </summary>
+internal sealed class DatabaseBooleanConverter : JsonConverterFactory
+{
+    public override bool CanConvert(Type typeToConvert) =>
+        typeToConvert == typeof(bool) || typeToConvert == typeof(bool?);
+
+    public override JsonConverter? CreateConverter(Type typeToConvert, JsonSerializerOptions options) =>
+        typeToConvert == typeof(bool?)
+            ? new NullableBooleanConverter()
+            : new BooleanConverter();
+
+    private sealed class BooleanConverter : JsonConverter<bool>
+    {
+        public override bool Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
+            ReadBoolean(ref reader);
+
+        public override void Write(Utf8JsonWriter writer, bool value, JsonSerializerOptions options) =>
+            writer.WriteBooleanValue(value);
+    }
+
+    private sealed class NullableBooleanConverter : JsonConverter<bool?>
+    {
+        public override bool HandleNull => true;
+
+        public override bool? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
+            reader.TokenType == JsonTokenType.Null ? null : ReadBoolean(ref reader);
+
+        public override void Write(Utf8JsonWriter writer, bool? value, JsonSerializerOptions options)
+        {
+            if (value is bool boolean) writer.WriteBooleanValue(boolean);
+            else writer.WriteNullValue();
+        }
+    }
+
+    private static bool ReadBoolean(ref Utf8JsonReader reader)
+    {
+        switch (reader.TokenType)
+        {
+            case JsonTokenType.True:
+                return true;
+
+            case JsonTokenType.False:
+                return false;
+
+            case JsonTokenType.Number:
+                if (reader.TryGetInt64(out long integer) && (integer == 0 || integer == 1))
+                {
+                    return integer == 1;
+                }
+
+                if (reader.TryGetDouble(out double real) && (real == 0 || real == 1))
+                {
+                    return real == 1;
+                }
+
+                break;
+
+            case JsonTokenType.String:
+                switch (reader.GetString()?.Trim().ToLowerInvariant())
+                {
+                    case "true":
+                    case "t":
+                    case "1":
+                        return true;
+
+                    case "false":
+                    case "f":
+                    case "0":
+                        return false;
+                }
+
+                break;
+        }
+
+        throw new JsonException(
+            $"Cannot convert the JSON token {reader.TokenType} to a boolean; expected true/false, 1/0, or \"true\"/\"false\".");
+    }
 }
