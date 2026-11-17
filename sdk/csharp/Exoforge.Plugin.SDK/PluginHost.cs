@@ -99,10 +99,6 @@ public static class PluginHost
     // them while the callers are still running.
     private static readonly ConcurrentDictionary<long, TaskCompletionSource<string?>> PendingHostCalls = new();
 
-    // A reply the reader saw before the call that owns it had registered. It can overtake the call
-    // (the reader runs ahead of the action loop), so keeping it is what makes a reply impossible
-    // to lose.
-    private static readonly ConcurrentDictionary<long, string?> EarlyHostCallResults = new();
 
     private static Stream? _stdout;
     private static long _nextHostCallId;
@@ -270,7 +266,7 @@ public static class PluginHost
         try
         {
             // A dedicated thread, not a pool one: this read blocks for the life of the process.
-            var readerThread = new Thread(() => ReadLoop(reader, frames.Writer))
+            var readerThread = new Thread(() => ReadLoop(reader, frames))
             {
                 IsBackground = true,
                 Name = "exoforge-host-reader"
@@ -323,12 +319,15 @@ public static class PluginHost
                     continue;
                 }
 
-                if (TryAnswerHostCall(line) || frames.TryWrite(line))
+                if (TryAnswerHostCall(line))
                 {
                     continue;
                 }
+                if (!frames.TryAdd(line))
+                {
+                    break; // the loop is gone; nobody left to read frames
+                }
 
-                break; // the loop is gone; nobody left to read frames
             }
         }
         finally
@@ -337,7 +336,7 @@ public static class PluginHost
             // what stops it from waiting out its timeout.
             _hostClosed = true;
             FailPendingHostCalls();
-            frames.TryComplete();
+            frames.CompleteAdding();
         }
     }
 
@@ -981,28 +980,13 @@ public static class PluginHost
 
         try
         {
-            if (EarlyHostCallResults.TryRemove(id, out string? early))
-            {
-                // The reader already saw the reply: it ran ahead of this call being registered.
-                reply.TrySetResult(early);
-            }
-            else if (_hostClosed)
+            if (_hostClosed)
             {
                 throw HostClosed(op);
             }
             else
             {
                 Write($"{{\"type\":\"host_call\",\"id\":{id},\"op\":{JsonEncode(op)},\"args\":{argsJson}}}");
-
-                if (EarlyHostCallResults.TryRemove(id, out string? late))
-                {
-                    reply.TrySetResult(late);
-                }
-                else if (_hostClosed)
-                {
-                    // The host closed stdin after this request was written, so no reply is coming.
-                    throw HostClosed(op);
-                }
             }
 
             TimeSpan timeoutAfter = HostCallTimeout;
