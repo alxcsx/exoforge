@@ -7,6 +7,12 @@ using UnityEngine;
 
 namespace SnakeGame
 {
+    /// <summary>
+    /// A run's score as the game keeps it. Declared in the game assembly on purpose: a record in a
+    /// game asmdef needs the SDK's public <c>IsExternalInit</c>, and compiling this is what proves it.
+    /// </summary>
+    public record SnakeRunScore(string PlayerId, int Score);
+
     [DefaultExecutionOrder(-750)]
     public class SnakeLeaderboard : MonoBehaviour
     {
