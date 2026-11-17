@@ -85,11 +85,16 @@ public static class HostBridge
     }
 
     /// <summary>
-    /// Calls another service's action through the Exoforge ActionDispatcher.
+    /// Calls another service's action through the Exoforge ActionDispatcher. Returns whether the
+    /// call was made; a failed call throws instead of looking like a success.
     /// </summary>
     public static bool CallAction(string service, string action, object payload)
     {
-        return _transport?.CallAction(service ?? "", action ?? "", ToJson(payload)) != null;
+        string? raw = _transport?.CallAction(service ?? "", action ?? "", ToJson(payload));
+        if (raw == null) return false;
+
+        ThrowIfActionError(raw, service ?? "", action ?? "");
+        return true;
     }
 
     /// <summary>
@@ -102,42 +107,85 @@ public static class HostBridge
     }
 
     /// <summary>
-    /// Calls another service's action and deserializes the JSON response.
+    /// Calls another service's action and deserializes the JSON response. A failed call throws
+    /// <see cref="ExoActionException"/> carrying the code the callee threw, so a caller branches on
+    /// the failure instead of treating a default value as an answer.
     /// </summary>
     public static TResponse? CallAction<TResponse>(string service, string action, object payload)
     {
         string? raw = CallActionRaw(service, action, payload);
         if (raw == null) return default;
-
-        try
-        {
-            using var doc = JsonDocument.Parse(raw);
-            if (doc.RootElement.ValueKind == JsonValueKind.Object &&
-                doc.RootElement.TryGetProperty("error", out var errProp) &&
-                errProp.ValueKind == JsonValueKind.String)
-            {
-                string err = errProp.GetString() ?? "";
-                if (err is ":service_not_found" or "service_not_found")
-                {
-                    throw new InvalidOperationException(
-                        $"Service '{service}' (called via '{service}.{action}') was not found on the server. Ensure the extension providing '{service}' is deployed and running.");
-                }
-                if (err == "service_not_declared")
-                {
-                    throw new InvalidOperationException(
-                        $"Service '{service}' is not declared in this extension's dependencies. Add '{service}' to your extension dependencies and regenerate stubs.");
-                }
-            }
-        }
-        catch (JsonException)
-        {
-            // Ignore non-JSON
-        }
+        ThrowIfActionError(raw, service ?? "", action ?? "");
 
         if (typeof(TResponse) == typeof(string)) return (TResponse)(object)raw;
         if (typeof(TResponse) == typeof(JsonElement)) return (TResponse)(object)JsonDocument.Parse(raw).RootElement.Clone();
 
         return PluginJson.Deserialize<TResponse>(raw);
+    }
+
+    /// <summary>
+    /// Turns an error reply into an exception: the callee's <c>{code, message}</c> becomes an
+    /// <see cref="ExoActionException"/> with that code. A host that predates structured errors sends
+    /// a bare string, which is the code.
+    /// </summary>
+    private static void ThrowIfActionError(string raw, string service, string action)
+    {
+        JsonElement error;
+        string? code;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(raw);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object ||
+                !doc.RootElement.TryGetProperty("error", out error))
+            {
+                return;
+            }
+
+            if (error.ValueKind == JsonValueKind.Object)
+            {
+                string structuredCode =
+                    error.TryGetProperty("code", out var codeProp) && codeProp.ValueKind == JsonValueKind.String
+                        ? codeProp.GetString() ?? "action_failed"
+                        : "action_failed";
+
+                string message =
+                    error.TryGetProperty("message", out var messageProp) && messageProp.ValueKind == JsonValueKind.String
+                        ? messageProp.GetString() ?? ""
+                        : "";
+
+                throw new ExoActionException(structuredCode, message);
+            }
+
+            if (error.ValueKind != JsonValueKind.String) return;
+
+            code = error.GetString();
+        }
+        catch (JsonException)
+        {
+            return;
+        }
+
+        string failureCode = string.IsNullOrEmpty(code) ? "action_failed" : code;
+
+        // Keep the actionable wording for the two failures a caller can fix in its own project.
+        if (failureCode == "service_not_found")
+        {
+            throw new ExoActionException(
+                failureCode,
+                $"Service '{service}' (called via '{service}.{action}') was not found on the server. " +
+                $"Ensure the extension providing '{service}' is deployed and running.");
+        }
+
+        if (failureCode == "service_not_declared")
+        {
+            throw new ExoActionException(
+                failureCode,
+                $"Service '{service}' is not declared in this extension's dependencies. " +
+                $"Add '{service}' to your extension dependencies and regenerate stubs.");
+        }
+
+        throw new ExoActionException(failureCode, $"Call to '{service}.{action}' failed: {failureCode}");
     }
 
     /// <summary>

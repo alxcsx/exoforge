@@ -671,10 +671,21 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
     cond do
       not Manifest.allows_service?(manifest, service) ->
         Logger.warning("[NativeExtensionRunner] #{manifest.id} called undeclared service #{service}")
-        %{error: "service_not_declared"}
+
+        %{
+          error: %{
+            code: "service_not_declared",
+            message: "Service '#{service}' is not declared in this extension's dependencies."
+          }
+        }
 
       self_call?(manifest, service) ->
-        %{error: "cannot_call_own_service"}
+        %{
+          error: %{
+            code: "cannot_call_own_service",
+            message: "An extension cannot call its own service '#{service}'."
+          }
+        }
 
       true ->
         case ActionDispatcher.dispatch_internal(
@@ -684,7 +695,7 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
              ) do
           {:ok, result} -> result
           :ok -> true
-          {:error, reason} -> %{error: inspect(reason)}
+          {:error, reason} -> %{error: describe_action_error(reason)}
         end
     end
   end
@@ -766,6 +777,21 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
   defp normalize_error(%{"code" => code, "message" => msg}), do: {String.to_atom(code), msg}
   defp normalize_error(error) when is_binary(error), do: error
   defp normalize_error(error), do: inspect(error)
+
+  # A failed extension-to-extension call keeps a code and a message: the SDK throws an
+  # ExoActionException with the code the callee threw, so a caller can branch on it.
+  defp describe_action_error({code, message}) when is_atom(code) or is_binary(code) do
+    %{code: to_string(code), message: error_message(message)}
+  end
+
+  defp describe_action_error(code) when is_atom(code) or is_binary(code) do
+    %{code: to_string(code), message: to_string(code)}
+  end
+
+  defp describe_action_error(other), do: %{code: "action_failed", message: inspect(other)}
+
+  defp error_message(message) when is_binary(message), do: message
+  defp error_message(message), do: inspect(message)
 
   defp split_lines(buffer) do
     parts = String.split(buffer, "\n")

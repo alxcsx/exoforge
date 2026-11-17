@@ -41,6 +41,12 @@ public class CounterEntity
     public string Status { get; set; } = "active";
 }
 
+/// <summary>What a wallet call answers; a failed debit must not come back as an empty one.</summary>
+public class WalletBalance
+{
+    public long Coins { get; set; }
+}
+
 [ExoResource("players", PrimaryKey = nameof(PlayerId), DrawerTabs = new[] { "overview", "inventory" })]
 public record PlayerRecord(
     [property: ExoColumn(PrimaryKey = true)]
@@ -253,6 +259,56 @@ public class PluginSdkTests
         Assert.True(created);
         Assert.NotNull(client);
         Assert.Same(context.Actions, ((InjectedServiceClient)client!).Dispatcher);
+    }
+
+    /// <summary>
+    /// A failed extension-to-extension call must not look like an empty answer: it throws with the
+    /// code the callee threw, so a caller can distinguish "no funds" from "no balance".
+    /// </summary>
+    [Fact]
+    public void A_failed_extension_call_throws_the_callee_code_and_message()
+    {
+        var transport = new FakeTransport
+        {
+            Response = "{\"error\":{\"code\":\"insufficient_funds\",\"message\":\"You need 10 coins\"}}"
+        };
+
+        HostBridge.UseTransport(transport);
+
+        try
+        {
+            var typed = Assert.Throws<ExoActionException>(() =>
+                HostBridge.CallAction<object>("wallet", "debit", new { amount = 10 }));
+            Assert.Equal("insufficient_funds", typed.Code);
+            Assert.Equal("You need 10 coins", typed.Message);
+
+            var plain = Assert.Throws<ExoActionException>(() =>
+                HostBridge.CallAction("wallet", "debit", new { amount = 10 }));
+            Assert.Equal("insufficient_funds", plain.Code);
+        }
+        finally
+        {
+            HostBridge.UseTransport(null);
+        }
+    }
+
+    [Fact]
+    public void A_successful_extension_call_still_returns_its_result()
+    {
+        var transport = new FakeTransport { Response = "{\"coins\":90}" };
+        HostBridge.UseTransport(transport);
+
+        try
+        {
+            var balance = HostBridge.CallAction<WalletBalance>("wallet", "get_balance", new { });
+
+            Assert.NotNull(balance);
+            Assert.Equal(90, balance!.Coins);
+        }
+        finally
+        {
+            HostBridge.UseTransport(null);
+        }
     }
 
     /// <summary>Captures the action call and returns a canned reply, so the SQL runner is testable off-host.</summary>

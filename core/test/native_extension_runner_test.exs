@@ -5,6 +5,15 @@ defmodule Exoforge.NativeExtensionRunnerTest do
   alias Exoforge.Drivers.Runtime.NativeExtensionRunner
   alias Exoforge.ExtensionLogs
 
+  # A service the stub plugin calls; it fails the way a real extension does, with a code the caller
+  # can act on, so the host-side shape of a failed call is observable end to end.
+  defmodule WalletPlug do
+    use Exoforge.Extension, provides: [:wallet]
+
+    @impl true
+    defaction debit(_payload), do: {:error, {:insufficient_funds, "You need 10 coins"}}
+  end
+
   # A stub "plugin": any executable that speaks the JSON line protocol works, which is the
   # point of the runtime — no C# toolchain needed to exercise the host side.
   @stub """
@@ -44,6 +53,10 @@ defmodule Exoforge.NativeExtensionRunnerTest do
         printf '{"type":"action_result","id":%s,"status":"ok","data":%s}\\n' "$id" "$reply" ;;
       *'"action":"call_self"'*)
         printf '{"type":"host_call","id":1,"op":"call_action","args":{"service":"stub_plugin","action":"ping","payload":{}}}\\n'
+        IFS= read -r reply
+        printf '{"type":"action_result","id":%s,"status":"ok","data":%s}\\n' "$id" "$reply" ;;
+      *'"action":"call_failing"'*)
+        printf '{"type":"host_call","id":1,"op":"call_action","args":{"service":"wallet","action":"debit","payload":{}}}\\n'
         IFS= read -r reply
         printf '{"type":"action_result","id":%s,"status":"ok","data":%s}\\n' "$id" "$reply" ;;
     esac
@@ -192,7 +205,33 @@ defmodule Exoforge.NativeExtensionRunnerTest do
     assert {:ok, %{"result" => %{"error" => error}}} =
              GenServer.call(pid, {:execute_action, "call_declared", %{}}, 5_000)
 
-    refute error == "service_not_declared", "a declared service was refused"
+    refute error["code"] == "service_not_declared", "a declared service was refused"
+
+    GenServer.stop(pid)
+  end
+
+  test "a failed extension-to-extension call keeps the callee's code and message", %{
+    manifest: manifest,
+    binary: binary
+  } do
+    Exoforge.ExtensionRegistry.register(%Manifest{
+      id: :wallet_plug,
+      name: "wallet_plug",
+      version: "1.0.0",
+      entry_point: WalletPlug,
+      provides: [:wallet]
+    })
+
+    pid = start_runner(%{manifest | dependencies: [:database, :wallet]}, binary)
+
+    # The SDK throws an ExoActionException with this code; a caller must not mistake a failed debit
+    # for an empty balance.
+    assert {:ok,
+            %{
+              "result" => %{
+                "error" => %{"code" => "insufficient_funds", "message" => "You need 10 coins"}
+              }
+            }} = GenServer.call(pid, {:execute_action, "call_failing", %{}}, 5_000)
 
     GenServer.stop(pid)
   end
@@ -202,7 +241,7 @@ defmodule Exoforge.NativeExtensionRunnerTest do
 
     # The capability check is not optional: the native runner used to dispatch anything, so a native
     # plugin could reach every service in the cluster while claiming none of them.
-    assert {:ok, %{"result" => %{"error" => "service_not_declared"}}} =
+    assert {:ok, %{"result" => %{"error" => %{"code" => "service_not_declared"}}}} =
              GenServer.call(pid, {:execute_action, "call_undeclared", %{}}, 5_000)
 
     GenServer.stop(pid)
@@ -213,7 +252,7 @@ defmodule Exoforge.NativeExtensionRunnerTest do
 
     # Dispatching to itself would GenServer.call the runner that is busy answering the host call,
     # so without the guard this blocks the runner for the full action timeout.
-    assert {:ok, %{"result" => %{"error" => "cannot_call_own_service"}}} =
+    assert {:ok, %{"result" => %{"error" => %{"code" => "cannot_call_own_service"}}}} =
              GenServer.call(pid, {:execute_action, "call_self", %{}}, 5_000)
 
     GenServer.stop(pid)
@@ -237,14 +276,14 @@ defmodule Exoforge.NativeExtensionRunnerTest do
 
     pid = start_runner(shaped, binary)
 
-    assert {:ok, %{"result" => %{"error" => "cannot_call_own_service"}}} =
+    assert {:ok, %{"result" => %{"error" => %{"code" => "cannot_call_own_service"}}}} =
              GenServer.call(pid, {:execute_action, "call_self", %{}}, 5_000)
 
     # And a declared dependency is still allowed through to the dispatcher.
     assert {:ok, %{"result" => %{"error" => error}}} =
              GenServer.call(pid, {:execute_action, "call_declared", %{}}, 5_000)
 
-    refute error == "service_not_declared", "a declared dependency was refused"
+    refute error["code"] == "service_not_declared", "a declared dependency was refused"
 
     GenServer.stop(pid)
   end
