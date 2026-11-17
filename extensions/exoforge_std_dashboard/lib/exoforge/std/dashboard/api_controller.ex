@@ -362,8 +362,40 @@ defmodule Exoforge.Std.Dashboard.ApiController do
     bucket = params["bucket"]
     payload = if bucket, do: %{"bucket" => bucket, "id" => id}, else: %{"id" => id}
 
-    case ActionDispatcher.dispatch_internal(:file_bucket, :get_file_info, payload) do
-      {:ok, %{file: file}} ->
+    with {:ok, %{file: file}} <- ActionDispatcher.dispatch_internal(:file_bucket, :get_file_info, payload),
+         :ok <- authorize_file(conn, file) do
+      send_stored_file(conn, file, params)
+    else
+      {:error, :forbidden_file} ->
+        conn
+        |> put_status(403)
+        |> json(%{status: "error", error: "forbidden", message: "Files are served to staff, from public buckets, or through a signed URL an extension issues."})
+
+      _ ->
+        conn
+        |> put_status(404)
+        |> json(%{status: "error", error: "not_found"})
+    end
+  end
+
+  # Same rule as the HTTP file route: players never read a bucket directly.
+  defp authorize_file(conn, file) do
+    query = Plug.Conn.fetch_query_params(conn).query_params
+    grant = %{"bucket" => file["bucket"], "id" => file["id"], "exp" => query["exp"], "sig" => query["sig"]}
+
+    case ActionDispatcher.dispatch_internal(:file_bucket, :authorize_download, grant) do
+      {:ok, %{allowed: true}} ->
+        :ok
+
+      _ ->
+        case verify_studio_auth(conn) do
+          {:ok, _} -> :ok
+          _ -> {:error, :forbidden_file}
+        end
+    end
+  end
+
+  defp send_stored_file(conn, file, params) do
         raw_path = file["disk_path"] || file[:disk_path]
         disk_path = if raw_path, do: Path.expand(raw_path), else: nil
         content_type = file["content_type"] || file[:content_type] || "application/octet-stream"
@@ -385,12 +417,6 @@ defmodule Exoforge.Std.Dashboard.ApiController do
           |> put_status(404)
           |> json(%{status: "error", error: "file_missing_on_disk"})
         end
-
-      _ ->
-        conn
-        |> put_status(404)
-        |> json(%{status: "error", error: "not_found"})
-    end
   end
 
   def download_manual_pdf(conn, _params) do

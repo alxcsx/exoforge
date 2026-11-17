@@ -23,7 +23,11 @@ defmodule Exoforge.Std.Dashboard.Router do
     plug(:accepts, ["json"])
   end
 
+  # Files check access per request (public bucket, signed URL, or a staff session), so the
+  # session has to be readable here.
   pipeline :public_files do
+    plug(:ensure_session)
+    plug(:fetch_session)
   end
 
   pipeline :api do

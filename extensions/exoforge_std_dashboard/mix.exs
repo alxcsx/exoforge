@@ -25,6 +25,7 @@ defmodule Exoforge.Std.Dashboard.MixProject do
       {:exoforge_std_dashboard_views, path: "../exoforge_std_dashboard_views", only: [:dev, :test]},
       {:exoforge_std_auth, path: "../exoforge_std_auth", only: [:dev, :test]},
       {:exoforge_std_player_data, path: "../exoforge_std_player_data", only: [:dev, :test]},
+      {:exoforge_std_file_bucket, path: "../exoforge_std_file_bucket", only: :test},
       {:exoforge_std_extension_manager, path: "../exoforge_std_extension_manager", only: [:dev, :test]},
       {:exoforge_std_docs, path: "../exoforge_std_docs"},
       {:exoforge_std_observability, path: "../exoforge_std_observability", only: [:dev, :test]},
