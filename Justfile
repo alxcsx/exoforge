@@ -360,6 +360,8 @@ build-unity-sdk root=".":
 
 	# Pack the Plugin SDK (which bundles Exoforge.Plugin.Generator as an analyzer)
 	# into both dist/nuget (standalone bundle) and Editor/Plugins/NuGet~ (embedded in Unity SDK).
+	# The package is versioned now, so an older .nupkg left here would ship beside the new one.
+	rm -rf "$root/dist/nuget" "$root/sdk/unity/Exoforge.SDK/Editor/Plugins/NuGet~"
 	dotnet pack "$out/Exoforge.Plugin.SDK" -c Release -o "$root/dist/nuget" --nologo -v q
 	rm -rf "$root/sdk/unity/Exoforge.SDK/Editor/Plugins/Tools~"
 	mkdir -p "$root/sdk/unity/Exoforge.SDK/Editor/Plugins/NuGet~"
