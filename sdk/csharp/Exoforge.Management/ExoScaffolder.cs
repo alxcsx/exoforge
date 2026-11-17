@@ -259,7 +259,7 @@ public static class ExoScaffolder
     /// element is edited in place rather than the project rewritten, so comments and settings a
     /// developer added survive.
     /// </summary>
-    private static bool EnsurePackageReference(string extensionDir, string version)
+    public static bool EnsurePackageReference(string extensionDir, string version)
     {
         string srcDir = Path.Combine(extensionDir, "src");
         string projectDir = Directory.Exists(srcDir) ? srcDir : extensionDir;
@@ -271,7 +271,7 @@ public static class ExoScaffolder
             string updated = System.Text.RegularExpressions.Regex.Replace(
                 text,
                 "(<PackageReference\\s+Include=\"Exoforge\\.Plugin\\.SDK\"\\s+Version=\")([^\"]*)(\")",
-                "$1" + version + "$3");
+                "${1}" + version + "${3}");
 
             if (updated == text) continue;
             File.WriteAllText(csproj, updated);
