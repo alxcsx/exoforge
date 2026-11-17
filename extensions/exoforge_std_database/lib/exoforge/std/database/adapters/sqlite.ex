@@ -11,9 +11,9 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
   """
   @behaviour Exoforge.Std.Database.Adapter
 
-  # Declared column types, per table. Filled on the first read of a table through this module's
-  # connection process (one per plugin database) and dropped by any schema change.
-  @column_types_cache {__MODULE__, :column_types}
+  # A table's declared boolean columns, learned from its own schema. Filled on first use through
+  # this module's connection process (one per plugin database) and dropped by any schema change.
+  @boolean_columns_cache {__MODULE__, :boolean_columns}
 
   @impl true
   def ensure_database(plugin_id, config) do
@@ -78,20 +78,16 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
 
   defp run_sql(conn, sql, args) do
     read? = String.match?(sql, ~r/^\s*SELECT/i)
-    # SQLite has no boolean type: `true` bound by exqlite is the text "true" (it serializes any atom
-    # that way), while `DEFAULT false` is the integer 0. The table's own declared column type is
-    # what says which values the caller means, so a single-table read decodes its rows by it.
-    types = if read?, do: column_types_for(conn, sql), else: %{}
 
-    # A statement that changes the schema outdates what was learned about its columns.
+    # A statement that changes the schema outdates what was learned about a table's columns.
     if not read? and String.match?(sql, ~r/^\s*(?:CREATE|ALTER|DROP)\b/i) do
-      Process.delete(@column_types_cache)
+      Process.delete(@boolean_columns_cache)
     end
 
     case Exqlite.Sqlite3.prepare(conn, sql) do
       {:ok, stmt} ->
         try do
-          do_run(conn, stmt, args, read?, types)
+          do_run(conn, stmt, args, read?)
         rescue
           e in ArgumentError -> {:error, {:bind_error, Exception.message(e)}}
         after
@@ -103,115 +99,16 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
     end
   end
 
-  defp do_run(conn, stmt, args, read?, types) do
+  defp do_run(conn, stmt, args, read?) do
     with :ok <- Exqlite.Sqlite3.bind(stmt, normalize_args(args)),
          {:ok, columns} <- Exqlite.Sqlite3.columns(conn, stmt),
          {:ok, raw_rows} <- Exqlite.Sqlite3.fetch_all(conn, stmt) do
-      rows =
-        Enum.map(raw_rows, fn row ->
-          columns |> Enum.zip(row) |> Map.new() |> coerce_row(types)
-        end)
-
+      rows = Enum.map(raw_rows, fn row -> columns |> Enum.zip(row) |> Map.new() end)
       {:ok, %{rows: rows, num_rows: max(length(rows), changes(conn))}}
     else
       {:error, reason} -> table_error(reason, read?)
     end
   end
-
-  ## ---- DECLARED COLUMN TYPES ----
-
-  defp column_types_for(conn, sql) do
-    case sql_table(sql) do
-      nil -> %{}
-      table -> table_column_types(conn, table)
-    end
-  end
-
-  # Only a plain single-table read has one set of declarations for every result column. A join or
-  # a subquery can mix tables whose columns share a name, so those are left alone.
-  defp sql_table(sql) do
-    cond do
-      String.match?(sql, ~r/\bJOIN\b/i) ->
-        nil
-
-      length(Regex.scan(~r/\bFROM\b/i, sql)) != 1 ->
-        nil
-
-      true ->
-        case Regex.run(
-               ~r/\bFROM\s+"?([A-Za-z0-9_]+)"?(?:\s+(?:AS\s+)?[A-Za-z_][A-Za-z0-9_]*)?\s*(?:\bWHERE\b|\bORDER\b|\bGROUP\b|\bLIMIT\b|$)/i,
-               sql
-             ) do
-          [_, table | _] -> table
-          _ -> nil
-        end
-    end
-  end
-
-  defp table_column_types(conn, table) do
-    cache = Process.get(@column_types_cache, %{})
-
-    case Map.fetch(cache, table) do
-      {:ok, types} ->
-        types
-
-      :error ->
-        types = load_column_types(conn, table)
-        Process.put(@column_types_cache, Map.put(cache, table, types))
-        types
-    end
-  end
-
-  # SQLite keeps the declared type verbatim, so its own schema answers what a column means - for a
-  # resource table and for one an extension created with raw SQL alike.
-  defp load_column_types(conn, table) do
-    safe_table = String.replace(table, "\"", "")
-
-    case run_sql(conn, "PRAGMA table_info(\"#{safe_table}\")", []) do
-      {:ok, %{rows: rows}} ->
-        for row <- rows, boolean_type(row["type"]) do
-          {to_string(row["name"]), :boolean}
-        end
-        |> Map.new()
-
-      _ ->
-        %{}
-    end
-  end
-
-  defp boolean_type(type) when is_binary(type),
-    do: String.contains?(String.downcase(type), "bool")
-
-  defp boolean_type(_type), do: false
-
-  defp coerce_row(row, types) when types == %{}, do: row
-
-  defp coerce_row(row, types) do
-    Map.new(row, fn {column, value} -> {column, coerce_value(Map.get(types, column), value)} end)
-  end
-
-  defp coerce_value(:boolean, value), do: to_boolean(value)
-  defp coerce_value(_type, value), do: value
-
-  defp to_boolean(nil), do: nil
-  defp to_boolean(true), do: true
-  defp to_boolean(false), do: false
-  defp to_boolean(1), do: true
-  defp to_boolean(0), do: false
-
-  defp to_boolean(value) when is_binary(value) do
-    case String.downcase(String.trim(value)) do
-      "true" -> true
-      "t" -> true
-      "1" -> true
-      "false" -> false
-      "f" -> false
-      "0" -> false
-      _ -> value
-    end
-  end
-
-  defp to_boolean(value), do: value
 
   defp changes(conn) do
     case Exqlite.Sqlite3.changes(conn) do
@@ -232,8 +129,14 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
   defp positional_args(other), do: {:ok, [other]}
 
   defp normalize_args(nil), do: []
-  defp normalize_args(args) when is_list(args), do: args
-  defp normalize_args(other), do: [other]
+  defp normalize_args(args) when is_list(args), do: Enum.map(args, &normalize_arg/1)
+  defp normalize_args(other), do: [normalize_arg(other)]
+
+  # exqlite binds any atom as text, so `true` would be stored as "true". A boolean is an integer in
+  # SQLite; storing 1/0 keeps comparisons and `DEFAULT false` on the same representation.
+  defp normalize_arg(true), do: 1
+  defp normalize_arg(false), do: 0
+  defp normalize_arg(value), do: value
 
   ## ---- KEY-VALUE OPERATIONS ----
 
@@ -318,7 +221,7 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
 
           case run_sql(conn, "SELECT * FROM \"#{safe_tbl}\" WHERE \"#{safe_pk}\" = $1", [id]) do
             {:ok, %{rows: [row | _]}} ->
-              {:ok, %{rows: [row], num_rows: 1}}
+              {:ok, %{rows: [decode_row(conn, tbl, row)], num_rows: 1}}
 
             _ ->
               get_from_kv(conn, tbl, id)
@@ -365,8 +268,12 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
           safe_tbl = String.replace(tbl, "\"", "")
 
           case run_sql(conn, "SELECT * FROM \"#{safe_tbl}\"", []) do
-            {:ok, %{rows: rows}} -> {:ok, %{rows: rows, num_rows: length(rows)}}
-            error -> error
+            {:ok, %{rows: rows}} ->
+              decoded = Enum.map(rows, &decode_row(conn, tbl, &1))
+              {:ok, %{rows: decoded, num_rows: length(decoded)}}
+
+            error ->
+              error
           end
 
         :error ->
@@ -456,6 +363,74 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
         :error
     end
   end
+
+  # The KV command path names its table, so the declared schema is known there. Values written
+  # before booleans were bound as integers hold the text "true"/"false"; both shapes decode.
+  defp decode_row(conn, tbl, row) do
+    case boolean_columns(conn, tbl) do
+      [] ->
+        row
+
+      columns ->
+        booleans = MapSet.new(columns)
+
+        Map.new(row, fn {column, value} ->
+          {column, if(MapSet.member?(booleans, column), do: to_boolean(value), else: value)}
+        end)
+    end
+  end
+
+  defp boolean_columns(conn, tbl) do
+    cache = Process.get(@boolean_columns_cache, %{})
+
+    case Map.fetch(cache, tbl) do
+      {:ok, columns} ->
+        columns
+
+      :error ->
+        columns = load_boolean_columns(conn, tbl)
+        Process.put(@boolean_columns_cache, Map.put(cache, tbl, columns))
+        columns
+    end
+  end
+
+  # SQLite keeps the declared type verbatim, so its own schema answers what a column means.
+  defp load_boolean_columns(conn, tbl) do
+    safe_tbl = String.replace(tbl, "\"", "")
+
+    case run_sql(conn, "PRAGMA table_info(\"#{safe_tbl}\")", []) do
+      {:ok, %{rows: rows}} ->
+        for row <- rows, boolean_type(row["type"]), do: to_string(row["name"])
+
+      _ ->
+        []
+    end
+  end
+
+  defp boolean_type(type) when is_binary(type),
+    do: String.contains?(String.downcase(type), "bool")
+
+  defp boolean_type(_type), do: false
+
+  defp to_boolean(nil), do: nil
+  defp to_boolean(true), do: true
+  defp to_boolean(false), do: false
+  defp to_boolean(1), do: true
+  defp to_boolean(0), do: false
+
+  defp to_boolean(value) when is_binary(value) do
+    case String.downcase(String.trim(value)) do
+      "true" -> true
+      "t" -> true
+      "1" -> true
+      "false" -> false
+      "f" -> false
+      "0" -> false
+      _ -> value
+    end
+  end
+
+  defp to_boolean(value), do: value
 
   defp put_into_kv(conn, tbl, id, record) do
     sql =

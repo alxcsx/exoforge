@@ -247,7 +247,7 @@ defmodule Exoforge.Std.Resources do
 
       case db(info.plugin_id, "SELECT * FROM #{table} WHERE #{pk} = $1", [target_id]) do
         {:ok, %{rows: [row | _]}} ->
-          {:ok, %{row: row}}
+          {:ok, %{row: decode_row(res, row)}}
 
         {:ok, _} ->
           cond do
@@ -482,6 +482,7 @@ defmodule Exoforge.Std.Resources do
         end
 
       {:ok, %{rows: rows}} ->
+        rows = Enum.map(rows, &decode_row(res, &1))
         {:ok, %{rows: rows, total: count_rows(pid, table, where_sql, where_args, rows)}}
 
       error ->
@@ -685,6 +686,47 @@ defmodule Exoforge.Std.Resources do
   # Resources declared by a native extension arrive from manifest.json, where types are strings.
   defp normalize_type(type) when is_binary(type), do: Exoforge.Atoms.existing(type, type)
   defp normalize_type(type), do: type
+
+  # SQLite stores booleans as 1/0 and older rows as the text "true"/"false"; the resource's declared
+  # columns are the schema this layer already has, so reads decode them here.
+  defp decode_row(res, row) when is_map(row) do
+    booleans =
+      MapSet.new(
+        for column <- res.columns || [],
+            normalize_type(column[:type] || column["type"]) == :boolean,
+            do: to_string(column[:name] || column["name"])
+      )
+
+    if MapSet.size(booleans) == 0 do
+      row
+    else
+      Map.new(row, fn {column, value} ->
+        {column, if(MapSet.member?(booleans, column), do: to_boolean(value), else: value)}
+      end)
+    end
+  end
+
+  defp decode_row(_res, row), do: row
+
+  defp to_boolean(nil), do: nil
+  defp to_boolean(true), do: true
+  defp to_boolean(false), do: false
+  defp to_boolean(1), do: true
+  defp to_boolean(0), do: false
+
+  defp to_boolean(value) when is_binary(value) do
+    case String.downcase(String.trim(value)) do
+      "true" -> true
+      "t" -> true
+      "1" -> true
+      "false" -> false
+      "f" -> false
+      "0" -> false
+      _ -> value
+    end
+  end
+
+  defp to_boolean(value), do: value
 
   defp out_of_choices?({name, value}, res) do
     column = Enum.find(res.columns || [], &(to_string(&1.name) == name))
