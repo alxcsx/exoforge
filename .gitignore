@@ -112,6 +112,8 @@ sdk/unity/sample_unity/ServerData/
 
 # Transient workspace files & meta
 scratch/
+# The packed extension SDK `exo`/the Studio copies into a workspace; a build input, not source.
+sdk/unity/sample_unity/Exoforge/.feed/
 **/bin.meta
 **/obj.meta
 sdk/unity/sample_unity/Exoforge/extensions/*/manifest.json.meta

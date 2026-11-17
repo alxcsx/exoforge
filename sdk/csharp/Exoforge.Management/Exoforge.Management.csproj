@@ -5,6 +5,9 @@
     <Nullable>enable</Nullable>
     <LangVersion>12</LangVersion>
     <RootNamespace>Exoforge.Management</RootNamespace>
+    <!-- The SDK version, carried in the assembly so a scaffolded extension names the package that
+         this tooling shipped with, wherever it runs (a checkout, a Unity package, the CLI). -->
+    <Version>$(ExoforgePluginSdkVersion)</Version>
   </PropertyGroup>
 
 

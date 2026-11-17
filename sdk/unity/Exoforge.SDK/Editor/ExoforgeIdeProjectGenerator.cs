@@ -15,8 +15,9 @@ namespace Exoforge.Unity.Editor
     /// Addresses Rider autocomplete and compiler check issues:
     /// 1. Ensures Unity's <c>unity_project_generation_flag</c> has <c>LocalTarBall</c> (128) and local package
     ///    flags enabled so Unity generates full <c>.csproj</c> projects for tarball-imported packages.
-    /// 2. Ensures <c>nuget.config</c> is configured in the workspace pointing to the bundled <c>NuGet~</c> feed,
-    ///    allowing Rider to restore <c>Exoforge.Plugin.SDK</c> for backend C# extensions.
+    /// 2. Copies the extension SDK into the workspace's <c>.feed</c> directory and names it by a
+    ///    relative <c>nuget.config</c> source, so Rider restores <c>Exoforge.Plugin.SDK</c> for backend
+    ///    C# extensions on any machine.
     /// 3. Injects backend C# extensions from <c>Exoforge/extensions/*/*.csproj</c> into the Unity <c>.sln</c>
     ///    under an "Exoforge Extensions" solution folder so developers have code completion, navigation,
     ///    and compiler checks for both client and backend code in the same IDE window.
@@ -45,7 +46,7 @@ namespace Exoforge.Unity.Editor
             bool packageChanged = PackageVersionChanged();
             if (packageChanged)
             {
-                EnsureWorkspaceNugetConfig();
+                EnsureWorkspaceFeed();
                 EditorPrefs.SetString(PackageVersionPrefKey, ExoforgePackageVersion.SdkVersion);
             }
 
@@ -67,7 +68,7 @@ namespace Exoforge.Unity.Editor
         public static bool EnsureIdeConfiguration(bool forceRegenerate = false)
         {
             bool changed = EnsureProjectGenerationFlags();
-            changed |= EnsureWorkspaceNugetConfig();
+            changed |= EnsureWorkspaceFeed();
 
             if (forceRegenerate || changed)
             {
@@ -95,43 +96,24 @@ namespace Exoforge.Unity.Editor
         }
 
         /// <summary>
-        /// Ensures nuget.config exists in the Exoforge workspace pointing to the local package feed.
+        /// Makes the workspace build backend extensions with no repository around it: the static
+        /// nuget.config, the extension SDK in <c>.feed</c> when it is missing, and every extension's
+        /// reference on the version that package carries.
         /// </summary>
-        public static bool EnsureWorkspaceNugetConfig()
+        public static bool EnsureWorkspaceFeed()
         {
             try
             {
-                string? feedPath = ExoforgeEditorConfig.BundledFeedPath;
-                if (string.IsNullOrEmpty(feedPath) || !Directory.Exists(feedPath))
-                {
-                    return false;
-                }
-
                 string wsPath = ExoforgeEditorConfig.GetAbsoluteWorkspacePath();
                 if (!Directory.Exists(wsPath))
                 {
                     Directory.CreateDirectory(wsPath);
                 }
 
-                string nugetPath = Path.Combine(wsPath, "nuget.config");
-                string expectedFeed = feedPath!.Replace('\\', '/');
-                string expectedContent =
-                    "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" +
-                    "<configuration>\n" +
-                    "  <!-- Package feeds for Exoforge extensions: official nuget.org for runtime packs + local feed -->\n" +
-                    "  <packageSources>\n" +
-                    "    <add key=\"nuget.org\" value=\"https://api.nuget.org/v3/index.json\" protocolVersion=\"3\" />\n" +
-                    $"    <add key=\"exoforge\" value=\"{expectedFeed}\" />\n" +
-                    "  </packageSources>\n" +
-                    "</configuration>\n";
+                string? feedPath = ExoforgeEditorConfig.BundledFeedPath;
+                ExoScaffolder.EnsureProjectFeed(wsPath, feedPath);
 
                 bool changed = false;
-                if (!File.Exists(nugetPath) || !File.ReadAllText(nugetPath).Contains(expectedFeed) || !File.ReadAllText(nugetPath).Contains("https://api.nuget.org/v3/index.json"))
-                {
-                    File.WriteAllText(nugetPath, expectedContent);
-                    changed = true;
-                }
-
                 string extDir = Path.Combine(wsPath, "extensions");
                 if (Directory.Exists(extDir))
                 {
@@ -139,12 +121,7 @@ namespace Exoforge.Unity.Editor
 
                     foreach (string dir in Directory.GetDirectories(extDir))
                     {
-                        string extNuget = Path.Combine(dir, "nuget.config");
-                        if (!File.Exists(extNuget) || !File.ReadAllText(extNuget).Contains(expectedFeed) || !File.ReadAllText(extNuget).Contains("https://api.nuget.org/v3/index.json"))
-                        {
-                            File.WriteAllText(extNuget, expectedContent);
-                            changed = true;
-                        }
+                        changed |= ExoScaffolder.EnsureBuildFeed(wsPath, dir, feedPath);
 
                         string extName = Path.GetFileName(dir);
                         string extSln = Path.Combine(dir, $"{extName}.sln");
@@ -199,7 +176,7 @@ namespace Exoforge.Unity.Editor
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[Exoforge] Failed to configure workspace nuget.config & solutions: {ex.Message}");
+                Debug.LogWarning($"[Exoforge] Failed to configure the workspace .feed & solutions: {ex.Message}");
             }
 
             return false;
@@ -480,7 +457,7 @@ namespace Exoforge.Unity.Editor
             string extDir = Path.Combine(wsPath, "extensions");
             string masterSln = Path.Combine(extDir, "Exoforge.Extensions.sln");
 
-            EnsureWorkspaceNugetConfig();
+            EnsureWorkspaceFeed();
 
             if (File.Exists(masterSln))
             {

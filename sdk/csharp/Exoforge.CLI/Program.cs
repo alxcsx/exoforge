@@ -1518,8 +1518,8 @@ public static class Program
             Usage: exo extension new <name> [--template standard] [--dir <path>]
 
             Scaffolds extensions/<name>/ with a src/ project, a solution, and a .gitignore. The project
-            references the Exoforge.Plugin.SDK package, so it builds wherever it is put; run
-            `just pack-sdk` to fill the local feed from a checkout.
+            references the Exoforge.Plugin.SDK package, and the workspace's .feed holds that package so
+            it restores offline: the CLI copies it in from the SDK it was installed with.
 
               --template <t>   standard (default)
             """);

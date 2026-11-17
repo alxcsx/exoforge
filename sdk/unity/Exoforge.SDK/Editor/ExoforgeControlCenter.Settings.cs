@@ -509,10 +509,10 @@ public partial class ExoforgeControlCenter : EditorWindow
             if (GUILayout.Button("Re-link IDE Projects (Rider / VS)", GUILayout.Height(24)))
             {
                 ExoforgeIdeProjectGenerator.EnsureIdeConfiguration(forceRegenerate: true);
-                ShowStatus("✓ Re-linked IDE project generation flags, nuget.config, and .csproj solutions.", MessageType.Info);
+                ShowStatus("✓ Re-linked IDE project generation flags, the .feed package source, and .csproj solutions.", MessageType.Info);
             }
             EditorGUILayout.EndHorizontal();
-            EditorGUILayout.LabelField("Reconfigures LocalTarBall flags (128), nuget feeds, and generates dedicated Exoforge.Extensions.sln.", EditorStyles.miniLabel);
+            EditorGUILayout.LabelField("Reconfigures LocalTarBall flags (128), the .feed package source, and generates dedicated Exoforge.Extensions.sln.", EditorStyles.miniLabel);
 
             EditorGUILayout.Space(6);
 

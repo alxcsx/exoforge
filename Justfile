@@ -347,6 +347,9 @@ build-unity-sdk root=".":
 	set -euo pipefail
 	root="${1:-.}"
 	out="$root/sdk/csharp"
+	# One release per pack: the package's version is read from the Unity package's own manifest
+	# (Directory.Build.props), and a leftover nupkg from an older version would travel beside it.
+	rm -rf "$root/dist/nuget"
 	mkdir -p "$root/dist/nuget"
 
 	# Where each library lands is decided by the staging hook in Directory.Build.targets, by project
@@ -391,15 +394,6 @@ pack-sdk:
 	rm -rf dist/nuget
 	mkdir -p dist/nuget
 	dotnet pack sdk/csharp/Exoforge.Plugin.SDK -c Release -o dist/nuget --nologo -v q
-
-	# NuGet caches a package by id and version, so a rebuilt 0.1.0 is served from the cache and the new
-	# one is never seen. That is what happened while migrating the manifest format: the clean room built
-	# a plugin with the previous generator and the manifest came out in the old format, with nothing
-	# saying why. The version does not change between development builds, so the cache has to - and it
-	# is asked for rather than assumed, because a dotnet installed by a version manager keeps it
-	# somewhere else than $HOME/.nuget.
-	packages=$(dotnet nuget locals global-packages --list | sed 's/.*: //')
-	rm -rf "${packages%/}/exoforge.plugin.sdk"
 	echo "[pack-sdk] local feed:"
 	ls -1 dist/nuget
 
@@ -578,7 +572,9 @@ pack-unity:
 	# Build output in the package is not the package: Unity compiles what it is given, and a stale
 	# bin/ or obj/ is the source of a whole class of "works on my machine".
 	find dist/package -type d \( -name bin -o -name obj \) -prune -exec rm -rf {} +
-	tar -czf "dist/com.exoforge.sdk-${VERSION}.tgz" -C dist package
+	# COPYFILE_DISABLE: macOS otherwise writes ._ AppleDouble members into the archive, and Unity
+	# imports them as package files.
+	COPYFILE_DISABLE=1 tar -czf "dist/com.exoforge.sdk-${VERSION}.tgz" -C dist package
 	echo "[Exoforge] Created UPM package archive:"
 	ls -lh "dist/com.exoforge.sdk-${VERSION}.tgz"
 	# The package must stand alone: a consumer has no Exoforge checkout for a path to point at.
