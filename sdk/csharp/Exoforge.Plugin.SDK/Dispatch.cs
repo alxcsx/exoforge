@@ -32,6 +32,11 @@ public static class ExoDispatch
     public static T Get<T>(JsonElement payload, string name, T fallback)
     {
         if (payload.ValueKind != JsonValueKind.Object) return fallback;
+
+        // A webhook handler receives the whole frame: the router sends body, headers, method and
+        // query as top-level keys, and [ExoWebhook] allows no other parameter shape.
+        if (typeof(T) == typeof(WebhookPayload)) return (T)(object)Convert<WebhookPayload>(payload);
+
         if (!TryFind(payload, name, out var value))
         {
             if ((name == "payload" || name == "request") && typeof(T) == typeof(JsonElement))

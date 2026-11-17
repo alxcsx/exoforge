@@ -110,6 +110,28 @@ public class FrameLoopTests
         Assert.Equal("{\"v\":1}", plugin.HostResult);
     }
 
+    /// <summary>
+    /// A [ExoWebhook] handler's parameter is the whole frame the router sends (body, raw_body,
+    /// json, headers, method, query); binding it by parameter name produced null.
+    /// </summary>
+    [Fact]
+    public void A_webhook_payload_parameter_binds_the_whole_frame()
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(
+            "{\"body\":\"raw_data\",\"raw_body\":\"raw_data\",\"json\":{\"id\":\"evt_1\"}," +
+            "\"headers\":{\"sig\":\"xyz\"},\"method\":\"POST\",\"query\":{\"tenant\":\"acme\"}}");
+
+        var payload = ExoDispatch.Get<WebhookPayload>(doc.RootElement, "payload", null!);
+
+        Assert.NotNull(payload);
+        Assert.Equal("raw_data", payload!.Body);
+        Assert.Equal("raw_data", payload.RawBody);
+        Assert.Equal("POST", payload.Method);
+        Assert.Equal("xyz", payload.Headers!["sig"]);
+        Assert.Equal("acme", payload.Query!["tenant"]);
+        Assert.Equal("evt_1", payload.Json.GetProperty("id").GetString());
+    }
+
     [Fact]
     public void An_event_arriving_during_a_host_call_is_handled_after_the_call_completes()
     {

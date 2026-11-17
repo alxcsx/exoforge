@@ -618,6 +618,14 @@ public static class PluginHost
         {
             var parameter = parameters[i];
 
+            // A webhook handler takes the whole frame; there is no key named after its parameter.
+            if (parameter.ParameterType == typeof(WebhookPayload) &&
+                payload.ValueKind == JsonValueKind.Object)
+            {
+                args[i] = ConvertElement(payload, parameter.ParameterType);
+                continue;
+            }
+
             if (payload.ValueKind == JsonValueKind.Object &&
                 TryGetArgument(payload, parameter.Name ?? "", out var value))
             {

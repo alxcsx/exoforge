@@ -40,6 +40,7 @@ public partial class DispatchSamplePlugin : IContractPing, ISharedContract
     public string LastEvent { get; private set; } = "";
     public string LastPing { get; private set; } = "";
     public string LastGreeting { get; private set; } = "";
+    public string LastWebhook { get; private set; } = "";
     public bool DailyCleanupRan { get; private set; }
 
     [ExoCron("0 0 * * *", Description = "Cleans up expired tokens daily", RunOnStartup = true)]
@@ -86,7 +87,8 @@ public partial class DispatchSamplePlugin : IContractPing, ISharedContract
     [ExoWebhook("stripe_webhook")]
     public string HandleStripe(WebhookPayload payload)
     {
-        return $"handled:{payload.Body}:{(payload.Headers != null && payload.Headers.ContainsKey("sig") ? payload.Headers["sig"] : "")}";
+        LastWebhook = $"handled:{payload.Body}:{(payload.Headers != null && payload.Headers.ContainsKey("sig") ? payload.Headers["sig"] : "")}";
+        return LastWebhook;
     }
 
     [ExoAction]
@@ -380,6 +382,8 @@ public class DispatchTests
         }));
 
         PluginHost.RunInstance(plugin, input, new ExoforgeDispatch());
+
+        Assert.Equal("handled:raw_data:xyz", plugin.LastWebhook);
     }
 
     [Fact]
