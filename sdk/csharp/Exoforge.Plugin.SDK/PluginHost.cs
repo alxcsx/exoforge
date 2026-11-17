@@ -9,7 +9,6 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
-using System.Threading.Channels;
 using System.Threading.Tasks;
 
 namespace Exoforge.Plugin.SDK;
@@ -233,7 +232,6 @@ public static class PluginHost
         HostBridge.UseTransport(new NativeTransport());
 
         PendingHostCalls.Clear();
-        EarlyHostCallResults.Clear();
         Interlocked.Exchange(ref _nextHostCallId, 0);
         _hostClosed = false;
         _instance = instance;
@@ -255,11 +253,7 @@ public static class PluginHost
         // One reader owns stdin and answers host calls from whatever thread is waiting for them;
         // everything else it reads is a frame for this loop. A single consumer is the guarantee
         // that actions and events still run one at a time, in the order the host wrote them.
-        var frames = Channel.CreateUnbounded<string>(new UnboundedChannelOptions
-        {
-            SingleReader = true,
-            SingleWriter = true
-        });
+        var frames = new BlockingCollection<string>();
 
         _connected = true;
 
@@ -273,12 +267,9 @@ public static class PluginHost
             };
             readerThread.Start();
 
-            while (frames.Reader.WaitToReadAsync().AsTask().GetAwaiter().GetResult())
+            foreach (var line in frames.GetConsumingEnumerable())
             {
-                while (frames.Reader.TryRead(out string? line))
-                {
-                    HandleFrame(line, instance, actions);
-                }
+                HandleFrame(line!, instance, actions);
             }
         }
         finally
@@ -292,7 +283,7 @@ public static class PluginHost
     /// waiting for it - that is what lets a caller be answered while an action is still running -
     /// and every other frame is queued for the single-consumer loop.
     /// </summary>
-    private static void ReadLoop(TextReader reader, ChannelWriter<string> frames)
+    private static void ReadLoop(TextReader reader, BlockingCollection<string> frames)
     {
         try
         {
@@ -327,7 +318,6 @@ public static class PluginHost
                 {
                     break; // the loop is gone; nobody left to read frames
                 }
-
             }
         }
         finally
@@ -376,8 +366,8 @@ public static class PluginHost
         }
         else
         {
-            // The reply overtook the call that owns it: the reader is not blocked behind the loop.
-            EarlyHostCallResults[id] = raw;
+            // No call owns this id: a reply for an unknown or already-timed-out call. Log and drop.
+            WriteHostLog(2, $"Dropped host_call_result for unknown id {id}.");
         }
 
         return true;
