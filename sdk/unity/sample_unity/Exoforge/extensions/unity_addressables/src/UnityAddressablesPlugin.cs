@@ -12,6 +12,7 @@ namespace Exoforge.Plugins.UnityAddressables;
     Category = "Game Content", Title = "Unity Addressables", Icon = "📦",
     DashboardElement = "exo-unity-addressables", DashboardEntry = "addressables-studio.js")]
 [ExoInputType("addressable_ref", Element = "exo-addressable-input", Entry = "addressable-input.js")]
+[ExoDependency("file_bucket")]
 public class UnityAddressablesPlugin
 {
     public const string AssetsTable = "addressable_assets";
