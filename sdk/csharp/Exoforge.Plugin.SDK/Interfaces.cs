@@ -19,8 +19,9 @@ public interface IPluginContext
 
 /// <summary>
 /// The plugin's isolated data store: a typed record key/value surface plus a typed SQL runner.
-/// Values are plain records; JSON never appears in plugin code. The native host transport is
-/// synchronous, so this API is too.
+/// Values are plain records; JSON never appears in plugin code. These members are the synchronous
+/// surface; <see cref="HostBridge"/> carries the async twins, which keep a thread free while the
+/// host answers.
 /// </summary>
 public interface IDatabase
 {
@@ -65,8 +66,9 @@ public interface IActionDispatcher
     Task<TResponse?> CallActionAsync<TResponse>(string service, string action, object payload);
 
     /// <summary>
-    /// Calls another service's action and returns its result synchronously. The native host
-    /// transport is synchronous, so plugin actions (which are sync) can use this directly.
+    /// Calls another service's action and returns its result synchronously. It waits on the same
+    /// multiplexed connection the async call uses; prefer <see cref="CallActionAsync{TResponse}"/>
+    /// where the caller can await.
     /// </summary>
     TResponse? CallAction<TResponse>(string service, string action, object payload);
 }

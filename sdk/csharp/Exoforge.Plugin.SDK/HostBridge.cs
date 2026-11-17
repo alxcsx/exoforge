@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Exoforge.Plugin.SDK;
 
@@ -76,6 +78,13 @@ public static class HostBridge
         return _transport != null ? _transport.ClockNow() : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
     }
 
+    /// <summary>Returns the current BEAM cluster time in milliseconds, without blocking.</summary>
+    public static async Task<long> ClockNowAsync(CancellationToken cancellationToken = default)
+    {
+        if (_transport == null) return DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        return await _transport.ClockNowAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     /// <summary>
     /// Broadcasts an event to the Exoforge Kernel EventDispatcher via host transport.
     /// </summary>
@@ -83,6 +92,13 @@ public static class HostBridge
     {
         return _transport?.EmitEvent(topic ?? "", eventName ?? "", ToJson(payload)) ?? false;
     }
+
+    /// <summary>
+    /// Broadcasts an event without blocking the caller's thread; the frame is written before this
+    /// returns, so a caller that does not await it still sends it.
+    /// </summary>
+    public static Task<bool> EmitEventAsync(string topic, string eventName, object payload, CancellationToken cancellationToken = default) =>
+        _transport?.EmitEventAsync(topic ?? "", eventName ?? "", ToJson(payload), cancellationToken) ?? Task.FromResult(false);
 
     /// <summary>
     /// Calls another service's action through the Exoforge ActionDispatcher. Returns whether the
@@ -107,6 +123,12 @@ public static class HostBridge
     }
 
     /// <summary>
+    /// Calls another service's action without blocking the caller's thread.
+    /// </summary>
+    public static Task<string?> CallActionRawAsync(string service, string action, object payload, CancellationToken cancellationToken = default) =>
+        _transport?.CallActionAsync(service ?? "", action ?? "", ToJson(payload), cancellationToken) ?? Task.FromResult<string?>(null);
+
+    /// <summary>
     /// Calls another service's action and deserializes the JSON response. A failed call throws
     /// <see cref="ExoActionException"/> carrying the code the callee threw, so a caller branches on
     /// the failure instead of treating a default value as an answer.
@@ -114,6 +136,22 @@ public static class HostBridge
     public static TResponse? CallAction<TResponse>(string service, string action, object payload)
     {
         string? raw = CallActionRaw(service, action, payload);
+        if (raw == null) return default;
+        ThrowIfActionError(raw, service ?? "", action ?? "");
+
+        if (typeof(TResponse) == typeof(string)) return (TResponse)(object)raw;
+        if (typeof(TResponse) == typeof(JsonElement)) return (TResponse)(object)JsonDocument.Parse(raw).RootElement.Clone();
+
+        return PluginJson.Deserialize<TResponse>(raw);
+    }
+
+    /// <summary>
+    /// Calls another service's action and deserializes the JSON response, without blocking the
+    /// caller's thread. The failure rules match <see cref="CallAction{TResponse}"/>.
+    /// </summary>
+    public static async Task<TResponse?> CallActionAsync<TResponse>(string service, string action, object payload, CancellationToken cancellationToken = default)
+    {
+        string? raw = await CallActionRawAsync(service, action, payload, cancellationToken).ConfigureAwait(false);
         if (raw == null) return default;
         ThrowIfActionError(raw, service ?? "", action ?? "");
 
@@ -210,6 +248,13 @@ public static class HostBridge
     }
 
     /// <summary>
+    /// Reads a record without blocking the caller's thread. The native host answers several of
+    /// these at once, so a caller that can await should prefer this over <see cref="DbGet"/>.
+    /// </summary>
+    public static Task<string?> DbGetAsync(string table, string key, CancellationToken cancellationToken = default) =>
+        _transport?.DbGetAsync(table ?? "", key ?? "", cancellationToken) ?? Task.FromResult<string?>(null);
+
+    /// <summary>
     /// Puts a record into the plugin's isolated multi-tenant database.
     /// </summary>
     public static bool DbPut(string table, string key, object value)
@@ -217,11 +262,19 @@ public static class HostBridge
         return _transport?.DbPut(table ?? "", key ?? "", ToJson(value)) ?? false;
     }
 
+    /// <summary>Writes a record without blocking the caller's thread.</summary>
+    public static Task<bool> DbPutAsync(string table, string key, object value, CancellationToken cancellationToken = default) =>
+        _transport?.DbPutAsync(table ?? "", key ?? "", ToJson(value), cancellationToken) ?? Task.FromResult(false);
+
     /// <summary>
     /// Reads every record in a table from the plugin's isolated multi-tenant database,
     /// as a JSON array.
     /// </summary>
     public static string? DbAll(string table) => _transport?.DbAll(table ?? "");
+
+    /// <summary>Reads every record in a table without blocking the caller's thread.</summary>
+    public static Task<string?> DbAllAsync(string table, CancellationToken cancellationToken = default) =>
+        _transport?.DbAllAsync(table ?? "", cancellationToken) ?? Task.FromResult<string?>(null);
 
     /// <summary>
     /// Deletes a record from the plugin's isolated multi-tenant database.
@@ -230,4 +283,8 @@ public static class HostBridge
     {
         return _transport?.DbDelete(table ?? "", key ?? "") ?? false;
     }
+
+    /// <summary>Deletes a record without blocking the caller's thread.</summary>
+    public static Task<bool> DbDeleteAsync(string table, string key, CancellationToken cancellationToken = default) =>
+        _transport?.DbDeleteAsync(table ?? "", key ?? "", cancellationToken) ?? Task.FromResult(false);
 }

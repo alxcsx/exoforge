@@ -5,9 +5,10 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
   The binary is spawned as an OS process and speaks newline-delimited JSON over stdio. The frames
   and the handshake are `Exoforge.Drivers.Runtime.ExtensionProtocol`; an extension that does not speak the
   host's protocol or cannot handle what the host sends is refused with a reason rather than fed
-  frames it cannot parse. Host calls are synchronous: the extension blocks reading the reply, so the
-  runner answers them inline while waiting for the action result. This keeps the extension free of any
-  toolchain beyond `dotnet publish` while preserving the same manifest/contract surface.
+  frames it cannot parse. Host calls are multiplexed by id: the extension may have several in
+  flight, so the runner answers each as it arrives while the action result is still pending. This
+  keeps the extension free of any toolchain beyond `dotnet publish` while preserving the same
+  manifest/contract surface.
   """
   @behaviour Exoforge.Contracts.ExtensionRunner
   use GenServer
