@@ -404,4 +404,14 @@ public class TransportTests
             await PumpAsync(call, client, TimeSpan.FromSeconds(1));
         });
     }
+
+    [Fact]
+    public void A_logged_failure_names_its_code_and_rid()
+    {
+        var failure = new ExoActionException("invalid_png", "Not a PNG image.", "r_1");
+
+        Assert.Equal("Not a PNG image.", failure.Message);
+        Assert.Equal("[invalid_png] Not a PNG image. (rid r_1)", failure.Describe());
+        Assert.StartsWith(failure.Describe(), failure.ToString());
+    }
 }

@@ -412,7 +412,7 @@ namespace Exoforge.Client.Unity
             var cfg = Config;
             var client = new ExoClient();
 
-            ExoClient.OnError = (msg, ex) => Debug.LogError($"[Exoforge] {msg}");
+            ExoClient.OnError = (msg, ex) => Debug.LogError($"[Exoforge] {(ex is ExoActionException a ? a.Describe() : msg)}");
             ExoClient.OnLog = (msg) => Debug.Log($"[Exoforge] {msg}");
 
             string effectiveHttp = GetEffectiveHttpUrl();

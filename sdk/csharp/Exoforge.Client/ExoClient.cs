@@ -985,6 +985,11 @@ public class ExoActionException : Exception
         Code = code;
         RequestId = requestId;
     }
+
+    /// <summary>The line a log shows: code, message and the rid a bug report quotes.</summary>
+    public string Describe() => $"[{Code}] {Message}" + (RequestId == null ? "" : $" (rid {RequestId})");
+
+    public override string ToString() => Describe() + Environment.NewLine + base.ToString();
 }
 
 /// <summary>One entry in the client's bounded call history, for a bug report.</summary>
