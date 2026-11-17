@@ -172,6 +172,11 @@ namespace Exoforge.Unity.Editor
 
                             extensionProjects.Add((extName, Path.Combine(extName, "src", $"{extName}.csproj")));
                         }
+
+                        // A project the developer keeps beside the extensions (an `<name>.Tests` folder)
+                        // belongs in the solution too; rewriting it without them drops their tests.
+                        foreach (string csproj in Directory.GetFiles(dir, "*.csproj"))
+                            extensionProjects.Add((Path.GetFileNameWithoutExtension(csproj), Path.Combine(extName, Path.GetFileName(csproj))));
                     }
 
                     // Maintain an independent master solution for backend extensions:
