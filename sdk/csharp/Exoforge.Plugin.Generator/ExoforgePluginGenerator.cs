@@ -344,6 +344,8 @@ namespace Exoforge.Plugin.SDK
             var cronAttr = FindAttribute(method.GetAttributes(), CronAttribute);
             if (actionAttr is null && webhookAttr is null && cronAttr is null) continue;
 
+            var (returnsScalar, returnFields, returnsList, returnsType) = DescribeReturn(method.ReturnType);
+
             if (cronAttr is not null)
             {
                 string cronName = PositionalString(cronAttr, 1) ?? NamedString(cronAttr, "Name") ?? ToSnakeCase(method.Name);
@@ -352,7 +354,23 @@ namespace Exoforge.Plugin.SDK
                 string schedule = PositionalString(cronAttr, 0) ?? NamedString(cronAttr, "Schedule") ?? "* * * * *";
                 string? desc = NamedString(cronAttr, "Description");
                 bool runOnStartup = NamedBool(cronAttr, "RunOnStartup");
-                ServiceFor(NamedString(cronAttr, "Service")).Crons.Add(new CronModel(
+                var cronService = ServiceFor(NamedString(cronAttr, "Service"));
+
+                // The scheduler invokes a cron job as an action, but no transport may: scope
+                // "server" is internal-only, so a player POST to it is refused while the cron
+                // runner (internal dispatch) still gets through.
+                cronService.Actions.Add(new ActionModel(
+                    cronName,
+                    ResolveActionMode(cronAttr, method.ReturnType),
+                    "server",
+                    "auto",
+                    method.Parameters.Select(p => new ParamModel(ToSnakeCase(p.Name), MapTypeToElixir(p.Type))).ToList(),
+                    returnsScalar,
+                    returnFields,
+                    returnsList,
+                    returnsType));
+
+                cronService.Crons.Add(new CronModel(
                     cronName,
                     schedule,
                     runOnStartup,
@@ -374,8 +392,6 @@ namespace Exoforge.Plugin.SDK
 
             string actionName = PositionalString(targetAttr, 0) ?? ToSnakeCase(method.Name);
             dispatches.Add(new ActionDispatch(actionName, method));
-
-            var (returnsScalar, returnFields, returnsList, returnsType) = DescribeReturn(method.ReturnType);
 
             ServiceFor(NamedString(targetAttr, "Service")).Actions.Add(new ActionModel(
                 actionName,

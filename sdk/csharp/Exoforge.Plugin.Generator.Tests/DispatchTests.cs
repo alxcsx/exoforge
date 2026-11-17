@@ -422,6 +422,12 @@ public class DispatchTests
         Assert.Equal("0 0 * * *", cron!["schedule"]?.GetValue<string>());
         Assert.True(cron["run_on_startup"]?.GetValue<bool>());
         Assert.Equal("Cleans up expired tokens daily", cron["description"]?.GetValue<string>());
+
+        // The scheduler invokes the job as an action; a player must not be able to.
+        var action = Service(manifest, "dispatch_sample")["actions"]!.AsArray()
+            .FirstOrDefault(a => a?["name"]?.GetValue<string>() == "daily_cleanup");
+        Assert.NotNull(action);
+        Assert.Equal("server", action!["scope"]?.GetValue<string>());
     }
 
     [Fact]

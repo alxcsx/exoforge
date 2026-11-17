@@ -38,7 +38,6 @@ defmodule Exoforge.ActionDispatcherTest do
 
   defmodule TestPlugin do
     use Exoforge.Extension, provides: [Exoforge.ActionDispatcherTest.TestService.Math]
-
     @impl true
     defaction add(payload) do
       %{a: a, b: b} = payload
@@ -60,6 +59,17 @@ defmodule Exoforge.ActionDispatcherTest do
 
     @impl true
     defaction(flag(%{enabled: enabled}), do: {:ok, %{enabled: enabled}})
+  end
+
+  # The pattern a [ExoCron] method gets from the generator: an action with server scope, which
+  # only kernel-internal dispatch (the cron runner) may call.
+  defmodule CronOnlyPlugin do
+    use Exoforge.Extension, provides: [:cron_test]
+
+    @impl true
+    defaction tick(_payload), scope: :server do
+      {:ok, %{ticked: true}}
+    end
   end
 
   setup do
@@ -164,6 +174,15 @@ defmodule Exoforge.ActionDispatcherTest do
     test "external caller with required scope succeeds" do
       assert {:ok, %{status: "reset_ok"}} =
                ActionDispatcher.dispatch(TestPlugin, :admin_reset, %{}, caller_scopes: ["admin"])
+    end
+
+    test "a server-scoped action refuses a player but the cron caller reaches it" do
+      assert {:error, {:forbidden_scope, %{required: :server, caller_scopes: ["player"]}}} =
+               ActionDispatcher.dispatch(CronOnlyPlugin, :tick, %{}, caller_scopes: ["player"])
+
+      # The cron runner dispatches with :internal scopes and the :cron caller.
+      assert {:ok, %{ticked: true}} =
+               ActionDispatcher.dispatch(CronOnlyPlugin, :tick, %{}, caller_scopes: :internal, caller: :cron)
     end
 
     test "caller scope provided via payload _auth is honored" do
