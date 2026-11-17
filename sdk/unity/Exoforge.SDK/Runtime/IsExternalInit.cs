@@ -1,9 +1,9 @@
 #if !NET5_0_OR_GREATER
 namespace System.Runtime.CompilerServices
 {
-    // Public, not internal: a game asmdef is a different assembly, and the compiler looks for a
-    // public IsExternalInit in the references before it will emit a record or an init-only setter.
-    // The guard keeps it out of a runtime that already defines one.
-    public static class IsExternalInit { }
+    // Internal on purpose: the type only has to be visible to this assembly. A game asmdef is a
+    // different assembly and needs its own copy (the Studio generates Assets/Exoforge/IsExternalInit.cs);
+    // a public copy here would also collide with another package's public copy.
+    internal static class IsExternalInit { }
 }
 #endif
