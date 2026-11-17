@@ -145,9 +145,10 @@ defmodule Exoforge.Std.Transport do
 
   # ---- Private Helpers ----
 
+  # A trusted game server (`service`) acts for players, so it names its target like staff does.
   defp staff_scope?(auth) when is_map(auth) do
     scopes = Map.get(auth, :scopes) || Map.get(auth, "scopes") || []
-    Enum.any?(scopes, &(&1 in [:admin, "admin", :studio, "studio"]))
+    Enum.any?(scopes, &(&1 in [:admin, "admin", :studio, "studio", :service, "service"]))
   end
 
   defp staff_scope?(_), do: false

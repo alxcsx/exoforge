@@ -81,6 +81,13 @@ defmodule Exoforge.Std.TransportTest do
       sanitized = Transport.sanitize_payload(raw, auth)
       assert sanitized["player_id"] == "target_user"
     end
+
+    test "allows a service account to report for the player it names" do
+      raw = %{"enemy" => "slime", "player_id" => "target_user"}
+      auth = %{player_id: "usr_game_server", scopes: ["service"]}
+
+      assert Transport.sanitize_payload(raw, auth)["player_id"] == "target_user"
+    end
   end
 
   describe "format_action_result/3" do
