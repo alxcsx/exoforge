@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -432,6 +433,10 @@ namespace Exoforge.Client.Unity
 
             client.OnDisconnected += OnClientDisconnected;
 
+            // A short-lived access token is renewed by the client itself: the session is renewed
+            // from the stored refresh token and the failed call is retried once.
+            client.RefreshTokensAsync = ct => ExoforgeSDK.Auth.RefreshAsync(ct);
+
             // What makes the connection lazy: the client asks for a socket only when an operation
             // needs one - a subscription, or an action the contract declared as WebSocket.
             client.EnsureConnected = async () => { await GetClientAsync().ConfigureAwait(false); };
@@ -474,6 +479,23 @@ namespace Exoforge.Client.Unity
                 if (!string.IsNullOrEmpty(targetToken))
                 {
                     var auth = await Client.AuthenticateAsync(targetToken);
+
+                    // An expired access token is ordinary: renew the pair from the stored refresh
+                    // token. RefreshAsync authenticates this socket with the new token, so the
+                    // session is back without a new login.
+                    if (!auth.IsSuccess && await ExoforgeSDK.Auth.RefreshAsync())
+                    {
+                        targetToken = useStudioConnection ? ExoTokenStore.StudioToken : ExoTokenStore.Token;
+                        var refreshed = ExoforgeSDK.Auth.Current;
+
+                        auth = new ExoAuthResult
+                        {
+                            Status = "ok",
+                            PlayerId = refreshed?.PlayerId,
+                            Scopes = refreshed?.Scopes is { } scopes ? new List<string>(scopes) : null
+                        };
+                    }
+
                     if (auth.IsSuccess)
                     {
                         if (useStudioConnection)

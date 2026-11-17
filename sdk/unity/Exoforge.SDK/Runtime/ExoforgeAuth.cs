@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Exoforge.Client;
 using UnityEngine;
@@ -94,6 +95,16 @@ namespace Exoforge.Client.Unity
                         return Current;
                     }
                 }
+                else if (!string.IsNullOrEmpty(ExoTokenStore.DeviceRefreshToken) && await RefreshAsync())
+                {
+                    // The access token expired, which is ordinary: the refresh token renews the
+                    // session for the same player instead of registering a new account.
+                    if (Current != null)
+                    {
+                        ExoforgeSDK.WireExoServicesLocator();
+                        return Current;
+                    }
+                }
                 else
                 {
                     // Stored credential is stale — fall through and mint a fresh account.
@@ -114,6 +125,10 @@ namespace Exoforge.Client.Unity
                 ? tokenProp.GetString() ?? ""
                 : "";
 
+            string refreshToken = result.ValueKind == JsonValueKind.Object && result.TryGetProperty("refresh_token", out var refreshProp)
+                ? refreshProp.GetString() ?? ""
+                : "";
+
             if (string.IsNullOrEmpty(token))
             {
                 throw new InvalidOperationException("auth.anonymous did not return a token.");
@@ -132,7 +147,7 @@ namespace Exoforge.Client.Unity
                 ? nameProp.GetString() ?? ""
                 : "";
 
-            ExoTokenStore.SaveSession(token, auth.PlayerId, auth.Scopes, name, activeDeviceId);
+            ExoTokenStore.SaveSession(token, auth.PlayerId, auth.Scopes, name, activeDeviceId, refreshToken);
 
             Current = new ExoSession(auth.PlayerId, name, token, auth.Scopes, true);
             ExoforgeSDK.WireExoServicesLocator();
@@ -178,6 +193,88 @@ namespace Exoforge.Client.Unity
                 // A stale or rejected credential falls through to a fresh account.
                 return null;
             }
+        }
+
+        /// <summary>
+        /// Exchanges the stored refresh token for a new access/refresh pair.
+        ///
+        /// The client calls this itself when an action comes back <c>token_expired</c> (and then
+        /// retries once), so game code rarely needs it; it is public for a game that wants to renew
+        /// ahead of time. Returns false when there is no refresh token or the server refuses it.
+        /// </summary>
+        public async Task<bool> RefreshAsync(CancellationToken cancellationToken = default)
+        {
+            var client = ExoforgeSDK.Client;
+            string refreshToken = ExoTokenStore.RefreshToken;
+
+            if (string.IsNullOrEmpty(refreshToken))
+            {
+                return false;
+            }
+
+            JsonElement result;
+
+            try
+            {
+                result = await client.SendActionAsync<JsonElement>(
+                    "auth",
+                    "refresh",
+                    new { token = refreshToken },
+                    ExoTransportPreference.Http,
+                    cancellationToken: cancellationToken);
+            }
+            catch (Exception)
+            {
+                // A refused or replayed refresh token means this session is over; the caller falls
+                // back to a fresh login.
+                return false;
+            }
+
+            string token = result.ValueKind == JsonValueKind.Object && result.TryGetProperty("token", out var tokenProp)
+                ? tokenProp.GetString() ?? ""
+                : "";
+
+            string rotated = result.ValueKind == JsonValueKind.Object && result.TryGetProperty("refresh_token", out var rotatedProp)
+                ? rotatedProp.GetString() ?? ""
+                : "";
+
+            if (string.IsNullOrEmpty(token) || string.IsNullOrEmpty(rotated))
+            {
+                return false;
+            }
+
+            var auth = await AuthenticateAsync(client, token);
+
+            if (auth == null)
+            {
+                return false;
+            }
+
+            if (ExoTokenStore.UseStudioSession)
+            {
+                ExoTokenStore.SaveStudioSession(token, auth.Value.PlayerId, auth.Value.Scopes, ExoTokenStore.PlayerName, rotated);
+            }
+            else
+            {
+                ExoTokenStore.SaveSession(token, auth.Value.PlayerId, auth.Value.Scopes, ExoTokenStore.PlayerName, ExoTokenStore.AttachedDeviceId, rotated);
+            }
+
+            client.UseToken(token);
+
+            if (client.IsConnected)
+            {
+                try
+                {
+                    await client.AuthenticateAsync(token);
+                }
+                catch (Exception)
+                {
+                    // The next reconnect authenticates the socket with the new token anyway.
+                }
+            }
+
+            Current = new ExoSession(auth.Value.PlayerId, ExoTokenStore.PlayerName, token, auth.Value.Scopes, false);
+            return true;
         }
 
         /// <summary>

@@ -1153,7 +1153,9 @@ public static class Program
           list [--search <s>] [--limit <n>]                       List accounts and their roles
           create <email> --password <p> [--name <n>] [--role r]   Create an account (role default: player)
           role <user_id> --role <r>                               Change an account's role
-          token <user_id>                                         Issue a token (a credential: keep it secret)
+          token <user_id> [--expires 30d]                         Issue a service token (default term: 90d)
+          token --revoke <token_id>                               Revoke a token by id
+          tokens <user_id>                                        List an account's tokens
           delete <user_id>                                        Delete an account
 
         Roles: player, studio, service, admin
@@ -1209,6 +1211,9 @@ public static class Program
 
                 case "token":
                     return await HandleUserTokenAsync(deployer, rest, env).ConfigureAwait(false);
+
+                case "tokens":
+                    return await HandleUserTokensAsync(deployer, rest, env).ConfigureAwait(false);
 
                 case "delete":
                     return await HandleUserDeleteAsync(deployer, rest, env).ConfigureAwait(false);
@@ -1292,12 +1297,32 @@ public static class Program
 
     private static async Task<int> HandleUserTokenAsync(ExoDeployer deployer, CliArgs cli, string? env)
     {
-        if (cli.Positional.Count == 0)
+        // `exo user token --revoke <token_id>` is the same command: a token is issued, and a token
+        // is taken away.
+        string? revokeId = cli.Value("revoke");
+
+        if (revokeId is not null)
         {
-            return Missing("user id", "exo user token <user_id>");
+            var revoked = await ExoUsers.RevokeTokenAsync(deployer, revokeId, env).ConfigureAwait(false);
+
+            if (cli.Json)
+            {
+                Console.WriteLine(PrettyJson(revoked));
+                return 0;
+            }
+
+            Success($"Revoked token {revokeId}. Every client holding it is signed out.");
+            return 0;
         }
 
-        var res = await ExoUsers.IssueTokenAsync(deployer, cli.Positional[0], env).ConfigureAwait(false);
+        if (cli.Positional.Count == 0)
+        {
+            return Missing("user id", "exo user token <user_id> [--expires 30d]");
+        }
+
+        int? expiresIn = cli.Has("expires") ? ExoUsers.ParseExpiry(cli.Value("expires")) : null;
+
+        var res = await ExoUsers.IssueTokenAsync(deployer, cli.Positional[0], expiresIn, env).ConfigureAwait(false);
         string token = ReadString(res, "token") ?? "";
 
         if (cli.Json)
@@ -1307,7 +1332,42 @@ public static class Program
         }
 
         Console.WriteLine(token);
-        Console.Error.WriteLine("This token is a credential: it acts as the account until the account is deleted. Keep it out of version control.");
+
+        string expiresAt = ReadString(res, "expires_at") ?? "";
+        Console.Error.WriteLine(
+            $"This token is a credential: it acts as the account until it expires ({expiresAt}) or is revoked " +
+            "(`exo user token --revoke <token_id>`). Keep it out of version control.");
+
+        return 0;
+    }
+
+    private static async Task<int> HandleUserTokensAsync(ExoDeployer deployer, CliArgs cli, string? env)
+    {
+        if (cli.Positional.Count == 0)
+        {
+            return Missing("user id", "exo user tokens <user_id>");
+        }
+
+        var res = await ExoUsers.ListTokensAsync(deployer, cli.Positional[0], env).ConfigureAwait(false);
+
+        if (cli.Json)
+        {
+            Console.WriteLine(PrettyJson(res));
+            return 0;
+        }
+
+        foreach (var token in res.TryGetProperty("tokens", out var tokens) ? tokens.EnumerateArray() : Enumerable.Empty<JsonElement>())
+        {
+            string revokedAt = ReadString(token, "revoked_at") ?? "";
+            string state = revokedAt.Length > 0 ? "revoked" : "live";
+
+            Console.WriteLine(
+                $"{ReadString(token, "token_id"),-18} {ReadString(token, "kind"),-7} " +
+                $"created {ReadString(token, "created_at"),-26} last used {ReadString(token, "last_used_at") ?? "-",-26} " +
+                $"expires {ReadString(token, "expires_at"),-26} {state}");
+        }
+
+        Console.WriteLine($"{(res.TryGetProperty("count", out var count) ? count.ToString() : "?")} token(s)");
         return 0;
     }
 

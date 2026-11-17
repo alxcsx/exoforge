@@ -24,12 +24,14 @@ namespace Exoforge.Client
     public static class ExoTokenStore
     {
         private const string TokenKey = "Exoforge.Token";
+        private const string RefreshTokenKey = "Exoforge.RefreshToken";
         private const string PlayerIdKey = "Exoforge.PlayerId";
         private const string ScopesKey = "Exoforge.Scopes";
         private const string NameKey = "Exoforge.PlayerName";
         private const string AttachedDeviceIdKey = "Exoforge.DeviceId.Attached";
 
         private const string StudioTokenKey = "Exoforge.Studio.Token";
+        private const string StudioRefreshTokenKey = "Exoforge.Studio.RefreshToken";
         private const string StudioPlayerIdKey = "Exoforge.Studio.PlayerId";
         private const string StudioScopesKey = "Exoforge.Studio.Scopes";
         private const string StudioNameKey = "Exoforge.Studio.PlayerName";
@@ -53,6 +55,16 @@ namespace Exoforge.Client
         {
             get => Read(TokenKey, StudioTokenKey);
             set => Write(TokenKey, StudioTokenKey, value);
+        }
+
+        /// <summary>
+        /// The single-use credential that mints a new access token when the current one expires.
+        /// Low-level, like the rest of this store: <see cref="ExoforgeAuth"/> rotates it for you.
+        /// </summary>
+        public static string RefreshToken
+        {
+            get => Read(RefreshTokenKey, StudioRefreshTokenKey);
+            set => Write(RefreshTokenKey, StudioRefreshTokenKey, value);
         }
 
         public static string PlayerId
@@ -86,6 +98,9 @@ namespace Exoforge.Client
         /// <summary>The device's own player id, irrespective of <see cref="UseStudioSession"/>.</summary>
         public static string DevicePlayerId => PlayerPrefs.GetString(PlayerIdKey, string.Empty);
 
+        /// <summary>The device's own refresh token, irrespective of <see cref="UseStudioSession"/>.</summary>
+        public static string DeviceRefreshToken => PlayerPrefs.GetString(RefreshTokenKey, string.Empty);
+
         /// <summary>The device id that was active when the device session was saved.</summary>
         public static string AttachedDeviceId => PlayerPrefs.GetString(AttachedDeviceIdKey, string.Empty);
 
@@ -93,6 +108,7 @@ namespace Exoforge.Client
         public static void ClearDeviceSession()
         {
             PlayerPrefs.DeleteKey(TokenKey);
+            PlayerPrefs.DeleteKey(RefreshTokenKey);
             PlayerPrefs.DeleteKey(PlayerIdKey);
             PlayerPrefs.DeleteKey(ScopesKey);
             PlayerPrefs.DeleteKey(NameKey);
@@ -101,6 +117,7 @@ namespace Exoforge.Client
             lock (s_memoryCache)
             {
                 s_memoryCache.Remove(TokenKey);
+                s_memoryCache.Remove(RefreshTokenKey);
                 s_memoryCache.Remove(PlayerIdKey);
                 s_memoryCache.Remove(ScopesKey);
                 s_memoryCache.Remove(NameKey);
@@ -117,6 +134,9 @@ namespace Exoforge.Client
         /// <summary>The Studio's bearer token.</summary>
         public static string StudioToken => PlayerPrefs.GetString(StudioTokenKey, string.Empty);
 
+        /// <summary>The Studio's refresh token.</summary>
+        public static string StudioRefreshToken => PlayerPrefs.GetString(StudioRefreshTokenKey, string.Empty);
+
         /// <summary>The Studio's player id.</summary>
         public static string StudioPlayerId => PlayerPrefs.GetString(StudioPlayerIdKey, string.Empty);
 
@@ -127,15 +147,16 @@ namespace Exoforge.Client
         public static void ClearStudioSession()
         {
             PlayerPrefs.DeleteKey(StudioTokenKey);
+            PlayerPrefs.DeleteKey(StudioRefreshTokenKey);
             PlayerPrefs.DeleteKey(StudioPlayerIdKey);
             PlayerPrefs.DeleteKey(StudioScopesKey);
             PlayerPrefs.DeleteKey(StudioNameKey);
             PlayerPrefs.Save();
         }
 
-        public static void SaveSession(string token, string? playerId = null, IEnumerable<string>? scopes = null, string? name = null, string? attachedDeviceId = null)
+        public static void SaveSession(string token, string? playerId = null, IEnumerable<string>? scopes = null, string? name = null, string? attachedDeviceId = null, string? refreshToken = null)
         {
-            Store(TokenKey, PlayerIdKey, ScopesKey, NameKey, token, playerId, scopes, name);
+            Store(TokenKey, PlayerIdKey, ScopesKey, NameKey, token, playerId, scopes, name, refreshToken);
             if (!string.IsNullOrEmpty(attachedDeviceId))
             {
                 try
@@ -152,15 +173,24 @@ namespace Exoforge.Client
         /// Stores the Exoforge Studio window's session. Written by the editor on connect; read in play
         /// mode when <see cref="UseStudioSession"/> is on.
         /// </summary>
-        public static void SaveStudioSession(string token, string? playerId = null, IEnumerable<string>? scopes = null, string? name = null) =>
-            Store(StudioTokenKey, StudioPlayerIdKey, StudioScopesKey, StudioNameKey, token, playerId, scopes, name);
+        public static void SaveStudioSession(string token, string? playerId = null, IEnumerable<string>? scopes = null, string? name = null, string? refreshToken = null) =>
+            Store(StudioTokenKey, StudioPlayerIdKey, StudioScopesKey, StudioNameKey, token, playerId, scopes, name, refreshToken);
 
         private static readonly Dictionary<string, string> s_memoryCache = new();
 
         private static void Store(
             string tokenKey, string playerIdKey, string scopesKey, string nameKey,
-            string token, string? playerId, IEnumerable<string>? scopes, string? name)
+            string token, string? playerId, IEnumerable<string>? scopes, string? name, string? refreshToken = null)
         {
+            // Only a login or a refresh knows the refresh token; authenticating with an existing
+            // access token must leave the stored one alone.
+            if (!string.IsNullOrEmpty(refreshToken))
+            {
+                string refreshKey = ReferenceEquals(tokenKey, TokenKey) ? RefreshTokenKey : StudioRefreshTokenKey;
+                lock (s_memoryCache) s_memoryCache[refreshKey] = refreshToken!;
+                try { PlayerPrefs.SetString(refreshKey, refreshToken!); } catch (Exception) { }
+            }
+
             string resolvedPlayerId = playerId ?? string.Empty;
 
             lock (s_memoryCache)

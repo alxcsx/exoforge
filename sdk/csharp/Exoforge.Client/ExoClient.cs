@@ -280,9 +280,71 @@ public class ExoClient : IDisposable
     }
 
     /// <summary>
+    /// Called when a call fails with <c>token_expired</c>: the engine SDK exchanges its refresh token
+    /// for a new pair here and installs the new access token. The call is then retried once. A null
+    /// callback (a client with no refresh token) leaves the original error with the caller.
+    /// </summary>
+    public Func<CancellationToken, Task>? RefreshTokensAsync { get; set; }
+
+    private readonly object _refreshLock = new();
+    private Task? _refreshInFlight;
+
+    /// <summary>
     /// Sends an action request to the Exoforge Kernel with explicit transport preference.
+    ///
+    /// When the server answers <c>token_expired</c> and a refresh callback is installed, the tokens
+    /// are renewed and the call is made once more - a short-lived access token is the point, so the
+    /// caller never sees an hour boundary.
     /// </summary>
     public async Task<TResult> SendActionAsync<TResult>(
+        string service,
+        string action,
+        object? payload,
+        ExoTransportPreference transportPreference,
+        TimeSpan? timeout = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await SendActionCoreAsync<TResult>(service, action, payload, transportPreference, timeout, cancellationToken).ConfigureAwait(false);
+        }
+        catch (ExoActionException ex) when (
+            ex.Code == "token_expired" &&
+            RefreshTokensAsync != null &&
+            // Refreshing is the cure, not a call that needs one; two concurrent expiries share a
+            // single refresh, because rotating the same refresh token twice would revoke the family.
+            !(service == "auth" && action == "refresh"))
+        {
+            await RefreshOnceAsync(cancellationToken).ConfigureAwait(false);
+            return await SendActionCoreAsync<TResult>(service, action, payload, transportPreference, timeout, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private Task RefreshOnceAsync(CancellationToken cancellationToken)
+    {
+        lock (_refreshLock)
+        {
+            if (_refreshInFlight == null)
+            {
+                Task refresh = RefreshTokensAsync!(cancellationToken);
+                _refreshInFlight = refresh;
+
+                _ = refresh.ContinueWith(
+                    _ =>
+                    {
+                        lock (_refreshLock)
+                        {
+                            if (ReferenceEquals(_refreshInFlight, refresh)) _refreshInFlight = null;
+                        }
+                    },
+                    TaskScheduler.Default);
+            }
+
+            return _refreshInFlight;
+        }
+    }
+
+    private async Task<TResult> SendActionCoreAsync<TResult>(
         string service,
         string action,
         object? payload,

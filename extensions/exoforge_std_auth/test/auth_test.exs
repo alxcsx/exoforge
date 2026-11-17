@@ -286,6 +286,13 @@ defmodule Exoforge.AuthTest do
       assert alpha["tokens_count"] >= 2
       assert length(alpha["active_tokens"]) >= 2
 
+      # A listing names the credentials by id, never by secret.
+      for token <- alpha["active_tokens"] do
+        assert is_binary(token["token_id"])
+        assert token["kind"] in ["ses", "ref", "svc", "legacy"]
+        refute Map.has_key?(token, "token")
+      end
+
       beta = Enum.find(users, &(&1["player_id"] == "user_beta"))
       assert beta != nil
       assert beta["tokens_count"] >= 1
@@ -763,9 +770,353 @@ defmodule Exoforge.AuthTest do
     refute player_row(disp)
     assert player_row(kept)
 
-    # The tokens went with it, and the other account kept its own.
+    # The tokens went with it, and the other account kept its own (an access/refresh pair).
     assert token_count(disp) == 0
-    assert token_count(kept) == 1
+    assert token_count(kept) == 2
+  end
+
+  # A token is a credential with a lifetime, not a row that never dies: `exo_<kind>_<id>.<secret>`,
+  # hashed at rest, short-lived for a session and rotatable through a refresh token.
+  describe "Expiring, revocable tokens" do
+    test "the format names the kind and only the hash is stored" do
+      {:ok, access, refresh} = session_for("token_fmt")
+
+      assert access =~ ~r/^exo_ses_[A-Za-z0-9_-]{16}\.[A-Za-z0-9_-]{43}$/
+      assert refresh =~ ~r/^exo_ref_[A-Za-z0-9_-]{16}\.[A-Za-z0-9_-]{43}$/
+
+      token_id = token_id_of(access)
+      secret = secret_of(access)
+
+      [row] = rows("SELECT * FROM tokens WHERE token_id = $1", [token_id])
+      assert row["kind"] == "ses"
+      assert row["secret_hash"] == Base.encode64(:crypto.hash(:sha256, secret))
+      assert row["expires_at"] && row["created_at"]
+      assert row["family_id"]
+
+      # Nothing at rest holds the credential itself.
+      refute Enum.any?(rows("SELECT * FROM tokens", []), fn row -> secret in Map.values(row) end)
+    end
+
+    test "an expired access token is refused as token_expired" do
+      with_token_config(:access_token_ttl, -1)
+      {:ok, access, _refresh} = session_for("token_expiry")
+
+      assert {:error, :token_expired} =
+               ActionDispatcher.dispatch(:auth, :authenticate, %{token: access})
+    end
+
+    test "an expired token stops working even after it authenticated once" do
+      unless Process.whereis(Exoforge.Std.Auth.Cache), do: start_supervised!(Exoforge.Std.Auth.Cache)
+      {:ok, access, _refresh} = session_for("token_expiry_cached")
+      assert {:ok, _} = ActionDispatcher.dispatch(:auth, :authenticate, %{token: access})
+
+      # The cached answer carries the row's expiry; age it the way an hour would.
+      [{^access, result, used_at}] = :ets.lookup(:exoforge_auth_tokens, access)
+
+      :ets.insert(
+        :exoforge_auth_tokens,
+        {access, Map.put(result, :expires_at, "2000-01-01T00:00:00Z"), used_at}
+      )
+
+      assert {:error, :token_expired} =
+               ActionDispatcher.dispatch(:auth, :authenticate, %{token: access})
+    end
+
+    test "a refresh token is not a bearer token" do
+      {:ok, _access, refresh} = session_for("token_kind")
+
+      assert {:error, :invalid_token} =
+               ActionDispatcher.dispatch(:auth, :authenticate, %{token: refresh})
+    end
+
+    test "refreshing rotates the pair and replaying a rotated token kills the family" do
+      {:ok, access, refresh} = session_for("token_rotate")
+
+      assert {:ok, %{token: rotated_access, refresh_token: rotated_refresh}} =
+               ActionDispatcher.dispatch(:auth, :refresh, %{token: refresh})
+
+      assert rotated_access != access
+      assert {:ok, _} = ActionDispatcher.dispatch(:auth, :authenticate, %{token: rotated_access})
+
+      # A rotated refresh token is single use. Presenting it again means it leaked, so the family
+      # it belongs to - including the access token issued a moment ago - is revoked.
+      assert {:error, :invalid_token} =
+               ActionDispatcher.dispatch(:auth, :refresh, %{token: refresh})
+
+      assert {:error, :invalid_token} =
+               ActionDispatcher.dispatch(:auth, :authenticate, %{token: rotated_access})
+
+      assert {:error, :invalid_token} =
+               ActionDispatcher.dispatch(:auth, :refresh, %{token: rotated_refresh})
+    end
+
+    test "an expired refresh token is refused but the access token it replaced still works until it expires" do
+      with_token_config(:refresh_token_ttl, -1)
+      {:ok, access, refresh} = session_for("token_refresh_expiry")
+
+      assert {:error, :token_expired} =
+               ActionDispatcher.dispatch(:auth, :refresh, %{token: refresh})
+
+      assert {:ok, _} = ActionDispatcher.dispatch(:auth, :authenticate, %{token: access})
+    end
+
+    test "a new login for the same device replaces that device's session" do
+      unless Process.whereis(Exoforge.Std.Auth.Cache), do: start_supervised!(Exoforge.Std.Auth.Cache)
+
+      {:ok, first_access, first_refresh} = session_for("token_device", "device_one")
+
+      # Authenticated before the replacement, so the answer is cached: revoking the row has to
+      # reach the cache as well, or the old token keeps working until the next flush.
+      assert {:ok, _} = ActionDispatcher.dispatch(:auth, :authenticate, %{token: first_access})
+
+      {:ok, second_access, _} = session_for("token_device", "device_one")
+
+      assert {:error, :invalid_token} =
+               ActionDispatcher.dispatch(:auth, :authenticate, %{token: first_access})
+
+      assert {:ok, _} = ActionDispatcher.dispatch(:auth, :authenticate, %{token: second_access})
+
+      assert {:error, :invalid_token} =
+               ActionDispatcher.dispatch(:auth, :refresh, %{token: first_refresh})
+    end
+
+    test "sessions per account are capped and the oldest is evicted" do
+      with_token_config(:max_sessions, 2)
+      _ = Auth.upsert_account("token_cap", "token_cap@exoforge.test", "pw", ["player"])
+
+      sessions =
+        for i <- 1..3 do
+          assert {:ok, session} =
+                   ActionDispatcher.dispatch(:auth, :login, %{
+                     email: "token_cap@exoforge.test",
+                     password: "pw",
+                     device_id: "cap_device_#{i}"
+                   })
+
+          session
+        end
+
+      assert {:error, :invalid_token} =
+               ActionDispatcher.dispatch(:auth, :authenticate, %{
+                 token: Enum.at(sessions, 0).token
+               })
+
+      for session <- Enum.drop(sessions, 1) do
+        assert {:ok, _} =
+                 ActionDispatcher.dispatch(:auth, :authenticate, %{token: session.token})
+      end
+
+      now = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601()
+
+      [%{"n" => live}] =
+        rows(
+          "SELECT COUNT(DISTINCT family_id) AS n FROM tokens WHERE user_id = $1 AND kind = 'ref' AND revoked_at IS NULL AND expires_at > $2",
+          ["token_cap", now]
+        )
+
+      assert live == 2
+    end
+
+    test "a service token is listed by id, carries the account's scopes, and can be revoked" do
+      _ = Auth.upsert_account("token_revoke", "token_revoke@exoforge.test", "pw", ["player"])
+
+      assert {:ok, %{token: access, token_id: token_id, expires_in: expires_in}} =
+               ActionDispatcher.dispatch(:auth, :issue_token, %{player_id: "token_revoke"},
+                 caller_scopes: ["admin"]
+               )
+
+      assert expires_in == 7_776_000
+      assert {:ok, _} = ActionDispatcher.dispatch(:auth, :authenticate, %{token: access})
+
+      assert {:ok, %{tokens: tokens}} =
+               ActionDispatcher.dispatch(:auth, :list_tokens, %{user_id: "token_revoke"},
+                 caller_scopes: ["admin"]
+               )
+
+      listed = Enum.find(tokens, &(&1["token_id"] == token_id))
+      assert listed["kind"] == "svc"
+      assert listed["created_at"] && listed["expires_at"]
+      refute Map.has_key?(listed, "token")
+
+      assert {:ok, %{status: "revoked"}} =
+               ActionDispatcher.dispatch(:auth, :revoke_token, %{token_id: token_id},
+                 caller_scopes: ["admin"]
+               )
+
+      assert {:error, :invalid_token} =
+               ActionDispatcher.dispatch(:auth, :authenticate, %{token: access})
+
+      assert {:error, :token_not_found} =
+               ActionDispatcher.dispatch(:auth, :revoke_token, %{token_id: token_id},
+                 caller_scopes: ["admin"]
+               )
+    end
+
+    test "a shorter term can be asked for when a token is issued" do
+      _ = Auth.upsert_account("token_term", "token_term@exoforge.test", "pw", ["service"])
+
+      assert {:ok, %{expires_in: 2_592_000}} =
+               ActionDispatcher.dispatch(
+                 :auth,
+                 :issue_token,
+                 %{user_id: "token_term", expires_in: 2_592_000},
+                 caller_scopes: ["admin"]
+               )
+    end
+
+    test "issuing a token for an id nobody holds is refused" do
+      assert {:error, :unknown_user} =
+               ActionDispatcher.dispatch(:auth, :issue_token, %{player_id: "nobody_here"},
+                 caller_scopes: ["admin"]
+               )
+    end
+
+    test "a role change applies to existing tokens without rewriting their rows" do
+      _ = Auth.upsert_account("token_roles", "token_roles@exoforge.test", "pw", ["studio"])
+
+      assert {:ok, %{token: access}} =
+               ActionDispatcher.dispatch(:auth, :login, %{
+                 email: "token_roles@exoforge.test",
+                 password: "pw"
+               })
+
+      assert {:ok, %{scopes: before}} =
+               ActionDispatcher.dispatch(:auth, :authenticate, %{token: access})
+
+      assert "studio" in before
+
+      token_id = token_id_of(access)
+      [row_before] = rows("SELECT * FROM tokens WHERE token_id = $1", [token_id])
+
+      assert {:ok, _} =
+               ActionDispatcher.dispatch(:auth, :update_user_roles, %{player_id: "token_roles", role: "player"},
+                 caller_scopes: ["admin"]
+               )
+
+      assert {:ok, %{scopes: now}} =
+               ActionDispatcher.dispatch(:auth, :authenticate, %{token: access})
+
+      refute "studio" in now
+
+      [row_after] = rows("SELECT * FROM tokens WHERE token_id = $1", [token_id])
+      assert Map.take(row_after, ["kind", "secret_hash", "expires_at", "created_at"]) ==
+               Map.take(row_before, ["kind", "secret_hash", "expires_at", "created_at"])
+    end
+
+    test "the contract hands the token purge to the cron extension" do
+      metadata = Exoforge.Std.Services.Auth.__service_metadata__()
+
+      assert [%{name: :purge_tokens, action: :purge_tokens, schedule: schedule}] = metadata.crons
+      assert schedule =~ ~r/^\S+ \S+ \S+ \S+ \S+$/
+    end
+
+    test "the cron purge deletes expired and revoked rows and keeps live ones" do
+      {:ok, live_access, _} = session_for("token_purge_live")
+      {:ok, dead_access, _} = session_for("token_purge_dead")
+
+      assert {:ok, %{token_id: dead_id}} =
+               ActionDispatcher.dispatch(:auth, :authenticate, %{token: dead_access})
+
+      assert {:ok, _} =
+               ActionDispatcher.dispatch(:auth, :revoke_token, %{token_id: dead_id},
+                 caller_scopes: ["admin"]
+               )
+
+      assert {:ok, %{purged: purged}} =
+               ActionDispatcher.dispatch(:auth, :purge_tokens, %{}, caller_scopes: :internal)
+
+      assert purged >= 2
+      refute Enum.any?(rows("SELECT * FROM tokens", []), &(&1["token_id"] == dead_id))
+
+      assert {:ok, _} = ActionDispatcher.dispatch(:auth, :authenticate, %{token: live_access})
+    end
+
+    test "rows written before hashing are hashed in place, cleared, and keep working" do
+      legacy_token = "legacy_" <> Base.url_encode64(:crypto.strong_rand_bytes(18), padding: false)
+
+      # The shape of the table this change upgrades from.
+      _ = execute_sql("DROP TABLE tokens")
+
+      _ =
+        execute_sql(
+          "CREATE TABLE tokens (id text, token text, player_id text, scopes text)"
+        )
+
+      # `init_schema` adds the new columns to a table that already exists; do that before writing
+      # the legacy row, the way an upgrade of a populated deployment happens.
+      _ = Auth.init_schema()
+      {:ok, _} = Auth.set_player_scopes("legacy_player", ["player"])
+
+      _ =
+        execute_sql(
+          "INSERT INTO tokens (id, token, player_id, scopes) VALUES ($1, $2, $3, $4)",
+          ["legacy_id", legacy_token, "legacy_player", "player"]
+        )
+
+      assert :ok = Auth.init_schema()
+
+      assert {:ok, %{player_id: "legacy_player"}} =
+               ActionDispatcher.dispatch(:auth, :authenticate, %{token: legacy_token})
+
+      [row] = rows("SELECT * FROM tokens WHERE user_id = $1", ["legacy_player"])
+      assert row["kind"] == "legacy"
+      assert row["token"] == ""
+      assert row["expires_at"]
+      assert row["secret_hash"] == Base.encode64(:crypto.hash(:sha256, legacy_token))
+      refute Enum.any?(rows("SELECT * FROM tokens", []), fn row -> legacy_token in Map.values(row) end)
+    end
+  end
+
+  defp session_for(player_id, device_id \\ nil) do
+    email = "#{player_id}@exoforge.test"
+
+    assert {:ok, _} =
+             ActionDispatcher.dispatch(:auth, :register, %{
+               player_id: player_id,
+               email: email,
+               password: "pw"
+             })
+
+    payload =
+      %{email: email, password: "pw"}
+      |> then(fn p -> if device_id, do: Map.put(p, :device_id, device_id), else: p end)
+
+    assert {:ok, %{token: access, refresh_token: refresh}} =
+             ActionDispatcher.dispatch(:auth, :login, payload)
+
+    {:ok, access, refresh}
+  end
+
+  defp token_id_of(token) do
+    token |> String.replace_prefix("exo_ses_", "") |> String.split(".") |> hd()
+  end
+
+  defp secret_of(token), do: token |> String.split(".") |> List.last()
+
+  defp execute_sql(sql, args \\ []) do
+    ActionDispatcher.dispatch_internal(:database, :execute, %{
+      plugin: :auth,
+      operation: sql,
+      arguments: args
+    })
+  end
+
+  defp rows(sql, args \\ []) do
+    case execute_sql(sql, args) do
+      {:ok, %{rows: rows}} -> rows
+      _ -> []
+    end
+  end
+
+  defp with_token_config(key, value) do
+    previous = Application.get_env(:exoforge, :auth, [])
+    Application.put_env(:exoforge, :auth, Keyword.put(List.wrap(previous), key, value))
+
+    on_exit(fn ->
+      if previous in [nil, []],
+        do: Application.delete_env(:exoforge, :auth),
+        else: Application.put_env(:exoforge, :auth, previous)
+    end)
   end
 
   defp player_row(player_id) do
@@ -782,7 +1133,7 @@ defmodule Exoforge.AuthTest do
   defp token_count(player_id) do
     case ActionDispatcher.dispatch_internal(:database, :execute, %{
            plugin: :auth,
-           operation: "SELECT count(*) as n FROM tokens WHERE player_id = $1",
+           operation: "SELECT count(*) as n FROM tokens WHERE user_id = $1",
            arguments: [player_id]
          }) do
       {:ok, %{rows: [row | _]}} -> row["n"] || row[:n]

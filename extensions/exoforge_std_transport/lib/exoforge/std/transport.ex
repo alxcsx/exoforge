@@ -54,7 +54,7 @@ defmodule Exoforge.Std.Transport do
     s = to_string(service)
     a = to_string(action)
 
-    s == "auth" and a in ["login", "register", "authenticate", "create_player", "anonymous"]
+    s == "auth" and a in ["login", "register", "authenticate", "create_player", "anonymous", "refresh"]
   end
 
   @doc """

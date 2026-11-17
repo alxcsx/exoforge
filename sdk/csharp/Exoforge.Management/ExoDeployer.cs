@@ -945,6 +945,40 @@ public class ExoDeployer
     }
 
     /// <summary>
+    /// Exchanges a fresh login for a service token (default term 90 days) for the same account.
+    /// Returns null when the account cannot mint one - a studio or player session keeps its login
+    /// token and expires with it.
+    /// </summary>
+    private static async Task<string?> TryIssueServiceTokenAsync(ExoClient client, JsonElement loginResult, CancellationToken ct)
+    {
+        string? userId = loginResult.ValueKind == JsonValueKind.Object && loginResult.TryGetProperty("player_id", out var pidProp)
+            ? pidProp.GetString()
+            : null;
+
+        if (string.IsNullOrEmpty(userId))
+        {
+            return null;
+        }
+
+        try
+        {
+            JsonElement issued = await client.SendActionAsync<JsonElement>(
+                "auth",
+                "issue_token",
+                new JsonObject { ["user_id"] = userId },
+                cancellationToken: ct).ConfigureAwait(false);
+
+            return issued.ValueKind == JsonValueKind.Object && issued.TryGetProperty("token", out var tokenProp)
+                ? tokenProp.GetString()
+                : null;
+        }
+        catch (ExoActionException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Connects to the cluster, optionally logs in or authenticates, queries system status,
     /// and optionally saves the connection settings to exoforge.json and Assets/Resources/exoforge.json.
     /// </summary>
@@ -1006,6 +1040,21 @@ public class ExoDeployer
                 if (!auth.IsSuccess)
                 {
                     throw new InvalidOperationException($"Authentication failed with acquired token: {auth.Error}");
+                }
+
+                // A login's access token is short-lived by design (an hour, renewed by a client that
+                // holds the refresh token). A saved CLI session has no such client, so an admin
+                // session exchanges it for a service token for the same account - a credential the
+                // tooling can keep.
+                string? serviceToken = await TryIssueServiceTokenAsync(client, loginResult, ct).ConfigureAwait(false);
+
+                if (!string.IsNullOrEmpty(serviceToken))
+                {
+                    var serviceAuth = await client.AuthenticateAsync(serviceToken, cancellationToken: ct).ConfigureAwait(false);
+                    if (serviceAuth.IsSuccess)
+                    {
+                        acquiredToken = serviceToken;
+                    }
                 }
 
                 authenticated = true;

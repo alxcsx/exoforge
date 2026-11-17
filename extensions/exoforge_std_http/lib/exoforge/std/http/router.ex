@@ -259,7 +259,7 @@ defmodule Exoforge.Std.Http.Router do
           do: handle_file_upload(conn, auth_info),
           else: forbidden(conn)
 
-      :error ->
+      _error ->
         unauthenticated(conn)
     end
   end
@@ -301,8 +301,9 @@ defmodule Exoforge.Std.Http.Router do
 
       # A public action without a token still gets an identity, so the action's own checks
       # (register scopes, anonymous takeover) see an external caller rather than the dispatcher's
-      # implicit full trust (M33 Fix 1).
-      :error when public? ->
+      # implicit full trust (M33 Fix 1). An expired bearer is the same case for one of these:
+      # `auth.refresh` carries its own credential in the payload.
+      reason when public? and reason in [:error, {:error, :token_expired}] ->
         dispatch_http(
           conn,
           service,
@@ -312,6 +313,15 @@ defmodule Exoforge.Std.Http.Router do
           nil,
           rid
         )
+
+      {:error, :token_expired} ->
+        send_json(conn, 401, %{
+          status: "error",
+          error: %{
+            code: "token_expired",
+            message: "The access token has expired. Refresh it with auth.refresh."
+          }
+        })
 
       :error ->
         unauthenticated(conn)
@@ -383,6 +393,8 @@ defmodule Exoforge.Std.Http.Router do
   defp authenticate_token(token) do
     case ActionDispatcher.dispatch(:auth, :authenticate, %{token: token}) do
       {:ok, %{player_id: _pid, scopes: _scopes} = auth_info} -> {:ok, auth_info}
+      # A client can act on this one: it holds a refresh token and can come back with a new pair.
+      {:error, :token_expired} -> {:error, :token_expired}
       _ -> :error
     end
   end
@@ -458,7 +470,7 @@ defmodule Exoforge.Std.Http.Router do
       _ ->
         case authenticate_token(token_from_request(conn)) do
           {:ok, auth} -> Exoforge.Auth.Roles.rank_of(auth.scopes) >= 2
-          :error -> false
+          _error -> false
         end
     end
   end

@@ -70,6 +70,7 @@ defmodule Exoforge.HttpTest do
 
     Exoforge.ExtensionCase.register_database(Exoforge.Std.Database)
     Exoforge.ExtensionCase.register_auth(Exoforge.Std.Auth)
+
     Exoforge.ExtensionCase.register_extension(Exoforge.Std.FileBucket,
       id: :exoforge_std_file_bucket,
       provides: [Exoforge.Std.Services.FileBucket]
@@ -313,6 +314,59 @@ defmodule Exoforge.HttpTest do
 
       assert conn.status == 403
       assert Jason.decode!(conn.resp_body)["error"] == "forbidden_scope"
+    end
+
+    test "an expired bearer token is reported as token_expired, and auth.refresh renews it" do
+      # An access token that has already run out, next to a refresh token that has not.
+      Application.put_env(:exoforge, :auth, access_token_ttl: -1)
+      on_exit(fn -> Application.delete_env(:exoforge, :auth) end)
+
+      _ =
+        Exoforge.Std.Auth.upsert_account(
+          "exp_http",
+          "exp_http@exoforge.test",
+          "pw",
+          ["admin"]
+        )
+
+      login =
+        conn(:post, "/api/auth/login", Jason.encode!(%{email: "exp_http@exoforge.test", password: "pw"}))
+        |> put_req_header("content-type", "application/json")
+        |> Router.call(@opts)
+
+      session = Jason.decode!(login.resp_body)["data"]
+      assert is_binary(session["refresh_token"])
+
+      expired =
+        conn(:post, "/api/mock_admin/secret_op", "{}")
+        |> put_req_header("content-type", "application/json")
+        |> put_req_header("authorization", "Bearer #{session["token"]}")
+        |> Router.call(@opts)
+
+      assert expired.status == 401
+      assert Jason.decode!(expired.resp_body)["error"]["code"] == "token_expired"
+
+      # New tokens are ordinary again; the client's refresh is a public call, so an expired bearer
+      # in the header is not what authorizes it - the refresh token in the body is.
+      Application.put_env(:exoforge, :auth, [])
+
+      refreshed =
+        conn(:post, "/api/auth/refresh", Jason.encode!(%{token: session["refresh_token"]}))
+        |> put_req_header("content-type", "application/json")
+        |> Router.call(@opts)
+
+      assert refreshed.status == 200
+      renewed = Jason.decode!(refreshed.resp_body)["data"]
+      assert is_binary(renewed["token"])
+      assert renewed["refresh_token"] != session["refresh_token"]
+
+      again =
+        conn(:post, "/api/mock_admin/secret_op", "{}")
+        |> put_req_header("content-type", "application/json")
+        |> put_req_header("authorization", "Bearer #{renewed["token"]}")
+        |> Router.call(@opts)
+
+      assert again.status == 200
     end
   end
 

@@ -16,6 +16,7 @@ defmodule Exoforge.Contracts.Service do
           only: [
             action: 2,
             event: 2,
+            cron: 2,
             resource: 1,
             resource: 2,
             defresource: 2,
@@ -24,6 +25,7 @@ defmodule Exoforge.Contracts.Service do
 
         Module.register_attribute(__MODULE__, :exo_actions_meta, accumulate: true)
         Module.register_attribute(__MODULE__, :exo_events_meta, accumulate: true)
+        Module.register_attribute(__MODULE__, :exo_crons_meta, accumulate: true)
         Module.register_attribute(__MODULE__, :exo_resources_meta, accumulate: true)
 
         unquote(block)
@@ -35,6 +37,7 @@ defmodule Exoforge.Contracts.Service do
             name: unquote(name),
             actions: Enum.reverse(@exo_actions_meta),
             events: Enum.reverse(@exo_events_meta),
+            crons: Enum.reverse(@exo_crons_meta),
             resources: Enum.reverse(@exo_resources_meta)
           }
         end
@@ -106,6 +109,29 @@ defmodule Exoforge.Contracts.Service do
         payload: unquote(Macro.escape(meta.payload)),
         scope: unquote(meta.scope),
         topic: unquote(meta.topic)
+      }
+    end
+  end
+
+  @doc """
+  Declares a scheduled job the cron extension runs against this service.
+
+  The job dispatches `action` (default: the cron's own name) with an empty payload and internal
+  trust — a schedule is cluster code, not a caller. `schedule` is standard five-field cron.
+  """
+  defmacro cron(name, do: block) do
+    meta = parse_cron_block(block)
+
+    quote location: :keep do
+      doc_tuple = Module.get_attribute(__MODULE__, :doc) || {0, nil}
+      Module.delete_attribute(__MODULE__, :doc)
+
+      @exo_crons_meta %{
+        name: unquote(name),
+        action: unquote(meta.action || name),
+        schedule: unquote(meta.schedule),
+        run_on_startup: unquote(meta.run_on_startup),
+        description: unquote(meta.description)
       }
     end
   end
@@ -368,6 +394,23 @@ defmodule Exoforge.Contracts.Service do
     Enum.reduce(nodes, defaults, fn
       {key, _meta, [value]}, acc when key in @valid_keys -> Map.put(acc, key, value)
       _invalid_node, acc -> acc
+    end)
+  end
+
+  defp parse_cron_block({:__block__, _, calls}), do: parse_cron_block(calls)
+  defp parse_cron_block(calls) when not is_list(calls), do: parse_cron_block([calls])
+
+  defp parse_cron_block(nodes) do
+    defaults = %{schedule: "* * * * *", action: nil, run_on_startup: false, description: ""}
+
+    Enum.reduce(nodes, defaults, fn
+      {key, _meta, [value]}, acc
+      when key in [:schedule, :action, :run_on_startup, :description] ->
+        {evaluated, _binding} = Code.eval_quoted(value)
+        Map.put(acc, key, evaluated)
+
+      _invalid_node, acc ->
+        acc
     end)
   end
 end

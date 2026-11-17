@@ -84,6 +84,68 @@ public static class ExoUsers
     /// <summary>Only the id: the token carries the scopes the account has now.</summary>
     public static JsonObject UserPayload(string userId) => new() { ["user_id"] = RequireId(userId) };
 
+    /// <summary>
+    /// A token request. The term is what makes a service credential safe to hand out: it stops
+    /// working without anyone having to remember to revoke it.
+    /// </summary>
+    public static JsonObject TokenPayload(string userId, int? expiresIn)
+    {
+        var payload = UserPayload(userId);
+        if (expiresIn is > 0)
+        {
+            payload["expires_in"] = expiresIn.Value;
+        }
+
+        return payload;
+    }
+
+    public static JsonObject RevokePayload(string tokenId)
+    {
+        if (string.IsNullOrWhiteSpace(tokenId))
+        {
+            throw new ArgumentException("A token id is required (--revoke <token_id>).");
+        }
+
+        return new JsonObject { ["token_id"] = tokenId.Trim() };
+    }
+
+    /// <summary>
+    /// Parses a term such as <c>30d</c>, <c>12h</c>, <c>90m</c> or <c>3600s</c> into seconds.
+    /// A bare number is seconds, which is what the action's <c>expires_in</c> takes.
+    /// </summary>
+    public static int ParseExpiry(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            throw new ArgumentException("An expiry is required (--expires 30d).");
+        }
+
+        string text = value.Trim().ToLowerInvariant();
+        long multiplier = text[^1] switch
+        {
+            'd' => 86_400,
+            'h' => 3_600,
+            'm' => 60,
+            's' => 1,
+            _ => 0,
+        };
+
+        string number = multiplier == 0 ? text : text[..^1];
+
+        if (!long.TryParse(number, out long amount) || amount <= 0)
+        {
+            throw new ArgumentException($"Invalid expiry '{value}'. Use e.g. 30d, 12h, 90m or 3600s.");
+        }
+
+        long seconds = amount * Math.Max(multiplier, 1);
+        if (seconds > int.MaxValue)
+        {
+            throw new ArgumentException($"Expiry '{value}' is too long.");
+        }
+
+        return (int)seconds;
+    }
+
     /// <summary>The server filters on <c>search</c> (id or email); its contract names the parameter <c>query</c>.</summary>
     public static JsonObject ListPayload(string? search, int? limit)
     {
@@ -110,8 +172,15 @@ public static class ExoUsers
     public static Task<JsonElement> SetRoleAsync(ExoDeployer deployer, string userId, string? role, string? env, CancellationToken ct = default) =>
         deployer.CallActionAsync("auth", "update_user_roles", RolePayload(userId, role), env, ct: ct);
 
-    public static Task<JsonElement> IssueTokenAsync(ExoDeployer deployer, string userId, string? env, CancellationToken ct = default) =>
-        deployer.CallActionAsync("auth", "issue_token", UserPayload(userId), env, ct: ct);
+    public static Task<JsonElement> IssueTokenAsync(ExoDeployer deployer, string userId, int? expiresIn, string? env, CancellationToken ct = default) =>
+        deployer.CallActionAsync("auth", "issue_token", TokenPayload(userId, expiresIn), env, ct: ct);
+
+    /// <summary>The account's tokens: ids, kinds, creation, last use and expiry. Never the secrets.</summary>
+    public static Task<JsonElement> ListTokensAsync(ExoDeployer deployer, string userId, string? env, CancellationToken ct = default) =>
+        deployer.CallActionAsync("auth", "list_tokens", UserPayload(userId), env, ct: ct);
+
+    public static Task<JsonElement> RevokeTokenAsync(ExoDeployer deployer, string tokenId, string? env, CancellationToken ct = default) =>
+        deployer.CallActionAsync("auth", "revoke_token", RevokePayload(tokenId), env, ct: ct);
 
     public static Task<JsonElement> DeleteAsync(ExoDeployer deployer, string userId, string? env, CancellationToken ct = default) =>
         deployer.CallActionAsync("auth", "delete_user", UserPayload(userId), env, ct: ct);

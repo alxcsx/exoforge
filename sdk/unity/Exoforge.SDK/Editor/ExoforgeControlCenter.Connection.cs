@@ -127,9 +127,23 @@ public partial class ExoforgeControlCenter : EditorWindow
             _editorClient.OnAnyEvent += HandleIncomingEvent;
             _editorClient.OnDisconnected += HandleClientDisconnected;
 
+            // A Studio session is an ordinary account session with a short-lived access token. The
+            // editor renews it from the stored refresh token, so an eight-hour session does not end
+            // at the one-hour mark.
+            _editorClient.RefreshTokensAsync = async ct => { await RefreshStudioSessionAsync(ct); };
+
             await _editorClient.ConnectAsync(new Uri(targetWs), cts.Token);
 
             var auth = await _editorClient.AuthenticateAsync(targetToken, cancellationToken: cts.Token);
+
+            // The stored access token may simply have reached its end; renew it before treating the
+            // session as rejected.
+            if (!auth.IsSuccess && await RefreshStudioSessionAsync(cts.Token))
+            {
+                targetToken = ExoTokenStore.StudioToken;
+                auth = await _editorClient.AuthenticateAsync(targetToken, cancellationToken: cts.Token);
+            }
+
             if (auth.IsSuccess)
             {
                 // The Studio is staff tooling (M33 Fix 14): its tabs read users, tokens, plugins and
@@ -225,6 +239,70 @@ public partial class ExoforgeControlCenter : EditorWindow
                 _ = ReconnectWithRetryAsync(maxRetries: 6, delayMs: 1200);
             }
         };
+    }
+
+    /// <summary>
+    /// Renews the Studio's stored session from its refresh token through the editor's own client.
+    /// Returns false when there is nothing to renew or the server refuses it.
+    /// </summary>
+    private async Task<bool> RefreshStudioSessionAsync(CancellationToken ct)
+    {
+        var client = _editorClient;
+        string refreshToken = ExoTokenStore.StudioRefreshToken;
+
+        if (client == null || string.IsNullOrEmpty(refreshToken))
+        {
+            return false;
+        }
+
+        JsonElement data;
+
+        try
+        {
+            data = await client.SendActionAsync<JsonElement>(
+                "auth",
+                "refresh",
+                new { token = refreshToken },
+                ExoTransportPreference.Http,
+                cancellationToken: ct);
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+
+        string token = data.ValueKind == JsonValueKind.Object && data.TryGetProperty("token", out var tProp)
+            ? tProp.GetString() ?? ""
+            : "";
+
+        string rotated = data.ValueKind == JsonValueKind.Object && data.TryGetProperty("refresh_token", out var rProp)
+            ? rProp.GetString() ?? ""
+            : "";
+
+        if (string.IsNullOrEmpty(token) || string.IsNullOrEmpty(rotated))
+        {
+            return false;
+        }
+
+        var scopes = ExoTokenStore.StudioScopes
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(scope => scope.Trim())
+            .Where(scope => scope.Length > 0)
+            .ToList();
+
+        client.UseToken(token);
+
+        try
+        {
+            await client.AuthenticateAsync(token, cancellationToken: ct);
+        }
+        catch (Exception)
+        {
+            // The next reconnect authenticates with the new token anyway.
+        }
+
+        ExoTokenStore.SaveStudioSession(token, ExoTokenStore.StudioPlayerId, scopes, null, rotated);
+        return true;
     }
 
     private async Task ReconnectWithRetryAsync(int maxRetries = 6, int delayMs = 1000)
@@ -376,6 +454,7 @@ public partial class ExoforgeControlCenter : EditorWindow
             var data = await loginClient.SendActionAsync<JsonElement>("auth", "login", new { email, password }, ExoTransportPreference.Http);
             string token = data.TryGetProperty("token", out var tProp) ? tProp.GetString() ?? "" : "";
             string playerId = data.TryGetProperty("player_id", out var pProp) ? pProp.GetString() ?? "" : "";
+            string refreshToken = data.TryGetProperty("refresh_token", out var rProp) ? rProp.GetString() ?? "" : "";
 
             var scopes = new List<string>();
             if (data.TryGetProperty("scopes", out var sProp) && sProp.ValueKind == JsonValueKind.Array)
@@ -394,7 +473,7 @@ public partial class ExoforgeControlCenter : EditorWindow
                 return (false, msg);
             }
 
-            ExoTokenStore.SaveStudioSession(token, playerId, scopes);
+            ExoTokenStore.SaveStudioSession(token, playerId, scopes, null, refreshToken);
             ExoforgeEditorConfig.LastLoginEmail = email;
             ExoforgeEditorConfig.LastLoginPassword = password;
             string successMsg = $"Successfully logged in as {playerId}.";
