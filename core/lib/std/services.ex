@@ -762,17 +762,21 @@ defmodule Exoforge.Std.Services do
   end
 
   defservice file_bucket do
-    @moduledoc "Cluster file storage and retrieval engine for binary assets, uploads, and blobs."
+    @moduledoc """
+    Cluster file storage and retrieval engine for binary assets, uploads, and blobs.
 
-    @doc "Stores a file in a specified bucket from raw binary, base64 content, or disk path."
+    Raw file actions are staff-only. Players reach files only through an extension that applies
+    its own rules, which stores files internally and hands out `signed_url/1` links.
+    """
+
+    @doc "Stores a file in a specified bucket from raw binary or base64 content."
     action :upload_file do
-      scope(:server)
+      scope(:studio)
 
       params(
         filename: :string,
         bucket: [type: :string, optional: true],
-        content: [type: :term, optional: true],
-        path: [type: :string, optional: true],
+        content: :term,
         content_type: [type: :string, optional: true],
         metadata: [type: :map, optional: true]
       )
@@ -783,7 +787,7 @@ defmodule Exoforge.Std.Services do
 
     @doc "Retrieves metadata and local storage path for a file."
     action :get_file_info do
-      scope(:server)
+      scope(:studio)
 
       params(
         id: :string,
@@ -796,7 +800,7 @@ defmodule Exoforge.Std.Services do
 
     @doc "Reads raw binary content of a file."
     action :read_file do
-      scope(:server)
+      scope(:studio)
 
       params(
         id: :string,
@@ -809,7 +813,7 @@ defmodule Exoforge.Std.Services do
 
     @doc "Lists stored files within a bucket or across all buckets."
     action :list_files do
-      scope(:server)
+      scope(:studio)
 
       params(
         bucket: [type: :string, optional: true],
@@ -822,14 +826,14 @@ defmodule Exoforge.Std.Services do
 
     @doc "Lists all existing storage buckets."
     action :list_buckets do
-      scope(:server)
+      scope(:studio)
       params()
       returns(buckets: [:string])
     end
 
     @doc "Modifies an existing file's name, metadata, or content."
     action :update_file do
-      scope(:server)
+      scope(:studio)
 
       params(
         id: :string,
@@ -844,9 +848,40 @@ defmodule Exoforge.Std.Services do
       errors([:not_found, :write_failed])
     end
 
+    @doc """
+    Returns a time-limited download URL for one file. Server-only: an extension decides who may
+    read a file and mints the link; the HTTP file route accepts it without a token until it expires.
+    """
+    action :signed_url do
+      scope(:server)
+
+      params(
+        id: :string,
+        bucket: [type: :string, optional: true],
+        ttl_seconds: [type: :integer, optional: true]
+      )
+
+      returns(url: :string, expires_at: :integer)
+      errors([:not_found])
+    end
+
+    @doc "Whether an unauthenticated download may be served: a public bucket, or a valid signed URL."
+    action :authorize_download do
+      scope(:server)
+
+      params(
+        bucket: :string,
+        id: :string,
+        exp: [type: :string, optional: true],
+        sig: [type: :string, optional: true]
+      )
+
+      returns(allowed: :boolean)
+    end
+
     @doc "Deletes a stored file."
     action :delete_file do
-      scope(:server)
+      scope(:studio)
 
       params(
         id: :string,

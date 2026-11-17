@@ -375,8 +375,19 @@ defmodule Exoforge.ActionDispatcher do
           end
 
         case action_info do
-          %{scope: scope} when not is_nil(scope) -> scope
-          _ -> check_contract_scopes(mod, action)
+          # A defaulted scope must not loosen the contract: `defaction` without `scope:` used to
+          # turn a contract's `:server` into `:player`.
+          %{scope: scope, scope_explicit: false} ->
+            case check_contract_scopes(mod, action) do
+              :global -> scope
+              contract_scope -> contract_scope
+            end
+
+          %{scope: scope} when not is_nil(scope) ->
+            scope
+
+          _ ->
+            check_contract_scopes(mod, action)
         end
 
       function_exported?(mod, :__service_metadata__, 0) ->

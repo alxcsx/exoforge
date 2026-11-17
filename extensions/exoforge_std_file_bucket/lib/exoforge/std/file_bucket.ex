@@ -37,7 +37,6 @@ defmodule Exoforge.Std.FileBucket do
     bucket = sanitize_bucket(payload[:bucket] || payload["bucket"] || "default")
     filename = payload[:filename] || payload["filename"]
     content_param = payload[:content] || payload["content"]
-    path_param = payload[:path] || payload["path"]
     explicit_content_type = payload[:content_type] || payload["content_type"]
     user_metadata = payload[:metadata] || payload["metadata"] || %{}
 
@@ -45,17 +44,11 @@ defmodule Exoforge.Std.FileBucket do
       is_nil(filename) or filename == "" ->
         {:error, :invalid_payload}
 
-      is_nil(content_param) and is_nil(path_param) ->
+      not is_binary(content_param) ->
         {:error, :invalid_payload}
 
       true ->
-        case resolve_binary_data(content_param, path_param) do
-          {:ok, binary} ->
-            store_binary(bucket, filename, binary, explicit_content_type, user_metadata)
-
-          {:error, reason} ->
-            {:error, reason}
-        end
+        store_binary(bucket, filename, decode_content(content_param), explicit_content_type, user_metadata)
     end
   end
 
@@ -284,6 +277,34 @@ defmodule Exoforge.Std.FileBucket do
   end
 
   @impl true
+  defaction signed_url(payload) do
+    id = payload[:id] || payload["id"]
+    bucket = payload[:bucket] || payload["bucket"]
+    sanitized = if is_binary(bucket) and bucket != "", do: sanitize_bucket(bucket), else: nil
+    ttl = payload[:ttl_seconds] || payload["ttl_seconds"] || 300
+
+    case lookup_file(sanitized, id) do
+      nil ->
+        {:error, :not_found}
+
+      file ->
+        expires_at = System.system_time(:second) + max(ttl, 1)
+        sig = url_signature(file["bucket"], file["id"], expires_at)
+        {:ok, %{url: "#{file["url"]}?exp=#{expires_at}&sig=#{sig}", expires_at: expires_at}}
+    end
+  end
+
+  @impl true
+  defaction authorize_download(payload) do
+    bucket = payload[:bucket] || payload["bucket"]
+    id = payload[:id] || payload["id"]
+    exp = payload[:exp] || payload["exp"]
+    sig = payload[:sig] || payload["sig"]
+
+    {:ok, %{allowed: public_bucket?(bucket) or valid_signature?(bucket, id, exp, sig)}}
+  end
+
+  @impl true
   defaction delete_file(payload) do
     id = payload[:id] || payload["id"]
     bucket = payload[:bucket] || payload["bucket"]
@@ -308,21 +329,57 @@ defmodule Exoforge.Std.FileBucket do
     end
   end
 
+  # ---- SIGNED DOWNLOADS ----
+
+  defp valid_signature?(bucket, id, exp, sig) when is_binary(bucket) and is_binary(id) and is_binary(sig) do
+    case Integer.parse(to_string(exp)) do
+      {expires_at, ""} ->
+        expected = url_signature(bucket, id, expires_at)
+
+        expires_at >= System.system_time(:second) and byte_size(expected) == byte_size(sig) and
+          :crypto.hash_equals(expected, sig)
+
+      _ ->
+        false
+    end
+  end
+
+  defp valid_signature?(_bucket, _id, _exp, _sig), do: false
+
+  # Buckets the operator made publicly readable: `config :exoforge_std_file_bucket, public_buckets: [...]`.
+  defp public_bucket?(bucket),
+    do: bucket in Application.get_env(:exoforge_std_file_bucket, :public_buckets, ["sdk"])
+
+  defp url_signature(bucket, id, expires_at) do
+    :crypto.mac(:hmac, :sha256, url_secret(), "#{bucket}/#{id}/#{expires_at}")
+    |> Base.url_encode64(padding: false)
+  end
+
+  defp url_secret do
+    case Application.get_env(:exoforge_std_file_bucket, :url_secret) do
+      secret when is_binary(secret) and secret != "" ->
+        secret
+
+      _ ->
+        case :persistent_term.get({__MODULE__, :url_secret}, nil) do
+          nil ->
+            secret = :crypto.strong_rand_bytes(32)
+            :persistent_term.put({__MODULE__, :url_secret}, secret)
+            secret
+
+          secret ->
+            secret
+        end
+    end
+  end
+
   # ---- STORAGE HELPERS ----
 
-  defp resolve_binary_data(content, path) do
-    cond do
-      is_binary(content) ->
-        case Base.decode64(content) do
-          {:ok, decoded} -> {:ok, decoded}
-          :error -> {:ok, content}
-        end
-
-      is_binary(path) and File.exists?(path) ->
-        File.read(path)
-
-      true ->
-        {:error, :invalid_payload}
+  # Content only: a file is never read from a caller-supplied server path.
+  defp decode_content(content) do
+    case Base.decode64(content) do
+      {:ok, decoded} -> decoded
+      :error -> content
     end
   end
 

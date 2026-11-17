@@ -47,6 +47,9 @@ defmodule Exoforge.Extension do
     arity = length(args)
     line = Keyword.get(meta, :line, __CALLER__.line)
     mode = Keyword.get(opts, :mode, :sync)
+    # An action that states no scope takes its contract's; :player is only the fallback.
+    scope_explicit? = Keyword.has_key?(opts, :scope)
+
     scope =
       opts
       |> Keyword.get(:scope, :player)
@@ -82,6 +85,7 @@ defmodule Exoforge.Extension do
             name: unquote(name),
             mode: unquote(mode),
             scope: unquote(scope),
+            scope_explicit: unquote(scope_explicit?),
             arity: unquote(arity)
           })
 

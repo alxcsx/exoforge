@@ -216,4 +216,60 @@ defmodule Exoforge.Std.FileBucketTest do
     assert sdk_file["filename"] == "com.exoforge.sdk-0.1.31.tgz"
     assert sdk_file["metadata"]["version"] == "0.1.31"
   end
+
+  describe "access" do
+    test "players cannot call raw file actions; staff can" do
+      payload = %{"bucket" => "b", "filename" => "a.txt", "content" => "x"}
+
+      for action <- [:upload_file, :list_files, :list_buckets, :read_file, :get_file_info, :update_file, :delete_file] do
+        assert {:error, {:forbidden_scope, _}} =
+                 ActionDispatcher.dispatch(:file_bucket, action, payload, caller_scopes: ["player"])
+      end
+
+      assert {:ok, %{file: _}} =
+               ActionDispatcher.dispatch(:file_bucket, :upload_file, payload, caller_scopes: ["studio"])
+    end
+
+    test "signed_url and authorize_download are server-only, even for admins" do
+      for action <- [:signed_url, :authorize_download] do
+        assert {:error, {:forbidden_scope, _}} =
+                 ActionDispatcher.dispatch(:file_bucket, action, %{}, caller_scopes: ["admin"])
+      end
+    end
+
+    test "upload_file never reads a server path" do
+      secret = Path.join(System.tmp_dir!(), "exo_bucket_secret_#{System.unique_integer([:positive])}")
+      File.write!(secret, "do not leak")
+
+      assert {:error, :invalid_payload} =
+               ActionDispatcher.dispatch_internal(:file_bucket, :upload_file, %{
+                 "bucket" => "x",
+                 "filename" => "h.txt",
+                 "path" => secret
+               })
+
+      File.rm(secret)
+    end
+
+    test "a signed URL authorizes one file until it expires" do
+      {:ok, %{file: file}} =
+        ActionDispatcher.dispatch_internal(:file_bucket, :upload_file, %{"bucket" => "levels", "filename" => "l.png", "content" => "png"})
+
+      {:ok, %{url: url}} =
+        ActionDispatcher.dispatch_internal(:file_bucket, :signed_url, %{"bucket" => "levels", "id" => file["id"], "ttl_seconds" => 60})
+
+      %{"exp" => exp, "sig" => sig} = url |> URI.parse() |> Map.get(:query) |> URI.decode_query()
+      grant = %{"bucket" => "levels", "id" => file["id"], "exp" => exp, "sig" => sig}
+
+      assert {:ok, %{allowed: true}} = ActionDispatcher.dispatch_internal(:file_bucket, :authorize_download, grant)
+      assert {:ok, %{allowed: false}} = ActionDispatcher.dispatch_internal(:file_bucket, :authorize_download, %{grant | "id" => "other"})
+      assert {:ok, %{allowed: false}} = ActionDispatcher.dispatch_internal(:file_bucket, :authorize_download, %{grant | "exp" => "1"})
+      assert {:ok, %{allowed: false}} = ActionDispatcher.dispatch_internal(:file_bucket, :authorize_download, Map.delete(grant, "sig"))
+    end
+
+    test "only operator-listed buckets are public" do
+      assert {:ok, %{allowed: true}} = ActionDispatcher.dispatch_internal(:file_bucket, :authorize_download, %{"bucket" => "sdk", "id" => "any"})
+      assert {:ok, %{allowed: false}} = ActionDispatcher.dispatch_internal(:file_bucket, :authorize_download, %{"bucket" => "levels", "id" => "any"})
+    end
+  end
 end

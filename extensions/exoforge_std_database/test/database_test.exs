@@ -346,4 +346,20 @@ defmodule Exoforge.DatabaseTest do
       assert {:ok, _} = Database.execute(plugin, "CREATE TABLE t (id text)")
     end
   end
+
+  describe "access" do
+    test "execute takes its contract's :server scope, so no transport caller can run SQL" do
+      Exoforge.ExtensionCase.start_kernel()
+      Exoforge.ExtensionCase.register_database(Exoforge.Std.Database)
+
+      query = %{plugin: :auth, operation: "SELECT 1 AS one", arguments: []}
+
+      for scopes <- [["player"], ["studio"], ["admin"]] do
+        assert {:error, {:forbidden_scope, _}} =
+                 Exoforge.ActionDispatcher.dispatch(:database, :execute, query, caller_scopes: scopes)
+      end
+
+      assert {:ok, %{rows: [%{"one" => 1}]}} = Exoforge.ActionDispatcher.dispatch_internal(:database, :execute, query)
+    end
+  end
 end

@@ -348,9 +348,10 @@ defmodule Exoforge.HttpTest do
       assert file["filename"] == "hello.txt"
       assert file["bucket"] == "assets"
 
-      # Download/serve the file
+      # Download/serve the file (staff)
       get_conn =
         conn(:get, "/api/files/assets/#{file["id"]}")
+        |> put_req_header("authorization", "Bearer dev:admin")
         |> Router.call(@opts)
 
       assert get_conn.status == 200
@@ -383,6 +384,62 @@ defmodule Exoforge.HttpTest do
 
       # Clean up tmp file
       File.rm(tmp_path)
+    end
+  end
+
+  describe "File Bucket access" do
+    setup do
+      {:ok, player} = Exoforge.Std.Auth.issue_token("ply_files", ["player"])
+
+      {:ok, %{file: file}} =
+        Exoforge.ActionDispatcher.dispatch_internal(:file_bucket, :upload_file, %{
+          "bucket" => "levels",
+          "filename" => "level.png",
+          "content" => "png-bytes"
+        })
+
+      %{player: player, stored: file}
+    end
+
+    test "a player cannot upload raw files", %{player: player} do
+      conn =
+        conn(:post, "/api/files/upload", Jason.encode!(%{"bucket" => "levels", "filename" => "x.txt", "content" => "x"}))
+        |> put_req_header("content-type", "application/json")
+        |> put_req_header("authorization", "Bearer #{player}")
+        |> Router.call(@opts)
+
+      assert conn.status == 403
+    end
+
+    test "a player cannot reach the raw file actions", %{player: player} do
+      for action <- ["upload_file", "read_file", "list_files", "delete_file"] do
+        conn =
+          conn(:post, "/api/file_bucket/#{action}", Jason.encode!(%{"bucket" => "levels", "filename" => "h.txt", "path" => "/etc/hosts"}))
+          |> put_req_header("content-type", "application/json")
+          |> put_req_header("authorization", "Bearer #{player}")
+          |> Router.call(@opts)
+
+        assert conn.status == 403, "#{action} returned #{conn.status}: #{conn.resp_body}"
+      end
+    end
+
+    test "a stored file is not served without a token or signature", %{player: player, stored: file} do
+      assert conn(:get, file["url"]) |> Router.call(@opts) |> Map.get(:status) == 403
+
+      as_player = conn(:get, file["url"]) |> put_req_header("authorization", "Bearer #{player}") |> Router.call(@opts)
+      assert as_player.status == 403
+    end
+
+    test "a signed URL serves exactly that file", %{stored: file} do
+      {:ok, %{url: url}} =
+        Exoforge.ActionDispatcher.dispatch_internal(:file_bucket, :signed_url, %{"bucket" => "levels", "id" => file["id"]})
+
+      ok = conn(:get, url) |> Router.call(@opts)
+      assert ok.status == 200
+      assert ok.resp_body == "png-bytes"
+
+      tampered = conn(:get, String.replace(url, "sig=", "sig=x")) |> Router.call(@opts)
+      assert tampered.status == 403
     end
   end
 

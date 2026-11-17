@@ -249,9 +249,13 @@ defmodule Exoforge.Std.Http.Router do
   # ---- FILE BUCKET INGRESS & SERVING ----
 
   post "/api/files/upload" do
+    # Raw uploads are for staff tooling. Players upload through an extension action, which
+    # applies its own rules before storing anything.
     case authenticate_token(token_from_request(conn)) do
       {:ok, auth_info} ->
-        handle_file_upload(conn, auth_info)
+        if Exoforge.Auth.Roles.rank_of(auth_info.scopes) >= 2,
+          do: handle_file_upload(conn, auth_info),
+          else: forbidden(conn)
 
       :error ->
         unauthenticated(conn)
@@ -391,16 +395,13 @@ defmodule Exoforge.Std.Http.Router do
     # Support multipart file upload as well as JSON body
     params = conn.body_params
 
-    {filename, path, content, explicit_ct} =
+    {filename, content, explicit_ct} =
       case params["file"] do
         %Plug.Upload{path: upload_path, filename: orig_name, content_type: ct} ->
-          {orig_name, upload_path, nil, ct}
+          {orig_name, File.read!(upload_path), ct}
 
         _ ->
-          name = params["filename"] || "uploaded_file.bin"
-          data = params["content"]
-          ct = params["content_type"]
-          {name, nil, data, ct}
+          {params["filename"] || "uploaded_file.bin", params["content"], params["content_type"]}
       end
 
     bucket = params["bucket"] || "default"
@@ -408,7 +409,6 @@ defmodule Exoforge.Std.Http.Router do
     upload_payload = %{
       "bucket" => bucket,
       "filename" => filename,
-      "path" => path,
       "content" => content,
       "content_type" => explicit_ct,
       "metadata" => params["metadata"] || %{}
@@ -429,6 +429,36 @@ defmodule Exoforge.Std.Http.Router do
   defp serve_file(conn, bucket, id, filename) do
     case ActionDispatcher.dispatch_internal(:file_bucket, :get_file_info, %{"bucket" => bucket, "id" => id}) do
       {:ok, %{file: file}} ->
+        if file_readable?(conn, file),
+          do: send_stored_file(conn, file, filename),
+          else: send_json(conn, 403, %{status: "error", error: "forbidden", message: "Files are served to staff, from public buckets, or through a signed URL an extension issues."})
+
+      _ ->
+        send_json(conn, 404, %{status: "error", error: "not_found"})
+    end
+  end
+
+  # A player never reads a bucket directly: an extension decides and mints a signed URL.
+  defp file_readable?(conn, file) do
+    conn = Plug.Conn.fetch_query_params(conn)
+    file_bucket = file["bucket"] || file[:bucket]
+    file_id = file["id"] || file[:id]
+
+    grant = %{"bucket" => file_bucket, "id" => file_id, "exp" => conn.query_params["exp"], "sig" => conn.query_params["sig"]}
+
+    case ActionDispatcher.dispatch_internal(:file_bucket, :authorize_download, grant) do
+      {:ok, %{allowed: true}} ->
+        true
+
+      _ ->
+        case authenticate_token(token_from_request(conn)) do
+          {:ok, auth} -> Exoforge.Auth.Roles.rank_of(auth.scopes) >= 2
+          :error -> false
+        end
+    end
+  end
+
+  defp send_stored_file(conn, file, filename) do
         raw_path = file["disk_path"] || file[:disk_path]
         disk_path = if raw_path, do: Path.expand(raw_path), else: nil
         content_type = file["content_type"] || file[:content_type] || "application/octet-stream"
@@ -448,10 +478,6 @@ defmodule Exoforge.Std.Http.Router do
         else
           send_json(conn, 404, %{status: "error", error: "file_missing_on_disk"})
         end
-
-      _ ->
-        send_json(conn, 404, %{status: "error", error: "not_found"})
-    end
   end
 
   match _ do
