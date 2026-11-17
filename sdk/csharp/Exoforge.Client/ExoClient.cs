@@ -375,7 +375,7 @@ public class ExoClient : IDisposable
             {
                 string errCode = result.Error?.Code ?? "unknown_error";
                 string errMsg = result.Error?.Message ?? "Action failed on server";
-                var ex = CreateActionException(service, action, errCode, errMsg, result.RequestId);
+                var ex = CreateActionException(service, action, errCode, errMsg, result.RequestId, result.Error?.Details);
                 OnError?.Invoke(ex.Message, ex);
                 throw ex;
             }
@@ -468,10 +468,12 @@ public class ExoClient : IDisposable
         {
             string errCode = "http_error";
             string errMsg = $"HTTP {(int)response.StatusCode}";
+            JsonElement? errDetails = null;
 
-            // The current shape keeps the code and the message apart: {"error":"invalid_png",
-            // "message":"Not a PNG image."}. An older server sent only an error string, which was
-            // the message; with no top-level message to prefer, that reading still holds.
+            // The current shape nests the error: {"error":{"code":"invalid_png",
+            // "message":"Not a PNG image.","details":{...}}}. One release back the code and the
+            // message were flat: {"error":"invalid_png","message":"Not a PNG image."}; before
+            // that the error was the message alone. All three are read here.
             string? rootMessage =
                 root.TryGetProperty("message", out var messageProp) &&
                 messageProp.ValueKind == JsonValueKind.String
@@ -499,8 +501,20 @@ public class ExoClient : IDisposable
                 }
                 else if (errProp.ValueKind == JsonValueKind.Object)
                 {
-                    if (errProp.TryGetProperty("code", out var cProp)) errCode = cProp.GetString() ?? errCode;
-                    if (errProp.TryGetProperty("message", out var mProp)) errMsg = mProp.GetString() ?? errMsg;
+                    if (errProp.TryGetProperty("code", out var cProp) && cProp.ValueKind == JsonValueKind.String)
+                    {
+                        errCode = cProp.GetString() ?? errCode;
+                    }
+
+                    if (errProp.TryGetProperty("message", out var mProp) && mProp.ValueKind == JsonValueKind.String)
+                    {
+                        errMsg = mProp.GetString() ?? errMsg;
+                    }
+
+                    if (errProp.TryGetProperty("details", out var detProp) && detProp.ValueKind != JsonValueKind.Null)
+                    {
+                        errDetails = detProp.Clone();
+                    }
                 }
             }
             else if (rootMessage != null)
@@ -508,7 +522,7 @@ public class ExoClient : IDisposable
                 errMsg = rootMessage;
             }
 
-            var ex = CreateActionException(service, action, errCode, errMsg, rid);
+            var ex = CreateActionException(service, action, errCode, errMsg, rid, errDetails);
             OnError?.Invoke(ex.Message, ex);
             throw ex;
         }
@@ -517,7 +531,13 @@ public class ExoClient : IDisposable
         return DeserializeResult<TResult>(dataElement);
     }
 
-    private static ExoActionException CreateActionException(string service, string action, string errCode, string errMsg, string? rid = null)
+    private static ExoActionException CreateActionException(
+        string service,
+        string action,
+        string errCode,
+        string errMsg,
+        string? rid = null,
+        JsonElement? details = null)
     {
         if (errCode == "service_not_found" || errMsg == "service_not_found" || errMsg == ":service_not_found" ||
             errMsg.Contains("was not found on the remote server") || errMsg.Contains("service_not_found"))
@@ -537,7 +557,7 @@ public class ExoClient : IDisposable
                 rid);
         }
 
-        return new ExoActionException(errCode, errMsg, rid);
+        return new ExoActionException(errCode, errMsg, rid, details);
     }
 
     private static TResult DeserializeResult<TResult>(JsonElement data)
@@ -975,15 +995,22 @@ public class ExoActionException : Exception
     public string? RequestId { get; }
 
     /// <summary>
+    /// What the server put beside the code and the message on a failure - a required scope, the
+    /// caller's scopes, or an extension's own fields. Null when the server sent none.
+    /// </summary>
+    public JsonElement? Details { get; }
+
+    /// <summary>
     /// <see cref="Exception.Message"/> is the server's message alone; <see cref="Code"/> is the
     /// machine-readable code a caller branches on, and <see cref="RequestId"/> is what a bug report
     /// quotes. Composing all three into one string made every consumer parse it back apart.
     /// </summary>
-    public ExoActionException(string code, string message, string? requestId = null)
+    public ExoActionException(string code, string message, string? requestId = null, JsonElement? details = null)
         : base(message)
     {
         Code = code;
         RequestId = requestId;
+        Details = details;
     }
 
     /// <summary>The line a log shows: code, message and the rid a bug report quotes.</summary>

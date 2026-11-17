@@ -105,7 +105,11 @@ defmodule Exoforge.Std.Ws.SocketHandler do
           reply(
             %{
               type: @frame_error,
-              error: %{code: @code_unauthenticated, message: "Authenticate before subscribing."}
+              error: %{
+                code: @code_unauthenticated,
+                message: "Authenticate before subscribing.",
+                details: %{}
+              }
             },
             state
           )
@@ -125,7 +129,7 @@ defmodule Exoforge.Std.Ws.SocketHandler do
             error: %{
               code: @code_unhandled_message,
               message: "Unhandled message type",
-              payload: unhandled
+              details: %{payload: unhandled}
             }
           },
           state
@@ -135,7 +139,11 @@ defmodule Exoforge.Std.Ws.SocketHandler do
         reply(
           %{
             type: @frame_error,
-            error: %{code: @code_invalid_json, message: Exception.message(decode_err)}
+            error: %{
+              code: @code_invalid_json,
+              message: Exception.message(decode_err),
+              details: %{}
+            }
           },
           state
         )
@@ -207,17 +215,14 @@ defmodule Exoforge.Std.Ws.SocketHandler do
           %{
             type: @frame_auth_result,
             status: @status_error,
-            error: %{
-              code: to_string(code),
-              message: message
-            }
+            error: Transport.action_error({code, message})
           },
           state
         )
 
       {:error, reason} ->
         Logger.warning("[WS] Authentication failed: #{inspect(reason)}")
-        reply(%{type: @frame_auth_result, status: @status_error, error: reason}, state)
+        reply(%{type: @frame_auth_result, status: @status_error, error: Transport.action_error(reason)}, state)
     end
   end
 
@@ -244,16 +249,13 @@ defmodule Exoforge.Std.Ws.SocketHandler do
 
   defp unauthenticated_action(req, state, rid) do
     reply(
-      %{
-        type: @frame_action_result,
-        id: Map.get(req, @id_key),
-        rid: rid,
-        status: @status_error,
-        error: %{
-          code: @code_unauthenticated,
-          message: "Authenticate first with a {type: \"auth\", token} frame."
-        }
-      },
+      Map.merge(
+        %{type: @frame_action_result, id: Map.get(req, @id_key)},
+        Transport.error_body(
+          {@code_unauthenticated, "Authenticate first with a {type: \"auth\", token} frame."},
+          rid
+        )
+      ),
       state
     )
   end
@@ -320,87 +322,19 @@ defmodule Exoforge.Std.Ws.SocketHandler do
           data: %{}
         })
 
-      {:error, {:forbidden_scope, details}} ->
-        Logger.warning(
-          "[WS:Action] #{service}.#{action} by #{auth.player_id} -> forbidden_scope (#{latency_us}µs)"
-        )
-
-        push.(%{
-          type: @frame_action_result,
-          id: req_id,
-          rid: rid,
-          status: @status_error,
-          error: %{
-            code: "forbidden_scope",
-            message: "Scope authorization failed",
-            required_scope: details.required,
-            caller_scopes: details.caller_scopes
-          }
-        })
-
-      {:error, reason} when reason in [:unauthorized, :forbidden_scope] ->
-        Logger.warning(
-          "[WS:Action] #{service}.#{action} by #{auth.player_id} -> #{reason} (#{latency_us}µs)"
-        )
-
-        push.(%{
-          type: @frame_action_result,
-          id: req_id,
-          rid: rid,
-          status: @status_error,
-          error: %{
-            code: to_string(reason),
-            message: "Scope authorization failed"
-          }
-        })
-
-      {:error, :service_not_found} ->
-        Logger.warning(
-          "[WS:Action] #{service}.#{action} by #{auth.player_id} -> service_not_found (#{latency_us}µs)"
-        )
-
-        push.(%{
-          type: @frame_action_result,
-          id: req_id,
-          rid: rid,
-          status: @status_error,
-          error: %{
-            code: "service_not_found",
-            message:
-              "Service '#{service}' was not found on the remote server. Ensure the extension providing '#{service}' is deployed and running."
-          }
-        })
-
-      {:error, {:action_not_found, missing_action}} ->
-        Logger.warning(
-          "[WS:Action] #{service}.#{action} by #{auth.player_id} -> action_not_found (#{latency_us}µs)"
-        )
-
-        push.(%{
-          type: @frame_action_result,
-          id: req_id,
-          rid: rid,
-          status: @status_error,
-          error: %{
-            code: "action_not_found",
-            message: "Action '#{missing_action}' was not found on service '#{service}'."
-          }
-        })
-
       {:error, reason} ->
-        %{"code" => code, "message" => message} = Transport.action_error(reason)
+        error = Transport.action_error(reason)
 
         Logger.warning(
-          "[WS:Action] #{service}.#{action} by #{auth.player_id} -> error: #{code}: #{message} (#{latency_us}µs)"
+          "[WS:Action] #{service}.#{action} by #{auth.player_id} -> error: #{error["code"]}: #{error["message"]} (#{latency_us}µs)"
         )
 
-        push.(%{
-          type: @frame_action_result,
-          id: req_id,
-          rid: rid,
-          status: @status_error,
-          error: %{code: code, message: message}
-        })
+        push.(
+          Map.merge(
+            %{type: @frame_action_result, id: req_id},
+            Transport.error_body(reason, rid)
+          )
+        )
     end
   end
 

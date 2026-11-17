@@ -111,7 +111,8 @@ defmodule Exoforge.Std.TransportTest do
                "status" => "error",
                "error" => %{
                  "code" => "not_found",
-                 "message" => "Item not found"
+                 "message" => "Item not found",
+                 "details" => %{}
                }
              }
     end
@@ -124,7 +125,8 @@ defmodule Exoforge.Std.TransportTest do
                "status" => "error",
                "error" => %{
                  "code" => "action_failed",
-                 "message" => "Something exploded"
+                 "message" => "Something exploded",
+                 "details" => %{}
                }
              }
       refute Map.has_key?(result, "id")
@@ -134,26 +136,105 @@ defmodule Exoforge.Std.TransportTest do
   describe "action_error/1" do
     test "keeps a native extension's code and message map" do
       assert Transport.action_error(%{"code" => "invalid_png", "message" => "Not a PNG image."}) ==
-               %{"code" => "invalid_png", "message" => "Not a PNG image."}
+               %{"code" => "invalid_png", "message" => "Not a PNG image.", "details" => %{}}
+    end
+
+    test "keeps the details a native extension reported" do
+      assert Transport.action_error(%{
+               "code" => "quota_exceeded",
+               "message" => "Too many uploads.",
+               "details" => %{"limit" => 10}
+             }) == %{
+               "code" => "quota_exceeded",
+               "message" => "Too many uploads.",
+               "details" => %{"limit" => 10}
+             }
     end
 
     test "keeps an atom-keyed code and message map" do
       assert Transport.action_error(%{code: :invalid_png, message: "Not a PNG image."}) ==
-               %{"code" => "invalid_png", "message" => "Not a PNG image."}
+               %{"code" => "invalid_png", "message" => "Not a PNG image.", "details" => %{}}
     end
 
     test "keeps a defaction code and message tuple" do
       assert Transport.action_error({:invalid_png, "Not a PNG image."}) ==
-               %{"code" => "invalid_png", "message" => "Not a PNG image."}
+               %{"code" => "invalid_png", "message" => "Not a PNG image.", "details" => %{}}
     end
 
     test "a bare atom is its own code and message" do
       assert Transport.action_error(:bad_signature) ==
-               %{"code" => "bad_signature", "message" => "bad_signature"}
+               %{"code" => "bad_signature", "message" => "bad_signature", "details" => %{}}
     end
 
     test "a bare binary is the message of an action_failed error" do
-      assert Transport.action_error("boom") == %{"code" => "action_failed", "message" => "boom"}
+      assert Transport.action_error("boom") == %{
+               "code" => "action_failed",
+               "message" => "boom",
+               "details" => %{}
+             }
+    end
+
+    test "a missing action names it in the details" do
+      error = Transport.action_error({:action_not_found, :ping})
+
+      assert error["code"] == "action_not_found"
+      assert error["details"] == %{"action" => "ping"}
+      assert error["message"] =~ "ping"
+    end
+
+    test "a scope refusal moves the required and caller scopes into the details" do
+      error = Transport.action_error({:forbidden_scope, %{required: :server, caller_scopes: [:player]}})
+
+      assert error == %{
+               "code" => "forbidden_scope",
+               "message" => "Scope authorization failed",
+               "details" => %{"required_scope" => "server", "caller_scopes" => ["player"]}
+             }
+    end
+
+    test "a bare scope refusal still answers in the nested shape" do
+      assert Transport.action_error(:forbidden_scope) == %{
+               "code" => "forbidden_scope",
+               "message" => "Scope authorization failed",
+               "details" => %{}
+             }
+    end
+  end
+
+  describe "error_body/2" do
+    test "wraps the error with the status and the request id" do
+      assert Transport.error_body({:not_found, "Item not found"}, "r_1") == %{
+               "status" => "error",
+               "error" => %{
+                 "code" => "not_found",
+                 "message" => "Item not found",
+                 "details" => %{}
+               },
+               "rid" => "r_1"
+             }
+    end
+
+    test "omits the rid when the request has none" do
+      assert Transport.error_body(:unauthorized) == %{
+               "status" => "error",
+               "error" => %{
+                 "code" => "unauthorized",
+                 "message" => "unauthorized",
+                 "details" => %{}
+               }
+             }
+    end
+  end
+
+  describe "http_status/1" do
+    test "maps each refusal to the status HTTP already answered with" do
+      assert Transport.http_status(:service_not_found) == 404
+      assert Transport.http_status({:action_not_found, :ping}) == 404
+      assert Transport.http_status(:unauthorized) == 401
+      assert Transport.http_status(:forbidden_scope) == 403
+      assert Transport.http_status({:forbidden_scope, %{required: :admin}}) == 403
+      assert Transport.http_status({:invalid_png, "Not a PNG image."}) == 400
+      assert Transport.http_status("boom") == 400
     end
   end
 

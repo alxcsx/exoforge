@@ -66,6 +66,14 @@ public class ExoErrorDetails
 
     [JsonPropertyName("message")]
     public string Message { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Whatever the server put beside the code and the message: the required scope and the caller's
+    /// scopes on a refusal, the missing action on a 404, or an extension's own fields. Always an
+    /// object on a current server; absent on servers that predate it.
+    /// </summary>
+    [JsonPropertyName("details")]
+    public JsonElement? Details { get; set; }
 }
 
 public sealed class ExoErrorDetailsConverter : JsonConverter<ExoErrorDetails>
@@ -90,6 +98,7 @@ public sealed class ExoErrorDetailsConverter : JsonConverter<ExoErrorDetails>
         {
             string code = "internal_error";
             string message = string.Empty;
+            JsonElement? details = null;
 
             while (reader.Read())
             {
@@ -102,18 +111,30 @@ public sealed class ExoErrorDetailsConverter : JsonConverter<ExoErrorDetails>
                 {
                     string prop = reader.GetString() ?? string.Empty;
                     reader.Read();
-                    if (string.Equals(prop, "code", StringComparison.OrdinalIgnoreCase))
+
+                    if (string.Equals(prop, "code", StringComparison.OrdinalIgnoreCase) &&
+                        reader.TokenType == JsonTokenType.String)
                     {
                         code = reader.GetString() ?? code;
                     }
-                    else if (string.Equals(prop, "message", StringComparison.OrdinalIgnoreCase))
+                    else if (string.Equals(prop, "message", StringComparison.OrdinalIgnoreCase) &&
+                             reader.TokenType == JsonTokenType.String)
                     {
                         message = reader.GetString() ?? message;
+                    }
+                    else if (string.Equals(prop, "details", StringComparison.OrdinalIgnoreCase) &&
+                             reader.TokenType != JsonTokenType.Null)
+                    {
+                        details = JsonElement.ParseValue(ref reader);
+                    }
+                    else
+                    {
+                        reader.Skip();
                     }
                 }
             }
 
-            return new ExoErrorDetails { Code = code, Message = message };
+            return new ExoErrorDetails { Code = code, Message = message, Details = details };
         }
 
         return new ExoErrorDetails { Code = "internal_error", Message = "Unknown error format" };
@@ -124,6 +145,13 @@ public sealed class ExoErrorDetailsConverter : JsonConverter<ExoErrorDetails>
         writer.WriteStartObject();
         writer.WriteString("code", value.Code);
         writer.WriteString("message", value.Message);
+
+        if (value.Details.HasValue)
+        {
+            writer.WritePropertyName("details");
+            value.Details.Value.WriteTo(writer);
+        }
+
         writer.WriteEndObject();
     }
 }

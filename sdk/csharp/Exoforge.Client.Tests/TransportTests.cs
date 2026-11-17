@@ -244,6 +244,122 @@ public class TransportTests
     }
 
     [Fact]
+    public async Task A_nested_error_surfaces_its_details()
+    {
+        await using var server = StubWebSocketServer.Start();
+        using var client = NewClient();
+
+        await client.ConnectAsync(server.Uri);
+
+        var call = client.SendActionAsync<JsonElement>("demo", "forbidden", new { });
+        string frame = await server.NextReceivedAsync(TimeSpan.FromSeconds(5));
+
+        await server.SendAsync(
+            "{\"type\":\"action_result\",\"id\":\"" + RequestId(frame) +
+            "\",\"status\":\"error\",\"error\":{\"code\":\"forbidden_scope\"," +
+            "\"message\":\"Scope authorization failed\",\"details\":{\"required_scope\":\"admin\"," +
+            "\"caller_scopes\":[\"player\"]}}}");
+
+        var failure = await Assert.ThrowsAsync<ExoActionException>(
+            () => PumpAsync(call, client, TimeSpan.FromSeconds(5)));
+
+        Assert.Equal("forbidden_scope", failure.Code);
+        Assert.Equal("Scope authorization failed", failure.Message);
+        Assert.NotNull(failure.Details);
+        Assert.Equal("admin", failure.Details!.Value.GetProperty("required_scope").GetString());
+    }
+
+    [Fact]
+    public async Task An_old_string_error_is_read_as_the_message()
+    {
+        await using var server = StubWebSocketServer.Start();
+        using var client = NewClient();
+
+        await client.ConnectAsync(server.Uri);
+
+        var call = client.SendActionAsync<JsonElement>("demo", "explode", new { });
+        string frame = await server.NextReceivedAsync(TimeSpan.FromSeconds(5));
+
+        await server.SendAsync(
+            "{\"type\":\"action_result\",\"id\":\"" + RequestId(frame) +
+            "\",\"status\":\"error\",\"error\":\"it broke\"}");
+
+        var failure = await Assert.ThrowsAsync<ExoActionException>(
+            () => PumpAsync(call, client, TimeSpan.FromSeconds(5)));
+
+        Assert.Equal("internal_error", failure.Code);
+        Assert.Equal("it broke", failure.Message);
+        Assert.Null(failure.Details);
+    }
+
+    [Fact]
+    public async Task A_nested_http_error_surfaces_its_details()
+    {
+        int port = FreeLoopbackPort();
+        using var listener = new HttpListener();
+        listener.Prefixes.Add($"http://127.0.0.1:{port}/");
+        listener.Start();
+
+        var serve = Task.Run(async () =>
+        {
+            var context = await listener.GetContextAsync();
+            byte[] body = Encoding.UTF8.GetBytes(
+                "{\"status\":\"error\",\"error\":{\"code\":\"forbidden_scope\"," +
+                "\"message\":\"Scope authorization failed\",\"details\":{\"required_scope\":\"admin\"}}," +
+                "\"rid\":\"r_http_8\"}");
+            context.Response.StatusCode = 403;
+            context.Response.ContentType = "application/json";
+            context.Response.Headers["x-exoforge-rid"] = "r_http_8";
+            await context.Response.OutputStream.WriteAsync(body);
+            context.Response.Close();
+        });
+
+        using var client = NewClient();
+        client.HttpBaseUri = new Uri($"http://127.0.0.1:{port}");
+
+        var failure = await Assert.ThrowsAsync<ExoActionException>(
+            () => client.SendActionAsync<JsonElement>("game_menu", "upload_icon", new { }));
+
+        await serve;
+
+        Assert.Equal("forbidden_scope", failure.Code);
+        Assert.Equal("Scope authorization failed", failure.Message);
+        Assert.Equal("r_http_8", failure.RequestId);
+        Assert.Equal("admin", failure.Details!.Value.GetProperty("required_scope").GetString());
+    }
+
+    [Fact]
+    public async Task An_old_string_only_http_error_is_read_as_the_message()
+    {
+        int port = FreeLoopbackPort();
+        using var listener = new HttpListener();
+        listener.Prefixes.Add($"http://127.0.0.1:{port}/");
+        listener.Start();
+
+        var serve = Task.Run(async () =>
+        {
+            var context = await listener.GetContextAsync();
+            byte[] body = Encoding.UTF8.GetBytes("{\"status\":\"error\",\"error\":\"it broke\"}");
+            context.Response.StatusCode = 400;
+            context.Response.ContentType = "application/json";
+            await context.Response.OutputStream.WriteAsync(body);
+            context.Response.Close();
+        });
+
+        using var client = NewClient();
+        client.HttpBaseUri = new Uri($"http://127.0.0.1:{port}");
+
+        var failure = await Assert.ThrowsAsync<ExoActionException>(
+            () => client.SendActionAsync<JsonElement>("game_menu", "upload_icon", new { }));
+
+        await serve;
+
+        Assert.Equal("http_error", failure.Code);
+        Assert.Equal("it broke", failure.Message);
+        Assert.Null(failure.Details);
+    }
+
+    [Fact]
     public async Task A_flat_http_error_surfaces_the_code_and_the_server_message()
     {
         int port = FreeLoopbackPort();
