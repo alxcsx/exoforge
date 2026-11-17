@@ -11,6 +11,10 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
   """
   @behaviour Exoforge.Std.Database.Adapter
 
+  # Declared column types, per table. Filled on the first read of a table through this module's
+  # connection process (one per plugin database) and dropped by any schema change.
+  @column_types_cache {__MODULE__, :column_types}
+
   @impl true
   def ensure_database(plugin_id, config) do
     path = db_path(plugin_id, config)
@@ -75,9 +79,14 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
   defp run_sql(conn, sql, args) do
     read? = String.match?(sql, ~r/^\s*SELECT/i)
     # SQLite has no boolean type: `true` bound by exqlite is the text "true" (it serializes any atom
-    # that way), while a bare `DEFAULT false` is the integer 0. The declared column type is the only
-    # place that says which values the caller means, so the row is decoded by it.
-    types = if read?, do: column_types_for(sql), else: %{}
+    # that way), while `DEFAULT false` is the integer 0. The table's own declared column type is
+    # what says which values the caller means, so a single-table read decodes its rows by it.
+    types = if read?, do: column_types_for(conn, sql), else: %{}
+
+    # A statement that changes the schema outdates what was learned about its columns.
+    if not read? and String.match?(sql, ~r/^\s*(?:CREATE|ALTER|DROP)\b/i) do
+      Process.delete(@column_types_cache)
+    end
 
     case Exqlite.Sqlite3.prepare(conn, sql) do
       {:ok, stmt} ->
@@ -111,49 +120,69 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
 
   ## ---- DECLARED COLUMN TYPES ----
 
-  # A result column named like a declared resource column is decoded by that column's type: boolean
-  # text/integers to booleans, numeric text to numbers. Columns the SQL produced some other way
-  # (expressions, joins, `SELECT 1`) are left alone.
-  defp column_types_for(sql) do
+  defp column_types_for(conn, sql) do
     case sql_table(sql) do
       nil -> %{}
-      table -> declared_column_types(table)
+      table -> table_column_types(conn, table)
     end
   end
 
+  # Only a plain single-table read has one set of declarations for every result column. A join or
+  # a subquery can mix tables whose columns share a name, so those are left alone.
   defp sql_table(sql) do
-    case Regex.run(~r/\bFROM\s+"?([A-Za-z0-9_]+)"?/i, sql) do
-      [_, table] ->
-        table
+    cond do
+      String.match?(sql, ~r/\bJOIN\b/i) ->
+        nil
 
-      _ ->
-        case Regex.run(~r/\b(?:UPDATE|INTO)\s+"?([A-Za-z0-9_]+)"?/i, sql) do
-          [_, table] -> table
+      length(Regex.scan(~r/\bFROM\b/i, sql)) != 1 ->
+        nil
+
+      true ->
+        case Regex.run(
+               ~r/\bFROM\s+"?([A-Za-z0-9_]+)"?(?:\s+(?:AS\s+)?[A-Za-z_][A-Za-z0-9_]*)?\s*(?:\bWHERE\b|\bORDER\b|\bGROUP\b|\bLIMIT\b|$)/i,
+               sql
+             ) do
+          [_, table | _] -> table
           _ -> nil
         end
     end
   end
 
-  defp declared_column_types(table) do
-    table = to_string(table)
+  defp table_column_types(conn, table) do
+    cache = Process.get(@column_types_cache, %{})
 
-    with {:ok, %{resource: res}} <- Exoforge.ExtensionRegistry.fetch_resource(table),
-         ^table <- table_source(res) do
-      for col <- Map.get(res, :columns) || Map.get(res, "columns") || [],
-          name = to_string(Map.get(col, :name) || Map.get(col, "name") || ""),
-          name != "",
-          type = column_type(Map.get(col, :type) || Map.get(col, "type")),
-          into: %{},
-          do: {name, type}
-    else
-      _ -> %{}
+    case Map.fetch(cache, table) do
+      {:ok, types} ->
+        types
+
+      :error ->
+        types = load_column_types(conn, table)
+        Process.put(@column_types_cache, Map.put(cache, table, types))
+        types
     end
-  rescue
-    _ -> %{}
   end
 
-  defp column_type(type) when is_binary(type), do: Exoforge.Atoms.existing(type, type)
-  defp column_type(type), do: type
+  # SQLite keeps the declared type verbatim, so its own schema answers what a column means - for a
+  # resource table and for one an extension created with raw SQL alike.
+  defp load_column_types(conn, table) do
+    safe_table = String.replace(table, "\"", "")
+
+    case run_sql(conn, "PRAGMA table_info(\"#{safe_table}\")", []) do
+      {:ok, %{rows: rows}} ->
+        for row <- rows, boolean_type(row["type"]) do
+          {to_string(row["name"]), :boolean}
+        end
+        |> Map.new()
+
+      _ ->
+        %{}
+    end
+  end
+
+  defp boolean_type(type) when is_binary(type),
+    do: String.contains?(String.downcase(type), "bool")
+
+  defp boolean_type(_type), do: false
 
   defp coerce_row(row, types) when types == %{}, do: row
 
@@ -162,8 +191,6 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
   end
 
   defp coerce_value(:boolean, value), do: to_boolean(value)
-  defp coerce_value(:integer, value), do: to_integer(value)
-  defp coerce_value(:float, value), do: to_float(value)
   defp coerce_value(_type, value), do: value
 
   defp to_boolean(nil), do: nil
@@ -185,30 +212,6 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
   end
 
   defp to_boolean(value), do: value
-
-  defp to_integer(value) when is_integer(value), do: value
-  defp to_integer(value) when is_float(value), do: trunc(value)
-
-  defp to_integer(value) when is_binary(value) do
-    case Integer.parse(String.trim(value)) do
-      {int, ""} -> int
-      _ -> value
-    end
-  end
-
-  defp to_integer(value), do: value
-
-  defp to_float(value) when is_float(value), do: value
-  defp to_float(value) when is_integer(value), do: value * 1.0
-
-  defp to_float(value) when is_binary(value) do
-    case Float.parse(String.trim(value)) do
-      {float, ""} -> float
-      _ -> value
-    end
-  end
-
-  defp to_float(value), do: value
 
   defp changes(conn) do
     case Exqlite.Sqlite3.changes(conn) do
