@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -57,7 +60,7 @@ public class TransportTests
             () => PumpAsync(call, client, TimeSpan.FromSeconds(5)));
 
         Assert.Equal("boom", failure.Code);
-        Assert.Equal("[boom] it broke", failure.Message);
+        Assert.Equal("it broke", failure.Message);
     }
 
     [Fact]
@@ -105,7 +108,7 @@ public class TransportTests
             () => PumpAsync(call, client, TimeSpan.FromSeconds(5)));
 
         Assert.Equal("r_client_2", failure.RequestId);
-        Assert.Contains("(rid r_client_2)", failure.Message);
+        Assert.Equal("it broke", failure.Message);
         Assert.Contains("\"status\": \"error\"", ExoClient.ExportDiagnostics());
     }
 
@@ -240,9 +243,51 @@ public class TransportTests
         }
     }
 
+    [Fact]
+    public async Task A_flat_http_error_surfaces_the_code_and_the_server_message()
+    {
+        int port = FreeLoopbackPort();
+        using var listener = new HttpListener();
+        listener.Prefixes.Add($"http://127.0.0.1:{port}/");
+        listener.Start();
+
+        var serve = Task.Run(async () =>
+        {
+            var context = await listener.GetContextAsync();
+            byte[] body = Encoding.UTF8.GetBytes(
+                "{\"status\":\"error\",\"error\":\"invalid_png\",\"message\":\"Not a PNG image.\",\"rid\":\"r_http_7\"}");
+            context.Response.StatusCode = 400;
+            context.Response.ContentType = "application/json";
+            context.Response.Headers["x-exoforge-rid"] = "r_http_7";
+            await context.Response.OutputStream.WriteAsync(body);
+            context.Response.Close();
+        });
+
+        using var client = NewClient();
+        client.HttpBaseUri = new Uri($"http://127.0.0.1:{port}");
+
+        var failure = await Assert.ThrowsAsync<ExoActionException>(
+            () => client.SendActionAsync<JsonElement>("game_menu", "upload_icon", new { }));
+
+        await serve;
+
+        Assert.Equal("invalid_png", failure.Code);
+        Assert.Equal("Not a PNG image.", failure.Message);
+        Assert.Equal("r_http_7", failure.RequestId);
+    }
+
     // ---- helpers -----------------------------------------------------------------------
 
     private static ExoClient NewClient() => new(new ExoDispatcher(useSynchronizationContext: false));
+
+    private static int FreeLoopbackPort()
+    {
+        var probe = new TcpListener(IPAddress.Loopback, 0);
+        probe.Start();
+        int port = ((IPEndPoint)probe.LocalEndpoint).Port;
+        probe.Stop();
+        return port;
+    }
 
     private static string RequestId(string frame)
     {

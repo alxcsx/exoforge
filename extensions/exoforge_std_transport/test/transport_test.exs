@@ -130,4 +130,40 @@ defmodule Exoforge.Std.TransportTest do
       refute Map.has_key?(result, "id")
     end
   end
+
+  describe "action_error/1" do
+    test "keeps a native extension's code and message map" do
+      assert Transport.action_error(%{"code" => "invalid_png", "message" => "Not a PNG image."}) ==
+               %{"code" => "invalid_png", "message" => "Not a PNG image."}
+    end
+
+    test "keeps an atom-keyed code and message map" do
+      assert Transport.action_error(%{code: :invalid_png, message: "Not a PNG image."}) ==
+               %{"code" => "invalid_png", "message" => "Not a PNG image."}
+    end
+
+    test "keeps a defaction code and message tuple" do
+      assert Transport.action_error({:invalid_png, "Not a PNG image."}) ==
+               %{"code" => "invalid_png", "message" => "Not a PNG image."}
+    end
+
+    test "a bare atom is its own code and message" do
+      assert Transport.action_error(:bad_signature) ==
+               %{"code" => "bad_signature", "message" => "bad_signature"}
+    end
+
+    test "a bare binary is the message of an action_failed error" do
+      assert Transport.action_error("boom") == %{"code" => "action_failed", "message" => "boom"}
+    end
+  end
+
+  describe "staff_scopes?/1" do
+    test "admin and studio are staff; player and webhook are not" do
+      assert Transport.staff_scopes?(["admin"])
+      assert Transport.staff_scopes?([:studio])
+      refute Transport.staff_scopes?(["player"])
+      refute Transport.staff_scopes?(["webhook", "global"])
+      refute Transport.staff_scopes?([])
+    end
+  end
 end

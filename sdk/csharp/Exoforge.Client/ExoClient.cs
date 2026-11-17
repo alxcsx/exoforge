@@ -468,14 +468,33 @@ public class ExoClient : IDisposable
         {
             string errCode = "http_error";
             string errMsg = $"HTTP {(int)response.StatusCode}";
+
+            // The current shape keeps the code and the message apart: {"error":"invalid_png",
+            // "message":"Not a PNG image."}. An older server sent only an error string, which was
+            // the message; with no top-level message to prefer, that reading still holds.
+            string? rootMessage =
+                root.TryGetProperty("message", out var messageProp) &&
+                messageProp.ValueKind == JsonValueKind.String
+                    ? messageProp.GetString()
+                    : null;
+
             if (root.TryGetProperty("error", out var errProp))
             {
                 if (errProp.ValueKind == JsonValueKind.String)
                 {
-                    errMsg = errProp.GetString() ?? errMsg;
-                    if (errMsg == "service_not_found" || errMsg.Contains("service_not_found"))
+                    string errorString = errProp.GetString() ?? errMsg;
+                    if (rootMessage != null)
                     {
-                        errCode = "service_not_found";
+                        errCode = errorString;
+                        errMsg = rootMessage;
+                    }
+                    else
+                    {
+                        errMsg = errorString;
+                        if (errorString == "service_not_found" || errorString.Contains("service_not_found"))
+                        {
+                            errCode = "service_not_found";
+                        }
                     }
                 }
                 else if (errProp.ValueKind == JsonValueKind.Object)
@@ -484,6 +503,11 @@ public class ExoClient : IDisposable
                     if (errProp.TryGetProperty("message", out var mProp)) errMsg = mProp.GetString() ?? errMsg;
                 }
             }
+            else if (rootMessage != null)
+            {
+                errMsg = rootMessage;
+            }
+
             var ex = CreateActionException(service, action, errCode, errMsg, rid);
             OnError?.Invoke(ex.Message, ex);
             throw ex;
@@ -950,8 +974,13 @@ public class ExoActionException : Exception
     /// </summary>
     public string? RequestId { get; }
 
+    /// <summary>
+    /// <see cref="Exception.Message"/> is the server's message alone; <see cref="Code"/> is the
+    /// machine-readable code a caller branches on, and <see cref="RequestId"/> is what a bug report
+    /// quotes. Composing all three into one string made every consumer parse it back apart.
+    /// </summary>
     public ExoActionException(string code, string message, string? requestId = null)
-        : base($"[{code}] {message}" + (requestId == null ? "" : $" (rid {requestId})"))
+        : base(message)
     {
         Code = code;
         RequestId = requestId;

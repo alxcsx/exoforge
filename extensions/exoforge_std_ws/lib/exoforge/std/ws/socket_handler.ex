@@ -8,6 +8,7 @@ defmodule Exoforge.Std.Ws.SocketHandler do
 
   alias Exoforge.ActionDispatcher
   alias Exoforge.EventDispatcher
+  alias Exoforge.Std.Transport
 
   # Wire protocol vocabulary, defined once.
   @type_key "type"
@@ -37,7 +38,6 @@ defmodule Exoforge.Std.Ws.SocketHandler do
   @code_unauthenticated "unauthenticated"
   @code_unhandled_message "unhandled_message"
   @code_invalid_json "invalid_json"
-  @code_action_failed "action_failed"
 
   @impl true
   def init(opts) do
@@ -290,8 +290,8 @@ defmodule Exoforge.Std.Ws.SocketHandler do
 
     latency_us = System.monotonic_time(:microsecond) - t0
 
-    # The logs of this request, not of the last 50 ms: concurrent requests no longer mix.
-    logs = Exoforge.ExtensionLogs.for_rid(rid)
+    # Logs name extension internals and host paths, so only a staff caller's frame carries them.
+    push = fn body -> reply(Transport.with_logs(body, rid, caller_scopes), state) end
 
     case res do
       {:ok, data} ->
@@ -299,157 +299,108 @@ defmodule Exoforge.Std.Ws.SocketHandler do
           "[WS:Action] #{service}.#{action} by #{auth.player_id} -> OK (#{latency_us}µs)"
         )
 
-        reply(
-          %{
-            type: @frame_action_result,
-            id: req_id,
-            rid: rid,
-            status: @status_ok,
-            data: data,
-            logs: logs
-          },
-          state
-        )
+        push.(%{
+          type: @frame_action_result,
+          id: req_id,
+          rid: rid,
+          status: @status_ok,
+          data: data
+        })
 
       :ok ->
         Logger.info(
           "[WS:Action] #{service}.#{action} by #{auth.player_id} -> OK (#{latency_us}µs)"
         )
 
-        reply(
-          %{
-            type: @frame_action_result,
-            id: req_id,
-            rid: rid,
-            status: @status_ok,
-            data: %{},
-            logs: logs
-          },
-          state
-        )
+        push.(%{
+          type: @frame_action_result,
+          id: req_id,
+          rid: rid,
+          status: @status_ok,
+          data: %{}
+        })
 
       {:error, {:forbidden_scope, details}} ->
         Logger.warning(
           "[WS:Action] #{service}.#{action} by #{auth.player_id} -> forbidden_scope (#{latency_us}µs)"
         )
 
-        reply(
-          %{
-            type: @frame_action_result,
-            id: req_id,
-            rid: rid,
-            status: @status_error,
-            error: %{
-              code: "forbidden_scope",
-              message: "Scope authorization failed",
-              required_scope: details.required,
-              caller_scopes: details.caller_scopes
-            },
-            logs: logs
-          },
-          state
-        )
+        push.(%{
+          type: @frame_action_result,
+          id: req_id,
+          rid: rid,
+          status: @status_error,
+          error: %{
+            code: "forbidden_scope",
+            message: "Scope authorization failed",
+            required_scope: details.required,
+            caller_scopes: details.caller_scopes
+          }
+        })
 
       {:error, reason} when reason in [:unauthorized, :forbidden_scope] ->
         Logger.warning(
           "[WS:Action] #{service}.#{action} by #{auth.player_id} -> #{reason} (#{latency_us}µs)"
         )
 
-        reply(
-          %{
-            type: @frame_action_result,
-            id: req_id,
-            rid: rid,
-            status: @status_error,
-            error: %{
-              code: to_string(reason),
-              message: "Scope authorization failed"
-            },
-            logs: logs
-          },
-          state
-        )
+        push.(%{
+          type: @frame_action_result,
+          id: req_id,
+          rid: rid,
+          status: @status_error,
+          error: %{
+            code: to_string(reason),
+            message: "Scope authorization failed"
+          }
+        })
 
       {:error, :service_not_found} ->
         Logger.warning(
           "[WS:Action] #{service}.#{action} by #{auth.player_id} -> service_not_found (#{latency_us}µs)"
         )
 
-        reply(
-          %{
-            type: @frame_action_result,
-            id: req_id,
-            rid: rid,
-            status: @status_error,
-            error: %{
-              code: "service_not_found",
-              message:
-                "Service '#{service}' was not found on the remote server. Ensure the extension providing '#{service}' is deployed and running."
-            },
-            logs: logs
-          },
-          state
-        )
+        push.(%{
+          type: @frame_action_result,
+          id: req_id,
+          rid: rid,
+          status: @status_error,
+          error: %{
+            code: "service_not_found",
+            message:
+              "Service '#{service}' was not found on the remote server. Ensure the extension providing '#{service}' is deployed and running."
+          }
+        })
 
       {:error, {:action_not_found, missing_action}} ->
         Logger.warning(
           "[WS:Action] #{service}.#{action} by #{auth.player_id} -> action_not_found (#{latency_us}µs)"
         )
 
-        reply(
-          %{
-            type: @frame_action_result,
-            id: req_id,
-            rid: rid,
-            status: @status_error,
-            error: %{
-              code: "action_not_found",
-              message: "Action '#{missing_action}' was not found on service '#{service}'."
-            },
-            logs: logs
-          },
-          state
-        )
+        push.(%{
+          type: @frame_action_result,
+          id: req_id,
+          rid: rid,
+          status: @status_error,
+          error: %{
+            code: "action_not_found",
+            message: "Action '#{missing_action}' was not found on service '#{service}'."
+          }
+        })
 
-      {:error, {code, message}} when (is_atom(code) or is_binary(code)) and is_binary(message) ->
+      {:error, reason} ->
+        %{"code" => code, "message" => message} = Transport.action_error(reason)
+
         Logger.warning(
           "[WS:Action] #{service}.#{action} by #{auth.player_id} -> error: #{code}: #{message} (#{latency_us}µs)"
         )
 
-        reply(
-          %{
-            type: @frame_action_result,
-            id: req_id,
-            rid: rid,
-            status: @status_error,
-            error: %{
-              code: to_string(code),
-              message: message
-            },
-            logs: logs
-          },
-          state
-        )
-
-      {:error, reason} ->
-        Logger.warning(
-          "[WS:Action] #{service}.#{action} by #{auth.player_id} -> error: #{inspect(reason)} (#{latency_us}µs)"
-        )
-
-        reply(
-          %{
-            type: @frame_action_result,
-            id: req_id,
-            rid: rid,
-            status: @status_error,
-            error: %{
-              code: @code_action_failed,
-              message: inspect(reason)
-            },
-            logs: logs
-          },
-          state
-        )
+        push.(%{
+          type: @frame_action_result,
+          id: req_id,
+          rid: rid,
+          status: @status_error,
+          error: %{code: code, message: message}
+        })
     end
   end
 

@@ -112,38 +112,76 @@ defmodule Exoforge.Std.Transport do
     if id, do: Map.put(frame, "id", id), else: frame
   end
 
-  def format_action_result(id, :error, {code, message}) when (is_atom(code) or is_binary(code)) and is_binary(message) do
+  def format_action_result(id, :error, reason) do
     frame = %{
       "type" => "action_result",
       "status" => "error",
-      "error" => %{
-        "code" => to_string(code),
-        "message" => message
-      }
+      "error" => action_error(reason)
     }
 
     if id, do: Map.put(frame, "id", id), else: frame
   end
 
-  def format_action_result(id, :error, reason) do
-    error_payload =
-      cond do
-        is_map(reason) -> reason
-        is_binary(reason) -> %{"code" => "action_failed", "message" => reason}
-        is_atom(reason) -> %{"code" => to_string(reason), "message" => to_string(reason)}
-        true -> %{"code" => "action_failed", "message" => inspect(reason)}
-      end
+  @doc """
+  The `{code, message}` pair every ingress puts on the wire when an action fails.
 
-    frame = %{
-      "type" => "action_result",
-      "status" => "error",
-      "error" => error_payload
-    }
+  A native extension reports `%{"code" => ..., "message" => ...}`, which the runner hands over as
+  `{code, message}`; a `defaction` may return the same tuple; a plain atom is its own code. None of
+  them may reach a client as an `inspect/1` string, and none may be silently dropped.
+  """
+  @spec action_error(term()) :: %{binary() => binary()}
+  def action_error(%{"code" => code} = error) when is_atom(code) or is_binary(code) do
+    %{"code" => to_string(code), "message" => error_message(Map.get(error, "message"), code)}
+  end
 
-    if id, do: Map.put(frame, "id", id), else: frame
+  def action_error(%{code: code} = error) when is_atom(code) or is_binary(code) do
+    %{"code" => to_string(code), "message" => error_message(Map.get(error, :message), code)}
+  end
+
+  def action_error({code, message}) when is_atom(code) or is_binary(code) do
+    %{"code" => to_string(code), "message" => error_message(message, code)}
+  end
+
+  def action_error(code) when is_atom(code) do
+    %{"code" => to_string(code), "message" => to_string(code)}
+  end
+
+  def action_error(message) when is_binary(message) do
+    %{"code" => "action_failed", "message" => message}
+  end
+
+  def action_error(other) do
+    %{"code" => "action_failed", "message" => inspect(other)}
+  end
+
+  @doc """
+  True for a caller whose reply may carry this request's extension logs.
+
+  Logs hold extension stack traces and host paths, so they are staff-only; a player, guest or
+  webhook gets the failure code and message, never the internals behind them.
+  """
+  @spec staff_scopes?(term()) :: boolean()
+  def staff_scopes?(scopes) do
+    Exoforge.Auth.Roles.has?(scopes, :admin) or Exoforge.Auth.Roles.has?(scopes, :studio)
+  end
+
+  @doc """
+  Adds `logs` to a reply only for a staff caller. The rid is added by the transport, always.
+  """
+  @spec with_logs(map(), binary(), term()) :: map()
+  def with_logs(reply, rid, scopes) when is_map(reply) do
+    if staff_scopes?(scopes) do
+      Map.put(reply, :logs, Exoforge.ExtensionLogs.for_rid(rid))
+    else
+      reply
+    end
   end
 
   # ---- Private Helpers ----
+
+  defp error_message(message, _code) when is_binary(message), do: message
+  defp error_message(nil, code), do: to_string(code)
+  defp error_message(message, _code), do: inspect(message)
 
   # A trusted game server (`service`) acts for players, so it names its target like staff does.
   defp staff_scope?(auth) when is_map(auth) do

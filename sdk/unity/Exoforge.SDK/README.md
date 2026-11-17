@@ -92,6 +92,11 @@ public class DailyRewardsController : MonoBehaviour
 }
 ```
 
+`ExoActionException` keeps the server's fields apart: `Code` is the stable code to branch on
+(`already_claimed`), `Message` is the server's message to show the player, and `RequestId` is the
+rid that joins the call to the server's timeline. Extension log lines (`logs`) are attached only
+for staff callers, so a player's error is the code and message without server internals.
+
 ---
 
 ## 🧭 The Two Unity Surfaces

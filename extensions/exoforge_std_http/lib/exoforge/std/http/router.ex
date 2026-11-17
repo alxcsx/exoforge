@@ -8,6 +8,7 @@ defmodule Exoforge.Std.Http.Router do
   require Logger
 
   alias Exoforge.ActionDispatcher
+  alias Exoforge.Std.Transport
 
   plug(Plug.Logger)
   plug(:handle_cors)
@@ -241,8 +242,9 @@ defmodule Exoforge.Std.Http.Router do
         send_json(conn, 403, %{status: "error", error: "forbidden_scope"})
 
       {:error, reason} ->
-        Logger.warning("[HTTP:Webhook] #{service}.#{action} -> 400 error: #{inspect(reason)} (#{latency_us}µs)")
-        send_json(conn, 400, %{status: "error", error: inspect(reason)})
+        %{"code" => code, "message" => message} = Transport.action_error(reason)
+        Logger.warning("[HTTP:Webhook] #{service}.#{action} -> 400 #{code} (#{latency_us}µs)")
+        send_json(conn, 400, %{status: "error", error: code, message: message})
     end
   end
 
@@ -330,42 +332,44 @@ defmodule Exoforge.Std.Http.Router do
 
     latency_us = System.monotonic_time(:microsecond) - t0
 
-    # The logs of this request, and the rid on every response so a client can quote it.
-    logs = Exoforge.ExtensionLogs.for_rid(rid)
+    # The rid rides on every response so a client can quote it; the extension logs behind it are
+    # staff-only, because they name host paths and carry cross-service internals (SEC-5).
     conn = conn |> put_resp_header("x-exoforge-rid", rid) |> assign(:exoforge_rid, rid)
+    reply = fn status, body -> send_json(conn, status, Transport.with_logs(body, rid, caller_scopes)) end
 
     case result do
-      {:ok, result} ->
+      {:ok, data} ->
         Logger.info("[HTTP:Action] #{service}.#{action} -> 200 OK (#{latency_us}µs)")
-        send_json(conn, 200, %{status: "ok", data: result, logs: logs})
+        reply.(200, %{status: "ok", data: data})
 
       :ok ->
         Logger.info("[HTTP:Action] #{service}.#{action} -> 200 OK (#{latency_us}µs)")
-        send_json(conn, 200, %{status: "ok", logs: logs})
+        reply.(200, %{status: "ok"})
 
       {:error, :service_not_found} ->
         Logger.warning("[HTTP:Action] #{service}.#{action} -> 404 service_not_found (#{latency_us}µs)")
-        send_json(conn, 404, %{status: "error", error: "service_not_found", logs: logs})
+        reply.(404, %{status: "error", error: "service_not_found"})
 
       {:error, {:action_not_found, _}} ->
         Logger.warning("[HTTP:Action] #{service}.#{action} -> 404 action_not_found (#{latency_us}µs)")
-        send_json(conn, 404, %{status: "error", error: "action_not_found", logs: logs})
+        reply.(404, %{status: "error", error: "action_not_found"})
 
       {:error, :unauthorized} ->
         Logger.warning("[HTTP:Action] #{service}.#{action} -> 401 unauthorized (#{latency_us}µs)")
-        send_json(conn, 401, %{status: "error", error: "unauthorized", logs: logs})
+        reply.(401, %{status: "error", error: "unauthorized"})
 
       {:error, {:forbidden_scope, details}} ->
         Logger.warning("[HTTP:Action] #{service}.#{action} -> 403 forbidden_scope (#{latency_us}µs)")
-        send_json(conn, 403, %{status: "error", error: "forbidden_scope", required_scope: details.required, caller_scopes: details.caller_scopes, logs: logs})
+        reply.(403, %{status: "error", error: "forbidden_scope", required_scope: details.required, caller_scopes: details.caller_scopes})
 
       {:error, :forbidden_scope} ->
         Logger.warning("[HTTP:Action] #{service}.#{action} -> 403 forbidden_scope (#{latency_us}µs)")
-        send_json(conn, 403, %{status: "error", error: "forbidden_scope", logs: logs})
+        reply.(403, %{status: "error", error: "forbidden_scope"})
 
       {:error, reason} ->
-        Logger.warning("[HTTP:Action] #{service}.#{action} -> 400 error: #{inspect(reason)} (#{latency_us}µs)")
-        send_json(conn, 400, %{status: "error", error: inspect(reason), logs: logs})
+        %{"code" => code, "message" => message} = Transport.action_error(reason)
+        Logger.warning("[HTTP:Action] #{service}.#{action} -> 400 #{code} (#{latency_us}µs)")
+        reply.(400, %{status: "error", error: code, message: message})
     end
   end
 
@@ -422,7 +426,8 @@ defmodule Exoforge.Std.Http.Router do
         send_json(conn, 200, %{status: "ok", data: result})
 
       {:error, reason} ->
-        send_json(conn, 400, %{status: "error", error: reason})
+        %{"code" => code, "message" => message} = Transport.action_error(reason)
+        send_json(conn, 400, %{status: "error", error: code, message: message})
     end
   end
 

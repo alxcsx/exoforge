@@ -17,6 +17,19 @@ defmodule Exoforge.HttpTest do
     end
   end
 
+  defmodule MockErrorService do
+    use Exoforge.Extension
+
+    defaction fail_tuple(_payload), scope: :global do
+      Exoforge.ExtensionLogs.append(:mock_error, 3, "internal detail for the rid")
+      {:error, {:invalid_png, "Not a PNG image."}}
+    end
+
+    defaction fail_map(_payload), scope: :global do
+      {:error, %{"code" => "invalid_png", "message" => "Not a PNG image."}}
+    end
+  end
+
   defmodule MockWebhookService do
     use Exoforge.Extension
 
@@ -69,6 +82,7 @@ defmodule Exoforge.HttpTest do
     )
 
     Exoforge.ExtensionCase.register_extension(MockAdminService, id: :mock_admin)
+    Exoforge.ExtensionCase.register_extension(MockErrorService, id: :mock_error)
     Exoforge.ExtensionCase.register_extension(MockWebhookService, id: :mock_webhook)
     :ok
   end
@@ -183,6 +197,56 @@ defmodule Exoforge.HttpTest do
       body = Jason.decode!(conn.resp_body)
       assert body["status"] == "error"
       assert body["error"] == "forbidden_scope"
+    end
+
+    test "a player's action error keeps the code and message, and never the server logs" do
+      {:ok, player} = Exoforge.Std.Auth.issue_token("ply_err", ["player"])
+
+      conn =
+        conn(:post, "/api/mock_error/fail_tuple", "{}")
+        |> put_req_header("content-type", "application/json")
+        |> put_req_header("authorization", "Bearer #{player}")
+        |> put_req_header("x-exoforge-rid", "r_player_err")
+        |> Router.call(@opts)
+
+      assert conn.status == 400
+      body = Jason.decode!(conn.resp_body)
+      assert body["status"] == "error"
+      assert body["error"] == "invalid_png"
+      assert body["message"] == "Not a PNG image."
+      assert body["rid"] == "r_player_err"
+      refute Map.has_key?(body, "logs")
+    end
+
+    test "a staff action error carries the code, the message and the logs" do
+      conn =
+        conn(:post, "/api/mock_error/fail_tuple", "{}")
+        |> put_req_header("content-type", "application/json")
+        |> put_req_header("authorization", "Bearer dev:admin")
+        |> put_req_header("x-exoforge-rid", "r_staff_err")
+        |> Router.call(@opts)
+
+      assert conn.status == 400
+      body = Jason.decode!(conn.resp_body)
+      assert body["error"] == "invalid_png"
+      assert body["message"] == "Not a PNG image."
+      assert Enum.any?(body["logs"], &(&1 =~ "internal detail for the rid"))
+    end
+
+    test "a native extension's {code, message} error is mapped, not inspected" do
+      {:ok, player} = Exoforge.Std.Auth.issue_token("ply_err_map", ["player"])
+
+      conn =
+        conn(:post, "/api/mock_error/fail_map", "{}")
+        |> put_req_header("content-type", "application/json")
+        |> put_req_header("authorization", "Bearer #{player}")
+        |> Router.call(@opts)
+
+      assert conn.status == 400
+      body = Jason.decode!(conn.resp_body)
+      assert body["error"] == "invalid_png"
+      assert body["message"] == "Not a PNG image."
+      refute body["error"] =~ "{:"
     end
 
     test "POST /api/:service/:action allows authorized admin token with 200" do

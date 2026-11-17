@@ -21,6 +21,10 @@ defmodule Exoforge.Std.WsTest do
         params(user_id: :string)
         returns(status: :string)
       end
+
+      action :fail do
+        scope(:global)
+      end
     end
   end
 
@@ -36,6 +40,12 @@ defmodule Exoforge.Std.WsTest do
     @impl true
     defaction kick_user(_payload), scope: :admin do
       {:ok, %{status: "kicked"}}
+    end
+
+    @impl true
+    defaction fail(), scope: :global do
+      Exoforge.ExtensionLogs.append(:dummy_plugin, 3, "internal detail for the rid")
+      {:error, {:invalid_png, "Not a PNG image."}}
     end
 
     # M33 Fix 5: what the action sees when the frame tries to name someone else.
@@ -151,6 +161,51 @@ defmodule Exoforge.Std.WsTest do
     assert resp["rid"] == "r_client_42"
     assert resp["status"] == "ok"
     assert resp["data"] == %{"message" => "Hello, Alex!"}
+  end
+
+  test "WebSocket action error reaches a player as code and message, without logs" do
+    {:ok, player} = Exoforge.Std.Auth.issue_token("ply_ws_err", ["player"])
+    {:ok, state} = SocketHandler.init([])
+    {:push, {:text, _}, state} = authenticate(state, player)
+
+    action_msg =
+      Jason.encode!(%{
+        "type" => "action",
+        "id" => "err-player",
+        "service" => "Exoforge.Std.WsTest.DummyService.Mock",
+        "action" => "fail",
+        "payload" => %{}
+      })
+
+    assert {:push, {:text, resp_json}, _new_state} =
+             SocketHandler.handle_in({action_msg, :text}, state)
+
+    resp = Jason.decode!(resp_json)
+    assert resp["status"] == "error"
+    assert resp["error"] == %{"code" => "invalid_png", "message" => "Not a PNG image."}
+    assert resp["rid"] =~ ~r/^r_/
+    refute Map.has_key?(resp, "logs")
+  end
+
+  test "WebSocket action error carries the logs for a staff caller" do
+    {:ok, state} = SocketHandler.init([])
+    {:push, {:text, _}, state} = authenticate(state, "dev:admin")
+
+    action_msg =
+      Jason.encode!(%{
+        "type" => "action",
+        "id" => "err-staff",
+        "service" => "Exoforge.Std.WsTest.DummyService.Mock",
+        "action" => "fail",
+        "payload" => %{}
+      })
+
+    assert {:push, {:text, resp_json}, _new_state} =
+             SocketHandler.handle_in({action_msg, :text}, state)
+
+    resp = Jason.decode!(resp_json)
+    assert resp["error"]["code"] == "invalid_png"
+    assert Enum.any?(resp["logs"], &(&1 =~ "internal detail for the rid"))
   end
 
   test "WebSocket subscribe and broadcast pushes event frame" do
