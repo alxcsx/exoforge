@@ -271,13 +271,14 @@ defmodule Exoforge.Std.Auth do
 
   @impl true
   defaction register(payload), scope: :global do
-    do_register_player(payload)
+    register_unprotected(payload)
   end
 
   @impl true
   defaction create_player(payload), scope: :global do
-    do_register_player(payload)
+    register_unprotected(payload)
   end
+
 
   @doc """
   Creates or resumes an anonymous player session.
@@ -598,6 +599,9 @@ defmodule Exoforge.Std.Auth do
             arguments: [scopes_str, pid]
           })
 
+        # authenticate caches its answer per token; without this a demoted account keeps the old
+        # scopes until the next restart.
+        _ = Exoforge.Std.Auth.Cache.flush()
         {:ok, %{user_id: pid, player_id: pid, scopes: scopes}}
     end
   end
@@ -628,6 +632,7 @@ defmodule Exoforge.Std.Auth do
       {:ok, %{purged: length(ids), dry_run: true}}
     else
       remove_disposable(ids)
+      _ = Exoforge.Std.Auth.Cache.flush()
       {:ok, %{purged: length(ids), dry_run: false}}
     end
   end
@@ -685,6 +690,8 @@ defmodule Exoforge.Std.Auth do
         # not rewritten here (documented ceiling).
         _ = ActionDispatcher.dispatch_internal(:observability, :purge_events, %{origin: pid})
 
+        # A deleted account's cached tokens would otherwise keep authenticating.
+        _ = Exoforge.Std.Auth.Cache.flush()
         {:ok, %{user_id: pid, player_id: pid, status: "deleted"}}
     end
   end
@@ -917,6 +924,17 @@ defmodule Exoforge.Std.Auth do
   credentials.
   """
   def protected_account?(player_id), do: to_string(player_id) == @admin_id
+
+  # Register upserts the account it names, and the transport names the caller's own id when the
+  # payload doesn't: an admin creating a user without an id used to overwrite the administrator.
+  # The administrator is reconciled from config, never through a user action.
+  defp register_unprotected(payload) do
+    target = Map.get(payload, :user_id) || Map.get(payload, "user_id") || Map.get(payload, :player_id) || Map.get(payload, "player_id")
+
+    if target && protected_account?(target),
+      do: {:error, :protected_admin_account},
+      else: do_register_player(payload)
+  end
 
   @doc "True when the account has a password, so `anonymous` may not reissue its token."
   def password_protected?(player_id) do

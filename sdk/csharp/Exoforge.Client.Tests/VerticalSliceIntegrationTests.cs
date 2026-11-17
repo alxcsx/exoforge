@@ -11,6 +11,27 @@ public class VerticalSliceIntegrationTests
 {
     private static readonly Uri ServerUri = new("ws://127.0.0.1:4000/ws");
 
+    // Every caller is an ordinary account: a disposable anonymous player, or the cluster's admin
+    // (EXOFORGE_ADMIN_EMAIL / EXOFORGE_ADMIN_PASSWORD, which a dev cluster defaults to admin/admin).
+    private static async Task<string> SignInPlayerAsync(ExoClient client)
+    {
+        var anonymous = await client.SendActionAsync<JsonElement>("auth", "anonymous", new { disposable = true });
+        var auth = await client.AuthenticateAsync(anonymous.GetProperty("token").GetString()!);
+        Assert.True(auth.IsSuccess, $"anonymous sign-in failed: {auth.Error}");
+        return anonymous.GetProperty("player_id").GetString()!;
+    }
+
+    private static async Task SignInAdminAsync(ExoClient client)
+    {
+        var login = await client.SendActionAsync<JsonElement>("auth", "login", new
+        {
+            email = Environment.GetEnvironmentVariable("EXOFORGE_ADMIN_EMAIL") ?? "admin",
+            password = Environment.GetEnvironmentVariable("EXOFORGE_ADMIN_PASSWORD") ?? "admin"
+        });
+        var auth = await client.AuthenticateAsync(login.GetProperty("token").GetString()!);
+        Assert.True(auth.IsSuccess, $"admin sign-in failed: {auth.Error}");
+    }
+
     private static async Task<bool> ConnectOrSkipAsync(ExoClient client, string testName)
     {
         try
@@ -43,10 +64,9 @@ public class VerticalSliceIntegrationTests
         Assert.True(client.IsConnected);
 
         // Authenticate client session before invoking actions
-        var authResult = await client.AuthenticateAsync("dev:test_e2e_player");
-        Assert.True(authResult.IsSuccess);
+        string playerId = await SignInPlayerAsync(client);
         Assert.True(client.IsAuthenticated);
-        Assert.Equal("test_e2e_player", client.PlayerId);
+        Assert.Equal(playerId, client.PlayerId);
 
         // 1. Client invokes action `sample_plugin.ping` -> native plugin executes and returns 42
         int pingResult = await client.SendActionAsync<int>("sample_plugin", "ping", Array.Empty<int>());
@@ -98,7 +118,7 @@ public class VerticalSliceIntegrationTests
         if (!await ConnectOrSkipAsync(client, nameof(EndToEnd_Client_Wildcard_Subscription_Receives_Events)))
             return;
 
-        await client.AuthenticateAsync("dev:wildcard_tester");
+        await SignInPlayerAsync(client);
 
         // Subscribe to wildcard
         await client.SubscribeAsync("*");
@@ -165,8 +185,7 @@ public class VerticalSliceIntegrationTests
         if (!await ConnectOrSkipAsync(client, nameof(ExtensionManager_ListExtensions_And_SystemInfo)))
             return;
 
-        var auth = await client.AuthenticateAsync("dev:developer");
-        Assert.True(auth.IsSuccess);
+        await SignInAdminAsync(client);
 
         int ping = await client.SendActionAsync<int>("sample_plugin", "ping", Array.Empty<int>());
         Assert.Equal(42, ping);

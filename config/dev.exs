@@ -1,8 +1,5 @@
 import Config
 
-config :exoforge,
-  allow_dev_tokens: true
-
 config :exoforge, :module_loader,
   driver: Exoforge.Drivers.Loaders.ManifestLoader,
   scan_path: ["_build/dev/lib", "extensions_csharp", "priv/data/uploaded_extensions"]

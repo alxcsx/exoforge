@@ -578,11 +578,34 @@ defmodule Exoforge.AuthTest do
           email: "del@exoforge.test"
         })
 
+      # Authenticate once first, so the answer is cached: deletion has to revoke it anyway.
+      unless Process.whereis(Exoforge.Std.Auth.Cache), do: start_supervised!(Exoforge.Std.Auth.Cache)
+      assert {:ok, _} = ActionDispatcher.dispatch(:auth, :authenticate, %{token: token})
+
       assert {:ok, %{status: "deleted"}} =
                ActionDispatcher.dispatch_internal(:auth, :delete_user, %{player_id: "to_delete"})
 
       assert {:error, :invalid_token} =
                ActionDispatcher.dispatch(:auth, :authenticate, %{token: token})
+    end
+
+    test "a role change reaches tokens that were already authenticated" do
+      unless Process.whereis(Exoforge.Std.Auth.Cache), do: start_supervised!(Exoforge.Std.Auth.Cache)
+      {:ok, %{token: token}} =
+        ActionDispatcher.dispatch_internal(:auth, :register, %{
+          player_id: "to_demote",
+          email: "demote@exoforge.test",
+          scopes: ["studio"]
+        })
+
+      assert {:ok, %{scopes: before}} = ActionDispatcher.dispatch(:auth, :authenticate, %{token: token})
+      assert "studio" in before
+
+      assert {:ok, _} =
+               ActionDispatcher.dispatch_internal(:auth, :update_user_roles, %{player_id: "to_demote", role: "player"})
+
+      assert {:ok, %{scopes: now}} = ActionDispatcher.dispatch(:auth, :authenticate, %{token: token})
+      refute "studio" in now
     end
 
     test "the administrator is an ordinary account except that user actions cannot remove it" do
@@ -608,6 +631,22 @@ defmodule Exoforge.AuthTest do
                  player_id: "admin",
                  password: "hacked"
                })
+
+      # Register upserts the account it names, so it must not be a way around the rules above.
+      for action <- [:register, :create_player] do
+        assert {:error, :protected_admin_account} =
+                 ActionDispatcher.dispatch(:auth, action, %{
+                   "player_id" => "admin",
+                   "email" => "taken@exoforge.test",
+                   "password" => "hacked",
+                   "scopes" => ["player"],
+                   "_auth" => %{"player_id" => "admin", "scopes" => ["admin"]}
+                 })
+      end
+
+      admin = Enum.find(users(), &(&1["player_id"] == "admin"))
+      assert "admin" in admin["scopes"]
+      refute admin["email"] == "taken@exoforge.test"
 
       # Every other account is removable.
       assert {:ok, _} =

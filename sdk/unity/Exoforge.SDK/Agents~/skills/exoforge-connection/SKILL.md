@@ -82,7 +82,35 @@ Example with authenticated player action:
 
 The CLI automatically supplies the active session token stored in `exoforge.json`.
 
-## 6. Common Troubleshooting Scenarios
+## 6. Users and service accounts
+
+Accounts are ordinary user accounts that an admin manages with the saved admin session of the active environment (`exo connect --save`). The same actions back the Studio's users view.
+
+```bash
+./exo user list --search arcade --limit 20
+./exo user create dev@studio.local --password '<password>' --name "Dev" --role studio
+./exo user role <user_id> --role player
+./exo user token <user_id>
+./exo user delete <user_id>
+```
+
+Roles: `player`, `studio`, `service`, `admin`. `--json` prints the raw reply; without it `list` prints one line per account, and `token` prints only the token on stdout.
+
+A token is a credential. It acts as the account until the account is deleted, and `exo user role` changes the scopes of tokens already issued. Keep tokens out of version control.
+
+### A service account for a trusted game server
+
+A trusted game server (the one that reports kills, hits or purchases) calls actions declared `Scope = "service"`. Players cannot call them: a player token gets `forbidden_scope`. The server gets its own account, never a player's or an admin's:
+
+```bash
+./exo user create game-server@studio.local --password '<password>' --name "Game server" --role service
+./exo user list --search game-server        # note the user id
+./exo user token <user_id> > Exoforge/game-server.token
+```
+
+Add `Exoforge/game-server.token` to `.gitignore`, read it only from server-side code or Editor-only tooling (never from `Assets/` and never in a build), and delete the account with `exo user delete <user_id>` when the server is retired.
+
+## 7. Common Troubleshooting Scenarios
 
 ### Cluster Offline or Unreachable
 - **Symptom**: `exo status` returns connection refused or timeout errors.

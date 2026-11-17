@@ -53,6 +53,9 @@ public static class Program
                 case "resource":
                     return await HandleResourceAsync(cli).ConfigureAwait(false);
 
+                case "user":
+                    return await HandleUserAsync(cli).ConfigureAwait(false);
+
                 case "contracts":
                     return await HandleContractsAsync(cli).ConfigureAwait(false);
 
@@ -117,6 +120,7 @@ public static class Program
           env <subcommand>           Manage cluster environments in exoforge.json (list, add, use)
           extension <subcommand>     Create, build, deploy and inspect extensions
           resource <subcommand>      Manage resource tables and entities (list, get, create, etc.)
+          user <subcommand>          Manage user and service accounts (list, create, role, token, delete)
           contracts                  Inspect available service contracts, actions and schemas
           call <service> <action>    Invoke an action directly over RPC
           sync                       Download live contracts and generate the typed C# client
@@ -1132,6 +1136,196 @@ public static class Program
 
         var result = await deployer.CallActionAsync(service, action, payload, cli.Value("env")).ConfigureAwait(false);
         Console.WriteLine(PrettyJson(result));
+        return 0;
+    }
+
+    // ---- user --------------------------------------------------------------------------
+
+    private static void PrintUserUsage()
+    {
+        Console.WriteLine("""
+        Usage: exo user <subcommand> [options]
+
+        Manages user accounts with the saved admin session of the environment. A service account
+        for a trusted game server is an ordinary account with the 'service' role.
+
+        Subcommands:
+          list [--search <s>] [--limit <n>]                       List accounts and their roles
+          create <email> --password <p> [--name <n>] [--role r]   Create an account (role default: player)
+          role <user_id> --role <r>                               Change an account's role
+          token <user_id>                                         Issue a token (a credential: keep it secret)
+          delete <user_id>                                        Delete an account
+
+        Roles: player, studio, service, admin
+
+        Common options:
+          --dir <path>     Workspace root (defaults to the current directory)
+          --env <name>     Target environment
+          --json           Machine-readable output
+        """);
+    }
+
+    private static async Task<int> HandleUserAsync(CliArgs cli)
+    {
+        if (cli.WantsHelp && cli.Positional.Count == 0)
+        {
+            PrintUserUsage();
+            return 0;
+        }
+
+        if (cli.Positional.Count == 0)
+        {
+            Error("Missing user subcommand.");
+            Console.WriteLine();
+            PrintUserUsage();
+            return 1;
+        }
+
+        string sub = cli.Positional[0].ToLowerInvariant();
+        var rest = CliArgs.From(cli.Positional.Skip(1).ToList(), cli);
+
+        if (rest.WantsHelp)
+        {
+            PrintUserUsage();
+            return 0;
+        }
+
+        var ws = ExoWorkspace.Load(cli.Value("dir") ?? Directory.GetCurrentDirectory());
+        var deployer = new ExoDeployer(ws);
+        string? env = cli.Value("env");
+
+        try
+        {
+            switch (sub)
+            {
+                case "list":
+                    return await HandleUserListAsync(deployer, rest, env).ConfigureAwait(false);
+
+                case "create":
+                    return await HandleUserCreateAsync(deployer, rest, env).ConfigureAwait(false);
+
+                case "role":
+                    return await HandleUserRoleAsync(deployer, rest, env).ConfigureAwait(false);
+
+                case "token":
+                    return await HandleUserTokenAsync(deployer, rest, env).ConfigureAwait(false);
+
+                case "delete":
+                    return await HandleUserDeleteAsync(deployer, rest, env).ConfigureAwait(false);
+
+                default:
+                    Error($"Unknown user subcommand: {sub}");
+                    Console.WriteLine();
+                    PrintUserUsage();
+                    return 1;
+            }
+        }
+        catch (ArgumentException ex)
+        {
+            Error(ex.Message);
+            return 1;
+        }
+    }
+
+    private static async Task<int> HandleUserListAsync(ExoDeployer deployer, CliArgs cli, string? env)
+    {
+        int? limit = cli.Has("limit") ? cli.IntValue("limit", 20) : null;
+        var res = await ExoUsers.ListAsync(deployer, cli.Value("search"), limit, env).ConfigureAwait(false);
+
+        if (cli.Json)
+        {
+            Console.WriteLine(PrettyJson(res));
+            return 0;
+        }
+
+        foreach (var user in res.TryGetProperty("users", out var users) ? users.EnumerateArray() : Enumerable.Empty<JsonElement>())
+        {
+            string scopes = user.TryGetProperty("scopes", out var s) && s.ValueKind == JsonValueKind.Array
+                ? string.Join(",", s.EnumerateArray().Select(x => x.ToString()))
+                : "";
+            Console.WriteLine($"{ReadString(user, "user_id"),-24} {ReadString(user, "email"),-32} {ExoUsers.RoleOf(scopes)}");
+        }
+
+        Console.WriteLine($"{(res.TryGetProperty("count", out var count) ? count.ToString() : "?")} account(s)");
+        return 0;
+    }
+
+    private static async Task<int> HandleUserCreateAsync(ExoDeployer deployer, CliArgs cli, string? env)
+    {
+        if (cli.Positional.Count == 0)
+        {
+            return Missing("email", "exo user create <email> --password <p> [--name <n>] [--role player|studio|service|admin]");
+        }
+
+        string role = ExoUsers.NormalizeRole(cli.Value("role"));
+        var res = await ExoUsers.CreateAsync(deployer, cli.Positional[0], cli.Value("password") ?? "", cli.Value("name"), role, env).ConfigureAwait(false);
+
+        // The register reply carries a token; `exo user token` is the one place a token is printed.
+        string userId = ReadString(res, "user_id") ?? "";
+        if (cli.Json)
+        {
+            Console.WriteLine(new JsonObject { ["user_id"] = userId, ["email"] = cli.Positional[0], ["role"] = role }.ToJsonString(JsonOptions));
+            return 0;
+        }
+
+        Success($"Created {cli.Positional[0]} ({userId}) with role {role}.");
+        return 0;
+    }
+
+    private static async Task<int> HandleUserRoleAsync(ExoDeployer deployer, CliArgs cli, string? env)
+    {
+        if (cli.Positional.Count == 0)
+        {
+            return Missing("user id", "exo user role <user_id> --role <player|studio|service|admin>");
+        }
+
+        var res = await ExoUsers.SetRoleAsync(deployer, cli.Positional[0], cli.Value("role"), env).ConfigureAwait(false);
+        if (cli.Json)
+        {
+            Console.WriteLine(PrettyJson(res));
+            return 0;
+        }
+
+        Success($"{cli.Positional[0]} is now {ExoUsers.NormalizeRole(cli.Value("role"))}. Tokens issued before this keep working with the new scopes.");
+        return 0;
+    }
+
+    private static async Task<int> HandleUserTokenAsync(ExoDeployer deployer, CliArgs cli, string? env)
+    {
+        if (cli.Positional.Count == 0)
+        {
+            return Missing("user id", "exo user token <user_id>");
+        }
+
+        var res = await ExoUsers.IssueTokenAsync(deployer, cli.Positional[0], env).ConfigureAwait(false);
+        string token = ReadString(res, "token") ?? "";
+
+        if (cli.Json)
+        {
+            Console.WriteLine(PrettyJson(res));
+            return 0;
+        }
+
+        Console.WriteLine(token);
+        Console.Error.WriteLine("This token is a credential: it acts as the account until the account is deleted. Keep it out of version control.");
+        return 0;
+    }
+
+    private static async Task<int> HandleUserDeleteAsync(ExoDeployer deployer, CliArgs cli, string? env)
+    {
+        if (cli.Positional.Count == 0)
+        {
+            return Missing("user id", "exo user delete <user_id>");
+        }
+
+        var res = await ExoUsers.DeleteAsync(deployer, cli.Positional[0], env).ConfigureAwait(false);
+        if (cli.Json)
+        {
+            Console.WriteLine(PrettyJson(res));
+            return 0;
+        }
+
+        Success($"Deleted {cli.Positional[0]}.");
         return 0;
     }
 

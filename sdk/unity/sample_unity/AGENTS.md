@@ -212,6 +212,10 @@ Deploy the extension and regenerate the client:
 # Option B — CLI. The `exo` CLI is not installed on PATH — run it from the repo:
 CLI="dotnet run --project <repo>/sdk/csharp/Exoforge.CLI --"
 
+# Sign in once. There are no magic tokens: tools use an ordinary account. A dev cluster's admin
+# is admin/admin unless EXOFORGE_ADMIN_EMAIL / EXOFORGE_ADMIN_PASSWORD say otherwise.
+$CLI connect --email admin --password admin --save
+
 $CLI extension push snake_leaderboard   # build + deploy to the running cluster
 $CLI sync                               # regenerate Assets/Exoforge/Generated/ExoforgeServices.g.cs
 ```
