@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Reflection;
 
 namespace Exoforge.Management;
 
@@ -30,16 +31,16 @@ public static class ExoScaffolder
 
         Directory.CreateDirectory(srcDir);
 
-        File.WriteAllText(Path.Combine(srcDir, $"{cleanName}.csproj"), GenerateCsproj());
+        string workspaceRoot = Path.GetDirectoryName(Path.GetFullPath(extensionsDirectory))!;
+        string? version = EnsureProjectFeed(workspaceRoot, feed);
+        string sdkVersion = version ?? SdkPackageVersion;
+
+        File.WriteAllText(Path.Combine(srcDir, $"{cleanName}.csproj"), GenerateCsproj(sdkVersion: sdkVersion));
         File.WriteAllText(Path.Combine(srcDir, $"{className}Extension.cs"), GenerateExtensionCode(cleanName, className, template));
         File.WriteAllText(Path.Combine(targetDir, $"{cleanName}.sln"), GenerateSln(cleanName));
 
         // The staged native binary and the local build counter are build artifacts.
         File.WriteAllText(Path.Combine(targetDir, ".gitignore"), "/.exoforge/\n/.buildcount\n/manifest.json\n");
-
-        // Ensure nuget feed in workspace root as well as directly inside the extension folder for Rider
-        RegisterLocalFeed(extensionsDirectory, feed);
-        EnsureLocalFeed(targetDir, feed);
 
         // Pre-restore packages so Rider has project assets, autocomplete, and Roslyn analyzers ready
         RestoreExtension(srcDir, cleanName);
@@ -184,63 +185,139 @@ public static class ExoScaffolder
     }
 
     /// <summary>
-    /// Ensures nuget.config exists in the workspace root, pointing to the local feed if resolved.
+    /// The project-relative directory a workspace keeps its packed Exoforge packages in. Relative
+    /// because a package cache path is machine-specific and a package reference is not.
     /// </summary>
-    public static void EnsureLocalFeed(string workspaceRoot, string? explicitFeed = null)
+    public const string FeedDirectoryName = ".feed";
+
+    /// <summary>
+    /// The workspace nuget.config. A relative source is resolved against the file that names it, so
+    /// this is the same two lines everywhere: a project commits it, and nothing rewrites it.
+    /// </summary>
+    public static string NugetConfigContent =>
+        "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" +
+        "<configuration>\n" +
+        "  <!-- Exoforge extensions: nuget.org for runtime packs, plus the extension SDK packed in .feed. -->\n" +
+        "  <packageSources>\n" +
+        "    <add key=\"nuget.org\" value=\"https://api.nuget.org/v3/index.json\" protocolVersion=\"3\" />\n" +
+        $"    <add key=\"exoforge\" value=\"{FeedDirectoryName}\" />\n" +
+        "  </packageSources>\n" +
+        "</configuration>\n";
+
+    /// <summary>
+    /// Makes a workspace able to build an extension with no repository around it: the static
+    /// nuget.config, and the SDK package itself in <see cref="FeedDirectoryName"/> when it is not
+    /// there yet. Returns the version the feed now carries.
+    /// </summary>
+    public static string? EnsureProjectFeed(string workspaceRoot, string? explicitFeed = null)
     {
+        Directory.CreateDirectory(workspaceRoot);
         string nugetConfig = Path.Combine(workspaceRoot, "nuget.config");
-        string? feed = ResolveDefaultFeed(explicitFeed);
-        if (string.IsNullOrEmpty(feed) || !Directory.Exists(feed)) return;
+        if (!File.Exists(nugetConfig) || File.ReadAllText(nugetConfig) != NugetConfigContent)
+            File.WriteAllText(nugetConfig, NugetConfigContent);
 
-        string normFeed = feed!.Replace('\\', '/');
-        string config =
-            "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" +
-            "<configuration>\n" +
-            "  <!-- Package feeds for Exoforge extensions: official nuget.org for runtime packs + local feed -->\n" +
-            "  <packageSources>\n" +
-            "    <add key=\"nuget.org\" value=\"https://api.nuget.org/v3/index.json\" protocolVersion=\"3\" />\n" +
-            $"    <add key=\"exoforge\" value=\"{normFeed}\" />\n" +
-            "  </packageSources>\n" +
-            "</configuration>\n";
+        string feedDir = Path.Combine(workspaceRoot, FeedDirectoryName);
+        string? bundled = NewestSdkPackage(feedDir);
+        string? source = NewestSdkPackage(ResolveDefaultFeed(explicitFeed));
 
-        string existing = File.Exists(nugetConfig) ? File.ReadAllText(nugetConfig) : "";
-        if (!existing.Contains(normFeed) ||
-            !existing.Contains("https://api.nuget.org/v3/index.json") ||
-            HasDeletedFeedSource(existing))
+        // NuGet caches a package by id and version, so every release is a new file and the old ones
+        // stay: an extension that has not been upgraded yet still restores from the feed.
+        if (source != null && (bundled == null || CompareVersions(source, bundled) > 0))
         {
-            File.WriteAllText(nugetConfig, config);
+            Directory.CreateDirectory(feedDir);
+            string target = Path.Combine(feedDir, Path.GetFileName(source));
+            if (!File.Exists(target)) File.Copy(source, target);
+            bundled = target;
         }
+
+        return bundled == null ? null : PackageVersion(bundled);
     }
 
     /// <summary>
-    /// Points every nuget.config NuGet reads while building an extension at the feed inside the
-    /// installed SDK: the workspace root, and the extension's own directory. NuGet merges sources
-    /// from both, and the extension's copy is the one that survives an SDK upgrade still naming the
-    /// package cache directory the upgrade deleted.
+    /// Prepares one extension to build: the project feed, its package reference moved to the version
+    /// the feed carries (an SDK upgrade would otherwise leave it on a version that is not there), and
+    /// the machine-specific config an older SDK wrote beside it, which NuGet would still merge into
+    /// its sources.
     /// </summary>
-    public static void EnsureBuildFeed(string workspaceRoot, string extensionDir, string? explicitFeed = null)
+    public static bool EnsureBuildFeed(string workspaceRoot, string extensionDir, string? explicitFeed = null)
     {
-        EnsureLocalFeed(workspaceRoot, explicitFeed);
-        EnsureLocalFeed(extensionDir, explicitFeed);
+        string? version = EnsureProjectFeed(workspaceRoot, explicitFeed);
+        bool changed = version != null && EnsurePackageReference(extensionDir, version);
+
+        string stale = Path.Combine(extensionDir, "nuget.config");
+        if (!File.Exists(stale)) return changed;
+
+        string text = File.ReadAllText(stale);
+        if (!text.Contains("key=\"exoforge\"") || text.Contains($"\"{FeedDirectoryName}\"")) return changed;
+
+        File.Delete(stale);
+        return true;
     }
 
     /// <summary>
-    /// True when the config names a local <c>exoforge</c> source whose directory is gone — exactly what
-    /// an SDK upgrade leaves behind once the old package cache entry is removed. Remote sources and
-    /// env-var paths are left to NuGet.
+    /// Moves an extension's <c>Exoforge.Plugin.SDK</c> reference to <paramref name="version"/>. The
+    /// element is edited in place rather than the project rewritten, so comments and settings a
+    /// developer added survive.
     /// </summary>
-    private static bool HasDeletedFeedSource(string configText)
+    private static bool EnsurePackageReference(string extensionDir, string version)
     {
-        foreach (System.Text.RegularExpressions.Match match in System.Text.RegularExpressions.Regex.Matches(
-                     configText,
-                     "<add\\s+key=\"exoforge\"\\s+value=\"([^\"]+)\""))
+        string srcDir = Path.Combine(extensionDir, "src");
+        string projectDir = Directory.Exists(srcDir) ? srcDir : extensionDir;
+        bool changed = false;
+
+        foreach (string csproj in Directory.GetFiles(projectDir, "*.csproj"))
         {
-            string value = match.Groups[1].Value;
-            if (value.Contains("://") || value.Contains('%')) continue;
-            if (!Directory.Exists(value)) return true;
+            string text = File.ReadAllText(csproj);
+            string updated = System.Text.RegularExpressions.Regex.Replace(
+                text,
+                "(<PackageReference\\s+Include=\"Exoforge\\.Plugin\\.SDK\"\\s+Version=\")([^\"]*)(\")",
+                "$1" + version + "$3");
+
+            if (updated == text) continue;
+            File.WriteAllText(csproj, updated);
+            changed = true;
         }
 
-        return false;
+        return changed;
+    }
+
+    private static string? NewestSdkPackage(string? dir)
+    {
+        if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) return null;
+
+        string? newest = null;
+        foreach (string file in Directory.GetFiles(dir!, SdkPackageId + ".*.nupkg"))
+        {
+            if (newest == null || CompareVersions(file, newest) > 0) newest = file;
+        }
+
+        return newest;
+    }
+
+    /// <summary>The version a packaged SDK's file name carries: <c>Exoforge.Plugin.SDK.&lt;version&gt;.nupkg</c>.</summary>
+    public static string PackageVersion(string nupkgPath)
+    {
+        string name = Path.GetFileName(nupkgPath);
+        string prefix = SdkPackageId + ".";
+        string suffix = ".nupkg";
+
+        if (!name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ||
+            !name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+        {
+            return "";
+        }
+
+        return name.Substring(prefix.Length, name.Length - prefix.Length - suffix.Length);
+    }
+
+    private static int CompareVersions(string left, string right)
+    {
+        string a = PackageVersion(left);
+        string b = PackageVersion(right);
+
+        return Version.TryParse(a, out var va) && Version.TryParse(b, out var vb)
+            ? va.CompareTo(vb)
+            : string.CompareOrdinal(a, b);
     }
 
     /// <summary>
@@ -271,29 +348,38 @@ public static class ExoScaffolder
     }
 
     /// <summary>
-    /// Points the workspace at a local feed, once, when one is configured.
-    /// </summary>
-    private static void RegisterLocalFeed(string pluginsDirectory, string? explicitFeed)
-    {
-        string? workspace = Path.GetDirectoryName(Path.GetFullPath(pluginsDirectory));
-        if (workspace is null) return;
-
-        EnsureLocalFeed(workspace, explicitFeed);
-    }
-
-    /// <summary>
-    /// The published package a scaffolded plugin references, and gets everything from.
-    ///
-    /// The version is a literal because a scaffolded plugin is usually outside this repository, where
-    /// no property is available to it. In here, <c>Directory.Build.props</c> holds the same number for
-    /// everything the build hook wires up — the two have to be bumped together.
+    /// The package a scaffolded plugin references, and gets everything from.
     /// </summary>
     public const string SdkPackageId = "Exoforge.Plugin.SDK";
 
-    /// <summary>Version of <see cref="SdkPackageId"/> a scaffolded plugin references.</summary>
-    public const string SdkPackageVersion = "0.1.0";
+    /// <summary>
+    /// The version of <see cref="SdkPackageId"/> this tooling ships, for a project scaffolded with no
+    /// feed to read one from. The assembly carries it: <c>Directory.Build.props</c> stamps it from the
+    /// Unity package's own version, so an installed Studio and the <c>NuGet~</c> package beside it
+    /// name the same release.
+    /// </summary>
+    public static string SdkPackageVersion
+    {
+        get
+        {
+            string? informational = typeof(ExoScaffolder).Assembly
+                .GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>()?.InformationalVersion;
 
-    public static string GenerateCsproj(string? targetFramework = null) => $@"
+            if (!string.IsNullOrEmpty(informational))
+            {
+                string version = informational!;
+                int plus = version.IndexOf('+');
+                return (plus > 0 ? version.Substring(0, plus) : version).Trim();
+            }
+
+            Version? assemblyVersion = typeof(ExoScaffolder).Assembly.GetName().Version;
+            return assemblyVersion == null
+                ? "0.1.0"
+                : $"{assemblyVersion.Major}.{assemblyVersion.Minor}.{assemblyVersion.Build}";
+        }
+    }
+
+    public static string GenerateCsproj(string? targetFramework = null, string? sdkVersion = null) => $@"
 <Project Sdk=""Microsoft.NET.Sdk"">
   <PropertyGroup>
     <TargetFramework>{targetFramework ?? DetectTargetFramework()}</TargetFramework>
@@ -314,7 +400,7 @@ public static class ExoScaffolder
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include=""{SdkPackageId}"" Version=""{SdkPackageVersion}"" />
+    <PackageReference Include=""{SdkPackageId}"" Version=""{sdkVersion ?? SdkPackageVersion}"" />
   </ItemGroup>
 </Project>
 ";
