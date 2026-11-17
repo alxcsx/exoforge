@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Exoforge.Plugin.SDK;
@@ -71,7 +72,11 @@ public static class PluginHost
     private static MethodInfo? _eventHandler;
     private static MethodInfo? _startupHandler;
     private static IExoforgeDispatch? _dispatch;
-    private static IPluginContext? _currentContext;
+
+    // AsyncLocal, not a static field: a test host is ambient state for the test that started it,
+    // and xunit runs test classes in parallel. A process-wide value let one test's context and
+    // stubs leak into another's.
+    private static readonly AsyncLocal<IPluginContext?> AmbientContext = new();
     private static bool _lifecycleComplete;
     private static string? _lifecycleCode;
     private static string? _lifecycleMessage;
@@ -79,8 +84,8 @@ public static class PluginHost
     /// <summary>The ambient plugin context for the currently executing plugin.</summary>
     public static IPluginContext CurrentContext
     {
-        get => _currentContext ?? HostPluginContext.Default;
-        set => _currentContext = value;
+        get => AmbientContext.Value ?? HostPluginContext.Default;
+        set => AmbientContext.Value = value;
     }
 
     /// <summary>Runs <typeparamref name="T"/> until stdin closes.</summary>

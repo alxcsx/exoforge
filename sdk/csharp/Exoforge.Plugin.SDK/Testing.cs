@@ -318,6 +318,8 @@ public static class ExoTestHost
     /// <summary>
     /// Starts an isolated in-memory test context for unit testing plugins.
     /// Use inside a <c>using</c> block to automatically restore ambient state when the test finishes.
+    /// The context and the <c>Exo</c>/<c>ExoServices</c> overrides are ambient to the current async
+    /// flow, so tests in parallel do not see each other's data or stubs.
     /// </summary>
     public static ExoTestContext Start(string pluginId = "test_plugin") => new(pluginId);
 }

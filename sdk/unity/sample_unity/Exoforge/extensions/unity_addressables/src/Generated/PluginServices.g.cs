@@ -221,54 +221,55 @@ namespace Exoforge.Plugin.SDK
 {
     public static class ExoServices
     {
-        private static IDatabase? _databaseOverride;
-        private static ILogger? _loggerOverride;
-        private static IEventDispatcher? _eventsOverride;
-        private static IActionDispatcher? _actionsOverride;
-        private static IPluginContext? _contextOverride;
+        // AsyncLocal so parallel test hosts own their own stubs; a plugin process has one flow.
+        private static readonly global::System.Threading.AsyncLocal<IDatabase?> _databaseOverride = new();
+        private static readonly global::System.Threading.AsyncLocal<ILogger?> _loggerOverride = new();
+        private static readonly global::System.Threading.AsyncLocal<IEventDispatcher?> _eventsOverride = new();
+        private static readonly global::System.Threading.AsyncLocal<IActionDispatcher?> _actionsOverride = new();
+        private static readonly global::System.Threading.AsyncLocal<IPluginContext?> _contextOverride = new();
 
         public static IDatabase Database
         {
-            get => _databaseOverride ?? Context.Database;
-            set => _databaseOverride = value;
+            get => _databaseOverride.Value ?? Context.Database;
+            set => _databaseOverride.Value = value;
         }
 
         public static ILogger Logger
         {
-            get => _loggerOverride ?? Context.Logger;
-            set => _loggerOverride = value;
+            get => _loggerOverride.Value ?? Context.Logger;
+            set => _loggerOverride.Value = value;
         }
 
         public static IEventDispatcher Events
         {
-            get => _eventsOverride ?? Context.Events;
-            set => _eventsOverride = value;
+            get => _eventsOverride.Value ?? Context.Events;
+            set => _eventsOverride.Value = value;
         }
 
         public static IActionDispatcher Actions
         {
-            get => _actionsOverride ?? Context.Actions;
-            set => _actionsOverride = value;
+            get => _actionsOverride.Value ?? Context.Actions;
+            set => _actionsOverride.Value = value;
         }
 
         public static IPluginContext Context
         {
-            get => _contextOverride ?? PluginHost.CurrentContext;
-            set => _contextOverride = value;
+            get => _contextOverride.Value ?? PluginHost.CurrentContext;
+            set => _contextOverride.Value = value;
         }
 
-        private static global::Exoforge.Plugins.Generated.ExoforgePluginServices? _services;
+        private static readonly global::System.Threading.AsyncLocal<global::Exoforge.Plugins.Generated.ExoforgePluginServices?> _services = new();
         public static global::Exoforge.Plugins.Generated.ExoforgePluginServices Services
         {
-            get => _services ??= new global::Exoforge.Plugins.Generated.ExoforgePluginServices(Actions);
-            set => _services = value;
+            get => _services.Value ?? (_services.Value = new global::Exoforge.Plugins.Generated.ExoforgePluginServices(Actions));
+            set => _services.Value = value;
         }
 
-        private static global::Exoforge.Plugins.Generated.IFileBucketService? _file_bucketOverride;
+        private static readonly global::System.Threading.AsyncLocal<global::Exoforge.Plugins.Generated.IFileBucketService?> _file_bucketOverride = new();
         public static global::Exoforge.Plugins.Generated.IFileBucketService FileBucket
         {
-            get => _file_bucketOverride ?? Services.FileBucket;
-            set => _file_bucketOverride = value;
+            get => _file_bucketOverride.Value ?? Services.FileBucket;
+            set => _file_bucketOverride.Value = value;
         }
         public static global::Exoforge.Plugins.Generated.IFileBucketService FileBucketService
         {
@@ -278,13 +279,13 @@ namespace Exoforge.Plugin.SDK
 
         public static void Reset()
         {
-            _databaseOverride = null;
-            _loggerOverride = null;
-            _eventsOverride = null;
-            _actionsOverride = null;
-            _contextOverride = null;
-            _services = null;
-            _file_bucketOverride = null;
+            _databaseOverride.Value = null;
+            _loggerOverride.Value = null;
+            _eventsOverride.Value = null;
+            _actionsOverride.Value = null;
+            _contextOverride.Value = null;
+            _services.Value = null;
+            _file_bucketOverride.Value = null;
         }
     }
 

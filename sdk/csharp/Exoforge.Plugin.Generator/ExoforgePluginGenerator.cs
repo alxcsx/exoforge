@@ -46,10 +46,11 @@ namespace Exoforge.Plugin.SDK
 {
     public static class ExoServices
     {
-        private static global::Exoforge.Plugin.SDK.IDatabase? _databaseOverride;
-        private static global::Exoforge.Plugin.SDK.ILogger? _loggerOverride;
-        private static global::Exoforge.Plugin.SDK.IEventDispatcher? _eventsOverride;
-        private static global::Exoforge.Plugin.SDK.IActionDispatcher? _actionsOverride;
+        // AsyncLocal so a parallel test host owns its own stubs; a plugin process has one flow.
+        private static readonly global::System.Threading.AsyncLocal<global::Exoforge.Plugin.SDK.IDatabase?> _databaseOverride = new();
+        private static readonly global::System.Threading.AsyncLocal<global::Exoforge.Plugin.SDK.ILogger?> _loggerOverride = new();
+        private static readonly global::System.Threading.AsyncLocal<global::Exoforge.Plugin.SDK.IEventDispatcher?> _eventsOverride = new();
+        private static readonly global::System.Threading.AsyncLocal<global::Exoforge.Plugin.SDK.IActionDispatcher?> _actionsOverride = new();
 
         public static global::Exoforge.Plugin.SDK.IPluginContext Context =>
             global::Exoforge.Plugin.SDK.PluginHost.CurrentContext
@@ -58,34 +59,34 @@ namespace Exoforge.Plugin.SDK
 
         public static global::Exoforge.Plugin.SDK.IDatabase Database
         {
-            get => _databaseOverride ?? Context.Database;
-            set => _databaseOverride = value;
+            get => _databaseOverride.Value ?? Context.Database;
+            set => _databaseOverride.Value = value;
         }
 
         public static global::Exoforge.Plugin.SDK.ILogger Logger
         {
-            get => _loggerOverride ?? Context.Logger;
-            set => _loggerOverride = value;
+            get => _loggerOverride.Value ?? Context.Logger;
+            set => _loggerOverride.Value = value;
         }
 
         public static global::Exoforge.Plugin.SDK.IEventDispatcher Events
         {
-            get => _eventsOverride ?? Context.Events;
-            set => _eventsOverride = value;
+            get => _eventsOverride.Value ?? Context.Events;
+            set => _eventsOverride.Value = value;
         }
 
         public static global::Exoforge.Plugin.SDK.IActionDispatcher Actions
         {
-            get => _actionsOverride ?? Context.Actions;
-            set => _actionsOverride = value;
+            get => _actionsOverride.Value ?? Context.Actions;
+            set => _actionsOverride.Value = value;
         }
 
         public static void Reset()
         {
-            _databaseOverride = null;
-            _loggerOverride = null;
-            _eventsOverride = null;
-            _actionsOverride = null;
+            _databaseOverride.Value = null;
+            _loggerOverride.Value = null;
+            _eventsOverride.Value = null;
+            _actionsOverride.Value = null;
         }
     }
 

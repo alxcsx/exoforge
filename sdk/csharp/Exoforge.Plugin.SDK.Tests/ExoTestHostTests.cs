@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -10,6 +11,14 @@ public class TestPlayerProfile
     public string Id { get; set; } = "";
     public string Name { get; set; } = "";
     public int Score { get; set; }
+}
+
+/// <summary>A plugin that only asks its injected dispatcher who it is talking to.</summary>
+public class WhoAmI
+{
+    public IActionDispatcher? Actions { get; set; }
+
+    public string Ask() => Actions!.CallAction<string>("dep", "who", new { }) ?? "none";
 }
 
 public class SampleGameExtension
@@ -76,6 +85,35 @@ public class ExoTestHostTests
         Assert.Single(test.Actions.Calls);
         Assert.Equal("ranking", test.Actions.Calls[0].Service);
         Assert.Equal("get_tier", test.Actions.Calls[0].Action);
+    }
+
+    [Fact]
+    public async Task Test_hosts_in_parallel_tasks_are_isolated()
+    {
+        var startedA = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var startedB = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        async Task ExerciseAsync(string id, TaskCompletionSource<bool> ready, TaskCompletionSource<bool> otherReady)
+        {
+            using var test = ExoTestHost.Start(id);
+            Exo.Database = test.Database;
+            test.Database.Put("who", "id", id);
+            test.Actions.Register("dep", "who", _ => id);
+
+            ready.SetResult(true);
+            await otherReady.Task;
+
+            // Ambient context, Exo overrides and the test host's own state are per flow: each
+            // task sees only its own.
+            Assert.Equal(id, PluginHost.CurrentContext.PluginId);
+            Assert.Equal(id, Exo.Database.Get<string>("who", "id"));
+            Assert.Equal(id, test.Database.Get<string>("who", "id"));
+            Assert.Equal(id, test.Create<WhoAmI>().Ask());
+        }
+
+        await Task.WhenAll(
+            Task.Run(() => ExerciseAsync("alpha", startedA, startedB)),
+            Task.Run(() => ExerciseAsync("beta", startedB, startedA)));
     }
 
     [Fact]
