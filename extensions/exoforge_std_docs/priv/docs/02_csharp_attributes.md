@@ -18,8 +18,8 @@ The `[ExoService]` attribute (and its standardized alias `[ExoExtension]`) is th
 |---|---|---|---|
 | name (positional) | string | **Required** | Unique identifier of the service (e.g. `"inventory_service"`). Used for RPC routing, CLI targeting, and log grouping. |
 | Title | string | `null` | Human-readable title displayed in the Studio Dashboard, cards, and API catalog (e.g. `"Inventory Manager"`). |
-| Icon | string | `"⚙️"` | Icon or emoji displayed on extension cards and navigation tabs in Studio (e.g. `"🎒"`, `"🎮"`). |
-| Category | string | `"Extension"` | Classification category in Studio (e.g. `"Game"`, `"Economy"`, `"Social"`, `"Operations"`, `"System"`). |
+| Icon | string | `null` | Icon or emoji displayed on extension cards and navigation tabs in Studio. The generator defaults to `⚙️` for system extensions and `🧩` for game extensions. |
+| Category | string | `null` | Classification category in Studio (e.g. `"Game"`, `"Economy"`, `"Social"`, `"Operations"`). The generator defaults to `"Game"`, or `"System"` when `System = true`. |
 | Version | string | `"0.1.0"` | Semantic version string. Checked during client synchronization, hot-reloads, and migrations. |
 | Resources | Type[] | `[]` | Array of C# record or class types managed by this service. The source generator automatically extracts column schemas and creates database tables. |
 | System | bool | `false` | Marks this as an essential system-level extension. Grouped into the System registry table in Studio. |
@@ -40,6 +40,30 @@ public class InventoryExtension
     // Actions, events, and background cron routines
 }
 ```
+
+---
+
+## `OnExtensionStart()` lifecycle hook
+
+Not an attribute: declare a parameterless public or private method named `OnExtensionStart` on the extension root. It may return `void` or `Task`.
+
+The host asks the extension to run it once after the protocol handshake and after its resource tables have been migrated. It is optional; an extension without the method starts normally. Keep the hook idempotent because it runs again after a process restart. If it throws, the extension is marked crashed with a structured startup error and is not considered ready for actions.
+
+```csharp
+public class InventoryExtension
+{
+    public void OnExtensionStart()
+    {
+        var table = Exo.Database.Table<InventoryItemRecord>();
+        if (!table.All().Any())
+        {
+            Exo.Database.Put(new InventoryItemRecord("starter-sword", "Starter Sword", 1));
+        }
+    }
+}
+```
+
+`OnExtensionStart()` is not an action and is not callable from clients. Do not use `[ExoAction]` for it.
 
 ---
 
@@ -81,7 +105,7 @@ By default, `Mode` is set to `ActionMode.Auto`, which is recommended for almost 
 |---|---|---|---|
 | Name (positional) | string | Method name | Wire action name. When omitted, automatically converted from method PascalCase to `snake_case` (e.g. `TransferItem` → `transfer_item`). |
 | Mode | ActionMode | `ActionMode.Auto` | Execution mode (`Auto`, `Sync`, `Async`, `Cast`). `Auto` infers from return type: `Task`/`Task<T>` becomes `:async`, concrete returns become `:sync`. Set `Cast` for fire-and-forget. |
-| Scope | string | `"global"` | Minimum authorization scope required to invoke (`"guest"`, `"player"`, `"admin"`, `"studio"`). Enforced by ActionDispatcher before IPC invocation. |
+| Scope | string | `"player"` | Minimum authorization scope required to invoke (`"guest"`, `"player"`, `"studio"`, `"admin"`). The dispatcher enforces it before the action runs; internal calls bypass it. |
 | Transport | ActionTransport | `ActionTransport.Auto` | Preferred transport mechanism (`Auto`, `WebSocket`, `Http`, `Webhook`). |
 | Service | string | `null` | Owning service name when a single extension provides multiple `[ExoService]` contracts. Defaults to the primary service. |
 
@@ -138,7 +162,7 @@ Declares an **event schema** on records, classes, or structs emitted or received
 > * To **define an event schema**: Decorate a record/class with `[ExoEvent]`. Public properties become the payload contract.
 > * To **listen to events** in a C# extension: Implement `public void OnEvent(string name, TPayload payload)` on your extension root class.
 > * To **publish events** in C#: Call `await Exo.Events.EmitAsync(new MyEvent(...))`.
-> * To **subscribe** in Unity: Call `ExoforgeSDK.Events.Subscribe<TEvent>("topic", handler)`.
+> * To **subscribe** in Unity: subscribe the generated service client with `await ExoServices.<Service>.SubscribeAsync("topic")`, then handle its `On<Event>` event.
 
 | Property | Type | Default | Description |
 |---|---|---|---|
@@ -164,6 +188,10 @@ public class MyExtension
         Exo.Logger.Info($"Player registered: {evt.DisplayName}");
     }
 }
+
+// 4. Subscribe from Unity through the generated service client
+await ExoServices.PlayerData.SubscribeAsync("player_data:*");
+ExoServices.PlayerData.OnPlayerCreated += evt => Debug.Log(evt.PlayerId);
 ```
 
 ---
@@ -184,6 +212,7 @@ Declares a typed entity record mapped directly to SQLite / PostgreSQL storage. T
 | Singleton | bool | `false` | Indicates whether this resource stores exactly one record (e.g. server configuration). Creates a default record when empty and renders as a single form in Studio. (Or use `[ExoSingletonResource]`). |
 | DrawerTabs | string[] | `["overview"]` | Tab sections displayed when inspecting a row in the Studio drawer (e.g. `new[] { "overview", "attributes" }`). |
 | ResourceType | Type | `null` | Explicit record type when declared on a service class via `[ExoService(Resources = ...)]`. |
+| AllowPlayerRead | bool | `false` | Makes the whole resource readable by player-scoped callers through `resource_store.list`/`get`. Enable only for public data (leaderboards, catalogues, config); it is not row-scoped. |
 
 ### [ExoColumn] Parameters
 
@@ -195,11 +224,11 @@ Declares a typed entity record mapped directly to SQLite / PostgreSQL storage. T
 | ReferencesType | Type | `null` | Entity record/class type referenced by this column. Automatically infers `ForeignKey = true` and target table/key `References` (e.g. `ReferencesType = typeof(PlayerDataRecord)`). |
 | References | string | `null` | Target referenced table and column (e.g. `"player_data.id"`). Inferred automatically from `ReferencesType` when provided. |
 | Label | string | Property name | User-friendly header label rendered in Studio Dashboard data tables and drawer forms. |
-| DataType | string | Auto-inferred | Explicit SQL data type override (`"text"`, `"integer"`, `"float"`, `"boolean"`, `"datetime"`, `"json"`). Inferred from C# type. |
+| DataType | string | Auto-inferred | Explicit type override (`"text"`, `"integer"`, `"float"`, `"boolean"`, `"datetime"`, `"map"`, `"list"`, `"binary"`). Inferred from the C# property type when omitted. |
 | Role | string | `null` | Semantic role for special Studio UI presentation from `ExoRole` (`ExoRole.PlayerId`, `ExoRole.FileReference`, `ExoRole.Currency`, `ExoRole.Status`, `ExoRole.Timestamp`, `ExoRole.Title`, `ExoRole.Description`). |
 | InputType | string | `"text"` | Form input widget from `ExoInput` (`Text`, `Color`, `Date`, `Time`, `DateTimeLocal`, `Textarea`, `Email`, `Url`, `Password`, `Range`, `Json`, `List`, `Checkbox`, `Select`, `FileReference`). |
-| Sortable | bool | `true` | Enables column click-sorting in Studio data tables. |
-| Filterable | bool | `true` | Enables quick search & filtering on this column in Studio. |
+| Sortable | bool | `false` | Enables column click-sorting in Studio data tables. |
+| Filterable | bool | `false` | Enables quick search & filtering on this column in Studio. |
 | Badge | bool | `false` | Renders the column value as a distinct colored badge chip in Studio. |
 | Bucket | string | `null` | Target storage bucket name when referencing binary/blob assets from `file_bucket`. |
 | FileReference | bool | `false` | Convenience shorthand for `Role = ExoRole.FileReference`. |

@@ -134,6 +134,17 @@ defmodule Exoforge.Std.Docs.View do
               type="button"
               phx-click="set_guide_subpage"
               phx-target={@myself}
+              phx-value-subpage="how_to"
+              onclick="window.exoScrollTop && window.exoScrollTop()"
+              class={"exo-tab #{if @subpage == "how_to", do: "exo-tab-active"}"}
+            >
+              <.studio_icon icon="sliders" class="w-3.5 h-3.5" />
+              <span>How-to</span>
+            </button>
+            <button
+              type="button"
+              phx-click="set_guide_subpage"
+              phx-target={@myself}
               phx-value-subpage="use_cases"
               onclick="window.exoScrollTop && window.exoScrollTop()"
               class={"exo-tab #{if @subpage == "use_cases", do: "exo-tab-active"}"}
@@ -191,6 +202,8 @@ defmodule Exoforge.Std.Docs.View do
 
       <!-- SUBPAGE ROUTING -->
       <%= case @subpage do %>
+        <% "how_to" -> %>
+          <.subpage_how_to myself={@myself} />
         <% "use_cases" -> %>
           <.subpage_use_cases myself={@myself} />
         <% "attributes" -> %>
@@ -271,6 +284,17 @@ defmodule Exoforge.Std.Docs.View do
 
     ~H"""
     <div class="space-y-8">
+      <!-- Prerequisites -->
+      <div class="exo-card p-5 space-y-2">
+        <h2 class="text-sm font-semibold text-gray-900">Before you start</h2>
+        <ul class="grid grid-cols-1 md:grid-cols-2 gap-1.5 text-xs text-gray-600 list-disc list-inside">
+          <li>Unity 2022.3+ with the Exoforge SDK package installed.</li>
+          <li>.NET 9 SDK available on the machine that builds extensions (<code class="font-mono">dotnet --version</code>).</li>
+          <li>A running cluster: <code class="font-mono">just dev</code>, Studio at <code class="font-mono">http://localhost:4005</code>.</li>
+          <li>An <code class="font-mono">exoforge.json</code> workspace, created by the Unity Studio Extensions tab.</li>
+        </ul>
+      </div>
+
       <!-- Hero Banner -->
       <div class="print:border print:border-gray-300 print:text-black relative overflow-hidden exo-hero text-white rounded-xl p-8 lg:p-10 shadow-xl border border-primary-500/20">
         <div class="absolute -right-12 -bottom-12 w-96 h-96 bg-primary-600/10 rounded-full blur-3xl pointer-events-none"></div>
@@ -295,7 +319,7 @@ defmodule Exoforge.Std.Docs.View do
             Creating Your First Online Multiplayer Feature
           </h1>
           <p class="text-base text-gray-300 leading-relaxed">
-            Exoforge allows Unity and game developers to write clean, strongly-typed native C# backend extensions that compile locally, hot-reload into an actor concurrency microservices runtime, and sync seamlessly into client code without manual networking boilerplate.
+            Write strongly-typed native C# extensions that compile locally, deploy into a supervised extension runtime, and sync into Unity client code without manual networking boilerplate.
           </p>
 
           <!-- Quickstart 5-Step Index Grid -->
@@ -459,7 +483,7 @@ defmodule Exoforge.Std.Docs.View do
           <ul class="space-y-2.5 text-gray-600 leading-relaxed">
             <li class="flex items-start gap-2">
               <span class="text-primary-600 font-semibold shrink-0">●</span>
-              <span><strong>Scaffold Solution:</strong> In Unity Studio, open <strong class="text-gray-900">Extensions</strong> and click <strong class="text-gray-900"><.studio_icon icon="bolt" class="w-3.5 h-3.5" /> New Extension...</strong> (or run <code class="font-mono bg-gray-100 text-primary-700 px-1.5 py-0.5 rounded font-semibold">exo extension new &lt;name&gt;</code>) to create <code class="font-mono bg-gray-100 px-1.5 py-0.5 rounded">Exoforge/extensions/&lt;name&gt;/</code>.</span>
+              <span><strong>Scaffold Solution:</strong> In Unity Studio, open <strong class="text-gray-900">Extensions</strong> and click <strong class="text-gray-900"><.studio_icon icon="bolt" class="w-3.5 h-3.5" /> New Extension...</strong>, or run <code class="font-mono bg-gray-100 text-primary-700 px-1.5 py-0.5 rounded font-semibold">exo extension new &lt;name&gt; --template standard</code>. The extension lands in the workspace's <code class="font-mono bg-gray-100 px-1.5 py-0.5 rounded">extensions/&lt;name&gt;/</code> directory; the Unity sample uses <code class="font-mono bg-gray-100 px-1.5 py-0.5 rounded">Exoforge/extensions/&lt;name&gt;/</code>.</span>
             </li>
             <li class="flex items-start gap-2">
               <span class="text-primary-600 font-semibold shrink-0">●</span>
@@ -527,14 +551,14 @@ defmodule Exoforge.Std.Docs.View do
             <ul class="space-y-2 leading-relaxed">
               <li class="flex items-start gap-2">
                 <span class="text-primary-600 font-semibold shrink-0">●</span>
-                <span>Build &amp; push from terminal: <code class="font-mono bg-gray-200 px-1 py-0.5 rounded text-gray-900 font-semibold">exo extension push &lt;name&gt;</code></span>
+                <span>Build from terminal, then push: <code class="font-mono bg-gray-200 px-1 py-0.5 rounded text-gray-900 font-semibold">exo extension build &lt;name&gt;</code> and <code class="font-mono bg-gray-200 px-1 py-0.5 rounded text-gray-900 font-semibold">exo extension push &lt;name&gt;</code></span>
               </li>
               <li class="flex items-start gap-2">
                 <span class="text-primary-600 font-semibold shrink-0">●</span>
                 <span>Tail live service logs in real time: <code class="font-mono bg-gray-200 px-1 py-0.5 rounded text-gray-900 font-semibold">exo extension logs &lt;name&gt;</code></span>
               </li>
             </ul>
-            <pre class="bg-gray-900 text-emerald-400 p-3 rounded-xl font-mono text-xs md:text-xs leading-relaxed overflow-x-auto max-w-full"><code>exo extension push gameplay_calculator&#10;exo extension logs gameplay_calculator</code></pre>
+            <pre class="bg-gray-900 text-emerald-400 p-3 rounded-xl font-mono text-xs md:text-xs leading-relaxed overflow-x-auto max-w-full"><code>exo extension build gameplay_calculator&#10;exo extension push gameplay_calculator&#10;exo extension logs gameplay_calculator</code></pre>
           </div>
         </div>
       </section>
@@ -672,6 +696,88 @@ defmodule Exoforge.Std.Docs.View do
   # SUBPAGE: WHAT YOU CAN BUILD (BLUEPRINTS, USE CASES & ARCHITECTURE TIPS)
   # ===========================================================================
   attr(:myself, :any, default: nil)
+
+  defp subpage_how_to(assigns) do
+    ~H"""
+    <div class="space-y-6">
+      <div class="exo-page-header">
+        <div>
+          <span class="exo-page-title block">How-to</span>
+          <span class="exo-page-subtitle">
+            Short recipes for the tasks you repeat after the Quickstart.
+          </span>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <section class="exo-card p-5 space-y-2">
+          <h2 class="text-sm font-semibold text-gray-900">Sign in a player</h2>
+          <p class="text-xs text-gray-500">
+            Always use <code class="font-mono">ExoforgeSDK.Auth</code>. It derives the device id, stores the token, and resumes the same account.
+          </p>
+          <pre class="bg-gray-950 text-gray-200 p-3 rounded-lg overflow-x-auto text-[11px] font-mono"><code>var session = await ExoforgeSDK.Auth.LoginAnonymously();
+    if (!session.HasDisplayName)
+    session = await ExoforgeSDK.Auth.SetDisplayName("Viper");</code></pre>
+        </section>
+
+        <section class="exo-card p-5 space-y-2">
+          <h2 class="text-sm font-semibold text-gray-900">Build and deploy an extension</h2>
+          <p class="text-xs text-gray-500">
+            Build locally, then push. <code class="font-mono">push</code> builds again and refuses to upload a stale binary when compilation fails.
+          </p>
+          <pre class="bg-gray-950 text-gray-200 p-3 rounded-lg overflow-x-auto text-[11px] font-mono"><code>exo extension build &lt;name&gt;
+    exo extension push &lt;name&gt;
+    exo extension logs &lt;name&gt;</code></pre>
+        </section>
+
+        <section class="exo-card p-5 space-y-2">
+          <h2 class="text-sm font-semibold text-gray-900">Regenerate service stubs</h2>
+          <p class="text-xs text-gray-500">
+            Unity client stubs come from the live contract export. Server-side stubs only include the dependencies in <code class="font-mono">manifest.json</code>.
+          </p>
+          <pre class="bg-gray-950 text-gray-200 p-3 rounded-lg overflow-x-auto text-[11px] font-mono"><code>exo sync
+    exo extension stubs &lt;name&gt;
+    exo sync --include-studio   # staff actions included</code></pre>
+        </section>
+
+        <section class="exo-card p-5 space-y-2">
+          <h2 class="text-sm font-semibold text-gray-900">Add persistence and seed on startup</h2>
+          <p class="text-xs text-gray-500">
+            Declare a resource once; deploy migrates its table. Add an optional idempotent <code class="font-mono">OnExtensionStart()</code> to seed it.
+          </p>
+          <p class="text-xs text-gray-600">
+            Declare the resource with <code class="font-mono">[ExoResource]</code>, then seed it from the hook through <code class="font-mono">Exo.Database</code>. The hook should be idempotent so a restart does not duplicate data.
+          </p>
+        </section>
+
+        <section class="exo-card p-5 space-y-2">
+          <h2 class="text-sm font-semibold text-gray-900">Subscribe to events</h2>
+          <p class="text-xs text-gray-500">
+            A server extension receives events through <code class="font-mono">OnEvent</code>; Unity subscribes through the generated service client.
+          </p>
+          <pre class="bg-gray-950 text-gray-200 p-3 rounded-lg overflow-x-auto text-[11px] font-mono"><code>// Server extension
+    public void OnEvent(string name, ScoreSubmitted evt) =&gt; Handle(evt);
+
+    // Unity
+    await ExoServices.Leaderboard.SubscribeAsync("scores:*");
+    ExoServices.Leaderboard.OnScoreSubmitted += evt =&gt; Debug.Log(evt.Score);</code></pre>
+        </section>
+
+        <section class="exo-card p-5 space-y-2">
+          <h2 class="text-sm font-semibold text-gray-900">Diagnose a failure</h2>
+          <p class="text-xs text-gray-500">
+            Start with the extension log. The Extension Inspector shows status, actions, events, resources, contracts and the retained log buffer.
+          </p>
+          <pre class="bg-gray-950 text-gray-200 p-3 rounded-lg overflow-x-auto text-[11px] font-mono"><code>exo extension list
+    exo extension logs &lt;name&gt;</code></pre>
+          <p class="text-xs text-gray-500">
+            A build failure is reported before upload. A startup-hook failure appears as <code class="font-mono">startup_failed</code> with its code and message.
+          </p>
+        </section>
+      </div>
+    </div>
+    """
+  end
 
   defp subpage_use_cases(assigns) do
     ~H"""
@@ -1299,14 +1405,14 @@ defmodule Exoforge.Std.Docs.View do
                 <tr>
                   <td class="py-2 px-3 font-semibold text-gray-900">Icon</td>
                   <td class="py-2 px-3 text-primary-700">string?</td>
-                  <td class="py-2 px-3 text-gray-400">Optional ("<.studio_icon icon="gear" class="w-3.5 h-3.5" />")</td>
-                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Icon or emoji displayed on extension cards and navigation tabs in Studio (e.g. <code class="font-mono text-primary-700">"<.studio_icon icon="folder" class="w-3.5 h-3.5" />"</code>, <code class="font-mono text-primary-700">"<.studio_icon icon="gamepad" class="w-3.5 h-3.5" />"</code>).</td>
+                  <td class="py-2 px-3 text-gray-400">Optional (null)</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Icon or emoji displayed on extension cards and navigation tabs in Studio. When omitted, the generator supplies a system or game default glyph.</td>
                 </tr>
                 <tr>
                   <td class="py-2 px-3 font-semibold text-gray-900">Category</td>
                   <td class="py-2 px-3 text-primary-700">string?</td>
-                  <td class="py-2 px-3 text-gray-400">Optional ("Extension")</td>
-                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Classification category in Studio (e.g. <code class="font-mono text-primary-700">"Game"</code>, <code class="font-mono text-primary-700">"Economy"</code>, <code class="font-mono text-primary-700">"Social"</code>, <code class="font-mono text-primary-700">"Operations"</code>).</td>
+                  <td class="py-2 px-3 text-gray-400">Optional (null)</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Classification category in Studio (e.g. <code class="font-mono text-primary-700">"Game"</code>, <code class="font-mono text-primary-700">"Economy"</code>, <code class="font-mono text-primary-700">"Social"</code>, <code class="font-mono text-primary-700">"Operations"</code>). The generator defaults to <code class="font-mono">"Game"</code>, or <code class="font-mono">"System"</code> when <code class="font-mono">System = true</code>.</td>
                 </tr>
                 <tr>
                   <td class="py-2 px-3 font-semibold text-gray-900">Version</td>
@@ -1349,6 +1455,15 @@ defmodule Exoforge.Std.Docs.View do
             <span class="font-mono text-[11px] text-gray-400">C# 12 / .NET 9+</span>
           </div>
           <pre class="bg-gray-950 text-gray-200 p-4 rounded-xl font-mono text-xs md:text-xs leading-relaxed overflow-x-auto border border-gray-800 max-w-full"><code><%= Phoenix.HTML.raw(Markdown.highlight_csharp(code_exo_extension_page())) %></code></pre>
+        </div>
+
+        <div class="p-4 rounded-xl bg-primary-500/10 border border-primary-500/30 text-primary-950 space-y-1.5">
+          <div class="font-semibold text-xs flex items-center gap-1.5">
+            <.studio_icon icon="play" class="w-3.5 h-3.5" /> <span>Optional startup hook</span>
+          </div>
+          <p class="text-[11px] leading-relaxed">
+            Add a parameterless <code class="font-mono text-primary-800 font-semibold">OnExtensionStart()</code> method (void or Task) to the extension root to seed or warm state once after the handshake and resource migration. It needs no attribute, is not callable from clients, and runs again after a restart, so keep it idempotent.
+          </p>
         </div>
       </section>
 
@@ -1593,7 +1708,7 @@ defmodule Exoforge.Std.Docs.View do
             <p class="text-[11px] leading-relaxed">
               <code class="font-mono text-primary-800 font-semibold">[ExoEvent]</code> annotates <strong>records, classes, or structs</strong> to declare the schema and wire contract of an event payload.
               To <strong>listen</strong> to events inside a C# extension, implement <code class="font-mono bg-primary-500/20 px-1 py-0.5 rounded">public void OnEvent(string name, TPayload payload)</code> on your extension class.
-              To <strong>subscribe</strong> in Unity, call <code class="font-mono bg-primary-500/20 px-1 py-0.5 rounded">ExoforgeSDK.Events.Subscribe&lt;T&gt;()</code>.
+              To <strong>subscribe</strong> in Unity, subscribe the generated service client with <code class="font-mono bg-primary-500/20 px-1 py-0.5 rounded">await ExoServices.&lt;Service&gt;.SubscribeAsync("topic")</code> and handle its <code class="font-mono">On&lt;Event&gt;</code> event.
             </p>
           </div>
 
@@ -1722,6 +1837,12 @@ defmodule Exoforge.Std.Docs.View do
                   <td class="py-2 px-3 font-sans text-xs text-gray-600">Indicates whether this resource stores exactly one record (e.g. server configuration). Creates a default record when empty and renders as a single form in Studio.</td>
                 </tr>
                 <tr>
+                  <td class="py-2 px-3 font-semibold text-gray-900">AllowPlayerRead</td>
+                  <td class="py-2 px-3 text-primary-700">bool</td>
+                  <td class="py-2 px-3 text-gray-400">Optional (false)</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Makes the whole resource readable by player-scoped callers through <code class="font-mono text-primary-700">resource_store.list</code>/<code class="font-mono text-primary-700">get</code>. Enable only for public data; it is not row-scoped.</td>
+                </tr>
+                <tr>
                   <td class="py-2 px-3 font-semibold text-gray-900">DrawerTabs</td>
                   <td class="py-2 px-3 text-primary-700">string[]?</td>
                   <td class="py-2 px-3 text-gray-400">Optional (["overview"])</td>
@@ -1765,7 +1886,7 @@ defmodule Exoforge.Std.Docs.View do
                   <td class="py-2 px-3 font-semibold text-gray-900">DataType</td>
                   <td class="py-2 px-3 text-primary-700">string?</td>
                   <td class="py-2 px-3 text-gray-400">Optional (auto-inferred)</td>
-                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Explicit SQL data type override (<code class="font-mono text-primary-700">"text"</code>, <code class="font-mono text-primary-700">"integer"</code>, <code class="font-mono text-primary-700">"float"</code>, <code class="font-mono text-primary-700">"boolean"</code>, <code class="font-mono text-primary-700">"datetime"</code>, <code class="font-mono text-primary-700">"json"</code>).</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Explicit type override (<code class="font-mono text-primary-700">"text"</code>, <code class="font-mono text-primary-700">"integer"</code>, <code class="font-mono text-primary-700">"float"</code>, <code class="font-mono text-primary-700">"boolean"</code>, <code class="font-mono text-primary-700">"datetime"</code>, <code class="font-mono text-primary-700">"map"</code>, <code class="font-mono text-primary-700">"list"</code>, <code class="font-mono text-primary-700">"binary"</code>).</td>
                 </tr>
                 <tr>
                   <td class="py-2 px-3 font-semibold text-gray-900">Role</td>
@@ -1782,13 +1903,13 @@ defmodule Exoforge.Std.Docs.View do
                 <tr>
                   <td class="py-2 px-3 font-semibold text-gray-900">Sortable</td>
                   <td class="py-2 px-3 text-primary-700">bool</td>
-                  <td class="py-2 px-3 text-gray-400">Optional (true)</td>
+                  <td class="py-2 px-3 text-gray-400">Optional (false)</td>
                   <td class="py-2 px-3 font-sans text-xs text-gray-600">Enables column click-sorting in Studio data tables.</td>
                 </tr>
                 <tr>
                   <td class="py-2 px-3 font-semibold text-gray-900">Filterable</td>
                   <td class="py-2 px-3 text-primary-700">bool</td>
-                  <td class="py-2 px-3 text-gray-400">Optional (true)</td>
+                  <td class="py-2 px-3 text-gray-400">Optional (false)</td>
                   <td class="py-2 px-3 font-sans text-xs text-gray-600">Enables quick search &amp; filtering on this column in Studio.</td>
                 </tr>
                 <tr>
@@ -2621,10 +2742,11 @@ defmodule Exoforge.Std.Docs.View do
 
   defp code_exo_event_unity do
     """
-    // Subscribe to strongly-typed event stream in Unity
-    ExoforgeSDK.Events.Subscribe<PlayerRegisteredEvent>("player.registered", evt => {
-        Debug.Log($"Welcome {evt.DisplayName}!");
-    });
+    // Subscribe through the generated service client for the service that owns the event
+    await ExoServices.PlayerData.SubscribeAsync("player_data:*");
+    ExoServices.PlayerData.OnPlayerCreated += evt => {
+        Debug.Log($"New player: {evt.PlayerId}");
+    };
     """
   end
 

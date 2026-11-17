@@ -15,18 +15,21 @@ Communication between the host cluster supervisor (Elixir BEAM) and the native C
 
 | Frame `type` | Direction | What Triggers This Frame | Carries |
 |---|---|---|---|
-| `hello` | Host ➔ Worker | Host spawns the native OS process. Initiates capability handshake. | `protocol: 1`, `host: "exoforge"`, `capabilities: ["action_result", "host_call", "host_log"]` |
-| `hello` | Worker ➔ Host | Worker starts and answers within 5-second timeout, declaring what it can receive. | `protocol: 1`, `extension: "<name>"`, `capabilities: ["action", "event"]` |
-| `action` | Host ➔ Worker | A player calls an action, or a background cron triggers a scheduled task. | `id: "req_..."`, `action: "method_name"`, `payload: { ... }` |
-| `action_result` | Worker ➔ Host | The C# action method finishes execution (or throws an unhandled exception). | `id: "req_..."`, `status: "ok" \| "error"`, `data: { ... }` or `error: "..."` |
+| `hello` | Host ➔ Worker | Host spawns the native OS process. Initiates capability handshake. | `protocol: 1`, `host: "exoforge"`, `capabilities: ["action_result", "host_call", "host_log", "lifecycle_result"]` |
+| `hello` | Worker ➔ Host | Worker starts and answers within 5-second timeout, declaring what it can receive. | `protocol: 1`, `plugin: "<name>"`, `capabilities: ["action", "event", "host_call_result"]` plus optional `"lifecycle"` |
+| `action` | Host ➔ Worker | A player calls an action, or a background cron triggers a scheduled task. | `id: <integer>`, `action: "method_name"`, `payload: { ... }` |
+| `action_result` | Worker ➔ Host | The C# action method finishes execution (or throws an unhandled exception). | `id: <integer>`, `status: "ok" \| "error"`, `data: { ... }` or `error: { "code": "...", "message": "..." }` |
 | `event` | Host ➔ Worker | An event that this extension subscribed to is published on the cluster event bus. | `event: "topic.name"`, `payload: { ... }` |
-| `host_call` | Worker ➔ Host | Extension invokes host capabilities: `Exo.Database.Put`, `Exo.Database.Query`, or `Exo.Events.EmitAsync`. | `id: "call_..."`, `op: "db_put" \| "db_query" \| "publish_event"`, `args: { ... }` |
-| `host_call_result` | Host ➔ Worker | The host completes the requested database operation or event publication. | `id: "call_..."`, `result: { ... }` |
-| `host_log` | Worker ➔ Host | Extension outputs logs via `Exo.Logger.Info` or `Console.WriteLine`. | `level: "info" \| "warn" \| "error"`, `message: "..."` |
+| `host_call` | Worker ➔ Host | Extension invokes a host capability: `emit_event`, `call_action`, `db_put`, `db_get`, `db_all`, `db_delete`, `log`, or `clock_now`. | `id: <integer>`, `op: "<operation>"`, `args: { ... }` |
+| `host_call_result` | Host ➔ Worker | The host completes the requested capability call. | `id: <integer>`, `result: <value>` or an error envelope |
+| `host_log` | Worker ➔ Host | Extension outputs logs via `Exo.Logger.Info` or an unhandled exception trace. | `level: 0..3`, `message: "..."` |
+| `lifecycle` | Host ➔ Worker | Sent after the handshake to an extension that declared `"lifecycle"`. | `id: <integer>` |
+| `lifecycle_result` | Worker ➔ Host | The optional `OnExtensionStart()` hook finished or failed. | `id: <integer>`, `status: "ok"` or `status: "error"` with `error: { "code": "...", "message": "..." }` |
 
 ### Handshake & Fault Isolation Guarantees
-1. **5-Second Handshake**: If an extension does not answer `hello` with valid capabilities within 5 seconds, the host refuses the extension with a clear log reason.
-2. **Crash Recovery**: If an OS worker process crashes, the runner is a supervised child, so `ExtensionSupervisor` (`:one_for_one`) restarts it without touching the rest of the cluster. Every request still waiting on the dead process is answered with `{:error, {:extension_crashed, reason}}` rather than left hanging, and the registry records the crash (`ExtensionRegistry.mark_crashed/2`) so the Studio can show it.
+1. **5-Second Handshake**: If an extension does not answer `hello` with valid capabilities within 5 seconds, the host refuses the extension with a clear log reason and stops the runner; it is not restarted in a loop.
+2. **Optional Lifecycle**: An extension that declares `"lifecycle"` receives `lifecycle` after the handshake. `OnExtensionStart()` runs once per process; the host waits up to 10 seconds. A failure marks the extension crashed with `{:startup_failed, %{code: ..., message: ...}}` and stops it.
+3. **Crash Recovery**: A runtime OS process exit is supervised by the extension supervisor (`:one_for_one`) and restarted without touching the rest of the cluster. Requests waiting on the dead process receive `{:error, {:extension_crashed, reason}}`, and the registry records the crash (`ExtensionRegistry.mark_crashed/2`) so Studio can show it.
 
 ---
 

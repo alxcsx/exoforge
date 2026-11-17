@@ -2,6 +2,9 @@
 
 Real-world architectural patterns, sample code, and design strategies for game backends on Exoforge.
 
+> [!NOTE]
+> The PlayFab and Unity Gaming Services comparisons below are explanatory, not measurements made by this repository. The only benchmark published here is the `:pg` fanout benchmark in `AGENTS.md`.
+
 When building games on traditional Backend-as-a-Service (BaaS) platforms like **Microsoft PlayFab (CloudScript)** or **Unity Gaming Services (UGS Cloud Code)**, developers repeatedly hit architectural walls: serverless cold starts, strict 15-second execution limits, data locked in per-player key-value JSON blobs without SQL joins, and client-side polling instead of real-time push.
 
 Exoforge combines **long-running stateful native C# processes**, **isolated relational SQL storage**, and **sub-millisecond pub/sub event broadcasting** into an integrated developer experience that makes advanced backend gameplay features intuitive and clean.
@@ -407,7 +410,7 @@ When architecting backend extensions for Exoforge, keep these five principles in
    Separate complex domains into independent extensions (e.g., `inventory`, `matchmaker`, `billing`). Call other extensions using generated typed stubs (`exo extension stubs <name>`), and broadcast major lifecycle events (`player.registered`, `item.crafted`, `match.ended`) so other services can react asynchronously.
 
 4. **Never Poll from Unity**  
-   If a client action requires waiting (e.g. matchmaking, asynchronous crafting, trade acceptance, webhook confirmation), return an immediate response from `[ExoAction]` and push the completion payload using `Exo.Events.EmitAsync`. The client listens via `ExoforgeSDK.Events.Subscribe<T>()`.
+   If a client action requires waiting (e.g. matchmaking, asynchronous crafting, trade acceptance, webhook confirmation), return an immediate response from `[ExoAction]` and push the completion payload using `Exo.Events.EmitAsync`. In Unity, subscribe with the generated service client: `await ExoServices.<Service>.SubscribeAsync("topic")`, then handle its `On<Event>` event.
 
 5. **Throw `ExoActionException` for Domain Errors**  
    Avoid using error codes or wrapper types like `Result<T>` in your action return signatures. Throwing `throw new ExoActionException("insufficient_funds", "You need 500 gold to purchase this item.")` automatically returns a structured error to the client, triggering `onError` callbacks or throwing caught exceptions in Unity async/await blocks.

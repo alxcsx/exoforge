@@ -110,7 +110,9 @@ defmodule Exoforge.Std.DocsTest do
     end
 
     test "export_docs produces unified markdown and html" do
-      {:ok, %{title: title, content: md, format: "markdown"}} = Docs.export_docs(%{format: "markdown"})
+      {:ok, %{title: title, content: md, format: "markdown"}} =
+        Docs.export_docs(%{format: "markdown"})
+
       assert title =~ "Exoforge Complete Developer Guide"
       assert md =~ "Developer Quickstart"
       assert md =~ "C# Attributes Reference"
@@ -119,7 +121,9 @@ defmodule Exoforge.Std.DocsTest do
       {:ok, %{content: html, format: "html"}} = Docs.export_docs(%{format: "html"})
       assert html =~ "<h1"
 
-      {:ok, %{title: pdf_title, binary: pdf_bytes, format: "pdf"}} = Docs.export_docs(%{format: "pdf"})
+      {:ok, %{title: pdf_title, binary: pdf_bytes, format: "pdf"}} =
+        Docs.export_docs(%{format: "pdf"})
+
       assert pdf_title =~ "Exoforge Complete Developer Guide"
       assert is_binary(pdf_bytes)
       assert String.starts_with?(pdf_bytes, "%PDF-1.4")
@@ -136,20 +140,50 @@ defmodule Exoforge.Std.DocsTest do
         subpage: "flow"
       }
 
-      html = Phoenix.LiveViewTest.rendered_to_string(~H"""
-      <View.view
-        action_catalog={@action_catalog}
-        extensions={@extensions}
-        project_name={@project_name}
-        studio_name={@studio_name}
-        subpage={@subpage}
-      />
-      """)
+      html =
+        Phoenix.LiveViewTest.rendered_to_string(~H"""
+        <View.view
+          action_catalog={@action_catalog}
+          extensions={@extensions}
+          project_name={@project_name}
+          studio_name={@studio_name}
+          subpage={@subpage}
+        />
+        """)
 
       assert html =~ "Creating Your First Online Multiplayer Feature"
       assert html =~ "Export to PDF"
       assert html =~ "/api/docs/manual.pdf"
       assert html =~ "@media print"
+    end
+
+    test "renders how-to subpage with step recipes" do
+      assigns = %{
+        action_catalog: [],
+        extensions: [],
+        project_name: "TestGame",
+        studio_name: "TestStudio",
+        subpage: "how_to"
+      }
+
+      html =
+        Phoenix.LiveViewTest.rendered_to_string(~H"""
+        <View.view
+          action_catalog={@action_catalog}
+          extensions={@extensions}
+          project_name={@project_name}
+          studio_name={@studio_name}
+          subpage={@subpage}
+        />
+        """)
+
+      assert html =~ "How-to"
+      assert html =~ "Sign in a player"
+      assert html =~ "Build and deploy an extension"
+      assert html =~ "Regenerate service stubs"
+      assert html =~ "Add persistence and seed on startup"
+      assert html =~ "Subscribe to events"
+      assert html =~ "Diagnose a failure"
     end
 
     test "renders attributes subpage" do
@@ -161,15 +195,16 @@ defmodule Exoforge.Std.DocsTest do
         subpage: "attributes"
       }
 
-      html = Phoenix.LiveViewTest.rendered_to_string(~H"""
-      <View.view
-        action_catalog={@action_catalog}
-        extensions={@extensions}
-        project_name={@project_name}
-        studio_name={@studio_name}
-        subpage={@subpage}
-      />
-      """)
+      html =
+        Phoenix.LiveViewTest.rendered_to_string(~H"""
+        <View.view
+          action_catalog={@action_catalog}
+          extensions={@extensions}
+          project_name={@project_name}
+          studio_name={@studio_name}
+          subpage={@subpage}
+        />
+        """)
 
       assert html =~ "[ExoExtension]"
       assert html =~ "[ExoAction]"
@@ -187,15 +222,16 @@ defmodule Exoforge.Std.DocsTest do
         subpage: "use_cases"
       }
 
-      html = Phoenix.LiveViewTest.rendered_to_string(~H"""
-      <View.view
-        action_catalog={@action_catalog}
-        extensions={@extensions}
-        project_name={@project_name}
-        studio_name={@studio_name}
-        subpage={@subpage}
-      />
-      """)
+      html =
+        Phoenix.LiveViewTest.rendered_to_string(~H"""
+        <View.view
+          action_catalog={@action_catalog}
+          extensions={@extensions}
+          project_name={@project_name}
+          studio_name={@studio_name}
+          subpage={@subpage}
+        />
+        """)
 
       assert html =~ "What You Can Build with Exoforge"
       assert html =~ "The Paradigm Shift: Exoforge vs. Legacy BaaS"
@@ -218,15 +254,16 @@ defmodule Exoforge.Std.DocsTest do
         subpage: "architecture"
       }
 
-      html = Phoenix.LiveViewTest.rendered_to_string(~H"""
-      <View.view
-        action_catalog={@action_catalog}
-        extensions={@extensions}
-        project_name={@project_name}
-        studio_name={@studio_name}
-        subpage={@subpage}
-      />
-      """)
+      html =
+        Phoenix.LiveViewTest.rendered_to_string(~H"""
+        <View.view
+          action_catalog={@action_catalog}
+          extensions={@extensions}
+          project_name={@project_name}
+          studio_name={@studio_name}
+          subpage={@subpage}
+        />
+        """)
 
       assert html =~ "Architecture"
       # The guide keeps its print stylesheet but not a second dark-mode remap: that lives in
@@ -240,7 +277,12 @@ defmodule Exoforge.Std.DocsTest do
     test "subpage flow does not duplicate the action catalog" do
       assigns = %{
         action_catalog: [
-          %{name: "test_svc", title: "Test Svc", icon: "🎮", actions: [%{name: "run", mode: "sync", doc: "runs", params: []}]}
+          %{
+            name: "test_svc",
+            title: "Test Svc",
+            icon: "🎮",
+            actions: [%{name: "run", mode: "sync", doc: "runs", params: []}]
+          }
         ],
         extensions: [],
         project_name: "TestGame",
@@ -248,15 +290,16 @@ defmodule Exoforge.Std.DocsTest do
         subpage: "flow"
       }
 
-      html = Phoenix.LiveViewTest.rendered_to_string(~H"""
-      <View.view
-        action_catalog={@action_catalog}
-        extensions={@extensions}
-        project_name={@project_name}
-        studio_name={@studio_name}
-        subpage={@subpage}
-      />
-      """)
+      html =
+        Phoenix.LiveViewTest.rendered_to_string(~H"""
+        <View.view
+          action_catalog={@action_catalog}
+          extensions={@extensions}
+          project_name={@project_name}
+          studio_name={@studio_name}
+          subpage={@subpage}
+        />
+        """)
 
       refute html =~ "<section id=\"catalog\""
       assert html =~ "Live Action Catalog"
@@ -291,15 +334,16 @@ defmodule Exoforge.Std.DocsTest do
         subpage: "catalog"
       }
 
-      html = Phoenix.LiveViewTest.rendered_to_string(~H"""
-      <View.view
-        action_catalog={@action_catalog}
-        extensions={@extensions}
-        project_name={@project_name}
-        studio_name={@studio_name}
-        subpage={@subpage}
-      />
-      """)
+      html =
+        Phoenix.LiveViewTest.rendered_to_string(~H"""
+        <View.view
+          action_catalog={@action_catalog}
+          extensions={@extensions}
+          project_name={@project_name}
+          studio_name={@studio_name}
+          subpage={@subpage}
+        />
+        """)
 
       assert html =~ "<section id=\"catalog\""
       assert html =~ "1 Services Loaded"
@@ -355,15 +399,16 @@ defmodule Exoforge.Std.DocsTest do
         subpage: "catalog"
       }
 
-      html = Phoenix.LiveViewTest.rendered_to_string(~H"""
-      <View.view
-        action_catalog={@action_catalog}
-        extensions={@extensions}
-        project_name={@project_name}
-        studio_name={@studio_name}
-        subpage={@subpage}
-      />
-      """)
+      html =
+        Phoenix.LiveViewTest.rendered_to_string(~H"""
+        <View.view
+          action_catalog={@action_catalog}
+          extensions={@extensions}
+          project_name={@project_name}
+          studio_name={@studio_name}
+          subpage={@subpage}
+        />
+        """)
 
       # Action title signatures: parameter names only, required first, ? for optionals
       assert html =~ ".authenticate(token)"
@@ -376,16 +421,20 @@ defmodule Exoforge.Std.DocsTest do
       assert html =~ ">async<"
 
       # Folds collapsed by default (no 'open' attribute on details)
-      refute html =~ "<details class=\"group bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden transition-all duration-200 print:border-gray-300 print:shadow-none print:break-inside-avoid\" open>"
-      refute html =~ "<details class=\"group/act bg-white rounded-xl border border-gray-200/80 p-4 space-y-3 shadow-2xs transition-all print:border-gray-300 print:break-inside-avoid\" open>"
+      refute html =~
+               "<details class=\"group bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden transition-all duration-200 print:border-gray-300 print:shadow-none print:break-inside-avoid\" open>"
+
+      refute html =~
+               "<details class=\"group/act bg-white rounded-xl border border-gray-200/80 p-4 space-y-3 shadow-2xs transition-all print:border-gray-300 print:break-inside-avoid\" open>"
     end
 
     test "renders ArchitectureGraph with UML diagram, maximize modal, and sequential workflow cascade" do
       assigns = %{}
 
-      html = Phoenix.LiveViewTest.rendered_to_string(~H"""
-      <Exoforge.Std.Docs.ArchitectureGraph.visualizer />
-      """)
+      html =
+        Phoenix.LiveViewTest.rendered_to_string(~H"""
+        <Exoforge.Std.Docs.ArchitectureGraph.visualizer />
+        """)
 
       # Core Philosophy & Rule of Thumb
       assert html =~ "CORE PHILOSOPHY"
