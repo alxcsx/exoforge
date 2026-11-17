@@ -10,12 +10,17 @@
     <ExoforgeCSharpSdk>$(ExoforgeRoot)sdk/csharp</ExoforgeCSharpSdk>
     <ExoforgeUnityPackage>$(ExoforgeRoot)sdk/unity/Exoforge.SDK</ExoforgeUnityPackage>
 
-    <!-- The feed `just pack-sdk` fills, and the version it fills it with. -->
+    <!-- The feed `just pack-sdk` fills. -->
     <ExoforgeLocalFeed>$(ExoforgeRoot)dist/nuget</ExoforgeLocalFeed>
-    <!-- The version of Exoforge.Plugin.SDK the build hook and the samples reference. A scaffolded
-         plugin is usually outside this repository and gets a literal instead, from
-         ExoScaffolder.SdkPackageVersion - the two have to be bumped together. -->
-    <ExoforgePluginSdkVersion>0.1.0</ExoforgePluginSdkVersion>
+    <!--
+      The version of Exoforge.Plugin.SDK, read from the Unity package's own manifest: the package a
+      developer installs and the extension SDK inside it are one release, so one file names it. A
+      packaged Exoforge.Plugin.SDK.<version>.nupkg is what a project's .feed receives, and NuGet
+      caches by id and version - a fixed version would be served from the cache forever.
+    -->
+    <ExoforgeUnityPackageVersion>$([System.Text.RegularExpressions.Regex]::Match($([System.IO.File]::ReadAllText('$(ExoforgeUnityPackage)/package.json')), '&quot;version&quot;\s*:\s*&quot;([^&quot;]+)&quot;').Groups[1].Value)</ExoforgeUnityPackageVersion>
+    <ExoforgePluginSdkVersion Condition="'$(ExoforgePluginSdkVersion)' == ''">$(ExoforgeUnityPackageVersion)</ExoforgePluginSdkVersion>
+    <ExoforgePluginSdkVersion Condition="'$(ExoforgePluginSdkVersion)' == ''">0.1.0</ExoforgePluginSdkVersion>
 
     <!-- Skip the NuGet vulnerability audit: it fetches nuget.org on every restore and stalls
          offline/air-gapped builds (and Unity's spawned dotnet builds) with no timeout in sight. -->

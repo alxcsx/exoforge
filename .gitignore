@@ -42,6 +42,8 @@ sdk/unity/Exoforge.SDK/*/Plugins/Tools~/**/*.pdb
 !**/Tools~
 !**/Agents~/
 !**/Cli~/
+# ...but the SDK's bundled CLI is build output (just build-unity-sdk), shipped only in the tarball.
+sdk/unity/Exoforge.SDK/Editor/Cli~/
 
 # The sample's copy of the Unity package, placed by `just unity-sync`. The sample names no path
 # outside itself, so the package is copied in - and being a copy, it is output, not source.
@@ -112,6 +114,8 @@ sdk/unity/sample_unity/ServerData/
 
 # Transient workspace files & meta
 scratch/
+# The packed extension SDK `exo`/the Studio copies into a workspace; a build input, not source.
+sdk/unity/sample_unity/Exoforge/.feed/
 **/bin.meta
 **/obj.meta
 sdk/unity/sample_unity/Exoforge/extensions/*/manifest.json.meta

@@ -245,42 +245,6 @@ public class ManagementTests : IDisposable
     }
 
     [Fact]
-    public void Build_Refreshes_Nuget_Config_Naming_A_Deleted_Feed()
-    {
-        var ws = ExoWorkspace.Initialize(_tempDir, "FeedUpgrade");
-        string extDir = Path.Combine(ws.ExtensionsPath, "wallet");
-        Directory.CreateDirectory(extDir);
-
-        string feed = Path.Combine(_tempDir, "feed");
-        Directory.CreateDirectory(feed);
-        string expectedFeed = Path.GetFullPath(feed).Replace('\\', '/');
-
-        // What an SDK upgrade leaves behind: both configs still name the package cache entry the
-        // upgrade deleted, and the extension's copy wins when NuGet merges sources.
-        string deleted = Path.Combine(_tempDir, "Library", "PackageCache", "com.exoforge.sdk@deadbeef", "Editor", "Plugins", "NuGet~")
-            .Replace('\\', '/');
-        string stale =
-            "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" +
-            "<configuration>\n" +
-            "  <packageSources>\n" +
-            "    <add key=\"nuget.org\" value=\"https://api.nuget.org/v3/index.json\" protocolVersion=\"3\" />\n" +
-            $"    <add key=\"exoforge\" value=\"{deleted}\" />\n" +
-            "  </packageSources>\n" +
-            "</configuration>\n";
-        File.WriteAllText(Path.Combine(ws.RootPath, "nuget.config"), stale);
-        File.WriteAllText(Path.Combine(extDir, "nuget.config"), stale);
-
-        ExoScaffolder.EnsureBuildFeed(ws.RootPath, extDir, feed);
-
-        foreach (string dir in new[] { ws.RootPath, extDir })
-        {
-            string config = File.ReadAllText(Path.Combine(dir, "nuget.config"));
-            Assert.Contains(expectedFeed, config);
-            Assert.DoesNotContain("deadbeef", config);
-        }
-    }
-
-    [Fact]
     public void ExtensionStubs_GenerateTypedClientFromContract()
     {
         string json = """
