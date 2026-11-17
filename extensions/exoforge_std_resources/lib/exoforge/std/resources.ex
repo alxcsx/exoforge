@@ -186,8 +186,9 @@ defmodule Exoforge.Std.Resources do
   # A column's default, as SQL. Quoted for text and left bare for numbers, so the database's idea of
   # the type matches the schema's rather than the value's spelling.
   defp default_clause(column) do
-    value = column[:default] || column["default"]
-    type = column[:type] || column["type"]
+    # `||` would drop a boolean `false` default, which is a legitimate default and the common one.
+    value = if is_nil(column[:default]), do: column["default"], else: column[:default]
+    type = normalize_type(column[:type] || column["type"])
 
     cond do
       is_nil(value) -> ""
@@ -678,10 +679,12 @@ defmodule Exoforge.Std.Resources do
 
   defp column_type(res, name) do
     column = Enum.find(res.columns || [], &(to_string(&1.name || &1["name"]) == name))
-    type = (column && (column[:type] || column["type"])) || :string
-    # Resources declared by a native extension arrive from manifest.json, where types are strings.
-    if is_binary(type), do: Exoforge.Atoms.existing(type, type), else: type
+    normalize_type((column && (column[:type] || column["type"])) || :string)
   end
+
+  # Resources declared by a native extension arrive from manifest.json, where types are strings.
+  defp normalize_type(type) when is_binary(type), do: Exoforge.Atoms.existing(type, type)
+  defp normalize_type(type), do: type
 
   defp out_of_choices?({name, value}, res) do
     column = Enum.find(res.columns || [], &(to_string(&1.name) == name))
@@ -854,8 +857,8 @@ defmodule Exoforge.Std.Resources do
       (res.columns || [])
       |> Enum.reduce(%{}, fn col, acc ->
         name = to_string(col.name || col["name"])
-        raw_default = col[:default] || col["default"]
-        type = col[:type] || col["type"] || :string
+        raw_default = if is_nil(col[:default]), do: col["default"], else: col[:default]
+        type = normalize_type(col[:type] || col["type"] || :string)
 
         val =
           cond do

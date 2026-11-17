@@ -74,11 +74,15 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
 
   defp run_sql(conn, sql, args) do
     read? = String.match?(sql, ~r/^\s*SELECT/i)
+    # SQLite has no boolean type: `true` bound by exqlite is the text "true" (it serializes any atom
+    # that way), while a bare `DEFAULT false` is the integer 0. The declared column type is the only
+    # place that says which values the caller means, so the row is decoded by it.
+    types = if read?, do: column_types_for(sql), else: %{}
 
     case Exqlite.Sqlite3.prepare(conn, sql) do
       {:ok, stmt} ->
         try do
-          do_run(conn, stmt, args, read?)
+          do_run(conn, stmt, args, read?, types)
         rescue
           e in ArgumentError -> {:error, {:bind_error, Exception.message(e)}}
         after
@@ -90,16 +94,121 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
     end
   end
 
-  defp do_run(conn, stmt, args, read?) do
+  defp do_run(conn, stmt, args, read?, types) do
     with :ok <- Exqlite.Sqlite3.bind(stmt, normalize_args(args)),
          {:ok, columns} <- Exqlite.Sqlite3.columns(conn, stmt),
          {:ok, raw_rows} <- Exqlite.Sqlite3.fetch_all(conn, stmt) do
-      rows = Enum.map(raw_rows, fn row -> columns |> Enum.zip(row) |> Map.new() end)
+      rows =
+        Enum.map(raw_rows, fn row ->
+          columns |> Enum.zip(row) |> Map.new() |> coerce_row(types)
+        end)
+
       {:ok, %{rows: rows, num_rows: max(length(rows), changes(conn))}}
     else
       {:error, reason} -> table_error(reason, read?)
     end
   end
+
+  ## ---- DECLARED COLUMN TYPES ----
+
+  # A result column named like a declared resource column is decoded by that column's type: boolean
+  # text/integers to booleans, numeric text to numbers. Columns the SQL produced some other way
+  # (expressions, joins, `SELECT 1`) are left alone.
+  defp column_types_for(sql) do
+    case sql_table(sql) do
+      nil -> %{}
+      table -> declared_column_types(table)
+    end
+  end
+
+  defp sql_table(sql) do
+    case Regex.run(~r/\bFROM\s+"?([A-Za-z0-9_]+)"?/i, sql) do
+      [_, table] ->
+        table
+
+      _ ->
+        case Regex.run(~r/\b(?:UPDATE|INTO)\s+"?([A-Za-z0-9_]+)"?/i, sql) do
+          [_, table] -> table
+          _ -> nil
+        end
+    end
+  end
+
+  defp declared_column_types(table) do
+    table = to_string(table)
+
+    with {:ok, %{resource: res}} <- Exoforge.ExtensionRegistry.fetch_resource(table),
+         ^table <- table_source(res) do
+      for col <- Map.get(res, :columns) || Map.get(res, "columns") || [],
+          name = to_string(Map.get(col, :name) || Map.get(col, "name") || ""),
+          name != "",
+          type = column_type(Map.get(col, :type) || Map.get(col, "type")),
+          into: %{},
+          do: {name, type}
+    else
+      _ -> %{}
+    end
+  rescue
+    _ -> %{}
+  end
+
+  defp column_type(type) when is_binary(type), do: Exoforge.Atoms.existing(type, type)
+  defp column_type(type), do: type
+
+  defp coerce_row(row, types) when types == %{}, do: row
+
+  defp coerce_row(row, types) do
+    Map.new(row, fn {column, value} -> {column, coerce_value(Map.get(types, column), value)} end)
+  end
+
+  defp coerce_value(:boolean, value), do: to_boolean(value)
+  defp coerce_value(:integer, value), do: to_integer(value)
+  defp coerce_value(:float, value), do: to_float(value)
+  defp coerce_value(_type, value), do: value
+
+  defp to_boolean(nil), do: nil
+  defp to_boolean(true), do: true
+  defp to_boolean(false), do: false
+  defp to_boolean(1), do: true
+  defp to_boolean(0), do: false
+
+  defp to_boolean(value) when is_binary(value) do
+    case String.downcase(String.trim(value)) do
+      "true" -> true
+      "t" -> true
+      "1" -> true
+      "false" -> false
+      "f" -> false
+      "0" -> false
+      _ -> value
+    end
+  end
+
+  defp to_boolean(value), do: value
+
+  defp to_integer(value) when is_integer(value), do: value
+  defp to_integer(value) when is_float(value), do: trunc(value)
+
+  defp to_integer(value) when is_binary(value) do
+    case Integer.parse(String.trim(value)) do
+      {int, ""} -> int
+      _ -> value
+    end
+  end
+
+  defp to_integer(value), do: value
+
+  defp to_float(value) when is_float(value), do: value
+  defp to_float(value) when is_integer(value), do: value * 1.0
+
+  defp to_float(value) when is_binary(value) do
+    case Float.parse(String.trim(value)) do
+      {float, ""} -> float
+      _ -> value
+    end
+  end
+
+  defp to_float(value), do: value
 
   defp changes(conn) do
     case Exqlite.Sqlite3.changes(conn) do

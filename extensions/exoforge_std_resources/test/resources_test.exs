@@ -57,6 +57,25 @@ defmodule Exoforge.Std.ResourcesTest do
     end
   end
 
+  # SQLite has no boolean type: exqlite binds `true` as the text "true", and a `DEFAULT false`
+  # column holds the integer 0. Reads decode by the declared column type.
+  defmodule TogglesContract do
+    import Exoforge.Contracts.Service
+
+    defservice toggles do
+      resource :toggle do
+        source({:table, "toggles"})
+        primary_key(:id)
+
+        column(:id, :string)
+        column(:color_blind, :boolean)
+        column(:beta, :boolean, default: false)
+        column(:volume, :integer)
+        column(:scale, :float)
+      end
+    end
+  end
+
   defmodule PublicCatalogContract do
     import Exoforge.Contracts.Service
 
@@ -129,6 +148,11 @@ defmodule Exoforge.Std.ResourcesTest do
       provides: [PublicCatalogContract.PublicCatalog]
     )
 
+    Exoforge.ExtensionCase.register_extension(Resources,
+      id: :toggles_plugin,
+      provides: [TogglesContract.Toggles]
+    )
+
     Resources.run_migrations()
 
     # One SQLite file for the whole suite, so a row written by one test is visible to the next: the
@@ -154,6 +178,81 @@ defmodule Exoforge.Std.ResourcesTest do
 
     assert {:ok, %{row: fetched}} = dispatch(:get, %{resource: "game_config", id: "cfg"})
     assert Jason.decode!(fetched["settings"]) == %{"volume" => 3}
+  end
+
+  test "boolean columns read back as booleans through the resource store" do
+    assert {:ok, %{row: row}} =
+             dispatch(:create, %{
+               resource: "toggle",
+               attributes: %{
+                 "id" => "bool_1",
+                 "color_blind" => true,
+                 "volume" => 5,
+                 "scale" => 1.5
+               }
+             })
+
+    assert row["color_blind"] == true
+    assert row["volume"] == 5
+    assert row["scale"] == 1.5
+
+    assert {:ok, %{row: fetched}} = dispatch(:get, %{resource: "toggle", id: "bool_1"})
+    assert fetched["color_blind"] == true
+    assert is_integer(fetched["volume"])
+    assert is_float(fetched["scale"])
+
+    assert {:ok, %{row: updated}} =
+             dispatch(:update, %{
+               resource: "toggle",
+               id: "bool_1",
+               attributes: %{"color_blind" => false}
+             })
+
+    assert updated["color_blind"] == false
+
+    assert {:ok, %{rows: rows}} = dispatch(:list, %{resource: "toggle"})
+    assert Enum.any?(rows, &(&1["id"] == "bool_1" and &1["color_blind"] == false))
+  end
+
+  test "boolean columns read back as booleans through the host KV bridge" do
+    assert {:ok, _} =
+             Exoforge.Std.Database.put(:toggles_plugin, "toggles", "bool_2", %{
+               "id" => "bool_2",
+               "color_blind" => true,
+               "volume" => 7
+             })
+
+    assert {:ok, row} = Exoforge.Std.Database.get(:toggles_plugin, "toggles", "bool_2")
+    assert row["color_blind"] == true
+    assert row["volume"] == 7
+
+    assert {:ok, rows} = Exoforge.Std.Database.all(:toggles_plugin, "toggles")
+    assert Enum.any?(rows, &(&1["id"] == "bool_2" and &1["color_blind"] == true))
+  end
+
+  test "booleans stored as SQLite text or left at a SQL default still read back as booleans" do
+    # Rows written before the fix hold the text "true"; a bare `DEFAULT false` holds the integer 0.
+    assert {:ok, _} =
+             Exoforge.Std.Database.execute(
+               :toggles_plugin,
+               "INSERT INTO toggles (id, color_blind) VALUES ($1, $2)",
+               ["bool_text", "true"]
+             )
+
+    assert {:ok, _} =
+             Exoforge.Std.Database.execute(
+               :toggles_plugin,
+               "INSERT INTO toggles (id) VALUES ($1)",
+               ["bool_default"]
+             )
+
+    assert {:ok, text_row} = Exoforge.Std.Database.get(:toggles_plugin, "toggles", "bool_text")
+    assert text_row["color_blind"] == true
+
+    assert {:ok, default_row} =
+             Exoforge.Std.Database.get(:toggles_plugin, "toggles", "bool_default")
+
+    assert default_row["beta"] == false
   end
 
   test "migrate creates the backing table" do
