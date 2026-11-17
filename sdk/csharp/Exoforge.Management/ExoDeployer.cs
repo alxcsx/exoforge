@@ -1397,7 +1397,7 @@ public class ExoDeployer
 
     private string PublishNative(string csproj, string pluginDir, string cleanName, string? rid, string dotnetPath, string buildStamp, Action<string> emit)
     {
-        ExoScaffolder.EnsureLocalFeed(_workspace.RootPath);
+        ExoScaffolder.EnsureBuildFeed(_workspace.RootPath, pluginDir);
 
         string targetRid = string.IsNullOrWhiteSpace(rid) ? HostRuntimeIdentifier() : rid!;
         string manifest = Path.Combine(pluginDir, "manifest.json");

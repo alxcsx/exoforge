@@ -203,12 +203,44 @@ public static class ExoScaffolder
             "  </packageSources>\n" +
             "</configuration>\n";
 
-        if (!File.Exists(nugetConfig) ||
-            !File.ReadAllText(nugetConfig).Contains(normFeed) ||
-            !File.ReadAllText(nugetConfig).Contains("https://api.nuget.org/v3/index.json"))
+        string existing = File.Exists(nugetConfig) ? File.ReadAllText(nugetConfig) : "";
+        if (!existing.Contains(normFeed) ||
+            !existing.Contains("https://api.nuget.org/v3/index.json") ||
+            HasDeletedFeedSource(existing))
         {
             File.WriteAllText(nugetConfig, config);
         }
+    }
+
+    /// <summary>
+    /// Points every nuget.config NuGet reads while building an extension at the feed inside the
+    /// installed SDK: the workspace root, and the extension's own directory. NuGet merges sources
+    /// from both, and the extension's copy is the one that survives an SDK upgrade still naming the
+    /// package cache directory the upgrade deleted.
+    /// </summary>
+    public static void EnsureBuildFeed(string workspaceRoot, string extensionDir, string? explicitFeed = null)
+    {
+        EnsureLocalFeed(workspaceRoot, explicitFeed);
+        EnsureLocalFeed(extensionDir, explicitFeed);
+    }
+
+    /// <summary>
+    /// True when the config names a local <c>exoforge</c> source whose directory is gone — exactly what
+    /// an SDK upgrade leaves behind once the old package cache entry is removed. Remote sources and
+    /// env-var paths are left to NuGet.
+    /// </summary>
+    private static bool HasDeletedFeedSource(string configText)
+    {
+        foreach (System.Text.RegularExpressions.Match match in System.Text.RegularExpressions.Regex.Matches(
+                     configText,
+                     "<add\\s+key=\"exoforge\"\\s+value=\"([^\"]+)\""))
+        {
+            string value = match.Groups[1].Value;
+            if (value.Contains("://") || value.Contains('%')) continue;
+            if (!Directory.Exists(value)) return true;
+        }
+
+        return false;
     }
 
     /// <summary>

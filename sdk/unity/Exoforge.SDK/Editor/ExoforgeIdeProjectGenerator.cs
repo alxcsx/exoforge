@@ -35,14 +35,31 @@ namespace Exoforge.Unity.Editor
         private const string FolderGuid = "{E0F0E0F0-E0F0-E0F0-E0F0-E0F0E0F0E0F0}";
         private const string FolderTypeGuid = "{2150E333-8FDC-42A3-9474-1A3956D46DE8}";
         private const string CSharpProjectTypeGuid = "{9A19103F-16F7-4668-BE54-9A1E7A4F7556}";
+        private const string PackageVersionPrefKey = "exoforge.package_version";
 
         static ExoforgeIdeProjectGenerator()
         {
+            // A headless import (-batchmode -quit) never pumps delayCall, and that is the run where an
+            // SDK upgrade must not leave every extension's nuget.config naming the package cache
+            // directory the upgrade deleted. Do it synchronously when the package version moved.
+            bool packageChanged = PackageVersionChanged();
+            if (packageChanged)
+            {
+                EnsureWorkspaceNugetConfig();
+                EditorPrefs.SetString(PackageVersionPrefKey, ExoforgePackageVersion.SdkVersion);
+            }
+
             EditorApplication.delayCall += () =>
             {
-                EnsureIdeConfiguration(forceRegenerate: false);
+                EnsureIdeConfiguration(forceRegenerate: packageChanged);
             };
         }
+
+        private static bool PackageVersionChanged() =>
+            !string.Equals(
+                EditorPrefs.GetString(PackageVersionPrefKey, string.Empty),
+                ExoforgePackageVersion.SdkVersion,
+                StringComparison.Ordinal);
 
         /// <summary>
         /// Validates and ensures IDE project generation flags, workspace nuget feeds, and project files.
