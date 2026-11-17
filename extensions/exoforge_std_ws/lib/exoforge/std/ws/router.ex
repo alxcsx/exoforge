@@ -4,6 +4,8 @@ defmodule Exoforge.Std.Ws.Router do
   """
   use Plug.Router
 
+  alias Exoforge.Std.Transport
+
   plug(Plug.Logger)
   plug(:authorize_ingress)
   plug(:match)
@@ -40,7 +42,9 @@ defmodule Exoforge.Std.Ws.Router do
   end
 
   match _ do
-    send_resp(conn, 404, Jason.encode!(%{error: "not_found"}))
+    conn
+    |> put_resp_content_type("application/json")
+    |> send_resp(404, Jason.encode!(Transport.error_body(:not_found)))
   end
 
   defp send_landing(conn) do
@@ -152,14 +156,14 @@ defmodule Exoforge.Std.Ws.Router do
   defp unauthenticated(conn) do
     conn
     |> put_resp_content_type("application/json")
-    |> send_resp(401, Jason.encode!(%{status: "error", error: "unauthenticated"}))
+    |> send_resp(401, Jason.encode!(Transport.error_body(:unauthenticated)))
     |> halt()
   end
 
   defp forbidden(conn) do
     conn
     |> put_resp_content_type("application/json")
-    |> send_resp(403, Jason.encode!(%{status: "error", error: "forbidden_scope"}))
+    |> send_resp(403, Jason.encode!(Transport.error_body(:forbidden_scope)))
     |> halt()
   end
 
@@ -212,13 +216,17 @@ defmodule Exoforge.Std.Ws.Router do
       |> put_resp_content_type("application/json")
       |> send_resp(
         426,
-        Jason.encode!(%{
-          error: "upgrade_required",
-          message:
-            "This endpoint requires a WebSocket connection (ws:// or wss://). Connect using a WebSocket client or the Exoforge C# / Unity SDK.",
-          websocket_url: "ws://localhost:#{Exoforge.Endpoints.ws_port()}/ws",
-          studio_url: Exoforge.Endpoints.studio_url()
-        })
+        Jason.encode!(
+          Transport.error_body(
+            {:upgrade_required,
+             "This endpoint requires a WebSocket connection (ws:// or wss://). Connect using a WebSocket client or the Exoforge C# / Unity SDK."},
+            nil
+          )
+          |> put_in(["error", "details"], %{
+            websocket_url: "ws://localhost:#{Exoforge.Endpoints.ws_port()}/ws",
+            studio_url: Exoforge.Endpoints.studio_url()
+          })
+        )
       )
     end
   end

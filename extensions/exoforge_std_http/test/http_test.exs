@@ -167,7 +167,9 @@ defmodule Exoforge.HttpTest do
       assert conn.status == 404
       body = Jason.decode!(conn.resp_body)
       assert body["status"] == "error"
-      assert body["error"] == "service_not_found"
+      assert body["error"]["code"] == "service_not_found"
+      assert is_binary(body["error"]["message"])
+      assert body["error"]["details"] == %{}
     end
 
     test "service action status/0 returns port" do
@@ -183,7 +185,8 @@ defmodule Exoforge.HttpTest do
       assert conn.status == 401
       body = Jason.decode!(conn.resp_body)
       assert body["status"] == "error"
-      assert body["error"] == "unauthenticated"
+      assert body["error"]["code"] == "unauthenticated"
+      assert body["error"]["details"] == %{}
     end
 
     test "POST /api/:service/:action rejects insufficient scope with 403" do
@@ -196,7 +199,9 @@ defmodule Exoforge.HttpTest do
       assert conn.status == 403
       body = Jason.decode!(conn.resp_body)
       assert body["status"] == "error"
-      assert body["error"] == "forbidden_scope"
+      assert body["error"]["code"] == "forbidden_scope"
+      assert body["error"]["details"]["required_scope"] == "admin"
+      assert "guest" in body["error"]["details"]["caller_scopes"]
     end
 
     test "a player's action error keeps the code and message, and never the server logs" do
@@ -212,8 +217,9 @@ defmodule Exoforge.HttpTest do
       assert conn.status == 400
       body = Jason.decode!(conn.resp_body)
       assert body["status"] == "error"
-      assert body["error"] == "invalid_png"
-      assert body["message"] == "Not a PNG image."
+      assert body["error"]["code"] == "invalid_png"
+      assert body["error"]["message"] == "Not a PNG image."
+      assert body["error"]["details"] == %{}
       assert body["rid"] == "r_player_err"
       refute Map.has_key?(body, "logs")
     end
@@ -228,8 +234,8 @@ defmodule Exoforge.HttpTest do
 
       assert conn.status == 400
       body = Jason.decode!(conn.resp_body)
-      assert body["error"] == "invalid_png"
-      assert body["message"] == "Not a PNG image."
+      assert body["error"]["code"] == "invalid_png"
+      assert body["error"]["message"] == "Not a PNG image."
       assert Enum.any?(body["logs"], &(&1 =~ "internal detail for the rid"))
     end
 
@@ -244,9 +250,9 @@ defmodule Exoforge.HttpTest do
 
       assert conn.status == 400
       body = Jason.decode!(conn.resp_body)
-      assert body["error"] == "invalid_png"
-      assert body["message"] == "Not a PNG image."
-      refute body["error"] =~ "{:"
+      assert body["error"]["code"] == "invalid_png"
+      assert body["error"]["message"] == "Not a PNG image."
+      refute body["error"]["message"] =~ "{:"
     end
 
     test "POST /api/:service/:action allows authorized admin token with 200" do
@@ -312,7 +318,7 @@ defmodule Exoforge.HttpTest do
         |> Router.call(@opts)
 
       assert conn.status == 403
-      assert Jason.decode!(conn.resp_body)["error"] == "forbidden_scope"
+      assert Jason.decode!(conn.resp_body)["error"]["code"] == "forbidden_scope"
     end
   end
 
@@ -350,7 +356,7 @@ defmodule Exoforge.HttpTest do
         |> Router.call(@opts)
 
       assert conn.status == 400
-      assert Jason.decode!(conn.resp_body)["error"] =~ "bad_signature"
+      assert Jason.decode!(conn.resp_body)["error"]["code"] == "bad_signature"
     end
 
     test "GET /api/webhooks responds to verification challenges with custom status and body" do
@@ -386,7 +392,7 @@ defmodule Exoforge.HttpTest do
         |> Router.call(@opts)
 
       assert conn.status == 403
-      assert Jason.decode!(conn.resp_body)["error"] == "forbidden_scope"
+      assert Jason.decode!(conn.resp_body)["error"]["code"] == "forbidden_scope"
     end
   end
 

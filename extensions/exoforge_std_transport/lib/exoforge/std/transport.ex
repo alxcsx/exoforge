@@ -123,36 +123,96 @@ defmodule Exoforge.Std.Transport do
   end
 
   @doc """
-  The `{code, message}` pair every ingress puts on the wire when an action fails.
+  The one error shape every ingress puts on the wire:
+
+      {"status": "error", "error": {"code": ..., "message": ..., "details": {...}}, "rid": ...}
+
+  `details` is always a map, so a client can read it without checking for absence. Whatever a
+  reason carries beyond its code and message lands there - a scope refusal names the required and
+  caller scopes, a missing action names itself, and a native extension may report its own.
 
   A native extension reports `%{"code" => ..., "message" => ...}`, which the runner hands over as
   `{code, message}`; a `defaction` may return the same tuple; a plain atom is its own code. None of
   them may reach a client as an `inspect/1` string, and none may be silently dropped.
   """
-  @spec action_error(term()) :: %{binary() => binary()}
+  @spec action_error(term()) :: %{binary() => term()}
   def action_error(%{"code" => code} = error) when is_atom(code) or is_binary(code) do
-    %{"code" => to_string(code), "message" => error_message(Map.get(error, "message"), code)}
+    error_shape(code, Map.get(error, "message"), Map.get(error, "details"))
   end
 
   def action_error(%{code: code} = error) when is_atom(code) or is_binary(code) do
-    %{"code" => to_string(code), "message" => error_message(Map.get(error, :message), code)}
+    error_shape(code, Map.get(error, :message), Map.get(error, :details))
+  end
+
+  def action_error({:action_not_found, action}) when is_atom(action) or is_binary(action) do
+    %{
+      "code" => "action_not_found",
+      "message" => "Action '#{action}' was not found on the remote server.",
+      "details" => %{"action" => to_string(action)}
+    }
+  end
+
+  def action_error({:forbidden_scope, %{required: required} = details}) do
+    scopes = Map.get(details, :caller_scopes) || Map.get(details, "caller_scopes") || []
+
+    %{
+      "code" => "forbidden_scope",
+      "message" => "Scope authorization failed",
+      "details" => %{
+        "required_scope" => to_string(required),
+        "caller_scopes" => Enum.map(scopes, &to_string/1)
+      }
+    }
+  end
+
+  def action_error(:forbidden_scope) do
+    %{
+      "code" => "forbidden_scope",
+      "message" => "Scope authorization failed",
+      "details" => %{}
+    }
   end
 
   def action_error({code, message}) when is_atom(code) or is_binary(code) do
-    %{"code" => to_string(code), "message" => error_message(message, code)}
+    error_shape(code, message, nil)
   end
 
   def action_error(code) when is_atom(code) do
-    %{"code" => to_string(code), "message" => to_string(code)}
+    error_shape(code, nil, nil)
   end
 
   def action_error(message) when is_binary(message) do
-    %{"code" => "action_failed", "message" => message}
+    %{"code" => "action_failed", "message" => message, "details" => %{}}
   end
 
   def action_error(other) do
-    %{"code" => "action_failed", "message" => inspect(other)}
+    %{"code" => "action_failed", "message" => inspect(other), "details" => %{}}
   end
+
+  @doc """
+  Wraps [action_error/1] in the envelope `{"status": "error", "error": ..., "rid": ...}`.
+
+  The rid is present when the request had one; every ingress uses this instead of assembling the
+  same three keys itself.
+  """
+  @spec error_body(term(), binary() | nil) :: map()
+  def error_body(reason, rid \\ nil) do
+    body = %{"status" => "error", "error" => action_error(reason)}
+
+    if is_binary(rid) and rid != "", do: Map.put(body, "rid", rid), else: body
+  end
+
+  @doc """
+  The HTTP status an action failure answers with. The wire shape is one; the status codes were
+  already distinct, so they stay.
+  """
+  @spec http_status(term()) :: non_neg_integer()
+  def http_status(:service_not_found), do: 404
+  def http_status({:action_not_found, _}), do: 404
+  def http_status(:unauthorized), do: 401
+  def http_status(:forbidden_scope), do: 403
+  def http_status({:forbidden_scope, _}), do: 403
+  def http_status(_reason), do: 400
 
   @doc """
   True for a caller whose reply may carry this request's extension logs.
@@ -178,6 +238,14 @@ defmodule Exoforge.Std.Transport do
   end
 
   # ---- Private Helpers ----
+
+  defp error_shape(code, message, details) do
+    %{
+      "code" => to_string(code),
+      "message" => error_message(message, code),
+      "details" => if(is_map(details), do: details, else: %{})
+    }
+  end
 
   defp error_message(message, _code) when is_binary(message), do: message
   defp error_message(nil, code), do: to_string(code)

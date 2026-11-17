@@ -119,7 +119,9 @@ defmodule Exoforge.Std.WsTest do
 
     assert conn.status == 426
     body = Jason.decode!(conn.resp_body)
-    assert body["error"] == "upgrade_required"
+    assert body["status"] == "error"
+    assert body["error"]["code"] == "upgrade_required"
+    assert body["error"]["details"]["websocket_url"] =~ "/ws"
   end
 
   defp authenticate(state, token) do
@@ -182,7 +184,12 @@ defmodule Exoforge.Std.WsTest do
 
     resp = Jason.decode!(resp_json)
     assert resp["status"] == "error"
-    assert resp["error"] == %{"code" => "invalid_png", "message" => "Not a PNG image."}
+    assert resp["error"] == %{
+             "code" => "invalid_png",
+             "message" => "Not a PNG image.",
+             "details" => %{}
+           }
+
     assert resp["rid"] =~ ~r/^r_/
     refute Map.has_key?(resp, "logs")
   end
@@ -265,6 +272,7 @@ defmodule Exoforge.Std.WsTest do
     resp = Jason.decode!(resp_json)
     assert resp["type"] == "error"
     assert resp["error"]["code"] == "invalid_json"
+    assert resp["error"]["details"] == %{}
   end
 
   test "WebSocket rejects unauthenticated action call with unauthenticated" do
@@ -288,6 +296,7 @@ defmodule Exoforge.Std.WsTest do
     assert resp["rid"] =~ ~r/^r_/
     assert resp["status"] == "error"
     assert resp["error"]["code"] == "unauthenticated"
+    assert resp["error"]["details"] == %{}
   end
 
   test "WebSocket rejects call from authenticated guest lacking scope with forbidden_scope" do
@@ -317,6 +326,9 @@ defmodule Exoforge.Std.WsTest do
     assert resp["id"] == "req-102"
     assert resp["status"] == "error"
     assert resp["error"]["code"] == "forbidden_scope"
+    assert resp["error"]["details"]["required_scope"] == "admin"
+    assert "guest" in resp["error"]["details"]["caller_scopes"]
+    assert resp["error"]["message"] == "Scope authorization failed"
   end
 
   test "WebSocket allows call from authenticated admin with ok" do

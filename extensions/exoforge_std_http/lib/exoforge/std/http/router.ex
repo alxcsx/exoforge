@@ -221,30 +221,12 @@ defmodule Exoforge.Std.Http.Router do
         Logger.info("[HTTP:Webhook] #{service}.#{action} -> 200 OK (#{latency_us}µs)")
         send_json(conn, 200, %{status: "ok"})
 
-      {:error, :service_not_found} ->
-        Logger.warning("[HTTP:Webhook] #{service}.#{action} -> 404 service_not_found (#{latency_us}µs)")
-        send_json(conn, 404, %{status: "error", error: "service_not_found"})
-
-      {:error, {:action_not_found, _}} ->
-        Logger.warning("[HTTP:Webhook] #{service}.#{action} -> 404 action_not_found (#{latency_us}µs)")
-        send_json(conn, 404, %{status: "error", error: "action_not_found"})
-
-      {:error, :unauthorized} ->
-        Logger.warning("[HTTP:Webhook] #{service}.#{action} -> 401 unauthorized (#{latency_us}µs)")
-        send_json(conn, 401, %{status: "error", error: "unauthorized"})
-
-      {:error, {:forbidden_scope, details}} ->
-        Logger.warning("[HTTP:Webhook] #{service}.#{action} -> 403 forbidden_scope (#{latency_us}µs)")
-        send_json(conn, 403, %{status: "error", error: "forbidden_scope", required_scope: details.required, caller_scopes: details.caller_scopes})
-
-      {:error, :forbidden_scope} ->
-        Logger.warning("[HTTP:Webhook] #{service}.#{action} -> 403 forbidden_scope (#{latency_us}µs)")
-        send_json(conn, 403, %{status: "error", error: "forbidden_scope"})
-
       {:error, reason} ->
-        %{"code" => code, "message" => message} = Transport.action_error(reason)
-        Logger.warning("[HTTP:Webhook] #{service}.#{action} -> 400 #{code} (#{latency_us}µs)")
-        send_json(conn, 400, %{status: "error", error: code, message: message})
+        error = Transport.action_error(reason)
+        status = Transport.http_status(reason)
+        Logger.warning("[HTTP:Webhook] #{service}.#{action} -> #{status} #{error["code"]} (#{latency_us}µs)")
+
+        send_json(conn, status, Transport.error_body(reason, rid))
     end
   end
 
@@ -346,30 +328,11 @@ defmodule Exoforge.Std.Http.Router do
         Logger.info("[HTTP:Action] #{service}.#{action} -> 200 OK (#{latency_us}µs)")
         reply.(200, %{status: "ok"})
 
-      {:error, :service_not_found} ->
-        Logger.warning("[HTTP:Action] #{service}.#{action} -> 404 service_not_found (#{latency_us}µs)")
-        reply.(404, %{status: "error", error: "service_not_found"})
-
-      {:error, {:action_not_found, _}} ->
-        Logger.warning("[HTTP:Action] #{service}.#{action} -> 404 action_not_found (#{latency_us}µs)")
-        reply.(404, %{status: "error", error: "action_not_found"})
-
-      {:error, :unauthorized} ->
-        Logger.warning("[HTTP:Action] #{service}.#{action} -> 401 unauthorized (#{latency_us}µs)")
-        reply.(401, %{status: "error", error: "unauthorized"})
-
-      {:error, {:forbidden_scope, details}} ->
-        Logger.warning("[HTTP:Action] #{service}.#{action} -> 403 forbidden_scope (#{latency_us}µs)")
-        reply.(403, %{status: "error", error: "forbidden_scope", required_scope: details.required, caller_scopes: details.caller_scopes})
-
-      {:error, :forbidden_scope} ->
-        Logger.warning("[HTTP:Action] #{service}.#{action} -> 403 forbidden_scope (#{latency_us}µs)")
-        reply.(403, %{status: "error", error: "forbidden_scope"})
-
       {:error, reason} ->
-        %{"code" => code, "message" => message} = Transport.action_error(reason)
-        Logger.warning("[HTTP:Action] #{service}.#{action} -> 400 #{code} (#{latency_us}µs)")
-        reply.(400, %{status: "error", error: code, message: message})
+        error = Transport.action_error(reason)
+        status = Transport.http_status(reason)
+        Logger.warning("[HTTP:Action] #{service}.#{action} -> #{status} #{error["code"]} (#{latency_us}µs)")
+        reply.(status, Transport.error_body(reason, rid))
     end
   end
 
@@ -426,8 +389,7 @@ defmodule Exoforge.Std.Http.Router do
         send_json(conn, 200, %{status: "ok", data: result})
 
       {:error, reason} ->
-        %{"code" => code, "message" => message} = Transport.action_error(reason)
-        send_json(conn, 400, %{status: "error", error: code, message: message})
+        send_json(conn, 400, Transport.error_body(reason))
     end
   end
 
@@ -436,10 +398,18 @@ defmodule Exoforge.Std.Http.Router do
       {:ok, %{file: file}} ->
         if file_readable?(conn, file),
           do: send_stored_file(conn, file, filename),
-          else: send_json(conn, 403, %{status: "error", error: "forbidden", message: "Files are served to staff, from public buckets, or through a signed URL an extension issues."})
+          else:
+            send_json(
+              conn,
+              403,
+              Transport.error_body(
+                {:forbidden,
+                 "Files are served to staff, from public buckets, or through a signed URL an extension issues."}
+              )
+            )
 
       _ ->
-        send_json(conn, 404, %{status: "error", error: "not_found"})
+        send_json(conn, 404, Transport.error_body(:not_found))
     end
   end
 
@@ -481,12 +451,12 @@ defmodule Exoforge.Std.Http.Router do
           |> put_resp_header("cache-control", "public, max-age=86400")
           |> send_file(200, disk_path)
         else
-          send_json(conn, 404, %{status: "error", error: "file_missing_on_disk"})
+          send_json(conn, 404, Transport.error_body(:file_missing_on_disk))
         end
   end
 
   match _ do
-    send_json(conn, 404, %{status: "error", error: "not_found"})
+    send_json(conn, 404, Transport.error_body(:not_found))
   end
 
   ## Helpers
@@ -536,21 +506,21 @@ defmodule Exoforge.Std.Http.Router do
 
   defp unauthenticated(conn) do
     conn
-    |> send_json(401, %{
-      status: "error",
-      error: "unauthenticated",
-      message: "A valid bearer token is required. Use POST /api/auth/login or /api/auth/register."
-    })
+    |> send_json(
+      401,
+      Transport.error_body(
+        {:unauthenticated, "A valid bearer token is required. Use POST /api/auth/login or /api/auth/register."}
+      )
+    )
     |> Plug.Conn.halt()
   end
 
   defp forbidden(conn) do
     conn
-    |> send_json(403, %{
-      status: "error",
-      error: "forbidden_scope",
-      message: "A studio or admin account is required for this resource."
-    })
+    |> send_json(
+      403,
+      Transport.error_body({:forbidden_scope, "A studio or admin account is required for this resource."})
+    )
     |> Plug.Conn.halt()
   end
 
