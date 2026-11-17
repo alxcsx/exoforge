@@ -21,7 +21,7 @@ defmodule Exoforge.Std.DocsTest do
       assert html =~ "<h1"
       assert html =~ "Main Title</h1>"
       assert html =~ "<h2"
-      assert html =~ "<strong class=\"font-bold text-gray-900\">bold</strong>"
+      assert html =~ "<strong class=\"font-semibold text-gray-900\">bold</strong>"
       assert html =~ "<em class=\"italic\">italic</em>"
       assert html =~ "<code class=\"font-mono"
       assert html =~ "inline_code</code>"
@@ -211,6 +211,9 @@ defmodule Exoforge.Std.DocsTest do
       assert html =~ "[ExoCron]"
       assert html =~ "[ExoEvent]"
       assert html =~ "[ExoResource]"
+      assert html =~ "[ExoFileReference]"
+      assert html =~ "[ExoInputType]"
+      assert html =~ "OnExtensionStart"
     end
 
     test "renders use_cases subpage with blueprints and comparison matrix" do

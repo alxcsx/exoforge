@@ -225,8 +225,8 @@ Declares a typed entity record mapped directly to SQLite / PostgreSQL storage. T
 | References | string | `null` | Target referenced table and column (e.g. `"player_data.id"`). Inferred automatically from `ReferencesType` when provided. |
 | Label | string | Property name | User-friendly header label rendered in Studio Dashboard data tables and drawer forms. |
 | DataType | string | Auto-inferred | Explicit type override (`"text"`, `"integer"`, `"float"`, `"boolean"`, `"datetime"`, `"map"`, `"list"`, `"binary"`). Inferred from the C# property type when omitted. |
-| Role | string | `null` | Semantic role for special Studio UI presentation from `ExoRole` (`ExoRole.PlayerId`, `ExoRole.FileReference`, `ExoRole.Currency`, `ExoRole.Status`, `ExoRole.Timestamp`, `ExoRole.Title`, `ExoRole.Description`). |
-| InputType | string | `"text"` | Form input widget from `ExoInput` (`Text`, `Color`, `Date`, `Time`, `DateTimeLocal`, `Textarea`, `Email`, `Url`, `Password`, `Range`, `Json`, `List`, `Checkbox`, `Select`, `FileReference`). |
+| Role | string | `null` | Semantic role for special Studio UI presentation from `ExoRole` (`ExoRole.PlayerId`, `ExoRole.FileReference`, `ExoRole.Currency`, `ExoRole.Status`, `ExoRole.Timestamp`, `ExoRole.Title`, `ExoRole.Description`). `ExoRole.PlayerId` is the same value as `ExoRole.UserId` (`"user_id"`). |
+| InputType | string | `"text"` | Form input widget from `ExoInput` (`Text`, `Color`, `Date`, `Time`, `DateTimeLocal`, `Textarea`, `Email`, `Url`, `Tel`, `Password`, `Range`, `Json`, `List`, `Checkbox`, `Select`, `FileReference`). |
 | Sortable | bool | `false` | Enables column click-sorting in Studio data tables. |
 | Filterable | bool | `false` | Enables quick search & filtering on this column in Studio. |
 | Badge | bool | `false` | Renders the column value as a distinct colored badge chip in Studio. |
@@ -242,6 +242,46 @@ public record PlayerScoreRecord(
     [property: ExoColumn(Badge = true, InputType = ExoInput.Color)] string TierBadge,
     DateTime CreatedAt
 );
+```
+
+---
+
+## [ExoFileReference]
+
+Marks a resource column as a file reference pointing at a bucket object. Studio renders a preview and a file picker instead of a plain text field.
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| bucket (positional) | string? | `null` | Bucket that stores the file. Omit to let the Store resolve it from the bucket metadata. |
+
+```csharp
+[ExoFileReference("avatars")]
+public string AvatarFileId { get; set; } = "";
+```
+
+---
+
+## [ExoInputType]
+
+Registers a custom Studio form input widget. A resource column references it with `InputType = "<id>"`.
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| id (positional) | string | **Required** | Widget id referenced by `ExoColumn.InputType`. |
+| Element | string | `""` | Custom element tag name rendered by the Studio input host. |
+| Entry | string | `""` | JavaScript entry module that defines the element. |
+
+```csharp
+[ExoInputType("map_picker", Element = "x-map-picker", Entry = "inputs/map.js")]
+public class MapExtension
+{
+    [ExoResource("regions")]
+    public class Region
+    {
+        [ExoColumn(InputType = "map_picker")]
+        public string Center { get; set; } = "";
+    }
+}
 ```
 
 ---

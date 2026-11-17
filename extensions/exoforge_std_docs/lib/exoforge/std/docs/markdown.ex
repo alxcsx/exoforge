@@ -476,7 +476,7 @@ defmodule Exoforge.Std.Docs.Markdown do
 
   defp render_bold(text) do
     Regex.replace(~r/\*\*([^*]+)\*\*/, text, fn _match, inner ->
-      "<strong class=\"font-bold text-gray-900\">#{inner}</strong>"
+      "<strong class=\"font-semibold text-gray-900\">#{inner}</strong>"
     end)
   end
 
@@ -489,7 +489,7 @@ defmodule Exoforge.Std.Docs.Markdown do
   # ---- SYNTAX HIGHLIGHTERS ----
 
   @csharp_keywords ~w(public private protected internal class record struct interface enum static readonly void string int long float double bool var new return throw using namespace async await if else try catch finally null true false this base typeof is as get set event override virtual)
-  @csharp_types ~w(Exoforge ExoServices ExoClient ExoSession ExoActionException ExoDispatcher ExoCron Task Action Func List DateTime Guid MonoBehaviour Debug GameObject)
+  @csharp_types ~w(Exoforge ExoServices ExoClient ExoSession ExoActionException ExoDatabaseException ExoDispatcher ExoCron ExoInput ExoRole ExoStandardInput Exo Task Action Func List IReadOnlyList Dictionary CancellationToken DateTime DateTimeOffset Guid Math JsonElement MonoBehaviour Debug GameObject)
 
   def highlight_csharp(code) when is_binary(code) do
     pattern =
@@ -512,7 +512,7 @@ defmodule Exoforge.Std.Docs.Markdown do
           "<span class=\"text-primary-400 font-semibold\">#{Plug.HTML.html_escape(part)}</span>"
 
         part in @csharp_types ->
-          "<span class=\"text-blue-300 font-bold\">#{Plug.HTML.html_escape(part)}</span>"
+          "<span class=\"text-blue-300 font-semibold\">#{Plug.HTML.html_escape(part)}</span>"
 
         Regex.match?(~r/^\d+(?:\.\d+)?f?$/, part) ->
           "<span class=\"text-amber-300 font-mono\">#{Plug.HTML.html_escape(part)}</span>"
@@ -547,7 +547,7 @@ defmodule Exoforge.Std.Docs.Markdown do
           "<span class=\"text-primary-400 font-semibold\">#{Plug.HTML.html_escape(part)}</span>"
 
         Regex.match?(~r/^[A-Z]/, part) ->
-          "<span class=\"text-blue-300 font-bold\">#{Plug.HTML.html_escape(part)}</span>"
+          "<span class=\"text-blue-300 font-semibold\">#{Plug.HTML.html_escape(part)}</span>"
 
         Regex.match?(~r/^\d+$/, part) ->
           "<span class=\"text-amber-300 font-mono\">#{Plug.HTML.html_escape(part)}</span>"

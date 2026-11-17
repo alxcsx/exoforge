@@ -203,9 +203,9 @@ defmodule Exoforge.Std.Docs.View do
       <!-- SUBPAGE ROUTING -->
       <%= case @subpage do %>
         <% "how_to" -> %>
-          <.subpage_how_to myself={@myself} />
+          <.subpage_how_to />
         <% "use_cases" -> %>
-          <.subpage_use_cases myself={@myself} />
+          <.subpage_use_cases />
         <% "attributes" -> %>
           <.subpage_attributes />
         <% "architecture" -> %>
@@ -289,17 +289,21 @@ defmodule Exoforge.Std.Docs.View do
         <h2 class="text-sm font-semibold text-gray-900">Before you start</h2>
         <ul class="grid grid-cols-1 md:grid-cols-2 gap-1.5 text-xs text-gray-600 list-disc list-inside">
           <li>Unity 2022.3+ with the Exoforge SDK package installed.</li>
-          <li>.NET 9 SDK available on the machine that builds extensions (<code class="font-mono">dotnet --version</code>).</li>
-          <li>A running cluster: <code class="font-mono">just dev</code>, Studio at <code class="font-mono">http://localhost:4005</code>.</li>
-          <li>An <code class="font-mono">exoforge.json</code> workspace, created by the Unity Studio Extensions tab.</li>
+          <li>
+            .NET 9 is the minimum required SDK. Install it from the
+            <a href="https://dotnet.microsoft.com/download" target="_blank" rel="noopener" class="text-primary-700 underline">official .NET download page</a>.
+          </li>
         </ul>
+        <p class="text-[11px] text-gray-500">
+          Install and configure the extension through Unity Studio; a separate workspace file is not required for this tutorial.
+        </p>
       </div>
 
       <!-- Hero Banner -->
       <div class="print:border print:border-gray-300 print:text-black relative overflow-hidden exo-hero text-white rounded-xl p-8 lg:p-10 shadow-xl border border-primary-500/20">
         <div class="absolute -right-12 -bottom-12 w-96 h-96 bg-primary-600/10 rounded-full blur-3xl pointer-events-none"></div>
-        <div class="relative z-10 space-y-5 max-w-4xl">
-          <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="relative z-10 max-w-5xl mx-auto text-center space-y-5">
+          <div class="flex flex-wrap items-center justify-center gap-3">
             <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur border border-white/10 text-xs font-semibold text-primary-200">
               <.studio_icon icon="bolt" class="w-3.5 h-3.5" />
               <span>Developer Quickstart &amp; Architecture Reference</span>
@@ -308,22 +312,22 @@ defmodule Exoforge.Std.Docs.View do
             <button
               type="button"
               phx-click="open_sdk_modal"
-              class="print:hidden inline-flex items-center gap-2 px-4 py-1.5 rounded-xl bg-primary-600 hover:bg-primary-500 text-white font-semibold text-xs shadow-md transition-colors cursor-pointer border border-primary-400/30"
+              class="print:hidden inline-flex items-center gap-2 px-4 py-1.5 rounded-lg bg-primary-600 hover:bg-primary-500 text-white font-medium text-xs shadow-md transition-colors cursor-pointer border border-primary-400/30"
             >
               <.studio_icon icon="box" class="w-3.5 h-3.5" />
               <span>Download Unity SDK</span>
               <span class="text-xs text-primary-200">➔</span>
             </button>
           </div>
-          <h1 class="text-3xl lg:text-4xl font-semibold tracking-tight text-white leading-tight">
+          <h1 class="text-3xl lg:text-4xl font-semibold tracking-tight text-white leading-tight max-w-3xl mx-auto">
             Creating Your First Online Multiplayer Feature
           </h1>
-          <p class="text-base text-gray-300 leading-relaxed">
+          <p class="text-base text-gray-300 leading-relaxed max-w-3xl mx-auto">
             Write strongly-typed native C# extensions that compile locally, deploy into a supervised extension runtime, and sync into Unity client code without manual networking boilerplate.
           </p>
 
           <!-- Quickstart 5-Step Index Grid -->
-          <div class="print:hidden pt-2 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+          <div class="print:hidden pt-2 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 text-left max-w-4xl mx-auto">
             <a href="#step-auth" class="group p-3 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 hover:border-white/25 transition-colors space-y-1 block">
               <div class="flex items-center justify-between">
                 <span class="w-6 h-6 rounded-lg bg-primary-500 text-white flex items-center justify-center text-[11px] font-semibold shadow-xs">1</span>
@@ -483,7 +487,7 @@ defmodule Exoforge.Std.Docs.View do
           <ul class="space-y-2.5 text-gray-600 leading-relaxed">
             <li class="flex items-start gap-2">
               <span class="text-primary-600 font-semibold shrink-0">●</span>
-              <span><strong>Scaffold Solution:</strong> In Unity Studio, open <strong class="text-gray-900">Extensions</strong> and click <strong class="text-gray-900"><.studio_icon icon="bolt" class="w-3.5 h-3.5" /> New Extension...</strong>, or run <code class="font-mono bg-gray-100 text-primary-700 px-1.5 py-0.5 rounded font-semibold">exo extension new &lt;name&gt; --template standard</code>. The extension lands in the workspace's <code class="font-mono bg-gray-100 px-1.5 py-0.5 rounded">extensions/&lt;name&gt;/</code> directory; the Unity sample uses <code class="font-mono bg-gray-100 px-1.5 py-0.5 rounded">Exoforge/extensions/&lt;name&gt;/</code>.</span>
+              <span><strong>Scaffold Solution:</strong> In Unity Studio, open <strong class="text-gray-900">Extensions</strong> and click <strong class="text-gray-900"><.studio_icon icon="bolt" class="w-3.5 h-3.5" /> New Extension...</strong>. Choose the standard template. Studio creates the workspace and the extension solution outside <code class="font-mono bg-gray-100 px-1.5 py-0.5 rounded">Assets/</code> for you.</span>
             </li>
             <li class="flex items-start gap-2">
               <span class="text-primary-600 font-semibold shrink-0">●</span>
@@ -546,19 +550,18 @@ defmodule Exoforge.Std.Docs.View do
           <div class="p-5 rounded-xl bg-gray-50 border border-gray-200/80 space-y-3">
             <h4 class="font-semibold text-gray-900 text-sm flex items-center gap-2">
               <.studio_icon icon="monitor" class="w-3.5 h-3.5" />
-              <span>CLI Deployment</span>
+              <span>Verify in Studio</span>
             </h4>
             <ul class="space-y-2 leading-relaxed">
               <li class="flex items-start gap-2">
                 <span class="text-primary-600 font-semibold shrink-0">●</span>
-                <span>Build from terminal, then push: <code class="font-mono bg-gray-200 px-1 py-0.5 rounded text-gray-900 font-semibold">exo extension build &lt;name&gt;</code> and <code class="font-mono bg-gray-200 px-1 py-0.5 rounded text-gray-900 font-semibold">exo extension push &lt;name&gt;</code></span>
+                <span>Wait for the extension status to report <strong class="text-gray-900">running</strong>. A build failure is reported before upload.</span>
               </li>
               <li class="flex items-start gap-2">
                 <span class="text-primary-600 font-semibold shrink-0">●</span>
-                <span>Tail live service logs in real time: <code class="font-mono bg-gray-200 px-1 py-0.5 rounded text-gray-900 font-semibold">exo extension logs &lt;name&gt;</code></span>
+                <span>Open the extension's <strong class="text-gray-900">Logs</strong> tab to confirm it started. Startup-hook failures appear as <code class="font-mono bg-gray-200 px-1 py-0.5 rounded text-gray-900">startup_failed</code>.</span>
               </li>
             </ul>
-            <pre class="bg-gray-900 text-emerald-400 p-3 rounded-xl font-mono text-xs md:text-xs leading-relaxed overflow-x-auto max-w-full"><code>exo extension build gameplay_calculator&#10;exo extension push gameplay_calculator&#10;exo extension logs gameplay_calculator</code></pre>
           </div>
         </div>
       </section>
@@ -583,7 +586,7 @@ defmodule Exoforge.Std.Docs.View do
             </li>
             <li class="flex items-start gap-2">
               <span class="text-primary-600 font-semibold shrink-0">●</span>
-              <span><strong>Server Extension Stubs:</strong> Run <code class="font-mono bg-gray-100 text-primary-700 px-1 py-0.5 rounded font-semibold">exo extension stubs &lt;name&gt;</code> to generate strongly-typed inter-service call stubs from the cluster contract export.</span>
+              <span><strong>Server Extension Stubs:</strong> In the Unity Studio Extensions tab, open your extension and click <strong class="text-gray-900">Stubs</strong> to generate strongly-typed inter-service call stubs from the cluster contract export.</span>
             </li>
             <li class="flex items-start gap-2">
               <span class="text-primary-600 font-semibold shrink-0">●</span>
@@ -693,9 +696,26 @@ defmodule Exoforge.Std.Docs.View do
   end
 
   # ===========================================================================
-  # SUBPAGE: WHAT YOU CAN BUILD (BLUEPRINTS, USE CASES & ARCHITECTURE TIPS)
+  # SUBPAGE: HOW-TO RECIPES
   # ===========================================================================
-  attr(:myself, :any, default: nil)
+  defp how_to_auth_code do
+    """
+    var session = await ExoforgeSDK.Auth.LoginAnonymously();
+    if (!session.HasDisplayName)
+        session = await ExoforgeSDK.Auth.SetDisplayName("Viper");
+    """
+  end
+
+  defp how_to_events_code do
+    """
+    // Server extension
+    public void OnEvent(string name, ScoreSubmitted evt) => Handle(evt);
+
+    // Unity
+    await ExoServices.Leaderboard.SubscribeAsync("scores:*");
+    ExoServices.Leaderboard.OnScoreSubmitted += evt => Debug.Log(evt.Score);
+    """
+  end
 
   defp subpage_how_to(assigns) do
     ~H"""
@@ -704,7 +724,7 @@ defmodule Exoforge.Std.Docs.View do
         <div>
           <span class="exo-page-title block">How-to</span>
           <span class="exo-page-subtitle">
-            Short recipes for the tasks you repeat after the Quickstart.
+            Short Unity Studio recipes for the tasks you repeat after the Quickstart.
           </span>
         </div>
       </div>
@@ -715,38 +735,38 @@ defmodule Exoforge.Std.Docs.View do
           <p class="text-xs text-gray-500">
             Always use <code class="font-mono">ExoforgeSDK.Auth</code>. It derives the device id, stores the token, and resumes the same account.
           </p>
-          <pre class="bg-gray-950 text-gray-200 p-3 rounded-lg overflow-x-auto text-[11px] font-mono"><code>var session = await ExoforgeSDK.Auth.LoginAnonymously();
-    if (!session.HasDisplayName)
-    session = await ExoforgeSDK.Auth.SetDisplayName("Viper");</code></pre>
+          <pre class="bg-gray-950 text-gray-200 p-3 rounded-lg overflow-x-auto text-[11px] font-mono"><code><%= Phoenix.HTML.raw(Markdown.highlight_csharp(how_to_auth_code())) %></code></pre>
         </section>
 
         <section class="exo-card p-5 space-y-2">
           <h2 class="text-sm font-semibold text-gray-900">Build and deploy an extension</h2>
-          <p class="text-xs text-gray-500">
-            Build locally, then push. <code class="font-mono">push</code> builds again and refuses to upload a stale binary when compilation fails.
-          </p>
-          <pre class="bg-gray-950 text-gray-200 p-3 rounded-lg overflow-x-auto text-[11px] font-mono"><code>exo extension build &lt;name&gt;
-    exo extension push &lt;name&gt;
-    exo extension logs &lt;name&gt;</code></pre>
+          <ol class="text-xs text-gray-600 space-y-1 list-decimal list-inside">
+            <li>Open the <strong>Extensions</strong> tab in Unity Studio.</li>
+            <li>On the extension card, click <strong>Build &amp; Deploy</strong>.</li>
+            <li>Wait for the status to report <strong>running</strong>. Build errors stop the deploy before upload.</li>
+          </ol>
         </section>
 
         <section class="exo-card p-5 space-y-2">
           <h2 class="text-sm font-semibold text-gray-900">Regenerate service stubs</h2>
           <p class="text-xs text-gray-500">
-            Unity client stubs come from the live contract export. Server-side stubs only include the dependencies in <code class="font-mono">manifest.json</code>.
+            Client stubs come from the live contract export. Studio generates server-side stubs for the dependencies declared in <code class="font-mono">manifest.json</code>.
           </p>
-          <pre class="bg-gray-950 text-gray-200 p-3 rounded-lg overflow-x-auto text-[11px] font-mono"><code>exo sync
-    exo extension stubs &lt;name&gt;
-    exo sync --include-studio   # staff actions included</code></pre>
+          <ol class="text-xs text-gray-600 space-y-1 list-decimal list-inside">
+            <li>Click <strong>Sync Client</strong> in the Unity toolbar to refresh the typed client.</li>
+            <li>In the <strong>Extensions</strong> tab, open the extension and click <strong>Stubs</strong> for its server-side dependencies.</li>
+          </ol>
         </section>
 
         <section class="exo-card p-5 space-y-2">
           <h2 class="text-sm font-semibold text-gray-900">Add persistence and seed on startup</h2>
-          <p class="text-xs text-gray-500">
-            Declare a resource once; deploy migrates its table. Add an optional idempotent <code class="font-mono">OnExtensionStart()</code> to seed it.
-          </p>
-          <p class="text-xs text-gray-600">
-            Declare the resource with <code class="font-mono">[ExoResource]</code>, then seed it from the hook through <code class="font-mono">Exo.Database</code>. The hook should be idempotent so a restart does not duplicate data.
+          <ol class="text-xs text-gray-600 space-y-1 list-decimal list-inside">
+            <li>Declare the record with <code class="font-mono">[ExoResource]</code> and its columns with <code class="font-mono">[ExoColumn]</code>.</li>
+            <li>Deploy; the extension manager migrates the table before the extension starts.</li>
+            <li>Add an optional idempotent <code class="font-mono">OnExtensionStart()</code> to seed defaults through <code class="font-mono">Exo.Database</code>.</li>
+          </ol>
+          <p class="text-[11px] text-gray-500">
+            The hook runs again after a restart, so guard duplicate writes.
           </p>
         </section>
 
@@ -755,22 +775,17 @@ defmodule Exoforge.Std.Docs.View do
           <p class="text-xs text-gray-500">
             A server extension receives events through <code class="font-mono">OnEvent</code>; Unity subscribes through the generated service client.
           </p>
-          <pre class="bg-gray-950 text-gray-200 p-3 rounded-lg overflow-x-auto text-[11px] font-mono"><code>// Server extension
-    public void OnEvent(string name, ScoreSubmitted evt) =&gt; Handle(evt);
-
-    // Unity
-    await ExoServices.Leaderboard.SubscribeAsync("scores:*");
-    ExoServices.Leaderboard.OnScoreSubmitted += evt =&gt; Debug.Log(evt.Score);</code></pre>
+          <pre class="bg-gray-950 text-gray-200 p-3 rounded-lg overflow-x-auto text-[11px] font-mono"><code><%= Phoenix.HTML.raw(Markdown.highlight_csharp(how_to_events_code())) %></code></pre>
         </section>
 
         <section class="exo-card p-5 space-y-2">
           <h2 class="text-sm font-semibold text-gray-900">Diagnose a failure</h2>
-          <p class="text-xs text-gray-500">
-            Start with the extension log. The Extension Inspector shows status, actions, events, resources, contracts and the retained log buffer.
-          </p>
-          <pre class="bg-gray-950 text-gray-200 p-3 rounded-lg overflow-x-auto text-[11px] font-mono"><code>exo extension list
-    exo extension logs &lt;name&gt;</code></pre>
-          <p class="text-xs text-gray-500">
+          <ol class="text-xs text-gray-600 space-y-1 list-decimal list-inside">
+            <li>Open the <strong>Extensions</strong> tab and inspect the extension's status.</li>
+            <li>Open <strong>Logs</strong> for build, runtime and startup messages.</li>
+            <li>Use the inspector's <strong>Actions</strong>, <strong>Events</strong> and <strong>Resources</strong> tabs to confirm what the extension exposes.</li>
+          </ol>
+          <p class="text-[11px] text-gray-500">
             A build failure is reported before upload. A startup-hook failure appears as <code class="font-mono">startup_failed</code> with its code and message.
           </p>
         </section>
@@ -1277,7 +1292,7 @@ defmodule Exoforge.Std.Docs.View do
             </div>
             <h3 class="font-semibold text-gray-900 text-sm">Decouple via Stubs &amp; Events</h3>
             <p class="leading-relaxed text-[11px]">
-              Separate complex domains into independent extensions (<code class="font-mono text-blue-700">inventory</code>, <code class="font-mono text-blue-700">billing</code>). Call other extensions using generated typed stubs (<code class="font-mono">exo extension stubs &lt;name&gt;</code>), and broadcast major lifecycle moments asynchronously.
+              Separate complex domains into independent extensions (<code class="font-mono text-blue-700">inventory</code>, <code class="font-mono text-blue-700">billing</code>). Call other extensions using generated typed stubs (open the extension in Studio and click <strong class="text-gray-900">Stubs</strong>), and broadcast major lifecycle moments asynchronously.
             </p>
           </div>
 
@@ -1341,6 +1356,12 @@ defmodule Exoforge.Std.Docs.View do
           </a>
           <a href="#attr-resource" class="px-2.5 py-1 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">
             <span>[ExoResource]</span>
+          </a>
+          <a href="#attr-file-reference" class="px-2.5 py-1 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">
+            <span>[ExoFileReference]</span>
+          </a>
+          <a href="#attr-input-type" class="px-2.5 py-1 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">
+            <span>[ExoInputType]</span>
           </a>
           <a href="#attr-dependency" class="px-2.5 py-1 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">
             <span>[ExoDependency]</span>
@@ -1898,7 +1919,7 @@ defmodule Exoforge.Std.Docs.View do
                   <td class="py-2 px-3 font-semibold text-gray-900">InputType</td>
                   <td class="py-2 px-3 text-primary-700">string?</td>
                   <td class="py-2 px-3 text-gray-400">Optional ("text")</td>
-                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Form input widget from <code class="font-mono text-primary-700">ExoInput</code> (<code class="font-mono">Text</code>, <code class="font-mono">Color</code>, <code class="font-mono">Date</code>, <code class="font-mono">Time</code>, <code class="font-mono">DateTimeLocal</code>, <code class="font-mono">Textarea</code>, <code class="font-mono">Email</code>, <code class="font-mono">Url</code>, <code class="font-mono">Password</code>, <code class="font-mono">Range</code>, <code class="font-mono">Json</code>, <code class="font-mono">List</code>, <code class="font-mono">Checkbox</code>, <code class="font-mono">Select</code>, <code class="font-mono">FileReference</code>).</td>
+                  <td class="py-2 px-3 font-sans text-xs text-gray-600">Form input widget from <code class="font-mono text-primary-700">ExoInput</code> (<code class="font-mono">Text</code>, <code class="font-mono">Color</code>, <code class="font-mono">Date</code>, <code class="font-mono">Time</code>, <code class="font-mono">DateTimeLocal</code>, <code class="font-mono">Textarea</code>, <code class="font-mono">Email</code>, <code class="font-mono">Url</code>, <code class="font-mono">Tel</code>, <code class="font-mono">Password</code>, <code class="font-mono">Range</code>, <code class="font-mono">Json</code>, <code class="font-mono">List</code>, <code class="font-mono">Checkbox</code>, <code class="font-mono">Select</code>, <code class="font-mono">FileReference</code>).</td>
                 </tr>
                 <tr>
                   <td class="py-2 px-3 font-semibold text-gray-900">Sortable</td>
@@ -1962,6 +1983,72 @@ defmodule Exoforge.Std.Docs.View do
         <div class="space-y-2">
           <pre class="bg-gray-950 text-gray-200 p-4 rounded-xl font-mono text-xs md:text-xs leading-relaxed overflow-x-auto border border-gray-800 max-w-full"><code><%= Phoenix.HTML.raw(Markdown.highlight_csharp(code_exo_resource_page())) %></code></pre>
         </div>
+      </section>
+
+      <!-- [ExoFileReference] -->
+      <section id="attr-file-reference" data-guide-section class="bg-white rounded-xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
+        <div class="border-b border-gray-100 pb-4">
+          <div class="flex items-center gap-2">
+            <h2 class="text-xl font-semibold text-gray-900 font-mono">[ExoFileReference]</h2>
+            <span class="px-2 py-0.5 rounded-full bg-primary-100 text-primary-800 text-[10px] font-semibold uppercase tracking-wider">Storage Preview</span>
+          </div>
+          <p class="text-xs text-gray-500 mt-0.5">Marks a resource column as a file reference and renders a preview/file picker in Studio.</p>
+        </div>
+        <div class="overflow-x-auto rounded-xl border border-gray-200">
+          <table class="w-full text-left text-xs bg-white">
+            <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 font-semibold text-[10px] uppercase">
+              <tr><th class="py-2 px-3">Property</th><th class="py-2 px-3">Type</th><th class="py-2 px-3">Default</th><th class="py-2 px-3">Description</th></tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 font-mono text-[11px]">
+              <tr>
+                <td class="py-2 px-3 font-semibold text-gray-900">bucket (positional)</td>
+                <td class="py-2 px-3 text-primary-700">string?</td>
+                <td class="py-2 px-3 text-gray-400">Optional (null)</td>
+                <td class="py-2 px-3 font-sans text-xs text-gray-600">Bucket that stores the referenced file. Omit to let Store resolve it from the bucket metadata.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <pre class="bg-gray-950 text-gray-200 p-4 rounded-xl font-mono text-xs leading-relaxed overflow-x-auto border border-gray-800 max-w-full"><code><%= Phoenix.HTML.raw(Markdown.highlight_csharp("[ExoFileReference(\"avatars\")]\npublic string AvatarFileId { get; set; } = \"\";")) %></code></pre>
+      </section>
+
+      <!-- [ExoInputType] -->
+      <section id="attr-input-type" data-guide-section class="bg-white rounded-xl border border-gray-200/90 p-8 shadow-sm space-y-5 print:border-gray-300 print:shadow-none print:break-inside-avoid">
+        <div class="border-b border-gray-100 pb-4">
+          <div class="flex items-center gap-2">
+            <h2 class="text-xl font-semibold text-gray-900 font-mono">[ExoInputType]</h2>
+            <span class="px-2 py-0.5 rounded-full bg-primary-100 text-primary-800 text-[10px] font-semibold uppercase tracking-wider">Custom Studio Input</span>
+          </div>
+          <p class="text-xs text-gray-500 mt-0.5">Registers a custom form input widget that extension resource columns can reference by id.</p>
+        </div>
+        <div class="overflow-x-auto rounded-xl border border-gray-200">
+          <table class="w-full text-left text-xs bg-white">
+            <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 font-semibold text-[10px] uppercase">
+              <tr><th class="py-2 px-3">Property</th><th class="py-2 px-3">Type</th><th class="py-2 px-3">Default</th><th class="py-2 px-3">Description</th></tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 font-mono text-[11px]">
+              <tr>
+                <td class="py-2 px-3 font-semibold text-gray-900">id (positional)</td>
+                <td class="py-2 px-3 text-primary-700">string</td>
+                <td class="py-2 px-3 text-red-600 font-sans text-xs font-semibold">Required</td>
+                <td class="py-2 px-3 font-sans text-xs text-gray-600">Widget id referenced by <code class="font-mono text-primary-700">ExoColumn.InputType</code>.</td>
+              </tr>
+              <tr>
+                <td class="py-2 px-3 font-semibold text-gray-900">Element</td>
+                <td class="py-2 px-3 text-primary-700">string</td>
+                <td class="py-2 px-3 text-gray-400">Optional ("")</td>
+                <td class="py-2 px-3 font-sans text-xs text-gray-600">Custom element tag name rendered by the Studio input host.</td>
+              </tr>
+              <tr>
+                <td class="py-2 px-3 font-semibold text-gray-900">Entry</td>
+                <td class="py-2 px-3 text-primary-700">string</td>
+                <td class="py-2 px-3 text-gray-400">Optional ("")</td>
+                <td class="py-2 px-3 font-sans text-xs text-gray-600">JavaScript entry module that defines the element.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <pre class="bg-gray-950 text-gray-200 p-4 rounded-xl font-mono text-xs leading-relaxed overflow-x-auto border border-gray-800 max-w-full"><code><%= Phoenix.HTML.raw(Markdown.highlight_csharp("[ExoInputType(\"map_picker\", Element = \"x-map-picker\", Entry = \"inputs/map.js\")]")) %></code></pre>
       </section>
 
       <!-- [ExoDependency] -->
