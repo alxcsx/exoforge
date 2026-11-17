@@ -10,12 +10,13 @@ using UnityEngine.UIElements;
 namespace Exoforge.Unity.Editor
 {
     /// <summary>
-    /// Unified 5-Step First-Run Setup Wizard:
+    /// Unified 6-Step First-Run Setup Wizard:
     /// Step 1: Connect to an instance (test connection, BaaS-first, offline escape hatch).
     /// Step 2: Sign in (Local dev or credentials).
     /// Step 3: Project readiness (verify dotnet >= 9, initialize workspace, runtime config).
-    /// Step 4: Scene setup (non-destructive ExoforgeManager attachment).
-    /// Step 5: Ready CTA ("Create your first extension").
+    /// Step 4: C# records support (generate IsExternalInit.cs when the project lacks one).
+    /// Step 5: Scene setup (non-destructive ExoforgeManager attachment).
+    /// Step 6: Ready CTA ("Create your first extension").
     /// </summary>
     public sealed class ExoforgeSetupModal : EditorWindow
     {
@@ -25,6 +26,7 @@ namespace Exoforge.Unity.Editor
         private string _wsUrl = "";
         private string _httpUrl = "";
         private bool _isOfflineMode = false;
+        private string _recordsTargetDir = ExoforgeIsExternalInit.DefaultDirectory;
 
         private string _email = "";
         private string _password = "";
@@ -51,7 +53,7 @@ namespace Exoforge.Unity.Editor
                 window._onCompleted = onCompleted;
 
                 const float width = 520;
-                const float height = 440;
+                const float height = 480;
                 window.minSize = new Vector2(width, height);
                 window.maxSize = new Vector2(width, height);
 
@@ -120,7 +122,7 @@ namespace Exoforge.Unity.Editor
             title.style.color = ExoforgeUIStyle.TextPrimary;
             titleCol.Add(title);
 
-            _stepProgressLabel = new Label("Step 1 of 5: Connect to Instance");
+            _stepProgressLabel = new Label("Step 1 of 6: Connect to Instance");
             _stepProgressLabel.style.fontSize = 11;
             _stepProgressLabel.style.color = ExoforgeUIStyle.BrandPurple;
             _stepProgressLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
@@ -168,10 +170,13 @@ namespace Exoforge.Unity.Editor
                     RenderStep3Project();
                     break;
                 case 4:
-                    RenderStep4Scene();
+                    RenderStep4Records();
                     break;
                 case 5:
-                    RenderStep5Ready();
+                    RenderStep5Scene();
+                    break;
+                case 6:
+                    RenderStep6Ready();
                     break;
             }
         }
@@ -181,7 +186,7 @@ namespace Exoforge.Unity.Editor
         // =========================================================================
         private void RenderStep1Connect()
         {
-            if (_stepProgressLabel != null) _stepProgressLabel.text = "Step 1 of 5: Connect to Instance";
+            if (_stepProgressLabel != null) _stepProgressLabel.text = "Step 1 of 6: Connect to Instance";
 
             var desc = new Label("Enter your Exoforge server address.");
             desc.style.fontSize = 11;
@@ -313,7 +318,7 @@ namespace Exoforge.Unity.Editor
         // =========================================================================
         private void RenderStep2SignIn()
         {
-            if (_stepProgressLabel != null) _stepProgressLabel.text = "Step 2 of 5: Authenticate";
+            if (_stepProgressLabel != null) _stepProgressLabel.text = "Step 2 of 6: Authenticate";
 
             var desc = new Label("Enter your credentials to authenticate with the server.");
             desc.style.fontSize = 11;
@@ -421,7 +426,7 @@ namespace Exoforge.Unity.Editor
         // =========================================================================
         private void RenderStep3Project()
         {
-            if (_stepProgressLabel != null) _stepProgressLabel.text = "Step 3 of 5: Project Setup";
+            if (_stepProgressLabel != null) _stepProgressLabel.text = "Step 3 of 6: Project Setup";
 
             // Workspace & config are always guaranteed to be initialized
             SaveWorkspaceEnvironment();
@@ -576,7 +581,7 @@ namespace Exoforge.Unity.Editor
             }, height: 28);
             btnRow.Add(backBtn);
 
-            var nextBtn = ExoforgeUIStyle.CreateModernButton("Next: Scene Setup ➔", () =>
+            var nextBtn = ExoforgeUIStyle.CreateModernButton("Next: Records ➔", () =>
             {
                 var validation = ExoforgeDotnetValidator.Validate();
                 if (!validation.IsValid)
@@ -606,11 +611,148 @@ namespace Exoforge.Unity.Editor
         }
 
         // =========================================================================
-        // Step 4: Add Exoforge to Scene
+        // Step 4: C# Records Support (IsExternalInit)
         // =========================================================================
-        private void RenderStep4Scene()
+        private void RenderStep4Records()
         {
-            if (_stepProgressLabel != null) _stepProgressLabel.text = "Step 4 of 5: Scene Setup";
+            if (_stepProgressLabel != null) _stepProgressLabel.text = "Step 4 of 6: C# Records Support";
+
+            var desc = new Label(
+                "Records and init-only setters need System.Runtime.CompilerServices.IsExternalInit. " +
+                "Unity's profile does not ship one, so without this file C# fails with CS0518.");
+            desc.style.fontSize = 11;
+            desc.style.color = ExoforgeUIStyle.TextSecondary;
+            desc.style.whiteSpace = WhiteSpace.Normal;
+            desc.style.marginBottom = 12;
+            _stepContainer!.Add(desc);
+
+            var statusCard = new VisualElement();
+            statusCard.style.backgroundColor = ExoforgeUIStyle.BgCard;
+            statusCard.style.paddingLeft = 14;
+            statusCard.style.paddingRight = 14;
+            statusCard.style.paddingTop = 12;
+            statusCard.style.paddingBottom = 12;
+            statusCard.style.borderTopLeftRadius = 6;
+            statusCard.style.borderTopRightRadius = 6;
+            statusCard.style.borderBottomLeftRadius = 6;
+            statusCard.style.borderBottomRightRadius = 6;
+            statusCard.style.marginBottom = 12;
+
+            var statusLabel = new Label();
+            statusLabel.style.fontSize = 11;
+            statusLabel.style.whiteSpace = WhiteSpace.Normal;
+            statusCard.Add(statusLabel);
+
+            void RefreshStatus()
+            {
+                string? present = ExoforgeIsExternalInit.PresentPath;
+                if (present != null)
+                {
+                    statusLabel.text = $"✓ Already present: {ExoforgeIsExternalInit.Relative(present)}";
+                    statusLabel.style.color = ExoforgeUIStyle.AccentGreen;
+                }
+                else
+                {
+                    statusLabel.text = "○ Not found anywhere in Assets/";
+                    statusLabel.style.color = ExoforgeUIStyle.TextMuted;
+                }
+            }
+            RefreshStatus();
+            _stepContainer.Add(statusCard);
+
+            var targetRow = new VisualElement();
+            targetRow.style.flexDirection = FlexDirection.Row;
+            targetRow.style.alignItems = Align.Center;
+            targetRow.style.marginBottom = 8;
+
+            var targetField = new TextField("Target folder") { value = _recordsTargetDir };
+            targetField.tooltip = "Folder that receives IsExternalInit.cs, relative to the Unity project";
+            targetField.style.flexGrow = 1;
+            targetRow.Add(targetField);
+
+            var browseBtn = new Button(() =>
+            {
+                string start = Path.GetFullPath(Path.Combine(ExoforgeIsExternalInit.ProjectRoot, _recordsTargetDir ?? ""));
+                string chosen = UnityEditor.EditorUtility.OpenFolderPanel("Choose the folder for IsExternalInit.cs", start, "");
+                if (string.IsNullOrEmpty(chosen)) return;
+                if (chosen.StartsWith(ExoforgeIsExternalInit.ProjectRoot))
+                {
+                    targetField.value = Path.GetRelativePath(ExoforgeIsExternalInit.ProjectRoot, chosen).Replace('\\', '/');
+                }
+                else
+                {
+                    _statusLabel?.SetText("⚠️ Choose a folder inside the Unity project.");
+                    if (_statusLabel != null) _statusLabel.style.color = ExoforgeUIStyle.AccentOrange;
+                }
+            })
+            { text = "Browse..." };
+            browseBtn.style.width = 76;
+            browseBtn.style.marginLeft = 6;
+            targetRow.Add(browseBtn);
+
+            _stepContainer.Add(targetRow);
+
+            var note = new Label(
+                "An asmdef compiles into its own assembly, and this type is internal: a copy in one " +
+                "assembly is invisible to another, so put one in each asmdef folder that declares records.");
+            note.style.fontSize = 10;
+            note.style.color = ExoforgeUIStyle.TextMuted;
+            note.style.whiteSpace = WhiteSpace.Normal;
+            note.style.marginBottom = 10;
+            _stepContainer.Add(note);
+
+            var createBtn = ExoforgeUIStyle.CreateModernButton("Generate IsExternalInit.cs", () =>
+            {
+                _recordsTargetDir = targetField.value?.Trim() ?? "";
+                try
+                {
+                    bool created = ExoforgeIsExternalInit.Ensure(_recordsTargetDir, out string path);
+                    string rel = ExoforgeIsExternalInit.Relative(path);
+                    _statusLabel?.SetText(created ? $"✓ Created {rel}" : $"✓ Already present: {rel}");
+                    if (_statusLabel != null) _statusLabel.style.color = ExoforgeUIStyle.AccentGreen;
+                    RefreshStatus();
+                }
+                catch (Exception ex)
+                {
+                    _statusLabel?.SetText($"Could not write the file: {ex.Message}");
+                    if (_statusLabel != null) _statusLabel.style.color = ExoforgeUIStyle.AccentOrange;
+                }
+            }, height: 28);
+            createBtn.style.marginBottom = 12;
+            _stepContainer.Add(createBtn);
+
+            var spacer = new VisualElement();
+            spacer.style.flexGrow = 1;
+            _stepContainer.Add(spacer);
+
+            var btnRow = new VisualElement();
+            btnRow.style.flexDirection = FlexDirection.Row;
+            btnRow.style.justifyContent = Justify.SpaceBetween;
+            btnRow.style.alignItems = Align.Center;
+
+            var backBtn = ExoforgeUIStyle.CreateModernButton("⯇ Back", () =>
+            {
+                _currentStep = 3;
+                RenderCurrentStep();
+            }, height: 28);
+            btnRow.Add(backBtn);
+
+            var nextBtn = ExoforgeUIStyle.CreateModernButton("Next: Scene Setup ➔", () =>
+            {
+                _currentStep = 5;
+                RenderCurrentStep();
+            }, bg: ExoforgeUIStyle.BrandPurple, textCol: Color.white, height: 28);
+            btnRow.Add(nextBtn);
+
+            _stepContainer.Add(btnRow);
+        }
+
+        // =========================================================================
+        // Step 5: Add Exoforge to Scene
+        // =========================================================================
+        private void RenderStep5Scene()
+        {
+            if (_stepProgressLabel != null) _stepProgressLabel.text = "Step 5 of 6: Scene Setup";
 
             bool hasManager = UnityEngine.Object.FindAnyObjectByType<ExoforgeManager>(FindObjectsInactive.Include) != null;
 
@@ -660,14 +802,14 @@ namespace Exoforge.Unity.Editor
 
             var backBtn = ExoforgeUIStyle.CreateModernButton("⯇ Back", () =>
             {
-                _currentStep = 3;
+                _currentStep = 4;
                 RenderCurrentStep();
             }, height: 28);
             btnRow.Add(backBtn);
 
             var nextBtn = ExoforgeUIStyle.CreateModernButton("Next: Complete ➔", () =>
             {
-                _currentStep = 5;
+                _currentStep = 6;
                 RenderCurrentStep();
             }, bg: ExoforgeUIStyle.BrandPurple, textCol: Color.white, height: 28);
             btnRow.Add(nextBtn);
@@ -676,11 +818,11 @@ namespace Exoforge.Unity.Editor
         }
 
         // =========================================================================
-        // Step 5: Ready / Call To Action
+        // Step 6: Ready / Call To Action
         // =========================================================================
-        private void RenderStep5Ready()
+        private void RenderStep6Ready()
         {
-            if (_stepProgressLabel != null) _stepProgressLabel.text = "Step 5 of 5: Ready to Build";
+            if (_stepProgressLabel != null) _stepProgressLabel.text = "Step 6 of 6: Ready to Build";
 
             ExoforgeEditorConfig.HasCompletedInitialSetup = true;
             try
@@ -752,7 +894,7 @@ namespace Exoforge.Unity.Editor
 
         private void OnDestroy()
         {
-            if (_currentStep == 5)
+            if (_currentStep == 6)
             {
                 _onCompleted?.Invoke();
             }

@@ -8,8 +8,9 @@ using UnityEngine;
 namespace SnakeGame
 {
     /// <summary>
-    /// A run's score as the game keeps it. Declared in the game assembly on purpose: a record in a
-    /// game asmdef needs the SDK's public <c>IsExternalInit</c>, and compiling this is what proves it.
+    /// A run's score as the game keeps it. Declared in the game assembly on purpose: this asmdef has
+    /// its own <c>IsExternalInit.cs</c> beside it, because the type is internal and the SDK's copy is
+    /// in another assembly. Compiling this is what proves the file is where a game needs it.
     /// </summary>
     public record SnakeRunScore(string PlayerId, int Score);
 

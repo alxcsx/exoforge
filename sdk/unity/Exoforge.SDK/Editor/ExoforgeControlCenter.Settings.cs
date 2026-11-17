@@ -23,6 +23,9 @@ public partial class ExoforgeControlCenter : EditorWindow
     // Tab 5: Settings
     // =========================================================================
 
+    // Folder the records-support button writes IsExternalInit.cs into, relative to the project root.
+    [SerializeField] private string _isExternalInitDir = ExoforgeIsExternalInit.DefaultDirectory;
+
     private void DrawSettings()
     {
         _settingsScroll = EditorGUILayout.BeginScrollView(_settingsScroll);
@@ -247,6 +250,59 @@ public partial class ExoforgeControlCenter : EditorWindow
         ExoforgeEditorConfig.AutoGenerateStubsOnBuild = EditorGUILayout.Toggle(
             new GUIContent("Auto-Generate Stubs on Build", "Automatically regenerate typed C# plugin stubs after compiling or rebuilding an extension"),
             ExoforgeEditorConfig.AutoGenerateStubsOnBuild);
+
+        EditorGUILayout.EndVertical();
+
+        EditorGUILayout.Space(8);
+
+        // Records support: Unity's profile has no IsExternalInit, so game code that declares a record
+        // or an init-only setter fails with CS0518 until one exists in that asmdef's assembly.
+        EditorGUILayout.LabelField("C# Records Support", EditorStyles.boldLabel);
+        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+
+        string? initPresent = ExoforgeIsExternalInit.PresentPath;
+        EditorGUILayout.LabelField(
+            initPresent != null
+                ? $"✓ IsExternalInit declared in {ExoforgeIsExternalInit.Relative(initPresent)}"
+                : "○ No IsExternalInit anywhere in Assets/ — records fail with CS0518",
+            EditorStyles.miniLabel);
+
+        EditorGUILayout.BeginHorizontal();
+        _isExternalInitDir = EditorGUILayout.TextField("Target Folder", _isExternalInitDir);
+        if (GUILayout.Button("Browse...", GUILayout.Width(70)))
+        {
+            string start = Path.GetFullPath(Path.Combine(ExoforgeIsExternalInit.ProjectRoot, _isExternalInitDir ?? ""));
+            string chosen = EditorUtility.OpenFolderPanel("Choose the folder for IsExternalInit.cs", start, "");
+            if (!string.IsNullOrEmpty(chosen))
+            {
+                _isExternalInitDir = chosen.StartsWith(ExoforgeIsExternalInit.ProjectRoot)
+                    ? Path.GetRelativePath(ExoforgeIsExternalInit.ProjectRoot, chosen)
+                    : chosen;
+            }
+        }
+        EditorGUILayout.EndHorizontal();
+
+        EditorGUILayout.HelpBox(
+            "An asmdef compiles into its own assembly and the type is internal, so a copy in one " +
+            "assembly is invisible to another. Each asmdef folder that declares records needs its own copy.",
+            MessageType.None);
+
+        if (GUILayout.Button("Generate IsExternalInit.cs", GUILayout.Height(24)))
+        {
+            try
+            {
+                bool created = ExoforgeIsExternalInit.Ensure(_isExternalInitDir, out string path);
+                ShowStatus(
+                    created
+                        ? $"✓ Created {ExoforgeIsExternalInit.Relative(path)}"
+                        : $"✓ IsExternalInit already present: {ExoforgeIsExternalInit.Relative(path)}",
+                    MessageType.Info);
+            }
+            catch (Exception ex)
+            {
+                ShowStatus($"Could not write IsExternalInit.cs: {ex.Message}", MessageType.Error);
+            }
+        }
 
         EditorGUILayout.EndVertical();
 
