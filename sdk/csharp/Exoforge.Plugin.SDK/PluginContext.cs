@@ -216,20 +216,14 @@ public class HostDatabase : IDatabase
 
 public class HostEventDispatcher : IEventDispatcher
 {
-    public Task EmitAsync<T>(string eventName, T payload, string? topic = null)
-    {
-        HostBridge.EmitEvent(topic ?? "", eventName, payload!);
-        return Task.CompletedTask;
-    }
+    public Task EmitAsync<T>(string eventName, T payload, string? topic = null) =>
+        HostBridge.EmitEventAsync(topic ?? "", eventName, payload!);
 }
 
 public class HostActionDispatcher : IActionDispatcher
 {
-    public Task<TResponse?> CallActionAsync<TResponse>(string service, string action, object payload)
-    {
-        var response = HostBridge.CallAction<TResponse>(service, action, payload);
-        return Task.FromResult(response);
-    }
+    public Task<TResponse?> CallActionAsync<TResponse>(string service, string action, object payload) =>
+        HostBridge.CallActionAsync<TResponse>(service, action, payload);
 
     public TResponse? CallAction<TResponse>(string service, string action, object payload)
     {

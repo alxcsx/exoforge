@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
@@ -25,6 +26,38 @@ public interface IPluginTransport
     bool DbPut(string table, string key, string valueJson);
     bool DbDelete(string table, string key);
     long ClockNow();
+
+    // The async twins. They are the real path for a native host: several calls can be in flight
+    // at once, so a caller that can await must not tie up a thread waiting for its turn. The
+    // defaults keep a synchronous transport (a test double, a plugin's own host) on the old path.
+
+    /// <summary>Emits an event without blocking the caller's thread.</summary>
+    Task<bool> EmitEventAsync(string topic, string evt, string payloadJson, CancellationToken cancellationToken = default) =>
+        Task.FromResult(EmitEvent(topic, evt, payloadJson));
+
+    /// <summary>Calls another service's action without blocking the caller's thread.</summary>
+    Task<string?> CallActionAsync(string service, string action, string payloadJson, CancellationToken cancellationToken = default) =>
+        Task.FromResult(CallAction(service, action, payloadJson));
+
+    /// <summary>Reads a record without blocking the caller's thread.</summary>
+    Task<string?> DbGetAsync(string table, string key, CancellationToken cancellationToken = default) =>
+        Task.FromResult(DbGet(table, key));
+
+    /// <summary>Reads every record in a table without blocking the caller's thread.</summary>
+    Task<string?> DbAllAsync(string table, CancellationToken cancellationToken = default) =>
+        Task.FromResult(DbAll(table));
+
+    /// <summary>Writes a record without blocking the caller's thread.</summary>
+    Task<bool> DbPutAsync(string table, string key, string valueJson, CancellationToken cancellationToken = default) =>
+        Task.FromResult(DbPut(table, key, valueJson));
+
+    /// <summary>Deletes a record without blocking the caller's thread.</summary>
+    Task<bool> DbDeleteAsync(string table, string key, CancellationToken cancellationToken = default) =>
+        Task.FromResult(DbDelete(table, key));
+
+    /// <summary>Reads the host's clock without blocking the caller's thread.</summary>
+    Task<long> ClockNowAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult(ClockNow());
 }
 
 /// <summary>
@@ -45,7 +78,10 @@ public interface IPluginTransport
 /// The host opens with `hello` and the plugin answers it before anything runs. Capabilities are
 /// the frame types each side can receive, so adding a frame type is a negotiation rather than an
 /// assumption; the protocol number is what the host refuses on.
-/// Host calls are synchronous: the plugin writes a request and reads the matching reply.
+///
+/// Host calls are multiplexed: one reader owns stdin and routes every frame, so several calls can
+/// be in flight at once. A call registers its id, writes the request and waits for the reader to
+/// complete it; the sync transport members keep working by waiting on that task.
 /// </summary>
 public static class PluginHost
 {
@@ -58,16 +94,19 @@ public static class PluginHost
 
     private static readonly object WriteLock = new();
 
-    // Frames that arrived while an action was blocked on a host call. One queue, because an event
-    // and an action that overtake each other must replay in the order the host wrote them.
-    private static readonly Queue<string> BufferedFrames = new();
+    // The calls waiting for a host_call_result, keyed by id. Concurrent because the reader answers
+    // them while the callers are still running.
+    private static readonly ConcurrentDictionary<long, TaskCompletionSource<string?>> PendingHostCalls = new();
 
-    // A host_call_result whose id is not the one being awaited. Keeping it (rather than dropping
-    // it) means a reply can never be lost, whatever the wait nesting.
-    private static readonly Dictionary<long, string?> BufferedHostCallResults = new();
+
     private static Stream? _stdout;
-    private static TextReader? _stdin;
     private static long _nextHostCallId;
+    private static volatile bool _hostClosed;
+
+    // Whether a host session is running. Outside one - after RunInstance returned, as in a test
+    // that keeps the process alive - there is nobody to ask, and a host call is a no-op rather
+    // than a failure.
+    private static volatile bool _connected;
     private static object? _instance;
     private static MethodInfo? _eventHandler;
     private static MethodInfo? _startupHandler;
@@ -162,9 +201,9 @@ public static class PluginHost
     }
 
     /// <summary>
-    /// The frame loop, reading from <paramref name="reader"/>. One reader serves the whole process:
-    /// host calls read through the same one, because two readers over one stdin each buffer ahead
-    /// and lose whatever the other buffered.
+    /// The frame loop, reading from <paramref name="reader"/>. One reader owns it for the whole
+    /// process, and only one: two readers over one stdin each buffer ahead and lose whatever the
+    /// other buffered.
     /// </summary>
     internal static void RunInstance(object instance, TextReader reader) =>
         RunInstance(instance, reader, dispatch: null);
@@ -190,12 +229,11 @@ public static class PluginHost
 
     internal static void RunInstance(object instance, TextReader reader, IExoforgeDispatch? dispatch)
     {
-        _stdin = reader;
         HostBridge.UseTransport(new NativeTransport());
 
-        BufferedFrames.Clear();
-        BufferedHostCallResults.Clear();
-        _nextHostCallId = 0;
+        PendingHostCalls.Clear();
+        Interlocked.Exchange(ref _nextHostCallId, 0);
+        _hostClosed = false;
         _instance = instance;
         _dispatch = dispatch;
         _lifecycleComplete = false;
@@ -212,38 +250,158 @@ public static class PluginHost
         _startupHandler = FindStartupHandler(pluginType);
         var actions = dispatch is null ? BuildActionTable(pluginType) : null;
 
-        while (true)
+        // One reader owns stdin and answers host calls from whatever thread is waiting for them;
+        // everything else it reads is a frame for this loop. A single consumer is the guarantee
+        // that actions and events still run one at a time, in the order the host wrote them.
+        var frames = new BlockingCollection<string>();
+
+        _connected = true;
+
+        try
         {
-            // A frame buffered while an action was blocked on a host call replays here, before the
-            // next one is read: the action (and any event it raised) has finished by now.
-            string? line = BufferedFrames.Count > 0 ? BufferedFrames.Dequeue() : reader.ReadLine();
+            // A dedicated thread, not a pool one: this read blocks for the life of the process.
+            var readerThread = new Thread(() => ReadLoop(reader, frames))
+            {
+                IsBackground = true,
+                Name = "exoforge-host-reader"
+            };
+            readerThread.Start();
 
-            if (line is null)
+            foreach (var line in frames.GetConsumingEnumerable())
             {
-                break;
+                HandleFrame(line!, instance, actions);
+            }
+        }
+        finally
+        {
+            _connected = false;
+        }
+    }
+
+    /// <summary>
+    /// Reads stdin for the life of the process. A <c>host_call_result</c> goes straight to the call
+    /// waiting for it - that is what lets a caller be answered while an action is still running -
+    /// and every other frame is queued for the single-consumer loop.
+    /// </summary>
+    private static void ReadLoop(TextReader reader, BlockingCollection<string> frames)
+    {
+        try
+        {
+            while (true)
+            {
+                string? line;
+
+                try
+                {
+                    line = reader.ReadLine();
+                }
+                catch (Exception)
+                {
+                    line = null; // a broken stdin is a closed stdin
+                }
+
+                if (line is null)
+                {
+                    break;
+                }
+
+                if (string.IsNullOrWhiteSpace(line))
+                {
+                    continue;
+                }
+
+                if (TryAnswerHostCall(line))
+                {
+                    continue;
+                }
+                if (!frames.TryAdd(line))
+                {
+                    break; // the loop is gone; nobody left to read frames
+                }
+            }
+        }
+        finally
+        {
+            // The host is gone: a call still waiting will never be answered, and saying so now is
+            // what stops it from waiting out its timeout.
+            _hostClosed = true;
+            FailPendingHostCalls();
+            frames.CompleteAdding();
+        }
+    }
+
+    private static bool TryAnswerHostCall(string line)
+    {
+        long id;
+        string? raw;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(line);
+            var root = doc.RootElement;
+
+            if (!root.TryGetProperty("type", out var type) || type.GetString() != "host_call_result")
+            {
+                return false;
             }
 
-            if (string.IsNullOrWhiteSpace(line))
+            if (!root.TryGetProperty("id", out var idProp) || idProp.ValueKind != JsonValueKind.Number)
             {
-                continue;
+                return false;
             }
 
-            if (IsFrameOfType(line, "hello"))
+            id = idProp.GetInt64();
+            raw = root.TryGetProperty("result", out var resultProp) && resultProp.ValueKind != JsonValueKind.Null
+                ? resultProp.GetRawText()
+                : null;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+
+        if (PendingHostCalls.TryRemove(id, out var call))
+        {
+            call.TrySetResult(raw);
+        }
+        else
+        {
+            // No call owns this id: a reply for an unknown or already-timed-out call. Log and drop.
+            WriteHostLog(2, $"Dropped host_call_result for unknown id {id}.");
+        }
+
+        return true;
+    }
+
+    private static void FailPendingHostCalls()
+    {
+        foreach (var id in PendingHostCalls.Keys)
+        {
+            if (PendingHostCalls.TryRemove(id, out var call))
             {
-                HandleHello(line);
+                call.TrySetException(new InvalidOperationException(
+                    $"The host closed stdin before it answered host call {id}; the plugin is shutting down."));
             }
-            else if (IsFrameOfType(line, "lifecycle"))
-            {
-                HandleLifecycle(line);
-            }
-            else if (IsEventFrame(line))
-            {
-                DispatchEvent(line);
-            }
-            else
-            {
-                Dispatch(line, instance, actions);
-            }
+        }
+    }
+
+    private static void HandleFrame(string line, object instance, Dictionary<string, (MethodInfo Method, ParameterInfo[] Params)>? actions)
+    {
+        if (IsFrameOfType(line, "hello"))
+        {
+            HandleHello(line);
+        }
+        else if (IsFrameOfType(line, "lifecycle"))
+        {
+            HandleLifecycle(line);
+        }
+        else if (IsEventFrame(line))
+        {
+            DispatchEvent(line);
+        }
+        else
+        {
+            Dispatch(line, instance, actions);
         }
     }
 
@@ -692,8 +850,9 @@ public static class PluginHost
     private static object? DefaultOf(Type type) => type.IsValueType ? Activator.CreateInstance(type) : null;
 
     /// <summary>
-    /// Unwraps a <see cref="Task"/> returned by an async action. The native transport is synchronous,
-    /// so the task is awaited to completion on the dispatch thread.
+    /// Unwraps a <see cref="Task"/> returned by an async action. Actions run on the dispatch
+    /// thread, so its task is awaited to completion there; a host call the action awaits is
+    /// answered by the reader thread, which is why that wait cannot deadlock.
     /// </summary>
     [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Task<T> metadata is rooted explicitly via GenericTaskType.")]
     private static object? AwaitResult(object? result)
@@ -771,8 +930,21 @@ public static class PluginHost
         Write($"{{\"type\":\"host_log\",\"level\":{level},\"message\":{JsonEncode(message)}}}");
     }
 
+    /// <summary>
+    /// How long a host call waits for its reply before failing. <see cref="TimeSpan.Zero"/> or a
+    /// negative value waits forever, which only a host that never closes stdin can justify.
+    /// </summary>
+    public static TimeSpan HostCallTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
     /// <summary>Issues a synchronous host call and returns the raw result JSON.</summary>
-    private static string? HostCall(string op, string argsJson)
+    private static string? HostCall(string op, string argsJson) =>
+        HostCallAsync(op, argsJson, CancellationToken.None).GetAwaiter().GetResult();
+
+    /// <summary>
+    /// Issues a host call and awaits its reply. The id is taken atomically and the reply is routed
+    /// by the reader, so any number of calls (and callers) can be in flight at once.
+    /// </summary>
+    private static async Task<string?> HostCallAsync(string op, string argsJson, CancellationToken cancellationToken)
     {
         if (!HostBridge.HostSupports("host_call"))
         {
@@ -781,67 +953,59 @@ public static class PluginHost
                  "The plugin and host disagree about capabilities; rebuild the plugin or update the host.");
         }
 
-        long id = ++_nextHostCallId;
-
-        if (BufferedHostCallResults.TryGetValue(id, out string? early))
+        // No host session: the plugin is not running, so there is nobody to ask. A stale transport
+        // from a finished run (a test keeps the process alive) must not look like a closed host.
+        if (!_connected)
         {
-            BufferedHostCallResults.Remove(id);
-            return early;
+            return null;
         }
 
-        Write($"{{\"type\":\"host_call\",\"id\":{id},\"op\":{JsonEncode(op)},\"args\":{argsJson}}}");
+        long id = Interlocked.Increment(ref _nextHostCallId);
+        var reply = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        PendingHostCalls[id] = reply;
 
-        TextReader? reader = _stdin;
-        if (reader == null) return null;
+        CancellationTokenSource? timeout = null;
+        CancellationTokenRegistration timeoutRegistration = default;
+        CancellationTokenRegistration cancelRegistration = default;
 
-        while (reader.ReadLine() is { } line)
+        try
         {
-            if (string.IsNullOrWhiteSpace(line)) continue;
-
-            try
+            if (_hostClosed)
             {
-                using var doc = JsonDocument.Parse(line);
-                var root = doc.RootElement;
-
-                if (root.TryGetProperty("type", out var frameType))
-                {
-                    switch (frameType.GetString())
-                    {
-                        // Events and actions may arrive while an action is blocked on a host call.
-                        // Queue them for the main loop instead of dispatching here: an OnEvent that
-                        // makes its own host call would otherwise re-enter this loop and drop the
-                        // outer reply.
-                        case "event":
-                        case "action":
-                            BufferedFrames.Enqueue(line);
-                            continue;
-
-                        case "host_call_result"
-                            when root.TryGetProperty("id", out var idProp):
-                        {
-                            long resultId = idProp.GetInt64();
-                            string? raw = root.TryGetProperty("result", out var resultProp) &&
-                                          resultProp.ValueKind != JsonValueKind.Null
-                                ? resultProp.GetRawText()
-                                : null;
-
-                            if (resultId == id) return raw;
-
-                            // A reply this call is not waiting for: keep it rather than drop it.
-                            BufferedHostCallResults[resultId] = raw;
-                            continue;
-                        }
-                    }
-                }
+                throw HostClosed(op);
             }
-            catch (JsonException)
+            else
             {
-                // ignore malformed lines
+                Write($"{{\"type\":\"host_call\",\"id\":{id},\"op\":{JsonEncode(op)},\"args\":{argsJson}}}");
             }
+
+            TimeSpan timeoutAfter = HostCallTimeout;
+            if (timeoutAfter > TimeSpan.Zero)
+            {
+                timeout = new CancellationTokenSource(timeoutAfter);
+                timeoutRegistration = timeout.Token.Register(() =>
+                    reply.TrySetException(new TimeoutException(
+                        $"The host did not answer host call '{op}' (id {id}) within {timeoutAfter.TotalMilliseconds:0} ms.")));
+            }
+
+            if (cancellationToken.CanBeCanceled)
+            {
+                cancelRegistration = cancellationToken.Register(() => reply.TrySetCanceled());
+            }
+
+            return await reply.Task.ConfigureAwait(false);
         }
-
-        return null;
+        finally
+        {
+            timeoutRegistration.Dispose();
+            cancelRegistration.Dispose();
+            timeout?.Dispose();
+            PendingHostCalls.TryRemove(id, out _);
+        }
     }
+
+    private static InvalidOperationException HostClosed(string op) =>
+        new($"The host closed stdin before it answered host call '{op}'; the plugin is shutting down.");
 
     private sealed class NativeTransport : IPluginTransport
     {
@@ -919,6 +1083,75 @@ public static class PluginHost
         public long ClockNow()
         {
             string? raw = HostCall("clock_now", "{}");
+            return long.TryParse(raw, out var value) ? value : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        }
+
+        public async Task<bool> EmitEventAsync(string topic, string evt, string payloadJson, CancellationToken cancellationToken = default)
+        {
+            string? raw = await HostCallAsync(
+                "emit_event",
+                $"{{\"topic\":{JsonEncode(topic)},\"event\":{JsonEncode(evt)},\"payload\":{payloadJson}}}",
+                cancellationToken).ConfigureAwait(false);
+            return raw != "false";
+        }
+
+        public Task<string?> CallActionAsync(string service, string action, string payloadJson, CancellationToken cancellationToken = default) =>
+            HostCallAsync(
+                "call_action",
+                $"{{\"service\":{JsonEncode(service)},\"action\":{JsonEncode(action)},\"payload\":{payloadJson}}}",
+                cancellationToken);
+
+        public async Task<string?> DbGetAsync(string table, string key, CancellationToken cancellationToken = default)
+        {
+            string? raw = await HostCallAsync(
+                "db_get",
+                $"{{\"table\":{JsonEncode(table)},\"key\":{JsonEncode(key)}}}",
+                cancellationToken).ConfigureAwait(false);
+            ThrowIfDbError(table, raw);
+            return raw;
+        }
+
+        public async Task<string?> DbAllAsync(string table, CancellationToken cancellationToken = default)
+        {
+            string? raw = await HostCallAsync(
+                "db_all",
+                $"{{\"table\":{JsonEncode(table)}}}",
+                cancellationToken).ConfigureAwait(false);
+            ThrowIfDbError(table, raw);
+            return raw;
+        }
+
+        public async Task<bool> DbPutAsync(string table, string key, string valueJson, CancellationToken cancellationToken = default)
+        {
+            string? raw = await HostCallAsync(
+                "db_put",
+                $"{{\"table\":{JsonEncode(table)},\"key\":{JsonEncode(key)},\"value\":{valueJson}}}",
+                cancellationToken).ConfigureAwait(false);
+            ThrowIfDbError(table, raw);
+            if (raw == "false")
+            {
+                throw new ExoDatabaseException(table, "Database put operation failed");
+            }
+            return raw != "false";
+        }
+
+        public async Task<bool> DbDeleteAsync(string table, string key, CancellationToken cancellationToken = default)
+        {
+            string? raw = await HostCallAsync(
+                "db_delete",
+                $"{{\"table\":{JsonEncode(table)},\"key\":{JsonEncode(key)}}}",
+                cancellationToken).ConfigureAwait(false);
+            ThrowIfDbError(table, raw);
+            if (raw == "false")
+            {
+                throw new ExoDatabaseException(table, "Database delete operation failed");
+            }
+            return raw != "false";
+        }
+
+        public async Task<long> ClockNowAsync(CancellationToken cancellationToken = default)
+        {
+            string? raw = await HostCallAsync("clock_now", "{}", cancellationToken).ConfigureAwait(false);
             return long.TryParse(raw, out var value) ? value : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         }
     }

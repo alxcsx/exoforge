@@ -1,4 +1,7 @@
+using System;
 using System.IO;
+using System.Text.Json;
+using System.Threading.Tasks;
 using Exoforge.Plugin.SDK;
 using Xunit;
 
@@ -69,42 +72,69 @@ public class FrameLoopPlugin
 /// </summary>
 public class FrameLoopTests
 {
+    private const string Hello =
+        "{\"type\":\"hello\",\"protocol\":1,\"host\":\"exoforge\",\"capabilities\":[\"action_result\",\"host_call\",\"host_log\"]}";
+
     [Fact]
-    public void A_host_call_sees_its_reply_and_the_next_frame_still_runs()
+    public async Task A_host_call_sees_its_reply_and_the_next_frame_still_runs()
     {
         var plugin = new FrameLoopPlugin();
+        using var host = new HostSimulator();
 
-        // Back to back, the way they arrive when the host writes more than one frame in one go.
-        var input = new StringReader(string.Join("\n", new[]
+        host.Send(Hello);
+        host.Send("{\"type\":\"action\",\"id\":1,\"action\":\"with_host_call\",\"payload\":{}}");
+
+        var run = Task.Run(() => PluginHost.RunInstance(plugin, host, host.Output, null));
+
+        string? call = host.ReadFrame("host_call", TimeSpan.FromSeconds(10));
+        Assert.NotNull(call);
+
+        using (var doc = JsonDocument.Parse(call!))
         {
-            "{\"type\":\"action\",\"id\":1,\"action\":\"with_host_call\",\"payload\":{}}",
-            "{\"type\":\"host_call_result\",\"id\":1,\"result\":{\"v\":1}}",
-            "{\"type\":\"action\",\"id\":2,\"action\":\"count\",\"payload\":{}}",
-            ""
-        }));
+            host.Send($"{{\"type\":\"host_call_result\",\"id\":{doc.RootElement.GetProperty("id").GetInt64()},\"result\":{{\"v\":1}}}}");
+        }
 
-        PluginHost.RunInstance(plugin, input);
+        Assert.NotNull(host.ReadFrame("action_result", TimeSpan.FromSeconds(10)));
+
+        host.Send("{\"type\":\"action\",\"id\":2,\"action\":\"count\",\"payload\":{}}");
+        Assert.NotNull(host.ReadFrame("action_result", TimeSpan.FromSeconds(10)));
+
+        host.CloseInput();
+        await run.WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.Equal("{\"v\":1}", plugin.HostResult);
         Assert.Equal(2, plugin.Dispatched);
     }
 
     [Fact]
-    public void An_action_arriving_during_a_host_call_is_replayed_not_dropped()
+    public async Task An_action_arriving_during_a_host_call_is_replayed_not_dropped()
     {
         var plugin = new FrameLoopPlugin();
+        using var host = new HostSimulator();
+
+        host.Send(Hello);
+        host.Send("{\"type\":\"action\",\"id\":1,\"action\":\"with_host_call\",\"payload\":{}}");
+
+        var run = Task.Run(() => PluginHost.RunInstance(plugin, host, host.Output, null));
+
+        string? call = host.ReadFrame("host_call", TimeSpan.FromSeconds(10));
+        Assert.NotNull(call);
 
         // The second action frame arrives while the first is blocked inside its host call: the
-        // host call's read loop must buffer it for the main loop, not swallow it (M33 Fix 6).
-        var input = new StringReader(string.Join("\n", new[]
-        {
-            "{\"type\":\"action\",\"id\":1,\"action\":\"with_host_call\",\"payload\":{}}",
-            "{\"type\":\"action\",\"id\":2,\"action\":\"count\",\"payload\":{}}",
-            "{\"type\":\"host_call_result\",\"id\":1,\"result\":{\"v\":1}}",
-            ""
-        }));
+        // reader must buffer it for the main loop, not swallow it (M33 Fix 6).
+        host.Send("{\"type\":\"action\",\"id\":2,\"action\":\"count\",\"payload\":{}}");
 
-        PluginHost.RunInstance(plugin, input);
+        using (var doc = JsonDocument.Parse(call!))
+        {
+            host.Send($"{{\"type\":\"host_call_result\",\"id\":{doc.RootElement.GetProperty("id").GetInt64()},\"result\":{{\"v\":1}}}}");
+        }
+
+        // Both actions must produce a result: the buffered one was not consumed by the call.
+        Assert.NotNull(host.ReadFrame("action_result", TimeSpan.FromSeconds(10)));
+        Assert.NotNull(host.ReadFrame("action_result", TimeSpan.FromSeconds(10)));
+
+        host.CloseInput();
+        await run.WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.Equal(2, plugin.Dispatched);
         Assert.Equal("{\"v\":1}", plugin.HostResult);
@@ -133,27 +163,72 @@ public class FrameLoopTests
     }
 
     [Fact]
-    public void An_event_arriving_during_a_host_call_is_handled_after_the_call_completes()
+    public async Task An_event_arriving_during_a_host_call_is_handled_after_the_call_completes()
     {
         var plugin = new FrameLoopPlugin();
+        using var host = new HostSimulator();
+
+        host.Send(Hello);
+        host.Send("{\"type\":\"action\",\"id\":1,\"action\":\"with_host_call_and_event\",\"payload\":{}}");
+
+        var run = Task.Run(() => PluginHost.RunInstance(plugin, host, host.Output, null));
+
+        string? outer = host.ReadFrame("host_call", TimeSpan.FromSeconds(10));
+        Assert.NotNull(outer);
 
         // The event is delivered while the action is blocked on its host call. Dispatching it inline
         // re-entered OnEvent, whose own host call consumed (and dropped) the outer reply. It must
         // instead run after the action returns, and its own host call must still be answered.
-        var input = new StringReader(string.Join("\n", new[]
-        {
-            "{\"type\":\"action\",\"id\":1,\"action\":\"with_host_call_and_event\",\"payload\":{}}",
-            "{\"type\":\"event\",\"event\":\"score_updated\",\"payload\":{\"value\":7}}",
-            "{\"type\":\"host_call_result\",\"id\":1,\"result\":{\"outer\":true}}",
-            "{\"type\":\"host_call_result\",\"id\":2,\"result\":{\"event\":true}}",
-            ""
-        }));
+        host.Send("{\"type\":\"event\",\"event\":\"score_updated\",\"payload\":{\"value\":7}}");
 
-        PluginHost.RunInstance(plugin, input);
+        using (var doc = JsonDocument.Parse(outer!))
+        {
+            host.Send($"{{\"type\":\"host_call_result\",\"id\":{doc.RootElement.GetProperty("id").GetInt64()},\"result\":{{\"outer\":true}}}}");
+        }
+
+        Assert.NotNull(host.ReadFrame("action_result", TimeSpan.FromSeconds(10)));
+
+        string? inner = host.ReadFrame("host_call", TimeSpan.FromSeconds(10));
+        Assert.NotNull(inner);
+
+        using (var doc = JsonDocument.Parse(inner!))
+        {
+            host.Send($"{{\"type\":\"host_call_result\",\"id\":{doc.RootElement.GetProperty("id").GetInt64()},\"result\":{{\"event\":true}}}}");
+        }
+
+        host.CloseInput();
+        await run.WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.Equal("{\"outer\":true}", plugin.HostResult);
         Assert.Equal(1, plugin.EventsHandled);
         Assert.Equal("{\"event\":true}", plugin.EventHostResult);
+    }
+
+    [Fact]
+    public async Task A_host_call_result_for_an_unknown_id_is_dropped_and_logged()
+    {
+        var plugin = new FrameLoopPlugin();
+        using var host = new HostSimulator();
+
+        host.Send(Hello);
+        host.Send("{\"type\":\"host_call_result\",\"id\":99,\"result\":{\"v\":1}}");
+
+        var run = Task.Run(() => PluginHost.RunInstance(plugin, host, host.Output, null));
+
+        string? log = host.ReadFrame("host_log", TimeSpan.FromSeconds(10));
+        Assert.NotNull(log);
+
+        using (var doc = JsonDocument.Parse(log!))
+        {
+            Assert.Equal(2, doc.RootElement.GetProperty("level").GetInt32());
+            Assert.Contains("unknown id 99", doc.RootElement.GetProperty("message").GetString());
+        }
+
+        host.CloseInput();
+        await run.WaitAsync(TimeSpan.FromSeconds(10));
+
+        // The stray reply must not have been mistaken for a call: none ran, and the loop survived.
+        Assert.Equal(0, plugin.Dispatched);
     }
 
     [Fact]
