@@ -163,9 +163,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
         {:noreply, assign(socket, upload_error: message)}
 
       {:ok, payload} ->
-        case ActionDispatcher.dispatch(:extension_manager, :upload_extension, payload,
-               caller_scopes: caller_scopes(socket)
-             ) do
+        case ActionDispatcher.dispatch(:extension_manager, :upload_extension, payload, caller_scopes: caller_scopes(socket)) do
           {:ok, result} ->
             ext_id = result[:extension_id] || result[:plugin_id]
 
@@ -175,8 +173,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
                 show_upload_modal: false,
                 upload_error: nil,
                 upload_file_info: nil,
-                upload_success:
-                  "Extension '#{ext_id}' (#{result[:type] || payload.type}) successfully uploaded and initialized!"
+                upload_success: "Extension '#{ext_id}' (#{result[:type] || payload.type}) successfully uploaded and initialized!"
               )
               |> load_data()
 
@@ -190,9 +187,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
 
   @impl true
   def handle_event("remove_plugin", %{"id" => id}, socket) do
-    case ActionDispatcher.dispatch(:extension_manager, :remove_extension, %{id: id},
-           caller_scopes: caller_scopes(socket)
-         ) do
+    case ActionDispatcher.dispatch(:extension_manager, :remove_extension, %{id: id}, caller_scopes: caller_scopes(socket)) do
       {:ok, _result} ->
         socket =
           socket
@@ -205,8 +200,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
         {:noreply, socket}
 
       {:error, reason} ->
-        {:noreply,
-         assign(socket, action_notification: "Failed to remove extension: #{inspect(reason)}")}
+        {:noreply, assign(socket, action_notification: "Failed to remove extension: #{inspect(reason)}")}
     end
   end
 
@@ -225,9 +219,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
 
   @impl true
   def handle_event("confirm_restart", _params, socket) do
-    case ActionDispatcher.dispatch(:extension_manager, :restart_system, %{},
-           caller_scopes: caller_scopes(socket)
-         ) do
+    case ActionDispatcher.dispatch(:extension_manager, :restart_system, %{}, caller_scopes: caller_scopes(socket)) do
       {:ok, result} ->
         count = result[:extensions_count] || result[:plugins_count] || 0
 
@@ -235,8 +227,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
           socket
           |> assign(
             show_restart_modal: false,
-            restart_status:
-              "Runtime cluster restarted. #{count} extensions reloaded successfully."
+            restart_status: "Runtime cluster restarted. #{count} extensions reloaded successfully."
           )
           |> load_data()
 
@@ -513,7 +504,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
               value={@search_query}
               phx-debounce="150"
               name="query"
-              class="w-full pl-9 pr-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all"
+              class="w-full pl-9 pr-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white transition-colors"
             />
             <svg class="w-4 h-4 text-gray-400 absolute left-3 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -542,7 +533,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
             <div class="w-12 h-12 rounded-xl bg-gray-100 text-gray-400 mx-auto flex items-center justify-center mb-3">
               <.studio_icon icon="box" class="w-6 h-6" />
             </div>
-            <h3 class="text-sm font-bold text-gray-900">No extensions match your query</h3>
+            <h3 class="text-sm font-semibold text-gray-900">No extensions match your query</h3>
             <p class="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
               Try adjusting your search terms to locate installed extensions.
             </p>
@@ -551,7 +542,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
           <div class="overflow-x-auto">
             <table class="w-full text-left border-collapse">
               <thead>
-                <tr class="bg-gray-50/75 border-b border-gray-200 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                <tr class="bg-gray-50/75 border-b border-gray-200 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
                   <th class="py-3 px-4">Extension</th>
                   <th class="py-3 px-4">Version</th>
                   <th class="py-3 px-4">Provided Services</th>
@@ -568,7 +559,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
                           <.studio_icon icon="box" class="w-4 h-4" />
                         </div>
                         <div>
-                          <div class="font-bold text-gray-900 flex items-center gap-1.5">
+                          <div class="font-semibold text-gray-900 flex items-center gap-1.5">
                             <span><%= plugin["name"] %></span>
                           </div>
                           <span class="font-mono text-[11px] text-gray-400"><%= plugin["id"] %></span>
@@ -583,7 +574,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
                     <td class="py-3 px-4">
                       <div class="flex flex-wrap gap-1">
                         <%= for s <- plugin["provides"] || [] do %>
-                          <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold font-mono bg-primary-50 text-primary-700 border border-primary-200">
+                          <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-semibold font-mono bg-primary-50 text-primary-700 border border-primary-200">
                             :<%= s %>
                           </span>
                         <% end %>
@@ -619,7 +610,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
                         </button>
 
                         <details class="exo-menu">
-                          <summary class="px-2 py-1 text-xs font-bold text-gray-500 hover:text-gray-800 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg cursor-pointer">
+                          <summary class="px-2 py-1 text-xs font-semibold text-gray-500 hover:text-gray-800 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg cursor-pointer">
                             ⋯
                           </summary>
                           <div class="exo-menu-panel">
@@ -664,21 +655,21 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
                   <div class="space-y-4">
                     <div class="grid grid-cols-2 gap-3">
                       <div class="bg-gray-50 p-3.5 rounded-xl border border-gray-200">
-                        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Extension Version</span>
-                        <span class="text-sm font-bold text-gray-900 mt-1 block">
+                        <span class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block">Extension Version</span>
+                        <span class="text-sm font-semibold text-gray-900 mt-1 block">
                           v<%= @selected_plugin["version"] || "0.1.0" %>
                         </span>
                       </div>
                       <div class="bg-gray-50 p-3.5 rounded-xl border border-gray-200">
-                        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Supervision Status</span>
-                        <span class="text-sm font-bold text-emerald-600 mt-1 block flex items-center gap-1.5">
+                        <span class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block">Supervision Status</span>
+                        <span class="text-sm font-semibold text-emerald-600 mt-1 block flex items-center gap-1.5">
                           <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Active &amp; Supervised
                         </span>
                       </div>
                     </div>
 
                     <div>
-                      <span class="text-xs font-bold text-gray-700 uppercase tracking-wider block mb-1">Entry Point</span>
+                      <span class="text-xs font-semibold text-gray-700 uppercase tracking-wider block mb-1">Entry Point</span>
                       <p class="font-mono text-xs bg-gray-50 p-2.5 rounded-xl border border-gray-200 text-gray-800 break-all select-all">
                         <%= @selected_plugin["entry_point"] || "Elixir Module" %>
                       </p>
@@ -686,7 +677,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
 
                     <%= if @selected_plugin["physical_path"] do %>
                       <div>
-                        <span class="text-xs font-bold text-gray-700 uppercase tracking-wider block mb-1">Physical Path</span>
+                        <span class="text-xs font-semibold text-gray-700 uppercase tracking-wider block mb-1">Physical Path</span>
                         <p class="font-mono text-xs bg-gray-50 p-2.5 rounded-xl border border-gray-200 text-gray-800 break-all select-all">
                           <%= @selected_plugin["physical_path"] %>
                         </p>
@@ -694,10 +685,10 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
                     <% end %>
 
                     <div>
-                      <span class="text-xs font-bold text-gray-700 uppercase tracking-wider block mb-2">Provided Service Contracts</span>
+                      <span class="text-xs font-semibold text-gray-700 uppercase tracking-wider block mb-2">Provided Service Contracts</span>
                       <div class="flex flex-wrap gap-1.5">
                         <%= for svc <- @selected_plugin["provides"] || [] do %>
-                          <span class="px-2.5 py-1 bg-primary-50 text-primary-800 border border-primary-200 rounded-lg text-xs font-mono font-bold">
+                          <span class="px-2.5 py-1 bg-primary-50 text-primary-800 border border-primary-200 rounded-lg text-xs font-mono font-semibold">
                             :<%= svc %>
                           </span>
                         <% end %>
@@ -705,7 +696,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
                     </div>
 
                     <div>
-                      <span class="text-xs font-bold text-gray-700 uppercase tracking-wider block mb-2">Service Dependencies</span>
+                      <span class="text-xs font-semibold text-gray-700 uppercase tracking-wider block mb-2">Service Dependencies</span>
                       <div class="flex flex-wrap gap-1.5">
                         <%= for dep <- @selected_plugin["dependencies"] || [] do %>
                           <span class="px-2.5 py-1 bg-gray-100 text-gray-700 border border-gray-200 rounded-lg text-xs font-mono font-semibold">
@@ -723,7 +714,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
                 <%= if @active_drawer_tab == "csharp" do %>
                   <div class="space-y-3">
                     <p class="text-xs text-gray-500">
-                      Invoke this extension directly from Unity or C# clients using <code class="font-mono text-primary-700 font-bold">Exoforge.Client</code>:
+                      Invoke this extension directly from Unity or C# clients using <code class="font-mono text-primary-700 font-semibold">Exoforge.Client</code>:
                     </p>
                     <pre class="bg-gray-900 text-gray-100 p-4 rounded-xl font-mono text-xs overflow-x-auto select-all leading-relaxed"><%= csharp_snippet(@selected_plugin) %></pre>
                   </div>
@@ -740,13 +731,13 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
                   phx-value-id={@selected_plugin["id"]}
                   phx-target={@myself}
                   data-confirm={"Are you sure you want to unload extension #{@selected_plugin["id"]}?"}
-                  class="px-4 py-2 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-colors"
+                  class="px-4 py-2 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-colors"
                 >
                   Unload &amp; Remove Extension
                 </button>
               <button
                 phx-click="close_focus"
-                class="px-4 py-2 text-xs font-bold text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-xl transition-colors shadow-sm ml-auto"
+                class="px-4 py-2 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-xl transition-colors shadow-sm ml-auto"
               >
                 Close
               </button>

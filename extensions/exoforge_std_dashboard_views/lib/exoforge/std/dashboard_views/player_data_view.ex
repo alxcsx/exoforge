@@ -470,7 +470,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
             <span>✓</span>
             <span><%= @action_notification %></span>
           </div>
-          <button phx-click="dismiss_notification" phx-target={@myself} class="text-emerald-500 hover:text-emerald-700 font-bold">&times;</button>
+          <button phx-click="dismiss_notification" phx-target={@myself} class="text-emerald-500 hover:text-emerald-700 font-semibold">&times;</button>
         </div>
       <% end %>
 
@@ -570,7 +570,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
       <!-- Players List Table -->
       <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div class="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-          <h4 class="text-xs font-bold text-gray-700 uppercase tracking-wider">
+          <h4 class="text-xs font-semibold text-gray-700 uppercase tracking-wider">
             Matching Players (<%= length(@filtered_players) %>)
           </h4>
         </div>
@@ -587,7 +587,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
             <button
               phx-click="open_create_modal"
               phx-target={@myself}
-              class="mt-4 px-4 py-2 text-xs font-bold text-primary-700 bg-primary-50 hover:bg-primary-100 rounded-xl transition-colors inline-flex items-center gap-1.5"
+              class="mt-4 px-4 py-2 text-xs font-semibold text-primary-700 bg-primary-50 hover:bg-primary-100 rounded-xl transition-colors inline-flex items-center gap-1.5"
             >
               <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -604,18 +604,18 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
 
               <div class="p-4 hover:bg-gray-50/80 transition-colors flex items-center justify-between gap-4">
                 <div class="flex items-center gap-3">
-                  <div class={"w-9 h-9 rounded-xl font-bold text-xs flex items-center justify-center shrink-0 border #{if is_linked, do: "bg-primary-50 text-primary-600 border-primary-100", else: "bg-amber-50 text-amber-600 border-amber-200"}"}>
+                  <div class={"w-9 h-9 rounded-xl font-semibold text-xs flex items-center justify-center shrink-0 border #{if is_linked, do: "bg-primary-50 text-primary-600 border-primary-100", else: "bg-amber-50 text-amber-600 border-amber-200"}"}>
                     <%= String.slice(pid, 0, 2) |> String.upcase() %>
                   </div>
                   <div>
                     <div class="flex items-center gap-2">
-                      <span class="text-xs font-bold text-gray-900"><%= player[:name] || player["name"] || pid %></span>
+                      <span class="text-xs font-semibold text-gray-900"><%= player[:name] || player["name"] || pid %></span>
                       <%= if is_linked and uid do %>
-                        <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                        <span class="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-blue-50 text-blue-700 border border-blue-200">
                           User: <%= Map.get(@user_names, to_string(uid), player[:name] || player["name"] || uid) %>
                         </span>
                       <% else %>
-                        <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300">
+                        <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-300">
                           Retained (No User)
                         </span>
                       <% end %>
@@ -645,7 +645,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
                   </button>
 
                   <details class="exo-menu">
-                    <summary class="px-2 py-1.5 text-xs font-bold text-gray-500 hover:text-gray-800 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg cursor-pointer">
+                    <summary class="px-2 py-1.5 text-xs font-semibold text-gray-500 hover:text-gray-800 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg cursor-pointer">
                       ⋯
                     </summary>
                     <div class="exo-menu-panel">
@@ -722,7 +722,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
                 <.studio_icon icon="mobile" class="w-3.5 h-3.5" />
                 <span>Attached Device IDs:</span>
               </span>
-              <span class="font-mono text-[11px] text-primary-700 font-bold truncate max-w-sm" title={Enum.join(p_dids, ", ")}>
+              <span class="font-mono text-[11px] text-primary-700 font-semibold truncate max-w-sm" title={Enum.join(p_dids, ", ")}>
                 <%= Enum.join(p_dids, ", ") %>
               </span>
             </div>
@@ -732,7 +732,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
             <%= if @player_inspect_tab == "kv_store" do %>
               <div class="border border-gray-200 rounded-xl p-4 bg-gray-50/60 space-y-3">
                 <div class="flex items-center justify-between">
-                  <span class="text-xs font-bold text-gray-800 uppercase tracking-wider">Key-Value JSON State (<%= map_size(@player_kv_data) %> keys)</span>
+                  <span class="text-xs font-semibold text-gray-800 uppercase tracking-wider">Key-Value JSON State (<%= map_size(@player_kv_data) %> keys)</span>
                   <span class="text-[10px] text-gray-400 font-mono">player_kv table</span>
                 </div>
 
@@ -742,7 +742,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
                   <div class="space-y-1.5 max-h-56 overflow-y-auto pr-1">
                     <%= for {k, v} <- @player_kv_data do %>
                       <div class="exo-card flex items-center justify-between p-2 text-xs">
-                        <span class="font-mono font-bold text-primary-800"><%= k %></span>
+                        <span class="font-mono font-semibold text-primary-800"><%= k %></span>
                         <div class="flex items-center gap-2">
                           <span class="font-mono text-gray-600 truncate max-w-xs"><%= inspect(v) %></span>
                           <button
@@ -780,7 +780,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
                   />
                   <button
                     type="submit"
-                    class="px-3 py-1.5 text-xs font-bold text-white bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors whitespace-nowrap"
+                    class="px-3 py-1.5 text-xs font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors whitespace-nowrap"
                   >
                     Set KV
                   </button>
@@ -793,7 +793,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
             <%= if @player_inspect_tab == "profile" do %>
               <form phx-submit="save_player_profile" phx-target={@myself} class="space-y-4">
                 <div>
-                  <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Profile Attributes JSON</label>
+                  <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Profile Attributes JSON</label>
                   <textarea
                     name="profile_raw"
                     rows="8"
@@ -838,7 +838,7 @@ defmodule Exoforge.Std.DashboardViews.PlayerDataView do
                     <button
                       type="submit"
                       phx-disable-with="Saving..."
-                      class="px-5 py-2 text-xs font-bold text-white bg-primary-600 hover:bg-primary-700 rounded-xl shadow-sm transition-colors"
+                      class="px-5 py-2 text-xs font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded-xl shadow-sm transition-colors"
                     >
                       Save Changes
                     </button>

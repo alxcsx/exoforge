@@ -46,16 +46,16 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
       role="button"
       tabindex="0"
       title={"Open #{ExtensionPresenter.display_name(@ext)} Control Panel"}
-      class="exo-card h-full p-5 hover:border-primary-500 hover:ring-2 hover:ring-primary-500/20 hover:shadow-lg transition-all flex flex-col justify-between space-y-4 group cursor-pointer relative overflow-hidden"
+      class="exo-card h-full p-5 hover:border-primary-500 hover:ring-2 hover:ring-primary-500/20 hover:shadow-lg transition-[border-color,box-shadow] flex flex-col justify-between space-y-4 group cursor-pointer relative overflow-hidden"
     >
       <div class="space-y-3">
         <div class="flex items-start justify-between gap-2">
           <div class="flex items-center gap-3 min-w-0">
-            <span class="w-10 h-10 rounded-xl bg-primary-50 text-primary-700 flex items-center justify-center text-xl shadow-xs shrink-0 group-hover:bg-primary-100 group-hover:scale-105 transition-all">
+            <span class="w-10 h-10 rounded-xl bg-primary-50 text-primary-700 flex items-center justify-center text-xl shadow-xs shrink-0 group-hover:bg-primary-100 group-hover:scale-105 transition-[background-color,transform]">
               <%= ExtensionPresenter.icon(@ext) %>
             </span>
             <div class="min-w-0">
-              <h4 class="font-bold text-gray-900 text-sm tracking-tight group-hover:text-primary-700 transition-colors flex items-center gap-1.5 truncate">
+              <h4 class="font-semibold text-gray-900 text-sm tracking-tight group-hover:text-primary-700 transition-colors flex items-center gap-1.5 truncate">
                 <span class="truncate"><%= ExtensionPresenter.display_name(@ext) %></span>
                 <%= if custom_ui?(@ext) do %>
                   <span class="text-[10px] text-primary-600 opacity-80 shrink-0" title="Ships its own UI">✦</span>
@@ -68,7 +68,7 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
           </div>
           <div class="flex flex-col items-end gap-1 shrink-0">
             <%= if @ext.system do %>
-              <span class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-gray-100 text-gray-600 border border-gray-200" title="System extension">
+              <span class="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-gray-100 text-gray-600 border border-gray-200" title="System extension">
                 System
               </span>
             <% else %>
@@ -119,7 +119,7 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
             type="button"
             phx-click="inspect_extension"
             phx-value-id={to_string(@ext.id)}
-            class="px-2.5 py-1 text-[11px] font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-lg transition-colors flex items-center gap-1"
+            class="px-2.5 py-1 text-[11px] font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-lg transition-colors flex items-center gap-1"
             title="Inspect extension contracts & metadata"
           >
             <.icon name="search" class="w-3 h-3" />
@@ -133,7 +133,7 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
               type="button"
               phx-click="open_action_modal"
               phx-value-service={List.first(@ext.provides)}
-              class="text-gray-500 hover:text-primary-700 font-bold flex items-center gap-1 transition-colors text-[11px]"
+              class="text-gray-500 hover:text-primary-700 font-semibold flex items-center gap-1 transition-colors text-[11px]"
               title="Execute action in modal runner"
             >
               <span class="inline-flex items-center gap-1"><.icon name="bolt" class="w-3 h-3" /> Run</span>
@@ -143,7 +143,7 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
             type="button"
             phx-click="switch_tab"
             phx-value-tab={to_string(@ext.id)}
-            class="text-xs font-bold text-primary-600 bg-primary-50 hover:bg-primary-600 hover:text-white px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 shadow-2xs"
+            class="text-xs font-semibold text-primary-600 bg-primary-50 hover:bg-primary-600 hover:text-white px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 shadow-2xs"
             title={"Open #{ExtensionPresenter.display_name(@ext)} Control Panel"}
           >
             <span>Control Panel</span>
@@ -282,8 +282,8 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
               <div class="space-y-3">
                 <div class="flex items-center gap-2">
                   <.icon name="sliders" class="w-4 h-4 text-gray-400" />
-                  <h4 class="text-base font-bold text-gray-900">Studio Extensions &amp; Visual Controls</h4>
-                  <span class="text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 border border-primary-200">
+                  <h4 class="text-base font-semibold text-gray-900">Studio Extensions &amp; Visual Controls</h4>
+                  <span class="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 border border-primary-200">
                     <%= length(ui_exts) %>
                   </span>
                   <span class="hidden sm:inline text-xs text-gray-400">— extensions with interactive dashboards and designer consoles</span>
@@ -304,8 +304,8 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
               <div class="space-y-3 pt-4 border-t border-gray-200/80">
                 <div class="flex items-center gap-2">
                   <.icon name="gear" class="w-3.5 h-3.5 text-gray-400" />
-                  <h4 class="text-sm font-bold text-gray-700">System Extensions &amp; Headless Services</h4>
-                  <span class="text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 border border-gray-200">
+                  <h4 class="text-sm font-semibold text-gray-700">System Extensions &amp; Headless Services</h4>
+                  <span class="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 border border-gray-200">
                     <%= length(system_exts) %>
                   </span>
                 </div>
@@ -317,7 +317,7 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
                     <div class="overflow-x-auto">
                       <table class="w-full text-left border-collapse text-xs">
                         <thead>
-                          <tr class="border-b border-gray-100 bg-gray-50/75 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                          <tr class="border-b border-gray-100 bg-gray-50/75 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
                             <th class="py-3 px-4">Extension</th>
                             <th class="py-3 px-4">Category</th>
                             <th class="py-3 px-4">Version</th>
@@ -336,16 +336,16 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
                             >
                               <td class="py-3 px-4">
                                 <div class="flex items-center gap-2.5">
-                                  <span class="w-8 h-8 rounded-lg bg-gray-100 text-gray-700 flex items-center justify-center text-sm font-bold shrink-0 group-hover:bg-primary-100 group-hover:text-primary-700 transition-colors">
+                                  <span class="w-8 h-8 rounded-lg bg-gray-100 text-gray-700 flex items-center justify-center text-sm font-semibold shrink-0 group-hover:bg-primary-100 group-hover:text-primary-700 transition-colors">
                                     <%= ExtensionPresenter.icon(ext) %>
                                   </span>
                                   <div class="min-w-0">
-                                    <div class="font-bold text-gray-900 group-hover:text-primary-700 transition-colors flex items-center gap-1.5">
+                                    <div class="font-semibold text-gray-900 group-hover:text-primary-700 transition-colors flex items-center gap-1.5">
                                       <span><%= ExtensionPresenter.display_name(ext) %></span>
                                       <%= if custom_ui?(ext) do %>
                                         <span class="text-[10px] text-primary-600 opacity-80 shrink-0" title="Ships its own UI">✦</span>
                                       <% end %>
-                                      <span class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-gray-100 text-gray-600 border border-gray-200">System</span>
+                                      <span class="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-gray-100 text-gray-600 border border-gray-200">System</span>
                                     </div>
                                     <span class="text-[10px] font-mono text-gray-400 block truncate"><%= ext.id %></span>
                                   </div>
@@ -400,7 +400,7 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
                                     type="button"
                                     phx-click="inspect_extension"
                                     phx-value-id={to_string(ext.id)}
-                                    class="px-2 py-1 text-[10px] font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-lg transition-colors flex items-center gap-1"
+                                    class="px-2 py-1 text-[10px] font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-lg transition-colors flex items-center gap-1"
                                     title="Inspect extension contracts"
                                   >
                                     <.icon name={:search} class="w-3 h-3" /> <span>Inspect</span>
@@ -410,7 +410,7 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
                                     type="button"
                                     phx-click="switch_tab"
                                     phx-value-tab={to_string(ext.id)}
-                                    class="px-2 py-1 text-[10px] font-bold text-primary-600 hover:text-white bg-primary-50 hover:bg-primary-600 rounded-lg transition-all flex items-center gap-1"
+                                    class="px-2 py-1 text-[10px] font-semibold text-primary-600 hover:text-white bg-primary-50 hover:bg-primary-600 rounded-lg transition-colors flex items-center gap-1"
                                     title="Open Control Panel"
                                   >
                                     <span>Control Panel &rarr;</span>

@@ -142,17 +142,14 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
   def handle_event("submit_register", %{"register" => params}, socket) do
     payload = UserForms.registration_payload(params)
 
-    case ActionDispatcher.dispatch(:auth, :register, payload,
-           caller_scopes: caller_scopes(socket)
-         ) do
+    case ActionDispatcher.dispatch(:auth, :register, payload, caller_scopes: caller_scopes(socket)) do
       {:ok, result} ->
         socket =
           socket
           |> assign(
             show_register_modal: false,
             error_message: nil,
-            action_notification:
-              "User '#{UserForms.display_name(payload.name, result.player_id)}' successfully created!",
+            action_notification: "User '#{UserForms.display_name(payload.name, result.player_id)}' successfully created!",
             issued_token_info: %{
               name: UserForms.display_name(payload.name, result.player_id),
               player_id: result.player_id,
@@ -198,9 +195,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
         {:noreply, assign(socket, reset_password_error: message)}
 
       {:ok, payload} ->
-        case ActionDispatcher.dispatch(:auth, :reset_password, payload,
-               caller_scopes: caller_scopes(socket)
-             ) do
+        case ActionDispatcher.dispatch(:auth, :reset_password, payload, caller_scopes: caller_scopes(socket)) do
           {:ok, _} ->
             socket =
               socket
@@ -281,8 +276,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
         {:noreply, socket}
 
       {:error, :protected_admin_account} ->
-        {:noreply,
-         assign(socket, roles_error: "Cannot alter roles of the protected environment admin.")}
+        {:noreply, assign(socket, roles_error: "Cannot alter roles of the protected environment admin.")}
 
       {:error, reason} ->
         {:noreply, assign(socket, roles_error: "Failed to update roles: #{inspect(reason)}")}
@@ -291,9 +285,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
 
   @impl true
   def handle_event("delete_user", %{"player_id" => player_id}, socket) do
-    case ActionDispatcher.dispatch(:auth, :delete_user, %{player_id: player_id},
-           caller_scopes: caller_scopes(socket)
-         ) do
+    case ActionDispatcher.dispatch(:auth, :delete_user, %{player_id: player_id}, caller_scopes: caller_scopes(socket)) do
       {:ok, _} ->
         socket =
           socket
@@ -319,8 +311,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
          )}
 
       {:error, reason} ->
-        {:noreply,
-         assign(socket, action_notification: "Failed to delete account: #{inspect(reason)}")}
+        {:noreply, assign(socket, action_notification: "Failed to delete account: #{inspect(reason)}")}
     end
   end
 
@@ -334,9 +325,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
     user = Enum.find(socket.assigns.users, &(&1["player_id"] == player_id))
     scopes = if user, do: user["scopes"], else: ["player"]
 
-    case ActionDispatcher.dispatch(:auth, :issue_token, %{player_id: player_id, scopes: scopes},
-           caller_scopes: caller_scopes(socket)
-         ) do
+    case ActionDispatcher.dispatch(:auth, :issue_token, %{player_id: player_id, scopes: scopes}, caller_scopes: caller_scopes(socket)) do
       {:ok, result} ->
         socket =
           socket
@@ -622,10 +611,10 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
       <%= if @action_notification do %>
         <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 shadow-sm flex items-center justify-between animate-in fade-in duration-150">
           <div class="flex items-center gap-3">
-            <div class="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shrink-0">
+            <div class="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-semibold text-sm shrink-0">
               ✓
             </div>
-            <p class="text-xs font-bold text-emerald-800">
+            <p class="text-xs font-semibold text-emerald-800">
               <%= @action_notification %>
             </p>
           </div>
@@ -649,8 +638,8 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                 <.studio_icon icon="key" class="w-4 h-4" />
               </div>
               <div class="space-y-1">
-                <h4 class="text-sm font-bold text-primary-900">
-                  New Bearer Token Generated for <span class="font-bold text-primary-600"><%= @issued_token_info[:name] || @issued_token_info.player_id %></span>
+                <h4 class="text-sm font-semibold text-primary-900">
+                  New Bearer Token Generated for <span class="font-semibold text-primary-600"><%= @issued_token_info[:name] || @issued_token_info.player_id %></span>
                 </h4>
                 <p class="text-xs text-primary-700">
                   Save this token securely. It grants client authentication with scopes:
@@ -729,7 +718,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
               value={@search_query}
               phx-debounce="200"
               name="query"
-              class="w-full pl-9 pr-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all"
+              class="w-full pl-9 pr-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white transition-colors"
             />
             <svg class="w-4 h-4 text-gray-400 absolute left-3 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -789,7 +778,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
             <div class="w-12 h-12 rounded-xl bg-gray-100 text-gray-400 mx-auto flex items-center justify-center mb-3">
               <.studio_icon icon="search" class="w-6 h-6" />
             </div>
-            <h3 class="text-sm font-bold text-gray-900">No accounts found</h3>
+            <h3 class="text-sm font-semibold text-gray-900">No accounts found</h3>
             <p class="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
               <%= if @search_query == "" and @scope_filter == "all" do %>
                 No user identities have been registered in the auth database yet. Click "Register User" above to create the first account.
@@ -811,7 +800,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
           <div class="overflow-x-auto">
             <table class="w-full text-left border-collapse">
               <thead>
-                <tr class="bg-gray-50/75 border-b border-gray-200 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                <tr class="bg-gray-50/75 border-b border-gray-200 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
                   <th class="py-3 px-4">User ID & Name</th>
                   <th class="py-3 px-4">Assigned Scopes</th>
                   <th class="py-3 px-4">Active Tokens</th>
@@ -825,14 +814,14 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                   <tr class="hover:bg-primary-50/30 transition-colors group">
                     <td class="py-3.5 px-4">
                       <div class="flex items-center gap-3">
-                        <div class="w-9 h-9 rounded-xl bg-primary-50 text-primary-700 font-bold text-xs flex items-center justify-center shrink-0 border border-primary-100">
+                        <div class="w-9 h-9 rounded-xl bg-primary-50 text-primary-700 font-semibold text-xs flex items-center justify-center shrink-0 border border-primary-100">
                           <%= String.slice(to_string(user["name"] || user["email"] || user["player_id"]), 0, 2) |> String.upcase() %>
                         </div>
                         <div class="flex flex-col">
                           <div class="flex items-center gap-2">
-                            <span class="font-bold text-gray-900"><%= user["name"] || user["email"] || user["user_id"] || user["player_id"] %></span>
+                            <span class="font-semibold text-gray-900"><%= user["name"] || user["email"] || user["user_id"] || user["player_id"] %></span>
                             <%= if is_protected do %>
-                              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300" title="Created via environment variables. Cannot be modified or deleted via UI.">
+                              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-300" title="Created via environment variables. Cannot be modified or deleted via UI.">
                                 Env Admin
                               </span>
                             <% end %>
@@ -864,7 +853,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                     </td>
                     <td class="py-3.5 px-4">
                       <div class="flex items-center gap-2">
-                        <span class="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-bold bg-gray-100 text-gray-700">
+                        <span class="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700">
                           <%= user["tokens_count"] %> tokens
                         </span>
                       </div>
@@ -888,7 +877,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                         </button>
 
                         <details class="exo-menu">
-                          <summary class="px-2 py-1 text-xs font-bold text-gray-500 hover:text-gray-800 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg cursor-pointer">
+                          <summary class="px-2 py-1 text-xs font-semibold text-gray-500 hover:text-gray-800 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg cursor-pointer">
                             ⋯
                           </summary>
                           <div class="exo-menu-panel">
@@ -1244,7 +1233,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
 
             <%= if @selected_user["email"] do %>
               <div>
-                <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Email</h4>
+                <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Email</h4>
                 <p class="text-xs font-mono text-gray-800 bg-gray-50 p-2 rounded-lg border border-gray-200">
                   <%= @selected_user["email"] %>
                 </p>
@@ -1257,7 +1246,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                 phx-click="capture_player"
                 phx-value-player={@selected_user["player_id"]}
                 phx-target={@myself}
-                class="px-2.5 py-1.5 text-xs font-bold text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-200 rounded-xl transition-colors inline-flex items-center gap-1.5"
+                class="px-2.5 py-1.5 text-xs font-semibold text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-200 rounded-xl transition-colors inline-flex items-center gap-1.5"
                 title="Keep this account's full action payloads in memory for 60 seconds"
               >
                 <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1270,7 +1259,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                 phx-click="stop_capture_player"
                 phx-value-player={@selected_user["player_id"]}
                 phx-target={@myself}
-                class="px-2.5 py-1.5 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-xl transition-colors"
+                class="px-2.5 py-1.5 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-xl transition-colors"
               >
                 Stop capture
               </button>
@@ -1281,7 +1270,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
 
             <div>
               <div class="flex items-center justify-between mb-2">
-                <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Granted Scopes</h4>
+                <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Granted Scopes</h4>
                 <%= unless sel_is_protected do %>
                   <button
                     phx-click="open_roles_modal"
@@ -1312,7 +1301,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                 phx-click="open_reset_password_modal"
                 phx-value-player_id={@selected_user["player_id"]}
                 phx-target={@myself}
-                class="w-full py-2 text-xs font-bold text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-200 rounded-xl transition-colors text-center"
+                class="w-full py-2 text-xs font-semibold text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-200 rounded-xl transition-colors text-center"
               >
                 Reset Password
               </button>
@@ -1320,7 +1309,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
 
             <div>
               <div class="flex items-center justify-between mb-2">
-                <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Active Bearer Tokens</h4>
+                <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Active Bearer Tokens</h4>
                 <button
                   phx-click="issue_token"
                   phx-value-player_id={@selected_user["player_id"]}
@@ -1343,7 +1332,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                       <button
                         phx-click={Phoenix.LiveView.JS.dispatch("exoforge:clip", detail: %{text: token})}
                         title="Copy Token"
-                        class="text-xs text-primary-600 hover:text-primary-800 font-bold shrink-0"
+                        class="text-xs text-primary-600 hover:text-primary-800 font-semibold shrink-0"
                       >
                         Copy
                       </button>
@@ -1356,14 +1345,14 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
             <%= if @user_inspect_tab == "events" do %>
               <div class="space-y-2">
                 <div class="flex flex-wrap items-center justify-between gap-2">
-                  <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Events triggered by this account</h4>
+                  <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Events triggered by this account</h4>
                   <div class="flex items-center gap-1.5 text-[10px] text-gray-400">
                     <span class="font-mono"><%= @user_events_total %> stored</span>
                     <button
                       type="button"
                       phx-click="refresh_user_events"
                       phx-target={@myself}
-                      class="px-1.5 py-0.5 rounded bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold"
+                      class="px-1.5 py-0.5 rounded bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold"
                       title="Reload the page"
                     >
                       ↻
@@ -1372,7 +1361,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                       type="button"
                       phx-click="toggle_user_events_archive"
                       phx-target={@myself}
-                      class={"px-1.5 py-0.5 rounded font-bold border #{if @user_events_archive, do: "bg-primary-50 border-primary-200 text-primary-700", else: "bg-gray-100 border-gray-200 text-gray-600"}"}
+                      class={"px-1.5 py-0.5 rounded font-semibold border #{if @user_events_archive, do: "bg-primary-50 border-primary-200 text-primary-700", else: "bg-gray-100 border-gray-200 text-gray-600"}"}
                       title="Search archived days too (capped)"
                     >
                       Archive
@@ -1391,7 +1380,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                       <div class={"p-2.5 rounded-xl border text-xs #{if errored?, do: "bg-red-50/70 border-red-200", else: "bg-gray-50 border-gray-200"}"}>
                         <div class="flex flex-wrap items-center justify-between gap-2">
                           <div class="flex items-center gap-2 min-w-0">
-                            <span class={"px-1.5 py-0.5 rounded font-mono font-bold text-[10px] border #{if errored?, do: "bg-red-100 text-red-700 border-red-200", else: "bg-white text-primary-700 border-primary-200"}"}>
+                            <span class={"px-1.5 py-0.5 rounded font-mono font-semibold text-[10px] border #{if errored?, do: "bg-red-100 text-red-700 border-red-200", else: "bg-white text-primary-700 border-primary-200"}"}>
                               <%= ev.event %>
                             </span>
                             <%= if ev[:origin] not in [nil, ""] and to_string(ev[:origin]) != to_string(@selected_user["player_id"]) do %>
@@ -1416,7 +1405,7 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                         </div>
 
                         <details class="group mt-1">
-                          <summary class="cursor-pointer select-none text-[10px] font-bold text-gray-500 uppercase tracking-wider list-none">
+                          <summary class="cursor-pointer select-none text-[10px] font-semibold text-gray-500 uppercase tracking-wider list-none">
                             <span class="group-open:hidden">▸ Payload</span>
                             <span class="hidden group-open:inline">▾ Payload</span>
                           </summary>
@@ -1486,14 +1475,14 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                 phx-value-player_id={@selected_user["player_id"]}
                 phx-target={@myself}
                 data-confirm={"Are you sure you want to permanently delete account '#{@selected_user["name"] || @selected_user["player_id"]}'?"}
-                class="w-full py-2 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-colors"
+                class="w-full py-2 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-colors"
               >
                 Delete Account
               </button>
             <% end %>
             <button
               phx-click="close_focus"
-              class="w-full py-2 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+              class="w-full py-2 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
             >
               Close
             </button>

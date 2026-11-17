@@ -55,7 +55,7 @@ defmodule Exoforge.Std.DashboardViews.UserPlayersTab do
     ~H"""
     <div class="mt-5 space-y-3">
       <div class="flex items-center justify-between">
-        <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Linked Players</h4>
+        <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Linked Players</h4>
         <span class="text-[10px] font-mono text-gray-400"><%= length(@players) %></span>
       </div>
 
@@ -76,8 +76,8 @@ defmodule Exoforge.Std.DashboardViews.UserPlayersTab do
               class="block p-3 bg-gray-50 hover:bg-primary-500/10 border border-gray-200 hover:border-primary-500/30 rounded-xl transition-colors"
             >
               <div class="flex items-center justify-between">
-                <span class="text-xs font-bold text-gray-900"><%= name %></span>
-                <span class="text-[10px] font-bold text-emerald-700"><%= status %></span>
+                <span class="text-xs font-semibold text-gray-900"><%= name %></span>
+                <span class="text-[10px] font-semibold text-emerald-700"><%= status %></span>
               </div>
               <div class="text-[10px] font-mono text-gray-500 mt-0.5"><%= pid %></div>
               <div class="text-[10px] text-gray-500 mt-1">

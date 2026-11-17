@@ -292,14 +292,14 @@ defmodule Exoforge.Std.Dashboard.ResourceLive do
           <a
             href={"data:#{if @export_format == "CSV", do: "text/csv", else: "application/json"};charset=utf-8," <> URI.encode(@export_content)}
             download={@export_filename}
-            class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-xl text-xs font-bold transition-colors inline-block"
+            class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-xl text-xs font-semibold transition-colors inline-block"
           >
             Download <%= @export_filename %>
           </a>
           <button
             type="button"
             phx-click="close_export_modal"
-            class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition-colors"
+            class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-semibold transition-colors"
           >
             Close
           </button>

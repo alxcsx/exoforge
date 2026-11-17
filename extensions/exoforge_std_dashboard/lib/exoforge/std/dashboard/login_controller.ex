@@ -105,25 +105,25 @@ defmodule Exoforge.Std.Dashboard.LoginController do
             <span class="text-2xl font-semibold tracking-tight text-gray-900">FORGE</span>
           </div>
         </div>
-        <h1 class="text-lg font-bold text-gray-900 mb-1">Sign in to the Studio</h1>
+        <h1 class="text-lg font-semibold text-gray-900 mb-1">Sign in to the Studio</h1>
         <p class="text-xs text-gray-500 mb-6">Enter your studio credentials to continue.</p>
         #{error_html}
         <form action="/login" method="post" class="space-y-4">
           <input type="hidden" name="_csrf_token" value="#{csrf}" />
           <div>
-            <label class="block text-xs font-bold text-gray-600 mb-1.5" for="email">Email / Account ID</label>
+            <label class="block text-xs font-semibold text-gray-600 mb-1.5" for="email">Email / Account ID</label>
             <input id="email" name="email" type="text" required autocomplete="username"
                    placeholder="admin@exoforge.local"
                    class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 focus:outline-none focus:border-primary-500" />
           </div>
           <div>
-            <label class="block text-xs font-bold text-gray-600 mb-1.5" for="password">Password</label>
+            <label class="block text-xs font-semibold text-gray-600 mb-1.5" for="password">Password</label>
             <input id="password" name="password" type="password" required autocomplete="current-password"
                    placeholder="••••••••"
                    class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 focus:outline-none focus:border-primary-500" />
           </div>
           <button type="submit"
-                  class="w-full rounded-xl bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold py-2.5 transition-colors shadow-sm">
+                  class="w-full rounded-xl bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold py-2.5 transition-colors shadow-sm">
             Sign in
           </button>
         </form>

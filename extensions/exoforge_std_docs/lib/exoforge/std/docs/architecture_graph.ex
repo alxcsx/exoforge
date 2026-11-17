@@ -357,7 +357,8 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       latency: "0.5 - 1.2 ms (Network RTT)",
       badge: "Ingress",
       color: "blue",
-      details: "The Unity SDK formats the typed C# request into canonical JSON framing. An async Task is registered in the pending queue awaiting response with matching request id."
+      details:
+        "The Unity SDK formats the typed C# request into canonical JSON framing. An async Task is registered in the pending queue awaiting response with matching request id."
     },
     %{
       step: 2,
@@ -384,7 +385,8 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       latency: "< 0.05 ms",
       badge: "Security",
       color: "violet",
-      details: "Clients can never forge player_id or scopes. The gateway validates the cryptographic session token issued by the auth extension and stamps the verified context."
+      details:
+        "Clients can never forge player_id or scopes. The gateway validates the cryptographic session token issued by the auth extension and stamps the verified context."
     },
     %{
       step: 3,
@@ -406,7 +408,8 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       latency: "< 0.02 ms (Lockless)",
       badge: "Kernel",
       color: "amber",
-      details: "Pure lockless in-memory resolution. If the caller has required scope (:guest, :player, :server, :studio), the request routes immediately to the registered worker."
+      details:
+        "Pure lockless in-memory resolution. If the caller has required scope (:guest, :player, :server, :studio), the request routes immediately to the registered worker."
     },
     %{
       step: 4,
@@ -426,7 +429,8 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       latency: "0.2 - 0.8 ms",
       badge: "Execution",
       color: "emerald",
-      details: "The framework-dependent single-file .NET worker deserializes arguments into typed records. Roslyn-generated dispatch maps method directly without reflection overhead."
+      details:
+        "The framework-dependent single-file .NET worker deserializes arguments into typed records. Roslyn-generated dispatch maps method directly without reflection overhead."
     },
     %{
       step: 5,
@@ -445,7 +449,8 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       latency: "< 0.3 ms",
       badge: "Persistence",
       color: "cyan",
-      details: "Each extension has its own isolated schema namespace (e.g. ext_snake_game). No extension can access or modify another extension's data without authorized contracts."
+      details:
+        "Each extension has its own isolated schema namespace (e.g. ext_snake_game). No extension can access or modify another extension's data without authorized contracts."
     },
     %{
       step: 6,
@@ -470,7 +475,8 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       latency: "< 0.1 ms framing",
       badge: "Egress",
       color: "blue",
-      details: "The gateway writes the JSON frame back down the client socket. In Unity, the matching Task completion source is resolved and returns the strongly-typed C# record."
+      details:
+        "The gateway writes the JSON frame back down the client socket. In Unity, the matching Task completion source is resolved and returns the strongly-typed C# record."
     }
   ]
 
@@ -522,7 +528,8 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       latency: "0.07 ms verified SLA",
       badge: "Kernel",
       color: "amber",
-      details: "Cluster distributed pub/sub delivers messages directly to subscriber worker processes with zero central serialization bottleneck (0.07 ms verified SLA to 50 concurrent subscribers)."
+      details:
+        "Cluster distributed pub/sub delivers messages directly to subscriber worker processes with zero central serialization bottleneck (0.07 ms verified SLA to 50 concurrent subscribers)."
     },
     %{
       step: 3,
@@ -584,11 +591,11 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       <!-- Section Header -->
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-200">
         <div>
-          <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-primary-50 text-primary-700 border border-primary-200 text-[10px] font-bold">
+          <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-primary-50 text-primary-700 border border-primary-200 text-[10px] font-semibold">
             
             <span>Progressive Disclosure Architecture &amp; Execution Pipeline</span>
           </div>
-          <h2 class="text-xl font-bold text-gray-900 tracking-tight mt-1">
+          <h2 class="text-xl font-semibold text-gray-900 tracking-tight mt-1">
             System Topology, Packages &amp; Execution Flow
           </h2>
           <p class="text-xs text-gray-500">
@@ -602,7 +609,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
             type="button"
             onclick="document.getElementById('arch-view-graph').classList.remove('hidden'); document.getElementById('arch-view-workflow').classList.add('hidden'); document.getElementById('btn-tab-graph').classList.add('bg-white', 'text-primary-700', 'shadow-xs'); document.getElementById('btn-tab-workflow').classList.remove('bg-white', 'text-primary-700', 'shadow-xs');"
             id="btn-tab-graph"
-            class="px-3.5 py-1.5 rounded-lg bg-white text-primary-700 shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+            class="px-3.5 py-1.5 rounded-lg bg-white text-primary-700 shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
           >
             <.studio_icon icon="graph" class="w-3.5 h-3.5" />
             <span>Network Architecture</span>
@@ -611,7 +618,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
             type="button"
             onclick="document.getElementById('arch-view-workflow').classList.remove('hidden'); document.getElementById('arch-view-graph').classList.add('hidden'); document.getElementById('btn-tab-workflow').classList.add('bg-white', 'text-primary-700', 'shadow-xs'); document.getElementById('btn-tab-graph').classList.remove('bg-white', 'text-primary-700', 'shadow-xs');"
             id="btn-tab-workflow"
-            class="px-3.5 py-1.5 rounded-lg text-gray-600 hover:text-gray-900 transition-all flex items-center gap-1.5 cursor-pointer"
+            class="px-3.5 py-1.5 rounded-lg text-gray-600 hover:text-gray-900 transition-colors flex items-center gap-1.5 cursor-pointer"
           >
             <.studio_icon icon="bolt" class="w-3.5 h-3.5" />
             <span>Sequential Workflow Cascade</span>
@@ -626,7 +633,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
           <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div class="space-y-2 max-w-2xl">
               <div class="flex items-center gap-2">
-                <span class="text-xs font-bold font-mono tracking-wider px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                <span class="text-xs font-semibold font-mono tracking-wider px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
                   CORE PHILOSOPHY
                 </span>
                 <span class="text-xs text-slate-400">Microkernel &amp; Pluggable Extensions</span>
@@ -641,7 +648,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
 
             <!-- Rule of Thumb Card -->
             <div class="bg-slate-800/90 p-4 rounded-xl border border-slate-700 md:max-w-xs shrink-0 space-y-2 text-xs">
-              <div class="font-bold text-amber-400 flex items-center gap-1.5">
+              <div class="font-semibold text-amber-400 flex items-center gap-1.5">
                 <.studio_icon icon="target" class="w-3.5 h-3.5" />
                 <span>Rule of Thumb</span>
               </div>
@@ -662,7 +669,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
               type="button"
               onclick="window.exoHighlightPackage('all')"
               id="pkg-btn-all"
-              class="px-2.5 py-1 rounded-lg bg-slate-900 text-white shadow-2xs transition-all cursor-pointer text-xs"
+              class="px-2.5 py-1 rounded-lg bg-slate-900 text-white shadow-2xs transition-colors cursor-pointer text-xs"
             >
               All Layers
             </button>
@@ -670,7 +677,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
               type="button"
               onclick="window.exoHighlightPackage('kernel')"
               id="pkg-btn-kernel"
-              class="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-all cursor-pointer text-xs flex items-center gap-1"
+              class="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors cursor-pointer text-xs flex items-center gap-1"
             >
               <.studio_icon icon="bolt" class="w-3.5 h-3.5" />
               <span>Kernel Core</span>
@@ -679,7 +686,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
               type="button"
               onclick="window.exoHighlightPackage('extension')"
               id="pkg-btn-extension"
-              class="px-2.5 py-1 rounded-lg bg-primary-50 text-primary-700 border border-primary-200 hover:bg-primary-100 transition-all cursor-pointer text-xs flex items-center gap-1"
+              class="px-2.5 py-1 rounded-lg bg-primary-50 text-primary-700 border border-primary-200 hover:bg-primary-100 transition-colors cursor-pointer text-xs flex items-center gap-1"
             >
               <.studio_icon icon="box" class="w-3.5 h-3.5" />
               <span>Extensions</span>
@@ -688,7 +695,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
               type="button"
               onclick="window.exoHighlightPackage('internal')"
               id="pkg-btn-internal"
-              class="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-all cursor-pointer text-xs flex items-center gap-1"
+              class="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors cursor-pointer text-xs flex items-center gap-1"
             >
               <.studio_icon icon="save" class="w-3.5 h-3.5" />
               <span>Storage</span>
@@ -698,7 +705,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
           <!-- Canvas Controls: Zoom, Reset, Expand All & Maximize -->
           <div class="flex items-center gap-2">
             <!-- Zoom Controls -->
-            <div class="flex items-center bg-gray-100 rounded-xl border border-gray-200/80 p-0.5 text-xs font-mono font-bold text-gray-700">
+            <div class="flex items-center bg-gray-100 rounded-xl border border-gray-200/80 p-0.5 text-xs font-mono font-semibold text-gray-700">
               <button
                 type="button"
                 onclick="window.ExoGraphEngine.zoom('arch-graph', 0.85)"
@@ -731,14 +738,14 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
               <button
                 type="button"
                 onclick="window.ExoGraphEngine.expandAll('arch-graph')"
-                class="px-2.5 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold transition-all cursor-pointer"
+                class="px-2.5 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold transition-colors cursor-pointer"
               >
                 Expand All
               </button>
               <button
                 type="button"
                 onclick="window.ExoGraphEngine.collapseAll('arch-graph')"
-                class="px-2.5 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold transition-all cursor-pointer"
+                class="px-2.5 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold transition-colors cursor-pointer"
               >
                 Collapse All
               </button>
@@ -748,7 +755,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
             <button
               type="button"
               onclick="document.getElementById('arch-graph-modal').classList.remove('hidden'); setTimeout(function() { window.ExoGraphEngine.fit('modal-arch-graph'); }, 50);"
-              class="px-3 py-1.5 rounded-xl bg-primary-50 hover:bg-primary-100 text-primary-700 border border-primary-200 transition-all cursor-pointer text-xs font-bold flex items-center gap-1.5 shadow-2xs"
+              class="px-3 py-1.5 rounded-xl bg-primary-50 hover:bg-primary-100 text-primary-700 border border-primary-200 transition-colors cursor-pointer text-xs font-semibold flex items-center gap-1.5 shadow-2xs"
             >
               <.studio_icon icon="monitor" class="w-3.5 h-3.5" />
               <span>Maximize Diagram</span>
@@ -790,7 +797,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
         <!-- Interactive Workflow Stepper Bar -->
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-gray-200/80 shadow-2xs">
           <div>
-            <h3 class="text-sm font-bold text-gray-900">Execution Pipeline Stepper</h3>
+            <h3 class="text-sm font-semibold text-gray-900">Execution Pipeline Stepper</h3>
             <p class="text-xs text-gray-500">Interactive step-by-step trace of packets across boundaries.</p>
           </div>
 
@@ -801,7 +808,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
                 type="button"
                 onclick="document.getElementById('cascade-action-workflow').classList.remove('hidden'); document.getElementById('cascade-event-workflow').classList.add('hidden'); document.getElementById('btn-wf-action').classList.add('bg-white', 'text-primary-700', 'shadow-xs'); document.getElementById('btn-wf-event').classList.remove('bg-white', 'text-primary-700', 'shadow-xs'); window._wfType = 'action'; window.ExoGraphEngine.stepWorkflow(1, 'action');"
                 id="btn-wf-action"
-                class="px-3 py-1.5 rounded-lg bg-white text-primary-700 shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+                class="px-3 py-1.5 rounded-lg bg-white text-primary-700 shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
               >
                 <.studio_icon icon="target" class="w-3.5 h-3.5" />
                 <span>Action RPC (6 Steps)</span>
@@ -810,7 +817,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
                 type="button"
                 onclick="document.getElementById('cascade-event-workflow').classList.remove('hidden'); document.getElementById('cascade-action-workflow').classList.add('hidden'); document.getElementById('btn-wf-event').classList.add('bg-white', 'text-primary-700', 'shadow-xs'); document.getElementById('btn-wf-action').classList.remove('bg-white', 'text-primary-700', 'shadow-xs'); window._wfType = 'event'; window.ExoGraphEngine.stepWorkflow(1, 'event');"
                 id="btn-wf-event"
-                class="px-3 py-1.5 rounded-lg text-gray-600 hover:text-gray-900 transition-all cursor-pointer flex items-center gap-1.5"
+                class="px-3 py-1.5 rounded-lg text-gray-600 hover:text-gray-900 transition-colors cursor-pointer flex items-center gap-1.5"
               >
                 <.studio_icon icon="radio" class="w-3.5 h-3.5" />
                 <span>Event Pub/Sub (4 Steps)</span>
@@ -826,11 +833,11 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
               >
                 ◀ Prev
               </button>
-              <span id="trace-step-counter" class="px-2.5 text-xs font-mono font-bold text-primary-700">Step 1</span>
+              <span id="trace-step-counter" class="px-2.5 text-xs font-mono font-semibold text-primary-700">Step 1</span>
               <button
                 type="button"
                 onclick="window._activeStep = Math.min(6, (window._activeStep || 1) + 1); window.ExoGraphEngine.stepWorkflow(window._activeStep, window._wfType || 'action');"
-                class="px-2.5 py-1 rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold shadow-2xs cursor-pointer"
+                class="px-2.5 py-1 rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold shadow-2xs cursor-pointer"
               >
                 Next ▶
               </button>
@@ -857,13 +864,13 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
               </div>
 
               <!-- Expandable Accordion Card -->
-              <details class="group flex-1 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden transition-all duration-200 hover:border-primary-300">
+              <details class="group flex-1 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden transition-colors duration-200 hover:border-primary-300">
                 <summary class="p-4 flex items-center justify-between gap-3 cursor-pointer select-none list-none">
                   <div class="flex items-center gap-3">
                     <div>
                       <div class="flex items-center gap-2">
-                        <span class="font-bold text-gray-900 text-sm"><%= step.title %></span>
-                        <span class={"text-[10px] font-mono font-bold px-1.5 py-0.5 rounded uppercase #{case step.color do
+                        <span class="font-semibold text-gray-900 text-sm"><%= step.title %></span>
+                        <span class={"text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded uppercase #{case step.color do
                           "blue" -> "bg-blue-50 text-blue-700 border border-blue-200"
                           "violet" -> "bg-primary-50 text-primary-700 border border-primary-200"
                           "amber" -> "bg-amber-50 text-amber-700 border border-amber-200"
@@ -881,7 +888,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
                   </div>
 
                   <div class="flex items-center gap-3">
-                    <span class="text-[11px] font-mono font-bold text-gray-500 bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-200">
+                    <span class="text-[11px] font-mono font-semibold text-gray-500 bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-200">
                       <.studio_icon icon="timeline" class="w-3.5 h-3.5" /> <%= step.latency %>
                     </span>
                     <svg class="w-5 h-5 text-gray-400 group-open:rotate-180 transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -897,12 +904,12 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
                   </p>
 
                   <div class="relative group/code">
-                    <div class="flex items-center justify-between text-[10px] font-mono font-bold text-gray-500 uppercase tracking-wider mb-1">
+                    <div class="flex items-center justify-between text-[10px] font-mono font-semibold text-gray-500 uppercase tracking-wider mb-1">
                       <span>Wire Frame / Code Execution:</span>
                       <button
                         type="button"
                         onclick="window.exoCopyCode && window.exoCopyCode(this)"
-                        class="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-gray-200 hover:bg-gray-300 text-gray-700 flex items-center gap-1 cursor-pointer"
+                        class="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-gray-200 hover:bg-gray-300 text-gray-700 flex items-center gap-1 cursor-pointer"
                       >
                         <span class="copy-icon"><.studio_icon icon="clipboard" class="w-3.5 h-3.5" /></span>
                         <span class="copy-text">Copy</span>
@@ -934,13 +941,13 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
               </div>
 
               <!-- Expandable Accordion Card -->
-              <details class="group flex-1 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden transition-all duration-200 hover:border-primary-300">
+              <details class="group flex-1 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden transition-colors duration-200 hover:border-primary-300">
                 <summary class="p-4 flex items-center justify-between gap-3 cursor-pointer select-none list-none">
                   <div class="flex items-center gap-3">
                     <div>
                       <div class="flex items-center gap-2">
-                        <span class="font-bold text-gray-900 text-sm"><%= step.title %></span>
-                        <span class={"text-[10px] font-mono font-bold px-1.5 py-0.5 rounded uppercase #{case step.color do
+                        <span class="font-semibold text-gray-900 text-sm"><%= step.title %></span>
+                        <span class={"text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded uppercase #{case step.color do
                           "blue" -> "bg-blue-50 text-blue-700 border border-blue-200"
                           "violet" -> "bg-primary-50 text-primary-700 border border-primary-200"
                           "amber" -> "bg-amber-50 text-amber-700 border border-amber-200"
@@ -957,7 +964,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
                   </div>
 
                   <div class="flex items-center gap-3">
-                    <span class="text-[11px] font-mono font-bold text-gray-500 bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-200">
+                    <span class="text-[11px] font-mono font-semibold text-gray-500 bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-200">
                       <.studio_icon icon="timeline" class="w-3.5 h-3.5" /> <%= step.latency %>
                     </span>
                     <svg class="w-5 h-5 text-gray-400 group-open:rotate-180 transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -973,12 +980,12 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
                   </p>
 
                   <div class="relative group/code">
-                    <div class="flex items-center justify-between text-[10px] font-mono font-bold text-gray-500 uppercase tracking-wider mb-1">
+                    <div class="flex items-center justify-between text-[10px] font-mono font-semibold text-gray-500 uppercase tracking-wider mb-1">
                       <span>Wire Event Frame:</span>
                       <button
                         type="button"
                         onclick="window.exoCopyCode && window.exoCopyCode(this)"
-                        class="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-gray-200 hover:bg-gray-300 text-gray-700 flex items-center gap-1 cursor-pointer"
+                        class="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-gray-200 hover:bg-gray-300 text-gray-700 flex items-center gap-1 cursor-pointer"
                       >
                         <span class="copy-icon"><.studio_icon icon="clipboard" class="w-3.5 h-3.5" /></span>
                         <span class="copy-text">Copy</span>
@@ -1001,14 +1008,14 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
             <div class="flex items-center gap-3">
               <span class="text-xl"><.studio_icon icon="graph" class="w-3.5 h-3.5" /></span>
               <div>
-                <h3 class="text-base font-bold text-white tracking-tight">Exoforge UML Architecture Diagram</h3>
+                <h3 class="text-base font-semibold text-white tracking-tight">Exoforge UML Architecture Diagram</h3>
                 <p class="text-xs text-slate-400">Progressive Disclosure, 1-Hop Spotlighting, and Interconnect Topology</p>
               </div>
             </div>
 
             <!-- Modal Controls -->
             <div class="flex items-center gap-3">
-              <div class="flex items-center bg-slate-800 rounded-xl p-0.5 text-xs font-mono font-bold text-slate-200">
+              <div class="flex items-center bg-slate-800 rounded-xl p-0.5 text-xs font-mono font-semibold text-slate-200">
                 <button
                   type="button"
                   onclick="window.ExoGraphEngine.zoom('modal-arch-graph', 0.85)"
@@ -1036,7 +1043,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
               <button
                 type="button"
                 onclick="document.getElementById('arch-graph-modal').classList.add('hidden');"
-                class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+                class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5"
               >
                 <span>✕</span>
                 <span>Close Fullscreen</span>
@@ -1105,7 +1112,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
           <button
             type="button"
             onclick="window.ExoGraphEngine.clearSpotlight()"
-            class="w-7 h-7 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center font-bold text-xs transition-colors cursor-pointer"
+            class="w-7 h-7 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center font-semibold text-xs transition-colors cursor-pointer"
             title="Dismiss Inspector"
           >
             ✕
@@ -1113,7 +1120,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
         </div>
 
         <div class="flex items-center justify-between">
-          <span class="drawer-badge text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
+          <span class="drawer-badge text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
             KERNEL [IMMUTABLE]
           </span>
           <span class="drawer-package text-[11px] font-mono text-slate-400">
@@ -1123,7 +1130,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
 
         <!-- Description -->
         <div class="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800/80">
-          <div class="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider mb-1">
+          <div class="text-[10px] font-mono font-semibold text-slate-400 uppercase tracking-wider mb-1">
             Subsystem Role &amp; Responsibility
           </div>
           <p class="drawer-desc text-xs text-slate-200 leading-relaxed">
@@ -1133,15 +1140,15 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
 
         <!-- Protocol & Transport -->
         <div class="bg-slate-800/40 p-3 rounded-xl border border-slate-700/60 flex items-center justify-between">
-          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Interconnect</span>
-          <span class="drawer-protocol text-xs font-bold text-primary-300 font-mono">
+          <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Interconnect</span>
+          <span class="drawer-protocol text-xs font-semibold text-primary-300 font-mono">
             In-Memory Zero-Copy
           </span>
         </div>
 
         <!-- 1-Hop Upstream Dependencies (What calls or supplies this) -->
         <div class="space-y-1.5">
-          <div class="text-[10px] font-mono font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1">
+          <div class="text-[10px] font-mono font-semibold text-amber-400 uppercase tracking-wider flex items-center gap-1">
             <span>▲</span> <span>Direct Upstream Dependencies:</span>
           </div>
           <div class="drawer-upstream-list flex flex-wrap gap-1.5">
@@ -1151,7 +1158,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
 
         <!-- 1-Hop Downstream Consumers (What depends on this) -->
         <div class="space-y-1.5">
-          <div class="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+          <div class="text-[10px] font-mono font-semibold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
             <span>▼</span> <span>Direct Downstream Consumers:</span>
           </div>
           <div class="drawer-downstream-list flex flex-wrap gap-1.5">
@@ -1269,7 +1276,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
             stroke="#475569"
             stroke-width="1.8"
             marker-end={"url(##{@prefix}net-arrow)"}
-            class="graph-edge opacity-60 transition-all duration-200"
+            class="graph-edge opacity-60 transition-[stroke,opacity] duration-200"
             data-edge-from={edge.from}
             data-edge-to={edge.to}
           />
@@ -1324,7 +1331,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
               end}
               stroke-width={if comp.category == "kernel", do: "2", else: "1.4"}
               filter={"url(##{@prefix}net-shadow)"}
-              class="group-hover:stroke-white transition-all duration-150"
+              class="group-hover:stroke-white transition-[stroke] duration-150"
             />
 
             <!-- Top Meta Line: Stereotype & Category Badge -->
@@ -1434,17 +1441,17 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
         # JSON numbers: : 1234
         |> String.replace(
           ~r/(:\s*)([0-9]+(?:\.[0-9]+)?)/,
-          "\\1<span class=\"text-amber-300 font-bold\">\\2</span>"
+          "\\1<span class=\"text-amber-300 font-semibold\">\\2</span>"
         )
         # JSON booleans & null
         |> String.replace(
           ~r/(:\s*)(true|false|null)/,
-          "\\1<span class=\"text-primary-300 font-bold\">\\2</span>"
+          "\\1<span class=\"text-primary-300 font-semibold\">\\2</span>"
         )
         # SQL keywords
         |> String.replace(
           ~r/\b(INSERT INTO|VALUES|ON CONFLICT|DO UPDATE SET|SELECT|FROM|WHERE)\b/,
-          "<span class=\"text-primary-400 font-bold\">\\1</span>"
+          "<span class=\"text-primary-400 font-semibold\">\\1</span>"
         )
     end
   end

@@ -136,6 +136,20 @@ defmodule Exoforge.Std.Dashboard.Layouts do
             }
           };
 
+          // Motion respects the OS preference: instant jumps when the user asks for less motion.
+          window.exoPrefersReducedMotion = function() {
+            return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+          };
+
+          window.exoScrollTop = function() {
+            window.scrollTo({ top: 0, behavior: window.exoPrefersReducedMotion() ? 'auto' : 'smooth' });
+          };
+
+          window.exoScrollIntoView = function(el, block) {
+            if (!el) return;
+            el.scrollIntoView({ behavior: window.exoPrefersReducedMotion() ? 'auto' : 'smooth', block: block || 'nearest' });
+          };
+
           // One-click Code Copier
           window.exoCopyCode = function(btn) {
             if (!btn) return;
@@ -489,7 +503,7 @@ defmodule Exoforge.Std.Dashboard.Layouts do
                   if (current === stepIndex) {
                     card.classList.add("ring-2", "ring-primary-500", "bg-primary-50/30");
                     if (details) details.open = true;
-                    card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                    window.exoScrollIntoView(card, "nearest");
                   } else {
                     card.classList.remove("ring-2", "ring-primary-500", "bg-primary-50/30");
                   }
@@ -586,7 +600,7 @@ defmodule Exoforge.Std.Dashboard.Layouts do
                     const el = this.el;
                     const kind = el.dataset.kind || "info";
                     const timer = setTimeout(() => {
-                      el.classList.add("opacity-0", "translate-x-4", "transition-all", "duration-300");
+                      el.classList.add("opacity-0", "translate-x-4", "transition-[opacity,transform]", "duration-300");
                       setTimeout(() => {
                         el.remove();
                         this.pushEvent("dismiss_toast", { kind: kind });
@@ -715,7 +729,7 @@ defmodule Exoforge.Std.Dashboard.Layouts do
                         console.error("[Exoforge MFE] Error loading module:", entry, err);
                         this.el.innerHTML = `
                           <div class="exo-callout-danger p-6 rounded-xl">
-                            <h3 class="font-bold text-sm">Failed to load plugin microfrontend</h3>
+                            <h3 class="font-semibold text-sm">Failed to load plugin microfrontend</h3>
                             <p class="text-xs mt-1 text-red-600 font-mono">${err && err.message ? err.message : String(err)}</p>
                             <p class="text-[11px] text-gray-500 mt-2 font-mono">Entry: ${entry}</p>
                           </div>
@@ -737,7 +751,7 @@ defmodule Exoforge.Std.Dashboard.Layouts do
                         const target = document.querySelector(hash);
                         if (target) {
                           setTimeout(() => {
-                            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            window.exoScrollIntoView(target, 'start');
                           }, 90);
                         }
                       } catch(_) {}

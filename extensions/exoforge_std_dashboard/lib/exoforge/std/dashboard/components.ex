@@ -249,7 +249,7 @@ defmodule Exoforge.Std.Dashboard.Components do
           Phoenix.HTML.html_escape(to_string(val || "active")) |> Phoenix.HTML.safe_to_string()
 
         Phoenix.HTML.raw("""
-        <span class="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+        <span class="inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
           #{safe_val}
         </span>
         """)
@@ -374,11 +374,11 @@ defmodule Exoforge.Std.Dashboard.Components do
     ~H"""
     <div class="space-y-4">
       <div class="flex items-center justify-between">
-        <h4 class="text-xs font-bold text-gray-700 uppercase tracking-wider">Dynamic Attributes &lt;Key, Value&gt;</h4>
+        <h4 class="text-xs font-semibold text-gray-700 uppercase tracking-wider">Dynamic Attributes &lt;Key, Value&gt;</h4>
         <button
           type="button"
           phx-click={@on_add}
-          class="px-2.5 py-1 text-xs font-bold bg-primary-50 hover:bg-primary-100 text-primary-700 rounded-lg border border-primary-200 transition-colors flex items-center gap-1"
+          class="px-2.5 py-1 text-xs font-semibold bg-primary-50 hover:bg-primary-100 text-primary-700 rounded-lg border border-primary-200 transition-colors flex items-center gap-1"
         >
           <span>+ Add Field</span>
         </button>
@@ -397,7 +397,7 @@ defmodule Exoforge.Std.Dashboard.Components do
                 placeholder="attribute_name"
                 class="flex-1 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-mono text-gray-800 focus:outline-none focus:border-primary-500"
               />
-              <span class="text-gray-300 font-bold">:</span>
+              <span class="text-gray-300 font-semibold">:</span>
               <input
                 type="text"
                 value={attr[:value] || attr["value"]}

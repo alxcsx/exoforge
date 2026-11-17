@@ -100,8 +100,7 @@ defmodule Exoforge.Std.Dashboard.UiStandardTest do
           stripped = String.replace(line, @text_glyphs, ""),
           Regex.match?(@emoji, stripped),
           not allowed_emoji?(path, line),
-          do:
-            "#{Path.basename(path)}:#{number} emoji in studio chrome (use Components.icon / Icons.studio_icon)\n    #{String.trim(line)}"
+          do: "#{Path.basename(path)}:#{number} emoji in studio chrome (use Components.icon / Icons.studio_icon)\n    #{String.trim(line)}"
 
     assert violations == [],
            "emoji in studio chrome\n\n  " <> Enum.join(Enum.uniq(violations), "\n  ")
@@ -173,6 +172,40 @@ defmodule Exoforge.Std.Dashboard.UiStandardTest do
            Add the exact class (alpha step included) to the remap in
            extensions/exoforge_std_dashboard/priv/static/vendor/exoforge-studio.css.
            """
+  end
+
+  test "code-copy buttons stay visible and ringed for keyboard focus" do
+    path = Path.join(@docs_lib, "exoforge/std/docs/view.ex")
+
+    violations =
+      path
+      |> File.read!()
+      |> String.split("\n")
+      |> Enum.with_index(1)
+      |> Enum.filter(fn {line, _} -> String.contains?(line, "exoCopyCode") end)
+      |> Enum.reject(fn {line, _} ->
+        String.contains?(line, "focus-visible:opacity-100") and
+          String.contains?(line, "focus-visible:ring-2")
+      end)
+      |> Enum.map(fn {line, number} -> "view.ex:#{number}\n    #{String.trim(line)}" end)
+
+    assert violations == [],
+           "code-copy buttons need focus-visible visibility and a ring\n\n  " <>
+             Enum.join(violations, "\n  ")
+  end
+
+  test "scroll motion is gated behind reduced-motion preference" do
+    ungated = ~r/window\.scrollTo\(\{top: 0, behavior: 'smooth'\}\)|scrollIntoView\(\{ behavior: ['"]smooth/
+
+    violations =
+      for path <- @sources,
+          {line, number} <- path |> File.read!() |> String.split("\n") |> Enum.with_index(1),
+          Regex.match?(ungated, line),
+          do: "#{Path.basename(path)}:#{number}\n    #{String.trim(line)}"
+
+    assert violations == [],
+           "smooth scrolling must use the reduced-motion helper\n\n  " <>
+             Enum.join(Enum.uniq(violations), "\n  ")
   end
 
   defp assert_violations(pattern, description) do

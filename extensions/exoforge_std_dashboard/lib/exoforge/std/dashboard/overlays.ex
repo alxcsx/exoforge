@@ -66,10 +66,10 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                     class="w-full text-left p-3 rounded-xl hover:bg-primary-50/70 transition-colors flex items-center justify-between group"
                   >
                     <div>
-                      <span class="text-xs font-bold text-gray-800 group-hover:text-primary-800"><%= item.title %></span>
+                      <span class="text-xs font-semibold text-gray-800 group-hover:text-primary-800"><%= item.title %></span>
                       <p class="text-[11px] text-gray-400"><%= item.subtitle %></p>
                     </div>
-                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 group-hover:bg-primary-100 text-gray-600 group-hover:text-primary-700">
+                    <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 group-hover:bg-primary-100 text-gray-600 group-hover:text-primary-700">
                       <%= item.type %>
                     </span>
                   </button>
@@ -160,7 +160,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             <!-- Service & Action Selection Pickers -->
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label class="block text-[11px] font-bold text-gray-600 uppercase mb-1">Target Service</label>
+                <label class="block text-[11px] font-semibold text-gray-600 uppercase mb-1">Target Service</label>
                 <form id="action_service_picker_form" phx-change={@on_select_service}>
                   <select
                     name="service"
@@ -176,7 +176,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               </div>
 
               <div>
-                <label class="block text-[11px] font-bold text-gray-600 uppercase mb-1">Target Action</label>
+                <label class="block text-[11px] font-semibold text-gray-600 uppercase mb-1">Target Action</label>
                 <form id="action_name_picker_form" phx-change={@on_select_action}>
                   <select
                     name="action"
@@ -198,10 +198,10 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             <%= if @current_act do %>
               <div class="p-3 bg-gray-50/80 rounded-xl border border-gray-100 text-xs space-y-1">
                 <div class="flex items-center justify-between">
-                  <span class="font-bold text-gray-800 font-mono text-xs">
+                  <span class="font-semibold text-gray-800 font-mono text-xs">
                     <%= @current_svc.name %>.<%= @current_act.name %>
                   </span>
-                  <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary-100 text-primary-800 uppercase">
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-primary-100 text-primary-800 uppercase">
                     <%= @current_act.mode %>
                   </span>
                 </div>
@@ -213,7 +213,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             <form id="action_execution_form" phx-change={@on_change_form} phx-submit={@on_dispatch} class="space-y-4">
               <%= if @current_act && @current_act.params != [] do %>
                 <div class="space-y-2.5">
-                  <span class="block text-[11px] font-bold text-gray-600 uppercase tracking-wider">
+                  <span class="block text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                     Parameters (<%= length(@current_act.params) %>)
                   </span>
                   <div class="space-y-2">
@@ -225,9 +225,9 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                           <span class="font-mono text-gray-900"><%= param.name %></span>
                           <div class="flex items-center gap-1.5">
                             <%= if p_optional do %>
-                              <span class="text-[10px] text-gray-400 font-bold uppercase bg-gray-100 px-1 py-0.2 rounded">optional</span>
+                              <span class="text-[10px] text-gray-400 font-semibold uppercase bg-gray-100 px-1 py-0.2 rounded">optional</span>
                             <% else %>
-                              <span class="text-[10px] text-primary-700 font-bold uppercase bg-primary-50 px-1 py-0.2 rounded">required</span>
+                              <span class="text-[10px] text-primary-700 font-semibold uppercase bg-primary-50 px-1 py-0.2 rounded">required</span>
                             <% end %>
                             <span class="text-[10px] text-gray-500 font-mono bg-gray-100 px-1.5 py-0.2 rounded">
                               <%= p_type %>
@@ -285,7 +285,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               <% end %>
 
               <div>
-                <label class="block text-[11px] font-bold text-gray-600 uppercase mb-1">
+                <label class="block text-[11px] font-semibold text-gray-600 uppercase mb-1">
                   Caller Scopes (verified session scopes)
                 </label>
                 <div class="w-full px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-gray-500">
@@ -303,7 +303,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                 </button>
                 <button
                   type="submit"
-                  class="px-4 py-2 rounded-xl text-xs font-bold bg-primary-600 hover:bg-primary-700 text-white shadow-sm transition-all flex items-center gap-1.5 active:scale-95"
+                  class="px-4 py-2 rounded-lg text-xs font-medium bg-primary-600 hover:bg-primary-700 text-white shadow-sm transition-[background-color,transform] flex items-center gap-1.5 active:scale-95"
                 >
                   <span>Dispatch Action</span>
                   <.icon name="bolt" class="w-3.5 h-3.5" />
@@ -315,19 +315,19 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             <%= if @result != nil do %>
               <div class="mt-4 pt-4 border-t border-gray-100 space-y-2 animate-fade-in">
                 <div class="flex items-center justify-between">
-                  <span class="text-xs font-bold text-gray-700 uppercase">Execution Output</span>
+                  <span class="text-xs font-semibold text-gray-700 uppercase">Execution Output</span>
                   <div class="flex items-center gap-2">
                     <%= if match?({:ok, _}, @result) or @result == :ok do %>
-                      <span class="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">
+                      <span class="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-semibold border border-emerald-200">
                         SUCCESS (200)
                       </span>
                     <% else %>
-                      <span class="px-2 py-0.5 rounded-full bg-red-50 text-red-700 text-[10px] font-bold border border-red-200">
+                      <span class="px-2 py-0.5 rounded-full bg-red-50 text-red-700 text-[10px] font-semibold border border-red-200">
                         ERROR
                       </span>
                     <% end %>
                     <%= if @latency_ms do %>
-                      <span class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[10px] font-mono font-bold">
+                      <span class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[10px] font-mono font-semibold">
                         <%= @latency_ms %> ms
                       </span>
                     <% end %>
@@ -335,7 +335,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                       <button
                         type="button"
                         phx-click={Phoenix.LiveView.JS.dispatch("exoforge:clip", detail: %{text: @rid})}
-                        class="px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 text-[10px] font-mono font-bold border border-primary-200 hover:bg-primary-100"
+                        class="px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 text-[10px] font-mono font-semibold border border-primary-200 hover:bg-primary-100"
                         title="Copy request id"
                       >
                         rid <%= @rid %>
@@ -375,19 +375,19 @@ defmodule Exoforge.Std.Dashboard.Overlays do
   def event_stream_dock(assigns) do
     ~H"""
     <%= if @open do %>
-      <div class="fixed bottom-0 inset-x-0 z-40 bg-gray-950/95 text-gray-100 border-t border-gray-800 shadow-2xl backdrop-blur flex flex-col h-80 sm:h-96 transition-all duration-300 animate-fade-in">
+      <div class="fixed bottom-0 inset-x-0 z-40 bg-gray-950/95 text-gray-100 border-t border-gray-800 shadow-2xl backdrop-blur flex flex-col h-80 sm:h-96 transition-colors duration-300 animate-fade-in">
         <!-- Dock Top Bar -->
         <div class="px-4 py-2.5 bg-gray-900 border-b border-gray-800 flex flex-wrap items-center justify-between gap-3 text-xs">
           <div class="flex items-center gap-3">
             <div class="flex items-center gap-2">
               <span class={"w-2.5 h-2.5 rounded-full #{if @paused, do: "bg-amber-400", else: "bg-emerald-400 animate-pulse"}"}></span>
-              <span class="font-bold text-gray-200 tracking-tight">Cluster Event Stream (:pg / EventDispatcher)</span>
+              <span class="font-semibold text-gray-200 tracking-tight">Cluster Event Stream (:pg / EventDispatcher)</span>
             </div>
-            <span class="px-2 py-0.5 rounded-full bg-gray-800 font-mono font-bold text-[10px] text-gray-300 border border-gray-700">
+            <span class="px-2 py-0.5 rounded-full bg-gray-800 font-mono font-semibold text-[10px] text-gray-300 border border-gray-700">
               <%= length(@events) %> captured
             </span>
             <%= if @paused do %>
-              <span class="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30">
+              <span class="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-semibold border border-amber-500/30">
                 STREAM PAUSED
               </span>
             <% end %>
@@ -414,7 +414,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             <button
               type="button"
               phx-click={@on_pause}
-              class={"px-2.5 py-1 rounded-lg font-bold text-xs flex items-center gap-1 transition-colors #{if @paused, do: "bg-emerald-600 hover:bg-emerald-500 text-white", else: "bg-gray-800 hover:bg-gray-700 text-gray-300"}"}
+              class={"px-2.5 py-1 rounded-lg font-semibold text-xs flex items-center gap-1 transition-colors #{if @paused, do: "bg-emerald-600 hover:bg-emerald-500 text-white", else: "bg-gray-800 hover:bg-gray-700 text-gray-300"}"}
             >
               <%= if @paused do %>
                 <.icon name="play" class="w-3 h-3" /><span>Resume</span>
@@ -426,7 +426,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             <button
               type="button"
               phx-click={@on_simulate}
-              class="px-2.5 py-1 bg-primary-600 hover:bg-primary-500 text-white rounded-lg font-bold text-xs transition-colors flex items-center gap-1 shadow-sm"
+              class="px-2.5 py-1 bg-primary-600 hover:bg-primary-500 text-white rounded-lg font-semibold text-xs transition-colors flex items-center gap-1 shadow-sm"
               title="Broadcast simulated event to cluster"
             >
               <.icon name={:bolt} class="w-3 h-3" />
@@ -436,7 +436,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             <button
               type="button"
               phx-click={@on_clear}
-              class="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-gray-200 rounded-lg font-bold text-xs transition-colors"
+              class="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-gray-200 rounded-lg font-semibold text-xs transition-colors"
             >
               Clear
             </button>
@@ -467,7 +467,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               <div class="p-3 bg-gray-900/90 rounded-xl border border-gray-800/80 flex flex-col gap-1.5 hover:border-gray-700 transition-colors">
                 <div class="flex flex-wrap items-center justify-between gap-1.5 text-[11px]">
                   <div class="flex flex-wrap items-center gap-1.5">
-                    <span class="px-2 py-0.5 rounded bg-primary-950 text-primary-300 font-bold border border-primary-800/60 font-mono">
+                    <span class="px-2 py-0.5 rounded bg-primary-950 text-primary-300 font-semibold border border-primary-800/60 font-mono">
                       <%= ev.event %>
                     </span>
                     <span class="text-gray-500 text-[10px]"><%= ev.time %></span>
@@ -476,7 +476,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                         type="button"
                         phx-click="open_timeline"
                         phx-value-rid={rid}
-                        class="px-1.5 py-0.5 rounded bg-primary-950/80 border border-primary-700/60 text-primary-200 hover:text-white hover:border-primary-500 text-[10px] font-bold font-mono inline-flex items-center gap-1"
+                        class="px-1.5 py-0.5 rounded bg-primary-950/80 border border-primary-700/60 text-primary-200 hover:text-white hover:border-primary-500 text-[10px] font-semibold font-mono inline-flex items-center gap-1"
                         title="Open this event's request timeline"
                       >
                         <.icon name={:timeline} class="w-3 h-3" /> <%= rid %>
@@ -586,13 +586,13 @@ defmodule Exoforge.Std.Dashboard.Overlays do
           <div class="space-y-4">
             <!-- Cluster & Core Settings -->
             <div>
-              <span class="px-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Cluster &amp; Core</span>
+              <span class="px-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Cluster &amp; Core</span>
               <div class="mt-1.5 space-y-0.5">
                 <button
                   type="button"
                   phx-click="set_settings_tab"
                   phx-value-tab="project"
-                  class={"w-full text-left px-2.5 py-2 rounded-xl font-bold flex items-center gap-2 transition-all #{if @settings_tab == "project", do: "bg-primary-600 text-white shadow-sm border border-primary-600", else: "text-gray-600 hover:text-gray-900 hover:bg-gray-100"}"}
+                  class={"w-full text-left px-2.5 py-2 rounded-xl font-semibold flex items-center gap-2 transition-colors #{if @settings_tab == "project", do: "bg-primary-600 text-white shadow-sm border border-primary-600", else: "text-gray-600 hover:text-gray-900 hover:bg-gray-100"}"}
                 >
                   <.icon name="gear" class="w-3.5 h-3.5" />
                   <span>Metadata</span>
@@ -601,7 +601,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   type="button"
                   phx-click="set_settings_tab"
                   phx-value-tab="visual"
-                  class={"w-full text-left px-2.5 py-2 rounded-xl font-bold flex items-center gap-2 transition-all #{if @settings_tab == "visual", do: "bg-primary-600 text-white shadow-sm border border-primary-600", else: "text-gray-600 hover:text-gray-900 hover:bg-gray-100"}"}
+                  class={"w-full text-left px-2.5 py-2 rounded-xl font-semibold flex items-center gap-2 transition-colors #{if @settings_tab == "visual", do: "bg-primary-600 text-white shadow-sm border border-primary-600", else: "text-gray-600 hover:text-gray-900 hover:bg-gray-100"}"}
                 >
                   <.icon name="moon" class="w-3.5 h-3.5" />
                   <span>Visual Settings</span>
@@ -610,7 +610,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   type="button"
                   phx-click="set_settings_tab"
                   phx-value-tab="console"
-                  class={"w-full text-left px-2.5 py-2 rounded-xl font-bold flex items-center gap-2 transition-all #{if @settings_tab == "console", do: "bg-primary-600 text-white shadow-sm border border-primary-600", else: "text-gray-600 hover:text-gray-900 hover:bg-gray-100"}"}
+                  class={"w-full text-left px-2.5 py-2 rounded-xl font-semibold flex items-center gap-2 transition-colors #{if @settings_tab == "console", do: "bg-primary-600 text-white shadow-sm border border-primary-600", else: "text-gray-600 hover:text-gray-900 hover:bg-gray-100"}"}
                 >
                   <.icon name="monitor" class="w-3.5 h-3.5" />
                   <span>Live Console</span>
@@ -621,7 +621,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             <!-- Extension Settings Tabs -->
             <div>
               <div class="flex items-center justify-between px-2">
-                <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Extension Settings</span>
+                <span class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Extension Settings</span>
                 <span class="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-gray-200/80 text-gray-600">
                   <%= length(@settings_hooks) %>
                 </span>
@@ -635,7 +635,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                       type="button"
                       phx-click="set_settings_tab"
                       phx-value-tab={to_string(hook.id)}
-                      class={"w-full text-left px-2.5 py-2 rounded-xl font-bold flex items-center gap-2 transition-all #{if @settings_tab == to_string(hook.id), do: "bg-primary-600 text-white shadow-sm border border-primary-600", else: "text-gray-600 hover:text-gray-900 hover:bg-gray-100"}"}
+                      class={"w-full text-left px-2.5 py-2 rounded-xl font-semibold flex items-center gap-2 transition-colors #{if @settings_tab == to_string(hook.id), do: "bg-primary-600 text-white shadow-sm border border-primary-600", else: "text-gray-600 hover:text-gray-900 hover:bg-gray-100"}"}
                     >
                       <span><%= hook.icon %></span>
                       <span class="truncate"><%= hook.title %></span>
@@ -665,13 +665,13 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             <div class="space-y-4">
               <div class="flex items-center justify-between">
                 <div>
-                  <h4 class="text-sm font-bold text-gray-900 flex items-center gap-2">
+                  <h4 class="text-sm font-semibold text-gray-900 flex items-center gap-2">
                     <.icon name="gear" class="w-3.5 h-3.5" />
                     <span>Project &amp; Cluster Metadata</span>
                   </h4>
                   <p class="text-xs text-gray-500 mt-0.5">Global configuration, studio identity, and runtime telemetry.</p>
                 </div>
-                <span class="px-2.5 py-1 text-[10px] font-bold rounded-full bg-primary-50 text-primary-700 border border-primary-200">
+                <span class="px-2.5 py-1 text-[10px] font-semibold rounded-full bg-primary-50 text-primary-700 border border-primary-200">
                   Cluster-wide
                 </span>
               </div>
@@ -680,66 +680,66 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                 <div class="space-y-3 bg-gray-50 p-4 rounded-xl border border-gray-200/80">
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                      <label class="block font-bold text-gray-700 mb-1">Studio Name</label>
+                      <label class="block font-semibold text-gray-700 mb-1">Studio Name</label>
                       <input
                         type="text"
                         name="studio_name"
                         value={@studio_name}
                         placeholder="e.g. Acme Game Studio"
-                        class="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                        class="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
                       />
                     </div>
                     <div>
-                      <label class="block font-bold text-gray-700 mb-1">Project Title</label>
+                      <label class="block font-semibold text-gray-700 mb-1">Project Title</label>
                       <input
                         type="text"
                         name="project_name"
                         value={@project_name}
                         placeholder="e.g. Cyber Snake Arena"
-                        class="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                        class="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label class="block font-bold text-gray-700 mb-1">Description</label>
+                    <label class="block font-semibold text-gray-700 mb-1">Description</label>
                     <input
                       type="text"
                       name="description"
                       value={desc}
                       placeholder="e.g. Multiplayer competitive arcade backend"
-                      class="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                      class="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
                     />
                   </div>
 
                   <div>
-                    <label class="block font-bold text-gray-700 mb-1">Website / Docs URL</label>
+                    <label class="block font-semibold text-gray-700 mb-1">Website / Docs URL</label>
                     <input
                       type="text"
                       name="website_url"
                       value={url}
                       placeholder="e.g. https://mygame.com or https://docs.mygame.com"
-                      class="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-mono focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                      class="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-mono focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
                     />
                   </div>
 
                   <div>
                     <div class="flex items-center justify-between mb-1">
-                      <label class="block font-bold text-gray-700">Custom Metadata (JSON)</label>
+                      <label class="block font-semibold text-gray-700">Custom Metadata (JSON)</label>
                       <span class="text-[10px] text-gray-400">Extensible key-value properties</span>
                     </div>
                     <textarea
                       name="custom_json"
                       rows="3"
                       placeholder='{"genre": "arcade", "region": "us-east", "discord": "https://..."}'
-                      class="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-mono focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                      class="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-mono focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
                     ><%= custom_json %></textarea>
                   </div>
 
                   <div class="flex justify-end pt-1">
                     <button
                       type="submit"
-                      class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-xl transition-all shadow-sm hover:shadow flex items-center gap-1.5"
+                      class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg transition-[background-color,box-shadow] shadow-sm hover:shadow flex items-center gap-1.5"
                     >
                       <.icon name="save" class="w-3.5 h-3.5" />
                       <span>Save Metadata</span>
@@ -749,25 +749,25 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               </form>
 
               <div class="space-y-2 bg-gray-50/70 p-4 rounded-xl border border-gray-200/80">
-                <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Runtime Identifiers</span>
+                <span class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block">Runtime Identifiers</span>
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
                   <div class="p-2.5 bg-white border border-gray-200 rounded-lg min-w-0">
-                    <span class="text-[10px] font-bold text-gray-400 uppercase block">Version</span>
-                    <p class="text-sm font-bold text-gray-800 font-mono mt-0.5 truncate">v<%= @overview[:version] || Exoforge.BuildInfo.version() %></p>
+                    <span class="text-[10px] font-semibold text-gray-400 uppercase block">Version</span>
+                    <p class="text-sm font-semibold text-gray-800 font-mono mt-0.5 truncate">v<%= @overview[:version] || Exoforge.BuildInfo.version() %></p>
                   </div>
                   <div class="p-2.5 bg-white border border-gray-200 rounded-lg min-w-0 overflow-hidden">
-                    <span class="text-[10px] font-bold text-gray-400 uppercase block">Commit Hash</span>
-                    <p class="text-sm font-bold text-primary-700 font-mono mt-0.5 truncate" title={@overview[:commit_hash]}>
+                    <span class="text-[10px] font-semibold text-gray-400 uppercase block">Commit Hash</span>
+                    <p class="text-sm font-semibold text-primary-700 font-mono mt-0.5 truncate" title={@overview[:commit_hash]}>
                       <%= String.slice(to_string(@overview[:commit_hash] || "dev"), 0, 7) %>
                     </p>
                   </div>
                   <div class="p-2.5 bg-white border border-gray-200 rounded-lg min-w-0">
-                    <span class="text-[10px] font-bold text-gray-400 uppercase block">Build Date</span>
-                    <p class="text-xs font-bold text-gray-800 font-mono mt-1 truncate" title={@overview[:build_date]}><%= @overview[:build_date] || "—" %></p>
+                    <span class="text-[10px] font-semibold text-gray-400 uppercase block">Build Date</span>
+                    <p class="text-xs font-semibold text-gray-800 font-mono mt-1 truncate" title={@overview[:build_date]}><%= @overview[:build_date] || "—" %></p>
                   </div>
                   <div class="p-2.5 bg-white border border-gray-200 rounded-lg min-w-0">
-                    <span class="text-[10px] font-bold text-gray-400 uppercase block">Extensions</span>
-                    <p class="text-sm font-bold text-gray-800 font-mono mt-0.5 truncate"><%= length(@overview.extensions) %></p>
+                    <span class="text-[10px] font-semibold text-gray-400 uppercase block">Extensions</span>
+                    <p class="text-sm font-semibold text-gray-800 font-mono mt-0.5 truncate"><%= length(@overview.extensions) %></p>
                   </div>
                 </div>
               </div>
@@ -777,7 +777,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
           <%= if @settings_tab == "database" do %>
             <div class="space-y-4">
               <div>
-                <h4 class="text-sm font-bold text-gray-900 flex items-center gap-2">
+                <h4 class="text-sm font-semibold text-gray-900 flex items-center gap-2">
                   <.icon name="database" class="w-3.5 h-3.5" />
                   <span>Database Engine &amp; Storage Architecture</span>
                 </h4>
@@ -787,10 +787,10 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               <div class="space-y-3 bg-gray-50 p-4 rounded-xl border border-gray-200/80">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div class="exo-card p-3">
-                    <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Storage Engine</span>
+                    <span class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block">Storage Engine</span>
                     <div class="flex items-center gap-2 mt-1">
                       <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                      <span class="font-bold text-gray-900 text-xs">
+                      <span class="font-semibold text-gray-900 text-xs">
                         <%= if System.get_env("DATABASE_URL"), do: "PostgreSQL (Production)", else: "SQLite (Local / Embedded)" %>
                       </span>
                     </div>
@@ -800,9 +800,9 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   </div>
 
                   <div class="exo-card p-3">
-                    <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Extension Isolation</span>
+                    <span class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block">Extension Isolation</span>
                     <div class="flex items-center gap-2 mt-1">
-                      <span class="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-200">
+                      <span class="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-semibold border border-blue-200">
                         Zero Cross-Tenant Access
                       </span>
                     </div>
@@ -813,21 +813,21 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                 </div>
 
                 <div class="exo-card p-3 space-y-2">
-                  <span class="font-bold text-gray-800 text-xs block">Cluster Database Diagnostics</span>
+                  <span class="font-semibold text-gray-800 text-xs block">Cluster Database Diagnostics</span>
                   <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px]">
                     <div class="p-2 bg-gray-50 rounded border border-gray-100">
                       <span class="text-gray-400 text-[10px] block">Driver</span>
-                      <span class="font-mono font-bold text-gray-700">
+                      <span class="font-mono font-semibold text-gray-700">
                         <%= if System.get_env("DATABASE_URL"), do: "Postgres", else: "Sqlite" %>
                       </span>
                     </div>
                     <div class="p-2 bg-gray-50 rounded border border-gray-100">
                       <span class="text-gray-400 text-[10px] block">Pool Registry</span>
-                      <span class="font-mono font-bold text-emerald-600">Active</span>
+                      <span class="font-mono font-semibold text-emerald-600">Active</span>
                     </div>
                     <div class="p-2 bg-gray-50 rounded border border-gray-100">
                       <span class="text-gray-400 text-[10px] block">Health Status</span>
-                      <span class="font-mono font-bold text-emerald-600">Healthy (200 OK)</span>
+                      <span class="font-mono font-semibold text-emerald-600">Healthy (200 OK)</span>
                     </div>
                   </div>
                 </div>
@@ -837,7 +837,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                     type="button"
                     phx-click="open_action_modal"
                     phx-value-service="database"
-                    class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer text-xs"
+                    class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer text-xs"
                   >
                     <.icon name="bolt" class="w-3.5 h-3.5" />
                     <span>Test Database Ping</span>
@@ -846,7 +846,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                     type="button"
                     phx-click="switch_tab"
                     phx-value-tab="resources"
-                    class="px-3 py-1.5 bg-white hover:bg-gray-100 text-gray-700 border border-gray-300 font-bold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer text-xs"
+                    class="px-3 py-1.5 bg-white hover:bg-gray-100 text-gray-700 border border-gray-300 font-semibold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer text-xs"
                   >
                     <.icon name="chart" class="w-3.5 h-3.5" />
                     <span>Inspect Resources &amp; Tables</span>
@@ -860,7 +860,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             <% admin_email = System.get_env("EXOFORGE_ADMIN_EMAIL") || "admin" %>
             <div class="space-y-4">
               <div>
-                <h4 class="text-sm font-bold text-gray-900 flex items-center gap-2">
+                <h4 class="text-sm font-semibold text-gray-900 flex items-center gap-2">
                   <.icon name="lock" class="w-3.5 h-3.5" />
                   <span>Authentication &amp; Identity Architecture</span>
                 </h4>
@@ -870,10 +870,10 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               <div class="space-y-3 bg-gray-50 p-4 rounded-xl border border-gray-200/80">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div class="exo-card p-3">
-                    <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Admin Principal</span>
+                    <span class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block">Admin Principal</span>
                     <div class="flex items-center gap-2 mt-1">
-                      <span class="font-mono font-bold text-gray-900 text-xs">admin</span>
-                      <span class="px-1.5 py-0.2 rounded bg-primary-50 text-primary-700 font-mono text-[10px] font-bold border border-primary-200">Protected</span>
+                      <span class="font-mono font-semibold text-gray-900 text-xs">admin</span>
+                      <span class="px-1.5 py-0.2 rounded bg-primary-50 text-primary-700 font-mono text-[10px] font-semibold border border-primary-200">Protected</span>
                     </div>
                     <p class="text-[10px] text-gray-500 mt-1">
                       Ordinary account with the fixed id <code class="font-mono">admin</code>, reconciled from
@@ -882,9 +882,9 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   </div>
 
                   <div class="exo-card p-3">
-                    <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Device Key Derivation</span>
+                    <span class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block">Device Key Derivation</span>
                     <div class="flex items-center gap-2 mt-1">
-                      <span class="font-bold text-emerald-700 text-xs">ExoDeviceId (PlayFab Pattern)</span>
+                      <span class="font-semibold text-emerald-700 text-xs">ExoDeviceId (PlayFab Pattern)</span>
                     </div>
                     <p class="text-[10px] text-gray-500 mt-1">
                       Stable hardware hash via SystemInfo.deviceUniqueIdentifier.
@@ -893,7 +893,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                 </div>
 
                 <div class="exo-card p-3 space-y-1.5">
-                  <span class="font-bold text-gray-800 text-xs block">Authorization Scope Hierarchy</span>
+                  <span class="font-semibold text-gray-800 text-xs block">Authorization Scope Hierarchy</span>
                   <div class="flex flex-wrap gap-1.5">
                     <span class="px-2 py-0.5 rounded bg-primary-50 text-primary-700 text-[10px] font-mono">admin &rarr; admin, studio, service, player, guest</span>
                     <span class="px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-mono">studio &rarr; studio, service, player, guest</span>
@@ -906,7 +906,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                     type="button"
                     phx-click="switch_tab"
                     phx-value-tab="auth"
-                    class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer text-xs"
+                    class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer text-xs"
                   >
                     <.icon name="shield" class="w-3.5 h-3.5" />
                     <span>Open Users &amp; Auth View</span>
@@ -916,7 +916,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                     phx-click="open_action_modal"
                     phx-value-service="auth"
                     phx-value-action="issue_token"
-                    class="px-3 py-1.5 bg-white hover:bg-gray-100 text-gray-700 border border-gray-300 font-bold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer text-xs"
+                    class="px-3 py-1.5 bg-white hover:bg-gray-100 text-gray-700 border border-gray-300 font-semibold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer text-xs"
                   >
                     <.icon name="key" class="w-3.5 h-3.5" />
                     <span>Issue Service Token</span>
@@ -929,7 +929,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
           <%= if @settings_tab == "visual" do %>
             <div class="space-y-4">
               <div>
-                <h4 class="text-sm font-bold text-gray-900 flex items-center gap-2">
+                <h4 class="text-sm font-semibold text-gray-900 flex items-center gap-2">
                   <.icon name="moon" class="w-3.5 h-3.5" />
                   <span>Visual Settings &amp; Theme</span>
                 </h4>
@@ -939,14 +939,14 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               <div class="space-y-3 bg-gray-50 p-4 rounded-xl border border-gray-200/80">
                 <div class="flex items-center justify-between p-3.5 bg-white border border-gray-200 rounded-xl">
                   <div>
-                    <span class="font-bold text-gray-800 block">Studio Color Theme</span>
+                    <span class="font-semibold text-gray-800 block">Studio Color Theme</span>
                     <p class="text-[11px] text-gray-500 mt-0.5">Switch between Unity-inspired Dark Mode and Daylight Mode.</p>
                   </div>
                   <div class="flex items-center gap-2">
                     <button
                       type="button"
                       onclick="window.ExoforgeTheme && window.ExoforgeTheme.set('dark')"
-                      class="px-3 py-1.5 rounded-lg font-bold text-xs bg-gray-900 text-white hover:bg-gray-800 border border-gray-700 transition-colors flex items-center gap-1.5 cursor-pointer"
+                      class="px-3 py-1.5 rounded-lg font-semibold text-xs bg-gray-900 text-white hover:bg-gray-800 border border-gray-700 transition-colors flex items-center gap-1.5 cursor-pointer"
                     >
                       <.icon name="moon" class="w-3.5 h-3.5" />
                       <span>Dark</span>
@@ -954,7 +954,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                     <button
                       type="button"
                       onclick="window.ExoforgeTheme && window.ExoforgeTheme.set('light')"
-                      class="px-3 py-1.5 rounded-lg font-bold text-xs bg-white text-gray-800 hover:bg-gray-100 border border-gray-300 transition-colors flex items-center gap-1.5 cursor-pointer"
+                      class="px-3 py-1.5 rounded-lg font-semibold text-xs bg-white text-gray-800 hover:bg-gray-100 border border-gray-300 transition-colors flex items-center gap-1.5 cursor-pointer"
                     >
                       <.icon name="sun" class="w-3.5 h-3.5" />
                       <span>Light</span>
@@ -963,7 +963,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                       type="button"
                       onclick="window.ExoforgeTheme && window.ExoforgeTheme.toggle()"
                       title="Toggle Dark / Light Theme"
-                      class="px-3 py-1.5 rounded-lg font-bold text-xs bg-primary-600 hover:bg-primary-700 text-white transition-colors flex items-center gap-1.5 cursor-pointer"
+                      class="px-3 py-1.5 rounded-lg font-semibold text-xs bg-primary-600 hover:bg-primary-700 text-white transition-colors flex items-center gap-1.5 cursor-pointer"
                     >
                       <.icon name="sun" class="w-3.5 h-3.5" />
                       <span>Toggle Theme</span>
@@ -978,18 +978,18 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             <div class="space-y-3 flex flex-col h-full">
               <div class="flex items-center justify-between flex-shrink-0">
                 <div>
-                  <h4 class="text-sm font-bold text-gray-900 flex items-center gap-2">
+                  <h4 class="text-sm font-semibold text-gray-900 flex items-center gap-2">
                     <.icon name="monitor" class="w-3.5 h-3.5" />
                     <span>Cluster Event Stream &amp; Console</span>
                   </h4>
                   <p class="text-xs text-gray-500 mt-0.5">Real-time cluster event stream via <code class="font-mono text-primary-600">EventDispatcher</code> &amp; <code class="font-mono text-primary-600">:pg</code></p>
                 </div>
                 <div class="flex items-center gap-2">
-                  <span class="px-2 py-0.5 rounded-full bg-gray-100 font-mono font-bold text-[10px] text-gray-600 border border-gray-200">
+                  <span class="px-2 py-0.5 rounded-full bg-gray-100 font-mono font-semibold text-[10px] text-gray-600 border border-gray-200">
                     <%= length(@activity_events) %> captured
                   </span>
                   <%= if @events_paused do %>
-                    <span class="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 text-[10px] font-bold border border-amber-200">
+                    <span class="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 text-[10px] font-semibold border border-amber-200">
                       STREAM PAUSED
                     </span>
                   <% end %>
@@ -1012,7 +1012,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   <button
                     type="button"
                     phx-click="toggle_event_pause"
-                    class={"px-2.5 py-1 rounded-lg font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer #{if @events_paused, do: "bg-emerald-600 hover:bg-emerald-500 text-white", else: "bg-white hover:bg-gray-100 text-gray-700 border border-gray-200"}"}
+                    class={"px-2.5 py-1 rounded-lg font-semibold text-xs flex items-center gap-1 transition-colors cursor-pointer #{if @events_paused, do: "bg-emerald-600 hover:bg-emerald-500 text-white", else: "bg-white hover:bg-gray-100 text-gray-700 border border-gray-200"}"}
                   >
                     <%= if @events_paused do %>
               <.icon name="play" class="w-3 h-3" /><span>Resume</span>
@@ -1024,7 +1024,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   <button
                     type="button"
                     phx-click="clear_events"
-                    class="px-2.5 py-1 bg-white hover:bg-gray-100 text-gray-600 border border-gray-200 rounded-lg font-bold text-xs transition-colors cursor-pointer"
+                    class="px-2.5 py-1 bg-white hover:bg-gray-100 text-gray-600 border border-gray-200 rounded-lg font-semibold text-xs transition-colors cursor-pointer"
                   >
                     Clear
                   </button>
@@ -1042,14 +1042,14 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                 <% else %>
                   <%= for ev <- @activity_events do %>
                     <% is_err = is_event_error?(ev) %>
-                    <div class={"p-2.5 rounded-lg border flex flex-col gap-1.5 transition-all #{if is_err, do: "bg-red-950/25 border-red-800/80", else: "bg-gray-900/90 border-gray-800/80 hover:border-gray-700"}"}>
+                    <div class={"p-2.5 rounded-lg border flex flex-col gap-1.5 transition-colors #{if is_err, do: "bg-red-950/25 border-red-800/80", else: "bg-gray-900/90 border-gray-800/80 hover:border-gray-700"}"}>
                       <div class="flex flex-wrap items-center justify-between gap-1.5 text-[11px]">
                         <div class="flex flex-wrap items-center gap-1.5">
-                          <span class={"px-2 py-0.5 rounded font-bold font-mono text-[10px] border #{if is_err, do: "bg-red-950 text-red-300 border-red-800/80", else: "bg-primary-950 text-primary-300 border-primary-800/60"}"}>
+                          <span class={"px-2 py-0.5 rounded font-semibold font-mono text-[10px] border #{if is_err, do: "bg-red-950 text-red-300 border-red-800/80", else: "bg-primary-950 text-primary-300 border-primary-800/60"}"}>
                             <%= ev.event %>
                           </span>
                           <%= if is_err do %>
-                            <span class="px-1.5 py-0.2 rounded bg-red-900 text-red-200 font-bold text-[10px]">ERROR</span>
+                            <span class="px-1.5 py-0.2 rounded bg-red-900 text-red-200 font-semibold text-[10px]">ERROR</span>
                           <% end %>
                           <span class="text-gray-400 text-[10px]"><%= ev.time %></span>
                           <%= if rid = event_rid(ev[:context]) do %>
@@ -1057,7 +1057,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                               type="button"
                               phx-click="open_timeline"
                               phx-value-rid={rid}
-                              class="px-1.5 py-0.5 rounded bg-primary-950/80 border border-primary-700/60 text-primary-200 hover:text-white hover:border-primary-500 text-[10px] font-bold font-mono inline-flex items-center gap-1"
+                              class="px-1.5 py-0.5 rounded bg-primary-950/80 border border-primary-700/60 text-primary-200 hover:text-white hover:border-primary-500 text-[10px] font-semibold font-mono inline-flex items-center gap-1"
                               title="Open this event's request timeline"
                             >
                               <.icon name={:timeline} class="w-3 h-3" /> <%= rid %>
@@ -1089,7 +1089,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             <% allow_creds = Map.get(@cors_config, "allow_credentials", Map.get(@cors_config, :allow_credentials, true)) != false %>
             <div class="space-y-4">
               <div>
-                <h4 class="text-sm font-bold text-gray-900 flex items-center gap-2">
+                <h4 class="text-sm font-semibold text-gray-900 flex items-center gap-2">
                   <.icon name="globe" class="w-3.5 h-3.5" />
                   <span>HTTP Ingress &amp; CORS Policy</span>
                 </h4>
@@ -1098,14 +1098,14 @@ defmodule Exoforge.Std.Dashboard.Overlays do
 
               <form id="cors_settings_form" phx-change="change_cors_settings" phx-submit="save_cors_settings" class="space-y-4">
                 <div class="bg-gray-50 p-4 rounded-xl border border-gray-200/80 space-y-3">
-                  <span class="font-bold text-gray-800 text-xs uppercase tracking-wider">CORS Access Policy</span>
+                  <span class="font-semibold text-gray-800 text-xs uppercase tracking-wider">CORS Access Policy</span>
 
                   <div class="grid grid-cols-1 md:grid-cols-3 gap-2.5 pt-1">
                     <!-- Relaxed Mode -->
-                    <label id="cors-policy-relaxed" class={"relative flex flex-col p-3 rounded-xl border cursor-pointer transition-all #{if mode == "relaxed", do: "bg-primary-50 border-primary-500 ring-2 ring-primary-500 shadow-xs", else: "bg-white border-gray-200 hover:border-gray-300 opacity-80 hover:opacity-100"}"}>
+                    <label id="cors-policy-relaxed" class={"relative flex flex-col p-3 rounded-xl border cursor-pointer transition-[background-color,border-color,box-shadow,opacity] #{if mode == "relaxed", do: "bg-primary-50 border-primary-500 ring-2 ring-primary-500 shadow-xs", else: "bg-white border-gray-200 hover:border-gray-300 opacity-80 hover:opacity-100"}"}>
                       <div class="flex items-center gap-2">
                         <input type="radio" name="mode" value="relaxed" checked={mode == "relaxed"} class="text-primary-600 focus:ring-primary-500" />
-                        <span class={"font-bold text-xs #{if mode == "relaxed", do: "text-primary-700", else: "text-gray-900"}"}>Relaxed (Wildcard)</span>
+                        <span class={"font-semibold text-xs #{if mode == "relaxed", do: "text-primary-700", else: "text-gray-900"}"}>Relaxed (Wildcard)</span>
                       </div>
                       <p class="text-[11px] text-gray-500 mt-1.5 leading-snug">
                         Accepts requests from any origin. Recommended for <strong>Unity WebGL builds</strong>, itch.io, and external web dev.
@@ -1113,10 +1113,10 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                     </label>
 
                     <!-- Whitelist Mode -->
-                    <label id="cors-policy-whitelist" class={"relative flex flex-col p-3 rounded-xl border cursor-pointer transition-all #{if mode == "whitelist", do: "bg-primary-50 border-primary-500 ring-2 ring-primary-500 shadow-xs", else: "bg-white border-gray-200 hover:border-gray-300 opacity-80 hover:opacity-100"}"}>
+                    <label id="cors-policy-whitelist" class={"relative flex flex-col p-3 rounded-xl border cursor-pointer transition-[background-color,border-color,box-shadow,opacity] #{if mode == "whitelist", do: "bg-primary-50 border-primary-500 ring-2 ring-primary-500 shadow-xs", else: "bg-white border-gray-200 hover:border-gray-300 opacity-80 hover:opacity-100"}"}>
                       <div class="flex items-center gap-2">
                         <input type="radio" name="mode" value="whitelist" checked={mode == "whitelist"} class="text-primary-600 focus:ring-primary-500" />
-                        <span class={"font-bold text-xs #{if mode == "whitelist", do: "text-primary-700", else: "text-gray-900"}"}>Allowed Origins</span>
+                        <span class={"font-semibold text-xs #{if mode == "whitelist", do: "text-primary-700", else: "text-gray-900"}"}>Allowed Origins</span>
                       </div>
                       <p class="text-[11px] text-gray-500 mt-1.5 leading-snug">
                         Restricts cross-origin requests to explicitly allowed domains.
@@ -1124,10 +1124,10 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                     </label>
 
                     <!-- Strict Mode -->
-                    <label id="cors-policy-strict" class={"relative flex flex-col p-3 rounded-xl border cursor-pointer transition-all #{if mode == "strict", do: "bg-primary-50 border-primary-500 ring-2 ring-primary-500 shadow-xs", else: "bg-white border-gray-200 hover:border-gray-300 opacity-80 hover:opacity-100"}"}>
+                    <label id="cors-policy-strict" class={"relative flex flex-col p-3 rounded-xl border cursor-pointer transition-[background-color,border-color,box-shadow,opacity] #{if mode == "strict", do: "bg-primary-50 border-primary-500 ring-2 ring-primary-500 shadow-xs", else: "bg-white border-gray-200 hover:border-gray-300 opacity-80 hover:opacity-100"}"}>
                       <div class="flex items-center gap-2">
                         <input type="radio" name="mode" value="strict" checked={mode == "strict"} class="text-primary-600 focus:ring-primary-500" />
-                        <span class={"font-bold text-xs #{if mode == "strict", do: "text-primary-700", else: "text-gray-900"}"}>Strict (Disabled)</span>
+                        <span class={"font-semibold text-xs #{if mode == "strict", do: "text-primary-700", else: "text-gray-900"}"}>Strict (Disabled)</span>
                       </div>
                       <p class="text-[11px] text-gray-500 mt-1.5 leading-snug">
                         Blocks all cross-origin requests. Only same-origin calls are permitted.
@@ -1137,7 +1137,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
 
                   <!-- Whitelist Origin Field -->
                   <div class="pt-2">
-                    <label class="block font-bold text-gray-700 text-xs mb-1">
+                    <label class="block font-semibold text-gray-700 text-xs mb-1">
                       Allowed Origins (Comma-separated)
                     </label>
                     <input
@@ -1168,7 +1168,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                         class="mt-0.5 rounded text-primary-600 focus:ring-primary-500 border-gray-300"
                       />
                       <div>
-                        <span class="font-bold text-gray-800 text-xs">Allow Credentials &amp; Auth Headers</span>
+                        <span class="font-semibold text-gray-800 text-xs">Allow Credentials &amp; Auth Headers</span>
                         <p class="text-[11px] text-gray-500 mt-0.5">
                           Enables <code class="font-mono text-primary-700">Access-Control-Allow-Credentials: true</code> so browser clients can transmit cookies and Authorization tokens cross-origin.
                         </p>
@@ -1183,7 +1183,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   </span>
                   <button
                     type="submit"
-                    class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-xl transition-all shadow-sm hover:shadow flex items-center gap-1.5"
+                    class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg transition-[background-color,box-shadow] shadow-sm hover:shadow flex items-center gap-1.5"
                   >
                     <.icon name="save" class="w-3.5 h-3.5" />
                     <span>Save CORS Policy</span>
@@ -1210,7 +1210,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                 <% true -> %>
                   <div class="space-y-4">
                     <div>
-                      <h4 class="text-sm font-bold text-gray-900 flex items-center gap-2">
+                      <h4 class="text-sm font-semibold text-gray-900 flex items-center gap-2">
                         <span><%= active_hook.icon %></span>
                         <span><%= active_hook.title %></span>
                       </h4>
@@ -1219,11 +1219,11 @@ defmodule Exoforge.Std.Dashboard.Overlays do
 
                     <div class="bg-gray-50 p-4 rounded-xl border border-gray-200/80 space-y-2">
                       <div class="exo-card flex items-center justify-between p-3">
-                        <span class="font-bold text-gray-800">Hook ID</span>
-                        <span class="font-mono text-primary-700 font-bold"><%= active_hook.id %></span>
+                        <span class="font-semibold text-gray-800">Hook ID</span>
+                        <span class="font-mono text-primary-700 font-semibold"><%= active_hook.id %></span>
                       </div>
                       <div class="exo-card flex items-center justify-between p-3">
-                        <span class="font-bold text-gray-800">Origin Plugin</span>
+                        <span class="font-semibold text-gray-800">Origin Plugin</span>
                         <span class="font-mono text-gray-600"><%= active_hook[:plugin_id] || "n/a" %></span>
                       </div>
                     </div>
@@ -1317,7 +1317,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   <%= extension_icon(@extension) %>
                 </span>
                 <div class="flex-1 min-w-0">
-                  <h4 class="font-bold text-gray-900 text-sm"><%= display_name(@extension) %></h4>
+                  <h4 class="font-semibold text-gray-900 text-sm"><%= display_name(@extension) %></h4>
                   <p class="text-[11px] text-gray-500 font-mono mt-0.5 truncate">
                     <%= @extension.id %> &bull; v<%= @extension.version %> &bull; <%= @extension.type %>
                   </p>
@@ -1326,15 +1326,15 @@ defmodule Exoforge.Std.Dashboard.Overlays do
 
               <div class="grid grid-cols-2 gap-3">
                 <div class="p-3 bg-gray-50 rounded-xl border border-gray-200 space-y-1">
-                  <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Provides</span>
+                  <span class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Provides</span>
                   <div class="flex flex-wrap gap-1 pt-1">
                     <%= for s <- @extension.provides do %>
-                      <span class="px-2 py-0.5 rounded bg-primary-50 text-primary-700 font-mono font-bold text-[10px]"><%= s %></span>
+                      <span class="px-2 py-0.5 rounded bg-primary-50 text-primary-700 font-mono font-semibold text-[10px]"><%= s %></span>
                     <% end %>
                   </div>
                 </div>
                 <div class="p-3 bg-gray-50 rounded-xl border border-gray-200 space-y-1">
-                  <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Depends On</span>
+                  <span class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Depends On</span>
                   <div class="flex flex-wrap gap-1 pt-1">
                     <%= if Enum.empty?(@extension.dependencies) do %>
                       <span class="text-gray-400 italic text-[11px]">None (root service)</span>
@@ -1350,7 +1350,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               <%= if provides_service?(@extension, :http) do %>
                 <div class="p-3.5 bg-emerald-50/80 border border-emerald-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
-                    <span class="font-bold text-emerald-900 text-xs flex items-center gap-1.5">
+                    <span class="font-semibold text-emerald-900 text-xs flex items-center gap-1.5">
                       <.icon name="book" class="w-3.5 h-3.5" /><span>Interactive Swagger / OpenAPI Explorer</span>
                     </span>
                     <p class="text-[11px] text-emerald-700 mt-0.5">Explore REST routes and test endpoints with the session token.</p>
@@ -1358,7 +1358,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   <a
                     href={"http://localhost:#{Exoforge.Endpoints.http_port()}/api/docs" <> if(@auth_token, do: "?token=" <> URI.encode_www_form(@auth_token), else: "")}
                     target="_blank"
-                    class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center justify-center gap-1 shadow-xs whitespace-nowrap flex-shrink-0"
+                    class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-lg transition-colors flex items-center justify-center gap-1 shadow-xs whitespace-nowrap flex-shrink-0"
                   >
                     <span>Open Swagger</span><span>↗</span>
                   </a>
@@ -1368,8 +1368,8 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <%= for {label, value} <- [{"Actions", length(@actions)}, {"Events", length(@events)}, {"Resources", length(@resources)}, {"Contracts", length(@services)}] do %>
                   <div class="p-2.5 bg-white border border-gray-200 rounded-lg">
-                    <span class="text-[10px] font-bold text-gray-400 uppercase block"><%= label %></span>
-                    <p class="text-sm font-bold text-gray-800 font-mono mt-0.5"><%= value %></p>
+                    <span class="text-[10px] font-semibold text-gray-400 uppercase block"><%= label %></span>
+                    <p class="text-sm font-semibold text-gray-800 font-mono mt-0.5"><%= value %></p>
                   </div>
                 <% end %>
               </div>
@@ -1383,13 +1383,13 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   <%= for act <- @actions do %>
                     <div class="p-2.5 bg-gray-50 border border-gray-200 rounded-lg space-y-1">
                       <div class="flex items-center justify-between gap-2">
-                        <span class="font-mono font-bold text-gray-900"><%= act.service %>.<%= act.name %></span>
+                        <span class="font-mono font-semibold text-gray-900"><%= act.service %>.<%= act.name %></span>
                         <button
                           type="button"
                           phx-click="open_action_modal"
                           phx-value-service={act.service}
                           phx-value-action={act.name}
-                          class="px-2.5 py-1 text-[11px] font-bold text-white bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors flex items-center gap-1 shadow-xs"
+                          class="px-2.5 py-1 text-[11px] font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors flex items-center gap-1 shadow-xs"
                         >
                           <span class="inline-flex items-center gap-1"><.icon name="bolt" class="w-3 h-3" /> Run</span>
                         </button>
@@ -1417,7 +1417,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   <%= for event <- @events do %>
                     <div class="p-2.5 bg-gray-50 border border-gray-200 rounded-lg space-y-1">
                       <div class="flex flex-wrap items-center gap-2">
-                        <span class="font-mono font-bold text-gray-900"><%= event[:name] || event["name"] %></span>
+                        <span class="font-mono font-semibold text-gray-900"><%= event[:name] || event["name"] %></span>
                         <%= if event[:scope] || event["scope"] do %>
                           <span class="px-1.5 py-0.5 rounded bg-gray-200 text-gray-600 font-mono text-[10px]">scope: <%= event[:scope] || event["scope"] %></span>
                         <% end %>
@@ -1443,7 +1443,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   <%= for res <- @resources do %>
                     <div class="p-2.5 bg-gray-50 border border-gray-200 rounded-lg space-y-1.5">
                       <div class="flex items-center justify-between">
-                        <span class="font-mono font-bold text-gray-900"><%= res[:name] || res["name"] %></span>
+                        <span class="font-mono font-semibold text-gray-900"><%= res[:name] || res["name"] %></span>
                         <span class="text-[10px] font-mono text-gray-500">pk: <%= res[:primary_key] || res["primary_key"] || :id %></span>
                       </div>
                       <div class="flex flex-wrap gap-1">
@@ -1462,7 +1462,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               <%= for hook <- @hooks do %>
                 <div class="pt-2 border-t border-gray-100 space-y-2">
                   <div>
-                    <h4 class="text-xs font-bold text-gray-900 flex items-center gap-2">
+                    <h4 class="text-xs font-semibold text-gray-900 flex items-center gap-2">
                       <span><%= hook.icon %></span>
                       <span><%= hook.title %></span>
                     </h4>
@@ -1491,7 +1491,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                     <% contract = svc[:__contract__] || svc["__contract__"] %>
                     <div class="p-2.5 bg-gray-50 border border-gray-200 rounded-lg space-y-2">
                       <div class="flex flex-wrap items-center justify-between gap-2">
-                        <span class="font-mono font-bold text-gray-900"><%= svc[:name] || svc["name"] %></span>
+                        <span class="font-mono font-semibold text-gray-900"><%= svc[:name] || svc["name"] %></span>
                         <span class="text-[10px] font-mono text-gray-500"><%= if is_atom(contract), do: inspect(contract), else: "manifest contract" %></span>
                       </div>
 
@@ -1499,7 +1499,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                         <%= for act <- Enum.filter(@actions, &(to_string(&1.service) == to_string(svc[:name] || svc["name"]))) do %>
                           <div class="exo-card p-2 space-y-1">
                             <div class="flex flex-wrap items-center gap-1.5">
-                              <span class="font-mono font-bold text-gray-800"><%= act.name %></span>
+                              <span class="font-mono font-semibold text-gray-800"><%= act.name %></span>
                               <span class="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-mono text-[10px]">
                                 <%= act.mode %>
                               </span>
@@ -1528,7 +1528,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
 
             <%= if @tab == "logs" do %>
               <div class="flex items-center justify-between">
-                <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                <span class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
                   Logs (<%= @logs.total %>)
                 </span>
                 <div class="flex items-center gap-2 text-[11px] text-gray-500">
@@ -1558,10 +1558,10 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                     <div class="flex items-start gap-2 py-0.5 border-b border-gray-800/50 last:border-0">
                       <span class="text-gray-500 shrink-0"><%= sample_time(l.at) %></span>
                       <span class={case l.level_name do
-                        "error" -> "text-red-400 font-bold"
-                        "warning" -> "text-amber-400 font-bold"
-                        "debug" -> "text-blue-400 font-bold"
-                        _ -> "text-emerald-400 font-bold"
+                        "error" -> "text-red-400 font-semibold"
+                        "warning" -> "text-amber-400 font-semibold"
+                        "debug" -> "text-blue-400 font-semibold"
+                        _ -> "text-emerald-400 font-semibold"
                       end}>
                         [<%= String.upcase(l.level_name) %>]
                       </span>
@@ -1576,7 +1576,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               <% about = module_doc(@extension[:entry_point]) %>
               <div class="space-y-4">
                 <div>
-                  <h4 class="text-xs font-bold text-gray-900 flex items-center gap-2">
+                  <h4 class="text-xs font-semibold text-gray-900 flex items-center gap-2">
                     <.icon name="book" class="w-3.5 h-3.5" />
                     <span><%= display_name(@extension) %></span>
                   </h4>
@@ -1590,7 +1590,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                 <%= for {service_name, contract, doc} <- @service_docs do %>
                   <div class="p-3 bg-gray-50 border border-gray-200 rounded-xl space-y-2">
                     <div class="flex items-center justify-between">
-                      <span class="font-mono font-bold text-gray-900"><%= service_name %></span>
+                      <span class="font-mono font-semibold text-gray-900"><%= service_name %></span>
                       <span class="text-[10px] font-mono text-gray-500"><%= inspect(contract) %></span>
                     </div>
                     <%= if doc do %>
@@ -1598,7 +1598,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                     <% end %>
                     <%= for act <- Enum.filter(@actions, &(to_string(&1.service) == to_string(service_name))) do %>
                       <div class="pt-1 border-t border-gray-200/70">
-                        <span class="font-mono font-bold text-gray-800 text-[11px]"><%= act.name %></span>
+                        <span class="font-mono font-semibold text-gray-800 text-[11px]"><%= act.name %></span>
                         <p class="text-[11px] text-gray-500 mt-0.5 whitespace-pre-wrap"><%= act.doc || "No documentation." %></p>
                       </div>
                     <% end %>
@@ -1667,7 +1667,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
           <input type="hidden" name="_csrf_token" value={@csrf_token} />
 
           <div>
-            <label class="block font-bold text-gray-700 mb-1">Email / Account ID</label>
+            <label class="block font-semibold text-gray-700 mb-1">Email / Account ID</label>
             <input
               type="text"
               name="email"
@@ -1678,7 +1678,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
           </div>
 
           <div>
-            <label class="block font-bold text-gray-700 mb-1">Password</label>
+            <label class="block font-semibold text-gray-700 mb-1">Password</label>
             <input
               type="password"
               name="password"
@@ -1691,7 +1691,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
           <div class="pt-2">
             <button
               type="submit"
-              class="w-full py-2 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-xl text-xs transition-colors shadow-xs"
+              class="w-full py-2 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl text-xs transition-colors shadow-xs"
             >
               Sign In
             </button>
@@ -1756,12 +1756,12 @@ defmodule Exoforge.Std.Dashboard.Overlays do
       <div class="space-y-4 text-xs">
         <div class="space-y-2.5">
           <div class="flex items-center justify-between">
-            <span class="font-bold text-gray-800 uppercase tracking-wider text-[11px]">Available SDK Packages (<%= length(@sdk_files) %>)</span>
+            <span class="font-semibold text-gray-800 uppercase tracking-wider text-[11px]">Available SDK Packages (<%= length(@sdk_files) %>)</span>
             <button
               type="button"
               phx-click="switch_tab"
               phx-value-tab="file_bucket"
-              class="text-[11px] font-bold text-primary-600 hover:text-primary-700"
+              class="text-[11px] font-semibold text-primary-600 hover:text-primary-700"
             >
               Open File Bucket &rarr;
             </button>
@@ -1769,7 +1769,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
 
           <%= if @sdk_files == [] do %>
             <div class="bg-gray-50 p-5 rounded-xl border border-gray-200/80 text-center space-y-1.5">
-              <p class="font-bold text-gray-800">No SDK packages in the <code class="font-mono">sdk</code> bucket yet</p>
+              <p class="font-semibold text-gray-800">No SDK packages in the <code class="font-mono">sdk</code> bucket yet</p>
               <p class="text-[11px] text-gray-500">
                 Run <code class="font-mono bg-white px-1.5 py-0.5 rounded border">just pack-unity</code> or upload an engine archive to the <code class="font-mono">sdk</code> bucket.
               </p>
@@ -1782,13 +1782,13 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                 <div class="p-3.5 bg-primary-50/50 rounded-xl border border-primary-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
                   <div class="space-y-1 min-w-0">
                     <div class="flex items-center gap-2">
-                      <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-primary-600 text-white font-mono shadow-2xs">
+                      <span class="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-primary-600 text-white font-mono shadow-2xs">
                         Latest
                       </span>
-                      <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-white text-primary-800 border border-primary-200 font-mono">
+                      <span class="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-white text-primary-800 border border-primary-200 font-mono">
                         <%= engine %>
                       </span>
-                      <span class="font-bold text-gray-900 font-mono truncate"><%= @latest_file["filename"] %></span>
+                      <span class="font-semibold text-gray-900 font-mono truncate"><%= @latest_file["filename"] %></span>
                     </div>
                     <p class="text-[11px] text-gray-500 font-mono truncate">
                       URL: <code class="text-gray-700 select-all">/api/files/sdk/<%= engine %></code> &bull; <code class="text-gray-700 select-all"><%= @latest_file["url"] %></code>
@@ -1799,7 +1799,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                       href={@latest_file["url"]}
                       download={@latest_file["filename"]}
                       target="_blank"
-                      class="px-3.5 py-2 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-xs"
+                      class="px-3.5 py-2 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-xs"
                     >
                       <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -1815,7 +1815,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               <!-- Older Versions Fold / Accordion -->
               <%= if @older_files != [] do %>
                 <details class="group border border-gray-200/80 rounded-xl overflow-hidden bg-gray-50/60">
-                  <summary class="p-2.5 px-3.5 flex items-center justify-between cursor-pointer text-[11px] font-bold text-gray-700 hover:text-gray-900 select-none">
+                  <summary class="p-2.5 px-3.5 flex items-center justify-between cursor-pointer text-[11px] font-semibold text-gray-700 hover:text-gray-900 select-none">
                     <div class="flex items-center gap-2">
                       <span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
                       <span>Older Versions (<%= length(@older_files) %>)</span>
@@ -1828,7 +1828,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                       <div class="p-2.5 bg-white rounded-lg border border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
                         <div class="min-w-0 space-y-0.5">
                           <div class="flex items-center gap-2">
-                            <span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-gray-100 text-gray-600 border border-gray-200 font-mono">
+                            <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase bg-gray-100 text-gray-600 border border-gray-200 font-mono">
                               <%= engine %>
                             </span>
                             <span class="font-medium text-gray-800 font-mono truncate"><%= file["filename"] %></span>
@@ -1859,19 +1859,19 @@ defmodule Exoforge.Std.Dashboard.Overlays do
 
         <!-- Installation Instructions -->
         <div class="p-4 bg-gray-50 rounded-xl border border-gray-200/80 space-y-3">
-          <span class="font-bold text-gray-800 uppercase tracking-wider text-[11px] block">Installation Instructions</span>
+          <span class="font-semibold text-gray-800 uppercase tracking-wider text-[11px] block">Installation Instructions</span>
 
           <div class="space-y-2 text-[11px] text-gray-600">
             <div>
-              <span class="font-bold text-gray-800">1. Unity Package Manager (UPM)</span>
+              <span class="font-semibold text-gray-800">1. Unity Package Manager (UPM)</span>
               <p class="mt-0.5">Download the <code class="font-mono text-primary-700">com.exoforge.sdk-*.tgz</code> tarball above, then in Unity open <strong>Window &rarr; Package Manager &rarr; + &rarr; Add package from tarball...</strong> and select the downloaded file.</p>
             </div>
             <div>
-              <span class="font-bold text-gray-800">2. Configure Cluster Endpoint &amp; Generate Stubs</span>
+              <span class="font-semibold text-gray-800">2. Configure Cluster Endpoint &amp; Generate Stubs</span>
               <p class="mt-0.5">Open <strong>Exoforge &rarr; Studio</strong> in the Unity Editor toolbar, point the cluster URL to this server, and click <strong>Sync &amp; Generate Stubs</strong>.</p>
             </div>
             <div>
-              <span class="font-bold text-gray-800">3. Quick Connect in C#</span>
+              <span class="font-semibold text-gray-800">3. Quick Connect in C#</span>
               <pre class="mt-1 p-2.5 bg-gray-900 text-emerald-300 rounded-lg font-mono text-[10px] overflow-x-auto"><%= "var session = await ExoforgeSDK.Auth.LoginAnonymously();\nawait ExoforgeSDK.ConnectAsync();" %></pre>
             </div>
           </div>
@@ -2065,7 +2065,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             <!-- Modal Header with Mode Switcher -->
             <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-gray-100 gap-3">
               <div>
-                <h3 class="font-bold text-gray-900 text-base flex items-center gap-2">
+                <h3 class="font-semibold text-gray-900 text-base flex items-center gap-2">
                   <%= if @is_error_mode, do: ~H(<.icon name="alert" class="w-4 h-4" />), else: ~H(<.icon name="trending" class="w-4 h-4" />) %>
                   <span><%= if @is_error_mode, do: "Action Exceptions & Error Breakdown", else: "Action Invocations & Telemetry Details" %></span>
                 </h3>
@@ -2081,7 +2081,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                     type="button"
                     phx-click={@on_switch_mode}
                     phx-value-mode="actions"
-                    class={"px-2.5 py-1 rounded-lg font-bold transition-all flex items-center gap-1 #{if not @is_error_mode, do: "bg-primary-600 text-white shadow-xs", else: "text-gray-500 hover:text-gray-900"}"}
+                    class={"px-2.5 py-1 rounded-lg font-semibold transition-colors flex items-center gap-1 #{if not @is_error_mode, do: "bg-primary-600 text-white shadow-xs", else: "text-gray-500 hover:text-gray-900"}"}
                   >
                     <.icon name={:graph} class="w-3 h-3" /> <span>Throughput</span>
                   </button>
@@ -2089,7 +2089,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                     type="button"
                     phx-click={@on_switch_mode}
                     phx-value-mode="errors"
-                    class={"px-2.5 py-1 rounded-lg font-bold transition-all flex items-center gap-1 #{if @is_error_mode, do: "bg-red-600 text-white shadow-xs", else: "text-gray-500 hover:text-gray-900"}"}
+                    class={"px-2.5 py-1 rounded-lg font-semibold transition-colors flex items-center gap-1 #{if @is_error_mode, do: "bg-red-600 text-white shadow-xs", else: "text-gray-500 hover:text-gray-900"}"}
                   >
                     <.icon name={:alert} class="w-3 h-3" /> <span>Errors</span>
                   </button>
@@ -2109,7 +2109,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             <!-- EXPANDED HIGH-RESOLUTION SVG GRAPH -->
             <div class="p-3 bg-gray-50/70 rounded-xl border border-gray-200/80 space-y-2">
               <div class="flex items-center justify-between text-xs">
-                <span class="font-bold text-gray-700 uppercase tracking-wider text-[10px]">
+                <span class="font-semibold text-gray-700 uppercase tracking-wider text-[10px]">
                   <%= if @is_error_mode, do: "Expanded Error Spikes (Last 25 Minutes)", else: "Expanded Action Throughput (Last 25 Minutes)" %>
                 </span>
                 <span class="font-mono text-[11px] text-gray-500">
@@ -2173,7 +2173,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               <% groups = @telemetry[:error_groups] || [] %>
               <div class="exo-card p-3 space-y-2">
                 <div class="flex items-center justify-between">
-                  <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                  <span class="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
                     Failure groups (<%= length(groups) %>)
                   </span>
                   <span class="text-[10px] text-gray-400">Grouped by action and reason, newest first</span>
@@ -2187,10 +2187,10 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                       <details class="group rounded-lg border border-gray-200 bg-gray-50/60">
                         <summary class="cursor-pointer select-none p-2 flex flex-wrap items-center justify-between gap-2 text-[11px]">
                           <div class="flex items-center gap-2 min-w-0">
-                            <span class="px-1.5 py-0.5 rounded bg-red-50 text-red-700 font-bold border border-red-200 text-[10px]">
+                            <span class="px-1.5 py-0.5 rounded bg-red-50 text-red-700 font-semibold border border-red-200 text-[10px]">
                               <%= group.count %>×
                             </span>
-                            <span class="font-mono font-bold text-gray-900">
+                            <span class="font-mono font-semibold text-gray-900">
                               <%= ExtensionPresenter.service_key(group.service) %>.<%= group.action %>
                             </span>
                             <span class="font-mono text-red-600 truncate max-w-[22rem]" title={group.reason}>
@@ -2217,7 +2217,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                                 type="button"
                                 phx-click="open_timeline"
                                 phx-value-rid={group.rid}
-                                class="px-1.5 py-0.5 rounded bg-primary-50 border border-primary-200 text-primary-700 text-[10px] font-bold hover:bg-primary-100 inline-flex items-center gap-1"
+                                class="px-1.5 py-0.5 rounded bg-primary-50 border border-primary-200 text-primary-700 text-[10px] font-semibold hover:bg-primary-100 inline-flex items-center gap-1"
                                 title="Open this request's timeline"
                               >
                                 <.icon name={:timeline} class="w-3 h-3" /> Timeline
@@ -2244,7 +2244,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   type="button"
                   phx-click={@on_filter_tab}
                   phx-value-tab="all"
-                  class={"px-3 py-1.5 rounded-lg font-bold text-xs transition-colors #{if @filter_tab == "all", do: "bg-primary-600 text-white shadow-xs", else: "text-gray-500 hover:text-gray-900"}"}
+                  class={"px-3 py-1.5 rounded-lg font-semibold text-xs transition-colors #{if @filter_tab == "all", do: "bg-primary-600 text-white shadow-xs", else: "text-gray-500 hover:text-gray-900"}"}
                 >
                   All (<%= @total_count %>)
                 </button>
@@ -2252,7 +2252,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   type="button"
                   phx-click={@on_filter_tab}
                   phx-value-tab="active"
-                  class={"px-3 py-1.5 rounded-lg font-bold text-xs transition-colors #{if @filter_tab == "active", do: "bg-emerald-600 text-white shadow-xs", else: "text-gray-500 hover:text-gray-900"}"}
+                  class={"px-3 py-1.5 rounded-lg font-semibold text-xs transition-colors #{if @filter_tab == "active", do: "bg-emerald-600 text-white shadow-xs", else: "text-gray-500 hover:text-gray-900"}"}
                 >
                   Active Traffic
                 </button>
@@ -2260,7 +2260,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   type="button"
                   phx-click={@on_filter_tab}
                   phx-value-tab="errors_only"
-                  class={"px-3 py-1.5 rounded-lg font-bold text-xs transition-colors #{if @filter_tab == "errors_only", do: "bg-red-600 text-white shadow-xs", else: "text-gray-500 hover:text-gray-900"}"}
+                  class={"px-3 py-1.5 rounded-lg font-semibold text-xs transition-colors #{if @filter_tab == "errors_only", do: "bg-red-600 text-white shadow-xs", else: "text-gray-500 hover:text-gray-900"}"}
                 >
                   With Errors
                 </button>
@@ -2312,7 +2312,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                 </div>
               <% else %>
                 <table class="w-full text-left border-collapse">
-                  <thead class="bg-gray-50 sticky top-0 border-b border-gray-200 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                  <thead class="bg-gray-50 sticky top-0 border-b border-gray-200 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
                     <tr>
                       <th class="py-2.5 px-3">Service &amp; Action</th>
                       <th class="py-2.5 px-3">Scope / Transport</th>
@@ -2343,7 +2343,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                               <.studio_icon icon={Map.get(item.service, :icon) || "bolt"} class="w-3 h-3" />
                             </span>
                             <div class="min-w-0">
-                              <span class="font-bold text-gray-900 font-mono block truncate"><%= item.key %></span>
+                              <span class="font-semibold text-gray-900 font-mono block truncate"><%= item.key %></span>
                               <span class="text-[10px] text-gray-400 block"><%= Map.get(item.service, :title) || Map.get(item.service, :name, "") %></span>
                             </div>
                           </div>
@@ -2358,7 +2358,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                             </span>
                           </div>
                         </td>
-                        <td class="py-2.5 px-3 text-right font-mono font-bold text-gray-800">
+                        <td class="py-2.5 px-3 text-right font-mono font-semibold text-gray-800">
                           <%= item.invocations %>
                         </td>
                         <td class="py-2.5 px-3 text-right font-mono text-[11px] text-gray-500" title="Invocations in the traced window (respects the caller filter)">
@@ -2373,7 +2373,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                         <td class="py-2.5 px-3 text-right font-mono text-[11px] text-gray-500" title="95th percentile (lifetime, log-scale histogram)">
                           <%= if item.p95_ms, do: "#{item.p95_ms}ms", else: "—" %>
                         </td>
-                        <td class={"py-2.5 px-3 text-right font-mono font-bold #{if item.errors > 0, do: "text-red-600", else: "text-gray-400"}"}>
+                        <td class={"py-2.5 px-3 text-right font-mono font-semibold #{if item.errors > 0, do: "text-red-600", else: "text-gray-400"}"}>
                           <%= item.errors %>
                           <%= if item.error_rate > 0 do %>
                             <span class="block text-[10px] font-normal"><%= item.error_rate %>%</span>
@@ -2395,7 +2395,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                             phx-click={@on_run_action}
                             phx-value-service={to_string(Map.get(item.service, :name, ""))}
                             phx-value-action={to_string(Map.get(item.action, :name, ""))}
-                            class="px-2.5 py-1 text-[11px] font-bold text-primary-700 bg-primary-50 hover:bg-primary-100 rounded-lg transition-colors inline-flex items-center gap-1 shadow-2xs"
+                            class="px-2.5 py-1 text-[11px] font-semibold text-primary-700 bg-primary-50 hover:bg-primary-100 rounded-lg transition-colors inline-flex items-center gap-1 shadow-2xs"
                           >
                             <.icon name={:bolt} class="w-3 h-3" /> Run
                           </button>
@@ -2413,7 +2413,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                                   type="button"
                                   phx-click={@on_filter_status}
                                   phx-value-errors="false"
-                                  class={"px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors #{if not @expansion.errors_only, do: "bg-primary-600 text-white shadow-xs", else: "text-gray-600 hover:text-gray-900"}"}
+                                  class={"px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors #{if not @expansion.errors_only, do: "bg-primary-600 text-white shadow-xs", else: "text-gray-600 hover:text-gray-900"}"}
                                 >
                                   All invocations<%= if not @expansion.errors_only, do: " (#{page.total})" %>
                                 </button>
@@ -2421,7 +2421,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                                   type="button"
                                   phx-click={@on_filter_status}
                                   phx-value-errors="true"
-                                  class={"px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors #{if @expansion.errors_only, do: "bg-red-600 text-white shadow-xs", else: "text-gray-600 hover:text-gray-900"}"}
+                                  class={"px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors #{if @expansion.errors_only, do: "bg-red-600 text-white shadow-xs", else: "text-gray-600 hover:text-gray-900"}"}
                                 >
                                   Errors<%= if @expansion.errors_only, do: " (#{page.total})" %>
                                 </button>
@@ -2467,7 +2467,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                                   <div class={"rounded-xl border p-2.5 space-y-1.5 bg-white #{if errored?, do: "border-red-200", else: "border-gray-200"}"}>
                                     <div class="flex flex-wrap items-center justify-between gap-2 text-[11px]">
                                       <div class="flex flex-wrap items-center gap-2 font-mono">
-                                        <span class={"px-1.5 py-0.5 rounded font-bold border #{if errored?, do: "bg-red-50 text-red-700 border-red-200", else: "bg-emerald-50 text-emerald-700 border-emerald-200"}"}>
+                                        <span class={"px-1.5 py-0.5 rounded font-semibold border #{if errored?, do: "bg-red-50 text-red-700 border-red-200", else: "bg-emerald-50 text-emerald-700 border-emerald-200"}"}>
                                           <%= sample.status %>
                                         </span>
                                         <span class="text-gray-600">caller: <%= sample.caller %></span>
@@ -2492,7 +2492,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                                           </button>
                                         <% end %>
                                         <%= if sample[:internal] do %>
-                                          <span class="px-1.5 py-0.5 rounded bg-primary-50 text-primary-700 text-[10px] font-bold border border-primary-200">internal call</span>
+                                          <span class="px-1.5 py-0.5 rounded bg-primary-50 text-primary-700 text-[10px] font-semibold border border-primary-200">internal call</span>
                                         <% end %>
                                         <span class="text-gray-400"><%= sample.duration_ms %>ms</span>
                                       </div>
@@ -2501,7 +2501,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
 
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
                                       <details class="group" open={errored?}>
-                                        <summary class="cursor-pointer select-none text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center justify-between py-0.5">
+                                        <summary class="cursor-pointer select-none text-[10px] font-semibold text-gray-500 uppercase tracking-wider flex items-center justify-between py-0.5">
                                           <span class="flex items-center gap-1">
                                             <span class="transition-transform group-open:rotate-90 inline-block text-[10px]">▶</span>
                                             <span>Sent payload</span>
@@ -2511,7 +2511,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                                       </details>
 
                                       <details class="group" open={errored?}>
-                                        <summary class="cursor-pointer select-none text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center justify-between py-0.5">
+                                        <summary class="cursor-pointer select-none text-[10px] font-semibold text-gray-500 uppercase tracking-wider flex items-center justify-between py-0.5">
                                           <span class="flex items-center gap-1">
                                             <span class="transition-transform group-open:rotate-90 inline-block text-[10px]">▶</span>
                                             <span>Received / error</span>
@@ -2553,7 +2553,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
   def service_filter(assigns) do
     ~H"""
     <details class="relative">
-      <summary class="list-none cursor-pointer select-none px-2.5 py-1.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 flex items-center gap-1.5 hover:bg-gray-50">
+      <summary class="list-none cursor-pointer select-none px-2.5 py-1.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 flex items-center gap-1.5 hover:bg-gray-50">
         <.icon name="target" class="w-3.5 h-3.5" />
         <span><%= if @tracked == [], do: "All services", else: "#{length(@tracked)} tracked" %></span>
         <span class="text-[10px] text-gray-400">▾</span>
@@ -2564,7 +2564,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
           type="button"
           phx-click={@on_toggle}
           phx-value-service=""
-          class={"w-full text-left px-2 py-1.5 rounded-lg text-xs font-bold #{if @tracked == [], do: "bg-primary-50 text-primary-700", else: "text-gray-600 hover:bg-gray-100"}"}
+          class={"w-full text-left px-2 py-1.5 rounded-lg text-xs font-semibold #{if @tracked == [], do: "bg-primary-50 text-primary-700", else: "text-gray-600 hover:bg-gray-100"}"}
         >
           All services
         </button>
@@ -2573,7 +2573,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             type="button"
             phx-click={@on_toggle}
             phx-value-service={service}
-            class={"w-full text-left px-2 py-1.5 rounded-lg text-xs font-mono flex items-center justify-between gap-2 #{if service in @tracked, do: "bg-primary-50 text-primary-700 font-bold", else: "text-gray-600 hover:bg-gray-100"}"}
+            class={"w-full text-left px-2 py-1.5 rounded-lg text-xs font-mono flex items-center justify-between gap-2 #{if service in @tracked, do: "bg-primary-50 text-primary-700 font-semibold", else: "text-gray-600 hover:bg-gray-100"}"}
           >
             <span class="truncate"><%= service %></span>
             <span class="text-[10px]"><%= if service in @tracked, do: "✓" %></span>
@@ -2628,12 +2628,12 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   <.icon name={:timeline} class="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 class="font-bold text-gray-900 text-base">Request Timeline</h3>
+                  <h3 class="font-semibold text-gray-900 text-base">Request Timeline</h3>
                   <p class="text-xs text-gray-500">Calls, events, logs and failures of one request, joined by its id.</p>
                 </div>
               </div>
               <div class="flex items-center gap-2">
-                <span class="px-2.5 py-1 rounded-full bg-gray-100 font-mono font-bold text-[10px] text-gray-600 border border-gray-200">
+                <span class="px-2.5 py-1 rounded-full bg-gray-100 font-mono font-semibold text-[10px] text-gray-600 border border-gray-200">
                   <%= length(@nodes) %> nodes
                 </span>
                 <button
@@ -2657,7 +2657,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               />
               <button
                 type="submit"
-                class="px-3 py-2 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-xl text-xs transition-colors"
+                class="px-3 py-2 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl text-xs transition-colors"
               >
                 Trace
               </button>
@@ -2666,7 +2666,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             <!-- Deep capture: full payloads, memory only, bounded by the rule's expiry -->
             <div class="p-2.5 bg-gray-50 rounded-xl border border-gray-200/80 space-y-2 text-xs">
               <div class="flex items-center justify-between">
-                <span class="font-bold text-gray-700 uppercase tracking-wider text-[10px]">Deep capture</span>
+                <span class="font-semibold text-gray-700 uppercase tracking-wider text-[10px]">Deep capture</span>
                 <span class="text-[10px] text-gray-400">Full payloads stay in memory and expire with the rule</span>
               </div>
 
@@ -2692,7 +2692,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                 />
                 <button
                   type="submit"
-                  class="px-2.5 py-1.5 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg text-xs inline-flex items-center gap-1.5"
+                  class="px-2.5 py-1.5 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-lg text-xs inline-flex items-center gap-1.5"
                 >
                   <.icon name={:capture} class="w-3.5 h-3.5" /> Capture
                 </button>
@@ -2708,7 +2708,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                         phx-click={@on_stop_capture}
                         phx-value-kind={capture.kind}
                         phx-value-value={capture.value}
-                        class="text-primary-500 hover:text-primary-800 font-bold"
+                        class="text-primary-500 hover:text-primary-800 font-semibold"
                         title="Stop this capture"
                       >
                         ✕
@@ -2723,7 +2723,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
             <%= if @replay do %>
               <div class={"p-2.5 rounded-xl border text-xs space-y-1 #{if @replay[:error], do: "bg-red-50 border-red-200", else: "bg-emerald-50/70 border-emerald-200"}"}>
                 <div class="flex flex-wrap items-center justify-between gap-2">
-                  <span class="font-bold text-[11px]">
+                  <span class="font-semibold text-[11px]">
                     <%= if @replay[:error], do: "Replay refused: #{@replay.error}", else: "Replayed from #{@replay.source_rid} as #{@replay.rid}" %>
                   </span>
                   <%= if @replay[:rid] do %>
@@ -2731,7 +2731,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                       type="button"
                       phx-click="open_timeline"
                       phx-value-rid={@replay.rid}
-                      class="px-1.5 py-0.5 rounded bg-white border border-emerald-200 text-emerald-700 font-mono text-[10px] font-bold inline-flex items-center gap-1"
+                      class="px-1.5 py-0.5 rounded bg-white border border-emerald-200 text-emerald-700 font-mono text-[10px] font-semibold inline-flex items-center gap-1"
                     >
                       <.icon name={:timeline} class="w-3 h-3" /> Open the new request
                     </button>
@@ -2779,13 +2779,13 @@ defmodule Exoforge.Std.Dashboard.Overlays do
     >
       <div class="flex flex-wrap items-center justify-between gap-2 text-[11px]">
         <div class="flex flex-wrap items-center gap-2 min-w-0">
-          <span class={"px-1.5 py-0.5 rounded text-[10px] font-bold border #{timeline_badge_class(@node.kind)}"}>
+          <span class={"px-1.5 py-0.5 rounded text-[10px] font-semibold border #{timeline_badge_class(@node.kind)}"}>
             <%= timeline_kind_label(@node.kind) %>
           </span>
-          <span class="font-mono font-bold text-gray-900 truncate"><%= @node.label %></span>
+          <span class="font-mono font-semibold text-gray-900 truncate"><%= @node.label %></span>
 
           <%= if @node[:status] do %>
-            <span class={"px-1.5 py-0.5 rounded text-[10px] font-bold #{if String.starts_with?(@node.status, "error"), do: "text-red-700", else: "text-emerald-700"}"}>
+            <span class={"px-1.5 py-0.5 rounded text-[10px] font-semibold #{if String.starts_with?(@node.status, "error"), do: "text-red-700", else: "text-emerald-700"}"}>
               <%= @node.status %>
             </span>
           <% end %>
@@ -2799,11 +2799,11 @@ defmodule Exoforge.Std.Dashboard.Overlays do
           <% end %>
 
           <%= if @node[:reason] do %>
-            <span class="text-red-700 font-mono font-bold text-[11px] truncate max-w-[24rem]" title={@node.reason}><%= @node.reason %></span>
+            <span class="text-red-700 font-mono font-semibold text-[11px] truncate max-w-[24rem]" title={@node.reason}><%= @node.reason %></span>
           <% end %>
 
           <%= if @node[:count] do %>
-            <span class="px-1.5 py-0.5 rounded bg-red-50 text-red-700 border border-red-200 text-[10px] font-bold"><%= @node.count %>×</span>
+            <span class="px-1.5 py-0.5 rounded bg-red-50 text-red-700 border border-red-200 text-[10px] font-semibold"><%= @node.count %>×</span>
           <% end %>
         </div>
         <div class="flex items-center gap-2">
@@ -2812,7 +2812,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               type="button"
               phx-click={@on_replay}
               phx-value-id={@node.id}
-              class="px-1.5 py-0.5 rounded bg-gray-100 hover:bg-gray-200 text-gray-600 text-[10px] font-bold inline-flex items-center gap-1"
+              class="px-1.5 py-0.5 rounded bg-gray-100 hover:bg-gray-200 text-gray-600 text-[10px] font-semibold inline-flex items-center gap-1"
               title="Replay this request as its original caller (side effects repeat)"
             >
               <.icon name={:replay} class="w-3 h-3" /> Replay
@@ -2829,7 +2829,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
       <%= if @node[:request] != nil or @node[:response] != nil do %>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
           <details class="group" open={String.starts_with?(to_string(@node[:status]), "error")}>
-            <summary class="cursor-pointer select-none text-[10px] font-bold text-gray-500 uppercase tracking-wider py-0.5">
+            <summary class="cursor-pointer select-none text-[10px] font-semibold text-gray-500 uppercase tracking-wider py-0.5">
               <span class="transition-transform group-open:rotate-90 inline-block text-[10px]">▶</span>
               Sent
             </summary>
@@ -2837,7 +2837,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
           </details>
 
           <details class="group" open={String.starts_with?(to_string(@node[:status]), "error")}>
-            <summary class="cursor-pointer select-none text-[10px] font-bold text-gray-500 uppercase tracking-wider py-0.5">
+            <summary class="cursor-pointer select-none text-[10px] font-semibold text-gray-500 uppercase tracking-wider py-0.5">
               <span class="transition-transform group-open:rotate-90 inline-block text-[10px]">▶</span>
               Received
             </summary>
@@ -2848,7 +2848,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
 
       <%= if @node.kind == :event and @node[:payload] != nil do %>
         <details class="group">
-          <summary class="cursor-pointer select-none text-[10px] font-bold text-gray-500 uppercase tracking-wider py-0.5">
+          <summary class="cursor-pointer select-none text-[10px] font-semibold text-gray-500 uppercase tracking-wider py-0.5">
             <span class="transition-transform group-open:rotate-90 inline-block text-[10px]">▶</span>
             Event payload
           </summary>
@@ -2999,7 +2999,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                       type="button"
                       phx-click={@on_filter_kind}
                       phx-value-kind={kind}
-                      class={"px-2.5 py-1 rounded-lg font-bold text-[11px] transition-colors #{if @kind_filter == kind, do: "bg-primary-600 text-white shadow-xs", else: "text-gray-500 hover:text-gray-900"}"}
+                      class={"px-2.5 py-1 rounded-lg font-semibold text-[11px] transition-colors #{if @kind_filter == kind, do: "bg-primary-600 text-white shadow-xs", else: "text-gray-500 hover:text-gray-900"}"}
                     >
                       <%= label %>
                     </button>
@@ -3011,7 +3011,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                 <button
                   type="button"
                   phx-click={@on_pause}
-                  class={"px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer #{if @paused, do: "bg-emerald-600 hover:bg-emerald-500 text-white", else: "bg-white hover:bg-gray-100 text-gray-700 border border-gray-200"}"}
+                  class={"px-3 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1 transition-colors cursor-pointer #{if @paused, do: "bg-emerald-600 hover:bg-emerald-500 text-white", else: "bg-white hover:bg-gray-100 text-gray-700 border border-gray-200"}"}
                 >
                   <%= if @paused do %>
                     <.icon name="play" class="w-3 h-3" /><span>Resume Stream</span>
@@ -3023,7 +3023,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                 <button
                   type="button"
                   phx-click={@on_clear}
-                  class="px-3 py-1.5 bg-white hover:bg-gray-100 text-gray-600 border border-gray-200 rounded-lg font-bold text-xs transition-colors cursor-pointer"
+                  class="px-3 py-1.5 bg-white hover:bg-gray-100 text-gray-600 border border-gray-200 rounded-lg font-semibold text-xs transition-colors cursor-pointer"
                 >
                   Clear History
                 </button>
@@ -3041,15 +3041,15 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               <% else %>
                 <%= for ev <- @events do %>
                   <% is_err = is_event_error?(ev) %>
-                  <div class={"p-3 rounded-xl border flex flex-col gap-2 transition-all #{if is_err, do: "bg-red-950/25 border-red-800/80 hover:border-red-600", else: "bg-gray-900/90 border-gray-800/80 hover:border-gray-700"}"}>
+                  <div class={"p-3 rounded-xl border flex flex-col gap-2 transition-colors #{if is_err, do: "bg-red-950/25 border-red-800/80 hover:border-red-600", else: "bg-gray-900/90 border-gray-800/80 hover:border-gray-700"}"}>
                     <div class="flex flex-wrap items-start justify-between gap-2">
                       <div class="flex flex-col gap-1.5 min-w-0">
                         <div class="flex flex-wrap items-center gap-2 text-xs">
-                          <span class={"px-2 py-0.5 rounded font-bold font-mono text-xs border #{if is_err, do: "bg-red-950 text-red-300 border-red-800/80", else: "bg-primary-950 text-primary-300 border-primary-800/60"}"}>
+                          <span class={"px-2 py-0.5 rounded font-semibold font-mono text-xs border #{if is_err, do: "bg-red-950 text-red-300 border-red-800/80", else: "bg-primary-950 text-primary-300 border-primary-800/60"}"}>
                             <%= ev.event %>
                           </span>
                           <%= if is_err do %>
-                            <span class="px-2 py-0.5 rounded bg-red-900 text-red-100 font-bold border border-red-700 text-[11px] animate-pulse">
+                            <span class="px-2 py-0.5 rounded bg-red-900 text-red-100 font-semibold border border-red-700 text-[11px] animate-pulse">
                               ERROR
                             </span>
                           <% end %>
@@ -3063,7 +3063,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                               type="button"
                               phx-click="open_timeline"
                               phx-value-rid={rid}
-                              class="px-1.5 py-0.5 rounded bg-primary-950/80 border border-primary-700/60 text-primary-200 hover:text-white hover:border-primary-500 text-[10px] font-bold font-mono inline-flex items-center gap-1"
+                              class="px-1.5 py-0.5 rounded bg-primary-950/80 border border-primary-700/60 text-primary-200 hover:text-white hover:border-primary-500 text-[10px] font-semibold font-mono inline-flex items-center gap-1"
                               title="Open this event's request timeline"
                             >
                               <.icon name={:timeline} class="w-3 h-3" /> <%= rid %>
@@ -3135,7 +3135,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
         Regex.replace(~r/(: )(&quot;[^&]*&quot;)/, str, fn _, p1, p2 ->
           color =
             if String.contains?(p2, "error") or String.contains?(p2, "fail") do
-              "text-red-400 font-bold"
+              "text-red-400 font-semibold"
             else
               "text-emerald-300"
             end
