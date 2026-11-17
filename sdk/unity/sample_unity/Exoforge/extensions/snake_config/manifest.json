@@ -4,7 +4,7 @@
   "version": "0.1.0+10.e5d4cdcd",
   "context": "global",
   "entry_point": "snake_config",
-  "dependencies": ["unity_addressables"],
+  "dependencies": ["file_bucket", "unity_addressables"],
   "provides": ["snake_config"],
   "category": "Game",
   "title": "Snake Configuration",

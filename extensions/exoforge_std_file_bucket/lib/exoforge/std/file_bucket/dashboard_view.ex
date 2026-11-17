@@ -12,6 +12,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
     {:ok,
      assign(socket,
        buckets: ["default"],
+       bucket_visibilities: %{},
        selected_bucket: "all",
        files: [],
        filtered_files: [],
@@ -377,6 +378,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
         socket
         |> assign(
           buckets: new_buckets,
+          bucket_visibilities: Map.put_new(socket.assigns.bucket_visibilities, name, "private"),
           selected_bucket: name,
           show_new_bucket_modal: false,
           new_bucket_name: ""
@@ -385,6 +387,27 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
         |> notify(:info, "Bucket '#{name}' created and selected.")
 
       {:noreply, socket}
+    end
+  end
+
+  def handle_event("toggle_bucket_visibility", %{"bucket" => bucket}, socket) do
+    current = Map.get(socket.assigns.bucket_visibilities, bucket, "private")
+    next = if current == "public", do: "private", else: "public"
+
+    case ActionDispatcher.dispatch_internal(:file_bucket, :set_bucket_visibility, %{
+           "bucket" => bucket,
+           "visibility" => next
+         }) do
+      {:ok, %{visibility: applied}} ->
+        socket =
+          socket
+          |> assign(bucket_visibilities: Map.put(socket.assigns.bucket_visibilities, bucket, applied))
+          |> notify(:info, "Bucket '#{bucket}' is now #{applied}.")
+
+        {:noreply, socket}
+
+      {:error, reason} ->
+        {:noreply, notify(socket, :error, "Visibility change failed: #{inspect(reason)}")}
     end
   end
 
@@ -406,10 +429,14 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
   # ---- PRIVATE HELPERS ----
 
   defp load_data(socket) do
-    buckets =
+    {buckets, bucket_visibilities} =
       case ActionDispatcher.dispatch_internal(:file_bucket, :list_buckets, %{}) do
-        {:ok, %{buckets: b}} when is_list(b) -> b
-        _ -> ["default"]
+        {:ok, %{buckets: entries}} when is_list(entries) ->
+          pairs = Enum.map(entries, &bucket_entry/1)
+          {Enum.map(pairs, &elem(&1, 0)), Map.new(pairs)}
+
+        _ ->
+          {["default"], %{"default" => "private"}}
       end
 
     {files, files_total} = list_files(0)
@@ -431,6 +458,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
     socket
     |> assign(
       buckets: buckets,
+      bucket_visibilities: bucket_visibilities,
       files: files,
       files_total: files_total,
       expanded_buckets: expanded,
@@ -438,6 +466,14 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
     )
     |> apply_filters()
   end
+
+  defp bucket_entry(%{"bucket" => bucket} = entry),
+    do: {bucket, entry["visibility"] || "private"}
+
+  defp bucket_entry(%{bucket: bucket} = entry),
+    do: {bucket, entry[:visibility] || "private"}
+
+  defp bucket_entry(bucket), do: {to_string(bucket), "private"}
 
   # 200 per request: enough that a normal bucket is one page, small enough that a huge one stays
   # responsive.
@@ -672,15 +708,27 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
             All Buckets
           </button>
           <%= for b <- @buckets do %>
-            <button
-              phx-click="select_bucket"
-              phx-value-bucket={b}
-              phx-target={@myself}
-              class={"px-3 py-1.5 text-xs font-semibold rounded-xl border transition-colors shrink-0 flex items-center gap-1.5 #{if @selected_bucket == b, do: "bg-violet-600 text-white border-violet-600 shadow-sm", else: "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}"}
-            >
-              <span>📁</span>
-              <span><%= b %></span>
-            </button>
+            <% public? = Map.get(@bucket_visibilities, b, "private") == "public" %>
+            <div class={"flex items-center rounded-xl border transition-colors shrink-0 #{if @selected_bucket == b, do: "bg-primary-50 border-primary-200", else: "bg-white border-gray-200 hover:bg-gray-50"}"}>
+              <button
+                phx-click="select_bucket"
+                phx-value-bucket={b}
+                phx-target={@myself}
+                class={"px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 #{if @selected_bucket == b, do: "text-primary-700", else: "text-gray-600"}"}
+              >
+                <span>📁</span>
+                <span><%= b %></span>
+              </button>
+              <button
+                phx-click="toggle_bucket_visibility"
+                phx-value-bucket={b}
+                phx-target={@myself}
+                class={"mr-1.5 px-2 py-0.5 text-[10px] font-semibold rounded-full border transition-colors #{if public?, do: "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100", else: "bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200"}"}
+                title={if public?, do: "Public: anyone may download. Click to make private.", else: "Private: staff or a signed URL only. Click to make public."}
+              >
+                <%= if public?, do: "Public", else: "Private" %>
+              </button>
+            </div>
           <% end %>
         </div>
 

@@ -351,9 +351,17 @@ defmodule Exoforge.ActionDispatcher do
     authorize_scope(declared_scope, caller_scopes)
   end
 
+  # `function_exported?/3` does not autoload. Authorization ran before the module that declares
+  # the action (or its contract) was ever called, so a first dispatch saw no metadata and a
+  # defaulted `:player` scope stood in for the contract's `:studio`/`:server`. Load first, then ask.
+  defp exported?(mod, fun, arity) do
+    function_exported?(mod, fun, arity) or
+      (Code.ensure_loaded?(mod) and function_exported?(mod, fun, arity))
+  end
+
   defp fetch_action_scope(mod, action) do
     cond do
-      function_exported?(mod, :__actions__, 0) ->
+      exported?(mod, :__actions__, 0) ->
         actions = mod.__actions__()
 
         action_info =
@@ -390,7 +398,7 @@ defmodule Exoforge.ActionDispatcher do
             check_contract_scopes(mod, action)
         end
 
-      function_exported?(mod, :__service_metadata__, 0) ->
+      exported?(mod, :__service_metadata__, 0) ->
         meta = mod.__service_metadata__()
         find_scope_in_actions(Map.get(meta, :actions, []), action)
 
@@ -400,9 +408,9 @@ defmodule Exoforge.ActionDispatcher do
   end
 
   defp check_contract_scopes(mod, action) do
-    if function_exported?(mod, :provides_contracts, 0) do
+    if exported?(mod, :provides_contracts, 0) do
       Enum.find_value(mod.provides_contracts(), :global, fn contract ->
-        if function_exported?(contract, :__service_metadata__, 0) do
+        if exported?(contract, :__service_metadata__, 0) do
           case find_scope_in_actions(contract.__service_metadata__().actions || [], action) do
             :global -> nil
             scope -> scope
@@ -542,7 +550,7 @@ defmodule Exoforge.ActionDispatcher do
 
   defp fetch_action_params(mod, action) do
     cond do
-      function_exported?(mod, :__service_metadata__, 0) ->
+      exported?(mod, :__service_metadata__, 0) ->
         meta = mod.__service_metadata__()
         find_params_in_actions(Map.get(meta, :actions, []), action)
 

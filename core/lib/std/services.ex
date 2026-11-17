@@ -824,11 +824,23 @@ defmodule Exoforge.Std.Services do
       returns(files: [:map], count: :integer)
     end
 
-    @doc "Lists all existing storage buckets."
+    @doc "Lists all storage buckets with their visibility (`public` or `private`)."
     action :list_buckets do
       scope(:studio)
       params()
-      returns(buckets: [:string])
+      returns(buckets: [:map])
+    end
+
+    @doc """
+    Sets a bucket's visibility. `public` lets anyone download its files by URL; `private` (the
+    default) serves them only to staff or through a `signed_url`. Staff-only; an extension that owns
+    a bucket resolves its own files and marks the bucket public at start.
+    """
+    action :set_bucket_visibility do
+      scope(:studio)
+      params(bucket: :string, visibility: :string)
+      returns(bucket: :string, visibility: :string)
+      errors([:invalid_payload])
     end
 
     @doc "Modifies an existing file's name, metadata, or content."

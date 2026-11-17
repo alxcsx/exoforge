@@ -4,7 +4,7 @@ defmodule Exoforge.Std.FileBucket.MixProject do
   def project do
     [
       app: :exoforge_std_file_bucket,
-      version: "0.1.34",
+      version: "0.1.35",
       elixir: "~> 1.20",
       deps: deps(),
       compilers: Mix.compilers() ++ [:exoforge_manifest]
@@ -20,6 +20,7 @@ defmodule Exoforge.Std.FileBucket.MixProject do
   defp deps do
     [
       {:exoforge_core, path: "../../core"},
+      {:exoforge_std_database, path: "../exoforge_std_database", only: :test},
       {:phoenix_live_view, "~> 1.0"},
       {:phoenix_html, "~> 4.0"},
       {:jason, "~> 1.4"}

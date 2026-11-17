@@ -59,4 +59,36 @@ defmodule Exoforge.DashboardFilesTest do
     {:ok, %{url: url}} = ActionDispatcher.dispatch_internal(:file_bucket, :signed_url, %{"bucket" => "levels", "id" => file["id"]})
     assert get(url).status == 200
   end
+
+  test "a player reaches a bucket only while staff have it public", %{stored: file, player: player} do
+    assert get(file["url"], player).status == 403
+
+    {:ok, %{visibility: "public"}} =
+      ActionDispatcher.dispatch(
+        :file_bucket,
+        :set_bucket_visibility,
+        %{
+          "bucket" => "levels",
+          "visibility" => "public"
+        },
+        caller_scopes: ["studio"]
+      )
+
+    assert get(file["url"]).status == 200
+    assert get(file["url"], player).status == 200
+
+    {:ok, %{visibility: "private"}} =
+      ActionDispatcher.dispatch(
+        :file_bucket,
+        :set_bucket_visibility,
+        %{
+          "bucket" => "levels",
+          "visibility" => "private"
+        },
+        caller_scopes: ["studio"]
+      )
+
+    assert get(file["url"]).status == 403
+    assert get(file["url"], player).status == 403
+  end
 end

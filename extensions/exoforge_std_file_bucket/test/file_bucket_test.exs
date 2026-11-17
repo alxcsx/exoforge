@@ -1,9 +1,16 @@
 defmodule Exoforge.Std.FileBucketTest do
   use ExUnit.Case, async: false
   alias Exoforge.ActionDispatcher
+  alias Exoforge.Std.Database.Manager, as: DbManager
 
   setup do
     Exoforge.ExtensionCase.start_kernel()
+
+    unless Process.whereis(DbManager) do
+      start_supervised!({DbManager, [driver: :sqlite]})
+    end
+
+    Exoforge.ExtensionCase.register_database(Exoforge.Std.Database)
 
     Exoforge.ExtensionCase.register_extension(Exoforge.Std.FileBucket,
       id: :exoforge_std_file_bucket,
@@ -102,9 +109,16 @@ defmodule Exoforge.Std.FileBucketTest do
     })
 
     assert {:ok, %{buckets: buckets}} = ActionDispatcher.dispatch_internal(:file_bucket, :list_buckets, %{})
-    assert "bucket_alpha" in buckets
-    assert "bucket_beta" in buckets
-    assert "default" in buckets
+    names = Enum.map(buckets, & &1["bucket"])
+    assert "bucket_alpha" in names
+    assert "bucket_beta" in names
+    assert "default" in names
+
+    assert %{"bucket" => "default", "visibility" => "private"} =
+             Enum.find(buckets, &(&1["bucket"] == "default"))
+
+    assert %{"bucket" => "bucket_alpha", "visibility" => "private"} =
+             Enum.find(buckets, &(&1["bucket"] == "bucket_alpha"))
   end
 
   test "update_file modifies filename and replaces content while keeping id" do
@@ -221,7 +235,16 @@ defmodule Exoforge.Std.FileBucketTest do
     test "players cannot call raw file actions; staff can" do
       payload = %{"bucket" => "b", "filename" => "a.txt", "content" => "x"}
 
-      for action <- [:upload_file, :list_files, :list_buckets, :read_file, :get_file_info, :update_file, :delete_file] do
+      for action <- [
+            :upload_file,
+            :list_files,
+            :list_buckets,
+            :set_bucket_visibility,
+            :read_file,
+            :get_file_info,
+            :update_file,
+            :delete_file
+          ] do
         assert {:error, {:forbidden_scope, _}} =
                  ActionDispatcher.dispatch(:file_bucket, action, payload, caller_scopes: ["player"])
       end
@@ -267,9 +290,60 @@ defmodule Exoforge.Std.FileBucketTest do
       assert {:ok, %{allowed: false}} = ActionDispatcher.dispatch_internal(:file_bucket, :authorize_download, Map.delete(grant, "sig"))
     end
 
-    test "only operator-listed buckets are public" do
+    test "the config seeds sdk as public; every other bucket is private" do
       assert {:ok, %{allowed: true}} = ActionDispatcher.dispatch_internal(:file_bucket, :authorize_download, %{"bucket" => "sdk", "id" => "any"})
       assert {:ok, %{allowed: false}} = ActionDispatcher.dispatch_internal(:file_bucket, :authorize_download, %{"bucket" => "levels", "id" => "any"})
+    end
+
+    test "staff set a bucket's visibility and the stored value decides the download" do
+      bucket = "levels_#{System.unique_integer([:positive])}"
+
+      assert {:ok, %{allowed: false}} =
+               ActionDispatcher.dispatch_internal(:file_bucket, :authorize_download, %{"bucket" => bucket, "id" => "any"})
+
+      assert {:ok, %{bucket: ^bucket, visibility: "public"}} =
+               ActionDispatcher.dispatch(
+                 :file_bucket,
+                 :set_bucket_visibility,
+                 %{
+                   "bucket" => bucket,
+                   "visibility" => "public"
+                 },
+                 caller_scopes: ["studio"]
+               )
+
+      assert {:ok, %{allowed: true}} =
+               ActionDispatcher.dispatch_internal(:file_bucket, :authorize_download, %{"bucket" => bucket, "id" => "any"})
+
+      assert {:ok, %{visibility: "private"}} =
+               ActionDispatcher.dispatch_internal(:file_bucket, :set_bucket_visibility, %{
+                 "bucket" => bucket,
+                 "visibility" => "private"
+               })
+
+      assert {:ok, %{allowed: false}} =
+               ActionDispatcher.dispatch_internal(:file_bucket, :authorize_download, %{"bucket" => bucket, "id" => "any"})
+    end
+
+    test "a visibility only accepts public or private" do
+      assert {:error, :invalid_payload} =
+               ActionDispatcher.dispatch_internal(:file_bucket, :set_bucket_visibility, %{
+                 "bucket" => "levels",
+                 "visibility" => "everyone"
+               })
+    end
+
+    test "visibility survives an extension restart, and the config does not undo it" do
+      assert {:ok, %{visibility: "private"}} =
+               ActionDispatcher.dispatch_internal(:file_bucket, :set_bucket_visibility, %{
+                 "bucket" => "sdk",
+                 "visibility" => "private"
+               })
+
+      Exoforge.Std.FileBucket.on_init(%{})
+
+      assert {:ok, %{allowed: false}} =
+               ActionDispatcher.dispatch_internal(:file_bucket, :authorize_download, %{"bucket" => "sdk", "id" => "any"})
     end
   end
 end

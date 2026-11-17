@@ -17,6 +17,30 @@ public class UnityAddressablesPlugin
     public const string AssetsTable = "addressable_assets";
     public const string ReleasesTable = "addressable_releases";
 
+    /// <summary>Wired by the host; the extension marks its own bucket readable at start.</summary>
+    public IActionDispatcher? Actions { get; set; }
+
+    public void OnExtensionStart() => MakeBucketPublic("addressables");
+
+    private void MakeBucketPublic(string bucket)
+    {
+        try
+        {
+            var response = Actions?.CallAction<JsonElement>("file_bucket", "set_bucket_visibility",
+                new { bucket, visibility = "public" });
+
+            if (response is JsonElement json && json.ValueKind == JsonValueKind.Object &&
+                json.TryGetProperty("error", out var error))
+            {
+                ExoServices.Logger.Warning($"[unity_addressables] Could not make bucket '{bucket}' public: {error}");
+            }
+        }
+        catch (Exception ex)
+        {
+            ExoServices.Logger.Warning($"[unity_addressables] Could not make bucket '{bucket}' public: {ex.Message}");
+        }
+    }
+
     [ExoAction]
     public AddressablesStats GetStats()
     {

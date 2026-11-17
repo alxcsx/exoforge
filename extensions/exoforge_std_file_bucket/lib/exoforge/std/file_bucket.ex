@@ -11,6 +11,7 @@ defmodule Exoforge.Std.FileBucket do
     category: "Storage",
     title: "File Bucket",
     icon: "🗂️",
+    dependencies: [Exoforge.Std.Services.Database],
     dashboard_view: %{
       id: :file_bucket,
       title: "File Bucket",
@@ -20,12 +21,15 @@ defmodule Exoforge.Std.FileBucket do
   }
 
   @meta_table :exo_file_bucket_meta
+  @visibility_table "bucket_visibility"
+  @visibilities ~w(public private)
 
   def on_init(_manifest) do
     ensure_meta_table()
     :ets.delete_all_objects(@meta_table)
     ensure_storage_dir()
     sync_disk_to_meta()
+    seed_bucket_visibility()
     seed_sdk_packages()
     :ok
   end
@@ -161,12 +165,36 @@ defmodule Exoforge.Std.FileBucket do
           []
       end
 
-    all_buckets =
+    visibilities = bucket_visibilities()
+
+    buckets =
       ["default" | buckets_from_meta ++ buckets_from_disk]
       |> Enum.uniq()
       |> Enum.sort()
+      |> Enum.map(fn bucket ->
+        %{"bucket" => bucket, "visibility" => Map.get(visibilities, bucket, "private")}
+      end)
 
-    {:ok, %{buckets: all_buckets}}
+    {:ok, %{buckets: buckets}}
+  end
+
+  @impl true
+  defaction set_bucket_visibility(payload) do
+    bucket = sanitize_bucket(payload[:bucket] || payload["bucket"] || "")
+    visibility = to_string(payload[:visibility] || payload["visibility"] || "")
+
+    if visibility in @visibilities do
+      with {:ok, _} <-
+             database_execute(
+               "INSERT INTO #{@visibility_table} (bucket, visibility) VALUES ($1, $2) " <>
+                 "ON CONFLICT (bucket) DO UPDATE SET visibility = excluded.visibility",
+               [bucket, visibility]
+             ) do
+        {:ok, %{bucket: bucket, visibility: visibility}}
+      end
+    else
+      {:error, :invalid_payload}
+    end
   end
 
   @impl true
@@ -346,9 +374,63 @@ defmodule Exoforge.Std.FileBucket do
 
   defp valid_signature?(_bucket, _id, _exp, _sig), do: false
 
-  # Buckets the operator made publicly readable: `config :exoforge_std_file_bucket, public_buckets: [...]`.
-  defp public_bucket?(bucket),
-    do: bucket in Application.get_env(:exoforge_std_file_bucket, :public_buckets, ["sdk"])
+  # Buckets are private unless their stored visibility says otherwise. The operator's
+  # `public_buckets` config is the boot-time seed, not the live answer.
+  defp public_bucket?(bucket), do: bucket_visibility(bucket) == "public"
+
+  defp bucket_visibility(bucket) do
+    case database_execute(
+           "SELECT visibility FROM #{@visibility_table} WHERE bucket = $1",
+           [sanitize_bucket(bucket)]
+         ) do
+      {:ok, %{rows: [%{"visibility" => visibility} | _]}} when visibility in @visibilities ->
+        visibility
+
+      _ ->
+        "private"
+    end
+  end
+
+  defp bucket_visibilities do
+    case database_execute("SELECT bucket, visibility FROM #{@visibility_table}") do
+      {:ok, %{rows: rows}} when is_list(rows) ->
+        Map.new(rows, fn row -> {row["bucket"], row["visibility"]} end)
+
+      _ ->
+        %{}
+    end
+  end
+
+  # The table is file_bucket's own; the operator's config only seeds a bucket that has no row yet,
+  # so a staff toggle survives restarts and a seed never undoes it.
+  defp seed_bucket_visibility do
+    with {:ok, _} <-
+           database_execute(
+             "CREATE TABLE IF NOT EXISTS #{@visibility_table} (" <>
+               "bucket text PRIMARY KEY, visibility text NOT NULL)"
+           ) do
+      Enum.each(Application.get_env(:exoforge_std_file_bucket, :public_buckets, ["sdk"]), fn bucket ->
+        _ =
+          database_execute(
+            "INSERT INTO #{@visibility_table} (bucket, visibility) VALUES ($1, 'public') " <>
+              "ON CONFLICT (bucket) DO NOTHING",
+            [sanitize_bucket(bucket)]
+          )
+      end)
+
+      :ok
+    end
+  end
+
+  defp database_execute(sql), do: database_execute(sql, [])
+
+  defp database_execute(sql, args) do
+    Exoforge.ActionDispatcher.dispatch_internal(:database, :execute, %{
+      plugin: :file_bucket,
+      operation: sql,
+      arguments: args
+    })
+  end
 
   defp url_signature(bucket, id, expires_at) do
     :crypto.mac(:hmac, :sha256, url_secret(), "#{bucket}/#{id}/#{expires_at}")

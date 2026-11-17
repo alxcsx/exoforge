@@ -83,7 +83,7 @@ file_bucket ──▶ database
 | `exoforge_std_extension_manager`| Lifecycle | `extension_manager` | — | Hot extension upload, reload, and manifest export. |
 | `exoforge_std_docs` | Docs / Guide | `docs` | `extension_manager` | Dynamic cluster API catalog, markdown chapters, and native PDF export. |
 | `exoforge_std_resources` | Store | `resource_store` | `database` | Schema-driven resource tables and generic CRUD. |
-| `exoforge_std_file_bucket` | Storage / CDN | `file_bucket` | `database` | Pluggable binary/blob asset storage with metadata and HTTP file routes. Raw access is staff-only: players reach files through an extension action that applies its own rules and hands out a `signed_url`. |
+| `exoforge_std_file_bucket` | Storage / CDN | `file_bucket` | `database` | Pluggable binary/blob asset storage with metadata and HTTP file routes. Each bucket is `public` (anyone may download by URL) or `private` (default; staff, or a `signed_url` an extension issues). Staff toggle visibility in the Studio; the operator's `public_buckets` config only seeds it at boot. Raw access is staff-only. |
 | `exoforge_std_metering` | Operations | `metering` | `database` | Usage metering per extension and action, persisted on the instance. |
 | `exoforge_std_observability` | Debug / History | `observability` | `database` | Cluster event history (day-indexed, hourly rollups, gzip archive with retention) and the joins behind it: request timelines, failure groups, live-tail reads. |
 | `exoforge_std_transport` | Gateway Abstraction | `transport` | — | Common gateway abstraction, framing normalization, and RPC dispatching for network ingress. |

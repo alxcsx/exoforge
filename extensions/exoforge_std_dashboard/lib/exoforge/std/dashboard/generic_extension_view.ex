@@ -309,7 +309,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
 
     buckets =
       case ActionDispatcher.dispatch_internal(:file_bucket, :list_buckets, %{}) do
-        {:ok, %{buckets: b}} when is_list(b) -> b
+        {:ok, %{buckets: entries}} when is_list(entries) -> Enum.map(entries, &bucket_name/1)
         _ -> ["default"]
       end
 
@@ -651,6 +651,11 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
   end
 
   ## ---- PRIVATE HELPERS ----
+
+  # `list_buckets` reports each bucket with its visibility; the picker only needs the name.
+  defp bucket_name(%{"bucket" => name}), do: name
+  defp bucket_name(%{bucket: name}), do: name
+  defp bucket_name(name), do: to_string(name)
 
   defp load_resource_data(socket) do
     case socket.assigns.selected_resource_name do
