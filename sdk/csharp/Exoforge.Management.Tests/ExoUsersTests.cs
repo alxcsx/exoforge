@@ -102,4 +102,39 @@ public class ExoUsersTests
     [InlineData("read", "guest")]
     public void RoleOf_names_the_highest_role(string scopes, string expected) =>
         Assert.Equal(expected, ExoUsers.RoleOf(scopes));
+
+    [Theory]
+    [InlineData("30d", 2_592_000)]
+    [InlineData("12h", 43_200)]
+    [InlineData("90m", 5_400)]
+    [InlineData("3600s", 3_600)]
+    [InlineData("3600", 3_600)]
+    public void ParseExpiry_reads_a_term_into_seconds(string value, int expected) =>
+        Assert.Equal(expected, ExoUsers.ParseExpiry(value));
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("soon")]
+    [InlineData("0d")]
+    [InlineData("-5d")]
+    public void ParseExpiry_rejects_what_is_not_a_term(string value) =>
+        Assert.Throws<ArgumentException>(() => ExoUsers.ParseExpiry(value));
+
+    [Fact]
+    public void TokenPayload_carries_the_term_only_when_one_was_asked_for()
+    {
+        var defaultTerm = ExoUsers.TokenPayload("u1", null);
+        Assert.Equal("u1", (string?)defaultTerm["user_id"]);
+        Assert.False(defaultTerm.ContainsKey("expires_in"));
+
+        var shortTerm = ExoUsers.TokenPayload("u1", 2_592_000);
+        Assert.Equal(2_592_000, (int?)shortTerm["expires_in"]);
+    }
+
+    [Fact]
+    public void RevokePayload_requires_a_token_id()
+    {
+        Assert.Equal("tok_1", (string?)ExoUsers.RevokePayload(" tok_1 ")["token_id"]);
+        Assert.Throws<ArgumentException>(() => ExoUsers.RevokePayload(" "));
+    }
 }

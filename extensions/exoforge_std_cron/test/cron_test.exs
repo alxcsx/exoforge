@@ -101,6 +101,23 @@ defmodule Exoforge.Std.CronTest do
     test "trigger returns error for non-existent job" do
       assert {:error, :job_not_found} = Scheduler.trigger("unknown:job")
     end
+
+    test "a contract's declared cron becomes a job" do
+      Exoforge.ExtensionRegistry.register(%Exoforge.Domain.Manifest{
+        id: :exoforge_std_auth,
+        name: "exoforge_std_auth",
+        version: "0.1.0",
+        entry_point: Exoforge.Std.Auth,
+        provides: [Exoforge.Std.Services.Auth]
+      })
+
+      assert :ok = Scheduler.reload()
+
+      job = Enum.find(Scheduler.list_jobs(), &(&1.id == "auth:purge_tokens"))
+      assert job
+      assert job.action == "purge_tokens"
+      assert job.schedule == "17 * * * *"
+    end
   end
 
   describe "Cron Extension Actions" do

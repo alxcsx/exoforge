@@ -280,9 +280,91 @@ public class ExoClient : IDisposable
     }
 
     /// <summary>
+    /// Called when a call fails with <c>token_expired</c>: the engine SDK exchanges its refresh token
+    /// for a new pair here and installs the new access token. The call is then retried once. A null
+    /// callback (a client with no refresh token) leaves the original error with the caller.
+    /// </summary>
+    public Func<CancellationToken, Task>? RefreshTokensAsync { get; set; }
+
+    private readonly object _refreshLock = new();
+    private Task<bool>? _refreshInFlight;
+
+    /// <summary>
+    /// Runs a token renewal under this client's single gate.
+    ///
+    /// Every route to a refresh - a call that came back <c>token_expired</c>, a reconnect, a login -
+    /// goes through here, so concurrent expiries share one rotation and all await its result.
+    /// Rotating a refresh token twice would revoke the session's whole family, which is exactly what
+    /// replaying it from two places would do.
+    /// </summary>
+    public Task<bool> RefreshTokensOnceAsync(
+        Func<CancellationToken, Task<bool>> refresh,
+        CancellationToken cancellationToken = default)
+    {
+        lock (_refreshLock)
+        {
+            if (_refreshInFlight == null)
+            {
+                Task<bool> started = refresh(cancellationToken);
+                _refreshInFlight = started;
+
+                _ = started.ContinueWith(
+                    _ =>
+                    {
+                        lock (_refreshLock)
+                        {
+                            if (ReferenceEquals(_refreshInFlight, started)) _refreshInFlight = null;
+                        }
+                    },
+                    TaskScheduler.Default);
+            }
+
+            return _refreshInFlight;
+        }
+    }
+
+    private Task<bool> RefreshOnceAsync(CancellationToken cancellationToken) =>
+        RefreshTokensOnceAsync(
+            async ct =>
+            {
+                await RefreshTokensAsync!(ct).ConfigureAwait(false);
+                return true;
+            },
+            cancellationToken);
+
+    /// <summary>
     /// Sends an action request to the Exoforge Kernel with explicit transport preference.
+    ///
+    /// When the server answers <c>token_expired</c> and a refresh callback is installed, the tokens
+    /// are renewed and the call is made once more - a short-lived access token is the point, so the
+    /// caller never sees an hour boundary.
     /// </summary>
     public async Task<TResult> SendActionAsync<TResult>(
+        string service,
+        string action,
+        object? payload,
+        ExoTransportPreference transportPreference,
+        TimeSpan? timeout = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await SendActionCoreAsync<TResult>(service, action, payload, transportPreference, timeout, cancellationToken).ConfigureAwait(false);
+        }
+        catch (ExoActionException ex) when (
+            ex.Code == "token_expired" &&
+            RefreshTokensAsync != null &&
+            // Refreshing is the cure, not a call that needs one, and validating a token is how an
+            // expiry is discovered. Retrying either inside a refresh would await the rotation it is
+            // part of; they surface the error instead.
+            !(service == "auth" && (action == "refresh" || action == "authenticate")))
+        {
+            await RefreshOnceAsync(cancellationToken).ConfigureAwait(false);
+            return await SendActionCoreAsync<TResult>(service, action, payload, transportPreference, timeout, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private async Task<TResult> SendActionCoreAsync<TResult>(
         string service,
         string action,
         object? payload,

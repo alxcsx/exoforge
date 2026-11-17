@@ -271,7 +271,14 @@ defmodule Exoforge.Std.Services do
     action :authenticate do
       params(token: :string)
       returns(player_id: :string, scopes: [:string])
-      errors([:invalid_token, :expired])
+      errors([:invalid_token, :token_expired])
+    end
+
+    @doc "Exchanges a refresh token for a fresh access/refresh pair."
+    action :refresh do
+      params(token: :string)
+      returns(player_id: :string, token: :string, refresh_token: :string, expires_in: :integer)
+      errors([:invalid_token, :token_expired])
     end
 
     @doc "Authenticates an account with email and password."
@@ -341,19 +348,71 @@ defmodule Exoforge.Std.Services do
       errors([:unauthorized, :invalid_attributes, :player_not_found])
     end
 
-    @doc "Issues an authentication token for a user or player."
+    @doc """
+    Issues a service token for an existing user or player account.
+
+    The token carries the account's scopes as they are when it authenticates; the `scopes`
+    parameter is accepted for older callers and ignored.
+    """
     action :issue_token do
-      # Mints tokens with arbitrary scopes - admin only (M33 Fix 3).
+      # Mints tokens - admin only (M33 Fix 3).
       scope("admin")
 
       params(
         player_id: :string,
         user_id: [type: :string, optional: true],
-        scopes: [type: :term, optional: true]
+        scopes: [type: :term, optional: true],
+        expires_in: [type: :integer, optional: true]
       )
 
-      returns(token: :string, user_id: :string, player_id: :string)
-      errors([:invalid_player])
+      returns(
+        token: :string,
+        user_id: :string,
+        player_id: :string,
+        token_id: :string,
+        expires_at: :string,
+        expires_in: :integer
+      )
+
+      errors([:invalid_player, :unknown_user])
+    end
+
+    @doc "Lists the tokens issued for an account: id, kind, creation, last use and expiry."
+    action :list_tokens do
+      scope("admin")
+
+      params(
+        user_id: [type: :string, optional: true],
+        player_id: [type: :string, optional: true]
+      )
+
+      returns(tokens: [:map], count: :integer)
+    end
+
+    @doc "Revokes a token (and the session it belongs to)."
+    action :revoke_token do
+      scope("admin")
+      params(token_id: :string)
+      returns(token_id: :string, status: :string)
+      errors([:token_not_found])
+    end
+
+    @doc "Deletes expired and revoked token rows. Cron calls this."
+    action :purge_tokens do
+      scope(:server)
+      returns(purged: :integer)
+    end
+
+    @doc """
+    Removes every token that has expired or been revoked.
+
+    Credentials are rows with a lifetime: an access token after an hour, a refresh token after a
+    month, a service token after its term. Deleting the dead ones is what keeps the table, and the
+    account listing built from it, a picture of live sessions rather than a history of them.
+    """
+    cron :purge_tokens do
+      schedule("17 * * * *")
+      description("Deletes expired and revoked token rows.")
     end
 
     @doc "Lists all registered user accounts and their assigned authorization scopes."

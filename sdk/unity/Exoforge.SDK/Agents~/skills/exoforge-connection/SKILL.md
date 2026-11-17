@@ -38,7 +38,7 @@ Connect to a cluster, authenticate administrator or developer credentials, and s
 ./exo connect --ws ws://localhost:4000 --http http://localhost:4001 --email admin@example.com --password admin_password --save --json
 ```
 
-The `--save` flag writes the authenticated token and endpoints into `Exoforge/exoforge.json` under the active environment.
+The `--save` flag writes the endpoints and the login session into `Exoforge/exoforge.json` under the active environment: the access token (`token`, about an hour) and the refresh token beside it (`refresh_token`, about 30 days). The CLI renews the pair through `auth.refresh` when the hour is up and writes the rotated pair back, so a saved session keeps working without another login; when it finally expires, `exo connect --save` again. The session belongs to this machine and environment (`cli:` plus a hash of both), so connecting again replaces it rather than adding another one. `--save` never mints a service token - those are for servers, via `exo user token`.
 
 ## 3. Verifying Cluster Status
 
@@ -90,13 +90,17 @@ Accounts are ordinary user accounts that an admin manages with the saved admin s
 ./exo user list --search arcade --limit 20
 ./exo user create dev@studio.local --password '<password>' --name "Dev" --role studio
 ./exo user role <user_id> --role player
-./exo user token <user_id>
+./exo user token <user_id> --expires 30d
+./exo user tokens <user_id>
+./exo user token --revoke <token_id>
 ./exo user delete <user_id>
 ```
 
 Roles: `player`, `studio`, `service`, `admin`. `--json` prints the raw reply; without it `list` prints one line per account, and `token` prints only the token on stdout.
 
-A token is a credential. It acts as the account until the account is deleted, and `exo user role` changes the scopes of tokens already issued. Keep tokens out of version control.
+A token is a credential with a lifetime: `exo_<kind>_<token_id>.<secret>`, stored hashed, listed by id (never by secret), and revoked by id. `exo user token <user_id>` mints a service token (`svc`, default term 90 days, `--expires 12h|30d|3600s` to shorten it); `exo user tokens <user_id>` lists the account's tokens with creation, last use and expiry; `exo user token --revoke <token_id>` signs out whoever holds it. `exo user role` changes the scopes of tokens already issued, because scopes are read from the account when a token authenticates. Keep tokens out of version control.
+
+A player session is different: sign-in returns a short-lived access token (`ses`, ~1 hour) and a single-use refresh token (`ref`, ~30 days). The client renews automatically through `auth.refresh` on `token_expired`; a refresh token presented twice revokes its whole session, and a new login on the same device replaces that device's session.
 
 ### A service account for a trusted game server
 
@@ -105,7 +109,7 @@ A trusted game server (the one that reports kills, hits or purchases) calls acti
 ```bash
 ./exo user create game-server@studio.local --password '<password>' --name "Game server" --role service
 ./exo user list --search game-server        # note the user id
-./exo user token <user_id> > Exoforge/game-server.token
+./exo user token <user_id> --expires 90d > Exoforge/game-server.token
 ```
 
 Add `Exoforge/game-server.token` to `.gitignore`, read it only from server-side code or Editor-only tooling (never from `Assets/` and never in a build), and delete the account with `exo user delete <user_id>` when the server is retired.

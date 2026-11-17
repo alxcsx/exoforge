@@ -352,6 +352,26 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
   end
 
   @impl true
+  def handle_event(
+        "revoke_token",
+        %{"token_id" => token_id, "player_id" => player_id},
+        socket
+      ) do
+    case ActionDispatcher.dispatch(:auth, :revoke_token, %{token_id: token_id},
+           caller_scopes: caller_scopes(socket)
+         ) do
+      {:ok, _} ->
+        socket = load_users(socket)
+        selected = Enum.find(socket.assigns.users, &(&1["player_id"] == player_id))
+        {:noreply, assign(socket, selected_user: selected, action_notification: "Token revoked.")}
+
+      {:error, reason} ->
+        {:noreply,
+         assign(socket, error_message: "Failed to revoke token: #{inspect(reason)}")}
+    end
+  end
+
+  @impl true
   def handle_event("switch_user_inspect_tab", %{"tab" => tab}, socket) do
     socket = assign(socket, :user_inspect_tab, tab)
 
@@ -1329,15 +1349,32 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
               <% else %>
                 <div class="space-y-2">
                   <%= for token <- @selected_user["active_tokens"] do %>
-                    <div class="p-2.5 bg-gray-50 rounded-xl border border-gray-200 flex items-center justify-between">
-                      <span class="font-mono text-xs text-gray-800 truncate mr-2 select-all"><%= token %></span>
-                      <button
-                        phx-click={Phoenix.LiveView.JS.dispatch("exoforge:clip", detail: %{text: token})}
-                        title="Copy Token"
-                        class="text-xs text-primary-600 hover:text-primary-800 font-semibold shrink-0"
-                      >
-                        Copy
-                      </button>
+                    <div class="p-2.5 bg-gray-50 rounded-xl border border-gray-200 flex items-center justify-between gap-2">
+                      <div class="min-w-0">
+                        <div class="font-mono text-xs text-gray-800 truncate select-all"><%= token["token_id"] %></div>
+                        <div class="text-[10px] text-gray-500">
+                          <%= token["kind"] %> · expires <%= token["expires_at"] %>
+                        </div>
+                      </div>
+                      <div class="flex items-center gap-2 shrink-0">
+                        <button
+                          phx-click={Phoenix.LiveView.JS.dispatch("exoforge:clip", detail: %{text: token["token_id"]})}
+                          title="Copy Token ID"
+                          class="text-xs text-primary-600 hover:text-primary-800 font-semibold"
+                        >
+                          Copy
+                        </button>
+                        <button
+                          phx-click="revoke_token"
+                          phx-value-token_id={token["token_id"]}
+                          phx-value-player_id={@selected_user["player_id"]}
+                          phx-target={@myself}
+                          title="Revoke this token"
+                          class="text-xs text-red-600 hover:text-red-800 font-semibold"
+                        >
+                          Revoke
+                        </button>
+                      </div>
                     </div>
                   <% end %>
                 </div>

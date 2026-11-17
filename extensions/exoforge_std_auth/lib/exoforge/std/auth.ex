@@ -1,8 +1,13 @@
 defmodule Exoforge.Std.Auth do
   @moduledoc """
-  Standard authentication and authorization plugin for Exoforge.
+  Standard authentication and authorization extension for Exoforge.
   Provides the :auth service contract.
   Relies on the :database service for isolated persistence of tokens and scopes.
+
+  A credential is `exo_<kind>_<token_id>.<secret>` - the id names the row, the secret is never
+  stored, only its SHA-256. Kinds: `ses` (player access, short-lived), `ref` (single-use refresh,
+  rotating) and `svc` (tooling, no refresh). Every row carries an expiry, so a credential that is
+  forgotten still stops working, and every row can be revoked by id.
   """
   use Exoforge.Extension, provides: [:auth]
 
@@ -57,6 +62,36 @@ defmodule Exoforge.Std.Auth do
   @players_table "players"
   @accounts_table "accounts"
 
+  # A token is `exo_<kind>_<token_id>.<secret>`: the id is the lookup key and is stored beside the
+  # row it names, the secret never is. The suffix says what the credential is for, so a refresh
+  # token presented as a bearer token is refused by kind rather than by luck.
+  @token_prefix "exo"
+
+  @token_columns [
+    {"token_id", "text"},
+    {"user_id", "text"},
+    {"kind", "text"},
+    {"secret_hash", "text"},
+    {"expires_at", "text"},
+    {"created_at", "text"},
+    {"last_used_at", "text"},
+    {"revoked_at", "text"},
+    {"family_id", "text"},
+    {"device_id", "text"}
+  ]
+
+  # Lifetimes in seconds. An access token is short because it travels on every request and a client
+  # can renew it; the refresh token is the long-lived credential and is single-use. A service token
+  # has no refresh and a term long enough to be pasted into a server's configuration.
+  @access_ttl 3_600
+  @refresh_ttl 2_592_000
+  @service_ttl 7_776_000
+  @max_sessions 10
+
+  # Writing `last_used_at` on every request would be a write per call for a field people read
+  # occasionally; once a minute is the resolution the listing needs.
+  @touch_interval_seconds 60
+
   def on_init(_manifest) do
     init_schema()
     ensure_admin_account()
@@ -70,49 +105,98 @@ defmodule Exoforge.Std.Auth do
   @doc "Initializes the required tables in the isolated auth database."
   def init_schema do
     _ =
-      ActionDispatcher.dispatch_internal(:database, :execute, %{
-        plugin: :auth,
-        operation:
-          "CREATE TABLE IF NOT EXISTS #{@tokens_table} (id text, token text, player_id text, scopes text)"
-      })
+      execute("CREATE TABLE IF NOT EXISTS #{@tokens_table} (#{Enum.map_join(@token_columns, ", ", fn {name, type} -> "#{name} #{type}" end)})")
 
     _ =
-      ActionDispatcher.dispatch_internal(:database, :execute, %{
-        plugin: :auth,
-        operation:
-          "CREATE TABLE IF NOT EXISTS #{@players_table} (id text, player_id text, scopes text)"
-      })
+      execute("CREATE TABLE IF NOT EXISTS #{@players_table} (id text, player_id text, scopes text)")
 
     _ =
-      ActionDispatcher.dispatch_internal(:database, :execute, %{
-        plugin: :auth,
-        operation:
-          "CREATE TABLE IF NOT EXISTS #{@accounts_table} (id text, player_id text, email text, password_hash text, scopes text)"
-      })
+      execute("CREATE TABLE IF NOT EXISTS #{@accounts_table} (id text, player_id text, email text, password_hash text, scopes text)")
 
     # `CREATE TABLE IF NOT EXISTS` does not add a column to a table that already exists, so databases
     # that predate this one are brought forward here rather than by a schema reset.
-    unless column_exists?(@players_table, "disposable") do
-      _ =
-        ActionDispatcher.dispatch_internal(:database, :execute, %{
-          plugin: :auth,
-          operation: "ALTER TABLE #{@players_table} ADD COLUMN disposable integer DEFAULT 0"
-        })
-    end
+    ensure_column(@players_table, "disposable", "integer DEFAULT 0")
+
+    # One inspection per table, not one per column: this runs on every boot and from the actions
+    # that need the schema.
+    token_columns = table_columns(@tokens_table)
+    ensure_token_columns(token_columns)
+    migrate_legacy_tokens(token_columns)
 
     :ok
   end
 
-  defp column_exists?(table, column) do
+  defp execute(sql, args \\ []) do
+    ActionDispatcher.dispatch_internal(:database, :execute, %{
+      plugin: :auth,
+      operation: sql,
+      arguments: args
+    })
+  end
+
+  defp ensure_column(table, column, definition) do
+    unless column_exists?(table, column) do
+      _ = execute("ALTER TABLE #{table} ADD COLUMN #{column} #{definition}")
+    end
+  end
+
+  defp ensure_token_columns(existing) do
+    Enum.each(@token_columns, fn {name, type} ->
+      unless name in existing do
+        _ = execute("ALTER TABLE #{@tokens_table} ADD COLUMN #{name} #{type}")
+      end
+    end)
+
+    :ok
+  end
+
+  defp table_columns(table) do
     # Column inspection is the adapter's dialect, not a PRAGMA here (M33 Fix 9): PostgreSQL does
     # not answer `PRAGMA table_info`, so the check read "no such column" there forever.
     case ActionDispatcher.dispatch_internal(:database, :table_columns, %{
            plugin: :auth,
            table: table
          }) do
-      {:ok, %{columns: columns}} -> to_string(column) in columns
-      _ -> false
+      {:ok, %{columns: columns}} -> Enum.map(columns, &to_string/1)
+      _ -> []
     end
+  end
+
+  defp column_exists?(table, column), do: to_string(column) in table_columns(table)
+
+  # Rows written before tokens were hashed carry the credential itself in `token`, with the
+  # account's scopes copied beside it. They are hashed in place - the old string is the secret,
+  # and the row keeps working - and given the refresh lifetime so they age out instead of living
+  # forever. Nothing is invalidated by the upgrade.
+  defp migrate_legacy_tokens(columns) do
+    if "token" in columns do
+      now = now_iso()
+      expires = iso_after(@refresh_ttl)
+
+      _ =
+        case execute("SELECT token, player_id FROM #{@tokens_table} WHERE token IS NOT NULL AND token != '' AND token_id IS NULL") do
+          {:ok, %{rows: rows}} ->
+            Enum.each(rows, fn row ->
+              token = row["token"] || row[:token]
+              player_id = row["player_id"] || row[:player_id]
+
+              # The id is derived, not stored: a legacy token's lookup key is the hash of the
+              # token itself, so no column holds the credential.
+              hashed = hash_secret(token)
+
+              _ =
+                execute(
+                  "UPDATE #{@tokens_table} SET token_id = $1, user_id = $2, kind = $3, secret_hash = $4, expires_at = $5, created_at = $6, token = '' WHERE token = $7",
+                  [hashed, player_id, "legacy", hashed, expires, now, token]
+                )
+            end)
+
+          _ ->
+            :ok
+        end
+    end
+
+    :ok
   end
 
   ## ---- SERVICE ACTIONS ----
@@ -134,40 +218,10 @@ defmodule Exoforge.Std.Auth do
       token == Roles.guest() ->
         scopes = [Roles.guest()]
 
-        {:ok,
-         %{user_id: "guest_anon", player_id: "guest_anon", scopes: scopes, role: role(scopes)}}
+        {:ok, %{user_id: "guest_anon", player_id: "guest_anon", scopes: scopes, role: role(scopes)}}
 
       true ->
-        case Exoforge.Std.Auth.Cache.get(token) do
-          {:ok, cached_result} ->
-            {:ok, cached_result}
-
-          :error ->
-            query = "SELECT * FROM #{@tokens_table} WHERE token = $1"
-
-            case ActionDispatcher.dispatch_internal(:database, :execute, %{
-                   plugin: :auth,
-                   operation: query,
-                   arguments: [token]
-                 }) do
-              {:ok, %{rows: [row | _]}} ->
-                uid =
-                  Map.get(row, "user_id") || Map.get(row, :user_id) || Map.get(row, "player_id") ||
-                    Map.get(row, :player_id)
-
-                raw_scopes = Map.get(row, "scopes") || Map.get(row, :scopes) || Roles.player()
-                scopes = parse_scopes(raw_scopes)
-                result = %{user_id: uid, player_id: uid, scopes: scopes, role: role(scopes)}
-                Exoforge.Std.Auth.Cache.put(token, result)
-                {:ok, result}
-
-              {:ok, %{rows: []}} ->
-                {:error, :invalid_token}
-
-              {:error, _reason} ->
-                {:error, :invalid_token}
-            end
-        end
+        verify_token(token)
     end
   end
 
@@ -206,13 +260,25 @@ defmodule Exoforge.Std.Auth do
                   Roles.player()
               )
 
-            case generate_and_store_token(player_id, scopes) do
-              {:ok, token} ->
+            device_id = Map.get(payload, :device_id) || Map.get(payload, "device_id")
+
+            case start_session(player_id, device_id) do
+              {:ok, session} ->
                 Exoforge.EventDispatcher.broadcast(
                   :"auth.login",
-                  %{player_id: player_id, role: to_string(role(scopes))}, topic: "auth")
+                  %{player_id: player_id, role: to_string(role(scopes))},
+                  topic: "auth"
+                )
 
-                {:ok, %{player_id: player_id, token: token, scopes: scopes, role: role(scopes)}}
+                {:ok,
+                 %{
+                   player_id: player_id,
+                   token: session.token,
+                   refresh_token: session.refresh_token,
+                   expires_in: session.expires_in,
+                   scopes: scopes,
+                   role: role(scopes)
+                 }}
 
               error ->
                 error
@@ -279,7 +345,6 @@ defmodule Exoforge.Std.Auth do
     register_unprotected(payload)
   end
 
-
   @doc """
   Creates or resumes an anonymous player session.
 
@@ -315,11 +380,9 @@ defmodule Exoforge.Std.Auth do
 
             attach_device_id(player_id, device_id)
 
-            case anonymous_token(player_id) do
+            case anonymous_token(player_id, device_id) do
               {:ok, result} ->
-                Exoforge.EventDispatcher.broadcast(:"auth.anonymous", %{player_id: player_id},
-                  topic: "auth"
-                )
+                Exoforge.EventDispatcher.broadcast(:"auth.anonymous", %{player_id: player_id}, topic: "auth")
 
                 {:ok, Map.put(result, :name, player_name(player_id))}
 
@@ -364,38 +427,154 @@ defmodule Exoforge.Std.Auth do
   @impl true
   defaction issue_token(payload), scope: Exoforge.Auth.Roles.admin() do
     user_id =
-      Map.get(payload, :user_id) || Map.get(payload, "user_id") ||
-        Map.get(payload, :player_id) || Map.get(payload, "player_id")
+      user_id_from(payload)
 
-    raw_scopes = Map.get(payload, :scopes) || Map.get(payload, "scopes")
+    expires_in = int_value(Map.get(payload, :expires_in) || Map.get(payload, "expires_in"), nil)
 
-    if is_nil(user_id) or user_id == "" do
-      {:error, :invalid_player}
-    else
-      scopes =
-        if is_nil(raw_scopes) do
-          query = "SELECT * FROM #{@players_table} WHERE player_id = $1"
+    cond do
+      is_nil(user_id) or user_id == "" ->
+        {:error, :invalid_player}
 
-          case ActionDispatcher.dispatch_internal(:database, :execute, %{
-                 plugin: :auth,
-                 operation: query,
-                 arguments: [user_id]
-               }) do
-            {:ok, %{rows: [row | _]}} ->
-              parse_scopes(Map.get(row, "scopes") || Map.get(row, :scopes) || Roles.player())
+      # A token is a credential for an account. Minting one for an id nobody holds would create a
+      # second, invisible identity that owns nothing and cannot be managed.
+      not user_exists?(user_id) ->
+        {:error, :unknown_user}
 
-            _ ->
-              [Roles.player()]
-          end
-        else
-          parse_scopes(raw_scopes)
+      true ->
+        # Scopes are the account's, read when the token authenticates: `scopes` in the payload is
+        # accepted for older callers and ignored, so a token cannot carry a role its account lost.
+        case new_token("svc", user_id, expires_in || service_ttl(), nil, nil) do
+          {:ok, token} ->
+            {:ok,
+             %{
+               token: token.token,
+               token_id: token.token_id,
+               user_id: user_id,
+               player_id: user_id,
+               expires_at: token.expires_at,
+               expires_in: token.expires_in
+             }}
+
+          error ->
+            error
         end
-
-      case generate_and_store_token(user_id, scopes) do
-        {:ok, token} -> {:ok, %{token: token, user_id: user_id, player_id: user_id}}
-        error -> error
-      end
     end
+  end
+
+  @doc """
+  Exchanges a refresh token for a fresh pair.
+
+  The presented refresh token is rotated: it is revoked, and its replacement belongs to the same
+  family. Presenting a rotated token again means the credential leaked, so the whole family - the
+  access token that was issued beside it and every descendant - is revoked.
+  """
+  @impl true
+  defaction refresh(payload), scope: :global do
+    token = extract_token(payload)
+
+    with {:ok, token_id, secret} <- parse_refresh_token(token),
+         %{} = row <- fetch_token(token_id) do
+      cond do
+        not secret_matches?(secret, row["secret_hash"] || row[:secret_hash]) ->
+          {:error, :invalid_token}
+
+        row["revoked_at"] || row[:revoked_at] ->
+          _ = revoke_family(row["family_id"] || row[:family_id])
+          _ = Exoforge.Std.Auth.Cache.flush()
+          {:error, :invalid_token}
+
+        expired?(row) ->
+          {:error, :token_expired}
+
+        true ->
+          user_id = to_string(row["user_id"] || row[:user_id])
+          family_id = row["family_id"] || row[:family_id]
+          device_id = row["device_id"] || row[:device_id]
+
+          _ = revoke_row(token_id)
+
+          with {:ok, access} <- new_token("ses", user_id, access_ttl(), family_id, device_id),
+               {:ok, rotated} <- new_token("ref", user_id, refresh_ttl(), family_id, device_id) do
+            {:ok,
+             %{
+               player_id: user_id,
+               user_id: user_id,
+               token: access.token,
+               refresh_token: rotated.token,
+               expires_in: access.expires_in,
+               refresh_expires_in: rotated.expires_in
+             }}
+          end
+      end
+    else
+      _ -> {:error, :invalid_token}
+    end
+  end
+
+  @impl true
+  defaction list_tokens(payload), scope: Exoforge.Auth.Roles.admin() do
+    user_id = user_id_from(payload)
+
+    {sql, args} =
+      if is_nil(user_id) or user_id == "" do
+        {"SELECT * FROM #{@tokens_table} ORDER BY created_at", []}
+      else
+        {"SELECT * FROM #{@tokens_table} WHERE user_id = $1 ORDER BY created_at", [user_id]}
+      end
+
+    tokens = sql |> run_query(args) |> Enum.map(&token_summary/1)
+
+    {:ok, %{tokens: tokens, count: length(tokens)}}
+  end
+
+  @impl true
+  defaction revoke_token(payload), scope: Exoforge.Auth.Roles.admin() do
+    token_id = Map.get(payload, :token_id) || Map.get(payload, "token_id")
+    row = if is_nil(token_id) or token_id == "", do: nil, else: fetch_token(token_id)
+
+    cond do
+      # A token that is already revoked is not a token any more; reporting it as missing is what
+      # lets a caller tell "revoked now" from "there was nothing to revoke".
+      is_nil(row) or revoked?(row) ->
+        {:error, :token_not_found}
+
+      true ->
+        # Revoking one credential of a session revokes the session: leaving the refresh token alive
+        # would let the client it belongs to mint a replacement for the access token just killed.
+        revoke_family(row["family_id"] || row[:family_id], token_id)
+        _ = Exoforge.Std.Auth.Cache.flush()
+        {:ok, %{token_id: token_id, status: "revoked"}}
+    end
+  end
+
+  @doc """
+  Deletes expired and revoked token rows. Called by the cron extension.
+
+  The rows are the only record that a rotated refresh token was used, so replay detection is
+  bounded by the purge interval: an old token replayed after its row is gone is refused as
+  unknown, not as a leak. That is the cost of not keeping credentials' history forever.
+  """
+  @impl true
+  defaction purge_tokens(), scope: :server do
+    init_schema()
+    now = now_iso()
+
+    purged =
+      case run_query(
+             "SELECT COUNT(*) AS n FROM #{@tokens_table} WHERE revoked_at IS NOT NULL OR (expires_at IS NOT NULL AND expires_at <= $1)",
+             [now]
+           ) do
+        [row | _] -> int_value(row["n"] || row[:n], 0)
+        [] -> 0
+      end
+
+    _ =
+      execute(
+        "DELETE FROM #{@tokens_table} WHERE revoked_at IS NOT NULL OR (expires_at IS NOT NULL AND expires_at <= $1)",
+        [now]
+      )
+
+    {:ok, %{purged: purged}}
   end
 
   @impl true
@@ -405,17 +584,17 @@ defmodule Exoforge.Std.Auth do
     ids_filter = user_ids_where(payload)
 
     union =
-      "SELECT player_id FROM #{@players_table} UNION SELECT player_id FROM #{@accounts_table} UNION SELECT player_id FROM #{@tokens_table}"
+      "SELECT player_id FROM #{@players_table} UNION SELECT player_id FROM #{@accounts_table} UNION SELECT user_id AS player_id FROM #{@tokens_table}"
 
     {ids, total} = page_user_ids(union, ids_filter, payload)
 
     players_rows = rows_in(@players_table, ids)
-    tokens_rows = rows_in(@tokens_table, ids)
+    tokens_rows = rows_in(@tokens_table, ids, "user_id")
     accounts_rows = rows_in(@accounts_table, ids)
 
     tokens_by_player =
       Enum.group_by(tokens_rows, fn row ->
-        to_string(Map.get(row, "player_id") || Map.get(row, :player_id))
+        to_string(Map.get(row, "user_id") || Map.get(row, :user_id))
       end)
 
     players_by_id =
@@ -443,10 +622,11 @@ defmodule Exoforge.Std.Auth do
         tokens = Map.get(tokens_by_player, pid, [])
         email = Map.get(acc_row, "email") || Map.get(acc_row, :email)
 
-        token_strings =
-          Enum.map(tokens, fn t ->
-            to_string(Map.get(t, "token") || Map.get(t, :token))
-          end)
+        active_tokens =
+          tokens
+          |> Enum.reject(fn t -> t["revoked_at"] || t[:revoked_at] end)
+          |> Enum.reject(fn t -> expired?(t) end)
+          |> Enum.map(&token_summary/1)
 
         %{
           "user_id" => pid,
@@ -454,8 +634,8 @@ defmodule Exoforge.Std.Auth do
           "name" => Map.get(acc_row, "name") || Map.get(acc_row, :name) || pid,
           "email" => email,
           "scopes" => scopes,
-          "tokens_count" => length(tokens),
-          "active_tokens" => token_strings,
+          "tokens_count" => length(active_tokens),
+          "active_tokens" => active_tokens,
           "status" => "Active",
           "is_protected" => protected_account?(pid)
         }
@@ -513,9 +693,7 @@ defmodule Exoforge.Std.Auth do
             actual_pid = Map.get(acc_row, "player_id") || Map.get(acc_row, :player_id) || pid
 
             scopes =
-              parse_scopes(
-                Map.get(acc_row, "scopes") || Map.get(acc_row, :scopes) || Roles.player()
-              )
+              parse_scopes(Map.get(acc_row, "scopes") || Map.get(acc_row, :scopes) || Roles.player())
 
             _ = upsert_account(actual_pid, email, password, scopes)
             {:ok, %{user_id: actual_pid, player_id: actual_pid, status: "password_reset"}}
@@ -530,9 +708,7 @@ defmodule Exoforge.Std.Auth do
                  }) do
               {:ok, %{rows: [prow | _]}} ->
                 scopes =
-                  parse_scopes(
-                    Map.get(prow, "scopes") || Map.get(prow, :scopes) || Roles.player()
-                  )
+                  parse_scopes(Map.get(prow, "scopes") || Map.get(prow, :scopes) || Roles.player())
 
                 _ = upsert_account(pid, "#{pid}@player.exoforge.io", password, scopes)
                 {:ok, %{user_id: pid, player_id: pid, status: "password_reset"}}
@@ -592,15 +768,9 @@ defmodule Exoforge.Std.Auth do
             arguments: [scopes_str, pid]
           })
 
-        _ =
-          ActionDispatcher.dispatch_internal(:database, :execute, %{
-            plugin: :auth,
-            operation: "UPDATE #{@tokens_table} SET scopes = $1 WHERE player_id = $2",
-            arguments: [scopes_str, pid]
-          })
-
-        # authenticate caches its answer per token; without this a demoted account keeps the old
-        # scopes until the next restart.
+        # authenticate reads the account's scopes, so there is nothing to rewrite in the token rows:
+        # a role change takes effect at the next authentication, for every token the account holds.
+        # The cache still has to go, because it holds the answer it gave yesterday.
         _ = Exoforge.Std.Auth.Cache.flush()
         {:ok, %{user_id: pid, player_id: pid, scopes: scopes}}
     end
@@ -664,7 +834,7 @@ defmodule Exoforge.Std.Auth do
         _ =
           ActionDispatcher.dispatch_internal(:database, :execute, %{
             plugin: :auth,
-            operation: "DELETE FROM #{@tokens_table} WHERE player_id = $1",
+            operation: "DELETE FROM #{@tokens_table} WHERE user_id = $1",
             arguments: [pid]
           })
 
@@ -708,12 +878,20 @@ defmodule Exoforge.Std.Auth do
     end
   end
 
-  defp anonymous_token(player_id) do
+  defp anonymous_token(player_id, device_id) do
     scopes = [Roles.player()]
 
-    case generate_and_store_token(player_id, scopes) do
-      {:ok, token} ->
-        {:ok, %{player_id: player_id, token: token, scopes: scopes, role: role(scopes)}}
+    case start_session(player_id, device_id) do
+      {:ok, session} ->
+        {:ok,
+         %{
+           player_id: player_id,
+           token: session.token,
+           refresh_token: session.refresh_token,
+           expires_in: session.expires_in,
+           scopes: scopes,
+           role: role(scopes)
+         }}
 
       error ->
         error
@@ -722,7 +900,9 @@ defmodule Exoforge.Std.Auth do
 
   defp remove_disposable(ids) do
     Enum.each(ids, fn player_id ->
-      Enum.each([@tokens_table, @accounts_table, @players_table], fn table ->
+      _ = execute("DELETE FROM #{@tokens_table} WHERE user_id = $1", [player_id])
+
+      Enum.each([@accounts_table, @players_table], fn table ->
         _ =
           ActionDispatcher.dispatch_internal(:database, :execute, %{
             plugin: :auth,
@@ -741,9 +921,7 @@ defmodule Exoforge.Std.Auth do
   defp register_unnamed(payload) do
     case do_register_player(payload, allow_empty_name: true) do
       {:ok, %{player: profile} = result} ->
-        Exoforge.EventDispatcher.broadcast(:"auth.anonymous", %{player_id: result.player_id},
-          topic: "auth"
-        )
+        Exoforge.EventDispatcher.broadcast(:"auth.anonymous", %{player_id: result.player_id}, topic: "auth")
 
         {:ok, Map.put(result, :name, Map.get(profile, "name") || "")}
 
@@ -857,8 +1035,12 @@ defmodule Exoforge.Std.Auth do
       _ = upsert_account(user_id, email, raw_password, scopes)
     end
 
-    case generate_and_store_token(user_id, scopes, disposable) do
-      {:ok, token} ->
+    # `set_player_scopes` also records the disposable marker; a password registration reaches it
+    # through `upsert_account`, which does not know about it.
+    _ = set_player_scopes(user_id, scopes, disposable)
+
+    case start_session(user_id, device_id_str) do
+      {:ok, session} ->
         base_attrs = [
           %{"key" => "locale", "value" => "en_US"},
           %{
@@ -899,13 +1081,17 @@ defmodule Exoforge.Std.Auth do
           _ ->
             Exoforge.EventDispatcher.broadcast(
               :"auth.register",
-              %{player_id: user_id, email: email, role: to_string(role(scopes))}, topic: "auth")
+              %{player_id: user_id, email: email, role: to_string(role(scopes))},
+              topic: "auth"
+            )
 
             {:ok,
              %{
                user_id: user_id,
                player_id: user_id,
-               token: token,
+               token: session.token,
+               refresh_token: session.refresh_token,
+               expires_in: session.expires_in,
                scopes: scopes,
                player: profile
              }}
@@ -986,9 +1172,7 @@ defmodule Exoforge.Std.Auth do
       when is_binary(email) and email != "" and is_binary(password) and password != "" ->
         _ = upsert_account(@admin_id, email, password, [Roles.admin()])
 
-        Logger.info(
-          "[Auth] Administrator account #{@admin_id} reconciled for #{String.downcase(email)}"
-        )
+        Logger.info("[Auth] Administrator account #{@admin_id} reconciled for #{String.downcase(email)}")
 
         :ok
 
@@ -1000,7 +1184,9 @@ defmodule Exoforge.Std.Auth do
   # Deleting rows is not enough: `authenticate` answers from the token cache before it looks at the
   # tokens table, so a removed account's sessions have to leave the cache too.
   defp remove_account(player_id) do
-    for table <- [@players_table, @accounts_table, @tokens_table] do
+    _ = execute("DELETE FROM #{@tokens_table} WHERE user_id = $1", [player_id])
+
+    for table <- [@players_table, @accounts_table] do
       _ =
         ActionDispatcher.dispatch_internal(:database, :execute, %{
           plugin: :auth,
@@ -1050,8 +1236,7 @@ defmodule Exoforge.Std.Auth do
     _ =
       ActionDispatcher.dispatch_internal(:database, :execute, %{
         plugin: :auth,
-        operation:
-          "INSERT INTO #{@accounts_table} (id, player_id, email, password_hash, scopes) VALUES ($1, $2, $3, $4, $5)",
+        operation: "INSERT INTO #{@accounts_table} (id, player_id, email, password_hash, scopes) VALUES ($1, $2, $3, $4, $5)",
         arguments: [email, player_id, email, hash, Enum.join(scopes, ",")]
       })
 
@@ -1121,31 +1306,273 @@ defmodule Exoforge.Std.Auth do
 
   ## ---- DIRECT ELIXIR FACADE ----
 
-  @doc "Issues and stores a new authentication token for a player."
+  @doc """
+  Issues and stores a service token for a player, for in-process callers.
+
+  The action of the same name (`issue_token/1`) also refuses an id nobody holds; this facade is
+  the kernel-side door tests and tooling already knock on, so it records the account first.
+  """
   def issue_token(player_id, scopes) when is_list(scopes) do
-    generate_and_store_token(player_id, scopes)
+    init_schema()
+    _ = set_player_scopes(player_id, scopes)
+
+    case new_token("svc", to_string(player_id), service_ttl(), nil, nil) do
+      {:ok, token} -> {:ok, token.token}
+      error -> error
+    end
   end
 
-  defp generate_and_store_token(player_id, scopes, disposable \\ nil) do
-    init_schema()
-    token = :crypto.strong_rand_bytes(24) |> Base.url_encode64(padding: false)
-    scopes_str = Enum.join(scopes, ",")
+  defp start_session(player_id, device_id) do
+    player_id = to_string(player_id)
+    device_id = blank_to_nil(device_id)
 
-    insert_query =
-      "INSERT INTO #{@tokens_table} (id, token, player_id, scopes) VALUES ($1, $2, $3, $4)"
+    # A login for a device replaces that device's session: two live sessions for one device are
+    # the same credential held twice, and one of them is always stale.
+    replaced = revoke_device_sessions(player_id, device_id)
+    evicted = enforce_session_cap(player_id)
 
-    case ActionDispatcher.dispatch_internal(:database, :execute, %{
-           plugin: :auth,
-           operation: insert_query,
-           arguments: [token, token, player_id, scopes_str]
-         }) do
+    # A revoked row still authenticates from the cache, which holds the answer it gave before the
+    # revocation. Clearing it is what makes "revoked" mean revoked, not "revoked at next flush".
+    if replaced or evicted do
+      _ = Exoforge.Std.Auth.Cache.flush()
+    end
+
+    family_id = random_string(12)
+
+    with {:ok, access} <- new_token("ses", player_id, access_ttl(), family_id, device_id),
+         {:ok, refresh} <- new_token("ref", player_id, refresh_ttl(), family_id, device_id) do
+      {:ok,
+       %{
+         token: access.token,
+         token_id: access.token_id,
+         refresh_token: refresh.token,
+         expires_in: access.expires_in,
+         refresh_expires_in: refresh.expires_in,
+         family_id: family_id
+       }}
+    end
+  end
+
+  defp new_token(kind, user_id, ttl, family_id, device_id) do
+    token_id = random_string(12)
+    secret = random_string(32)
+    # Creation is ordered (the session cap evicts the oldest), so it keeps the clock's resolution
+    # rather than rounding three logins in the same second into a tie.
+    created_at = DateTime.utc_now() |> DateTime.to_iso8601()
+    expires_at = iso_after(ttl)
+
+    case execute(
+           "INSERT INTO #{@tokens_table} (token_id, user_id, kind, secret_hash, expires_at, created_at, family_id, device_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+           [
+             token_id,
+             user_id,
+             kind,
+             hash_secret(secret),
+             expires_at,
+             created_at,
+             family_id,
+             device_id
+           ]
+         ) do
       {:ok, _} ->
-        # Also record/update the player's primary scopes, and whether it is disposable.
-        _ = set_player_scopes(player_id, scopes, disposable)
-        {:ok, token}
+        {:ok,
+         %{
+           token: "#{@token_prefix}_#{kind}_#{token_id}.#{secret}",
+           token_id: token_id,
+           expires_at: expires_at,
+           expires_in: ttl,
+           kind: kind
+         }}
 
       error ->
         error
+    end
+  end
+
+  # The oldest sessions go first: the cap exists so one account cannot accumulate credentials
+  # forever, and a stale session is the one worth dropping.
+  defp enforce_session_cap(user_id) do
+    max = max_sessions()
+
+    families =
+      run_query(
+        "SELECT family_id, MIN(created_at) AS created FROM #{@tokens_table} WHERE user_id = $1 AND kind = 'ref' AND revoked_at IS NULL AND expires_at > $2 GROUP BY family_id ORDER BY created ASC",
+        [user_id, now_iso()]
+      )
+      |> Enum.map(fn row -> row["family_id"] || row[:family_id] end)
+
+    excess = length(families) - (max - 1)
+
+    if excess > 0 do
+      families |> Enum.take(excess) |> Enum.each(&revoke_family/1)
+      true
+    else
+      false
+    end
+  end
+
+  defp revoke_device_sessions(_user_id, nil), do: false
+
+  defp revoke_device_sessions(user_id, device_id) do
+    _ =
+      execute(
+        "UPDATE #{@tokens_table} SET revoked_at = $1 WHERE user_id = $2 AND device_id = $3 AND revoked_at IS NULL",
+        [now_iso(), user_id, device_id]
+      )
+
+    true
+  end
+
+  defp revoke_family(family_id, fallback_token_id \\ nil)
+
+  defp revoke_family(nil, token_id) when not is_nil(token_id), do: revoke_row(token_id)
+  defp revoke_family(nil, _token_id), do: :ok
+
+  defp revoke_family(family_id, _fallback_token_id) do
+    _ =
+      execute(
+        "UPDATE #{@tokens_table} SET revoked_at = $1 WHERE family_id = $2 AND revoked_at IS NULL",
+        [now_iso(), family_id]
+      )
+
+    :ok
+  end
+
+  defp revoke_row(token_id) do
+    _ =
+      execute("UPDATE #{@tokens_table} SET revoked_at = $1 WHERE token_id = $2 AND revoked_at IS NULL", [
+        now_iso(),
+        token_id
+      ])
+
+    :ok
+  end
+
+  defp touch_token(nil), do: :ok
+
+  defp touch_token(token_id) do
+    _ =
+      execute("UPDATE #{@tokens_table} SET last_used_at = $1 WHERE token_id = $2", [
+        now_iso(),
+        token_id
+      ])
+
+    :ok
+  end
+
+  defp fetch_token(nil), do: nil
+
+  defp fetch_token(token_id) do
+    case run_query("SELECT * FROM #{@tokens_table} WHERE token_id = $1", [token_id]) do
+      [row | _] -> row
+      [] -> nil
+    end
+  end
+
+  # A refresh token is only ever a refresh token. The kind is in the string, so a caller cannot
+  # present one to `authenticate` and get a session out of it.
+  defp parse_refresh_token(token) when is_binary(token) do
+    case parse_token(token) do
+      {:ok, "ref", token_id, secret} -> {:ok, token_id, secret}
+      _ -> :error
+    end
+  end
+
+  defp parse_refresh_token(_), do: :error
+
+  defp parse_token(token) when is_binary(token) do
+    with "exo_" <> rest <- token,
+         [kind, rest] <- String.split(rest, "_", parts: 2),
+         [token_id, secret] <- String.split(rest, ".", parts: 2),
+         true <- kind in ["ses", "ref", "svc"] and token_id != "" and secret != "" do
+      {:ok, kind, token_id, secret}
+    else
+      _ -> :legacy
+    end
+  end
+
+  defp parse_token(_), do: :legacy
+
+  defp secret_matches?(secret, hash) when is_binary(secret) and is_binary(hash) do
+    expected = hash_secret(secret)
+    byte_size(expected) == byte_size(hash) and :crypto.hash_equals(expected, hash)
+  end
+
+  defp secret_matches?(_secret, _hash), do: false
+
+  defp hash_secret(secret), do: :crypto.hash(:sha256, secret) |> Base.encode64()
+
+  defp random_string(bytes), do: :crypto.strong_rand_bytes(bytes) |> Base.url_encode64(padding: false)
+
+  defp expired?(row) do
+    expired_at?(Map.get(row, "expires_at") || Map.get(row, :expires_at))
+  end
+
+  defp revoked?(nil), do: false
+  defp revoked?(row), do: not is_nil(row["revoked_at"] || row[:revoked_at])
+
+  defp expired_at?(nil), do: false
+  defp expired_at?(expires_at) when is_binary(expires_at), do: expires_at <= now_iso()
+  defp expired_at?(_), do: false
+
+  defp now_iso, do: iso(DateTime.utc_now())
+
+  defp iso_after(seconds), do: iso(DateTime.add(DateTime.utc_now(), seconds, :second))
+
+  defp iso(%DateTime{} = at), do: at |> DateTime.truncate(:second) |> DateTime.to_iso8601()
+
+  defp blank_to_nil(nil), do: nil
+  defp blank_to_nil(""), do: nil
+  defp blank_to_nil(value), do: to_string(value)
+
+  defp token_summary(row) do
+    %{
+      "token_id" => row["token_id"] || row[:token_id],
+      "kind" => row["kind"] || row[:kind],
+      "created_at" => row["created_at"] || row[:created_at],
+      "last_used_at" => row["last_used_at"] || row[:last_used_at],
+      "expires_at" => row["expires_at"] || row[:expires_at],
+      "revoked_at" => row["revoked_at"] || row[:revoked_at],
+      "device_id" => row["device_id"] || row[:device_id]
+    }
+  end
+
+  defp user_id_from(payload) do
+    Map.get(payload, :user_id) || Map.get(payload, "user_id") ||
+      Map.get(payload, :player_id) || Map.get(payload, "player_id")
+  end
+
+  defp user_exists?(user_id) do
+    Enum.any?([@players_table, @accounts_table], fn table ->
+      case run_query("SELECT player_id FROM #{table} WHERE player_id = $1", [user_id]) do
+        [_ | _] -> true
+        _ -> false
+      end
+    end)
+  end
+
+  defp account_scopes(user_id) do
+    Enum.find_value([@players_table, @accounts_table], [Roles.player()], fn table ->
+      case run_query("SELECT scopes FROM #{table} WHERE player_id = $1", [user_id]) do
+        [row | _] ->
+          parse_scopes(Map.get(row, "scopes") || Map.get(row, :scopes) || Roles.player())
+
+        _ ->
+          nil
+      end
+    end)
+  end
+
+  defp access_ttl, do: setting(:access_token_ttl, @access_ttl)
+  defp refresh_ttl, do: setting(:refresh_token_ttl, @refresh_ttl)
+  defp service_ttl, do: setting(:service_token_ttl, @service_ttl)
+  defp max_sessions, do: setting(:max_sessions, @max_sessions)
+
+  defp setting(key, default) do
+    case Application.get_env(:exoforge, :auth, []) do
+      config when is_map(config) -> Map.get(config, key, default)
+      config when is_list(config) -> Keyword.get(config, key, default)
+      _ -> default
     end
   end
 
@@ -1253,11 +1680,13 @@ defmodule Exoforge.Std.Auth do
     {ids, total}
   end
 
-  defp rows_in(_table, []), do: []
+  defp rows_in(table, ids), do: rows_in(table, ids, "player_id")
 
-  defp rows_in(table, ids) do
+  defp rows_in(_table, [], _column), do: []
+
+  defp rows_in(table, ids, column) do
     placeholders = Enum.map_join(1..length(ids), ", ", &"$#{&1}")
-    run_query("SELECT * FROM #{table} WHERE player_id IN (#{placeholders})", ids)
+    run_query("SELECT * FROM #{table} WHERE #{column} IN (#{placeholders})", ids)
   end
 
   defp run_query(sql, args) do
@@ -1290,6 +1719,81 @@ defmodule Exoforge.Std.Auth do
   defp int_value(_value, default), do: default
 
   ## ---- PRIVATE HELPERS ----
+
+  defp verify_token(token) do
+    case Exoforge.Std.Auth.Cache.get(token) do
+      {:ok, result, used_at} ->
+        cond do
+          # The cache holds the answer, not a permanent one: the row's lifetime still applies to
+          # every request, or a client that authenticated once would never be told its access
+          # token died.
+          expired_at?(result[:expires_at]) ->
+            Exoforge.Std.Auth.Cache.delete(token)
+            {:error, :token_expired}
+
+          System.system_time(:second) - used_at > @touch_interval_seconds ->
+            _ = touch_token(result.token_id)
+            Exoforge.Std.Auth.Cache.put(token, result, System.system_time(:second))
+            {:ok, result}
+
+          true ->
+            {:ok, result}
+        end
+
+      :error ->
+        verify_stored_token(token)
+    end
+  end
+
+  defp verify_stored_token(token) do
+    {token_id, secret} =
+      case parse_token(token) do
+        {:ok, _kind, token_id, secret} -> {token_id, secret}
+        # A token written before the prefixed format was hashed in place; its derived id is the
+        # same hash, so the row is found without the credential ever being stored.
+        :legacy -> {hash_secret(token), token}
+      end
+
+    case fetch_token(token_id) do
+      nil ->
+        {:error, :invalid_token}
+
+      row ->
+        cond do
+          # The secret is checked before the row's state, so a wrong secret cannot learn from the
+          # answer whether an expired or revoked row exists.
+          not secret_matches?(secret, row["secret_hash"] || row[:secret_hash]) ->
+            {:error, :invalid_token}
+
+          row["revoked_at"] || row[:revoked_at] ->
+            {:error, :invalid_token}
+
+          expired?(row) ->
+            {:error, :token_expired}
+
+          row["kind"] == "ref" ->
+            {:error, :invalid_token}
+
+          true ->
+            user_id = to_string(row["user_id"] || row[:user_id])
+            scopes = account_scopes(user_id)
+
+            result = %{
+              user_id: user_id,
+              player_id: user_id,
+              scopes: scopes,
+              role: role(scopes),
+              token_id: to_string(row["token_id"] || row[:token_id]),
+              kind: row["kind"] || row[:kind],
+              expires_at: row["expires_at"] || row[:expires_at]
+            }
+
+            Exoforge.Std.Auth.Cache.put(token, result, System.system_time(:second))
+            _ = touch_token(result.token_id)
+            {:ok, result}
+        end
+    end
+  end
 
   defp extract_token(payload) when is_binary(payload), do: payload
 
@@ -1342,6 +1846,14 @@ defmodule Exoforge.Std.Auth do
 end
 
 defmodule Exoforge.Std.Auth.Cache do
+  @moduledoc """
+  The answer `authenticate` gave for a token, kept until the account's scopes change.
+
+  The entry also carries when it was last written, so `last_used_at` can be kept current without
+  a database write on every request. Expiry is not cached away: the result carries the row's
+  `expires_at` and every hit compares it.
+  """
+
   use GenServer
 
   @table :exoforge_auth_tokens
@@ -1352,16 +1864,27 @@ defmodule Exoforge.Std.Auth.Cache do
 
   def get(token) do
     case :ets.lookup(@table, token) do
-      [{^token, result}] -> {:ok, result}
+      [{^token, result, used_at}] -> {:ok, result, used_at}
+      [{^token, result}] -> {:ok, result, 0}
       [] -> :error
     end
   rescue
     ArgumentError -> :error
   end
 
-  def put(token, result) do
+  def put(token, result, used_at \\ 0) do
     try do
-      :ets.insert(@table, {token, result})
+      :ets.insert(@table, {token, result, used_at})
+    rescue
+      ArgumentError -> :ok
+    end
+
+    :ok
+  end
+
+  def delete(token) do
+    try do
+      :ets.delete(@table, token)
     rescue
       ArgumentError -> :ok
     end
