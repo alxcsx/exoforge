@@ -541,7 +541,7 @@ public static class Program
               --token <tok>      Cluster authentication token
               --email <email>    Login email (used with --password)
               --password <pass>  Login password (used with --email)
-              --save             Save validated endpoints & token to exoforge.json and Assets/Resources/exoforge.json
+              --save             Save validated endpoints and the login session (access + refresh token) to exoforge.json
               --dir <path>       Workspace directory
               --json             Machine-readable JSON output
             """);

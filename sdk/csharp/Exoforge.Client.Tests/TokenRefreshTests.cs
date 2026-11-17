@@ -81,6 +81,34 @@ public class TokenRefreshTests
         Assert.Equal(0, refreshes);
     }
 
+    /// <summary>
+    /// N calls that all expire at once cause one <c>auth.refresh</c>, not N: the SDK's refresh is a
+    /// single-use rotation, and a second request with the same refresh token would revoke the
+    /// session's whole family.
+    /// </summary>
+    [Fact]
+    public async Task Concurrent_expiries_cause_exactly_one_auth_refresh_action()
+    {
+        var handler = new ScriptedAuthHandler { RefreshDelay = TimeSpan.FromMilliseconds(150) };
+        using var client = NewClient(handler, "exo_ses_stale");
+
+        // The renewal is the real call, so the assertion is about what reached the cluster.
+        client.RefreshTokensAsync = async cancellationToken =>
+        {
+            JsonElement rotated = await client.SendActionAsync<JsonElement>(
+                "auth", "refresh", new { token = "exo_ref_current" }, cancellationToken);
+            client.UseToken(rotated.GetProperty("token").GetString());
+        };
+
+        JsonElement[] results = await Task.WhenAll(
+            Enumerable.Range(0, 8).Select(i =>
+                client.SendActionAsync<JsonElement>("demo", "ping", new { value = i }, default)));
+
+        Assert.Equal(1, handler.Count("auth.refresh"));
+        Assert.All(results, result => Assert.True(result.GetProperty("pong").GetBoolean()));
+        Assert.Equal("exo_ses_fresh", handler.LastAuthorization("demo.ping"));
+    }
+
     private static ExoClient NewClient(HttpMessageHandler handler, string token)
     {
         var client = new ExoClient(httpClient: new HttpClient(handler), httpBaseUri: new Uri("http://cluster.test/"));
@@ -96,6 +124,9 @@ public class TokenRefreshTests
 
         public bool AlwaysExpired { get; init; }
 
+        /// <summary>Long enough that a second expiry has to decide whether to join or rotate again.</summary>
+        public TimeSpan RefreshDelay { get; init; } = TimeSpan.Zero;
+
         public int Count(string action)
         {
             lock (_lock) return _calls.FindAll(c => c.Action == action).Count;
@@ -106,7 +137,7 @@ public class TokenRefreshTests
             lock (_lock) return _calls.FindAll(c => c.Action == action)[^1].Authorization;
         }
 
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             string path = request.RequestUri!.AbsolutePath;
             string action = path.Trim('/').Replace("api/", "").Replace('/', '.');
@@ -116,18 +147,23 @@ public class TokenRefreshTests
 
             if (action == "auth.refresh")
             {
-                return Task.FromResult(Json(AlwaysExpired ? 401 : 200, AlwaysExpired
+                if (RefreshDelay > TimeSpan.Zero)
+                {
+                    await Task.Delay(RefreshDelay, cancellationToken);
+                }
+
+                return Json(AlwaysExpired ? 401 : 200, AlwaysExpired
                     ? "{\"status\":\"error\",\"error\":{\"code\":\"token_expired\",\"message\":\"expired\"}}"
-                    : "{\"status\":\"ok\",\"data\":{\"token\":\"exo_ses_fresh\",\"refresh_token\":\"exo_ref_new\"}}"));
+                    : "{\"status\":\"ok\",\"data\":{\"token\":\"exo_ses_fresh\",\"refresh_token\":\"exo_ref_new\"}}");
             }
 
             if (authorization == "exo_ses_stale")
             {
-                return Task.FromResult(Json(401,
-                    "{\"status\":\"error\",\"error\":{\"code\":\"token_expired\",\"message\":\"The access token has expired.\"}}"));
+                return Json(401,
+                    "{\"status\":\"error\",\"error\":{\"code\":\"token_expired\",\"message\":\"The access token has expired.\"}}");
             }
 
-            return Task.FromResult(Json(200, "{\"status\":\"ok\",\"data\":{\"pong\":true}}"));
+            return Json(200, "{\"status\":\"ok\",\"data\":{\"pong\":true}}");
         }
 
         private static HttpResponseMessage Json(int status, string body) =>

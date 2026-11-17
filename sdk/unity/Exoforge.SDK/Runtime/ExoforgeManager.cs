@@ -434,8 +434,10 @@ namespace Exoforge.Client.Unity
             client.OnDisconnected += OnClientDisconnected;
 
             // A short-lived access token is renewed by the client itself: the session is renewed
-            // from the stored refresh token and the failed call is retried once.
-            client.RefreshTokensAsync = ct => ExoforgeSDK.Auth.RefreshAsync(ct);
+            // from the stored refresh token and the failed call is retried once. The callback is
+            // the ungated rotation - the client wraps it in its one gate, so a reconnect or a login
+            // that renews at the same moment joins it instead of rotating a second time.
+            client.RefreshTokensAsync = ct => ExoforgeSDK.Auth.RefreshCoreAsync(ct);
 
             // What makes the connection lazy: the client asks for a socket only when an operation
             // needs one - a subscription, or an action the contract declared as WebSocket.
@@ -478,11 +480,22 @@ namespace Exoforge.Client.Unity
 
                 if (!string.IsNullOrEmpty(targetToken))
                 {
-                    var auth = await Client.AuthenticateAsync(targetToken);
+                    ExoAuthResult auth;
+
+                    try
+                    {
+                        auth = await Client.AuthenticateAsync(targetToken);
+                    }
+                    catch (ExoActionException)
+                    {
+                        // A refused token arrives as an exception, not an unsuccessful result. It is
+                        // usually just the hour passing.
+                        auth = new ExoAuthResult { Status = "error" };
+                    }
 
                     // An expired access token is ordinary: renew the pair from the stored refresh
-                    // token. RefreshAsync authenticates this socket with the new token, so the
-                    // session is back without a new login.
+                    // token. RefreshAsync runs under the client's one gate and authenticates this
+                    // socket with the new token, so the session is back without a new login.
                     if (!auth.IsSuccess && await ExoforgeSDK.Auth.RefreshAsync())
                     {
                         targetToken = useStudioConnection ? ExoTokenStore.StudioToken : ExoTokenStore.Token;

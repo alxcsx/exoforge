@@ -59,6 +59,14 @@ public class ExoEnvironmentConfig
 
     [JsonPropertyName("token")]
     public string Token { get; set; } = "";
+
+    /// <summary>
+    /// The single-use credential that mints the next access token. A saved CLI session is the
+    /// same pair a client holds, so `exo connect --save` keeps working past the access token's hour
+    /// instead of minting a long-lived service credential.
+    /// </summary>
+    [JsonPropertyName("refresh_token")]
+    public string RefreshToken { get; set; } = "";
 }
 
 public class ExoCodegenConfig

@@ -287,7 +287,50 @@ public class ExoClient : IDisposable
     public Func<CancellationToken, Task>? RefreshTokensAsync { get; set; }
 
     private readonly object _refreshLock = new();
-    private Task? _refreshInFlight;
+    private Task<bool>? _refreshInFlight;
+
+    /// <summary>
+    /// Runs a token renewal under this client's single gate.
+    ///
+    /// Every route to a refresh - a call that came back <c>token_expired</c>, a reconnect, a login -
+    /// goes through here, so concurrent expiries share one rotation and all await its result.
+    /// Rotating a refresh token twice would revoke the session's whole family, which is exactly what
+    /// replaying it from two places would do.
+    /// </summary>
+    public Task<bool> RefreshTokensOnceAsync(
+        Func<CancellationToken, Task<bool>> refresh,
+        CancellationToken cancellationToken = default)
+    {
+        lock (_refreshLock)
+        {
+            if (_refreshInFlight == null)
+            {
+                Task<bool> started = refresh(cancellationToken);
+                _refreshInFlight = started;
+
+                _ = started.ContinueWith(
+                    _ =>
+                    {
+                        lock (_refreshLock)
+                        {
+                            if (ReferenceEquals(_refreshInFlight, started)) _refreshInFlight = null;
+                        }
+                    },
+                    TaskScheduler.Default);
+            }
+
+            return _refreshInFlight;
+        }
+    }
+
+    private Task<bool> RefreshOnceAsync(CancellationToken cancellationToken) =>
+        RefreshTokensOnceAsync(
+            async ct =>
+            {
+                await RefreshTokensAsync!(ct).ConfigureAwait(false);
+                return true;
+            },
+            cancellationToken);
 
     /// <summary>
     /// Sends an action request to the Exoforge Kernel with explicit transport preference.
@@ -311,36 +354,13 @@ public class ExoClient : IDisposable
         catch (ExoActionException ex) when (
             ex.Code == "token_expired" &&
             RefreshTokensAsync != null &&
-            // Refreshing is the cure, not a call that needs one; two concurrent expiries share a
-            // single refresh, because rotating the same refresh token twice would revoke the family.
-            !(service == "auth" && action == "refresh"))
+            // Refreshing is the cure, not a call that needs one, and validating a token is how an
+            // expiry is discovered. Retrying either inside a refresh would await the rotation it is
+            // part of; they surface the error instead.
+            !(service == "auth" && (action == "refresh" || action == "authenticate")))
         {
             await RefreshOnceAsync(cancellationToken).ConfigureAwait(false);
             return await SendActionCoreAsync<TResult>(service, action, payload, transportPreference, timeout, cancellationToken).ConfigureAwait(false);
-        }
-    }
-
-    private Task RefreshOnceAsync(CancellationToken cancellationToken)
-    {
-        lock (_refreshLock)
-        {
-            if (_refreshInFlight == null)
-            {
-                Task refresh = RefreshTokensAsync!(cancellationToken);
-                _refreshInFlight = refresh;
-
-                _ = refresh.ContinueWith(
-                    _ =>
-                    {
-                        lock (_refreshLock)
-                        {
-                            if (ReferenceEquals(_refreshInFlight, refresh)) _refreshInFlight = null;
-                        }
-                    },
-                    TaskScheduler.Default);
-            }
-
-            return _refreshInFlight;
         }
     }
 

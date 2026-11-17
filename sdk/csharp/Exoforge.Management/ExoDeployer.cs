@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -39,16 +40,141 @@ public class ExoDeployer
 
         await client.ConnectAsync(new Uri(env.WsUrl), cancellationToken).ConfigureAwait(false);
 
+        string targetEnv = environmentName ?? _workspace.Config.DefaultEnvironment;
+
         if (!string.IsNullOrEmpty(env.Token))
         {
-            var auth = await client.AuthenticateAsync(env.Token, cancellationToken: cancellationToken).ConfigureAwait(false);
-            if (!auth.IsSuccess)
+            bool authenticated = await TryAuthenticateAsync(client, env.Token, cancellationToken).ConfigureAwait(false);
+
+            // A saved session is a pair: an access token that lasts an hour and the refresh token
+            // beside it. The hour having passed is ordinary, not a failed login.
+            if (!authenticated &&
+                !string.IsNullOrEmpty(env.RefreshToken) &&
+                await RefreshCliSessionAsync(client, env, targetEnv, cancellationToken).ConfigureAwait(false))
             {
-                throw new InvalidOperationException($"Failed to authenticate with cluster: {auth.Error}");
+                authenticated = await TryAuthenticateAsync(client, env.Token, cancellationToken).ConfigureAwait(false);
+            }
+
+            if (!authenticated)
+            {
+                throw new InvalidOperationException(
+                    "Failed to authenticate with cluster: the saved session was refused. " +
+                    "Run `exo connect --email <email> --password <password> --save` to renew it.");
             }
         }
 
+        // Every command's calls renew the pair the same way, through the client's one gate.
+        client.RefreshTokensAsync = ct => RefreshCliSessionAsync(client, env, targetEnv, ct);
+
         return client;
+    }
+
+    /// <summary>
+    /// Whether the socket accepted <paramref name="token"/>. The client raises a refusal as an
+    /// exception rather than returning an unsuccessful result, and a refusal is what a caller wants
+    /// to branch on here.
+    /// </summary>
+    private static async Task<bool> TryAuthenticateAsync(ExoClient client, string token, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await client.AuthenticateAsync(token, cancellationToken: cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+        catch (ExoActionException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// The device a CLI session belongs to: one per machine and environment, so connecting again
+    /// replaces that session (the server rotates a device's tokens) instead of adding another pair.
+    /// Stable across runs, because it is derived rather than stored.
+    /// </summary>
+    public static string CliDeviceId(string environmentName)
+    {
+        using var sha = SHA256.Create();
+        byte[] hash = sha.ComputeHash(Encoding.UTF8.GetBytes($"{Environment.MachineName}:{environmentName}"));
+        // A device id is an opaque key, not a secret: eight bytes identify the machine without
+        // carrying the machine name to the server.
+        return "cli:" + BitConverter.ToString(hash, 0, 8).Replace("-", "").ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// Exchanges the saved refresh token for a new pair and writes the rotated pair back, so the
+    /// next command finds the one that works. Single-use rotation means the old token is spent as
+    /// soon as this returns.
+    /// </summary>
+    private async Task<bool> RefreshCliSessionAsync(
+        ExoClient client,
+        ExoEnvironmentConfig env,
+        string environmentName,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(env.RefreshToken))
+        {
+            return false;
+        }
+
+        JsonElement result;
+
+        try
+        {
+            result = await client.SendActionAsync<JsonElement>(
+                "auth",
+                "refresh",
+                new { token = env.RefreshToken },
+                ExoTransportPreference.Http,
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+
+        string token = result.ValueKind == JsonValueKind.Object && result.TryGetProperty("token", out var tokenProp)
+            ? tokenProp.GetString() ?? ""
+            : "";
+
+        string rotated = result.ValueKind == JsonValueKind.Object && result.TryGetProperty("refresh_token", out var rotatedProp)
+            ? rotatedProp.GetString() ?? ""
+            : "";
+
+        if (string.IsNullOrEmpty(token) || string.IsNullOrEmpty(rotated))
+        {
+            return false;
+        }
+
+        env.Token = token;
+        env.RefreshToken = rotated;
+        client.UseToken(token);
+
+        if (client.IsConnected)
+        {
+            try
+            {
+                await client.AuthenticateAsync(token, cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                // The socket was opened with the previous token; the calls that follow go over HTTP
+                // with the new one, and the next command dials a fresh socket.
+            }
+        }
+
+        // Only a session the workspace already keeps is written back: a connect without --save
+        // leaves the workspace alone.
+        if (_workspace.Config.Environments.ContainsKey(environmentName))
+        {
+            _workspace.Save();
+        }
+
+        return true;
     }
 
     public async Task<string> UploadExtensionAsync(
@@ -945,40 +1071,6 @@ public class ExoDeployer
     }
 
     /// <summary>
-    /// Exchanges a fresh login for a service token (default term 90 days) for the same account.
-    /// Returns null when the account cannot mint one - a studio or player session keeps its login
-    /// token and expires with it.
-    /// </summary>
-    private static async Task<string?> TryIssueServiceTokenAsync(ExoClient client, JsonElement loginResult, CancellationToken ct)
-    {
-        string? userId = loginResult.ValueKind == JsonValueKind.Object && loginResult.TryGetProperty("player_id", out var pidProp)
-            ? pidProp.GetString()
-            : null;
-
-        if (string.IsNullOrEmpty(userId))
-        {
-            return null;
-        }
-
-        try
-        {
-            JsonElement issued = await client.SendActionAsync<JsonElement>(
-                "auth",
-                "issue_token",
-                new JsonObject { ["user_id"] = userId },
-                cancellationToken: ct).ConfigureAwait(false);
-
-            return issued.ValueKind == JsonValueKind.Object && issued.TryGetProperty("token", out var tokenProp)
-                ? tokenProp.GetString()
-                : null;
-        }
-        catch (ExoActionException)
-        {
-            return null;
-        }
-    }
-
-    /// <summary>
     /// Connects to the cluster, optionally logs in or authenticates, queries system status,
     /// and optionally saves the connection settings to exoforge.json and Assets/Resources/exoforge.json.
     /// </summary>
@@ -998,6 +1090,7 @@ public class ExoDeployer
         string effectiveWsUrl = wsUrlOverride ?? env.WsUrl;
         string effectiveHttpUrl = httpUrlOverride ?? env.HttpUrl;
         string? effectiveToken = tokenOverride ?? env.Token;
+        string? effectiveRefreshToken = env.RefreshToken;
 
         var client = new ExoClient();
         bool connected = false;
@@ -1017,10 +1110,13 @@ public class ExoDeployer
 
             if (!string.IsNullOrEmpty(email) && !string.IsNullOrEmpty(password))
             {
+                // The device id makes the saved session replaceable: logging in again on this
+                // machine and environment rotates that session rather than adding another pair.
                 var loginPayload = new JsonObject
                 {
                     ["email"] = email,
-                    ["password"] = password
+                    ["password"] = password,
+                    ["device_id"] = CliDeviceId(targetEnvName)
                 };
 
                 var loginResult = await client.SendActionAsync<JsonElement>("auth", "login", loginPayload, cancellationToken: ct).ConfigureAwait(false);
@@ -1036,25 +1132,16 @@ public class ExoDeployer
                     throw new InvalidOperationException("Cluster login succeeded, but no token was returned in the payload.");
                 }
 
-                var auth = await client.AuthenticateAsync(acquiredToken, cancellationToken: ct).ConfigureAwait(false);
-                if (!auth.IsSuccess)
+                if (!await TryAuthenticateAsync(client, acquiredToken, ct).ConfigureAwait(false))
                 {
-                    throw new InvalidOperationException($"Authentication failed with acquired token: {auth.Error}");
+                    throw new InvalidOperationException("Authentication failed with the token the cluster issued.");
                 }
 
-                // A login's access token is short-lived by design (an hour, renewed by a client that
-                // holds the refresh token). A saved CLI session has no such client, so an admin
-                // session exchanges it for a service token for the same account - a credential the
-                // tooling can keep.
-                string? serviceToken = await TryIssueServiceTokenAsync(client, loginResult, ct).ConfigureAwait(false);
-
-                if (!string.IsNullOrEmpty(serviceToken))
+                // A saved CLI session is the same pair a client holds: the access token lasts an
+                // hour, and the refresh token beside it is what keeps the session usable.
+                if (loginResult.ValueKind == JsonValueKind.Object && loginResult.TryGetProperty("refresh_token", out var refreshProp))
                 {
-                    var serviceAuth = await client.AuthenticateAsync(serviceToken, cancellationToken: ct).ConfigureAwait(false);
-                    if (serviceAuth.IsSuccess)
-                    {
-                        acquiredToken = serviceToken;
-                    }
+                    effectiveRefreshToken = refreshProp.GetString();
                 }
 
                 authenticated = true;
@@ -1062,13 +1149,34 @@ public class ExoDeployer
             }
             else if (!string.IsNullOrEmpty(effectiveToken))
             {
-                var auth = await client.AuthenticateAsync(effectiveToken, cancellationToken: ct).ConfigureAwait(false);
-                if (!auth.IsSuccess)
+                bool valid = await TryAuthenticateAsync(client, effectiveToken, ct).ConfigureAwait(false);
+
+                // The hour passing is ordinary for a saved session, not a failed login: renew from
+                // the refresh token beside it. An explicitly passed token is not the saved session,
+                // so it is only validated.
+                if (!valid && tokenOverride == null &&
+                    !string.IsNullOrEmpty(effectiveRefreshToken) &&
+                    await RefreshCliSessionAsync(client, env, targetEnvName, ct).ConfigureAwait(false))
                 {
-                    throw new InvalidOperationException($"Authentication failed: {auth.Error}");
+                    effectiveToken = env.Token;
+                    effectiveRefreshToken = env.RefreshToken;
+                    valid = await TryAuthenticateAsync(client, effectiveToken, ct).ConfigureAwait(false);
+                }
+
+                if (!valid)
+                {
+                    throw new InvalidOperationException("Authentication failed: the cluster refused the token.");
                 }
 
                 authenticated = true;
+            }
+
+            // The status query below is a call like any other: if the saved pair expires in this
+            // command, renew it and retry once. A token passed on the command line is not that
+            // session, so it is not renewed from it.
+            if (tokenOverride == null && !string.IsNullOrEmpty(env.RefreshToken))
+            {
+                client.RefreshTokensAsync = ct2 => RefreshCliSessionAsync(client, env, targetEnvName, ct2);
             }
 
             systemStatus = await client.SendActionAsync<JsonElement>(
@@ -1088,6 +1196,11 @@ public class ExoDeployer
                 {
                     envConfig.Token = effectiveToken;
                     tokenSaved = true;
+                }
+
+                if (!string.IsNullOrEmpty(effectiveRefreshToken))
+                {
+                    envConfig.RefreshToken = effectiveRefreshToken;
                 }
 
                 _workspace.Save();

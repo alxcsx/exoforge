@@ -38,7 +38,7 @@ Connect to a cluster, authenticate administrator or developer credentials, and s
 ./exo connect --ws ws://localhost:4000 --http http://localhost:4001 --email admin@example.com --password admin_password --save --json
 ```
 
-The `--save` flag writes the authenticated token and endpoints into `Exoforge/exoforge.json` under the active environment.
+The `--save` flag writes the endpoints and the login session into `Exoforge/exoforge.json` under the active environment: the access token (`token`, about an hour) and the refresh token beside it (`refresh_token`, about 30 days). The CLI renews the pair through `auth.refresh` when the hour is up and writes the rotated pair back, so a saved session keeps working without another login; when it finally expires, `exo connect --save` again. The session belongs to this machine and environment (`cli:` plus a hash of both), so connecting again replaces it rather than adding another one. `--save` never mints a service token - those are for servers, via `exo user token`.
 
 ## 3. Verifying Cluster Status
 

@@ -201,8 +201,20 @@ namespace Exoforge.Client.Unity
         /// The client calls this itself when an action comes back <c>token_expired</c> (and then
         /// retries once), so game code rarely needs it; it is public for a game that wants to renew
         /// ahead of time. Returns false when there is no refresh token or the server refuses it.
+        ///
+        /// Every route to a renewal - the retry after an expiry, a reconnect, a login - runs under
+        /// the client's one gate, so a burst of expiries shares a single rotation and all of them
+        /// await its result.
         /// </summary>
-        public async Task<bool> RefreshAsync(CancellationToken cancellationToken = default)
+        public Task<bool> RefreshAsync(CancellationToken cancellationToken = default) =>
+            ExoforgeSDK.Client.RefreshTokensOnceAsync(RefreshCoreAsync, cancellationToken);
+
+        /// <summary>
+        /// The rotation itself. Internal because it must not be reached except through
+        /// <see cref="RefreshAsync"/>: calling it twice concurrently would replay a single-use
+        /// refresh token and revoke the session family.
+        /// </summary>
+        internal async Task<bool> RefreshCoreAsync(CancellationToken cancellationToken = default)
         {
             var client = ExoforgeSDK.Client;
             string refreshToken = ExoTokenStore.RefreshToken;
@@ -225,9 +237,19 @@ namespace Exoforge.Client.Unity
             }
             catch (Exception)
             {
-                // A refused or replayed refresh token means this session is over; the caller falls
-                // back to a fresh login.
-                return false;
+                // A refused or replayed refresh token normally means this session is over and the
+                // caller falls back to a fresh login. Unless the store now holds a pair that was
+                // rotated while this call waited: then that pair is the session, and adopting it
+                // beats replaying the spent token.
+                string stored = ExoTokenStore.RefreshToken;
+
+                if (string.IsNullOrEmpty(stored) ||
+                    string.Equals(stored, refreshToken, StringComparison.Ordinal))
+                {
+                    return false;
+                }
+
+                return await AdoptStoredSessionAsync(client);
             }
 
             string token = result.ValueKind == JsonValueKind.Object && result.TryGetProperty("token", out var tokenProp)
@@ -260,21 +282,54 @@ namespace Exoforge.Client.Unity
             }
 
             client.UseToken(token);
-
-            if (client.IsConnected)
-            {
-                try
-                {
-                    await client.AuthenticateAsync(token);
-                }
-                catch (Exception)
-                {
-                    // The next reconnect authenticates the socket with the new token anyway.
-                }
-            }
+            await AuthenticateSocketIfConnectedAsync(client, token);
 
             Current = new ExoSession(auth.Value.PlayerId, ExoTokenStore.PlayerName, token, auth.Value.Scopes, false);
             return true;
+        }
+
+        /// <summary>
+        /// Uses the access token already in the store - one another client rotated - instead of
+        /// minting a second rotation from a refresh token that has been spent.
+        /// </summary>
+        private async Task<bool> AdoptStoredSessionAsync(ExoClient client)
+        {
+            string stored = ExoTokenStore.Token;
+
+            if (string.IsNullOrEmpty(stored))
+            {
+                return false;
+            }
+
+            var auth = await AuthenticateAsync(client, stored);
+
+            if (auth == null)
+            {
+                return false;
+            }
+
+            client.UseToken(stored);
+            await AuthenticateSocketIfConnectedAsync(client, stored);
+
+            Current = new ExoSession(auth.Value.PlayerId, ExoTokenStore.PlayerName, stored, auth.Value.Scopes, false);
+            return true;
+        }
+
+        private static async Task AuthenticateSocketIfConnectedAsync(ExoClient client, string token)
+        {
+            if (!client.IsConnected)
+            {
+                return;
+            }
+
+            try
+            {
+                await client.AuthenticateAsync(token);
+            }
+            catch (Exception)
+            {
+                // The next reconnect authenticates the socket with the new token anyway.
+            }
         }
 
         /// <summary>
