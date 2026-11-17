@@ -194,8 +194,13 @@ defmodule Exoforge.Std.Database.Manager do
       dir = System.get_env("EXOFORGE_DATA_DIR") ->
         dir
 
+      # unique_integer restarts with every VM, so it named the same directory run after run (and
+      # across checkouts), and a later run inherited an earlier run's tables. Random, and removed.
       function_exported?(Mix, :env, 0) and Mix.env() == :test ->
-        Path.join(System.tmp_dir!(), "exoforge_test_#{System.unique_integer([:positive])}")
+        suffix = :crypto.strong_rand_bytes(9) |> Base.url_encode64(padding: false)
+        dir = Path.join(System.tmp_dir!(), "exoforge_test_" <> suffix)
+        System.at_exit(fn _ -> File.rm_rf(dir) end)
+        dir
 
       true ->
         Path.join([File.cwd!(), "priv", "data", "sqlite"])
