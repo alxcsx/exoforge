@@ -133,6 +133,10 @@ Executes scheduled recurring background tasks via the cluster scheduler.
 
 Decorate any service method with `[ExoCron("schedule")]` to turn it into an automated background job. Ideal for leaderboard rollovers, daily resets, state sweepers, and periodic syncs.
 
+> [!IMPORTANT]
+> A cron method is registered as an action with scope `"server"`: the scheduler invokes it with internal
+> dispatch, but no transport can — a player or HTTP request to it is refused with `forbidden_scope`.
+
 | Property | Type | Default | Description |
 |---|---|---|---|
 | schedule (positional 0) | string | **Required** | Standard 5-field cron expression in UTC (`minute hour day-of-month month day-of-week`). Examples: `"0 0 * * *"` (midnight daily), `"*/5 * * * *"` (every 5 min), `"0 * * * *"` (hourly), `"0 12 * * 1-5"` (weekdays at noon). |
@@ -308,13 +312,14 @@ public class GuildExtension
 
 **Source / Provider:** HTTP Gateway (`exoforge_std_http`)
 
-Marks a method as an inbound external webhook receiver (e.g. Stripe, GitHub, Discord) routed over HTTP POST. Automatically receives raw payload, query strings, and request headers.
+Marks a method as an inbound external webhook receiver (e.g. Stripe, GitHub, Discord) routed over HTTP POST. The handler's single parameter is a `WebhookPayload` bound to the whole request: `Body`/`RawBody`, `Json`, `Headers`, `Method` and `Query`.
 
 ```csharp
 [ExoWebhook("stripe_payment")]
-public async Task HandleStripeWebhook(StripeWebhookPayload payload)
+public async Task HandleStripeWebhook(WebhookPayload payload)
 {
-    Exo.Logger.Info($"Received payment event: {payload.Type}");
+    // Verify payload.Headers["stripe-signature"] against payload.RawBody before trusting payload.Json.
+    Exo.Logger.Info($"Received payment event at {payload.Method} {payload.Query?.Count ?? 0} query keys");
 }
 ```
 

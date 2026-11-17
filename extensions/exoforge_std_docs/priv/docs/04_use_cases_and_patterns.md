@@ -370,12 +370,12 @@ public class BillingExtension
     [ExoWebhook("stripe")]
     public async Task<WebhookResult> HandleStripeWebhook(WebhookPayload payload)
     {
-        string signature = payload.Headers.TryGetValue("Stripe-Signature", out var sig) ? sig : "";
-        Exo.Logger.Info($"Inbound Stripe webhook: {payload.EventName}");
+        string signature = payload.Headers != null && payload.Headers.TryGetValue("Stripe-Signature", out var sig) ? sig : "";
+        Exo.Logger.Info($"Inbound Stripe webhook with {payload.RawBody.Length} bytes (sig {signature.Length} chars)");
 
-        // Verify HMAC signature, parse customer player ID, and grant purchased item
-        string targetPlayerId = payload.Data["client_reference_id"]?.ToString() ?? "";
-        string productId = payload.Data["product_id"]?.ToString() ?? "";
+        // Verify the HMAC over payload.RawBody before trusting the parsed JSON.
+        string targetPlayerId = payload.Json.TryGetProperty("client_reference_id", out var player) ? player.GetString() ?? "" : "";
+        string productId = payload.Json.TryGetProperty("product_id", out var product) ? product.GetString() ?? "" : "";
 
         // Instantly credit player account
         Exo.Database.Execute(
@@ -386,7 +386,7 @@ public class BillingExtension
         // Push real-time unlock animation event directly to the player's active Unity client
         await Exo.Events.EmitAsync(new PurchaseFulfilledEvent(targetPlayerId, productId));
 
-        return WebhookResult.Success();
+        return new WebhookResult();
     }
 }
 

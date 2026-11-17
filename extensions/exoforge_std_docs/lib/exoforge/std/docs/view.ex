@@ -1650,6 +1650,10 @@ defmodule Exoforge.Std.Docs.View do
             Decorate parameterless methods with <code class="font-mono text-amber-700 font-semibold">[ExoCron]</code> to schedule automated background executions under cluster supervision.
           </p>
 
+          <p class="text-xs text-gray-600 leading-relaxed">
+            A cron method is registered as an action with scope <code class="font-mono text-primary-700">"server"</code>: the scheduler invokes it internally, but a player or HTTP caller is refused with <code class="font-mono text-red-600">forbidden_scope</code>.
+          </p>
+
           <div class="overflow-x-auto rounded-xl border border-gray-200 mt-3">
             <table class="w-full text-left text-xs bg-white">
               <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 font-semibold text-[10px] uppercase">
@@ -2906,11 +2910,11 @@ defmodule Exoforge.Std.Docs.View do
         [ExoWebhook("stripe")]
         public async Task<WebhookResult> HandleStripeWebhook(WebhookPayload payload)
         {
-            string signature = payload.Headers.TryGetValue("Stripe-Signature", out var sig) ? sig : "";
-            Exo.Logger.Info($"Processing Stripe checkout webhook: {payload.EventName}");
+            string signature = payload.Headers != null && payload.Headers.TryGetValue("Stripe-Signature", out var sig) ? sig : "";
+            Exo.Logger.Info($"Processing Stripe checkout webhook: {payload.RawBody.Length} bytes");
 
-            // Process payload and acknowledge receipt
-            return WebhookResult.Success();
+            // Verify the HMAC over payload.RawBody before trusting the parsed JSON.
+            return new WebhookResult();
         }
     }
     """
@@ -3216,12 +3220,12 @@ defmodule Exoforge.Std.Docs.View do
         [ExoWebhook("stripe")]
         public async Task<WebhookResult> HandleStripeWebhook(WebhookPayload payload)
         {
-            string signature = payload.Headers.TryGetValue("Stripe-Signature", out var sig) ? sig : "";
-            Exo.Logger.Info($"Inbound Stripe webhook: {payload.EventName}");
+            string signature = payload.Headers != null && payload.Headers.TryGetValue("Stripe-Signature", out var sig) ? sig : "";
+            Exo.Logger.Info($"Inbound Stripe webhook: {payload.RawBody.Length} bytes (sig {signature.Length} chars)");
 
-            // Verify signature, extract player ID and product from payload
-            string targetPlayerId = payload.Data.TryGetValue("client_reference_id", out var refId) ? refId?.ToString() ?? "" : "";
-            string productId = payload.Data.TryGetValue("product_id", out var pId) ? pId?.ToString() ?? "" : "";
+            // Verify the HMAC over payload.RawBody before trusting the parsed JSON.
+            string targetPlayerId = payload.Json.TryGetProperty("client_reference_id", out var refId) ? refId.GetString() ?? "" : "";
+            string productId = payload.Json.TryGetProperty("product_id", out var pId) ? pId.GetString() ?? "" : "";
 
             // Instantly credit player account
             Exo.Database.Execute(
@@ -3232,7 +3236,7 @@ defmodule Exoforge.Std.Docs.View do
             // Push real-time unlock animation event directly to the player's active Unity client
             await Exo.Events.EmitAsync(new PurchaseFulfilledEvent(targetPlayerId, productId));
 
-            return WebhookResult.Success();
+            return new WebhookResult();
         }
     }
 

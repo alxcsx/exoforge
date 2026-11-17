@@ -110,6 +110,11 @@ public TransferItemResponse TransferItem(TransferItemRequest req)
 
 Marks a method as a scheduled recurring background task (cron job). Executed periodically by the cluster scheduler according to the specified cron expression.
 
+> [!IMPORTANT]
+> A cron method is registered as an action with scope `"server"`, so the scheduler can invoke it
+> (internal dispatch) but no transport can: a player or web request to `/<service>/<job>` is refused
+> with `forbidden_scope`. Give the method an `[ExoAction]` as well if players must call it.
+
 ### Parameters & Properties
 
 | Parameter | Type | Required / Default | Description |
