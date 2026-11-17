@@ -2132,7 +2132,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                       phx-value-id={ext_id}
                       title={"Unpin #{title} from top bar"}
                       aria-label={"Unpin #{title}"}
-                      class="absolute right-1 text-gray-400 hover:text-red-500 transition-opacity opacity-0 group-hover:opacity-100 p-0.5 flex items-center justify-center cursor-pointer"
+                      class="absolute right-1 rounded-lg text-gray-400 hover:text-red-500 transition-opacity opacity-0 group-hover:opacity-100 focus-visible:opacity-100 p-0.5 flex items-center justify-center cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
                     >
                       <.icon name={:close} class="w-3 h-3" />
                     </button>

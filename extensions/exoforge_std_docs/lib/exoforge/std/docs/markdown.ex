@@ -153,6 +153,7 @@ defmodule Exoforge.Std.Docs.Markdown do
         case rest do
           [next | next_rest] ->
             next_trimmed = String.trim(next)
+
             if (type == :ul and Regex.match?(~r/^[-*+]\s+/, next_trimmed)) or
                  (type == :ol and Regex.match?(~r/^\d+\.\s+/, next_trimmed)) do
               parse_list_lines(next_rest, ["" | items], type, acc)
@@ -239,7 +240,7 @@ defmodule Exoforge.Std.Docs.Markdown do
       end
 
     copy_btn = """
-    <button type=\"button\" onclick=\"window.exoCopyCode && window.exoCopyCode(this)\" class=\"absolute top-2 right-14 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white border border-gray-700 flex items-center gap-1 cursor-pointer print:hidden shadow-xs\" title=\"Copy code\"><span class=\"copy-icon\">#{icon("clipboard")}</span><span class=\"copy-text\">Copy</span></button>
+    <button type=\"button\" onclick=\"window.exoCopyCode && window.exoCopyCode(this)\" class=\"absolute top-2 right-14 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity text-[10px] font-mono font-medium px-2 py-0.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white border border-gray-700 flex items-center gap-1 cursor-pointer print:hidden shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-950\" title=\"Copy code\"><span class=\"copy-icon\">#{icon("clipboard")}</span><span class=\"copy-text\">Copy</span></button>
     """
 
     """

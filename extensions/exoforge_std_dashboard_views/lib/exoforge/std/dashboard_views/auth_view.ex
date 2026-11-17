@@ -826,9 +826,11 @@ defmodule Exoforge.Std.DashboardViews.AuthView do
                               </span>
                             <% end %>
                             <button
+                              type="button"
                               phx-click={Phoenix.LiveView.JS.dispatch("exoforge:clip", detail: %{text: user["user_id"] || user["player_id"]})}
                               title="Copy User ID"
-                              class="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-primary-600 transition-opacity text-xs"
+                              aria-label="Copy User ID"
+                              class="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 rounded-lg text-gray-400 hover:text-primary-600 transition-opacity text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
                             >
                               <.studio_icon icon="clipboard" class="w-3 h-3" />
                             </button>
