@@ -114,6 +114,19 @@ public class DeploymentGuardTests
         }
     }
 
+    [Fact]
+    public async Task Dotnet_build_does_not_hang_when_build_servers_are_cold()
+    {
+        await RunDotnetAsync("build-server shutdown").WaitAsync(TimeSpan.FromSeconds(15));
+
+        var (exitCode, output) = await RunDotnetAsync(
+            $"build \"{FixtureProject}\" -c Release -v q --nologo")
+            .WaitAsync(TimeSpan.FromSeconds(15));
+
+        Assert.Equal(0, exitCode);
+        Assert.DoesNotContain("error ", output);
+    }
+
     private static string Executable(string outputDir) =>
         Path.Combine(outputDir, OperatingSystem.IsWindows() ? "guard_probe.exe" : "guard_probe");
 
@@ -122,6 +135,15 @@ public class DeploymentGuardTests
 
     private static async Task<(int ExitCode, string Output)> RunDotnetAsync(string arguments)
     {
+        // Build/publish without --disable-build-servers spawns VBCSCompiler/MSBuild worker nodes
+        // that inherit redirected stdout/stderr pipes and keep them open for their 10-minute idle
+        // keepalive after dotnet exits.
+        if (arguments.StartsWith("build ", StringComparison.Ordinal) ||
+            arguments.StartsWith("publish ", StringComparison.Ordinal))
+        {
+            arguments = $"{arguments} --disable-build-servers";
+        }
+
         var start = new ProcessStartInfo("dotnet", arguments)
         {
             RedirectStandardOutput = true,
@@ -144,14 +166,17 @@ public class DeploymentGuardTests
         try
         {
             await process.WaitForExitAsync(timeout.Token);
+            await Task.WhenAll(stdout, stderr).WaitAsync(timeout.Token);
         }
         catch (OperationCanceledException)
         {
-            process.Kill(entireProcessTree: true);
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
             throw new TimeoutException($"dotnet {arguments} did not finish within three minutes.");
         }
 
-        await Task.WhenAll(stdout, stderr);
         return (process.ExitCode, stdout.Result + stderr.Result);
     }
 }
