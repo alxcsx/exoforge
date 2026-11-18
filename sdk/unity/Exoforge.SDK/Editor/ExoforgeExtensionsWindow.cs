@@ -3114,7 +3114,7 @@ namespace Exoforge.Unity.Editor
                 await deployer.UploadExtensionAsync(plugin.Name, existingClient: GetClient());
                 ShowStatus($"✓ Successfully deployed '{plugin.Name}' to cluster.");
                 await RefreshPluginsDataAsync();
-                int changed = await deployer.SyncContractsAsync(outputPathOverride: ExoforgeEditorConfig.GetAbsoluteGeneratedScriptPath(), existingClient: GetClient());
+                int changed = await deployer.SyncContractsAsync(outputPathOverride: ExoforgeEditorConfig.GetAbsoluteGeneratedScriptPath(), existingClient: GetClient(), includeStudio: true);
                 if (changed > 0)
                 {
                     AssetDatabase.Refresh();

@@ -329,4 +329,65 @@ public class ExoCodeGeneratorTests
         Assert.Contains("public int Small { get; set; }", code);
         Assert.Contains("public long Beam { get; set; }", code);
     }
+
+    [Fact]
+    public void Generate_StudioScopedService_MustNotAppearOnExoServices_AndStudioClassIsGuarded()
+    {
+        string exportJson = """
+        {
+            "export": {
+                "plugins": [
+                    {
+                        "id": "gameplay",
+                        "services": [
+                            {
+                                "name": "leaderboard",
+                                "actions": [
+                                    { "name": "get_scores", "scope": "player", "params": [] }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "id": "admin",
+                        "services": [
+                            {
+                                "name": "database",
+                                "actions": [
+                                    { "name": "execute", "scope": "server", "params": [] }
+                                ]
+                            },
+                            {
+                                "name": "extension_manager",
+                                "actions": [
+                                    { "name": "list_extensions", "scope": "studio", "params": [] }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+        """;
+
+        string code = ExoCodeGenerator.GenerateFromExportJson(exportJson, includeStudio: true);
+
+        // 1. Gameplay service is on ExoServices
+        Assert.Contains("public static class ExoServices", code);
+        Assert.Contains("public static LeaderboardServiceClient Leaderboard =>", code);
+
+        // 2. Studio-scoped services MUST NOT appear on ExoServices
+        int exoServicesIdx = code.IndexOf("public static class ExoServices", StringComparison.Ordinal);
+        int nextClassIdx = code.IndexOf("public static class Exo", exoServicesIdx + 30, StringComparison.Ordinal);
+        string exoServicesBody = code.Substring(exoServicesIdx, nextClassIdx - exoServicesIdx);
+
+        Assert.DoesNotContain("DatabaseServiceClient Database", exoServicesBody);
+        Assert.DoesNotContain("ExtensionManagerServiceClient ExtensionManager", exoServicesBody);
+
+        // 3. Studio-scoped services MUST appear on ExoStudioServices, wrapped in #if UNITY_EDITOR
+        Assert.Contains("#if UNITY_EDITOR", code);
+        Assert.Contains("public static class ExoStudioServices", code);
+        Assert.Contains("public static DatabaseServiceClient Database =>", code);
+        Assert.Contains("public static ExtensionManagerServiceClient ExtensionManager =>", code);
+    }
 }

@@ -422,7 +422,7 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
             string outputPath = ExoforgeEditorConfig.GetAbsoluteGeneratedScriptPath();
 
             // Run offline-capable sync
-            int changed = await deployer.SyncContractsAsync(outputPathOverride: outputPath);
+            int changed = await deployer.SyncContractsAsync(outputPathOverride: outputPath, includeStudio: true);
 
             // Generate runtime config
             ExoforgeRuntimeConfigGenerator.Generate();
@@ -465,7 +465,7 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
                     UnityEngine.Debug.Log("[Exoforge] Missing client bindings detected. Auto-generating baseline C# client from workspace...");
                     var ws = ExoWorkspace.Load(wsPath);
                     var deployer = new ExoDeployer(ws);
-                    await deployer.SyncContractsAsync(outputPathOverride: outputPath);
+                    await deployer.SyncContractsAsync(outputPathOverride: outputPath, includeStudio: true);
                     ExoforgeRuntimeConfigGenerator.Generate();
                     AssetDatabase.Refresh();
                 }
@@ -1509,13 +1509,15 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
             {
                 changedCount = await deployer.SyncContractsAsync(
                     outputPathOverride: outputPath,
-                    existingClient: _editorClient);
+                    existingClient: _editorClient,
+                    includeStudio: true);
             }
             else
             {
                 changedCount = await deployer.SyncContractsAsync(
                     environmentName: null,
-                    outputPathOverride: outputPath);
+                    outputPathOverride: outputPath,
+                    includeStudio: true);
             }
 
             ExoforgeRuntimeConfigGenerator.Generate();

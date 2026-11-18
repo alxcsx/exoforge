@@ -161,6 +161,7 @@ public static class ExoCodeGenerator
             $".{svcPascal}.",
             $"Exo.{svcPascal}",
             $"ExoServices.{svcPascal}",
+            $"ExoStudioServices.{svcPascal}",
             $"Exoforge.{svcPascal}"
         };
 
@@ -1266,12 +1267,33 @@ public static class ExoCodeGenerator
         var actionRespNames = new Dictionary<ActionContractModel, string>();
         var emittedModelSignatures = new Dictionary<string, string>(StringComparer.Ordinal);
 
+        var clientModelNames = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var svc in serviceList.Where(IsClientVisibleService))
+        {
+            string svcPascal = ToPascalCase(svc.Name);
+            foreach (var act in svc.Actions.Where(IsClientAction))
+            {
+                if (act.Params.Count > 0)
+                {
+                    clientModelNames.Add($"{svcPascal}{ToPascalCase(act.Name)}Request");
+                }
+                if (act.ReturnFields.Count > 0)
+                {
+                    string respName = ResolveResponseModelName(svcPascal, act, emittedModelSignatures);
+                    actionRespNames[act] = respName;
+                    clientModelNames.Add(respName);
+                    string sig = string.Join("|", act.ReturnFields.Select(f => $"{f.Name}:{f.Type}"));
+                    emittedModelSignatures[respName] = sig;
+                }
+            }
+        }
+
         foreach (var svc in serviceList)
         {
             string svcPascal = ToPascalCase(svc.Name);
             foreach (var act in svc.Actions)
             {
-                if (act.ReturnFields.Count > 0)
+                if (act.ReturnFields.Count > 0 && !actionRespNames.ContainsKey(act))
                 {
                     string respName = ResolveResponseModelName(svcPascal, act, emittedModelSignatures);
                     actionRespNames[act] = respName;
@@ -1312,6 +1334,8 @@ public static class ExoCodeGenerator
                 if (act.Params.Count > 0)
                 {
                     string reqName = $"{svcPascal}{actPascal}Request";
+                    bool isStudioReq = !clientModelNames.Contains(reqName);
+                    if (isStudioReq) sb.AppendLine("#if UNITY_EDITOR");
                     sb.AppendLine($"/// <summary>Request payload for {svc.Name}.{act.Name} action.</summary>");
                     sb.AppendLine($"public class {reqName}");
                     sb.AppendLine("{");
@@ -1328,6 +1352,7 @@ public static class ExoCodeGenerator
                         sb.AppendLine($"    public {csType} {propName} {{ get; set; }} = {ParamInitializer(p, csType)};");
                     }
                     sb.AppendLine("}");
+                    if (isStudioReq) sb.AppendLine("#endif");
                     sb.AppendLine();
                 }
 
@@ -1337,6 +1362,8 @@ public static class ExoCodeGenerator
 
                     if (emittedModels.Add(respName))
                     {
+                        bool isStudioResp = !clientModelNames.Contains(respName);
+                        if (isStudioResp) sb.AppendLine("#if UNITY_EDITOR");
                         sb.AppendLine($"/// <summary>Response model for {svc.Name}.{act.Name} action.</summary>");
                         sb.AppendLine($"public class {respName}");
                         sb.AppendLine("{");
@@ -1349,6 +1376,7 @@ public static class ExoCodeGenerator
                             sb.AppendLine($"    public {csType} {propName} {{ get; set; }} = default!;");
                         }
                         sb.AppendLine("}");
+                        if (isStudioResp) sb.AppendLine("#endif");
                         sb.AppendLine();
                     }
                 }
@@ -1357,6 +1385,8 @@ public static class ExoCodeGenerator
             // Event Models
             foreach (var evt in svc.Events)
             {
+                bool isStudioSvc = !IsClientVisibleService(svc);
+                if (isStudioSvc) sb.AppendLine("#if UNITY_EDITOR");
                 string evtPascal = ToPascalCase(evt.Name);
                 string evtName = $"{svcPascal}{evtPascal}Event";
                 sb.AppendLine($"/// <summary>Event payload for {evt.Topic ?? svc.Name} -> {evt.Name}.</summary>");
@@ -1379,6 +1409,7 @@ public static class ExoCodeGenerator
                     sb.AppendLine("    public Dictionary<string, JsonElement>? ExtraData { get; set; }");
                 }
                 sb.AppendLine("}");
+                if (isStudioSvc) sb.AppendLine("#endif");
                 sb.AppendLine();
             }
         }
@@ -1398,9 +1429,12 @@ public static class ExoCodeGenerator
         foreach (var svc in serviceList)
         {
             string pascalName = ToPascalCase(svc.Name);
+            bool isStudioOnly = !IsClientVisibleService(svc);
+            if (isStudioOnly) sb.AppendLine("#if UNITY_EDITOR");
             sb.AppendLine($"    /// <summary>Access the {pascalName} service contract.</summary>");
             sb.AppendLine($"    public static {pascalName}ServiceClient {pascalName}(this ExoClient client) =>");
             sb.AppendLine($"        client.Services().{pascalName};");
+            if (isStudioOnly) sb.AppendLine("#endif");
             sb.AppendLine();
         }
         sb.AppendLine("}");
@@ -1458,7 +1492,7 @@ public static class ExoCodeGenerator
         sb.AppendLine("    /// <summary>Configures a custom resolver for the active ExoClient.</summary>");
         sb.AppendLine("    public static void SetClientLocator(Func<ExoClient> locator) => _clientLocator = locator;");
         sb.AppendLine();
-        foreach (var svc in serviceList)
+        foreach (var svc in serviceList.Where(IsClientVisibleService))
         {
             string pascalName = ToPascalCase(svc.Name);
             sb.AppendLine($"    /// <summary>Access the {pascalName} service contract.</summary>");
@@ -1483,7 +1517,7 @@ public static class ExoCodeGenerator
         sb.AppendLine("    /// <summary>Configures a custom resolver for the active ExoClient.</summary>");
         sb.AppendLine("    public static void SetClientLocator(Func<ExoClient> locator) => ExoServices.SetClientLocator(locator);");
         sb.AppendLine();
-        foreach (var svc in serviceList)
+        foreach (var svc in serviceList.Where(IsClientVisibleService))
         {
             string pascalName = ToPascalCase(svc.Name);
             sb.AppendLine($"    /// <summary>Access the {pascalName} service contract.</summary>");
@@ -1493,6 +1527,39 @@ public static class ExoCodeGenerator
         }
         sb.AppendLine("}");
         sb.AppendLine();
+
+        var studioServices = serviceList.Where(s => !IsClientVisibleService(s) || s.Actions.Any(a => !IsClientAction(a))).ToList();
+        if (includeStudio && studioServices.Count > 0)
+        {
+            sb.AppendLine("#if UNITY_EDITOR");
+            sb.AppendLine("/// <summary>");
+            sb.AppendLine("/// Static access to Exoforge studio/admin services matching the extension runtime syntax.");
+            sb.AppendLine("/// Reachable only from Unity Editor assemblies.");
+            sb.AppendLine("/// </summary>");
+            sb.AppendLine("public static class ExoStudioServices");
+            sb.AppendLine("{");
+            sb.AppendLine("    /// <summary>The active ExoClient used by static studio service calls.</summary>");
+            sb.AppendLine("    public static ExoClient Client");
+            sb.AppendLine("    {");
+            sb.AppendLine("        get => ExoServices.Client;");
+            sb.AppendLine("        set => ExoServices.Client = value;");
+            sb.AppendLine("    }");
+            sb.AppendLine();
+            sb.AppendLine("    /// <summary>Configures a custom resolver for the active ExoClient.</summary>");
+            sb.AppendLine("    public static void SetClientLocator(Func<ExoClient> locator) => ExoServices.SetClientLocator(locator);");
+            sb.AppendLine();
+            foreach (var svc in studioServices)
+            {
+                string pascalName = ToPascalCase(svc.Name);
+                sb.AppendLine($"    /// <summary>Access the {pascalName} studio service contract.</summary>");
+                sb.AppendLine($"    public static {pascalName}ServiceClient {pascalName} =>");
+                sb.AppendLine($"        Client.{pascalName}();");
+                sb.AppendLine();
+            }
+            sb.AppendLine("}");
+            sb.AppendLine("#endif");
+            sb.AppendLine();
+        }
 
         // 3. Central Hub
         sb.AppendLine("/// <summary>");
@@ -1512,8 +1579,11 @@ public static class ExoCodeGenerator
         {
             string pascalName = ToPascalCase(svc.Name);
             string fieldName = SanitizeFieldName(svc.Name);
+            bool isStudioOnly = !IsClientVisibleService(svc);
+            if (isStudioOnly) sb.AppendLine("#if UNITY_EDITOR");
             sb.AppendLine($"    private {pascalName}ServiceClient? {fieldName};");
             sb.AppendLine($"    public {pascalName}ServiceClient {pascalName} => {fieldName} ??= new {pascalName}ServiceClient(_client);");
+            if (isStudioOnly) sb.AppendLine("#endif");
             sb.AppendLine();
         }
         sb.AppendLine("}");
@@ -1523,6 +1593,8 @@ public static class ExoCodeGenerator
         foreach (var svc in serviceList)
         {
             string svcPascal = ToPascalCase(svc.Name);
+            bool isStudioOnly = !IsClientVisibleService(svc);
+            if (isStudioOnly) sb.AppendLine("#if UNITY_EDITOR");
             sb.AppendLine($"/// <summary>Client interface for the {svc.Name} service.</summary>");
             if (svc.Name.Equals("auth", StringComparison.OrdinalIgnoreCase))
             {
@@ -1583,6 +1655,9 @@ public static class ExoCodeGenerator
             // Action Methods
             foreach (var act in svc.Actions)
             {
+                bool isStudioAction = !isStudioOnly && includeStudio && !IsClientAction(act);
+                if (isStudioAction) sb.AppendLine("#if UNITY_EDITOR");
+
                 string actPascal = ToPascalCase(act.Name);
                 string transportPref = act.Transport.ToLowerInvariant() switch
                 {
@@ -1723,9 +1798,12 @@ public static class ExoCodeGenerator
                     sb.AppendLine("    }");
                     sb.AppendLine();
                 }
+
+                if (isStudioAction) sb.AppendLine("#endif");
             }
 
             sb.AppendLine("}");
+            if (isStudioOnly) sb.AppendLine("#endif");
             sb.AppendLine();
         }
 
@@ -1862,14 +1940,14 @@ public static class ExoCodeGenerator
         };
     }
 
-    private static bool IsClientVisibleService(ServiceContractModel service) =>
+    public static bool IsClientVisibleService(ServiceContractModel service) =>
         service.Actions.Any(IsClientAction);
 
     /// <summary>
     /// Scopes a game client may call. <c>player</c> and <c>global</c> are the client surface;
     /// <c>studio</c>, <c>admin</c>, <c>server</c>, <c>service</c> and <c>webhook</c> are not.
     /// </summary>
-    private static bool IsClientAction(ActionContractModel action)
+    public static bool IsClientAction(ActionContractModel action)
     {
         string scope = (action.Scope ?? "").Trim().ToLowerInvariant();
         return scope is "" or "player" or "global";

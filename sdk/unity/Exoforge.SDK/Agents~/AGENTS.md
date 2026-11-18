@@ -45,7 +45,7 @@ Unity projects integrate Exoforge using a strict boundary between client code an
 
 ### Key Topology Rules:
 1. **Server Extensions Live Outside `Assets/`**: Extension source code is located in `Exoforge/extensions/<name>/`. This keeps native C# backend projects completely isolated from Unity's AssetDatabase and Mono/IL2CPP compilers, allowing extensions to use modern .NET features and libraries.
-2. **Client Stubs Inside `Assets/`**: Unity gameplay scripts only reference the generated client bindings in `Assets/Exoforge/Generated/ExoforgeServices.g.cs`. Never reference extension backend assemblies directly from Unity gameplay scripts.
+2. **Client Stubs Inside `Assets/`**: Unity gameplay scripts only reference the generated client bindings in `Assets/Exoforge/Generated/ExoforgeServices.g.cs`. Never reference extension backend assemblies directly from Unity gameplay scripts. Gameplay scripts access services via `ExoServices.<Service>`; studio and admin services are separated into `ExoStudioServices.<Service>` guarded by `#if UNITY_EDITOR`.
 3. **Runtime Configuration**: The runtime connection settings reside in `Assets/Resources/exoforge.json`. These are generated and updated automatically by `exo sync` or via the Unity Editor menu.
 
 ## 3. Installed Agent Skills
