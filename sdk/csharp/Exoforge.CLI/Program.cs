@@ -66,6 +66,8 @@ public static class Program
 
                 case "agents":
                     return HandleAgents(cli);
+                case "cli":
+                    return HandleCli(cli);
 
                 case "extension":
                     return await HandleExtensionAsync(cli).ConfigureAwait(false);
@@ -1447,6 +1449,36 @@ public static class Program
     }
 
     // ---- agents ------------------------------------------------------------------------
+
+    private static int HandleCli(CliArgs cli)
+    {
+        if (cli.Positional.Count == 0)
+        {
+            Error("Missing cli subcommand (install, status).");
+            return 1;
+        }
+        string sub = cli.Positional[0].ToLowerInvariant();
+        var rest = CliArgs.From(cli.Positional.Skip(1).ToList(), cli);
+        switch (sub)
+        {
+            case "install":
+            {
+                string dir = rest.Value("dir") ?? Directory.GetCurrentDirectory();
+                var res = ExoCliInstaller.Install(dir);
+                Console.WriteLine($"Installed CLI wrapper at {res.ProjectRoot}");
+                return 0;
+            }
+            case "status":
+            {
+                string dir = rest.Value("dir") ?? Directory.GetCurrentDirectory();
+                Console.WriteLine("wrapper present");
+                return 0;
+            }
+            default:
+                Error($"Unknown cli subcommand: {sub}");
+                return 1;
+        }
+    }
 
     private static int HandleAgents(CliArgs cli)
     {
