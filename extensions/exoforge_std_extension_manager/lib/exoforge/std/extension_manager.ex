@@ -35,7 +35,10 @@ defmodule Exoforge.Std.ExtensionManager do
     end
 
     @impl true
-    def init(:ok), do: {:ok, %{}}
+    def init(:ok) do
+      Exoforge.Std.ExtensionManager.recover_leftover_backups()
+      {:ok, %{}}
+    end
 
     @impl true
     def handle_call({:run, fun}, _from, state) do
@@ -449,25 +452,28 @@ defmodule Exoforge.Std.ExtensionManager do
     case ensure_writable_target_dir(clean_name) do
       {:ok, target_dir} ->
         backup_dir = backup_existing_dir(target_dir)
-        is_win = match?({:win32, _}, :os.type())
-        binary_name = if is_win, do: clean_name <> ".exe", else: clean_name
-        binary_path = Path.join(target_dir, binary_name)
-        staged_path = binary_path <> ".new"
-        manifest_path = Path.join(target_dir, "manifest.json")
 
-        with :ok <- File.write(staged_path, binary),
-             :ok <- safe_install_binary(staged_path, binary_path),
-             :ok <- write_extension_files(target_dir, files_map),
-             :ok <- write_manifest_file(manifest_path, clean_name, manifest_param, :native) do
-          load_and_boot_extension(target_dir, clean_name, :native, previous, backup_dir)
-        else
-          {:error, reason} ->
-            Logger.error("[ExtensionManager] Failed to install native extension #{clean_name}: #{inspect(reason)}")
-            rollback_extension(target_dir, clean_name, previous, backup_dir, reason)
+        install_with_rollback(target_dir, clean_name, previous, backup_dir, fn ->
+          is_win = match?({:win32, _}, :os.type())
+          binary_name = if is_win, do: clean_name <> ".exe", else: clean_name
+          binary_path = Path.join(target_dir, binary_name)
+          staged_path = binary_path <> ".new"
+          manifest_path = Path.join(target_dir, "manifest.json")
 
-          _ ->
-            rollback_extension(target_dir, clean_name, previous, backup_dir, :write_failed)
-        end
+          with :ok <- File.write(staged_path, binary),
+               :ok <- safe_install_binary(staged_path, binary_path),
+               :ok <- write_extension_files(target_dir, files_map),
+               :ok <- write_manifest_file(manifest_path, clean_name, manifest_param, :native) do
+            load_and_boot_extension(target_dir, clean_name, :native, previous, backup_dir)
+          else
+            {:error, reason} ->
+              Logger.error("[ExtensionManager] Failed to install native extension #{clean_name}: #{inspect(reason)}")
+              rollback_extension(target_dir, clean_name, previous, backup_dir, reason)
+
+            _ ->
+              rollback_extension(target_dir, clean_name, previous, backup_dir, :write_failed)
+          end
+        end)
 
       {:error, reason} ->
         Logger.error("[ExtensionManager] Could not create target directory for #{clean_name}: #{inspect(reason)}")
@@ -549,21 +555,24 @@ defmodule Exoforge.Std.ExtensionManager do
     case ensure_writable_target_dir(clean_name) do
       {:ok, target_dir} ->
         backup_dir = backup_existing_dir(target_dir)
-        lib_dir = Path.join([target_dir, "lib"])
-        manifest_path = Path.join(target_dir, "manifest.json")
 
-        with :ok <- File.mkdir_p(lib_dir),
-             :ok <- write_elixir_files(target_dir, clean_name, elixir_code, files_map),
-             :ok <- write_manifest_file(manifest_path, clean_name, manifest_param, :elixir),
-             :ok <- compile_elixir_extension(target_dir, elixir_code) do
-          load_and_boot_extension(target_dir, clean_name, :elixir, previous, backup_dir)
-        else
-          {:error, reason} ->
-            rollback_extension(target_dir, clean_name, previous, backup_dir, reason)
+        install_with_rollback(target_dir, clean_name, previous, backup_dir, fn ->
+          lib_dir = Path.join([target_dir, "lib"])
+          manifest_path = Path.join(target_dir, "manifest.json")
 
-          _ ->
-            rollback_extension(target_dir, clean_name, previous, backup_dir, :write_failed)
-        end
+          with :ok <- File.mkdir_p(lib_dir),
+               :ok <- write_elixir_files(target_dir, clean_name, elixir_code, files_map),
+               :ok <- write_manifest_file(manifest_path, clean_name, manifest_param, :elixir),
+               :ok <- compile_elixir_extension(target_dir, elixir_code) do
+            load_and_boot_extension(target_dir, clean_name, :elixir, previous, backup_dir)
+          else
+            {:error, reason} ->
+              rollback_extension(target_dir, clean_name, previous, backup_dir, reason)
+
+            _ ->
+              rollback_extension(target_dir, clean_name, previous, backup_dir, :write_failed)
+          end
+        end)
 
       {:error, reason} ->
         {:error, reason}
@@ -667,7 +676,8 @@ defmodule Exoforge.Std.ExtensionManager do
     end
   end
 
-  defp backup_existing_dir(target_dir) do
+  @doc false
+  def backup_existing_dir(target_dir) do
     if File.dir?(target_dir) do
       backup_dir = "#{target_dir}.bak.#{System.unique_integer([:positive])}"
       File.rm_rf(backup_dir)
@@ -718,11 +728,73 @@ defmodule Exoforge.Std.ExtensionManager do
     end
   end
 
-  defp rollback_extension(target_dir, clean_name, previous, backup_dir, original_error, loaded_manifest \\ nil) do
-    if loaded_manifest do
-      _ = ExtensionBootstrapper.unload_extension(loaded_manifest.id)
-      ExtensionRegistry.unregister(loaded_manifest.id)
+  @doc false
+  def recover_leftover_backups do
+    dirs =
+      [upload_base_dir(), Path.join(System.tmp_dir!(), "exoforge_uploaded_extensions")]
+      |> Enum.uniq()
+      |> Enum.filter(&File.dir?/1)
+
+    Enum.each(dirs, fn base ->
+      base
+      |> Path.join("*.bak.*")
+      |> Path.wildcard()
+      |> Enum.filter(&File.dir?/1)
+      |> Enum.each(fn backup_dir ->
+        target_dir = Regex.replace(~r/\.bak\.\d+$/, backup_dir, "")
+        clean_name = Path.basename(target_dir)
+        Logger.warning("[ExtensionManager] Recovering leftover backup #{backup_dir} -> #{target_dir}")
+
+        unload_id = Exoforge.Atoms.existing(clean_name, clean_name)
+        _ = ExtensionBootstrapper.unload_extension(unload_id)
+        ExtensionRegistry.unregister(unload_id)
+
+        File.rm_rf(target_dir)
+
+        case File.rename(backup_dir, target_dir) do
+          :ok ->
+            case ManifestLoader.load_extensions(target_dir) do
+              [manifest | _] ->
+                if manifest.type == :elixir do
+                  _ = compile_elixir_extension(manifest.physical_path || target_dir, nil)
+                end
+
+                ExtensionRegistry.register(manifest)
+                boot_res = safe_boot_extension(manifest)
+                Logger.info("[ExtensionManager] Recovered #{manifest.id} v#{manifest.version} from backup (boot: #{inspect(boot_res)})")
+
+              _ ->
+                Logger.warning("[ExtensionManager] Restored backup #{target_dir} but no manifest could be loaded")
+            end
+
+          {:error, reason} ->
+            Logger.error("[ExtensionManager] Failed to restore backup #{backup_dir} -> #{target_dir}: #{inspect(reason)}")
+        end
+      end)
+    end)
+
+    :ok
+  end
+
+  @doc false
+  def install_with_rollback(target_dir, clean_name, previous, backup_dir, install_fun) do
+    try do
+      install_fun.()
+    rescue
+      e ->
+        Logger.error("[ExtensionManager] Exception during install of #{clean_name}: #{Exception.message(e)}")
+        rollback_extension(target_dir, clean_name, previous, backup_dir, {:exception, Exception.message(e)})
+    catch
+      kind, reason ->
+        Logger.error("[ExtensionManager] #{kind} during install of #{clean_name}: #{inspect(reason)}")
+        rollback_extension(target_dir, clean_name, previous, backup_dir, {kind, reason})
     end
+  end
+
+  defp rollback_extension(target_dir, clean_name, previous, backup_dir, original_error, loaded_manifest \\ nil) do
+    unload_id = if loaded_manifest, do: loaded_manifest.id, else: Exoforge.Atoms.existing(clean_name, clean_name)
+    _ = ExtensionBootstrapper.unload_extension(unload_id)
+    ExtensionRegistry.unregister(unload_id)
 
     File.rm_rf(target_dir)
 

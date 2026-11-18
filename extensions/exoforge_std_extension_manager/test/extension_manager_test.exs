@@ -283,10 +283,10 @@ defmodule Exoforge.Std.ExtensionManagerTest do
             {:invalid_resource,
              %{extension: info.extension_id, table: to_string(res.name), column: List.first(names), reason: :duplicate_column}}}}
         else
-          if to_string(res.name) == "fail_migration_table" do
-            {:halt, {:error, :simulated_ddl_failure}}
-          else
-            {:cont, {:ok, %{migrated: count + 1}}}
+          case to_string(res.name) do
+            "fail_migration_table" -> {:halt, {:error, :simulated_ddl_failure}}
+            "raise_migration_table" -> raise "simulated_migration_crash"
+            _ -> {:cont, {:ok, %{migrated: count + 1}}}
           end
         end
       end)
@@ -311,6 +311,8 @@ defmodule Exoforge.Std.ExtensionManagerTest do
         File.rm_rf("priv/data/uploaded_extensions/ext_redeploy_boot_fail")
         File.rm_rf("priv/data/uploaded_extensions/ext_redeploy_empty_manifest")
         File.rm_rf("priv/data/uploaded_extensions/ext_concurrent_push")
+        File.rm_rf("priv/data/uploaded_extensions/ext_redeploy_crash")
+        File.rm_rf("priv/data/uploaded_extensions/ext_leftover_bak")
 
         if :ets.whereis(:exo_extensions_mem) != :undefined do
           ExtensionRegistry.unregister(:ext_a_broken)
@@ -320,6 +322,8 @@ defmodule Exoforge.Std.ExtensionManagerTest do
           ExtensionRegistry.unregister(:ext_redeploy_boot_fail)
           ExtensionRegistry.unregister(:ext_redeploy_empty_manifest)
           ExtensionRegistry.unregister(:ext_concurrent_push)
+          ExtensionRegistry.unregister(:ext_redeploy_crash)
+          ExtensionRegistry.unregister(:ext_leftover_bak)
           ExtensionRegistry.unregister(:test_resource_store)
         end
       end)
@@ -717,6 +721,108 @@ defmodule Exoforge.Std.ExtensionManagerTest do
 
       assert to_string(manifest.version) == disk_ver
       assert Path.wildcard("priv/data/uploaded_extensions/ext_concurrent_push.bak.*") == []
+    end
+
+    test "install that raises mid-way rolls back and leaves previous version running" do
+      elixir_v1 = """
+      defmodule ExtRedeployCrash do
+        use Exoforge.Extension, provides: [:ext_redeploy_crash]
+        defaction version(_p), do: {:ok, %{v: 1}}
+      end
+      """
+
+      manifest_v1 = """
+      {
+        "id": "ext_redeploy_crash",
+        "version": "1.0.0",
+        "type": "elixir",
+        "entry_point": "Elixir.ExtRedeployCrash",
+        "provides": ["ext_redeploy_crash"]
+      }
+      """
+
+      assert {:ok, %{extension_id: "ext_redeploy_crash"}} =
+               ActionDispatcher.dispatch(
+                 :extension_manager,
+                 :upload_extension,
+                 %{name: "ext_redeploy_crash", type: "elixir", elixir_code: elixir_v1, manifest: manifest_v1},
+                 caller_scopes: ["admin"]
+               )
+
+      elixir_v2 = """
+      defmodule ExtRedeployCrash do
+        use Exoforge.Extension, provides: [:ext_redeploy_crash]
+        defaction version(_p), do: {:ok, %{v: 2}}
+      end
+      """
+
+      target_dir = "priv/data/uploaded_extensions/ext_redeploy_crash"
+      previous = ExtensionRegistry.fetch_manifest(:ext_redeploy_crash)
+      backup_dir = Exoforge.Std.ExtensionManager.backup_existing_dir(target_dir)
+      File.write!(Path.join(target_dir, "manifest.json"), "{half_installed")
+
+      assert {:error, %{error: {:exception, "boom_mid_install"}, rollback: :restored}} =
+               Exoforge.Std.ExtensionManager.install_with_rollback(
+                 target_dir,
+                 "ext_redeploy_crash",
+                 previous,
+                 backup_dir,
+                 fn -> raise "boom_mid_install" end
+               )
+
+      assert %{version: current_version} = ExtensionRegistry.fetch_manifest(:ext_redeploy_crash)
+      assert to_string(current_version) == "1.0.0"
+      assert {:ok, %{v: 1}} = ActionDispatcher.dispatch_internal(:ext_redeploy_crash, :version, %{})
+      assert Path.wildcard("priv/data/uploaded_extensions/ext_redeploy_crash.bak.*") == []
+    end
+
+    test "Serializer.init recovers a leftover backup directory on disk" do
+      base = "priv/data/uploaded_extensions"
+      target_dir = Path.join(base, "ext_leftover_bak")
+      backup_dir = Path.join(base, "ext_leftover_bak.bak.999")
+      File.rm_rf(target_dir)
+      File.rm_rf(backup_dir)
+      File.mkdir_p!(Path.join(target_dir, "lib"))
+      File.mkdir_p!(Path.join(backup_dir, "lib"))
+
+      File.write!(
+        Path.join(backup_dir, "lib/ext_leftover_bak.ex"),
+        """
+        defmodule ExtLeftoverBak do
+          use Exoforge.Extension, provides: [:ext_leftover_bak]
+          defaction version(_p), do: {:ok, %{v: 1}}
+        end
+        """
+      )
+
+      File.write!(
+        Path.join(backup_dir, "manifest.json"),
+        """
+        {
+          "id": "ext_leftover_bak",
+          "version": "1.0.0",
+          "type": "elixir",
+          "entry_point": "Elixir.ExtLeftoverBak",
+          "provides": ["ext_leftover_bak"]
+        }
+        """
+      )
+
+      # Simulate half-installed v2
+      File.write!(Path.join(target_dir, "manifest.json"), "{bad")
+
+      if pid = Process.whereis(Exoforge.Std.ExtensionManager.Serializer) do
+        GenServer.stop(pid, :normal)
+      end
+
+      case Exoforge.Std.ExtensionManager.Serializer.start_link([]) do
+        {:ok, _pid} -> :ok
+        {:error, {:already_started, _pid}} -> :ok
+      end
+      refute File.dir?(backup_dir)
+      assert %{version: v} = ExtensionRegistry.fetch_manifest(:ext_leftover_bak)
+      assert to_string(v) == "1.0.0"
+      assert {:ok, %{v: 1}} = ActionDispatcher.dispatch_internal(:ext_leftover_bak, :version, %{})
     end
   end
 end
