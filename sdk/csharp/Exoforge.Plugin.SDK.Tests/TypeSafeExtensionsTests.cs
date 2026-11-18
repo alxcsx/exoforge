@@ -51,6 +51,14 @@ public record UserJoined(string UserId);
 [ExoAction("login", Service = "auth")]
 public record LoginRequest(string Username, string Password);
 
+// Test row for adapter-shape bool round-trips through Exo.Database.Query<T>
+public record BoolRoundTripRow
+{
+    public string Id { get; init; } = "";
+    public bool IsActive { get; init; }
+    public bool? IsMuted { get; init; }
+}
+
 public class TypeSafeExtensionsTests
 {
     private class MockDatabase : IDatabase
@@ -273,5 +281,97 @@ public class TypeSafeExtensionsTests
         Assert.Equal("auth", actions.LastService);
         Assert.Equal("login", actions.LastAction);
         Assert.Same(req, actions.LastPayload);
+    }
+
+    private sealed class QueryTransport(string response) : IPluginTransport
+    {
+        public string? LastPayload { get; private set; }
+
+        public bool EmitEvent(string topic, string evt, string payloadJson) => false;
+
+        public string? CallAction(string service, string action, string payloadJson)
+        {
+            LastPayload = payloadJson;
+            return response;
+        }
+
+        public void Log(int level, string message) { }
+        public string? DbGet(string table, string key) => null;
+        public string? DbAll(string table) => null;
+        public bool DbPut(string table, string key, string valueJson) => false;
+        public bool DbDelete(string table, string key) => false;
+        public long ClockNow() => 0;
+    }
+
+    [Fact]
+    public void ExoDatabase_Query_RoundTripsBoolColumn_SqliteShape()
+    {
+        var transport = new QueryTransport("""
+            {"rows":[
+                {"id":"a","is_active":1,"is_muted":0},
+                {"id":"b","is_active":0,"is_muted":"true"},
+                {"id":"c","is_active":"false","is_muted":null}
+            ],"num_rows":3}
+            """);
+
+        HostBridge.UseTransport(transport);
+        try
+        {
+            var rows = Exo.Database.Query<BoolRoundTripRow>(
+                "SELECT id, is_active, is_muted FROM flags WHERE is_active = $1", true);
+
+            Assert.Contains("\"args\":[true]", transport.LastPayload);
+            Assert.Equal(3, rows.Count);
+            Assert.True(rows[0].IsActive);
+            Assert.False(rows[0].IsMuted);
+            Assert.False(rows[1].IsActive);
+            Assert.True(rows[1].IsMuted);
+            Assert.False(rows[2].IsActive);
+            Assert.Null(rows[2].IsMuted);
+
+            var tableRows = Exo.Database.Table<BoolRoundTripRow>()
+                .Query("SELECT id, is_active, is_muted FROM flags");
+            Assert.Equal(3, tableRows.Count);
+            Assert.True(tableRows[0].IsActive);
+        }
+        finally
+        {
+            HostBridge.UseTransport(null);
+        }
+    }
+
+    [Fact]
+    public void ExoDatabase_Query_RoundTripsBoolColumn_PostgresShape()
+    {
+        var transport = new QueryTransport("""
+            {"rows":[
+                {"id":"a","is_active":true,"is_muted":false},
+                {"id":"b","is_active":false,"is_muted":null}
+            ],"num_rows":2}
+            """);
+
+        HostBridge.UseTransport(transport);
+        try
+        {
+            var rows = Exo.Database.Query<BoolRoundTripRow>(
+                "SELECT id, is_active, is_muted FROM flags WHERE is_active = $1", true);
+
+            Assert.Contains("\"args\":[true]", transport.LastPayload);
+            Assert.Equal(2, rows.Count);
+            Assert.True(rows[0].IsActive);
+            Assert.False(rows[0].IsMuted);
+            Assert.False(rows[1].IsActive);
+            Assert.Null(rows[1].IsMuted);
+
+            var single = Exo.Database.QuerySingle<BoolRoundTripRow>(
+                "SELECT id, is_active, is_muted FROM flags LIMIT 1");
+            Assert.NotNull(single);
+            Assert.True(single!.IsActive);
+            Assert.False(single.IsMuted);
+        }
+        finally
+        {
+            HostBridge.UseTransport(null);
+        }
     }
 }
