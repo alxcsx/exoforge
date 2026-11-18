@@ -247,6 +247,26 @@ public class ExoWorkspace
         File.WriteAllText(ConfigPath, json);
     }
 
+    public void SaveSessionToken(string token, string? refreshToken = null, string? environmentName = null)
+    {
+        if (string.IsNullOrWhiteSpace(token)) return;
+
+        string target = environmentName ?? Config.DefaultEnvironment;
+        if (!Config.Environments.TryGetValue(target, out var env))
+        {
+            env = new ExoEnvironmentConfig();
+            Config.Environments[target] = env;
+        }
+
+        env.Token = token;
+        if (!string.IsNullOrEmpty(refreshToken))
+        {
+            env.RefreshToken = refreshToken;
+        }
+
+        Save();
+    }
+
     public ExoEnvironmentConfig GetActiveEnvironment(string? envName = null)
     {
         string target = envName ?? Config.DefaultEnvironment;

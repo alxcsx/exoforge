@@ -132,4 +132,74 @@ public class CliSessionTests : IDisposable
         Assert.Equal(0, cluster.ReplayedRefreshTokens);
         Assert.Equal(cluster.LiveSession.Refresh, workspace.GetActiveEnvironment("local").RefreshToken);
     }
+
+    [Fact]
+    public async Task Studio_session_save_updates_workspace_exoforge_json_and_never_writes_to_resources()
+    {
+        await using var cluster = StubCluster.Start();
+
+        // Simulate Unity project layout: project root has Exoforge/ and Assets/Resources/
+        string projectRoot = Path.Combine(_tempDir, "UnityProject");
+        string exoforgeDir = Path.Combine(projectRoot, "Exoforge");
+        string resourcesDir = Path.Combine(projectRoot, "Assets", "Resources");
+        Directory.CreateDirectory(exoforgeDir);
+        Directory.CreateDirectory(resourcesDir);
+
+        string resourcesJsonPath = Path.Combine(resourcesDir, "exoforge.json");
+        File.WriteAllText(resourcesJsonPath, """
+        {
+            "default_environment": "local",
+            "environments": {
+                "local": {
+                    "ws_url": "ws://localhost:4000/ws",
+                    "http_url": "http://localhost:4001"
+                }
+            }
+        }
+        """);
+
+        var workspace = ExoWorkspace.Initialize(exoforgeDir, "StudioTokenTest");
+        var env = workspace.GetActiveEnvironment("local");
+        env.WsUrl = cluster.WsUri.ToString();
+        env.HttpUrl = cluster.HttpUri.ToString();
+        env.Token = "old_refused_token";
+        env.RefreshToken = "old_refused_refresh";
+        workspace.Save();
+
+        var deployer = new ExoDeployer(workspace);
+
+        // Before login/save, CreateConnectedClientAsync fails because cluster refuses old_refused_token
+        await Assert.ThrowsAsync<InvalidOperationException>(() => deployer.CreateConnectedClientAsync("local"));
+
+        // Studio login succeeds against cluster and obtains new tokens
+        using var client = new ExoClient { HttpBaseUri = cluster.HttpUri };
+        await client.ConnectAsync(cluster.WsUri);
+        var loginPayload = new System.Text.Json.Nodes.JsonObject
+        {
+            ["email"] = "admin",
+            ["password"] = StubCluster.Password,
+            ["device_id"] = "studio_device_123"
+        };
+        var loginResult = await client.SendActionAsync<JsonElement>("auth", "login", loginPayload);
+        string newToken = loginResult.GetProperty("token").GetString()!;
+        string newRefreshToken = loginResult.GetProperty("refresh_token").GetString()!;
+
+        // The writer in Exoforge.Management writes the new session to the workspace active environment
+        workspace.SaveSessionToken(newToken, newRefreshToken, "local");
+
+        // Verify workspace was updated in-memory and on disk
+        var reloadedEnv = ExoWorkspace.Load(exoforgeDir).GetActiveEnvironment("local");
+        Assert.Equal(newToken, reloadedEnv.Token);
+        Assert.Equal(newRefreshToken, reloadedEnv.RefreshToken);
+
+        // Verify Assets/Resources/exoforge.json was NEVER modified with tokens
+        string resourcesJson = File.ReadAllText(resourcesJsonPath);
+        Assert.DoesNotContain(newToken, resourcesJson);
+        Assert.DoesNotContain("token", resourcesJson.ToLowerInvariant());
+
+        // Subsequent CLI/ExoDeployer calls now connect and authenticate successfully
+        using var connectedClient = await deployer.CreateConnectedClientAsync("local");
+        var sysInfo = await connectedClient.SendActionAsync<JsonElement>("extension_manager", "get_system_info");
+        Assert.True(sysInfo.ValueKind == JsonValueKind.Object);
+    }
 }
