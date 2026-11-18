@@ -37,6 +37,25 @@ public class ProfileTests
     [Fact]
     public void Suffix_Differs_By_Profile()
     {
+        Assert.Equal(".a", ExoProfileResolver.SuffixFor("a"));
         Assert.NotEqual(ExoProfileResolver.SuffixFor("a"), ExoProfileResolver.SuffixFor("b"));
+    }
+
+    [Fact]
+    public void DeviceSeed_Differs_By_Profile_And_Default_Is_Legacy()
+    {
+        Assert.Equal("hw1", ExoProfileResolver.DeviceSeed("hw1", "default"));
+        var a = ExoProfileResolver.DeviceSeed("hw1", "alice");
+        var b = ExoProfileResolver.DeviceSeed("hw1", "bob");
+        Assert.NotEqual("hw1", a);
+        Assert.NotEqual(a, b);
+    }
+
+    [Fact]
+    public void MaxLength_And_Allowed_Chars_Validated()
+    {
+        Assert.True(ExoProfileResolver.IsValid("player_1-test"));
+        Assert.True(ExoProfileResolver.IsValid(new string('a', ExoProfileResolver.MaxNameLength)));
+        Assert.False(ExoProfileResolver.IsValid(new string('a', ExoProfileResolver.MaxNameLength + 1)));
     }
 }

@@ -114,7 +114,16 @@ A trusted game server (the one that reports kills, hits or purchases) calls acti
 
 Add `Exoforge/game-server.token` to `.gitignore`, read it only from server-side code or Editor-only tooling (never from `Assets/` and never in a build), and delete the account with `exo user delete <user_id>` when the server is retired.
 
-## 7. Common Troubleshooting Scenarios
+## 7. Testing several players on one machine
+
+Each game instance on the same machine needs its own device id and token store so two instances do not share a session or replay each other's rotating refresh tokens:
+
+- **Unity Multiplayer Play Mode (MPPM)**: clones are detected automatically from `Application.dataPath` (`Library/VP/<id>`); each clone gets its own profile (`<id>`), device id, and `PlayerPrefs` keys.
+- **Standalone builds / CI**: pass `-exoProfile <name>` on the command line (letters, digits, `-`, `_`, up to 32 characters; invalid names fall back to `default`).
+- **Default profile**: when neither is set, the active profile is `default`, which keeps the legacy `PlayerPrefs` keys and hardware device id so existing players keep their account.
+- **Runtime inspection & impersonation**: `ExoforgeSDK.Auth.Profile` returns the active profile name; `ExoDeviceId.Impersonate` and `ExoDeviceId.Mask` operate within the active profile's keys.
+
+## 8. Common Troubleshooting Scenarios
 
 ### Cluster Offline or Unreachable
 - **Symptom**: `exo status` returns connection refused or timeout errors.

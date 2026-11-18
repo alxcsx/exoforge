@@ -51,5 +51,8 @@ namespace Exoforge.Client
 
         public static string SuffixFor(string profile) =>
             string.Equals(profile, "default", StringComparison.Ordinal) ? string.Empty : "." + profile;
+
+        public static string DeviceSeed(string hardwareSeed, string profile) =>
+            string.Equals(profile, "default", StringComparison.Ordinal) ? hardwareSeed : hardwareSeed + ":" + profile;
     }
 }

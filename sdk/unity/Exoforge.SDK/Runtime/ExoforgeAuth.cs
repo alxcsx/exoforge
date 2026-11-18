@@ -19,6 +19,8 @@ namespace Exoforge.Client.Unity
 
         /// <summary>The active player profile name (default for the legacy single-instance behaviour).</summary>
         public string Profile => ExoProfile.Current;
+
+        /// <summary>
         /// Stage 1 — enters the account for this device, registering it on first sight.
         ///
         /// No display name is assigned: a new account comes back with

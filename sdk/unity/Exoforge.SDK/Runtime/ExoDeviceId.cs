@@ -32,7 +32,7 @@ namespace Exoforge.Client.Unity
                 {
                     seed = "hw_fallback_device";
                 }
-                return Derive(seed);
+                return Derive(ExoProfileResolver.DeviceSeed(seed, ExoProfile.Current));
             }
         }
 
