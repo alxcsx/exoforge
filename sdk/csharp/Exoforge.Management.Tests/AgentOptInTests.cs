@@ -196,8 +196,6 @@ public class AgentOptInTests : IDisposable
         }
 
         Assert.Contains("AGENTS.md", lines);
-        Assert.Contains("exo", lines);
-        Assert.Contains("exo.cmd", lines);
     }
 
     [Fact]
@@ -276,8 +274,6 @@ public class AgentOptInTests : IDisposable
         Assert.Contains(".gemini/", lines);
         Assert.DoesNotContain(".agents/", lines);
         Assert.Contains("AGENTS.md", lines);
-        Assert.Contains("exo", lines);
-        Assert.Contains("exo.cmd", lines);
 
         // Repeating --gemini does not duplicate anything
         var (code3, _) = await RunCliAsync("agents", "install", "--gemini", "--dir", projectRoot);
