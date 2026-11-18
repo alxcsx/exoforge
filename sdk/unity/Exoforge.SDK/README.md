@@ -132,9 +132,9 @@ MPPM clones are detected automatically from the Editor's data path (`Library/VP/
 
 ## AI Agent Tooling & Embedded CLI (Opt-In)
 
-`com.exoforge.sdk` bundles the `exo` CLI (`Editor/Cli~/exo`, `exo.cmd`, `exo.dll`) and agent guide/skills (`Agents~/AGENTS.md`, `Agents~/skills/`) inside the package without writing anything to your project root automatically on import, initialization, scaffold, or build.
+`com.exoforge.sdk` bundles the `exo` CLI (`Editor/Cli~/exo`, `exo.cmd`, `exo.dll`) and agent guide/skills (`Agents~/AGENTS.md`, `Agents~/skills/`) inside the package and places only the `exo` wrapper (`./exo`, `./exo.cmd`, gitignored) at your project root automatically; no AI files are written on import, initialization, scaffold, or build.
 
-To opt in and install skills, `AGENTS.md`, and `./exo` wrappers into your Unity project:
+To opt in and install skills and `AGENTS.md` into your Unity project (`exo cli install` or **Exoforge ▸ CLI ▸ Install exo wrapper** re-creates just the wrapper):
 
 - **Unity Editor**: **Exoforge ▸ Agents ▸ Install Agent Skills & CLI...**
 - **Headless Unity (CI / automation)**:

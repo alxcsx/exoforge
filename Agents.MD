@@ -106,11 +106,11 @@ file_bucket ──▶ database
   `ExoWorkspace` resolves any `Assets/...` config path against the project root automatically.
 - **Caveat**: the workspace is invisible to Unity's AssetDatabase, so editor tooling must reach it
   through `System.IO` (`ExoWorkspace.ExtensionsPath`, `ExoDeployer`), never `AssetDatabase`/`Resources`.
-- **Bundled AI Tooling & Embedded CLI (Opt-In)**: `com.exoforge.sdk` ships `Agents~/` (`AGENTS.md` + `skills/`) and `Editor/Cli~/` (`exo`, `exo.cmd`, `exo.dll`, staged by `just build-unity-sdk` and packed into `dist/com.exoforge.sdk-*.tgz` by `just pack-unity`). Nothing AI-related is ever installed automatically on package import, `exo init`, `exo extension new`, setup wizard, or build. Developers opt in explicitly via:
+- **Bundled AI Tooling & Embedded CLI (Opt-In)**: `com.exoforge.sdk` ships `Agents~/` (`AGENTS.md` + `skills/`) and `Editor/Cli~/` (`exo`, `exo.cmd`, `exo.dll`, staged by `just build-unity-sdk` and packed into `dist/com.exoforge.sdk-*.tgz` by `just pack-unity`). The `exo` wrapper is a development tool, not AI tooling: Unity places it at the project root automatically when the package loads (`ExoforgeCliTools`, gitignored via its own `# >>> EXOFORGE-CLI:START` block; it only locates the CLI in `Packages/` or `Library/PackageCache/`, nothing is copied), and `exo cli install [--dir]` / **Exoforge ▸ CLI ▸ Install exo wrapper** do it explicitly. Nothing AI-related is ever installed automatically on package import, `exo init`, `exo extension new`, setup wizard, or build. Developers opt in explicitly via:
   - CLI: `exo agents install --claude|--gemini|--agents|--all` (invoking `exo agents install` with no target flags prints help and installs nothing).
   - Unity Editor menu: **Exoforge ▸ Agents ▸ Install Agent Skills & CLI...**.
   - Headless Unity: `-batchmode -quit -nographics -executeMethod Exoforge.Unity.Editor.ExoforgeAgentTools.InstallAgentSkillsAndCliHeadless`.
-  Installation is idempotent and writes a marked `.gitignore` block (`# >>> EXOFORGE-AGENT-TOOLING:START` / `# <<< EXOFORGE-AGENT-TOOLING:END`) listing the generated artifacts (`.agents/`, `.claude/`, `.gemini/`, `AGENTS.md`, `exo`, `exo.cmd`).
+  Installation is idempotent and writes a marked `.gitignore` block (`# >>> EXOFORGE-AGENT-TOOLING:START` / `# <<< EXOFORGE-AGENT-TOOLING:END`) listing the generated artifacts (`.agents/`, `.claude/`, `.gemini/`, `AGENTS.md`).
 
 > **Rule**: Game-specific extensions must NOT touch `core/`, `extensions/`, or `extensions_csharp/`. They live exclusively inside the game project and are built/deployed independently. The system `just build-extensions` only builds `extensions_csharp/`; game extensions are built within their own project (e.g., Unity Editor menu or the game's own build scripts).
 

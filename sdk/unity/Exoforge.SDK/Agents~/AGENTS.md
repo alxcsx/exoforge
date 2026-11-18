@@ -5,13 +5,13 @@ This guide provides AI agents and developer tooling with essential architectural
 
 ## 1. Embedded CLI Execution
 
-All backend operations are handled through the Exoforge CLI (`exo`). AI tooling (`AGENTS.md`, skills, and root `./exo` wrappers) is **opt-in** and never installed automatically when importing `com.exoforge.sdk`.
+All backend operations are handled through the Exoforge CLI (`exo`). The root `./exo` wrapper is placed automatically by Unity (it is a dev tool, gitignored; `exo cli install` does the same by hand). AI tooling (`AGENTS.md` and skills) is **opt-in** and never installed automatically when importing `com.exoforge.sdk`.
 
 - **Opt-In Installation**:
   - CLI: `dotnet Packages/com.exoforge.sdk/Editor/Cli~/exo.dll agents install --all` (or `--claude`, `--gemini`, `--agents`; running `exo agents install` with no flags prints help and installs nothing).
   - Unity Editor: **Exoforge ▸ Agents ▸ Install Agent Skills & CLI...** (or headless via `-batchmode -quit -nographics -executeMethod Exoforge.Unity.Editor.ExoforgeAgentTools.InstallAgentSkillsAndCliHeadless`).
   - Installations are idempotent and add a marked `.gitignore` block (`# >>> EXOFORGE-AGENT-TOOLING:START` / `# <<< EXOFORGE-AGENT-TOOLING:END`) covering the generated files.
-- **Project Root Wrapper**: Once installed, execute `./exo <command>` directly from the Unity project root.
+- **Project Root Wrapper**: Once Unity has opened the project, execute `./exo <command>` directly from the Unity project root.
 - **Embedded Package Fallback**: Before or without root wrappers, invoke the bundled CLI directly from `Editor/Cli~/`:
   - `Packages/com.exoforge.sdk/Editor/Cli~/exo <command>` (or `exo.cmd` on Windows)
   - `dotnet Packages/com.exoforge.sdk/Editor/Cli~/exo.dll <command>`
@@ -60,7 +60,7 @@ When opted in via `exo agents install` or the Unity Editor menu, specialized age
 
 | Command | Purpose |
 | :--- | :--- |
-| `exo agents install --claude\|--gemini\|--agents\|--all` | Opt in to installing selected AI skills, `AGENTS.md`, `./exo` wrappers, and the marked `.gitignore` block (no flags prints help). |
+| `exo agents install --claude\|--gemini\|--agents\|--all` | Opt in to installing selected AI skills, `AGENTS.md`, and the marked `.gitignore` block (no flags prints help). Also ensures the `./exo` wrapper exists. |
 | `exo agents status --json` | Inspect installed agent tooling, skills, and CLI wrappers. |
 | `exo status --json` | Inspect cluster connectivity, node status, and response latency. |
 | `exo contracts --json` | List all registered service contracts, actions, and event schemas. |
