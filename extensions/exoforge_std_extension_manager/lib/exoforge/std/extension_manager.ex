@@ -560,6 +560,8 @@ defmodule Exoforge.Std.ExtensionManager do
   defp load_and_boot_extension(target_dir, clean_name, type) do
     case ManifestLoader.load_extensions(target_dir) do
       [loaded_manifest | _] ->
+        previous = ExtensionRegistry.fetch_manifest(loaded_manifest.id)
+
         ExtensionRegistry.register(loaded_manifest)
 
         migration_result =
@@ -571,7 +573,12 @@ defmodule Exoforge.Std.ExtensionManager do
 
         case migration_result do
           {:error, reason} ->
-            ExtensionRegistry.unregister(loaded_manifest.id)
+            if previous do
+              ExtensionRegistry.register(previous)
+            else
+              ExtensionRegistry.unregister(loaded_manifest.id)
+            end
+
             {:error, {:migration_failed, reason}}
 
           _ ->
