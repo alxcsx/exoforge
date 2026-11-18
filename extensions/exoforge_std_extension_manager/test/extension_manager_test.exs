@@ -309,6 +309,8 @@ defmodule Exoforge.Std.ExtensionManagerTest do
         File.rm_rf("priv/data/uploaded_extensions/ext_redeploy_roll")
         File.rm_rf("priv/data/uploaded_extensions/ext_redeploy_mig_fail")
         File.rm_rf("priv/data/uploaded_extensions/ext_redeploy_boot_fail")
+        File.rm_rf("priv/data/uploaded_extensions/ext_redeploy_empty_manifest")
+        File.rm_rf("priv/data/uploaded_extensions/ext_concurrent_push")
 
         if :ets.whereis(:exo_extensions_mem) != :undefined do
           ExtensionRegistry.unregister(:ext_a_broken)
@@ -316,6 +318,8 @@ defmodule Exoforge.Std.ExtensionManagerTest do
           ExtensionRegistry.unregister(:ext_redeploy_roll)
           ExtensionRegistry.unregister(:ext_redeploy_mig_fail)
           ExtensionRegistry.unregister(:ext_redeploy_boot_fail)
+          ExtensionRegistry.unregister(:ext_redeploy_empty_manifest)
+          ExtensionRegistry.unregister(:ext_concurrent_push)
           ExtensionRegistry.unregister(:test_resource_store)
         end
       end)
@@ -619,6 +623,100 @@ defmodule Exoforge.Std.ExtensionManagerTest do
       assert disk_manifest["version"] == "1.0.0"
       assert File.read!("priv/data/uploaded_extensions/ext_redeploy_boot_fail/lib/ext_redeploy_boot_fail.ex") =~ "v: 1"
       assert Path.wildcard("priv/data/uploaded_extensions/ext_redeploy_boot_fail.bak.*") == []
+    end
+
+    test "redeploy whose manifest fails to load ([]) restores previous version and backup" do
+      elixir_v1 = """
+      defmodule ExtRedeployEmptyManifest do
+        use Exoforge.Extension, provides: [:ext_redeploy_empty_manifest]
+        defaction version(_p), do: {:ok, %{v: 1}}
+      end
+      """
+
+      manifest_v1 = """
+      {
+        "id": "ext_redeploy_empty_manifest",
+        "version": "1.0.0",
+        "type": "elixir",
+        "entry_point": "Elixir.ExtRedeployEmptyManifest",
+        "provides": ["ext_redeploy_empty_manifest"]
+      }
+      """
+
+      assert {:ok, %{extension_id: "ext_redeploy_empty_manifest"}} =
+               ActionDispatcher.dispatch(
+                 :extension_manager,
+                 :upload_extension,
+                 %{name: "ext_redeploy_empty_manifest", type: "elixir", elixir_code: elixir_v1, manifest: manifest_v1},
+                 caller_scopes: ["admin"]
+               )
+
+      elixir_v2 = """
+      defmodule ExtRedeployEmptyManifest do
+        use Exoforge.Extension, provides: [:ext_redeploy_empty_manifest]
+        defaction version(_p), do: {:ok, %{v: 2}}
+      end
+      """
+
+      # "{}" causes ManifestLoader.load_extensions/1 to return []
+      assert {:error, %{error: :manifest_not_loaded, rollback: :restored}} =
+               ActionDispatcher.dispatch(
+                 :extension_manager,
+                 :upload_extension,
+                 %{name: "ext_redeploy_empty_manifest", type: "elixir", elixir_code: elixir_v2, manifest: "{}"},
+                 caller_scopes: ["admin"]
+               )
+
+      assert %{version: current_version} = ExtensionRegistry.fetch_manifest(:ext_redeploy_empty_manifest)
+      assert to_string(current_version) == "1.0.0"
+      assert {:ok, %{v: 1}} = ActionDispatcher.dispatch_internal(:ext_redeploy_empty_manifest, :version, %{})
+      assert Path.wildcard("priv/data/uploaded_extensions/ext_redeploy_empty_manifest.bak.*") == []
+    end
+
+    test "two concurrent pushes of the same extension serialize cleanly without stale restore" do
+      push = fn ver, v_num ->
+        code = """
+        defmodule ExtConcurrentPush do
+          use Exoforge.Extension, provides: [:ext_concurrent_push]
+          defaction version(_p), do: {:ok, %{v: #{v_num}}}
+        end
+        """
+
+        manifest = """
+        {
+          "id": "ext_concurrent_push",
+          "version": "#{ver}",
+          "type": "elixir",
+          "entry_point": "Elixir.ExtConcurrentPush",
+          "provides": ["ext_concurrent_push"]
+        }
+        """
+
+        ActionDispatcher.dispatch(
+          :extension_manager,
+          :upload_extension,
+          %{name: "ext_concurrent_push", type: "elixir", elixir_code: code, manifest: manifest},
+          caller_scopes: ["admin"]
+        )
+      end
+
+      t1 = Task.async(fn -> push.("1.0.0", 1) end)
+      t2 = Task.async(fn -> push.("2.0.0", 2) end)
+
+      assert {:ok, %{status: "installed"}} = Task.await(t1, 10_000)
+      assert {:ok, %{status: "installed"}} = Task.await(t2, 10_000)
+
+      # Both completed serially; the active manifest and disk version must agree (no stale restore).
+      manifest = ExtensionRegistry.fetch_manifest(:ext_concurrent_push)
+      assert manifest != nil
+      disk_ver =
+        "priv/data/uploaded_extensions/ext_concurrent_push/manifest.json"
+        |> File.read!()
+        |> Jason.decode!()
+        |> Map.fetch!("version")
+
+      assert to_string(manifest.version) == disk_ver
+      assert Path.wildcard("priv/data/uploaded_extensions/ext_concurrent_push.bak.*") == []
     end
   end
 end

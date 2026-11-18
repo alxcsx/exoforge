@@ -4,8 +4,46 @@ defmodule Exoforge.Std.ExtensionManager do
   Provides the :extension_manager service contract for runtime inspection,
   hot-loading of Elixir and native C# extensions, lifecycle restarts,
   and CLI/SDK synchronization.
+
+  Redeploying an extension stops the previous instance before starting the new one
+  (one instance by design, to prevent duplicate runners and binary-busy errors),
+  creating a brief window where the extension is not running. Lifecycle mutations
+  (`upload_extension`, `remove_extension`, `reload_extension`) are serialized through
+  `Exoforge.Std.ExtensionManager.Serializer`, and a failed redeploy restores the
+  backed-up previous version.
   """
   use Exoforge.Extension, provides: [:extension_manager]
+
+  defmodule Serializer do
+    @moduledoc false
+    use GenServer
+
+    def start_link(_opts), do: GenServer.start_link(__MODULE__, :ok, name: __MODULE__)
+
+    def run(fun) when is_function(fun, 0) do
+      ensure_started()
+      GenServer.call(__MODULE__, {:run, fun}, :infinity)
+    end
+
+    defp ensure_started do
+      if Process.whereis(__MODULE__) == nil do
+        case GenServer.start(__MODULE__, :ok, name: __MODULE__) do
+          {:ok, _pid} -> :ok
+          {:error, {:already_started, _pid}} -> :ok
+        end
+      end
+    end
+
+    @impl true
+    def init(:ok), do: {:ok, %{}}
+
+    @impl true
+    def handle_call({:run, fun}, _from, state) do
+      {:reply, fun.(), state}
+    end
+  end
+
+  def children, do: [Serializer]
 
   alias Exoforge.ExtensionRegistry
   alias Exoforge.ExtensionBootstrapper
@@ -142,12 +180,12 @@ defmodule Exoforge.Std.ExtensionManager do
 
   @impl true
   defaction upload_extension(payload), scope: Exoforge.Auth.Roles.admin() do
-    upload_extension_internal(payload)
+    Serializer.run(fn -> upload_extension_internal(payload) end)
   end
 
   @impl true
   defaction remove_extension(payload), scope: Exoforge.Auth.Roles.admin() do
-    remove_extension_internal(payload)
+    Serializer.run(fn -> remove_extension_internal(payload) end)
   end
 
   @impl true
@@ -174,7 +212,7 @@ defmodule Exoforge.Std.ExtensionManager do
 
   @impl true
   defaction reload_extension(payload), scope: Exoforge.Auth.Roles.admin() do
-    reload_extension_internal(payload)
+    Serializer.run(fn -> reload_extension_internal(payload) end)
   end
 
   @impl true
@@ -604,8 +642,13 @@ defmodule Exoforge.Std.ExtensionManager do
           _ ->
             case safe_boot_extension(loaded_manifest) do
               :ok ->
-                cleanup_backup(backup_dir)
-                {:ok, %{extension_id: clean_name, type: to_string(type), status: "installed"}}
+                case cleanup_backup(backup_dir) do
+                  :ok ->
+                    {:ok, %{extension_id: clean_name, type: to_string(type), status: "installed"}}
+
+                  {:error, cleanup_err} ->
+                    {:ok, %{extension_id: clean_name, type: to_string(type), status: "installed", warning: inspect(cleanup_err)}}
+                end
 
               {:error, reason} ->
                 rollback_extension(
@@ -620,8 +663,7 @@ defmodule Exoforge.Std.ExtensionManager do
         end
 
       _ ->
-        cleanup_backup(backup_dir)
-        {:ok, %{extension_id: clean_name, type: to_string(type), status: "saved_pending_restart"}}
+        rollback_extension(target_dir, clean_name, previous, backup_dir, :manifest_not_loaded)
     end
   end
 
@@ -644,7 +686,17 @@ defmodule Exoforge.Std.ExtensionManager do
   end
 
   defp cleanup_backup(nil), do: :ok
-  defp cleanup_backup(backup_dir), do: File.rm_rf(backup_dir)
+
+  defp cleanup_backup(backup_dir) do
+    case File.rm_rf(backup_dir) do
+      {:ok, _} ->
+        :ok
+
+      {:error, reason, file} ->
+        Logger.warning("[ExtensionManager] Failed to remove backup #{backup_dir} at #{file}: #{inspect(reason)}")
+        {:error, {:backup_cleanup_failed, backup_dir, file, reason}}
+    end
+  end
 
   defp safe_boot_extension(manifest) do
     if Process.whereis(Exoforge.ExtensionSupervisor) == nil do
