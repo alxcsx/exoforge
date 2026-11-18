@@ -464,7 +464,7 @@ defmodule Exoforge.Std.Observability.Events do
     |> Enum.each(fn {{day, hour, event, origin, status}, grouped} ->
       run_query(
         "INSERT INTO #{@rollup_table} (day, hour, event, origin, status, n) VALUES ($1, $2, $3, $4, $5, $6) " <>
-          "ON CONFLICT (day, hour, event, origin, status) DO UPDATE SET n = n + excluded.n",
+          "ON CONFLICT (day, hour, event, origin, status) DO UPDATE SET n = #{@rollup_table}.n + excluded.n",
         [day, hour, event, origin, status, length(grouped)]
       )
     end)
@@ -520,7 +520,7 @@ defmodule Exoforge.Std.Observability.Events do
       """
       CREATE TABLE IF NOT EXISTS #{@db_table} (
         id text PRIMARY KEY,
-        at integer,
+        at bigint,
         day text,
         event text,
         origin text,
@@ -529,7 +529,7 @@ defmodule Exoforge.Std.Observability.Events do
         payload text,
         context text,
         time text,
-        timestamp integer
+        timestamp bigint
       )
       """,
       "CREATE INDEX IF NOT EXISTS #{@db_table}_day ON #{@db_table} (day)",
@@ -544,15 +544,24 @@ defmodule Exoforge.Std.Observability.Events do
       """,
       """
       CREATE TABLE IF NOT EXISTS #{@archive_table} (
-        day text PRIMARY KEY, path text, rows integer, bytes integer, created_at integer
+        day text PRIMARY KEY, path text, rows integer, bytes integer, created_at bigint
       )
       """
     ]
 
+    result =
+      Enum.reduce(statements, :ok, fn sql, acc ->
+        case run_query_ok(sql, []) do
+          :ok -> acc
+          :error -> :retry
+        end
+      end)
+
     # A store created before these columns existed gains them; CREATE TABLE IF NOT EXISTS does not.
+    # Evaluate after statements so a fresh table already exists when column_exists? inspects it.
     alters =
       for {column, type} <- [
-            {"at", "integer"},
+            {"at", "bigint"},
             {"day", "text"},
             {"origin", "text"},
             {"rid", "text"},
@@ -562,7 +571,7 @@ defmodule Exoforge.Std.Observability.Events do
           do: "ALTER TABLE #{@db_table} ADD COLUMN #{column} #{type}"
 
     result =
-      Enum.reduce(statements ++ alters, :ok, fn sql, acc ->
+      Enum.reduce(alters, result, fn sql, acc ->
         case run_query_ok(sql, []) do
           :ok -> acc
           :error -> :retry
@@ -729,7 +738,7 @@ defmodule Exoforge.Std.Observability.Events do
     Enum.each(rollups, fn {{day, hour, event, origin, status}, n} ->
       run_query(
         "INSERT INTO #{@rollup_table} (day, hour, event, origin, status, n) VALUES ($1, $2, $3, $4, $5, $6) " <>
-          "ON CONFLICT (day, hour, event, origin, status) DO UPDATE SET n = n + excluded.n",
+          "ON CONFLICT (day, hour, event, origin, status) DO UPDATE SET n = #{@rollup_table}.n + excluded.n",
         [day, hour, event, origin, status, n]
       )
     end)
