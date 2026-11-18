@@ -263,4 +263,47 @@ public class ExoIsExternalInitTests : IDisposable
             Console.SetOut(previous);
         }
     }
+
+    [Fact]
+    public void DeclaresRecordOrInit_SeesARecordAfterAPreprocessorLine()
+    {
+        string game = Path.Combine(_root, "Assets", "Game");
+        Directory.CreateDirectory(game);
+        File.WriteAllText(Path.Combine(game, "Game.asmdef"), "{}");
+        File.WriteAllText(Path.Combine(game, "Score.cs"), "#nullable enable\nrecord Score(int Points);\n");
+
+        Assert.True(ExoIsExternalInit.DeclaresRecordOrInit(_root, "Assets/Game"));
+    }
+
+    [Fact]
+    public void DeclaresRecordOrInit_SeesPartialAndNestedRecords()
+    {
+        string game = Path.Combine(_root, "Assets", "Game");
+        Directory.CreateDirectory(game);
+        File.WriteAllText(Path.Combine(game, "Game.asmdef"), "{}");
+        File.WriteAllText(Path.Combine(game, "Nested.cs"), "class Outer\n{\n    partial record Inner(int A);\n}\n");
+
+        Assert.True(ExoIsExternalInit.DeclaresRecordOrInit(_root, "Assets/Game"));
+    }
+
+    [Fact]
+    public void TryResolveDirectory_RefusesAPathTheOsCannotParse_WithoutThrowing()
+    {
+        // What a half-typed Studio field can hold; GetFullPath throws on it, OnGUI must not.
+        const string typed = "Assets/\0bad";
+
+        Assert.Null(Record.Exception(() => ExoIsExternalInit.TryResolveDirectory(_root, typed, out _)));
+        Assert.False(ExoIsExternalInit.TryResolveDirectory(_root, typed, out _));
+        Assert.False(ExoIsExternalInit.IsInsideAssets(_root, typed));
+    }
+
+    [Fact]
+    public void IsPathUnderRoot_IgnoresCaseOnlyWhereTheFileSystemDoes()
+    {
+        string root = Path.Combine(_root, "Assets");
+        string otherCase = Path.Combine(_root, "assets", "x");
+        bool expected = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS();
+
+        Assert.Equal(expected, ExoIsExternalInit.IsPathUnderRoot(otherCase, root));
+    }
 }

@@ -133,4 +133,40 @@ public class FeedMigrationTests : IDisposable
         ExoScaffolder.EnsureBuildFeed(workspace, ext);
         Assert.True(File.Exists(extConfigPath));
     }
+
+    [Fact]
+    public void NeedsFeedMigration_Returns_True_When_An_Extension_Config_Names_A_Feed_Folder_That_Is_Gone()
+    {
+        string workspace = Path.Combine(_tempDir, "Exoforge");
+        string ext = Path.Combine(workspace, "extensions", "loja_itens");
+        Directory.CreateDirectory(ext);
+        File.WriteAllText(Path.Combine(workspace, "nuget.config"), ExoScaffolder.NugetConfigContent);
+        File.WriteAllText(
+            Path.Combine(ext, "nuget.config"),
+            "<configuration><packageSources><add key=\"exoforge\" value=\"/Users/someone/old-checkout/dist/nuget\" /></packageSources></configuration>");
+
+        Assert.True(ExoScaffolder.NeedsFeedMigration(workspace));
+    }
+
+    [Fact]
+    public void NeedsFeedMigration_Leaves_A_User_Feed_That_Exists_Or_Is_A_Url()
+    {
+        string workspace = Path.Combine(_tempDir, "Exoforge");
+        string ext = Path.Combine(workspace, "extensions", "shop");
+        string privateFeed = Path.Combine(_tempDir, "private-feed");
+        Directory.CreateDirectory(ext);
+        Directory.CreateDirectory(privateFeed);
+        File.WriteAllText(Path.Combine(workspace, "nuget.config"), ExoScaffolder.NugetConfigContent);
+        File.WriteAllText(
+            Path.Combine(ext, "nuget.config"),
+            $"<configuration><packageSources><add key=\"exoforge\" value=\"{privateFeed}\" /></packageSources></configuration>");
+
+        Assert.False(ExoScaffolder.NeedsFeedMigration(workspace));
+
+        File.WriteAllText(
+            Path.Combine(ext, "nuget.config"),
+            "<configuration><packageSources><add key=\"exoforge\" value=\"https://nuget.example.com/v3/index.json\" /></packageSources></configuration>");
+
+        Assert.False(ExoScaffolder.NeedsFeedMigration(workspace));
+    }
 }

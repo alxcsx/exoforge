@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -40,7 +41,7 @@ public static class ExoIsExternalInit
     private static readonly Regex RecordOrInitPattern =
         new(
             @"(?:(?:(?:^|[;{}\]])\s*|\b(?:public|internal|private|protected|sealed|abstract|static|partial|readonly|file|unsafe|new)\s+)record\s+(?:(?:class|struct)\s+)?(?!is\b|as\b|in\b|when\b|with\b|and\b|or\b|not\b|switch\b)[A-Za-z_@][A-Za-z0-9_]*|\binit\s*(?:;|=>|\{))",
-            RegexOptions.Compiled);
+            RegexOptions.Compiled | RegexOptions.Multiline);
 
     /// <summary>The assets folder of the Unity project rooted at <paramref name="projectRoot"/>.</summary>
     public static string AssetsPath(string projectRoot) => Path.Combine(Path.GetFullPath(projectRoot), "Assets");
@@ -53,11 +54,20 @@ public static class ExoIsExternalInit
     public static bool TryResolveDirectory(string projectRoot, string? directory, out string resolved)
     {
         if (string.IsNullOrWhiteSpace(directory)) directory = DefaultDirectory;
-        string assetsRoot = TrimSep(Path.GetFullPath(AssetsPath(projectRoot)));
-        string candidate = Path.IsPathRooted(directory)
-            ? Path.GetFullPath(directory)
-            : Path.GetFullPath(Path.Combine(Path.GetFullPath(projectRoot), directory!.Replace('\\', '/')));
-        candidate = TrimSep(candidate);
+        string assetsRoot, candidate;
+        try
+        {
+            assetsRoot = TrimSep(Path.GetFullPath(AssetsPath(projectRoot)));
+            candidate = TrimSep(Path.IsPathRooted(directory)
+                ? Path.GetFullPath(directory)
+                : Path.GetFullPath(Path.Combine(Path.GetFullPath(projectRoot), directory!.Replace('\\', '/'))));
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            // A half-typed folder in the Studio field (`a|b` on Windows) is simply not a target.
+            resolved = string.Empty;
+            return false;
+        }
 
         if (!IsPathUnderRoot(candidate, assetsRoot))
         {
@@ -84,7 +94,14 @@ public static class ExoIsExternalInit
     private static string TrimSep(string path) =>
         path.Length > 1 ? path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) : path;
 
-    internal static bool IsPathUnderRoot(string path, string root, StringComparison comparison = StringComparison.OrdinalIgnoreCase)
+    // Windows and macOS file systems ignore case by default; Linux (CI) does not, and there `assets/x`
+    // is a different folder from `Assets/x` - accepting it would write outside Unity's Assets.
+    internal static readonly StringComparison PathComparison =
+        RuntimeInformation.IsOSPlatform(OSPlatform.Windows) || RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+
+    internal static bool IsPathUnderRoot(string path, string root) => IsPathUnderRoot(path, root, PathComparison);
+
+    internal static bool IsPathUnderRoot(string path, string root, StringComparison comparison)
     {
         string normPath = TrimSep(path);
         string normRoot = TrimSep(root);

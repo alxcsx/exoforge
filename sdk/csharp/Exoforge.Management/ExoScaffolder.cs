@@ -240,9 +240,16 @@ public static class ExoScaffolder
         string value = (match.Groups[1].Success ? match.Groups[1].Value : match.Groups[2].Value).Replace('\\', '/');
         if (value == FeedDirectoryName) return false;
 
-        return value.Contains("Library/PackageCache/", StringComparison.OrdinalIgnoreCase)
+        if (value.Contains("Library/PackageCache/", StringComparison.OrdinalIgnoreCase)
             || value.EndsWith("/Plugins/NuGet~", StringComparison.OrdinalIgnoreCase)
-            || value.Contains("/Plugins/NuGet~/", StringComparison.OrdinalIgnoreCase);
+            || value.Contains("/Plugins/NuGet~/", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        // A pre-.feed config can also name a feed folder that no longer exists (an old checkout, another
+        // machine); NuGet would keep merging it. A URL or a folder that is there is the user's own feed.
+        if (value.Contains("://", StringComparison.Ordinal)) return false;
+        string folder = Path.IsPathRooted(value) ? value : Path.Combine(Path.GetDirectoryName(path) ?? ".", value);
+        return !Directory.Exists(folder);
     }
 
     /// <summary>
