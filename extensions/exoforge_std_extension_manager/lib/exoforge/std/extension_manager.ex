@@ -17,6 +17,7 @@ defmodule Exoforge.Std.ExtensionManager do
   defmodule Serializer do
     @moduledoc false
     use GenServer
+    require Logger
 
     def start_link(_opts), do: GenServer.start_link(__MODULE__, :ok, name: __MODULE__)
 
@@ -34,10 +35,22 @@ defmodule Exoforge.Std.ExtensionManager do
       end
     end
 
+    # Recovery runs after init returns and never raises out of it: a backup that cannot be restored
+    # is logged, not a crash loop that takes the extension manager down with it.
     @impl true
-    def init(:ok) do
-      Exoforge.Std.ExtensionManager.recover_leftover_backups()
-      {:ok, %{}}
+    def init(:ok), do: {:ok, %{}, {:continue, :recover}}
+
+    @impl true
+    def handle_continue(:recover, state) do
+      try do
+        Exoforge.Std.ExtensionManager.recover_leftover_backups()
+      rescue
+        e -> Logger.error("[ExtensionManager] Backup recovery failed: #{Exception.message(e)}")
+      catch
+        kind, reason -> Logger.error("[ExtensionManager] Backup recovery failed: #{inspect({kind, reason})}")
+      end
+
+      {:noreply, state}
     end
 
     @impl true
@@ -697,7 +710,12 @@ defmodule Exoforge.Std.ExtensionManager do
 
   defp cleanup_backup(nil), do: :ok
 
+  # Renaming the backup to `.done.` is the commit point: it is atomic, and recovery restores only
+  # `.bak.` directories, so a crash after a successful install never brings the old version back.
   defp cleanup_backup(backup_dir) do
+    done_dir = String.replace(backup_dir, ~r/\.bak\.(\d+)$/, ".done.\\1")
+    backup_dir = if File.rename(backup_dir, done_dir) == :ok, do: done_dir, else: backup_dir
+
     case File.rm_rf(backup_dir) do
       {:ok, _} ->
         :ok
@@ -736,6 +754,9 @@ defmodule Exoforge.Std.ExtensionManager do
       |> Enum.filter(&File.dir?/1)
 
     Enum.each(dirs, fn base ->
+      # Committed installs whose backup removal was interrupted.
+      base |> Path.join("*.done.*") |> Path.wildcard() |> Enum.each(&File.rm_rf/1)
+
       base
       |> Path.join("*.bak.*")
       |> Path.wildcard()
@@ -760,7 +781,13 @@ defmodule Exoforge.Std.ExtensionManager do
                 end
 
                 ExtensionRegistry.register(manifest)
-                boot_res = safe_boot_extension(manifest)
+
+                # At boot the extensions it depends on may not be up yet; then the files are back and the
+                # bootstrapper starts it in dependency order on the next start instead.
+                boot_res =
+                  if Enum.all?(manifest.dependencies || [], &dependency_up?/1),
+                    do: safe_boot_extension(manifest),
+                    else: :deferred_until_dependencies
                 Logger.info("[ExtensionManager] Recovered #{manifest.id} v#{manifest.version} from backup (boot: #{inspect(boot_res)})")
 
               _ ->
@@ -774,6 +801,13 @@ defmodule Exoforge.Std.ExtensionManager do
     end)
 
     :ok
+  end
+
+  defp dependency_up?(dep) do
+    case if(is_atom(dep), do: dep, else: Exoforge.Atoms.existing(to_string(dep), nil)) do
+      nil -> false
+      service -> ExtensionRegistry.fetch_service(service) != nil
+    end
   end
 
   @doc false

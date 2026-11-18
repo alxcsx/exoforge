@@ -564,6 +564,11 @@ defmodule Exoforge.Std.ExtensionManagerTest do
     end
 
     test "redeploy whose new boot fails restores previous files on disk and keeps previous version running" do
+      # Without the extension supervisor a boot is skipped as :ok, so a failing boot could never fail here.
+      unless Process.whereis(Exoforge.ExtensionSupervisor) do
+        start_supervised!({DynamicSupervisor, name: Exoforge.ExtensionSupervisor, strategy: :one_for_one})
+      end
+
       elixir_v1 = """
       defmodule ExtRedeployBootFail do
         use Exoforge.Extension, provides: [:ext_redeploy_boot_fail]
@@ -819,10 +824,80 @@ defmodule Exoforge.Std.ExtensionManagerTest do
         {:ok, _pid} -> :ok
         {:error, {:already_started, _pid}} -> :ok
       end
+
+      # Recovery runs in handle_continue; a call after it returns only once it has finished.
+      :sys.get_state(Exoforge.Std.ExtensionManager.Serializer)
       refute File.dir?(backup_dir)
       assert %{version: v} = ExtensionRegistry.fetch_manifest(:ext_leftover_bak)
       assert to_string(v) == "1.0.0"
       assert {:ok, %{v: 1}} = ActionDispatcher.dispatch_internal(:ext_leftover_bak, :version, %{})
+    end
+  
+    test "a committed install's .done backup is deleted, never restored over it" do
+      base = "priv/data/uploaded_extensions"
+      target_dir = Path.join(base, "ext_done_bak")
+      done_dir = Path.join(base, "ext_done_bak.done.7")
+      File.rm_rf(target_dir)
+      File.rm_rf(done_dir)
+      File.mkdir_p!(target_dir)
+      File.write!(Path.join(target_dir, "marker"), "new")
+      File.mkdir_p!(done_dir)
+      File.write!(Path.join(done_dir, "marker"), "old")
+
+      assert :ok = Exoforge.Std.ExtensionManager.recover_leftover_backups()
+
+      refute File.dir?(done_dir)
+      assert File.read!(Path.join(target_dir, "marker")) == "new"
+      File.rm_rf(target_dir)
+    end
+
+    test "a backup whose dependencies are not up yet is restored on disk but not booted" do
+      base = "priv/data/uploaded_extensions"
+      target_dir = Path.join(base, "ext_dep_wait")
+      backup_dir = Path.join(base, "ext_dep_wait.bak.5")
+      File.rm_rf(target_dir)
+      File.rm_rf(backup_dir)
+      File.mkdir_p!(Path.join(backup_dir, "lib"))
+
+      File.write!(Path.join(backup_dir, "lib/ext_dep_wait.ex"), """
+      defmodule ExtDepWait do
+        use Exoforge.Extension, provides: [:ext_dep_wait]
+        defaction version(_p), do: {:ok, %{v: 1}}
+      end
+      """)
+
+      File.write!(Path.join(backup_dir, "manifest.json"), """
+      {"id": "ext_dep_wait", "type": "elixir", "version": "1.0.0", "context": "global",
+       "entry_point": "Elixir.ExtDepWait", "provides": ["ext_dep_wait"],
+       "dependencies": ["service_that_is_not_up"]}
+      """)
+
+      assert :ok = Exoforge.Std.ExtensionManager.recover_leftover_backups()
+
+      refute File.dir?(backup_dir)
+      assert File.dir?(target_dir)
+      assert ExtensionRegistry.fetch_manifest(:ext_dep_wait)
+      File.rm_rf(target_dir)
+      ExtensionRegistry.unregister(:ext_dep_wait)
+    end
+
+    test "a recovery that fails does not take the Serializer down" do
+      base = "priv/data/uploaded_extensions"
+      # A backup "directory" that is a regular file under a .bak name cannot be restored.
+      File.mkdir_p!(base)
+      broken = Path.join(base, "ext_broken_bak.bak.3")
+      File.rm_rf(broken)
+      File.mkdir_p!(broken)
+      File.chmod!(broken, 0o000)
+
+      if pid = Process.whereis(Exoforge.Std.ExtensionManager.Serializer), do: GenServer.stop(pid, :normal)
+      {:ok, pid} = Exoforge.Std.ExtensionManager.Serializer.start_link([])
+      :sys.get_state(pid)
+      assert Process.alive?(pid)
+
+      File.chmod!(broken, 0o755)
+      File.rm_rf(broken)
+      File.rm_rf(Path.join(base, "ext_broken_bak"))
     end
   end
 end
