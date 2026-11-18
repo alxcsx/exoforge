@@ -593,5 +593,14 @@ pack-unity:
 	fi
 	echo "[Exoforge] Package is self-contained."
 
+	# Unity ignores a file without a .meta in an immutable package - silently, so a type the code needs is
+	# just "not found" (ExoProfile.cs in 0.1.49). Every source a project compiles must carry one.
+	missing=$(cd dist/package && find Runtime Editor -name '*.cs' ! -path '*~*' | while read -r f; do [ -f "$f.meta" ] || echo "$f"; done)
+	if [ -n "$missing" ]; then
+		echo "[Exoforge] FAILED: these files have no .meta, so Unity would ignore them:"
+		echo "$missing"
+		exit 1
+	fi
+
 	echo "Distributable: dist/com.exoforge.sdk-*.tgz"
 
