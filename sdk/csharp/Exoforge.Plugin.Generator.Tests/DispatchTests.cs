@@ -42,6 +42,21 @@ public partial class DispatchSamplePlugin : IContractPing, ISharedContract
     public string LastGreeting { get; private set; } = "";
     public string LastWebhook { get; private set; } = "";
     public bool DailyCleanupRan { get; private set; }
+    public int StartupCalls { get; private set; }
+    public int SeedCalls { get; private set; }
+    public bool SeedRanAfterStartup { get; private set; }
+
+    public void OnExtensionStart()
+    {
+        StartupCalls++;
+    }
+
+    [ExoSeed]
+    public void Seed()
+    {
+        SeedCalls++;
+        SeedRanAfterStartup = StartupCalls > 0;
+    }
 
     [ExoCron("0 0 * * *", Description = "Cleans up expired tokens daily", RunOnStartup = true)]
     public bool DailyCleanup()
@@ -200,6 +215,27 @@ public class DispatchTests
 
         // The unknown action is skipped and the loop keeps going.
         Assert.Equal(3, plugin.LastStored);
+    }
+
+    [Fact]
+    public void Generated_dispatch_detects_and_runs_seed_hook_after_startup()
+    {
+        var plugin = new DispatchSamplePlugin();
+        var dispatch = new ExoforgeDispatch();
+
+        var input = new StringReader(string.Join("\n", new[]
+        {
+            "{\"type\":\"hello\",\"protocol\":1,\"host\":\"exoforge\",\"capabilities\":[\"action_result\",\"host_call\",\"host_log\",\"lifecycle_result\"]}",
+            "{\"type\":\"lifecycle\",\"id\":1}",
+            "{\"type\":\"lifecycle\",\"id\":2}",
+            ""
+        }));
+
+        PluginHost.RunInstance(plugin, input, dispatch);
+
+        Assert.Equal(1, plugin.StartupCalls);
+        Assert.Equal(1, plugin.SeedCalls);
+        Assert.True(plugin.SeedRanAfterStartup);
     }
 
     /// <summary>

@@ -215,9 +215,12 @@ Protocol `1`, handshake timeout five seconds. Capabilities are the frame types a
 extension must declare `action` and `event`, and may declare `lifecycle`. An extension that
 declares `lifecycle` is asked to run its optional parameterless `OnExtensionStart()` hook (void or
 `Task`) once after the handshake; `lifecycle_result` reports `ok` or a structured error. An
-extension that does not declare it is never sent the frame, so protocol 1 stays compatible in both
-directions. A protocol mismatch, a missing capability, or no answer at all is one log line and a
-refusal - never a retry.
+extension can also declare an optional `[ExoSeed]` method on its root (parameterless, `void` or
+`Task`): the generated dispatch runs it once after `OnExtensionStart()` on every start. It must be
+idempotent by contract (authors check before inserting initial rows). A throwing seed logs and fails
+the lifecycle handshake like `OnExtensionStart()` does. An extension that does not declare it is never
+sent the frame, so protocol 1 stays compatible in both directions. A protocol mismatch, a missing
+capability, or no answer at all is one log line and a refusal - never a retry.
 
 **Inbound events**: the runner subscribes to the events an extension declares in its manifest (with their declared
 topic) and forwards them as `{"type":"event"}` frames. The extension handles them in an optional

@@ -17,6 +17,13 @@ public interface IExoforgeDispatch
 
     /// <summary>Hands an inbound event to the plugin's handler. Returns false when it has none.</summary>
     bool TryHandleEvent(object instance, string name, JsonElement payload);
+
+    /// <summary>Runs the optional [ExoSeed] hook. Returns false when the plugin declares no seed method.</summary>
+    bool TryRunSeed(object instance, out object? result)
+    {
+        result = null;
+        return false;
+    }
 }
 
 /// <summary>

@@ -40,6 +40,44 @@ public class LifecycleNoneProbe
     public int Ping() => 1;
 }
 
+[ExoService("lifecycle_seed_probe", Version = "1.0.0")]
+public class LifecycleSeedProbe
+{
+    public int StartupCalls { get; private set; }
+    public int SeedCalls { get; private set; }
+    public bool SeedRanAfterStartup { get; private set; }
+
+    public void OnExtensionStart() => StartupCalls++;
+
+    [ExoSeed]
+    public void Seed()
+    {
+        SeedCalls++;
+        SeedRanAfterStartup = StartupCalls > 0;
+    }
+}
+
+[ExoService("lifecycle_async_seed_probe", Version = "1.0.0")]
+public class LifecycleAsyncSeedProbe
+{
+    public int SeedCalls { get; private set; }
+
+    [ExoSeed]
+    public async Task SeedAsync()
+    {
+        await Task.Delay(10);
+        SeedCalls++;
+    }
+}
+
+[ExoService("lifecycle_seed_error_probe", Version = "1.0.0")]
+public class LifecycleSeedErrorProbe
+{
+    [ExoSeed]
+    public void Seed() =>
+        throw new ExoActionException("seed_failed", "database seed failed");
+}
+
 /// <summary>
 /// The optional startup hook. The host asks only extensions that declared the `lifecycle`
 /// capability; this side runs OnExtensionStart once per process and answers explicitly.
@@ -123,6 +161,85 @@ public class LifecycleTests
         Assert.Contains(
             "\"type\":\"lifecycle_result\",\"id\":1,\"status\":\"ok\"",
             Encoding.UTF8.GetString(output.ToArray()));
+    }
+
+    [Fact]
+    public void Seed_hook_runs_after_startup_hook_and_reports_ok()
+    {
+        var plugin = new LifecycleSeedProbe();
+        var output = new MemoryStream();
+
+        PluginHost.RunInstance(
+            plugin,
+            Lines(Hello, "{\"type\":\"lifecycle\",\"id\":1}"),
+            output,
+            null);
+
+        Assert.Equal(1, plugin.StartupCalls);
+        Assert.Equal(1, plugin.SeedCalls);
+        Assert.True(plugin.SeedRanAfterStartup);
+
+        string written = Encoding.UTF8.GetString(output.ToArray());
+        Assert.Contains("\"type\":\"lifecycle_result\",\"id\":1,\"status\":\"ok\"", written);
+    }
+
+    [Fact]
+    public void Seed_hook_runs_once_per_start()
+    {
+        var plugin = new LifecycleSeedProbe();
+        var output = new MemoryStream();
+
+        PluginHost.RunInstance(
+            plugin,
+            Lines(Hello,
+                "{\"type\":\"lifecycle\",\"id\":1}",
+                "{\"type\":\"lifecycle\",\"id\":2}"),
+            output,
+            null);
+
+        Assert.Equal(1, plugin.SeedCalls);
+
+        string written = Encoding.UTF8.GetString(output.ToArray());
+        Assert.Contains("\"type\":\"lifecycle_result\",\"id\":1,\"status\":\"ok\"", written);
+        Assert.Contains("\"type\":\"lifecycle_result\",\"id\":2,\"status\":\"ok\"", written);
+    }
+
+    [Fact]
+    public async Task Async_seed_hook_is_awaited()
+    {
+        var plugin = new LifecycleAsyncSeedProbe();
+        var output = new MemoryStream();
+
+        PluginHost.RunInstance(
+            plugin,
+            Lines(Hello, "{\"type\":\"lifecycle\",\"id\":1}"),
+            output,
+            null);
+
+        Assert.Equal(1, plugin.SeedCalls);
+        Assert.Contains(
+            "\"type\":\"lifecycle_result\",\"id\":1,\"status\":\"ok\"",
+            Encoding.UTF8.GetString(output.ToArray()));
+
+        await Task.CompletedTask;
+    }
+
+    [Fact]
+    public void Seed_hook_failure_reports_structured_error()
+    {
+        var plugin = new LifecycleSeedErrorProbe();
+        var output = new MemoryStream();
+
+        PluginHost.RunInstance(
+            plugin,
+            Lines(Hello, "{\"type\":\"lifecycle\",\"id\":1}"),
+            output,
+            null);
+
+        string written = Encoding.UTF8.GetString(output.ToArray());
+        Assert.Contains("\"type\":\"lifecycle_result\",\"id\":1,\"status\":\"error\"", written);
+        Assert.Contains("\"code\":\"seed_failed\"", written);
+        Assert.Contains("database seed failed", written);
     }
 
     private static StringReader Lines(params string[] lines) =>

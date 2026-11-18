@@ -75,6 +75,8 @@ public record ClaimResult(bool Success, int Amount);
 ### Core SDK Attributes & APIs:
 - `[ExoService("name")]`: Registers the class as a service contract with the host.
 - `[ExoAction(Scope = "player")]`: Exposes a public method as an RPC action. `Scope = "player"` requires a valid authenticated player session; `Scope = "admin"` restricts access to administrator credentials; default or omitting scope permits public calls.
+- `[ExoSeed]`: Marks a parameterless method (`void` or `Task`) on the extension root to run once after `OnExtensionStart` on every startup. Must be idempotent by contract (check before inserting initial rows). Throwing fails extension startup.
+- `OnExtensionStart()`: Optional parameterless lifecycle method (`void` or `Task`) on the extension root invoked once during handshake startup before seeding.
 - `Exo.Database`: Typed storage interface (`Get<T>`, `Put`, `Query<T>`, `Execute`).
 - `Exo.Context`: Provides runtime metadata such as `CallerPlayerId` and caller context.
 - `Exo.Events`: Publishes events to the cluster pub/sub bus (`Publish`).
