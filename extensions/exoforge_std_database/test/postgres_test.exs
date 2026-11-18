@@ -89,6 +89,33 @@ defmodule Exoforge.Std.Database.Adapters.PostgresTest do
     end
 
     @tag :postgres
+    test "a legacy document table accepts typed-column rows once its data column is relaxed" do
+      unless Process.whereis(Exoforge.Std.Database.PoolRegistry) do
+        start_supervised!({Registry, keys: :unique, name: Exoforge.Std.Database.PoolRegistry})
+      end
+
+      unless Process.whereis(Exoforge.Std.Database.PoolSupervisor) do
+        start_supervised!({DynamicSupervisor, name: Exoforge.Std.Database.PoolSupervisor, strategy: :one_for_one})
+      end
+
+      plugin = :"pg_kv_legacy_#{System.unique_integer([:positive])}"
+      assert {:ok, _} = Postgres.ensure_database(plugin, @pg_config)
+      on_exit(fn -> _ = Postgres.reset(plugin, @pg_config) end)
+
+      # The document table the KV path creates on first write, then a resource that gains typed columns.
+      assert {:ok, _} = Postgres.execute(plugin, %{action: :put, table: "itens", id: "old", data: %{"x" => 1}}, [], @pg_config)
+      assert {:ok, _} = Postgres.execute(plugin, "ALTER TABLE itens ADD COLUMN preco integer, ADD COLUMN tags text", [], @pg_config)
+
+      assert {:error, _} = Postgres.execute(plugin, "INSERT INTO itens (id, preco) VALUES ($1, $2)", ["new", 5], @pg_config)
+
+      assert {:ok, _} = Postgres.execute(plugin, "ALTER TABLE itens ALTER COLUMN data DROP NOT NULL", [], @pg_config)
+      assert {:ok, _} = Postgres.execute(plugin, "INSERT INTO itens (id, preco, tags) VALUES ($1, $2, $3)", ["new", 5, ~s(["a","b"])], @pg_config)
+
+      assert {:ok, %{rows: [%{"id" => "new", "preco" => 5, "tags" => ~s(["a","b"])}]}} =
+               Postgres.execute(plugin, "SELECT id, preco, tags FROM itens WHERE id = $1", ["new"], @pg_config)
+    end
+
+    @tag :postgres
     test "undeclared KV tables still use (id, data, updated_at)" do
       unless Process.whereis(Exoforge.Std.Database.PoolRegistry) do
         start_supervised!({Registry, keys: :unique, name: Exoforge.Std.Database.PoolRegistry})
