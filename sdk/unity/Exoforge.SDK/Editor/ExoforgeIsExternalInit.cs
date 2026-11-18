@@ -15,8 +15,11 @@ public static class ExoforgeIsExternalInit
 
     public static string ProjectRoot => Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
 
-    /// <summary>The file declaring the type anywhere in <c>Assets/</c>, or null when the project has none.</summary>
-    public static string? PresentPath => ExoIsExternalInit.FindInProject(ProjectRoot);
+    /// <summary>Whether <paramref name="directory"/> resolves inside <c>Assets/</c>.</summary>
+    public static bool IsInsideAssets(string? directory) => ExoIsExternalInit.IsInsideAssets(ProjectRoot, directory);
+
+    /// <summary>The file declaring the type in the same assembly as <paramref name="directory"/>, or null when that assembly has none or is outside Assets.</summary>
+    public static string? PresentPath(string? directory) => ExoIsExternalInit.FindInAssembly(ProjectRoot, directory);
 
     public static string Relative(string path) => Path.GetRelativePath(ProjectRoot, path).Replace('\\', '/');
 

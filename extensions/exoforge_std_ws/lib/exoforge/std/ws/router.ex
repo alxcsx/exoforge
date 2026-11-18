@@ -7,6 +7,7 @@ defmodule Exoforge.Std.Ws.Router do
   alias Exoforge.Std.Transport
 
   plug(Plug.Logger)
+  plug(:assign_rid)
   plug(:authorize_ingress)
   plug(:match)
   plug(:dispatch)
@@ -34,7 +35,11 @@ defmodule Exoforge.Std.Ws.Router do
         |> Exoforge.Auth.Request.query()
 
       conn
-      |> WebSockAdapter.upgrade(Exoforge.Std.Ws.SocketHandler, [token: token], timeout: 60_000)
+      |> WebSockAdapter.upgrade(
+        Exoforge.Std.Ws.SocketHandler,
+        [token: token, rid: conn.assigns[:exoforge_rid]],
+        timeout: 60_000
+      )
       |> halt()
     else
       send_upgrade_required(conn)
@@ -44,7 +49,7 @@ defmodule Exoforge.Std.Ws.Router do
   match _ do
     conn
     |> put_resp_content_type("application/json")
-    |> send_resp(404, Jason.encode!(Transport.error_body(:not_found)))
+    |> send_resp(404, Jason.encode!(Transport.error_body(:not_found, conn.assigns[:exoforge_rid])))
   end
 
   defp send_landing(conn) do
@@ -138,10 +143,21 @@ defmodule Exoforge.Std.Ws.Router do
               forbidden(conn)
             end
 
-          :error ->
+          {:error, :token_expired} ->
+            token_expired(conn)
+
+          _error ->
             unauthenticated(conn)
         end
     end
+  end
+
+  defp assign_rid(conn, _opts) do
+    rid = Exoforge.RequestContext.sanitize_rid(List.first(get_req_header(conn, "x-exoforge-rid")))
+
+    conn
+    |> put_resp_header("x-exoforge-rid", rid)
+    |> assign(:exoforge_rid, rid)
   end
 
   defp authenticate_token(nil), do: :error
@@ -149,21 +165,37 @@ defmodule Exoforge.Std.Ws.Router do
   defp authenticate_token(token) do
     case Exoforge.ActionDispatcher.dispatch(:auth, :authenticate, %{token: token}) do
       {:ok, auth} -> {:ok, auth}
+      {:error, :token_expired} -> {:error, :token_expired}
       _ -> :error
     end
+  end
+
+  defp token_expired(conn) do
+    conn
+    |> put_resp_content_type("application/json")
+    |> send_resp(
+      401,
+      Jason.encode!(
+        Transport.error_body(
+          {:token_expired, "The access token has expired. Refresh it with auth.refresh."},
+          conn.assigns[:exoforge_rid]
+        )
+      )
+    )
+    |> halt()
   end
 
   defp unauthenticated(conn) do
     conn
     |> put_resp_content_type("application/json")
-    |> send_resp(401, Jason.encode!(Transport.error_body(:unauthenticated)))
+    |> send_resp(401, Jason.encode!(Transport.error_body(:unauthenticated, conn.assigns[:exoforge_rid])))
     |> halt()
   end
 
   defp forbidden(conn) do
     conn
     |> put_resp_content_type("application/json")
-    |> send_resp(403, Jason.encode!(Transport.error_body(:forbidden_scope)))
+    |> send_resp(403, Jason.encode!(Transport.error_body(:forbidden_scope, conn.assigns[:exoforge_rid])))
     |> halt()
   end
 
@@ -220,7 +252,7 @@ defmodule Exoforge.Std.Ws.Router do
           Transport.error_body(
             {:upgrade_required,
              "This endpoint requires a WebSocket connection (ws:// or wss://). Connect using a WebSocket client or the Exoforge C# / Unity SDK."},
-            nil
+            conn.assigns[:exoforge_rid]
           )
           |> put_in(["error", "details"], %{
             websocket_url: "ws://localhost:#{Exoforge.Endpoints.ws_port()}/ws",

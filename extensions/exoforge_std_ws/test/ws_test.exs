@@ -275,6 +275,56 @@ defmodule Exoforge.Std.WsTest do
     assert resp["error"]["details"] == %{}
   end
 
+  test "GET / without token returns 401 with rid and canonical error shape" do
+    conn =
+      conn(:get, "/")
+      |> put_req_header("x-exoforge-rid", "r_ws_http_401")
+      |> Router.call(Router.init([]))
+
+    assert conn.status == 401
+    body = Jason.decode!(conn.resp_body)
+    assert body["status"] == "error"
+    assert body["error"]["code"] == "unauthenticated"
+    assert is_binary(body["error"]["message"])
+    assert body["error"]["details"] == %{}
+    assert body["rid"] == "r_ws_http_401"
+    assert get_resp_header(conn, "x-exoforge-rid") == ["r_ws_http_401"]
+  end
+
+  test "WebSocket auth frame failure carries rid and canonical error shape" do
+    {:ok, state} = SocketHandler.init([])
+
+    auth_msg = Jason.encode!(%{"type" => "auth", "token" => "invalid_token", "rid" => "r_ws_auth_fail"})
+
+    assert {:push, {:text, resp_json}, _new_state} =
+             SocketHandler.handle_in({auth_msg, :text}, state)
+
+    resp = Jason.decode!(resp_json)
+    assert resp["type"] == "auth_result"
+    assert resp["status"] == "error"
+    assert resp["rid"] == "r_ws_auth_fail"
+    assert is_binary(resp["error"]["code"])
+    assert is_binary(resp["error"]["message"])
+    assert resp["error"]["details"] == %{}
+  end
+
+  test "WebSocket unauthenticated subscribe carries rid and canonical error shape" do
+    {:ok, state} = SocketHandler.init([])
+
+    sub_msg = Jason.encode!(%{"type" => "subscribe", "topic" => "room:test"})
+
+    assert {:push, {:text, resp_json}, _new_state} =
+             SocketHandler.handle_in({sub_msg, :text}, state)
+
+    resp = Jason.decode!(resp_json)
+    assert resp["type"] == "error"
+    assert resp["status"] == "error"
+    assert resp["rid"] =~ ~r/^r_/
+    assert resp["error"]["code"] == "unauthenticated"
+    assert is_binary(resp["error"]["message"])
+    assert resp["error"]["details"] == %{}
+  end
+
   test "WebSocket rejects unauthenticated action call with unauthenticated" do
     {:ok, state} = SocketHandler.init([])
 
@@ -429,6 +479,57 @@ defmodule Exoforge.Std.WsTest do
       state = %{subscriptions: MapSet.new()}
 
       assert {:ok, ^state} = Exoforge.Std.Ws.SocketHandler.handle_info(:some_other_message, state)
+    end
+  end
+
+  describe "connect-time ?token= authentication" do
+    test "connect without token stays anonymous" do
+      assert {:ok, state} = SocketHandler.init([])
+      refute Map.has_key?(state, :auth)
+
+      assert {:ok, state_nil} = SocketHandler.init(token: nil)
+      refute Map.has_key?(state_nil, :auth)
+
+      assert {:ok, state_empty} = SocketHandler.init(token: "")
+      refute Map.has_key?(state_empty, :auth)
+    end
+
+    test "connect with invalid ?token= refuses with invalid_token and rid" do
+      assert {:stop, :normal, {4001, "invalid_token"}, [{:text, json}], _state} =
+               SocketHandler.init(token: "not_a_real_token", rid: "r_ws_bad_tok")
+
+      frame = Jason.decode!(json)
+      assert frame["type"] == "auth_result"
+      assert frame["status"] == "error"
+      assert frame["rid"] == "r_ws_bad_tok"
+      assert frame["error"]["code"] == "invalid_token"
+      assert is_binary(frame["error"]["message"])
+      assert frame["error"]["details"] == %{}
+    end
+
+    test "connect with expired ?token= refuses with token_expired and rid" do
+      Application.put_env(:exoforge, :auth, access_token_ttl: -1)
+      on_exit(fn -> Application.delete_env(:exoforge, :auth) end)
+
+      _ = Exoforge.Std.Auth.upsert_account("exp_ws", "exp_ws@exoforge.test", "secret123", ["player"])
+      {:ok, %{token: expired_token}} =
+        Exoforge.ActionDispatcher.dispatch(:auth, :login, %{
+          email: "exp_ws@exoforge.test",
+          password: "secret123"
+        })
+
+      Application.put_env(:exoforge, :auth, [])
+
+      assert {:stop, :normal, {4001, "token_expired"}, [{:text, json}], _state} =
+               SocketHandler.init(token: expired_token, rid: "r_ws_exp_tok")
+
+      frame = Jason.decode!(json)
+      assert frame["type"] == "auth_result"
+      assert frame["status"] == "error"
+      assert frame["rid"] == "r_ws_exp_tok"
+      assert frame["error"]["code"] == "token_expired"
+      assert is_binary(frame["error"]["message"])
+      assert frame["error"]["details"] == %{}
     end
   end
 end

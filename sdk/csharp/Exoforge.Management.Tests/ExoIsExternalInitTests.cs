@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Threading.Tasks;
+using Exoforge.CLI;
 using Exoforge.Management;
 using Xunit;
 
@@ -96,5 +98,212 @@ public class ExoIsExternalInitTests : IDisposable
         File.WriteAllText(Path.Combine(packages, "IsExternalInit.cs"), ExoIsExternalInit.Source);
 
         Assert.Null(ExoIsExternalInit.FindInProject(_root));
+    }
+
+    [Fact]
+    public async Task UnityRecordsCli_Asmdef_WritesIfMissing_AndIsIdempotent()
+    {
+        string game = Path.Combine(_root, "Assets", "Game");
+        Directory.CreateDirectory(game);
+        File.WriteAllText(Path.Combine(game, "Game.asmdef"), "{}");
+
+        string firstOut = await RunCliAsync("unity", "records", "--asmdef", "Assets/Game", "--dir", _root);
+        string initPath = Path.Combine(game, "IsExternalInit.cs");
+        Assert.True(File.Exists(initPath));
+        Assert.Contains("Wrote", firstOut);
+
+        string secondOut = await RunCliAsync("unity", "records", "--asmdef", "Assets/Game", "--dir", _root);
+        Assert.Contains("Skipped (already present)", secondOut);
+    }
+
+    [Fact]
+    public async Task UnityRecordsCli_All_WritesOnlyAsmdefsWithRecordOrInit_AndIsIdempotent()
+    {
+        string withRecord = Path.Combine(_root, "Assets", "Game");
+        string withInit = Path.Combine(_root, "Assets", "Game", "Editor");
+        string withoutRecord = Path.Combine(_root, "Assets", "Plain");
+        string alreadyHas = Path.Combine(_root, "Assets", "Existing");
+        Directory.CreateDirectory(withRecord);
+        Directory.CreateDirectory(withInit);
+        Directory.CreateDirectory(withoutRecord);
+        Directory.CreateDirectory(alreadyHas);
+
+        File.WriteAllText(Path.Combine(withRecord, "Game.asmdef"), "{}");
+        File.WriteAllText(Path.Combine(withRecord, "Score.cs"), "public record Score(int Value);\n");
+
+        File.WriteAllText(Path.Combine(withInit, "Game.Editor.asmdef"), "{}");
+        File.WriteAllText(Path.Combine(withInit, "Config.cs"), "public class Config { public int Max { get; init; } }\n");
+
+        File.WriteAllText(Path.Combine(withoutRecord, "Plain.asmdef"), "{}");
+        File.WriteAllText(Path.Combine(withoutRecord, "Helper.cs"), "public class Helper { int recordId; void Initialize() {} }\n");
+
+        File.WriteAllText(Path.Combine(alreadyHas, "Existing.asmdef"), "{}");
+        File.WriteAllText(Path.Combine(alreadyHas, "Model.cs"), "public record Model(string Id);\n");
+        File.WriteAllText(Path.Combine(alreadyHas, "IsExternalInit.cs"), ExoIsExternalInit.Source);
+
+        string firstOut = await RunCliAsync("unity", "records", "--all", "--dir", _root);
+
+        Assert.True(File.Exists(Path.Combine(withRecord, "IsExternalInit.cs")));
+        Assert.True(File.Exists(Path.Combine(withInit, "IsExternalInit.cs")));
+        Assert.False(File.Exists(Path.Combine(withoutRecord, "IsExternalInit.cs")));
+        Assert.Contains($"Wrote {Path.Combine(withRecord, "IsExternalInit.cs")}", firstOut);
+        Assert.Contains($"Wrote {Path.Combine(withInit, "IsExternalInit.cs")}", firstOut);
+        Assert.Contains("Skipped (no record/init): Assets/Plain", firstOut);
+        Assert.Contains("Skipped (already present): Assets/Existing", firstOut);
+
+        string secondOut = await RunCliAsync("unity", "records", "--all", "--dir", _root);
+        Assert.DoesNotContain("Wrote", secondOut);
+        Assert.Contains("Skipped (already present): Assets/Game", secondOut);
+        Assert.Contains("Skipped (already present): Assets/Game/Editor", secondOut);
+        Assert.Contains("Skipped (no record/init): Assets/Plain", secondOut);
+        Assert.Contains("Skipped (already present): Assets/Existing", secondOut);
+    }
+
+    [Fact]
+    public void ResolveDirectory_RejectsPathsOutsideAssets()
+    {
+        Assert.Throws<ArgumentException>(() => ExoIsExternalInit.ResolveDirectory(_root, "../outside"));
+        Assert.Throws<ArgumentException>(() => ExoIsExternalInit.ResolveDirectory(_root, Path.Combine(_root, "Packages")));
+        Assert.Throws<ArgumentException>(() => ExoIsExternalInit.ResolveDirectory(_root, Path.GetTempPath()));
+        Assert.Throws<ArgumentException>(() => ExoIsExternalInit.ResolveDirectory(_root, "/Assets/Game"));
+
+        string inside = ExoIsExternalInit.ResolveDirectory(_root, "Assets/Game");
+        Assert.StartsWith(ExoIsExternalInit.AssetsPath(_root), inside);
+    }
+
+    [Fact]
+    public void DeclaresRecordOrInit_IgnoresCommentsStringsAndIdentifiers()
+    {
+        string plain = Path.Combine(_root, "Assets", "Noisy");
+        Directory.CreateDirectory(plain);
+        File.WriteAllText(Path.Combine(plain, "Noisy.asmdef"), "{}");
+        File.WriteAllText(Path.Combine(plain, "Noisy.cs"), """
+            public class Noisy
+            {
+                // record the score
+                /* public int X { get; init; } */
+                public void Demo()
+                {
+                    var record = 1;
+                    string a = "public record Foo(int X);";
+                    string b = @"record Bar { get; init; }";
+                    string c = "\"\"\"record Baz\"\"\"";
+                    string d = $"interpolated record {record}";
+                }
+            }
+            """);
+
+        Assert.False(ExoIsExternalInit.DeclaresRecordOrInit(_root, "Assets/Noisy"));
+
+        // Also verify real C# 11 raw string literal stripping directly
+        Assert.False(ExoIsExternalInit.ContainsRecordOrInit("class C { string s = \"\"\"\npublic record Fake(int X);\n\"\"\"; }"));
+        Assert.True(ExoIsExternalInit.ContainsRecordOrInit("public record Real(int X);"));
+    }
+
+    [Fact]
+    public void ContainsRecordOrInit_RequiresTypeDeclarationPosition()
+    {
+        Assert.False(ExoIsExternalInit.ContainsRecordOrInit("if (record is null) return;"));
+        Assert.False(ExoIsExternalInit.ContainsRecordOrInit("var x = record as X;"));
+        Assert.False(ExoIsExternalInit.ContainsRecordOrInit("foreach (var x in record) {}"));
+        Assert.False(ExoIsExternalInit.ContainsRecordOrInit("if (obj.record is Y) {}"));
+        Assert.False(ExoIsExternalInit.ContainsRecordOrInit("var r = record switch { _ => 1 };"));
+
+        Assert.True(ExoIsExternalInit.ContainsRecordOrInit("public sealed record Foo(int A);"));
+        Assert.True(ExoIsExternalInit.ContainsRecordOrInit("record struct P(int X);"));
+        Assert.True(ExoIsExternalInit.ContainsRecordOrInit("[Serializable] record Bar;"));
+        Assert.True(ExoIsExternalInit.ContainsRecordOrInit("public class C { public int X { get; init; } }"));
+    }
+
+    [Fact]
+    public void FindInAssembly_OutsideAssets_ReturnsNull_WhileEnsureThrows()
+    {
+        Assert.Null(ExoIsExternalInit.FindInAssembly(_root, "../outside"));
+        Assert.Null(ExoIsExternalInit.FindInAssembly(_root, Path.Combine(_root, "Packages")));
+        Assert.False(ExoIsExternalInit.IsInsideAssets(_root, "../outside"));
+        Assert.Throws<ArgumentException>(() => ExoIsExternalInit.Ensure(_root, "../outside", out _));
+    }
+
+    [Fact]
+    public void IsPathUnderRoot_IgnoresCaseOnEveryOs()
+    {
+        string game = Path.Combine(_root, "Assets", "Game");
+        Directory.CreateDirectory(game);
+        File.WriteAllText(Path.Combine(game, "Game.asmdef"), "{}");
+        File.WriteAllText(Path.Combine(game, "IsExternalInit.cs"), ExoIsExternalInit.Source);
+
+        string assets = Path.Combine(_root, "Assets");
+        string mixedCaseChild = Path.Combine(_root, "assets", "Game");
+        Assert.True(ExoIsExternalInit.IsPathUnderRoot(mixedCaseChild, assets));
+        Assert.NotNull(ExoIsExternalInit.FindInAssembly(_root, "assets/Game"));
+    }
+
+    [Fact]
+    public async Task CliHelp_AlignsUnityRecordsAndHasBlankLineBeforeOptions()
+    {
+        string help = await RunCliAsync("--help");
+        Assert.Contains("  unity records              Write IsExternalInit polyfill per assembly (--asmdef/--all)", help);
+        string normalized = help.Replace("\r\n", "\n");
+        Assert.Contains("Write IsExternalInit polyfill per assembly (--asmdef/--all)\n\nOptions:", normalized);
+    }
+
+    private static async Task<string> RunCliAsync(params string[] args)
+    {
+        var writer = new StringWriter();
+        var previous = Console.Out;
+        Console.SetOut(writer);
+        try
+        {
+            int code = await Program.Main(args);
+            Assert.Equal(0, code);
+            return writer.ToString();
+        }
+        finally
+        {
+            Console.SetOut(previous);
+        }
+    }
+
+    [Fact]
+    public void DeclaresRecordOrInit_SeesARecordAfterAPreprocessorLine()
+    {
+        string game = Path.Combine(_root, "Assets", "Game");
+        Directory.CreateDirectory(game);
+        File.WriteAllText(Path.Combine(game, "Game.asmdef"), "{}");
+        File.WriteAllText(Path.Combine(game, "Score.cs"), "#nullable enable\nrecord Score(int Points);\n");
+
+        Assert.True(ExoIsExternalInit.DeclaresRecordOrInit(_root, "Assets/Game"));
+    }
+
+    [Fact]
+    public void DeclaresRecordOrInit_SeesPartialAndNestedRecords()
+    {
+        string game = Path.Combine(_root, "Assets", "Game");
+        Directory.CreateDirectory(game);
+        File.WriteAllText(Path.Combine(game, "Game.asmdef"), "{}");
+        File.WriteAllText(Path.Combine(game, "Nested.cs"), "class Outer\n{\n    partial record Inner(int A);\n}\n");
+
+        Assert.True(ExoIsExternalInit.DeclaresRecordOrInit(_root, "Assets/Game"));
+    }
+
+    [Fact]
+    public void TryResolveDirectory_RefusesAPathTheOsCannotParse_WithoutThrowing()
+    {
+        // What a half-typed Studio field can hold; GetFullPath throws on it, OnGUI must not.
+        const string typed = "Assets/\0bad";
+
+        Assert.Null(Record.Exception(() => ExoIsExternalInit.TryResolveDirectory(_root, typed, out _)));
+        Assert.False(ExoIsExternalInit.TryResolveDirectory(_root, typed, out _));
+        Assert.False(ExoIsExternalInit.IsInsideAssets(_root, typed));
+    }
+
+    [Fact]
+    public void IsPathUnderRoot_IgnoresCaseOnlyWhereTheFileSystemDoes()
+    {
+        string root = Path.Combine(_root, "Assets");
+        string otherCase = Path.Combine(_root, "assets", "x");
+        bool expected = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS();
+
+        Assert.Equal(expected, ExoIsExternalInit.IsPathUnderRoot(otherCase, root));
     }
 }

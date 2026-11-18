@@ -645,7 +645,14 @@ namespace Exoforge.Unity.Editor
 
             void RefreshStatus()
             {
-                string? present = ExoforgeIsExternalInit.PresentPath;
+                if (!ExoforgeIsExternalInit.IsInsideAssets(_recordsTargetDir))
+                {
+                    statusLabel.text = "⚠ Target folder is outside Assets/";
+                    statusLabel.style.color = ExoforgeUIStyle.TextMuted;
+                    return;
+                }
+
+                string? present = ExoforgeIsExternalInit.PresentPath(_recordsTargetDir);
                 if (present != null)
                 {
                     statusLabel.text = $"✓ Already present: {ExoforgeIsExternalInit.Relative(present)}";
@@ -653,7 +660,7 @@ namespace Exoforge.Unity.Editor
                 }
                 else
                 {
-                    statusLabel.text = "○ Not found anywhere in Assets/";
+                    statusLabel.text = "○ Not found in this assembly";
                     statusLabel.style.color = ExoforgeUIStyle.TextMuted;
                 }
             }
@@ -668,6 +675,11 @@ namespace Exoforge.Unity.Editor
             var targetField = new TextField("Target folder") { value = _recordsTargetDir };
             targetField.tooltip = "Folder that receives IsExternalInit.cs, relative to the Unity project";
             targetField.style.flexGrow = 1;
+            targetField.RegisterValueChangedCallback(evt =>
+            {
+                _recordsTargetDir = evt.newValue?.Trim() ?? "";
+                RefreshStatus();
+            });
             targetRow.Add(targetField);
 
             var browseBtn = new Button(() =>

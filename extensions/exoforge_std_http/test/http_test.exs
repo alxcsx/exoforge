@@ -187,7 +187,26 @@ defmodule Exoforge.HttpTest do
       body = Jason.decode!(conn.resp_body)
       assert body["status"] == "error"
       assert body["error"]["code"] == "unauthenticated"
+      assert is_binary(body["error"]["message"])
       assert body["error"]["details"] == %{}
+      assert body["rid"] =~ ~r/^r_/
+      assert get_resp_header(conn, "x-exoforge-rid") == [body["rid"]]
+    end
+
+    test "GET /api/routes rejects unauthenticated call via authorize_ingress plug with 401 and rid" do
+      conn =
+        conn(:get, "/api/routes")
+        |> put_req_header("x-exoforge-rid", "r_plug_401")
+        |> Router.call(@opts)
+
+      assert conn.status == 401
+      body = Jason.decode!(conn.resp_body)
+      assert body["status"] == "error"
+      assert body["error"]["code"] == "unauthenticated"
+      assert is_binary(body["error"]["message"])
+      assert body["error"]["details"] == %{}
+      assert body["rid"] == "r_plug_401"
+      assert get_resp_header(conn, "x-exoforge-rid") == ["r_plug_401"]
     end
 
     test "POST /api/:service/:action rejects insufficient scope with 403" do
@@ -347,10 +366,17 @@ defmodule Exoforge.HttpTest do
         conn(:post, "/api/mock_admin/secret_op", "{}")
         |> put_req_header("content-type", "application/json")
         |> put_req_header("authorization", "Bearer #{session["token"]}")
+        |> put_req_header("x-exoforge-rid", "r_expired_1")
         |> Router.call(@opts)
 
       assert expired.status == 401
-      assert Jason.decode!(expired.resp_body)["error"]["code"] == "token_expired"
+      expired_body = Jason.decode!(expired.resp_body)
+      assert expired_body["status"] == "error"
+      assert expired_body["error"]["code"] == "token_expired"
+      assert is_binary(expired_body["error"]["message"])
+      assert expired_body["error"]["details"] == %{}
+      assert expired_body["rid"] == "r_expired_1"
+      assert get_resp_header(expired, "x-exoforge-rid") == ["r_expired_1"]
 
       # New tokens are ordinary again; the client's refresh is a public call, so an expired bearer
       # in the header is not what authorizes it - the refresh token in the body is.

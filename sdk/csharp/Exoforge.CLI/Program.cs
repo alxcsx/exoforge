@@ -35,7 +35,9 @@ public static class Program
             return 0;
         }
 
-        var cli = CliArgs.Parse(args, 1);
+        var cli = command == "unity"
+            ? CliArgs.Parse(args, 2)
+            : CliArgs.Parse(args, 1);
 
         try
         {
@@ -67,6 +69,9 @@ public static class Program
 
                 case "extension":
                     return await HandleExtensionAsync(cli).ConfigureAwait(false);
+
+                case "unity":
+                    return HandleUnity(cli, args);
 
                 case "sync":
                 case "gen":
@@ -128,6 +133,7 @@ public static class Program
           agents <subcommand>        Install and inspect AI agent skills, AGENTS.md, and wrappers
           repair                     Sanitize and repair client stubs in-place
           status                     Inspect live cluster health and metrics
+          unity records              Write IsExternalInit polyfill per assembly (--asmdef/--all)
 
         Options:
           --dir <path>               Workspace root (defaults to the current directory)
@@ -287,6 +293,57 @@ public static class Program
         return 0;
     }
 
+    private static int HandleUnity(CliArgs cli, string[] args)
+    {
+        string sub = args.Length > 1 ? args[1].ToLowerInvariant() : "";
+        if (sub != "records" || cli.WantsHelp)
+        {
+            Console.WriteLine("Usage: exo unity records [--asmdef <dir>] [--all] [--dir <path>]");
+            return 0;
+        }
+
+        string dir = cli.Value("dir") ?? Directory.GetCurrentDirectory();
+        string? asmdef = cli.Value("asmdef");
+        bool all = cli.Has("all");
+
+        if (!string.IsNullOrWhiteSpace(asmdef))
+        {
+            try
+            {
+                bool created = Exoforge.Management.ExoIsExternalInit.Ensure(dir, asmdef, out string path);
+                Console.WriteLine(created ? $"Wrote {path}" : $"Skipped (already present): {path}");
+                return 0;
+            }
+            catch (ArgumentException ex)
+            {
+                Console.Error.WriteLine(ex.Message);
+                return 1;
+            }
+        }
+
+        if (all)
+        {
+            foreach (string assembly in Exoforge.Management.ExoIsExternalInit.EnumerateAssemblies(dir))
+            {
+                if (!Exoforge.Management.ExoIsExternalInit.DeclaresRecordOrInit(dir, assembly))
+                {
+                    Console.WriteLine($"Skipped (no record/init): {assembly}");
+                    continue;
+                }
+                if (Exoforge.Management.ExoIsExternalInit.FindInAssembly(dir, assembly) != null)
+                {
+                    Console.WriteLine($"Skipped (already present): {assembly}");
+                    continue;
+                }
+                bool created = Exoforge.Management.ExoIsExternalInit.Ensure(dir, assembly, out string path);
+                Console.WriteLine(created ? $"Wrote {path}" : $"Skipped (already present): {path}");
+            }
+            return 0;
+        }
+
+        Console.WriteLine("Usage: exo unity records [--asmdef <dir>] [--all] [--dir <path>]");
+        return 0;
+    }
     private static async Task<int> HandleStatusAsync(CliArgs cli)
     {
         if (cli.WantsHelp)

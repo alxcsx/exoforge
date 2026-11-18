@@ -1,8 +1,13 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
+
+[assembly: InternalsVisibleTo("Exoforge.Management.Tests")]
 
 namespace Exoforge.Management;
 
@@ -33,16 +38,76 @@ public static class ExoIsExternalInit
     private static readonly Regex DeclarationPattern =
         new(@"\b(?:class|record|struct)\s+IsExternalInit\b", RegexOptions.Compiled);
 
+    private static readonly Regex RecordOrInitPattern =
+        new(
+            @"(?:(?:(?:^|[;{}\]])\s*|\b(?:public|internal|private|protected|sealed|abstract|static|partial|readonly|file|unsafe|new)\s+)record\s+(?:(?:class|struct)\s+)?(?!is\b|as\b|in\b|when\b|with\b|and\b|or\b|not\b|switch\b)[A-Za-z_@][A-Za-z0-9_]*|\binit\s*(?:;|=>|\{))",
+            RegexOptions.Compiled | RegexOptions.Multiline);
+
     /// <summary>The assets folder of the Unity project rooted at <paramref name="projectRoot"/>.</summary>
     public static string AssetsPath(string projectRoot) => Path.Combine(Path.GetFullPath(projectRoot), "Assets");
+
+    /// <summary>Whether <paramref name="directory"/> resolves inside <see cref="AssetsPath"/>.</summary>
+    public static bool IsInsideAssets(string projectRoot, string? directory = null) =>
+        TryResolveDirectory(projectRoot, directory, out _);
+
+    /// <summary>Resolves <paramref name="directory"/> when it lies inside <see cref="AssetsPath"/>.</summary>
+    public static bool TryResolveDirectory(string projectRoot, string? directory, out string resolved)
+    {
+        if (string.IsNullOrWhiteSpace(directory)) directory = DefaultDirectory;
+        string assetsRoot, candidate;
+        try
+        {
+            assetsRoot = TrimSep(Path.GetFullPath(AssetsPath(projectRoot)));
+            candidate = TrimSep(Path.IsPathRooted(directory)
+                ? Path.GetFullPath(directory)
+                : Path.GetFullPath(Path.Combine(Path.GetFullPath(projectRoot), directory!.Replace('\\', '/'))));
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            // A half-typed folder in the Studio field (`a|b` on Windows) is simply not a target.
+            resolved = string.Empty;
+            return false;
+        }
+
+        if (!IsPathUnderRoot(candidate, assetsRoot))
+        {
+            resolved = string.Empty;
+            return false;
+        }
+
+        resolved = candidate;
+        return true;
+    }
 
     /// <summary>Absolute folder to write into: <paramref name="directory"/> (absolute or project-relative), else the default.</summary>
     public static string ResolveDirectory(string projectRoot, string? directory = null)
     {
-        if (string.IsNullOrWhiteSpace(directory)) directory = DefaultDirectory;
-        return Path.IsPathRooted(directory)
-            ? Path.GetFullPath(directory)
-            : Path.GetFullPath(Path.Combine(Path.GetFullPath(projectRoot), directory!.Replace('\\', '/')));
+        if (!TryResolveDirectory(projectRoot, directory, out string resolved))
+        {
+            string assetsRoot = TrimSep(Path.GetFullPath(AssetsPath(projectRoot)));
+            throw new ArgumentException($"Target directory '{directory}' must be inside '{assetsRoot}'.", nameof(directory));
+        }
+
+        return resolved;
+    }
+
+    private static string TrimSep(string path) =>
+        path.Length > 1 ? path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) : path;
+
+    // Windows and macOS file systems ignore case by default; Linux (CI) does not, and there `assets/x`
+    // is a different folder from `Assets/x` - accepting it would write outside Unity's Assets.
+    internal static readonly StringComparison PathComparison =
+        RuntimeInformation.IsOSPlatform(OSPlatform.Windows) || RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+
+    internal static bool IsPathUnderRoot(string path, string root) => IsPathUnderRoot(path, root, PathComparison);
+
+    internal static bool IsPathUnderRoot(string path, string root, StringComparison comparison)
+    {
+        string normPath = TrimSep(path);
+        string normRoot = TrimSep(root);
+        if (string.Equals(normPath, normRoot, comparison)) return true;
+        return normPath.StartsWith(normRoot + Path.DirectorySeparatorChar, comparison)
+            || normPath.StartsWith(normRoot + Path.AltDirectorySeparatorChar, comparison);
     }
 
     /// <summary>
@@ -51,6 +116,42 @@ public static class ExoIsExternalInit
     /// </summary>
     public static string? FindInProject(string projectRoot)
         => ScanAll(AssetsPath(projectRoot));
+    /// <summary>
+    /// Every assembly directory (relative to <paramref name="projectRoot"/>) under <c>Assets/</c> that
+    /// contains an <c>.asmdef</c>, including nested ones.
+    /// </summary>
+    public static IEnumerable<string> EnumerateAssemblies(string projectRoot)
+    {
+        string assets = AssetsPath(projectRoot);
+        if (!Directory.Exists(assets)) yield break;
+        foreach (string asmdef in Directory.EnumerateFiles(assets, "*.asmdef", SearchOption.AllDirectories))
+        {
+            yield return Path.GetRelativePath(projectRoot, Path.GetDirectoryName(asmdef)!).Replace('\\', '/');
+        }
+    }
+
+    /// <summary>
+    /// Whether any C# file in <paramref name="assemblyDir"/> (relative to <paramref name="projectRoot"/>)
+    /// declares a <c>record</c> or an <c>init</c> accessor, so the polyfill is actually needed.
+    /// </summary>
+    public static bool DeclaresRecordOrInit(string projectRoot, string assemblyDir)
+    {
+        string root = ResolveDirectory(projectRoot, assemblyDir);
+        if (!Directory.Exists(root)) return false;
+        foreach (string file in Directory.EnumerateFiles(root, "*.cs"))
+        {
+            string text;
+            try { text = File.ReadAllText(file); } catch { continue; }
+            if (ContainsRecordOrInit(text)) return true;
+        }
+        foreach (string child in Directory.EnumerateDirectories(root))
+        {
+            if (HasAsmdef(child)) continue;
+            string rel = Path.GetRelativePath(projectRoot, child).Replace('\\', '/');
+            if (DeclaresRecordOrInit(projectRoot, rel)) return true;
+        }
+        return false;
+    }
 
     /// <summary>
     /// The file that already declares the type in the same assembly as <paramref name="directory"/>.
@@ -59,7 +160,9 @@ public static class ExoIsExternalInit
     /// assembly has none.
     /// </summary>
     public static string? FindInAssembly(string projectRoot, string? directory = null)
-        => ScanAssembly(AssemblyRoot(AssetsPath(projectRoot), ResolveDirectory(projectRoot, directory)));
+        => TryResolveDirectory(projectRoot, directory, out string resolved)
+            ? ScanAssembly(AssemblyRoot(AssetsPath(projectRoot), resolved))
+            : null;
 
     /// <summary>
     /// Writes <see cref="FileName"/> into <paramref name="directory"/> unless that assembly already
@@ -87,15 +190,143 @@ public static class ExoIsExternalInit
 
     private static string AssemblyRoot(string assets, string directory)
     {
-        string current = Path.GetFullPath(directory);
-        while (current.Length >= assets.Length && current.StartsWith(assets, StringComparison.Ordinal))
+        string current = TrimSep(Path.GetFullPath(directory));
+        string normAssets = TrimSep(Path.GetFullPath(assets));
+        while (IsPathUnderRoot(current, normAssets))
         {
             if (HasAsmdef(current)) return current;
+            if (string.Equals(current, normAssets, StringComparison.OrdinalIgnoreCase)) break;
             string? parent = Path.GetDirectoryName(current);
             if (parent == null || parent == current) break;
             current = parent;
         }
-        return assets;
+        return normAssets;
+    }
+
+    internal static bool ContainsRecordOrInit(string source)
+    {
+        string stripped = StripCommentsAndLiterals(source);
+        return RecordOrInitPattern.IsMatch(stripped);
+    }
+
+    /// <summary>Replaces C# comments and string/char literals (including verbatim and raw strings) with spaces.</summary>
+    internal static string StripCommentsAndLiterals(string text)
+    {
+        var sb = new StringBuilder(text.Length);
+        int i = 0;
+        int n = text.Length;
+
+        while (i < n)
+        {
+            char c = text[i];
+
+            // Line comment
+            if (c == '/' && i + 1 < n && text[i + 1] == '/')
+            {
+                i += 2;
+                while (i < n && text[i] != '\n') i++;
+                sb.Append(' ');
+                continue;
+            }
+
+            // Block comment
+            if (c == '/' && i + 1 < n && text[i + 1] == '*')
+            {
+                i += 2;
+                while (i + 1 < n && !(text[i] == '*' && text[i + 1] == '/')) i++;
+                i = i + 1 < n ? i + 2 : n;
+                sb.Append(' ');
+                continue;
+            }
+
+            // Raw string literal: one or more '$' followed by 3+ '"', or 3+ '"' directly
+            if (c == '$' || c == '"')
+            {
+                int quoteStart = i;
+                while (quoteStart < n && text[quoteStart] == '$') quoteStart++;
+                int quoteCount = 0;
+                while (quoteStart + quoteCount < n && text[quoteStart + quoteCount] == '"') quoteCount++;
+
+                if (quoteCount >= 3)
+                {
+                    int j = quoteStart + quoteCount;
+                    while (j < n)
+                    {
+                        if (text[j] == '"')
+                        {
+                            int closeCount = 0;
+                            while (j + closeCount < n && text[j + closeCount] == '"') closeCount++;
+                            if (closeCount >= quoteCount)
+                            {
+                                j += closeCount;
+                                break;
+                            }
+                            j += closeCount;
+                        }
+                        else
+                        {
+                            j++;
+                        }
+                    }
+                    i = j;
+                    sb.Append(' ');
+                    continue;
+                }
+            }
+
+            // Verbatim string: @"...", $@"...", @$"..."
+            if ((c == '@' && i + 1 < n && text[i + 1] == '"') ||
+                (c == '@' && i + 2 < n && text[i + 1] == '$' && text[i + 2] == '"') ||
+                (c == '$' && i + 2 < n && text[i + 1] == '@' && text[i + 2] == '"'))
+            {
+                i = text[i + 1] == '"' ? i + 2 : i + 3;
+                while (i < n)
+                {
+                    if (text[i] == '"')
+                    {
+                        if (i + 1 < n && text[i + 1] == '"') { i += 2; continue; }
+                        i++;
+                        break;
+                    }
+                    i++;
+                }
+                sb.Append(' ');
+                continue;
+            }
+
+            // Regular / interpolated string
+            if (c == '"' || (c == '$' && i + 1 < n && text[i + 1] == '"'))
+            {
+                i += c == '$' ? 2 : 1;
+                while (i < n)
+                {
+                    if (text[i] == '\\') { i += 2; continue; }
+                    if (text[i] == '"') { i++; break; }
+                    i++;
+                }
+                sb.Append(' ');
+                continue;
+            }
+
+            // Char literal
+            if (c == '\'')
+            {
+                i++;
+                while (i < n)
+                {
+                    if (text[i] == '\\') { i += 2; continue; }
+                    if (text[i] == '\'') { i++; break; }
+                    i++;
+                }
+                sb.Append(' ');
+                continue;
+            }
+
+            sb.Append(c);
+            i++;
+        }
+
+        return sb.ToString();
     }
 
     private static bool HasAsmdef(string directory)

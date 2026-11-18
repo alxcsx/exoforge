@@ -58,6 +58,7 @@ Specialized agent skill instructions are available in the project skills directo
 | `exo status --json` | Inspect cluster connectivity, node status, and response latency. |
 | `exo contracts --json` | List all registered service contracts, actions, and event schemas. |
 | `exo sync` | Download cluster contracts and regenerate `Assets/Exoforge/Generated/ExoforgeServices.g.cs`. |
+| `exo unity records --all` | Write `IsExternalInit.cs` per asmdef under `Assets/` that declares a `record` or `init` accessor (useful on fresh clones / CI). |
 | `exo extension new <name> --template <type>` | Scaffold a new server-side extension (`persistent`, `basic`, `config`, `events`). |
 | `exo extension build <name>` | Compile an extension assembly targeting the deploy runtime. |
 | `exo extension push <name>` | Build, upload, and hot-load the extension into the active cluster. |

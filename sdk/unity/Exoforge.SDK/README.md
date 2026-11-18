@@ -121,7 +121,7 @@ for staff callers, so a player's error is the code and message without server in
 1. **Connecting a Unity Project**: Keep your `Exoforge/exoforge.json` in version control; the SDK generates `Assets/Resources/exoforge.json` for runtime builds.
 2. **ExoforgeManager Lifecycle**: Dropping `Exoforge.prefab` into your first scene ensures background reconnects, main-thread callback dispatching, and persistent state (`DontDestroyOnLoad`).
 3. **Working Offline**: Developing offline is supported for tests and branching, but BaaS capabilities (remote sync, live cluster deploy, telemetry) require an online cluster.
-4. **Records in Game Code**: Unity's profile has no `System.Runtime.CompilerServices.IsExternalInit`, so a `record` or an `init` setter fails with CS0518. **Exoforge ▸ Studio ▸ Settings ▸ C# Records Support** (and the setup wizard) writes `Assets/Exoforge/IsExternalInit.cs` for you. The type is internal, so it belongs to one assembly: an asmdef that declares records needs its own copy in its folder — the SDK's copy is internal to the SDK and does not help your assembly.
+4. **Records in Game Code**: Unity's profile has no `System.Runtime.CompilerServices.IsExternalInit`, so a `record` or an `init` setter fails with CS0518. **Exoforge ▸ Studio ▸ Settings ▸ C# Records Support** (and the setup wizard) writes `Assets/Exoforge/IsExternalInit.cs` for you. The type is internal, so it belongs to one assembly: an asmdef that declares records needs its own copy in its folder — the SDK's copy is internal to the SDK and does not help your assembly. On fresh clones or in CI (without Unity running), run `exo unity records --all` (or `--asmdef <dir>`).
 
 
 ## Testing several players on one machine

@@ -204,6 +204,54 @@ public static class ExoScaffolder
         "  </packageSources>\n" +
         "</configuration>\n";
 
+    public static bool NeedsFeedMigration(string workspaceRoot)
+    {
+        if (string.IsNullOrEmpty(workspaceRoot) || !Directory.Exists(workspaceRoot)) return false;
+
+        string nugetConfig = Path.Combine(workspaceRoot, "nuget.config");
+        if (!File.Exists(nugetConfig) || NormalizeLineEndings(File.ReadAllText(nugetConfig)) != NugetConfigContent)
+            return true;
+
+        string extensionsDir = Path.Combine(workspaceRoot, "extensions");
+        if (!Directory.Exists(extensionsDir)) return false;
+
+        foreach (string extDir in Directory.EnumerateDirectories(extensionsDir))
+        {
+            if (IsStaleExoforgeNugetConfig(Path.Combine(extDir, "nuget.config")))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static string NormalizeLineEndings(string text) => text.Replace("\r\n", "\n");
+
+    private static readonly System.Text.RegularExpressions.Regex ExoforgeSourcePattern =
+        new("<add\\b[^>]*key=\"exoforge\"[^>]*value=\"([^\"]*)\"|<add\\b[^>]*value=\"([^\"]*)\"[^>]*key=\"exoforge\"",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    private static bool IsStaleExoforgeNugetConfig(string path)
+    {
+        if (!File.Exists(path)) return false;
+        string text = File.ReadAllText(path);
+        var match = ExoforgeSourcePattern.Match(text);
+        if (!match.Success) return false;
+
+        string value = (match.Groups[1].Success ? match.Groups[1].Value : match.Groups[2].Value).Replace('\\', '/');
+        if (value == FeedDirectoryName) return false;
+
+        if (value.Contains("Library/PackageCache/", StringComparison.OrdinalIgnoreCase)
+            || value.EndsWith("/Plugins/NuGet~", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("/Plugins/NuGet~/", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        // A pre-.feed config can also name a feed folder that no longer exists (an old checkout, another
+        // machine); NuGet would keep merging it. A URL or a folder that is there is the user's own feed.
+        if (value.Contains("://", StringComparison.Ordinal)) return false;
+        string folder = Path.IsPathRooted(value) ? value : Path.Combine(Path.GetDirectoryName(path) ?? ".", value);
+        return !Directory.Exists(folder);
+    }
+
     /// <summary>
     /// Makes a workspace able to build an extension with no repository around it: the static
     /// nuget.config, and the SDK package itself in <see cref="FeedDirectoryName"/> when it is not
@@ -213,7 +261,7 @@ public static class ExoScaffolder
     {
         Directory.CreateDirectory(workspaceRoot);
         string nugetConfig = Path.Combine(workspaceRoot, "nuget.config");
-        if (!File.Exists(nugetConfig) || File.ReadAllText(nugetConfig) != NugetConfigContent)
+        if (!File.Exists(nugetConfig) || NormalizeLineEndings(File.ReadAllText(nugetConfig)) != NugetConfigContent)
             File.WriteAllText(nugetConfig, NugetConfigContent);
 
         string feedDir = Path.Combine(workspaceRoot, FeedDirectoryName);
@@ -245,10 +293,7 @@ public static class ExoScaffolder
         bool changed = version != null && EnsurePackageReference(extensionDir, version);
 
         string stale = Path.Combine(extensionDir, "nuget.config");
-        if (!File.Exists(stale)) return changed;
-
-        string text = File.ReadAllText(stale);
-        if (!text.Contains("key=\"exoforge\"") || text.Contains($"\"{FeedDirectoryName}\"")) return changed;
+        if (!IsStaleExoforgeNugetConfig(stale)) return changed;
 
         File.Delete(stale);
         return true;
