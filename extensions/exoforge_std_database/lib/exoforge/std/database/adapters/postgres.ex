@@ -1,6 +1,8 @@
 defmodule Exoforge.Std.Database.Adapters.Postgres do
   # Postgrex connect timeout, in milliseconds.
   @connect_timeout 3000
+  # Keep per-extension pools small so N extensions stay well under Postgres max_connections (100).
+  @default_pool_size 2
 
   @moduledoc """
   PostgreSQL database adapter providing strict per-plugin multi-tenant isolation.
@@ -74,7 +76,7 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
     port = Map.get(config, :port, 5432)
     user = Map.get(config, :username, "postgres")
     pass = Map.get(config, :password, "")
-    pool_size = Map.get(config, :pool_size, 10)
+    pool_size = Map.get(config, :pool_size, @default_pool_size)
 
     auth = if pass != "", do: "#{user}:#{pass}@", else: "#{user}@"
     url = "postgres://#{auth}#{host}:#{port}/#{db_name}?search_path=#{schema_name}"
@@ -142,10 +144,106 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
   end
 
   def execute(plugin_id, %{action: action} = command, _args, config) do
-    # Convenience key-value / document emulation on top of Postgres
     schema_name = schema_name(plugin_id, config)
     tbl = to_string(command[:table])
 
+    case real_table_info(plugin_id, schema_name, tbl, config) do
+      {:resource_table, info} ->
+        execute_resource_kv(action, plugin_id, schema_name, tbl, info, command, config)
+
+      :missing when action in [:put, :get, :all] ->
+        if declared_resource_table?(tbl) do
+          {:error, {:missing_resource_table, tbl}}
+        else
+          execute_doc_kv(action, plugin_id, schema_name, tbl, command, config)
+        end
+
+      _ ->
+        execute_doc_kv(action, plugin_id, schema_name, tbl, command, config)
+    end
+  end
+
+  defp execute_resource_kv(:put, plugin_id, schema_name, tbl, %{columns: cols, pk: pk_col}, command, config) do
+    id = to_string(command[:id])
+    data = command[:data] || %{}
+    record = Map.put(data, "id", id)
+    data_with_pk = Map.put(data, pk_col, id)
+
+    valid_pairs =
+      Enum.flat_map(cols, fn col ->
+        case Map.fetch(data_with_pk, col) do
+          {:ok, val} ->
+            [{col, val}]
+
+          :error ->
+            case Enum.find(data_with_pk, fn {k, _} -> to_string(k) == col end) do
+              {_, val} -> [{col, val}]
+              nil -> []
+            end
+        end
+      end)
+
+    if valid_pairs == [] do
+      execute_doc_kv(:put, plugin_id, schema_name, tbl, command, config)
+    else
+      safe_schema = quote_ident(schema_name)
+      safe_tbl = quote_ident(tbl)
+      safe_pk = quote_ident(pk_col)
+      {names, values} = Enum.unzip(valid_pairs)
+      placeholders = Enum.map_join(1..length(names), ", ", &"$#{&1}")
+
+      updates =
+        names
+        |> Enum.reject(&(&1 == pk_col))
+        |> Enum.map_join(", ", fn col ->
+          q = quote_ident(col)
+          "#{q} = EXCLUDED.#{q}"
+        end)
+
+      sql =
+        "INSERT INTO #{safe_schema}.#{safe_tbl} (#{Enum.map_join(names, ", ", &quote_ident/1)}) " <>
+          "VALUES (#{placeholders}) " <>
+          if(updates == "",
+            do: "ON CONFLICT (#{safe_pk}) DO NOTHING",
+            else: "ON CONFLICT (#{safe_pk}) DO UPDATE SET #{updates}"
+          )
+
+      with {:ok, _} <- execute(plugin_id, sql, values, config) do
+        {:ok, %{rows: [record], num_rows: 1}}
+      end
+    end
+  end
+
+  defp execute_resource_kv(:get, plugin_id, schema_name, tbl, %{pk: pk_col}, command, config) do
+    id = to_string(command[:id])
+    sql = "SELECT * FROM #{quote_ident(schema_name)}.#{quote_ident(tbl)} WHERE #{quote_ident(pk_col)} = $1"
+
+    case execute(plugin_id, sql, [id], config) do
+      {:ok, %{rows: [row | _]}} -> {:ok, %{rows: [row], num_rows: 1}}
+      {:ok, %{rows: []}} -> {:ok, %{rows: [], num_rows: 0}}
+      error -> error
+    end
+  end
+
+  defp execute_resource_kv(:delete, plugin_id, schema_name, tbl, %{pk: pk_col}, command, config) do
+    id = to_string(command[:id])
+    sql = "DELETE FROM #{quote_ident(schema_name)}.#{quote_ident(tbl)} WHERE #{quote_ident(pk_col)} = $1"
+    execute(plugin_id, sql, [id], config)
+  end
+
+  defp execute_resource_kv(:all, plugin_id, schema_name, tbl, _info, _command, config) do
+    sql = "SELECT * FROM #{quote_ident(schema_name)}.#{quote_ident(tbl)}"
+
+    with {:ok, %{rows: rows}} <- execute(plugin_id, sql, [], config) do
+      {:ok, %{rows: rows, num_rows: length(rows)}}
+    end
+  end
+
+  defp execute_resource_kv(other, _plugin_id, _schema_name, _tbl, _info, _command, _config),
+    do: {:error, {:unknown_action, other}}
+
+  defp execute_doc_kv(action, plugin_id, schema_name, tbl, command, config) do
+    # Convenience key-value / document emulation on top of Postgres
     create_sql = table_schema_sql(schema_name, tbl)
 
     case action do
@@ -206,6 +304,68 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
         {:error, {:unknown_action, other}}
     end
   end
+
+  defp real_table_info(plugin_id, schema_name, tbl, config) do
+    case table_columns(plugin_id, tbl, config) do
+      {:ok, []} ->
+        :missing
+
+      {:ok, cols} ->
+        if Enum.sort(cols) == ["data", "id", "updated_at"] do
+          :kv_table
+        else
+          pk_sql =
+            "SELECT kcu.column_name " <>
+              "FROM information_schema.table_constraints tc " <>
+              "JOIN information_schema.key_column_usage kcu " <>
+              "ON tc.constraint_name = kcu.constraint_name " <>
+              "AND tc.table_schema = kcu.table_schema " <>
+              "AND tc.table_name = kcu.table_name " <>
+              "WHERE tc.constraint_type = 'PRIMARY KEY' " <>
+              "AND tc.table_schema = $1 AND tc.table_name = $2 " <>
+              "ORDER BY kcu.ordinal_position LIMIT 1"
+
+          pk_col =
+            case execute(plugin_id, pk_sql, [schema_name, tbl], config) do
+              {:ok, %{rows: [%{"column_name" => col} | _]}} -> to_string(col)
+              _ -> "id"
+            end
+
+          {:resource_table, %{columns: cols, pk: pk_col}}
+        end
+
+      _ ->
+        :missing
+    end
+  end
+
+  defp declared_resource_table?(tbl) do
+    table = to_string(tbl)
+
+    case Exoforge.ExtensionRegistry.fetch_resource(table) do
+      {:ok, %{resource: res}} -> table_source(res) == table
+      _ -> false
+    end
+  rescue
+    _ -> false
+  end
+
+  defp table_source(res) when is_map(res) do
+    source = Map.get(res, :source) || Map.get(res, "source")
+
+    case source do
+      {:table, t} -> to_string(t)
+      [:table, t] -> to_string(t)
+      ["table", t] -> to_string(t)
+      %{table: t} -> to_string(t)
+      %{"table" => t} -> to_string(t)
+      _ -> Map.get(res, :table) || Map.get(res, "table")
+    end
+  end
+
+  defp table_source(_), do: nil
+
+  defp quote_ident(name), do: ~s("#{String.replace(to_string(name), "\"", "")}")
 
 
   @impl true
@@ -283,7 +443,7 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
       connection_opts(target_database(plugin_id, config), config)
       |> Keyword.merge(
         name: name,
-        pool_size: Map.get(config, :pool_size, 10),
+        pool_size: Map.get(config, :pool_size, @default_pool_size),
         parameters: [search_path: ~s("#{schema_name}", public)]
       )
 
