@@ -584,5 +584,7 @@ defmodule Exoforge.ActionDispatcher do
   defp valid_type?(val, :map), do: is_map(val)
   defp valid_type?(val, :list), do: is_list(val)
   defp valid_type?(val, :atom), do: is_atom(val)
+  # `"[:string]"`: a list of something, as a native extension's manifest spells it.
+  defp valid_type?(val, "[" <> _), do: is_list(val)
   defp valid_type?(_val, _other), do: true
 end

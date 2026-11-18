@@ -723,7 +723,7 @@ defmodule Exoforge.Std.Resources do
   end
 
   defp encode_value(res, name, value) do
-    if column_type(res, name) in @json_column_types and (is_map(value) or is_list(value)) do
+    if json_type?(column_type(res, name)) and (is_map(value) or is_list(value)) do
       case Jason.encode(value) do
         {:ok, json} -> json
         # ponytail: a term that is not JSON-encodable is inspected rather than dropped;
@@ -734,6 +734,9 @@ defmodule Exoforge.Std.Resources do
       value
     end
   end
+
+  # `[:string]` and friends are lists a native extension's manifest names by element type.
+  defp json_type?(type), do: type in @json_column_types or (is_binary(type) and String.starts_with?(type, "["))
 
   defp column_type(res, name) do
     column = Enum.find(res.columns || [], &(to_string(&1.name || &1["name"]) == name))

@@ -25,7 +25,18 @@ defmodule Exoforge.Std.Database.Manager do
   end
 
   @doc "Executes a query or operation isolated to the plugin's database."
-  def execute(plugin_id, query, args \\ []) do
+  def execute(plugin_id, query, args \\ [])
+
+  def execute(plugin_id, %{action: action, table: _} = command, args) when action in [:put, :get, :all] do
+    command = Exoforge.Std.Database.JsonColumns.encode(command)
+
+    Exoforge.Std.Database.JsonColumns.decode(
+      command,
+      GenServer.call(@name, {:execute, plugin_id, command, args}, 15_000)
+    )
+  end
+
+  def execute(plugin_id, query, args) do
     GenServer.call(@name, {:execute, plugin_id, query, args}, 15_000)
   end
 

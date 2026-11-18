@@ -1284,6 +1284,19 @@ namespace Exoforge.Generated
             }
         }
 
+        // A list is `[:string]`, `[:int]`, `[:integer]` for the element types a client can name, and the plain
+        // `list` otherwise - never `map`, which a dispatcher would then refuse a list for.
+        if (type is not IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_Byte } && IsList(type, out var element))
+        {
+            return element!.SpecialType switch
+            {
+                SpecialType.System_String => "[:string]",
+                SpecialType.System_Int32 or SpecialType.System_Int16 or SpecialType.System_Byte or SpecialType.System_UInt32 => "[:int]",
+                SpecialType.System_Int64 or SpecialType.System_UInt64 => "[:integer]",
+                _ => "list",
+            };
+        }
+
         switch (type.SpecialType)
         {
             case SpecialType.System_Void:

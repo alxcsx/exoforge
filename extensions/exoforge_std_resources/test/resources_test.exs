@@ -231,6 +231,22 @@ defmodule Exoforge.Std.ResourcesTest do
     assert Enum.any?(rows, &(&1["id"] == "bool_2" and &1["color_blind"] == true))
   end
 
+  test "a list or map written through the key-value path is stored as JSON text and read back structured" do
+    assert {:ok, _} =
+             Exoforge.Std.Database.put(:config_plugin, "game_config", "kv", %{
+               "id" => "kv",
+               "settings" => %{"volume" => 3},
+               "tags" => ["a", "b"]
+             })
+
+    assert {:ok, row} = Exoforge.Std.Database.get(:config_plugin, "game_config", "kv")
+    assert row["tags"] == ["a", "b"]
+    assert row["settings"] == %{"volume" => 3}
+
+    assert {:ok, rows} = Exoforge.Std.Database.all(:config_plugin, "game_config")
+    assert Enum.find(rows, &(&1["id"] == "kv"))["tags"] == ["a", "b"]
+  end
+
   test "booleans stored as SQLite text or left at a SQL default still read back as booleans" do
     # Rows written before the fix hold the text "true"; a bare `DEFAULT false` holds the integer 0.
     assert {:ok, _} =
