@@ -226,11 +226,23 @@ public static class ExoScaffolder
 
     private static string NormalizeLineEndings(string text) => text.Replace("\r\n", "\n");
 
+    private static readonly System.Text.RegularExpressions.Regex ExoforgeSourcePattern =
+        new("<add\\b[^>]*key=\"exoforge\"[^>]*value=\"([^\"]*)\"|<add\\b[^>]*value=\"([^\"]*)\"[^>]*key=\"exoforge\"",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+
     private static bool IsStaleExoforgeNugetConfig(string path)
     {
         if (!File.Exists(path)) return false;
         string text = File.ReadAllText(path);
-        return text.Contains("key=\"exoforge\"") && !text.Contains($"\"{FeedDirectoryName}\"");
+        var match = ExoforgeSourcePattern.Match(text);
+        if (!match.Success) return false;
+
+        string value = (match.Groups[1].Success ? match.Groups[1].Value : match.Groups[2].Value).Replace('\\', '/');
+        if (value == FeedDirectoryName) return false;
+
+        return value.Contains("Library/PackageCache/", StringComparison.OrdinalIgnoreCase)
+            || value.EndsWith("/Plugins/NuGet~", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("/Plugins/NuGet~/", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

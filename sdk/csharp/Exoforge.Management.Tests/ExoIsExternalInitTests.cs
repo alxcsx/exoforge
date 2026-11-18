@@ -201,12 +201,41 @@ public class ExoIsExternalInitTests : IDisposable
     }
 
     [Fact]
-    public void IsPathUnderRoot_SupportsCaseInsensitiveWindowsComparison()
+    public void ContainsRecordOrInit_RequiresTypeDeclarationPosition()
     {
+        Assert.False(ExoIsExternalInit.ContainsRecordOrInit("if (record is null) return;"));
+        Assert.False(ExoIsExternalInit.ContainsRecordOrInit("var x = record as X;"));
+        Assert.False(ExoIsExternalInit.ContainsRecordOrInit("foreach (var x in record) {}"));
+        Assert.False(ExoIsExternalInit.ContainsRecordOrInit("if (obj.record is Y) {}"));
+        Assert.False(ExoIsExternalInit.ContainsRecordOrInit("var r = record switch { _ => 1 };"));
+
+        Assert.True(ExoIsExternalInit.ContainsRecordOrInit("public sealed record Foo(int A);"));
+        Assert.True(ExoIsExternalInit.ContainsRecordOrInit("record struct P(int X);"));
+        Assert.True(ExoIsExternalInit.ContainsRecordOrInit("[Serializable] record Bar;"));
+        Assert.True(ExoIsExternalInit.ContainsRecordOrInit("public class C { public int X { get; init; } }"));
+    }
+
+    [Fact]
+    public void FindInAssembly_OutsideAssets_ReturnsNull_WhileEnsureThrows()
+    {
+        Assert.Null(ExoIsExternalInit.FindInAssembly(_root, "../outside"));
+        Assert.Null(ExoIsExternalInit.FindInAssembly(_root, Path.Combine(_root, "Packages")));
+        Assert.False(ExoIsExternalInit.IsInsideAssets(_root, "../outside"));
+        Assert.Throws<ArgumentException>(() => ExoIsExternalInit.Ensure(_root, "../outside", out _));
+    }
+
+    [Fact]
+    public void IsPathUnderRoot_IgnoresCaseOnEveryOs()
+    {
+        string game = Path.Combine(_root, "Assets", "Game");
+        Directory.CreateDirectory(game);
+        File.WriteAllText(Path.Combine(game, "Game.asmdef"), "{}");
+        File.WriteAllText(Path.Combine(game, "IsExternalInit.cs"), ExoIsExternalInit.Source);
+
         string assets = Path.Combine(_root, "Assets");
         string mixedCaseChild = Path.Combine(_root, "assets", "Game");
-        Assert.True(ExoIsExternalInit.IsPathUnderRoot(mixedCaseChild, assets, StringComparison.OrdinalIgnoreCase));
-        Assert.False(ExoIsExternalInit.IsPathUnderRoot(mixedCaseChild, assets, StringComparison.Ordinal));
+        Assert.True(ExoIsExternalInit.IsPathUnderRoot(mixedCaseChild, assets));
+        Assert.NotNull(ExoIsExternalInit.FindInAssembly(_root, "assets/Game"));
     }
 
     [Fact]

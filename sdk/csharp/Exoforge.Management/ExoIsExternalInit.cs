@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -39,28 +38,45 @@ public static class ExoIsExternalInit
         new(@"\b(?:class|record|struct)\s+IsExternalInit\b", RegexOptions.Compiled);
 
     private static readonly Regex RecordOrInitPattern =
-        new(@"\b(?:record\s+(?:(?:class|struct)\s+)?[A-Za-z_@][A-Za-z0-9_]*|init\s*(?:;|=>|\{))", RegexOptions.Compiled);
-
-    private static StringComparison PathComparison =>
-        RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-            ? StringComparison.OrdinalIgnoreCase
-            : StringComparison.Ordinal;
+        new(
+            @"(?:(?:(?:^|[;{}\]])\s*|\b(?:public|internal|private|protected|sealed|abstract|static|partial|readonly|file|unsafe|new)\s+)record\s+(?:(?:class|struct)\s+)?(?!is\b|as\b|in\b|when\b|with\b|and\b|or\b|not\b|switch\b)[A-Za-z_@][A-Za-z0-9_]*|\binit\s*(?:;|=>|\{))",
+            RegexOptions.Compiled);
 
     /// <summary>The assets folder of the Unity project rooted at <paramref name="projectRoot"/>.</summary>
     public static string AssetsPath(string projectRoot) => Path.Combine(Path.GetFullPath(projectRoot), "Assets");
 
-    /// <summary>Absolute folder to write into: <paramref name="directory"/> (absolute or project-relative), else the default.</summary>
-    public static string ResolveDirectory(string projectRoot, string? directory = null)
+    /// <summary>Whether <paramref name="directory"/> resolves inside <see cref="AssetsPath"/>.</summary>
+    public static bool IsInsideAssets(string projectRoot, string? directory = null) =>
+        TryResolveDirectory(projectRoot, directory, out _);
+
+    /// <summary>Resolves <paramref name="directory"/> when it lies inside <see cref="AssetsPath"/>.</summary>
+    public static bool TryResolveDirectory(string projectRoot, string? directory, out string resolved)
     {
         if (string.IsNullOrWhiteSpace(directory)) directory = DefaultDirectory;
         string assetsRoot = TrimSep(Path.GetFullPath(AssetsPath(projectRoot)));
-        string resolved = Path.IsPathRooted(directory)
+        string candidate = Path.IsPathRooted(directory)
             ? Path.GetFullPath(directory)
             : Path.GetFullPath(Path.Combine(Path.GetFullPath(projectRoot), directory!.Replace('\\', '/')));
-        resolved = TrimSep(resolved);
+        candidate = TrimSep(candidate);
 
-        if (!IsPathUnderRoot(resolved, assetsRoot, PathComparison))
+        if (!IsPathUnderRoot(candidate, assetsRoot))
+        {
+            resolved = string.Empty;
+            return false;
+        }
+
+        resolved = candidate;
+        return true;
+    }
+
+    /// <summary>Absolute folder to write into: <paramref name="directory"/> (absolute or project-relative), else the default.</summary>
+    public static string ResolveDirectory(string projectRoot, string? directory = null)
+    {
+        if (!TryResolveDirectory(projectRoot, directory, out string resolved))
+        {
+            string assetsRoot = TrimSep(Path.GetFullPath(AssetsPath(projectRoot)));
             throw new ArgumentException($"Target directory '{directory}' must be inside '{assetsRoot}'.", nameof(directory));
+        }
 
         return resolved;
     }
@@ -68,7 +84,7 @@ public static class ExoIsExternalInit
     private static string TrimSep(string path) =>
         path.Length > 1 ? path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) : path;
 
-    internal static bool IsPathUnderRoot(string path, string root, StringComparison comparison)
+    internal static bool IsPathUnderRoot(string path, string root, StringComparison comparison = StringComparison.OrdinalIgnoreCase)
     {
         string normPath = TrimSep(path);
         string normRoot = TrimSep(root);
@@ -127,7 +143,9 @@ public static class ExoIsExternalInit
     /// assembly has none.
     /// </summary>
     public static string? FindInAssembly(string projectRoot, string? directory = null)
-        => ScanAssembly(AssemblyRoot(AssetsPath(projectRoot), ResolveDirectory(projectRoot, directory)));
+        => TryResolveDirectory(projectRoot, directory, out string resolved)
+            ? ScanAssembly(AssemblyRoot(AssetsPath(projectRoot), resolved))
+            : null;
 
     /// <summary>
     /// Writes <see cref="FileName"/> into <paramref name="directory"/> unless that assembly already
@@ -157,10 +175,10 @@ public static class ExoIsExternalInit
     {
         string current = TrimSep(Path.GetFullPath(directory));
         string normAssets = TrimSep(Path.GetFullPath(assets));
-        while (IsPathUnderRoot(current, normAssets, PathComparison))
+        while (IsPathUnderRoot(current, normAssets))
         {
             if (HasAsmdef(current)) return current;
-            if (string.Equals(current, normAssets, PathComparison)) break;
+            if (string.Equals(current, normAssets, StringComparison.OrdinalIgnoreCase)) break;
             string? parent = Path.GetDirectoryName(current);
             if (parent == null || parent == current) break;
             current = parent;

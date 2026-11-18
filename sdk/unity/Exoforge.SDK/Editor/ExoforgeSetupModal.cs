@@ -645,6 +645,13 @@ namespace Exoforge.Unity.Editor
 
             void RefreshStatus()
             {
+                if (!ExoforgeIsExternalInit.IsInsideAssets(_recordsTargetDir))
+                {
+                    statusLabel.text = "⚠ Target folder is outside Assets/";
+                    statusLabel.style.color = ExoforgeUIStyle.TextMuted;
+                    return;
+                }
+
                 string? present = ExoforgeIsExternalInit.PresentPath(_recordsTargetDir);
                 if (present != null)
                 {

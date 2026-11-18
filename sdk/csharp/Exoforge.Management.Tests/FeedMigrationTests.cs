@@ -41,7 +41,7 @@ public class FeedMigrationTests : IDisposable
         File.WriteAllText(Path.Combine(workspace, "nuget.config"), ExoScaffolder.NugetConfigContent);
         File.WriteAllText(
             Path.Combine(ext, "nuget.config"),
-            "<configuration><packageSources><add key=\"exoforge\" value=\"/old/cache/path\" /></packageSources></configuration>");
+            "<configuration><packageSources><add key=\"exoforge\" value=\"/proj/Library/PackageCache/com.exoforge.sdk/Editor/Plugins/NuGet~\" /></packageSources></configuration>");
 
         Assert.True(ExoScaffolder.NeedsFeedMigration(workspace));
     }
@@ -73,7 +73,7 @@ public class FeedMigrationTests : IDisposable
         File.WriteAllText(Path.Combine(workspace, "nuget.config"), "<configuration />");
         File.WriteAllText(
             Path.Combine(ext, "nuget.config"),
-            "<configuration><packageSources><add key=\"exoforge\" value=\"/old/cache/path\" /></packageSources></configuration>");
+            "<configuration><packageSources><add key=\"exoforge\" value=\"/proj/Library/PackageCache/com.exoforge.sdk/Editor/Plugins/NuGet~\" /></packageSources></configuration>");
 
         Assert.True(ExoScaffolder.NeedsFeedMigration(workspace));
 
@@ -116,5 +116,21 @@ public class FeedMigrationTests : IDisposable
             ExoScaffolder.NugetConfigContent.Replace("\n", "\r\n"));
 
         Assert.False(ExoScaffolder.NeedsFeedMigration(workspace));
+    }
+
+    [Fact]
+    public void NeedsFeedMigration_IgnoresCustomExoforgeSourceNotInPackageCacheOrPluginsNuGet()
+    {
+        string workspace = Path.Combine(_tempDir, "Exoforge");
+        string ext = Path.Combine(workspace, "extensions", "snake_game");
+        Directory.CreateDirectory(ext);
+        File.WriteAllText(Path.Combine(workspace, "nuget.config"), ExoScaffolder.NugetConfigContent);
+        string customConfig = "<configuration><packageSources><add key=\"exoforge\" value=\"https://custom.example.com/nuget/v3/index.json\" /></packageSources></configuration>";
+        string extConfigPath = Path.Combine(ext, "nuget.config");
+        File.WriteAllText(extConfigPath, customConfig);
+
+        Assert.False(ExoScaffolder.NeedsFeedMigration(workspace));
+        ExoScaffolder.EnsureBuildFeed(workspace, ext);
+        Assert.True(File.Exists(extConfigPath));
     }
 }
