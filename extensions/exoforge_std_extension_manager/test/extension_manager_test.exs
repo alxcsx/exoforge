@@ -258,4 +258,646 @@ defmodule Exoforge.Std.ExtensionManagerTest do
                )
     end
   end
+
+  defmodule StubResourceStore do
+    use Exoforge.Extension, provides: [:resource_store]
+
+    @impl true
+    defaction migrate(payload) do
+      extension = Map.get(payload, :extension) || Map.get(payload, "extension")
+
+      resources =
+        ExtensionRegistry.all_resources()
+        |> Enum.filter(fn info ->
+          extension == nil or to_string(info.extension_id) == to_string(extension)
+        end)
+
+      Enum.reduce_while(resources, {:ok, %{migrated: 0}}, fn info, {:ok, %{migrated: count}} ->
+        res = info.resource
+        cols = res.columns || []
+        names = Enum.map(cols, &String.downcase(to_string(&1[:name] || &1["name"] || "")))
+
+        if Enum.uniq(names) != names do
+          {:halt,
+           {:error,
+            {:invalid_resource,
+             %{extension: info.extension_id, table: to_string(res.name), column: List.first(names), reason: :duplicate_column}}}}
+        else
+          case to_string(res.name) do
+            "fail_migration_table" -> {:halt, {:error, :simulated_ddl_failure}}
+            "raise_migration_table" -> raise "simulated_migration_crash"
+            _ -> {:cont, {:ok, %{migrated: count + 1}}}
+          end
+        end
+      end)
+    end
+  end
+
+  describe "Scoped extension migrations and redeploy rollback" do
+    setup do
+      Exoforge.ExtensionCase.register_extension(StubResourceStore,
+        id: :test_resource_store,
+        name: "TestResourceStore",
+        version: Version.parse!("0.1.0"),
+        type: :elixir,
+        provides: [:resource_store]
+      )
+
+      on_exit(fn ->
+        File.rm_rf("priv/data/uploaded_extensions/ext_a_broken")
+        File.rm_rf("priv/data/uploaded_extensions/ext_b_healthy")
+        File.rm_rf("priv/data/uploaded_extensions/ext_redeploy_roll")
+        File.rm_rf("priv/data/uploaded_extensions/ext_redeploy_mig_fail")
+        File.rm_rf("priv/data/uploaded_extensions/ext_redeploy_boot_fail")
+        File.rm_rf("priv/data/uploaded_extensions/ext_redeploy_empty_manifest")
+        File.rm_rf("priv/data/uploaded_extensions/ext_concurrent_push")
+        File.rm_rf("priv/data/uploaded_extensions/ext_redeploy_crash")
+        File.rm_rf("priv/data/uploaded_extensions/ext_leftover_bak")
+
+        if :ets.whereis(:exo_extensions_mem) != :undefined do
+          ExtensionRegistry.unregister(:ext_a_broken)
+          ExtensionRegistry.unregister(:ext_b_healthy)
+          ExtensionRegistry.unregister(:ext_redeploy_roll)
+          ExtensionRegistry.unregister(:ext_redeploy_mig_fail)
+          ExtensionRegistry.unregister(:ext_redeploy_boot_fail)
+          ExtensionRegistry.unregister(:ext_redeploy_empty_manifest)
+          ExtensionRegistry.unregister(:ext_concurrent_push)
+          ExtensionRegistry.unregister(:ext_redeploy_crash)
+          ExtensionRegistry.unregister(:ext_leftover_bak)
+          ExtensionRegistry.unregister(:test_resource_store)
+        end
+      end)
+
+      :ok
+    end
+
+    test "broken resource in extension A does not block pushing extension B" do
+      ExtensionRegistry.register(%Exoforge.Domain.Manifest{
+        id: :ext_a_broken,
+        name: "ExtABroken",
+        version: Version.parse!("0.1.0"),
+        entry_point: "ext_a_broken",
+        type: :native,
+        services: [
+          %{
+            name: :ext_a_broken,
+            resources: [
+              %{
+                name: :broken_table,
+                primary_key: :id,
+                columns: [
+                  %{name: :id, type: :string},
+                  %{name: :Id, type: :string}
+                ]
+              }
+            ]
+          }
+        ]
+      })
+
+      manifest_b = """
+      {
+        "id": "ext_b_healthy",
+        "version": "0.1.0",
+        "type": "elixir",
+        "entry_point": "Elixir.ExtBHealthy",
+        "provides": ["ext_b_healthy"],
+        "services": [
+          {
+            "name": "ext_b_healthy",
+            "resources": [
+              {
+                "name": "healthy_table",
+                "primary_key": "id",
+                "columns": [{"name": "id", "type": "string"}]
+              }
+            ]
+          }
+        ]
+      }
+      """
+
+      elixir_b = """
+      defmodule ExtBHealthy do
+        use Exoforge.Extension, provides: [:ext_b_healthy]
+        defaction ping(_p), do: {:ok, %{ok: true}}
+      end
+      """
+
+      assert {:ok, %{extension_id: "ext_b_healthy", status: "installed"}} =
+               ActionDispatcher.dispatch(
+                 :extension_manager,
+                 :upload_extension,
+                 %{name: "ext_b_healthy", type: "elixir", elixir_code: elixir_b, manifest: manifest_b},
+                 caller_scopes: ["admin"]
+               )
+    end
+
+    test "migration error names extension and table, and failed redeploy keeps previous version registered" do
+      elixir_v1 = """
+      defmodule ExtRedeployRoll do
+        use Exoforge.Extension, provides: [:ext_redeploy_roll]
+        defaction version(_p), do: {:ok, %{v: 1}}
+      end
+      """
+
+      manifest_v1 = """
+      {
+        "id": "ext_redeploy_roll",
+        "version": "1.0.0",
+        "type": "elixir",
+        "entry_point": "Elixir.ExtRedeployRoll",
+        "provides": ["ext_redeploy_roll"],
+        "services": [
+          {
+            "name": "ext_redeploy_roll",
+            "resources": [
+              {
+                "name": "roll_table",
+                "primary_key": "id",
+                "columns": [{"name": "id", "type": "string"}]
+              }
+            ]
+          }
+        ]
+      }
+      """
+
+      assert {:ok, %{extension_id: "ext_redeploy_roll"}} =
+               ActionDispatcher.dispatch(
+                 :extension_manager,
+                 :upload_extension,
+                 %{name: "ext_redeploy_roll", type: "elixir", elixir_code: elixir_v1, manifest: manifest_v1},
+                 caller_scopes: ["admin"]
+               )
+
+      assert %{version: v1} = ExtensionRegistry.fetch_manifest(:ext_redeploy_roll)
+      assert to_string(v1) == "1.0.0"
+
+      manifest_v2_bad = """
+      {
+        "id": "ext_redeploy_roll",
+        "version": "2.0.0",
+        "type": "elixir",
+        "entry_point": "Elixir.ExtRedeployRoll",
+        "provides": ["ext_redeploy_roll"],
+        "services": [
+          {
+            "name": "ext_redeploy_roll",
+            "resources": [
+              {
+                "name": "roll_table",
+                "primary_key": "id",
+                "columns": [
+                  {"name": "id", "type": "string"},
+                  {"name": "Id", "type": "string"}
+                ]
+              }
+            ]
+          }
+        ]
+      }
+      """
+
+      assert {:error,
+              {:migration_failed,
+               {:invalid_resource, %{extension: :ext_redeploy_roll, table: "roll_table", reason: :duplicate_column}}}} =
+               ActionDispatcher.dispatch(
+                 :extension_manager,
+                 :upload_extension,
+                 %{name: "ext_redeploy_roll", type: "elixir", elixir_code: elixir_v1, manifest: manifest_v2_bad},
+                 caller_scopes: ["admin"]
+               )
+
+      assert %{version: current_version} = ExtensionRegistry.fetch_manifest(:ext_redeploy_roll)
+      assert to_string(current_version) == "1.0.0"
+      assert {:ok, %{v: 1}} = ActionDispatcher.dispatch_internal(:ext_redeploy_roll, :version, %{})
+    end
+
+    test "redeploy whose migration fails restores previous files on disk and keeps previous version running" do
+      elixir_v1 = """
+      defmodule ExtRedeployMigFail do
+        use Exoforge.Extension, provides: [:ext_redeploy_mig_fail]
+        defaction version(_p), do: {:ok, %{v: 1}}
+      end
+      """
+
+      manifest_v1 = """
+      {
+        "id": "ext_redeploy_mig_fail",
+        "version": "1.0.0",
+        "type": "elixir",
+        "entry_point": "Elixir.ExtRedeployMigFail",
+        "provides": ["ext_redeploy_mig_fail"],
+        "services": [
+          {
+            "name": "ext_redeploy_mig_fail",
+            "resources": [
+              {
+                "name": "ok_table",
+                "primary_key": "id",
+                "columns": [{"name": "id", "type": "string"}]
+              }
+            ]
+          }
+        ]
+      }
+      """
+
+      assert {:ok, %{extension_id: "ext_redeploy_mig_fail"}} =
+               ActionDispatcher.dispatch(
+                 :extension_manager,
+                 :upload_extension,
+                 %{name: "ext_redeploy_mig_fail", type: "elixir", elixir_code: elixir_v1, manifest: manifest_v1},
+                 caller_scopes: ["admin"]
+               )
+
+      elixir_v2 = """
+      defmodule ExtRedeployMigFail do
+        use Exoforge.Extension, provides: [:ext_redeploy_mig_fail]
+        defaction version(_p), do: {:ok, %{v: 2}}
+      end
+      """
+
+      manifest_v2_fail = """
+      {
+        "id": "ext_redeploy_mig_fail",
+        "version": "2.0.0",
+        "type": "elixir",
+        "entry_point": "Elixir.ExtRedeployMigFail",
+        "provides": ["ext_redeploy_mig_fail"],
+        "services": [
+          {
+            "name": "ext_redeploy_mig_fail",
+            "resources": [
+              {
+                "name": "fail_migration_table",
+                "primary_key": "id",
+                "columns": [{"name": "id", "type": "string"}]
+              }
+            ]
+          }
+        ]
+      }
+      """
+
+      assert {:error, %{error: {:migration_failed, :simulated_ddl_failure}, rollback: :restored}} =
+               ActionDispatcher.dispatch(
+                 :extension_manager,
+                 :upload_extension,
+                 %{name: "ext_redeploy_mig_fail", type: "elixir", elixir_code: elixir_v2, manifest: manifest_v2_fail},
+                 caller_scopes: ["admin"]
+               )
+
+      assert %{version: current_version} = ExtensionRegistry.fetch_manifest(:ext_redeploy_mig_fail)
+      assert to_string(current_version) == "1.0.0"
+      assert {:ok, %{v: 1}} = ActionDispatcher.dispatch_internal(:ext_redeploy_mig_fail, :version, %{})
+
+      disk_manifest =
+        "priv/data/uploaded_extensions/ext_redeploy_mig_fail/manifest.json"
+        |> File.read!()
+        |> Jason.decode!()
+
+      assert disk_manifest["version"] == "1.0.0"
+      assert File.read!("priv/data/uploaded_extensions/ext_redeploy_mig_fail/lib/ext_redeploy_mig_fail.ex") =~ "v: 1"
+      assert Path.wildcard("priv/data/uploaded_extensions/ext_redeploy_mig_fail.bak.*") == []
+    end
+
+    test "redeploy whose new boot fails restores previous files on disk and keeps previous version running" do
+      # Without the extension supervisor a boot is skipped as :ok, so a failing boot could never fail here.
+      unless Process.whereis(Exoforge.ExtensionSupervisor) do
+        start_supervised!({DynamicSupervisor, name: Exoforge.ExtensionSupervisor, strategy: :one_for_one})
+      end
+
+      elixir_v1 = """
+      defmodule ExtRedeployBootFail do
+        use Exoforge.Extension, provides: [:ext_redeploy_boot_fail]
+        defaction version(_p), do: {:ok, %{v: 1}}
+      end
+      """
+
+      manifest_v1 = """
+      {
+        "id": "ext_redeploy_boot_fail",
+        "version": "1.0.0",
+        "type": "elixir",
+        "entry_point": "Elixir.ExtRedeployBootFail",
+        "provides": ["ext_redeploy_boot_fail"]
+      }
+      """
+
+      assert {:ok, %{extension_id: "ext_redeploy_boot_fail"}} =
+               ActionDispatcher.dispatch(
+                 :extension_manager,
+                 :upload_extension,
+                 %{name: "ext_redeploy_boot_fail", type: "elixir", elixir_code: elixir_v1, manifest: manifest_v1},
+                 caller_scopes: ["admin"]
+               )
+
+      elixir_v2_crash = """
+      defmodule ExtRedeployBootFail do
+        use Exoforge.Extension, provides: [:ext_redeploy_boot_fail]
+        def on_init(_manifest), do: {:error, :boot_boom}
+        defaction version(_p), do: {:ok, %{v: 2}}
+      end
+      """
+
+      manifest_v2 = """
+      {
+        "id": "ext_redeploy_boot_fail",
+        "version": "2.0.0",
+        "type": "elixir",
+        "entry_point": "Elixir.ExtRedeployBootFail",
+        "provides": ["ext_redeploy_boot_fail"]
+      }
+      """
+
+      assert {:error, %{error: {:boot_failed, _reason}, rollback: :restored}} =
+               ActionDispatcher.dispatch(
+                 :extension_manager,
+                 :upload_extension,
+                 %{name: "ext_redeploy_boot_fail", type: "elixir", elixir_code: elixir_v2_crash, manifest: manifest_v2},
+                 caller_scopes: ["admin"]
+               )
+
+      assert %{version: current_version} = ExtensionRegistry.fetch_manifest(:ext_redeploy_boot_fail)
+      assert to_string(current_version) == "1.0.0"
+      assert {:ok, %{v: 1}} = ActionDispatcher.dispatch_internal(:ext_redeploy_boot_fail, :version, %{})
+
+      disk_manifest =
+        "priv/data/uploaded_extensions/ext_redeploy_boot_fail/manifest.json"
+        |> File.read!()
+        |> Jason.decode!()
+
+      assert disk_manifest["version"] == "1.0.0"
+      assert File.read!("priv/data/uploaded_extensions/ext_redeploy_boot_fail/lib/ext_redeploy_boot_fail.ex") =~ "v: 1"
+      assert Path.wildcard("priv/data/uploaded_extensions/ext_redeploy_boot_fail.bak.*") == []
+    end
+
+    test "redeploy whose manifest fails to load ([]) restores previous version and backup" do
+      elixir_v1 = """
+      defmodule ExtRedeployEmptyManifest do
+        use Exoforge.Extension, provides: [:ext_redeploy_empty_manifest]
+        defaction version(_p), do: {:ok, %{v: 1}}
+      end
+      """
+
+      manifest_v1 = """
+      {
+        "id": "ext_redeploy_empty_manifest",
+        "version": "1.0.0",
+        "type": "elixir",
+        "entry_point": "Elixir.ExtRedeployEmptyManifest",
+        "provides": ["ext_redeploy_empty_manifest"]
+      }
+      """
+
+      assert {:ok, %{extension_id: "ext_redeploy_empty_manifest"}} =
+               ActionDispatcher.dispatch(
+                 :extension_manager,
+                 :upload_extension,
+                 %{name: "ext_redeploy_empty_manifest", type: "elixir", elixir_code: elixir_v1, manifest: manifest_v1},
+                 caller_scopes: ["admin"]
+               )
+
+      elixir_v2 = """
+      defmodule ExtRedeployEmptyManifest do
+        use Exoforge.Extension, provides: [:ext_redeploy_empty_manifest]
+        defaction version(_p), do: {:ok, %{v: 2}}
+      end
+      """
+
+      # "{}" causes ManifestLoader.load_extensions/1 to return []
+      assert {:error, %{error: :manifest_not_loaded, rollback: :restored}} =
+               ActionDispatcher.dispatch(
+                 :extension_manager,
+                 :upload_extension,
+                 %{name: "ext_redeploy_empty_manifest", type: "elixir", elixir_code: elixir_v2, manifest: "{}"},
+                 caller_scopes: ["admin"]
+               )
+
+      assert %{version: current_version} = ExtensionRegistry.fetch_manifest(:ext_redeploy_empty_manifest)
+      assert to_string(current_version) == "1.0.0"
+      assert {:ok, %{v: 1}} = ActionDispatcher.dispatch_internal(:ext_redeploy_empty_manifest, :version, %{})
+      assert Path.wildcard("priv/data/uploaded_extensions/ext_redeploy_empty_manifest.bak.*") == []
+    end
+
+    test "two concurrent pushes of the same extension serialize cleanly without stale restore" do
+      push = fn ver, v_num ->
+        code = """
+        defmodule ExtConcurrentPush do
+          use Exoforge.Extension, provides: [:ext_concurrent_push]
+          defaction version(_p), do: {:ok, %{v: #{v_num}}}
+        end
+        """
+
+        manifest = """
+        {
+          "id": "ext_concurrent_push",
+          "version": "#{ver}",
+          "type": "elixir",
+          "entry_point": "Elixir.ExtConcurrentPush",
+          "provides": ["ext_concurrent_push"]
+        }
+        """
+
+        ActionDispatcher.dispatch(
+          :extension_manager,
+          :upload_extension,
+          %{name: "ext_concurrent_push", type: "elixir", elixir_code: code, manifest: manifest},
+          caller_scopes: ["admin"]
+        )
+      end
+
+      t1 = Task.async(fn -> push.("1.0.0", 1) end)
+      t2 = Task.async(fn -> push.("2.0.0", 2) end)
+
+      assert {:ok, %{status: "installed"}} = Task.await(t1, 10_000)
+      assert {:ok, %{status: "installed"}} = Task.await(t2, 10_000)
+
+      # Both completed serially; the active manifest and disk version must agree (no stale restore).
+      manifest = ExtensionRegistry.fetch_manifest(:ext_concurrent_push)
+      assert manifest != nil
+      disk_ver =
+        "priv/data/uploaded_extensions/ext_concurrent_push/manifest.json"
+        |> File.read!()
+        |> Jason.decode!()
+        |> Map.fetch!("version")
+
+      assert to_string(manifest.version) == disk_ver
+      assert Path.wildcard("priv/data/uploaded_extensions/ext_concurrent_push.bak.*") == []
+    end
+
+    test "install that raises mid-way rolls back and leaves previous version running" do
+      elixir_v1 = """
+      defmodule ExtRedeployCrash do
+        use Exoforge.Extension, provides: [:ext_redeploy_crash]
+        defaction version(_p), do: {:ok, %{v: 1}}
+      end
+      """
+
+      manifest_v1 = """
+      {
+        "id": "ext_redeploy_crash",
+        "version": "1.0.0",
+        "type": "elixir",
+        "entry_point": "Elixir.ExtRedeployCrash",
+        "provides": ["ext_redeploy_crash"]
+      }
+      """
+
+      assert {:ok, %{extension_id: "ext_redeploy_crash"}} =
+               ActionDispatcher.dispatch(
+                 :extension_manager,
+                 :upload_extension,
+                 %{name: "ext_redeploy_crash", type: "elixir", elixir_code: elixir_v1, manifest: manifest_v1},
+                 caller_scopes: ["admin"]
+               )
+
+      elixir_v2 = """
+      defmodule ExtRedeployCrash do
+        use Exoforge.Extension, provides: [:ext_redeploy_crash]
+        defaction version(_p), do: {:ok, %{v: 2}}
+      end
+      """
+
+      target_dir = "priv/data/uploaded_extensions/ext_redeploy_crash"
+      previous = ExtensionRegistry.fetch_manifest(:ext_redeploy_crash)
+      backup_dir = Exoforge.Std.ExtensionManager.backup_existing_dir(target_dir)
+      File.write!(Path.join(target_dir, "manifest.json"), "{half_installed")
+
+      assert {:error, %{error: {:exception, "boom_mid_install"}, rollback: :restored}} =
+               Exoforge.Std.ExtensionManager.install_with_rollback(
+                 target_dir,
+                 "ext_redeploy_crash",
+                 previous,
+                 backup_dir,
+                 fn -> raise "boom_mid_install" end
+               )
+
+      assert %{version: current_version} = ExtensionRegistry.fetch_manifest(:ext_redeploy_crash)
+      assert to_string(current_version) == "1.0.0"
+      assert {:ok, %{v: 1}} = ActionDispatcher.dispatch_internal(:ext_redeploy_crash, :version, %{})
+      assert Path.wildcard("priv/data/uploaded_extensions/ext_redeploy_crash.bak.*") == []
+    end
+
+    test "Serializer.init recovers a leftover backup directory on disk" do
+      base = "priv/data/uploaded_extensions"
+      target_dir = Path.join(base, "ext_leftover_bak")
+      backup_dir = Path.join(base, "ext_leftover_bak.bak.999")
+      File.rm_rf(target_dir)
+      File.rm_rf(backup_dir)
+      File.mkdir_p!(Path.join(target_dir, "lib"))
+      File.mkdir_p!(Path.join(backup_dir, "lib"))
+
+      File.write!(
+        Path.join(backup_dir, "lib/ext_leftover_bak.ex"),
+        """
+        defmodule ExtLeftoverBak do
+          use Exoforge.Extension, provides: [:ext_leftover_bak]
+          defaction version(_p), do: {:ok, %{v: 1}}
+        end
+        """
+      )
+
+      File.write!(
+        Path.join(backup_dir, "manifest.json"),
+        """
+        {
+          "id": "ext_leftover_bak",
+          "version": "1.0.0",
+          "type": "elixir",
+          "entry_point": "Elixir.ExtLeftoverBak",
+          "provides": ["ext_leftover_bak"]
+        }
+        """
+      )
+
+      # Simulate half-installed v2
+      File.write!(Path.join(target_dir, "manifest.json"), "{bad")
+
+      if pid = Process.whereis(Exoforge.Std.ExtensionManager.Serializer) do
+        GenServer.stop(pid, :normal)
+      end
+
+      case Exoforge.Std.ExtensionManager.Serializer.start_link([]) do
+        {:ok, _pid} -> :ok
+        {:error, {:already_started, _pid}} -> :ok
+      end
+
+      # Recovery runs in handle_continue; a call after it returns only once it has finished.
+      :sys.get_state(Exoforge.Std.ExtensionManager.Serializer)
+      refute File.dir?(backup_dir)
+      assert %{version: v} = ExtensionRegistry.fetch_manifest(:ext_leftover_bak)
+      assert to_string(v) == "1.0.0"
+      assert {:ok, %{v: 1}} = ActionDispatcher.dispatch_internal(:ext_leftover_bak, :version, %{})
+    end
+  
+    test "a committed install's .done backup is deleted, never restored over it" do
+      base = "priv/data/uploaded_extensions"
+      target_dir = Path.join(base, "ext_done_bak")
+      done_dir = Path.join(base, "ext_done_bak.done.7")
+      File.rm_rf(target_dir)
+      File.rm_rf(done_dir)
+      File.mkdir_p!(target_dir)
+      File.write!(Path.join(target_dir, "marker"), "new")
+      File.mkdir_p!(done_dir)
+      File.write!(Path.join(done_dir, "marker"), "old")
+
+      assert :ok = Exoforge.Std.ExtensionManager.recover_leftover_backups()
+
+      refute File.dir?(done_dir)
+      assert File.read!(Path.join(target_dir, "marker")) == "new"
+      File.rm_rf(target_dir)
+    end
+
+    test "a backup whose dependencies are not up yet is restored on disk but not booted" do
+      base = "priv/data/uploaded_extensions"
+      target_dir = Path.join(base, "ext_dep_wait")
+      backup_dir = Path.join(base, "ext_dep_wait.bak.5")
+      File.rm_rf(target_dir)
+      File.rm_rf(backup_dir)
+      File.mkdir_p!(Path.join(backup_dir, "lib"))
+
+      File.write!(Path.join(backup_dir, "lib/ext_dep_wait.ex"), """
+      defmodule ExtDepWait do
+        use Exoforge.Extension, provides: [:ext_dep_wait]
+        defaction version(_p), do: {:ok, %{v: 1}}
+      end
+      """)
+
+      File.write!(Path.join(backup_dir, "manifest.json"), """
+      {"id": "ext_dep_wait", "type": "elixir", "version": "1.0.0", "context": "global",
+       "entry_point": "Elixir.ExtDepWait", "provides": ["ext_dep_wait"],
+       "dependencies": ["service_that_is_not_up"]}
+      """)
+
+      assert :ok = Exoforge.Std.ExtensionManager.recover_leftover_backups()
+
+      refute File.dir?(backup_dir)
+      assert File.dir?(target_dir)
+      assert ExtensionRegistry.fetch_manifest(:ext_dep_wait)
+      File.rm_rf(target_dir)
+      ExtensionRegistry.unregister(:ext_dep_wait)
+    end
+
+    test "a recovery that fails does not take the Serializer down" do
+      base = "priv/data/uploaded_extensions"
+      # A backup "directory" that is a regular file under a .bak name cannot be restored.
+      File.mkdir_p!(base)
+      broken = Path.join(base, "ext_broken_bak.bak.3")
+      File.rm_rf(broken)
+      File.mkdir_p!(broken)
+      File.chmod!(broken, 0o000)
+
+      if pid = Process.whereis(Exoforge.Std.ExtensionManager.Serializer), do: GenServer.stop(pid, :normal)
+      {:ok, pid} = Exoforge.Std.ExtensionManager.Serializer.start_link([])
+      :sys.get_state(pid)
+      assert Process.alive?(pid)
+
+      File.chmod!(broken, 0o755)
+      File.rm_rf(broken)
+      File.rm_rf(Path.join(base, "ext_broken_bak"))
+    end
+  end
 end

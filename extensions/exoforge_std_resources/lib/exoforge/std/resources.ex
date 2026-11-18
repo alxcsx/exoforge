@@ -53,30 +53,48 @@ defmodule Exoforge.Std.Resources do
 
   ## ---- MIGRATIONS ----
 
-  @doc "Ensures tables exist for every store-managed resource (additive only)."
-  def run_migrations(target \\ nil) do
+  def run_migrations(target \\ nil, extension \\ nil) do
     ensure_cache()
 
     resources =
       ExtensionRegistry.all_resources()
       |> Enum.filter(fn info ->
-        target == nil or to_string(info.resource.name) == to_string(target)
+        (target == nil or to_string(info.resource.name) == to_string(target)) and
+          (extension == nil or to_string(info.extension_id) == to_string(extension) or
+             to_string(info.plugin_id) == to_string(extension))
       end)
 
-    Enum.reduce_while(resources, {:ok, 0}, fn info, {:ok, acc} ->
-      case migrate_resource(info) do
-        :ok -> {:cont, {:ok, acc + 1}}
-        :skip -> {:cont, {:ok, acc}}
-        {:error, reason} -> {:halt, {:error, reason}}
+    with :ok <- validate_resources(resources) do
+      Enum.reduce_while(resources, {:ok, 0}, fn info, {:ok, acc} ->
+        case migrate_resource(info) do
+          :ok -> {:cont, {:ok, acc + 1}}
+          :skip -> {:cont, {:ok, acc}}
+          {:error, reason} -> {:halt, {:error, reason}}
+        end
+      end)
+      |> case do
+        {:ok, count} -> count
+        {:error, reason} -> {:error, reason}
       end
-    end)
-    |> case do
-      {:ok, count} -> count
-      {:error, reason} -> {:error, reason}
     end
   end
 
-  defp migrate_resource(%{plugin_id: pid, resource: res}) do
+  defp validate_resources(resources) do
+    Enum.reduce_while(resources, :ok, fn %{resource: res} = info, :ok ->
+      case table_source(res) do
+        nil ->
+          {:cont, :ok}
+
+        table ->
+          case validate_resource(info, table, res) do
+            :ok -> {:cont, :ok}
+            {:error, _} = err -> {:halt, err}
+          end
+      end
+    end)
+  end
+
+  defp migrate_resource(%{plugin_id: pid, resource: res} = info) do
     case table_source(res) do
       nil ->
         :skip
@@ -84,15 +102,21 @@ defmodule Exoforge.Std.Resources do
       table ->
         key = {pid, table}
 
-        case db(pid, "CREATE TABLE IF NOT EXISTS #{table} (#{column_defs(res)})") do
-          {:ok, _} ->
-            repair_primary_key(pid, table, res)
-            reconcile_columns(pid, table, res)
-            mark_migrated(key)
-            :ok
+        case validate_resource(info, table, res) do
+          {:error, _} = err ->
+            err
 
-          {:error, reason} ->
-            {:error, reason}
+          :ok ->
+            case db(pid, "CREATE TABLE IF NOT EXISTS #{table} (#{column_defs(res)})") do
+              {:ok, _} ->
+                repair_primary_key(pid, table, res)
+                reconcile_columns(pid, table, res)
+                mark_migrated(key)
+                :ok
+
+              {:error, reason} ->
+                {:error, {:migration_failed, %{extension: info.extension_id, table: table, reason: reason}}}
+            end
         end
     end
   end
@@ -105,9 +129,14 @@ defmodule Exoforge.Std.Resources do
   # A UNIQUE INDEX satisfies a column-targeted `ON CONFLICT` exactly as a PRIMARY KEY does, so the
   # data does not have to move: one statement, no rows copied, nothing to recover if it fails.
   defp repair_primary_key(pid, table, res) do
-    pk = to_string(res.primary_key || :id)
+    pk = String.downcase(to_string(res.primary_key || :id))
 
-    case db(pid, "CREATE UNIQUE INDEX IF NOT EXISTS #{table}_#{pk}_key ON #{table} (#{pk})") do
+    pk_col =
+      existing_columns(pid, table)
+      |> Enum.find(&(String.downcase(to_string(&1)) == pk))
+      |> Kernel.||(pk)
+
+    case db(pid, "CREATE UNIQUE INDEX IF NOT EXISTS #{table}_#{pk}_key ON #{table} (#{pk_col})") do
       {:ok, _} ->
         :ok
 
@@ -134,10 +163,12 @@ defmodule Exoforge.Std.Resources do
   # Renames and type changes still need an explicit migration (documented ceiling), and SQLite cannot
   # add a CHECK to an existing table, so a column that gains choices keeps them on new tables only.
   defp reconcile_columns(pid, table, res) do
-    existing = existing_columns(pid, table)
+    existing =
+      existing_columns(pid, table)
+      |> Enum.map(&String.downcase(to_string(&1)))
 
     Enum.each(res.columns || [], fn column ->
-      name = to_string(column.name)
+      name = String.downcase(to_string(column.name))
 
       unless name in existing do
         _ =
@@ -158,28 +189,53 @@ defmodule Exoforge.Std.Resources do
   end
 
   defp column_defs(res) do
-    pk = to_string(res.primary_key || :id)
-    pk_col = Enum.find(res.columns || [], &(to_string(&1.name) == pk))
+    pk = String.downcase(to_string(res.primary_key || :id))
+    pk_col = Enum.find(res.columns || [], &(String.downcase(to_string(&1.name)) == pk))
     pk_type = if pk_col, do: sql_type(pk_col.type), else: "text"
 
     cols =
       (res.columns || [])
-      |> Enum.reject(&(to_string(&1.name) == pk))
-      |> Enum.map(fn c -> "#{c.name} #{sql_type(c.type)}#{default_clause(c)}#{choices_clause(c)}" end)
+      |> Enum.reject(&(String.downcase(to_string(&1.name)) == pk))
+      |> Enum.map(fn c ->
+        name = String.downcase(to_string(c[:name] || c["name"] || c.name))
+        "#{name} #{sql_type(c.type)}#{default_clause(c)}#{choices_clause(c, name)}"
+      end)
 
     Enum.join(["#{pk} #{pk_type} PRIMARY KEY" | cols], ", ")
   end
 
   # A column that declares its choices is a closed set, so the database enforces it too - anything
   # writing SQL directly is held to the same schema as the API.
-  defp choices_clause(column) do
+  defp choices_clause(column, name) do
     choices = column[:choices] || column["choices"]
+    colname = name || String.downcase(to_string(column[:name] || column["name"]))
 
     if is_list(choices) and choices != [] do
       values = Enum.map_join(choices, ", ", &"'#{&1}'")
-      " CHECK (#{column[:name] || column["name"]} IN (#{values}))"
+      " CHECK (#{colname} IN (#{values}))"
     else
       ""
+    end
+  end
+
+  defp validate_resource(info, table, res) do
+    pk = String.downcase(to_string(res.primary_key || :id))
+    pk_down = String.downcase(pk)
+    cols = res.columns || []
+    names = Enum.map(cols, fn c -> to_string(c[:name] || c["name"] || c.name) end)
+    down_names = Enum.map(names, &String.downcase/1)
+
+    cond do
+      pk_down != "id" and pk_down not in down_names ->
+        {:error, {:invalid_resource, %{extension: info.extension_id, table: table, column: pk, reason: :primary_key_not_found}}}
+
+      Enum.uniq(down_names) != down_names ->
+        dup = down_names -- Enum.uniq(down_names)
+        col = Enum.find(names, fn n -> String.downcase(n) == List.first(dup) end)
+        {:error, {:invalid_resource, %{extension: info.extension_id, table: table, column: col, reason: :duplicate_column}}}
+
+      true ->
+        :ok
     end
   end
 
@@ -202,8 +258,9 @@ defmodule Exoforge.Std.Resources do
   @impl true
   defaction migrate(payload), scope: Exoforge.Auth.Roles.studio() do
     target = param(payload, :resource)
+    extension = param(payload, :extension)
 
-    case run_migrations(target) do
+    case run_migrations(target, extension) do
       {:error, reason} -> {:error, reason}
       count when is_integer(count) -> {:ok, %{migrated: count}}
     end
@@ -236,7 +293,7 @@ defmodule Exoforge.Std.Resources do
       ensure_migrated(info)
       res = info.resource
       table = table_for(res)
-      pk = to_string(res.primary_key || :id)
+      pk = String.downcase(to_string(res.primary_key || :id))
 
       target_id =
         if is_nil(id) and is_singleton?(res) do
@@ -333,7 +390,7 @@ defmodule Exoforge.Std.Resources do
       ensure_migrated(info)
       res = info.resource
       table = table_for(res)
-      pk = to_string(res.primary_key || :id)
+      pk = String.downcase(to_string(res.primary_key || :id))
 
       case db(info.plugin_id, "DELETE FROM #{table} WHERE #{pk} = $1", [id]) do
         {:ok, _} -> {:ok, %{deleted: true}}
@@ -379,7 +436,7 @@ defmodule Exoforge.Std.Resources do
         kv_write(info, Map.new(pairs))
       else
         table = table_for(res)
-        pk = to_string(res.primary_key || :id)
+        pk = String.downcase(to_string(res.primary_key || :id))
         {names, values} = Enum.unzip(pairs)
         placeholders = Enum.map_join(1..length(names), ", ", &"$#{&1}")
 
@@ -407,7 +464,7 @@ defmodule Exoforge.Std.Resources do
   defp kv_clear(%{plugin_id: pid, resource: res}) do
     db = Module.concat([Exoforge, Std, Database])
     table = to_string(res.name)
-    pk = to_string(res.primary_key || :id)
+    pk = String.downcase(to_string(res.primary_key || :id))
 
     case apply(db, :all, [pid, table]) do
       {:ok, rows} when is_list(rows) ->
@@ -499,7 +556,7 @@ defmodule Exoforge.Std.Resources do
   defp kv_write(%{plugin_id: pid, resource: res}, attrs) do
     db = Module.concat([Exoforge, Std, Database])
     table = to_string(res.name)
-    pk = to_string(res.primary_key || :id)
+    pk = String.downcase(to_string(res.primary_key || :id))
 
     case attrs[pk] do
       nil -> {:error, :missing_primary_key}
@@ -534,7 +591,7 @@ defmodule Exoforge.Std.Resources do
         # primary key twice - once as the resource declares it and once as the store's own string.
         # Dropped here rather than in the adapter: the key is how the row is stored, and the resource
         # is what decides whether it is a field.
-        pk = to_string(res.primary_key || :id)
+        pk = String.downcase(to_string(res.primary_key || :id))
         rows = Enum.map(rows, &drop_stored_key(&1, pk))
 
         {:ok, %{rows: Enum.slice(rows, offset, limit), total: length(rows)}}
@@ -892,7 +949,7 @@ defmodule Exoforge.Std.Resources do
 
   defp create_default_singleton(info, target_id) do
     res = info.resource
-    pk = to_string(res.primary_key || :id)
+    pk = String.downcase(to_string(res.primary_key || :id))
     key_val = target_id || singleton_key(res)
 
     default_attrs =

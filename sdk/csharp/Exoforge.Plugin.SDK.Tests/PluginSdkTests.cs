@@ -360,6 +360,9 @@ public class PluginSdkTests
         Assert.Equal("submit_score", ExoNaming.ToSnakeCase("SubmitScore"));
         Assert.Equal("get_leaderboard", ExoNaming.ToSnakeCase("GetLeaderboard"));
         Assert.Equal("snake_length", ExoNaming.ToSnakeCase("snakeLength"));
+        Assert.Equal("id", ExoNaming.ToSnakeCase("ID"));
+        Assert.Equal("player_id", ExoNaming.ToSnakeCase("PlayerID"));
+        Assert.Equal("http_code", ExoNaming.ToSnakeCase("HTTPCode"));
     }
 
     [Fact]

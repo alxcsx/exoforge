@@ -136,6 +136,14 @@ namespace Exoforge.Plugin.SDK
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
+    private static readonly DiagnosticDescriptor InvalidResourceColumn = new(
+        "EXO005",
+        "Invalid resource column",
+        "{0}",
+        "Exoforge",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var servicesFromService = context.SyntaxProvider
@@ -254,7 +262,8 @@ namespace Exoforge.Plugin.SDK
         string ContractBinding,
         List<ServiceModel> Models,
         List<InputTypeModel> InputTypes,
-        List<string> WebhookValidationErrors);
+        List<string> WebhookValidationErrors,
+        List<string> ResourceValidationErrors);
 
 
     // ---- service extraction ----
@@ -423,6 +432,7 @@ namespace Exoforge.Plugin.SDK
         }
 
         var primary = services[0];
+        var resourceValidationErrors = new List<string>();
 
         // Resources: from [ExoService(Resources = ...)] and from [ExoResource] on the declaring type -
         // both belong to the service that declared them. A standalone [ExoResource] record elsewhere
@@ -433,7 +443,7 @@ namespace Exoforge.Plugin.SDK
 
             foreach (var resType in NamedTypeArray(attr, "Resources"))
             {
-                AddResource(owner.Resources, ResourceFromType(resType, ActionNames(owner)));
+                AddResource(owner.Resources, ResourceFromType(resType, ActionNames(owner), resourceValidationErrors));
             }
         }
 
@@ -444,19 +454,27 @@ namespace Exoforge.Plugin.SDK
             var target = NamedType(attr, "ResourceType");
             if (target is not null)
             {
-                AddResource(primary.Resources, ResourceFromType(target, ActionNames(primary)));
+                AddResource(primary.Resources, ResourceFromType(target, ActionNames(primary), resourceValidationErrors));
                 continue;
             }
 
-            var columns = ColumnsFor(declared, attr, out _);
+            var columns = ColumnsFor(declared, attr, out var declaredPk, resourceValidationErrors);
             if (columns.Count == 0) continue;
+
+            if (string.IsNullOrEmpty(declaredPk))
+            {
+                var candidate = columns.FirstOrDefault(c =>
+                    string.Equals(c.Name, "id", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(c.Name, "key", StringComparison.OrdinalIgnoreCase));
+                declaredPk = candidate?.Name ?? "id";
+            }
 
             bool isSingleton = IsSingletonAttribute(attr) || NamedBool(attr, "Singleton");
             string resName = NamedString(attr, "Name") ?? PositionalString(attr, 0) ?? ToSnakeCase(declared.Name);
             AddResource(primary.Resources, new ResourceModel(
                 resName,
                 NamedString(attr, "Source") ?? resName,
-                ToSnakeCase(NamedString(attr, "PrimaryKey") ?? "id"),
+                ToSnakeCase(declaredPk!),
                 NamedStringArray(attr, "DrawerTabs") ?? new[] { "overview" },
                 ActionNames(primary),
                 columns,
@@ -473,7 +491,7 @@ namespace Exoforge.Plugin.SDK
             var resAttr = FindResourceAttribute(candidate.GetAttributes());
             if (resAttr is not null)
             {
-                AddResource(primary.Resources, ResourceFromType(candidate, ActionNames(primary)));
+                AddResource(primary.Resources, ResourceFromType(candidate, ActionNames(primary), resourceValidationErrors));
             }
 
             foreach (var attr in candidate.GetAttributes())
@@ -687,7 +705,8 @@ namespace Exoforge.Plugin.SDK
             binding,
             services,
             inputTypes,
-            webhookValidationErrors);
+            webhookValidationErrors,
+            resourceValidationErrors);
     }
 
     private static ImmutableArray<ServiceEmit> ExtractReferencedContracts(Compilation compilation, CancellationToken ct)
@@ -873,7 +892,7 @@ namespace Exoforge.Plugin.SDK
 
     // ---- resource extraction ----
 
-    private static ResourceModel? ResourceFromType(ITypeSymbol symbol, List<string> serviceActions)
+    private static ResourceModel? ResourceFromType(ITypeSymbol symbol, List<string> serviceActions, List<string>? diagnostics)
     {
         if (symbol is not INamedTypeSymbol resourceType) return null;
 
@@ -887,7 +906,7 @@ namespace Exoforge.Plugin.SDK
 
         string resName = NamedString(resAttr, "Name") ?? PositionalString(resAttr, 0) ?? ToSnakeCase(typeName);
 
-        var columns = ColumnsFor(resourceType, resAttr, out var primaryKey);
+        var columns = ColumnsFor(resourceType, resAttr, out var primaryKey, diagnostics);
         if (string.IsNullOrEmpty(primaryKey))
         {
             var candidate = columns.FirstOrDefault(c =>
@@ -910,11 +929,13 @@ namespace Exoforge.Plugin.SDK
             NamedBool(resAttr, "AllowPlayerRead"));
     }
 
-    private static List<ColumnModel> ColumnsFor(INamedTypeSymbol type, AttributeData? resourceAttr, out string? primaryKey)
+    private static List<ColumnModel> ColumnsFor(INamedTypeSymbol type, AttributeData? resourceAttr, out string? primaryKey, List<string>? diagnostics)
     {
         var columns = new List<ColumnModel>();
         var rawPk = NamedString(resourceAttr, "PrimaryKey");
         primaryKey = rawPk is not null ? ToSnakeCase(rawPk) : null;
+
+        var seen = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var member in type.GetMembers())
         {
@@ -928,7 +949,24 @@ namespace Exoforge.Plugin.SDK
             // Without [ExoColumn] the property still counts when the record carries [ExoResource].
             if (colAttr is null && resourceAttr is null) continue;
 
-            string colName = NamedString(colAttr, "Name") ?? PositionalString(colAttr, 0) ?? ToSnakeCase(property.Name);
+            string? explicitName = NamedString(colAttr, "Name") ?? PositionalString(colAttr, 0);
+            string colName = explicitName ?? ToSnakeCase(property.Name);
+            if (explicitName is not null)
+            {
+                colName = colName.ToLowerInvariant();
+                if (!IsSnakeIdentifier(colName))
+                {
+                    diagnostics?.Add($"Resource '{type.Name}': property '{property.Name}' declares column name '{explicitName}' which is not a lowercase snake identifier.");
+                }
+            }
+            if (seen.TryGetValue(colName, out var other))
+            {
+                diagnostics?.Add($"Resource '{type.Name}': properties '{other}' and '{property.Name}' map to the same column '{colName}'.");
+            }
+            else
+            {
+                seen[colName] = property.Name;
+            }
 
             var fileRefAttr = FindAttribute(property.GetAttributes(), "ExoFileReferenceAttribute") ??
                               FindAttribute(property.GetAttributes(), "FileReferenceAttribute");
@@ -983,8 +1021,21 @@ namespace Exoforge.Plugin.SDK
             if (NamedBool(colAttr, "PrimaryKey") && string.IsNullOrEmpty(primaryKey)) primaryKey = colName;
         }
 
+        string? pkCheck = primaryKey;
+        if (!string.IsNullOrEmpty(pkCheck) &&
+            !string.Equals(pkCheck, "id", StringComparison.OrdinalIgnoreCase) &&
+            !columns.Any(c => string.Equals(c.Name, pkCheck, StringComparison.OrdinalIgnoreCase)))
+        {
+            diagnostics?.Add($"Resource '{type.Name}': PrimaryKey '{primaryKey}' names no column.");
+        }
+
         return columns;
     }
+
+
+    private static bool IsSnakeIdentifier(string name) =>
+        !string.IsNullOrEmpty(name) && name == name.ToLowerInvariant() &&
+        System.Text.RegularExpressions.Regex.IsMatch(name, "^[a-z][a-z0-9_]*$");
 
     // ---- output ----
 
@@ -1016,6 +1067,11 @@ namespace Exoforge.Plugin.SDK
             {
                 spc.ReportDiagnostic(Diagnostic.Create(InvalidWebhookSignature, Location.None, methodName));
             }
+        }
+
+        foreach (var error in ordered.SelectMany(e => e.ResourceValidationErrors).Distinct(StringComparer.Ordinal))
+        {
+            spc.ReportDiagnostic(Diagnostic.Create(InvalidResourceColumn, Location.None, error));
         }
 
         var cases = new StringBuilder();
@@ -1335,14 +1391,28 @@ namespace Exoforge.Generated
                named.ContainingNamespace?.ToDisplayString() == "System.Threading.Tasks";
     }
 
-    private static string ToSnakeCase(string name)
+    internal static string ToSnakeCase(string name)
     {
+        if (string.IsNullOrEmpty(name)) return name;
+
         var sb = new StringBuilder(name.Length + 4);
 
         for (int i = 0; i < name.Length; i++)
         {
-            if (char.IsUpper(name[i]) && i > 0) sb.Append('_');
-            sb.Append(char.ToLowerInvariant(name[i]));
+            char c = name[i];
+            if (char.IsUpper(c) && i > 0)
+            {
+                char prev = name[i - 1];
+                bool prevLower = char.IsLower(prev);
+                bool nextLower = i + 1 < name.Length && char.IsLower(name[i + 1]);
+                bool prevUpper = char.IsUpper(prev);
+                if (prevLower || (prevUpper && nextLower))
+                {
+                    sb.Append('_');
+                }
+            }
+
+            sb.Append(char.ToLowerInvariant(c));
         }
 
         return sb.ToString();

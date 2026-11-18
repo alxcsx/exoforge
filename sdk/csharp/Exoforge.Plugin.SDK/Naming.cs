@@ -15,12 +15,20 @@ public static class ExoNaming
 
         for (int i = 0; i < name.Length; i++)
         {
-            if (char.IsUpper(name[i]) && i > 0)
+            char c = name[i];
+            if (char.IsUpper(c) && i > 0)
             {
-                sb.Append('_');
+                char prev = name[i - 1];
+                bool prevLower = char.IsLower(prev);
+                bool nextLower = i + 1 < name.Length && char.IsLower(name[i + 1]);
+                bool prevUpper = char.IsUpper(prev);
+                if (prevLower || (prevUpper && nextLower))
+                {
+                    sb.Append('_');
+                }
             }
 
-            sb.Append(char.ToLowerInvariant(name[i]));
+            sb.Append(char.ToLowerInvariant(c));
         }
 
         return sb.ToString();

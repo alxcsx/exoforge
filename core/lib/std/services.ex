@@ -734,7 +734,7 @@ defmodule Exoforge.Std.Services do
     @doc "Creates/updates the tables backing all declared resources (additive migrations)."
     action :migrate do
       scope(:studio)
-      params(resource: [type: :string, optional: true])
+      params(resource: [type: :string, optional: true], extension: [type: :string, optional: true])
       returns(migrated: :integer)
     end
 
