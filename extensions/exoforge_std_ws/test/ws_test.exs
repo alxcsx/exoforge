@@ -481,4 +481,55 @@ defmodule Exoforge.Std.WsTest do
       assert {:ok, ^state} = Exoforge.Std.Ws.SocketHandler.handle_info(:some_other_message, state)
     end
   end
+
+  describe "connect-time ?token= authentication" do
+    test "connect without token stays anonymous" do
+      assert {:ok, state} = SocketHandler.init([])
+      refute Map.has_key?(state, :auth)
+
+      assert {:ok, state_nil} = SocketHandler.init(token: nil)
+      refute Map.has_key?(state_nil, :auth)
+
+      assert {:ok, state_empty} = SocketHandler.init(token: "")
+      refute Map.has_key?(state_empty, :auth)
+    end
+
+    test "connect with invalid ?token= refuses with invalid_token and rid" do
+      assert {:stop, :normal, {4001, "invalid_token"}, [{:text, json}], _state} =
+               SocketHandler.init(token: "not_a_real_token", rid: "r_ws_bad_tok")
+
+      frame = Jason.decode!(json)
+      assert frame["type"] == "auth_result"
+      assert frame["status"] == "error"
+      assert frame["rid"] == "r_ws_bad_tok"
+      assert frame["error"]["code"] == "invalid_token"
+      assert is_binary(frame["error"]["message"])
+      assert frame["error"]["details"] == %{}
+    end
+
+    test "connect with expired ?token= refuses with token_expired and rid" do
+      Application.put_env(:exoforge, :auth, access_token_ttl: -1)
+      on_exit(fn -> Application.delete_env(:exoforge, :auth) end)
+
+      _ = Exoforge.Std.Auth.upsert_account("exp_ws", "exp_ws@exoforge.test", "secret123", ["player"])
+      {:ok, %{token: expired_token}} =
+        Exoforge.ActionDispatcher.dispatch(:auth, :login, %{
+          email: "exp_ws@exoforge.test",
+          password: "secret123"
+        })
+
+      Application.put_env(:exoforge, :auth, [])
+
+      assert {:stop, :normal, {4001, "token_expired"}, [{:text, json}], _state} =
+               SocketHandler.init(token: expired_token, rid: "r_ws_exp_tok")
+
+      frame = Jason.decode!(json)
+      assert frame["type"] == "auth_result"
+      assert frame["status"] == "error"
+      assert frame["rid"] == "r_ws_exp_tok"
+      assert frame["error"]["code"] == "token_expired"
+      assert is_binary(frame["error"]["message"])
+      assert frame["error"]["details"] == %{}
+    end
+  end
 end

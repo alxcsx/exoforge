@@ -35,7 +35,11 @@ defmodule Exoforge.Std.Ws.Router do
         |> Exoforge.Auth.Request.query()
 
       conn
-      |> WebSockAdapter.upgrade(Exoforge.Std.Ws.SocketHandler, [token: token], timeout: 60_000)
+      |> WebSockAdapter.upgrade(
+        Exoforge.Std.Ws.SocketHandler,
+        [token: token, rid: conn.assigns[:exoforge_rid]],
+        timeout: 60_000
+      )
       |> halt()
     else
       send_upgrade_required(conn)

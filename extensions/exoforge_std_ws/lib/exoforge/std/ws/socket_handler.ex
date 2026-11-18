@@ -45,17 +45,29 @@ defmodule Exoforge.Std.Ws.SocketHandler do
     }
 
     # A token supplied on the /ws upgrade (?token=...) authenticates the socket
-    # up front; otherwise the client sends a {type: "auth", token} frame.
+    # up front; an invalid or expired token is refused (never treated as anonymous).
+    # Without a token, the socket stays anonymous and awaits a {type: "auth", token} frame.
+    rid = Exoforge.RequestContext.sanitize_rid(Keyword.get(opts, :rid))
+
     case Keyword.get(opts, :token) do
       token when is_binary(token) and token != "" ->
-        case ActionDispatcher.dispatch(:auth, :authenticate, %{token: token}) do
+        case ActionDispatcher.dispatch(:auth, :authenticate, %{token: token}, rid: rid) do
           {:ok, auth} ->
             Logger.info("[WS] Client connected & authenticated as #{auth.player_id}")
             {:ok, Map.put(state, :auth, auth)}
 
-          _ ->
-            Logger.info("[WS] Client connected (token invalid, awaiting auth frame)")
-            {:ok, state}
+          {:error, reason} ->
+            error = Transport.action_error(reason)
+            code = error["code"] || "invalid_token"
+            Logger.warning("[WS] Connection refused (?token=): #{code}: #{error["message"]}")
+
+            frame =
+              Map.merge(
+                %{type: @frame_auth_result},
+                Transport.error_body(reason, rid)
+              )
+
+            {:stop, :normal, {4001, code}, [{:text, encode_json(frame)}], state}
         end
 
       _ ->
@@ -333,13 +345,16 @@ defmodule Exoforge.Std.Ws.SocketHandler do
   end
 
   defp reply(data, state) do
+    {:push, {:text, encode_json(data)}, state}
+  end
+
+  defp encode_json(data) do
     case Jason.encode(data) do
       {:ok, json} ->
-        {:push, {:text, json}, state}
+        json
 
       {:error, _} ->
-        sanitized = Exoforge.ExtensionRegistry.sanitize_for_json(data)
-        {:push, {:text, Jason.encode!(sanitized)}, state}
+        data |> Exoforge.ExtensionRegistry.sanitize_for_json() |> Jason.encode!()
     end
   end
 
