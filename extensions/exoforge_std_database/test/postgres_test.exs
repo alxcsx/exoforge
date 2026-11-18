@@ -122,4 +122,121 @@ defmodule Exoforge.Std.Database.Adapters.PostgresTest do
                )
     end
   end
+
+  describe "F34 & F35: coercion by declared Postgres column type" do
+    setup do
+      unless Process.whereis(Exoforge.Std.Database.PoolRegistry) do
+        start_supervised!({Registry, keys: :unique, name: Exoforge.Std.Database.PoolRegistry})
+      end
+
+      unless Process.whereis(Exoforge.Std.Database.PoolSupervisor) do
+        start_supervised!({DynamicSupervisor, name: Exoforge.Std.Database.PoolSupervisor, strategy: :one_for_one})
+      end
+
+      plugin = :"pg_kv_coerce_#{System.unique_integer([:positive])}"
+      assert {:ok, _} = Postgres.ensure_database(plugin, @pg_config)
+
+      on_exit(fn ->
+        _ = Postgres.reset(plugin, @pg_config)
+      end)
+
+      {:ok, plugin: plugin}
+    end
+
+    @tag :postgres
+    test "F34: string id and string integer values coerce for integer PK and columns", %{plugin: plugin} do
+      assert {:ok, _} =
+               Postgres.execute(
+                 plugin,
+                 "CREATE TABLE daily_reward_table (day integer PRIMARY KEY, coins integer NOT NULL, label text)",
+                 [],
+                 @pg_config
+               )
+
+      assert {:ok, %{num_rows: 1}} =
+               Postgres.execute(
+                 plugin,
+                 %{action: :put, table: "daily_reward_table", id: "1", data: %{"coins" => "100", "label" => "Day 1"}},
+                 [],
+                 @pg_config
+               )
+
+      assert {:ok, %{rows: [%{"day" => 1, "coins" => 100, "label" => "Day 1"}], num_rows: 1}} =
+               Postgres.execute(
+                 plugin,
+                 %{action: :get, table: "daily_reward_table", id: "1"},
+                 [],
+                 @pg_config
+               )
+
+      assert {:ok, _} =
+               Postgres.execute(
+                 plugin,
+                 %{action: :delete, table: "daily_reward_table", id: "1"},
+                 [],
+                 @pg_config
+               )
+    end
+
+    @tag :postgres
+    test "F35: ISO-8601 timestamp strings coerce on put and round-trip as ISO-8601 strings", %{plugin: plugin} do
+      assert {:ok, _} =
+               Postgres.execute(
+                 plugin,
+                 "CREATE TABLE wallet_balances (player_id text PRIMARY KEY, coins integer NOT NULL, active boolean NOT NULL, updated_at timestamp without time zone NOT NULL)",
+                 [],
+                 @pg_config
+               )
+
+      assert {:ok, %{num_rows: 1}} =
+               Postgres.execute(
+                 plugin,
+                 %{
+                   action: :put,
+                   table: "wallet_balances",
+                   id: "p1",
+                   data: %{
+                     "coins" => 50,
+                     "active" => "true",
+                     "updated_at" => "2026-11-18T14:40:28.756442Z"
+                   }
+                 },
+                 [],
+                 @pg_config
+               )
+
+      assert {:ok, %{rows: [row], num_rows: 1}} =
+               Postgres.execute(
+                 plugin,
+                 %{action: :get, table: "wallet_balances", id: "p1"},
+                 [],
+                 @pg_config
+               )
+
+      assert row["player_id"] == "p1"
+      assert row["coins"] == 50
+      assert row["active"] == true
+      assert is_binary(row["updated_at"])
+      assert String.starts_with?(row["updated_at"], "2026-11-18T14:40:28")
+    end
+
+    @tag :postgres
+    test "uncoercible value returns {:error, {:invalid_value, column, type}}", %{plugin: plugin} do
+      assert {:ok, _} =
+               Postgres.execute(
+                 plugin,
+                 "CREATE TABLE typed_items (id integer PRIMARY KEY, coins integer NOT NULL)",
+                 [],
+                 @pg_config
+               )
+
+      assert {:error, {:invalid_value, "coins", "integer"}} =
+               Postgres.execute(
+                 plugin,
+                 %{action: :put, table: "typed_items", id: "1", data: %{"coins" => "not_an_int"}},
+                 [],
+                 @pg_config
+               )
+    end
+  end
 end
