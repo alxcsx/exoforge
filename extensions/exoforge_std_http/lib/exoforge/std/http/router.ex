@@ -12,6 +12,7 @@ defmodule Exoforge.Std.Http.Router do
 
   plug(Plug.Logger)
   plug(:handle_cors)
+  plug(:assign_rid)
   plug(:match)
 
   plug(Plug.Parsers,
@@ -192,8 +193,7 @@ defmodule Exoforge.Std.Http.Router do
       "query" => conn.query_params
     }
 
-    rid = Exoforge.RequestContext.sanitize_rid(List.first(get_req_header(conn, "x-exoforge-rid")))
-    conn = conn |> put_resp_header("x-exoforge-rid", rid) |> assign(:exoforge_rid, rid)
+    rid = conn.assigns[:exoforge_rid]
 
     result =
       ActionDispatcher.dispatch(service, action, payload,
@@ -267,7 +267,7 @@ defmodule Exoforge.Std.Http.Router do
       end
 
     public? = public_action?(service, action)
-    rid = Exoforge.RequestContext.sanitize_rid(List.first(get_req_header(conn, "x-exoforge-rid")))
+    rid = conn.assigns[:exoforge_rid]
 
     case authenticate_token(token_from_request(conn)) do
       {:ok, auth_info} ->
@@ -297,13 +297,7 @@ defmodule Exoforge.Std.Http.Router do
         )
 
       {:error, :token_expired} ->
-        send_json(conn, 401, %{
-          status: "error",
-          error: %{
-            code: "token_expired",
-            message: "The access token has expired. Refresh it with auth.refresh."
-          }
-        })
+        token_expired(conn)
 
       :error ->
         unauthenticated(conn)
@@ -326,7 +320,6 @@ defmodule Exoforge.Std.Http.Router do
 
     # The rid rides on every response so a client can quote it; the extension logs behind it are
     # staff-only, because they name host paths and carry cross-service internals (SEC-5).
-    conn = conn |> put_resp_header("x-exoforge-rid", rid) |> assign(:exoforge_rid, rid)
     reply = fn status, body -> send_json(conn, status, Transport.with_logs(body, rid, caller_scopes)) end
 
     case result do
@@ -500,10 +493,23 @@ defmodule Exoforge.Std.Http.Router do
               forbidden(conn)
             end
 
-          :error ->
+          {:error, :token_expired} ->
+            token_expired(conn)
+
+          _error ->
             unauthenticated(conn)
         end
     end
+  end
+
+  defp assign_rid(%{request_path: "/health"} = conn, _opts), do: conn
+
+  defp assign_rid(conn, _opts) do
+    rid = Exoforge.RequestContext.sanitize_rid(List.first(get_req_header(conn, "x-exoforge-rid")))
+
+    conn
+    |> put_resp_header("x-exoforge-rid", rid)
+    |> assign(:exoforge_rid, rid)
   end
 
   defp authenticate_request(conn) do
@@ -516,12 +522,25 @@ defmodule Exoforge.Std.Http.Router do
     Exoforge.Auth.Request.token(conn.req_headers, conn.query_params, conn.req_cookies)
   end
 
+  defp token_expired(conn) do
+    conn
+    |> send_json(
+      401,
+      Transport.error_body(
+        {:token_expired, "The access token has expired. Refresh it with auth.refresh."},
+        conn.assigns[:exoforge_rid]
+      )
+    )
+    |> Plug.Conn.halt()
+  end
+
   defp unauthenticated(conn) do
     conn
     |> send_json(
       401,
       Transport.error_body(
-        {:unauthenticated, "A valid bearer token is required. Use POST /api/auth/login or /api/auth/register."}
+        {:unauthenticated, "A valid bearer token is required. Use POST /api/auth/login or /api/auth/register."},
+        conn.assigns[:exoforge_rid]
       )
     )
     |> Plug.Conn.halt()
@@ -531,7 +550,10 @@ defmodule Exoforge.Std.Http.Router do
     conn
     |> send_json(
       403,
-      Transport.error_body({:forbidden_scope, "A studio or admin account is required for this resource."})
+      Transport.error_body(
+        {:forbidden_scope, "A studio or admin account is required for this resource."},
+        conn.assigns[:exoforge_rid]
+      )
     )
     |> Plug.Conn.halt()
   end
@@ -539,9 +561,16 @@ defmodule Exoforge.Std.Http.Router do
   defp send_json(conn, status, body) do
     body =
       case conn.assigns[:exoforge_rid] do
-        nil -> body
-        rid when is_map(body) -> Map.put(body, :rid, rid)
-        _rid -> body
+        nil ->
+          body
+
+        rid when is_map(body) ->
+          if Map.has_key?(body, "rid") or Map.has_key?(body, :rid),
+            do: body,
+            else: Map.put(body, :rid, rid)
+
+        _rid ->
+          body
       end
 
     conn

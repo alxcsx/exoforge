@@ -20,7 +20,6 @@ defmodule Exoforge.Std.Ws.SocketHandler do
   @action_key "action"
   @payload_key "payload"
   @status_ok "ok"
-  @status_error "error"
 
   @frame_ping "ping"
   @frame_pong "pong"
@@ -89,10 +88,10 @@ defmodule Exoforge.Std.Ws.SocketHandler do
       {:ok, %{@type_key => @frame_action} = req} ->
         handle_action(req, state)
 
-      {:ok, %{@type_key => @frame_auth, @token_key => token}} ->
-        handle_auth(token, state)
+      {:ok, %{@type_key => @frame_auth, @token_key => token} = req} ->
+        handle_auth(token, req, state)
 
-      {:ok, %{@type_key => @frame_subscribe, @topic_key => topic}} when is_binary(topic) ->
+      {:ok, %{@type_key => @frame_subscribe, @topic_key => topic} = req} when is_binary(topic) ->
         if Map.get(state, :auth) do
           EventDispatcher.subscribe(:all, topic: topic)
           new_state = %{state | subscriptions: MapSet.put(state.subscriptions, topic)}
@@ -101,16 +100,13 @@ defmodule Exoforge.Std.Ws.SocketHandler do
           reply(%{type: @frame_subscribed, topic: topic}, new_state)
         else
           Logger.warning("[WS] Subscribe rejected: socket unauthenticated")
+          rid = Exoforge.RequestContext.sanitize_rid(Map.get(req, @rid_key))
 
           reply(
-            %{
-              type: @frame_error,
-              error: %{
-                code: @code_unauthenticated,
-                message: "Authenticate before subscribing.",
-                details: %{}
-              }
-            },
+            Map.merge(
+              %{type: @frame_error},
+              Transport.error_body({@code_unauthenticated, "Authenticate before subscribing."}, rid)
+            ),
             state
           )
         end
@@ -197,32 +193,30 @@ defmodule Exoforge.Std.Ws.SocketHandler do
 
   # ---- Private Helpers ----
 
-  defp handle_auth(token, state) do
-    case ActionDispatcher.dispatch(:auth, :authenticate, %{token: token}) do
+  defp handle_auth(token, req, state) do
+    rid = Exoforge.RequestContext.sanitize_rid(Map.get(req, @rid_key))
+
+    case ActionDispatcher.dispatch(:auth, :authenticate, %{token: token}, rid: rid) do
       {:ok, %{player_id: player_id, scopes: scopes} = auth_info} ->
         Logger.info("[WS] Authenticated player: #{player_id} (scopes: #{inspect(scopes)})")
         new_state = Map.put(state, :auth, auth_info)
 
         reply(
-          %{type: @frame_auth_result, status: @status_ok, player_id: player_id, scopes: scopes},
+          %{type: @frame_auth_result, status: @status_ok, player_id: player_id, scopes: scopes, rid: rid},
           new_state
         )
 
-      {:error, {code, message}} when (is_atom(code) or is_binary(code)) and is_binary(message) ->
-        Logger.warning("[WS] Authentication failed: #{code}: #{message}")
+      {:error, reason} ->
+        error = Transport.action_error(reason)
+        Logger.warning("[WS] Authentication failed: #{error["code"]}: #{error["message"]}")
 
         reply(
-          %{
-            type: @frame_auth_result,
-            status: @status_error,
-            error: Transport.action_error({code, message})
-          },
+          Map.merge(
+            %{type: @frame_auth_result},
+            Transport.error_body(reason, rid)
+          ),
           state
         )
-
-      {:error, reason} ->
-        Logger.warning("[WS] Authentication failed: #{inspect(reason)}")
-        reply(%{type: @frame_auth_result, status: @status_error, error: Transport.action_error(reason)}, state)
     end
   end
 
