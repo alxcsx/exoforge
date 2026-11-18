@@ -329,17 +329,16 @@ public static class ExoAgentInstaller
             gitignoreEntries.Add("AGENTS.md");
         }
 
-        // 3. Create ./exo and ./exo.cmd wrappers
-        InstallWrappers(resolvedProject, result.UpdatedFiles);
-        gitignoreEntries.Add("exo");
-        gitignoreEntries.Add("exo.cmd");
+        // 3. Create ./exo and ./exo.cmd wrappers via ExoCliInstaller
+        var cliResult = ExoCliInstaller.Install(resolvedProject, pkgRoot);
+        foreach (var f in cliResult.UpdatedFiles) result.UpdatedFiles.Add(f);
 
         string exoforgeSubdir = Path.Combine(resolvedProject, "Exoforge");
         if (Directory.Exists(exoforgeSubdir))
         {
-            InstallWrappers(exoforgeSubdir, result.UpdatedFiles);
+            var cliResult2 = ExoCliInstaller.Install(exoforgeSubdir, pkgRoot);
+            foreach (var f in cliResult2.UpdatedFiles) result.UpdatedFiles.Add(f);
         }
-
         // 4. Update marked .gitignore block for exact generated items
         UpdateGitignore(resolvedProject, gitignoreEntries, result.UpdatedFiles);
 
@@ -440,6 +439,8 @@ public static class ExoAgentInstaller
         byte[] bytesB = File.ReadAllBytes(pathB);
         return bytesA.AsSpan().SequenceEqual(bytesB);
     }
+    public static void InstallWrappersPublic(string directory, List<string> updatedFiles) => InstallWrappers(directory, updatedFiles);
+    public static void UpdateGitignorePublic(string projectRoot, IEnumerable<string> entries, List<string> updatedFiles) => UpdateGitignore(projectRoot, entries, updatedFiles);
 
     private static void InstallWrappers(string directory, List<string> updatedFiles)
     {
