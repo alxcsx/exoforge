@@ -483,5 +483,18 @@ public class WebhookResult
     }
 }
 
+/// <summary>
+/// Marks a method as the extension's seed hook.
+/// Executed once on every extension start after <c>OnExtensionStart</c>.
+/// The method must be parameterless, return <c>void</c> or <c>Task</c>, and reside on the extension root.
+/// Must be idempotent by contract: extensions check whether initial rows exist before inserting.
+/// A throwing seed logs and fails the lifecycle handshake.
+/// </summary>
+[AttributeUsage(AttributeTargets.Method, Inherited = false, AllowMultiple = false)]
+public class ExoSeedAttribute : Attribute
+{
+}
+
+
 
 

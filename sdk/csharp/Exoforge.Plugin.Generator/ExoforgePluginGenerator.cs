@@ -30,6 +30,7 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
     private const string ActionAttribute = "Exoforge.Plugin.SDK.ExoActionAttribute";
     private const string WebhookAttribute = "Exoforge.Plugin.SDK.ExoWebhookAttribute";
     private const string CronAttribute = "Exoforge.Plugin.SDK.ExoCronAttribute";
+    private const string SeedAttribute = "Exoforge.Plugin.SDK.ExoSeedAttribute";
     private const string EventAttribute = "Exoforge.Plugin.SDK.ExoEventAttribute";
     private const string ColumnAttribute = "Exoforge.Plugin.SDK.ExoColumnAttribute";
     private const string DependencyAttribute = "Exoforge.Plugin.SDK.ExoDependencyAttribute";
@@ -258,6 +259,7 @@ namespace Exoforge.Plugin.SDK
         string? JsonContextDisplayName,
         string DispatchCases,
         string EventHandler,
+        string SeedHandler,
         string ContractInterface,
         string ContractBinding,
         List<ServiceModel> Models,
@@ -701,6 +703,7 @@ namespace Exoforge.Plugin.SDK
             FindJsonContext(compilation),
             DispatchEmitter.Cases(rootFq, dispatches),
             DispatchEmitter.EventHandler(rootFq, FindEventHandler(root)),
+            DispatchEmitter.SeedHandler(rootFq, FindSeedHandler(root)),
             contract,
             binding,
             services,
@@ -803,6 +806,36 @@ namespace Exoforge.Plugin.SDK
         }
 
         return single;
+    }
+
+    /// <summary>
+    /// The extension's seed hook: parameterless method with <c>[ExoSeed]</c> returning <c>void</c> or <c>Task</c>.
+    /// </summary>
+    private static IMethodSymbol? FindSeedHandler(INamedTypeSymbol type)
+    {
+        for (INamedTypeSymbol? current = type; current != null && current.SpecialType != SpecialType.System_Object; current = current.BaseType)
+        {
+            foreach (var member in current.GetMembers())
+            {
+                if (member is not IMethodSymbol method) continue;
+                if (!IsSeedMethod(method)) continue;
+                if (method.Parameters.Length != 0) continue;
+                if (method.ReturnsVoid || IsTask(method.ReturnType))
+                {
+                    return method;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsSeedMethod(IMethodSymbol method)
+    {
+        return method.GetAttributes().Any(a =>
+            a.AttributeClass?.ToDisplayString() == SeedAttribute ||
+            a.AttributeClass?.Name == "ExoSeedAttribute" ||
+            a.AttributeClass?.Name == "ExoSeed");
     }
 
     private static void AddResource(List<ResourceModel> resources, ResourceModel? resource)
@@ -1079,7 +1112,7 @@ namespace Exoforge.Plugin.SDK
         foreach (var emit in owned) cases.Append(emit.DispatchCases);
 
         spc.AddSource("ExoforgeDispatch.g.cs", SourceText.From(
-            DispatchEmitter.Class(root, cases.ToString(), primary.EventHandler), Encoding.UTF8));
+            DispatchEmitter.Class(root, cases.ToString(), primary.EventHandler, primary.SeedHandler), Encoding.UTF8));
 
         var contracts = new StringBuilder();
         var bindings = new StringBuilder();

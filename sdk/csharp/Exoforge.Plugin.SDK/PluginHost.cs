@@ -110,6 +110,7 @@ public static class PluginHost
     private static object? _instance;
     private static MethodInfo? _eventHandler;
     private static MethodInfo? _startupHandler;
+    private static MethodInfo? _seedHandler;
     private static IExoforgeDispatch? _dispatch;
 
     // AsyncLocal, not a static field: a test host is ambient state for the test that started it,
@@ -248,6 +249,7 @@ public static class PluginHost
         // plugin that has not been through the generator - including this SDK's own tests.
         _eventHandler = dispatch is null ? FindEventHandler(pluginType) : null;
         _startupHandler = FindStartupHandler(pluginType);
+        _seedHandler = dispatch is null ? FindSeedHandler(pluginType) : null;
         var actions = dispatch is null ? BuildActionTable(pluginType) : null;
 
         // One reader owns stdin and answers host calls from whatever thread is waiting for them;
@@ -527,6 +529,36 @@ public static class PluginHost
     }
 
     /// <summary>
+    /// Finds the optional <c>[ExoSeed]</c> hook: a parameterless instance or static method
+    /// returning <c>void</c> or <c>Task</c>. Used as fallback when no generated dispatch is provided.
+    /// </summary>
+    [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = "Run<T> roots PublicMethods/NonPublicMethods on the plugin type.")]
+    private static MethodInfo? FindSeedHandler(Type pluginType)
+    {
+        const BindingFlags flags =
+            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
+
+        foreach (var method in pluginType.GetMethods(flags))
+        {
+            if (method.GetCustomAttribute<ExoSeedAttribute>() == null &&
+                !method.GetCustomAttributes().Any(a => a.GetType().Name == "ExoSeedAttribute"))
+            {
+                continue;
+            }
+
+            if (method.GetParameters().Length != 0) continue;
+
+            Type returnType = method.ReturnType;
+            if (returnType == typeof(void) || typeof(Task).IsAssignableFrom(returnType))
+            {
+                return method;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Runs the optional startup hook exactly once per process and answers the host explicitly.
     /// A duplicate frame re-sends the cached result instead of running the hook again.
     /// </summary>
@@ -562,6 +594,20 @@ public static class PluginHost
                 object? target = _startupHandler.IsStatic ? null : _instance;
                 object? result = _startupHandler.Invoke(target, null);
                 AwaitResult(result);
+            }
+
+            if (_dispatch != null)
+            {
+                if (_dispatch.TryRunSeed(_instance!, out object? seedResult))
+                {
+                    AwaitResult(seedResult);
+                }
+            }
+            else if (_seedHandler != null)
+            {
+                object? target = _seedHandler.IsStatic ? null : _instance;
+                object? seedResult = _seedHandler.Invoke(target, null);
+                AwaitResult(seedResult);
             }
 
             _lifecycleCode = null;
