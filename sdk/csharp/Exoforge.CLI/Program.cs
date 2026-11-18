@@ -1487,11 +1487,14 @@ public static class Program
         Usage: exo agents <subcommand> [options]
 
         Subcommands:
-          install    Install agent skills, AGENTS.md guide, and project root CLI wrappers
+          install    Install selected agent skills, AGENTS.md guide, CLI wrappers, and .gitignore block
           status     Inspect installed agent tooling, skills, and CLI wrappers
 
-        Options for 'install':
-          --target <target>   Skills directory target: 'all' (default), 'agents', 'claude', or 'gemini'
+        Options for 'install' (at least one target flag is required):
+          --claude            Install Claude Code skills (.claude/skills/)
+          --gemini            Install Gemini CLI skills (.gemini/skills/)
+          --agents            Install generic agent skills (.agents/skills/)
+          --all               Install all agent targets (.agents/, .claude/, .gemini/)
 
         Common options:
           --dir <path>        Project root directory (defaults to current directory)
@@ -1500,18 +1503,43 @@ public static class Program
         """);
     }
 
+    private static void PrintAgentsInstallUsage()
+    {
+        Console.WriteLine("""
+        Usage: exo agents install [--claude] [--gemini] [--agents] [--all] [--dir <path>] [--json] [-h|--help]
+
+        Installs selected AI agent skills, AGENTS.md guide, ./exo wrappers, and a marked .gitignore block.
+        Running without target flags prints this help and installs nothing.
+
+        Targets:
+          --claude            Install Claude Code skills (.claude/skills/)
+          --gemini            Install Gemini CLI skills (.gemini/skills/)
+          --agents            Install generic agent skills (.agents/skills/)
+          --all               Install all agent targets (.agents/, .claude/, .gemini/)
+
+        Options:
+          --dir <path>        Project root directory (defaults to current directory)
+          --json              Machine-readable JSON output
+          -h, --help          Show help
+        """);
+    }
+
     private static int HandleAgentsInstall(CliArgs cli)
     {
-        if (cli.WantsHelp)
+        var selectedTargets = new List<string>();
+        if (cli.Has("all")) selectedTargets.Add("all");
+        if (cli.Has("agents")) selectedTargets.Add("agents");
+        if (cli.Has("claude")) selectedTargets.Add("claude");
+        if (cli.Has("gemini")) selectedTargets.Add("gemini");
+
+        if (cli.WantsHelp || selectedTargets.Count == 0)
         {
-            Console.WriteLine("Usage: exo agents install [--dir <path>] [--target all|agents|claude|gemini] [--json]");
+            PrintAgentsInstallUsage();
             return 0;
         }
 
         string dir = cli.Value("dir") ?? Directory.GetCurrentDirectory();
-        string target = cli.Value("target") ?? "all";
-
-        var res = ExoAgentInstaller.Install(dir, target);
+        var res = ExoAgentInstaller.Install(dir, selectedTargets);
 
         if (cli.Json)
         {
@@ -1524,7 +1552,7 @@ public static class Program
         Console.WriteLine($"  Skills:     {res.InstalledSkills.Count} installed ({string.Join(", ", res.InstalledSkills)})");
         Console.WriteLine($"  Files:      {res.UpdatedFiles.Count} written/updated");
         Console.WriteLine($"  CLI binary: {(res.CliAvailable ? "Available" : "Missing from package")}");
-        Console.WriteLine("  Installed:  ./exo, ./exo.cmd, AGENTS.md, skills folders");
+        Console.WriteLine("  Installed:  ./exo, ./exo.cmd, AGENTS.md, skills folders, .gitignore block");
         return 0;
     }
 

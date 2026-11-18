@@ -56,6 +56,20 @@ public static class ExoAgentInstaller
     public const string MarkerEnd = "<!-- EXOFORGE-AGENT-GUIDE:END -->";
     public const string GenericMarker = "<!-- EXOFORGE-AGENT-GUIDE";
 
+    public const string GitignoreMarkerStart = "# >>> EXOFORGE-AGENT-TOOLING:START";
+    public const string GitignoreMarkerEnd = "# <<< EXOFORGE-AGENT-TOOLING:END";
+
+    private static readonly string[] CanonicalGitignoreOrder =
+    {
+        ".agents/",
+        ".claude/",
+        ".gemini/",
+        "AGENTS.md",
+        "exo",
+        "exo.cmd",
+        "exo.ps1"
+    };
+
     public static string? FindPackageRoot(string? startDir = null)
     {
         if (!string.IsNullOrEmpty(startDir) && IsPackageRoot(startDir))
@@ -156,6 +170,19 @@ public static class ExoAgentInstaller
 
     public static AgentInstallResult Install(string projectRoot, string target = "all", string? packageRootOverride = null)
     {
+        var targets = string.IsNullOrWhiteSpace(target)
+            ? Array.Empty<string>()
+            : new[] { target };
+        return Install(projectRoot, (IEnumerable<string>)targets, packageRootOverride);
+    }
+
+    public static AgentInstallResult Install(string projectRoot, IEnumerable<string> targets, string? packageRootOverride = null)
+    {
+        if (targets == null)
+        {
+            throw new ArgumentNullException(nameof(targets));
+        }
+
         string resolvedProject = Path.GetFullPath(projectRoot);
 
         // If pointing to <game>/Exoforge, step up to <game> if parent has Assets/
@@ -165,7 +192,46 @@ public static class ExoAgentInstaller
             resolvedProject = Directory.GetParent(resolvedProject)!.FullName;
         }
 
+        var selectedTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string rawTarget in targets)
+        {
+            if (string.IsNullOrWhiteSpace(rawTarget))
+            {
+                continue;
+            }
+
+            string t = rawTarget.Trim().ToLowerInvariant();
+            switch (t)
+            {
+                case "all":
+                    selectedTargets.Add("agents");
+                    selectedTargets.Add("claude");
+                    selectedTargets.Add("gemini");
+                    break;
+                case "agents":
+                case "claude":
+                case "gemini":
+                    selectedTargets.Add(t);
+                    break;
+                default:
+                    throw new ArgumentException(
+                        $"Unknown agent install target '{rawTarget}'. Expected one of: agents, claude, gemini, all.",
+                        nameof(targets));
+            }
+        }
+
         string? pkgRoot = packageRootOverride ?? FindPackageRoot(resolvedProject);
+
+        if (selectedTargets.Count == 0)
+        {
+            return new AgentInstallResult
+            {
+                ProjectRoot = resolvedProject,
+                PackageRoot = pkgRoot ?? "",
+                CliAvailable = CheckCliAvailability(resolvedProject, pkgRoot)
+            };
+        }
+
         if (string.IsNullOrEmpty(pkgRoot) || !Directory.Exists(pkgRoot))
         {
             throw new DirectoryNotFoundException(
@@ -178,37 +244,30 @@ public static class ExoAgentInstaller
             PackageRoot = pkgRoot
         };
 
+        var gitignoreEntries = new List<string>();
+
         // 1. Copy skills
+        var targetFolders = new List<string>();
+        if (selectedTargets.Contains("agents"))
+        {
+            targetFolders.Add(".agents/skills");
+            gitignoreEntries.Add(".agents/");
+        }
+        if (selectedTargets.Contains("claude"))
+        {
+            targetFolders.Add(".claude/skills");
+            gitignoreEntries.Add(".claude/");
+        }
+        if (selectedTargets.Contains("gemini"))
+        {
+            targetFolders.Add(".gemini/skills");
+            gitignoreEntries.Add(".gemini/");
+        }
+
         string packageSkillsDir = Path.Combine(pkgRoot, "Agents~", "skills");
         if (Directory.Exists(packageSkillsDir))
         {
             var skillDirs = Directory.GetDirectories(packageSkillsDir);
-            var targetFolders = new List<string>();
-
-            string t = target.Trim().ToLowerInvariant();
-            if (t == "all")
-            {
-                targetFolders.Add(".agents/skills");
-                targetFolders.Add(".claude/skills");
-                targetFolders.Add(".gemini/skills");
-            }
-            else if (t == "agents")
-            {
-                targetFolders.Add(".agents/skills");
-            }
-            else if (t == "claude")
-            {
-                targetFolders.Add(".claude/skills");
-            }
-            else if (t == "gemini")
-            {
-                targetFolders.Add(".gemini/skills");
-            }
-            else
-            {
-                targetFolders.Add($".{t}/skills");
-            }
-
             var installedSkillNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var skillPath in skillDirs)
@@ -230,12 +289,14 @@ public static class ExoAgentInstaller
         string srcAgentsMd = Path.Combine(pkgRoot, "Agents~", "AGENTS.md");
         if (File.Exists(srcAgentsMd))
         {
-            string guideContent = File.ReadAllText(srcAgentsMd);
+            string guideContent = File.ReadAllText(srcAgentsMd).Trim();
             string destAgentsMd = Path.Combine(resolvedProject, "AGENTS.md");
+            string desiredAgentsMd;
 
             if (!File.Exists(destAgentsMd))
             {
-                File.WriteAllText(destAgentsMd, guideContent);
+                desiredAgentsMd = guideContent + "\n";
+                File.WriteAllText(destAgentsMd, desiredAgentsMd);
                 result.UpdatedFiles.Add(destAgentsMd);
             }
             else
@@ -246,28 +307,32 @@ public static class ExoAgentInstaller
                 {
                     int startIdx = existing.IndexOf(MarkerStart, StringComparison.Ordinal);
                     int endIdx = existing.IndexOf(MarkerEnd, StringComparison.Ordinal) + MarkerEnd.Length;
-                    string updated = existing.Substring(0, startIdx) + guideContent.Trim() + existing.Substring(endIdx);
-                    File.WriteAllText(destAgentsMd, updated);
-                    result.UpdatedFiles.Add(destAgentsMd);
+                    desiredAgentsMd = existing.Substring(0, startIdx) + guideContent + existing.Substring(endIdx);
                 }
                 else if (existing.Contains(GenericMarker))
                 {
                     int startIdx = existing.IndexOf(GenericMarker, StringComparison.Ordinal);
-                    string updated = existing.Substring(0, startIdx) + guideContent.Trim() + "\n";
-                    File.WriteAllText(destAgentsMd, updated);
-                    result.UpdatedFiles.Add(destAgentsMd);
+                    desiredAgentsMd = existing.Substring(0, startIdx) + guideContent + "\n";
                 }
                 else
                 {
-                    string appended = existing.TrimEnd() + "\n\n" + guideContent;
-                    File.WriteAllText(destAgentsMd, appended);
+                    desiredAgentsMd = existing.TrimEnd() + "\n\n" + guideContent + "\n";
+                }
+
+                if (!string.Equals(existing, desiredAgentsMd, StringComparison.Ordinal))
+                {
+                    File.WriteAllText(destAgentsMd, desiredAgentsMd);
                     result.UpdatedFiles.Add(destAgentsMd);
                 }
             }
+
+            gitignoreEntries.Add("AGENTS.md");
         }
 
         // 3. Create ./exo and ./exo.cmd wrappers
         InstallWrappers(resolvedProject, result.UpdatedFiles);
+        gitignoreEntries.Add("exo");
+        gitignoreEntries.Add("exo.cmd");
 
         string exoforgeSubdir = Path.Combine(resolvedProject, "Exoforge");
         if (Directory.Exists(exoforgeSubdir))
@@ -275,7 +340,10 @@ public static class ExoAgentInstaller
             InstallWrappers(exoforgeSubdir, result.UpdatedFiles);
         }
 
-        // 4. Check if CLI is available
+        // 4. Update marked .gitignore block for exact generated items
+        UpdateGitignore(resolvedProject, gitignoreEntries, result.UpdatedFiles);
+
+        // 5. Check if CLI is available
         result.CliAvailable = CheckCliAvailability(resolvedProject, pkgRoot);
 
         return result;
@@ -345,8 +413,11 @@ public static class ExoAgentInstaller
         {
             string fileName = Path.GetFileName(file);
             string destFile = Path.Combine(targetDir, fileName);
-            File.Copy(file, destFile, overwrite: true);
-            updatedFiles.Add(destFile);
+            if (!File.Exists(destFile) || !FilesEqual(file, destFile))
+            {
+                File.Copy(file, destFile, overwrite: true);
+                updatedFiles.Add(destFile);
+            }
         }
 
         foreach (string subDir in Directory.GetDirectories(sourceDir))
@@ -354,6 +425,20 @@ public static class ExoAgentInstaller
             string subDirName = Path.GetFileName(subDir);
             CopyDirectoryRecursively(subDir, Path.Combine(targetDir, subDirName), updatedFiles);
         }
+    }
+
+    private static bool FilesEqual(string pathA, string pathB)
+    {
+        var infoA = new FileInfo(pathA);
+        var infoB = new FileInfo(pathB);
+        if (infoA.Length != infoB.Length)
+        {
+            return false;
+        }
+
+        byte[] bytesA = File.ReadAllBytes(pathA);
+        byte[] bytesB = File.ReadAllBytes(pathB);
+        return bytesA.AsSpan().SequenceEqual(bytesB);
     }
 
     private static void InstallWrappers(string directory, List<string> updatedFiles)
@@ -455,12 +540,111 @@ public static class ExoAgentInstaller
         )
         """;
 
-        File.WriteAllText(shPath, shContent.Replace("\r\n", "\n"));
-        MakeExecutable(shPath);
-        updatedFiles.Add(shPath);
+        string normalizedSh = shContent.Replace("\r\n", "\n");
+        if (!File.Exists(shPath) || !string.Equals(File.ReadAllText(shPath), normalizedSh, StringComparison.Ordinal))
+        {
+            File.WriteAllText(shPath, normalizedSh);
+            MakeExecutable(shPath);
+            updatedFiles.Add(shPath);
+        }
 
-        File.WriteAllText(cmdPath, cmdContent);
-        updatedFiles.Add(cmdPath);
+        if (!File.Exists(cmdPath) || !string.Equals(File.ReadAllText(cmdPath), cmdContent, StringComparison.Ordinal))
+        {
+            File.WriteAllText(cmdPath, cmdContent);
+            updatedFiles.Add(cmdPath);
+        }
+    }
+
+    private static void UpdateGitignore(string projectRoot, IEnumerable<string> generatedEntries, List<string> updatedFiles)
+    {
+        var generatedSet = new HashSet<string>(
+            generatedEntries.Where(e => !string.IsNullOrWhiteSpace(e)).Select(e => e.Trim()),
+            StringComparer.Ordinal);
+
+        if (generatedSet.Count == 0)
+        {
+            return;
+        }
+
+        string gitignorePath = Path.Combine(projectRoot, ".gitignore");
+        if (!File.Exists(gitignorePath))
+        {
+            string block = BuildGitignoreBlock(OrderGitignoreEntries(generatedSet));
+            File.WriteAllText(gitignorePath, block + "\n");
+            updatedFiles.Add(gitignorePath);
+            return;
+        }
+
+        string existing = File.ReadAllText(gitignorePath);
+        int startIdx = existing.IndexOf(GitignoreMarkerStart, StringComparison.Ordinal);
+        int endIdx = startIdx >= 0
+            ? existing.IndexOf(GitignoreMarkerEnd, startIdx + GitignoreMarkerStart.Length, StringComparison.Ordinal)
+            : -1;
+
+        string desired;
+        if (startIdx >= 0 && endIdx > startIdx)
+        {
+            int bodyStart = startIdx + GitignoreMarkerStart.Length;
+            string existingBody = existing.Substring(bodyStart, endIdx - bodyStart);
+            var merged = new HashSet<string>(generatedSet, StringComparer.Ordinal);
+            foreach (string line in existingBody.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                string trimmed = line.Trim();
+                if (trimmed.Length > 0 && !trimmed.StartsWith("#", StringComparison.Ordinal))
+                {
+                    merged.Add(trimmed);
+                }
+            }
+
+            string block = BuildGitignoreBlock(OrderGitignoreEntries(merged));
+            desired = existing.Substring(0, startIdx) + block + existing.Substring(endIdx + GitignoreMarkerEnd.Length);
+        }
+        else
+        {
+            var existingLines = existing
+                .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(l => l.Trim())
+                .Where(l => l.Length > 0 && !l.StartsWith("#", StringComparison.Ordinal))
+                .ToHashSet(StringComparer.Ordinal);
+
+            var toAdd = generatedSet.Where(e => !existingLines.Contains(e)).ToList();
+            if (toAdd.Count == 0)
+            {
+                return;
+            }
+
+            string block = BuildGitignoreBlock(OrderGitignoreEntries(toAdd));
+            string trimmedExisting = existing.TrimEnd('\r', '\n');
+            desired = string.IsNullOrEmpty(trimmedExisting)
+                ? block + "\n"
+                : trimmedExisting + "\n\n" + block + "\n";
+        }
+
+        if (!string.Equals(existing, desired, StringComparison.Ordinal))
+        {
+            File.WriteAllText(gitignorePath, desired);
+            updatedFiles.Add(gitignorePath);
+        }
+    }
+
+    private static List<string> OrderGitignoreEntries(IEnumerable<string> entries)
+    {
+        var entrySet = new HashSet<string>(entries, StringComparer.Ordinal);
+        var ordered = new List<string>();
+        foreach (string canonical in CanonicalGitignoreOrder)
+        {
+            if (entrySet.Remove(canonical))
+            {
+                ordered.Add(canonical);
+            }
+        }
+        ordered.AddRange(entrySet.OrderBy(e => e, StringComparer.Ordinal));
+        return ordered;
+    }
+
+    private static string BuildGitignoreBlock(IReadOnlyList<string> entries)
+    {
+        return GitignoreMarkerStart + "\n" + string.Join("\n", entries) + "\n" + GitignoreMarkerEnd;
     }
 
     private static void MakeExecutable(string filePath)

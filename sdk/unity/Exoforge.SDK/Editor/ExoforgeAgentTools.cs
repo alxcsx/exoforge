@@ -17,12 +17,49 @@ namespace Exoforge.Unity.Editor
         [MenuItem("Exoforge/Agents/Install Agent Skills & CLI...", false, 40)]
         public static void InstallAgentSkillsAndCli()
         {
+            try
+            {
+                InstallAgentToolingCore(showUi: true);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[Exoforge] Failed to install agent skills and CLI: {ex.Message}\n{ex.StackTrace}");
+                if (!Application.isBatchMode)
+                {
+                    EditorUtility.DisplayDialog("Exoforge Agent Error", $"Failed to install agent tooling:\n\n{ex.Message}", "OK");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Headless entry point for <c>-batchmode -quit -nographics -executeMethod Exoforge.Unity.Editor.ExoforgeAgentTools.InstallAgentSkillsAndCliHeadless</c>.
+        /// Installs agent skills, AGENTS.md, CLI wrappers, and the marked .gitignore block without UI dialogs.
+        /// </summary>
+        public static void InstallAgentSkillsAndCliHeadless()
+        {
+            try
+            {
+                InstallAgentToolingCore(showUi: false);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[Exoforge] Headless agent tooling installation failed: {ex.Message}\n{ex.StackTrace}");
+                throw;
+            }
+        }
+
+        private static AgentInstallResult InstallAgentToolingCore(bool showUi)
+        {
             string projectRoot = ExoforgeEditorConfig.ProjectRoot;
             string? packageRoot = ExoforgeEditorConfig.PackageRoot;
+            bool useUi = showUi && !Application.isBatchMode;
 
             try
             {
-                EditorUtility.DisplayProgressBar("Exoforge Agents", "Installing agent skills and CLI wrappers...", 0.5f);
+                if (useUi)
+                {
+                    EditorUtility.DisplayProgressBar("Exoforge Agents", "Installing agent skills and CLI wrappers...", 0.5f);
+                }
 
                 AgentInstallResult result = ExoAgentInstaller.Install(projectRoot, "all", packageRoot);
 
@@ -40,20 +77,23 @@ namespace Exoforge.Unity.Editor
                                        (result.UpdatedFiles.Count > 8 ? $"\n... and {result.UpdatedFiles.Count - 8} more" : "")
                                      : "• (No file changes)") + "\n\n" +
                                  $"CLI Available: {(result.CliAvailable ? "Yes" : "No")}\n" +
-                                 "Configured paths: .agents/skills/, .claude/skills/, .gemini/skills/, AGENTS.md, ./exo";
+                                 "Configured paths: .agents/skills/, .claude/skills/, .gemini/skills/, AGENTS.md, ./exo, exo.cmd, .gitignore";
 
                 Debug.Log($"[Exoforge] Agent tooling installation complete. {filesCount} files updated in {result.ProjectRoot}");
 
-                EditorUtility.DisplayDialog("Exoforge Agent Setup", message, "OK");
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"[Exoforge] Failed to install agent skills and CLI: {ex.Message}\n{ex.StackTrace}");
-                EditorUtility.DisplayDialog("Exoforge Agent Error", $"Failed to install agent tooling:\n\n{ex.Message}", "OK");
+                if (useUi)
+                {
+                    EditorUtility.DisplayDialog("Exoforge Agent Setup", message, "OK");
+                }
+
+                return result;
             }
             finally
             {
-                EditorUtility.ClearProgressBar();
+                if (useUi)
+                {
+                    EditorUtility.ClearProgressBar();
+                }
             }
         }
 
@@ -147,7 +187,10 @@ namespace Exoforge.Unity.Editor
                                    $"• Project AGENTS.md: {(hasAgentsMd ? "Present" : "Missing")}\n\n" +
                                    "Detailed report logged to Unity Console.";
 
-            EditorUtility.DisplayDialog("Exoforge Agent Setup Check", dialogSummary, "OK");
+            if (!Application.isBatchMode)
+            {
+                EditorUtility.DisplayDialog("Exoforge Agent Setup Check", dialogSummary, "OK");
+            }
         }
     }
 }
