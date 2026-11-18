@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -33,6 +34,9 @@ public static class ExoIsExternalInit
     private static readonly Regex DeclarationPattern =
         new(@"\b(?:class|record|struct)\s+IsExternalInit\b", RegexOptions.Compiled);
 
+    private static readonly Regex RecordOrInitPattern =
+        new(@"\b(?:record\b|init\s*(?:;|=>|\{))", RegexOptions.Compiled);
+
     /// <summary>The assets folder of the Unity project rooted at <paramref name="projectRoot"/>.</summary>
     public static string AssetsPath(string projectRoot) => Path.Combine(Path.GetFullPath(projectRoot), "Assets");
 
@@ -51,6 +55,42 @@ public static class ExoIsExternalInit
     /// </summary>
     public static string? FindInProject(string projectRoot)
         => ScanAll(AssetsPath(projectRoot));
+    /// <summary>
+    /// Every assembly directory (relative to <paramref name="projectRoot"/>) under <c>Assets/</c> that
+    /// contains an <c>.asmdef</c>, including nested ones.
+    /// </summary>
+    public static IEnumerable<string> EnumerateAssemblies(string projectRoot)
+    {
+        string assets = AssetsPath(projectRoot);
+        if (!Directory.Exists(assets)) yield break;
+        foreach (string asmdef in Directory.EnumerateFiles(assets, "*.asmdef", SearchOption.AllDirectories))
+        {
+            yield return Path.GetRelativePath(projectRoot, Path.GetDirectoryName(asmdef)!).Replace('\\', '/');
+        }
+    }
+
+    /// <summary>
+    /// Whether any C# file in <paramref name="assemblyDir"/> (relative to <paramref name="projectRoot"/>)
+    /// declares a <c>record</c> or an <c>init</c> accessor, so the polyfill is actually needed.
+    /// </summary>
+    public static bool DeclaresRecordOrInit(string projectRoot, string assemblyDir)
+    {
+        string root = ResolveDirectory(projectRoot, assemblyDir);
+        if (!Directory.Exists(root)) return false;
+        foreach (string file in Directory.EnumerateFiles(root, "*.cs"))
+        {
+            string text;
+            try { text = File.ReadAllText(file); } catch { continue; }
+            if (RecordOrInitPattern.IsMatch(text)) return true;
+        }
+        foreach (string child in Directory.EnumerateDirectories(root))
+        {
+            if (HasAsmdef(child)) continue;
+            string rel = Path.GetRelativePath(projectRoot, child).Replace('\\', '/');
+            if (DeclaresRecordOrInit(projectRoot, rel)) return true;
+        }
+        return false;
+    }
 
     /// <summary>
     /// The file that already declares the type in the same assembly as <paramref name="directory"/>.

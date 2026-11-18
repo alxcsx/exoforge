@@ -260,11 +260,11 @@ public partial class ExoforgeControlCenter : EditorWindow
         EditorGUILayout.LabelField("C# Records Support", EditorStyles.boldLabel);
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
 
-        string? initPresent = ExoforgeIsExternalInit.PresentPath;
+        string? initPresent = ExoforgeIsExternalInit.PresentPath(_isExternalInitDir);
         EditorGUILayout.LabelField(
             initPresent != null
                 ? $"✓ IsExternalInit declared in {ExoforgeIsExternalInit.Relative(initPresent)}"
-                : "○ No IsExternalInit anywhere in Assets/ — records fail with CS0518",
+                : "○ No IsExternalInit in this assembly — records fail with CS0518",
             EditorStyles.miniLabel);
 
         EditorGUILayout.BeginHorizontal();
