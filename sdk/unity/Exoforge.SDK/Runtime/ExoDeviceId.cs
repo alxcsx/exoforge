@@ -18,8 +18,8 @@ namespace Exoforge.Client.Unity
     /// </summary>
     public static class ExoDeviceId
     {
-        private const string Key = "Exoforge.DeviceId";
-        private const string PreviousKey = "Exoforge.PreviousDeviceId";
+        private static string Key => "Exoforge.DeviceId" + ExoProfile.Suffix;
+        private static string PreviousKey => "Exoforge.PreviousDeviceId" + ExoProfile.Suffix;
         private static string? s_cached;
 
         /// <summary>Returns the true hardware-derived device id (stable across reinstalls).</summary>

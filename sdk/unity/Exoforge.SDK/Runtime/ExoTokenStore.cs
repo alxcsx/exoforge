@@ -23,12 +23,12 @@ namespace Exoforge.Client
     /// </remarks>
     public static class ExoTokenStore
     {
-        private const string TokenKey = "Exoforge.Token";
-        private const string RefreshTokenKey = "Exoforge.RefreshToken";
-        private const string PlayerIdKey = "Exoforge.PlayerId";
-        private const string ScopesKey = "Exoforge.Scopes";
-        private const string NameKey = "Exoforge.PlayerName";
-        private const string AttachedDeviceIdKey = "Exoforge.DeviceId.Attached";
+        private static string TokenKey => "Exoforge.Token" + ExoProfile.Suffix;
+        private static string RefreshTokenKey => "Exoforge.RefreshToken" + ExoProfile.Suffix;
+        private static string PlayerIdKey => "Exoforge.PlayerId" + ExoProfile.Suffix;
+        private static string ScopesKey => "Exoforge.Scopes" + ExoProfile.Suffix;
+        private static string NameKey => "Exoforge.PlayerName" + ExoProfile.Suffix;
+        private static string AttachedDeviceIdKey => "Exoforge.DeviceId.Attached" + ExoProfile.Suffix;
 
         private const string StudioTokenKey = "Exoforge.Studio.Token";
         private const string StudioRefreshTokenKey = "Exoforge.Studio.RefreshToken";
@@ -186,7 +186,7 @@ namespace Exoforge.Client
             // access token must leave the stored one alone.
             if (!string.IsNullOrEmpty(refreshToken))
             {
-                string refreshKey = ReferenceEquals(tokenKey, TokenKey) ? RefreshTokenKey : StudioRefreshTokenKey;
+                string refreshKey = (tokenKey == TokenKey) ? RefreshTokenKey : StudioRefreshTokenKey;
                 lock (s_memoryCache) s_memoryCache[refreshKey] = refreshToken!;
                 try { PlayerPrefs.SetString(refreshKey, refreshToken!); } catch (Exception) { }
             }
