@@ -602,5 +602,34 @@ pack-unity:
 		exit 1
 	fi
 
+	just check-unity-package
 	echo "Distributable: dist/com.exoforge.sdk-*.tgz"
+
+# Verify that the packed Unity SDK tarball ships embedded AI agent tooling and CLI binaries.
+check-unity-package:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	VERSION=$(grep '"version"' sdk/unity/Exoforge.SDK/package.json | head -1 | awk -F'"' '{print $4}')
+	tarball="dist/com.exoforge.sdk-${VERSION}.tgz"
+	if [ ! -f "$tarball" ]; then
+		echo "[check-unity-package] FAILED: $tarball not found (run 'just pack-unity' first)"
+		exit 1
+	fi
+	contents=$(tar -tzf "$tarball")
+	required=(
+		"package/Agents~/AGENTS.md"
+		"package/Agents~/skills/exoforge-connection/SKILL.md"
+		"package/Agents~/skills/exoforge-extensions/SKILL.md"
+		"package/Agents~/skills/exoforge-resources/SKILL.md"
+		"package/Editor/Cli~/exo"
+		"package/Editor/Cli~/exo.cmd"
+		"package/Editor/Cli~/exo.dll"
+	)
+	for entry in "${required[@]}"; do
+		if ! grep -Fxq "$entry" <<< "$contents"; then
+			echo "[check-unity-package] FAILED: missing '$entry' in $tarball"
+			exit 1
+		fi
+	done
+	echo "[check-unity-package] Verified Agents~ and Editor/Cli~ contents in $tarball"
 

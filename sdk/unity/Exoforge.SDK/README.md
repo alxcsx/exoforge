@@ -127,3 +127,23 @@ for staff callers, so a player's error is the code and message without server in
 ## Testing several players on one machine
 
 MPPM clones are detected automatically from the Editor's data path (`Library/VP/<id>`); each clone gets its own device id and token store. Standalone builds/CI use `-exoProfile <name>` on the command line. The default profile keeps the legacy PlayerPrefs keys, so existing players keep their account.
+
+---
+
+## AI Agent Tooling & Embedded CLI (Opt-In)
+
+`com.exoforge.sdk` bundles the `exo` CLI (`Editor/Cli~/exo`, `exo.cmd`, `exo.dll`) and agent guide/skills (`Agents~/AGENTS.md`, `Agents~/skills/`) inside the package without writing anything to your project root automatically on import, initialization, scaffold, or build.
+
+To opt in and install skills, `AGENTS.md`, and `./exo` wrappers into your Unity project:
+
+- **Unity Editor**: **Exoforge ▸ Agents ▸ Install Agent Skills & CLI...**
+- **Headless Unity (CI / automation)**:
+  ```bash
+  Unity -batchmode -quit -nographics -projectPath <path> -executeMethod Exoforge.Unity.Editor.ExoforgeAgentTools.InstallAgentSkillsAndCliHeadless
+  ```
+- **Embedded CLI** (explicit target flags required; running without flags prints help and installs nothing):
+  ```bash
+  dotnet Packages/com.exoforge.sdk/Editor/Cli~/exo.dll agents install --claude   # or --gemini, --agents, --all
+  ```
+
+Installation is idempotent and appends a marked `.gitignore` block (`# >>> EXOFORGE-AGENT-TOOLING:START` / `# <<< EXOFORGE-AGENT-TOOLING:END`) listing the generated artifacts (`.agents/`, `.claude/`, `.gemini/`, `AGENTS.md`, `exo`, `exo.cmd`).

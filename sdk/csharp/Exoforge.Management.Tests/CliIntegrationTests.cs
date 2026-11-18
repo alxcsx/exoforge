@@ -231,7 +231,7 @@ public class CliIntegrationTests : IDisposable
         var (installCode, installOut) = await RunCliAsync(
             "agents", "install",
             "--dir", tempUnityProject,
-            "--target", "all",
+            "--all",
             "--json"
         );
 
@@ -260,6 +260,12 @@ public class CliIntegrationTests : IDisposable
 
         string wrapperContent = File.ReadAllText(exoWrapperFile);
         Assert.Contains("exo.dll", wrapperContent);
+
+        string gitignoreFile = Path.Combine(tempUnityProject, ".gitignore");
+        Assert.True(File.Exists(gitignoreFile), "Expected .gitignore to exist");
+        string gitignoreContent = File.ReadAllText(gitignoreFile);
+        Assert.Contains("# >>> EXOFORGE-AGENT-TOOLING:START", gitignoreContent);
+        Assert.Contains("# <<< EXOFORGE-AGENT-TOOLING:END", gitignoreContent);
 
         var (statusCode, statusOut) = await RunCliAsync(
             "agents", "status",

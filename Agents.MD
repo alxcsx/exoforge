@@ -106,6 +106,11 @@ file_bucket ──▶ database
   `ExoWorkspace` resolves any `Assets/...` config path against the project root automatically.
 - **Caveat**: the workspace is invisible to Unity's AssetDatabase, so editor tooling must reach it
   through `System.IO` (`ExoWorkspace.ExtensionsPath`, `ExoDeployer`), never `AssetDatabase`/`Resources`.
+- **Bundled AI Tooling & Embedded CLI (Opt-In)**: `com.exoforge.sdk` ships `Agents~/` (`AGENTS.md` + `skills/`) and `Editor/Cli~/` (`exo`, `exo.cmd`, `exo.dll`, staged by `just build-unity-sdk` and packed into `dist/com.exoforge.sdk-*.tgz` by `just pack-unity`). Nothing AI-related is ever installed automatically on package import, `exo init`, `exo extension new`, setup wizard, or build. Developers opt in explicitly via:
+  - CLI: `exo agents install --claude|--gemini|--agents|--all` (invoking `exo agents install` with no target flags prints help and installs nothing).
+  - Unity Editor menu: **Exoforge ▸ Agents ▸ Install Agent Skills & CLI...**.
+  - Headless Unity: `-batchmode -quit -nographics -executeMethod Exoforge.Unity.Editor.ExoforgeAgentTools.InstallAgentSkillsAndCliHeadless`.
+  Installation is idempotent and writes a marked `.gitignore` block (`# >>> EXOFORGE-AGENT-TOOLING:START` / `# <<< EXOFORGE-AGENT-TOOLING:END`) listing the generated artifacts (`.agents/`, `.claude/`, `.gemini/`, `AGENTS.md`, `exo`, `exo.cmd`).
 
 > **Rule**: Game-specific extensions must NOT touch `core/`, `extensions/`, or `extensions_csharp/`. They live exclusively inside the game project and are built/deployed independently. The system `just build-extensions` only builds `extensions_csharp/`; game extensions are built within their own project (e.g., Unity Editor menu or the game's own build scripts).
 
@@ -146,7 +151,7 @@ dependencies, and the runtime comes from the host, which is how UGS Cloud Code s
 runtime in it). `manifest.json` and the entry point are written by the
 `Exoforge.Plugin.Generator` source generator during that same compile — there is no separate manifest
 tool. The Unity **Exoforge Studio ▸ Extensions** tab runs the same build and deploys the result, so game
-teams never need the CLI. The
+teams never need the CLI for day-to-day workflows (though `Editor/Cli~` ships inside the Unity SDK package for CI, headless runs, and opt-in agent tooling). The
 entry point and the action/event dispatch table are generated for you, so the host never reflects
 over the extension's methods:
 

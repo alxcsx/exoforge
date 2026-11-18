@@ -5,10 +5,15 @@ This guide provides AI agents and developer tooling with essential architectural
 
 ## 1. Embedded CLI Execution
 
-All backend operations are handled through the Exoforge CLI (`exo`).
+All backend operations are handled through the Exoforge CLI (`exo`). AI tooling (`AGENTS.md`, skills, and root `./exo` wrappers) is **opt-in** and never installed automatically when importing `com.exoforge.sdk`.
 
-- **Project Root Wrapper**: If installed, execute `./exo <command>` directly from the Unity project root.
-- **Embedded Package Fallback**: When the root wrapper is not present, invoke the compiled binary with `dotnet`:
+- **Opt-In Installation**:
+  - CLI: `dotnet Packages/com.exoforge.sdk/Editor/Cli~/exo.dll agents install --all` (or `--claude`, `--gemini`, `--agents`; running `exo agents install` with no flags prints help and installs nothing).
+  - Unity Editor: **Exoforge ▸ Agents ▸ Install Agent Skills & CLI...** (or headless via `-batchmode -quit -nographics -executeMethod Exoforge.Unity.Editor.ExoforgeAgentTools.InstallAgentSkillsAndCliHeadless`).
+  - Installations are idempotent and add a marked `.gitignore` block (`# >>> EXOFORGE-AGENT-TOOLING:START` / `# <<< EXOFORGE-AGENT-TOOLING:END`) covering the generated files.
+- **Project Root Wrapper**: Once installed, execute `./exo <command>` directly from the Unity project root.
+- **Embedded Package Fallback**: Before or without root wrappers, invoke the bundled CLI directly from `Editor/Cli~/`:
+  - `Packages/com.exoforge.sdk/Editor/Cli~/exo <command>` (or `exo.cmd` on Windows)
   - `dotnet Packages/com.exoforge.sdk/Editor/Cli~/exo.dll <command>`
   - Or from the UPM cache: `dotnet Library/PackageCache/com.exoforge.sdk@*/Editor/Cli~/exo.dll <command>`
 - **Structured JSON Output**: Always append `--json` to commands when programmatic parsing is required. JSON responses are written directly to stdout.
@@ -45,7 +50,7 @@ Unity projects integrate Exoforge using a strict boundary between client code an
 
 ## 3. Installed Agent Skills
 
-Specialized agent skill instructions are available in the project skills directory:
+When opted in via `exo agents install` or the Unity Editor menu, specialized agent skill instructions are installed into the selected skills directories (`.agents/skills/`, `.claude/skills/`, and/or `.gemini/skills/`) and ignored by git via the marked `.gitignore` block:
 
 - **`exoforge-extensions`**: Full lifecycle of server-side C# extensions: scaffolding (`new`), compiling (`build`), deploying to the cluster (`push`), inspecting runtime outputs (`logs`), and updating client bindings (`sync`).
 - **`exoforge-resources`**: Defining `[ExoResource]` entities, inspecting database tables, running migrations, and executing CRUD operations on cluster storage.
@@ -55,6 +60,8 @@ Specialized agent skill instructions are available in the project skills directo
 
 | Command | Purpose |
 | :--- | :--- |
+| `exo agents install --claude\|--gemini\|--agents\|--all` | Opt in to installing selected AI skills, `AGENTS.md`, `./exo` wrappers, and the marked `.gitignore` block (no flags prints help). |
+| `exo agents status --json` | Inspect installed agent tooling, skills, and CLI wrappers. |
 | `exo status --json` | Inspect cluster connectivity, node status, and response latency. |
 | `exo contracts --json` | List all registered service contracts, actions, and event schemas. |
 | `exo sync` | Download cluster contracts and regenerate `Assets/Exoforge/Generated/ExoforgeServices.g.cs`. |
