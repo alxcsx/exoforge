@@ -20,6 +20,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
@@ -31,6 +32,7 @@
   <!-- The SDK and the generator come from Directory.Build.targets: this project declares itself a
        plugin and gets both, plus the manifest plumbing. The contracts project is its own thing. -->
   <ItemGroup>
+    <ProjectReference Include="..\Exoforge.Plugin.Generator\Exoforge.Plugin.Generator.csproj" />
     <ProjectReference Include="..\Exoforge.Plugin.Generator.Tests.Contracts\Exoforge.Plugin.Generator.Tests.Contracts.csproj" />
   </ItemGroup>
 

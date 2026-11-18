@@ -35,7 +35,7 @@ internal static class DispatchEmitter
             {
                 var parameter = parameters[i];
                 string type = parameter.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                string wireName = ToSnakeCase(parameter.Name);
+                string wireName = ExoforgePluginGenerator.ToSnakeCase(parameter.Name);
                 string fallback = FormatDefault(parameter);
                 string comma = i < parameters.Length - 1 ? "," : "";
 
@@ -220,18 +220,5 @@ internal static class DispatchEmitter
             long l => l.ToString(CultureInfo.InvariantCulture) + "L",
             _ => Convert.ToString(value, CultureInfo.InvariantCulture) ?? "default!",
         };
-    }
-
-    private static string ToSnakeCase(string name)
-    {
-        var sb = new StringBuilder(name.Length + 4);
-
-        for (int i = 0; i < name.Length; i++)
-        {
-            if (char.IsUpper(name[i]) && i > 0) sb.Append('_');
-            sb.Append(char.ToLowerInvariant(name[i]));
-        }
-
-        return sb.ToString();
     }
 }
