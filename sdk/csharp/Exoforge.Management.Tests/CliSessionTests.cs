@@ -185,7 +185,7 @@ public class CliSessionTests : IDisposable
         string newRefreshToken = loginResult.GetProperty("refresh_token").GetString()!;
 
         // The writer in Exoforge.Management writes the new session to the workspace active environment
-        deployer.SaveSessionToken(newToken, newRefreshToken, "local");
+        workspace.SaveSessionToken(newToken, newRefreshToken, "local");
 
         // Verify workspace was updated in-memory and on disk
         var reloadedEnv = ExoWorkspace.Load(exoforgeDir).GetActiveEnvironment("local");

@@ -524,10 +524,8 @@ public partial class ExoforgeControlCenter : EditorWindow
         {
             string envName = environmentName ?? ActiveEnvironment?.Name ?? ExoforgeEditorConfig.SelectedEnvironment ?? "local";
             string wsPath = ExoforgeEditorConfig.GetAbsoluteWorkspacePath();
-            if (!ExoWorkspace.Exists(wsPath))
-            {
-                ExoWorkspace.Initialize(wsPath);
-            }
+            // A project with no exo workspace has no exoforge.json to keep in step; login must not create one.
+            if (!ExoWorkspace.Exists(wsPath)) return;
 
             var ws = Instance?.Workspace ?? ExoWorkspace.Load(wsPath);
             ws.SaveSessionToken(token, refreshToken, envName);
