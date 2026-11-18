@@ -42,18 +42,35 @@ namespace Exoforge.Unity.Editor
         {
             // A headless import (-batchmode -quit) never pumps delayCall, and that is the run where an
             // SDK upgrade must not leave every extension's nuget.config naming the package cache
-            // directory the upgrade deleted. Do it synchronously when the package version moved.
+            // directory the upgrade deleted. Do it synchronously when the package version moved or the
+            // workspace still has pre-.feed NuGet configuration.
             bool packageChanged = PackageVersionChanged();
-            if (packageChanged)
+            bool needsFeedMigration = NeedsWorkspaceFeedMigration();
+            if (packageChanged || needsFeedMigration)
             {
                 EnsureWorkspaceFeed();
-                EditorPrefs.SetString(PackageVersionPrefKey, ExoforgePackageVersion.SdkVersion);
+                if (packageChanged)
+                {
+                    EditorPrefs.SetString(PackageVersionPrefKey, ExoforgePackageVersion.SdkVersion);
+                }
             }
 
             EditorApplication.delayCall += () =>
             {
-                EnsureIdeConfiguration(forceRegenerate: packageChanged);
+                EnsureIdeConfiguration(forceRegenerate: packageChanged || needsFeedMigration);
             };
+        }
+
+        private static bool NeedsWorkspaceFeedMigration()
+        {
+            try
+            {
+                return ExoScaffolder.NeedsFeedMigration(ExoforgeEditorConfig.GetAbsoluteWorkspacePath());
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private static bool PackageVersionChanged() =>

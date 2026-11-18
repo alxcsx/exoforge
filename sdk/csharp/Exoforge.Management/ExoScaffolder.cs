@@ -204,6 +204,19 @@ public static class ExoScaffolder
         "  </packageSources>\n" +
         "</configuration>\n";
 
+    public static bool NeedsFeedMigration(string workspaceRoot)
+    {
+        if (string.IsNullOrEmpty(workspaceRoot) || !Directory.Exists(workspaceRoot)) return false;
+
+        string nugetConfig = Path.Combine(workspaceRoot, "nuget.config");
+        if (!File.Exists(nugetConfig) || File.ReadAllText(nugetConfig) != NugetConfigContent)
+            return true;
+
+        string extensionsDir = Path.Combine(workspaceRoot, "extensions");
+        return Directory.Exists(extensionsDir) &&
+               Directory.GetFiles(extensionsDir, "nuget.config", SearchOption.AllDirectories).Length > 0;
+    }
+
     /// <summary>
     /// Makes a workspace able to build an extension with no repository around it: the static
     /// nuget.config, and the SDK package itself in <see cref="FeedDirectoryName"/> when it is not
