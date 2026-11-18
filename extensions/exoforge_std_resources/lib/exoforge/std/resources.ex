@@ -98,7 +98,7 @@ defmodule Exoforge.Std.Resources do
                 :ok
 
               {:error, reason} ->
-                {:error, reason}
+                {:error, {:migration_failed, %{extension: info.extension_id, table: table, reason: reason}}}
             end
         end
     end
@@ -234,8 +234,9 @@ defmodule Exoforge.Std.Resources do
   @impl true
   defaction migrate(payload), scope: Exoforge.Auth.Roles.studio() do
     target = param(payload, :resource)
+    extension = param(payload, :extension)
 
-    case run_migrations(target) do
+    case run_migrations(target, extension) do
       {:error, reason} -> {:error, reason}
       count when is_integer(count) -> {:ok, %{migrated: count}}
     end

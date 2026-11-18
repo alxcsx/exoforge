@@ -258,4 +258,204 @@ defmodule Exoforge.Std.ExtensionManagerTest do
                )
     end
   end
+
+  defmodule StubResourceStore do
+    use Exoforge.Extension, provides: [:resource_store]
+
+    @impl true
+    defaction migrate(payload) do
+      extension = Map.get(payload, :extension) || Map.get(payload, "extension")
+
+      resources =
+        ExtensionRegistry.all_resources()
+        |> Enum.filter(fn info ->
+          extension == nil or to_string(info.extension_id) == to_string(extension)
+        end)
+
+      Enum.reduce_while(resources, {:ok, %{migrated: 0}}, fn info, {:ok, %{migrated: count}} ->
+        res = info.resource
+        cols = res.columns || []
+        names = Enum.map(cols, &String.downcase(to_string(&1[:name] || &1["name"] || "")))
+
+        if Enum.uniq(names) != names do
+          {:halt,
+           {:error,
+            {:invalid_resource,
+             %{extension: info.extension_id, table: to_string(res.name), column: List.first(names), reason: :duplicate_column}}}}
+        else
+          {:cont, {:ok, %{migrated: count + 1}}}
+        end
+      end)
+    end
+  end
+
+  describe "Scoped extension migrations and redeploy rollback" do
+    setup do
+      Exoforge.ExtensionCase.register_extension(StubResourceStore,
+        id: :test_resource_store,
+        name: "TestResourceStore",
+        version: Version.parse!("0.1.0"),
+        type: :elixir,
+        provides: [:resource_store]
+      )
+
+      on_exit(fn ->
+        File.rm_rf("priv/data/uploaded_extensions/ext_a_broken")
+        File.rm_rf("priv/data/uploaded_extensions/ext_b_healthy")
+        File.rm_rf("priv/data/uploaded_extensions/ext_redeploy_roll")
+
+        if :ets.whereis(:exo_extensions_mem) != :undefined do
+          ExtensionRegistry.unregister(:ext_a_broken)
+          ExtensionRegistry.unregister(:ext_b_healthy)
+          ExtensionRegistry.unregister(:ext_redeploy_roll)
+          ExtensionRegistry.unregister(:test_resource_store)
+        end
+      end)
+
+      :ok
+    end
+
+    test "broken resource in extension A does not block pushing extension B" do
+      ExtensionRegistry.register(%Exoforge.Domain.Manifest{
+        id: :ext_a_broken,
+        name: "ExtABroken",
+        version: Version.parse!("0.1.0"),
+        entry_point: "ext_a_broken",
+        type: :native,
+        services: [
+          %{
+            name: :ext_a_broken,
+            resources: [
+              %{
+                name: :broken_table,
+                primary_key: :id,
+                columns: [
+                  %{name: :id, type: :string},
+                  %{name: :Id, type: :string}
+                ]
+              }
+            ]
+          }
+        ]
+      })
+
+      manifest_b = """
+      {
+        "id": "ext_b_healthy",
+        "version": "0.1.0",
+        "type": "elixir",
+        "entry_point": "Elixir.ExtBHealthy",
+        "provides": ["ext_b_healthy"],
+        "services": [
+          {
+            "name": "ext_b_healthy",
+            "resources": [
+              {
+                "name": "healthy_table",
+                "primary_key": "id",
+                "columns": [{"name": "id", "type": "string"}]
+              }
+            ]
+          }
+        ]
+      }
+      """
+
+      elixir_b = """
+      defmodule ExtBHealthy do
+        use Exoforge.Extension, provides: [:ext_b_healthy]
+        defaction ping(_p), do: {:ok, %{ok: true}}
+      end
+      """
+
+      assert {:ok, %{extension_id: "ext_b_healthy", status: "installed"}} =
+               ActionDispatcher.dispatch(
+                 :extension_manager,
+                 :upload_extension,
+                 %{name: "ext_b_healthy", type: "elixir", elixir_code: elixir_b, manifest: manifest_b},
+                 caller_scopes: ["admin"]
+               )
+    end
+
+    test "migration error names extension and table, and failed redeploy keeps previous version registered" do
+      elixir_v1 = """
+      defmodule ExtRedeployRoll do
+        use Exoforge.Extension, provides: [:ext_redeploy_roll]
+        defaction version(_p), do: {:ok, %{v: 1}}
+      end
+      """
+
+      manifest_v1 = """
+      {
+        "id": "ext_redeploy_roll",
+        "version": "1.0.0",
+        "type": "elixir",
+        "entry_point": "Elixir.ExtRedeployRoll",
+        "provides": ["ext_redeploy_roll"],
+        "services": [
+          {
+            "name": "ext_redeploy_roll",
+            "resources": [
+              {
+                "name": "roll_table",
+                "primary_key": "id",
+                "columns": [{"name": "id", "type": "string"}]
+              }
+            ]
+          }
+        ]
+      }
+      """
+
+      assert {:ok, %{extension_id: "ext_redeploy_roll"}} =
+               ActionDispatcher.dispatch(
+                 :extension_manager,
+                 :upload_extension,
+                 %{name: "ext_redeploy_roll", type: "elixir", elixir_code: elixir_v1, manifest: manifest_v1},
+                 caller_scopes: ["admin"]
+               )
+
+      assert %{version: v1} = ExtensionRegistry.fetch_manifest(:ext_redeploy_roll)
+      assert to_string(v1) == "1.0.0"
+
+      manifest_v2_bad = """
+      {
+        "id": "ext_redeploy_roll",
+        "version": "2.0.0",
+        "type": "elixir",
+        "entry_point": "Elixir.ExtRedeployRoll",
+        "provides": ["ext_redeploy_roll"],
+        "services": [
+          {
+            "name": "ext_redeploy_roll",
+            "resources": [
+              {
+                "name": "roll_table",
+                "primary_key": "id",
+                "columns": [
+                  {"name": "id", "type": "string"},
+                  {"name": "Id", "type": "string"}
+                ]
+              }
+            ]
+          }
+        ]
+      }
+      """
+
+      assert {:error,
+              {:migration_failed,
+               {:invalid_resource, %{extension: :ext_redeploy_roll, table: "roll_table", reason: :duplicate_column}}}} =
+               ActionDispatcher.dispatch(
+                 :extension_manager,
+                 :upload_extension,
+                 %{name: "ext_redeploy_roll", type: "elixir", elixir_code: elixir_v1, manifest: manifest_v2_bad},
+                 caller_scopes: ["admin"]
+               )
+
+      assert %{version: current_version} = ExtensionRegistry.fetch_manifest(:ext_redeploy_roll)
+      assert to_string(current_version) == "1.0.0"
+      assert {:ok, %{v: 1}} = ActionDispatcher.dispatch_internal(:ext_redeploy_roll, :version, %{})
+    end
+  end
 end

@@ -540,4 +540,195 @@ defmodule Exoforge.Std.ResourcesTest do
                caller_scopes: ["player"]
              )
   end
+
+  defp register_native_manifest(id, json_map) do
+    dir = Path.join(System.tmp_dir!(), "exo_res_test_#{id}_#{System.unique_integer([:positive])}")
+    File.mkdir_p!(dir)
+    File.write!(Path.join(dir, "manifest.json"), Jason.encode!(json_map))
+    [manifest] = Exoforge.Drivers.Loaders.ManifestLoader.load_extensions(dir)
+    Exoforge.ExtensionRegistry.register(manifest)
+
+    on_exit(fn ->
+      if :ets.whereis(:exo_extensions_mem) != :undefined do
+        Exoforge.ExtensionRegistry.unregister(manifest.id)
+      end
+
+      File.rm_rf!(dir)
+    end)
+
+    manifest
+  end
+
+  test "loja_itens manifest with PrimaryKey 'Id' and column 'id' migrates twice and stores rows" do
+    register_native_manifest("loja_itens", %{
+      "id" => "loja_itens",
+      "name" => "LojaItens",
+      "version" => "0.1.0",
+      "type" => "native",
+      "entry_point" => "loja_itens",
+      "services" => [
+        %{
+          "name" => "loja_itens",
+          "resources" => [
+            %{
+              "name" => "itens",
+              "source" => %{"table" => "itens"},
+              "primary_key" => "Id",
+              "columns" => [
+                %{"name" => "id", "type" => "string"},
+                %{"name" => "nome", "type" => "string"},
+                %{"name" => "tipo", "type" => "string"},
+                %{"name" => "preco", "type" => "integer"}
+              ]
+            },
+            %{
+              "name" => "inventario",
+              "source" => %{"table" => "inventario"},
+              "primary_key" => "Id",
+              "columns" => [
+                %{"name" => "id", "type" => "string"},
+                %{"name" => "ouro", "type" => "integer"},
+                %{"name" => "itens", "type" => "map"}
+              ]
+            }
+          ]
+        }
+      ]
+    })
+
+    assert {:ok, %{migrated: 2}} =
+             ActionDispatcher.dispatch_internal(:resource_store, :migrate, %{extension: "loja_itens"})
+
+    # Redeploy / second migrate succeeds cleanly without duplicate-column errors.
+    assert {:ok, %{migrated: 2}} =
+             ActionDispatcher.dispatch_internal(:resource_store, :migrate, %{extension: "loja_itens"})
+
+    assert {:ok, %{row: item}} =
+             dispatch(:create, %{
+               resource: "itens",
+               attributes: %{"id" => "espada", "nome" => "Espada", "tipo" => "arma", "preco" => 50}
+             })
+
+    assert item["nome"] == "Espada"
+  end
+
+  test "refuses duplicate columns differing only by case before running any DDL" do
+    register_native_manifest("dup_ext", %{
+      "id" => "dup_ext",
+      "name" => "DupExt",
+      "version" => "0.1.0",
+      "type" => "native",
+      "entry_point" => "dup_ext",
+      "services" => [
+        %{
+          "name" => "dup_svc",
+          "resources" => [
+            %{
+              "name" => "dup_items",
+              "source" => %{"table" => "dup_items"},
+              "primary_key" => "id",
+              "columns" => [
+                %{"name" => "id", "type" => "string"},
+                %{"name" => "Name", "type" => "string"},
+                %{"name" => "name", "type" => "string"}
+              ]
+            }
+          ]
+        }
+      ]
+    })
+
+    assert {:error, {:invalid_resource, %{extension: :dup_ext, table: "dup_items", column: col, reason: :duplicate_column}}} =
+             ActionDispatcher.dispatch_internal(:resource_store, :migrate, %{extension: "dup_ext"})
+
+    assert String.downcase(col) == "name"
+
+    assert {:ok, %{rows: []}} =
+             Exoforge.Std.Database.execute(
+               :dup_ext,
+               "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'dup_items'"
+             )
+  end
+
+  test "refuses primary_key naming no column before running any DDL" do
+    register_native_manifest("bad_pk_ext", %{
+      "id" => "bad_pk_ext",
+      "name" => "BadPkExt",
+      "version" => "0.1.0",
+      "type" => "native",
+      "entry_point" => "bad_pk_ext",
+      "services" => [
+        %{
+          "name" => "bad_pk_svc",
+          "resources" => [
+            %{
+              "name" => "bad_pks",
+              "source" => %{"table" => "bad_pks"},
+              "primary_key" => "missing_id",
+              "columns" => [
+                %{"name" => "id", "type" => "string"},
+                %{"name" => "label", "type" => "string"}
+              ]
+            }
+          ]
+        }
+      ]
+    })
+
+    assert {:error, {:invalid_resource, %{extension: :bad_pk_ext, table: "bad_pks", column: "missing_id", reason: :primary_key_not_found}}} =
+             ActionDispatcher.dispatch_internal(:resource_store, :migrate, %{extension: "bad_pk_ext"})
+
+    assert {:ok, %{rows: []}} =
+             Exoforge.Std.Database.execute(
+               :bad_pk_ext,
+               "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'bad_pks'"
+             )
+  end
+
+  test "scoped migrate ignores a broken resource in another extension" do
+    register_native_manifest("broken_other", %{
+      "id" => "broken_other",
+      "name" => "BrokenOther",
+      "version" => "0.1.0",
+      "type" => "native",
+      "entry_point" => "broken_other",
+      "services" => [
+        %{
+          "name" => "broken_other",
+          "resources" => [
+            %{
+              "name" => "broken_rows",
+              "source" => %{"table" => "broken_rows"},
+              "primary_key" => "missing_id",
+              "columns" => [%{"name" => "id", "type" => "string"}]
+            }
+          ]
+        }
+      ]
+    })
+
+    register_native_manifest("healthy_ext", %{
+      "id" => "healthy_ext",
+      "name" => "HealthyExt",
+      "version" => "0.1.0",
+      "type" => "native",
+      "entry_point" => "healthy_ext",
+      "services" => [
+        %{
+          "name" => "healthy_ext",
+          "resources" => [
+            %{
+              "name" => "healthy_rows",
+              "source" => %{"table" => "healthy_rows"},
+              "primary_key" => "id",
+              "columns" => [%{"name" => "id", "type" => "string"}]
+            }
+          ]
+        }
+      ]
+    })
+
+    assert {:ok, %{migrated: 1}} =
+             ActionDispatcher.dispatch_internal(:resource_store, :migrate, %{extension: "healthy_ext"})
+  end
 end

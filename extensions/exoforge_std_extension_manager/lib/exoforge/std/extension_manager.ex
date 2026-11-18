@@ -212,13 +212,16 @@ defmodule Exoforge.Std.ExtensionManager do
         {:error, :invalid_package}
 
       true ->
+        # Capture the previous manifest before unloading so a failed redeploy migration can restore it.
+        previous = find_manifest(name_str)
+
         # Re-deploying a running extension: stop the old instance first, otherwise its binary is busy
         # (ETXTBSY on Linux) and booting again would start a duplicate runner.
         _ = ExtensionBootstrapper.unload_extension(name_str)
 
         case ext_type do
-          :native -> handle_upload_native(name_str, raw_binary, manifest_param, files_map)
-          :elixir -> handle_upload_elixir(name_str, elixir_code, files_map, manifest_param)
+          :native -> handle_upload_native(name_str, raw_binary, manifest_param, files_map, previous)
+          :elixir -> handle_upload_elixir(name_str, elixir_code, files_map, manifest_param, previous)
         end
     end
   end
@@ -382,7 +385,7 @@ defmodule Exoforge.Std.ExtensionManager do
     end
   end
 
-  defp handle_upload_native(name_str, raw_binary, manifest_param, files_map) do
+  defp handle_upload_native(name_str, raw_binary, manifest_param, files_map, previous \\ nil) do
     if is_nil(raw_binary) or raw_binary == "" do
       {:error, :invalid_package}
     else
@@ -401,7 +404,7 @@ defmodule Exoforge.Std.ExtensionManager do
                :ok <- safe_install_binary(staged_path, binary_path),
                :ok <- write_extension_files(target_dir, files_map),
                :ok <- write_manifest_file(manifest_path, clean_name, manifest_param, :native) do
-            load_and_boot_extension(target_dir, clean_name, :native)
+            load_and_boot_extension(target_dir, clean_name, :native, previous)
           else
             {:error, reason} ->
               Logger.error("[ExtensionManager] Failed to install native extension #{clean_name}: #{inspect(reason)}")
@@ -486,7 +489,7 @@ defmodule Exoforge.Std.ExtensionManager do
 
   defp write_extension_files(_target_dir, _), do: :ok
 
-  defp handle_upload_elixir(name_str, elixir_code, files_map, manifest_param) do
+  defp handle_upload_elixir(name_str, elixir_code, files_map, manifest_param, previous \\ nil) do
     has_code = (is_binary(elixir_code) and String.trim(elixir_code) != "") or (is_map(files_map) and map_size(files_map) > 0)
 
     if not has_code do
@@ -503,7 +506,7 @@ defmodule Exoforge.Std.ExtensionManager do
                :ok <- write_elixir_files(target_dir, clean_name, elixir_code, files_map),
                :ok <- write_manifest_file(manifest_path, clean_name, manifest_param, :elixir),
                :ok <- compile_elixir_extension(target_dir, elixir_code) do
-            load_and_boot_extension(target_dir, clean_name, :elixir)
+            load_and_boot_extension(target_dir, clean_name, :elixir, previous)
           else
             {:error, reason} -> {:error, reason}
             _ -> {:error, :write_failed}
@@ -557,16 +560,18 @@ defmodule Exoforge.Std.ExtensionManager do
     end
   end
 
-  defp load_and_boot_extension(target_dir, clean_name, type) do
+  defp load_and_boot_extension(target_dir, clean_name, type, previous \\ nil) do
     case ManifestLoader.load_extensions(target_dir) do
       [loaded_manifest | _] ->
-        previous = ExtensionRegistry.fetch_manifest(loaded_manifest.id)
+        previous = previous || ExtensionRegistry.fetch_manifest(loaded_manifest.id)
 
         ExtensionRegistry.register(loaded_manifest)
 
         migration_result =
           if ExtensionRegistry.fetch_service(:resource_store) != nil and declares_resources?(loaded_manifest) do
-            Exoforge.ActionDispatcher.dispatch_internal(:resource_store, :migrate, %{extension: loaded_manifest.id})
+            Exoforge.ActionDispatcher.dispatch_internal(:resource_store, :migrate, %{
+              extension: to_string(loaded_manifest.id)
+            })
           else
             {:ok, :noop}
           end
@@ -575,6 +580,10 @@ defmodule Exoforge.Std.ExtensionManager do
           {:error, reason} ->
             if previous do
               ExtensionRegistry.register(previous)
+
+              if Process.whereis(Exoforge.ExtensionSupervisor) != nil do
+                ExtensionBootstrapper.boot_extension(previous)
+              end
             else
               ExtensionRegistry.unregister(loaded_manifest.id)
             end
