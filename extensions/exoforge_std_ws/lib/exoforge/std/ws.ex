@@ -41,7 +41,7 @@ defmodule Exoforge.Std.Ws do
   end
 
   @impl true
-  defaction broadcast(payload) do
+  defaction broadcast(payload), scope: Exoforge.Auth.Roles.studio() do
     topic = Map.get(payload, :topic) || Map.get(payload, "topic")
     event = Map.get(payload, :event) || Map.get(payload, "event")
     data = Map.get(payload, :payload) || Map.get(payload, "payload", %{})
@@ -51,7 +51,7 @@ defmodule Exoforge.Std.Ws do
   end
 
   @impl true
-  defaction connection_count() do
+  defaction connection_count(), scope: Exoforge.Auth.Roles.studio() do
     {:ok, %{count: 0}}
   end
 end

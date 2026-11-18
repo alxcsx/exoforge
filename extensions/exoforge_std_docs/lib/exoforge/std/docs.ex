@@ -31,13 +31,13 @@ defmodule Exoforge.Std.Docs do
   ## ---- SERVICE ACTIONS ----
 
   @impl true
-  defaction list_chapters do
+  defaction list_chapters, scope: Exoforge.Auth.Roles.studio() do
     chapters = load_all_chapters_meta()
     {:ok, %{chapters: chapters, count: length(chapters)}}
   end
 
   @impl true
-  defaction get_chapter(payload) do
+  defaction get_chapter(payload), scope: Exoforge.Auth.Roles.studio() do
     id = Map.get(payload, :id) || Map.get(payload, "id")
 
     case find_chapter(id) do
@@ -51,7 +51,7 @@ defmodule Exoforge.Std.Docs do
   end
 
   @impl true
-  defaction export_docs(payload) do
+  defaction export_docs(payload), scope: Exoforge.Auth.Roles.studio() do
     format = Map.get(payload, :format) || Map.get(payload, "format") || "markdown"
     chapters = load_all_chapters()
     catalog = build_api_catalog()

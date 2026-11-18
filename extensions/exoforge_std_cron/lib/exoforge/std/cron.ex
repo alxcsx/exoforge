@@ -43,7 +43,7 @@ defmodule Exoforge.Std.Cron do
   end
 
   @impl true
-  defaction status() do
+  defaction status(), scope: Exoforge.Auth.Roles.studio() do
     jobs = Scheduler.list_jobs()
     {:ok, %{status: "online", active_jobs: length(jobs)}}
   end

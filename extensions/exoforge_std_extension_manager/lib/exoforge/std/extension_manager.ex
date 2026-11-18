@@ -237,7 +237,7 @@ defmodule Exoforge.Std.ExtensionManager do
   end
 
   @impl true
-  defaction csharp_attributes do
+  defaction csharp_attributes, scope: Exoforge.Auth.Roles.studio() do
     files = scan_csharp_attributes()
     {:ok, %{files: files, count: length(files)}}
   end

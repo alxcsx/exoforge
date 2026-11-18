@@ -81,6 +81,20 @@ defmodule Exoforge.Std.WsTest do
     :ok
   end
 
+  test "a player cannot call ws.broadcast; staff can" do
+    Exoforge.ExtensionCase.register_extension(Exoforge.Std.Ws, id: :exoforge_std_ws, provides: [:ws])
+
+    payload = %{topic: "room:x", event: "spoofed", payload: %{}}
+
+    assert {:error, {:forbidden_scope, %{required: "studio"}}} =
+             Exoforge.ActionDispatcher.dispatch(:ws, :broadcast, payload, caller_scopes: ["player"])
+
+    assert {:error, {:forbidden_scope, _}} =
+             Exoforge.ActionDispatcher.dispatch(:ws, :connection_count, %{}, caller_scopes: ["player"])
+
+    assert {:ok, _} = Exoforge.ActionDispatcher.dispatch(:ws, :broadcast, payload, caller_scopes: ["studio"])
+  end
+
   test "HTTP health endpoint returns ok" do
     conn = conn(:get, "/health")
     conn = Router.call(conn, Router.init([]))

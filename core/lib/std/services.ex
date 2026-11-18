@@ -599,12 +599,14 @@ defmodule Exoforge.Std.Services do
 
     @doc "Broadcasts a frame to an active WebSocket topic."
     action :broadcast do
+      scope(:studio)
       params(topic: :string, event: :string, payload: :map)
       returns(status: :string)
     end
 
     @doc "Retrieves current active WebSocket connection count."
     action :connection_count do
+      scope(:studio)
       returns(count: :integer)
     end
   end
@@ -632,6 +634,7 @@ defmodule Exoforge.Std.Services do
 
     @doc "Returns status and count of active cron jobs."
     action :status do
+      scope(:studio)
       returns(status: :string, active_jobs: :integer)
     end
 
@@ -724,6 +727,7 @@ defmodule Exoforge.Std.Services do
 
     @doc "Exports C# companion attributes and types provided by loaded extensions."
     action :csharp_attributes do
+      scope(:studio)
       returns(files: [:map], count: :integer)
     end
   end
@@ -969,11 +973,13 @@ defmodule Exoforge.Std.Services do
 
     @doc "Lists all available documentation chapters."
     action :list_chapters do
+      scope(:studio)
       returns(chapters: [:map])
     end
 
     @doc "Retrieves the content of a specific documentation chapter."
     action :get_chapter do
+      scope(:studio)
       params(id: :string)
       returns(chapter: :map)
       errors([:not_found])
@@ -981,6 +987,7 @@ defmodule Exoforge.Std.Services do
 
     @doc "Exports the consolidated documentation and dynamic API reference as Markdown or HTML."
     action :export_docs do
+      scope(:studio)
       params(format: [type: :string, optional: true])
       returns(title: :string, content: :string, format: :string)
     end
