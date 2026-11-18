@@ -24,6 +24,11 @@ public class ExoDeployer
         _workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
     }
 
+    public void SaveSessionToken(string token, string? refreshToken = null, string? environmentName = null)
+    {
+        _workspace.SaveSessionToken(token, refreshToken, environmentName);
+    }
+
     public async Task<ExoClient> CreateConnectedClientAsync(
         string? environmentName = null,
         CancellationToken cancellationToken = default)

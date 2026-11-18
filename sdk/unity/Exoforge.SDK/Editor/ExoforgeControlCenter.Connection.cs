@@ -172,6 +172,7 @@ public partial class ExoforgeControlCenter : EditorWindow
                 // ExoforgeManager's "use studio connection" flag is on, and the device's own session
                 // is left intact for when it is off.
                 ExoTokenStore.SaveStudioSession(targetToken, auth.PlayerId, auth.Scopes);
+                SaveWorkspaceSessionTokenShared(targetToken, ExoTokenStore.StudioRefreshToken);
 
                 ShowStatus($"Connected as {auth.PlayerId} to {ActiveWsUrl}.", MessageType.Info);
 
@@ -302,6 +303,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         }
 
         ExoTokenStore.SaveStudioSession(token, ExoTokenStore.StudioPlayerId, scopes, null, rotated);
+        SaveWorkspaceSessionTokenShared(token, rotated);
         return true;
     }
 
@@ -474,6 +476,7 @@ public partial class ExoforgeControlCenter : EditorWindow
             }
 
             ExoTokenStore.SaveStudioSession(token, playerId, scopes, null, refreshToken);
+            SaveWorkspaceSessionTokenShared(token, refreshToken);
             ExoforgeEditorConfig.LastLoginEmail = email;
             ExoforgeEditorConfig.LastLoginPassword = password;
             string successMsg = $"Successfully logged in as {playerId}.";
@@ -508,6 +511,32 @@ public partial class ExoforgeControlCenter : EditorWindow
         Instance?.ShowStatus("Logged out and cleared the stored session.", MessageType.Info);
         Instance?.Repaint();
         ExoforgePluginsWindow.Instance?.Repaint();
+    }
+
+    /// <summary>
+    /// Persists the Studio session's access and refresh tokens to the active environment in
+    /// Exoforge/exoforge.json, so CLI commands (exo) and deployment share the authenticated session.
+    /// Never writes to Assets/Resources/exoforge.json (runtime config).
+    /// </summary>
+    internal static void SaveWorkspaceSessionTokenShared(string token, string? refreshToken = null, string? environmentName = null)
+    {
+        try
+        {
+            string envName = environmentName ?? ActiveEnvironment?.Name ?? ExoforgeEditorConfig.SelectedEnvironment ?? "local";
+            string wsPath = ExoforgeEditorConfig.GetAbsoluteWorkspacePath();
+            if (!ExoWorkspace.Exists(wsPath))
+            {
+                ExoWorkspace.Initialize(wsPath);
+            }
+
+            var ws = Instance?.Workspace ?? ExoWorkspace.Load(wsPath);
+            ws.SaveSessionToken(token, refreshToken, envName);
+            InvalidateWorkspaceShared();
+        }
+        catch (Exception ex)
+        {
+            UnityEngine.Debug.LogWarning($"[Exoforge] Failed to persist session token to workspace: {ex.Message}");
+        }
     }
 
     /// <summary>
