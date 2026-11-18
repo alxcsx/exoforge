@@ -248,7 +248,7 @@ defmodule Exoforge.Std.Resources do
 
     cond do
       is_nil(value) -> ""
-      type == :string -> " DEFAULT '#{value}'"
+      type == :string -> " DEFAULT '#{String.replace(to_string(value), "'", "''")}'"
       true -> " DEFAULT #{value}"
     end
   end

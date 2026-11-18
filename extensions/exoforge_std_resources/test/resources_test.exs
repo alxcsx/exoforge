@@ -70,6 +70,7 @@ defmodule Exoforge.Std.ResourcesTest do
         column(:id, :string)
         column(:color_blind, :boolean)
         column(:beta, :boolean, default: false)
+        column(:label, :string, default: "it's on")
         column(:volume, :integer)
         column(:scale, :float)
       end
@@ -253,6 +254,8 @@ defmodule Exoforge.Std.ResourcesTest do
              Exoforge.Std.Database.get(:toggles_plugin, "toggles", "bool_default")
 
     assert default_row["beta"] == false
+    # A quote in a text default is escaped in the DDL instead of ending the literal.
+    assert default_row["label"] == "it's on"
   end
 
   test "migrate creates the backing table" do

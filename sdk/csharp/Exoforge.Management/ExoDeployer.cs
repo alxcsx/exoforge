@@ -1719,6 +1719,18 @@ public class ExoDeployer
         return staged;
     }
 
+    /// <summary>
+    /// Whether the sources differ from what was built. A manifest without the build stamp was not
+    /// written by <c>exo</c> (an IDE or plain <c>dotnet build</c> rewrites it unstamped), so nothing
+    /// proves it matches the sources: it counts as modified, never as current.
+    /// </summary>
+    public static bool IsModifiedSinceBuild(string pluginDir, string? manifestVersion)
+    {
+        if (manifestVersion is null || !manifestVersion.Contains('+')) return true;
+
+        return !manifestVersion.EndsWith("." + ComputeSourceFingerprint(pluginDir), StringComparison.Ordinal);
+    }
+
     public static string ComputeSourceFingerprint(string pluginDir)
     {
         var files = Directory.EnumerateFiles(pluginDir, "*.cs", SearchOption.AllDirectories)

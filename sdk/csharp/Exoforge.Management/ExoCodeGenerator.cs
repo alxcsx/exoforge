@@ -42,6 +42,10 @@ public class ParamModel
     public string Name { get; set; } = string.Empty;
     public string Type { get; set; } = "term";
     public bool Optional { get; set; }
+    public bool Nullable { get; set; }
+
+    /// <summary>The server-side default as JSON text (a valid C# literal for a number, bool or string).</summary>
+    public string? Default { get; set; }
 }
 
 public class EventContractModel
@@ -63,6 +67,7 @@ public class ResourceColumnModel
 {
     public string Name { get; set; } = string.Empty;
     public string Type { get; set; } = "string";
+    public bool Nullable { get; set; }
 }
 
 public static class ExoCodeGenerator
@@ -426,6 +431,9 @@ public static class ExoCodeGenerator
                     }
                 }
 
+                MarkNullable(aModel.Params, act, "params_nullable");
+                MarkParamDefaults(aModel.Params, act);
+
                 if (act.TryGetProperty("returns_list", out var listElem) && listElem.ValueKind == JsonValueKind.True)
                 {
                     aModel.ReturnsList = true;
@@ -467,6 +475,8 @@ public static class ExoCodeGenerator
                         aModel.ReturnType = retElem.GetString();
                     }
                 }
+
+                MarkNullable(aModel.ReturnFields, act, "returns_nullable");
 
                 model.Actions.Add(aModel);
             }
@@ -510,6 +520,7 @@ public static class ExoCodeGenerator
                     }
                 }
 
+                MarkNullable(eModel.PayloadFields, evt, "payload_nullable");
                 model.Events.Add(eModel);
             }
         }
@@ -532,7 +543,8 @@ public static class ExoCodeGenerator
                         rModel.Columns.Add(new ResourceColumnModel
                         {
                             Name = col.TryGetProperty("name", out var cn) ? cn.GetString() ?? "" : "",
-                            Type = col.TryGetProperty("type", out var ct) ? ct.GetString() ?? "string" : "string"
+                            Type = col.TryGetProperty("type", out var ct) ? ct.GetString() ?? "string" : "string",
+                            Nullable = col.TryGetProperty("nullable", out var cnull) && cnull.ValueKind == JsonValueKind.True
                         });
                     }
                 }
@@ -785,7 +797,7 @@ public static class ExoCodeGenerator
                 {
                     string propName = SafePropertyName(col.Name, typeName, usedProps);
                     sb.AppendLine($"        [JsonPropertyName(\"{col.Name}\")]");
-                    sb.AppendLine($"        public {MapTypeToCSharp(col.Type)} {propName} {{ get; set; }} = default!;");
+                    sb.AppendLine($"        public {WithNullable(MapTypeToCSharp(col.Type), col.Nullable)} {propName} {{ get; set; }} = default!;");
                 }
                 sb.AppendLine("    }");
                 sb.AppendLine();
@@ -802,14 +814,14 @@ public static class ExoCodeGenerator
                 var usedReqProps = new HashSet<string>(StringComparer.Ordinal);
                 foreach (var p in act.Params)
                 {
-                    string propType = MapTypeToCSharp(p.Type);
+                    string propType = WithNullable(MapTypeToCSharp(p.Type), p.Nullable);
                     string propName = SafePropertyName(p.Name, reqName, usedReqProps);
                     sb.AppendLine($"        [JsonPropertyName(\"{p.Name}\")]");
                     if (p.Optional || propType == "JsonElement")
                     {
                         sb.AppendLine("        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]");
                     }
-                    sb.AppendLine($"        public {propType} {propName} {{ get; set; }} = default!;");
+                    sb.AppendLine($"        public {propType} {propName} {{ get; set; }} = {ParamInitializer(p, propType)};");
                 }
                 sb.AppendLine("    }");
                 sb.AppendLine();
@@ -832,7 +844,7 @@ public static class ExoCodeGenerator
                     {
                         string propName = SafePropertyName(f.Name, respName, usedRespProps);
                         sb.AppendLine($"        [JsonPropertyName(\"{f.Name}\")]");
-                        sb.AppendLine($"        public {MapReturnFieldType(svc, f)} {propName} {{ get; set; }} = default!;");
+                        sb.AppendLine($"        public {WithNullable(MapReturnFieldType(svc, f), f.Nullable)} {propName} {{ get; set; }} = default!;");
                     }
                     sb.AppendLine("    }");
                     sb.AppendLine();
@@ -851,7 +863,7 @@ public static class ExoCodeGenerator
                 {
                     string propName = SafePropertyName(f.Name, evtName, usedProps);
                     sb.AppendLine($"        [JsonPropertyName(\"{f.Name}\")]");
-                    sb.AppendLine($"        public {MapTypeToCSharp(f.Type)} {propName} {{ get; set; }} = default!;");
+                    sb.AppendLine($"        public {WithNullable(MapTypeToCSharp(f.Type), f.Nullable)} {propName} {{ get; set; }} = default!;");
                 }
                 sb.AppendLine("    }");
                 sb.AppendLine();
@@ -1307,13 +1319,13 @@ public static class ExoCodeGenerator
                     foreach (var p in act.Params)
                     {
                         string propName = SafePropertyName(p.Name, reqName, usedProps);
-                        string csType = MapTypeToCSharp(p.Type);
+                        string csType = WithNullable(MapTypeToCSharp(p.Type), p.Nullable);
                         sb.AppendLine($"    [JsonPropertyName(\"{p.Name}\")]");
                         if (p.Optional || csType == "JsonElement")
                         {
                             sb.AppendLine("    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]");
                         }
-                        sb.AppendLine($"    public {csType} {propName} {{ get; set; }} = default!;");
+                        sb.AppendLine($"    public {csType} {propName} {{ get; set; }} = {ParamInitializer(p, csType)};");
                     }
                     sb.AppendLine("}");
                     sb.AppendLine();
@@ -1332,7 +1344,7 @@ public static class ExoCodeGenerator
                         foreach (var r in act.ReturnFields)
                         {
                             string propName = SafePropertyName(r.Name, respName, usedProps);
-                            string csType = MapTypeToCSharp(r.Type);
+                            string csType = WithNullable(MapTypeToCSharp(r.Type), r.Nullable);
                             sb.AppendLine($"    [JsonPropertyName(\"{r.Name}\")]");
                             sb.AppendLine($"    public {csType} {propName} {{ get; set; }} = default!;");
                         }
@@ -1862,6 +1874,41 @@ public static class ExoCodeGenerator
         string scope = (action.Scope ?? "").Trim().ToLowerInvariant();
         return scope is "" or "player" or "global";
     }
+
+    /// <summary>Flags the fields the manifest lists as <c>Nullable&lt;T&gt;</c> in the plugin's own C#.</summary>
+    private static void MarkNullable(List<ParamModel> fields, JsonElement owner, string key)
+    {
+        if (!owner.TryGetProperty(key, out var names) || names.ValueKind != JsonValueKind.Array) return;
+
+        var set = new HashSet<string>(names.EnumerateArray().Select(n => n.GetString() ?? ""), StringComparer.Ordinal);
+        foreach (var field in fields) field.Nullable = set.Contains(field.Name);
+    }
+
+    /// <summary>Applies <c>params_optional</c> and <c>params_defaults</c>: a parameter the caller may omit, and what the server then uses.</summary>
+    private static void MarkParamDefaults(List<ParamModel> parameters, JsonElement action)
+    {
+        if (action.TryGetProperty("params_optional", out var optional) && optional.ValueKind == JsonValueKind.Array)
+        {
+            var names = new HashSet<string>(optional.EnumerateArray().Select(n => n.GetString() ?? ""), StringComparer.Ordinal);
+            foreach (var p in parameters) p.Optional |= names.Contains(p.Name);
+        }
+
+        if (action.TryGetProperty("params_defaults", out var defaults) && defaults.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var p in parameters)
+            {
+                if (defaults.TryGetProperty(p.Name, out var value)) p.Default = value.GetRawText();
+            }
+        }
+    }
+
+    /// <summary>The initializer a request property gets: the server's own default when the contract carries one.</summary>
+    private static string ParamInitializer(ParamModel p, string csType) =>
+        p.Default is not null && csType.TrimEnd('?') is "int" or "long" or "double" or "bool" or "string" ? p.Default : "default!";
+
+    /// <summary>A value type that may be null in the contract is <c>int?</c>, not <c>int</c>: a null would not deserialize.</summary>
+    private static string WithNullable(string csType, bool nullable) =>
+        nullable && csType is "int" or "long" or "double" or "bool" ? csType + "?" : csType;
 
     private static string MapTypeToCSharp(string type)
     {

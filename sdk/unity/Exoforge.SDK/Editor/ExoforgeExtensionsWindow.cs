@@ -2624,20 +2624,7 @@ namespace Exoforge.Unity.Editor
                     string stagedBin = ExoDeployer.StagedBinary(dir, name);
                     bool isBuilt = !string.IsNullOrEmpty(stagedBin) && File.Exists(stagedBin);
 
-                    bool modified = false;
-                    if (isBuilt)
-                    {
-                        string? builtVer = ExoDeployer.ReadManifestVersion(dir);
-                        string fingerprint = ExoDeployer.ComputeSourceFingerprint(dir);
-                        if (builtVer != null && builtVer.Contains('+'))
-                        {
-                            modified = !builtVer.EndsWith("." + fingerprint, StringComparison.Ordinal);
-                        }
-                        else
-                        {
-                            modified = false;
-                        }
-                    }
+                    bool modified = isBuilt && ExoDeployer.IsModifiedSinceBuild(dir, ExoDeployer.ReadManifestVersion(dir));
 
                     string displayTitle = !string.IsNullOrWhiteSpace(title) ? title : name;
                     bool hasBuildError = SessionState.GetString($"Exoforge_BuildFailed_{name}", "").Length > 0;

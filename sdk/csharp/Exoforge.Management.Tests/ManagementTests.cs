@@ -320,6 +320,52 @@ public class ManagementTests : IDisposable
         Assert.NotEqual(first, second);
     }
 
+    /// <summary>A parameter the server defaults is sent with the same default, so omitting it is not sending zero.</summary>
+    [Fact]
+    public void Stubs_Carry_Parameter_Defaults_And_Nullability()
+    {
+        string exportJson = """
+        {
+            "plugins": [ { "id": "loja", "services": [ {
+                "name": "loja",
+                "actions": [ {
+                    "name": "comprar", "scope": "player",
+                    "params": { "id": "string", "qtd": "integer", "desconto": "integer", "nota": "string" },
+                    "params_optional": ["qtd", "desconto", "nota"],
+                    "params_nullable": ["desconto"],
+                    "params_defaults": { "qtd": 1, "nota": "a\"b" },
+                    "returns": "integer"
+                } ],
+                "events": [], "resources": []
+            } ] } ]
+        }
+        """;
+
+        foreach (string code in new[] { ExoCodeGenerator.GeneratePluginStubs(exportJson), ExoCodeGenerator.GenerateFromExportJson(exportJson) })
+        {
+            Assert.Contains("public long Qtd { get; set; } = 1;", code);
+            Assert.Contains("public long? Desconto { get; set; } = default!;", code);
+            Assert.Contains("public string Nota { get; set; } = \"a\\\"b\";", code);
+            Assert.Contains("public string Id { get; set; } = default!;", code);
+        }
+    }
+
+    [Fact]
+    public void IsModifiedSinceBuild_Treats_An_Unstamped_Manifest_As_Modified()
+    {
+        string dir = Path.Combine(_tempDir, "fp_modified");
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "code.cs"), "public class Test {}\n");
+        string fingerprint = ExoDeployer.ComputeSourceFingerprint(dir);
+
+        Assert.False(ExoDeployer.IsModifiedSinceBuild(dir, $"0.1.0+3.{fingerprint}"));
+        Assert.True(ExoDeployer.IsModifiedSinceBuild(dir, "0.1.0+3.00000000"));
+
+        // An IDE or plain `dotnet build` rewrites manifest.json without the stamp: nothing proves it is current.
+        Assert.True(ExoDeployer.IsModifiedSinceBuild(dir, "0.1.0"));
+        Assert.True(ExoDeployer.IsModifiedSinceBuild(dir, null));
+    }
+
     [Fact]
     public void SourceFingerprint_IgnoresCrlfAndBuildOutputs()
     {
@@ -706,6 +752,50 @@ public class ManagementTests : IDisposable
         // Another plugin's records are not this plugin's business.
         string other = ExoCodeGenerator.GeneratePluginStubs(exportJson, pluginId: "something_else");
         Assert.DoesNotContain("MyGame.SnakeScoreRecord", other);
+    }
+
+    /// <summary>
+    /// <c>int?</c> reaches the manifest as the type atom <c>integer</c> with the name listed beside it, so a
+    /// client stub declares <c>long?</c> and a null price deserializes instead of throwing.
+    /// </summary>
+    [Fact]
+    public void Stubs_Declare_Nullable_Value_Types_The_Manifest_Lists()
+    {
+        string exportJson = """
+        {
+            "plugins": [
+                {
+                    "id": "loja",
+                    "services": [
+                        {
+                            "name": "loja",
+                            "actions": [
+                                {
+                                    "name": "listar", "scope": "player", "params": [],
+                                    "returns": { "id": "string", "preco": "integer", "qtd": "integer" },
+                                    "returns_nullable": ["preco"],
+                                    "returns_list": true
+                                }
+                            ],
+                            "events": [],
+                            "resources": [
+                                { "name": "itens", "primary_key": "id",
+                                  "columns": [ { "name": "id", "type": "string" }, { "name": "preco", "type": "integer", "nullable": true } ] }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+        """;
+
+        foreach (string code in new[] { ExoCodeGenerator.GeneratePluginStubs(exportJson), ExoCodeGenerator.GenerateFromExportJson(exportJson) })
+        {
+            Assert.Contains("public long? Preco", code);
+            Assert.DoesNotContain("public long Preco", code);
+        }
+
+        Assert.Contains("public long Qtd", ExoCodeGenerator.GenerateFromExportJson(exportJson));
     }
 
     /// <summary>

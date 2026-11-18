@@ -374,7 +374,7 @@ namespace Exoforge.Plugin.SDK
                     ResolveActionMode(cronAttr, method.ReturnType),
                     "server",
                     "auto",
-                    method.Parameters.Select(p => new ParamModel(ToSnakeCase(p.Name), MapTypeToElixir(p.Type))).ToList(),
+                    method.Parameters.Select(ParamOf).ToList(),
                     returnsScalar,
                     returnFields,
                     returnsList,
@@ -408,7 +408,7 @@ namespace Exoforge.Plugin.SDK
                 isWebhook ? "sync" : ResolveActionMode(targetAttr, method.ReturnType),
                 NamedString(targetAttr, "Scope") ?? (isWebhook ? "webhook" : "player"),
                 isWebhook ? "webhook" : (NamedEnum(targetAttr, "Transport") ?? "auto").ToLowerInvariant(),
-                method.Parameters.Select(p => new ParamModel(ToSnakeCase(p.Name), MapTypeToElixir(p.Type))).ToList(),
+                method.Parameters.Select(ParamOf).ToList(),
                 returnsScalar,
                 returnFields,
                 returnsList,
@@ -829,7 +829,7 @@ namespace Exoforge.Plugin.SDK
             {
                 if (member is IPropertySymbol property && property.DeclaredAccessibility == Accessibility.Public)
                 {
-                    payload.Add(new ParamModel(ToSnakeCase(property.Name), MapTypeToElixir(property.Type)));
+                    payload.Add(new ParamModel(ToSnakeCase(property.Name), MapTypeToElixir(property.Type), IsNullableValue(property.Type)));
                 }
             }
         }
@@ -1016,7 +1016,8 @@ namespace Exoforge.Plugin.SDK
                 bucket,
                 inputType,
                 isFk,
-                references));
+                references,
+                IsNullableValue(property.Type)));
 
             if (NamedBool(colAttr, "PrimaryKey") && string.IsNullOrEmpty(primaryKey)) primaryKey = colName;
         }
@@ -1246,6 +1247,28 @@ namespace Exoforge.Generated
         return null;
     }
 
+    private static ParamModel ParamOf(IParameterSymbol p)
+    {
+        string? json = null;
+
+        if (p.HasExplicitDefaultValue && p.Type.TypeKind != TypeKind.Enum)
+        {
+            json = p.ExplicitDefaultValue switch
+            {
+                null => null,
+                string text => ManifestEmitter.Str(text),
+                bool flag => flag ? "true" : "false",
+                IFormattable number => number.ToString(null, System.Globalization.CultureInfo.InvariantCulture),
+                _ => null,
+            };
+        }
+
+        return new ParamModel(ToSnakeCase(p.Name), MapTypeToElixir(p.Type), IsNullableValue(p.Type), p.HasExplicitDefaultValue, json);
+    }
+
+    private static bool IsNullableValue(ITypeSymbol type) =>
+        type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T };
+
     private static string MapTypeToElixir(ITypeSymbol type)
     {
         if (type is INamedTypeSymbol named)
@@ -1337,7 +1360,7 @@ namespace Exoforge.Generated
         {
             if (member is IPropertySymbol property && property.DeclaredAccessibility == Accessibility.Public && !property.IsStatic)
             {
-                fields.Add(new ParamModel(ToSnakeCase(property.Name), MapTypeToElixir(property.Type)));
+                fields.Add(new ParamModel(ToSnakeCase(property.Name), MapTypeToElixir(property.Type), IsNullableValue(property.Type)));
             }
         }
 

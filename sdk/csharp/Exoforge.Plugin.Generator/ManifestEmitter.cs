@@ -5,7 +5,8 @@ using System.Text;
 
 namespace Exoforge.Plugin.Generator;
 
-internal sealed record ParamModel(string Name, string Type);
+/// <summary><c>Default</c> is the C# default as JSON text, set only for a parameter that declares one.</summary>
+internal sealed record ParamModel(string Name, string Type, bool Nullable = false, bool Optional = false, string? Default = null);
 
 /// <summary>An enum a column is typed as: its type, and its members with the names the schema uses.</summary>
 internal sealed record EnumModel(string Type, List<KeyValuePair<string, string>> Members);
@@ -23,7 +24,8 @@ internal sealed record ColumnModel(
     string? Bucket = null,
     string? Input = null,
     bool ForeignKey = false,
-    string? References = null);
+    string? References = null,
+    bool Nullable = false);
 
 internal sealed record ActionModel(
     string Name,
@@ -183,9 +185,9 @@ internal static class ManifestEmitter
                 sb.Append($"\"scope\": {Str(action.Scope)}, ");
                 sb.Append($"\"transport\": {Str(action.Transport)}, ");
                 sb.Append($"\"arity\": {action.Params.Count}, ");
-                sb.Append($"\"params\": {AtomMap(action.Params)}, ");
+                sb.Append($"\"params\": {AtomMap(action.Params)}{ParamHints(action.Params)}, ");
                 sb.Append($"\"returns\": {Returns(action)}, ");
-                sb.Append($"\"returns_list\": {Lower(action.ReturnsList)}{returnsType}}}");
+                sb.Append($"\"returns_list\": {Lower(action.ReturnsList)}{returnsType}{NullableNames("returns_nullable", action.ReturnFields)}}}");
                 sb.Append(comma).Append('\n');
             }
 
@@ -197,7 +199,7 @@ internal static class ManifestEmitter
                 var evt = service.Events[i];
                 string comma = i == service.Events.Count - 1 ? "" : ",";
                 string topic = evt.Topic is null ? "" : $", \"topic\": {Str(evt.Topic)}";
-                string payload = evt.Payload.Count == 0 ? "" : $", \"payload\": {AtomMap(evt.Payload)}";
+                string payload = evt.Payload.Count == 0 ? "" : $", \"payload\": {AtomMap(evt.Payload)}{NullableNames("payload_nullable", evt.Payload)}";
                 string payloadType = evt.PayloadTypeName is null ? "" : $", \"payload_type\": {Str(evt.PayloadTypeName)}";
 
                 sb.Append($"        {{\"name\": {Str(evt.Name)}{topic}, \"scope\": {Str(evt.Scope)}{payload}{payloadType}}}");
@@ -300,12 +302,39 @@ internal static class ManifestEmitter
             baseJson += $", \"input\": {Str(column.Input!)}";
         }
 
+        if (column.Nullable) baseJson += ", \"nullable\": true";
+
         return baseJson;
     }
 
     /// <summary>A scalar atom, or a record's fields as a map of name to atom.</summary>
     private static string Returns(ActionModel action) =>
         action.ReturnFields.Count > 0 ? AtomMap(action.ReturnFields) : Str(action.ReturnsScalar ?? "term");
+
+    /// <summary>
+    /// The fields that are <c>Nullable&lt;T&gt;</c> in C#: the type atom stays <c>integer</c>, so a client
+    /// needs this beside it to know a <c>null</c> is a legal value rather than a malformed response.
+    /// </summary>
+    private static string NullableNames(string key, IEnumerable<ParamModel> fields)
+    {
+        var names = fields.Where(f => f.Nullable).Select(f => f.Name).ToList();
+        return names.Count == 0 ? "" : $", \"{key}\": {Atoms(names)}";
+    }
+
+    /// <summary>
+    /// What the type atom cannot say about a parameter: which ones a caller may leave out, which may be
+    /// null, and what the server uses when they are absent - so a stub can offer the same default.
+    /// </summary>
+    private static string ParamHints(IEnumerable<ParamModel> parameters)
+    {
+        var list = parameters.ToList();
+        var sb = new StringBuilder();
+        if (list.Any(p => p.Optional)) sb.Append(", \"params_optional\": ").Append(Atoms(list.Where(p => p.Optional).Select(p => p.Name)));
+        sb.Append(NullableNames("params_nullable", list));
+        var defaults = list.Where(p => p.Default is not null).ToList();
+        if (defaults.Count > 0) sb.Append(", \"params_defaults\": {").Append(string.Join(", ", defaults.Select(p => Str(p.Name) + ": " + p.Default))).Append('}');
+        return sb.ToString();
+    }
 
     private static string AtomMap(IEnumerable<ParamModel> parameters) =>
         "{" + string.Join(", ", parameters.Select(p => Str(p.Name) + ": " + Str(p.Type))) + "}";
@@ -314,7 +343,7 @@ internal static class ManifestEmitter
         "[" + string.Join(", ", values.Select(Str)) + "]";
 
     /// <summary>A JSON string literal. The only values here that are not identifiers are labels and topics.</summary>
-    private static string Str(string value)
+    internal static string Str(string value)
     {
         var sb = new StringBuilder(value.Length + 2);
         sb.Append('"');

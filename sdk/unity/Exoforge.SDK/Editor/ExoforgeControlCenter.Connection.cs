@@ -905,15 +905,7 @@ public partial class ExoforgeControlCenter : EditorWindow
             if (isBuilt)
             {
                 version = ExoDeployer.ReadManifestVersion(dir);
-                string fingerprint = ExoDeployer.ComputeSourceFingerprint(dir);
-                if (version != null && version.Contains('+'))
-                {
-                    modified = !version.EndsWith("." + fingerprint, StringComparison.Ordinal);
-                }
-                else
-                {
-                    modified = false;
-                }
+                modified = ExoDeployer.IsModifiedSinceBuild(dir, version);
             }
 
             string icon = "🧩";
