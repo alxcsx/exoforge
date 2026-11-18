@@ -564,7 +564,7 @@ defmodule Exoforge.Std.ExtensionManager do
 
         migration_result =
           if ExtensionRegistry.fetch_service(:resource_store) != nil and declares_resources?(loaded_manifest) do
-            Exoforge.ActionDispatcher.dispatch_internal(:resource_store, :migrate, %{})
+            Exoforge.ActionDispatcher.dispatch_internal(:resource_store, :migrate, %{extension: loaded_manifest.id})
           else
             {:ok, :noop}
           end
