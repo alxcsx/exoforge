@@ -58,4 +58,12 @@ public class ProfileTests
         Assert.True(ExoProfileResolver.IsValid(new string('a', ExoProfileResolver.MaxNameLength)));
         Assert.False(ExoProfileResolver.IsValid(new string('a', ExoProfileResolver.MaxNameLength + 1)));
     }
+
+    [Fact]
+    public void NonAscii_Letters_And_Digits_Are_Rejected()
+    {
+        Assert.False(ExoProfileResolver.IsValid("café"));
+        Assert.False(ExoProfileResolver.IsValid("player١"));
+        Assert.False(ExoProfileResolver.IsValid("üser"));
+    }
 }

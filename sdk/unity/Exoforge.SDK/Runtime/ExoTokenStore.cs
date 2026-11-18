@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Exoforge.Client.Unity;
 using UnityEngine;
 
 namespace Exoforge.Client
@@ -30,11 +31,11 @@ namespace Exoforge.Client
         private static string NameKey => "Exoforge.PlayerName" + ExoProfile.Suffix;
         private static string AttachedDeviceIdKey => "Exoforge.DeviceId.Attached" + ExoProfile.Suffix;
 
-        private const string StudioTokenKey = "Exoforge.Studio.Token";
-        private const string StudioRefreshTokenKey = "Exoforge.Studio.RefreshToken";
-        private const string StudioPlayerIdKey = "Exoforge.Studio.PlayerId";
-        private const string StudioScopesKey = "Exoforge.Studio.Scopes";
-        private const string StudioNameKey = "Exoforge.Studio.PlayerName";
+        private static string StudioTokenKey => "Exoforge.Studio.Token" + ExoProfile.Suffix;
+        private static string StudioRefreshTokenKey => "Exoforge.Studio.RefreshToken" + ExoProfile.Suffix;
+        private static string StudioPlayerIdKey => "Exoforge.Studio.PlayerId" + ExoProfile.Suffix;
+        private static string StudioScopesKey => "Exoforge.Studio.Scopes" + ExoProfile.Suffix;
+        private static string StudioNameKey => "Exoforge.Studio.PlayerName" + ExoProfile.Suffix;
 
         /// <summary>
         /// Read the Studio's session instead of this device's. Set from <c>ExoforgeManager</c>'s

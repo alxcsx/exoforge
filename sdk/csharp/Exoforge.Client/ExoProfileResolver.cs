@@ -44,7 +44,12 @@ namespace Exoforge.Client
             if (trimmed.Length == 0 || trimmed.Length > MaxNameLength) return false;
             foreach (char c in trimmed)
             {
-                if (!(char.IsLetterOrDigit(c) || c == '-' || c == '_')) return false;
+                bool isAscii = (c >= 'A' && c <= 'Z')
+                    || (c >= 'a' && c <= 'z')
+                    || (c >= '0' && c <= '9')
+                    || c == '-'
+                    || c == '_';
+                if (!isAscii) return false;
             }
             return true;
         }
