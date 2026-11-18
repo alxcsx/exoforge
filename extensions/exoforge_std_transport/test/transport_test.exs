@@ -192,6 +192,16 @@ defmodule Exoforge.Std.TransportTest do
              }
     end
 
+    test "a refusal that knows its reason carries it in the details" do
+      error = Transport.action_error({:forbidden_scope, %{required: :studio, caller_scopes: ["player"], reason: :resource_not_player_readable}})
+
+      assert error["details"] == %{
+               "required_scope" => "studio",
+               "caller_scopes" => ["player"],
+               "reason" => "resource_not_player_readable"
+             }
+    end
+
     test "a bare scope refusal still answers in the nested shape" do
       assert Transport.action_error(:forbidden_scope) == %{
                "code" => "forbidden_scope",

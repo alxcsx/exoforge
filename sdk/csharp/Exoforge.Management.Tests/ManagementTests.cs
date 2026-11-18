@@ -351,6 +351,20 @@ public class ManagementTests : IDisposable
     }
 
     [Fact]
+    public void TargetRidFrom_Reads_The_Clusters_Runtime_From_System_Info()
+    {
+        using var nested = JsonDocument.Parse("""{ "system": { "target_rid": "linux-musl-x64", "os": "linux" } }""");
+        using var flat = JsonDocument.Parse("""{ "target_rid": "linux-arm64" }""");
+        using var missing = JsonDocument.Parse("""{ "system": { "os": "linux" } }""");
+        using var blank = JsonDocument.Parse("""{ "system": { "target_rid": "" } }""");
+
+        Assert.Equal("linux-musl-x64", ExoDeployer.TargetRidFrom(nested.RootElement));
+        Assert.Equal("linux-arm64", ExoDeployer.TargetRidFrom(flat.RootElement));
+        Assert.Null(ExoDeployer.TargetRidFrom(missing.RootElement));
+        Assert.Null(ExoDeployer.TargetRidFrom(blank.RootElement));
+    }
+
+    [Fact]
     public void IsModifiedSinceBuild_Treats_An_Unstamped_Manifest_As_Modified()
     {
         string dir = Path.Combine(_tempDir, "fp_modified");

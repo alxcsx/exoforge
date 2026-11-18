@@ -178,6 +178,23 @@ defmodule Exoforge.Std.Resources do
           )
       end
     end)
+
+    relax_legacy_document_column(pid, table, res, existing)
+  end
+
+  # A table that began as a key-value document store has `data NOT NULL`. Once the resource declares
+  # typed columns, rows are written without a document, and every insert would fail on that
+  # constraint - which used to mean wiping the database. Keeping the column and dropping only its
+  # NOT NULL leaves old rows readable. SQLite cannot alter a constraint (the statement is refused and
+  # ignored there; its document table has no NOT NULL to trip on).
+  defp relax_legacy_document_column(pid, table, res, existing) do
+    declared = Enum.map(res.columns || [], &String.downcase(to_string(&1.name)))
+
+    if "data" in existing and "data" not in declared do
+      _ = db(pid, "ALTER TABLE #{table} ALTER COLUMN data DROP NOT NULL")
+    end
+
+    :ok
   end
 
   defp existing_columns(pid, table) do
@@ -810,7 +827,7 @@ defmodule Exoforge.Std.Resources do
       allow_player_read?(info.resource) -> :ok
       internal_request?() -> :ok
       staff_scopes?(caller_scopes(payload)) -> :ok
-      true -> {:error, :forbidden_scope}
+      true -> {:error, {:forbidden_scope, %{required: :studio, caller_scopes: caller_scopes(payload), reason: :resource_not_player_readable}}}
     end
   end
 

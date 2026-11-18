@@ -158,10 +158,12 @@ defmodule Exoforge.Std.Transport do
     %{
       "code" => "forbidden_scope",
       "message" => "Scope authorization failed",
-      "details" => %{
-        "required_scope" => to_string(required),
-        "caller_scopes" => Enum.map(scopes, &to_string/1)
-      }
+      "details" =>
+        %{
+          "required_scope" => to_string(required),
+          "caller_scopes" => Enum.map(scopes, &to_string/1)
+        }
+        |> put_reason(Map.get(details, :reason) || Map.get(details, "reason"))
     }
   end
 
@@ -265,4 +267,10 @@ defmodule Exoforge.Std.Transport do
   defaction status(), scope: :global do
     {:ok, %{status: "online", layer: "exoforge_std_transport"}}
   end
+
+  # Why the scope was not enough, when the action's own check knows (the dispatcher's does not: the
+  # declared scope is the whole reason).
+  defp put_reason(details, nil), do: details
+  defp put_reason(details, reason), do: Map.put(details, "reason", to_string(reason))
+
 end

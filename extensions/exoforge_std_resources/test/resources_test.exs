@@ -530,7 +530,7 @@ defmodule Exoforge.Std.ResourcesTest do
     assert row["name"] == "Public"
 
     # Player cannot read a resource that did not opt in.
-    assert {:error, :forbidden_scope} =
+    assert {:error, {:forbidden_scope, %{required: :studio, caller_scopes: ["player"], reason: :resource_not_player_readable}}} =
              ActionDispatcher.dispatch(
                :resource_store,
                :list,

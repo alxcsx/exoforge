@@ -1760,6 +1760,7 @@ public static class Program
             Usage: exo extension push <name> [--rid <rid>] [--env <name>] [--dir <path>] [--no-verify]
 
             Builds, uploads, and then confirms the cluster is actually running the new build.
+            --rid defaults to the connected cluster's runtime, not this machine's.
             """);
             return 0;
         }
@@ -1786,6 +1787,7 @@ public static class Program
             Usage: exo extension dev <name> [--rid <rid>] [--env <name>] [--dir <path>]
 
             Builds, deploys, then watches the extension's sources and repeats on every change.
+            --rid defaults to the connected cluster's runtime, not this machine's.
             Stop with Ctrl-C.
             """);
             return 0;
@@ -2187,6 +2189,15 @@ public static class Program
         string? env,
         bool verify)
     {
+        if (rid is null)
+        {
+            // The binary runs on the cluster, not here: build for the cluster's runtime unless told otherwise.
+            rid = await deployer.GetClusterTargetRidAsync(env).ConfigureAwait(false);
+            Console.WriteLine(rid is null
+                ? "[Exoforge] Could not read the cluster's runtime; building for this machine (pass --rid to choose)."
+                : $"[Exoforge] Building for the cluster's runtime: {rid}");
+        }
+
         if (Build(ws, name, rid) != 0)
         {
             Error("[Exoforge] Not deploying: the build failed, so the last good binary would be uploaded.");

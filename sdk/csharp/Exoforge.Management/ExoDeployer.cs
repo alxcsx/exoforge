@@ -1037,6 +1037,35 @@ public class ExoDeployer
         return await client.SendActionAsync<JsonElement>("extension_manager", "get_system_info", null, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// The runtime identifier the connected cluster runs on, so a build for it is not a build for this
+    /// machine (a win-x64 binary uploaded to a linux-musl-x64 cluster dies on its first byte).
+    /// Null when the cluster cannot be asked; the caller then falls back to the host.
+    /// </summary>
+    public async Task<string?> GetClusterTargetRidAsync(string? environmentName = null, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return TargetRidFrom(await GetSystemStatusAsync(environmentName, cancellationToken).ConfigureAwait(false));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return null;
+        }
+    }
+
+    public static string? TargetRidFrom(JsonElement systemInfo)
+    {
+        if (systemInfo.ValueKind != JsonValueKind.Object) return null;
+
+        JsonElement node = systemInfo.TryGetProperty("system", out var system) ? system : systemInfo;
+
+        return node.ValueKind == JsonValueKind.Object && node.TryGetProperty("target_rid", out var rid) && rid.ValueKind == JsonValueKind.String
+            && !string.IsNullOrWhiteSpace(rid.GetString())
+            ? rid.GetString()
+            : null;
+    }
+
     public async Task<JsonElement> ListExtensionsAsync(
         string? environmentName = null,
         CancellationToken cancellationToken = default)
