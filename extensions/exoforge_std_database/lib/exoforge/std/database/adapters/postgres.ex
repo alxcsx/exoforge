@@ -163,7 +163,7 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
     end
   end
 
-  defp execute_resource_kv(:put, plugin_id, schema_name, tbl, %{columns: cols, pk: pk_col}, command, config) do
+  defp execute_resource_kv(:put, plugin_id, schema_name, tbl, %{columns: cols, types: types, pk: pk_col}, command, config) do
     id = to_string(command[:id])
     data = command[:data] || %{}
     record = Map.put(data, "id", id)
@@ -186,56 +186,61 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
     if valid_pairs == [] do
       execute_doc_kv(:put, plugin_id, schema_name, tbl, command, config)
     else
-      safe_schema = quote_ident(schema_name)
-      safe_tbl = quote_ident(tbl)
-      safe_pk = quote_ident(pk_col)
-      {names, values} = Enum.unzip(valid_pairs)
-      placeholders = Enum.map_join(1..length(names), ", ", &"$#{&1}")
+      with {:ok, coerced_pairs} <- coerce_pairs(valid_pairs, types) do
+        safe_schema = quote_ident(schema_name)
+        safe_tbl = quote_ident(tbl)
+        safe_pk = quote_ident(pk_col)
+        {names, values} = Enum.unzip(coerced_pairs)
+        placeholders = Enum.map_join(1..length(names), ", ", &"$#{&1}")
 
-      updates =
-        names
-        |> Enum.reject(&(&1 == pk_col))
-        |> Enum.map_join(", ", fn col ->
-          q = quote_ident(col)
-          "#{q} = EXCLUDED.#{q}"
-        end)
+        updates =
+          names
+          |> Enum.reject(&(&1 == pk_col))
+          |> Enum.map_join(", ", fn col ->
+            q = quote_ident(col)
+            "#{q} = EXCLUDED.#{q}"
+          end)
 
-      sql =
-        "INSERT INTO #{safe_schema}.#{safe_tbl} (#{Enum.map_join(names, ", ", &quote_ident/1)}) " <>
-          "VALUES (#{placeholders}) " <>
-          if(updates == "",
-            do: "ON CONFLICT (#{safe_pk}) DO NOTHING",
-            else: "ON CONFLICT (#{safe_pk}) DO UPDATE SET #{updates}"
-          )
+        sql =
+          "INSERT INTO #{safe_schema}.#{safe_tbl} (#{Enum.map_join(names, ", ", &quote_ident/1)}) " <>
+            "VALUES (#{placeholders}) " <>
+            if(updates == "",
+              do: "ON CONFLICT (#{safe_pk}) DO NOTHING",
+              else: "ON CONFLICT (#{safe_pk}) DO UPDATE SET #{updates}"
+            )
 
-      with {:ok, _} <- execute(plugin_id, sql, values, config) do
-        {:ok, %{rows: [record], num_rows: 1}}
+        with {:ok, _} <- execute(plugin_id, sql, values, config) do
+          {:ok, %{rows: [record], num_rows: 1}}
+        end
       end
     end
   end
 
-  defp execute_resource_kv(:get, plugin_id, schema_name, tbl, %{pk: pk_col}, command, config) do
-    id = to_string(command[:id])
-    sql = "SELECT * FROM #{quote_ident(schema_name)}.#{quote_ident(tbl)} WHERE #{quote_ident(pk_col)} = $1"
+  defp execute_resource_kv(:get, plugin_id, schema_name, tbl, %{types: types, pk: pk_col}, command, config) do
+    with {:ok, id} <- coerce_value(pk_col, Map.get(types, pk_col), to_string(command[:id])) do
+      sql = "SELECT * FROM #{quote_ident(schema_name)}.#{quote_ident(tbl)} WHERE #{quote_ident(pk_col)} = $1"
 
-    case execute(plugin_id, sql, [id], config) do
-      {:ok, %{rows: [row | _]}} -> {:ok, %{rows: [row], num_rows: 1}}
-      {:ok, %{rows: []}} -> {:ok, %{rows: [], num_rows: 0}}
-      error -> error
+      case execute(plugin_id, sql, [id], config) do
+        {:ok, %{rows: [row | _]}} -> {:ok, %{rows: [decode_resource_row(row)], num_rows: 1}}
+        {:ok, %{rows: []}} -> {:ok, %{rows: [], num_rows: 0}}
+        error -> error
+      end
     end
   end
 
-  defp execute_resource_kv(:delete, plugin_id, schema_name, tbl, %{pk: pk_col}, command, config) do
-    id = to_string(command[:id])
-    sql = "DELETE FROM #{quote_ident(schema_name)}.#{quote_ident(tbl)} WHERE #{quote_ident(pk_col)} = $1"
-    execute(plugin_id, sql, [id], config)
+  defp execute_resource_kv(:delete, plugin_id, schema_name, tbl, %{types: types, pk: pk_col}, command, config) do
+    with {:ok, id} <- coerce_value(pk_col, Map.get(types, pk_col), to_string(command[:id])) do
+      sql = "DELETE FROM #{quote_ident(schema_name)}.#{quote_ident(tbl)} WHERE #{quote_ident(pk_col)} = $1"
+      execute(plugin_id, sql, [id], config)
+    end
   end
 
   defp execute_resource_kv(:all, plugin_id, schema_name, tbl, _info, _command, config) do
     sql = "SELECT * FROM #{quote_ident(schema_name)}.#{quote_ident(tbl)}"
 
     with {:ok, %{rows: rows}} <- execute(plugin_id, sql, [], config) do
-      {:ok, %{rows: rows, num_rows: length(rows)}}
+      decoded = Enum.map(rows, &decode_resource_row/1)
+      {:ok, %{rows: decoded, num_rows: length(decoded)}}
     end
   end
 
@@ -306,14 +311,22 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
   end
 
   defp real_table_info(plugin_id, schema_name, tbl, config) do
-    case table_columns(plugin_id, tbl, config) do
-      {:ok, []} ->
+    cols_sql =
+      "SELECT column_name, data_type FROM information_schema.columns " <>
+        "WHERE table_schema = $1 AND table_name = $2 ORDER BY ordinal_position"
+
+    case execute(plugin_id, cols_sql, [schema_name, to_string(tbl)], config) do
+      {:ok, %{rows: []}} ->
         :missing
 
-      {:ok, cols} ->
+      {:ok, %{rows: rows}} ->
+        cols = Enum.map(rows, &to_string(&1["column_name"]))
+
         if Enum.sort(cols) == ["data", "id", "updated_at"] do
           :kv_table
         else
+          types = Map.new(rows, &{to_string(&1["column_name"]), to_string(&1["data_type"])})
+
           pk_sql =
             "SELECT kcu.column_name " <>
               "FROM information_schema.table_constraints tc " <>
@@ -331,13 +344,155 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
               _ -> "id"
             end
 
-          {:resource_table, %{columns: cols, pk: pk_col}}
+          {:resource_table, %{columns: cols, types: types, pk: pk_col}}
         end
 
       _ ->
         :missing
     end
   end
+
+  defp coerce_pairs(pairs, types) do
+    Enum.reduce_while(pairs, {:ok, []}, fn {col, val}, {:ok, acc} ->
+      case coerce_value(col, Map.get(types, col), val) do
+        {:ok, coerced} -> {:cont, {:ok, [{col, coerced} | acc]}}
+        {:error, _} = err -> {:halt, err}
+      end
+    end)
+    |> case do
+      {:ok, reversed} -> {:ok, Enum.reverse(reversed)}
+      error -> error
+    end
+  end
+
+  defp coerce_value(_col, _type, nil), do: {:ok, nil}
+
+  defp coerce_value(col, type, val) when type in ["integer", "smallint", "bigint"] do
+    cond do
+      is_integer(val) ->
+        {:ok, val}
+
+      is_float(val) and trunc(val) == val ->
+        {:ok, trunc(val)}
+
+      is_binary(val) ->
+        case Integer.parse(String.trim(val)) do
+          {n, ""} -> {:ok, n}
+          _ -> {:error, {:invalid_value, col, type}}
+        end
+
+      true ->
+        {:error, {:invalid_value, col, type}}
+    end
+  end
+
+  defp coerce_value(col, type, val) when type in ["numeric", "decimal", "real", "double precision"] do
+    cond do
+      is_number(val) ->
+        {:ok, val}
+
+      is_binary(val) ->
+        case Float.parse(String.trim(val)) do
+          {n, ""} -> {:ok, n}
+          _ -> {:error, {:invalid_value, col, type}}
+        end
+
+      true ->
+        {:error, {:invalid_value, col, type}}
+    end
+  end
+
+  defp coerce_value(col, "boolean" = type, val) do
+    cond do
+      is_boolean(val) ->
+        {:ok, val}
+
+      val in [1, "1", "true", "t", "TRUE", "True"] ->
+        {:ok, true}
+
+      val in [0, "0", "false", "f", "FALSE", "False"] ->
+        {:ok, false}
+
+      is_binary(val) ->
+        case String.downcase(String.trim(val)) do
+          s when s in ["true", "t", "1"] -> {:ok, true}
+          s when s in ["false", "f", "0"] -> {:ok, false}
+          _ -> {:error, {:invalid_value, col, type}}
+        end
+
+      true ->
+        {:error, {:invalid_value, col, type}}
+    end
+  end
+
+  defp coerce_value(col, "timestamp without time zone" = type, val) do
+    case val do
+      %NaiveDateTime{} ->
+        {:ok, val}
+
+      %DateTime{} ->
+        {:ok, DateTime.to_naive(val)}
+
+      s when is_binary(s) ->
+        case NaiveDateTime.from_iso8601(s) do
+          {:ok, ndt} ->
+            {:ok, ndt}
+
+          {:error, _} ->
+            case DateTime.from_iso8601(s) do
+              {:ok, dt, _} -> {:ok, DateTime.to_naive(dt)}
+              {:error, _} -> {:error, {:invalid_value, col, type}}
+            end
+        end
+
+      _ ->
+        {:error, {:invalid_value, col, type}}
+    end
+  end
+
+  defp coerce_value(col, "timestamp with time zone" = type, val) do
+    case val do
+      %DateTime{} ->
+        {:ok, val}
+
+      %NaiveDateTime{} ->
+        {:ok, DateTime.from_naive!(val, "Etc/UTC")}
+
+      s when is_binary(s) ->
+        case DateTime.from_iso8601(s) do
+          {:ok, dt, _} ->
+            {:ok, dt}
+
+          {:error, _} ->
+            case NaiveDateTime.from_iso8601(s) do
+              {:ok, ndt} -> {:ok, DateTime.from_naive!(ndt, "Etc/UTC")}
+              {:error, _} -> {:error, {:invalid_value, col, type}}
+            end
+        end
+
+      _ ->
+        {:error, {:invalid_value, col, type}}
+    end
+  end
+
+  defp coerce_value(col, type, val) when type in ["json", "jsonb"] do
+    cond do
+      is_binary(val) -> {:ok, val}
+      is_map(val) or is_list(val) -> {:ok, Jason.encode!(val)}
+      true -> {:error, {:invalid_value, col, type}}
+    end
+  end
+
+  defp coerce_value(_col, _type, val), do: {:ok, val}
+
+  defp decode_resource_row(row) when is_map(row) do
+    Map.new(row, fn {col, val} -> {col, decode_resource_value(val)} end)
+  end
+
+  defp decode_resource_value(%DateTime{} = dt), do: DateTime.to_iso8601(dt)
+  defp decode_resource_value(%NaiveDateTime{} = ndt), do: NaiveDateTime.to_iso8601(ndt)
+  defp decode_resource_value(%Decimal{} = dec), do: Decimal.to_float(dec)
+  defp decode_resource_value(val), do: val
 
   defp declared_resource_table?(tbl) do
     table = to_string(tbl)
