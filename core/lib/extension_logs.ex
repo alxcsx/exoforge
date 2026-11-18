@@ -385,7 +385,7 @@ defmodule Exoforge.ExtensionLogs do
                level integer,
                level_name text,
                message text,
-               timestamp integer,
+               timestamp bigint,
                rid text
              )
              """
