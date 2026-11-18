@@ -211,19 +211,38 @@ defmodule Exoforge.Std.ExtensionManager do
       is_nil(ext_type) ->
         {:error, :invalid_package}
 
+      ext_type == :native and (is_nil(raw_binary) or raw_binary == "") ->
+        {:error, :invalid_package}
+
+      ext_type == :elixir and not has_elixir_code?(elixir_code, files_map) ->
+        {:error, :invalid_package}
+
       true ->
-        # Capture the previous manifest before unloading so a failed redeploy migration can restore it.
-        previous = find_manifest(name_str)
+        clean_name = sanitize_name(name_str)
 
-        # Re-deploying a running extension: stop the old instance first, otherwise its binary is busy
-        # (ETXTBSY on Linux) and booting again would start a duplicate runner.
-        _ = ExtensionBootstrapper.unload_extension(name_str)
+        case validate_incoming_manifest_resources(clean_name, manifest_param, files_map) do
+          {:error, reason} ->
+            {:error, {:migration_failed, reason}}
 
-        case ext_type do
-          :native -> handle_upload_native(name_str, raw_binary, manifest_param, files_map, previous)
-          :elixir -> handle_upload_elixir(name_str, elixir_code, files_map, manifest_param, previous)
+          :ok ->
+            # Capture the previous manifest before unloading so a failed redeploy can restore it.
+            previous = find_manifest(name_str)
+
+            # Re-deploying a running extension: stop the old instance first, otherwise its binary is busy
+            # (ETXTBSY on Linux) and booting again would start a duplicate runner.
+            _ = ExtensionBootstrapper.unload_extension(name_str)
+
+            case ext_type do
+              :native -> handle_upload_native(name_str, raw_binary, manifest_param, files_map, previous)
+              :elixir -> handle_upload_elixir(name_str, elixir_code, files_map, manifest_param, previous)
+            end
         end
     end
+  end
+
+  defp has_elixir_code?(elixir_code, files_map) do
+    (is_binary(elixir_code) and String.trim(elixir_code) != "") or
+      (is_map(files_map) and map_size(files_map) > 0)
   end
 
   defp remove_extension_internal(payload) do
@@ -385,39 +404,36 @@ defmodule Exoforge.Std.ExtensionManager do
     end
   end
 
-  defp handle_upload_native(name_str, raw_binary, manifest_param, files_map, previous \\ nil) do
-    if is_nil(raw_binary) or raw_binary == "" do
-      {:error, :invalid_package}
-    else
-      clean_name = sanitize_name(name_str)
-      binary = decode_binary(raw_binary)
+  defp handle_upload_native(name_str, raw_binary, manifest_param, files_map, previous) do
+    clean_name = sanitize_name(name_str)
+    binary = decode_binary(raw_binary)
 
-      case ensure_writable_target_dir(clean_name) do
-        {:ok, target_dir} ->
-          is_win = match?({:win32, _}, :os.type())
-          binary_name = if is_win, do: clean_name <> ".exe", else: clean_name
-          binary_path = Path.join(target_dir, binary_name)
-          staged_path = binary_path <> ".new"
-          manifest_path = Path.join(target_dir, "manifest.json")
+    case ensure_writable_target_dir(clean_name) do
+      {:ok, target_dir} ->
+        backup_dir = backup_existing_dir(target_dir)
+        is_win = match?({:win32, _}, :os.type())
+        binary_name = if is_win, do: clean_name <> ".exe", else: clean_name
+        binary_path = Path.join(target_dir, binary_name)
+        staged_path = binary_path <> ".new"
+        manifest_path = Path.join(target_dir, "manifest.json")
 
-          with :ok <- File.write(staged_path, binary),
-               :ok <- safe_install_binary(staged_path, binary_path),
-               :ok <- write_extension_files(target_dir, files_map),
-               :ok <- write_manifest_file(manifest_path, clean_name, manifest_param, :native) do
-            load_and_boot_extension(target_dir, clean_name, :native, previous)
-          else
-            {:error, reason} ->
-              Logger.error("[ExtensionManager] Failed to install native extension #{clean_name}: #{inspect(reason)}")
-              {:error, reason}
+        with :ok <- File.write(staged_path, binary),
+             :ok <- safe_install_binary(staged_path, binary_path),
+             :ok <- write_extension_files(target_dir, files_map),
+             :ok <- write_manifest_file(manifest_path, clean_name, manifest_param, :native) do
+          load_and_boot_extension(target_dir, clean_name, :native, previous, backup_dir)
+        else
+          {:error, reason} ->
+            Logger.error("[ExtensionManager] Failed to install native extension #{clean_name}: #{inspect(reason)}")
+            rollback_extension(target_dir, clean_name, previous, backup_dir, reason)
 
-            _ ->
-              {:error, :write_failed}
-          end
+          _ ->
+            rollback_extension(target_dir, clean_name, previous, backup_dir, :write_failed)
+        end
 
-        {:error, reason} ->
-          Logger.error("[ExtensionManager] Could not create target directory for #{clean_name}: #{inspect(reason)}")
-          {:error, reason}
-      end
+      {:error, reason} ->
+        Logger.error("[ExtensionManager] Could not create target directory for #{clean_name}: #{inspect(reason)}")
+        {:error, reason}
     end
   end
 
@@ -489,32 +505,30 @@ defmodule Exoforge.Std.ExtensionManager do
 
   defp write_extension_files(_target_dir, _), do: :ok
 
-  defp handle_upload_elixir(name_str, elixir_code, files_map, manifest_param, previous \\ nil) do
-    has_code = (is_binary(elixir_code) and String.trim(elixir_code) != "") or (is_map(files_map) and map_size(files_map) > 0)
+  defp handle_upload_elixir(name_str, elixir_code, files_map, manifest_param, previous) do
+    clean_name = sanitize_name(name_str)
 
-    if not has_code do
-      {:error, :invalid_package}
-    else
-      clean_name = sanitize_name(name_str)
+    case ensure_writable_target_dir(clean_name) do
+      {:ok, target_dir} ->
+        backup_dir = backup_existing_dir(target_dir)
+        lib_dir = Path.join([target_dir, "lib"])
+        manifest_path = Path.join(target_dir, "manifest.json")
 
-      case ensure_writable_target_dir(clean_name) do
-        {:ok, target_dir} ->
-          lib_dir = Path.join([target_dir, "lib"])
-          manifest_path = Path.join(target_dir, "manifest.json")
+        with :ok <- File.mkdir_p(lib_dir),
+             :ok <- write_elixir_files(target_dir, clean_name, elixir_code, files_map),
+             :ok <- write_manifest_file(manifest_path, clean_name, manifest_param, :elixir),
+             :ok <- compile_elixir_extension(target_dir, elixir_code) do
+          load_and_boot_extension(target_dir, clean_name, :elixir, previous, backup_dir)
+        else
+          {:error, reason} ->
+            rollback_extension(target_dir, clean_name, previous, backup_dir, reason)
 
-          with :ok <- File.mkdir_p(lib_dir),
-               :ok <- write_elixir_files(target_dir, clean_name, elixir_code, files_map),
-               :ok <- write_manifest_file(manifest_path, clean_name, manifest_param, :elixir),
-               :ok <- compile_elixir_extension(target_dir, elixir_code) do
-            load_and_boot_extension(target_dir, clean_name, :elixir, previous)
-          else
-            {:error, reason} -> {:error, reason}
-            _ -> {:error, :write_failed}
-          end
+          _ ->
+            rollback_extension(target_dir, clean_name, previous, backup_dir, :write_failed)
+        end
 
-        {:error, reason} ->
-          {:error, reason}
-      end
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
@@ -560,7 +574,7 @@ defmodule Exoforge.Std.ExtensionManager do
     end
   end
 
-  defp load_and_boot_extension(target_dir, clean_name, type, previous \\ nil) do
+  defp load_and_boot_extension(target_dir, clean_name, type, previous \\ nil, backup_dir \\ nil) do
     case ManifestLoader.load_extensions(target_dir) do
       [loaded_manifest | _] ->
         previous = previous || ExtensionRegistry.fetch_manifest(loaded_manifest.id)
@@ -578,29 +592,221 @@ defmodule Exoforge.Std.ExtensionManager do
 
         case migration_result do
           {:error, reason} ->
-            if previous do
-              ExtensionRegistry.register(previous)
-
-              if Process.whereis(Exoforge.ExtensionSupervisor) != nil do
-                ExtensionBootstrapper.boot_extension(previous)
-              end
-            else
-              ExtensionRegistry.unregister(loaded_manifest.id)
-            end
-
-            {:error, {:migration_failed, reason}}
+            rollback_extension(
+              target_dir,
+              clean_name,
+              previous,
+              backup_dir,
+              {:migration_failed, reason},
+              loaded_manifest
+            )
 
           _ ->
-            if Process.whereis(Exoforge.ExtensionSupervisor) != nil do
-              ExtensionBootstrapper.boot_extension(loaded_manifest)
-              {:ok, %{extension_id: clean_name, type: to_string(type), status: "installed"}}
-            else
-              {:ok, %{extension_id: clean_name, type: to_string(type), status: "installed"}}
+            case safe_boot_extension(loaded_manifest) do
+              :ok ->
+                cleanup_backup(backup_dir)
+                {:ok, %{extension_id: clean_name, type: to_string(type), status: "installed"}}
+
+              {:error, reason} ->
+                rollback_extension(
+                  target_dir,
+                  clean_name,
+                  previous,
+                  backup_dir,
+                  {:boot_failed, reason},
+                  loaded_manifest
+                )
             end
         end
 
       _ ->
+        cleanup_backup(backup_dir)
         {:ok, %{extension_id: clean_name, type: to_string(type), status: "saved_pending_restart"}}
+    end
+  end
+
+  defp backup_existing_dir(target_dir) do
+    if File.dir?(target_dir) do
+      backup_dir = "#{target_dir}.bak.#{System.unique_integer([:positive])}"
+      File.rm_rf(backup_dir)
+
+      case File.rename(target_dir, backup_dir) do
+        :ok ->
+          File.mkdir_p!(target_dir)
+          backup_dir
+
+        {:error, _} ->
+          nil
+      end
+    else
+      nil
+    end
+  end
+
+  defp cleanup_backup(nil), do: :ok
+  defp cleanup_backup(backup_dir), do: File.rm_rf(backup_dir)
+
+  defp safe_boot_extension(manifest) do
+    if Process.whereis(Exoforge.ExtensionSupervisor) == nil do
+      :ok
+    else
+      try do
+        case ExtensionBootstrapper.boot_extension(manifest) do
+          {:ok, _pid} -> :ok
+          {:ok, _pid, _info} -> :ok
+          :ok -> :ok
+          {:error, reason} -> {:error, reason}
+          other -> {:error, other}
+        end
+      rescue
+        e -> {:error, Exception.message(e)}
+      catch
+        :exit, reason -> {:error, reason}
+      end
+    end
+  end
+
+  defp rollback_extension(target_dir, clean_name, previous, backup_dir, original_error, loaded_manifest \\ nil) do
+    if loaded_manifest do
+      _ = ExtensionBootstrapper.unload_extension(loaded_manifest.id)
+      ExtensionRegistry.unregister(loaded_manifest.id)
+    end
+
+    File.rm_rf(target_dir)
+
+    if backup_dir && File.dir?(backup_dir) do
+      _ = File.rename(backup_dir, target_dir)
+    end
+
+    rollback_status =
+      if previous do
+        if previous.type == :elixir do
+          _ = compile_elixir_extension(previous.physical_path || target_dir, nil)
+        end
+
+        ExtensionRegistry.register(previous)
+
+        case safe_boot_extension(previous) do
+          :ok -> :restored
+          {:error, rb_err} -> {:failed, rb_err}
+        end
+      else
+        ExtensionRegistry.unregister(clean_name)
+        :cleaned
+      end
+
+    {:error, %{error: original_error, rollback: rollback_status}}
+  end
+
+  defp validate_incoming_manifest_resources(clean_name, manifest_param, files_map) do
+    manifest_map = parse_manifest_param(manifest_param, files_map)
+
+    if is_map(manifest_map) do
+      ext_id_raw = Map.get(manifest_map, :id) || Map.get(manifest_map, "id") || clean_name
+      ext_id = Exoforge.Atoms.existing(to_string(ext_id_raw), ext_id_raw)
+      resources = extract_manifest_resources(manifest_map)
+
+      Enum.reduce_while(resources, :ok, fn res, :ok ->
+        case extract_table_source(res) do
+          nil ->
+            {:cont, :ok}
+
+          table ->
+            case validate_resource_spec(ext_id, table, res) do
+              :ok -> {:cont, :ok}
+              {:error, _} = err -> {:halt, err}
+            end
+        end
+      end)
+    else
+      :ok
+    end
+  end
+
+  defp parse_manifest_param(manifest_param, _files_map) when is_map(manifest_param), do: manifest_param
+
+  defp parse_manifest_param(manifest_param, _files_map) when is_binary(manifest_param) do
+    case Jason.decode(manifest_param) do
+      {:ok, m} when is_map(m) -> m
+      _ -> nil
+    end
+  end
+
+  defp parse_manifest_param(_, files_map) when is_map(files_map) do
+    entry = Map.get(files_map, "manifest.json") || Map.get(files_map, :"manifest.json")
+
+    raw =
+      case entry do
+        %{"content" => c} -> c
+        %{content: c} -> c
+        c when is_binary(c) -> c
+        m when is_map(m) -> m
+        _ -> nil
+      end
+
+    cond do
+      is_map(raw) -> raw
+      is_binary(raw) -> parse_manifest_param(raw, nil)
+      true -> nil
+    end
+  end
+
+  defp parse_manifest_param(_, _), do: nil
+
+  defp extract_manifest_resources(manifest_map) do
+    root_res = Map.get(manifest_map, :resources) || Map.get(manifest_map, "resources") || []
+    services = Map.get(manifest_map, :services) || Map.get(manifest_map, "services") || []
+
+    service_res =
+      if is_list(services) do
+        Enum.flat_map(services, fn svc ->
+          if is_map(svc), do: Map.get(svc, :resources) || Map.get(svc, "resources") || [], else: []
+        end)
+      else
+        []
+      end
+
+    root_res ++ service_res
+  end
+
+  defp extract_table_source(res) when is_map(res) do
+    case Map.get(res, :source) || Map.get(res, "source") do
+      {:table, t} -> to_string(t)
+      [:table, t] -> to_string(t)
+      ["table", t] -> to_string(t)
+      %{table: t} -> to_string(t)
+      %{"table" => t} -> to_string(t)
+      nil ->
+        name = Map.get(res, :name) || Map.get(res, "name")
+        if name, do: to_string(name), else: nil
+      _ -> nil
+    end
+  end
+
+  defp extract_table_source(_), do: nil
+
+  defp validate_resource_spec(ext_id, table, res) do
+    pk = String.downcase(to_string(Map.get(res, :primary_key) || Map.get(res, "primary_key") || :id))
+    cols = Map.get(res, :columns) || Map.get(res, "columns") || []
+
+    names =
+      Enum.map(cols, fn c ->
+        to_string(Map.get(c, :name) || Map.get(c, "name") || "")
+      end)
+
+    down_names = Enum.map(names, &String.downcase/1)
+
+    cond do
+      pk != "id" and pk not in down_names ->
+        {:error, {:invalid_resource, %{extension: ext_id, table: table, column: pk, reason: :primary_key_not_found}}}
+
+      Enum.uniq(down_names) != down_names ->
+        dup = down_names -- Enum.uniq(down_names)
+        col = Enum.find(names, fn n -> String.downcase(n) == List.first(dup) end)
+        {:error, {:invalid_resource, %{extension: ext_id, table: table, column: col, reason: :duplicate_column}}}
+
+      true ->
+        :ok
     end
   end
 

@@ -283,7 +283,11 @@ defmodule Exoforge.Std.ExtensionManagerTest do
             {:invalid_resource,
              %{extension: info.extension_id, table: to_string(res.name), column: List.first(names), reason: :duplicate_column}}}}
         else
-          {:cont, {:ok, %{migrated: count + 1}}}
+          if to_string(res.name) == "fail_migration_table" do
+            {:halt, {:error, :simulated_ddl_failure}}
+          else
+            {:cont, {:ok, %{migrated: count + 1}}}
+          end
         end
       end)
     end
@@ -303,11 +307,15 @@ defmodule Exoforge.Std.ExtensionManagerTest do
         File.rm_rf("priv/data/uploaded_extensions/ext_a_broken")
         File.rm_rf("priv/data/uploaded_extensions/ext_b_healthy")
         File.rm_rf("priv/data/uploaded_extensions/ext_redeploy_roll")
+        File.rm_rf("priv/data/uploaded_extensions/ext_redeploy_mig_fail")
+        File.rm_rf("priv/data/uploaded_extensions/ext_redeploy_boot_fail")
 
         if :ets.whereis(:exo_extensions_mem) != :undefined do
           ExtensionRegistry.unregister(:ext_a_broken)
           ExtensionRegistry.unregister(:ext_b_healthy)
           ExtensionRegistry.unregister(:ext_redeploy_roll)
+          ExtensionRegistry.unregister(:ext_redeploy_mig_fail)
+          ExtensionRegistry.unregister(:ext_redeploy_boot_fail)
           ExtensionRegistry.unregister(:test_resource_store)
         end
       end)
@@ -456,6 +464,161 @@ defmodule Exoforge.Std.ExtensionManagerTest do
       assert %{version: current_version} = ExtensionRegistry.fetch_manifest(:ext_redeploy_roll)
       assert to_string(current_version) == "1.0.0"
       assert {:ok, %{v: 1}} = ActionDispatcher.dispatch_internal(:ext_redeploy_roll, :version, %{})
+    end
+
+    test "redeploy whose migration fails restores previous files on disk and keeps previous version running" do
+      elixir_v1 = """
+      defmodule ExtRedeployMigFail do
+        use Exoforge.Extension, provides: [:ext_redeploy_mig_fail]
+        defaction version(_p), do: {:ok, %{v: 1}}
+      end
+      """
+
+      manifest_v1 = """
+      {
+        "id": "ext_redeploy_mig_fail",
+        "version": "1.0.0",
+        "type": "elixir",
+        "entry_point": "Elixir.ExtRedeployMigFail",
+        "provides": ["ext_redeploy_mig_fail"],
+        "services": [
+          {
+            "name": "ext_redeploy_mig_fail",
+            "resources": [
+              {
+                "name": "ok_table",
+                "primary_key": "id",
+                "columns": [{"name": "id", "type": "string"}]
+              }
+            ]
+          }
+        ]
+      }
+      """
+
+      assert {:ok, %{extension_id: "ext_redeploy_mig_fail"}} =
+               ActionDispatcher.dispatch(
+                 :extension_manager,
+                 :upload_extension,
+                 %{name: "ext_redeploy_mig_fail", type: "elixir", elixir_code: elixir_v1, manifest: manifest_v1},
+                 caller_scopes: ["admin"]
+               )
+
+      elixir_v2 = """
+      defmodule ExtRedeployMigFail do
+        use Exoforge.Extension, provides: [:ext_redeploy_mig_fail]
+        defaction version(_p), do: {:ok, %{v: 2}}
+      end
+      """
+
+      manifest_v2_fail = """
+      {
+        "id": "ext_redeploy_mig_fail",
+        "version": "2.0.0",
+        "type": "elixir",
+        "entry_point": "Elixir.ExtRedeployMigFail",
+        "provides": ["ext_redeploy_mig_fail"],
+        "services": [
+          {
+            "name": "ext_redeploy_mig_fail",
+            "resources": [
+              {
+                "name": "fail_migration_table",
+                "primary_key": "id",
+                "columns": [{"name": "id", "type": "string"}]
+              }
+            ]
+          }
+        ]
+      }
+      """
+
+      assert {:error, %{error: {:migration_failed, :simulated_ddl_failure}, rollback: :restored}} =
+               ActionDispatcher.dispatch(
+                 :extension_manager,
+                 :upload_extension,
+                 %{name: "ext_redeploy_mig_fail", type: "elixir", elixir_code: elixir_v2, manifest: manifest_v2_fail},
+                 caller_scopes: ["admin"]
+               )
+
+      assert %{version: current_version} = ExtensionRegistry.fetch_manifest(:ext_redeploy_mig_fail)
+      assert to_string(current_version) == "1.0.0"
+      assert {:ok, %{v: 1}} = ActionDispatcher.dispatch_internal(:ext_redeploy_mig_fail, :version, %{})
+
+      disk_manifest =
+        "priv/data/uploaded_extensions/ext_redeploy_mig_fail/manifest.json"
+        |> File.read!()
+        |> Jason.decode!()
+
+      assert disk_manifest["version"] == "1.0.0"
+      assert File.read!("priv/data/uploaded_extensions/ext_redeploy_mig_fail/lib/ext_redeploy_mig_fail.ex") =~ "v: 1"
+      assert Path.wildcard("priv/data/uploaded_extensions/ext_redeploy_mig_fail.bak.*") == []
+    end
+
+    test "redeploy whose new boot fails restores previous files on disk and keeps previous version running" do
+      elixir_v1 = """
+      defmodule ExtRedeployBootFail do
+        use Exoforge.Extension, provides: [:ext_redeploy_boot_fail]
+        defaction version(_p), do: {:ok, %{v: 1}}
+      end
+      """
+
+      manifest_v1 = """
+      {
+        "id": "ext_redeploy_boot_fail",
+        "version": "1.0.0",
+        "type": "elixir",
+        "entry_point": "Elixir.ExtRedeployBootFail",
+        "provides": ["ext_redeploy_boot_fail"]
+      }
+      """
+
+      assert {:ok, %{extension_id: "ext_redeploy_boot_fail"}} =
+               ActionDispatcher.dispatch(
+                 :extension_manager,
+                 :upload_extension,
+                 %{name: "ext_redeploy_boot_fail", type: "elixir", elixir_code: elixir_v1, manifest: manifest_v1},
+                 caller_scopes: ["admin"]
+               )
+
+      elixir_v2_crash = """
+      defmodule ExtRedeployBootFail do
+        use Exoforge.Extension, provides: [:ext_redeploy_boot_fail]
+        def on_init(_manifest), do: {:error, :boot_boom}
+        defaction version(_p), do: {:ok, %{v: 2}}
+      end
+      """
+
+      manifest_v2 = """
+      {
+        "id": "ext_redeploy_boot_fail",
+        "version": "2.0.0",
+        "type": "elixir",
+        "entry_point": "Elixir.ExtRedeployBootFail",
+        "provides": ["ext_redeploy_boot_fail"]
+      }
+      """
+
+      assert {:error, %{error: {:boot_failed, _reason}, rollback: :restored}} =
+               ActionDispatcher.dispatch(
+                 :extension_manager,
+                 :upload_extension,
+                 %{name: "ext_redeploy_boot_fail", type: "elixir", elixir_code: elixir_v2_crash, manifest: manifest_v2},
+                 caller_scopes: ["admin"]
+               )
+
+      assert %{version: current_version} = ExtensionRegistry.fetch_manifest(:ext_redeploy_boot_fail)
+      assert to_string(current_version) == "1.0.0"
+      assert {:ok, %{v: 1}} = ActionDispatcher.dispatch_internal(:ext_redeploy_boot_fail, :version, %{})
+
+      disk_manifest =
+        "priv/data/uploaded_extensions/ext_redeploy_boot_fail/manifest.json"
+        |> File.read!()
+        |> Jason.decode!()
+
+      assert disk_manifest["version"] == "1.0.0"
+      assert File.read!("priv/data/uploaded_extensions/ext_redeploy_boot_fail/lib/ext_redeploy_boot_fail.ex") =~ "v: 1"
+      assert Path.wildcard("priv/data/uploaded_extensions/ext_redeploy_boot_fail.bak.*") == []
     end
   end
 end

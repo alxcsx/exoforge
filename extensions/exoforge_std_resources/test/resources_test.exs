@@ -731,4 +731,97 @@ defmodule Exoforge.Std.ResourcesTest do
     assert {:ok, %{migrated: 1}} =
              ActionDispatcher.dispatch_internal(:resource_store, :migrate, %{extension: "healthy_ext"})
   end
+
+  test "validates all resources of an extension before running DDL for any of them" do
+    register_native_manifest("multi_res_ext", %{
+      "id" => "multi_res_ext",
+      "name" => "MultiResExt",
+      "version" => "0.1.0",
+      "type" => "native",
+      "entry_point" => "multi_res_ext",
+      "services" => [
+        %{
+          "name" => "multi_res_ext",
+          "resources" => [
+            %{
+              "name" => "first_valid",
+              "source" => %{"table" => "first_valid"},
+              "primary_key" => "id",
+              "columns" => [%{"name" => "id", "type" => "string"}]
+            },
+            %{
+              "name" => "second_invalid",
+              "source" => %{"table" => "second_invalid"},
+              "primary_key" => "id",
+              "columns" => [
+                %{"name" => "id", "type" => "string"},
+                %{"name" => "Id", "type" => "string"}
+              ]
+            }
+          ]
+        }
+      ]
+    })
+
+    assert {:error, {:invalid_resource, %{extension: :multi_res_ext, table: "second_invalid", reason: :duplicate_column}}} =
+             ActionDispatcher.dispatch_internal(:resource_store, :migrate, %{extension: "multi_res_ext"})
+
+    assert {:ok, %{rows: []}} =
+             Exoforge.Std.Database.execute(
+               :multi_res_ext,
+               "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'first_valid'"
+             )
+  end
+
+  test "compares existing table columns case-insensitively in reconcile_columns and repair_primary_key" do
+    assert {:ok, _} =
+             Exoforge.Std.Database.execute(
+               :mixed_cols_ext,
+               "CREATE TABLE mixed_cols (Id text, Nome text)"
+             )
+
+    register_native_manifest("mixed_cols_ext", %{
+      "id" => "mixed_cols_ext",
+      "name" => "MixedColsExt",
+      "version" => "0.1.0",
+      "type" => "native",
+      "entry_point" => "mixed_cols_ext",
+      "services" => [
+        %{
+          "name" => "mixed_cols_ext",
+          "resources" => [
+            %{
+              "name" => "mixed_cols",
+              "source" => %{"table" => "mixed_cols"},
+              "primary_key" => "id",
+              "columns" => [
+                %{"name" => "id", "type" => "string"},
+                %{"name" => "nome", "type" => "string"},
+                %{"name" => "score", "type" => "integer"}
+              ]
+            }
+          ]
+        }
+      ]
+    })
+
+    assert {:ok, %{migrated: 1}} =
+             ActionDispatcher.dispatch_internal(:resource_store, :migrate, %{extension: "mixed_cols_ext"})
+
+    {:ok, %{columns: cols}} =
+      ActionDispatcher.dispatch_internal(:database, :table_columns, %{
+        plugin: :mixed_cols_ext,
+        table: "mixed_cols"
+      })
+
+    assert Enum.map(cols, &String.downcase/1) == ["id", "nome", "score"]
+
+    assert {:ok, %{row: row}} =
+             dispatch(:upsert, %{
+               resource: "mixed_cols",
+               attributes: %{"id" => "m1", "nome" => "Alice", "score" => 10}
+             })
+
+    assert row["score"] == 10
+  end
 end

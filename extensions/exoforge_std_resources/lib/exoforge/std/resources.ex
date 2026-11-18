@@ -64,17 +64,34 @@ defmodule Exoforge.Std.Resources do
              to_string(info.plugin_id) == to_string(extension))
       end)
 
-    Enum.reduce_while(resources, {:ok, 0}, fn info, {:ok, acc} ->
-      case migrate_resource(info) do
-        :ok -> {:cont, {:ok, acc + 1}}
-        :skip -> {:cont, {:ok, acc}}
-        {:error, reason} -> {:halt, {:error, reason}}
+    with :ok <- validate_resources(resources) do
+      Enum.reduce_while(resources, {:ok, 0}, fn info, {:ok, acc} ->
+        case migrate_resource(info) do
+          :ok -> {:cont, {:ok, acc + 1}}
+          :skip -> {:cont, {:ok, acc}}
+          {:error, reason} -> {:halt, {:error, reason}}
+        end
+      end)
+      |> case do
+        {:ok, count} -> count
+        {:error, reason} -> {:error, reason}
+      end
+    end
+  end
+
+  defp validate_resources(resources) do
+    Enum.reduce_while(resources, :ok, fn %{resource: res} = info, :ok ->
+      case table_source(res) do
+        nil ->
+          {:cont, :ok}
+
+        table ->
+          case validate_resource(info, table, res) do
+            :ok -> {:cont, :ok}
+            {:error, _} = err -> {:halt, err}
+          end
       end
     end)
-    |> case do
-      {:ok, count} -> count
-      {:error, reason} -> {:error, reason}
-    end
   end
 
   defp migrate_resource(%{plugin_id: pid, resource: res} = info) do
@@ -114,7 +131,12 @@ defmodule Exoforge.Std.Resources do
   defp repair_primary_key(pid, table, res) do
     pk = String.downcase(to_string(res.primary_key || :id))
 
-    case db(pid, "CREATE UNIQUE INDEX IF NOT EXISTS #{table}_#{pk}_key ON #{table} (#{pk})") do
+    pk_col =
+      existing_columns(pid, table)
+      |> Enum.find(&(String.downcase(to_string(&1)) == pk))
+      |> Kernel.||(pk)
+
+    case db(pid, "CREATE UNIQUE INDEX IF NOT EXISTS #{table}_#{pk}_key ON #{table} (#{pk_col})") do
       {:ok, _} ->
         :ok
 
@@ -141,7 +163,9 @@ defmodule Exoforge.Std.Resources do
   # Renames and type changes still need an explicit migration (documented ceiling), and SQLite cannot
   # add a CHECK to an existing table, so a column that gains choices keeps them on new tables only.
   defp reconcile_columns(pid, table, res) do
-    existing = existing_columns(pid, table)
+    existing =
+      existing_columns(pid, table)
+      |> Enum.map(&String.downcase(to_string(&1)))
 
     Enum.each(res.columns || [], fn column ->
       name = String.downcase(to_string(column.name))
