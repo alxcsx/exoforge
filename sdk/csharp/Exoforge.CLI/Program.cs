@@ -133,7 +133,8 @@ public static class Program
           agents <subcommand>        Install and inspect AI agent skills, AGENTS.md, and wrappers
           repair                     Sanitize and repair client stubs in-place
           status                     Inspect live cluster health and metrics
-          unity records     Write IsExternalInit polyfill per assembly (--asmdef/--all)
+          unity records              Write IsExternalInit polyfill per assembly (--asmdef/--all)
+
         Options:
           --dir <path>               Workspace root (defaults to the current directory)
           --env <environment>        Target environment from exoforge.json (default: 'local')
@@ -307,9 +308,17 @@ public static class Program
 
         if (!string.IsNullOrWhiteSpace(asmdef))
         {
-            bool created = Exoforge.Management.ExoIsExternalInit.Ensure(dir, asmdef, out string path);
-            Console.WriteLine(created ? $"Wrote {path}" : $"Skipped (already present): {path}");
-            return 0;
+            try
+            {
+                bool created = Exoforge.Management.ExoIsExternalInit.Ensure(dir, asmdef, out string path);
+                Console.WriteLine(created ? $"Wrote {path}" : $"Skipped (already present): {path}");
+                return 0;
+            }
+            catch (ArgumentException ex)
+            {
+                Console.Error.WriteLine(ex.Message);
+                return 1;
+            }
         }
 
         if (all)

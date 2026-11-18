@@ -81,4 +81,40 @@ public class FeedMigrationTests : IDisposable
 
         Assert.False(ExoScaffolder.NeedsFeedMigration(workspace));
     }
+
+    [Fact]
+    public void NeedsFeedMigration_IgnoresUserPrivateNugetConfigs_AndStaysFalseAcrossConsecutiveChecks()
+    {
+        string workspace = Path.Combine(_tempDir, "Exoforge");
+        string ext = Path.Combine(workspace, "extensions", "snake_game");
+        string nested = Path.Combine(ext, "src");
+        Directory.CreateDirectory(nested);
+        File.WriteAllText(Path.Combine(workspace, "nuget.config"), "<configuration />");
+
+        // User's private feed at extension root (no key="exoforge") and deeper nuget.config
+        string privateConfig = "<configuration><packageSources><add key=\"my-private\" value=\"https://pkgs.example.com\" /></packageSources></configuration>";
+        string topPrivatePath = Path.Combine(ext, "nuget.config");
+        string deepConfigPath = Path.Combine(nested, "nuget.config");
+        File.WriteAllText(topPrivatePath, privateConfig);
+        File.WriteAllText(deepConfigPath, privateConfig);
+
+        ExoScaffolder.EnsureBuildFeed(workspace, ext);
+
+        Assert.True(File.Exists(topPrivatePath));
+        Assert.True(File.Exists(deepConfigPath));
+        Assert.False(ExoScaffolder.NeedsFeedMigration(workspace));
+        Assert.False(ExoScaffolder.NeedsFeedMigration(workspace));
+    }
+
+    [Fact]
+    public void NeedsFeedMigration_IgnoresCrlfLineEndingsInWorkspaceNugetConfig()
+    {
+        string workspace = Path.Combine(_tempDir, "Exoforge");
+        Directory.CreateDirectory(workspace);
+        File.WriteAllText(
+            Path.Combine(workspace, "nuget.config"),
+            ExoScaffolder.NugetConfigContent.Replace("\n", "\r\n"));
+
+        Assert.False(ExoScaffolder.NeedsFeedMigration(workspace));
+    }
 }

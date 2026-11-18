@@ -159,6 +159,65 @@ public class ExoIsExternalInitTests : IDisposable
         Assert.Contains("Skipped (already present): Assets/Existing", secondOut);
     }
 
+    [Fact]
+    public void ResolveDirectory_RejectsPathsOutsideAssets()
+    {
+        Assert.Throws<ArgumentException>(() => ExoIsExternalInit.ResolveDirectory(_root, "../outside"));
+        Assert.Throws<ArgumentException>(() => ExoIsExternalInit.ResolveDirectory(_root, Path.Combine(_root, "Packages")));
+        Assert.Throws<ArgumentException>(() => ExoIsExternalInit.ResolveDirectory(_root, Path.GetTempPath()));
+        Assert.Throws<ArgumentException>(() => ExoIsExternalInit.ResolveDirectory(_root, "/Assets/Game"));
+
+        string inside = ExoIsExternalInit.ResolveDirectory(_root, "Assets/Game");
+        Assert.StartsWith(ExoIsExternalInit.AssetsPath(_root), inside);
+    }
+
+    [Fact]
+    public void DeclaresRecordOrInit_IgnoresCommentsStringsAndIdentifiers()
+    {
+        string plain = Path.Combine(_root, "Assets", "Noisy");
+        Directory.CreateDirectory(plain);
+        File.WriteAllText(Path.Combine(plain, "Noisy.asmdef"), "{}");
+        File.WriteAllText(Path.Combine(plain, "Noisy.cs"), """
+            public class Noisy
+            {
+                // record the score
+                /* public int X { get; init; } */
+                public void Demo()
+                {
+                    var record = 1;
+                    string a = "public record Foo(int X);";
+                    string b = @"record Bar { get; init; }";
+                    string c = "\"\"\"record Baz\"\"\"";
+                    string d = $"interpolated record {record}";
+                }
+            }
+            """);
+
+        Assert.False(ExoIsExternalInit.DeclaresRecordOrInit(_root, "Assets/Noisy"));
+
+        // Also verify real C# 11 raw string literal stripping directly
+        Assert.False(ExoIsExternalInit.ContainsRecordOrInit("class C { string s = \"\"\"\npublic record Fake(int X);\n\"\"\"; }"));
+        Assert.True(ExoIsExternalInit.ContainsRecordOrInit("public record Real(int X);"));
+    }
+
+    [Fact]
+    public void IsPathUnderRoot_SupportsCaseInsensitiveWindowsComparison()
+    {
+        string assets = Path.Combine(_root, "Assets");
+        string mixedCaseChild = Path.Combine(_root, "assets", "Game");
+        Assert.True(ExoIsExternalInit.IsPathUnderRoot(mixedCaseChild, assets, StringComparison.OrdinalIgnoreCase));
+        Assert.False(ExoIsExternalInit.IsPathUnderRoot(mixedCaseChild, assets, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task CliHelp_AlignsUnityRecordsAndHasBlankLineBeforeOptions()
+    {
+        string help = await RunCliAsync("--help");
+        Assert.Contains("  unity records              Write IsExternalInit polyfill per assembly (--asmdef/--all)", help);
+        string normalized = help.Replace("\r\n", "\n");
+        Assert.Contains("Write IsExternalInit polyfill per assembly (--asmdef/--all)\n\nOptions:", normalized);
+    }
+
     private static async Task<string> RunCliAsync(params string[] args)
     {
         var writer = new StringWriter();

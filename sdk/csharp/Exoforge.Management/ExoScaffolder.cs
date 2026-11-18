@@ -209,12 +209,28 @@ public static class ExoScaffolder
         if (string.IsNullOrEmpty(workspaceRoot) || !Directory.Exists(workspaceRoot)) return false;
 
         string nugetConfig = Path.Combine(workspaceRoot, "nuget.config");
-        if (!File.Exists(nugetConfig) || File.ReadAllText(nugetConfig) != NugetConfigContent)
+        if (!File.Exists(nugetConfig) || NormalizeLineEndings(File.ReadAllText(nugetConfig)) != NugetConfigContent)
             return true;
 
         string extensionsDir = Path.Combine(workspaceRoot, "extensions");
-        return Directory.Exists(extensionsDir) &&
-               Directory.GetFiles(extensionsDir, "nuget.config", SearchOption.AllDirectories).Length > 0;
+        if (!Directory.Exists(extensionsDir)) return false;
+
+        foreach (string extDir in Directory.EnumerateDirectories(extensionsDir))
+        {
+            if (IsStaleExoforgeNugetConfig(Path.Combine(extDir, "nuget.config")))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static string NormalizeLineEndings(string text) => text.Replace("\r\n", "\n");
+
+    private static bool IsStaleExoforgeNugetConfig(string path)
+    {
+        if (!File.Exists(path)) return false;
+        string text = File.ReadAllText(path);
+        return text.Contains("key=\"exoforge\"") && !text.Contains($"\"{FeedDirectoryName}\"");
     }
 
     /// <summary>
@@ -226,7 +242,7 @@ public static class ExoScaffolder
     {
         Directory.CreateDirectory(workspaceRoot);
         string nugetConfig = Path.Combine(workspaceRoot, "nuget.config");
-        if (!File.Exists(nugetConfig) || File.ReadAllText(nugetConfig) != NugetConfigContent)
+        if (!File.Exists(nugetConfig) || NormalizeLineEndings(File.ReadAllText(nugetConfig)) != NugetConfigContent)
             File.WriteAllText(nugetConfig, NugetConfigContent);
 
         string feedDir = Path.Combine(workspaceRoot, FeedDirectoryName);
@@ -258,10 +274,7 @@ public static class ExoScaffolder
         bool changed = version != null && EnsurePackageReference(extensionDir, version);
 
         string stale = Path.Combine(extensionDir, "nuget.config");
-        if (!File.Exists(stale)) return changed;
-
-        string text = File.ReadAllText(stale);
-        if (!text.Contains("key=\"exoforge\"") || text.Contains($"\"{FeedDirectoryName}\"")) return changed;
+        if (!IsStaleExoforgeNugetConfig(stale)) return changed;
 
         File.Delete(stale);
         return true;
