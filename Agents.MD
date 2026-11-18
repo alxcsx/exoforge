@@ -297,7 +297,10 @@ var board   = await ExoServices.SnakeLeaderboard.GetLeaderboardAsync(10);
   the player from the caller's identity, so a player can only name themselves).
 - `ExoServices.<Extension>` & `ExoforgeSDK.Client` — **primary service accessors**. Client stubs match
   the server extension C# runtime syntax (`ExoServices.<Service>`), with `Exo.<Service>` and
-  `Client.<Service>()` available as aliases.
+  `Client.<Service>()` available as aliases. Exposes gameplay and player/global actions only; services
+  whose actions are not player/global scope (and studio/admin actions) are emitted in a separate
+  `ExoStudioServices.<Service>` facade guarded by `#if UNITY_EDITOR`, reachable only from Editor assemblies
+  so a standalone game build never sees or compiles them.
 - `ExoTokenStore` is public but **low-level** — use `ExoforgeSDK.Auth`. Exposed only for custom
   credential storage and tooling.
 - **Token renewal is automatic**: sign-in returns a short-lived access token (`ses`, ~1h) and a
