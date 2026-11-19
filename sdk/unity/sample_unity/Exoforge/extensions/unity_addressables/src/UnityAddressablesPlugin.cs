@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using System.Threading.Tasks;
 using Exoforge.Plugin.SDK;
 using Exoforge.Plugins.Generated;
 
@@ -19,17 +18,23 @@ public class UnityAddressablesPlugin
     public const string AssetsTable = "addressable_assets";
     public const string ReleasesTable = "addressable_releases";
 
-    public async Task OnExtensionStart() => await MakeBucketPublicAsync("addressables");
+    /// <summary>Wired by the host; the extension marks its own bucket readable at start.</summary>
+    public IActionDispatcher? Actions { get; set; }
 
-    private async Task MakeBucketPublicAsync(string bucket)
+    public void OnExtensionStart() => MakeBucketPublic("addressables");
+
+    private void MakeBucketPublic(string bucket)
     {
         try
         {
-            await ExoServices.FileBucket.SetBucketVisibilityAsync(new FileBucketSetBucketVisibilityRequest
+            var response = Actions?.CallAction<JsonElement>("file_bucket", "set_bucket_visibility",
+                new { bucket, visibility = "public" });
+
+            if (response is JsonElement json && json.ValueKind == JsonValueKind.Object &&
+                json.TryGetProperty("error", out var error))
             {
-                Bucket = bucket,
-                Visibility = "public"
-            });
+                ExoServices.Logger.Warning($"[unity_addressables] Could not make bucket '{bucket}' public: {error}");
+            }
         }
         catch (Exception ex)
         {
@@ -98,20 +103,6 @@ public class UnityAddressablesPlugin
     {
         if (string.IsNullOrEmpty(address)) return null;
         return ExoServices.Database.Get<AddressableAssetRecord>(address);
-    }
-
-    [ExoAction]
-    public List<AddressableAssetRecord> GetMany(List<string> addresses)
-    {
-        var result = new List<AddressableAssetRecord>();
-        if (addresses is null || addresses.Count == 0) return result;
-        foreach (var address in addresses)
-        {
-            if (string.IsNullOrEmpty(address)) continue;
-            var asset = ExoServices.Database.Get<AddressableAssetRecord>(address);
-            if (asset is not null) result.Add(asset);
-        }
-        return result;
     }
 
     [ExoAction]
