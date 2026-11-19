@@ -73,7 +73,8 @@ file_bucket ──▶ database
 
 | Extension | Port / Role | Provides | Depends on | Purpose |
 | :--- | :--- | :--- | :--- | :--- |
-| `exoforge_std_database` | Storage | `database`, `lldb` | — | Per-extension schema isolation on PostgreSQL (official extension is Postgres-only; the `database` contract remains swappable — see [ADR 003](docs/adr/003-postgres-only.md)). |
+| `exoforge_std_lldb` | Storage | `lldb` | — | Driver layer: engine-specific connections, pools, namespaces, roles/grants, transactions, DDL rendering, catalog introspection, dialect, type mapping, health (see [ADR 005](docs/adr/005-database-layers.md)). |
+| `exoforge_std_database` | Storage | `database` | `lldb` | SQL helper over `lldb`: put/get/all/delete, query/execute with binding, batch, row<->JSON mapping. Official extension is Postgres-only (see [ADR 003](docs/adr/003-postgres-only.md)). |
 | `exoforge_std_auth` | Identity | `auth` | `database` | Token issuance, session verification, scope validation. |
 | `exoforge_std_player_data` | Profiles | `player_data` | `database`, `auth` | Canonical player profile persistence and lifecycle events. |
 | `exoforge_std_http` | REST (:4001) | `http` | `auth` | Dynamic OpenAPI routes derived from service contracts. |
@@ -82,7 +83,7 @@ file_bucket ──▶ database
 | `exoforge_std_dashboard_views` | Studio Views | `dashboard_view` | `dashboard` | Decoupled UI components for player data, extension manager, auth. |
 | `exoforge_std_extension_manager`| Lifecycle | `extension_manager` | — | Hot extension upload, reload, and manifest export. |
 | `exoforge_std_docs` | Docs / Guide | `docs` | `extension_manager` | Dynamic cluster API catalog, markdown chapters, and native PDF export. |
-| `exoforge_std_resources` | Store | `resource_store` | `database` | Schema-driven resource tables and generic CRUD. |
+| `exoforge_std_resources` | Store | `resource_store` | `database` | ORM: manifest resources to table descriptors, schema reconcile, migrations (see [ADR 005](docs/adr/005-database-layers.md)). |
 | `exoforge_std_file_bucket` | Storage / CDN | `file_bucket` | `database` | Pluggable binary/blob asset storage with metadata and HTTP file routes. Each bucket is `public` (anyone may download by URL) or `private` (default; staff, or a `signed_url` an extension issues). Staff toggle visibility in the Studio; the operator's `public_buckets` config only seeds it at boot. Raw access is staff-only. |
 | `exoforge_std_metering` | Operations | `metering` | `database` | Usage metering per extension and action, persisted on the instance. |
 | `exoforge_std_observability` | Debug / History | `observability` | `database` | Cluster event history (day-indexed, hourly rollups, gzip archive with retention) and the joins behind it: request timelines, failure groups, live-tail reads. |
@@ -91,6 +92,7 @@ file_bucket ──▶ database
 
 Cross-extension SQL reads are opt-in via declared `db_read` grants (see [`docs/adr/002-database-read-grants.md`](docs/adr/002-database-read-grants.md)); undeclared cross-extension access remains denied.
 Declared resources use typed tables with real columns (see [`docs/adr/004-typed-resource-schemas.md`](docs/adr/004-typed-resource-schemas.md)): each manifest resource emits `schema_hash` and per-column `storage`, `primary_key`, `unique`, `indexed`, `nullable`, `default`, `choices`, `foreign_key`, and `references`; undeclared tables keep the `id/data jsonb` envelope.
+Database layers (lldb/database/resource_store) are defined in [ADR 005](docs/adr/005-database-layers.md).
 
 ### Extension Placement Rules
 
