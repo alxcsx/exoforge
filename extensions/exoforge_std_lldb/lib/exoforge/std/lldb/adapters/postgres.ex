@@ -571,548 +571,8 @@ defmodule Exoforge.Std.Lldb.Adapters.Postgres do
     end
   end
 
-  def execute(plugin_id, %{action: :batch, operations: operations}, _args, config)
-      when is_list(operations) do
-    execute_batch(plugin_id, operations, config)
-  end
-
-  def execute(plugin_id, %{"action" => "batch", "operations" => operations}, _args, config)
-      when is_list(operations) do
-    execute_batch(plugin_id, operations, config)
-  end
-
-  def execute(plugin_id, %{action: action} = command, _args, config) do
-    schema_name = schema_name(plugin_id, config)
-    tbl = to_string(command[:table])
-
-    with {:ok, {mode, conn}} <- pooled_connection(plugin_id, schema_name, config) do
-      try do
-        execute_kv_on_conn(conn, action, schema_name, tbl, command)
-      after
-        if mode == :unmanaged, do: GenServer.stop(conn)
-      end
-    end
-  end
-
-  defp execute_batch(_plugin_id, [], _config), do: {:ok, %{rows: [], num_rows: 0}}
-
-  defp execute_batch(plugin_id, operations, config) when is_list(operations) do
-    schema_name = schema_name(plugin_id, config)
-
-    with {:ok, {mode, conn}} <- pooled_connection(plugin_id, schema_name, config) do
-      try do
-        case Postgrex.transaction(conn, fn tx_conn ->
-               run_batch_operations(tx_conn, schema_name, operations)
-             end) do
-          {:ok, total_rows} ->
-            {:ok, %{rows: [], num_rows: total_rows}}
-
-          {:error, %{index: _} = err} ->
-            {:error, err}
-
-          {:error, reason} ->
-            {:error, %{index: 0, reason: reason, message: format_batch_reason(reason)}}
-        end
-      after
-        if mode == :unmanaged, do: GenServer.stop(conn)
-      end
-    end
-  end
-
-  defp run_batch_operations(tx_conn, schema_name, operations) do
-    Enum.reduce(Enum.with_index(operations), 0, fn {op, idx}, acc_rows ->
-      case execute_batch_op(tx_conn, schema_name, op) do
-        {:ok, %{num_rows: n}} when is_integer(n) ->
-          acc_rows + n
-
-        {:ok, _} ->
-          acc_rows
-
-        {:error, reason} ->
-          Postgrex.rollback(tx_conn, %{
-            index: idx,
-            reason: reason,
-            message: format_batch_reason(reason)
-          })
-      end
-    end)
-  end
-
-  defp execute_batch_op(tx_conn, schema_name, op) do
-    case normalize_batch_op(op) do
-      {:execute, sql, args} ->
-        with {:ok, params} <- positional_args(args) do
-          query_pooled(tx_conn, sql, params)
-        end
-
-      {:put, table, id, data} ->
-        tbl = to_string(table)
-        cmd = Exoforge.Std.Lldb.JsonColumns.encode(%{action: :put, table: tbl, id: id, data: data})
-        execute_kv_on_conn(tx_conn, :put, schema_name, tbl, cmd)
-
-      {:delete, table, id} ->
-        tbl = to_string(table)
-        execute_kv_on_conn(tx_conn, :delete, schema_name, tbl, %{action: :delete, table: tbl, id: id})
-
-      {:error, _} = err ->
-        err
-    end
-  end
-
-  defp normalize_batch_op({sql, args}) when is_binary(sql), do: {:execute, sql, args || []}
-  defp normalize_batch_op(sql) when is_binary(sql), do: {:execute, sql, []}
-
-  defp normalize_batch_op(op) when is_map(op) do
-    raw_action =
-      Map.get(op, :action) || Map.get(op, "action") ||
-        Map.get(op, :op) || Map.get(op, "op") ||
-        Map.get(op, :type) || Map.get(op, "type")
-
-    sql = Map.get(op, :sql) || Map.get(op, "sql") || Map.get(op, :query) || Map.get(op, "query")
-
-    action =
-      cond do
-        raw_action in [:execute, "execute", :sql, "sql"] -> :execute
-        raw_action in [:put, "put"] -> :put
-        raw_action in [:delete, "delete"] -> :delete
-        is_nil(raw_action) and is_binary(sql) -> :execute
-        true -> raw_action
-      end
-
-    case action do
-      :execute when is_binary(sql) ->
-        args =
-          cond do
-            Map.has_key?(op, :args) -> Map.get(op, :args)
-            Map.has_key?(op, "args") -> Map.get(op, "args")
-            Map.has_key?(op, :arguments) -> Map.get(op, :arguments)
-            Map.has_key?(op, "arguments") -> Map.get(op, "arguments")
-            Map.has_key?(op, :params) -> Map.get(op, :params)
-            Map.has_key?(op, "params") -> Map.get(op, "params")
-            true -> []
-          end
-
-        {:execute, sql, args}
-
-      :put ->
-        table = Map.get(op, :table) || Map.get(op, "table")
-        id = Map.get(op, :id) || Map.get(op, "id") || Map.get(op, :key) || Map.get(op, "key")
-        data = Map.get(op, :data) || Map.get(op, "data") || Map.get(op, :value) || Map.get(op, "value") || %{}
-
-        if is_nil(table) or is_nil(id) do
-          {:error, :invalid_batch_operation}
-        else
-          {:put, table, id, data}
-        end
-
-      :delete ->
-        table = Map.get(op, :table) || Map.get(op, "table")
-        id = Map.get(op, :id) || Map.get(op, "id") || Map.get(op, :key) || Map.get(op, "key")
-
-        if is_nil(table) or is_nil(id) do
-          {:error, :invalid_batch_operation}
-        else
-          {:delete, table, id}
-        end
-
-      other when not is_nil(other) ->
-        {:error, {:unsupported_batch_action, other}}
-
-      _ ->
-        {:error, :invalid_batch_operation}
-    end
-  end
-
-  defp normalize_batch_op(_), do: {:error, :invalid_batch_operation}
-
-  defp format_batch_reason({:postgres_error, msg}) when is_binary(msg), do: msg
-
-  defp format_batch_reason({:invalid_value, col, type}),
-    do: "Invalid value for column '#{col}' (expected #{type})"
-
-  defp format_batch_reason({:missing_resource_table, tbl}),
-    do: "Missing declared resource table '#{tbl}'"
-
-  defp format_batch_reason({:unsupported_batch_action, action}),
-    do: "Unsupported batch operation '#{action}'; only execute, put, and delete are allowed"
-
-  defp format_batch_reason(other), do: inspect(other)
-
-  defp execute_kv_on_conn(conn, action, schema_name, tbl, command) do
-    case real_table_info(conn, schema_name, tbl) do
-      {:resource_table, info} ->
-        execute_resource_kv(conn, action, schema_name, tbl, info, command)
-
-      :missing when action in [:put, :get, :all] ->
-        if declared_resource_table?(tbl) do
-          {:error, {:missing_resource_table, tbl}}
-        else
-          execute_doc_kv(conn, action, schema_name, tbl, command)
-        end
-
-      _ ->
-        execute_doc_kv(conn, action, schema_name, tbl, command)
-    end
-  end
-
-  defp execute_resource_kv(conn, :put, schema_name, tbl, %{columns: cols, types: types, pk: pk_col}, command) do
-    id = to_string(command[:id])
-    data = command[:data] || %{}
-    record = Map.put(data, "id", id)
-    data_with_pk = Map.put(data, pk_col, id)
-
-    valid_pairs =
-      Enum.flat_map(cols, fn col ->
-        case Map.fetch(data_with_pk, col) do
-          {:ok, val} ->
-            [{col, val}]
-
-          :error ->
-            case Enum.find(data_with_pk, fn {k, _} -> to_string(k) == col end) do
-              {_, val} -> [{col, val}]
-              nil -> []
-            end
-        end
-      end)
-
-    if valid_pairs == [] do
-      execute_doc_kv(conn, :put, schema_name, tbl, command)
-    else
-      with {:ok, coerced_pairs} <- coerce_pairs(valid_pairs, types) do
-        safe_schema = quote_ident(schema_name)
-        safe_tbl = quote_ident(tbl)
-        safe_pk = quote_ident(pk_col)
-        {names, values} = Enum.unzip(coerced_pairs)
-        placeholders = Enum.map_join(1..length(names), ", ", &"$#{&1}")
-
-        updates =
-          names
-          |> Enum.reject(&(&1 == pk_col))
-          |> Enum.map_join(", ", fn col ->
-            q = quote_ident(col)
-            "#{q} = EXCLUDED.#{q}"
-          end)
-
-        sql =
-          "INSERT INTO #{safe_schema}.#{safe_tbl} (#{Enum.map_join(names, ", ", &quote_ident/1)}) " <>
-            "VALUES (#{placeholders}) " <>
-            if(updates == "",
-              do: "ON CONFLICT (#{safe_pk}) DO NOTHING",
-              else: "ON CONFLICT (#{safe_pk}) DO UPDATE SET #{updates}"
-            )
-
-        with {:ok, _} <- query_pooled(conn, sql, values) do
-          {:ok, %{rows: [record], num_rows: 1}}
-        end
-      end
-    end
-  end
-
-  defp execute_resource_kv(conn, :get, schema_name, tbl, %{types: types, pk: pk_col}, command) do
-    with {:ok, id} <- coerce_value(pk_col, Map.get(types, pk_col), to_string(command[:id])) do
-      sql = "SELECT * FROM #{quote_ident(schema_name)}.#{quote_ident(tbl)} WHERE #{quote_ident(pk_col)} = $1"
-
-      case query_pooled(conn, sql, [id]) do
-        {:ok, %{rows: [row | _]}} -> {:ok, %{rows: [decode_resource_row(row)], num_rows: 1}}
-        {:ok, %{rows: []}} -> {:ok, %{rows: [], num_rows: 0}}
-        error -> error
-      end
-    end
-  end
-
-  defp execute_resource_kv(conn, :delete, schema_name, tbl, %{types: types, pk: pk_col}, command) do
-    with {:ok, id} <- coerce_value(pk_col, Map.get(types, pk_col), to_string(command[:id])) do
-      sql = "DELETE FROM #{quote_ident(schema_name)}.#{quote_ident(tbl)} WHERE #{quote_ident(pk_col)} = $1"
-      query_pooled(conn, sql, [id])
-    end
-  end
-
-  defp execute_resource_kv(conn, :all, schema_name, tbl, _info, _command) do
-    sql = "SELECT * FROM #{quote_ident(schema_name)}.#{quote_ident(tbl)}"
-
-    with {:ok, %{rows: rows}} <- query_pooled(conn, sql, []) do
-      decoded = Enum.map(rows, &decode_resource_row/1)
-      {:ok, %{rows: decoded, num_rows: length(decoded)}}
-    end
-  end
-
-  defp execute_resource_kv(_conn, other, _schema_name, _tbl, _info, _command),
-    do: {:error, {:unknown_action, other}}
-
-  defp execute_doc_kv(conn, action, schema_name, tbl, command) do
-    # Convenience key-value / document emulation on top of Postgres
-    safe_schema = quote_ident(schema_name)
-    safe_tbl = quote_ident(tbl)
-    create_sql = table_schema_sql(schema_name, tbl)
-
-    case action do
-      :put ->
-        id = to_string(command[:id])
-        data = Jason.encode!(command[:data] || %{})
-
-        upsert_sql = """
-        INSERT INTO #{safe_schema}.#{safe_tbl} (id, data, updated_at)
-        VALUES ($1, $2::jsonb, CURRENT_TIMESTAMP)
-        ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = CURRENT_TIMESTAMP;
-        """
-
-        with {:ok, _} <- query_pooled(conn, create_sql, []),
-             {:ok, _} <- query_pooled(conn, upsert_sql, [id, data]) do
-          {:ok, %{rows: [%{"id" => id, "data" => command[:data]}], num_rows: 1}}
-        end
-
-      :get ->
-        id = to_string(command[:id])
-        sql = "SELECT data FROM #{safe_schema}.#{safe_tbl} WHERE id = $1"
-
-        with {:ok, _} <- query_pooled(conn, create_sql, []),
-             {:ok, res} <- query_pooled(conn, sql, [id]) do
-          case res do
-            %{rows: [%{"data" => json_data}]} ->
-              data = if is_binary(json_data), do: Jason.decode!(json_data), else: json_data
-              {:ok, %{rows: [Map.put(data, "id", id)], num_rows: 1}}
-
-            %{rows: []} ->
-              {:ok, %{rows: [], num_rows: 0}}
-          end
-        end
-
-      :delete ->
-        id = to_string(command[:id])
-        sql = "DELETE FROM #{safe_schema}.#{safe_tbl} WHERE id = $1"
-
-        with {:ok, _} <- query_pooled(conn, create_sql, []) do
-          query_pooled(conn, sql, [id])
-        end
-
-      :all ->
-        sql = "SELECT id, data FROM #{safe_schema}.#{safe_tbl}"
-
-        with {:ok, _} <- query_pooled(conn, create_sql, []),
-             {:ok, %{rows: rows}} <- query_pooled(conn, sql, []) do
-          decoded =
-            Enum.map(rows, fn row ->
-              d = if is_binary(row["data"]), do: Jason.decode!(row["data"]), else: row["data"]
-              Map.put(d, "id", row["id"])
-            end)
-
-          {:ok, %{rows: decoded, num_rows: length(decoded)}}
-        end
-
-      other ->
-        {:error, {:unknown_action, other}}
-    end
-  end
-
-  defp real_table_info(conn, schema_name, tbl) do
-    cols_sql =
-      "SELECT column_name, data_type FROM information_schema.columns " <>
-        "WHERE table_schema = $1 AND table_name = $2 ORDER BY ordinal_position"
-
-    case query_pooled(conn, cols_sql, [schema_name, to_string(tbl)]) do
-      {:ok, %{rows: []}} ->
-        :missing
-
-      {:ok, %{rows: rows}} ->
-        cols = Enum.map(rows, &to_string(&1["column_name"]))
-
-        if Enum.sort(cols) == ["data", "id", "updated_at"] do
-          :kv_table
-        else
-          types = Map.new(rows, &{to_string(&1["column_name"]), to_string(&1["data_type"])})
-
-          pk_sql =
-            "SELECT kcu.column_name " <>
-              "FROM information_schema.table_constraints tc " <>
-              "JOIN information_schema.key_column_usage kcu " <>
-              "ON tc.constraint_name = kcu.constraint_name " <>
-              "AND tc.table_schema = kcu.table_schema " <>
-              "AND tc.table_name = kcu.table_name " <>
-              "WHERE tc.constraint_type = 'PRIMARY KEY' " <>
-              "AND tc.table_schema = $1 AND tc.table_name = $2 " <>
-              "ORDER BY kcu.ordinal_position LIMIT 1"
-
-          pk_col =
-            case query_pooled(conn, pk_sql, [schema_name, tbl]) do
-              {:ok, %{rows: [%{"column_name" => col} | _]}} -> to_string(col)
-              _ -> "id"
-            end
-
-          {:resource_table, %{columns: cols, types: types, pk: pk_col}}
-        end
-
-      _ ->
-        :missing
-    end
-  end
-
-  defp coerce_pairs(pairs, types) do
-    Enum.reduce_while(pairs, {:ok, []}, fn {col, val}, {:ok, acc} ->
-      case coerce_value(col, Map.get(types, col), val) do
-        {:ok, coerced} -> {:cont, {:ok, [{col, coerced} | acc]}}
-        {:error, _} = err -> {:halt, err}
-      end
-    end)
-    |> case do
-      {:ok, reversed} -> {:ok, Enum.reverse(reversed)}
-      error -> error
-    end
-  end
-
-  defp coerce_value(_col, _type, nil), do: {:ok, nil}
-
-  defp coerce_value(col, type, val) when type in ["integer", "smallint", "bigint"] do
-    cond do
-      is_integer(val) ->
-        {:ok, val}
-
-      is_float(val) and trunc(val) == val ->
-        {:ok, trunc(val)}
-
-      is_binary(val) ->
-        case Integer.parse(String.trim(val)) do
-          {n, ""} -> {:ok, n}
-          _ -> {:error, {:invalid_value, col, type}}
-        end
-
-      true ->
-        {:error, {:invalid_value, col, type}}
-    end
-  end
-
-  defp coerce_value(col, type, val) when type in ["numeric", "decimal", "real", "double precision"] do
-    cond do
-      is_number(val) ->
-        {:ok, val}
-
-      is_binary(val) ->
-        case Float.parse(String.trim(val)) do
-          {n, ""} -> {:ok, n}
-          _ -> {:error, {:invalid_value, col, type}}
-        end
-
-      true ->
-        {:error, {:invalid_value, col, type}}
-    end
-  end
-
-  defp coerce_value(col, "boolean" = type, val) do
-    cond do
-      is_boolean(val) ->
-        {:ok, val}
-
-      val in [1, "1", "true", "t", "TRUE", "True"] ->
-        {:ok, true}
-
-      val in [0, "0", "false", "f", "FALSE", "False"] ->
-        {:ok, false}
-
-      is_binary(val) ->
-        case String.downcase(String.trim(val)) do
-          s when s in ["true", "t", "1"] -> {:ok, true}
-          s when s in ["false", "f", "0"] -> {:ok, false}
-          _ -> {:error, {:invalid_value, col, type}}
-        end
-
-      true ->
-        {:error, {:invalid_value, col, type}}
-    end
-  end
-
-  defp coerce_value(col, "timestamp without time zone" = type, val) do
-    case val do
-      %NaiveDateTime{} ->
-        {:ok, val}
-
-      %DateTime{} ->
-        {:ok, DateTime.to_naive(val)}
-
-      s when is_binary(s) ->
-        case NaiveDateTime.from_iso8601(s) do
-          {:ok, ndt} ->
-            {:ok, ndt}
-
-          {:error, _} ->
-            case DateTime.from_iso8601(s) do
-              {:ok, dt, _} -> {:ok, DateTime.to_naive(dt)}
-              {:error, _} -> {:error, {:invalid_value, col, type}}
-            end
-        end
-
-      _ ->
-        {:error, {:invalid_value, col, type}}
-    end
-  end
-
-  defp coerce_value(col, "timestamp with time zone" = type, val) do
-    case val do
-      %DateTime{} ->
-        {:ok, val}
-
-      %NaiveDateTime{} ->
-        {:ok, DateTime.from_naive!(val, "Etc/UTC")}
-
-      s when is_binary(s) ->
-        case DateTime.from_iso8601(s) do
-          {:ok, dt, _} ->
-            {:ok, dt}
-
-          {:error, _} ->
-            case NaiveDateTime.from_iso8601(s) do
-              {:ok, ndt} -> {:ok, DateTime.from_naive!(ndt, "Etc/UTC")}
-              {:error, _} -> {:error, {:invalid_value, col, type}}
-            end
-        end
-
-      _ ->
-        {:error, {:invalid_value, col, type}}
-    end
-  end
-
-  defp coerce_value(col, type, val) when type in ["json", "jsonb"] do
-    cond do
-      is_binary(val) -> {:ok, val}
-      is_map(val) or is_list(val) -> {:ok, Jason.encode!(val)}
-      true -> {:error, {:invalid_value, col, type}}
-    end
-  end
-
-  defp coerce_value(_col, _type, val), do: {:ok, val}
-
-  defp decode_resource_row(row) when is_map(row) do
-    Map.new(row, fn {col, val} -> {col, decode_resource_value(val)} end)
-  end
-
-  defp decode_resource_value(%DateTime{} = dt), do: DateTime.to_iso8601(dt)
-  defp decode_resource_value(%NaiveDateTime{} = ndt), do: NaiveDateTime.to_iso8601(ndt)
-  defp decode_resource_value(%Decimal{} = dec), do: Decimal.to_float(dec)
-  defp decode_resource_value(val), do: val
-
-  defp declared_resource_table?(tbl) do
-    table = to_string(tbl)
-
-    case Exoforge.ExtensionRegistry.fetch_resource(table) do
-      {:ok, %{resource: res}} -> table_source(res) == table
-      _ -> false
-    end
-  rescue
-    _ -> false
-  end
-
-  defp table_source(res) when is_map(res) do
-    source = Map.get(res, :source) || Map.get(res, "source")
-
-    case source do
-      {:table, t} -> to_string(t)
-      [:table, t] -> to_string(t)
-      ["table", t] -> to_string(t)
-      %{table: t} -> to_string(t)
-      %{"table" => t} -> to_string(t)
-      _ -> Map.get(res, :table) || Map.get(res, "table")
-    end
-  end
-
-  defp table_source(_), do: nil
+  # The driver runs SQL. Key-value commands are the database layer's to turn into SQL.
+  def execute(_plugin_id, other, _args, _config), do: {:error, {:unsupported_operation, other}}
 
   defp quote_ident(name), do: ~s("#{valid_ident!(name)}")
 
@@ -1130,6 +590,135 @@ defmodule Exoforge.Std.Lldb.Adapters.Postgres do
       {:ok, %{rows: rows}} -> {:ok, Enum.map(rows, &to_string(&1["column_name"]))}
       error -> error
     end
+  end
+
+  @impl true
+  def transaction(_plugin_id, [], _config), do: {:ok, %{results: [], num_rows: 0}}
+
+  def transaction(plugin_id, statements, config) when is_list(statements) do
+    schema_name = schema_name(plugin_id, config)
+
+    with {:ok, {mode, conn}} <- pooled_connection(plugin_id, schema_name, config) do
+      try do
+        case Postgrex.transaction(conn, fn tx_conn ->
+               statements
+               |> Enum.with_index()
+               |> Enum.map(fn {{sql, args}, idx} ->
+                 with {:ok, params} <- positional_args(args),
+                      {:ok, result} <- query_pooled(tx_conn, sql, params) do
+                   result
+                 else
+                   {:error, reason} ->
+                     Postgrex.rollback(tx_conn, %{index: idx, reason: reason, message: transaction_message(reason)})
+                 end
+               end)
+             end) do
+          {:ok, results} ->
+            {:ok, %{results: results, num_rows: results |> Enum.map(&Map.get(&1, :num_rows, 0)) |> Enum.sum()}}
+
+          {:error, %{index: _} = err} ->
+            {:error, err}
+
+          {:error, reason} ->
+            {:error, %{index: 0, reason: reason, message: transaction_message(reason)}}
+        end
+      after
+        # An unmanaged connection (no pool supervisor running) is per-call, as before.
+        if mode == :unmanaged, do: GenServer.stop(conn)
+      end
+    end
+  end
+
+  defp transaction_message({:postgres_error, msg}) when is_binary(msg), do: msg
+  defp transaction_message(other), do: inspect(other)
+
+  @impl true
+  def introspect(plugin_id, table, config) do
+    schema_name = schema_name(plugin_id, config)
+    tbl = to_string(table)
+
+    columns_sql =
+      "SELECT column_name, data_type, is_nullable FROM information_schema.columns " <>
+        "WHERE table_schema = $1 AND table_name = $2 ORDER BY ordinal_position"
+
+    primary_key_sql =
+      "SELECT kcu.column_name " <>
+        "FROM information_schema.table_constraints tc " <>
+        "JOIN information_schema.key_column_usage kcu " <>
+        "ON tc.constraint_name = kcu.constraint_name " <>
+        "AND tc.table_schema = kcu.table_schema " <>
+        "AND tc.table_name = kcu.table_name " <>
+        "WHERE tc.constraint_type = 'PRIMARY KEY' " <>
+        "AND tc.table_schema = $1 AND tc.table_name = $2 " <>
+        "ORDER BY kcu.ordinal_position"
+
+    with {:ok, %{rows: rows}} <- execute(plugin_id, columns_sql, [schema_name, tbl], config) do
+      case rows do
+        [] ->
+          {:ok, %{exists: false, columns: [], primary_key: []}}
+
+        _ ->
+          columns =
+            Enum.map(rows, fn row ->
+              native = to_string(row["data_type"])
+
+              %{
+                name: to_string(row["column_name"]),
+                type: logical_type(native),
+                tz: native == "timestamp with time zone",
+                nullable: row["is_nullable"] == "YES"
+              }
+            end)
+
+          primary_key =
+            case execute(plugin_id, primary_key_sql, [schema_name, tbl], config) do
+              {:ok, %{rows: pk_rows}} -> Enum.map(pk_rows, &to_string(&1["column_name"]))
+              _ -> []
+            end
+
+          {:ok, %{exists: true, columns: columns, primary_key: primary_key}}
+      end
+    end
+  end
+
+  # PostgreSQL's catalog names, in the engine-neutral vocabulary the manifest uses (ADR 005).
+  defp logical_type(native) do
+    case native do
+      "smallint" -> "int16"
+      "integer" -> "int32"
+      "bigint" -> "int64"
+      "real" -> "float32"
+      "double precision" -> "float64"
+      n when n in ["numeric", "decimal"] -> "decimal"
+      "boolean" -> "bool"
+      n when n in ["text", "character varying", "character", "varchar"] -> "text"
+      "uuid" -> "uuid"
+      n when n in ["timestamp without time zone", "timestamp with time zone"] -> "timestamp"
+      "bytea" -> "bytes"
+      n when n in ["json", "jsonb"] -> "json"
+      _ -> "other"
+    end
+  end
+
+  @impl true
+  def dialect(_config) do
+    %{
+      name: "postgres",
+      # `$1, $2, ...`; the other style is `?`.
+      placeholder: "numbered",
+      identifier_quote: "\"",
+      # `INSERT ... ON CONFLICT (key) DO UPDATE`; the fallback is a delete followed by an insert.
+      upsert: "on_conflict",
+      # Appended to a placeholder that carries JSON text.
+      json_cast: "::jsonb",
+      transactional_ddl: true,
+      types: %{
+        "text" => "text",
+        "json" => "jsonb",
+        "timestamp" => "timestamptz",
+        "timestamp_naive" => "timestamp"
+      }
+    }
   end
 
   defp query_pooled(conn, query, params) do
@@ -1163,16 +752,6 @@ defmodule Exoforge.Std.Lldb.Adapters.Postgres do
   end
 
   defp missing_relation_hint(msg), do: msg
-
-  defp table_schema_sql(schema_name, tbl) do
-    """
-    CREATE TABLE IF NOT EXISTS #{quote_ident(schema_name)}.#{quote_ident(tbl)} (
-      id text PRIMARY KEY,
-      data jsonb NOT NULL,
-      updated_at timestamp DEFAULT CURRENT_TIMESTAMP
-    );
-    """
-  end
 
   ## ---- PRIVATE HELPERS ----
 

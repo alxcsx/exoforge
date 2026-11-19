@@ -23,20 +23,26 @@ defmodule Exoforge.Std.Lldb.Manager do
     GenServer.call(@name, {:ensure_database, plugin_id})
   end
 
-  @doc "Executes a query or operation isolated to the plugin's database."
+  @doc "Executes a SQL statement isolated to the plugin's namespace."
   def execute(plugin_id, query, args \\ [])
-
-  def execute(plugin_id, %{action: action, table: _} = command, args) when action in [:put, :get, :all] do
-    command = Exoforge.Std.Lldb.JsonColumns.encode(command)
-
-    Exoforge.Std.Lldb.JsonColumns.decode(
-      command,
-      GenServer.call(@name, {:execute, plugin_id, command, args}, 15_000)
-    )
-  end
 
   def execute(plugin_id, query, args) do
     GenServer.call(@name, {:execute, plugin_id, query, args}, 15_000)
+  end
+
+  @doc "Runs `statements` (`{sql, args}` pairs) in order in one transaction; all or nothing."
+  def transaction(plugin_id, statements) when is_list(statements) do
+    GenServer.call(@name, {:transaction, plugin_id, statements}, 15_000)
+  end
+
+  @doc "Describes a table of the plugin's namespace in engine-neutral terms."
+  def introspect(plugin_id, table) do
+    GenServer.call(@name, {:introspect, plugin_id, table}, 15_000)
+  end
+
+  @doc "How to write SQL for the active engine."
+  def dialect do
+    GenServer.call(@name, :dialect)
   end
 
   @doc "Returns isolated connection configuration for the plugin."
@@ -121,6 +127,36 @@ defmodule Exoforge.Std.Lldb.Manager do
   end
 
   @impl true
+  def handle_call({:transaction, plugin_id, statements}, _from, state) do
+    clean = Lldb.clean_id(plugin_id)
+
+    case ensure_once(clean, state) do
+      {:ok, state} ->
+        result = safely(fn -> state.adapter.transaction(clean, statements, state.config) end)
+        {:reply, result, state}
+
+      {:error, reason, state} ->
+        {:reply, {:error, reason}, state}
+    end
+  end
+
+  def handle_call({:introspect, plugin_id, table}, _from, state) do
+    clean = Lldb.clean_id(plugin_id)
+
+    case ensure_once(clean, state) do
+      {:ok, state} ->
+        result = safely(fn -> state.adapter.introspect(clean, table, state.config) end)
+        {:reply, result, state}
+
+      {:error, reason, state} ->
+        {:reply, {:error, reason}, state}
+    end
+  end
+
+  def handle_call(:dialect, _from, state) do
+    {:reply, {:ok, state.adapter.dialect(state.config)}, state}
+  end
+
   def handle_call({:table_columns, plugin_id, table}, _from, state) do
     clean = Lldb.clean_id(plugin_id)
     # Column inspection wants the table to exist; same first-use rule as execute.

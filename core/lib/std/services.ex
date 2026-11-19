@@ -64,6 +64,37 @@ defmodule Exoforge.Std.Services do
       returns(result: :term)
     end
 
+    @doc "Runs statements (SQL with positional arguments) in order in one transaction, all or nothing; a failure names the statement index."
+    action :transaction do
+      scope(:server)
+
+      params(
+        statements: [type: :term],
+        namespace: [type: :term, optional: true]
+      )
+
+      returns(result: :term)
+      errors([:syntax_error, :unauthorized])
+    end
+
+    @doc "Describes a table in engine-neutral terms: columns with logical types, nullability and the primary key."
+    action :introspect do
+      scope(:server)
+
+      params(
+        table: :string,
+        namespace: [type: :term, optional: true]
+      )
+
+      returns(result: :term)
+    end
+
+    @doc "How to write SQL for this engine: placeholder and quoting style, upsert strategy and type names."
+    action :dialect do
+      scope(:server)
+      returns(result: :term)
+    end
+
     @doc "Lists the columns of a table in a namespace."
     action :table_columns do
       scope(:server)

@@ -19,6 +19,7 @@ defmodule Exoforge.Std.Database do
   }
 
   alias Exoforge.ActionDispatcher
+  alias Exoforge.Std.Database.Store
 
   ## ---- SERVICE ACTIONS ----
 
@@ -28,7 +29,13 @@ defmodule Exoforge.Std.Database do
     operation = extract_operation(payload)
     arguments = extract_arguments(payload)
 
-    case lldb(:exec, %{namespace: plugin, operation: operation, arguments: arguments}) do
+    result =
+      case operation do
+        %{} = command -> Store.run(plugin, command)
+        _ -> lldb(:exec, %{namespace: plugin, operation: operation, arguments: arguments})
+      end
+
+    case result do
       {:ok, rows} when is_list(rows) -> {:ok, %{rows: rows}}
       res -> res
     end
@@ -51,7 +58,10 @@ defmodule Exoforge.Std.Database do
   ## ---- DIRECT ELIXIR FACADE ----
 
   @doc "Direct helper to execute a query against a plugin's isolated database."
-  def execute(plugin, query, args \\ []) do
+  def execute(plugin, query, args \\ [])
+  def execute(plugin, %{} = command, _args), do: Store.run(plugin, command)
+
+  def execute(plugin, query, args) do
     lldb(:exec, %{namespace: plugin, operation: query, arguments: args})
   end
 
@@ -94,7 +104,7 @@ defmodule Exoforge.Std.Database do
 
   ## ---- PRIVATE HELPERS ----
 
-  defp exec(plugin, command), do: lldb(:exec, %{namespace: plugin, operation: command, arguments: []})
+  defp exec(plugin, command), do: Store.run(plugin, command)
 
   defp lldb(action, payload), do: ActionDispatcher.dispatch_internal(:lldb, action, payload)
 

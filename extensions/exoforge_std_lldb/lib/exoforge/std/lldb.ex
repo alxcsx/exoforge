@@ -89,6 +89,29 @@ defmodule Exoforge.Std.Lldb do
     end
   end
 
+  @impl true
+  defaction transaction(payload) do
+    statements =
+      payload
+      |> fetch_any([:statements], [])
+      |> Enum.map(fn
+        {sql, args} -> {sql, args}
+        %{} = st -> {fetch_any(st, [:sql], ""), fetch_any(st, [:args, :arguments, :params], [])}
+      end)
+
+    Manager.transaction(extract_namespace(payload), statements)
+  end
+
+  @impl true
+  defaction introspect(payload) do
+    Manager.introspect(extract_namespace(payload), fetch_any(payload, [:table, "table"], ""))
+  end
+
+  @impl true
+  defaction dialect(), scope: :global do
+    Manager.dialect()
+  end
+
   @doc "Dry-run schema planner for an extension's declared resources (staff/studio scope, applies nothing)."
   defaction plan_schema(payload), scope: :studio do
     namespace = fetch_any(payload, [:namespace, :extension, :plugin, :id], :default)

@@ -20,6 +20,7 @@ defmodule Exoforge.Std.Database.MixProject do
   defp deps do
     [
       {:exoforge_core, path: "../../core"},
+      {:decimal, ">= 0.0.0"},
       {:exoforge_std_lldb, path: "../exoforge_std_lldb", only: :test},
       {:postgrex, ">= 0.0.0", only: :test}
     ]
