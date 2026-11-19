@@ -190,7 +190,7 @@ public class MyExtension
 **Namespace:** `Exoforge.Plugin.SDK`  
 **Source / Provider:** Database & Resource Store Extensions (`exoforge_std_database`, `exoforge_std_resources`)
 
-Declares a metadata-driven database entity mapped to SQLite or PostgreSQL storage. The Roslyn generator extracts typed columns, indexes, and primary keys to produce database tables without manual migration files.
+Declares a metadata-driven database entity mapped to PostgreSQL storage. The Roslyn generator extracts typed columns, indexes, and primary keys to produce database tables without manual migration files.
 
 ### `[ExoResource]` Parameters & Properties
 

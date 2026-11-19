@@ -181,7 +181,7 @@ reimports on its own when the files change. Every `sample-*` recipe runs `unity-
 never run against yesterday's package.
 
 `just sample-live-tests` and `just test-e2e` start the backend on a **throwaway database** and delete
-it afterwards, so an integration run leaves nothing in `priv/data/sqlite`. Running the play-mode tests
+it afterwards, so an integration run leaves no database behind. Running the play-mode tests
 from the Editor instead points them at whatever server is up — they sign in with
 `LoginAnonymously(disposable: true)`, and `auth.purge_disposable` (studio-scoped, callable from the
 Studio's Action Sandbox) removes those accounts and nothing else.
@@ -247,5 +247,5 @@ Rules of thumb:
   reflection. A hand-written `JsonSerializerContext` is still honoured, just not required.
 - Extensions build per OS: `$CLI extension build snake_leaderboard --rid linux-musl-x64` for container/Alpine deploy.
 - Uploaded extensions **do not survive a server restart** — re-`push` after restarting the backend.
-- `just dev-reset` stops the dev server and wipes every `priv/data` (SQLite databases and
-  uploaded extensions). Use it for a clean slate — the server recreates its databases on boot.
+- `just dev-reset` stops the dev server and wipes every `priv/data` (uploaded
+  extensions); the Postgres data is untouched (`just db-down` and drop the volume to reset it).
