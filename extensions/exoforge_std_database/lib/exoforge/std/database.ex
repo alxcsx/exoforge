@@ -121,6 +121,13 @@ defmodule Exoforge.Std.Database do
     end
   end
 
+  @doc "Dry-run schema planner for an extension's declared resources (staff/studio scope, applies nothing)."
+  defaction plan_schema(payload), scope: :studio do
+    plugin = fetch_any(payload, [:extension, :plugin, :id, :namespace], :default)
+    resources = fetch_any(payload, [:resources], nil)
+    Manager.plan_schema(plugin, resources)
+  end
+
   ## ---- DIRECT ELIXIR FACADE ----
 
   @doc "Direct helper to execute a query against a plugin's isolated database."

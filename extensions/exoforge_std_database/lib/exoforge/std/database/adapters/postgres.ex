@@ -406,6 +406,43 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
     _ -> []
   end
 
+  @doc """
+  Dry-run declarative schema planner for an extension's declared resources.
+  Reads live schema state from PostgreSQL and computes the reconciliation plan without applying any DDL.
+  """
+  def plan_schema(plugin_id, resources_override, config) do
+    clean_self = valid_plugin_id!(plugin_id)
+    schema_name = valid_ident!(schema_name(clean_self, config))
+    resources = resolve_manifest_resources(clean_self, resources_override)
+
+    with {:ok, {mode, conn}} <- pooled_connection(clean_self, schema_name, config) do
+      try do
+        with {:ok, live_state} <-
+               Exoforge.Std.Database.Schema.read_live_state(conn, schema_name, resources),
+             {:ok, plan_res} <- Exoforge.Std.Database.Schema.plan(resources, live_state) do
+          {:ok, Map.put(plan_res, :extension, to_string(plugin_id))}
+        end
+      after
+        if mode == :unmanaged, do: GenServer.stop(conn)
+      end
+    end
+  end
+
+  defp resolve_manifest_resources(_clean_self, resources) when is_list(resources), do: resources
+
+  defp resolve_manifest_resources(clean_self, _) do
+    case find_manifest_for(clean_self) do
+      nil ->
+        []
+
+      manifest ->
+        Exoforge.ExtensionRegistry.manifest_services(manifest)
+        |> Enum.flat_map(fn svc -> Map.get(svc, :resources) || Map.get(svc, "resources") || [] end)
+    end
+  rescue
+    _ -> []
+  end
+
   defp find_manifest_for(clean_id) do
     Exoforge.ExtensionRegistry.all_manifests()
     |> Enum.find(fn m ->

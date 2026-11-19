@@ -49,6 +49,11 @@ defmodule Exoforge.Std.Database.Manager do
     GenServer.call(@name, {:table_columns, plugin_id, table}, 15_000)
   end
 
+  @doc "Dry-run declarative schema plan for an extension's declared resources (applies nothing)."
+  def plan_schema(plugin_id, resources \\ nil) do
+    GenServer.call(@name, {:plan_schema, plugin_id, resources}, 15_000)
+  end
+
   @doc "Performs a health check of the underlying database system."
   def health_check do
     GenServer.call(@name, :health_check)
@@ -122,6 +127,28 @@ defmodule Exoforge.Std.Database.Manager do
     case ensure_once(clean, state) do
       {:ok, state} ->
         result = safely(fn -> state.adapter.table_columns(clean, table, state.config) end)
+        {:reply, result, state}
+
+      {:error, reason, state} ->
+        {:reply, {:error, reason}, state}
+    end
+  end
+
+  @impl true
+  def handle_call({:plan_schema, plugin_id, resources}, _from, state) do
+    clean = Database.clean_id(plugin_id)
+
+    case ensure_once(clean, state) do
+      {:ok, state} ->
+        result =
+          safely(fn ->
+            if function_exported?(state.adapter, :plan_schema, 3) do
+              state.adapter.plan_schema(clean, resources, state.config)
+            else
+              Postgres.plan_schema(clean, resources, state.config)
+            end
+          end)
+
         {:reply, result, state}
 
       {:error, reason, state} ->
