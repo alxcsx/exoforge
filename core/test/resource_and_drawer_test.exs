@@ -89,10 +89,10 @@ defmodule Exoforge.ResourceAndDrawerTest do
 
   test "resource_store actions declare player reads and studio writes" do
     metadata = Exoforge.Std.Services.ResourceStore.__service_metadata__()
-    assert length(metadata.actions) == 8
+    assert length(metadata.actions) == 9
 
     action_names = Enum.map(metadata.actions, & &1.name)
-    assert Enum.sort(action_names) == [:clear, :create, :delete, :get, :list, :migrate, :update, :upsert]
+    assert Enum.sort(action_names) == [:clear, :create, :delete, :get, :list, :migrate, :provision, :update, :upsert]
 
     # Reads are player-callable and gated per-resource inside the action; writes remain studio.
     for action <- metadata.actions do
