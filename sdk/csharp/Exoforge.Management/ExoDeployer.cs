@@ -487,7 +487,7 @@ public class ExoDeployer
         CancellationToken cancellationToken = default) =>
         GenerateExtensionStubsAsync(extensionName, services: null, existingClient: existingClient, emit: emit, cancellationToken: cancellationToken);
 
-    /// <summary>Fetches the contracts and writes typed stubs into the extension's <c>src/Generated</c> folder.</summary>
+    /// <summary>Fetches the contracts and writes typed stubs into the extension's <c>obj/exoforge</c> folder.</summary>
     public async Task<string> GenerateExtensionStubsAsync(
         string extensionName,
         IEnumerable<string>? services,
@@ -497,7 +497,7 @@ public class ExoDeployer
     {
         string cleanName = NormalizeExtensionName(extensionName);
         string extensionDir = Path.Combine(_workspace.ExtensionsPath, cleanName);
-        string output = Path.Combine(extensionDir, "src", "Generated", "PluginServices.g.cs");
+        string output = StubsPath(extensionDir);
         string exportJson;
 
         try
@@ -531,7 +531,7 @@ public class ExoDeployer
         }
 
         ExoCodeGenerator.GeneratePluginStubsToFile(merged, output, services: targetServices, pluginId: cleanName);
-        string attrDir = Path.Combine(extensionDir, "src", "Generated", "Attributes");
+        string attrDir = Path.Combine(extensionDir, "obj", "exoforge", "Attributes");
         SyncCompanionAttributes(merged, attrDir, emit);
         return output;
     }
@@ -943,6 +943,52 @@ public class ExoDeployer
         }
     }
 
+    /// <summary>
+    /// Where an extension's typed stubs live: under <c>obj/</c>, which the build compiles and nobody
+    /// commits, so the file is never a thing to keep in step with the contracts it was made from.
+    /// </summary>
+    public static string StubsPath(string extensionDir) =>
+        Path.Combine(extensionDir, "obj", "exoforge", "PluginServices.g.cs");
+
+    /// <summary>A deployer whose workspace is the folder beside an extension: its siblings are the contracts.</summary>
+    public static ExoDeployer BesideExtension(string extensionDir) =>
+        new(new ExoWorkspace(
+            Path.GetDirectoryName(Path.GetFullPath(extensionDir))!,
+            new ExoProjectConfig { ExtensionsDir = Path.GetDirectoryName(Path.GetFullPath(extensionDir))! }));
+
+    /// <summary>
+    /// Build-time stubs: the services the extension declares as dependencies, from the sibling manifests,
+    /// asking the cluster only for what they do not cover. Nothing declared means nothing to generate
+    /// (<c>Output</c> is null); a dependency with no contract anywhere comes back in <c>Missing</c>.
+    /// </summary>
+    public async Task<(string? Output, IReadOnlyList<string> Missing)> GenerateDependencyStubsAsync(
+        string extensionDir,
+        CancellationToken cancellationToken = default)
+    {
+        if (ReadManifestDependencies(extensionDir) is not { } deps) return (null, Array.Empty<string>());
+
+        string export = MergeLocalContracts("{\"export\":{\"extensions\":[]}}");
+
+        if (MissingServices(export, deps).Count > 0)
+        {
+            try
+            {
+                export = MergeLocalContracts(await GetContractsExportJsonAsync(cancellationToken: cancellationToken).ConfigureAwait(false));
+            }
+            catch (Exception)
+            {
+                // No cluster to ask: whatever the siblings did not cover stays missing, and is reported.
+            }
+        }
+
+        var missing = MissingServices(export, deps);
+        if (missing.Count > 0) return (null, missing);
+
+        string output = StubsPath(extensionDir);
+        ExoCodeGenerator.GeneratePluginStubsToFile(export, output, services: deps, pluginId: Path.GetFileName(extensionDir), codeSearchRoot: extensionDir);
+        return (output, missing);
+    }
+
     /// <summary>Generates typed stubs for every extension in the workspace that has a project.</summary>
     public async Task<List<string>> GenerateAllExtensionStubsAsync(
         string? environmentName = null,
@@ -972,7 +1018,7 @@ public class ExoDeployer
             string name = Path.GetFileName(dir);
             if (FindExtensionCsproj(dir, name) == null) continue;
 
-            string output = Path.Combine(dir, "src", "Generated", "PluginServices.g.cs");
+            string output = StubsPath(dir);
             ExoCodeGenerator.GeneratePluginStubsToFile(merged, output, services: ReadManifestDependencies(dir), pluginId: name, codeSearchRoot: dir, log: null);
             outputs.Add(output);
         }
@@ -1537,7 +1583,7 @@ public class ExoDeployer
         int buildNumber = PeekBuildNumber(extensionDir);
         string buildStamp = $"{buildNumber}.{fingerprint}";
         // Refresh stubs from contracts before compiling if stubs file exists and cached contracts are available
-        string stubsFile = Path.Combine(extensionDir, "src", "Generated", "PluginServices.g.cs");
+        string stubsFile = StubsPath(extensionDir);
         if (File.Exists(stubsFile))
         {
             try

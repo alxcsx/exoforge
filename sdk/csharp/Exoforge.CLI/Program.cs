@@ -2035,6 +2035,9 @@ public static class Program
         {
             Console.WriteLine("""
             Usage: exo extension stubs <name> [--services a,b] [--out <path>] [--file <export.json>]
+                   exo extension stubs --project-dir <extension dir>   (what the build runs)
+
+            Stubs are written under the extension's obj/, which the build compiles; none live in src/.
 
             Reads the cluster's contracts, and lays this workspace's own built extensions over them, so an
             extension that is built but not deployed still produces stubs. Without a cluster it uses what
@@ -2046,9 +2049,25 @@ public static class Program
             return 0;
         }
 
-        if (cli.Positional.Count == 0)
+        if (cli.Positional.Count == 0 && cli.Value("project-dir") is null)
         {
             return Missing("extension name", "exo extension stubs <name>");
+        }
+
+        // The build's own call: only what the extension declares, from the manifests beside it.
+        if (cli.Value("project-dir") is { } projectDir)
+        {
+            projectDir = Path.GetFullPath(projectDir);
+            var (built, unresolved) = await ExoDeployer.BesideExtension(projectDir).GenerateDependencyStubsAsync(projectDir).ConfigureAwait(false);
+
+            if (unresolved.Count > 0)
+            {
+                Error($"[Exoforge] No contracts for: {string.Join(", ", unresolved)}. Start the cluster (`just dev`), or build the extension that provides them.");
+                return 1;
+            }
+
+            if (built != null) Success($"[Exoforge] Generated typed extension service stubs:\n  {built}");
+            return 0;
         }
 
         string name = ExoScaffolder.NormalizeExtensionName(cli.Positional[0]);
@@ -2083,7 +2102,7 @@ public static class Program
         exportJson = deployer.MergeLocalContracts(exportJson);
 
         string extensionDir = Path.Combine(ws.ExtensionsPath, name);
-        string stubsOut = cli.Value("out") ?? Path.Combine(extensionDir, "src", "Generated", "PluginServices.g.cs");
+        string stubsOut = cli.Value("out") ?? ExoDeployer.StubsPath(extensionDir);
 
         var deps = ExoDeployer.ReadManifestDependencies(extensionDir);
         string? servicesOption = cli.Value("services");

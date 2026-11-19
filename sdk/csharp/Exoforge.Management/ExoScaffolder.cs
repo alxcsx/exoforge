@@ -12,7 +12,6 @@ namespace Exoforge.Management;
 ///   .gitignore           ignores the build outputs (the staged binary, the manifest)
 ///   src/&lt;name&gt;.csproj
 ///   src/&lt;Name&gt;Plugin.cs  the actions
-///   src/Generated/       typed service stubs and the JSON context, from `exo plugin stubs`
 /// </code>
 /// The built binary is staged under <c>.exoforge/</c> and <c>manifest.json</c> is written at the plugin
 /// root; both are build outputs.
@@ -464,7 +463,7 @@ public static class ExoScaffolder
         | Path | What it is |
         | :--- | :--- |
         | `src/{className}{suffix}.cs` | the {term}: `[ExoAction]` methods are what callers invoke |
-        | `src/Generated/` | typed service stubs and the JSON context (`exo {term} stubs {cleanName}`) |
+        | `obj/exoforge/` | typed service stubs generated from `[ExoDependency]` declarations |
         | `manifest.json` | generated from the attributes; do not edit |
         | `{cleanName}` | the staged native binary; generated |
 

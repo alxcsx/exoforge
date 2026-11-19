@@ -110,7 +110,7 @@ Whenever an extension action or schema changes, update your typed code contracts
 Click **Sync Client** in the Unity toolbar (or the Exoforge Studio menu). This queries live cluster contracts and generates `Assets/Exoforge/Generated/ExoforgeServices.g.cs`. Player- and global-scoped actions are emitted; studio/admin actions are excluded from the game surface by default. The generated file provides static accessors (`ExoServices.GameplayCalculator`) and client extensions (`ExoforgeSDK.Client.GameplayCalculator()`) with main-thread callbacks and async overloads.
 
 ### Extension-to-Extension Stubs (Server)
-In the **Extensions** tab, open your extension and click **Stubs**. Studio generates typed client stubs for the services declared in the extension's `manifest.json` dependencies, writing to `src/Generated/PluginServices.g.cs`. Only those dependencies are generated.
+In the **Extensions** tab, open your extension and click **Stubs**. Studio generates typed client stubs for the services declared in the extension's `manifest.json` dependencies, writing to `obj/exoforge/PluginServices.g.cs`. Only those dependencies are generated.
 
 ---
 

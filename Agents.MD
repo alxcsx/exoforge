@@ -262,10 +262,17 @@ Action declarations follow conventions, so the attribute is usually bare:
   (`ActionMode.Cast` is still explicit.)
 - **Transport** — defaults to `:auto`.
 
-Extensions call other services through **generated, region-agnostic stubs**: `exo extension stubs <name>`
-reads the cluster contract export and writes `src/Generated/ExtensionServices.g.cs` (typed
-request/response records + a typed client per service). Only the services in the extension's
-`manifest.json` dependencies are generated (`--services a,b` overrides), so the file stays small. The
+Extensions call other services through **generated, region-agnostic stubs**. The build makes them:
+for the services in the extension's `manifest.json` dependencies (`[ExoDependency]`), `Directory.Build.targets`
+runs `exo extension stubs --project-dir <extension dir>`, which reads the sibling manifests (the cluster only
+for what they do not cover) and writes `obj/exoforge/PluginServices.g.cs` (typed request/response records +
+a typed client per service), compiled from there; a dependency no source has fails the build. Nothing is
+committed in `src/`. Stubs emit one record
+per contract type, reused by every action naming it. Foreign keys resolve through `[ExoColumn(ReferencesType = typeof(T))]`:
+when `T` is a stub (or local) resource record, the generator resolves the target table and primary key from its manifest;
+an unknown type reports an `EXO005` compile error. `exo extension stubs <name>`
+writes the same file by hand (`--services a,b` overrides). The first build of a new dependency declares it
+(the manifest is written by compiling), the next one generates the stubs. The
 stubs are reached through the generated holder (`Exo.PlayerData.GetProfileAsync(...)`, or
 `Exo.Services.PlayerData`), so extension code only deals with services and never touches
 `IActionDispatcher`. The stubs depend on the service *contract*, never on the extension that implements it.
