@@ -63,6 +63,20 @@ jobs:
   test-elixir:
     name: Fast Test - Elixir Core & Plugins Coverage
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: exoforge_prod
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -80,6 +94,8 @@ jobs:
       - name: Run Core & Plugin Tests with Coverage in Container
         run: |
           docker run --rm \
+            --network host \
+            -e DATABASE_URL="postgres://postgres:postgres@127.0.0.1:5432/exoforge_prod" \
             -v "${{ github.workspace }}:/app" \
             -w /app \
             elixir:1.20-otp-29-alpine sh -c "

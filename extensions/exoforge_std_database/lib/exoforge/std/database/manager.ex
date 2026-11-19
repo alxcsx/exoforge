@@ -188,9 +188,10 @@ defmodule Exoforge.Std.Database.Manager do
 
     parsed_url = if url, do: parse_database_url(url), else: %{}
 
-    Enum.into(opts, %{})
+    %{}
     |> Map.merge(Enum.into(app_config, %{}))
     |> Map.merge(parsed_url)
+    |> Map.merge(Enum.into(opts, %{}))
     |> Map.put_new_lazy(:data_dir, &default_data_dir/0)
   end
 

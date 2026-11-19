@@ -2,14 +2,14 @@
 # Exoforge Command Automation (Justfile)
 # =====================================================================
 
-container_engine := `command -v podman >/dev/null 2>&1 && echo podman || echo docker`
-compose_cmd := `command -v docker-compose >/dev/null 2>&1 && echo "docker-compose" || (command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1 && echo "docker compose" || echo "podman-compose")`
+container_engine := `if command -v docker >/dev/null 2>&1; then echo docker; elif command -v podman >/dev/null 2>&1; then echo podman; else echo docker; fi`
+compose_cmd := `if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then echo "docker compose"; elif command -v docker-compose >/dev/null 2>&1; then echo "docker-compose"; elif command -v podman-compose >/dev/null 2>&1; then echo "podman-compose"; elif command -v podman >/dev/null 2>&1 && podman compose version >/dev/null 2>&1; then echo "podman compose"; else echo "docker compose"; fi`
 
 # ---- Development ----
 
 # Run backend development server
-dev:
-	mix run --no-halt
+dev: db-up
+	DATABASE_URL="${DATABASE_URL:-postgres://postgres:postgres@127.0.0.1:5432/exoforge_prod}" mix run --no-halt
 
 # Stop the dev server and wipe all dev data (SQLite databases + uploaded extensions)
 dev-reset:
@@ -62,7 +62,7 @@ test-core:
 # Test every standard extension. Each is its own Mix project with its own deps directory, and only the
 # root's are fetched by a checkout: without `mix deps.get` here the first extension dies with "Unchecked
 # dependencies for environment test" and the other seven never run.
-test-extensions:
+test-extensions: db-up
 	#!/usr/bin/env bash
 	set -euo pipefail
 	for dir in extensions/*/; do
@@ -72,7 +72,7 @@ test-extensions:
 	done
 
 # Test root system integration
-test-system: build-extensions
+test-system: db-up build-extensions
 	mix test
 
 # Test C# SDKs (Client, Plugin SDK, Generator & Management Engine)
@@ -96,19 +96,29 @@ test-sdk:
 	dotnet build "$sample_proj" -v q --nologo
 
 # Run live end-to-end integration test (Client -> WS :4000 -> native plugin -> Event -> Client)
-test-e2e: build-extensions
+test-e2e: db-up build-extensions
 	#!/usr/bin/env bash
 	set -euo pipefail
 	pkill -f beam.smp 2>/dev/null || true
 	sleep 0.5
-	# A throwaway database. Without it this ran against priv/data/sqlite and left every account,
-	# token and score it created in the developer's own data, where nothing distinguishes them from
-	# real ones.
+	# A throwaway database and temp data dir so accounts, tokens and scores never land in exoforge_prod.
 	data_dir=$(mktemp -d)
-	echo "Starting Exoforge backend on a disposable database..."
-	EXOFORGE_DATA_DIR="$data_dir" mix run --no-halt &
+	test_db="exoforge_test_$$_$RANDOM"
+	SERVER_PID=""
+	cleanup() {
+		if [ -n "$SERVER_PID" ]; then
+			pkill -P "$SERVER_PID" 2>/dev/null || true
+			kill "$SERVER_PID" 2>/dev/null || true
+		fi
+		pkill -f beam.smp 2>/dev/null || true
+		"{{just_executable()}}" _pg-drop-db "$test_db" 2>/dev/null || true
+		rm -rf "$data_dir"
+	}
+	trap cleanup EXIT
+	echo "Starting Exoforge backend on a disposable database ($test_db)..."
+	"{{just_executable()}}" _pg-create-db "$test_db"
+	DATABASE_URL="postgres://postgres:postgres@127.0.0.1:${PGPORT:-5432}/$test_db" EXOFORGE_DATA_DIR="$data_dir" mix run --no-halt &
 	SERVER_PID=$!
-	trap "pkill -P $SERVER_PID 2>/dev/null || true; kill $SERVER_PID 2>/dev/null || true; pkill -f beam.smp 2>/dev/null || true; rm -rf $data_dir" EXIT
 	echo "Waiting for ports 4000 and 4001..."
 	for i in $(seq 1 40); do
 		if nc -z 127.0.0.1 4000 2>/dev/null && nc -z 127.0.0.1 4001 2>/dev/null; then break; fi
@@ -182,13 +192,59 @@ compose-down:
 # Restart Compose stack
 compose-restart: compose-down compose-up
 
-# Start only local PostgreSQL container
-postgres-up:
-	{{compose_cmd}} up -d postgres
+# Ensure local PostgreSQL container is running and accepting connections
+db-up:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	pg_port="${PGPORT:-5432}"
+	pg_user="${PGUSER:-postgres}"
+	if (command -v pg_isready >/dev/null 2>&1 && pg_isready -h 127.0.0.1 -p "$pg_port" -U "$pg_user" >/dev/null 2>&1) || \
+	   (command -v "{{container_engine}}" >/dev/null 2>&1 && "{{container_engine}}" exec exoforge_postgres pg_isready -U postgres -d exoforge_prod >/dev/null 2>&1); then
+		echo "[db-up] PostgreSQL is ready on 127.0.0.1:${pg_port}"
+		exit 0
+	fi
+	if ! command -v docker >/dev/null 2>&1 && ! command -v podman >/dev/null 2>&1; then
+		echo "Docker (https://docs.docker.com/get-docker/) or Podman (https://podman.io/docs/installation) is required to run local PostgreSQL." >&2
+		exit 1
+	fi
+	echo "[db-up] Starting PostgreSQL container..."
+	POSTGRES_PORT="${POSTGRES_PORT:-$pg_port}" {{compose_cmd}} up -d postgres
+	for _ in $(seq 1 60); do
+		if ("{{container_engine}}" exec exoforge_postgres pg_isready -U postgres -d exoforge_prod >/dev/null 2>&1) || \
+		   (command -v pg_isready >/dev/null 2>&1 && pg_isready -h 127.0.0.1 -p "$pg_port" -U "$pg_user" >/dev/null 2>&1); then
+			echo "[db-up] PostgreSQL is ready on 127.0.0.1:${pg_port}"
+			exit 0
+		fi
+		sleep 0.5
+	done
+	echo "[db-up] Timed out waiting for PostgreSQL on 127.0.0.1:${pg_port}" >&2
+	exit 1
 
 # Stop local PostgreSQL container
-postgres-down:
+db-down:
 	{{compose_cmd}} stop postgres
+
+# Start only local PostgreSQL container
+postgres-up: db-up
+
+# Stop local PostgreSQL container
+postgres-down: db-down
+
+_pg-exec sql:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	sql='{{sql}}'
+	if command -v "{{container_engine}}" >/dev/null 2>&1 && "{{container_engine}}" exec exoforge_postgres pg_isready -U postgres -d postgres >/dev/null 2>&1; then
+		"{{container_engine}}" exec exoforge_postgres psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c "$sql" >/dev/null
+	else
+		PGPASSWORD="${PGPASSWORD:-postgres}" psql -h "${PGHOST:-127.0.0.1}" -p "${PGPORT:-5432}" -U "${PGUSER:-postgres}" -d postgres -v ON_ERROR_STOP=1 -c "$sql" >/dev/null
+	fi
+
+_pg-create-db name:
+	@"{{just_executable()}}" _pg-exec 'CREATE DATABASE "{{name}}"'
+
+_pg-drop-db name:
+	@"{{just_executable()}}" _pg-exec 'DROP DATABASE IF EXISTS "{{name}}" WITH (FORCE)'
 
 # Deploy to Kubernetes cluster via Kustomize (with sensible defaults)
 k8s-deploy:
@@ -306,20 +362,32 @@ sample-check: unity-sync _unity-reset
 # ---- Unity SDK Package ----
 
 # Starts the backend, deploys the sample plugin, runs the tests, stops the server again.
-sample-live-tests: unity-sync
+sample-live-tests: db-up unity-sync
 	#!/usr/bin/env bash
 	set -euo pipefail
 	pkill -f "mix run" 2>/dev/null || true
 	sleep 1
 
-	# A throwaway database, so the accounts, scores and players these tests create are not left in the
-	# developer's own - which is what happened, 83 players and 186 tokens deep.
+	# A throwaway database, so the accounts, scores and players these tests create never touch exoforge_prod.
 	data_dir=$(mktemp -d)
-	EXOFORGE_DATA_DIR="$data_dir" mix run --no-halt > /tmp/exoforge-live-tests-server.log 2>&1 &
-	server=$!
+	test_db="exoforge_test_$$_$RANDOM"
+	server=""
+	cleanup() {
+		if [ -n "$server" ]; then
+			kill "$server" 2>/dev/null || true
+		fi
+		pkill -f "mix run" 2>/dev/null || true
+		pkill -f beam.smp 2>/dev/null || true
+		"{{just_executable()}}" _pg-drop-db "$test_db" 2>/dev/null || true
+		rm -rf "$data_dir"
+	}
 	# Kill the BEAM too, not just the wrapper: `kill` on `mix run` can leave it holding port 4000,
 	# and then the offline play-mode tests run against a half-dead server instead of skipping.
-	trap 'kill $server 2>/dev/null || true; pkill -f "mix run" 2>/dev/null || true; pkill -f beam.smp 2>/dev/null || true; rm -rf $data_dir' EXIT
+	trap cleanup EXIT
+
+	"{{just_executable()}}" _pg-create-db "$test_db"
+	DATABASE_URL="postgres://postgres:postgres@127.0.0.1:${PGPORT:-5432}/$test_db" EXOFORGE_DATA_DIR="$data_dir" mix run --no-halt > /tmp/exoforge-live-tests-server.log 2>&1 &
+	server=$!
 
 	for _ in $(seq 1 60); do
 		nc -z 127.0.0.1 4000 2>/dev/null && break
@@ -453,22 +521,26 @@ clean-room-sdk:
 # imports the packaged SDK tarball (dist/com.exoforge.sdk-*.tgz), checks for compilation errors,
 # writes any compile errors to log/unity-compilation-errors.log, and tests live auth/connection
 # against localhost (or $EXOFORGE_TEST_URL).
-test-unity-package:
+test-unity-package: db-up
 	#!/usr/bin/env bash
 	set -euo pipefail
 
 	started_server=0
 	server_pid=""
 	data_dir=""
+	test_db=""
 	cleanup() {
 		if [ "$started_server" -eq 1 ] && [ -n "$server_pid" ]; then
 			echo "[test-unity-package] Stopping temporary backend server..."
 			kill "$server_pid" 2>/dev/null || true
 			pkill -f "mix run" 2>/dev/null || true
 			pkill -f beam.smp 2>/dev/null || true
-			if [ -n "$data_dir" ] && [ -d "$data_dir" ]; then
-				rm -rf "$data_dir"
-			fi
+		fi
+		if [ -n "$test_db" ]; then
+			"{{just_executable()}}" _pg-drop-db "$test_db" 2>/dev/null || true
+		fi
+		if [ -n "$data_dir" ] && [ -d "$data_dir" ]; then
+			rm -rf "$data_dir"
 		fi
 	}
 	trap cleanup EXIT
@@ -476,9 +548,11 @@ test-unity-package:
 	target_url="${EXOFORGE_TEST_URL:-http://localhost:4001}"
 	if [[ "$target_url" == *"localhost"* ]] || [[ "$target_url" == *"127.0.0.1"* ]]; then
 		if ! nc -z 127.0.0.1 4000 2>/dev/null; then
-			echo "[test-unity-package] Starting local backend server with disposable data dir..."
 			data_dir=$(mktemp -d)
-			EXOFORGE_DATA_DIR="$data_dir" mix run --no-halt > /tmp/exoforge-package-test-server.log 2>&1 &
+			test_db="exoforge_test_$$_$RANDOM"
+			echo "[test-unity-package] Starting local backend server with disposable database ($test_db)..."
+			"{{just_executable()}}" _pg-create-db "$test_db"
+			DATABASE_URL="postgres://postgres:postgres@127.0.0.1:${PGPORT:-5432}/$test_db" EXOFORGE_DATA_DIR="$data_dir" mix run --no-halt > /tmp/exoforge-package-test-server.log 2>&1 &
 			server_pid=$!
 			started_server=1
 
