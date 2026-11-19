@@ -25,6 +25,19 @@ public class SamplePlugin
 
     [ExoAction("echo")]
     public int Echo(int value) => value;
+
+    [ExoAction("get_many")]
+    public List<Counter> GetMany(List<int> ids)
+    {
+        var result = new List<Counter>();
+        if (ids is null || ids.Count == 0) return result;
+        foreach (var id in ids)
+        {
+            var counter = ExoServices.Database.Get<Counter>(id);
+            if (counter is not null) result.Add(counter);
+        }
+        return result;
+    }
 }
 
 [ExoResource("counters", PrimaryKey = "counter_id", DrawerTabs = new[] { "overview", "attributes" })]

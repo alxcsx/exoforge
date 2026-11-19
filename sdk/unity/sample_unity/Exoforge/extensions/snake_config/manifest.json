@@ -1,7 +1,7 @@
 {
   "id": "snake_config",
   "type": "native",
-  "version": "0.1.0+10.e5d4cdcd",
+  "version": "0.1.0",
   "context": "global",
   "entry_point": "snake_config",
   "dependencies": ["file_bucket", "unity_addressables"],
@@ -13,9 +13,12 @@
   "services": [
     {
       "name": "snake_config",
+      "category": "Game",
+      "title": "Snake Configuration",
+      "icon": "⚙️",
       "actions": [
-        {"name": "get_config", "mode": "sync", "scope": "global", "transport": "auto", "arity": 0, "params": {}, "returns": {"snake_color": "string", "apple_color": "string", "apple_points": "integer", "background_file_id": "string", "background_addressable": "string"}, "returns_list": false, "returns_type": "global::Exoforge.Plugins.SnakeConfig.SnakeConfigDto"},
-        {"name": "update_config", "mode": "sync", "scope": "global", "transport": "auto", "arity": 5, "params": {"snake_color": "string", "apple_color": "string", "apple_points": "integer", "background_file_id": "string", "background_addressable": "string"}, "returns": {"snake_color": "string", "apple_color": "string", "apple_points": "integer", "background_file_id": "string", "background_addressable": "string"}, "returns_list": false, "returns_type": "global::Exoforge.Plugins.SnakeConfig.SnakeConfigDto"}
+        {"name": "get_config", "mode": "sync", "scope": "player", "transport": "auto", "arity": 0, "params": {}, "returns": {"snake_color": "string", "apple_color": "string", "apple_points": "integer", "background_file_id": "string", "background_addressable": "string"}, "returns_list": false, "returns_type": "global::Exoforge.Plugins.SnakeConfig.SnakeConfigDto"},
+        {"name": "update_config", "mode": "sync", "scope": "player", "transport": "auto", "arity": 5, "params": {"snake_color": "string", "apple_color": "string", "apple_points": "integer", "background_file_id": "string", "background_addressable": "string"}, "params_nullable": ["apple_points"], "returns": {"snake_color": "string", "apple_color": "string", "apple_points": "integer", "background_file_id": "string", "background_addressable": "string"}, "returns_list": false, "returns_type": "global::Exoforge.Plugins.SnakeConfig.SnakeConfigDto"}
       ],
       "events": [
       ],

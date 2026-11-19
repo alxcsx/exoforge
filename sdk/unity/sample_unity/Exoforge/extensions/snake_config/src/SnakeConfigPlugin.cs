@@ -1,5 +1,6 @@
 using System;
 using System.Text.Json;
+using System.Threading.Tasks;
 using Exoforge.Plugin.SDK;
 using Exoforge.Plugins.Generated;
 
@@ -10,23 +11,17 @@ namespace Exoforge.Plugins.SnakeConfig;
 [ExoDependency("file_bucket")]
 public class SnakeConfigPlugin
 {
-    /// <summary>Wired by the host; the config's background images live in a player-readable bucket.</summary>
-    public IActionDispatcher? Actions { get; set; }
+    public async Task OnExtensionStart() => await MakeBucketPublicAsync("snake_assets");
 
-    public void OnExtensionStart() => MakeBucketPublic("snake_assets");
-
-    private void MakeBucketPublic(string bucket)
+    private async Task MakeBucketPublicAsync(string bucket)
     {
         try
         {
-            var response = Actions?.CallAction<JsonElement>("file_bucket", "set_bucket_visibility",
-                new { bucket, visibility = "public" });
-
-            if (response is JsonElement json && json.ValueKind == JsonValueKind.Object &&
-                json.TryGetProperty("error", out var error))
+            await ExoServices.FileBucket.SetBucketVisibilityAsync(new FileBucketSetBucketVisibilityRequest
             {
-                ExoServices.Logger.Warning($"[snake_config] Could not make bucket '{bucket}' public: {error}");
-            }
+                Bucket = bucket,
+                Visibility = "public"
+            });
         }
         catch (Exception ex)
         {

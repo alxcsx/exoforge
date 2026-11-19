@@ -267,7 +267,7 @@ for the services in the extension's `manifest.json` dependencies (`[ExoDependenc
 runs `exo extension stubs --project-dir <extension dir>`, which reads the sibling manifests (the cluster only
 for what they do not cover) and writes `obj/exoforge/PluginServices.g.cs` (typed request/response records +
 a typed client per service), compiled from there; a dependency no source has fails the build. Nothing is
-committed in `src/`; an extension that still commits `src/Generated` stubs keeps them. Stubs emit one record
+committed in `src/`. Stubs emit one record
 per contract type, reused by every action naming it. Foreign keys resolve through `[ExoColumn(ReferencesType = typeof(T))]`:
 when `T` is a stub (or local) resource record, the generator resolves the target table and primary key from its manifest;
 an unknown type reports an `EXO005` compile error. `exo extension stubs <name>`

@@ -531,7 +531,7 @@ public class ExoDeployer
         }
 
         ExoCodeGenerator.GeneratePluginStubsToFile(merged, output, services: targetServices, pluginId: cleanName);
-        string attrDir = Path.Combine(extensionDir, "src", "Generated", "Attributes");
+        string attrDir = Path.Combine(extensionDir, "obj", "exoforge", "Attributes");
         SyncCompanionAttributes(merged, attrDir, emit);
         return output;
     }
