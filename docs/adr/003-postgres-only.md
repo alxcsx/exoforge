@@ -26,4 +26,5 @@ Whoever swaps the `database` extension owns cross-extension joins and every isol
 ## 3. Consequences & Accepted Cost
 
 - **Positive**: Dev, CI, and production share identical Postgres semantics (per-extension LOGIN roles, transactions, `JSONB`, `db_read` grants) under the official extension while keeping the `database` contract swappable.
-- **Where Postgres-specific parts live**: see [ADR 005](005-database-layers.md) — everything above `lldb` stays engine-agnostic.
+- **Accepted Cost**: Running a local backend requires Docker or Podman, and third-party database replacements own their isolation and `db_read` enforcement.
+- **Where Postgres-specific parts live**: see [ADR 005](005-database-layers.md); everything above `lldb` stays engine-agnostic.

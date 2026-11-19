@@ -51,5 +51,4 @@ An in-repo test double `lldb` with a different dialect (quote style, no upsert) 
 - **Positive**: clean engine boundary; `database`/`resource_store` stay SQL-generic and swappable.
 - **Accepted Cost**: one extra service hop per query (`database` -> `lldb`); excluded from metering, expect microseconds.
 - **Risk**: a SQL-generic layer over one real engine can drift into Postgres-only assumptions; mitigated by the test double.
-- **Risk**: L2 is a large move (~3,000 lines); do pure moves first, behaviour changes after.<|end|><|start|>startup to=bash<|channel|>analysis <|constrain|>xml<|message|><rfl:parameter name="command">
-cd /Users/alexcs/projects/exoforge-wt/l0 && wc -l docs/adr/005-database-layers.md
+- **Risk**: L2 is a large move (~3,000 lines); do pure moves first, behaviour changes after.

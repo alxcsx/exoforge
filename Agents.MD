@@ -73,7 +73,7 @@ file_bucket ──▶ database
 
 | Extension | Port / Role | Provides | Depends on | Purpose |
 | :--- | :--- | :--- | :--- | :--- |
-| `exoforge_std_lldb` | Storage | `lldb` | — | Driver layer: engine-specific connections, pools, namespaces, roles/grants, transactions, DDL rendering, catalog introspection, dialect, type mapping, health (see [ADR 005](docs/adr/005-database-layers.md)). |
+| `exoforge_std_lldb` | Storage | `lldb` | — | Driver layer (being extracted from `exoforge_std_database`, see ADR 005): engine-specific connections, pools, namespaces, roles/grants, transactions, DDL rendering, catalog introspection, dialect, type mapping, health (see [ADR 005](docs/adr/005-database-layers.md)). |
 | `exoforge_std_database` | Storage | `database` | `lldb` | SQL helper over `lldb`: put/get/all/delete, query/execute with binding, batch, row<->JSON mapping. Official extension is Postgres-only (see [ADR 003](docs/adr/003-postgres-only.md)). |
 | `exoforge_std_auth` | Identity | `auth` | `database` | Token issuance, session verification, scope validation. |
 | `exoforge_std_player_data` | Profiles | `player_data` | `database`, `auth` | Canonical player profile persistence and lifecycle events. |
