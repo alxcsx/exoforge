@@ -35,11 +35,20 @@ defmodule Exoforge.ExtensionCase do
     _ -> :ok
   end
 
-  @doc "Registers the standard database extension under its canonical id and contracts."
+  @doc """
+  Registers the standard database layers under their canonical ids and contracts: the `lldb` driver
+  and, on top of it, the database extension named by `entry_point`.
+  """
   def register_database(entry_point) do
+    register_extension(Module.concat([Exoforge, Std, Lldb]),
+      id: :exoforge_std_lldb,
+      provides: [Services.Lldb]
+    )
+
     register_extension(entry_point,
       id: :exoforge_std_database,
-      provides: [Services.Database, Services.Lldb]
+      provides: [Services.Database],
+      dependencies: [Services.Lldb]
     )
   end
 

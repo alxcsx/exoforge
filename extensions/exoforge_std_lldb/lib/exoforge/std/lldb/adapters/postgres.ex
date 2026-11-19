@@ -1,4 +1,4 @@
-defmodule Exoforge.Std.Database.Adapters.Postgres do
+defmodule Exoforge.Std.Lldb.Adapters.Postgres do
   # Postgrex connect timeout, in milliseconds.
   @connect_timeout 3000
   # Keep per-extension pools small so N extensions stay well under Postgres max_connections (100).
@@ -10,7 +10,7 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
   Supports both multi-database provisioning (CREATE DATABASE exoforge_<plugin>)
   and schema isolation (CREATE SCHEMA IF NOT EXISTS plugin_<plugin>) with dedicated search_paths.
   """
-  @behaviour Exoforge.Std.Database.Adapter
+  @behaviour Exoforge.Std.Lldb.Adapter
 
   require Logger
 
@@ -418,8 +418,8 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
     with {:ok, {mode, conn}} <- pooled_connection(clean_self, schema_name, config) do
       try do
         with {:ok, live_state} <-
-               Exoforge.Std.Database.Schema.read_live_state(conn, schema_name, resources),
-             {:ok, plan_res} <- Exoforge.Std.Database.Schema.plan(resources, live_state) do
+               Exoforge.Std.Lldb.Schema.read_live_state(conn, schema_name, resources),
+             {:ok, plan_res} <- Exoforge.Std.Lldb.Schema.plan(resources, live_state) do
           {:ok, Map.put(plan_res, :extension, to_string(plugin_id))}
         end
       after
@@ -446,9 +446,9 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
   defp find_manifest_for(clean_id) do
     Exoforge.ExtensionRegistry.all_manifests()
     |> Enum.find(fn m ->
-      Exoforge.Std.Database.clean_id(m.id) == clean_id or
+      Exoforge.Std.Lldb.clean_id(m.id) == clean_id or
         Enum.any?(m.provides || [], fn p ->
-          Exoforge.Std.Database.clean_id(Exoforge.Domain.Manifest.service_name(p)) == clean_id
+          Exoforge.Std.Lldb.clean_id(Exoforge.Domain.Manifest.service_name(p)) == clean_id
         end)
     end)
   rescue
@@ -647,7 +647,7 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
 
       {:put, table, id, data} ->
         tbl = to_string(table)
-        cmd = Exoforge.Std.Database.JsonColumns.encode(%{action: :put, table: tbl, id: id, data: data})
+        cmd = Exoforge.Std.Lldb.JsonColumns.encode(%{action: :put, table: tbl, id: id, data: data})
         execute_kv_on_conn(tx_conn, :put, schema_name, tbl, cmd)
 
       {:delete, table, id} ->
@@ -1158,7 +1158,7 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
   # is that extension's action or a stub, never SQL that reaches further.
   defp missing_relation_hint(msg) when is_binary(msg) do
     if String.contains?(msg, "relation") and String.contains?(msg, "does not exist"),
-      do: msg <> Exoforge.Std.Database.cross_extension_hint(),
+      do: msg <> Exoforge.Std.Lldb.cross_extension_hint(),
       else: msg
   end
 
@@ -1191,7 +1191,7 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
       _ = ensure_database(plugin_id, config)
     end
 
-    if Process.whereis(Exoforge.Std.Database.PoolSupervisor) != nil do
+    if Process.whereis(Exoforge.Std.Lldb.PoolSupervisor) != nil do
       supervise_pooled(plugin_id, target_db, schema_name, config)
     else
       # ponytail: unsupervised single connection for direct adapter use (tests without the
@@ -1201,7 +1201,7 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
   end
 
   defp supervise_pooled(plugin_id, target_db, schema_name, config) do
-    name = {:via, Registry, {Exoforge.Std.Database.PoolRegistry, {target_db, schema_name}}}
+    name = {:via, Registry, {Exoforge.Std.Lldb.PoolRegistry, {target_db, schema_name}}}
 
     opts =
       extension_connection_opts(plugin_id, target_db, schema_name, config)
@@ -1211,7 +1211,7 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
         parameters: [search_path: "#{quote_ident(schema_name)}, public"]
       )
 
-    case DynamicSupervisor.start_child(Exoforge.Std.Database.PoolSupervisor, Postgrex.child_spec(opts)) do
+    case DynamicSupervisor.start_child(Exoforge.Std.Lldb.PoolSupervisor, Postgrex.child_spec(opts)) do
       {:ok, pid} -> {:ok, {:managed, pid}}
       {:error, {:already_started, pid}} -> {:ok, {:managed, pid}}
       {:error, reason} -> {:error, {:connection_failed, reason}}
@@ -1233,11 +1233,11 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
   end
 
   defp stop_pool(target_db, schema_name) do
-    if Process.whereis(Exoforge.Std.Database.PoolRegistry) != nil and
-         Process.whereis(Exoforge.Std.Database.PoolSupervisor) != nil do
-      case Registry.lookup(Exoforge.Std.Database.PoolRegistry, {target_db, schema_name}) do
+    if Process.whereis(Exoforge.Std.Lldb.PoolRegistry) != nil and
+         Process.whereis(Exoforge.Std.Lldb.PoolSupervisor) != nil do
+      case Registry.lookup(Exoforge.Std.Lldb.PoolRegistry, {target_db, schema_name}) do
         [{pid, _} | _] when is_pid(pid) ->
-          _ = DynamicSupervisor.terminate_child(Exoforge.Std.Database.PoolSupervisor, pid)
+          _ = DynamicSupervisor.terminate_child(Exoforge.Std.Lldb.PoolSupervisor, pid)
           :ok
 
         _ ->

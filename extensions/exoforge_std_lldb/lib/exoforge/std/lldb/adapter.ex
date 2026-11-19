@@ -1,4 +1,4 @@
-defmodule Exoforge.Std.Database.Adapter do
+defmodule Exoforge.Std.Lldb.Adapter do
   @moduledoc """
   Behaviour defining operations for Exoforge database drivers.
   Every adapter must enforce strict per-plugin database isolation.

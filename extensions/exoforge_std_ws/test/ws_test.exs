@@ -65,8 +65,8 @@ defmodule Exoforge.Std.WsTest do
     Exoforge.ExtensionCase.allow_dev_tokens()
     Exoforge.ExtensionCase.start_kernel()
 
-    unless Process.whereis(Exoforge.Std.Database.Manager) do
-      start_supervised!(Exoforge.Std.Database.Manager)
+    unless Process.whereis(Exoforge.Std.Lldb.Manager) do
+      start_supervised!(Exoforge.Std.Lldb.Manager)
     end
 
     Exoforge.ExtensionCase.register_database(Exoforge.Std.Database)

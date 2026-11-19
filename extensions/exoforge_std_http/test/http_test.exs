@@ -5,7 +5,7 @@ defmodule Exoforge.HttpTest do
 
   alias Exoforge.Std.Http.Router
   alias Exoforge.Std.Http
-  alias Exoforge.Std.Database.Manager, as: DbManager
+  alias Exoforge.Std.Lldb.Manager, as: DbManager
 
   @opts Router.init([])
 

@@ -1,4 +1,4 @@
-defmodule Exoforge.Std.Database.TestDB do
+defmodule Exoforge.Std.Lldb.TestDB do
   @moduledoc """
   Provisions a throwaway PostgreSQL database for a test run and drops it on VM exit.
 

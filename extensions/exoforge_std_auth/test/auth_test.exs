@@ -2,7 +2,7 @@ defmodule Exoforge.AuthTest do
   use ExUnit.Case, async: false
 
   alias Exoforge.Std.Auth
-  alias Exoforge.Std.Database.Manager, as: DbManager
+  alias Exoforge.Std.Lldb.Manager, as: DbManager
   alias Exoforge.ActionDispatcher
 
   # Minimal in-memory player store, so auth's create / look-up / rename paths behave like the

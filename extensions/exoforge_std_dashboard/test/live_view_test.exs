@@ -11,7 +11,7 @@ defmodule Exoforge.DashboardLiveViewTest do
   alias Exoforge.Std.Dashboard.Endpoint
   alias Exoforge.ExtensionRegistry
   alias Exoforge.EventDispatcher
-  alias Exoforge.Std.Database.Manager, as: DbManager
+  alias Exoforge.Std.Lldb.Manager, as: DbManager
 
   @endpoint Endpoint
 
@@ -63,14 +63,25 @@ defmodule Exoforge.DashboardLiveViewTest do
     })
 
     ExtensionRegistry.register(%Exoforge.Domain.Manifest{
+      id: :exoforge_std_lldb,
+      name: "exoforge_std_lldb",
+      version: "0.1.0",
+      entry_point: Exoforge.Std.Lldb,
+      provides: [Exoforge.Std.Services.Lldb],
+      category: "Storage",
+      system: true,
+      dashboard_view: %{id: :database, title: "Database Engine", icon: "🗄️"}
+    })
+
+    ExtensionRegistry.register(%Exoforge.Domain.Manifest{
       id: :exoforge_std_database,
       name: "exoforge_std_database",
       version: "0.1.0",
       entry_point: Exoforge.Std.Database,
-      provides: [Exoforge.Std.Services.Database, Exoforge.Std.Services.Lldb],
+      provides: [Exoforge.Std.Services.Database],
+      dependencies: [Exoforge.Std.Services.Lldb],
       category: "Storage",
-      system: true,
-      dashboard_view: %{id: :database, title: "Database Engine", icon: "🗄️"}
+      system: true
     })
 
     ExtensionRegistry.register(%Exoforge.Domain.Manifest{

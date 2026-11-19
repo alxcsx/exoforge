@@ -5,7 +5,7 @@ defmodule Exoforge.DashboardFilesTest do
 
   alias Exoforge.ActionDispatcher
   alias Exoforge.Std.Dashboard.Router
-  alias Exoforge.Std.Database.Manager, as: DbManager
+  alias Exoforge.Std.Lldb.Manager, as: DbManager
 
   @opts Router.init([])
 

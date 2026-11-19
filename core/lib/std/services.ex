@@ -34,7 +34,48 @@ defmodule Exoforge.Std.Services do
   end
 
   defservice lldb do
-    @moduledoc "Low-level database connection."
+    @moduledoc "Low-level database driver: one engine's connections, isolated namespaces and health. The engine is not named here (ADR 005)."
+
+    @doc "Runs an operation inside a namespace: a SQL statement with arguments, or a key-value command."
+    action :exec do
+      scope(:server)
+
+      params(
+        operation: [type: :term],
+        arguments: [type: :term, optional: true],
+        namespace: [type: :term, optional: true]
+      )
+
+      returns(result: :term)
+      errors([:syntax_error, :not_found, :unauthorized])
+    end
+
+    @doc "Creates, or refreshes, the isolated namespace (and its access rules) for an extension."
+    action :provision_namespace do
+      scope(:server)
+      params(namespace: [type: :term, optional: true])
+      returns(result: :term)
+    end
+
+    @doc "Removes an extension's namespace and everything in it."
+    action :drop_namespace do
+      scope(:server)
+      params(namespace: [type: :term, optional: true])
+      returns(result: :term)
+    end
+
+    @doc "Lists the columns of a table in a namespace."
+    action :table_columns do
+      scope(:server)
+
+      params(
+        table: :string,
+        namespace: [type: :term, optional: true]
+      )
+
+      returns(columns: [:string])
+      errors([:not_found])
+    end
 
     @doc "Retrieves namespaced database connection details."
     action :connection_config do

@@ -1,10 +1,10 @@
-defmodule Exoforge.Std.Database.Adapters.PostgresTest do
+defmodule Exoforge.Std.Lldb.Adapters.PostgresTest do
   use ExUnit.Case, async: false
 
-  alias Exoforge.Std.Database
-  alias Exoforge.Std.Database.Adapters.Postgres
-  alias Exoforge.Std.Database.Manager
-  alias Exoforge.Std.Database.TestDB
+  alias Exoforge.Std.Lldb
+  alias Exoforge.Std.Lldb.Adapters.Postgres
+  alias Exoforge.Std.Lldb.Manager
+  alias Exoforge.Std.Lldb.TestDB
 
   defp pg_config, do: TestDB.config()
 
@@ -21,12 +21,12 @@ defmodule Exoforge.Std.Database.Adapters.PostgresTest do
   describe "F32: KV operations on resource-migrated tables" do
     @tag :postgres
     test "put, get, all, and delete work on a schema-migrated table without a data column" do
-      unless Process.whereis(Exoforge.Std.Database.PoolRegistry) do
-        start_supervised!({Registry, keys: :unique, name: Exoforge.Std.Database.PoolRegistry})
+      unless Process.whereis(Exoforge.Std.Lldb.PoolRegistry) do
+        start_supervised!({Registry, keys: :unique, name: Exoforge.Std.Lldb.PoolRegistry})
       end
 
-      unless Process.whereis(Exoforge.Std.Database.PoolSupervisor) do
-        start_supervised!({DynamicSupervisor, name: Exoforge.Std.Database.PoolSupervisor, strategy: :one_for_one})
+      unless Process.whereis(Exoforge.Std.Lldb.PoolSupervisor) do
+        start_supervised!({DynamicSupervisor, name: Exoforge.Std.Lldb.PoolSupervisor, strategy: :one_for_one})
       end
 
       plugin = :"pg_kv_res_#{System.unique_integer([:positive])}"
@@ -87,12 +87,12 @@ defmodule Exoforge.Std.Database.Adapters.PostgresTest do
 
     @tag :postgres
     test "a legacy document table accepts typed-column rows once its data column is relaxed" do
-      unless Process.whereis(Exoforge.Std.Database.PoolRegistry) do
-        start_supervised!({Registry, keys: :unique, name: Exoforge.Std.Database.PoolRegistry})
+      unless Process.whereis(Exoforge.Std.Lldb.PoolRegistry) do
+        start_supervised!({Registry, keys: :unique, name: Exoforge.Std.Lldb.PoolRegistry})
       end
 
-      unless Process.whereis(Exoforge.Std.Database.PoolSupervisor) do
-        start_supervised!({DynamicSupervisor, name: Exoforge.Std.Database.PoolSupervisor, strategy: :one_for_one})
+      unless Process.whereis(Exoforge.Std.Lldb.PoolSupervisor) do
+        start_supervised!({DynamicSupervisor, name: Exoforge.Std.Lldb.PoolSupervisor, strategy: :one_for_one})
       end
 
       plugin = :"pg_kv_legacy_#{System.unique_integer([:positive])}"
@@ -114,12 +114,12 @@ defmodule Exoforge.Std.Database.Adapters.PostgresTest do
 
     @tag :postgres
     test "undeclared KV tables still use (id, data, updated_at)" do
-      unless Process.whereis(Exoforge.Std.Database.PoolRegistry) do
-        start_supervised!({Registry, keys: :unique, name: Exoforge.Std.Database.PoolRegistry})
+      unless Process.whereis(Exoforge.Std.Lldb.PoolRegistry) do
+        start_supervised!({Registry, keys: :unique, name: Exoforge.Std.Lldb.PoolRegistry})
       end
 
-      unless Process.whereis(Exoforge.Std.Database.PoolSupervisor) do
-        start_supervised!({DynamicSupervisor, name: Exoforge.Std.Database.PoolSupervisor, strategy: :one_for_one})
+      unless Process.whereis(Exoforge.Std.Lldb.PoolSupervisor) do
+        start_supervised!({DynamicSupervisor, name: Exoforge.Std.Lldb.PoolSupervisor, strategy: :one_for_one})
       end
 
       plugin = :"pg_kv_doc_#{System.unique_integer([:positive])}"
@@ -149,12 +149,12 @@ defmodule Exoforge.Std.Database.Adapters.PostgresTest do
 
   describe "F34 & F35: coercion by declared Postgres column type" do
     setup do
-      unless Process.whereis(Exoforge.Std.Database.PoolRegistry) do
-        start_supervised!({Registry, keys: :unique, name: Exoforge.Std.Database.PoolRegistry})
+      unless Process.whereis(Exoforge.Std.Lldb.PoolRegistry) do
+        start_supervised!({Registry, keys: :unique, name: Exoforge.Std.Lldb.PoolRegistry})
       end
 
-      unless Process.whereis(Exoforge.Std.Database.PoolSupervisor) do
-        start_supervised!({DynamicSupervisor, name: Exoforge.Std.Database.PoolSupervisor, strategy: :one_for_one})
+      unless Process.whereis(Exoforge.Std.Lldb.PoolSupervisor) do
+        start_supervised!({DynamicSupervisor, name: Exoforge.Std.Lldb.PoolSupervisor, strategy: :one_for_one})
       end
 
       plugin = :"pg_kv_coerce_#{System.unique_integer([:positive])}"
@@ -267,12 +267,12 @@ defmodule Exoforge.Std.Database.Adapters.PostgresTest do
   describe "cross-extension tables" do
     @tag :postgres
     test "a missing relation explains that tables are private to each extension" do
-      unless Process.whereis(Exoforge.Std.Database.PoolRegistry) do
-        start_supervised!({Registry, keys: :unique, name: Exoforge.Std.Database.PoolRegistry})
+      unless Process.whereis(Exoforge.Std.Lldb.PoolRegistry) do
+        start_supervised!({Registry, keys: :unique, name: Exoforge.Std.Lldb.PoolRegistry})
       end
 
-      unless Process.whereis(Exoforge.Std.Database.PoolSupervisor) do
-        start_supervised!({DynamicSupervisor, name: Exoforge.Std.Database.PoolSupervisor, strategy: :one_for_one})
+      unless Process.whereis(Exoforge.Std.Lldb.PoolSupervisor) do
+        start_supervised!({DynamicSupervisor, name: Exoforge.Std.Lldb.PoolSupervisor, strategy: :one_for_one})
       end
 
       plugin = :"pg_missing_#{System.unique_integer([:positive])}"
@@ -295,12 +295,12 @@ defmodule Exoforge.Std.Database.Adapters.PostgresTest do
       assert cfg.database != "exoforge_prod"
       assert String.starts_with?(cfg.database, "exoforge_test_")
 
-      unless Process.whereis(Exoforge.Std.Database.PoolRegistry) do
-        start_supervised!({Registry, keys: :unique, name: Exoforge.Std.Database.PoolRegistry})
+      unless Process.whereis(Exoforge.Std.Lldb.PoolRegistry) do
+        start_supervised!({Registry, keys: :unique, name: Exoforge.Std.Lldb.PoolRegistry})
       end
 
-      unless Process.whereis(Exoforge.Std.Database.PoolSupervisor) do
-        start_supervised!({DynamicSupervisor, name: Exoforge.Std.Database.PoolSupervisor, strategy: :one_for_one})
+      unless Process.whereis(Exoforge.Std.Lldb.PoolSupervisor) do
+        start_supervised!({DynamicSupervisor, name: Exoforge.Std.Lldb.PoolSupervisor, strategy: :one_for_one})
       end
 
       unless Process.whereis(Manager) do
@@ -315,41 +315,41 @@ defmodule Exoforge.Std.Database.Adapters.PostgresTest do
         _ = Postgres.reset(plugin_b, cfg)
       end)
 
-      assert {:ok, conn_cfg} = Database.get_connection_config(plugin_a)
+      assert {:ok, conn_cfg} = Manager.connection_config(plugin_a)
       assert conn_cfg.driver == :postgres
-      assert conn_cfg.schema == "plugin_#{Database.clean_id(plugin_a)}"
+      assert conn_cfg.schema == "plugin_#{Lldb.clean_id(plugin_a)}"
 
       assert {:ok, %{rows: [%{"db" => current_db, "schema" => current_schema}]}} =
-               Database.execute(plugin_a, "SELECT current_database() AS db, current_schema() AS schema")
+               Manager.execute(plugin_a, "SELECT current_database() AS db, current_schema() AS schema")
 
       assert current_db == cfg.database
-      assert current_schema == "plugin_#{Database.clean_id(plugin_a)}"
+      assert current_schema == "plugin_#{Lldb.clean_id(plugin_a)}"
 
-      assert {:ok, _} = Database.execute(plugin_a, "CREATE TABLE items (id text PRIMARY KEY, owner text NOT NULL)")
-      assert {:ok, _} = Database.execute(plugin_a, "INSERT INTO items (id, owner) VALUES ($1, $2)", ["i1", "alpha"])
+      assert {:ok, _} = Manager.execute(plugin_a, "CREATE TABLE items (id text PRIMARY KEY, owner text NOT NULL)")
+      assert {:ok, _} = Manager.execute(plugin_a, "INSERT INTO items (id, owner) VALUES ($1, $2)", ["i1", "alpha"])
 
-      assert {:error, {:postgres_error, msg}} = Database.execute(plugin_b, "SELECT * FROM items")
+      assert {:error, {:postgres_error, msg}} = Manager.execute(plugin_b, "SELECT * FROM items")
       assert msg =~ "does not exist"
 
-      assert {:ok, _} = Database.execute(plugin_b, "CREATE TABLE items (id text PRIMARY KEY, owner text NOT NULL)")
-      assert {:ok, _} = Database.execute(plugin_b, "INSERT INTO items (id, owner) VALUES ($1, $2)", ["i1", "beta"])
+      assert {:ok, _} = Manager.execute(plugin_b, "CREATE TABLE items (id text PRIMARY KEY, owner text NOT NULL)")
+      assert {:ok, _} = Manager.execute(plugin_b, "INSERT INTO items (id, owner) VALUES ($1, $2)", ["i1", "beta"])
 
       assert {:ok, %{rows: [%{"id" => "i1", "owner" => "alpha"}]}} =
-               Database.execute(plugin_a, "SELECT id, owner FROM items")
+               Manager.execute(plugin_a, "SELECT id, owner FROM items")
 
       assert {:ok, %{rows: [%{"id" => "i1", "owner" => "beta"}]}} =
-               Database.execute(plugin_b, "SELECT id, owner FROM items")
+               Manager.execute(plugin_b, "SELECT id, owner FROM items")
     end
   end
 
   describe "D3: batched atomic writes (db_batch) with Postgrex.transaction rollback" do
     setup do
-      unless Process.whereis(Exoforge.Std.Database.PoolRegistry) do
-        start_supervised!({Registry, keys: :unique, name: Exoforge.Std.Database.PoolRegistry})
+      unless Process.whereis(Exoforge.Std.Lldb.PoolRegistry) do
+        start_supervised!({Registry, keys: :unique, name: Exoforge.Std.Lldb.PoolRegistry})
       end
 
-      unless Process.whereis(Exoforge.Std.Database.PoolSupervisor) do
-        start_supervised!({DynamicSupervisor, name: Exoforge.Std.Database.PoolSupervisor, strategy: :one_for_one})
+      unless Process.whereis(Exoforge.Std.Lldb.PoolSupervisor) do
+        start_supervised!({DynamicSupervisor, name: Exoforge.Std.Lldb.PoolSupervisor, strategy: :one_for_one})
       end
 
       plugin = :"pg_batch_#{System.unique_integer([:positive])}"
@@ -550,13 +550,13 @@ defmodule Exoforge.Std.Database.Adapters.PostgresTest do
 
     @tag :postgres
     test "enforces per-extension login roles, db_read grants, revocations, migration, uninstall, and CREATEROLE check" do
-      unless Process.whereis(Exoforge.Std.Database.PoolRegistry) do
-        start_supervised!({Registry, keys: :unique, name: Exoforge.Std.Database.PoolRegistry})
+      unless Process.whereis(Exoforge.Std.Lldb.PoolRegistry) do
+        start_supervised!({Registry, keys: :unique, name: Exoforge.Std.Lldb.PoolRegistry})
       end
 
-      unless Process.whereis(Exoforge.Std.Database.PoolSupervisor) do
+      unless Process.whereis(Exoforge.Std.Lldb.PoolSupervisor) do
         start_supervised!(
-          {DynamicSupervisor, name: Exoforge.Std.Database.PoolSupervisor, strategy: :one_for_one}
+          {DynamicSupervisor, name: Exoforge.Std.Lldb.PoolSupervisor, strategy: :one_for_one}
         )
       end
 

@@ -2,7 +2,7 @@ defmodule Exoforge.PlayerDataTest do
   use ExUnit.Case, async: false
 
   alias Exoforge.Std.PlayerData
-  alias Exoforge.Std.Database.Manager, as: DbManager
+  alias Exoforge.Std.Lldb.Manager, as: DbManager
   alias Exoforge.ActionDispatcher
   alias Exoforge.EventDispatcher
 

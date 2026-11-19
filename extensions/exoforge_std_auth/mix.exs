@@ -21,6 +21,7 @@ defmodule Exoforge.Std.Auth.MixProject do
     [
       {:exoforge_core, path: "../../core"},
       {:exoforge_std_database, path: "../exoforge_std_database", only: :test},
+      {:exoforge_std_lldb, path: "../exoforge_std_lldb", only: :test},
       {:jason, "~> 1.4"}
     ]
   end

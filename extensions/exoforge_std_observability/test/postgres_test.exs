@@ -2,9 +2,9 @@ defmodule Exoforge.Std.Observability.PostgresTest do
   use ExUnit.Case, async: false
 
   alias Exoforge.Std.Database
-  alias Exoforge.Std.Database.Adapters.Postgres
-  alias Exoforge.Std.Database.Manager, as: DbManager
-  alias Exoforge.Std.Database.TestDB
+  alias Exoforge.Std.Lldb.Adapters.Postgres
+  alias Exoforge.Std.Lldb.Manager, as: DbManager
+  alias Exoforge.Std.Lldb.TestDB
   alias Exoforge.Std.Observability
   alias Exoforge.Std.Observability.Events
 
@@ -13,12 +13,12 @@ defmodule Exoforge.Std.Observability.PostgresTest do
   setup do
     Exoforge.ExtensionCase.start_kernel()
 
-    unless Process.whereis(Exoforge.Std.Database.PoolRegistry) do
-      start_supervised!({Registry, keys: :unique, name: Exoforge.Std.Database.PoolRegistry})
+    unless Process.whereis(Exoforge.Std.Lldb.PoolRegistry) do
+      start_supervised!({Registry, keys: :unique, name: Exoforge.Std.Lldb.PoolRegistry})
     end
 
-    unless Process.whereis(Exoforge.Std.Database.PoolSupervisor) do
-      start_supervised!({DynamicSupervisor, name: Exoforge.Std.Database.PoolSupervisor, strategy: :one_for_one})
+    unless Process.whereis(Exoforge.Std.Lldb.PoolSupervisor) do
+      start_supervised!({DynamicSupervisor, name: Exoforge.Std.Lldb.PoolSupervisor, strategy: :one_for_one})
     end
 
     if pid = Process.whereis(DbManager) do

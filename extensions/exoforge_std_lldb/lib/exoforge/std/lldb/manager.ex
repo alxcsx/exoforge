@@ -1,4 +1,4 @@
-defmodule Exoforge.Std.Database.Manager do
+defmodule Exoforge.Std.Lldb.Manager do
   @moduledoc """
   Core mediator and lifecycle manager for Exoforge multi-tenant database access.
   Acts as the middleground between PostgreSQL and all plugins.
@@ -7,8 +7,8 @@ defmodule Exoforge.Std.Database.Manager do
   use GenServer
   require Logger
 
-  alias Exoforge.Std.Database
-  alias Exoforge.Std.Database.Adapters.Postgres
+  alias Exoforge.Std.Lldb
+  alias Exoforge.Std.Lldb.Adapters.Postgres
 
   @name __MODULE__
 
@@ -27,9 +27,9 @@ defmodule Exoforge.Std.Database.Manager do
   def execute(plugin_id, query, args \\ [])
 
   def execute(plugin_id, %{action: action, table: _} = command, args) when action in [:put, :get, :all] do
-    command = Exoforge.Std.Database.JsonColumns.encode(command)
+    command = Exoforge.Std.Lldb.JsonColumns.encode(command)
 
-    Exoforge.Std.Database.JsonColumns.decode(
+    Exoforge.Std.Lldb.JsonColumns.decode(
       command,
       GenServer.call(@name, {:execute, plugin_id, command, args}, 15_000)
     )
@@ -93,7 +93,7 @@ defmodule Exoforge.Std.Database.Manager do
 
   @impl true
   def handle_call({:ensure_database, plugin_id}, _from, state) do
-    clean = Database.clean_id(plugin_id)
+    clean = Lldb.clean_id(plugin_id)
 
     case safely(fn -> state.adapter.ensure_database(clean, state.config) end) do
       {:ok, result} ->
@@ -107,7 +107,7 @@ defmodule Exoforge.Std.Database.Manager do
 
   @impl true
   def handle_call({:execute, plugin_id, query, args}, _from, state) do
-    clean = Database.clean_id(plugin_id)
+    clean = Lldb.clean_id(plugin_id)
     # Ensure the database exists on first use, not on every query (M33 Fix 7): provisioning DDL on
     # each request was a round trip to the server per query, and the manager already remembers.
     case ensure_once(clean, state) do
@@ -122,7 +122,7 @@ defmodule Exoforge.Std.Database.Manager do
 
   @impl true
   def handle_call({:table_columns, plugin_id, table}, _from, state) do
-    clean = Database.clean_id(plugin_id)
+    clean = Lldb.clean_id(plugin_id)
     # Column inspection wants the table to exist; same first-use rule as execute.
     case ensure_once(clean, state) do
       {:ok, state} ->
@@ -136,7 +136,7 @@ defmodule Exoforge.Std.Database.Manager do
 
   @impl true
   def handle_call({:plan_schema, plugin_id, resources}, _from, state) do
-    clean = Database.clean_id(plugin_id)
+    clean = Lldb.clean_id(plugin_id)
 
     case ensure_once(clean, state) do
       {:ok, state} ->
@@ -158,7 +158,7 @@ defmodule Exoforge.Std.Database.Manager do
 
   @impl true
   def handle_call({:connection_config, plugin_id}, _from, state) do
-    clean = Database.clean_id(plugin_id)
+    clean = Lldb.clean_id(plugin_id)
     result = safely(fn -> state.adapter.connection_config(clean, state.config) end)
     {:reply, result, state}
   end
@@ -171,7 +171,7 @@ defmodule Exoforge.Std.Database.Manager do
 
   @impl true
   def handle_call({:reset, plugin_id}, _from, state) do
-    clean = Database.clean_id(plugin_id)
+    clean = Lldb.clean_id(plugin_id)
     result = safely(fn -> state.adapter.reset(clean, state.config) end)
     {:reply, result, %{state | databases: MapSet.delete(state.databases, clean)}}
   end

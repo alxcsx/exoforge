@@ -1,4 +1,4 @@
-defmodule Exoforge.Std.Database.JsonColumns do
+defmodule Exoforge.Std.Lldb.JsonColumns do
   @moduledoc """
   Maps and lists in a declared resource's `:map`, `:list` and `:term` columns.
 

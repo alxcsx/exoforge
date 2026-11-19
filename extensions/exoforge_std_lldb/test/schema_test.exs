@@ -1,22 +1,22 @@
-defmodule Exoforge.Std.Database.SchemaTest do
+defmodule Exoforge.Std.Lldb.SchemaTest do
   use ExUnit.Case, async: false
 
-  alias Exoforge.Std.Database
-  alias Exoforge.Std.Database.Adapters.Postgres
-  alias Exoforge.Std.Database.Manager
-  alias Exoforge.Std.Database.Schema
-  alias Exoforge.Std.Database.TestDB
+  alias Exoforge.Std.Lldb
+  alias Exoforge.Std.Lldb.Adapters.Postgres
+  alias Exoforge.Std.Lldb.Manager
+  alias Exoforge.Std.Lldb.Schema
+  alias Exoforge.Std.Lldb.TestDB
 
   defp pg_config, do: TestDB.config()
 
   setup do
-    unless Process.whereis(Exoforge.Std.Database.PoolRegistry) do
-      start_supervised!({Registry, keys: :unique, name: Exoforge.Std.Database.PoolRegistry})
+    unless Process.whereis(Exoforge.Std.Lldb.PoolRegistry) do
+      start_supervised!({Registry, keys: :unique, name: Exoforge.Std.Lldb.PoolRegistry})
     end
 
-    unless Process.whereis(Exoforge.Std.Database.PoolSupervisor) do
+    unless Process.whereis(Exoforge.Std.Lldb.PoolSupervisor) do
       start_supervised!(
-        {DynamicSupervisor, name: Exoforge.Std.Database.PoolSupervisor, strategy: :one_for_one}
+        {DynamicSupervisor, name: Exoforge.Std.Lldb.PoolSupervisor, strategy: :one_for_one}
       )
     end
 
@@ -35,7 +35,7 @@ defmodule Exoforge.Std.Database.SchemaTest do
     plugin = :"t2_schema_#{System.unique_integer([:positive])}"
     assert {:ok, _} = Postgres.ensure_database(plugin, cfg)
 
-    schema = "plugin_#{Database.clean_id(plugin)}"
+    schema = "plugin_#{Lldb.clean_id(plugin)}"
 
     conn =
       start_supervised!(
@@ -581,13 +581,16 @@ defmodule Exoforge.Std.Database.SchemaTest do
              Postgrex.query(conn, ~s[SELECT id, data FROM "#{schema}"."items"], [])
   end
 
-  test "database.plan_schema action returns ops, classification and reasons and changes nothing", %{
+  test "lldb.plan_schema action returns ops, classification and reasons and changes nothing", %{
     plugin: plugin,
     conn: conn,
     schema: schema
   } do
     Exoforge.ExtensionCase.start_kernel()
-    Exoforge.ExtensionCase.register_database(Exoforge.Std.Database)
+    Exoforge.ExtensionCase.register_extension(Exoforge.Std.Lldb,
+      id: :exoforge_std_lldb,
+      provides: [Exoforge.Std.Services.Lldb]
+    )
 
     res = base_resource()
 
@@ -607,7 +610,7 @@ defmodule Exoforge.Std.Database.SchemaTest do
 
     assert {:ok, result} =
              Exoforge.ActionDispatcher.dispatch(
-               :database,
+               :lldb,
                :plan_schema,
                %{extension: plugin},
                caller_scopes: ["studio"]
@@ -627,7 +630,7 @@ defmodule Exoforge.Std.Database.SchemaTest do
     # Player scope is forbidden
     assert {:error, {:forbidden_scope, _}} =
              Exoforge.ActionDispatcher.dispatch(
-               :database,
+               :lldb,
                :plan_schema,
                %{extension: plugin},
                caller_scopes: ["player"]

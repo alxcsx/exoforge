@@ -1,7 +1,7 @@
 defmodule Exoforge.Std.ResourcesTest do
   use ExUnit.Case, async: false
 
-  alias Exoforge.Std.Database.Manager, as: DbManager
+  alias Exoforge.Std.Lldb.Manager, as: DbManager
   alias Exoforge.Std.Resources
   alias Exoforge.ActionDispatcher
   alias Exoforge.ExtensionRegistry

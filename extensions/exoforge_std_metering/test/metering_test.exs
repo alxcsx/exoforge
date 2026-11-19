@@ -2,7 +2,7 @@ defmodule Exoforge.Std.MeteringTest do
   use ExUnit.Case, async: false
 
   alias Exoforge.ActionDispatcher
-  alias Exoforge.Std.Database.Manager, as: DbManager
+  alias Exoforge.Std.Lldb.Manager, as: DbManager
   alias Exoforge.Std.Metering.Flusher
 
   setup do
@@ -34,8 +34,8 @@ defmodule Exoforge.Std.MeteringTest do
 
   # A spy on the database adapter: the flusher's batch size is what this milestone pins (M33 Fix 11).
   defmodule CountingPostgres do
-    @behaviour Exoforge.Std.Database.Adapter
-    alias Exoforge.Std.Database.Adapters.Postgres
+    @behaviour Exoforge.Std.Lldb.Adapter
+    alias Exoforge.Std.Lldb.Adapters.Postgres
 
     @table :exo_metering_batch_calls
 
@@ -69,7 +69,7 @@ defmodule Exoforge.Std.MeteringTest do
     on_exit(fn ->
       if db_pid do
         try do
-          GenServer.call(db_pid, {:set_adapter, Exoforge.Std.Database.Adapters.Postgres})
+          GenServer.call(db_pid, {:set_adapter, Exoforge.Std.Lldb.Adapters.Postgres})
         catch
           :exit, _ -> :ok
         end
@@ -86,7 +86,7 @@ defmodule Exoforge.Std.MeteringTest do
     # 2 schema creates + 3 batched action statements + 1 plugin row: six statements, not 121 calls.
     assert CountingPostgres.queries() == 6
 
-    DbManager.set_adapter(Exoforge.Std.Database.Adapters.Postgres)
+    DbManager.set_adapter(Exoforge.Std.Lldb.Adapters.Postgres)
   end
 
   test "persists the counters and serves the rollup", %{plugin: id} do

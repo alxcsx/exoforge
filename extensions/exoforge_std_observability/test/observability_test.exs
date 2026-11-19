@@ -2,7 +2,7 @@ defmodule Exoforge.Std.ObservabilityTest do
   use ExUnit.Case, async: false
 
   alias Exoforge.ActionDispatcher
-  alias Exoforge.Std.Database.Manager, as: DbManager
+  alias Exoforge.Std.Lldb.Manager, as: DbManager
   alias Exoforge.Std.Observability
   alias Exoforge.Std.Observability.Analytics
   alias Exoforge.Std.Observability.Events

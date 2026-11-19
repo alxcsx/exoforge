@@ -2,12 +2,16 @@ defmodule Exoforge.DatabaseTest do
   use ExUnit.Case, async: false
 
   alias Exoforge.Std.Database
-  alias Exoforge.Std.Database.Manager
+  alias Exoforge.Std.Lldb.Manager
 
   setup do
+    Exoforge.ExtensionCase.start_kernel()
+
     unless Process.whereis(Manager) do
       start_supervised!(Manager)
     end
+
+    Exoforge.ExtensionCase.register_database(Database)
 
     Database.reset!(:auth)
     Database.reset!(:player_data)
@@ -160,6 +164,8 @@ defmodule Exoforge.DatabaseTest do
     test "declared resource table returns missing_resource_table error if not created on get, put, all" do
       unless Process.whereis(Exoforge.ExtensionRegistry) do
         start_supervised!(Exoforge.ExtensionRegistry)
+        # Starting the registry resets its tables, and with them the layers registered in setup.
+        Exoforge.ExtensionCase.register_database(Database)
       end
 
       manifest = %Exoforge.Domain.Manifest{
@@ -206,24 +212,6 @@ defmodule Exoforge.DatabaseTest do
     end
   end
 
-  describe "Service Contracts & Connection Config" do
-    test "lldb connection_config returns unique isolated details" do
-      {:ok, auth_config} = Database.get_connection_config(:auth)
-      assert auth_config.database == "exoforge_auth"
-      assert auth_config.schema == "plugin_auth"
-      assert String.contains?(auth_config.url, "exoforge_auth")
-
-      {:ok, player_config} = Database.get_connection_config(:player_data)
-      assert player_config.database == "exoforge_player_data"
-      assert player_config.schema == "plugin_player_data"
-      assert auth_config.url != player_config.url
-    end
-
-    test "health_check returns ok status" do
-      assert {:ok, %{status: "ok"}} = Database.health_check()
-    end
-  end
-
   describe "M33 hardening" do
     test "a plugin's database is provisioned once, not per query (M33 Fix 7)" do
       table = :adapter_calls
@@ -235,8 +223,8 @@ defmodule Exoforge.DatabaseTest do
       :ets.insert(table, {:ensures, 0})
 
       defmodule CountingPostgres do
-        @behaviour Exoforge.Std.Database.Adapter
-        alias Exoforge.Std.Database.Adapters.Postgres
+        @behaviour Exoforge.Std.Lldb.Adapter
+        alias Exoforge.Std.Lldb.Adapters.Postgres
 
         @table :adapter_calls
 
@@ -267,7 +255,7 @@ defmodule Exoforge.DatabaseTest do
         case Process.whereis(Manager) do
           pid when is_pid(pid) ->
             try do
-              GenServer.call(pid, {:set_adapter, Exoforge.Std.Database.Adapters.Postgres})
+              GenServer.call(pid, {:set_adapter, Exoforge.Std.Lldb.Adapters.Postgres})
             rescue
               _ -> :ok
             end
@@ -290,7 +278,7 @@ defmodule Exoforge.DatabaseTest do
       # Three queries, one provision.
       assert CountingPostgres.ensures() == 1
 
-      Manager.set_adapter(Exoforge.Std.Database.Adapters.Postgres)
+      Manager.set_adapter(Exoforge.Std.Lldb.Adapters.Postgres)
     end
 
     test "table_columns answers through the adapter's dialect (M33 Fix 9)" do
@@ -313,8 +301,8 @@ defmodule Exoforge.DatabaseTest do
 
     test "an adapter failure is an error tuple, not a Manager crash" do
       defmodule RaisingPostgres do
-        @behaviour Exoforge.Std.Database.Adapter
-        alias Exoforge.Std.Database.Adapters.Postgres
+        @behaviour Exoforge.Std.Lldb.Adapter
+        alias Exoforge.Std.Lldb.Adapters.Postgres
 
         @impl true
         def ensure_database(id, config), do: Postgres.ensure_database(id, config)
@@ -340,7 +328,7 @@ defmodule Exoforge.DatabaseTest do
       on_exit(fn ->
         case Process.whereis(Manager) do
           pid when is_pid(pid) ->
-            GenServer.call(pid, {:set_adapter, Exoforge.Std.Database.Adapters.Postgres})
+            GenServer.call(pid, {:set_adapter, Exoforge.Std.Lldb.Adapters.Postgres})
 
           _ ->
             :ok
@@ -360,7 +348,7 @@ defmodule Exoforge.DatabaseTest do
       # Same process: it reported the database error instead of dying and restarting.
       assert Process.whereis(Manager) == manager
 
-      Manager.set_adapter(Exoforge.Std.Database.Adapters.Postgres)
+      Manager.set_adapter(Exoforge.Std.Lldb.Adapters.Postgres)
       plugin = :"recovered_#{System.unique_integer([:positive])}"
       assert {:ok, _} = Database.execute(plugin, "CREATE TABLE t (id text)")
     end

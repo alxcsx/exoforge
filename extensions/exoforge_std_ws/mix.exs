@@ -22,6 +22,7 @@ defmodule Exoforge.Std.Ws.MixProject do
       {:exoforge_core, path: "../../core"},
       {:exoforge_std_transport, path: "../exoforge_std_transport"},
       {:exoforge_std_database, path: "../exoforge_std_database", only: :test},
+      {:exoforge_std_lldb, path: "../exoforge_std_lldb", only: :test},
       {:exoforge_std_auth, path: "../exoforge_std_auth", only: :test},
       {:bandit, "~> 1.12"},
       {:websock_adapter, "~> 0.6.0"},

@@ -1,7 +1,7 @@
 defmodule Exoforge.Std.FileBucketTest do
   use ExUnit.Case, async: false
   alias Exoforge.ActionDispatcher
-  alias Exoforge.Std.Database.Manager, as: DbManager
+  alias Exoforge.Std.Lldb.Manager, as: DbManager
 
   setup do
     Exoforge.ExtensionCase.start_kernel()

@@ -1,4 +1,4 @@
-defmodule Exoforge.Std.Database.Schema do
+defmodule Exoforge.Std.Lldb.Schema do
   import Kernel, except: [apply: 2]
 
   @moduledoc """

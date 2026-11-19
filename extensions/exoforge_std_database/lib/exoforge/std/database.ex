@@ -1,66 +1,24 @@
 defmodule Exoforge.Std.Database do
   @moduledoc """
-  Standard database extension for Exoforge.
-  Provides the :database and :lldb service contracts.
-  Acts as the middleground between PostgreSQL and all other extensions,
-  ensuring complete per-extension multi-tenant isolation.
+  Standard database extension for Exoforge: the SQL helper over the `lldb` driver layer (ADR 005).
 
-  There is no cross-extension SQL. Each extension's tables live in its own PostgreSQL schema, so a
-  query sees only the caller's own tables; a table it cannot see comes back with a hint pointing at
-  the owning extension's action (for example a `get_many`) or a generated typed stub.
+  Provides the `:database` service contract. It reaches the engine only through the `:lldb` service,
+  so it names no engine. Each extension's tables live in its own isolated namespace, so a query sees
+  only the caller's own tables; a table it cannot see comes back with a hint pointing at the owning
+  extension's action (for example a `get_many`) or a generated typed stub.
   """
-  use Exoforge.Extension, provides: [:database, :lldb]
+  use Exoforge.Extension, provides: [:database]
 
   @manifest %{
     category: "Storage",
     system: true,
-    title: "Database Engine",
+    title: "Database",
     icon: "🗄️",
     dashboard_view: nil,
-    ui_hooks: %{
-      settings: [
-        %{id: :database, title: "Database Engine", icon: "🗄️", order: 20}
-      ]
-    }
+    dependencies: [Exoforge.Std.Services.Lldb]
   }
 
-  alias Exoforge.Std.Database.Manager
-
-  @doc """
-  SQL-safe identifier for a plugin, used for PostgreSQL database and schema names.
-
-  Shared by the manager and the Postgres adapter, so a plugin's storage always maps to the
-  same database and schema names.
-  """
-  def clean_id(plugin_id) when is_binary(plugin_id) do
-    plugin_id
-    |> String.replace(~r/[^a-zA-Z0-9_]/, "_")
-    |> String.downcase()
-  end
-
-  def clean_id(plugin_id) when is_atom(plugin_id) or is_integer(plugin_id),
-    do: clean_id(to_string(plugin_id))
-
-  # Callers are extensions, so a missing payload field can arrive as nil or a map. That is not a
-  # plugin name, and `to_string/1` on it would raise inside the Manager and take the Manager down.
-  def clean_id(_), do: "default"
-
-  # A missing table is the common cross-extension mistake, and the fix is never more SQL: the
-  # Postgres adapter appends this so the failure explains itself.
-  @cross_extension_hint " Tables are private to each extension; to read another extension's data, call its action (e.g. a get_many) or use a generated typed stub."
-
-  @doc "The hint appended when a query's table is missing."
-  def cross_extension_hint, do: @cross_extension_hint
-
-  def children do
-    [
-      # Named Postgres pools live here (M33 Fix 8): one supervisor to restart a pool that drops,
-      # one unique registry to name them. Both die with the plugin, which is the lifecycle owner.
-      {Registry, keys: :unique, name: Exoforge.Std.Database.PoolRegistry},
-      {DynamicSupervisor, name: Exoforge.Std.Database.PoolSupervisor, strategy: :one_for_one},
-      Manager
-    ]
-  end
+  alias Exoforge.ActionDispatcher
 
   ## ---- SERVICE ACTIONS ----
 
@@ -70,43 +28,9 @@ defmodule Exoforge.Std.Database do
     operation = extract_operation(payload)
     arguments = extract_arguments(payload)
 
-    case Manager.execute(plugin, operation, arguments) do
+    case lldb(:exec, %{namespace: plugin, operation: operation, arguments: arguments}) do
       {:ok, rows} when is_list(rows) -> {:ok, %{rows: rows}}
       res -> res
-    end
-  end
-
-  @impl true
-  defaction connection_config(payload) do
-    namespace =
-      case payload do
-        %{namespace: ns} when is_binary(ns) or is_atom(ns) -> ns
-        %{"namespace" => ns} when is_binary(ns) or is_atom(ns) -> ns
-        _ -> :default
-      end
-
-    case Manager.connection_config(namespace) do
-      {:ok, config} ->
-        {:ok,
-         %{
-           url: config.url,
-           pool_size: config.pool_size,
-           driver: config.driver
-         }}
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
-  @impl true
-  defaction health_check(), scope: :global do
-    case Manager.health_check() do
-      {:ok, %{status: status}} ->
-        {:ok, %{status: status}}
-
-      {:error, reason} ->
-        {:error, reason}
     end
   end
 
@@ -115,49 +39,35 @@ defmodule Exoforge.Std.Database do
     plugin = extract_plugin(payload)
     table = fetch_any(payload, [:table, "table"], "")
 
-    case Manager.table_columns(plugin, table) do
-      {:ok, columns} -> {:ok, %{columns: columns}}
-      error -> error
-    end
+    lldb(:table_columns, %{namespace: plugin, table: table})
   end
 
   @doc "Dry-run schema planner for an extension's declared resources (staff/studio scope, applies nothing)."
   defaction plan_schema(payload), scope: :studio do
     plugin = fetch_any(payload, [:extension, :plugin, :id, :namespace], :default)
-    resources = fetch_any(payload, [:resources], nil)
-    Manager.plan_schema(plugin, resources)
+    lldb(:plan_schema, %{namespace: plugin, resources: fetch_any(payload, [:resources], nil)})
   end
 
   ## ---- DIRECT ELIXIR FACADE ----
 
   @doc "Direct helper to execute a query against a plugin's isolated database."
   def execute(plugin, query, args \\ []) do
-    Manager.execute(plugin, query, args)
-  end
-
-  @doc "Direct helper to ensure a plugin's database exists."
-  def ensure_database(plugin) do
-    Manager.ensure_database(plugin)
-  end
-
-  @doc "Direct helper to retrieve connection details for a plugin."
-  def get_connection_config(plugin) do
-    Manager.connection_config(plugin)
+    lldb(:exec, %{namespace: plugin, operation: query, arguments: args})
   end
 
   @doc "Direct helper to reset/clear a plugin's database."
   def reset!(plugin) do
-    Manager.reset(plugin)
+    lldb(:drop_namespace, %{namespace: plugin})
   end
 
   @doc "Key-value helper: put document into plugin's database."
   def put(plugin, table, id, data) do
-    Manager.execute(plugin, %{action: :put, table: table, id: id, data: data})
+    exec(plugin, %{action: :put, table: table, id: id, data: data})
   end
 
   @doc "Key-value helper: get document from plugin's database."
   def get(plugin, table, id) do
-    case Manager.execute(plugin, %{action: :get, table: table, id: id}) do
+    case exec(plugin, %{action: :get, table: table, id: id}) do
       {:ok, %{rows: [record]}} -> {:ok, record}
       {:ok, %{rows: []}} -> {:error, :not_found}
       error -> error
@@ -166,12 +76,12 @@ defmodule Exoforge.Std.Database do
 
   @doc "Key-value helper: delete document from plugin's database."
   def delete(plugin, table, id) do
-    Manager.execute(plugin, %{action: :delete, table: table, id: id})
+    exec(plugin, %{action: :delete, table: table, id: id})
   end
 
   @doc "Key-value helper: retrieve all documents from table."
   def all(plugin, table) do
-    case Manager.execute(plugin, %{action: :all, table: table}) do
+    case exec(plugin, %{action: :all, table: table}) do
       {:ok, %{rows: rows}} -> {:ok, rows}
       error -> error
     end
@@ -179,10 +89,14 @@ defmodule Exoforge.Std.Database do
 
   @doc "Executes an ordered list of write operations atomically in a single transaction."
   def batch(plugin, operations) when is_list(operations) do
-    Manager.execute(plugin, %{action: :batch, operations: operations})
+    exec(plugin, %{action: :batch, operations: operations})
   end
 
   ## ---- PRIVATE HELPERS ----
+
+  defp exec(plugin, command), do: lldb(:exec, %{namespace: plugin, operation: command, arguments: []})
+
+  defp lldb(action, payload), do: ActionDispatcher.dispatch_internal(:lldb, action, payload)
 
   defp fetch_any(map, keys, default) when is_map(map) do
     Enum.find_value(keys, default, fn k ->

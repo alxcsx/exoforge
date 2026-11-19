@@ -21,6 +21,7 @@ defmodule Exoforge.Std.FileBucket.MixProject do
     [
       {:exoforge_core, path: "../../core"},
       {:exoforge_std_database, path: "../exoforge_std_database", only: :test},
+      {:exoforge_std_lldb, path: "../exoforge_std_lldb", only: :test},
       {:phoenix_live_view, "~> 1.0"},
       {:phoenix_html, "~> 4.0"},
       {:jason, "~> 1.4"}
