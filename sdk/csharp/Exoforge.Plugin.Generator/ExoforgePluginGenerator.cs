@@ -476,13 +476,14 @@ namespace Exoforge.Plugin.SDK
 
             bool isSingleton = IsSingletonAttribute(attr) || NamedBool(attr, "Singleton");
             string resName = NamedString(attr, "Name") ?? PositionalString(attr, 0) ?? ToSnakeCase(declared.Name);
+            string resolvedPk = ToSnakeCase(declaredPk!);
             AddResource(primary.Resources, new ResourceModel(
                 resName,
                 NamedString(attr, "Source") ?? resName,
-                ToSnakeCase(declaredPk!),
+                resolvedPk,
                 NamedStringArray(attr, "DrawerTabs") ?? new[] { "overview" },
                 ActionNames(primary),
-                columns,
+                MarkPrimaryKey(columns, resolvedPk),
                 declared.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                 isSingleton,
                 NamedBool(attr, "AllowPlayerRead")));
@@ -1021,18 +1022,24 @@ namespace Exoforge.Plugin.SDK
         }
 
         bool isSingleton = IsSingletonAttribute(resAttr) || NamedBool(resAttr, "Singleton");
+        string resolvedPk = ToSnakeCase(primaryKey!);
 
         return new ResourceModel(
             resName,
             NamedString(resAttr, "Source") ?? resName,
-            ToSnakeCase(primaryKey!),
+            resolvedPk,
             NamedStringArray(resAttr, "DrawerTabs") ?? new[] { "overview", "attributes" },
             serviceActions,
-            columns,
+            MarkPrimaryKey(columns, resolvedPk),
             resourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
             isSingleton,
             NamedBool(resAttr, "AllowPlayerRead"));
     }
+
+    private static List<ColumnModel> MarkPrimaryKey(List<ColumnModel> columns, string primaryKey) =>
+        columns.Select(c => c.PrimaryKey || string.Equals(c.Name, primaryKey, StringComparison.OrdinalIgnoreCase)
+            ? c with { PrimaryKey = true }
+            : c).ToList();
 
     private static List<ColumnModel> ColumnsFor(
         INamedTypeSymbol type,
@@ -1057,7 +1064,9 @@ namespace Exoforge.Plugin.SDK
                     continue;
                 foreach (var param in ctor.Parameters)
                 {
-                    if (!recordParams.ContainsKey(param.Name) || FindForeignKeyAttribute(param.GetAttributes()) is not null)
+                    if (!recordParams.ContainsKey(param.Name)
+                        || FindForeignKeyAttribute(param.GetAttributes()) is not null
+                        || FindAttribute(param.GetAttributes(), ColumnAttribute) is not null)
                     {
                         recordParams[param.Name] = param;
                     }
@@ -1070,11 +1079,12 @@ namespace Exoforge.Plugin.SDK
             if (member is not IPropertySymbol property) continue;
             if (property.DeclaredAccessibility != Accessibility.Public || property.IsStatic) continue;
 
-            var colAttr = FindAttribute(property.GetAttributes(), ColumnAttribute);
+            IParameterSymbol? recParam = null;
+            recordParams?.TryGetValue(property.Name, out recParam);
+            var colAttr = FindAttribute(property.GetAttributes(), ColumnAttribute)
+                          ?? (recParam is not null ? FindAttribute(recParam.GetAttributes(), ColumnAttribute) : null);
             var fkAttr = FindForeignKeyAttribute(property.GetAttributes())
-                         ?? (recordParams is not null && recordParams.TryGetValue(property.Name, out var recParam)
-                             ? FindForeignKeyAttribute(recParam.GetAttributes())
-                             : null);
+                         ?? (recParam is not null ? FindForeignKeyAttribute(recParam.GetAttributes()) : null);
 
             bool isExplicitPk = NamedBool(colAttr, "PrimaryKey") || property.Name.Equals("Id", StringComparison.OrdinalIgnoreCase);
 
@@ -1206,7 +1216,11 @@ namespace Exoforge.Plugin.SDK
                 inputType,
                 isFk,
                 references,
-                IsNullableValue(property.Type)));
+                IsNullableProperty(property),
+                MapTypeToStorage(property.Type),
+                NamedBool(colAttr, "PrimaryKey"),
+                NamedBool(colAttr, "Unique"),
+                NamedBool(colAttr, "Indexed")));
 
             if (NamedBool(colAttr, "PrimaryKey") && string.IsNullOrEmpty(primaryKey)) primaryKey = colName;
         }
@@ -1405,7 +1419,10 @@ namespace Exoforge.Generated
     /// </summary>
     private static EnumModel? EnumOf(IPropertySymbol property)
     {
-        if (property.Type is not INamedTypeSymbol { TypeKind: TypeKind.Enum } enumType) return null;
+        var type = property.Type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T, TypeArguments.Length: 1 } nullable
+            ? nullable.TypeArguments[0]
+            : property.Type;
+        if (type is not INamedTypeSymbol { TypeKind: TypeKind.Enum } enumType) return null;
 
         var members = enumType.GetMembers()
             .OfType<IFieldSymbol>()
@@ -1466,6 +1483,71 @@ namespace Exoforge.Generated
 
     private static bool IsNullableValue(ITypeSymbol type) =>
         type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T };
+
+    private static bool IsNullableProperty(IPropertySymbol property)
+    {
+        if (IsNullableValue(property.Type)) return true;
+        if (property.NullableAnnotation == NullableAnnotation.Annotated ||
+            property.Type.NullableAnnotation == NullableAnnotation.Annotated)
+        {
+            return true;
+        }
+
+        foreach (var reference in property.DeclaringSyntaxReferences)
+        {
+            switch (reference.GetSyntax())
+            {
+                case PropertyDeclarationSyntax { Type: NullableTypeSyntax }:
+                case ParameterSyntax { Type: NullableTypeSyntax }:
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string MapTypeToStorage(ITypeSymbol type)
+    {
+        if (type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T, TypeArguments.Length: 1 } nullable)
+        {
+            return MapTypeToStorage(nullable.TypeArguments[0]);
+        }
+
+        if (type is IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_Byte })
+        {
+            return "bytea";
+        }
+
+        switch (type.SpecialType)
+        {
+            case SpecialType.System_String:
+                return "text";
+            case SpecialType.System_Int32:
+                return "integer";
+            case SpecialType.System_Int64:
+                return "bigint";
+            case SpecialType.System_Int16:
+                return "smallint";
+            case SpecialType.System_Boolean:
+                return "boolean";
+            case SpecialType.System_Double:
+                return "double precision";
+            case SpecialType.System_Single:
+                return "real";
+            case SpecialType.System_Decimal:
+                return "numeric";
+            case SpecialType.System_DateTime:
+                return "timestamptz";
+        }
+
+        if (type.TypeKind == TypeKind.Enum) return "text";
+
+        string display = type.WithNullableAnnotation(NullableAnnotation.None).ToDisplayString();
+        if (display is "System.DateTime" or "System.DateTimeOffset") return "timestamptz";
+        if (display == "System.Guid") return "uuid";
+
+        return "jsonb";
+    }
 
     private static string MapTypeToElixir(ITypeSymbol type)
     {

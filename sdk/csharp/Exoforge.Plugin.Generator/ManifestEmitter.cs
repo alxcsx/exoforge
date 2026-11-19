@@ -25,7 +25,11 @@ internal sealed record ColumnModel(
     string? Input = null,
     bool ForeignKey = false,
     string? References = null,
-    bool Nullable = false);
+    bool Nullable = false,
+    string Storage = "text",
+    bool PrimaryKey = false,
+    bool Unique = false,
+    bool Indexed = false);
 
 internal sealed record ActionModel(
     string Name,
@@ -231,6 +235,7 @@ internal static class ManifestEmitter
                 // The shape `Exoforge.Std.Resources.normalize_source/1` reads. A bare string would not
                 // match, and a resource with no source is stored as an opaque key-value document.
                 sb.Append($"\"source\": {{\"table\": {Str(resource.Source)}}}, ");
+                sb.Append($"\"schema_hash\": {Str(SchemaHash(resource))}, ");
                 sb.Append($"\"drawer\": {Atoms(resource.Drawer)}, ");
                 sb.Append($"\"actions\": {Atoms(resource.Actions)}, ");
                 sb.Append("\"columns\": [");
@@ -238,6 +243,10 @@ internal static class ManifestEmitter
                 for (int c = 0; c < resource.Columns.Count; c++)
                 {
                     var column = resource.Columns[c];
+                    if (!column.PrimaryKey && string.Equals(column.Name, resource.PrimaryKey, StringComparison.OrdinalIgnoreCase))
+                    {
+                        column = column with { PrimaryKey = true };
+                    }
                     string columnComma = c == resource.Columns.Count - 1 ? "" : ", ";
                     string role = column.Role is null ? "" : $", \"role\": {Str(column.Role)}";
                     string bucket = column.Bucket is null ? "" : $", \"bucket\": {Str(column.Bucket)}";
@@ -296,7 +305,8 @@ internal static class ManifestEmitter
 
     private static string Column(ColumnModel column)
     {
-        string baseJson = $"\"name\": {Str(column.Name)}, \"type\": {Str(column.Type)}, \"label\": {Str(column.Label)}, " +
+        string baseJson = $"\"name\": {Str(column.Name)}, \"type\": {Str(column.Type)}, \"storage\": {Str(column.Storage)}, \"label\": {Str(column.Label)}, " +
+            $"\"primary_key\": {Lower(column.PrimaryKey)}, \"unique\": {Lower(column.Unique)}, \"indexed\": {Lower(column.Indexed)}, " +
             $"\"sortable\": {Lower(column.Sortable)}, \"filterable\": {Lower(column.Filterable)}, \"badge\": {Lower(column.Badge)}";
 
         if (!string.IsNullOrEmpty(column.Input))
@@ -307,6 +317,32 @@ internal static class ManifestEmitter
         if (column.Nullable) baseJson += ", \"nullable\": true";
 
         return baseJson;
+    }
+
+    internal static string SchemaHash(ResourceModel resource)
+    {
+        var sb = new StringBuilder();
+        sb.Append(resource.Source).Append('\n');
+        foreach (var col in resource.Columns)
+        {
+            bool isPk = col.PrimaryKey || string.Equals(col.Name, resource.PrimaryKey, StringComparison.OrdinalIgnoreCase);
+            string choices = col.Choices is null ? "" : string.Join(",", col.Choices);
+            string def = col.Default is null ? "" : Str(col.Default);
+            sb.Append(col.Name).Append('|')
+              .Append(col.Storage).Append('|')
+              .Append(Lower(col.Nullable)).Append('|')
+              .Append(Lower(isPk)).Append('|')
+              .Append(Lower(col.Unique)).Append('|')
+              .Append(Lower(col.Indexed)).Append('|')
+              .Append(def).Append('|')
+              .Append(choices).Append('\n');
+        }
+
+        using var sha = System.Security.Cryptography.SHA256.Create();
+        byte[] hash = sha.ComputeHash(Encoding.UTF8.GetBytes(sb.ToString()));
+        var hex = new StringBuilder(64);
+        foreach (byte b in hash) hex.Append(b.ToString("x2"));
+        return hex.ToString();
     }
 
     /// <summary>A scalar atom, or a record's fields as a map of name to atom.</summary>

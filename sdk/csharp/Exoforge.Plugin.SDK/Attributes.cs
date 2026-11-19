@@ -262,6 +262,12 @@ public class ExoColumnAttribute : Attribute
     /// <summary>Marks this column as the primary key of the resource table.</summary>
     public bool PrimaryKey { get; set; }
 
+    /// <summary>Marks this column as unique.</summary>
+    public bool Unique { get; set; }
+
+    /// <summary>Marks this column as indexed.</summary>
+    public bool Indexed { get; set; }
+
     /// <summary>Marks this column as a foreign key reference.</summary>
     public bool ForeignKey { get; set; }
 

@@ -209,6 +209,8 @@ Declares a metadata-driven database entity mapped to PostgreSQL storage. The Ros
 |---|---|---|---|
 | `name` (positional or named) | `string?` | Optional (property name) | Column name in the database table in snake_case. |
 | `PrimaryKey` | `bool` | Optional (`false`) | Marks this column as the primary key of the resource table. (Properties named `Id` are automatically inferred as primary keys). |
+| `Unique` | `bool` | Optional (`false`) | Marks this column as having a unique constraint in the resource table. |
+| `Indexed` | `bool` | Optional (`false`) | Marks this column as indexed in the resource table. |
 | `ForeignKey` | `bool` | Optional (`false`) | Marks this column as a foreign key reference. Inferred automatically when `ReferencesType` is specified. |
 | `ReferencesType` | `Type?` | Optional (`null`) | Entity record/class type referenced by this column. Automatically infers `ForeignKey = true` and target table/key `References` (e.g. `ReferencesType = typeof(PlayerDataRecord)`). |
 | `References` | `string?` | Optional (`null`) | Target referenced table and column (e.g. `"player_data.id"`). Inferred automatically from `ReferencesType` when provided. |

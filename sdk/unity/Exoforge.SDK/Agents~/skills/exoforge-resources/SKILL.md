@@ -34,7 +34,8 @@ public record SeasonConfig(
 );
 ```
 
-- `[ExoResource("table_name", PrimaryKey = "id")]`: Defines a multi-row table schema.
+- `[ExoResource("table_name", PrimaryKey = "id")]`: Defines a multi-row table schema (emits `schema_hash` and per-column `storage`, `primary_key`, `unique`, `indexed`, `nullable`, `default`, `choices`, `foreign_key`, `references` in `manifest.json`).
+- `[ExoColumn(PrimaryKey = true, Unique = true, Indexed = true)]`: Configures per-column constraints and indexes on resource properties.
 - `[ExoSingletonResource("table_name")]`: Defines a singleton configuration resource accessible via `Exo.Database.First<T>()`.
 
 ## 2. Reconciling Database Schemas (Migrate)
