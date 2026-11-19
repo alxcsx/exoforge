@@ -555,7 +555,12 @@ namespace Exoforge.Plugin.SDK
                     or "Exoforge.Plugin.SDK.ExoServices.Services" or "Exoforge.Plugin.SDK.Exo.Services" or "Exoforge.Plugin.SDK.Exoforge.Services")
                 {
                     string propName = memberAccess.Name.Identifier.Text;
-                    if (propName is "Database" or "Logger" or "Events" or "Actions" or "Context" or "Reset" or "Services")
+                    if (propName == "Database")
+                    {
+                        if (!dependencies.Contains("database")) dependencies.Add("database");
+                        continue;
+                    }
+                    if (propName is "Logger" or "Events" or "Actions" or "Context" or "Reset" or "Services")
                     {
                         continue;
                     }
@@ -615,6 +620,11 @@ namespace Exoforge.Plugin.SDK
             foreach (var identifier in fileRoot.DescendantNodes().OfType<IdentifierNameSyntax>())
             {
                 string idText = identifier.Identifier.Text;
+                if (idText == "IDatabase")
+                {
+                    if (!dependencies.Contains("database")) dependencies.Add("database");
+                    continue;
+                }
                 if (idText.StartsWith("I", StringComparison.Ordinal) && idText.EndsWith("Service", StringComparison.Ordinal) && idText.Length > 8)
                 {
                     string svc = idText.Substring(1, idText.Length - 8);
@@ -686,6 +696,12 @@ namespace Exoforge.Plugin.SDK
                     inputTypes.Add(new InputTypeModel(itId, itElement, itEntry));
                 }
             }
+        }
+        // Resources are stored through the :database service, so an extension that declares any
+        // resource needs "database" in its dependencies (Query/Execute go through call_action).
+        if (services.Any(s => s.Resources.Count > 0) && !dependencies.Contains("database"))
+        {
+            dependencies.Add("database");
         }
 
         return new ServiceEmit(
