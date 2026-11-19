@@ -662,7 +662,7 @@ public class ExoDeployer
         var wanted = services?.ToList();
         if (wanted is null || wanted.Count == 0) return Array.Empty<string>();
 
-        var available = new HashSet<string>(StringComparer.Ordinal);
+        var available = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         try
         {
@@ -758,35 +758,155 @@ public class ExoDeployer
     /// <summary>
     /// Every workspace plugin's generated contracts, by plugin id. A plugin that has not been built has
     /// no file and is simply absent — the same as it being absent from the cluster.
+    /// When in-repo, also scans builtin extensions' manifests from extensions/*/priv/manifest.json.
     /// </summary>
     private IEnumerable<(string Id, JsonNode Node)> LocalContracts()
     {
-        if (!Directory.Exists(_workspace.ExtensionsPath)) yield break;
-
         var found = new List<(string Id, JsonNode Node)>();
+        var seenIds = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (string dir in Directory.GetDirectories(_workspace.ExtensionsPath).OrderBy(d => d, StringComparer.Ordinal))
+        void ScanDirectory(string baseDir, bool scanPriv)
         {
-            string path = Path.Combine(dir, "manifest.json");
-            if (!File.Exists(path)) continue;
+            if (!Directory.Exists(baseDir)) return;
 
-            try
+            foreach (string dir in Directory.GetDirectories(baseDir).OrderBy(d => d, StringComparer.Ordinal))
             {
-                if (JsonNode.Parse(ToExport(File.ReadAllText(path)))?["export"]?["plugins"] is not JsonArray localPlugins) continue;
+                string path = scanPriv && File.Exists(Path.Combine(dir, "priv", "manifest.json"))
+                    ? Path.Combine(dir, "priv", "manifest.json")
+                    : Path.Combine(dir, "manifest.json");
 
-                foreach (JsonNode? plugin in localPlugins)
+                if (!File.Exists(path) && scanPriv) path = Path.Combine(dir, "priv", "manifest.json");
+                if (!File.Exists(path)) continue;
+
+                try
                 {
-                    if (plugin is not null && PluginId(plugin) is { Length: > 0 } id) found.Add((id, plugin));
+                    if (JsonNode.Parse(ToExport(File.ReadAllText(path)))?["export"]?["plugins"] is not JsonArray localPlugins) continue;
+
+                    foreach (JsonNode? plugin in localPlugins)
+                    {
+                        if (plugin is not null && PluginId(plugin) is { Length: > 0 } id)
+                        {
+                            if (seenIds.Add(id))
+                            {
+                                found.Add((id, plugin));
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex) when (ex is JsonException or InvalidOperationException)
+                {
+                    // A half-written file is not worth failing a build over: the plugin is treated as one
+                    // with no local contract, which is what it was before the file existed.
                 }
             }
-            catch (Exception ex) when (ex is JsonException or InvalidOperationException)
+        }
+
+        if (Directory.Exists(_workspace.ExtensionsPath))
+        {
+            ScanDirectory(_workspace.ExtensionsPath, scanPriv: false);
+        }
+
+        string? repoRoot = FindRepoRoot(_workspace.ExtensionsPath) ?? FindRepoRoot(_workspace.RootPath) ?? FindRepoRoot(Directory.GetCurrentDirectory());
+        if (repoRoot != null)
+        {
+            string repoExt = Path.Combine(repoRoot, "extensions");
+            if (Directory.Exists(repoExt) && !string.Equals(Path.GetFullPath(repoExt), Path.GetFullPath(_workspace.ExtensionsPath), StringComparison.OrdinalIgnoreCase))
             {
-                // A half-written file is not worth failing a build over: the plugin is treated as one
-                // with no local contract, which is what it was before the file existed.
+                ScanDirectory(repoExt, scanPriv: true);
+            }
+
+            string? mainRepo = FindMainRepoFromWorktree(repoRoot);
+            if (mainRepo != null && !string.Equals(mainRepo, repoRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                string mainExt = Path.Combine(mainRepo, "extensions");
+                if (Directory.Exists(mainExt))
+                {
+                    ScanDirectory(mainExt, scanPriv: true);
+                }
             }
         }
 
         foreach (var entry in found) yield return entry;
+    }
+
+    private static string? FindRepoRoot(string startPath)
+    {
+        for (var dir = new DirectoryInfo(startPath); dir != null; dir = dir.Parent)
+        {
+            if (File.Exists(Path.Combine(dir.FullName, "Directory.Build.targets")) &&
+                Directory.Exists(Path.Combine(dir.FullName, "extensions")))
+            {
+                return dir.FullName;
+            }
+        }
+        return null;
+    }
+
+    private static string? FindMainRepoFromWorktree(string repoRoot)
+    {
+        try
+        {
+            string gitPath = Path.Combine(repoRoot, ".git");
+            if (File.Exists(gitPath))
+            {
+                string text = File.ReadAllText(gitPath).Trim();
+                if (text.StartsWith("gitdir:", StringComparison.OrdinalIgnoreCase))
+                {
+                    string gitDir = text.Substring(7).Trim();
+                    int idx = gitDir.IndexOf("/.git/worktrees/", StringComparison.Ordinal);
+                    if (idx >= 0)
+                    {
+                        string candidate = gitDir.Substring(0, idx);
+                        if (Directory.Exists(Path.Combine(candidate, "extensions")))
+                        {
+                            return candidate;
+                        }
+                    }
+                }
+            }
+        }
+        catch
+        {
+        }
+        return null;
+    }
+
+    public static string CleanServiceName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return string.Empty;
+
+        string s = name.Trim();
+        if (s.StartsWith("Elixir.", StringComparison.Ordinal)) s = s.Substring(7);
+        if (s.StartsWith("Exoforge.Std.Services.", StringComparison.Ordinal)) s = s.Substring(22);
+        else if (s.StartsWith("Exoforge.Services.", StringComparison.Ordinal)) s = s.Substring(18);
+        else if (s.StartsWith("Exoforge.", StringComparison.Ordinal)) s = s.Substring(9);
+        else if (s.StartsWith("Std.Services.", StringComparison.Ordinal)) s = s.Substring(13);
+        else if (s.StartsWith("Services.", StringComparison.Ordinal)) s = s.Substring(9);
+
+        if (s.StartsWith("exoforge_std_", StringComparison.OrdinalIgnoreCase)) s = s.Substring(13);
+
+        var sb = new System.Text.StringBuilder();
+        for (int i = 0; i < s.Length; i++)
+        {
+            char c = s[i];
+            if (c == '.')
+            {
+                sb.Append('_');
+            }
+            else if (char.IsUpper(c))
+            {
+                if (i > 0 && s[i - 1] != '.' && s[i - 1] != '_' && !char.IsUpper(s[i - 1]))
+                {
+                    sb.Append('_');
+                }
+                sb.Append(char.ToLowerInvariant(c));
+            }
+            else
+            {
+                sb.Append(c);
+            }
+        }
+        return sb.ToString();
     }
 
     /// <summary>
@@ -819,10 +939,40 @@ public class ExoDeployer
             ["version"] = manifest["version"]?.DeepClone(),
             ["type"] = manifest["type"]?.DeepClone(),
             ["entry_point"] = manifest["entry_point"]?.DeepClone(),
-            ["provides"] = manifest["provides"]?.DeepClone(),
             ["dependencies"] = manifest["dependencies"]?.DeepClone(),
             ["services"] = manifest["services"]?.DeepClone()
         };
+
+        var providesArray = new JsonArray();
+        var seenProvides = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        if (manifest["provides"] is JsonArray rawProvides)
+        {
+            foreach (var item in rawProvides)
+            {
+                string? pStr = item?.GetValue<string>();
+                if (string.IsNullOrWhiteSpace(pStr)) continue;
+
+                if (seenProvides.Add(pStr)) providesArray.Add(pStr);
+
+                string cleaned = CleanServiceName(pStr);
+                if (!string.IsNullOrEmpty(cleaned) && seenProvides.Add(cleaned))
+                {
+                    providesArray.Add(cleaned);
+                }
+            }
+        }
+
+        if (manifest["id"]?.GetValue<string>() is { Length: > 0 } manifestId)
+        {
+            string cleanId = CleanServiceName(manifestId);
+            if (!string.IsNullOrEmpty(cleanId) && seenProvides.Add(cleanId))
+            {
+                providesArray.Add(cleanId);
+            }
+        }
+
+        plugin["provides"] = providesArray;
 
         if (manifest["title"] is JsonNode tit) plugin["title"] = tit.DeepClone();
         else if (manifest["dashboard_view"]?["title"] is JsonNode dvt) plugin["title"] = dvt.DeepClone();

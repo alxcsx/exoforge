@@ -158,6 +158,45 @@ public class ManagementTests : IDisposable
     }
 
     [Fact]
+    public async System.Threading.Tasks.Task DependencyStubs_Resolves_Builtin_Elixir_Extension_From_Repo_Extensions_Priv_Manifest()
+    {
+        string repoDir = Path.Combine(_tempDir, "mock_repo");
+        Directory.CreateDirectory(repoDir);
+        File.WriteAllText(Path.Combine(repoDir, "Directory.Build.targets"), "<Project />");
+
+        string privDir = Path.Combine(repoDir, "extensions", "exoforge_std_file_bucket", "priv");
+        Directory.CreateDirectory(privDir);
+        File.WriteAllText(Path.Combine(privDir, "manifest.json"), """
+        {
+          "id": "exoforge_std_file_bucket",
+          "version": "0.1.35",
+          "type": "elixir",
+          "provides": [
+            "Elixir.Exoforge.Std.Services.FileBucket"
+          ],
+          "services": []
+        }
+        """);
+
+        string callerDir = Path.Combine(repoDir, "sdk", "unity", "sample_unity", "Exoforge", "extensions", "caller");
+        Directory.CreateDirectory(callerDir);
+        File.WriteAllText(Path.Combine(callerDir, "manifest.json"), """
+        {
+          "id": "caller",
+          "version": "1.0.0",
+          "type": "native",
+          "dependencies": ["file_bucket"]
+        }
+        """);
+
+        var (output, missing) = await ExoDeployer.BesideExtension(callerDir).GenerateDependencyStubsAsync(callerDir);
+
+        Assert.Empty(missing);
+        Assert.NotNull(output);
+        Assert.True(File.Exists(output));
+    }
+
+    [Fact]
     public void CodeGenerator_GenerateToFile_Skips_Write_If_Content_Unchanged()
     {
         string outputPath = Path.Combine(_tempDir, "GeneratedClient.cs");
