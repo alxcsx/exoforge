@@ -75,6 +75,21 @@ defmodule Exoforge.DatabaseTest do
     end
   end
 
+  describe "Cross-extension tables" do
+    test "a query for another extension's table explains that tables are private" do
+      assert {:ok, _} = Database.execute(:auth, "CREATE TABLE users (id text)")
+
+      assert {:error, message} = Database.execute(:player_data, "SELECT * FROM users")
+      assert message =~ "no such table"
+      assert message =~ "get_many"
+      assert message =~ "typed stub"
+
+      # An error that is not a missing table carries no hint.
+      assert {:error, other} = Database.execute(:auth, "SELECT FROM")
+      refute other =~ "get_many"
+    end
+  end
+
   describe "SQL Query Operations" do
     test "handles parameterized INSERT, SELECT, UPDATE, and DELETE" do
       assert {:ok, _} =

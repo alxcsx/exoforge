@@ -118,6 +118,14 @@ defmodule Exoforge.Std.Database.Adapters.Sqlite do
     end
   end
 
+  # A missing table is usually another extension's, and a SQLite file holds only its own: the hint
+  # points at the owning extension's action or a stub instead of a query that cannot work.
+  defp table_error(reason, _read?) when is_binary(reason) do
+    if String.contains?(reason, "no such table"),
+      do: {:error, reason <> Exoforge.Std.Database.cross_extension_hint()},
+      else: {:error, reason}
+  end
+
   defp table_error(reason, _read?), do: {:error, reason}
 
   # A map's values have no order, so binding them to positional parameters would make the query's

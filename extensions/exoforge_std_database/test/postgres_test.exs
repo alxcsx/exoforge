@@ -266,4 +266,28 @@ defmodule Exoforge.Std.Database.Adapters.PostgresTest do
                )
     end
   end
+
+  describe "cross-extension tables" do
+    @tag :postgres
+    test "a missing relation explains that tables are private to each extension" do
+      unless Process.whereis(Exoforge.Std.Database.PoolRegistry) do
+        start_supervised!({Registry, keys: :unique, name: Exoforge.Std.Database.PoolRegistry})
+      end
+
+      unless Process.whereis(Exoforge.Std.Database.PoolSupervisor) do
+        start_supervised!({DynamicSupervisor, name: Exoforge.Std.Database.PoolSupervisor, strategy: :one_for_one})
+      end
+
+      plugin = :"pg_missing_#{System.unique_integer([:positive])}"
+      assert {:ok, _} = Postgres.ensure_database(plugin, @pg_config)
+      on_exit(fn -> _ = Postgres.reset(plugin, @pg_config) end)
+
+      assert {:error, {:postgres_error, message}} =
+               Postgres.execute(plugin, "SELECT * FROM other_extension_table", [], @pg_config)
+
+      assert message =~ "does not exist"
+      assert message =~ "get_many"
+      assert message =~ "typed stub"
+    end
+  end
 end

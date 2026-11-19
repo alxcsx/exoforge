@@ -554,12 +554,22 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
         {:ok, %{rows: formatted_rows, num_rows: num_rows}}
 
       {:error, %Postgrex.Error{postgres: %{message: msg}}} ->
-        {:error, {:postgres_error, msg}}
+        {:error, {:postgres_error, missing_relation_hint(msg)}}
 
       {:error, reason} ->
         {:error, reason}
     end
   end
+
+  # A missing relation is usually another extension's table, which this schema cannot see; the fix
+  # is that extension's action or a stub, never SQL that reaches further.
+  defp missing_relation_hint(msg) when is_binary(msg) do
+    if String.contains?(msg, "relation") and String.contains?(msg, "does not exist"),
+      do: msg <> Exoforge.Std.Database.cross_extension_hint(),
+      else: msg
+  end
+
+  defp missing_relation_hint(msg), do: msg
 
   defp table_schema_sql(schema_name, tbl) do
     """

@@ -4,6 +4,11 @@ defmodule Exoforge.Std.Database do
   Provides the :database and :lldb service contracts.
   Acts as the middleground between PostgreSQL and all other extensions,
   ensuring complete per-extension multi-tenant isolation.
+
+  There is no cross-extension SQL. Each extension's tables live in its own schema (PostgreSQL) or
+  its own file (SQLite), so a query sees only the caller's own tables; a table it cannot see comes
+  back with a hint pointing at the owning extension's action (for example a `get_many`) or a
+  generated typed stub.
   """
   use Exoforge.Extension, provides: [:database, :lldb]
 
@@ -40,6 +45,13 @@ defmodule Exoforge.Std.Database do
   # Callers are extensions, so a missing payload field can arrive as nil or a map. That is not a
   # plugin name, and `to_string/1` on it would raise inside the Manager and take the Manager down.
   def clean_id(_), do: "default"
+
+  # A missing table is the common cross-extension mistake, and the fix is never more SQL: both
+  # adapters append this so the failure explains itself.
+  @cross_extension_hint " Tables are private to each extension; to read another extension's data, call its action (e.g. a get_many) or use a generated typed stub."
+
+  @doc "The hint appended when a query's table is missing."
+  def cross_extension_hint, do: @cross_extension_hint
 
   def children do
     [
