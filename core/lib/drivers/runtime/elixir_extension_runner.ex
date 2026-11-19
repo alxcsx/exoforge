@@ -35,12 +35,12 @@ defmodule Exoforge.Drivers.Runtime.ElixirExtensionRunner do
       type: :supervisor
     }
 
-    # An extension whose children fail to start must fail the boot loudly, not leave
-    # the cluster running with a silently-dead subsystem.
+    # An extension whose children fail to start reports it; the bootstrapper records that extension as
+    # failed and boots the rest, so a dead subsystem is never silent and never takes the cluster with it.
     case DynamicSupervisor.start_child(Exoforge.ExtensionSupervisor, child_spec) do
       {:ok, pid} -> {:ok, pid}
       {:error, {:already_started, pid}} -> {:ok, pid}
-      {:error, reason} -> raise "[Extension Start Failed] #{inspect(ext_mod)}: #{inspect(reason)}"
+      {:error, reason} -> {:error, {:extension_start_failed, ext_mod, reason}}
     end
   end
 

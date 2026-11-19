@@ -16,6 +16,7 @@ defmodule Exoforge.ExtensionRegistry do
     ensure_table(:exo_extensions_mem, :set)
     ensure_table(:exo_services_mem, :bag)
     ensure_table(:exo_extension_status_mem, :set)
+    ensure_table(:exo_extension_failures_mem, :set)
     :ok
   end
 
@@ -101,8 +102,49 @@ defmodule Exoforge.ExtensionRegistry do
     end
   end
 
+  @doc """
+  Records that an extension could not be started, and why.
+
+  A failed extension is not registered, so it provides no service and nothing is routed to it; the
+  manifest is kept here instead so the cluster can still list it, say why it is down, and answer
+  calls to its services with `{:extension_unavailable, id}` rather than "service not found".
+  `failure` is a map: `kind` (`:boot_failed` or `:blocked`), `stage`, `message`, `detail` and `at`.
+  """
+  def record_failure(%Manifest{} = manifest, %{} = failure) do
+    id = to_string(manifest.id)
+    safe(:insert, [:exo_extension_failures_mem, {id, manifest, failure}])
+    mark_crashed(manifest.id, failure)
+    :ok
+  end
+
+  @doc "The failure recorded for an extension, or nil."
+  def get_failure(manifest_id) do
+    case safe(:lookup, [:exo_extension_failures_mem, to_string(manifest_id)]) do
+      [{_, _manifest, failure} | _] -> failure
+      _ -> nil
+    end
+  end
+
+  @doc "Every extension that failed or was blocked at boot, as `{manifest, failure}`."
+  def failed_extensions do
+    safe(:tab2list, [:exo_extension_failures_mem])
+    |> Enum.map(fn {_id, manifest, failure} -> {manifest, failure} end)
+    |> Enum.sort_by(fn {manifest, _} -> to_string(manifest.id) end)
+  end
+
+  @doc "The id of a failed extension that would have provided `type`, or nil."
+  def failed_provider(type) do
+    keys = service_keys(type)
+
+    Enum.find_value(failed_extensions(), fn {manifest, _failure} ->
+      provided = Enum.flat_map(manifest.provides || [], &service_keys/1)
+      if Enum.any?(keys, &(&1 in provided)), do: manifest.id
+    end)
+  end
+
   @doc "Clears crash status for an extension."
   def clear_crash_status(manifest_id) do
+    safe(:delete, [:exo_extension_failures_mem, to_string(manifest_id)])
     safe(:delete, [:exo_extension_status_mem, manifest_id])
     id_atom = Exoforge.Atoms.existing(manifest_id, manifest_id)
 

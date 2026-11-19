@@ -77,7 +77,7 @@ defmodule Exoforge.ActionDispatcher do
         :ok ->
           case validate_params(resolved_mod, action_atom, payload, opts) do
             :ok ->
-              case run_action(resolved_mod, action_atom, payload) do
+              case run_action(resolved_mod, service_atom, action_atom, payload) do
                 {:error, reason} = err ->
                   case resolved_mod do
                     nil -> Logger.warning("[Action] service not found: #{inspect(service)}, action: #{action}")
@@ -275,9 +275,16 @@ defmodule Exoforge.ActionDispatcher do
     end
   end
 
-  defp run_action(nil, _action, _payload), do: {:error, :service_not_found}
+  # A service nobody provides is "not found", unless an extension that would have provided it failed
+  # to start: then the caller is told which one, and why is on `ExtensionRegistry.get_failure/1`.
+  defp run_action(nil, service, _action, _payload) do
+    case Exoforge.ExtensionRegistry.failed_provider(service) do
+      nil -> {:error, :service_not_found}
+      id -> {:error, {:extension_unavailable, id}}
+    end
+  end
 
-  defp run_action(mod, action, payload) do
+  defp run_action(mod, _service, action, payload) do
     try do
       apply(mod, :__execute_action__, [action, payload])
     rescue
