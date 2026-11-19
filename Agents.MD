@@ -90,6 +90,7 @@ file_bucket ──▶ database
 | `exoforge_std_cron` | Operations | `cron` | — | Scheduled background task execution and recurring cron runner. |
 
 Cross-extension SQL reads are opt-in via declared `db_read` grants (see [`docs/adr/002-database-read-grants.md`](docs/adr/002-database-read-grants.md)); undeclared cross-extension access remains denied.
+Declared resources use typed tables with real columns (see [`docs/adr/004-typed-resource-schemas.md`](docs/adr/004-typed-resource-schemas.md)); undeclared tables keep the `id/data jsonb` envelope.
 
 ### Extension Placement Rules
 
