@@ -37,6 +37,72 @@ defmodule Exoforge.Std.ExtensionManagerTest do
   end
 
   describe "Extension Manager Service Actions" do
+    test "list_extensions and get_extension report an extension that failed to boot, with why" do
+      manifest = %Exoforge.Domain.Manifest{
+        id: :broken_game_extension,
+        name: "BrokenGameExtension",
+        version: "1.0.0",
+        type: :elixir,
+        entry_point: BrokenGameExtension,
+        provides: [:broken_game_service],
+        dependencies: []
+      }
+
+      ExtensionRegistry.record_failure(manifest, %{
+        kind: :boot_failed,
+        stage: :storage,
+        message: "unsafe schema change on items.price",
+        detail: "details",
+        at: 1_700_000_000
+      })
+
+      assert {:ok, %{extensions: extensions}} =
+               ActionDispatcher.dispatch(:extension_manager, :list_extensions, %{}, caller_scopes: ["studio"])
+
+      broken = Enum.find(extensions, &(&1["id"] == "broken_game_extension"))
+      assert broken["status"] == "failed"
+
+      assert %{"kind" => "boot_failed", "stage" => "storage", "message" => "unsafe schema change on items.price"} =
+               broken["failure"]
+
+      healthy = Enum.find(extensions, &(&1["id"] == "test_game_extension"))
+      assert healthy["status"] == "running"
+      assert healthy["failure"] == nil
+
+      assert {:ok, %{extension: ext}} =
+               ActionDispatcher.dispatch(:extension_manager, :get_extension, %{id: "broken_game_extension"},
+                 caller_scopes: ["studio"]
+               )
+
+      assert ext["status"] == "failed"
+      assert ext["failure"]["stage"] == "storage"
+    end
+
+    test "a blocked extension is reported as blocked" do
+      manifest = %Exoforge.Domain.Manifest{
+        id: :waiting_extension,
+        name: "Waiting",
+        version: "1.0.0",
+        type: :elixir,
+        entry_point: WaitingExtension,
+        provides: [],
+        dependencies: [:broken_game_service]
+      }
+
+      ExtensionRegistry.record_failure(manifest, %{
+        kind: :blocked,
+        stage: :dependencies,
+        message: "dependency broken_game_extension failed",
+        detail: nil,
+        at: 1_700_000_000
+      })
+
+      assert {:ok, %{extensions: extensions}} =
+               ActionDispatcher.dispatch(:extension_manager, :list_extensions, %{}, caller_scopes: ["studio"])
+
+      assert Enum.find(extensions, &(&1["id"] == "waiting_extension"))["status"] == "blocked"
+    end
+
     test "list_extensions returns all registered extensions and count with icon and title" do
       assert {:ok, result} =
                ActionDispatcher.dispatch(:extension_manager, :list_extensions, %{}, caller_scopes: ["studio"])

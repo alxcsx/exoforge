@@ -86,7 +86,10 @@ defmodule Exoforge.Std.ExtensionManager do
 
   @impl true
   defaction list_extensions, scope: Exoforge.Auth.Roles.studio() do
-    manifests = ExtensionRegistry.all_manifests()
+    # Extensions that failed to boot are not registered; they are listed too, so the cluster can say
+    # which are down and why.
+    failed = Enum.map(ExtensionRegistry.failed_extensions(), fn {manifest, _failure} -> manifest end)
+    manifests = ExtensionRegistry.all_manifests() ++ failed
 
     extensions =
       Enum.map(manifests, fn m ->
@@ -104,6 +107,7 @@ defmodule Exoforge.Std.ExtensionManager do
           "version" => to_string(m.version),
           "type" => to_string(m.type),
           "status" => extension_status(m.id),
+          "failure" => failure_info(m.id),
           "entry_point" => to_string(m.entry_point),
           "category" => m.category || "Extension",
           "system" => m.system == true,
@@ -149,6 +153,7 @@ defmodule Exoforge.Std.ExtensionManager do
             "version" => to_string(m.version),
             "type" => to_string(m.type),
             "status" => extension_status(m.id),
+            "failure" => failure_info(m.id),
             "category" => m.category || "Extension",
             "system" => m.system == true,
             "entry_point" => to_string(m.entry_point),
@@ -441,7 +446,8 @@ defmodule Exoforge.Std.ExtensionManager do
   # Resolves an extension by id, accepting either the string or the existing atom form.
   defp find_manifest(id_str) when is_binary(id_str) do
     ExtensionRegistry.fetch_manifest(id_str) ||
-      ExtensionRegistry.fetch_manifest(Exoforge.Atoms.existing(id_str, id_str))
+      ExtensionRegistry.fetch_manifest(Exoforge.Atoms.existing(id_str, id_str)) ||
+      failed_manifest(id_str)
   end
 
   defp find_manifest(_), do: nil
@@ -1184,9 +1190,41 @@ defmodule Exoforge.Std.ExtensionManager do
   end
 
   defp extension_status(manifest_id) do
-    case ExtensionRegistry.get_crash_info(manifest_id) do
-      {:crashed, reason} -> "crashed: #{inspect(reason)}"
-      _ -> "running"
+    case ExtensionRegistry.get_failure(manifest_id) do
+      %{kind: :blocked} ->
+        "blocked"
+
+      %{} ->
+        "failed"
+
+      nil ->
+        case ExtensionRegistry.get_crash_info(manifest_id) do
+          {:crashed, reason} -> "crashed: #{inspect(reason)}"
+          _ -> "running"
+        end
     end
+  end
+
+  # Why an extension is not running, as JSON-safe data; nil for one that is.
+  defp failure_info(manifest_id) do
+    case ExtensionRegistry.get_failure(manifest_id) do
+      %{} = failure ->
+        %{
+          "kind" => to_string(failure.kind),
+          "stage" => to_string(failure.stage),
+          "message" => failure.message,
+          "detail" => if(failure.detail, do: to_string(inspect(failure.detail, printable_limit: 2000)), else: nil),
+          "at" => failure.at
+        }
+
+      nil ->
+        nil
+    end
+  end
+
+  defp failed_manifest(id_str) do
+    Enum.find_value(ExtensionRegistry.failed_extensions(), fn {manifest, _failure} ->
+      if to_string(manifest.id) == id_str, do: manifest
+    end)
   end
 end
