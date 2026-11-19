@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Reflection;
+using System.Text;
 
 namespace Exoforge.Plugin.SDK;
 
@@ -157,6 +159,135 @@ public static class DatabaseExtensions
     /// Resolves the SQL table name for entity type <typeparamref name="T"/>.
     /// </summary>
     public static string TableName<T>() => EntityMetadata<T>.TableName;
+
+    /// <summary>
+    /// Runs an interpolated SQL query, turning each interpolation into a positional parameter
+    /// (<c>$1</c>, <c>$2</c>, ...) passed as arguments to <see cref="IDatabase.Query{T}"/>.
+    /// Only the format string's literal segments become SQL text, so interpolated values are never
+    /// concatenated into SQL. Format specifiers and alignment clauses (e.g. <c>{v:F2}</c>,
+    /// <c>{v,-10}</c>) are ignored and raw values are passed as parameters.
+    /// </summary>
+    public static IReadOnlyList<T> QuerySql<T>(this IDatabase db, FormattableString sql)
+    {
+        if (db == null) throw new ArgumentNullException(nameof(db));
+        if (sql == null) throw new ArgumentNullException(nameof(sql));
+
+        var (text, args) = Parameterize(sql);
+        return db.Query<T>(text, args);
+    }
+
+    /// <summary>
+    /// Runs an interpolated SQL statement (INSERT/UPDATE/DELETE), turning each interpolation into
+    /// a positional parameter (<c>$1</c>, <c>$2</c>, ...) passed as arguments to
+    /// <see cref="IDatabase.Execute"/>. Only the format string's literal segments become SQL text,
+    /// so interpolated values are never concatenated into SQL. Format specifiers and alignment
+    /// clauses (e.g. <c>{v:F2}</c>, <c>{v,-10}</c>) are ignored and raw values are passed as
+    /// parameters.
+    /// </summary>
+    public static int ExecuteSql(this IDatabase db, FormattableString sql)
+    {
+        if (db == null) throw new ArgumentNullException(nameof(db));
+        if (sql == null) throw new ArgumentNullException(nameof(sql));
+
+        var (text, args) = Parameterize(sql);
+        return db.Execute(text, args);
+    }
+
+    internal static (string Sql, object?[] Args) Parameterize(FormattableString sql)
+    {
+        string format = sql.Format ?? throw new FormatException("SQL format string cannot be null.");
+        object?[] rawArgs = sql.GetArguments();
+
+        var sb = new StringBuilder(format.Length + rawArgs.Length * 2);
+        List<object?>? boundArgs = null;
+
+        int i = 0;
+        int len = format.Length;
+
+        while (i < len)
+        {
+            char c = format[i];
+            if (c == '{')
+            {
+                if (i + 1 < len && format[i + 1] == '{')
+                {
+                    sb.Append('{');
+                    i += 2;
+                    continue;
+                }
+
+                i++; // skip '{'
+                int indexStart = i;
+                while (i < len && format[i] >= '0' && format[i] <= '9')
+                {
+                    i++;
+                }
+
+                if (i == indexStart || i >= len)
+                {
+                    throw new FormatException($"Invalid format item at position {indexStart - 1} in SQL format string.");
+                }
+
+                if (!int.TryParse(format.Substring(indexStart, i - indexStart), NumberStyles.None, CultureInfo.InvariantCulture, out int argIndex)
+                    || argIndex < 0 || argIndex >= rawArgs.Length)
+                {
+                    throw new FormatException($"Format item index out of range at position {indexStart} in SQL format string.");
+                }
+
+                // Ignore optional alignment (,[-]<digits>) and format specifier (:...) until '}'
+                while (i < len && format[i] == ' ') i++;
+
+                if (i < len && format[i] == ',')
+                {
+                    i++;
+                    while (i < len && format[i] == ' ') i++;
+                    if (i < len && format[i] == '-') i++;
+                    int alignStart = i;
+                    while (i < len && format[i] >= '0' && format[i] <= '9') i++;
+                    if (i == alignStart)
+                    {
+                        throw new FormatException($"Invalid alignment in format item at position {i} in SQL format string.");
+                    }
+                    while (i < len && format[i] == ' ') i++;
+                }
+
+                if (i < len && format[i] == ':')
+                {
+                    i++;
+                    while (i < len && format[i] != '}') i++;
+                }
+
+                if (i >= len || format[i] != '}')
+                {
+                    throw new FormatException($"Unclosed or invalid format item near position {i} in SQL format string.");
+                }
+
+                i++; // skip '}'
+
+                boundArgs ??= new List<object?>(rawArgs.Length);
+                boundArgs.Add(rawArgs[argIndex]);
+                sb.Append('$').Append(boundArgs.Count.ToString(CultureInfo.InvariantCulture));
+            }
+            else if (c == '}')
+            {
+                if (i + 1 < len && format[i + 1] == '}')
+                {
+                    sb.Append('}');
+                    i += 2;
+                    continue;
+                }
+
+                throw new FormatException($"Unescaped '}}' at position {i} in SQL format string.");
+            }
+            else
+            {
+                sb.Append(c);
+                i++;
+            }
+        }
+
+        return (sb.ToString(), boundArgs != null ? boundArgs.ToArray() : Array.Empty<object?>());
+    }
 }
 
 internal class DatabaseTable<T> : IDatabaseTable<T>

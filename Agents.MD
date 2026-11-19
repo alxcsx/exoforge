@@ -246,9 +246,14 @@ that declares a context anyway is still honoured; nothing requires one.
 var best = Exo.Database.Get<SnakeScoreRecord>("snake_scores", playerId);
 Exo.Database.Put("snake_scores", playerId, record);
 
-// Typed SQL: rows map onto records, args are positional ($1, $2, ...)
-var top = Exo.Database.Query<SnakeScoreRecord>("SELECT * FROM snake_scores ORDER BY score DESC LIMIT $1", 10);
-Exo.Database.Execute("DELETE FROM snake_scores WHERE score < $1", 0);
+// Typed SQL: QuerySql/ExecuteSql accept FormattableString and turn each interpolation into
+// positional parameters ($1, $2, ...) so values are never concatenated into SQL (format
+// specifiers and alignment clauses like {v:F2} or {v,-10} are ignored; raw values are bound).
+var top = Exo.Database.QuerySql<SnakeScoreRecord>($"SELECT * FROM snake_scores ORDER BY score DESC LIMIT {10}");
+Exo.Database.ExecuteSql($"DELETE FROM snake_scores WHERE score < {0}");
+
+// Explicit positional Query<T>/Execute are also available:
+var topPos = Exo.Database.Query<SnakeScoreRecord>("SELECT * FROM snake_scores ORDER BY score DESC LIMIT $1", 10);
 ```
 
 Keep `ExtensionHost.Run<...>()`'s `[DynamicallyAccessedMembers]` annotation intact — that is what keeps the

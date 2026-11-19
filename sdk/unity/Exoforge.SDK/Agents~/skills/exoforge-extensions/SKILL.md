@@ -77,7 +77,7 @@ public record ClaimResult(bool Success, int Amount);
 - `[ExoAction(Scope = "player")]`: Exposes a public method as an RPC action. `Scope = "player"` requires a valid authenticated player session; `Scope = "admin"` restricts access to administrator credentials; default or omitting scope permits public calls.
 - `[ExoSeed]`: Marks a parameterless method (`void` or `Task`) on the extension root to run once after `OnExtensionStart` on every startup. Must be idempotent by contract (check before inserting initial rows). Throwing fails extension startup.
 - `OnExtensionStart()`: Optional parameterless lifecycle method (`void` or `Task`) on the extension root invoked once during handshake startup before seeding.
-- `Exo.Database`: Typed storage interface (`Get<T>`, `Put`, `Query<T>`, `Execute`).
+- `Exo.Database`: Typed storage interface (`Get<T>`, `Put`, `Query<T>`, `Execute`, `QuerySql<T>`, `ExecuteSql`). Prefer `QuerySql<T>($"...")` and `ExecuteSql($"...")` for SQL with parameters: each interpolation becomes a positional placeholder (`$1`, `$2`, ...) and values are passed as arguments, never concatenated into SQL (format specifiers and alignment clauses such as `{v:F2}` or `{v,-10}` are ignored; raw values are bound).
 - `Exo.Context`: Provides runtime metadata such as `CallerPlayerId` and caller context.
 - `Exo.Events`: Publishes events to the cluster pub/sub bus (`Publish`).
 
