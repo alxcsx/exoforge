@@ -351,8 +351,64 @@ defmodule Exoforge.Std.ExtensionManager do
       m ->
         ExtensionBootstrapper.unload_extension(m.id)
 
-        {:ok, %{status: status}} = load_and_boot_extension(m.physical_path, to_string(m.id), m.type)
-        {:ok, %{extension_id: to_string(m.id), status: status}}
+        case reload_boot(m) do
+          :ok -> {:ok, %{extension_id: to_string(m.id), status: "installed"}}
+          {:error, reason} -> {:error, %{error: reason}}
+        end
+    end
+  end
+
+  # Boots the files that are already installed. Unlike an install there is no earlier version to go
+  # back to, and `rollback_extension/6` deletes the target directory, so a failed reload must not go
+  # through it: it leaves the files alone and records the extension as failed, so it stays listed with why.
+  defp reload_boot(%{physical_path: path} = manifest) do
+    result =
+      try do
+        case ManifestLoader.load_extensions(path) do
+          [loaded | _] ->
+            ExtensionRegistry.register(loaded)
+
+            case run_resource_migration(loaded) do
+              {:error, reason} -> {:error, {:migration_failed, reason}}
+              _ -> safe_boot_extension(loaded)
+            end
+
+          [] ->
+            {:error, :manifest_not_loaded}
+        end
+      rescue
+        e -> {:error, Exception.message(e)}
+      catch
+        :exit, reason -> {:error, reason}
+      end
+
+    case result do
+      :ok ->
+        :ok
+
+      {:error, reason} ->
+        _ = ExtensionBootstrapper.unload_extension(manifest.id)
+        ExtensionRegistry.unregister(manifest.id)
+
+        ExtensionRegistry.record_failure(manifest, %{
+          kind: :boot_failed,
+          stage: :reload,
+          message: "reload failed: #{inspect(reason)}",
+          detail: inspect(reason),
+          at: System.system_time(:second)
+        })
+
+        {:error, reason}
+    end
+  end
+
+  defp run_resource_migration(loaded_manifest) do
+    if ExtensionRegistry.fetch_service(:resource_store) != nil and declares_resources?(loaded_manifest) do
+      Exoforge.ActionDispatcher.dispatch_internal(:resource_store, :migrate, %{
+        extension: to_string(loaded_manifest.id)
+      })
+    else
+      {:ok, :noop}
     end
   end
 
@@ -647,14 +703,7 @@ defmodule Exoforge.Std.ExtensionManager do
 
         ExtensionRegistry.register(loaded_manifest)
 
-        migration_result =
-          if ExtensionRegistry.fetch_service(:resource_store) != nil and declares_resources?(loaded_manifest) do
-            Exoforge.ActionDispatcher.dispatch_internal(:resource_store, :migrate, %{
-              extension: to_string(loaded_manifest.id)
-            })
-          else
-            {:ok, :noop}
-          end
+        migration_result = run_resource_migration(loaded_manifest)
 
         case migration_result do
           {:error, reason} ->

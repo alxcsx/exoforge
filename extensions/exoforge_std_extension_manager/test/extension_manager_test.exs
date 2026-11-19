@@ -78,6 +78,40 @@ defmodule Exoforge.Std.ExtensionManagerTest do
       assert ext["failure"]["stage"] == "storage"
     end
 
+    test "a failed reload reports the error, leaves the installed files alone and keeps the extension listed as failed" do
+      dir = "priv/data/uploaded_extensions/ext_reload_keep"
+      File.mkdir_p!(dir)
+      File.write!(Path.join(dir, "keep.txt"), "installed file")
+      on_exit(fn -> File.rm_rf(dir) end)
+
+      # There is no manifest.json in the directory, so the reload cannot load it.
+      ExtensionRegistry.register(%Exoforge.Domain.Manifest{
+        id: :ext_reload_keep,
+        name: "ReloadKeep",
+        version: "1.0.0",
+        type: :elixir,
+        entry_point: ReloadKeep,
+        provides: [:reload_keep_service],
+        dependencies: [],
+        physical_path: dir
+      })
+
+      assert {:error, %{error: :manifest_not_loaded}} =
+               ActionDispatcher.dispatch(:extension_manager, :reload_extension, %{id: "ext_reload_keep"},
+                 caller_scopes: ["admin"]
+               )
+
+      assert File.read!(Path.join(dir, "keep.txt")) == "installed file"
+
+      assert %{kind: :boot_failed, stage: :reload} = ExtensionRegistry.get_failure(:ext_reload_keep)
+
+      # the lifecycle serializer survived, and the extension is listed as failed
+      assert {:ok, %{extensions: extensions}} =
+               ActionDispatcher.dispatch(:extension_manager, :list_extensions, %{}, caller_scopes: ["studio"])
+
+      assert Enum.find(extensions, &(&1["id"] == "ext_reload_keep"))["status"] == "failed"
+    end
+
     test "a blocked extension is reported as blocked" do
       manifest = %Exoforge.Domain.Manifest{
         id: :waiting_extension,

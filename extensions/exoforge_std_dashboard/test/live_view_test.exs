@@ -1094,6 +1094,64 @@ defmodule Exoforge.DashboardLiveViewTest do
       assert unpin_html =~ "Pin"
     end
 
+    test "overview lists extensions that failed to boot or are blocked, and offers a retry for the failed one" do
+      broken = %Exoforge.Domain.Manifest{
+        id: :broken_ext,
+        name: "Broken Ext",
+        version: "1.0.0",
+        type: :native,
+        entry_point: BrokenExt,
+        provides: [:broken_svc],
+        dependencies: []
+      }
+
+      waiting = %Exoforge.Domain.Manifest{
+        id: :waiting_ext,
+        name: "Waiting Ext",
+        version: "1.0.0",
+        type: :native,
+        entry_point: WaitingExt,
+        provides: [],
+        dependencies: [:broken_svc]
+      }
+
+      ExtensionRegistry.record_failure(broken, %{
+        kind: :boot_failed,
+        stage: :storage,
+        message: "unsafe schema change on items.price",
+        detail: nil,
+        at: 1_700_000_000
+      })
+
+      ExtensionRegistry.record_failure(waiting, %{
+        kind: :blocked,
+        stage: :dependencies,
+        message: "dependency broken_ext failed",
+        detail: nil,
+        at: 1_700_000_000
+      })
+
+      admin_id = "failed_ext_admin_#{System.unique_integer([:positive])}"
+
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{"admin_player_id" => admin_id, "admin_scopes" => ["admin"]})
+
+      {:ok, view, html} = live(conn, "/")
+
+      assert html =~ ~s(id="faulty-extension-broken_ext")
+      assert html =~ "Failed to start (storage): unsafe schema change on items.price"
+      assert html =~ ~s(id="faulty-extension-waiting_ext")
+      assert html =~ "Blocked: dependency broken_ext failed"
+
+      assert has_element?(view, "#faulty-extension-broken_ext button", "Retry")
+      refute has_element?(view, "#faulty-extension-waiting_ext button")
+
+      # Retry goes through extension_manager.reload_extension; with none registered here the error is reported, not raised
+      html = view |> element("#faulty-extension-broken_ext button", "Retry") |> render_click()
+      assert html =~ "Could not restart broken_ext"
+    end
+
     test "overview 4-slot grid supports slot rearrangement, SDK modal popup, and faulty extension warnings" do
       # Register a faulty extension with infinite_loop flag and a dynamic overview widget
       :ets.insert(:exo_extensions_mem, {

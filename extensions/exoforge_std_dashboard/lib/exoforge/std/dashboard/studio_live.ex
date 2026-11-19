@@ -672,6 +672,20 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     {:noreply, assign(socket, :grid_edit_mode, !socket.assigns.grid_edit_mode)}
   end
 
+  def handle_event("retry_extension", %{"id" => id}, socket) do
+    case ActionDispatcher.dispatch(:extension_manager, :reload_extension, %{id: id},
+           caller_scopes: socket.assigns.current_scopes
+         ) do
+      {:ok, _} ->
+        plugins = fetch_plugins()
+        overview = Map.merge(socket.assigns.overview, %{plugins: plugins, plugins_count: length(plugins)})
+        {:noreply, socket |> assign(:overview, overview) |> show_toast(:info, "Restarted #{id}")}
+
+      {:error, reason} ->
+        {:noreply, show_toast(socket, :error, "Could not restart #{id}: #{inspect(reason)}")}
+    end
+  end
+
   def handle_event("remove_overview_slot", %{"id" => slot_id}, socket) do
     widgets = Exoforge.UIHookRegistry.list_hooks(:overview_widget)
     current_ids = resolve_overview_slot_ids(widgets, socket.assigns.overview_grid_order)
@@ -1318,8 +1332,9 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
   defp fetch_plugins do
     try do
-      :ets.tab2list(:exo_extensions_mem)
-      |> Enum.map(fn {_id, m} ->
+      registered =
+        :ets.tab2list(:exo_extensions_mem)
+        |> Enum.map(fn {_id, m} ->
         %{
           id: to_string(m.id),
           name: to_string(m.name),
@@ -1333,10 +1348,34 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
           dependencies: Enum.map(m.dependencies || [], &ExtensionRegistry.service_alias_or_module/1)
         }
       end)
+
+      # Extensions that did not boot are not registered; they are listed too, with why, so a broken
+      # one is visible here instead of simply missing.
+      failed =
+        Enum.map(ExtensionRegistry.failed_extensions(), fn {m, failure} ->
+          %{
+            id: to_string(m.id),
+            name: to_string(m.name),
+            version: to_string(m.version),
+            type: to_string(m.type),
+            status: failure.kind,
+            failure: failure,
+            restarts: 0,
+            infinite_loop: false,
+            crashed_recently: false,
+            provides: Enum.map(m.provides || [], &ExtensionRegistry.service_alias_or_module/1),
+            dependencies: Enum.map(m.dependencies || [], &ExtensionRegistry.service_alias_or_module/1)
+          }
+        end)
+
+      registered ++ failed
     rescue
       _ -> []
     end
   end
+
+  defp failure_reason(%{kind: :blocked, message: message}), do: "Blocked: #{message}"
+  defp failure_reason(%{stage: stage, message: message}), do: "Failed to start (#{stage}): #{message}"
 
   defp fetch_overview do
     plugins = fetch_plugins()
@@ -1772,6 +1811,9 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
             Map.get(p, :status) in [:faulty, "faulty", :crashed, "crashed"]
 
         cond do
+          failure = Map.get(p, :failure) ->
+            [%{id: pid, name: humanize_plugin_name(p), kind: failure.kind, reason: failure_reason(failure)}]
+
           infinite_loop? ->
             [
               %{
@@ -2897,9 +2939,26 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                     <%= if @telemetry.faulty_extensions != [] do %>
                       <div class="space-y-1.5">
                         <%= for f <- @telemetry.faulty_extensions do %>
-                          <div class="px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-center justify-between gap-2">
+                          <% down? = Map.get(f, :kind) in [:boot_failed, :blocked] %>
+                          <div
+                            id={"faulty-extension-#{f.id}"}
+                            class={"px-3 py-2 rounded-xl border text-xs flex items-center justify-between gap-2 #{if down?, do: "bg-red-50 border-red-200 text-red-900", else: "bg-amber-50 border-amber-200 text-amber-900"}"}
+                          >
                             <span class="font-semibold truncate"><%= f.name %></span>
-                            <span class="font-mono text-[11px] text-amber-800 shrink-0"><%= f.reason %></span>
+                            <span
+                              class={"font-mono text-[11px] truncate #{if down?, do: "text-red-800", else: "text-amber-800 shrink-0"}"}
+                              title={f.reason}
+                            ><%= f.reason %></span>
+                            <%= if Map.get(f, :kind) == :boot_failed do %>
+                              <button
+                                type="button"
+                                phx-click="retry_extension"
+                                phx-value-id={f.id}
+                                class="px-2 py-0.5 rounded-lg border border-red-200 text-[11px] font-medium text-red-700 hover:text-white hover:bg-red-600 shrink-0"
+                              >
+                                Retry
+                              </button>
+                            <% end %>
                           </div>
                         <% end %>
                       </div>
