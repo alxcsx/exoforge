@@ -195,6 +195,30 @@ defmodule Exoforge.Std.Database.SchemaTest do
              )
   end
 
+  test "a text default that contains SQL-looking text is stored as data, never split into statements", %{
+    conn: conn,
+    schema: schema
+  } do
+    res1 = base_resource()
+    assert {:ok, _} = Schema.reconcile(conn, schema, [res1])
+    Postgrex.query!(conn, ~s[INSERT INTO "#{schema}"."items" ("id") VALUES ('i1')], [])
+
+    hostile = "x'; ALTER TABLE victim DROP COLUMN y; -- ; ALTER TABLE z"
+
+    res2 =
+      base_resource(%{
+        schema_hash: "hash_hostile_default",
+        columns: res1.columns ++ [%{name: "note", storage: "text", nullable: false, default: hostile}]
+      })
+
+    assert {:ok, live} = Schema.read_live_state(conn, schema, [res2])
+    assert {:ok, plan} = Schema.plan([res2], live)
+    assert {:ok, _} = Schema.apply(conn, plan)
+
+    assert {:ok, %Postgrex.Result{rows: [[^hostile]]}} =
+             Postgrex.query(conn, ~s[SELECT "note" FROM "#{schema}"."items" WHERE "id" = 'i1'], [])
+  end
+
   test "add NOT NULL column without default: safe on empty table, unsafe on non-empty table", %{
     conn: conn,
     schema: schema

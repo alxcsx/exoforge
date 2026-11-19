@@ -803,14 +803,14 @@ defmodule Exoforge.Std.Database.Schema do
           has_default? = not is_nil(mcol.default_sql) or not is_nil(lcol.default)
 
           if not has_nulls? and has_default? do
-            def_prefix =
+            set_default =
               if not is_nil(mcol.default_sql) do
-                "ALTER TABLE #{qs}.#{qt} ALTER COLUMN #{qc} SET DEFAULT #{mcol.default_sql}; "
+                ["ALTER TABLE #{qs}.#{qt} ALTER COLUMN #{qc} SET DEFAULT #{mcol.default_sql}"]
               else
-                ""
+                []
               end
 
-            sql = "#{def_prefix}ALTER TABLE #{qs}.#{qt} ALTER COLUMN #{qc} SET NOT NULL"
+            sql = set_default ++ ["ALTER TABLE #{qs}.#{qt} ALTER COLUMN #{qc} SET NOT NULL"]
 
             [
               %{
@@ -1054,11 +1054,10 @@ defmodule Exoforge.Std.Database.Schema do
                  end
 
                  Enum.each(ops, fn op ->
-                   if is_binary(op.sql) and op.sql != "" do
-                     Enum.each(split_sql_statements(op.sql), fn stmt ->
-                       run_tx!(tx, stmt, [])
-                     end)
-                   end
+                   op.sql
+                   |> List.wrap()
+                   |> Enum.reject(&(&1 in [nil, ""]))
+                   |> Enum.each(fn stmt -> run_tx!(tx, stmt, []) end)
                  end)
 
                  Enum.each(table_hashes, fn {tbl, schema_hash, tbl_ops} ->
@@ -1092,15 +1091,6 @@ defmodule Exoforge.Std.Database.Schema do
           end
         end
       end
-    end
-  end
-
-  defp split_sql_statements(sql) do
-    # Only used for safe internal multi-statement ops like SET DEFAULT + SET NOT NULL where default has no semicolon,
-    # or run as single statement if only one.
-    case String.split(sql, "; ALTER TABLE ") do
-      [single] -> [single]
-      [first, rest] -> [first, "ALTER TABLE " <> rest]
     end
   end
 
