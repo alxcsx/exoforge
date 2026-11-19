@@ -160,8 +160,8 @@ defmodule Exoforge.Std.Resources do
   # added it, and every write naming that column failed with "table has no column named". The database
   # already knows which columns exist; asking it is both correct and one table fewer.
   #
-  # Renames and type changes still need an explicit migration (documented ceiling), and SQLite cannot
-  # add a CHECK to an existing table, so a column that gains choices keeps them on new tables only.
+  # Renames, type changes, and retroactive CHECK constraints on existing tables still need an
+  # explicit migration (documented ceiling), so a column that gains choices keeps them on new tables only.
   defp reconcile_columns(pid, table, res) do
     existing =
       existing_columns(pid, table)
@@ -185,8 +185,7 @@ defmodule Exoforge.Std.Resources do
   # A table that began as a key-value document store has `data NOT NULL`. Once the resource declares
   # typed columns, rows are written without a document, and every insert would fail on that
   # constraint - which used to mean wiping the database. Keeping the column and dropping only its
-  # NOT NULL leaves old rows readable. SQLite cannot alter a constraint (the statement is refused and
-  # ignored there; its document table has no NOT NULL to trip on).
+  # NOT NULL leaves old rows readable (adapters that refuse ALTER COLUMN ignore it safely).
   defp relax_legacy_document_column(pid, table, res, existing) do
     declared = Enum.map(res.columns || [], &String.downcase(to_string(&1.name)))
 
@@ -198,7 +197,7 @@ defmodule Exoforge.Std.Resources do
   end
 
   defp existing_columns(pid, table) do
-    # The adapter answers with its own dialect (M33 Fix 9); a PRAGMA is SQLite-only.
+    # The adapter answers with its own dialect via :table_columns.
     case ActionDispatcher.dispatch_internal(:database, :table_columns, %{plugin: pid, table: table}) do
       {:ok, %{columns: columns}} -> columns
       _ -> []
@@ -514,11 +513,18 @@ defmodule Exoforge.Std.Resources do
       {:ok, %{rows: [first | _]} = result} ->
         pk = to_string(info.resource.primary_key || :id)
 
-        if Map.has_key?(first, pk), do: {:ok, result}, else: kv_list(info, payload)
+        if Map.has_key?(first, pk) and not kv_envelope_row?(first, info.resource),
+          do: {:ok, result},
+          else: kv_list(info, payload)
 
       _ ->
         kv_list(info, payload)
     end
+  end
+
+  defp kv_envelope_row?(row, res) when is_map(row) do
+    declared = MapSet.new(res.columns || [], &String.downcase(to_string(&1.name)))
+    Enum.sort(Map.keys(row)) == ["data", "id", "updated_at"] and not MapSet.member?(declared, "data")
   end
 
   defp list_action(res) do
@@ -652,7 +658,7 @@ defmodule Exoforge.Std.Resources do
           ors =
             filterable
             |> Enum.with_index(length(filter_args) + 1)
-            |> Enum.map_join(" OR ", fn {col, i} -> "#{col} LIKE $#{i}" end)
+            |> Enum.map_join(" OR ", fn {col, i} -> "CAST(#{col} AS text) ILIKE $#{i}" end)
 
           {ors, Enum.map(filterable, fn _ -> pattern end)}
 
@@ -764,8 +770,8 @@ defmodule Exoforge.Std.Resources do
   defp normalize_type(type) when is_binary(type), do: Exoforge.Atoms.existing(type, type)
   defp normalize_type(type), do: type
 
-  # SQLite stores booleans as 1/0 and older rows as the text "true"/"false"; the resource's declared
-  # columns are the schema this layer already has, so reads decode them here.
+  # Legacy or string-encoded boolean values may arrive as 1/0 or "true"/"false"; the resource's
+  # declared columns are the schema this layer already has, so reads decode them here.
   defp decode_row(res, row) when is_map(row) do
     booleans =
       MapSet.new(

@@ -49,7 +49,7 @@ defmodule Exoforge.Std.PlayerData do
     _ =
       ActionDispatcher.dispatch_internal(:database, :execute, %{
         plugin: :player_data,
-        operation: "CREATE TABLE IF NOT EXISTS player_kv (id text, player_id text, key text, value text, updated_at integer)"
+        operation: "CREATE TABLE IF NOT EXISTS player_kv (id text, player_id text, key text, value text, updated_at bigint)"
       })
 
     _ =

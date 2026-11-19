@@ -597,7 +597,7 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
     else
       # ponytail: unsupervised single connection for direct adapter use (tests without the
       # plugin's supervision tree); the tree is the upgrade path.
-      unmanaged_connection(plugin_id, config)
+      unmanaged_connection(plugin_id, schema_name, config)
     end
   end
 
@@ -619,8 +619,15 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
     end
   end
 
-  defp unmanaged_connection(plugin_id, config) do
-    case Postgrex.start_link(connection_opts(target_database(plugin_id, config), config) ++ [pool_size: 1]) do
+  defp unmanaged_connection(plugin_id, schema_name, config) do
+    opts =
+      connection_opts(target_database(plugin_id, config), config)
+      |> Keyword.merge(
+        pool_size: 1,
+        parameters: [search_path: ~s("#{schema_name}", public)]
+      )
+
+    case Postgrex.start_link(opts) do
       {:ok, conn} -> {:ok, {:unmanaged, conn}}
       {:error, reason} -> {:error, {:connection_failed, reason}}
     end

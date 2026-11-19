@@ -1807,7 +1807,7 @@ defmodule Exoforge.Std.Docs.View do
                 <h2 class="text-xl font-semibold text-gray-900 font-mono">[ExoResource] &amp; [ExoColumn]</h2>
                 <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-semibold uppercase tracking-wider">Database Entity</span>
               </div>
-              <p class="text-xs text-gray-500 mt-0.5">Declares typed entity records and columns mapped directly to SQLite / PostgreSQL storage.</p>
+              <p class="text-xs text-gray-500 mt-0.5">Declares typed entity records and columns mapped directly to PostgreSQL storage.</p>
             </div>
           </div>
           <div class="text-[11px] font-mono bg-gray-100 px-3 py-1.5 rounded-xl text-gray-600 self-start sm:self-auto">
@@ -3188,7 +3188,7 @@ defmodule Exoforge.Std.Docs.View do
             // Atomic SQL: Archive top 100 players into hall of fame
             Exo.Database.Execute(@"
                 INSERT INTO hall_of_fame (player_id, final_score, season_number, recorded_at)
-                SELECT player_id, score, 12, datetime('now')
+                SELECT player_id, score, 12, NOW()
                 FROM season_scores
                 ORDER BY score DESC LIMIT 100
             ");
@@ -3229,7 +3229,7 @@ defmodule Exoforge.Std.Docs.View do
 
             // Instantly credit player account
             Exo.Database.Execute(
-                "INSERT INTO player_purchases (player_id, product_id, purchased_at) VALUES ($1, $2, datetime('now'))",
+                "INSERT INTO player_purchases (player_id, product_id, purchased_at) VALUES ($1, $2, NOW())",
                 targetPlayerId, productId
             );
 

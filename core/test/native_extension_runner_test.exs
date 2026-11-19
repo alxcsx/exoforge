@@ -24,11 +24,11 @@ defmodule Exoforge.NativeExtensionRunnerTest do
     defaction health_check(), do: {:ok, %{status: "ok"}}
   end
 
-  defmodule SqliteLldbPlug do
+  defmodule CustomLldbPlug do
     use Exoforge.Extension, provides: [:lldb]
 
     @impl true
-    defaction connection_config(_payload), do: {:ok, %{url: "", pool_size: 1, driver: :sqlite}}
+    defaction connection_config(_payload), do: {:ok, %{url: "", pool_size: 1, driver: :custom_db}}
 
     @impl true
     defaction health_check(), do: {:ok, %{status: "ok"}}
@@ -574,24 +574,24 @@ defmodule Exoforge.NativeExtensionRunnerTest do
     GenServer.stop(pid)
   end
 
-  test "advertises sqlite dialect in host hello when :lldb reports :sqlite", %{manifest: manifest} do
+  test "advertises custom dialect in host hello when :lldb reports :custom_db", %{manifest: manifest} do
     Exoforge.ExtensionRegistry.register(%Manifest{
-      id: :lldb_sqlite_plug,
-      name: "lldb_sqlite_plug",
+      id: :lldb_custom_plug,
+      name: "lldb_custom_plug",
       version: "1.0.0",
-      entry_point: SqliteLldbPlug,
+      entry_point: CustomLldbPlug,
       provides: [:lldb]
     })
 
     on_exit(fn ->
       if Process.whereis(Exoforge.ExtensionRegistry) do
-        Exoforge.ExtensionRegistry.unregister(:lldb_sqlite_plug)
+        Exoforge.ExtensionRegistry.unregister(:lldb_custom_plug)
       end
     end)
 
     pid = start_runner(manifest, write_variant(manifest, @hello_capture_stub))
 
-    assert {:ok, %{"type" => "hello", "dialect" => "sqlite"}} =
+    assert {:ok, %{"type" => "hello", "dialect" => "custom_db"}} =
              GenServer.call(pid, {:execute_action, "received_hello", %{}}, 5_000)
 
     GenServer.stop(pid)

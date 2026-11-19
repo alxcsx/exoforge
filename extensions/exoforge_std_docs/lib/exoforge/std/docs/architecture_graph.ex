@@ -292,7 +292,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
     %{
       id: "storage_adapters",
       title: "Isolated DB Schemas",
-      subtitle: "SQLite / PostgreSQL Engine",
+      subtitle: "PostgreSQL Engine",
       desc: "Strictly isolated schema namespace (e.g. ext_snake_game) preventing cross-extension data leakage.",
       icon: "💾",
       package: "Data & Storage",
@@ -439,7 +439,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       title: "Isolated Schema Database Query",
       actor: "Database Manager (:database)",
       action: "Exo.Database.Put / Typed SQL",
-      summary: "Extension invokes host capability to persist data into its strictly isolated SQLite/PostgreSQL schema.",
+      summary: "Extension invokes host capability to persist data into its strictly isolated PostgreSQL schema.",
       wire_sample: """
       -- Extension-isolated schema query executed via host bridge
       INSERT INTO ext_snake_game.scores (player_id, score, updated_at)

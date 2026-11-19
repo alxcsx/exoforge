@@ -113,8 +113,8 @@ defmodule Exoforge.Std.Database.TestDB do
     url_cfg = parse_url(System.get_env("DATABASE_URL"))
 
     defaults
-    |> Map.merge(pg_env)
     |> Map.merge(url_cfg)
+    |> Map.merge(pg_env)
     |> Map.merge(Enum.into(opts, %{}))
   end
 

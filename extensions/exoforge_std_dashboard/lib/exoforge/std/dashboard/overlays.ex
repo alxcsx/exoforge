@@ -781,7 +781,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   <.icon name="database" class="w-3.5 h-3.5" />
                   <span>Database Engine &amp; Storage Architecture</span>
                 </h4>
-                <p class="text-xs text-gray-500 mt-0.5">Per-extension schema isolation with PostgreSQL &amp; SQLite adapters.</p>
+                <p class="text-xs text-gray-500 mt-0.5">Per-extension schema isolation on PostgreSQL.</p>
               </div>
 
               <div class="space-y-3 bg-gray-50 p-4 rounded-xl border border-gray-200/80">
@@ -791,11 +791,11 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                     <div class="flex items-center gap-2 mt-1">
                       <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
                       <span class="font-semibold text-gray-900 text-xs">
-                        <%= if System.get_env("DATABASE_URL"), do: "PostgreSQL (Production)", else: "SQLite (Local / Embedded)" %>
+                        PostgreSQL
                       </span>
                     </div>
                     <p class="text-[10px] text-gray-500 mt-1">
-                      <%= if System.get_env("DATABASE_URL"), do: "Connected via pg connection pool", else: "Persisted under priv/data/sqlite/" %>
+                      Connected via PostgreSQL connection pool
                     </p>
                   </div>
 
@@ -807,7 +807,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                       </span>
                     </div>
                     <p class="text-[10px] text-gray-500 mt-1">
-                      Each extension interacts strictly with its dedicated schema or file.
+                      Each extension interacts strictly with its dedicated schema.
                     </p>
                   </div>
                 </div>
@@ -818,7 +818,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                     <div class="p-2 bg-gray-50 rounded border border-gray-100">
                       <span class="text-gray-400 text-[10px] block">Driver</span>
                       <span class="font-mono font-semibold text-gray-700">
-                        <%= if System.get_env("DATABASE_URL"), do: "Postgres", else: "Sqlite" %>
+                        Postgres
                       </span>
                     </div>
                     <div class="p-2 bg-gray-50 rounded border border-gray-100">

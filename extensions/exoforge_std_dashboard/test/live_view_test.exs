@@ -31,7 +31,7 @@ defmodule Exoforge.DashboardLiveViewTest do
     ExtensionRegistry.initialize_ets()
 
     unless Process.whereis(DbManager) do
-      start_supervised!({DbManager, [driver: :sqlite]})
+      start_supervised!(DbManager)
     end
 
     unless Process.whereis(EventDispatcher.registry_name()) do

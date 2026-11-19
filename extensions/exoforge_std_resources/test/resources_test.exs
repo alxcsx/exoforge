@@ -57,8 +57,8 @@ defmodule Exoforge.Std.ResourcesTest do
     end
   end
 
-  # SQLite has no boolean type: exqlite binds `true` as the text "true", and a `DEFAULT false`
-  # column holds the integer 0. Reads decode by the declared column type.
+  # Typed boolean columns and SQL defaults (including escaped quotes in text defaults)
+  # decode by their declared column types.
   defmodule TogglesContract do
     import Exoforge.Contracts.Service
 
@@ -119,7 +119,7 @@ defmodule Exoforge.Std.ResourcesTest do
     Exoforge.ExtensionCase.start_kernel()
 
     unless Process.whereis(DbManager) do
-      start_supervised!({DbManager, [driver: :sqlite]})
+      start_supervised!(DbManager)
     end
 
     Exoforge.ExtensionCase.register_database(Exoforge.Std.Database)
@@ -156,7 +156,7 @@ defmodule Exoforge.Std.ResourcesTest do
 
     Resources.run_migrations()
 
-    # One SQLite file for the whole suite, so a row written by one test is visible to the next: the
+    # One throwaway database for the whole suite, so a row written by one test is visible to the next: the
     # test that asserts `total: 3` saw four whenever the upsert test ran first, which is a coin flip
     # on the seed. Each test starts from an empty table instead.
     dispatch(:clear, %{resource: "widget"})
@@ -247,13 +247,13 @@ defmodule Exoforge.Std.ResourcesTest do
     assert Enum.find(rows, &(&1["id"] == "kv"))["tags"] == ["a", "b"]
   end
 
-  test "booleans stored as SQLite text or left at a SQL default still read back as booleans" do
-    # Rows written before the fix hold the text "true"; a bare `DEFAULT false` holds the integer 0.
+  test "boolean columns and SQL defaults read back with their declared types" do
+    # Native boolean columns bind Elixir booleans directly; omitted columns pick up SQL defaults.
     assert {:ok, _} =
              Exoforge.Std.Database.execute(
                :toggles_plugin,
                "INSERT INTO toggles (id, color_blind) VALUES ($1, $2)",
-               ["bool_text", "true"]
+               ["bool_text", true]
              )
 
     assert {:ok, _} =
@@ -436,11 +436,25 @@ defmodule Exoforge.Std.ResourcesTest do
     {:ok, %{rows: rows}} =
       ActionDispatcher.dispatch_internal(:database, :execute, %{
         plugin: :tiers_plugin,
-        operation: "SELECT sql FROM sqlite_master WHERE name = 'tiers'"
+        operation: """
+        SELECT pg_get_constraintdef(c.oid) AS def
+        FROM pg_constraint c
+        JOIN pg_class t ON t.oid = c.conrelid
+        JOIN pg_namespace n ON n.oid = t.relnamespace
+        WHERE n.nspname = current_schema() AND t.relname = 'tiers' AND c.contype = 'c'
+        """
       })
 
-    assert [%{"sql" => sql}] = rows
-    assert sql =~ "CHECK (level IN ('bronze', 'silver'))"
+    assert [%{"def" => def_sql}] = rows
+    assert def_sql =~ "bronze"
+    assert def_sql =~ "silver"
+
+    assert {:error, {:postgres_error, _}} =
+             ActionDispatcher.dispatch_internal(:database, :execute, %{
+               plugin: :tiers_plugin,
+               operation: "INSERT INTO tiers (id, level) VALUES ($1, $2)",
+               arguments: ["bad_tier", "gold"]
+             })
   end
 
   test "rejects attributes outside the resource schema" do
@@ -665,7 +679,7 @@ defmodule Exoforge.Std.ResourcesTest do
     assert {:ok, %{rows: []}} =
              Exoforge.Std.Database.execute(
                :dup_ext,
-               "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'dup_items'"
+               "SELECT tablename FROM pg_tables WHERE schemaname = current_schema() AND tablename = 'dup_items'"
              )
   end
 
@@ -700,7 +714,7 @@ defmodule Exoforge.Std.ResourcesTest do
     assert {:ok, %{rows: []}} =
              Exoforge.Std.Database.execute(
                :bad_pk_ext,
-               "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'bad_pks'"
+               "SELECT tablename FROM pg_tables WHERE schemaname = current_schema() AND tablename = 'bad_pks'"
              )
   end
 
@@ -788,7 +802,7 @@ defmodule Exoforge.Std.ResourcesTest do
     assert {:ok, %{rows: []}} =
              Exoforge.Std.Database.execute(
                :multi_res_ext,
-               "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'first_valid'"
+               "SELECT tablename FROM pg_tables WHERE schemaname = current_schema() AND tablename = 'first_valid'"
              )
   end
 

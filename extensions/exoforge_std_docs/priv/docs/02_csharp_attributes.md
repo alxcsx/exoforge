@@ -204,7 +204,7 @@ ExoServices.PlayerData.OnPlayerCreated += evt => Debug.Log(evt.PlayerId);
 
 **Source / Provider:** Database & Resource Store Extensions (`exoforge_std_database`, `exoforge_std_resources`)
 
-Declares a typed entity record mapped directly to SQLite / PostgreSQL storage. The Roslyn generator extracts typed columns, indexes, and primary keys to produce database tables without manual migration files.
+Declares a typed entity record mapped directly to PostgreSQL storage. The Roslyn generator extracts typed columns, indexes, and primary keys to produce database tables without manual migration files.
 
 ### [ExoResource] Parameters
 

@@ -1,7 +1,7 @@
 defmodule Exoforge.Std.Database.Manager do
   @moduledoc """
   Core mediator and lifecycle manager for Exoforge multi-tenant database access.
-  Acts as the middleground between database backends (PostgreSQL, SQLite) and all plugins.
+  Acts as the middleground between PostgreSQL and all plugins.
   Guarantees that each plugin operates exclusively within its own isolated database/schema.
   """
   use GenServer
@@ -9,7 +9,6 @@ defmodule Exoforge.Std.Database.Manager do
 
   alias Exoforge.Std.Database
   alias Exoforge.Std.Database.Adapters.Postgres
-  alias Exoforge.Std.Database.Adapters.Sqlite
 
   @name __MODULE__
 
@@ -183,99 +182,62 @@ defmodule Exoforge.Std.Database.Manager do
   end
 
   defp resolve_config(opts) do
-    app_config = Application.get_env(:exoforge, :database, [])
-    url = System.get_env("DATABASE_URL") || Keyword.get(app_config, :url)
+    app_config = Application.get_env(:exoforge, :database, []) |> Enum.into(%{})
 
-    parsed_url = if url, do: parse_database_url(url), else: %{}
+    env_url =
+      case System.get_env("DATABASE_URL") do
+        val when is_binary(val) and val != "" -> val
+        _ -> nil
+      end
+
+    url = env_url || Map.get(app_config, :url)
+    parsed_url = if is_binary(url) and url != "", do: parse_database_url(url), else: %{}
 
     %{}
-    |> Map.merge(Enum.into(app_config, %{}))
+    |> Map.merge(app_config)
     |> Map.merge(parsed_url)
+    |> Map.merge(pg_env_config())
+    |> Map.merge(test_pg_config())
     |> Map.merge(Enum.into(opts, %{}))
-    |> Map.put_new_lazy(:data_dir, &default_data_dir/0)
   end
 
-  # Tests get a fresh SQLite database per Manager instance so cases stay isolated; everything else
-  # persists under priv/data/sqlite, unless EXOFORGE_DATA_DIR says otherwise.
-  #
-  # That override is what lets a server run against a throwaway database: the integration tests start
-  # one, and without it they wrote every account, token and score they made into the developer's own
-  # database - 83 players and 186 tokens after a few runs, indistinguishable from real ones.
-  defp default_data_dir do
-    cond do
-      dir = System.get_env("EXOFORGE_DATA_DIR") ->
-        dir
+  defp pg_env_config do
+    %{}
+    |> maybe_put_env(:host, "PGHOST")
+    |> maybe_put_port_env(:port, "PGPORT")
+    |> maybe_put_env(:username, "PGUSER")
+    |> maybe_put_env(:password, "PGPASSWORD")
+    |> maybe_put_env(:database, "PGDATABASE")
+  end
 
-      # unique_integer restarts with every VM, so it named the same directory run after run (and
-      # across checkouts), and a later run inherited an earlier run's tables. Random, and removed.
-      function_exported?(Mix, :env, 0) and Mix.env() == :test ->
-        suffix = :crypto.strong_rand_bytes(9) |> Base.url_encode64(padding: false)
-        dir = Path.join(System.tmp_dir!(), "exoforge_test_" <> suffix)
-        System.at_exit(fn _ -> File.rm_rf(dir) end)
-        dir
-
-      true ->
-        Path.join([File.cwd!(), "priv", "data", "sqlite"])
+  defp maybe_put_env(acc, key, env_name) do
+    case System.get_env(env_name) do
+      val when is_binary(val) and val != "" -> Map.put(acc, key, val)
+      _ -> acc
     end
   end
 
-  defp detect_adapter(config) do
-    force_driver = Map.get(config, :driver)
-
-    cond do
-      force_driver == :postgres ->
-        Postgres
-
-      force_driver == :sqlite ->
-        Sqlite
-
-      function_exported?(Mix, :env, 0) and Mix.env() == :test ->
-        Sqlite
-
-      Map.has_key?(config, :host) or System.get_env("DATABASE_URL") != nil ->
-        # Verify if Postgres is reachable
-        case Postgres.health_check(config) do
-          {:ok, _} ->
-            Postgres
-
-          {:error, _reason} ->
-            Logger.warning("[Database] PostgreSQL not reachable at configured host. Using the local SQLite adapter.")
-
-            Sqlite
+  defp maybe_put_port_env(acc, key, env_name) do
+    case System.get_env(env_name) do
+      val when is_binary(val) and val != "" ->
+        case Integer.parse(val) do
+          {port, ""} -> Map.put(acc, key, port)
+          _ -> acc
         end
 
-      true ->
-        if sqlite_fallback_allowed?(config) do
-          Logger.warning(
-            "[Database] No DATABASE_URL configured. Using the local SQLite adapter " <>
-              "(data persists under priv/data/sqlite). Set DATABASE_URL for a production database."
-          )
-
-          Sqlite
-        else
-          raise """
-          No DATABASE_URL configured and the SQLite fallback is not permitted in production.
-
-          Set DATABASE_URL (or :database, :driver) to point at a real database, or set
-          EXOFORGE_ALLOW_SQLITE_FALLBACK=true to explicitly opt in to a local SQLite file.
-          """
-        end
+      _ ->
+        acc
     end
   end
 
-  # SQLite is the dev/test default. In production — including any release build,
-  # where Mix is unavailable — it must be an explicit choice, never a silent fallback.
-  defp sqlite_fallback_allowed?(config) do
-    case Map.get(config, :fallback_to_sqlite) do
-      true -> true
-      false -> false
-      nil -> not prod_build?() or System.get_env("EXOFORGE_ALLOW_SQLITE_FALLBACK") in ["1", "true", "yes"]
+  defp test_pg_config do
+    case Application.get_env(:exoforge, :test_pg_config) do
+      nil -> %{}
+      cfg -> Enum.into(cfg, %{})
     end
   end
 
-  defp prod_build? do
-    if function_exported?(Mix, :env, 0), do: Mix.env() == :prod, else: true
-  end
+  defp detect_adapter(config), do: Map.get(config, :adapter, Postgres)
 
   defp parse_database_url(url) when is_binary(url) do
     uri = URI.parse(url)
@@ -294,6 +256,4 @@ defmodule Exoforge.Std.Database.Manager do
       database: db
     }
   end
-
-  defp parse_database_url(_), do: %{}
 end

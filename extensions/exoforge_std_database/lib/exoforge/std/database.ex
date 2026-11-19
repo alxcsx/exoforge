@@ -5,10 +5,9 @@ defmodule Exoforge.Std.Database do
   Acts as the middleground between PostgreSQL and all other extensions,
   ensuring complete per-extension multi-tenant isolation.
 
-  There is no cross-extension SQL. Each extension's tables live in its own schema (PostgreSQL) or
-  its own file (SQLite), so a query sees only the caller's own tables; a table it cannot see comes
-  back with a hint pointing at the owning extension's action (for example a `get_many`) or a
-  generated typed stub.
+  There is no cross-extension SQL. Each extension's tables live in its own PostgreSQL schema, so a
+  query sees only the caller's own tables; a table it cannot see comes back with a hint pointing at
+  the owning extension's action (for example a `get_many`) or a generated typed stub.
   """
   use Exoforge.Extension, provides: [:database, :lldb]
 
@@ -28,10 +27,10 @@ defmodule Exoforge.Std.Database do
   alias Exoforge.Std.Database.Manager
 
   @doc """
-  Filesystem- and SQL-safe identifier for a plugin, used for database, schema and file names.
+  SQL-safe identifier for a plugin, used for PostgreSQL database and schema names.
 
-  Shared by the manager and both adapters, so a plugin's storage cannot land in a differently
-  named database depending on which backend is active.
+  Shared by the manager and the Postgres adapter, so a plugin's storage always maps to the
+  same database and schema names.
   """
   def clean_id(plugin_id) when is_binary(plugin_id) do
     plugin_id
@@ -46,8 +45,8 @@ defmodule Exoforge.Std.Database do
   # plugin name, and `to_string/1` on it would raise inside the Manager and take the Manager down.
   def clean_id(_), do: "default"
 
-  # A missing table is the common cross-extension mistake, and the fix is never more SQL: both
-  # adapters append this so the failure explains itself.
+  # A missing table is the common cross-extension mistake, and the fix is never more SQL: the
+  # Postgres adapter appends this so the failure explains itself.
   @cross_extension_hint " Tables are private to each extension; to read another extension's data, call its action (e.g. a get_many) or use a generated typed stub."
 
   @doc "The hint appended when a query's table is missing."

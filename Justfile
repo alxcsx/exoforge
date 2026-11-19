@@ -11,11 +11,11 @@ compose_cmd := `if command -v docker >/dev/null 2>&1 && docker compose version >
 dev: db-up
 	DATABASE_URL="${DATABASE_URL:-postgres://postgres:postgres@127.0.0.1:5432/exoforge_prod}" mix run --no-halt
 
-# Stop the dev server and wipe all dev data (SQLite databases + uploaded extensions)
+# Stop the dev server and wipe all dev data (local runtime data + uploaded extensions)
 dev-reset:
 	-@pkill -f "mix run" 2>/dev/null
 	@find . -type d -path "*/priv/data" -not -path "*/_build/*" -prune -exec rm -rf {} +
-	@echo "Development data cleared — SQLite databases and uploaded extensions are gone."
+	@echo "Development data cleared — local runtime data and uploaded extensions are gone."
 
 # Format all Elixir code
 format:
@@ -149,11 +149,11 @@ build-extensions:
 	echo "[build-extensions] $ext_dir/sample_plugin"
 
 # Run backend in production mode (foreground)
-prod: build-extensions
-	# Local prod-mode run: opt in to SQLite explicitly (real deploys must set DATABASE_URL).
+prod: db-up build-extensions
+	DATABASE_URL="${DATABASE_URL:-postgres://postgres:postgres@127.0.0.1:5432/exoforge_prod}" \
 	SECRET_KEY_BASE="${SECRET_KEY_BASE:-$(mix phx.gen.secret)}" \
 	LIVEVIEW_SIGNING_SALT="${LIVEVIEW_SIGNING_SALT:-exoforge_local_prod_liveview_salt}" \
-	EXOFORGE_ALLOW_SQLITE_FALLBACK=true MIX_ENV=prod mix run --no-halt
+	MIX_ENV=prod mix run --no-halt
 
 # Assemble standalone OTP production release
 release: build-extensions

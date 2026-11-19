@@ -6,7 +6,7 @@ defmodule Exoforge.DatabaseTest do
 
   setup do
     unless Process.whereis(Manager) do
-      start_supervised!({Manager, [driver: :sqlite]})
+      start_supervised!(Manager)
     end
 
     Database.reset!(:auth)
@@ -79,13 +79,14 @@ defmodule Exoforge.DatabaseTest do
     test "a query for another extension's table explains that tables are private" do
       assert {:ok, _} = Database.execute(:auth, "CREATE TABLE users (id text)")
 
-      assert {:error, message} = Database.execute(:player_data, "SELECT * FROM users")
-      assert message =~ "no such table"
+      assert {:error, {:postgres_error, message}} =
+               Database.execute(:player_data, "SELECT * FROM users")
+      assert message =~ "does not exist"
       assert message =~ "get_many"
       assert message =~ "typed stub"
 
       # An error that is not a missing table carries no hint.
-      assert {:error, other} = Database.execute(:auth, "SELECT FROM")
+      assert {:error, {:postgres_error, other}} = Database.execute(:auth, "SELECT FROM")
       refute other =~ "get_many"
     end
   end
@@ -233,9 +234,9 @@ defmodule Exoforge.DatabaseTest do
 
       :ets.insert(table, {:ensures, 0})
 
-      defmodule CountingSqlite do
+      defmodule CountingPostgres do
         @behaviour Exoforge.Std.Database.Adapter
-        alias Exoforge.Std.Database.Adapters.Sqlite
+        alias Exoforge.Std.Database.Adapters.Postgres
 
         @table :adapter_calls
 
@@ -244,19 +245,19 @@ defmodule Exoforge.DatabaseTest do
         @impl true
         def ensure_database(id, config) do
           :ets.update_counter(@table, :ensures, {2, 1}, {:ensures, 0})
-          Sqlite.ensure_database(id, config)
+          Postgres.ensure_database(id, config)
         end
 
         @impl true
-        defdelegate execute(id, q, a, c), to: Sqlite
+        defdelegate execute(id, q, a, c), to: Postgres
         @impl true
-        defdelegate table_columns(id, t, c), to: Sqlite
+        defdelegate table_columns(id, t, c), to: Postgres
         @impl true
-        defdelegate connection_config(id, c), to: Sqlite
+        defdelegate connection_config(id, c), to: Postgres
         @impl true
-        defdelegate health_check(c), to: Sqlite
+        defdelegate health_check(c), to: Postgres
         @impl true
-        defdelegate reset(id, c), to: Sqlite
+        defdelegate reset(id, c), to: Postgres
       end
 
       # Parallel ExUnit modules share one Manager process; whatever happens in this test, they and
@@ -266,7 +267,7 @@ defmodule Exoforge.DatabaseTest do
         case Process.whereis(Manager) do
           pid when is_pid(pid) ->
             try do
-              GenServer.call(pid, {:set_adapter, Exoforge.Std.Database.Adapters.Sqlite})
+              GenServer.call(pid, {:set_adapter, Exoforge.Std.Database.Adapters.Postgres})
             rescue
               _ -> :ok
             end
@@ -276,9 +277,9 @@ defmodule Exoforge.DatabaseTest do
         end
       end)
 
-      Manager.set_adapter(CountingSqlite)
+      Manager.set_adapter(CountingPostgres)
 
-      # A unique plugin id: other tests (and other runs) must not share its database file.
+      # A unique plugin id: other tests (and other runs) must not share its schema.
       plugin = :"counted_#{System.unique_integer([:positive])}"
 
       assert {:ok, _} = Database.execute(plugin, "CREATE TABLE t (id text)")
@@ -287,9 +288,9 @@ defmodule Exoforge.DatabaseTest do
       assert length(rows) == 1
 
       # Three queries, one provision.
-      assert CountingSqlite.ensures() == 1
+      assert CountingPostgres.ensures() == 1
 
-      Manager.set_adapter(Exoforge.Std.Database.Adapters.Sqlite)
+      Manager.set_adapter(Exoforge.Std.Database.Adapters.Postgres)
     end
 
     test "table_columns answers through the adapter's dialect (M33 Fix 9)" do
@@ -311,12 +312,12 @@ defmodule Exoforge.DatabaseTest do
     end
 
     test "an adapter failure is an error tuple, not a Manager crash" do
-      defmodule RaisingSqlite do
+      defmodule RaisingPostgres do
         @behaviour Exoforge.Std.Database.Adapter
-        alias Exoforge.Std.Database.Adapters.Sqlite
+        alias Exoforge.Std.Database.Adapters.Postgres
 
         @impl true
-        def ensure_database(id, config), do: Sqlite.ensure_database(id, config)
+        def ensure_database(id, config), do: Postgres.ensure_database(id, config)
 
         # Postgrex raises DBConnection.ConnectionError when its connection is gone; a raise is the
         # same shape of failure.
@@ -324,22 +325,25 @@ defmodule Exoforge.DatabaseTest do
         def execute(_id, _query, _args, _config), do: raise("connection closed")
 
         @impl true
-        defdelegate table_columns(id, t, c), to: Sqlite
+        defdelegate table_columns(id, t, c), to: Postgres
         @impl true
-        defdelegate connection_config(id, c), to: Sqlite
+        defdelegate connection_config(id, c), to: Postgres
         @impl true
-        defdelegate health_check(c), to: Sqlite
+        defdelegate health_check(c), to: Postgres
         @impl true
-        defdelegate reset(id, c), to: Sqlite
+        defdelegate reset(id, c), to: Postgres
       end
 
       manager = Process.whereis(Manager)
-      Manager.set_adapter(RaisingSqlite)
+      Manager.set_adapter(RaisingPostgres)
 
       on_exit(fn ->
         case Process.whereis(Manager) do
-          pid when is_pid(pid) -> GenServer.call(pid, {:set_adapter, Exoforge.Std.Database.Adapters.Sqlite})
-          _ -> :ok
+          pid when is_pid(pid) ->
+            GenServer.call(pid, {:set_adapter, Exoforge.Std.Database.Adapters.Postgres})
+
+          _ ->
+            :ok
         end
       end)
 
@@ -356,7 +360,7 @@ defmodule Exoforge.DatabaseTest do
       # Same process: it reported the database error instead of dying and restarting.
       assert Process.whereis(Manager) == manager
 
-      Manager.set_adapter(Exoforge.Std.Database.Adapters.Sqlite)
+      Manager.set_adapter(Exoforge.Std.Database.Adapters.Postgres)
       plugin = :"recovered_#{System.unique_integer([:positive])}"
       assert {:ok, _} = Database.execute(plugin, "CREATE TABLE t (id text)")
     end

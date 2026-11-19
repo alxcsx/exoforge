@@ -4,18 +4,9 @@ defmodule Exoforge.Std.Observability.PostgresTest do
   alias Exoforge.Std.Database
   alias Exoforge.Std.Database.Adapters.Postgres
   alias Exoforge.Std.Database.Manager, as: DbManager
+  alias Exoforge.Std.Database.TestDB
   alias Exoforge.Std.Observability
   alias Exoforge.Std.Observability.Events
-
-  @pg_config [
-    driver: :postgres,
-    host: "127.0.0.1",
-    port: 5432,
-    username: "postgres",
-    password: "postgres",
-    database: "exoforge_prod",
-    pool_size: 2
-  ]
 
   @moduletag :postgres
 
@@ -35,7 +26,7 @@ defmodule Exoforge.Std.Observability.PostgresTest do
       if Process.alive?(pid), do: GenServer.stop(pid)
     end
 
-    start_supervised!({DbManager, @pg_config})
+    start_supervised!(DbManager)
     Exoforge.ExtensionCase.register_database(Exoforge.Std.Database)
 
     Exoforge.ExtensionCase.register_extension(Observability,
@@ -56,7 +47,7 @@ defmodule Exoforge.Std.Observability.PostgresTest do
         :ets.delete(:exo_observability_events_schema)
       end
 
-      _ = Postgres.reset(:observability, Map.new(@pg_config))
+      _ = Postgres.reset(:observability, TestDB.config())
     end)
 
     :ok

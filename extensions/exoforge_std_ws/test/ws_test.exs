@@ -66,7 +66,7 @@ defmodule Exoforge.Std.WsTest do
     Exoforge.ExtensionCase.start_kernel()
 
     unless Process.whereis(Exoforge.Std.Database.Manager) do
-      start_supervised!({Exoforge.Std.Database.Manager, [driver: :sqlite]})
+      start_supervised!(Exoforge.Std.Database.Manager)
     end
 
     Exoforge.ExtensionCase.register_database(Exoforge.Std.Database)

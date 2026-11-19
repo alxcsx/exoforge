@@ -34,7 +34,7 @@ defmodule Exoforge.Std.ObservabilityTest do
     Exoforge.ExtensionCase.start_kernel()
 
     unless Process.whereis(DbManager) do
-      start_supervised!({DbManager, [driver: :sqlite]})
+      start_supervised!(DbManager)
     end
 
     Exoforge.ExtensionCase.register_database(Exoforge.Std.Database)

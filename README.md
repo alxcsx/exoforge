@@ -87,7 +87,7 @@ All networking, storage, authentication, and game domains exist as swappable ext
 
 | Extension | Port / Role | Provides | Purpose |
 | :--- | :--- | :--- | :--- |
-| `exoforge_std_database` | Storage | `:database`, `:lldb` | Schema-isolated storage with PostgreSQL and SQLite adapters. |
+| `exoforge_std_database` | Storage | `:database`, `:lldb` | Schema-isolated storage on PostgreSQL (official adapter; database contract remains swappable). |
 | `exoforge_std_auth` | Identity | `:auth` | Session verification, bearer token issuance, and RBAC scope validation. |
 | `exoforge_std_player_data` | Profiles | `:player_data` | Canonical player profile persistence, schemas, and lifecycle events. |
 | `exoforge_std_http` | REST (:4001) | `:http` | Dynamic OpenAPI endpoints generated directly from service contracts. |
@@ -230,7 +230,7 @@ just run-release
 │   └── test/                     # Kernel unit & benchmark tests
 ├── extensions/                   # Standard Elixir Extensions (14 standard services)
 │   ├── exoforge_std_auth/        # Authentication & RBAC scopes
-│   ├── exoforge_std_database/    # PostgreSQL & SQLite storage adapters
+│   ├── exoforge_std_database/    # PostgreSQL storage adapter
 │   ├── exoforge_std_player_data/ # Player profile management
 │   ├── exoforge_std_http/        # REST ingress & OpenAPI reflection
 │   ├── exoforge_std_ws/          # WebSocket JSON ingress

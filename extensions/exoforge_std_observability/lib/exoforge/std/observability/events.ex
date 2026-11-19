@@ -4,8 +4,8 @@ defmodule Exoforge.Std.Observability.Events do
   and the other surfaces read through `observability.events`.
 
   Ingest is batched: the producer buffers events and flushes them in one multi-row INSERT every
-  250 ms or eighty rows (SQLite's bind limit is 999 parameters). Each flush also bumps hourly
-  rollups, so "events per hour" survives the raw rows being archived or deleted.
+  250 ms or eighty rows. Each flush also bumps hourly rollups, so "events per hour" survives the
+  raw rows being archived or deleted.
 
   Retention is by day: a daily maintenance pass exports every day older than
   `EXOFORGE_EVENT_HOT_DAYS` (default 30) to `events-YYYY-MM-DD.ndjson.gz` under

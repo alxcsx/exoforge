@@ -24,8 +24,7 @@ defmodule Exoforge.Drivers.Runtime.ExtensionProtocol do
   does not declare it is never sent the frame, so protocol 1 remains compatible in both
   directions.
 
-  The host `hello` frame also carries an optional `dialect` (`"postgres"` or `"sqlite"`, omitted
-  when unknown) so native extensions can read the active database backend without guessing.
+  The host `hello` frame also carries an optional `dialect` (e.g. `"postgres"` for the official database extension, or the engine identifier reported by a swapped-in database extension; omitted when unknown) so native extensions can read the active database backend without guessing.
   """
 
   @protocol 1
@@ -69,10 +68,18 @@ defmodule Exoforge.Drivers.Runtime.ExtensionProtocol do
     |> Jason.encode!()
   end
 
-  defp normalize_dialect(:postgres), do: "postgres"
-  defp normalize_dialect("postgres"), do: "postgres"
-  defp normalize_dialect(:sqlite), do: "sqlite"
-  defp normalize_dialect("sqlite"), do: "sqlite"
+  defp normalize_dialect(nil), do: nil
+  defp normalize_dialect(d) when is_boolean(d), do: nil
+  defp normalize_dialect(:unknown), do: nil
+
+  defp normalize_dialect(d) when is_atom(d) or is_binary(d) do
+    normalized = d |> to_string() |> String.trim() |> String.downcase()
+
+    if normalized != "unknown" and Regex.match?(~r/^[a-z][a-z0-9_-]*$/, normalized) do
+      normalized
+    end
+  end
+
   defp normalize_dialect(_), do: nil
 
   @doc """

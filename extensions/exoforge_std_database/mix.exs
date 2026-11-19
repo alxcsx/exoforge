@@ -20,8 +20,7 @@ defmodule Exoforge.Std.Database.MixProject do
   defp deps do
     [
       {:exoforge_core, path: "../../core"},
-      {:postgrex, ">= 0.0.0"},
-      {:exqlite, "~> 0.42"}
+      {:postgrex, ">= 0.0.0"}
     ]
   end
 end

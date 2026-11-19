@@ -26,19 +26,19 @@ defmodule Exoforge.Drivers.Runtime.ExtensionProtocolTest do
              }
     end
 
-    for dialect <- [:sqlite, "sqlite"] do
+    for dialect <- [:custom_db, "custom_db"] do
       assert Jason.decode!(ExtensionProtocol.hello_frame(dialect: dialect)) == %{
                "type" => "hello",
                "protocol" => 1,
                "host" => "exoforge",
                "capabilities" => ["action_result", "host_call", "host_log", "lifecycle_result"],
-               "dialect" => "sqlite"
+               "dialect" => "custom_db"
              }
     end
   end
 
-  test "the host hello omits dialect when nil or unrecognized" do
-    for dialect <- [nil, :unknown, :other] do
+  test "the host hello omits dialect when nil, unknown, or invalid" do
+    for dialect <- [nil, :unknown, "unknown", "", "   ", true, 123, "bad dialect!"] do
       decoded = Jason.decode!(ExtensionProtocol.hello_frame(dialect: dialect))
       refute Map.has_key?(decoded, "dialect")
       assert decoded["protocol"] == 1
