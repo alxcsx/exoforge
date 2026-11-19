@@ -121,6 +121,42 @@ public class ManagementTests : IDisposable
         File.WriteAllText(Path.Combine(dir, "manifest.json"), json);
     }
 
+    /// <summary>
+    /// What the build runs: stubs for the declared dependencies, from the manifests beside the
+    /// extension, written under its obj/ and nowhere in src/.
+    /// </summary>
+    [Fact]
+    public async System.Threading.Tasks.Task DependencyStubs_Come_From_Sibling_Manifests_Into_Obj()
+    {
+        WriteManifest(_tempDir, "loja", """
+        {"id":"loja","version":"1.0.0","type":"native","services":[{"name":"loja",
+          "actions":[{"name":"comprar","params":[{"name":"id","type":"string"}],"returns":{}}]}]}
+        """);
+        WriteManifest(_tempDir, "caller", """{"id":"caller","version":"1.0.0","type":"native","dependencies":["loja"]}""");
+        string extensionDir = Path.Combine(_tempDir, "caller");
+
+        var (output, missing) = await ExoDeployer.BesideExtension(extensionDir).GenerateDependencyStubsAsync(extensionDir);
+
+        Assert.Empty(missing);
+        Assert.Equal(ExoDeployer.StubsPath(extensionDir), output);
+        Assert.Contains("class LojaServiceClient", File.ReadAllText(output!));
+        Assert.StartsWith(Path.Combine(extensionDir, "obj") + Path.DirectorySeparatorChar, output);
+        Assert.False(Directory.Exists(Path.Combine(extensionDir, "src")));
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task DependencyStubs_Name_What_No_Source_Has_And_Write_Nothing()
+    {
+        WriteManifest(_tempDir, "caller", """{"id":"caller","version":"1.0.0","type":"native","dependencies":["ghost"]}""");
+        string extensionDir = Path.Combine(_tempDir, "caller");
+
+        var (output, missing) = await ExoDeployer.BesideExtension(extensionDir).GenerateDependencyStubsAsync(extensionDir);
+
+        Assert.Null(output);
+        Assert.Equal(new[] { "ghost" }, missing);
+        Assert.False(File.Exists(ExoDeployer.StubsPath(extensionDir)));
+    }
+
     [Fact]
     public void CodeGenerator_GenerateToFile_Skips_Write_If_Content_Unchanged()
     {
