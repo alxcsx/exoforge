@@ -23,6 +23,7 @@ public static class HostBridge
         // A new transport is a new host session: what the last host declared does not carry over.
         _hostProtocol = 0;
         _hostCapabilities = null;
+        _databaseDialect = DatabaseDialect.Unknown;
         Handshaken = false;
     }
 
@@ -34,6 +35,7 @@ public static class HostBridge
 
     private static int _hostProtocol;
     private static IReadOnlyList<string>? _hostCapabilities;
+    private static DatabaseDialect _databaseDialect = DatabaseDialect.Unknown;
 
     /// <summary>True once the host's hello has been read.</summary>
     public static bool Handshaken { get; private set; }
@@ -41,11 +43,25 @@ public static class HostBridge
     /// <summary>The host's protocol version, once handshaken; 0 before that.</summary>
     public static int HostProtocol => _hostProtocol;
 
-    internal static void NoteHandshake(int protocol, IReadOnlyList<string> capabilities)
+    /// <summary>The active database dialect declared in the host's hello; <see cref="DatabaseDialect.Unknown"/> before or if omitted.</summary>
+    public static DatabaseDialect DatabaseDialect => _databaseDialect;
+
+    internal static void NoteHandshake(
+        int protocol,
+        IReadOnlyList<string> capabilities,
+        DatabaseDialect dialect = DatabaseDialect.Unknown)
     {
         _hostProtocol = protocol;
         _hostCapabilities = capabilities;
+        _databaseDialect = dialect;
         Handshaken = true;
+    }
+
+    internal static DatabaseDialect ParseDialect(string? raw)
+    {
+        if (string.Equals(raw, "postgres", StringComparison.OrdinalIgnoreCase)) return DatabaseDialect.Postgres;
+        if (string.Equals(raw, "sqlite", StringComparison.OrdinalIgnoreCase)) return DatabaseDialect.Sqlite;
+        return DatabaseDialect.Unknown;
     }
 
     /// <summary>

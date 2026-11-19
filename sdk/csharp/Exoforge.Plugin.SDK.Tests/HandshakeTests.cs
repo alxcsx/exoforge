@@ -74,6 +74,136 @@ public class HandshakeTests
         Assert.Contains("host_call", written);
     }
 
+    [Fact]
+    public void Host_hello_with_postgres_dialect_sets_HostBridge_and_Exo_Database_Dialect()
+    {
+        try
+        {
+            PluginHost.RunInstance(
+                new HandshakeProbe(),
+                Lines("{\"type\":\"hello\",\"protocol\":1,\"host\":\"exoforge\",\"capabilities\":[\"action_result\",\"host_call\",\"host_log\"],\"dialect\":\"postgres\"}"),
+                new MemoryStream(),
+                null);
+
+            Assert.Equal(DatabaseDialect.Postgres, HostBridge.DatabaseDialect);
+            Assert.Equal(DatabaseDialect.Postgres, Exo.Database.Dialect);
+        }
+        finally
+        {
+            HostBridge.UseTransport(null);
+        }
+    }
+
+    [Fact]
+    public void Host_hello_with_sqlite_dialect_sets_HostBridge_and_Exo_Database_Dialect()
+    {
+        try
+        {
+            PluginHost.RunInstance(
+                new HandshakeProbe(),
+                Lines("{\"type\":\"hello\",\"protocol\":1,\"host\":\"exoforge\",\"capabilities\":[\"action_result\",\"host_call\",\"host_log\"],\"dialect\":\"sqlite\"}"),
+                new MemoryStream(),
+                null);
+
+            Assert.Equal(DatabaseDialect.Sqlite, HostBridge.DatabaseDialect);
+            Assert.Equal(DatabaseDialect.Sqlite, Exo.Database.Dialect);
+        }
+        finally
+        {
+            HostBridge.UseTransport(null);
+        }
+    }
+
+    [Fact]
+    public void Host_hello_without_dialect_keeps_DatabaseDialect_Unknown()
+    {
+        try
+        {
+            PluginHost.RunInstance(
+                new HandshakeProbe(),
+                Lines("{\"type\":\"hello\",\"protocol\":1,\"host\":\"exoforge\",\"capabilities\":[\"action_result\",\"host_call\",\"host_log\"]}"),
+                new MemoryStream(),
+                null);
+
+            Assert.True(HostBridge.Handshaken);
+            Assert.Equal(DatabaseDialect.Unknown, HostBridge.DatabaseDialect);
+            Assert.Equal(DatabaseDialect.Unknown, Exo.Database.Dialect);
+        }
+        finally
+        {
+            HostBridge.UseTransport(null);
+        }
+    }
+
+    [Fact]
+    public void Host_hello_with_unrecognized_dialect_keeps_Unknown_without_failing_handshake()
+    {
+        var output = new MemoryStream();
+
+        try
+        {
+            PluginHost.RunInstance(
+                new HandshakeProbe(),
+                Lines(
+                    "{\"type\":\"hello\",\"protocol\":1,\"host\":\"exoforge\",\"capabilities\":[\"action_result\",\"host_call\",\"host_log\"],\"dialect\":\"oracle\"}",
+                    "{\"type\":\"action\",\"id\":1,\"action\":\"ping\",\"payload\":{}}"),
+                output,
+                null);
+
+            Assert.True(HostBridge.Handshaken);
+            Assert.Equal(DatabaseDialect.Unknown, HostBridge.DatabaseDialect);
+            Assert.Equal(DatabaseDialect.Unknown, Exo.Database.Dialect);
+
+            string written = Encoding.UTF8.GetString(output.ToArray());
+            Assert.Contains("\"type\":\"hello\"", written);
+            Assert.Contains("\"status\":\"ok\",\"data\":42", written);
+        }
+        finally
+        {
+            HostBridge.UseTransport(null);
+        }
+    }
+
+    [Fact]
+    public void Starting_a_new_session_without_dialect_resets_Exo_Database_Dialect_to_Unknown()
+    {
+        try
+        {
+            PluginHost.RunInstance(
+                new HandshakeProbe(),
+                Lines("{\"type\":\"hello\",\"protocol\":1,\"host\":\"exoforge\",\"capabilities\":[\"action_result\",\"host_call\",\"host_log\"],\"dialect\":\"postgres\"}"),
+                new MemoryStream(),
+                null);
+
+            Assert.Equal(DatabaseDialect.Postgres, HostBridge.DatabaseDialect);
+            Assert.Equal(DatabaseDialect.Postgres, Exo.Database.Dialect);
+
+            PluginHost.RunInstance(
+                new HandshakeProbe(),
+                Lines("{\"type\":\"hello\",\"protocol\":1,\"host\":\"exoforge\",\"capabilities\":[\"action_result\",\"host_call\",\"host_log\"]}"),
+                new MemoryStream(),
+                null);
+
+            Assert.Equal(DatabaseDialect.Unknown, HostBridge.DatabaseDialect);
+            Assert.Equal(DatabaseDialect.Unknown, Exo.Database.Dialect);
+        }
+        finally
+        {
+            HostBridge.UseTransport(null);
+        }
+    }
+
+    [Fact]
+    public void InMemoryDatabase_exposes_its_own_Dialect_in_test_host()
+    {
+        using var test = ExoTestHost.Start("dialect_test");
+
+        Assert.Equal(DatabaseDialect.Unknown, Exo.Database.Dialect);
+
+        test.Database.Dialect = DatabaseDialect.Sqlite;
+        Assert.Equal(DatabaseDialect.Sqlite, Exo.Database.Dialect);
+    }
+
     private static StringReader Lines(params string[] lines) =>
         new(string.Join("\n", lines) + "\n");
 }

@@ -15,6 +15,36 @@ defmodule Exoforge.Drivers.Runtime.ExtensionProtocolTest do
            }
   end
 
+  test "the host hello advertises a known database dialect when provided" do
+    for dialect <- [:postgres, "postgres"] do
+      assert Jason.decode!(ExtensionProtocol.hello_frame(dialect: dialect)) == %{
+               "type" => "hello",
+               "protocol" => 1,
+               "host" => "exoforge",
+               "capabilities" => ["action_result", "host_call", "host_log", "lifecycle_result"],
+               "dialect" => "postgres"
+             }
+    end
+
+    for dialect <- [:sqlite, "sqlite"] do
+      assert Jason.decode!(ExtensionProtocol.hello_frame(dialect: dialect)) == %{
+               "type" => "hello",
+               "protocol" => 1,
+               "host" => "exoforge",
+               "capabilities" => ["action_result", "host_call", "host_log", "lifecycle_result"],
+               "dialect" => "sqlite"
+             }
+    end
+  end
+
+  test "the host hello omits dialect when nil or unrecognized" do
+    for dialect <- [nil, :unknown, :other] do
+      decoded = Jason.decode!(ExtensionProtocol.hello_frame(dialect: dialect))
+      refute Map.has_key?(decoded, "dialect")
+      assert decoded["protocol"] == 1
+    end
+  end
+
   test "accepts an extension that speaks the protocol and handles what the host sends" do
     assert {:ok, %{protocol: 1, capabilities: ["action", "event", "host_call_result"], lifecycle: false}} =
              ExtensionProtocol.accept_hello(%{
