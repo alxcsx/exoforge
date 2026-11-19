@@ -303,4 +303,18 @@ public static class HostBridge
     /// <summary>Deletes a record without blocking the caller's thread.</summary>
     public static Task<bool> DbDeleteAsync(string table, string key, CancellationToken cancellationToken = default) =>
         _transport?.DbDeleteAsync(table ?? "", key ?? "", cancellationToken) ?? Task.FromResult(false);
+
+    /// <summary>
+    /// Executes an ordered batch of write operations atomically in a single transaction on the host.
+    /// </summary>
+    public static bool DbBatch(object operations)
+    {
+        return _transport?.DbBatch(ToJson(operations)) ?? false;
+    }
+
+    /// <summary>
+    /// Executes an ordered batch of write operations atomically without blocking the caller's thread.
+    /// </summary>
+    public static Task<bool> DbBatchAsync(object operations, CancellationToken cancellationToken = default) =>
+        _transport?.DbBatchAsync(ToJson(operations), cancellationToken) ?? Task.FromResult(false);
 }

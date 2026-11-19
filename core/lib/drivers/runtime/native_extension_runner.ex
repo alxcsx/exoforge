@@ -664,6 +664,72 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
     end
   end
 
+  defp run_host_call("db_batch", args, manifest) do
+    if not Manifest.allows_service?(manifest, "database") do
+      Logger.warning("[NativeExtensionRunner] #{manifest.id} called undeclared service database")
+
+      %{
+        ok: false,
+        error: %{
+          code: "service_not_declared",
+          message: "Service 'database' is not declared in this extension's dependencies."
+        }
+      }
+    else
+      operations = extract_batch_operations(args)
+
+      if not is_list(operations) do
+        %{
+          ok: false,
+          error: %{
+            code: "invalid_batch",
+            message: "db_batch requires an 'operations' list."
+          }
+        }
+      else
+        case db_batch(manifest, operations) do
+          {:ok, _} ->
+            true
+
+          {:error, %{index: idx} = err} when is_integer(idx) ->
+            reason = Map.get(err, :reason)
+            code = Map.get(err, :code) || batch_error_code(reason)
+            message = Map.get(err, :message) || format_batch_error(reason)
+
+            %{
+              ok: false,
+              index: idx,
+              error: %{
+                code: to_string(code),
+                index: idx,
+                message: to_string(message)
+              }
+            }
+
+          {:error, {:batch_error, idx, reason}} when is_integer(idx) ->
+            %{
+              ok: false,
+              index: idx,
+              error: %{
+                code: batch_error_code(reason),
+                index: idx,
+                message: format_batch_error(reason)
+              }
+            }
+
+          {:error, reason} ->
+            %{
+              ok: false,
+              error: %{
+                code: batch_error_code(reason),
+                message: format_batch_error(reason)
+              }
+            }
+        end
+      end
+    end
+  end
+
   defp run_host_call("call_action", args, manifest) do
     service = Map.get(args, "service", "")
     action = Map.get(args, "action", "")
@@ -769,6 +835,54 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
       other -> {:error, other}
     end
   end
+
+  defp db_batch(manifest, operations) when is_list(operations) do
+    case ActionDispatcher.dispatch_internal(:database, :execute, %{
+           plugin: manifest.id,
+           extension: manifest.id,
+           operation: %{action: :batch, operations: operations}
+         }) do
+      {:ok, res} -> {:ok, res}
+      {:error, reason} -> {:error, reason}
+      other -> {:error, other}
+    end
+  end
+
+  defp extract_batch_operations(ops) when is_list(ops), do: ops
+
+  defp extract_batch_operations(args) when is_map(args) do
+    cond do
+      Map.has_key?(args, "operations") -> Map.get(args, "operations")
+      Map.has_key?(args, :operations) -> Map.get(args, :operations)
+      true -> nil
+    end
+  end
+
+  defp extract_batch_operations(_), do: nil
+
+  defp batch_error_code({:postgres_error, _}), do: "postgres_error"
+  defp batch_error_code({:invalid_value, _, _}), do: "invalid_value"
+  defp batch_error_code({:missing_resource_table, _}), do: "missing_resource_table"
+  defp batch_error_code({:unsupported_batch_action, _}), do: "unsupported_batch_action"
+  defp batch_error_code(:positional_args_must_be_list), do: "invalid_arguments"
+  defp batch_error_code({code, _}) when is_atom(code) or is_binary(code), do: to_string(code)
+  defp batch_error_code(code) when is_atom(code) and not is_nil(code), do: to_string(code)
+  defp batch_error_code(_), do: "batch_failed"
+
+  defp format_batch_error({:postgres_error, msg}) when is_binary(msg), do: msg
+
+  defp format_batch_error({:invalid_value, col, type}),
+    do: "Invalid value for column '#{col}' (expected #{type})"
+
+  defp format_batch_error({:missing_resource_table, tbl}),
+    do: "Missing declared resource table '#{tbl}'"
+
+  defp format_batch_error({:unsupported_batch_action, action}),
+    do: "Unsupported batch operation '#{action}'; only execute, put, and delete are allowed"
+
+  defp format_batch_error({_, msg}) when is_binary(msg), do: msg
+  defp format_batch_error(msg) when is_binary(msg), do: msg
+  defp format_batch_error(other), do: inspect(other)
 
   # -- Helpers --
 

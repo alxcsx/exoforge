@@ -55,6 +55,13 @@ public interface IPluginTransport
     Task<bool> DbDeleteAsync(string table, string key, CancellationToken cancellationToken = default) =>
         Task.FromResult(DbDelete(table, key));
 
+    /// <summary>Executes an ordered batch of write operations atomically in a single host transaction.</summary>
+    bool DbBatch(string operationsJson) => false;
+
+    /// <summary>Executes an ordered batch of write operations atomically without blocking the caller's thread.</summary>
+    Task<bool> DbBatchAsync(string operationsJson, CancellationToken cancellationToken = default) =>
+        Task.FromResult(DbBatch(operationsJson));
+
     /// <summary>Reads the host's clock without blocking the caller's thread.</summary>
     Task<long> ClockNowAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult(ClockNow());
@@ -1058,31 +1065,8 @@ public static class PluginHost
 
     private sealed class NativeTransport : IPluginTransport
     {
-        private static void ThrowIfDbError(string table, string? raw)
-        {
-            if (string.IsNullOrEmpty(raw)) return;
-
-            if (raw.StartsWith("{") && raw.Contains("\"ok\":false"))
-            {
-                try
-                {
-                    using var doc = JsonDocument.Parse(raw);
-                    if (doc.RootElement.ValueKind == JsonValueKind.Object &&
-                        doc.RootElement.TryGetProperty("ok", out var okProp) &&
-                        !okProp.GetBoolean())
-                    {
-                        string error = doc.RootElement.TryGetProperty("error", out var errProp)
-                            ? (errProp.ValueKind == JsonValueKind.String ? errProp.GetString()! : errProp.GetRawText())
-                            : raw;
-                        throw new ExoDatabaseException(table, error);
-                    }
-                }
-                catch (JsonException)
-                {
-                    // ignore malformed json
-                }
-            }
-        }
+        private static void ThrowIfDbError(string table, string? raw) =>
+            ExoDatabaseException.ThrowIfError(table, raw);
 
         public bool EmitEvent(string topic, string evt, string payloadJson) =>
             HostCall("emit_event", $"{{\"topic\":{JsonEncode(topic)},\"event\":{JsonEncode(evt)},\"payload\":{payloadJson}}}") != "false";
@@ -1125,6 +1109,17 @@ public static class PluginHost
             if (raw == "false")
             {
                 throw new ExoDatabaseException(table, "Database delete operation failed");
+            }
+            return raw != "false";
+        }
+
+        public bool DbBatch(string operationsJson)
+        {
+            string? raw = HostCall("db_batch", $"{{\"operations\":{operationsJson}}}");
+            ThrowIfDbError("batch", raw);
+            if (raw == "false")
+            {
+                throw new ExoDatabaseException("batch", "Database batch operation failed");
             }
             return raw != "false";
         }
@@ -1194,6 +1189,20 @@ public static class PluginHost
             if (raw == "false")
             {
                 throw new ExoDatabaseException(table, "Database delete operation failed");
+            }
+            return raw != "false";
+        }
+
+        public async Task<bool> DbBatchAsync(string operationsJson, CancellationToken cancellationToken = default)
+        {
+            string? raw = await HostCallAsync(
+                "db_batch",
+                $"{{\"operations\":{operationsJson}}}",
+                cancellationToken).ConfigureAwait(false);
+            ThrowIfDbError("batch", raw);
+            if (raw == "false")
+            {
+                throw new ExoDatabaseException("batch", "Database batch operation failed");
             }
             return raw != "false";
         }

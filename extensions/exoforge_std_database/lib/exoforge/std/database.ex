@@ -170,6 +170,11 @@ defmodule Exoforge.Std.Database do
     end
   end
 
+  @doc "Executes an ordered list of write operations atomically in a single transaction."
+  def batch(plugin, operations) when is_list(operations) do
+    Manager.execute(plugin, %{action: :batch, operations: operations})
+  end
+
   ## ---- PRIVATE HELPERS ----
 
   defp fetch_any(map, keys, default) when is_map(map) do

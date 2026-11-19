@@ -34,6 +34,39 @@ defmodule Exoforge.NativeExtensionRunnerTest do
     defaction health_check(), do: {:ok, %{status: "ok"}}
   end
 
+  defmodule BatchDatabasePlug do
+    use Exoforge.Extension, provides: [:database]
+
+    @impl true
+    defaction execute(payload) do
+      if pid = Application.get_env(:exoforge, :batch_db_test_pid) do
+        send(pid, {:db_execute, payload})
+      end
+
+      op = payload[:operation] || payload["operation"]
+      ops = if is_map(op), do: op[:operations] || op["operations"] || [], else: []
+
+      case Enum.find_index(ops, fn item ->
+             sql = item[:sql] || item["sql"] || ""
+             String.contains?(to_string(sql), "broken")
+           end) do
+        nil ->
+          {:ok, %{rows: [], num_rows: length(ops)}}
+
+        idx ->
+          {:error,
+           %{
+             index: idx,
+             reason: {:postgres_error, "relation \"broken\" does not exist"},
+             message: "relation \"broken\" does not exist"
+           }}
+      end
+    end
+
+    @impl true
+    defaction table_columns(_payload), do: {:ok, %{columns: []}}
+  end
+
   # A stub "plugin": any executable that speaks the JSON line protocol works, which is the
   # point of the runtime — no C# toolchain needed to exercise the host side.
   @stub """
@@ -77,6 +110,14 @@ defmodule Exoforge.NativeExtensionRunnerTest do
         printf '{"type":"action_result","id":%s,"status":"ok","data":%s}\\n' "$id" "$reply" ;;
       *'"action":"call_failing"'*)
         printf '{"type":"host_call","id":1,"op":"call_action","args":{"service":"wallet","action":"debit","payload":{}}}\\n'
+        IFS= read -r reply
+        printf '{"type":"action_result","id":%s,"status":"ok","data":%s}\\n' "$id" "$reply" ;;
+      *'"action":"db_batch_ok"'*)
+        printf '{"type":"host_call","id":1,"op":"db_batch","args":{"plugin":"spoofed_other","operations":[{"action":"put","table":"scores","key":"p1","value":{"score":10}},{"action":"execute","sql":"UPDATE scores SET score = $1 WHERE id = $2","args":[20,"p1"]},{"action":"delete","table":"scores","key":"p2"}]}}\\n'
+        IFS= read -r reply
+        printf '{"type":"action_result","id":%s,"status":"ok","data":%s}\\n' "$id" "$reply" ;;
+      *'"action":"db_batch_fail"'*)
+        printf '{"type":"host_call","id":1,"op":"db_batch","args":{"operations":[{"action":"put","table":"scores","key":"p1","value":{"score":10}},{"action":"execute","sql":"INSERT INTO broken VALUES ($1)","args":["x"]}]}}\\n'
         IFS= read -r reply
         printf '{"type":"action_result","id":%s,"status":"ok","data":%s}\\n' "$id" "$reply" ;;
     esac
@@ -593,6 +634,129 @@ defmodule Exoforge.NativeExtensionRunnerTest do
 
     assert {:ok, %{"type" => "hello", "dialect" => "custom_db"}} =
              GenServer.call(pid, {:execute_action, "received_hello", %{}}, 5_000)
+
+    GenServer.stop(pid)
+  end
+
+  test "db_batch dispatches ordered operations scoped to the caller extension in one round trip", %{
+    manifest: manifest,
+    binary: binary
+  } do
+    Application.put_env(:exoforge, :batch_db_test_pid, self())
+
+    Exoforge.ExtensionRegistry.register(%Manifest{
+      id: :batch_db_plug,
+      name: "batch_db_plug",
+      version: "1.0.0",
+      entry_point: BatchDatabasePlug,
+      provides: [:database]
+    })
+
+    on_exit(fn ->
+      Application.delete_env(:exoforge, :batch_db_test_pid)
+
+      if Process.whereis(Exoforge.ExtensionRegistry) do
+        Exoforge.ExtensionRegistry.unregister(:batch_db_plug)
+      end
+    end)
+
+    pid = start_runner(manifest, binary)
+
+    assert {:ok, %{"result" => true}} =
+             GenServer.call(pid, {:execute_action, "db_batch_ok", %{}}, 5_000)
+
+    assert_receive {:db_execute,
+                    %{
+                      plugin: :stub_plugin,
+                      extension: :stub_plugin,
+                      operation: %{
+                        action: :batch,
+                        operations: [
+                          %{"action" => "put", "table" => "scores", "key" => "p1", "value" => %{"score" => 10}},
+                          %{
+                            "action" => "execute",
+                            "sql" => "UPDATE scores SET score = $1 WHERE id = $2",
+                            "args" => [20, "p1"]
+                          },
+                          %{"action" => "delete", "table" => "scores", "key" => "p2"}
+                        ]
+                      }
+                    }}
+
+    GenServer.stop(pid)
+  end
+
+  test "db_batch returns a structured error naming the failing operation index", %{
+    manifest: manifest,
+    binary: binary
+  } do
+    Exoforge.ExtensionRegistry.register(%Manifest{
+      id: :batch_db_plug,
+      name: "batch_db_plug",
+      version: "1.0.0",
+      entry_point: BatchDatabasePlug,
+      provides: [:database]
+    })
+
+    on_exit(fn ->
+      if Process.whereis(Exoforge.ExtensionRegistry) do
+        Exoforge.ExtensionRegistry.unregister(:batch_db_plug)
+      end
+    end)
+
+    pid = start_runner(manifest, binary)
+
+    assert {:ok,
+            %{
+              "result" => %{
+                "ok" => false,
+                "index" => 1,
+                "error" => %{
+                  "code" => "postgres_error",
+                  "index" => 1,
+                  "message" => message
+                }
+              }
+            }} = GenServer.call(pid, {:execute_action, "db_batch_fail", %{}}, 5_000)
+
+    assert message =~ "relation \"broken\" does not exist"
+
+    GenServer.stop(pid)
+  end
+
+  test "db_batch refuses an extension that did not declare the database dependency", %{
+    manifest: manifest,
+    binary: binary
+  } do
+    Application.put_env(:exoforge, :batch_db_test_pid, self())
+
+    Exoforge.ExtensionRegistry.register(%Manifest{
+      id: :batch_db_plug,
+      name: "batch_db_plug",
+      version: "1.0.0",
+      entry_point: BatchDatabasePlug,
+      provides: [:database]
+    })
+
+    on_exit(fn ->
+      Application.delete_env(:exoforge, :batch_db_test_pid)
+
+      if Process.whereis(Exoforge.ExtensionRegistry) do
+        Exoforge.ExtensionRegistry.unregister(:batch_db_plug)
+      end
+    end)
+
+    pid = start_runner(%{manifest | dependencies: []}, binary)
+
+    assert {:ok,
+            %{
+              "result" => %{
+                "ok" => false,
+                "error" => %{"code" => "service_not_declared"}
+              }
+            }} = GenServer.call(pid, {:execute_action, "db_batch_ok", %{}}, 5_000)
+
+    refute_receive {:db_execute, _}
 
     GenServer.stop(pid)
   end

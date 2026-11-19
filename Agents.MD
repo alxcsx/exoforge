@@ -208,7 +208,7 @@ newline-delimited JSON with a `type`:
 | `hello` | extension → host | `protocol`, `extension`, `capabilities` |
 | `action` / `action_result` | host → extension / back | `id`, `action`, `payload` / `status`, `data` or `error` |
 | `event` | host → extension | `event`, `payload` |
-| `host_call` / `host_call_result` | extension → host / back | `id`, `op`, `args` / `result` |
+| `host_call` / `host_call_result` | extension → host / back | `id`, `op` (`emit_event`, `call_action`, `db_get`, `db_all`, `db_put`, `db_delete`, `db_batch`, `log`, `clock_now`), `args` / `result` |
 | `host_log` | extension → host | `level`, `message` |
 | `lifecycle` / `lifecycle_result` | host → extension / back | `id` / `status`, `error` |
 
@@ -259,6 +259,13 @@ Exo.Database.ExecuteSql($"DELETE FROM snake_scores WHERE score < {0}");
 
 // Explicit positional Query<T>/Execute are also available:
 var topPos = Exo.Database.Query<SnakeScoreRecord>("SELECT * FROM snake_scores ORDER BY score DESC LIMIT $1", 10);
+
+// Batched atomic writes in one db_batch stdio round trip (the callback only records Execute, ExecuteSql, Put, Delete; no reads inside):
+Exo.Database.Transaction(tx =>
+{
+    tx.Put("snake_scores", playerId, record);
+    tx.ExecuteSql($"DELETE FROM snake_scores WHERE score < {0}");
+});
 ```
 
 Keep `ExtensionHost.Run<...>()`'s `[DynamicallyAccessedMembers]` annotation intact — that is what keeps the

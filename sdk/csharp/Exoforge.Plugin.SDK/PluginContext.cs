@@ -69,31 +69,8 @@ public class HostDatabase : IDatabase
         PluginId = pluginId;
     }
 
-    private static void CheckDbError(string table, string? json)
-    {
-        if (string.IsNullOrEmpty(json)) return;
-
-        if (json.StartsWith("{") && json.Contains("\"ok\":false"))
-        {
-            try
-            {
-                using var doc = JsonDocument.Parse(json);
-                if (doc.RootElement.ValueKind == JsonValueKind.Object &&
-                    doc.RootElement.TryGetProperty("ok", out var okProp) &&
-                    !okProp.GetBoolean())
-                {
-                    string error = doc.RootElement.TryGetProperty("error", out var errProp)
-                        ? (errProp.ValueKind == JsonValueKind.String ? errProp.GetString()! : errProp.GetRawText())
-                        : json;
-                    throw new ExoDatabaseException(table, error);
-                }
-            }
-            catch (JsonException)
-            {
-                // ignore malformed json
-            }
-        }
-    }
+    private static void CheckDbError(string table, string? json) =>
+        ExoDatabaseException.ThrowIfError(table, json);
 
     public T? Get<T>(string table, string key)
     {
@@ -170,6 +147,67 @@ public class HostDatabase : IDatabase
     {
         RunSql(sql, args, out int affected);
         return affected;
+    }
+
+    public void Transaction(Action<ITransaction> tx)
+    {
+        if (tx == null) throw new ArgumentNullException(nameof(tx));
+        var recorder = new BatchTransactionRecorder();
+        tx(recorder);
+        ExecuteBatch(recorder.Operations);
+    }
+
+    public void ExecuteBatch(IEnumerable<DbBatchOperation> operations)
+    {
+        if (operations == null) throw new ArgumentNullException(nameof(operations));
+
+        var array = new JsonArray();
+        foreach (var op in operations)
+        {
+            if (op == null) throw new ArgumentException("Batch operations cannot contain null elements.", nameof(operations));
+
+            switch (op.Action)
+            {
+                case "execute":
+                    array.Add(new JsonObject
+                    {
+                        ["action"] = "execute",
+                        ["sql"] = op.Sql ?? "",
+                        ["args"] = JsonNode.Parse(PluginJson.Serialize(op.Args ?? Array.Empty<object?>()))
+                    });
+                    break;
+
+                case "put":
+                    array.Add(new JsonObject
+                    {
+                        ["action"] = "put",
+                        ["table"] = op.Table ?? "",
+                        ["key"] = op.Key ?? "",
+                        ["value"] = JsonNode.Parse(op.ValueJson ?? PluginJson.Serialize(op.Value))
+                    });
+                    break;
+
+                case "delete":
+                    array.Add(new JsonObject
+                    {
+                        ["action"] = "delete",
+                        ["table"] = op.Table ?? "",
+                        ["key"] = op.Key ?? ""
+                    });
+                    break;
+
+                default:
+                    throw new InvalidOperationException($"Unsupported batch operation '{op.Action}'.");
+            }
+        }
+
+        if (array.Count == 0) return;
+
+        bool ok = HostBridge.DbBatch(array);
+        if (!ok)
+        {
+            throw new ExoDatabaseException("batch", "Database batch operation failed");
+        }
     }
 
     /// <summary>Runs SQL through the <c>:database</c> service and returns its rows array.</summary>

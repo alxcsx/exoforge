@@ -143,27 +143,191 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
     end
   end
 
+  def execute(plugin_id, %{action: :batch, operations: operations}, _args, config)
+      when is_list(operations) do
+    execute_batch(plugin_id, operations, config)
+  end
+
+  def execute(plugin_id, %{"action" => "batch", "operations" => operations}, _args, config)
+      when is_list(operations) do
+    execute_batch(plugin_id, operations, config)
+  end
+
   def execute(plugin_id, %{action: action} = command, _args, config) do
     schema_name = schema_name(plugin_id, config)
     tbl = to_string(command[:table])
 
-    case real_table_info(plugin_id, schema_name, tbl, config) do
+    with {:ok, {mode, conn}} <- pooled_connection(plugin_id, schema_name, config) do
+      try do
+        execute_kv_on_conn(conn, action, schema_name, tbl, command)
+      after
+        if mode == :unmanaged, do: GenServer.stop(conn)
+      end
+    end
+  end
+
+  defp execute_batch(_plugin_id, [], _config), do: {:ok, %{rows: [], num_rows: 0}}
+
+  defp execute_batch(plugin_id, operations, config) when is_list(operations) do
+    schema_name = schema_name(plugin_id, config)
+
+    with {:ok, {mode, conn}} <- pooled_connection(plugin_id, schema_name, config) do
+      try do
+        case Postgrex.transaction(conn, fn tx_conn ->
+               run_batch_operations(tx_conn, schema_name, operations)
+             end) do
+          {:ok, total_rows} ->
+            {:ok, %{rows: [], num_rows: total_rows}}
+
+          {:error, %{index: _} = err} ->
+            {:error, err}
+
+          {:error, reason} ->
+            {:error, %{index: 0, reason: reason, message: format_batch_reason(reason)}}
+        end
+      after
+        if mode == :unmanaged, do: GenServer.stop(conn)
+      end
+    end
+  end
+
+  defp run_batch_operations(tx_conn, schema_name, operations) do
+    Enum.reduce(Enum.with_index(operations), 0, fn {op, idx}, acc_rows ->
+      case execute_batch_op(tx_conn, schema_name, op) do
+        {:ok, %{num_rows: n}} when is_integer(n) ->
+          acc_rows + n
+
+        {:ok, _} ->
+          acc_rows
+
+        {:error, reason} ->
+          Postgrex.rollback(tx_conn, %{
+            index: idx,
+            reason: reason,
+            message: format_batch_reason(reason)
+          })
+      end
+    end)
+  end
+
+  defp execute_batch_op(tx_conn, schema_name, op) do
+    case normalize_batch_op(op) do
+      {:execute, sql, args} ->
+        with {:ok, params} <- positional_args(args) do
+          query_pooled(tx_conn, sql, params)
+        end
+
+      {:put, table, id, data} ->
+        tbl = to_string(table)
+        cmd = Exoforge.Std.Database.JsonColumns.encode(%{action: :put, table: tbl, id: id, data: data})
+        execute_kv_on_conn(tx_conn, :put, schema_name, tbl, cmd)
+
+      {:delete, table, id} ->
+        tbl = to_string(table)
+        execute_kv_on_conn(tx_conn, :delete, schema_name, tbl, %{action: :delete, table: tbl, id: id})
+
+      {:error, _} = err ->
+        err
+    end
+  end
+
+  defp normalize_batch_op({sql, args}) when is_binary(sql), do: {:execute, sql, args || []}
+  defp normalize_batch_op(sql) when is_binary(sql), do: {:execute, sql, []}
+
+  defp normalize_batch_op(op) when is_map(op) do
+    raw_action =
+      Map.get(op, :action) || Map.get(op, "action") ||
+        Map.get(op, :op) || Map.get(op, "op") ||
+        Map.get(op, :type) || Map.get(op, "type")
+
+    sql = Map.get(op, :sql) || Map.get(op, "sql") || Map.get(op, :query) || Map.get(op, "query")
+
+    action =
+      cond do
+        raw_action in [:execute, "execute", :sql, "sql"] -> :execute
+        raw_action in [:put, "put"] -> :put
+        raw_action in [:delete, "delete"] -> :delete
+        is_nil(raw_action) and is_binary(sql) -> :execute
+        true -> raw_action
+      end
+
+    case action do
+      :execute when is_binary(sql) ->
+        args =
+          cond do
+            Map.has_key?(op, :args) -> Map.get(op, :args)
+            Map.has_key?(op, "args") -> Map.get(op, "args")
+            Map.has_key?(op, :arguments) -> Map.get(op, :arguments)
+            Map.has_key?(op, "arguments") -> Map.get(op, "arguments")
+            Map.has_key?(op, :params) -> Map.get(op, :params)
+            Map.has_key?(op, "params") -> Map.get(op, "params")
+            true -> []
+          end
+
+        {:execute, sql, args}
+
+      :put ->
+        table = Map.get(op, :table) || Map.get(op, "table")
+        id = Map.get(op, :id) || Map.get(op, "id") || Map.get(op, :key) || Map.get(op, "key")
+        data = Map.get(op, :data) || Map.get(op, "data") || Map.get(op, :value) || Map.get(op, "value") || %{}
+
+        if is_nil(table) or is_nil(id) do
+          {:error, :invalid_batch_operation}
+        else
+          {:put, table, id, data}
+        end
+
+      :delete ->
+        table = Map.get(op, :table) || Map.get(op, "table")
+        id = Map.get(op, :id) || Map.get(op, "id") || Map.get(op, :key) || Map.get(op, "key")
+
+        if is_nil(table) or is_nil(id) do
+          {:error, :invalid_batch_operation}
+        else
+          {:delete, table, id}
+        end
+
+      other when not is_nil(other) ->
+        {:error, {:unsupported_batch_action, other}}
+
+      _ ->
+        {:error, :invalid_batch_operation}
+    end
+  end
+
+  defp normalize_batch_op(_), do: {:error, :invalid_batch_operation}
+
+  defp format_batch_reason({:postgres_error, msg}) when is_binary(msg), do: msg
+
+  defp format_batch_reason({:invalid_value, col, type}),
+    do: "Invalid value for column '#{col}' (expected #{type})"
+
+  defp format_batch_reason({:missing_resource_table, tbl}),
+    do: "Missing declared resource table '#{tbl}'"
+
+  defp format_batch_reason({:unsupported_batch_action, action}),
+    do: "Unsupported batch operation '#{action}'; only execute, put, and delete are allowed"
+
+  defp format_batch_reason(other), do: inspect(other)
+
+  defp execute_kv_on_conn(conn, action, schema_name, tbl, command) do
+    case real_table_info(conn, schema_name, tbl) do
       {:resource_table, info} ->
-        execute_resource_kv(action, plugin_id, schema_name, tbl, info, command, config)
+        execute_resource_kv(conn, action, schema_name, tbl, info, command)
 
       :missing when action in [:put, :get, :all] ->
         if declared_resource_table?(tbl) do
           {:error, {:missing_resource_table, tbl}}
         else
-          execute_doc_kv(action, plugin_id, schema_name, tbl, command, config)
+          execute_doc_kv(conn, action, schema_name, tbl, command)
         end
 
       _ ->
-        execute_doc_kv(action, plugin_id, schema_name, tbl, command, config)
+        execute_doc_kv(conn, action, schema_name, tbl, command)
     end
   end
 
-  defp execute_resource_kv(:put, plugin_id, schema_name, tbl, %{columns: cols, types: types, pk: pk_col}, command, config) do
+  defp execute_resource_kv(conn, :put, schema_name, tbl, %{columns: cols, types: types, pk: pk_col}, command) do
     id = to_string(command[:id])
     data = command[:data] || %{}
     record = Map.put(data, "id", id)
@@ -184,7 +348,7 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
       end)
 
     if valid_pairs == [] do
-      execute_doc_kv(:put, plugin_id, schema_name, tbl, command, config)
+      execute_doc_kv(conn, :put, schema_name, tbl, command)
     else
       with {:ok, coerced_pairs} <- coerce_pairs(valid_pairs, types) do
         safe_schema = quote_ident(schema_name)
@@ -209,18 +373,18 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
               else: "ON CONFLICT (#{safe_pk}) DO UPDATE SET #{updates}"
             )
 
-        with {:ok, _} <- execute(plugin_id, sql, values, config) do
+        with {:ok, _} <- query_pooled(conn, sql, values) do
           {:ok, %{rows: [record], num_rows: 1}}
         end
       end
     end
   end
 
-  defp execute_resource_kv(:get, plugin_id, schema_name, tbl, %{types: types, pk: pk_col}, command, config) do
+  defp execute_resource_kv(conn, :get, schema_name, tbl, %{types: types, pk: pk_col}, command) do
     with {:ok, id} <- coerce_value(pk_col, Map.get(types, pk_col), to_string(command[:id])) do
       sql = "SELECT * FROM #{quote_ident(schema_name)}.#{quote_ident(tbl)} WHERE #{quote_ident(pk_col)} = $1"
 
-      case execute(plugin_id, sql, [id], config) do
+      case query_pooled(conn, sql, [id]) do
         {:ok, %{rows: [row | _]}} -> {:ok, %{rows: [decode_resource_row(row)], num_rows: 1}}
         {:ok, %{rows: []}} -> {:ok, %{rows: [], num_rows: 0}}
         error -> error
@@ -228,26 +392,26 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
     end
   end
 
-  defp execute_resource_kv(:delete, plugin_id, schema_name, tbl, %{types: types, pk: pk_col}, command, config) do
+  defp execute_resource_kv(conn, :delete, schema_name, tbl, %{types: types, pk: pk_col}, command) do
     with {:ok, id} <- coerce_value(pk_col, Map.get(types, pk_col), to_string(command[:id])) do
       sql = "DELETE FROM #{quote_ident(schema_name)}.#{quote_ident(tbl)} WHERE #{quote_ident(pk_col)} = $1"
-      execute(plugin_id, sql, [id], config)
+      query_pooled(conn, sql, [id])
     end
   end
 
-  defp execute_resource_kv(:all, plugin_id, schema_name, tbl, _info, _command, config) do
+  defp execute_resource_kv(conn, :all, schema_name, tbl, _info, _command) do
     sql = "SELECT * FROM #{quote_ident(schema_name)}.#{quote_ident(tbl)}"
 
-    with {:ok, %{rows: rows}} <- execute(plugin_id, sql, [], config) do
+    with {:ok, %{rows: rows}} <- query_pooled(conn, sql, []) do
       decoded = Enum.map(rows, &decode_resource_row/1)
       {:ok, %{rows: decoded, num_rows: length(decoded)}}
     end
   end
 
-  defp execute_resource_kv(other, _plugin_id, _schema_name, _tbl, _info, _command, _config),
+  defp execute_resource_kv(_conn, other, _schema_name, _tbl, _info, _command),
     do: {:error, {:unknown_action, other}}
 
-  defp execute_doc_kv(action, plugin_id, schema_name, tbl, command, config) do
+  defp execute_doc_kv(conn, action, schema_name, tbl, command) do
     # Convenience key-value / document emulation on top of Postgres
     create_sql = table_schema_sql(schema_name, tbl)
 
@@ -262,8 +426,8 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
         ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = CURRENT_TIMESTAMP;
         """
 
-        with {:ok, _} <- execute(plugin_id, create_sql, [], config),
-             {:ok, _} <- execute(plugin_id, upsert_sql, [id, data], config) do
+        with {:ok, _} <- query_pooled(conn, create_sql, []),
+             {:ok, _} <- query_pooled(conn, upsert_sql, [id, data]) do
           {:ok, %{rows: [%{"id" => id, "data" => command[:data]}], num_rows: 1}}
         end
 
@@ -271,8 +435,8 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
         id = to_string(command[:id])
         sql = "SELECT data FROM \"#{schema_name}\".\"#{tbl}\" WHERE id = $1"
 
-        with {:ok, _} <- execute(plugin_id, create_sql, [], config),
-             {:ok, res} <- execute(plugin_id, sql, [id], config) do
+        with {:ok, _} <- query_pooled(conn, create_sql, []),
+             {:ok, res} <- query_pooled(conn, sql, [id]) do
           case res do
             %{rows: [%{"data" => json_data}]} ->
               data = if is_binary(json_data), do: Jason.decode!(json_data), else: json_data
@@ -287,15 +451,15 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
         id = to_string(command[:id])
         sql = "DELETE FROM \"#{schema_name}\".\"#{tbl}\" WHERE id = $1"
 
-        with {:ok, _} <- execute(plugin_id, create_sql, [], config) do
-          execute(plugin_id, sql, [id], config)
+        with {:ok, _} <- query_pooled(conn, create_sql, []) do
+          query_pooled(conn, sql, [id])
         end
 
       :all ->
         sql = "SELECT id, data FROM \"#{schema_name}\".\"#{tbl}\""
 
-        with {:ok, _} <- execute(plugin_id, create_sql, [], config),
-             {:ok, %{rows: rows}} <- execute(plugin_id, sql, [], config) do
+        with {:ok, _} <- query_pooled(conn, create_sql, []),
+             {:ok, %{rows: rows}} <- query_pooled(conn, sql, []) do
           decoded =
             Enum.map(rows, fn row ->
               d = if is_binary(row["data"]), do: Jason.decode!(row["data"]), else: row["data"]
@@ -310,12 +474,12 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
     end
   end
 
-  defp real_table_info(plugin_id, schema_name, tbl, config) do
+  defp real_table_info(conn, schema_name, tbl) do
     cols_sql =
       "SELECT column_name, data_type FROM information_schema.columns " <>
         "WHERE table_schema = $1 AND table_name = $2 ORDER BY ordinal_position"
 
-    case execute(plugin_id, cols_sql, [schema_name, to_string(tbl)], config) do
+    case query_pooled(conn, cols_sql, [schema_name, to_string(tbl)]) do
       {:ok, %{rows: []}} ->
         :missing
 
@@ -339,7 +503,7 @@ defmodule Exoforge.Std.Database.Adapters.Postgres do
               "ORDER BY kcu.ordinal_position LIMIT 1"
 
           pk_col =
-            case execute(plugin_id, pk_sql, [schema_name, tbl], config) do
+            case query_pooled(conn, pk_sql, [schema_name, tbl]) do
               {:ok, %{rows: [%{"column_name" => col} | _]}} -> to_string(col)
               _ -> "id"
             end

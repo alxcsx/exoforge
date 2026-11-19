@@ -193,6 +193,108 @@ public static class DatabaseExtensions
         return db.Execute(text, args);
     }
 
+    /// <summary>
+    /// Records an interpolated SQL statement (INSERT/UPDATE/DELETE) in <paramref name="tx"/>,
+    /// turning each interpolation into a positional parameter (<c>$1</c>, <c>$2</c>, ...) passed as
+    /// arguments to <see cref="ITransaction.Execute"/>. Only the format string's literal segments
+    /// become SQL text, so interpolated values are never concatenated into SQL.
+    /// </summary>
+    public static void ExecuteSql(this ITransaction tx, FormattableString sql)
+    {
+        if (tx == null) throw new ArgumentNullException(nameof(tx));
+        if (sql == null) throw new ArgumentNullException(nameof(sql));
+
+        var (text, args) = Parameterize(sql);
+        tx.Execute(text, args);
+    }
+
+    /// <summary>
+    /// Records an entity write (upsert) in <paramref name="tx"/>, resolving the table name and primary key automatically.
+    /// </summary>
+    public static void Put<T>(this ITransaction tx, T entity)
+    {
+        if (tx == null) throw new ArgumentNullException(nameof(tx));
+        string key = EntityMetadata<T>.GetKey(entity);
+        tx.Put(EntityMetadata<T>.TableName, key, entity);
+    }
+
+    /// <summary>
+    /// Records an entity write (upsert) with an explicit primary key in <paramref name="tx"/>, resolving the table name automatically.
+    /// </summary>
+    public static void Put<T>(this ITransaction tx, string key, T entity)
+    {
+        if (tx == null) throw new ArgumentNullException(nameof(tx));
+        tx.Put(EntityMetadata<T>.TableName, key, entity);
+    }
+
+    /// <summary>
+    /// Records an entity write (upsert) with an explicit numeric/guid primary key in <paramref name="tx"/>, resolving the table name automatically.
+    /// </summary>
+    public static void Put<T>(this ITransaction tx, object key, T entity)
+    {
+        if (tx == null) throw new ArgumentNullException(nameof(tx));
+        if (key == null) throw new ArgumentNullException(nameof(key));
+        tx.Put(EntityMetadata<T>.TableName, key.ToString()!, entity);
+    }
+
+    /// <summary>
+    /// Records a delete of a record of type <typeparamref name="T"/> by primary key in <paramref name="tx"/>.
+    /// </summary>
+    public static void Delete<T>(this ITransaction tx, string id)
+    {
+        if (tx == null) throw new ArgumentNullException(nameof(tx));
+        tx.Delete(EntityMetadata<T>.TableName, id);
+    }
+
+    /// <summary>
+    /// Records a delete of an entity in <paramref name="tx"/> by extracting its primary key automatically.
+    /// </summary>
+    public static void Delete<T>(this ITransaction tx, T entity)
+    {
+        if (tx == null) throw new ArgumentNullException(nameof(tx));
+        string key = EntityMetadata<T>.GetKey(entity);
+        tx.Delete(EntityMetadata<T>.TableName, key);
+    }
+
+    /// <summary>
+    /// Executes an ordered sequence of interpolated SQL write statements atomically in a single
+    /// <c>db_batch</c> round trip. Each interpolation is turned into a positional parameter
+    /// (<c>$1</c>, <c>$2</c>, ...) and never concatenated into SQL.
+    /// </summary>
+    public static void ExecuteBatch(this IDatabase db, IEnumerable<FormattableString> statements)
+    {
+        if (db == null) throw new ArgumentNullException(nameof(db));
+        if (statements == null) throw new ArgumentNullException(nameof(statements));
+
+        var ops = new List<DbBatchOperation>();
+        foreach (var stmt in statements)
+        {
+            if (stmt == null) throw new ArgumentException("Batch statements cannot contain null elements.", nameof(statements));
+            ops.Add(DbBatchOperation.ExecuteSql(stmt));
+        }
+
+        db.ExecuteBatch(ops);
+    }
+
+    /// <summary>
+    /// Executes an ordered sequence of parameterized SQL write statements (<c>Sql, Args</c>)
+    /// atomically in a single <c>db_batch</c> round trip.
+    /// </summary>
+    public static void ExecuteBatch(this IDatabase db, IEnumerable<(string Sql, object?[]? Args)> statements)
+    {
+        if (db == null) throw new ArgumentNullException(nameof(db));
+        if (statements == null) throw new ArgumentNullException(nameof(statements));
+
+        var ops = new List<DbBatchOperation>();
+        foreach (var (sql, args) in statements)
+        {
+            if (sql == null) throw new ArgumentException("Batch SQL statement cannot be null.", nameof(statements));
+            ops.Add(DbBatchOperation.Execute(sql, args ?? Array.Empty<object?>()));
+        }
+
+        db.ExecuteBatch(ops);
+    }
+
     internal static (string Sql, object?[] Args) Parameterize(FormattableString sql)
     {
         string format = sql.Format ?? throw new FormatException("SQL format string cannot be null.");
@@ -444,4 +546,102 @@ internal static class EntityMetadata<T>
 
         return val.ToString()!;
     }
+}
+
+/// <summary>
+/// A single write operation (<c>execute</c>, <c>put</c>, or <c>delete</c>) in a batched atomic database transaction.
+/// </summary>
+public sealed class DbBatchOperation
+{
+    public string Action { get; }
+    public string? Table { get; }
+    public string? Key { get; }
+    public object? Value { get; }
+    public string? ValueJson { get; }
+    public string? Sql { get; }
+    public object?[]? Args { get; }
+
+    internal DbBatchOperation(
+        string action,
+        string? table = null,
+        string? key = null,
+        object? value = null,
+        string? valueJson = null,
+        string? sql = null,
+        object?[]? args = null)
+    {
+        Action = action;
+        Table = table;
+        Key = key;
+        Value = value;
+        ValueJson = valueJson;
+        Sql = sql;
+        Args = args;
+    }
+
+    /// <summary>Creates a parameterized SQL write operation (<c>$1, $2, ...</c>).</summary>
+    public static DbBatchOperation Execute(string sql, params object?[] args)
+    {
+        if (sql == null) throw new ArgumentNullException(nameof(sql));
+        return new DbBatchOperation("execute", sql: sql, args: args ?? Array.Empty<object?>());
+    }
+
+    /// <summary>Creates a parameterized SQL write operation from an interpolated string (<c>$1, $2, ...</c>).</summary>
+    public static DbBatchOperation ExecuteSql(FormattableString sql)
+    {
+        if (sql == null) throw new ArgumentNullException(nameof(sql));
+        var (text, args) = DatabaseExtensions.Parameterize(sql);
+        return new DbBatchOperation("execute", sql: text, args: args);
+    }
+
+    /// <summary>Creates a key/value write (upsert) operation.</summary>
+    public static DbBatchOperation Put<T>(string table, string key, T value)
+    {
+        if (table == null) throw new ArgumentNullException(nameof(table));
+        if (key == null) throw new ArgumentNullException(nameof(key));
+        return new DbBatchOperation("put", table: table, key: key, value: value, valueJson: PluginJson.Serialize(value));
+    }
+
+    /// <summary>Creates a key/value write (upsert) operation, resolving table name and primary key from <typeparamref name="T"/>.</summary>
+    public static DbBatchOperation Put<T>(T entity)
+    {
+        string key = EntityMetadata<T>.GetKey(entity);
+        return Put(EntityMetadata<T>.TableName, key, entity);
+    }
+
+    /// <summary>Creates a key/value write (upsert) operation with an explicit key, resolving table name from <typeparamref name="T"/>.</summary>
+    public static DbBatchOperation Put<T>(string key, T entity) =>
+        Put(EntityMetadata<T>.TableName, key, entity);
+
+    /// <summary>Creates a key/value delete operation.</summary>
+    public static DbBatchOperation Delete(string table, string key)
+    {
+        if (table == null) throw new ArgumentNullException(nameof(table));
+        if (key == null) throw new ArgumentNullException(nameof(key));
+        return new DbBatchOperation("delete", table: table, key: key);
+    }
+
+    /// <summary>Creates a key/value delete operation, resolving table name from <typeparamref name="T"/>.</summary>
+    public static DbBatchOperation Delete<T>(string id) =>
+        Delete(EntityMetadata<T>.TableName, id);
+
+    /// <summary>Creates a key/value delete operation, resolving table name and primary key from <typeparamref name="T"/>.</summary>
+    public static DbBatchOperation Delete<T>(T entity) =>
+        Delete(EntityMetadata<T>.TableName, EntityMetadata<T>.GetKey(entity));
+}
+
+internal sealed class BatchTransactionRecorder : ITransaction
+{
+    private readonly List<DbBatchOperation> _operations = new();
+
+    public IReadOnlyList<DbBatchOperation> Operations => _operations;
+
+    public void Put<T>(string table, string key, T value) =>
+        _operations.Add(DbBatchOperation.Put(table, key, value));
+
+    public void Delete(string table, string key) =>
+        _operations.Add(DbBatchOperation.Delete(table, key));
+
+    public void Execute(string sql, params object?[] args) =>
+        _operations.Add(DbBatchOperation.Execute(sql, args));
 }

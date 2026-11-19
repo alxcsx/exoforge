@@ -81,6 +81,53 @@ public class InMemoryDatabase : IDatabase
 
     public int Execute(string sql, params object?[] args) => 0;
 
+    public void Transaction(Action<ITransaction> tx)
+    {
+        if (tx == null) throw new ArgumentNullException(nameof(tx));
+        var recorder = new BatchTransactionRecorder();
+        tx(recorder);
+        ExecuteBatch(recorder.Operations);
+    }
+
+    public void ExecuteBatch(IEnumerable<DbBatchOperation> operations)
+    {
+        if (operations == null) throw new ArgumentNullException(nameof(operations));
+
+        var list = operations as IList<DbBatchOperation> ?? operations.ToList();
+        var snapshot = _store.ToArray();
+
+        try
+        {
+            for (int i = 0; i < list.Count; i++)
+            {
+                var op = list[i] ?? throw new ArgumentException("Batch operations cannot contain null elements.", nameof(operations));
+                switch (op.Action)
+                {
+                    case "put":
+                        Put<object?>(op.Table ?? "", op.Key ?? "", op.Value);
+                        break;
+                    case "delete":
+                        Delete(op.Table ?? "", op.Key ?? "");
+                        break;
+                    case "execute":
+                        Execute(op.Sql ?? "", op.Args ?? Array.Empty<object?>());
+                        break;
+                    default:
+                        throw new ExoDatabaseException("batch", $"Unsupported batch operation '{op.Action}'", i);
+                }
+            }
+        }
+        catch
+        {
+            _store.Clear();
+            foreach (var entry in snapshot)
+            {
+                _store[entry.Key] = entry.Value;
+            }
+            throw;
+        }
+    }
+
     public int Count(string table)
     {
         string tbl = table.ToLowerInvariant();

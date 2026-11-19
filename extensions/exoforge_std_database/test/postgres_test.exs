@@ -341,4 +341,156 @@ defmodule Exoforge.Std.Database.Adapters.PostgresTest do
                Database.execute(plugin_b, "SELECT id, owner FROM items")
     end
   end
+
+  describe "D3: batched atomic writes (db_batch) with Postgrex.transaction rollback" do
+    setup do
+      unless Process.whereis(Exoforge.Std.Database.PoolRegistry) do
+        start_supervised!({Registry, keys: :unique, name: Exoforge.Std.Database.PoolRegistry})
+      end
+
+      unless Process.whereis(Exoforge.Std.Database.PoolSupervisor) do
+        start_supervised!({DynamicSupervisor, name: Exoforge.Std.Database.PoolSupervisor, strategy: :one_for_one})
+      end
+
+      plugin = :"pg_batch_#{System.unique_integer([:positive])}"
+      assert {:ok, _} = Postgres.ensure_database(plugin, pg_config())
+
+      on_exit(fn ->
+        _ = Postgres.reset(plugin, pg_config())
+      end)
+
+      {:ok, plugin: plugin}
+    end
+
+    @tag :postgres
+    test "commits all execute, put, and delete operations atomically in order when all succeed", %{plugin: plugin} do
+      assert {:ok, _} =
+               Postgres.execute(
+                 plugin,
+                 "CREATE TABLE accounts (id text PRIMARY KEY, coins integer NOT NULL CHECK (coins >= 0))",
+                 [],
+                 pg_config()
+               )
+
+      assert {:ok, _} =
+               Postgres.execute(
+                 plugin,
+                 %{action: :put, table: "sessions", id: "stale", data: %{"token" => "old"}},
+                 [],
+                 pg_config()
+               )
+
+      operations = [
+        %{action: "put", table: "accounts", key: "p1", value: %{"coins" => 100}},
+        %{action: "put", table: "accounts", key: "p2", value: %{"coins" => 50}},
+        %{action: "execute", sql: "UPDATE accounts SET coins = coins - $1 WHERE id = $2", args: [30, "p1"]},
+        %{action: "execute", sql: "UPDATE accounts SET coins = coins + $1 WHERE id = $2", args: [30, "p2"]},
+        %{action: "put", table: "sessions", key: "active", value: %{"token" => "fresh"}},
+        %{action: "delete", table: "sessions", key: "stale"}
+      ]
+
+      assert {:ok, %{num_rows: 6}} =
+               Postgres.execute(plugin, %{action: :batch, operations: operations}, [], pg_config())
+
+      assert {:ok, %{rows: [%{"id" => "p1", "coins" => 70}]}} =
+               Postgres.execute(plugin, %{action: :get, table: "accounts", id: "p1"}, [], pg_config())
+
+      assert {:ok, %{rows: [%{"id" => "p2", "coins" => 80}]}} =
+               Postgres.execute(plugin, %{action: :get, table: "accounts", id: "p2"}, [], pg_config())
+
+      assert {:ok, %{rows: [%{"id" => "active", "token" => "fresh"}]}} =
+               Postgres.execute(plugin, %{action: :get, table: "sessions", id: "active"}, [], pg_config())
+
+      assert {:ok, %{rows: []}} =
+               Postgres.execute(plugin, %{action: :get, table: "sessions", id: "stale"}, [], pg_config())
+    end
+
+    @tag :postgres
+    test "rolls back every preceding SQL and KV write in the batch on failure and names the failing index", %{
+      plugin: plugin
+    } do
+      assert {:ok, _} =
+               Postgres.execute(
+                 plugin,
+                 "CREATE TABLE accounts (id text PRIMARY KEY, coins integer NOT NULL CHECK (coins >= 0))",
+                 [],
+                 pg_config()
+               )
+
+      assert {:ok, _} =
+               Postgres.execute(
+                 plugin,
+                 %{action: :put, table: "accounts", id: "p1", data: %{"coins" => 100}},
+                 [],
+                 pg_config()
+               )
+
+      assert {:ok, _} =
+               Postgres.execute(
+                 plugin,
+                 %{action: :put, table: "accounts", id: "p2", data: %{"coins" => 50}},
+                 [],
+                 pg_config()
+               )
+
+      assert {:ok, _} =
+               Postgres.execute(
+                 plugin,
+                 %{action: :put, table: "sessions", id: "keep_me", data: %{"token" => "still_here"}},
+                 [],
+                 pg_config()
+               )
+
+      # Index 0..2 succeed inside the transaction; index 3 violates CHECK (coins >= 0).
+      operations = [
+        %{action: "execute", sql: "UPDATE accounts SET coins = coins + $1 WHERE id = $2", args: [30, "p2"]},
+        %{action: "put", table: "sessions", key: "rolled_back", value: %{"token" => "transient"}},
+        %{action: "delete", table: "sessions", key: "keep_me"},
+        %{action: "execute", sql: "UPDATE accounts SET coins = coins - $1 WHERE id = $2", args: [500, "p1"]}
+      ]
+
+      assert {:error, %{index: 3, reason: {:postgres_error, msg}, message: message}} =
+               Postgres.execute(plugin, %{action: :batch, operations: operations}, [], pg_config())
+
+      assert is_binary(msg)
+      assert is_binary(message)
+
+      # Index 0 was rolled back: p2 still has 50 coins, p1 still has 100 coins.
+      assert {:ok, %{rows: [%{"id" => "p2", "coins" => 50}]}} =
+               Postgres.execute(plugin, %{action: :get, table: "accounts", id: "p2"}, [], pg_config())
+
+      assert {:ok, %{rows: [%{"id" => "p1", "coins" => 100}]}} =
+               Postgres.execute(plugin, %{action: :get, table: "accounts", id: "p1"}, [], pg_config())
+
+      # Index 1 was rolled back: "rolled_back" session was not persisted.
+      assert {:ok, %{rows: []}} =
+               Postgres.execute(plugin, %{action: :get, table: "sessions", id: "rolled_back"}, [], pg_config())
+
+      # Index 2 was rolled back: "keep_me" session was not deleted.
+      assert {:ok, %{rows: [%{"id" => "keep_me", "token" => "still_here"}]}} =
+               Postgres.execute(plugin, %{action: :get, table: "sessions", id: "keep_me"}, [], pg_config())
+    end
+
+    @tag :postgres
+    test "rolls back preceding writes when a resource KV put fails coercion at a later index", %{plugin: plugin} do
+      assert {:ok, _} =
+               Postgres.execute(
+                 plugin,
+                 "CREATE TABLE accounts (id text PRIMARY KEY, coins integer NOT NULL)",
+                 [],
+                 pg_config()
+               )
+
+      operations = [
+        %{action: "put", table: "accounts", key: "p1", value: %{"coins" => 100}},
+        %{action: "put", table: "accounts", key: "p2", value: %{"coins" => "not_an_int"}}
+      ]
+
+      assert {:error, %{index: 1, reason: {:invalid_value, "coins", "integer"}}} =
+               Postgres.execute(plugin, %{action: :batch, operations: operations}, [], pg_config())
+
+      assert {:ok, %{rows: []}} =
+               Postgres.execute(plugin, %{action: :all, table: "accounts"}, [], pg_config())
+    end
+  end
 end
