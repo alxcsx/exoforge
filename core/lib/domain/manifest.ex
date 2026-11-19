@@ -43,6 +43,7 @@ defmodule Exoforge.Domain.Manifest do
     physical_path: "",
     dependencies: [],
     provides: [],
+    db_read: [],
     services: [],
     events: [],
     dashboard_view: nil,

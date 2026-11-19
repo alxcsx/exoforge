@@ -105,18 +105,28 @@ defmodule Exoforge.Std.Database.Manager do
     clean = Database.clean_id(plugin_id)
     # Ensure the database exists on first use, not on every query (M33 Fix 7): provisioning DDL on
     # each request was a round trip to the server per query, and the manager already remembers.
-    state = ensure_once(clean, state)
-    result = safely(fn -> state.adapter.execute(clean, query, args, state.config) end)
-    {:reply, result, state}
+    case ensure_once(clean, state) do
+      {:ok, state} ->
+        result = safely(fn -> state.adapter.execute(clean, query, args, state.config) end)
+        {:reply, result, state}
+
+      {:error, reason, state} ->
+        {:reply, {:error, reason}, state}
+    end
   end
 
   @impl true
   def handle_call({:table_columns, plugin_id, table}, _from, state) do
     clean = Database.clean_id(plugin_id)
     # Column inspection wants the table to exist; same first-use rule as execute.
-    state = ensure_once(clean, state)
-    result = safely(fn -> state.adapter.table_columns(clean, table, state.config) end)
-    {:reply, result, state}
+    case ensure_once(clean, state) do
+      {:ok, state} ->
+        result = safely(fn -> state.adapter.table_columns(clean, table, state.config) end)
+        {:reply, result, state}
+
+      {:error, reason, state} ->
+        {:reply, {:error, reason}, state}
+    end
   end
 
   @impl true
@@ -136,7 +146,7 @@ defmodule Exoforge.Std.Database.Manager do
   def handle_call({:reset, plugin_id}, _from, state) do
     clean = Database.clean_id(plugin_id)
     result = safely(fn -> state.adapter.reset(clean, state.config) end)
-    {:reply, result, state}
+    {:reply, result, %{state | databases: MapSet.delete(state.databases, clean)}}
   end
 
   @impl true
@@ -172,11 +182,12 @@ defmodule Exoforge.Std.Database.Manager do
   # (M33 Fix 7). A failed provision is not remembered, so the next call retries it.
   defp ensure_once(clean, state) do
     if MapSet.member?(state.databases, clean) do
-      state
+      {:ok, state}
     else
       case safely(fn -> state.adapter.ensure_database(clean, state.config) end) do
-        {:ok, _} -> %{state | databases: MapSet.put(state.databases, clean)}
-        _ -> state
+        {:ok, _} -> {:ok, %{state | databases: MapSet.put(state.databases, clean)}}
+        {:error, reason} -> {:error, reason, state}
+        other -> {:error, other, state}
       end
     end
   end
@@ -208,6 +219,7 @@ defmodule Exoforge.Std.Database.Manager do
     |> maybe_put_env(:username, "PGUSER")
     |> maybe_put_env(:password, "PGPASSWORD")
     |> maybe_put_env(:database, "PGDATABASE")
+    |> maybe_put_env(:role_secret, "EXOFORGE_DB_ROLE_SECRET")
   end
 
   defp maybe_put_env(acc, key, env_name) do

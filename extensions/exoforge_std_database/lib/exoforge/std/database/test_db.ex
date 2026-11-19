@@ -39,10 +39,32 @@ defmodule Exoforge.Std.Database.TestDB do
   defp drop_database(base, db_name) do
     _ = Application.ensure_all_started(:postgrex)
     exec_maintenance_sql(base, ~s[DROP DATABASE IF EXISTS "#{db_name}" WITH (FORCE)])
+    drop_database_roles(base, db_name)
   rescue
     _ -> :ok
   catch
     _, _ -> :ok
+  end
+
+  defp drop_database_roles(base, db_name) do
+    db_hash =
+      :crypto.hash(:sha256, to_string(db_name))
+      |> Base.encode16(case: :lower)
+      |> binary_part(0, 8)
+
+    pattern = "ext_#{db_hash}_%"
+
+    case exec_maintenance_sql(base, "SELECT rolname FROM pg_roles WHERE rolname LIKE '#{pattern}'") do
+      {:ok, %Postgrex.Result{rows: rows}} ->
+        Enum.each(rows, fn [rol] ->
+          if is_binary(rol) and rol =~ ~r/^[a-z0-9_]+$/ do
+            _ = exec_maintenance_sql(base, ~s[DROP ROLE IF EXISTS "#{rol}"])
+          end
+        end)
+
+      _ ->
+        :ok
+    end
   end
 
   defp ensure_tcp_reachable!(base) do

@@ -148,7 +148,7 @@ defmodule Exoforge.Drivers.Loaders.ManifestLoader do
   # service, action, event, resource or column name. One field that meant something else would have
   # cost a reader that knows where it is.
   @atom_keys ~w(id type context mode scope transport returns primary_key name)
-  @atom_list_keys ~w(dependencies provides drawer actions)
+  @atom_list_keys ~w(dependencies provides db_read drawer actions)
   @atom_map_keys ~w(params payload)
 
   defp to_manifest_terms(map) when is_map(map) do
