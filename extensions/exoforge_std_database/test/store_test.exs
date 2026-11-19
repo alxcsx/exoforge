@@ -23,6 +23,57 @@ defmodule Exoforge.Std.Database.StoreTest do
   defp exec(plugin, %{} = command, _args), do: Store.run(plugin, command)
   defp exec(plugin, sql, args), do: Database.execute(plugin, sql, args)
 
+  describe "typed tables made from logical manifest columns" do
+    @tag :postgres
+    test "a table the driver creates from logical storage types round-trips through the typed path" do
+      plugin = :"pg_logical_#{System.unique_integer([:positive])}"
+      on_exit(fn -> Database.reset!(plugin) end)
+
+      resource = %{
+        name: "inventory",
+        source: %{table: "inventory"},
+        primary_key: "sku",
+        columns: [
+          %{name: "sku", storage: "text", primary_key: true},
+          %{name: "qty", storage: "int32", nullable: false, default: 0},
+          %{name: "weight", storage: "decimal", nullable: true},
+          %{name: "seen_at", storage: "timestamp", nullable: true},
+          %{name: "flag", storage: "bool", nullable: true}
+        ]
+      }
+
+      assert {:ok, %{applied: applied}} =
+               Exoforge.ActionDispatcher.dispatch_internal(:lldb, :apply_schema, %{namespace: plugin, resources: [resource]})
+
+      assert applied > 0
+
+      assert {:ok, %{num_rows: 1}} =
+               exec(plugin, %{
+                 action: :put,
+                 table: "inventory",
+                 id: "gear",
+                 data: %{"qty" => "7", "weight" => "1.5", "seen_at" => "2026-11-19T10:00:00Z", "flag" => "true"}
+               }, [])
+
+      assert {:ok, %{rows: [row]}} = exec(plugin, %{action: :get, table: "inventory", id: "gear"}, [])
+      assert %{"sku" => "gear", "qty" => 7, "weight" => 1.5, "flag" => true} = row
+      assert row["seen_at"] =~ "2026-11-19T10:00:00"
+
+      assert {:error, {:invalid_value, "qty", "int32"}} =
+               exec(plugin, %{action: :put, table: "inventory", id: "bad", data: %{"qty" => "many"}}, [])
+
+      # the default fills what the caller leaves out
+      assert {:ok, %{num_rows: 1}} = exec(plugin, %{action: :put, table: "inventory", id: "bare", data: %{}}, [])
+      assert {:ok, %{rows: [%{"qty" => 0}]}} = exec(plugin, %{action: :get, table: "inventory", id: "bare"}, [])
+
+      assert {:ok, %{rows: rows}} = exec(plugin, %{action: :all, table: "inventory"}, [])
+      assert Enum.sort(Enum.map(rows, & &1["sku"])) == ["bare", "gear"]
+
+      assert {:ok, %{num_rows: 1}} = exec(plugin, %{action: :delete, table: "inventory", id: "gear"}, [])
+      assert {:ok, %{rows: []}} = exec(plugin, %{action: :get, table: "inventory", id: "gear"}, [])
+    end
+  end
+
   describe "F32: KV operations on resource-migrated tables" do
     @tag :postgres
     test "put, get, all, and delete work on a schema-migrated table without a data column" do

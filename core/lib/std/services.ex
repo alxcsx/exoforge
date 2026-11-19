@@ -95,6 +95,30 @@ defmodule Exoforge.Std.Services do
       returns(result: :term)
     end
 
+    @doc "Applies the safe changes that bring a namespace's tables in line with declared resources (logical `storage` types); an unsafe change applies nothing and is reported."
+    action :apply_schema do
+      scope(:server)
+
+      params(
+        resources: [type: :term, optional: true],
+        namespace: [type: :term, optional: true]
+      )
+
+      returns(result: :term)
+    end
+
+    @doc "Drops a table of a namespace, and its schema history."
+    action :reset_table do
+      scope(:server)
+
+      params(
+        table: :string,
+        namespace: [type: :term, optional: true]
+      )
+
+      returns(result: :term)
+    end
+
     @doc "Lists the columns of a table in a namespace."
     action :table_columns do
       scope(:server)

@@ -33,6 +33,15 @@ defmodule Exoforge.Std.Lldb.Adapter do
   """
   @callback introspect(plugin_id, table_name, config) :: {:ok, map()} | {:error, term()}
 
+  @doc """
+  Brings the namespace's tables in line with `resources` (manifest shape, logical `storage` types) by
+  applying only safe changes; an unsafe one applies nothing and is returned as `{:unsafe_schema_change, ops}`.
+  """
+  @callback apply_schema(plugin_id, resources :: list() | nil, config) :: {:ok, map()} | {:error, term()}
+
+  @doc "Drops a table of the namespace and its schema history."
+  @callback reset_table(plugin_id, table_name, config) :: {:ok, map()} | {:error, term()}
+
   @doc "How to write SQL for this engine: placeholder and quoting style, upsert strategy, native type names."
   @callback dialect(config) :: map()
   @callback connection_config(plugin_id, config) :: {:ok, map()} | {:error, term()}

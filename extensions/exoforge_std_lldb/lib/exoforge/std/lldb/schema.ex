@@ -70,8 +70,12 @@ defmodule Exoforge.Std.Lldb.Schema do
   def validate_storage_type(type) when is_binary(type) or is_atom(type) do
     str = type |> to_string() |> String.downcase() |> String.trim()
 
-    if str in @allowed_storage_types do
-      {:ok, str}
+    # The manifest speaks logical types (`int32`, `decimal`, `timestamp`, ...); this engine's names for
+    # them come from its dialect. Native names are still accepted.
+    native = Map.get(Exoforge.Std.Lldb.Adapters.Postgres.dialect(%{}).types, str, str)
+
+    if native in @allowed_storage_types do
+      {:ok, native}
     else
       {:error, {:invalid_storage_type, str}}
     end

@@ -60,6 +60,16 @@ defmodule Exoforge.Std.Lldb.Manager do
     GenServer.call(@name, {:plan_schema, plugin_id, resources}, 15_000)
   end
 
+  @doc "Applies the safe changes that bring an extension's tables in line with its declared resources."
+  def apply_schema(plugin_id, resources \\ nil) do
+    GenServer.call(@name, {:apply_schema, plugin_id, resources}, 30_000)
+  end
+
+  @doc "Drops one table of the plugin's namespace, and its schema history."
+  def reset_table(plugin_id, table) do
+    GenServer.call(@name, {:reset_table, plugin_id, table}, 15_000)
+  end
+
   @doc "Performs a health check of the underlying database system."
   def health_check do
     GenServer.call(@name, :health_check)
@@ -193,6 +203,30 @@ defmodule Exoforge.Std.Lldb.Manager do
   end
 
   @impl true
+  def handle_call({:apply_schema, plugin_id, resources}, _from, state) do
+    clean = Lldb.clean_id(plugin_id)
+
+    case ensure_once(clean, state) do
+      {:ok, state} ->
+        {:reply, safely(fn -> state.adapter.apply_schema(clean, resources, state.config) end), state}
+
+      {:error, reason, state} ->
+        {:reply, {:error, reason}, state}
+    end
+  end
+
+  def handle_call({:reset_table, plugin_id, table}, _from, state) do
+    clean = Lldb.clean_id(plugin_id)
+
+    case ensure_once(clean, state) do
+      {:ok, state} ->
+        {:reply, safely(fn -> state.adapter.reset_table(clean, table, state.config) end), state}
+
+      {:error, reason, state} ->
+        {:reply, {:error, reason}, state}
+    end
+  end
+
   def handle_call({:connection_config, plugin_id}, _from, state) do
     clean = Lldb.clean_id(plugin_id)
     result = safely(fn -> state.adapter.connection_config(clean, state.config) end)

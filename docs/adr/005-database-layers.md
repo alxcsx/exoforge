@@ -26,7 +26,7 @@ Dependencies: `resource_store` -> `database` -> `lldb`.
 
 ### Decision 2: Nothing Above `lldb` Names PostgreSQL
 
-Words that stay below `lldb`'s contract: `schema`, `role`, `search_path`, `pg_*`, `jsonb`. The contract says "namespace". A swapped-in `lldb` implements or refuses.
+Words that stay below `lldb`'s contract are the engine's own: its name, `search_path`, roles, `pg_*` catalogs and native type names such as `jsonb`. The contract says "namespace" where PostgreSQL says schema. ("Schema" in `apply_schema` means table definitions and is engine-neutral.) A swapped-in `lldb` implements or refuses.
 
 ### Decision 3: Logical Types for Manifest `storage`
 

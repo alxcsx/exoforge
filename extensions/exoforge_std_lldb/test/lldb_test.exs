@@ -147,11 +147,74 @@ defmodule Exoforge.Std.LldbTest do
       assert %{"text" => "text", "json" => "jsonb"} = types
     end
 
-    test "the contract names no engine: namespace, not schema or role" do
+    test "apply_schema creates tables from logical storage types, is idempotent, and reset_table drops them" do
+      ns = :lldb_contract
+
+      resource = %{
+        name: "inventory",
+        source: %{table: "inventory"},
+        primary_key: "sku",
+        columns: [
+          %{name: "sku", storage: "text", primary_key: true},
+          %{name: "qty", storage: "int32", nullable: false, default: 0},
+          %{name: "weight", storage: "decimal", nullable: true},
+          %{name: "seen_at", storage: "timestamp", nullable: true},
+          %{name: "tags", storage: "json", nullable: true},
+          %{name: "big", storage: "int64", nullable: true},
+          %{name: "flag", storage: "bool", nullable: true}
+        ]
+      }
+
+      assert {:ok, %{applied: applied}} =
+               ActionDispatcher.dispatch_internal(:lldb, :apply_schema, %{namespace: ns, resources: [resource]})
+
+      assert applied > 0
+
+      assert {:ok, %{exists: true, columns: columns, primary_key: ["sku"]}} =
+               ActionDispatcher.dispatch_internal(:lldb, :introspect, %{namespace: ns, table: "inventory"})
+
+      type = fn name -> Enum.find(columns, &(&1.name == name)) end
+      assert %{type: "text"} = type.("sku")
+      assert %{type: "int32", nullable: false} = type.("qty")
+      assert %{type: "decimal"} = type.("weight")
+      assert %{type: "timestamp", tz: true} = type.("seen_at")
+      assert %{type: "json"} = type.("tags")
+      assert %{type: "int64"} = type.("big")
+      assert %{type: "bool"} = type.("flag")
+
+      # a second apply has nothing left to do
+      assert {:ok, %{applied: 0}} =
+               ActionDispatcher.dispatch_internal(:lldb, :apply_schema, %{namespace: ns, resources: [resource]})
+
+      assert {:ok, %{dropped: true}} =
+               ActionDispatcher.dispatch_internal(:lldb, :reset_table, %{namespace: ns, table: "inventory"})
+
+      assert {:ok, %{exists: false}} =
+               ActionDispatcher.dispatch_internal(:lldb, :introspect, %{namespace: ns, table: "inventory"})
+
+      # the table's schema history starts again with the table
+      assert {:ok, %{rows: [%{"n" => 0}]}} =
+               ActionDispatcher.dispatch_internal(:lldb, :exec, %{
+                 namespace: ns,
+                 operation: "SELECT count(*)::int AS n FROM _exo_schema WHERE table_name = $1",
+                 arguments: ["inventory"]
+               })
+    end
+
+    test "a logical type the engine does not know is refused, not guessed" do
+      resource = %{name: "odd", source: %{table: "odd"}, primary_key: "id", columns: [%{name: "id", storage: "hyperint", primary_key: true}]}
+
+      assert {:error, {:invalid_storage_type, "hyperint"}} =
+               ActionDispatcher.dispatch_internal(:lldb, :apply_schema, %{namespace: :lldb_contract, resources: [resource]})
+    end
+
+    test "the contract names no engine: namespace, not PostgreSQL's schema or role" do
       contract = Exoforge.Std.Services.Lldb.__service_metadata__()
       text = inspect(contract) |> String.downcase()
 
-      for word <- ["postgres", "schema", "role", "search_path", "jsonb"] do
+      # "schema" alone is fine: it means table definitions (apply_schema). What stays out is the engine's
+      # own vocabulary: its name, its catalog, its roles and search path, and its column types.
+      for word <- ["postgres", "pg_", " role", "search_path", "jsonb", "timestamptz", "bytea"] do
         refute text =~ word, "the lldb contract must not mention #{word}"
       end
     end

@@ -428,6 +428,40 @@ defmodule Exoforge.Std.Lldb.Adapters.Postgres do
     end
   end
 
+  @impl true
+  def apply_schema(plugin_id, resources_override, config) do
+    clean_self = valid_plugin_id!(plugin_id)
+    schema_name = valid_ident!(schema_name(clean_self, config))
+    resources = resolve_manifest_resources(clean_self, resources_override)
+
+    with {:ok, {mode, conn}} <- pooled_connection(clean_self, schema_name, config) do
+      try do
+        Exoforge.Std.Lldb.Schema.reconcile(conn, schema_name, resources)
+      after
+        if mode == :unmanaged, do: GenServer.stop(conn)
+      end
+    end
+  end
+
+  @impl true
+  def reset_table(plugin_id, table, config) do
+    clean_self = valid_plugin_id!(plugin_id)
+    schema_name = valid_ident!(schema_name(clean_self, config))
+    tbl = to_string(table)
+
+    with {:ok, {mode, conn}} <- pooled_connection(clean_self, schema_name, config) do
+      try do
+        with {:ok, _} <- query_pooled(conn, "DROP TABLE IF EXISTS #{quote_ident(schema_name)}.#{quote_ident(tbl)} CASCADE", []) do
+          # The ledger is the table's history: it starts again with the table. It may not exist yet.
+          _ = query_pooled(conn, "DELETE FROM #{quote_ident(schema_name)}.\"_exo_schema\" WHERE table_name = $1", [tbl])
+          {:ok, %{table: tbl, dropped: true}}
+        end
+      after
+        if mode == :unmanaged, do: GenServer.stop(conn)
+      end
+    end
+  end
+
   defp resolve_manifest_resources(_clean_self, resources) when is_list(resources), do: resources
 
   defp resolve_manifest_resources(clean_self, _) do
@@ -714,9 +748,18 @@ defmodule Exoforge.Std.Lldb.Adapters.Postgres do
       transactional_ddl: true,
       types: %{
         "text" => "text",
-        "json" => "jsonb",
+        "int16" => "smallint",
+        "int32" => "integer",
+        "int64" => "bigint",
+        "float32" => "real",
+        "float64" => "double precision",
+        "decimal" => "numeric",
+        "bool" => "boolean",
+        "uuid" => "uuid",
         "timestamp" => "timestamptz",
-        "timestamp_naive" => "timestamp"
+        "timestamp_naive" => "timestamp",
+        "bytes" => "bytea",
+        "json" => "jsonb"
       }
     }
   end

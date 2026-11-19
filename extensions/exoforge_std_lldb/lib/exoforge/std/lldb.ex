@@ -119,6 +119,16 @@ defmodule Exoforge.Std.Lldb do
   end
 
   @impl true
+  defaction apply_schema(payload) do
+    Manager.apply_schema(extract_namespace(payload), fetch_any(payload, [:resources], nil))
+  end
+
+  @impl true
+  defaction reset_table(payload) do
+    Manager.reset_table(extract_namespace(payload), fetch_any(payload, [:table, "table"], ""))
+  end
+
+  @impl true
   defaction connection_config(payload) do
     namespace =
       case payload do
