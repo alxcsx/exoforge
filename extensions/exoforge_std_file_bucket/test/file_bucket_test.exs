@@ -334,16 +334,24 @@ defmodule Exoforge.Std.FileBucketTest do
     end
 
     test "visibility survives an extension restart, and the config does not undo it" do
-      assert {:ok, %{visibility: "private"}} =
-               ActionDispatcher.dispatch_internal(:file_bucket, :set_bucket_visibility, %{
-                 "bucket" => "sdk",
-                 "visibility" => "private"
-               })
+      try do
+        assert {:ok, %{visibility: "private"}} =
+                 ActionDispatcher.dispatch_internal(:file_bucket, :set_bucket_visibility, %{
+                   "bucket" => "sdk",
+                   "visibility" => "private"
+                 })
 
-      Exoforge.Std.FileBucket.on_init(%{})
+        Exoforge.Std.FileBucket.on_init(%{})
 
-      assert {:ok, %{allowed: false}} =
-               ActionDispatcher.dispatch_internal(:file_bucket, :authorize_download, %{"bucket" => "sdk", "id" => "any"})
+        assert {:ok, %{allowed: false}} =
+                 ActionDispatcher.dispatch_internal(:file_bucket, :authorize_download, %{"bucket" => "sdk", "id" => "any"})
+      after
+        # The stored value outlives the test; put the seeded default back for the tests that follow.
+        ActionDispatcher.dispatch_internal(:file_bucket, :set_bucket_visibility, %{
+          "bucket" => "sdk",
+          "visibility" => "public"
+        })
+      end
     end
   end
 end
