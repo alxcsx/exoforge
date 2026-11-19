@@ -42,7 +42,7 @@ The kernel is strictly limited to:
 - DSL & Drivers: [`Exoforge.Contracts.Extension`](core/lib/contracts/extension.ex), [`Service`](core/lib/contracts/service.ex), [`ElixirExtensionRunner`](core/lib/drivers/runtime/elixir_extension_runner.ex), `NativeExtensionRunner`, and [`ExtensionProtocol`](core/lib/drivers/runtime/extension_protocol.ex) (the host side of the wire handshake).
 
 ### The 4-Question Litmus Test: "Should this be an extension?"
-1. **Can two implementations be swapped?** (REST ↔ gRPC ↔ WebSocket, Postgres ↔ SQLite, web ↔ TUI) → **Extension**.
+1. **Can two implementations be swapped?** (REST ↔ gRPC ↔ WebSocket, database engines behind the `database` contract, web ↔ TUI) → **Extension**.
 2. **Does something need to depend on it by contract?** → **Extension**.
 3. **Would bootstrapping itself depend on it?** → **Kernel**.
 4. **Is it only consumed by one domain extension?** → Keep it internal to that extension.
@@ -73,7 +73,7 @@ file_bucket ──▶ database
 
 | Extension | Port / Role | Provides | Depends on | Purpose |
 | :--- | :--- | :--- | :--- | :--- |
-| `exoforge_std_database` | Storage | `database`, `lldb` | — | Per-extension schema isolation with Postgres and SQLite adapters. |
+| `exoforge_std_database` | Storage | `database`, `lldb` | — | Per-extension schema isolation on PostgreSQL (official extension is Postgres-only; the `database` contract remains swappable — see [ADR 003](docs/adr/003-postgres-only.md)). |
 | `exoforge_std_auth` | Identity | `auth` | `database` | Token issuance, session verification, scope validation. |
 | `exoforge_std_player_data` | Profiles | `player_data` | `database`, `auth` | Canonical player profile persistence and lifecycle events. |
 | `exoforge_std_http` | REST (:4001) | `http` | `auth` | Dynamic OpenAPI routes derived from service contracts. |
@@ -204,7 +204,7 @@ newline-delimited JSON with a `type`:
 
 | type | direction | carries |
 | :--- | :--- | :--- |
-| `hello` | host → extension | `protocol`, `host`, `capabilities`, `dialect`? (`postgres` \| `sqlite`) |
+| `hello` | host → extension | `protocol`, `host`, `capabilities`, `dialect`? (e.g. `postgres`) |
 | `hello` | extension → host | `protocol`, `extension`, `capabilities` |
 | `action` / `action_result` | host → extension / back | `id`, `action`, `payload` / `status`, `data` or `error` |
 | `event` | host → extension | `event`, `payload` |
@@ -222,10 +222,10 @@ extension can also declare an optional `[ExoSeed]` method on its root (parameter
 idempotent by contract (authors check before inserting initial rows). A throwing seed logs and fails
 the lifecycle handshake like `OnExtensionStart()` does. An extension that does not declare it is never
 sent the frame, so protocol 1 stays compatible in both directions. The host's `hello` also carries an
-optional `dialect` (from the active `exoforge_std_database` adapter, omitted when unknown) so protocol 1
-stays compatible both ways, and the C# SDK exposes it as `Exo.Database.Dialect` (default
-`DatabaseDialect.Unknown`). A protocol mismatch, a missing capability, or no answer at all is one log
-line and a refusal - never a retry.
+optional `dialect` (the official `exoforge_std_database` reports `postgres`, while a swapped-in database
+extension may advertise its own engine; omitted when unknown) so protocol 1 stays compatible both ways,
+and the C# SDK exposes it as `Exo.Database.Dialect` (default `DatabaseDialect.Unknown`). A protocol
+mismatch, a missing capability, or no answer at all is one log line and a refusal - never a retry.
 
 **Inbound events**: the runner subscribes to the events an extension declares in its manifest (with their declared
 topic) and forwards them as `{"type":"event"}` frames. The extension handles them in an optional

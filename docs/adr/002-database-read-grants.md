@@ -26,9 +26,9 @@ While RPC hydration preserves action-level authorization and loose coupling, joi
 - At boot, the database extension reconciles `USAGE` and `SELECT` grants for declared `db_read` targets.
 - Queries execute inside a transaction with `SET LOCAL ROLE` and `SET LOCAL search_path`, so Postgres rejects writes to foreign schemas and any undeclared reads.
 
-### Decision 3: SQLite Parity
-- Declared `db_read` targets are attached read-only via `ATTACH DATABASE ... AS <schema>` using URI `mode=ro`.
-- Consumers get schema-qualified `SELECT` parity with Postgres without any write access to foreign databases.
+### Decision 3: Official Extension Ownership & Swapped-In Databases
+- Cross-extension `db_read` grants are enforced by PostgreSQL roles only in the official `exoforge_std_database` extension (see [ADR 003](003-postgres-only.md)).
+- A swapped-in `database` extension owns its isolation guarantees and must implement `db_read` itself or refuse `db_read` at boot.
 
 ### Decision 4: Soft Cross-Schema Foreign Keys
 - Cross-schema foreign keys are indexed columns with no SQL `REFERENCES` constraint.
@@ -38,7 +38,7 @@ While RPC hydration preserves action-level authorization and loose coupling, joi
 
 ## 3. Consequences & Accepted Cost
 
-- **Positive**: Enables direct cross-extension joins and reads with database-enforced read-only isolation in both Postgres and SQLite.
+- **Positive**: Enables direct cross-extension joins and reads with database-enforced read-only isolation in PostgreSQL under the official extension.
 - **Accepted Cost**: A producer's table and column layout becomes part of its contract for declared `db_read` readers (breaking schema changes affect declared consumers just like breaking action contracts).
 - **Opt-In & Least Privilege**: Read grants are strictly `SELECT`-only and opt-in; undeclared cross-extension SQL remains denied with the missing-table RPC/stub hint.
 - **RPC Default Preserved**: RPC hydration (`get_many` + stubs) remains the default when action-level authorization or decoupling is preferred.
