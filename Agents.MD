@@ -14,6 +14,13 @@ Phase 1 bulldozed all platform terminology from "plugin" to "extension", purged 
 
 `Exoforge.Plugin.SDK` is embedded in the Unity package (`NuGet~/`), and client stubs require no local cluster: **An extension manifest is JSON** — `manifest.json`, written by the extension's own Roslyn generator or by the Elixir manifest compiler, read by the server and C# tooling alike. Stub generation lays each built extension's manifest over the cluster export, so an extension that is built but not yet deployed still has typed stubs. See [`plan.md`](plan.md).
 
+**Typed resources and the schema strategy.** A resource whose columns all declare a `storage` type (the C# generator emits them) gets
+a real table, made before its extension starts by `resource_store.provision` and kept in line by the `lldb` driver layer; resources
+written with the Elixir DSL keep the older path. What an *unsafe* change means (drop or rename a column, narrow a type, `NOT NULL`
+without a default on a table with rows) is set at the deploy site by `EXOFORGE_SCHEMA_CHANGE_MODE`: `refuse` (the default) fails that
+extension alone and says where (`table.column`, the change, why); `reset` drops and rebuilds the table, its rows lost. `just dev` sets
+`reset`; the compose file defaults to `refuse` and passes the variable through. See [ADR 004](docs/adr/004-typed-resource-schemas.md).
+
 **Test data does not outlive the test.** An integration run creates accounts, and they used to land in
 the developer's own database, indistinguishable from a player who signed up. Two things stop that: the
 live-test recipes run the backend with `EXOFORGE_DATA_DIR` pointing at a temporary directory, and an

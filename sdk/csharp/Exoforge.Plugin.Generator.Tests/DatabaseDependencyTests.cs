@@ -46,6 +46,21 @@ public class DatabaseDependencyTests
     }
 
     [Fact]
+    public void Declaring_A_Resource_Adds_The_Resource_Store_Dependency()
+    {
+        const string source = """
+            using Exoforge.Plugin.SDK;
+            namespace P;
+            [ExoService("loja", Resources = new[] { typeof(Item) })]
+            public partial class Loja { [ExoAction] public Item Get(string id) => new(); }
+            [ExoResource("itens")]
+            public class Item { public string Id { get; set; } = ""; }
+            """;
+
+        Assert.Contains("resource_store", Dependencies(RunManifest(source)));
+    }
+
+    [Fact]
     public void Referencing_Exo_Database_Adds_The_Database_Dependency()
     {
         const string source = """
@@ -95,5 +110,6 @@ public class DatabaseDependencyTests
             """;
 
         Assert.DoesNotContain("database", Dependencies(RunManifest(source)));
+        Assert.DoesNotContain("resource_store", Dependencies(RunManifest(source)));
     }
 }

@@ -160,7 +160,7 @@ public class ManagementTests : IDisposable
     [Fact]
     public async System.Threading.Tasks.Task DependencyStubs_Do_Not_Demand_A_Contract_For_The_Hosts_Database()
     {
-        WriteManifest(_tempDir, "caller", """{"id":"caller","version":"1.0.0","type":"native","dependencies":["database"]}""");
+        WriteManifest(_tempDir, "caller", """{"id":"caller","version":"1.0.0","type":"native","dependencies":["database","resource_store"]}""");
         string extensionDir = Path.Combine(_tempDir, "caller");
 
         var (output, missing) = await ExoDeployer.BesideExtension(extensionDir).GenerateDependencyStubsAsync(extensionDir);

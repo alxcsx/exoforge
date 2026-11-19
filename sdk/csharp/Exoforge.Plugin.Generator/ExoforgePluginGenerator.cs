@@ -760,6 +760,13 @@ namespace Exoforge.Plugin.SDK
             dependencies.Add("database");
         }
 
+        // The resource store makes the tables of its typed resources before the extension starts, so it
+        // has to start first.
+        if (services.Any(s => s.Resources.Count > 0) && !dependencies.Contains("resource_store"))
+        {
+            dependencies.Add("resource_store");
+        }
+
         return new ServiceEmit(
             id,
             pluginVersion,

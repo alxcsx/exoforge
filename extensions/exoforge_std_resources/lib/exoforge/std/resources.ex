@@ -53,11 +53,13 @@ defmodule Exoforge.Std.Resources do
 
   ## ---- MIGRATIONS ----
 
-  def run_migrations(target \\ nil, extension \\ nil) do
+  def run_migrations(target \\ nil, extension \\ nil, opts \\ []) do
     ensure_cache()
+    typed_only? = Keyword.get(opts, :typed_only, false)
 
     resources =
       ExtensionRegistry.all_resources()
+      |> Enum.filter(fn info -> not typed_only? or typed_resource?(info.resource) end)
       |> Enum.filter(fn info ->
         (target == nil or to_string(info.resource.name) == to_string(target)) and
           (extension == nil or to_string(info.extension_id) == to_string(extension) or
@@ -107,19 +109,114 @@ defmodule Exoforge.Std.Resources do
             err
 
           :ok ->
-            case db(pid, "CREATE TABLE IF NOT EXISTS #{table} (#{column_defs(res)})") do
-              {:ok, _} ->
-                repair_primary_key(pid, table, res)
-                reconcile_columns(pid, table, res)
-                mark_migrated(key)
-                :ok
-
-              {:error, reason} ->
-                {:error, {:migration_failed, %{extension: info.extension_id, table: table, reason: reason}}}
-            end
+            if typed_resource?(res),
+              do: migrate_typed(info, table, key),
+              else: migrate_legacy(info, table, key)
         end
     end
   end
+
+  defp migrate_legacy(%{plugin_id: pid, resource: res} = info, table, key) do
+    case db(pid, "CREATE TABLE IF NOT EXISTS #{table} (#{column_defs(res)})") do
+      {:ok, _} ->
+        repair_primary_key(pid, table, res)
+        reconcile_columns(pid, table, res)
+        mark_migrated(key)
+        :ok
+
+      {:error, reason} ->
+        {:error, {:migration_failed, %{extension: info.extension_id, table: table, reason: reason}}}
+    end
+  end
+
+  # A resource is typed when every one of its columns says what it stores (`storage`, emitted by the
+  # C# generator): its table is then made and kept in line by the driver layer's reconciler (ADR 004).
+  # Resources written with the Elixir DSL declare no `storage` and keep the older path above.
+  defp typed_resource?(res) do
+    case Map.get(res, :columns) || Map.get(res, "columns") do
+      [_ | _] = columns ->
+        Enum.all?(columns, fn col ->
+          storage = Map.get(col, :storage) || Map.get(col, "storage")
+          is_binary(storage) and storage != ""
+        end)
+
+      _ ->
+        false
+    end
+  end
+
+  defp migrate_typed(%{plugin_id: pid, resource: res} = info, table, key) do
+    case apply_typed_schema(pid, res) do
+      :ok ->
+        mark_migrated(key)
+        :ok
+
+      {:error, {:unsafe_schema_change, _} = reason} ->
+        {:error, reason}
+
+      {:error, reason} ->
+        {:error, {:migration_failed, %{extension: info.extension_id, table: table, reason: reason}}}
+    end
+  end
+
+  defp apply_typed_schema(pid, res) do
+    case lldb(:apply_schema, %{namespace: pid, resources: [res]}) do
+      {:ok, _} ->
+        :ok
+
+      {:error, {:unsafe_schema_change, ops}} ->
+        unsafe_schema_change(pid, res, ops)
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  # The deploy decides what an unsafe change means. `reset` is for development: the table is dropped and
+  # made again, so its rows are gone. `refuse` (the default) fails the extension and says where.
+  defp unsafe_schema_change(pid, res, ops) do
+    case schema_change_mode() do
+      :reset ->
+        ops
+        |> Enum.map(& &1.table)
+        |> Enum.uniq()
+        |> Enum.each(fn table ->
+          reasons = ops |> Enum.filter(&(&1.table == table)) |> Enum.map_join("; ", & &1.message)
+
+          Logger.warning(
+            "[ResourceStore] EXOFORGE_SCHEMA_CHANGE_MODE=reset: dropping table #{table} of #{pid} (rows are lost): #{reasons}"
+          )
+
+          lldb(:reset_table, %{namespace: pid, table: table})
+        end)
+
+        case lldb(:apply_schema, %{namespace: pid, resources: [res]}) do
+          {:ok, _} -> :ok
+          error -> error
+        end
+
+      :refuse ->
+        {:error,
+         {:unsafe_schema_change,
+          %{
+            extension: to_string(pid),
+            table: table_for(res),
+            changes: Enum.map(ops, &%{table: &1.table, column: Map.get(&1, :column), change: &1.op, reason: &1.reason}),
+            hint:
+              "Add a migration for this change, or set EXOFORGE_SCHEMA_CHANGE_MODE=reset to rebuild the table (its rows are lost)."
+          }}}
+    end
+  end
+
+  @doc "`:reset` or `:refuse`, set at the deploy site (env `EXOFORGE_SCHEMA_CHANGE_MODE`, or `config :exoforge, :schema_change_mode`). Default `:refuse`."
+  def schema_change_mode do
+    case System.get_env("EXOFORGE_SCHEMA_CHANGE_MODE") || Application.get_env(:exoforge, :schema_change_mode) do
+      mode when mode in ["reset", :reset] -> :reset
+      _ -> :refuse
+    end
+  end
+
+  defp lldb(action, payload), do: ActionDispatcher.dispatch_internal(:lldb, action, payload)
 
   # `CREATE TABLE IF NOT EXISTS` does not repair a table that already exists, so one created by an
   # older schema keeps what it had. Without a PRIMARY KEY every upsert against it fails forever with
@@ -279,6 +376,19 @@ defmodule Exoforge.Std.Resources do
     case run_migrations(target, extension) do
       {:error, reason} -> {:error, reason}
       count when is_integer(count) -> {:ok, %{migrated: count}}
+    end
+  end
+
+  @doc """
+  Provisioning step: makes the tables of an extension's TYPED resources before the extension starts.
+  Resources without declared column types are left to the lazy path. A failure is the extension's to
+  report: the kernel records it as a boot failure of that extension alone (stage `:storage`).
+  """
+  @impl true
+  defaction provision(payload), scope: Exoforge.Auth.Roles.studio() do
+    case run_migrations(nil, param(payload, :extension), typed_only: true) do
+      {:error, reason} -> {:error, reason}
+      count when is_integer(count) -> {:ok, %{provisioned: count}}
     end
   end
 

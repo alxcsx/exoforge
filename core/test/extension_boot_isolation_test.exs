@@ -34,6 +34,24 @@ defmodule Exoforge.ExtensionBootIsolationTest do
     def load_extensions(manifests), do: manifests
   end
 
+  # A resource store whose provisioning answer the test chooses.
+  defmodule StubResourceStore do
+    use Exoforge.Extension, provides: [:resource_store]
+
+    @manifest %{category: "Storage", system: true, title: "Stub resource store", icon: "🧪", dashboard_view: nil}
+
+    def start, do: Agent.start_link(fn -> %{answer: {:ok, %{provisioned: 1}}, asked: []} end, name: __MODULE__)
+    def answer(value), do: Agent.update(__MODULE__, &%{&1 | answer: value})
+    def asked, do: Agent.get(__MODULE__, &Enum.reverse(&1.asked))
+
+    @impl true
+    defaction provision(payload) do
+      Agent.get_and_update(__MODULE__, fn state ->
+        {state.answer, %{state | asked: [payload[:extension] | state.asked]}}
+      end)
+    end
+  end
+
   setup do
     start_supervised!(ExtensionRegistry)
     start_supervised!(Exoforge.EventDispatcher)
@@ -163,6 +181,76 @@ defmodule Exoforge.ExtensionBootIsolationTest do
     assert ExtensionRegistry.get_failure(:flaky) == nil
     assert ExtensionRegistry.get_crash_info(:flaky) == nil
     assert ExtensionRegistry.fetch_manifest(:flaky)
+  end
+
+  describe "storage provisioning" do
+    setup do
+      {:ok, _} = StubResourceStore.start()
+
+      ExtensionRegistry.register(%Manifest{
+        id: :stub_resource_store,
+        name: "stub_resource_store",
+        version: "0.1.0",
+        type: OkRunner,
+        entry_point: StubResourceStore,
+        provides: [Exoforge.Std.Services.ResourceStore],
+        dependencies: []
+      })
+
+      on_exit(fn -> if Process.whereis(StubResourceStore), do: Agent.stop(StubResourceStore) end)
+      :ok
+    end
+
+    defp with_resources(manifest), do: %{manifest | services: [%{name: manifest.id, resources: [%{name: "inventory"}]}]}
+
+    test "an extension that declares resources is provisioned before it starts" do
+      stores = with_resources(manifest(:stores, OkRunner, [:svc_stores]))
+
+      assert [%Manifest{id: :stores}] = ExtensionBootstrapper.run(Driver, [stores])
+      assert StubResourceStore.asked() == ["stores"]
+      assert ExtensionRegistry.get_failure(:stores) == nil
+    end
+
+    test "an extension without resources is not asked about storage" do
+      ExtensionBootstrapper.run(Driver, [manifest(:plain, OkRunner, [:svc_plain])])
+      assert StubResourceStore.asked() == []
+    end
+
+    test "a storage failure fails that extension alone, with the stage, where and what to do" do
+      StubResourceStore.answer(
+        {:error,
+         {:unsafe_schema_change,
+          %{
+            extension: "stores",
+            table: "inventory",
+            changes: [%{table: "inventory", column: "qty", change: :alter_type, reason: "text is not a widening of int32"}],
+            hint: "Add a migration, or set EXOFORGE_SCHEMA_CHANGE_MODE=reset."
+          }}}
+      )
+
+      stores = with_resources(manifest(:stores, RaisingRunner, [:svc_stores]))
+      healthy = manifest(:healthy, OkRunner, [:svc_healthy])
+
+      # the failing extension's own runner would raise if it were started: it never is
+      assert [%Manifest{id: :healthy}] = ExtensionBootstrapper.run(Driver, [stores, healthy])
+
+      assert %{kind: :boot_failed, stage: :storage, message: message} = ExtensionRegistry.get_failure(:stores)
+      assert message =~ "unsafe schema change in inventory"
+      assert message =~ "inventory.qty (alter_type): text is not a widening of int32"
+      assert message =~ "EXOFORGE_SCHEMA_CHANGE_MODE=reset"
+      assert ExtensionRegistry.get_failure(:healthy) == nil
+    end
+
+    test "a dependent of an extension whose storage failed is blocked" do
+      StubResourceStore.answer({:error, {:migration_failed, %{table: "inventory"}}})
+
+      stores = with_resources(manifest(:stores, OkRunner, [:svc_stores]))
+      dependent = manifest(:dependent, RaisingRunner, [:svc_dependent], [:svc_stores])
+
+      assert [] = ExtensionBootstrapper.run(Driver, [stores, dependent])
+      assert %{stage: :storage} = ExtensionRegistry.get_failure(:stores)
+      assert %{kind: :blocked, message: "dependency stores failed"} = ExtensionRegistry.get_failure(:dependent)
+    end
   end
 
   test "the Elixir runner reports a start failure instead of raising" do

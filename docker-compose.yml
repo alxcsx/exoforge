@@ -36,6 +36,9 @@ services:
     environment:
       MIX_ENV: prod
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/exoforge_prod
+      # What an unsafe change to a typed table does: `refuse` fails that extension and says where; `reset`
+      # drops and rebuilds the table (its rows are lost). A development stack can set `reset`.
+      EXOFORGE_SCHEMA_CHANGE_MODE: ${EXOFORGE_SCHEMA_CHANGE_MODE:-refuse}
       SECRET_KEY_BASE: ${SECRET_KEY_BASE:-exoforge_super_secret_key_base_at_least_64_bytes_long_for_dev_mode}
       LIVEVIEW_SIGNING_SALT: ${LIVEVIEW_SIGNING_SALT:-exoforge_liveview_salt_for_studio_sockets_at_least_8}
       RELEASE_COOKIE: ${RELEASE_COOKIE:-exoforge_cluster_cookie}

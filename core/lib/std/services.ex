@@ -838,6 +838,13 @@ defmodule Exoforge.Std.Services do
       returns(migrated: :integer)
     end
 
+    @doc "Provisioning step before an extension starts: makes the tables of its typed resources (those that declare column storage types)."
+    action :provision do
+      scope(:studio)
+      params(extension: [type: :string, optional: true])
+      returns(provisioned: :integer)
+    end
+
     @doc "Lists rows for a resource with filtering, sorting, and pagination."
     action :list do
       scope(:player)

@@ -9,7 +9,7 @@ compose_cmd := `if command -v docker >/dev/null 2>&1 && docker compose version >
 
 # Run backend development server
 dev: db-up
-	DATABASE_URL="${DATABASE_URL:-postgres://postgres:postgres@127.0.0.1:5432/exoforge_prod}" mix run --no-halt
+	DATABASE_URL="${DATABASE_URL:-postgres://postgres:postgres@127.0.0.1:5432/exoforge_prod}" EXOFORGE_SCHEMA_CHANGE_MODE="${EXOFORGE_SCHEMA_CHANGE_MODE:-reset}" mix run --no-halt
 
 # Stop the dev server and wipe all dev data (local runtime data + uploaded extensions)
 dev-reset:

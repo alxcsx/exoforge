@@ -965,10 +965,11 @@ public class ExoDeployer
         string extensionDir,
         CancellationToken cancellationToken = default)
     {
-        // `database` is the host's own capability (Exo.Database), reached without a stub, and the generator
-        // declares it for any extension that stores anything - so it must not demand a contract offline.
+        // `database` (Exo.Database) and `resource_store` are the host's own capabilities, reached without a
+        // stub, and the generator declares them for any extension that stores anything - so they must not
+        // demand a contract offline.
         if (ReadManifestDependencies(extensionDir) is not { } all
-            || all.Where(d => d != "database").ToList() is not { Count: > 0 } deps)
+            || all.Where(d => d is not ("database" or "resource_store")).ToList() is not { Count: > 0 } deps)
         {
             return (null, Array.Empty<string>());
         }

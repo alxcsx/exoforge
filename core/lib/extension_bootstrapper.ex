@@ -43,6 +43,24 @@ defmodule Exoforge.ExtensionBootstrapper do
     :ok
   end
 
+  defmodule StorageError do
+    @moduledoc "Raised when the storage an extension declared could not be provisioned."
+    defexception [:id, :reason]
+
+    @impl true
+    def message(%{id: id, reason: {:unsafe_schema_change, %{changes: changes, hint: hint, table: table}}}) do
+      where =
+        Enum.map_join(changes, "; ", fn change ->
+          column = if change[:column], do: ".#{change.column}", else: ""
+          "#{change.table}#{column} (#{change.change}): #{change.reason}"
+        end)
+
+      "extension #{id} has an unsafe schema change in #{table}: #{where}. #{hint}"
+    end
+
+    def message(%{id: id, reason: reason}), do: "extension #{id} could not provision its storage: #{inspect(reason)}"
+  end
+
   defmodule StartError do
     @moduledoc "Raised when an extension's runner reports that it could not start."
     defexception [:id, :reason]
@@ -166,6 +184,7 @@ defmodule Exoforge.ExtensionBootstrapper do
     initialize_and_register(manifest)
     :ok
   rescue
+    e in StorageError -> {:error, %{stage: :storage, message: Exception.message(e), detail: inspect(e.reason)}}
     e in StartError -> {:error, %{stage: :start, message: Exception.message(e), detail: inspect(e.reason)}}
     e -> {:error, %{stage: :load, message: Exception.message(e), detail: Exception.format(:error, e, __STACKTRACE__)}}
   catch
@@ -241,11 +260,33 @@ defmodule Exoforge.ExtensionBootstrapper do
       end
 
     ExtensionRegistry.register(manifest)
+    provision_storage(manifest)
 
     case runner.load(manifest) do
       {:error, reason} -> raise StartError, id: manifest.id, reason: reason
       result -> result
     end
+  end
+
+  # An extension that declares typed resources gets its tables made before it starts, by the resource
+  # store when there is one. A failure is that extension's alone (stage :storage), like any boot failure.
+  defp provision_storage(%Manifest{} = manifest) do
+    if ExtensionRegistry.fetch_service(:resource_store) != nil and declares_resources?(manifest) do
+      case Exoforge.ActionDispatcher.dispatch_internal(:resource_store, :provision, %{extension: to_string(manifest.id)}) do
+        {:error, reason} -> raise StorageError, id: manifest.id, reason: reason
+        _ -> :ok
+      end
+    end
+
+    :ok
+  end
+
+  defp declares_resources?(manifest) do
+    manifest
+    |> ExtensionRegistry.manifest_services()
+    |> Enum.any?(fn service -> (Map.get(service, :resources) || []) != [] end)
+  rescue
+    _ -> false
   end
 
   # One clause per runtime. A runtime added later adds a clause here and a runner module, and
