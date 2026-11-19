@@ -202,7 +202,7 @@ newline-delimited JSON with a `type`:
 
 | type | direction | carries |
 | :--- | :--- | :--- |
-| `hello` | host → extension | `protocol`, `host`, `capabilities` |
+| `hello` | host → extension | `protocol`, `host`, `capabilities`, `dialect`? (`postgres` \| `sqlite`) |
 | `hello` | extension → host | `protocol`, `extension`, `capabilities` |
 | `action` / `action_result` | host → extension / back | `id`, `action`, `payload` / `status`, `data` or `error` |
 | `event` | host → extension | `event`, `payload` |
@@ -219,8 +219,11 @@ extension can also declare an optional `[ExoSeed]` method on its root (parameter
 `Task`): the generated dispatch runs it once after `OnExtensionStart()` on every start. It must be
 idempotent by contract (authors check before inserting initial rows). A throwing seed logs and fails
 the lifecycle handshake like `OnExtensionStart()` does. An extension that does not declare it is never
-sent the frame, so protocol 1 stays compatible in both directions. A protocol mismatch, a missing
-capability, or no answer at all is one log line and a refusal - never a retry.
+sent the frame, so protocol 1 stays compatible in both directions. The host's `hello` also carries an
+optional `dialect` (from the active `exoforge_std_database` adapter, omitted when unknown) so protocol 1
+stays compatible both ways, and the C# SDK exposes it as `Exo.Database.Dialect` (default
+`DatabaseDialect.Unknown`). A protocol mismatch, a missing capability, or no answer at all is one log
+line and a refusal - never a retry.
 
 **Inbound events**: the runner subscribes to the events an extension declares in its manifest (with their declared
 topic) and forwards them as `{"type":"event"}` frames. The extension handles them in an optional

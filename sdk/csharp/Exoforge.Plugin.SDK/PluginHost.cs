@@ -465,11 +465,14 @@ public static class PluginHost
             var root = doc.RootElement;
 
             int protocol = root.TryGetProperty("protocol", out var p) && p.TryGetInt32(out int value) ? value : 0;
-            HostBridge.NoteHandshake(protocol, ReadCapabilities(root));
+            string? rawDialect = root.TryGetProperty("dialect", out var d) && d.ValueKind == JsonValueKind.String
+                ? d.GetString()
+                : null;
+            HostBridge.NoteHandshake(protocol, ReadCapabilities(root), HostBridge.ParseDialect(rawDialect));
         }
         catch (JsonException)
         {
-            HostBridge.NoteHandshake(0, Array.Empty<string>());
+            HostBridge.NoteHandshake(0, Array.Empty<string>(), DatabaseDialect.Unknown);
         }
 
         Write(HelloFrame());

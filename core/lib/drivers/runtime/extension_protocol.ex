@@ -23,6 +23,9 @@ defmodule Exoforge.Drivers.Runtime.ExtensionProtocol do
   capability is asked to run its `OnExtensionStart` hook after the handshake. An extension that
   does not declare it is never sent the frame, so protocol 1 remains compatible in both
   directions.
+
+  The host `hello` frame also carries an optional `dialect` (`"postgres"` or `"sqlite"`, omitted
+  when unknown) so native extensions can read the active database backend without guessing.
   """
 
   @protocol 1
@@ -51,14 +54,26 @@ defmodule Exoforge.Drivers.Runtime.ExtensionProtocol do
   def lifecycle_timeout_ms, do: @lifecycle_timeout_ms
 
   @doc "The host's opening frame, ready to write to the port as one line."
-  def hello_frame do
-    Jason.encode!(%{
+  def hello_frame(opts \\ []) do
+    base = %{
       type: "hello",
       protocol: @protocol,
       host: "exoforge",
       capabilities: @host_capabilities
-    })
+    }
+
+    case normalize_dialect(Keyword.get(opts, :dialect)) do
+      nil -> base
+      dialect -> Map.put(base, :dialect, dialect)
+    end
+    |> Jason.encode!()
   end
+
+  defp normalize_dialect(:postgres), do: "postgres"
+  defp normalize_dialect("postgres"), do: "postgres"
+  defp normalize_dialect(:sqlite), do: "sqlite"
+  defp normalize_dialect("sqlite"), do: "sqlite"
+  defp normalize_dialect(_), do: nil
 
   @doc """
   Validates an extension's hello.

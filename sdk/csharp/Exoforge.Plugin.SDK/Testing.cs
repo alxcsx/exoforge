@@ -18,6 +18,9 @@ public class InMemoryDatabase : IDatabase
     /// <summary>Raw stored entries for test assertions.</summary>
     public IReadOnlyDictionary<(string Table, string Key), object> Entries => _store;
 
+    /// <summary>Database dialect reported by <c>Dialect</c> during unit tests.</summary>
+    public DatabaseDialect Dialect { get; set; } = DatabaseDialect.Unknown;
+
     public T? Get<T>(string table, string key)
     {
         if (_store.TryGetValue((table.ToLowerInvariant(), key), out var val))

@@ -14,6 +14,26 @@ defmodule Exoforge.NativeExtensionRunnerTest do
     defaction debit(_payload), do: {:error, {:insufficient_funds, "You need 10 coins"}}
   end
 
+  defmodule PostgresLldbPlug do
+    use Exoforge.Extension, provides: [:lldb]
+
+    @impl true
+    defaction connection_config(_payload), do: {:ok, %{url: "", pool_size: 1, driver: :postgres}}
+
+    @impl true
+    defaction health_check(), do: {:ok, %{status: "ok"}}
+  end
+
+  defmodule SqliteLldbPlug do
+    use Exoforge.Extension, provides: [:lldb]
+
+    @impl true
+    defaction connection_config(_payload), do: {:ok, %{url: "", pool_size: 1, driver: :sqlite}}
+
+    @impl true
+    defaction health_check(), do: {:ok, %{status: "ok"}}
+  end
+
   # A stub "plugin": any executable that speaks the JSON line protocol works, which is the
   # point of the runtime — no C# toolchain needed to exercise the host side.
   @stub """
@@ -108,6 +128,21 @@ defmodule Exoforge.NativeExtensionRunnerTest do
       *'"type":"lifecycle"'*)
         printf '{"type":"lifecycle_result","id":1,"status":"error","error":{"code":"startup_failed","message":"seed failed"}}\\n'
         exit 0 ;;
+    esac
+  done
+  """
+
+  @hello_capture_stub """
+  #!/usr/bin/env bash
+  hello_line=""
+  while IFS= read -r line; do
+    id=$(printf '%s' "$line" | sed -n 's/.*"id":\\([0-9]*\\).*/\\1/p')
+    case "$line" in
+      *'"type":"hello"'*)
+        hello_line="$line"
+        printf '{"type":"hello","protocol":1,"plugin":"stub_plugin","capabilities":["action","event","host_call_result"]}\\n' ;;
+      *'"action":"received_hello"'*)
+        printf '{"type":"action_result","id":%s,"status":"ok","data":%s}\\n' "$id" "$hello_line" ;;
     esac
   done
   """
@@ -504,5 +539,61 @@ defmodule Exoforge.NativeExtensionRunnerTest do
     # Temporary stderr file must be cleaned up
     refute File.exists?(stderr_file)
     assert Path.wildcard(temp_pattern) == []
+  end
+
+  test "omits database dialect from host hello when :lldb is not registered", %{manifest: manifest} do
+    pid = start_runner(manifest, write_variant(manifest, @hello_capture_stub))
+
+    assert {:ok, hello} = GenServer.call(pid, {:execute_action, "received_hello", %{}}, 5_000)
+    assert hello["type"] == "hello"
+    refute Map.has_key?(hello, "dialect")
+
+    GenServer.stop(pid)
+  end
+
+  test "advertises postgres dialect in host hello when :lldb reports :postgres", %{manifest: manifest} do
+    Exoforge.ExtensionRegistry.register(%Manifest{
+      id: :lldb_postgres_plug,
+      name: "lldb_postgres_plug",
+      version: "1.0.0",
+      entry_point: PostgresLldbPlug,
+      provides: [:lldb]
+    })
+
+    on_exit(fn ->
+      if Process.whereis(Exoforge.ExtensionRegistry) do
+        Exoforge.ExtensionRegistry.unregister(:lldb_postgres_plug)
+      end
+    end)
+
+    pid = start_runner(manifest, write_variant(manifest, @hello_capture_stub))
+
+    assert {:ok, %{"type" => "hello", "dialect" => "postgres"}} =
+             GenServer.call(pid, {:execute_action, "received_hello", %{}}, 5_000)
+
+    GenServer.stop(pid)
+  end
+
+  test "advertises sqlite dialect in host hello when :lldb reports :sqlite", %{manifest: manifest} do
+    Exoforge.ExtensionRegistry.register(%Manifest{
+      id: :lldb_sqlite_plug,
+      name: "lldb_sqlite_plug",
+      version: "1.0.0",
+      entry_point: SqliteLldbPlug,
+      provides: [:lldb]
+    })
+
+    on_exit(fn ->
+      if Process.whereis(Exoforge.ExtensionRegistry) do
+        Exoforge.ExtensionRegistry.unregister(:lldb_sqlite_plug)
+      end
+    end)
+
+    pid = start_runner(manifest, write_variant(manifest, @hello_capture_stub))
+
+    assert {:ok, %{"type" => "hello", "dialect" => "sqlite"}} =
+             GenServer.call(pid, {:execute_action, "received_hello", %{}}, 5_000)
+
+    GenServer.stop(pid)
   end
 end

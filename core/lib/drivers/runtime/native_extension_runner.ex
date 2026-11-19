@@ -192,7 +192,7 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
       Exoforge.Metering.record_start(manifest.id)
     end
 
-    Port.command(port, ExtensionProtocol.hello_frame() <> "\n")
+    Port.command(port, ExtensionProtocol.hello_frame(dialect: active_db_dialect(manifest)) <> "\n")
     handshake_timer = Process.send_after(self(), :handshake_timeout, handshake_timeout_ms)
 
     schedule_os_sample()
@@ -773,6 +773,22 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
   # -- Helpers --
 
   defp sanitize(result), do: Exoforge.ExtensionRegistry.sanitize_for_json(result)
+
+  defp active_db_dialect(manifest) do
+    if ExtensionRegistry.fetch_service(:lldb) do
+      try do
+        case ActionDispatcher.dispatch_internal(:lldb, :connection_config, %{namespace: to_string(manifest.id)}) do
+          {:ok, %{driver: driver}} -> driver
+          {:ok, %{"driver" => driver}} -> driver
+          _ -> nil
+        end
+      rescue
+        _ -> nil
+      catch
+        :exit, _ -> nil
+      end
+    end
+  end
 
   defp normalize_error(nil), do: "unknown_error"
   defp normalize_error(%{"code" => code, "message" => msg}), do: {String.to_atom(code), msg}
