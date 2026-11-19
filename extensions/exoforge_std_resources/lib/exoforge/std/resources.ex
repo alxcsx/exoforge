@@ -428,7 +428,7 @@ defmodule Exoforge.Std.Resources do
           id
         end
 
-      case db(info.plugin_id, "SELECT * FROM #{table} WHERE #{pk} = $1", [target_id]) do
+      case db(info.plugin_id, "SELECT * FROM #{table} WHERE #{pk} = $1", [coerce_id(res, target_id)]) do
         {:ok, %{rows: [row | _]}} ->
           {:ok, %{row: decode_row(res, row)}}
 
@@ -499,7 +499,7 @@ defmodule Exoforge.Std.Resources do
 
         sql = "UPDATE #{table} SET #{assignments} WHERE #{pk} = $#{length(names) + 1}"
 
-        case db(info.plugin_id, sql, values ++ [id]) do
+        case db(info.plugin_id, sql, values ++ [coerce_id(info.resource, id)]) do
           {:ok, _} -> get(%{resource: name, id: id})
           error -> error
         end
@@ -518,7 +518,7 @@ defmodule Exoforge.Std.Resources do
       table = table_for(res)
       pk = String.downcase(to_string(res.primary_key || :id))
 
-      case db(info.plugin_id, "DELETE FROM #{table} WHERE #{pk} = $1", [id]) do
+      case db(info.plugin_id, "DELETE FROM #{table} WHERE #{pk} = $1", [coerce_id(res, id)]) do
         {:ok, _} -> {:ok, %{deleted: true}}
         error -> error
       end
@@ -870,6 +870,31 @@ defmodule Exoforge.Std.Resources do
 
   # `[:string]` and friends are lists a native extension's manifest names by element type.
   defp json_type?(type), do: type in @json_column_types or (is_binary(type) and String.starts_with?(type, "["))
+
+  # An id arrives as a string (a URL, a form). A key column that holds numbers is bound as a number, or
+  # the database refuses the parameter.
+  defp coerce_id(res, id) when is_binary(id) do
+    pk = String.downcase(to_string(res.primary_key || :id))
+
+    case column_type(res, pk) do
+      :integer ->
+        case Integer.parse(String.trim(id)) do
+          {n, ""} -> n
+          _ -> id
+        end
+
+      :float ->
+        case Float.parse(String.trim(id)) do
+          {n, ""} -> n
+          _ -> id
+        end
+
+      _ ->
+        id
+    end
+  end
+
+  defp coerce_id(_res, id), do: id
 
   defp column_type(res, name) do
     column = Enum.find(res.columns || [], &(to_string(&1.name || &1["name"]) == name))

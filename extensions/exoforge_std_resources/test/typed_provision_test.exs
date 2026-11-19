@@ -139,6 +139,44 @@ defmodule Exoforge.Std.ResourcesTypedProvisionTest do
     assert {:error, :not_found} = Database.get(plugin, "inventory", "gear")
   end
 
+  describe "Studio's generic CRUD on a typed table with an integer key" do
+    setup %{plugin: plugin} do
+      on_exit(fn -> Database.reset!(plugin) end)
+
+      declare(plugin, %{
+        name: "counters",
+        source: {:table, "counters"},
+        primary_key: :counter_id,
+        # the shape a native extension's manifest gives: every column also carries its Studio display fields
+        columns: [
+          %{name: "counter_id", storage: "int32", primary_key: true, type: "integer", label: "Counter ID", sortable: true, filterable: true, badge: false},
+          %{name: "value", storage: "int32", nullable: true, type: "integer", label: "Value", sortable: true, filterable: false, badge: false},
+          %{name: "status", storage: "text", nullable: true, type: "string", label: "Status", sortable: false, filterable: true, badge: true, choices: ~w(active retired)}
+        ]
+      })
+
+      assert {:ok, %{provisioned: 1}} = provision(plugin)
+      :ok
+    end
+
+    defp store(action, payload), do: ActionDispatcher.dispatch_internal(:resource_store, action, payload)
+
+    test "ids arrive as strings and are read, changed and removed by the key's declared type", %{plugin: _plugin} do
+      assert {:ok, _} = store(:create, %{resource: "counters", attributes: %{"counter_id" => 7, "value" => 1, "status" => "active"}})
+
+      # what a URL or a form sends
+      assert {:ok, %{row: %{"counter_id" => 7, "value" => 1}}} = store(:get, %{resource: "counters", id: "7"})
+
+      assert {:ok, _} = store(:update, %{resource: "counters", id: "7", attributes: %{"value" => 9}})
+      assert {:ok, %{row: %{"value" => 9}}} = store(:get, %{resource: "counters", id: "7"})
+
+      assert {:ok, %{rows: [%{"counter_id" => 7}], total: 1}} = store(:list, %{resource: "counters"})
+
+      assert {:ok, _} = store(:delete, %{resource: "counters", id: "7"})
+      assert {:error, :not_found} = store(:get, %{resource: "counters", id: "7"})
+    end
+  end
+
   test "the mode is refuse unless the deploy says reset" do
     System.delete_env("EXOFORGE_SCHEMA_CHANGE_MODE")
     assert Resources.schema_change_mode() == :refuse
