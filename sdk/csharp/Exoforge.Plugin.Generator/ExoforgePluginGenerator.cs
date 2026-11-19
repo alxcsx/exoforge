@@ -249,6 +249,7 @@ namespace Exoforge.Plugin.SDK
         string Version,
         string Provides,
         string Dependencies,
+        string DbRead,
         string ServiceName,
         string? Category,
         string? Title,
@@ -295,6 +296,7 @@ namespace Exoforge.Plugin.SDK
         // A contract interface declares the service and the class implementing it is the plugin's
         // root. A class declares and implements it in one place.
         bool isContract = declared.TypeKind == TypeKind.Interface;
+        if (!isContract && (declared.IsStatic || declared.IsAbstract)) return null;
         var root = isContract ? FindImplementation(compilation, declared) : declared;
         if (root is null) return null;
 
@@ -435,6 +437,7 @@ namespace Exoforge.Plugin.SDK
 
         var primary = services[0];
         var resourceValidationErrors = new List<string>();
+        var inferredDbReads = new List<string>();
 
         // Resources: from [ExoService(Resources = ...)] and from [ExoResource] on the declaring type -
         // both belong to the service that declared them. A standalone [ExoResource] record elsewhere
@@ -445,7 +448,7 @@ namespace Exoforge.Plugin.SDK
 
             foreach (var resType in NamedTypeArray(attr, "Resources"))
             {
-                AddResource(owner.Resources, ResourceFromType(resType, ActionNames(owner), resourceValidationErrors));
+                AddResource(owner.Resources, ResourceFromType(resType, ActionNames(owner), resourceValidationErrors, inferredDbReads));
             }
         }
 
@@ -456,11 +459,11 @@ namespace Exoforge.Plugin.SDK
             var target = NamedType(attr, "ResourceType");
             if (target is not null)
             {
-                AddResource(primary.Resources, ResourceFromType(target, ActionNames(primary), resourceValidationErrors));
+                AddResource(primary.Resources, ResourceFromType(target, ActionNames(primary), resourceValidationErrors, inferredDbReads));
                 continue;
             }
 
-            var columns = ColumnsFor(declared, attr, out var declaredPk, resourceValidationErrors);
+            var columns = ColumnsFor(declared, attr, out var declaredPk, resourceValidationErrors, inferredDbReads);
             if (columns.Count == 0) continue;
 
             if (string.IsNullOrEmpty(declaredPk))
@@ -489,11 +492,12 @@ namespace Exoforge.Plugin.SDK
         {
             if (SymbolEqualityComparer.Default.Equals(candidate, declared)) continue;
             if (candidate.GetAttributes().Any(IsServiceAttribute)) continue;
+            if (IsNestedInForeignExtension(candidate, declared, root)) continue;
 
             var resAttr = FindResourceAttribute(candidate.GetAttributes());
             if (resAttr is not null)
             {
-                AddResource(primary.Resources, ResourceFromType(candidate, ActionNames(primary), resourceValidationErrors));
+                AddResource(primary.Resources, ResourceFromType(candidate, ActionNames(primary), resourceValidationErrors, inferredDbReads));
             }
 
             foreach (var attr in candidate.GetAttributes())
@@ -528,6 +532,57 @@ namespace Exoforge.Plugin.SDK
                 }
                 if (!string.IsNullOrEmpty(dep) && !dependencies.Contains(dep!)) dependencies.Add(dep!);
             }
+        }
+
+        var dbRead = new List<string>();
+        void AddDbRead(string? extId)
+        {
+            if (string.IsNullOrWhiteSpace(extId)) return;
+            string trimmed = extId!.Trim();
+            if (provides.Contains(trimmed) || string.Equals(trimmed, id, StringComparison.Ordinal)) return;
+            if (!dbRead.Contains(trimmed)) dbRead.Add(trimmed);
+            if (!dependencies.Contains(trimmed)) dependencies.Add(trimmed);
+        }
+
+        void ScanDbReadAttributes(INamedTypeSymbol symbol)
+        {
+            foreach (var attr in symbol.GetAttributes())
+            {
+                if (attr.AttributeClass?.Name is not ("DbReadAttribute" or "DbRead")) continue;
+
+                string? extId = PositionalString(attr, 0) ?? NamedString(attr, "ExtensionId");
+                if (string.IsNullOrEmpty(extId))
+                {
+                    ITypeSymbol? markerType = null;
+                    if (attr.AttributeClass.IsGenericType && attr.AttributeClass.TypeArguments.Length == 1)
+                    {
+                        markerType = attr.AttributeClass.TypeArguments[0];
+                    }
+                    else if (attr.ConstructorArguments.Length > 0 && attr.ConstructorArguments[0].Value is ITypeSymbol typeSymbol)
+                    {
+                        markerType = typeSymbol;
+                    }
+                    else
+                    {
+                        markerType = NamedType(attr, "MarkerType");
+                    }
+
+                    extId = ResolveExtensionMarkerId(markerType);
+                }
+
+                AddDbRead(extId);
+            }
+        }
+
+        ScanDbReadAttributes(root);
+        if (!SymbolEqualityComparer.Default.Equals(declared, root))
+        {
+            ScanDbReadAttributes(declared);
+        }
+
+        foreach (var extId in inferredDbReads)
+        {
+            AddDbRead(extId);
         }
 
         // Detect dependencies referenced via static holder: ExoServices.<Service>, Exo.<Service>, Exoforge.<Service>, or I<Service>Service
@@ -709,6 +764,7 @@ namespace Exoforge.Plugin.SDK
             pluginVersion,
             string.Join(",", provides),
             string.Join(",", dependencies),
+            string.Join(",", dbRead),
             primary.Name,
             primary.Category,
             primary.Title,
@@ -941,21 +997,21 @@ namespace Exoforge.Plugin.SDK
 
     // ---- resource extraction ----
 
-    private static ResourceModel? ResourceFromType(ITypeSymbol symbol, List<string> serviceActions, List<string>? diagnostics)
+    private static ResourceModel? ResourceFromType(
+        ITypeSymbol symbol,
+        List<string> serviceActions,
+        List<string>? diagnostics,
+        List<string>? inferredDbReads = null)
     {
         if (symbol is not INamedTypeSymbol resourceType) return null;
 
         var resAttr = FindResourceAttribute(resourceType.GetAttributes());
 
-        string typeName = resourceType.Name;
-        if (typeName.EndsWith("Resource", StringComparison.OrdinalIgnoreCase) && typeName.Length > 8)
-        {
-            typeName = typeName.Substring(0, typeName.Length - 8);
-        }
+        string typeName = StripResourceSuffix(resourceType.Name);
 
         string resName = NamedString(resAttr, "Name") ?? PositionalString(resAttr, 0) ?? ToSnakeCase(typeName);
 
-        var columns = ColumnsFor(resourceType, resAttr, out var primaryKey, diagnostics);
+        var columns = ColumnsFor(resourceType, resAttr, out var primaryKey, diagnostics, inferredDbReads);
         if (string.IsNullOrEmpty(primaryKey))
         {
             var candidate = columns.FirstOrDefault(c =>
@@ -978,7 +1034,12 @@ namespace Exoforge.Plugin.SDK
             NamedBool(resAttr, "AllowPlayerRead"));
     }
 
-    private static List<ColumnModel> ColumnsFor(INamedTypeSymbol type, AttributeData? resourceAttr, out string? primaryKey, List<string>? diagnostics)
+    private static List<ColumnModel> ColumnsFor(
+        INamedTypeSymbol type,
+        AttributeData? resourceAttr,
+        out string? primaryKey,
+        List<string>? diagnostics,
+        List<string>? inferredDbReads = null)
     {
         var columns = new List<ColumnModel>();
         var rawPk = NamedString(resourceAttr, "PrimaryKey");
@@ -986,17 +1047,39 @@ namespace Exoforge.Plugin.SDK
 
         var seen = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
+        Dictionary<string, IParameterSymbol>? recordParams = null;
+        if (type.IsRecord)
+        {
+            recordParams = new Dictionary<string, IParameterSymbol>(StringComparer.Ordinal);
+            foreach (var ctor in type.InstanceConstructors)
+            {
+                if (ctor.Parameters.Length == 1 && SymbolEqualityComparer.Default.Equals(ctor.Parameters[0].Type, type))
+                    continue;
+                foreach (var param in ctor.Parameters)
+                {
+                    if (!recordParams.ContainsKey(param.Name) || FindForeignKeyAttribute(param.GetAttributes()) is not null)
+                    {
+                        recordParams[param.Name] = param;
+                    }
+                }
+            }
+        }
+
         foreach (var member in type.GetMembers())
         {
             if (member is not IPropertySymbol property) continue;
             if (property.DeclaredAccessibility != Accessibility.Public || property.IsStatic) continue;
 
             var colAttr = FindAttribute(property.GetAttributes(), ColumnAttribute);
+            var fkAttr = FindForeignKeyAttribute(property.GetAttributes())
+                         ?? (recordParams is not null && recordParams.TryGetValue(property.Name, out var recParam)
+                             ? FindForeignKeyAttribute(recParam.GetAttributes())
+                             : null);
 
             bool isExplicitPk = NamedBool(colAttr, "PrimaryKey") || property.Name.Equals("Id", StringComparison.OrdinalIgnoreCase);
 
-            // Without [ExoColumn] the property still counts when the record carries [ExoResource].
-            if (colAttr is null && resourceAttr is null) continue;
+            // Without [ExoColumn] the property still counts when the record carries [ExoResource] or [ExoForeignKey].
+            if (colAttr is null && resourceAttr is null && fkAttr is null) continue;
 
             string? explicitName = NamedString(colAttr, "Name") ?? PositionalString(colAttr, 0);
             string colName = explicitName ?? ToSnakeCase(property.Name);
@@ -1036,8 +1119,34 @@ namespace Exoforge.Plugin.SDK
             string? inputType = NamedString(colAttr, "InputType");
 
             var refType = NamedType(colAttr, "ReferencesType");
-            bool isFk = NamedBool(colAttr, "ForeignKey") || refType is not null;
+            bool isFk = NamedBool(colAttr, "ForeignKey") || refType is not null || fkAttr is not null;
             string? references = NamedString(colAttr, "References");
+
+            if (fkAttr is not null)
+            {
+                var fkRecordType = fkAttr.AttributeClass!.TypeArguments[0];
+                if (string.IsNullOrEmpty(references) && fkRecordType is INamedTypeSymbol fkNamed && fkNamed.TypeKind != TypeKind.Error)
+                {
+                    var targetResAttr = FindResourceAttribute(fkNamed.GetAttributes())
+                                        ?? fkNamed.GetAttributes().FirstOrDefault(a => a.AttributeClass?.Name == "ExoContractResourceAttribute");
+                    string? rawTable = NamedString(targetResAttr, "Source")
+                                       ?? NamedString(targetResAttr, "Name")
+                                       ?? PositionalString(targetResAttr, 0);
+                    string targetTable = !string.IsNullOrEmpty(rawTable)
+                        ? rawTable!
+                        : ToSnakeCase(StripResourceSuffix(fkNamed.Name));
+                    string? rawTargetCol = PositionalString(fkAttr, 0);
+                    if (string.IsNullOrWhiteSpace(rawTargetCol)) rawTargetCol = NamedString(fkAttr, "Column");
+                    string targetCol = ToSnakeCase(string.IsNullOrWhiteSpace(rawTargetCol) ? "id" : rawTargetCol!.Trim());
+                    references = $"{targetTable}.{targetCol}";
+                }
+
+                string? enclosingExt = ResolveEnclosingExtensionId(fkRecordType);
+                if (!string.IsNullOrEmpty(enclosingExt) && inferredDbReads is not null && !inferredDbReads.Contains(enclosingExt!))
+                {
+                    inferredDbReads.Add(enclosingExt!);
+                }
+            }
 
             if (string.IsNullOrEmpty(references) && refType is INamedTypeSymbol refNamed)
             {
@@ -1190,17 +1299,26 @@ namespace Exoforge.Plugin.SDK
 
         var provides = new List<string>();
         var dependencies = new List<string>();
+        var dbRead = new List<string>();
 
         foreach (var emit in ordered)
         {
             foreach (var name in emit.Provides.Split(',')) if (name.Length > 0 && !provides.Contains(name)) provides.Add(name);
             foreach (var name in emit.Dependencies.Split(',')) if (name.Length > 0 && !dependencies.Contains(name)) dependencies.Add(name);
+            foreach (var name in emit.DbRead.Split(',')) if (name.Length > 0 && !dbRead.Contains(name)) dbRead.Add(name);
+        }
+
+        dbRead.RemoveAll(name => provides.Contains(name) || string.Equals(name, primary.Id, StringComparison.Ordinal));
+        foreach (var name in dbRead)
+        {
+            if (!dependencies.Contains(name)) dependencies.Add(name);
         }
 
         // Sorted for the same reason the generated client is: a manifest that reorders itself between
         // builds is a diff that says nothing. The services are already ordered by name.
         provides.Sort(StringComparer.Ordinal);
         dependencies.Sort(StringComparer.Ordinal);
+        dbRead.Sort(StringComparer.Ordinal);
 
         var models = new List<ServiceModel>();
         var inputTypes = new List<InputTypeModel>();
@@ -1213,7 +1331,7 @@ namespace Exoforge.Plugin.SDK
         string final = ManifestEmitter.Finalize(
             ManifestEmitter.Manifest(
                 primary.Id, provides, dependencies, models,
-                primary.Category, primary.Title, primary.Icon, primary.System, inputTypes),
+                primary.Category, primary.Title, primary.Icon, primary.System, inputTypes, dbRead),
             primary.Id, primary.Version, settings.PluginType, settings.BuildStamp);
 
         try
@@ -1563,6 +1681,50 @@ namespace Exoforge.Generated
         return ToSnakeCase(typeName);
     }
 
+    private static string StripResourceSuffix(string typeName) =>
+        typeName.EndsWith("Resource", StringComparison.OrdinalIgnoreCase) && typeName.Length > 8
+            ? typeName.Substring(0, typeName.Length - 8)
+            : typeName;
+
+    private static bool IsNestedInForeignExtension(
+        INamedTypeSymbol candidate,
+        INamedTypeSymbol declared,
+        INamedTypeSymbol root)
+    {
+        for (var parent = candidate.ContainingType; parent is not null; parent = parent.ContainingType)
+        {
+            if (parent.GetAttributes().Any(IsServiceAttribute)
+                && !SymbolEqualityComparer.Default.Equals(parent, declared)
+                && !SymbolEqualityComparer.Default.Equals(parent, root))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string? ResolveEnclosingExtensionId(ITypeSymbol? type)
+    {
+        for (var current = type; current is not null && current.TypeKind != TypeKind.Error; current = current.ContainingType)
+        {
+            var serviceAttr = FindServiceAttribute(current.GetAttributes());
+            if (serviceAttr is not null)
+            {
+                string? name = PositionalString(serviceAttr, 0) ?? NamedString(serviceAttr, "Name");
+                if (!string.IsNullOrEmpty(name)) return name;
+            }
+        }
+
+        return null;
+    }
+
+    private static string? ResolveExtensionMarkerId(ITypeSymbol? type)
+    {
+        if (type is null || type.TypeKind == TypeKind.Error) return null;
+        return ResolveEnclosingExtensionId(type) ?? InferDependencyName(type);
+    }
+
     private static string ToTitleCase(string name)
     {
         var words = name.Split(new[] { '_' }, StringSplitOptions.RemoveEmptyEntries);
@@ -1612,6 +1774,13 @@ namespace Exoforge.Generated
     private static AttributeData? FindResourceAttribute(IEnumerable<AttributeData> attributes)
     {
         return attributes.FirstOrDefault(a => IsResourceAttribute(a));
+    }
+
+    private static AttributeData? FindForeignKeyAttribute(IEnumerable<AttributeData> attributes)
+    {
+        return attributes.FirstOrDefault(a =>
+            a.AttributeClass is { IsGenericType: true, TypeArguments.Length: 1 } cls &&
+            cls.Name is "ExoForeignKeyAttribute" or "ExoForeignKey");
     }
 
     private static string? PositionalString(AttributeData? attr, int index)
