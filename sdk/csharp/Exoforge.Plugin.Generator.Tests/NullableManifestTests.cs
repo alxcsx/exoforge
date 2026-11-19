@@ -178,28 +178,28 @@ public class NullableManifestTests
         Assert.Null(Col("id")["nullable"]);
         Assert.Equal("text", Storage("optional_text"));
         Assert.True(Col("optional_text")["nullable"]!.GetValue<bool>());
-        Assert.Equal("integer", Storage("int_col"));
-        Assert.Equal("integer", Storage("nullable_int"));
+        Assert.Equal("int32", Storage("int_col"));
+        Assert.Equal("int32", Storage("nullable_int"));
         Assert.True(Col("nullable_int")["nullable"]!.GetValue<bool>());
-        Assert.Equal("bigint", Storage("long_col"));
-        Assert.Equal("smallint", Storage("short_col"));
-        Assert.Equal("boolean", Storage("bool_col"));
-        Assert.Equal("double precision", Storage("double_col"));
-        Assert.Equal("real", Storage("float_col"));
-        Assert.Equal("numeric", Storage("decimal_col"));
+        Assert.Equal("int64", Storage("long_col"));
+        Assert.Equal("int16", Storage("short_col"));
+        Assert.Equal("bool", Storage("bool_col"));
+        Assert.Equal("float64", Storage("double_col"));
+        Assert.Equal("float32", Storage("float_col"));
+        Assert.Equal("decimal", Storage("decimal_col"));
         Assert.Equal("uuid", Storage("guid_col"));
-        Assert.Equal("timestamptz", Storage("date_time_col"));
-        Assert.Equal("timestamptz", Storage("date_time_offset_col"));
-        Assert.Equal("bytea", Storage("bytes_col"));
+        Assert.Equal("timestamp", Storage("date_time_col"));
+        Assert.Equal("timestamp", Storage("date_time_offset_col"));
+        Assert.Equal("bytes", Storage("bytes_col"));
         Assert.Equal("text", Storage("tier_col"));
         Assert.Equal(new[] { "rookie", "pro_level" }, Col("tier_col")["choices"]!.AsArray().Select(c => c!.GetValue<string>()));
         Assert.Equal("text", Storage("nullable_tier"));
         Assert.True(Col("nullable_tier")["nullable"]!.GetValue<bool>());
         Assert.Equal(new[] { "rookie", "pro_level" }, Col("nullable_tier")["choices"]!.AsArray().Select(c => c!.GetValue<string>()));
-        Assert.Equal("jsonb", Storage("list_col"));
-        Assert.Equal("jsonb", Storage("array_col"));
-        Assert.Equal("jsonb", Storage("dict_col"));
-        Assert.Equal("jsonb", Storage("nested_col"));
+        Assert.Equal("json", Storage("list_col"));
+        Assert.Equal("json", Storage("array_col"));
+        Assert.Equal("json", Storage("dict_col"));
+        Assert.Equal("json", Storage("nested_col"));
     }
 
     [Fact]
@@ -296,11 +296,11 @@ public class NullableManifestTests
         var columns = RunManifest(source)["services"]!.AsArray()[0]!["resources"]!.AsArray()[0]!["columns"]!.AsArray();
         string Storage(string name) => columns.Single(c => c!["name"]!.GetValue<string>() == name)!["storage"]!.GetValue<string>();
 
-        Assert.Equal("smallint", Storage("byte_col"));
-        Assert.Equal("smallint", Storage("s_byte_col"));
-        Assert.Equal("integer", Storage("u_short_col"));
-        Assert.Equal("bigint", Storage("u_int_col"));
-        Assert.Equal("numeric", Storage("u_long_col"));
+        Assert.Equal("int16", Storage("byte_col"));
+        Assert.Equal("int16", Storage("s_byte_col"));
+        Assert.Equal("int32", Storage("u_short_col"));
+        Assert.Equal("int64", Storage("u_int_col"));
+        Assert.Equal("decimal", Storage("u_long_col"));
         Assert.Equal("text", Storage("char_col"));
     }
 

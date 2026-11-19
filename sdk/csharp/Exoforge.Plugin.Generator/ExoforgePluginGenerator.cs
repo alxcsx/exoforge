@@ -1506,6 +1506,8 @@ namespace Exoforge.Generated
         return false;
     }
 
+    // Logical column types, not an engine's: the database layer (lldb) renders them for its engine, so
+    // the manifest never names PostgreSQL. See docs/adr/005-database-layers.md.
     private static string MapTypeToStorage(ITypeSymbol type)
     {
         if (type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T, TypeArguments.Length: 1 } nullable)
@@ -1515,48 +1517,44 @@ namespace Exoforge.Generated
 
         if (type is IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_Byte })
         {
-            return "bytea";
+            return "bytes";
         }
 
         switch (type.SpecialType)
         {
             case SpecialType.System_String:
+            case SpecialType.System_Char:
                 return "text";
-            case SpecialType.System_Int32:
-                return "integer";
-            case SpecialType.System_Int64:
-                return "bigint";
             case SpecialType.System_Int16:
             case SpecialType.System_Byte:
             case SpecialType.System_SByte:
-                return "smallint";
+                return "int16";
+            case SpecialType.System_Int32:
             case SpecialType.System_UInt16:
-                return "integer";
+                return "int32";
+            case SpecialType.System_Int64:
             case SpecialType.System_UInt32:
-                return "bigint";
-            case SpecialType.System_UInt64:
-                return "numeric";
-            case SpecialType.System_Char:
-                return "text";
+                return "int64";
             case SpecialType.System_Boolean:
-                return "boolean";
+                return "bool";
             case SpecialType.System_Double:
-                return "double precision";
+                return "float64";
             case SpecialType.System_Single:
-                return "real";
+                return "float32";
             case SpecialType.System_Decimal:
-                return "numeric";
+            case SpecialType.System_UInt64:
+                return "decimal";
             case SpecialType.System_DateTime:
-                return "timestamptz";
+                return "timestamp";
         }
 
         if (type.TypeKind == TypeKind.Enum) return "text";
 
         string display = type.WithNullableAnnotation(NullableAnnotation.None).ToDisplayString();
-        if (display is "System.DateTime" or "System.DateTimeOffset") return "timestamptz";
+        if (display is "System.DateTime" or "System.DateTimeOffset") return "timestamp";
         if (display == "System.Guid") return "uuid";
 
-        return "jsonb";
+        return "json";
     }
 
     private static string MapTypeToElixir(ITypeSymbol type)
