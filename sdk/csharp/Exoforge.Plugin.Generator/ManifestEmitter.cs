@@ -323,7 +323,7 @@ internal static class ManifestEmitter
     {
         var sb = new StringBuilder();
         sb.Append(resource.Source).Append('\n');
-        foreach (var col in resource.Columns)
+        foreach (var col in resource.Columns.OrderBy(c => c.Name, StringComparer.Ordinal))
         {
             bool isPk = col.PrimaryKey || string.Equals(col.Name, resource.PrimaryKey, StringComparison.OrdinalIgnoreCase);
             string choices = col.Choices is null ? "" : string.Join(",", col.Choices);

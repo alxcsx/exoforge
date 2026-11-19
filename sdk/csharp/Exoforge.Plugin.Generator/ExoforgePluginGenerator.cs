@@ -1527,7 +1527,17 @@ namespace Exoforge.Generated
             case SpecialType.System_Int64:
                 return "bigint";
             case SpecialType.System_Int16:
+            case SpecialType.System_Byte:
+            case SpecialType.System_SByte:
                 return "smallint";
+            case SpecialType.System_UInt16:
+                return "integer";
+            case SpecialType.System_UInt32:
+                return "bigint";
+            case SpecialType.System_UInt64:
+                return "numeric";
+            case SpecialType.System_Char:
+                return "text";
             case SpecialType.System_Boolean:
                 return "boolean";
             case SpecialType.System_Double:

@@ -271,4 +271,62 @@ public class NullableManifestTests
         Assert.Equal(h1, hLabelChanged);
         Assert.NotEqual(h1, hStorageChanged);
     }
+
+    [Fact]
+    public void Unsigned_Byte_And_Char_Columns_Get_Real_Column_Types_Not_Jsonb()
+    {
+        const string source = """
+            using Exoforge.Plugin.SDK;
+            namespace P;
+            [ExoService("svc", Resources = new[] { typeof(Wide) })]
+            public partial class Svc { }
+            [ExoResource("wide")]
+            public class Wide
+            {
+                public string Id { get; set; } = "";
+                public byte ByteCol { get; set; }
+                public sbyte SByteCol { get; set; }
+                public ushort UShortCol { get; set; }
+                public uint UIntCol { get; set; }
+                public ulong ULongCol { get; set; }
+                public char CharCol { get; set; }
+            }
+            """;
+
+        var columns = RunManifest(source)["services"]!.AsArray()[0]!["resources"]!.AsArray()[0]!["columns"]!.AsArray();
+        string Storage(string name) => columns.Single(c => c!["name"]!.GetValue<string>() == name)!["storage"]!.GetValue<string>();
+
+        Assert.Equal("smallint", Storage("byte_col"));
+        Assert.Equal("smallint", Storage("s_byte_col"));
+        Assert.Equal("integer", Storage("u_short_col"));
+        Assert.Equal("bigint", Storage("u_int_col"));
+        Assert.Equal("numeric", Storage("u_long_col"));
+        Assert.Equal("text", Storage("char_col"));
+    }
+
+    [Fact]
+    public void SchemaHash_Does_Not_Depend_On_Property_Order()
+    {
+        static string Source(string first, string second) => $$"""
+            using Exoforge.Plugin.SDK;
+            namespace P;
+            [ExoService("svc", Resources = new[] { typeof(Item) })]
+            public partial class Svc { }
+            [ExoResource("items")]
+            public class Item
+            {
+                public string Id { get; set; } = "";
+                {{first}}
+                {{second}}
+            }
+            """;
+
+        string Hash(string src) =>
+            RunManifest(src)["services"]!.AsArray()[0]!["resources"]!.AsArray()[0]!["schema_hash"]!.GetValue<string>();
+
+        string ab = Hash(Source("public int Alpha { get; set; }", "public long Beta { get; set; }"));
+        string ba = Hash(Source("public long Beta { get; set; }", "public int Alpha { get; set; }"));
+
+        Assert.Equal(ab, ba);
+    }
 }
