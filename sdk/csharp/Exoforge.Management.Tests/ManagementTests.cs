@@ -158,6 +158,18 @@ public class ManagementTests : IDisposable
     }
 
     [Fact]
+    public async System.Threading.Tasks.Task DependencyStubs_Do_Not_Demand_A_Contract_For_The_Hosts_Database()
+    {
+        WriteManifest(_tempDir, "caller", """{"id":"caller","version":"1.0.0","type":"native","dependencies":["database"]}""");
+        string extensionDir = Path.Combine(_tempDir, "caller");
+
+        var (output, missing) = await ExoDeployer.BesideExtension(extensionDir).GenerateDependencyStubsAsync(extensionDir);
+
+        Assert.Null(output);
+        Assert.Empty(missing);
+    }
+
+    [Fact]
     public void CodeGenerator_GenerateToFile_Skips_Write_If_Content_Unchanged()
     {
         string outputPath = Path.Combine(_tempDir, "GeneratedClient.cs");

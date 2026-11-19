@@ -965,7 +965,13 @@ public class ExoDeployer
         string extensionDir,
         CancellationToken cancellationToken = default)
     {
-        if (ReadManifestDependencies(extensionDir) is not { } deps) return (null, Array.Empty<string>());
+        // `database` is the host's own capability (Exo.Database), reached without a stub, and the generator
+        // declares it for any extension that stores anything - so it must not demand a contract offline.
+        if (ReadManifestDependencies(extensionDir) is not { } all
+            || all.Where(d => d != "database").ToList() is not { Count: > 0 } deps)
+        {
+            return (null, Array.Empty<string>());
+        }
 
         string export = MergeLocalContracts("{\"export\":{\"extensions\":[]}}");
 
