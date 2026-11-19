@@ -114,7 +114,8 @@ internal static class ManifestEmitter
         string? title,
         string? icon,
         bool system,
-        IEnumerable<InputTypeModel>? inputTypes = null)
+        IEnumerable<InputTypeModel>? inputTypes = null,
+        IEnumerable<string>? dbRead = null)
     {
         var sb = new StringBuilder();
         sb.Append("{\n");
@@ -125,6 +126,7 @@ internal static class ManifestEmitter
         sb.Append($"  \"entry_point\": {Str(EntryPlaceholder)},\n");
         sb.Append($"  \"dependencies\": {Atoms(dependencies)},\n");
         sb.Append($"  \"provides\": {Atoms(provides)},\n");
+        sb.Append($"  \"db_read\": {Atoms(dbRead ?? Array.Empty<string>())},\n");
 
         string effectiveCategory = !string.IsNullOrEmpty(category) ? category! : (system ? "System" : "Game");
         string effectiveTitle = !string.IsNullOrEmpty(title) ? title! : FormatTitle(id);

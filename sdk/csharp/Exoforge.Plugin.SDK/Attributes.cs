@@ -403,6 +403,52 @@ public class ExoDependencyAttribute<TService> : ExoDependencyAttribute
 }
 
 /// <summary>
+/// Declares read-only SQL access to another extension's tables.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Interface, Inherited = false, AllowMultiple = true)]
+public class DbReadAttribute : Attribute
+{
+    public string? ExtensionId { get; }
+    public Type? MarkerType { get; }
+
+    public DbReadAttribute(string extensionId)
+    {
+        ExtensionId = extensionId ?? throw new ArgumentNullException(nameof(extensionId));
+    }
+
+    public DbReadAttribute(Type markerType)
+    {
+        MarkerType = markerType ?? throw new ArgumentNullException(nameof(markerType));
+    }
+}
+
+/// <summary>
+/// Declares type-safe read-only SQL access to another extension's tables via a marker type.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Interface, Inherited = false, AllowMultiple = true)]
+public class DbReadAttribute<TMarker> : DbReadAttribute
+{
+    public DbReadAttribute() : base(typeof(TMarker))
+    {
+    }
+}
+
+/// <summary>
+/// Marks a resource column as a foreign key referencing <typeparamref name="TRecord"/>.
+/// When <typeparamref name="TRecord"/> belongs to another extension, also grants read access via <c>db_read</c>.
+/// </summary>
+[AttributeUsage(AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Parameter, Inherited = false, AllowMultiple = false)]
+public class ExoForeignKeyAttribute<TRecord> : Attribute
+{
+    public string Column { get; }
+
+    public ExoForeignKeyAttribute(string column = "id")
+    {
+        Column = string.IsNullOrWhiteSpace(column) ? "id" : column;
+    }
+}
+
+/// <summary>
 /// Marks a resource column as a file reference pointing to a file in a storage bucket.
 /// Renders direct preview and search/select file picker in Studio Dashboard.
 /// </summary>
