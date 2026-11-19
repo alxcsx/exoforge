@@ -763,6 +763,17 @@ public static class ExoCodeGenerator
         sb.AppendLine($"namespace {targetNamespace}");
         sb.AppendLine("{");
 
+        // Names the table a stub record stands for, so `[ExoColumn(ReferencesType = typeof(...))]` on a
+        // stub resolves the foreign key from the contract. The extension's own generator reads it.
+        sb.AppendLine("    [AttributeUsage(AttributeTargets.Class)]");
+        sb.AppendLine("    internal sealed class ExoContractResourceAttribute : Attribute");
+        sb.AppendLine("    {");
+        sb.AppendLine("        public ExoContractResourceAttribute(string name) => Name = name;");
+        sb.AppendLine("        public string Name { get; }");
+        sb.AppendLine("        public string? PrimaryKey { get; set; }");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+
         var actionRespNames = new Dictionary<ActionContractModel, string>();
         var emittedModelSignatures = new Dictionary<string, string>(StringComparer.Ordinal);
 
@@ -771,12 +782,15 @@ public static class ExoCodeGenerator
             string svcPascal = ToPascalCase(svc.Name);
             foreach (var act in svc.Actions)
             {
-                if (act.ReturnFields.Count > 0)
+                if (act.ReturnFields.Count > 0 || !string.IsNullOrEmpty(act.ReturnTypeName))
                 {
                     string respName = ResolveResponseModelName(svcPascal, act, emittedModelSignatures);
                     actionRespNames[act] = respName;
-                    string sig = string.Join("|", act.ReturnFields.Select(f => $"{f.Name}:{f.Type}"));
-                    emittedModelSignatures[respName] = sig;
+                    if (act.ReturnFields.Count > 0)
+                    {
+                        string sig = string.Join("|", act.ReturnFields.Select(f => $"{f.Name}:{f.Type}"));
+                        emittedModelSignatures[respName] = sig;
+                    }
                 }
             }
         }
@@ -789,8 +803,11 @@ public static class ExoCodeGenerator
             foreach (var res in svc.Resources)
             {
                 string typeName = $"{svcPascal}{ResourceTypeName(res)}";
+                emittedModels.Add(typeName);
                 serializable.Add(typeName);
 
+                string primaryKey = string.IsNullOrEmpty(res.PrimaryKey) ? "" : $", PrimaryKey = \"{res.PrimaryKey}\"";
+                sb.AppendLine($"    [ExoContractResource(\"{res.Name}\"{primaryKey})]");
                 sb.AppendLine($"    public class {typeName}");
                 sb.AppendLine("    {");
                 var usedProps = new HashSet<string>(StringComparer.Ordinal);
@@ -1277,13 +1294,16 @@ public static class ExoCodeGenerator
                 {
                     clientModelNames.Add($"{svcPascal}{ToPascalCase(act.Name)}Request");
                 }
-                if (act.ReturnFields.Count > 0)
+                if (act.ReturnFields.Count > 0 || !string.IsNullOrEmpty(act.ReturnTypeName))
                 {
                     string respName = ResolveResponseModelName(svcPascal, act, emittedModelSignatures);
                     actionRespNames[act] = respName;
                     clientModelNames.Add(respName);
-                    string sig = string.Join("|", act.ReturnFields.Select(f => $"{f.Name}:{f.Type}"));
-                    emittedModelSignatures[respName] = sig;
+                    if (act.ReturnFields.Count > 0)
+                    {
+                        string sig = string.Join("|", act.ReturnFields.Select(f => $"{f.Name}:{f.Type}"));
+                        emittedModelSignatures[respName] = sig;
+                    }
                 }
             }
         }
@@ -1293,12 +1313,15 @@ public static class ExoCodeGenerator
             string svcPascal = ToPascalCase(svc.Name);
             foreach (var act in svc.Actions)
             {
-                if (act.ReturnFields.Count > 0 && !actionRespNames.ContainsKey(act))
+                if ((act.ReturnFields.Count > 0 || !string.IsNullOrEmpty(act.ReturnTypeName)) && !actionRespNames.ContainsKey(act))
                 {
                     string respName = ResolveResponseModelName(svcPascal, act, emittedModelSignatures);
                     actionRespNames[act] = respName;
-                    string sig = string.Join("|", act.ReturnFields.Select(f => $"{f.Name}:{f.Type}"));
-                    emittedModelSignatures[respName] = sig;
+                    if (act.ReturnFields.Count > 0)
+                    {
+                        string sig = string.Join("|", act.ReturnFields.Select(f => $"{f.Name}:{f.Type}"));
+                        emittedModelSignatures[respName] = sig;
+                    }
                 }
             }
         }
@@ -1904,7 +1927,7 @@ public static class ExoCodeGenerator
     {
         string element;
 
-        if (act.ReturnFields.Count > 0)
+        if (act.ReturnFields.Count > 0 || !string.IsNullOrEmpty(act.ReturnTypeName))
         {
             element = explicitResponseModelName ?? ResponseModelName(svcPascal, act);
         }

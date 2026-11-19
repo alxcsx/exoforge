@@ -942,6 +942,66 @@ public class ManagementTests : IDisposable
         }
     }
 
+    [Fact]
+    public void PluginStubs_Emits_ExoContractResource_And_Shares_Response_Models()
+    {
+        string exportJson = """
+        {
+            "plugins": [
+                {
+                    "id": "catalog",
+                    "services": [
+                        {
+                            "name": "catalog",
+                            "actions": [
+                                {
+                                    "name": "get_item",
+                                    "scope": "global",
+                                    "params": [],
+                                    "returns": { "id": "string", "name": "string" },
+                                    "returns_type": "global::Catalog.ItemRecord"
+                                },
+                                {
+                                    "name": "update_item",
+                                    "scope": "global",
+                                    "params": [],
+                                    "returns": { "id": "string", "name": "string" },
+                                    "returns_type": "global::Catalog.ItemRecord"
+                                }
+                            ],
+                            "events": [],
+                            "resources": [
+                                {
+                                    "name": "catalog_items",
+                                    "primary_key": "sku",
+                                    "columns": [
+                                        { "name": "sku", "type": "string" },
+                                        { "name": "name", "type": "string" }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+        """;
+
+        string code = ExoCodeGenerator.GeneratePluginStubs(exportJson);
+
+        // Resource carries ExoContractResource with table name and primary key
+        Assert.Contains("[ExoContractResource(\"catalog_items\", PrimaryKey = \"sku\")]", code);
+        Assert.Contains("public class CatalogCatalogItem", code);
+
+        // The shared response model is emitted exactly once
+        int modelDeclarations = code.Split(new[] { "public class ItemRecord" }, StringSplitOptions.None).Length - 1;
+        Assert.Equal(1, modelDeclarations);
+
+        // Both action methods return the shared response model
+        Assert.Contains("Task<ItemRecord?> GetItemAsync();", code);
+        Assert.Contains("Task<ItemRecord?> UpdateItemAsync();", code);
+    }
+
     private static string ServiceJson(string service, string action) =>
         "{\"name\":\"" + service + "\",\"actions\":[{\"name\":\"" + action +
         "\",\"scope\":\"global\",\"params\":[{\"name\":\"id\",\"type\":\"string\"}]," +

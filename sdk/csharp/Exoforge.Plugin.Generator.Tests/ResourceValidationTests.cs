@@ -279,4 +279,139 @@ public class ResourceValidationTests
             if (File.Exists(manifestPath)) File.Delete(manifestPath);
         }
     }
+
+    [Fact]
+    public void ReferencesType_With_Local_Resource_Infers_Target_Table_And_PrimaryKey()
+    {
+        var manifestPath = Path.Combine(Path.GetTempPath(), $"exoforge_reftype_{Guid.NewGuid():N}.json");
+        try
+        {
+            const string source = """
+                using Exoforge.Plugin.SDK;
+
+                namespace TestPlugin;
+
+                [ExoService("orders_svc", Resources = new[] { typeof(OrderRecord), typeof(CustomerRecord) })]
+                public partial class TestPlugin { }
+
+                [ExoResource("customers", PrimaryKey = "id")]
+                public class CustomerRecord
+                {
+                    public string Id { get; set; } = "";
+                    public string Name { get; set; } = "";
+                }
+
+                [ExoResource("orders")]
+                public class OrderRecord
+                {
+                    public string Id { get; set; } = "";
+                    [ExoColumn(ReferencesType = typeof(CustomerRecord))]
+                    public string CustomerId { get; set; } = "";
+                }
+                """;
+
+            var (output, diagnostics) = RunGenerator(source, manifestPath);
+            Assert.Empty(diagnostics);
+
+            var manifest = JsonNode.Parse(File.ReadAllText(manifestPath))!;
+            var svc = manifest["services"]!.AsArray()[0]!;
+            var ordersRes = svc["resources"]!.AsArray().First(r => r!["name"]?.GetValue<string>() == "orders")!;
+            var custCol = ordersRes["columns"]!.AsArray().First(c => c!["name"]?.GetValue<string>() == "customer_id")!;
+
+            Assert.True(custCol["foreign_key"]?.GetValue<bool>());
+            Assert.Equal("customers.id", custCol["references"]?.GetValue<string>());
+        }
+        finally
+        {
+            if (File.Exists(manifestPath)) File.Delete(manifestPath);
+        }
+    }
+
+    [Fact]
+    public void ReferencesType_With_Contract_Resource_Stub_Infers_Target_Table_And_PrimaryKey()
+    {
+        var manifestPath = Path.Combine(Path.GetTempPath(), $"exoforge_refstub_{Guid.NewGuid():N}.json");
+        try
+        {
+            const string source = """
+                using System;
+                using Exoforge.Plugin.SDK;
+
+                namespace TestPlugin;
+
+                [AttributeUsage(AttributeTargets.Class)]
+                internal sealed class ExoContractResourceAttribute : Attribute
+                {
+                    public ExoContractResourceAttribute(string name) => Name = name;
+                    public string Name { get; }
+                    public string? PrimaryKey { get; set; }
+                }
+
+                [ExoContractResource("catalog_items", PrimaryKey = "sku")]
+                public class ItemStub
+                {
+                    public string Sku { get; set; } = "";
+                }
+
+                [ExoService("cart_svc", Resources = new[] { typeof(CartItemRecord) })]
+                public partial class TestPlugin { }
+
+                [ExoResource("cart_items")]
+                public class CartItemRecord
+                {
+                    public string Id { get; set; } = "";
+                    [ExoColumn(ReferencesType = typeof(ItemStub))]
+                    public string ItemSku { get; set; } = "";
+                }
+                """;
+
+            var (output, diagnostics) = RunGenerator(source, manifestPath);
+            Assert.Empty(diagnostics);
+
+            var manifest = JsonNode.Parse(File.ReadAllText(manifestPath))!;
+            var svc = manifest["services"]!.AsArray()[0]!;
+            var cartRes = svc["resources"]!.AsArray().First(r => r!["name"]?.GetValue<string>() == "cart_items")!;
+            var itemCol = cartRes["columns"]!.AsArray().First(c => c!["name"]?.GetValue<string>() == "item_sku")!;
+
+            Assert.True(itemCol["foreign_key"]?.GetValue<bool>());
+            Assert.Equal("catalog_items.sku", itemCol["references"]?.GetValue<string>());
+        }
+        finally
+        {
+            if (File.Exists(manifestPath)) File.Delete(manifestPath);
+        }
+    }
+
+    [Fact]
+    public void ReferencesType_With_Unknown_Type_Reports_EXO005_Error()
+    {
+        const string source = """
+            using System;
+            using Exoforge.Plugin.SDK;
+
+            namespace TestPlugin;
+
+            public class OrdinaryClass
+            {
+                public string Value { get; set; } = "";
+            }
+
+            [ExoService("test_svc", Resources = new[] { typeof(BadRefRecord) })]
+            public partial class TestPlugin { }
+
+            [ExoResource("bad_refs")]
+            public class BadRefRecord
+            {
+                public string Id { get; set; } = "";
+                [ExoColumn(ReferencesType = typeof(OrdinaryClass))]
+                public string RefProp { get; set; } = "";
+            }
+            """;
+
+        var (_, diagnostics) = RunGenerator(source);
+        var error = Assert.Single(diagnostics, d => d.Id == "EXO005");
+        Assert.Equal(DiagnosticSeverity.Error, error.Severity);
+        Assert.Contains("OrdinaryClass", error.GetMessage());
+        Assert.Contains("RefProp", error.GetMessage());
+    }
 }

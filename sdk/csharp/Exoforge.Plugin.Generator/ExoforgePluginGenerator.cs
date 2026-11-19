@@ -1025,14 +1025,45 @@ namespace Exoforge.Plugin.SDK
 
             if (string.IsNullOrEmpty(references) && refType is INamedTypeSymbol refNamed)
             {
-                var targetResAttr = FindAttribute(refNamed.GetAttributes(), ResourceAttribute);
-                string targetTable = NamedString(targetResAttr, "Name") ?? PositionalString(targetResAttr, 0) ?? ToSnakeCase(refNamed.Name);
-                string targetPk = ToSnakeCase(NamedString(targetResAttr, "PrimaryKey") ?? "id");
-                references = $"{targetTable}.{targetPk}";
+                // A record of this extension is an [ExoResource]; a record of another service is the stub that
+                // service's contract generated, which names its table the same way ([ExoContractResource]).
+                var targetResAttr = FindResourceAttribute(refNamed.GetAttributes())
+                                    ?? refNamed.GetAttributes().FirstOrDefault(a => a.AttributeClass?.Name == "ExoContractResourceAttribute");
 
-                if (string.IsNullOrEmpty(role) && (targetTable.Contains("player") || targetTable.Contains("user") || colName.Contains("player_id") || colName.Contains("user_id")))
+                if (targetResAttr is not null)
                 {
-                    role = "user_id";
+                    string targetTable = NamedString(targetResAttr, "Name") ?? PositionalString(targetResAttr, 0) ?? ToSnakeCase(refNamed.Name);
+                    string? targetPk = NamedString(targetResAttr, "PrimaryKey");
+                    if (string.IsNullOrEmpty(targetPk))
+                    {
+                        foreach (var m in refNamed.GetMembers())
+                        {
+                            if (m is IPropertySymbol p && p.DeclaredAccessibility == Accessibility.Public && !p.IsStatic)
+                            {
+                                var pCol = FindAttribute(p.GetAttributes(), ColumnAttribute);
+                                if (NamedBool(pCol, "PrimaryKey"))
+                                {
+                                    targetPk = NamedString(pCol, "Name") ?? PositionalString(pCol, 0) ?? ToSnakeCase(p.Name);
+                                    break;
+                                }
+                                if (p.Name.Equals("Id", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    targetPk ??= NamedString(pCol, "Name") ?? PositionalString(pCol, 0) ?? "id";
+                                }
+                            }
+                        }
+                    }
+                    targetPk = ToSnakeCase(targetPk ?? "id");
+                    references = $"{targetTable}.{targetPk}";
+
+                    if (string.IsNullOrEmpty(role) && (targetTable.Contains("player") || targetTable.Contains("user") || colName.Contains("player_id") || colName.Contains("user_id")))
+                    {
+                        role = "user_id";
+                    }
+                }
+                else if (refNamed.TypeKind != TypeKind.Error)
+                {
+                    diagnostics?.Add($"Resource '{type.Name}': property '{property.Name}' references type '{refNamed.Name}', which is neither an [ExoResource] record nor a contract stub record.");
                 }
             }
 

@@ -267,7 +267,10 @@ for the services in the extension's `manifest.json` dependencies (`[ExoDependenc
 runs `exo extension stubs --project-dir <extension dir>`, which reads the sibling manifests (the cluster only
 for what they do not cover) and writes `obj/exoforge/PluginServices.g.cs` (typed request/response records +
 a typed client per service), compiled from there; a dependency no source has fails the build. Nothing is
-committed in `src/`; an extension that still commits `src/Generated` stubs keeps them. `exo extension stubs <name>`
+committed in `src/`; an extension that still commits `src/Generated` stubs keeps them. Stubs emit one record
+per contract type, reused by every action naming it. Foreign keys resolve through `[ExoColumn(ReferencesType = typeof(T))]`:
+when `T` is a stub (or local) resource record, the generator resolves the target table and primary key from its manifest;
+an unknown type reports an `EXO005` compile error. `exo extension stubs <name>`
 writes the same file by hand (`--services a,b` overrides). The first build of a new dependency declares it
 (the manifest is written by compiling), the next one generates the stubs. The
 stubs are reached through the generated holder (`Exo.PlayerData.GetProfileAsync(...)`, or
