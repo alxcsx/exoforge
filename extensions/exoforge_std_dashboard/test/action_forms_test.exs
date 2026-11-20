@@ -129,4 +129,34 @@ defmodule Exoforge.Std.Dashboard.ActionFormsTest do
 
     test "an empty catalog is handled", do: assert(ActionForms.service([], "x") == nil)
   end
+  describe "what an action does, from its name" do
+    test "reads, changes and destructive actions are told apart" do
+      assert ActionForms.action_kind(:list_users) == :read
+      assert ActionForms.action_kind("get_config") == :read
+      assert ActionForms.action_kind(:error_groups) == :read
+      assert ActionForms.action_kind(:table_columns) == :read
+      assert ActionForms.action_kind(:introspect) == :read
+      assert ActionForms.action_kind(:reset_table) == :destructive
+      assert ActionForms.action_kind(:set_locks) == :write
+      assert ActionForms.action_kind(:delete_user) == :destructive
+      # any word of the name counts, not only the first
+      assert ActionForms.action_kind(:user_purge) == :destructive
+      assert ActionForms.action_kind(:stop_capture) == :destructive
+      # a word that merely contains a verb is not that verb
+      assert ActionForms.action_kind(:listener_status) == :write
+    end
+
+    test "actions are grouped look, change, dangerous, in the contract's order, and empty groups are dropped" do
+      actions = [%{name: :delete_user}, %{name: :register}, %{name: :list_users}, %{name: :get_user}]
+
+      assert [{:read, "Look", reads}, {:write, "Change", writes}, {:destructive, "Dangerous", danger}] =
+               ActionForms.group_actions(actions)
+
+      assert Enum.map(reads, & &1.name) == [:list_users, :get_user]
+      assert Enum.map(writes, & &1.name) == [:register]
+      assert Enum.map(danger, & &1.name) == [:delete_user]
+
+      assert [{:write, "Change", _}] = ActionForms.group_actions([%{name: :register}])
+    end
+  end
 end

@@ -14,6 +14,34 @@ defmodule Exoforge.Std.Dashboard.ActionForms do
   @type service :: %{name: String.t(), actions: [map()]}
   @type action :: map()
 
+  @read_words ~w(get list find query count stats show read resolve search describe health usage status info lookup fetch view check history top introspect dialect table connection error)
+  @destructive_words ~w(delete remove clear purge reset revoke drop block wipe kill stop restart destroy truncate expire)
+
+  @doc """
+  What running an action does to the server, guessed from its name: `:read` (looks, changes nothing), `:destructive`
+  (removes or stops something, and is asked about first) or `:write`. A heuristic on purpose: the contract carries no
+  such flag, and the panel is the generic fallback. A wrong guess costs one extra confirmation or one missing, so the
+  destructive list is deliberately the longer-reaching one (any word of the name matching counts).
+  """
+  @spec action_kind(term()) :: :read | :write | :destructive
+  def action_kind(name) do
+    words = name |> to_string() |> String.downcase() |> String.split("_", trim: true)
+
+    cond do
+      Enum.any?(words, &(&1 in @destructive_words)) -> :destructive
+      List.first(words) in @read_words -> :read
+      true -> :write
+    end
+  end
+
+  @doc "Actions ordered reads, then changes, then destructive ones; each group keeps the contract's order."
+  def group_actions(actions) do
+    grouped = Enum.group_by(actions, &action_kind(&1[:name]))
+    [read: "Look", write: "Change", destructive: "Dangerous"]
+    |> Enum.map(fn {kind, title} -> {kind, title, Map.get(grouped, kind, [])} end)
+    |> Enum.reject(fn {_, _, list} -> list == [] end)
+  end
+
   @doc """
   Every callable action across all extensions, grouped by service and sorted by name.
 

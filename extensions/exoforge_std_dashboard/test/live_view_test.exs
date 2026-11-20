@@ -358,6 +358,44 @@ defmodule Exoforge.DashboardLiveViewTest do
     end
   end
 
+  describe "Destructive actions ask first" do
+    alias Exoforge.Std.Dashboard.GenericExtensionView
+
+    defp action_socket do
+      ext = %{id: :demo, actions: [%{name: "delete_all", service: "demo", params: [], scope: :studio, mode: :sync, doc: ""}], resources: [], events: []}
+
+      %Phoenix.LiveView.Socket{
+        assigns: %{__changed__: %{}, extension: ext, action_forms: %{}, action_results: %{}, confirming: nil, current_scopes: ["admin"], selected_resource_name: nil, subtab: "actions"}
+      }
+    end
+
+    test "the first press arms it, Cancel disarms it, the second press runs it" do
+      params = %{"action" => "delete_all", "service" => "demo"}
+
+      {:noreply, armed} = GenericExtensionView.handle_event("run_action", params, action_socket())
+      assert armed.assigns.confirming == "delete_all"
+      assert armed.assigns.action_results == %{}
+
+      {:noreply, cancelled} = GenericExtensionView.handle_event("cancel_confirm", %{}, armed)
+      assert cancelled.assigns.confirming == nil
+      assert cancelled.assigns.action_results == %{}
+
+      {:noreply, ran} = GenericExtensionView.handle_event("run_action", params, armed)
+      assert ran.assigns.confirming == nil
+      assert Map.has_key?(ran.assigns.action_results, "delete_all")
+    end
+
+    test "an ordinary action runs on the first press" do
+      socket = action_socket()
+      ext = %{socket.assigns.extension | actions: [%{name: "list_things", service: "demo", params: [], scope: :studio, mode: :sync, doc: ""}]}
+      socket = %{socket | assigns: %{socket.assigns | extension: ext}}
+
+      {:noreply, ran} = GenericExtensionView.handle_event("run_action", %{"action" => "list_things", "service" => "demo"}, socket)
+      assert ran.assigns.confirming == nil
+      assert Map.has_key?(ran.assigns.action_results, "list_things")
+    end
+  end
+
   describe "Resource browser" do
     test "opens for a declared resource and lists it, and its rows page" do
       conn =

@@ -6,6 +6,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
   """
   use Phoenix.LiveComponent
   alias Exoforge.ActionDispatcher
+  alias Exoforge.Std.Dashboard.ActionForms
   alias Exoforge.Std.Dashboard.ResourceForms
   alias Exoforge.EventDispatcher
   alias Exoforge.ExtensionRegistry
@@ -24,6 +25,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
        subtab: nil,
        action_forms: %{},
        action_results: %{},
+       confirming: nil,
        selected_resource_name: nil,
        resource_rows: [],
        filtered_resource_rows: [],
@@ -186,59 +188,16 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
   end
 
   @impl true
+  def handle_event("cancel_confirm", _params, socket), do: {:noreply, assign(socket, :confirming, nil)}
+
+  # A destructive action asks first: the first press arms it, the second runs it. Anything else the person does to
+  # the form (or another card) disarms it, so a stale confirmation is never left waiting.
   def handle_event("run_action", %{"action" => act_name, "service" => svc_name}, socket) do
-    ext = socket.assigns.extension
-    action_def = Enum.find(ext[:actions] || [], &(&1[:name] == act_name))
-
-    act_form = Map.get(socket.assigns.action_forms, act_name, %{})
-
-    # The session's verified scopes (M33 Fix 27): the caller's RBAC comes from the login, not
-    # from a form field that could claim `admin` or `server`.
-    scopes = socket.assigns[:current_scopes] || []
-
-    # Cast parameters
-    payload =
-      if action_def do
-        Enum.reduce(action_def[:params] || [], %{}, fn p, acc ->
-          val_str =
-            Map.get(act_form, p[:name] || p["name"], default_value_for(p[:type] || p["type"], p[:optional] || p["optional"] || false))
-
-          casted = cast_value(val_str, p[:type] || p["type"])
-          Map.put(acc, Exoforge.Atoms.existing(p[:name] || p["name"]), casted)
-        end)
-      else
-        %{}
-      end
-
-    start_time = System.monotonic_time(:microsecond)
-
-    result =
-      try do
-        ActionDispatcher.dispatch(svc_name, act_name, payload, caller_scopes: scopes)
-      rescue
-        e -> {:error, Exception.message(e)}
-      catch
-        :exit, reason -> {:error, inspect(reason)}
-      end
-
-    duration_us = System.monotonic_time(:microsecond) - start_time
-    latency_ms = Float.round(duration_us / 1000, 2)
-
-    result_info = %{
-      result: result,
-      latency_ms: latency_ms,
-      time: Calendar.strftime(DateTime.utc_now(), "%H:%M:%S")
-    }
-
-    updated_results = Map.put(socket.assigns.action_results, act_name, result_info)
-
-    # Reload resource if action potentially changed resource data
-    socket =
-      socket
-      |> assign(:action_results, updated_results)
-      |> load_resource_data()
-
-    {:noreply, socket}
+    if ActionForms.action_kind(act_name) == :destructive and socket.assigns.confirming != act_name do
+      {:noreply, assign(socket, :confirming, act_name)}
+    else
+      run_action(assign(socket, :confirming, nil), act_name, svc_name)
+    end
   end
 
   @impl true
@@ -653,6 +612,61 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
   ## ---- PRIVATE HELPERS ----
 
   # `list_buckets` reports each bucket with its visibility; the picker only needs the name.
+  defp run_action(socket, act_name, svc_name) do
+    ext = socket.assigns.extension
+    action_def = Enum.find(ext[:actions] || [], &(&1[:name] == act_name))
+
+    act_form = Map.get(socket.assigns.action_forms, act_name, %{})
+
+    # The session's verified scopes (M33 Fix 27): the caller's RBAC comes from the login, not
+    # from a form field that could claim `admin` or `server`.
+    scopes = socket.assigns[:current_scopes] || []
+
+    # Cast parameters
+    payload =
+      if action_def do
+        Enum.reduce(action_def[:params] || [], %{}, fn p, acc ->
+          val_str =
+            Map.get(act_form, p[:name] || p["name"], default_value_for(p[:type] || p["type"], p[:optional] || p["optional"] || false))
+
+          casted = cast_value(val_str, p[:type] || p["type"])
+          Map.put(acc, Exoforge.Atoms.existing(p[:name] || p["name"]), casted)
+        end)
+      else
+        %{}
+      end
+
+    start_time = System.monotonic_time(:microsecond)
+
+    result =
+      try do
+        ActionDispatcher.dispatch(svc_name, act_name, payload, caller_scopes: scopes)
+      rescue
+        e -> {:error, Exception.message(e)}
+      catch
+        :exit, reason -> {:error, inspect(reason)}
+      end
+
+    duration_us = System.monotonic_time(:microsecond) - start_time
+    latency_ms = Float.round(duration_us / 1000, 2)
+
+    result_info = %{
+      result: result,
+      latency_ms: latency_ms,
+      time: Calendar.strftime(DateTime.utc_now(), "%H:%M:%S")
+    }
+
+    updated_results = Map.put(socket.assigns.action_results, act_name, result_info)
+
+    # Reload resource if action potentially changed resource data
+    socket =
+      socket
+      |> assign(:action_results, updated_results)
+      |> load_resource_data()
+
+    {:noreply, socket}
+  end
+
   defp bucket_name(%{"bucket" => name}), do: name
   defp bucket_name(%{bucket: name}), do: name
   defp bucket_name(name), do: to_string(name)
@@ -996,6 +1010,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
       assigns
       |> assign(:icon, icon)
       |> assign(:actions, actions)
+      |> assign(:action_groups, ActionForms.group_actions(actions))
       |> assign(:resources, resources)
       |> assign(:events, events)
       |> assign(:columns, columns)
@@ -1099,12 +1114,16 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
             </div>
           </div>
 
+          <%= for {kind, title, group_actions} <- @action_groups do %>
+          <div class="space-y-3" id={"actions-" <> to_string(kind)}>
+            <h4 :if={length(@action_groups) > 1} class={["text-[11px] font-semibold uppercase tracking-wider", if(kind == :destructive, do: "text-red-700", else: "text-gray-500")]}><%= title %></h4>
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <%= for act <- @actions do %>
+            <%= for act <- group_actions do %>
               <% act_form = Map.get(@action_forms, act[:name], %{}) %>
               <% result_info = Map.get(@action_results, act[:name]) %>
+              <% armed = @confirming == to_string(act[:name]) %>
 
-              <div class="exo-card p-5 space-y-3.5 hover:border-primary-300 transition-colors">
+              <div class={["exo-card p-5 space-y-3.5 transition-colors", if(kind == :destructive, do: "border-red-200 hover:border-red-300", else: "hover:border-primary-300")]}>
                 <div class="flex items-start justify-between gap-2">
                   <div class="min-w-0">
                     <h4 class="font-semibold text-gray-900 text-sm tracking-tight"><%= Phoenix.Naming.humanize(to_string(act[:name])) %></h4>
@@ -1197,12 +1216,16 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
 
                   <!-- Run Button -->
                   <div class="pt-1 flex items-center justify-between">
-                    <button
-                      type="submit"
-                      class="exo-btn exo-btn-primary"
-                    >
-                      <.icon name={:bolt} class="w-3.5 h-3.5" /> <span>Run Action</span>
-                    </button>
+                    <div class="flex items-center gap-2">
+                      <button
+                        type="submit"
+                        class={["exo-btn", if(kind == :destructive, do: "exo-btn-danger", else: "exo-btn-primary")]}
+                      >
+                        <.icon name={:bolt} class="w-3.5 h-3.5" />
+                        <span><%= cond do %><% armed -> %>Yes, run it<% kind == :destructive -> %>Run…<% true -> %>Run Action<% end %></span>
+                      </button>
+                      <button :if={armed} type="button" phx-click="cancel_confirm" phx-target={@myself} class="exo-btn exo-btn-secondary">Cancel</button>
+                    </div>
 
                     <%= if result_info do %>
                       <span class="inline-flex items-center gap-1 text-[11px] font-mono text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-200 font-medium tabular-nums">
@@ -1237,6 +1260,8 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
               </div>
             <% end %>
           </div>
+          </div>
+          <% end %>
         </div>
       <% end %>
 
