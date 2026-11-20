@@ -25,7 +25,7 @@ defmodule Exoforge.Std.Cron do
     icon: "⏱️",
     category: "Operations",
     system: true,
-    dashboard_view: nil
+    dashboard_view: %{id: :cron, title: "Scheduled Tasks", icon: "⏱️"}
   }
 
   def children do

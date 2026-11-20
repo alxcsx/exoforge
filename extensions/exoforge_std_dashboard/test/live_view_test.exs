@@ -304,6 +304,25 @@ defmodule Exoforge.DashboardLiveViewTest do
     end
   end
 
+  describe "Extensions page categories" do
+    test "the category pills add up to All, including a category an author made up" do
+      extensions = [
+        %{id: "a", category: "Game"},
+        %{id: "b", category: "auth"},
+        %{id: "c", category: "System"},
+        %{id: "d", category: "Economy"},
+        %{id: "e"}
+      ]
+
+      pills = Exoforge.Std.Dashboard.ExtensionRegistry.extension_categories(extensions)
+      [{"all", _, _, total} | rest] = pills
+
+      assert total == 5
+      assert Enum.sum(Enum.map(rest, &elem(&1, 3))) == total
+      assert {"economy", "Economy", _, 1} = List.keyfind(rest, "economy", 0)
+    end
+  end
+
   describe "StudioLive Interactive LiveView" do
     test "mounts and displays Exoforge Shell header and platform metric cards" do
       conn =

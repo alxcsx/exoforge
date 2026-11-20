@@ -75,6 +75,13 @@ defmodule Exoforge.Std.Dashboard.ActionFormsTest do
       assert payload == %{score: 0}
     end
 
+    test "an optional field left empty is not sent, so the action's own default applies" do
+      action = action([%{name: "limit", type: :integer, optional: true}, %{name: "since", type: :integer, optional: true}, %{name: "id", type: :string}])
+
+      assert ActionForms.build_payload(action, %{"limit" => "", "since" => "5", "id" => ""}) == %{since: 5, id: ""}
+      assert ActionForms.default_params(action) == %{"limit" => "", "since" => "", "id" => ""}
+    end
+
     test "no action means an empty payload" do
       assert ActionForms.build_payload(nil, %{"x" => "1"}) == %{}
     end

@@ -47,7 +47,7 @@ defmodule Exoforge.Std.Dashboard.ActionForms do
   def default_params(nil), do: %{}
 
   def default_params(%{params: params}) do
-    Map.new(params, fn param -> {param.name, default_value(param.type)} end)
+    Map.new(params, fn param -> {param.name, default_value(param.type, Map.get(param, :optional, false))} end)
   end
 
   @doc """
@@ -59,7 +59,13 @@ defmodule Exoforge.Std.Dashboard.ActionForms do
   def build_payload(nil, _form_values), do: %{}
 
   def build_payload(%{params: params}, form_values) do
-    Map.new(params, fn param ->
+    params
+    # A field the producer left empty is not sent when the action says it is optional: the action's own default
+    # applies, instead of a zero it never asked for.
+    |> Enum.reject(fn param ->
+      Map.get(param, :optional, false) and String.trim(to_string(Map.get(form_values, param.name, ""))) == ""
+    end)
+    |> Map.new(fn param ->
       key = Exoforge.Atoms.existing(param.name, param.name)
       {key, cast(Map.get(form_values, param.name, ""), param.type)}
     end)
@@ -126,11 +132,15 @@ defmodule Exoforge.Std.Dashboard.ActionForms do
 
   defp actions_of(svc), do: svc[:actions] || svc["actions"] || []
 
-  defp default_value(:integer), do: "1"
-  defp default_value(:float), do: "1.0"
-  defp default_value(:boolean), do: "true"
-  defp default_value(:map), do: "{}"
-  defp default_value(_), do: ""
+  # A required number opens as 1, a value the contract accepts. An optional one opens empty and is then not sent
+  # (see `build_payload/2`): a prefilled 1 turned an offset into 1 and a limit into 1 without anyone choosing it.
+  defp default_value(:integer, true), do: ""
+  defp default_value(:float, true), do: ""
+  defp default_value(:integer, false), do: "1"
+  defp default_value(:float, false), do: "1.0"
+  defp default_value(:boolean, _), do: "true"
+  defp default_value(:map, _), do: "{}"
+  defp default_value(_, _), do: ""
 
   defp parse_integer(value) do
     case Integer.parse(value) do

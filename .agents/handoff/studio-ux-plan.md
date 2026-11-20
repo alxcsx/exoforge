@@ -38,13 +38,13 @@ C# author still needs something metadata + row actions cannot express (candidate
 escape hatch; no new data bridge.
 
 ## Slices (ordered)
-0. DONE: icon bug + regression test. NEXT quick wins (S, web): rename "Interactive Action Control Panel" -> "Actions", "Technical
+0. DONE: icon bug + regression test; quick wins done: "Actions"/"Access" labels, no always-SYNC pill, display name as page title, optional numbers open empty and are not sent, category pills add up (a made-up category gets its own pill). STILL OPEN from the list (S, web): rename "Interactive Action Control Panel" -> "Actions", "Technical
    Context & Scopes" -> "Access", drop the always-SYNC pill, display name as page title, empty (not "1") defaults for optional integers,
    "plugin" terminology leaks in descriptions, fix the Extensions counts, `aria-label`s on icon buttons, Esc closes the topmost modal.
 1. DONE (7e9ec8b+): Versioning view (M): `Exoforge.Std.DashboardViews.VersioningView` (convention-resolved): status stats, versions table with chips, locks
    as `extension@version`, Promote/Block with two-step confirm, Edit locks (dev only), Register form, and the "versioning is off until
    you register a version" empty state. Tests: LiveView render + actions.
-2. Metering and cron views (S each); declare `returns` fields for `list_jobs`/`usage` rows.
+2. DONE: Usage (metering) and Scheduled Tasks (cron) screens. Cron needed no contract change: `list_jobs` already returns id, schedule, last run/result, run count. Still open: declare `returns` fields in the contracts for the catalog, and a stale-build ghost ("Plugin Manager") was a leftover in `_build`, removed locally.
 3. Resource discoverability + metadata (M): link Extensions cards and the nav to `/resources/:name`; `ExoColumn` Format/Readonly/Hidden/
    Choices/Min/Max/Order, `ExoResource` DefaultSort + row actions (generator + manifest + `ResourceLive`). Unlocks wallet and moderation.
 4. IA (M): Extensions page grouped as "Your game" / "Studio features" / collapsed "Platform internals"; Overview v2 (one-line dismissible

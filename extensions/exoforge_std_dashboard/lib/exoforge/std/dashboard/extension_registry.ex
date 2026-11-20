@@ -15,12 +15,21 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
     do: ext[:custom_view_module] != nil || ExtensionPresenter.view_module(ext) != nil
 
   # Category pills are standardized and derived from extension metadata.
-  defp extension_categories(extensions) do
+  @doc false
+  def extension_categories(extensions) do
     all_cat = [{"all", "All Extensions", nil, length(extensions)}]
     standard_order = ["Gameplay", "Players", "Storage", "Network", "System"]
 
+    # A category the standard list does not know (an author's own) still gets its pill, so the pills always add up to "All".
+    others =
+      extensions
+      |> Enum.map(&ExtensionPresenter.normalize_category(&1[:category]))
+      |> Enum.uniq()
+      |> Enum.reject(&(&1 in standard_order))
+      |> Enum.sort()
+
     pills =
-      Enum.map(standard_order, fn cat_name ->
+      Enum.map(standard_order ++ others, fn cat_name ->
         count =
           Enum.count(extensions, fn ext ->
             ExtensionPresenter.normalize_category(ext[:category]) == cat_name

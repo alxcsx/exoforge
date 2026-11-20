@@ -201,7 +201,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
       if action_def do
         Enum.reduce(action_def[:params] || [], %{}, fn p, acc ->
           val_str =
-            Map.get(act_form, p[:name] || p["name"], default_value_for(p[:type] || p["type"]))
+            Map.get(act_form, p[:name] || p["name"], default_value_for(p[:type] || p["type"], p[:optional] || p["optional"] || false))
 
           casted = cast_value(val_str, p[:type] || p["type"])
           Map.put(acc, Exoforge.Atoms.existing(p[:name] || p["name"]), casted)
@@ -783,13 +783,15 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
     "/tab/#{link[:target]}?focus=#{link[:focus]}:#{URI.encode_www_form(to_string(value))}"
   end
 
-  defp default_value_for(type) do
-    case type do
-      :integer -> "1"
-      :float -> "1.0"
-      :boolean -> "true"
-      :map -> "{}"
-      :list -> "[]"
+  defp default_value_for(type, optional) do
+    case {type, optional} do
+      {:integer, true} -> ""
+      {:integer, _} -> "1"
+      {:float, true} -> ""
+      {:float, _} -> "1.0"
+      {:boolean, _} -> "true"
+      {:map, _} -> "{}"
+      {:list, _} -> "[]"
       _ -> ""
     end
   end
@@ -1005,7 +1007,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
         <div class="min-w-0">
           <div class="flex flex-wrap items-center gap-2.5">
             <span class="text-base shrink-0"><%= @icon %></span>
-            <h1 class="exo-page-title truncate"><%= Phoenix.Naming.humanize(to_string(@extension.name)) %></h1>
+            <h1 class="exo-page-title truncate"><%= Exoforge.Std.Dashboard.ExtensionPresenter.display_name(@extension) %></h1>
             <span class="exo-badge bg-primary-50 text-primary-700 border-primary-200 font-mono">
               v<%= to_string(@extension.version) %>
             </span>
@@ -1092,8 +1094,8 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
         <div class="space-y-4">
           <div class="flex items-center justify-between">
             <div>
-              <h3 class="text-sm font-semibold text-gray-900">Interactive Action Control Panel</h3>
-              <p class="text-xs text-gray-500 mt-0.5">Execute typed backend RPCs with parameter inputs and live latency profiling</p>
+              <h3 class="text-sm font-semibold text-gray-900">Actions</h3>
+              <p class="text-xs text-gray-500 mt-0.5">Run an action by hand with the fields it takes, and see its answer.</p>
             </div>
           </div>
 
@@ -1108,7 +1110,8 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                     <h4 class="font-semibold text-gray-900 text-sm tracking-tight"><%= Phoenix.Naming.humanize(to_string(act[:name])) %></h4>
                     <span class="text-[11px] font-mono text-gray-400"><%= act[:name] %></span>
                   </div>
-                  <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-medium uppercase tracking-wider bg-gray-100 text-gray-700 shrink-0">
+                  <%!-- Every action is sync unless it says otherwise, so only the exceptions get a label. --%>
+                  <span :if={to_string(act[:mode]) != "sync"} class="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-medium uppercase tracking-wider bg-gray-100 text-gray-700 shrink-0">
                     <%= act[:mode] %>
                   </span>
                 </div>
@@ -1128,7 +1131,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                       <%= for p <- act[:params] do %>
                         <% p_name = p[:name] || p["name"] %>
                         <% p_type = p[:type] || p["type"] %>
-                        <% val = Map.get(act_form, p_name, default_value_for(p_type)) %>
+                        <% val = Map.get(act_form, p_name, default_value_for(p_type, p[:optional] || p["optional"] || false)) %>
 
                         <div>
                           <div class="flex items-center justify-between mb-1">
@@ -1176,7 +1179,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                   <!-- Technical Context & Scope Gating (tucked inside fold) -->
                   <details class="exo-fold">
                     <summary>
-                      <span>Technical Context &amp; Scopes</span>
+                      <span>Access</span>
                       <span class="exo-chevron">▸</span>
                     </summary>
                     <div class="exo-fold-body space-y-2">
