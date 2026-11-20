@@ -17,11 +17,12 @@ defmodule Exoforge.Std.Dashboard.UiStandardTest do
   @dashboard_lib Path.expand("../lib", __DIR__)
   @views_lib Path.expand("../../exoforge_std_dashboard_views/lib", __DIR__)
   @docs_lib Path.expand("../../exoforge_std_docs/lib", __DIR__)
+  @file_bucket_lib Path.expand("../../exoforge_std_file_bucket/lib", __DIR__)
   @css Path.expand("../priv/static/vendor/exoforge-studio.css", __DIR__)
 
   # Every extension that renders Studio chrome. The docs extension is the third surface and had
   # drifted furthest (87 rounded-2xl, 36 dark: variants) because this test did not look at it.
-  @sources Enum.flat_map([@dashboard_lib, @views_lib, @docs_lib], fn dir ->
+  @sources Enum.flat_map([@dashboard_lib, @views_lib, @docs_lib, @file_bucket_lib], fn dir ->
              Path.wildcard(Path.join(dir, "**/*.ex"))
            end)
 
@@ -112,8 +113,10 @@ defmodule Exoforge.Std.Dashboard.UiStandardTest do
   @icon_data ~r/(?:icon:|Icon\s*=)/
 
   defp allowed_emoji?(path, line) do
-    # the presenter's whole job is extension identity icons
+    # the presenter's whole job is extension identity icons; the file bucket's `file_icon/1` returns a glyph that
+    # names a kind of file (a bare quoted emoji on its own line), which is content identity, not chrome
     Path.basename(path) == "extension_presenter.ex" or
+      (String.contains?(path, "exoforge_std_file_bucket") and Regex.match?(~r/^\s*"[^"a-zA-Z0-9_]+"\s*$/u, line)) or
       Regex.match?(@icon_data, line) or
       String.contains?(line, [
         "dashboard_view[",

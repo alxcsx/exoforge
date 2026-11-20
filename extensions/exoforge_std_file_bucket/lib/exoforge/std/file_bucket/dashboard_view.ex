@@ -622,23 +622,22 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
     <div class="space-y-6">
       <!-- Notification Banner -->
       <%= if @action_notification do %>
-        <div class={"p-4 rounded-2xl flex items-center justify-between border shadow-sm transition-all #{if @action_notification.type == :error, do: "bg-red-50 text-red-700 border-red-200", else: "bg-emerald-50 text-emerald-800 border-emerald-200"}"}>
+        <div class={"p-4 rounded-xl flex items-center justify-between border shadow-sm transition-all #{if @action_notification.type == :error, do: "bg-red-50 text-red-700 border-red-200", else: "bg-emerald-50 text-emerald-800 border-emerald-200"}"}>
           <div class="flex items-center gap-3">
-            <span class="text-base"><%= if @action_notification.type == :error, do: "⚠️", else: "✅" %></span>
+            <span class="text-base font-bold"><%= if @action_notification.type == :error, do: "!", else: "✓" %></span>
             <span class="text-xs font-semibold"><%= @action_notification.message %></span>
           </div>
-          <button phx-click="dismiss_notification" phx-target={@myself} class="text-xs font-bold opacity-60 hover:opacity-100">✕</button>
+          <button phx-click="dismiss_notification" phx-target={@myself} class="text-xs font-bold opacity-60 hover:opacity-100"></button>
         </div>
       <% end %>
 
       <!-- Top Summary & Metrics Card -->
-      <div class="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
+      <div class="bg-white rounded-xl border border-gray-100 p-6 shadow-sm">
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div class="flex items-center gap-3">
-              <span class="text-2xl">🗂️</span>
               <h2 class="text-lg font-bold text-gray-900">File Bucket Storage</h2>
-              <span class="text-xs px-2.5 py-0.5 font-bold rounded-full bg-violet-50 text-violet-700 border border-violet-100">Cluster Engine</span>
+              <span class="text-xs px-2.5 py-0.5 font-bold rounded-full bg-primary-50 text-primary-700 border border-primary-100">Cluster Engine</span>
             </div>
             <p class="text-xs text-gray-400 mt-1">Pluggable binary asset storage for Unity, web clients, game media, and configurations</p>
           </div>
@@ -650,15 +649,13 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
               phx-target={@myself}
               class="px-3.5 py-2 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 rounded-xl transition-colors shadow-sm flex items-center gap-1.5"
             >
-              <span>📁</span>
               <span>New Bucket</span>
             </button>
             <button
               phx-click="open_upload_modal"
               phx-target={@myself}
-              class="px-4 py-2 text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 rounded-xl transition-colors shadow-sm flex items-center gap-1.5"
+              class="px-4 py-2 text-xs font-bold text-white bg-primary-600 hover:bg-primary-700 rounded-xl transition-colors shadow-sm flex items-center gap-1.5"
             >
-              <span>⬆️</span>
               <span>Upload File</span>
             </button>
             <button
@@ -690,7 +687,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
           </div>
           <div class="bg-gray-50/70 p-3 rounded-xl border border-gray-100">
             <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Selected Scope</span>
-            <p class="text-base font-bold text-violet-600 mt-0.5 truncate"><%= if @selected_bucket == "all", do: "All Buckets", else: @selected_bucket %></p>
+            <p class="text-base font-bold text-primary-600 mt-0.5 truncate"><%= if @selected_bucket == "all", do: "All Buckets", else: @selected_bucket %></p>
           </div>
         </div>
       </div>
@@ -703,7 +700,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
             phx-click="select_bucket"
             phx-value-bucket="all"
             phx-target={@myself}
-            class={"px-3 py-1.5 text-xs font-semibold rounded-xl border transition-colors shrink-0 #{if @selected_bucket == "all", do: "bg-violet-600 text-white border-violet-600 shadow-sm", else: "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}"}
+            class={"px-3 py-1.5 text-xs font-semibold rounded-xl border transition-colors shrink-0 #{if @selected_bucket == "all", do: "bg-primary-600 text-white border-primary-600 shadow-sm", else: "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}"}
           >
             All Buckets
           </button>
@@ -716,7 +713,6 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
                 phx-target={@myself}
                 class={"px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 #{if @selected_bucket == b, do: "text-primary-700", else: "text-gray-600"}"}
               >
-                <span>📁</span>
                 <span><%= b %></span>
               </button>
               <button
@@ -742,15 +738,14 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
                 placeholder="Search filename or ID..."
                 value={@search_query}
                 phx-debounce="250"
-                class="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 shadow-sm"
+                class="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 shadow-sm"
               />
-              <span class="absolute left-2.5 top-2 text-xs text-gray-400">🔍</span>
             </div>
 
             <!-- Type filter dropdown -->
             <select
               name="type"
-              class="text-xs bg-white border border-gray-200 rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-violet-500 shadow-sm"
+              class="text-xs bg-white border border-gray-200 rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary-500 shadow-sm"
             >
               <option value="all" selected={@type_filter == "all"}>All Types</option>
               <option value="image" selected={@type_filter == "image"}>Images</option>
@@ -770,7 +765,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
               class={"px-2 py-1 text-xs font-bold rounded-lg transition-all #{if @view_mode == "tree", do: "bg-white text-gray-800 shadow-sm", else: "text-gray-500 hover:text-gray-800"}"}
               title="Tree view"
             >
-              📁 Tree
+               Tree
             </button>
             <button
               phx-click="set_view_mode"
@@ -788,7 +783,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
       <!-- Main Explorer (Split View) -->
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         <!-- Left Panel: File Tree / File List (7 cols) -->
-        <div class="lg:col-span-7 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col min-h-[500px]">
+        <div class="lg:col-span-7 bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden flex flex-col min-h-[500px]">
           <div class="p-3.5 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
             <div class="flex items-center gap-2">
               <span class="text-xs font-bold text-gray-700 uppercase tracking-wider">
@@ -799,13 +794,13 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
                   type="button"
                   phx-click="load_more_files"
                   phx-target={@myself}
-                  class="px-2 py-0.5 text-[10px] font-bold text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-100 rounded-lg transition-colors"
+                  class="px-2 py-0.5 text-[10px] font-bold text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-100 rounded-lg transition-colors"
                 >
                   Load more
                 </button>
               <% end %>
               <%= if @selected_bucket != "all" do %>
-                <span class="text-[10px] font-mono text-violet-700 bg-violet-50 px-2 py-0.5 rounded-full border border-violet-100">
+                <span class="text-[10px] font-mono text-primary-700 bg-primary-50 px-2 py-0.5 rounded-full border border-primary-100">
                   /<%= @selected_bucket %>
                 </span>
               <% end %>
@@ -815,17 +810,16 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
           <div class="p-2 flex-1 overflow-y-auto max-h-[620px]">
             <%= if @filtered_files == [] do %>
               <div class="py-16 text-center">
-                <div class="w-12 h-12 rounded-2xl bg-gray-100 text-gray-400 flex items-center justify-center mx-auto mb-3 text-xl">
-                  🗂️
+                <div class="w-12 h-12 rounded-xl bg-gray-100 text-gray-400 flex items-center justify-center mx-auto mb-3 text-xl">
                 </div>
                 <p class="text-sm font-semibold text-gray-700">No Files Found</p>
                 <p class="text-xs text-gray-400 mt-1">Upload binary files, game assets, or textures to this bucket.</p>
                 <button
                   phx-click="open_upload_modal"
                   phx-target={@myself}
-                  class="mt-4 px-4 py-2 text-xs font-bold text-violet-700 bg-violet-50 hover:bg-violet-100 rounded-xl transition-colors inline-flex items-center gap-1.5"
+                  class="mt-4 px-4 py-2 text-xs font-bold text-primary-700 bg-primary-50 hover:bg-primary-100 rounded-xl transition-colors inline-flex items-center gap-1.5"
                 >
-                  <span>⬆️</span> Upload File
+                   Upload File
                 </button>
               </div>
             <% else %>
@@ -845,7 +839,6 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
                       >
                         <div class="flex items-center gap-2">
                           <span class="text-xs text-gray-400 transition-transform"><%= if is_expanded, do: "▼", else: "▶" %></span>
-                          <span class="text-sm">📁</span>
                           <span class="text-xs font-bold text-gray-800"><%= bucket_name %></span>
                           <span class="text-[10px] text-gray-400 font-semibold">(<%= length(bucket_files) %>)</span>
                         </div>
@@ -853,7 +846,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
                           phx-click="open_upload_modal"
                           phx-value-bucket={bucket_name}
                           phx-target={@myself}
-                          class="text-[10px] font-bold text-violet-600 hover:text-violet-800 bg-white px-2 py-0.5 rounded-lg border border-gray-200 shadow-2xs"
+                          class="text-[10px] font-bold text-primary-600 hover:text-primary-800 bg-white px-2 py-0.5 rounded-lg border border-gray-200 shadow-2xs"
                           onclick="event.stopPropagation();"
                         >
                           + Upload
@@ -869,7 +862,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
                               phx-click="select_file"
                               phx-value-id={file["id"]}
                               phx-target={@myself}
-                              class={"p-2.5 hover:bg-violet-50/40 cursor-pointer flex items-center justify-between gap-3 transition-colors #{if is_selected, do: "bg-violet-50/70 border-l-2 border-violet-600 font-medium"}"}
+                              class={"p-2.5 hover:bg-primary-50/40 cursor-pointer flex items-center justify-between gap-3 transition-colors #{if is_selected, do: "bg-primary-50/70 border-l-2 border-primary-600 font-medium"}"}
                             >
                               <div class="flex items-center gap-2.5 min-w-0">
                                 <span class="text-base shrink-0"><%= file_icon(file) %></span>
@@ -881,7 +874,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
                                     <span class="text-[10px] font-mono text-gray-400"><%= file["id"] %></span>
                                     <span class="text-[10px] text-gray-400">• <%= format_bytes(file["size_bytes"]) %></span>
                                     <%= if has_bundle_tag?(file) do %>
-                                      <span class="px-1.5 py-0.2 rounded text-[9px] bg-violet-100 text-violet-700 font-semibold font-mono">addressables</span>
+                                      <span class="px-1.5 py-0.2 rounded text-[10px] bg-primary-100 text-primary-700 font-semibold font-mono">addressables</span>
                                     <% end %>
                                   </div>
                                 </div>
@@ -903,7 +896,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
                       phx-click="select_file"
                       phx-value-id={file["id"]}
                       phx-target={@myself}
-                      class={"p-3 rounded-xl border cursor-pointer hover:border-violet-300 transition-all flex flex-col justify-between #{if is_selected, do: "border-violet-500 bg-violet-50/50 shadow-sm", else: "border-gray-200 bg-white hover:bg-gray-50/50"}"}
+                      class={"p-3 rounded-xl border cursor-pointer hover:border-primary-300 transition-all flex flex-col justify-between #{if is_selected, do: "border-primary-500 bg-primary-50/50 shadow-sm", else: "border-gray-200 bg-white hover:bg-gray-50/50"}"}
                     >
                       <div class="flex items-center justify-center h-24 bg-gray-50 rounded-lg mb-2 overflow-hidden border border-gray-100">
                         <%= if image_file?(file) do %>
@@ -928,7 +921,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
         </div>
 
         <!-- Right Panel: File Preview & Inspector (5 cols) -->
-        <div class="lg:col-span-5 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col min-h-[500px]">
+        <div class="lg:col-span-5 bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden flex flex-col min-h-[500px]">
           <div class="p-3.5 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
             <span class="text-xs font-bold text-gray-700 uppercase tracking-wider">File Details & Live Preview</span>
             <%= if @selected_file do %>
@@ -939,7 +932,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
                   class="text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-200 transition-colors shadow-2xs"
                   title="Modify file"
                 >
-                  ✏️ Edit
+                   Edit
                 </button>
                 <button
                   phx-click="open_delete_modal"
@@ -947,7 +940,6 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
                   class="text-xs font-semibold text-red-600 bg-white hover:bg-red-50 px-2.5 py-1 rounded-lg border border-red-200 transition-colors shadow-2xs"
                   title="Delete file"
                 >
-                  🗑️
                 </button>
               </div>
             <% end %>
@@ -969,7 +961,6 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
                   <% else %>
                     <%= if String.starts_with?(to_string(@selected_file["content_type"] || ""), "audio/") do %>
                       <div class="w-full space-y-3 text-center">
-                        <span class="text-4xl">🎵</span>
                         <audio controls src={@selected_file["url"]} class="w-full mt-2"></audio>
                       </div>
                     <% else %>
@@ -990,7 +981,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
                       <p class="text-sm font-bold text-gray-900 break-all"><%= @selected_file["filename"] %></p>
                     </div>
                     <div class="flex items-center gap-1.5 shrink-0">
-                      <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-100">
+                      <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 border border-primary-100">
                         <%= @selected_file["bucket"] %>
                       </span>
                       <span class="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
@@ -1010,7 +1001,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
                       <div>
                         <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400">File Reference ID</span>
                         <div class="flex items-center gap-2 mt-1">
-                          <code class="px-2.5 py-1 text-xs font-mono font-bold bg-violet-50 text-violet-700 rounded-lg border border-violet-100 select-all">
+                          <code class="px-2.5 py-1 text-xs font-mono font-bold bg-primary-50 text-primary-700 rounded-lg border border-primary-100 select-all">
                             <%= @selected_file["id"] %>
                           </code>
                           <button
@@ -1018,7 +1009,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
                             class="text-xs px-2 py-1 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg font-semibold text-gray-600 transition-colors shadow-2xs"
                             title="Copy ID"
                           >
-                            📋 Copy
+                             Copy
                           </button>
                         </div>
                         <p class="text-[10px] text-gray-400 mt-1">Use this ID on any resource column tagged as <span class="font-mono text-gray-600">file_reference</span></p>
@@ -1048,7 +1039,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
                           <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Metadata & Tags</span>
                           <div class="flex flex-wrap gap-1 mt-1">
                             <%= for {k, v} <- @selected_file["metadata"] do %>
-                              <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono bg-violet-50 text-violet-700 rounded-md border border-violet-100">
+                              <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono bg-primary-50 text-primary-700 rounded-lg border border-primary-100">
                                 <span class="text-gray-400"><%= k %>:</span> <%= to_string(v) %>
                               </span>
                             <% end %>
@@ -1069,7 +1060,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
                           <a
                             href={@selected_file["url"]}
                             target="_blank"
-                            class="px-2.5 py-1 text-xs font-bold text-violet-700 bg-violet-50 hover:bg-violet-100 rounded-lg border border-violet-100 shrink-0"
+                            class="px-2.5 py-1 text-xs font-bold text-primary-700 bg-primary-50 hover:bg-primary-100 rounded-lg border border-primary-100 shrink-0"
                           >
                             ↗ Open
                           </a>
@@ -1084,24 +1075,24 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
               <div class="pt-5 border-t border-gray-100 flex items-center gap-2">
                 <a
                   href={@selected_file["url"]}
+                  aria-label={"Download " <> to_string(@selected_file["filename"])}
                   download={@selected_file["filename"]}
                   target="_blank"
                   class="flex-1 py-2 text-center text-xs font-bold text-gray-800 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl transition-colors shadow-2xs"
                 >
-                  ⬇️ Download
+                   Download
                 </a>
                 <button
                   phx-click="open_modify_modal"
                   phx-target={@myself}
-                  class="flex-1 py-2 text-center text-xs font-bold text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-100 rounded-xl transition-colors shadow-2xs"
+                  class="flex-1 py-2 text-center text-xs font-bold text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-100 rounded-xl transition-colors shadow-2xs"
                 >
-                  ✏️ Modify
+                   Modify
                 </button>
               </div>
             <% else %>
               <div class="py-24 text-center my-auto">
-                <div class="w-12 h-12 rounded-2xl bg-gray-100 text-gray-400 flex items-center justify-center mx-auto mb-3 text-xl">
-                  🔍
+                <div class="w-12 h-12 rounded-xl bg-gray-100 text-gray-400 flex items-center justify-center mx-auto mb-3 text-xl">
                 </div>
                 <p class="text-sm font-semibold text-gray-700">No File Selected</p>
                 <p class="text-xs text-gray-400 mt-1">Click any file from the explorer on the left to inspect, preview, and copy its ID.</p>
@@ -1117,13 +1108,12 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
       <%= if @show_upload_modal do %>
         <div class="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div class="fixed inset-0" phx-click="close_modal" phx-target={@myself}></div>
-          <div class="relative bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-200 space-y-4">
+          <div class="relative bg-white rounded-xl max-w-lg w-full p-6 shadow-2xl border border-gray-200 space-y-4">
             <div class="flex items-center justify-between border-b border-gray-100 pb-3">
               <div class="flex items-center gap-2">
-                <span class="text-xl">⬆️</span>
                 <h3 class="text-sm font-bold text-gray-900">Upload File to Bucket</h3>
               </div>
-              <button phx-click="close_modal" phx-target={@myself} class="text-gray-400 hover:text-gray-600 text-sm font-bold">✕</button>
+              <button phx-click="close_modal" phx-target={@myself} class="text-gray-400 hover:text-gray-600 text-sm font-bold"></button>
             </div>
 
             <%= if @modal_error do %>
@@ -1138,7 +1128,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
                 <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Target Bucket</label>
                 <select
                   name="upload[bucket]"
-                  class="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  class="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
                   <%= for b <- @buckets do %>
                     <option value={b} selected={b == @upload_form["bucket"]}><%= b %></option>
@@ -1152,7 +1142,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
                 <input type="hidden" id="bucket_upload_content_type_input" name="upload[content_type]" value="" />
 
                 <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Select File to Upload</label>
-                <div class="border-2 border-dashed border-gray-300 rounded-xl p-5 text-center hover:border-violet-400 transition-colors bg-gray-50/50">
+                <div class="border-2 border-dashed border-gray-300 rounded-xl p-5 text-center hover:border-primary-400 transition-colors bg-gray-50/50">
                   <input
                     type="file"
                     id="bucket_upload_file_picker"
@@ -1187,7 +1177,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
                       };
                       reader.readAsDataURL(file);
                     "
-                    class="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100 cursor-pointer"
+                    class="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 cursor-pointer"
                   />
                   <p class="text-[11px] text-gray-400 mt-2">Selecting a file will automatically populate the filename below.</p>
                 </div>
@@ -1205,7 +1195,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
                   name="upload[filename]"
                   value={@upload_form["filename"]}
                   placeholder="Select a file above or enter custom filename..."
-                  class="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 font-mono focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  class="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 font-mono focus:outline-none focus:ring-2 focus:ring-primary-500"
                 />
                 <p class="text-[11px] text-gray-400 mt-1">This is the saved file name in the bucket. Edit it if you wish to save with a new name.</p>
               </div>
@@ -1231,7 +1221,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
                 <button
                   type="submit"
                   phx-disable-with="Uploading..."
-                  class="px-4 py-2 text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 rounded-xl transition-colors shadow-sm"
+                  class="px-4 py-2 text-xs font-bold text-white bg-primary-600 hover:bg-primary-700 rounded-xl transition-colors shadow-sm"
                 >
                   Upload File
                 </button>
@@ -1245,13 +1235,12 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
       <%= if @show_modify_modal do %>
         <div class="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div class="fixed inset-0" phx-click="close_modal" phx-target={@myself}></div>
-          <div class="relative bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-200 space-y-4">
+          <div class="relative bg-white rounded-xl max-w-lg w-full p-6 shadow-2xl border border-gray-200 space-y-4">
             <div class="flex items-center justify-between border-b border-gray-100 pb-3">
               <div class="flex items-center gap-2">
-                <span class="text-xl">✏️</span>
                 <h3 class="text-sm font-bold text-gray-900">Modify File (<%= @modify_form["id"] %>)</h3>
               </div>
-              <button phx-click="close_modal" phx-target={@myself} class="text-gray-400 hover:text-gray-600 text-sm font-bold">✕</button>
+              <button phx-click="close_modal" phx-target={@myself} class="text-gray-400 hover:text-gray-600 text-sm font-bold"></button>
             </div>
 
             <form phx-submit="submit_modify" phx-target={@myself} class="space-y-4">
@@ -1277,7 +1266,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
                   id="bucket_modify_filename_input"
                   name="modify[filename]"
                   value={@modify_form["filename"]}
-                  class="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 font-mono focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  class="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 font-mono focus:outline-none focus:ring-2 focus:ring-primary-500"
                 />
               </div>
 
@@ -1343,7 +1332,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
                 <button
                   type="submit"
                   phx-disable-with="Uploading..."
-                  class="px-4 py-2 text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 rounded-xl transition-colors shadow-sm"
+                  class="px-4 py-2 text-xs font-bold text-white bg-primary-600 hover:bg-primary-700 rounded-xl transition-colors shadow-sm"
                 >
                   Save Changes
                 </button>
@@ -1356,13 +1345,12 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
       <!-- 3. Delete Confirmation Modal -->
       <%= if @show_delete_modal and @delete_file_target do %>
         <div class="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-200 space-y-4">
+          <div class="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl border border-gray-200 space-y-4">
             <div class="flex items-center gap-3 text-red-600">
-              <span class="text-2xl">⚠️</span>
               <h3 class="text-sm font-bold text-gray-900">Delete Stored File</h3>
             </div>
             <p class="text-xs text-gray-600">
-              Are you sure you want to permanently delete <strong class="text-gray-900"><%= @delete_file_target["filename"] %></strong> (ID: <code class="font-mono text-violet-700 bg-violet-50 px-1 rounded"><%= @delete_file_target["id"] %></code>) from bucket <strong class="text-gray-900"><%= @delete_file_target["bucket"] %></strong>?
+              Are you sure you want to permanently delete <strong class="text-gray-900"><%= @delete_file_target["filename"] %></strong> (ID: <code class="font-mono text-primary-700 bg-primary-50 px-1 rounded"><%= @delete_file_target["id"] %></code>) from bucket <strong class="text-gray-900"><%= @delete_file_target["bucket"] %></strong>?
             </p>
             <p class="text-[11px] text-gray-400">Any game client or resource referencing this File ID will fail to load the asset.</p>
             <div class="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
@@ -1390,13 +1378,12 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
       <!-- 4. New Bucket Modal -->
       <%= if @show_new_bucket_modal do %>
         <div class="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-gray-200 space-y-4">
+          <div class="bg-white rounded-xl max-w-sm w-full p-6 shadow-2xl border border-gray-200 space-y-4">
             <div class="flex items-center justify-between border-b border-gray-100 pb-3">
               <div class="flex items-center gap-2">
-                <span class="text-xl">📁</span>
                 <h3 class="text-sm font-bold text-gray-900">Create New Bucket</h3>
               </div>
-              <button phx-click="close_modal" phx-target={@myself} class="text-gray-400 hover:text-gray-600 text-sm font-bold">✕</button>
+              <button phx-click="close_modal" phx-target={@myself} class="text-gray-400 hover:text-gray-600 text-sm font-bold"></button>
             </div>
 
             <form phx-submit="submit_new_bucket" phx-target={@myself} class="space-y-4">
@@ -1409,7 +1396,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
                   value={@new_bucket_name}
                   phx-change="update_new_bucket_name"
                   phx-target={@myself}
-                  class="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 font-mono focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  class="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 font-mono focus:outline-none focus:ring-2 focus:ring-primary-500"
                 />
                 <p class="text-[10px] text-gray-400 mt-1">Lowercase letters, numbers, and underscores only.</p>
               </div>
@@ -1426,7 +1413,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
                 <button
                   type="submit"
                   phx-disable-with="Uploading..."
-                  class="px-4 py-2 text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 rounded-xl transition-colors shadow-sm"
+                  class="px-4 py-2 text-xs font-bold text-white bg-primary-600 hover:bg-primary-700 rounded-xl transition-colors shadow-sm"
                 >
                   Create Bucket
                 </button>

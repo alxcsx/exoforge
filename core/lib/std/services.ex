@@ -19,7 +19,7 @@ defmodule Exoforge.Std.Services do
       errors([:syntax_error, :not_found, :unauthorized])
     end
 
-    @doc "Lists the columns of a table in a plugin's isolated database (M33 Fix 9)."
+    @doc "Lists the columns of a table in an extension's isolated database."
     action :table_columns do
       scope(:server)
 
@@ -926,9 +926,9 @@ defmodule Exoforge.Std.Services do
   end
 
   defservice metering do
-    @moduledoc "Local usage metering: what each plugin was called with, and what it cost."
+    @moduledoc "Local usage metering: what each extension was called with, and what it cost."
 
-    @doc "Rolls up persisted usage per plugin and action for this title."
+    @doc "Rolls up persisted usage per extension and action for this title."
     action :usage do
       scope(:studio)
 

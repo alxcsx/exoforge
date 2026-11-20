@@ -304,6 +304,32 @@ defmodule Exoforge.DashboardLiveViewTest do
     end
   end
 
+  describe "Escape" do
+    test "closes only the window on top" do
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{"admin_player_id" => "admin", "admin_scopes" => ["admin"]})
+
+      {:ok, view, _html} = live(conn, "/")
+
+      render_click(view, "open_settings", %{})
+      html = render(view)
+      assert html =~ "Cluster &amp; Core"
+
+      render_click(view, "open_cmd_palette", %{})
+      assert render(view) =~ "Search extensions, resources, players"
+
+      # the palette is on top: one press closes it and leaves the settings open
+      html = render_hook(view, "handle_key", %{"key" => "Escape"})
+      refute html =~ "Search extensions, resources, players"
+      assert html =~ "Cluster &amp; Core"
+
+      # the next press closes the settings
+      html = render_hook(view, "handle_key", %{"key" => "Escape"})
+      refute html =~ "Cluster &amp; Core"
+    end
+  end
+
   describe "Extensions page categories" do
     test "the category pills add up to All, including a category an author made up" do
       extensions = [
@@ -360,7 +386,7 @@ defmodule Exoforge.DashboardLiveViewTest do
 
       # Open Command Palette (Cmd+K)
       html = render_click(view, "open_cmd_palette", %{})
-      assert html =~ "Search plugins, resources, players, actions... (Cmd+K)"
+      assert html =~ "Search extensions, resources, players, actions... (Cmd+K)"
 
       # Search in Command Palette for dynamic action
       html = render_change(view, "search_cmd_palette", %{"query" => "register"})
@@ -937,11 +963,11 @@ defmodule Exoforge.DashboardLiveViewTest do
 
       # 1. Trigger Cmd+K keydown event
       html = render_hook(view, "handle_key", %{"key" => "k", "metaKey" => true})
-      assert html =~ "Search plugins, resources, players, actions... (Cmd+K)"
+      assert html =~ "Search extensions, resources, players, actions... (Cmd+K)"
 
       # 2. Trigger Escape keydown event to close modal
       html = render_hook(view, "handle_key", %{"key" => "Escape"})
-      refute html =~ "Search plugins, resources, players, actions... (Cmd+K)"
+      refute html =~ "Search extensions, resources, players, actions... (Cmd+K)"
     end
 
     test "topbar navigation orders overview first, extensions second, and enforces pin limit" do

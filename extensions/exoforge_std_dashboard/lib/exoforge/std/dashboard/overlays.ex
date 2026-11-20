@@ -43,7 +43,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   type="text"
                   name="query"
                   value={@query}
-                  placeholder="Search plugins, resources, players, actions... (Cmd+K)"
+                  placeholder="Search extensions, resources, players, actions... (Cmd+K)"
                   class="w-full px-2 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none"
                   autofocus
                 />

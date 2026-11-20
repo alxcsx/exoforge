@@ -436,15 +436,22 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         {:noreply, assign(socket, cmd_palette_open: new_open, cmd_query: "", cmd_results: results)}
 
       key in ["Escape", "Esc"] ->
-        {:noreply,
-         assign(socket,
-           cmd_palette_open: false,
-           settings_open: false,
-           sdk_modal_open: false,
-           action_modal_open: false,
-           actions_detail_modal: nil,
-           events_modal_open: false
-         )}
+        # One press closes the window on top, not every window at once: the palette sits over a settings modal
+        # that sits over the page.
+        a = socket.assigns
+
+        closing =
+          cond do
+            a.cmd_palette_open -> [cmd_palette_open: false]
+            a.action_modal_open -> [action_modal_open: false]
+            a.actions_detail_modal -> [actions_detail_modal: nil]
+            a.events_modal_open -> [events_modal_open: false]
+            a.sdk_modal_open -> [sdk_modal_open: false]
+            a.settings_open -> [settings_open: false]
+            true -> []
+          end
+
+        {:noreply, assign(socket, closing)}
 
       true ->
         {:noreply, socket}
