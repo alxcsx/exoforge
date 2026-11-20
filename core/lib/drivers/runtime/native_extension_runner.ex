@@ -27,6 +27,9 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
   @os_sample_ms 5_000
   @max_stderr_bytes 64 * 1024
   @max_stderr_lines 20
+  # How often what the process writes to stderr is copied into the extension's logs, and how much per pass.
+  @stderr_poll_ms 2_000
+  @stderr_lines_per_pass 100
 
   @doc "Prepares the manifest by ensuring the proxy module is created and set as entry_point."
   def prepare_manifest(%Manifest{} = manifest) do
@@ -196,6 +199,7 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
     handshake_timer = Process.send_after(self(), :handshake_timeout, handshake_timeout_ms)
 
     schedule_os_sample()
+    Process.send_after(self(), :poll_stderr, @stderr_poll_ms)
 
     {:ok,
      %{
@@ -210,7 +214,8 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
        lifecycle: nil,
        lifecycle_timer: nil,
        worker_idx: idx,
-       stderr_path: stderr_path
+       stderr_path: stderr_path,
+       stderr_offset: 0
      }}
   end
 
@@ -280,6 +285,10 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
   end
 
   def handle_info({port, {:exit_status, status}}, %{port: port} = state) do
+    # What it printed on its way out is the reason, so it goes into its logs before anything else.
+    state = flush_stderr(state)
+    record_log(state.manifest.id, 3, "The process exited with status #{status}.")
+
     if is_nil(state.handshake) do
       stderr_tail = read_stderr_tail(state.stderr_path)
       stderr_msg = format_stderr_msg(stderr_tail, " (no stderr captured)")
@@ -322,6 +331,12 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
   end
 
   def handle_info(:lifecycle_timeout, state), do: {:noreply, state}
+
+  def handle_info(:poll_stderr, state) do
+    state = flush_stderr(state)
+    Process.send_after(self(), :poll_stderr, @stderr_poll_ms)
+    {:noreply, state}
+  end
 
   def handle_info(:sample_os, state) do
     case Port.info(state.port, :os_pid) do
@@ -435,13 +450,11 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
       {:ok, _other} ->
         state
 
-      {:error, reason} ->
-        if is_nil(state.handshake) do
-          state
-        else
-          Logger.warning("[NativeExtensionRunner] Bad frame from #{state.manifest.id}: #{inspect(reason)}")
-          state
-        end
+      {:error, _reason} ->
+        # stdout is the wire, so a plain `Console.WriteLine` lands here. It is still the extension talking: it goes
+        # into its logs instead of vanishing into the server console.
+        if state.handshake, do: record_log(state.manifest.id, 1, "[stdout] " <> String.slice(line, 0, 2_000))
+        state
     end
   end
 
@@ -976,6 +989,39 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
   end
 
   defp cleanup_stderr(_state), do: :ok
+
+  # Copies what the process has written to stderr since the last pass into the extension's logs (as warnings), so a
+  # `Console.Error.WriteLine` or an unhandled exception shows up while the extension runs, not only after it died.
+  defp flush_stderr(%{stderr_path: path} = state) when is_binary(path) do
+    offset = Map.get(state, :stderr_offset, 0)
+
+    with {:ok, %{size: size}} when size > offset <- File.stat(path),
+         {:ok, file} <- :file.open(to_charlist(path), [:read, :binary]) do
+      try do
+        case :file.pread(file, offset, min(size - offset, @max_stderr_bytes)) do
+          {:ok, chunk} ->
+            lines = chunk |> String.split(~r/\r?\n/, trim: true) |> Enum.reject(&(String.trim(&1) == ""))
+            {shown, extra} = Enum.split(lines, @stderr_lines_per_pass)
+
+            Enum.each(shown, &record_log(state.manifest.id, 2, "[stderr] " <> String.slice(&1, 0, 2_000)))
+
+            if extra != [],
+              do: record_log(state.manifest.id, 2, "[stderr] ... #{length(extra)} more lines were written to stderr")
+
+            %{state | stderr_offset: offset + byte_size(chunk)}
+
+          _ ->
+            state
+        end
+      after
+        :file.close(file)
+      end
+    else
+      _ -> state
+    end
+  end
+
+  defp flush_stderr(state), do: state
 
   defp read_stderr_tail(nil), do: []
 

@@ -222,7 +222,8 @@ defmodule Exoforge.ActionDispatcher do
       _, _ -> :ok
     end
 
-    # 2. Append to ExtensionLogs for the providing extension
+    # 2. Resolve the providing extension (action calls are traced and metered; the log ring is for what an
+    #    extension says, so a busy action cannot push its real lines out of it).
     try do
       manifest =
         case resolved_mod do
@@ -246,16 +247,6 @@ defmodule Exoforge.ActionDispatcher do
           manifest && is_atom(manifest.id) -> to_string(manifest.id)
           true -> to_string(service)
         end
-
-      if manifest && is_binary(manifest.id) do
-        level = if status_str == "ok", do: 1, else: 2
-
-        Exoforge.ExtensionLogs.append(
-          manifest.id,
-          level,
-          "[action] #{service}.#{action} -> #{status_str} (#{duration_ms}ms)"
-        )
-      end
 
       # 3. Record in Metering for non-native extensions (native runner tracks its own stdio port bytes)
       is_native =

@@ -3,11 +3,17 @@ defmodule Exoforge.ExtensionLogs do
   @max_per_second 100
 
   @moduledoc """
-  Bounded, in-memory record of the most recent log lines each extension emitted.
+  Bounded, in-memory record of the most recent log lines each extension emitted, with a persisted copy so history
+  survives a restart.
+
+  What lands here: lines an extension writes through its logger (C# `Exo.Logger`), the output a native extension
+  writes to stdout or stderr outside the protocol, boot and runtime failures, and how a native process ended.
+  Warnings and errors are never dropped by the flood guard; the lines it does drop are counted in one summary line.
   """
 
   @table :exo_extension_logs
   @rate_table :exo_extension_log_rate
+  @schema_table :exo_extension_logs_schema
   @max_lines 200
 
   @type level :: 0 | 1 | 2 | 3
@@ -35,50 +41,69 @@ defmodule Exoforge.ExtensionLogs do
   def append(extension_id, level, message, now_ms) when is_binary(message) do
     table = ensure_table()
     id = to_string(extension_id)
+    lvl = normalize_level(level)
 
-    if allowed?(id, now_ms) do
-      if :ets.select_count(table, [{{id, :_, :_, :_, :_}, [], [true]}]) >= @max_lines do
-        drop_oldest(table, id)
-      end
+    case allowed?(id, lvl, now_ms) do
+      {:ok, dropped_before} ->
+        if dropped_before > 0 do
+          store(table, id, 2, "#{dropped_before} log lines were dropped in the previous second (over #{@max_per_second} a second)")
+        end
 
-      at = System.system_time(:millisecond)
-      lvl = normalize_level(level)
-      rid = Exoforge.RequestContext.rid()
-      :ets.insert(table, {id, at, lvl, message, rid})
-      persist_async(id, at, lvl, message, rid)
-      :ok
-    else
-      :rate_limited
+        store(table, id, lvl, message)
+        :ok
+
+      :rate_limited ->
+        :rate_limited
     end
   end
 
   def append(_extension_id, _level, _message, _now_ms), do: :ok
+
+  defp store(table, id, lvl, message) do
+    if :ets.select_count(table, [{{id, :_, :_, :_, :_}, [], [true]}]) >= @max_lines do
+      drop_oldest(table, id)
+    end
+
+    at = System.system_time(:millisecond)
+    rid = Exoforge.RequestContext.rid()
+    :ets.insert(table, {id, at, lvl, message, rid})
+    persist_async(id, at, lvl, message, rid)
+  end
 
   @doc "Recent lines for an extension, newest last. `limit` caps how many are returned."
   def list(extension_id, limit \\ 100) do
     table = ensure_table()
     id = to_string(extension_id)
 
-    entries =
-      case :ets.lookup(table, id) do
-        [] ->
-          # If ETS has no logs for this extension, try loading persisted logs from DB
-          load_from_db(id, limit)
+    cached =
+      Enum.map(:ets.lookup(table, id), fn
+        {_id, at, level, message, rid} ->
+          %{at: at, level: level, level_name: level_name(level), message: message, rid: rid}
 
-        cached ->
-          Enum.map(cached, fn
-            {_id, at, level, message, rid} ->
-              %{at: at, level: level, level_name: level_name(level), message: message, rid: rid}
+        # Lines written before the rid column existed.
+        {_id, at, level, message} ->
+          %{at: at, level: level, level_name: level_name(level), message: message, rid: nil}
+      end)
 
-            # Lines written before the rid column existed.
-            {_id, at, level, message} ->
-              %{at: at, level: level, level_name: level_name(level), message: message, rid: nil}
-          end)
+    merge_history(cached, limit, fn before_ms, count -> load_from_db(id, count, before_ms) end)
+  end
+
+  @doc false
+  # The lines in memory are the newest. When there are fewer than `limit`, the persisted lines older than the oldest
+  # one in memory fill the rest: after a restart the history is still there, and one new line does not hide it.
+  def merge_history(cached, limit, history_fn) do
+    limit = max(limit, 1)
+    cached = Enum.sort_by(cached, & &1.at)
+
+    older =
+      if length(cached) >= limit do
+        []
+      else
+        before_ms = case cached do [] -> nil; [first | _] -> first.at end
+        history_fn.(before_ms, limit - length(cached))
       end
 
-    entries
-    |> Enum.sort_by(& &1.at)
-    |> Enum.take(-max(limit, 1))
+    (older ++ cached) |> Enum.sort_by(& &1.at) |> Enum.take(-limit)
   end
 
   @doc """
@@ -239,36 +264,47 @@ defmodule Exoforge.ExtensionLogs do
       _ ->
         @table
     end
+
+    # The flood counters and the "schema is ready" mark belong to the same owner: a table made by a request or a
+    # one-off task dies with it, and a lost mark meant every persisted line re-ran the schema check.
+    if :ets.info(@rate_table) == :undefined, do: :ets.new(@rate_table, [:set, :named_table, :public, write_concurrency: true])
+    if :ets.info(@schema_table) == :undefined, do: :ets.new(@schema_table, [:named_table, :public, :set])
+    @table
   end
 
   defp ensure_rate_table do
-    case :ets.info(@rate_table) do
-      :undefined ->
-        :ets.new(@rate_table, [:set, :named_table, :public, write_concurrency: true])
-
-      _ ->
-        @rate_table
-    end
+    if :ets.info(@rate_table) == :undefined, do: Exoforge.TableOwner.ensure_started()
+    @rate_table
   end
 
-  # One counter per plugin per second window, so a flood is bounded without a timer that would
-  # have to be cleaned up. The table holds at most one entry per plugin: the next line in a new
-  # window overwrites it.
-  defp allowed?(id, now_ms) do
+  # One counter per extension per second window, so a flood is bounded without a timer that would have to be
+  # cleaned up. The table holds one entry per extension: the next line in a new window replaces it. Lines below
+  # warning are dropped past the limit and counted, and the first line of the next window reports the count; a
+  # warning or an error is always kept, because a flood must not be able to hide the line that says why.
+  defp allowed?(id, level, now_ms) do
     table = ensure_rate_table()
     window = div(now_ms, 1000)
 
     case :ets.lookup(table, id) do
-      [{^id, ^window, count}] when count >= @max_per_second ->
-        false
+      [{^id, ^window, count, dropped}] when count >= @max_per_second ->
+        if level >= 2 do
+          {:ok, 0}
+        else
+          :ets.insert(table, {id, window, count, dropped + 1})
+          :rate_limited
+        end
 
-      [{^id, ^window, count}] ->
-        :ets.insert(table, {id, window, count + 1})
-        true
+      [{^id, ^window, count, dropped}] ->
+        :ets.insert(table, {id, window, count + 1, dropped})
+        {:ok, 0}
+
+      [{^id, _old_window, _count, dropped}] ->
+        :ets.insert(table, {id, window, 1, 0})
+        {:ok, dropped}
 
       _ ->
-        :ets.insert(table, {id, window, 1})
-        true
+        :ets.insert(table, {id, window, 1, 0})
+        {:ok, 0}
     end
   end
 
@@ -320,15 +356,20 @@ defmodule Exoforge.ExtensionLogs do
     end
   end
 
-  defp load_from_db(extension_id, limit) do
+  defp load_from_db(extension_id, limit, before_ms) do
     try do
       ensure_schema()
+
+      {where, args} =
+        if before_ms,
+          do: {"extension_id = $1 AND timestamp < $3", [to_string(extension_id), limit, before_ms]},
+          else: {"extension_id = $1", [to_string(extension_id), limit]}
 
       case Exoforge.ActionDispatcher.dispatch_internal(:database, :execute, %{
              plugin: :extension_logs,
              operation:
-               "SELECT level, level_name, message, timestamp, rid FROM extension_logs WHERE extension_id = $1 ORDER BY timestamp DESC LIMIT $2",
-             arguments: [to_string(extension_id), limit]
+               "SELECT level, level_name, message, timestamp, rid FROM extension_logs WHERE #{where} ORDER BY timestamp DESC LIMIT $2",
+             arguments: args
            }) do
         {:ok, %{rows: rows}} when is_list(rows) ->
           Enum.map(rows, fn row ->
@@ -355,23 +396,13 @@ defmodule Exoforge.ExtensionLogs do
   end
 
   defp ensure_schema do
-    case :ets.info(:exo_extension_logs_schema) do
-      :undefined ->
-        case do_create_schema() do
-          :ok ->
-            try do
-              :ets.new(:exo_extension_logs_schema, [:named_table, :public, :set])
-            rescue
-              _ -> :ok
-            end
+    ensure_table()
 
-          _ ->
-            :ok
-        end
-
-      _ ->
-        :ok
+    if :ets.lookup(@schema_table, :ready) == [] do
+      if do_create_schema() == :ok, do: :ets.insert(@schema_table, {:ready, true})
     end
+
+    :ok
   end
 
   defp do_create_schema do

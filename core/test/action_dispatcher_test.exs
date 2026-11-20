@@ -106,7 +106,21 @@ defmodule Exoforge.ActionDispatcherTest do
     assert {:error, :division_by_zero} = ActionDispatcher.dispatch_internal(TestService.Math, :divide, %{a: 10, b: 0})
   end
 
-  test "a dispatch stamps its request id on the event, the log, the trace and the error group" do
+  test "a log line written while a request runs carries that request's id" do
+    previous = Exoforge.RequestContext.enter(%{rid: "r_log_1", origin: "alice", depth: 0})
+    Exoforge.ExtensionLogs.clear("rid_logs_plugin")
+
+    try do
+      Exoforge.ExtensionLogs.append("rid_logs_plugin", 1, "belongs to the request")
+    after
+      Exoforge.RequestContext.restore(previous)
+    end
+
+    assert [%{message: "belongs to the request", rid: "r_log_1"}] = Exoforge.ExtensionLogs.list("rid_logs_plugin")
+    Exoforge.ExtensionLogs.clear("rid_logs_plugin")
+  end
+
+  test "a dispatch stamps its request id on the event, the trace and the error group" do
     Exoforge.ExtensionCase.start_kernel()
     Exoforge.ExtensionCase.register_extension(TestPlugin, id: "math_plugin", provides: [TestService.Math])
     Exoforge.ErrorGroups.clear()
@@ -130,8 +144,9 @@ defmodule Exoforge.ActionDispatcherTest do
     assert context.rid == "r_test_1"
     assert context.origin == "alice"
 
-    # The extension's log line belongs to the request, not to a time window.
-    assert Enum.any?(Exoforge.ExtensionLogs.list("math_plugin", 50), &(&1.rid == "r_test_1"))
+    # A busy action does not write into the extension's log: the call is in the trace and the metering, and
+    # the log keeps what the extension itself says (that a line carries its request id is tested below).
+    assert Exoforge.ExtensionLogs.list("math_plugin", 50) == []
 
     assert %{samples: [sample]} = Exoforge.ActionTrace.samples("#{TestService.Math}.divide")
     assert sample.rid == "r_test_1"

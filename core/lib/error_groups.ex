@@ -159,7 +159,15 @@ defmodule Exoforge.ErrorGroups do
     end
   end
 
+  # Created by `Exoforge.TableOwner`, never by the caller: a table dies with its creator, and the creator here is
+  # whatever request first recorded a failure, so the groups used to vanish when that request ended.
   defp init_table do
+    if :ets.whereis(@table) == :undefined, do: Exoforge.TableOwner.ensure_started()
+    @table
+  end
+
+  @doc false
+  def create_table do
     case :ets.whereis(@table) do
       :undefined ->
         try do

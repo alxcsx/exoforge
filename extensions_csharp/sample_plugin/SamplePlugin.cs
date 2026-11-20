@@ -26,6 +26,24 @@ public class SamplePlugin
     [ExoAction("echo")]
     public int Echo(int value) => value;
 
+    /// <summary>Writes log lines in four ways, to see which of them reach the Studio's Logs tab.</summary>
+    [ExoAction("log_demo")]
+    public string LogDemo(int lines, bool console)
+    {
+        for (int i = 1; i <= lines; i++) Exo.Logger.Info($"log_demo line {i}");
+        Exo.Logger.Warning("log_demo warning");
+        Exo.Logger.Error("log_demo error");
+
+        if (console)
+        {
+            // Not through the SDK: stdout is the wire to the host, stderr is the process's own.
+            System.Console.WriteLine("log_demo plain stdout line");
+            System.Console.Error.WriteLine("log_demo plain stderr line");
+        }
+
+        return $"wrote {lines}";
+    }
+
     [ExoAction("get_many")]
     public List<Counter> GetMany(List<int> ids)
     {

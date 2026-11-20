@@ -223,7 +223,18 @@ defmodule Exoforge.ActionTrace do
 
   ## ---- internals ----
 
+  # The tables live in `Exoforge.TableOwner`: a table dies with the process that created it, and the first caller
+  # here is usually a request that ends a moment later, taking the whole trace with it.
   defp init_tables do
+    if :ets.whereis(@samples) == :undefined or :ets.whereis(@buckets) == :undefined or :ets.whereis(@deep) == :undefined do
+      Exoforge.TableOwner.ensure_started()
+    end
+
+    :ok
+  end
+
+  @doc false
+  def create_tables do
     ensure_table(@samples, [:ordered_set, :public, :named_table, read_concurrency: true])
     ensure_table(@buckets, [:set, :public, :named_table, write_concurrency: true])
     ensure_table(@deep, [:ordered_set, :public, :named_table, read_concurrency: true])

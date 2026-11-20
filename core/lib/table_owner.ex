@@ -2,9 +2,10 @@ defmodule Exoforge.TableOwner do
   @moduledoc """
   Owns the kernel's shared ETS tables.
 
-  An ETS table dies with the process that created it, and both the plugin log buffer and the usage
-  counters must outlive every plugin: a runner restart that took a plugin's own usage with it would
-  erase exactly the history that says it restarted. The owner is started on demand and does nothing
+  An ETS table dies with the process that created it, and the extension log buffer, the usage counters, the
+  failure groups and the action trace must outlive every request and every extension: a runner restart that took an
+  extension's own usage with it would erase exactly the history that says it restarted, and a table made by the
+  request that recorded the first failure disappeared when that request ended. The owner is started on demand and does nothing
   but hold them for the node's lifetime.
   """
   use GenServer
@@ -28,6 +29,8 @@ defmodule Exoforge.TableOwner do
   def init(:ok) do
     Exoforge.ExtensionLogs.init_table()
     Exoforge.Metering.init_table()
+    Exoforge.ErrorGroups.create_table()
+    Exoforge.ActionTrace.create_tables()
     {:ok, nil}
   end
 

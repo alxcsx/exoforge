@@ -92,6 +92,10 @@ defmodule Exoforge.NativeExtensionRunnerTest do
         # No reply at all: the process goes away without saying anything, which is what a segfault,
         # an OOM kill or an Environment.Exit looks like from the host's side.
         exit 1 ;;
+      *'"action":"stdout_noise"'*)
+        # `Console.WriteLine` in a C# extension: not a frame, but the extension talking.
+        echo "plain console output"
+        printf '{"type":"action_result","id":%s,"status":"ok","data":1}\\n' "$id" ;;
       *'"action":"stderr_noise"'*)
         echo "debug noise from native extension" >&2
         printf '{"type":"action_result","id":%s,"status":"ok","data":"clean_result"}\\n' "$id"
@@ -402,6 +406,31 @@ defmodule Exoforge.NativeExtensionRunnerTest do
              ExtensionLogs.list(manifest.id)
 
     GenServer.stop(pid)
+  end
+
+  test "plain stdout and stderr output of the extension reach its logs, and so does how it ended", %{manifest: manifest, binary: binary} do
+    ExtensionLogs.clear(manifest.id)
+    on_exit(fn -> ExtensionLogs.clear(manifest.id) end)
+
+    pid = start_runner(manifest, binary)
+
+    assert {:ok, 1} = GenServer.call(pid, {:execute_action, "stdout_noise", %{}}, 5_000)
+    assert {:ok, "clean_result"} = GenServer.call(pid, {:execute_action, "stderr_noise", %{}}, 5_000)
+
+    # stderr is copied on a timer; ask for the pass instead of waiting for it
+    send(pid, :poll_stderr)
+    wait_until(fn -> Enum.any?(ExtensionLogs.list(manifest.id), &(&1.message =~ "[stderr] more debug noise")) end)
+
+    messages = Enum.map(ExtensionLogs.list(manifest.id), & &1.message)
+    assert "[stdout] plain console output" in messages
+    assert "[stderr] debug noise from native extension" in messages
+    assert Enum.find(ExtensionLogs.list(manifest.id), &(&1.message =~ "[stderr]")).level == 2
+
+    # a process that goes away says so in its logs
+    Process.flag(:trap_exit, true)
+    assert {:error, {:extension_exited, 1}} = GenServer.call(pid, {:execute_action, "die", %{}}, 5_000)
+    wait_until(fn -> Enum.any?(ExtensionLogs.list(manifest.id), &(&1.message =~ "exited with status")) end)
+    assert Enum.find(ExtensionLogs.list(manifest.id), &(&1.message =~ "exited with status")).level == 3
   end
 
   test "meters the calls the runner sees", %{manifest: manifest, binary: binary} do
