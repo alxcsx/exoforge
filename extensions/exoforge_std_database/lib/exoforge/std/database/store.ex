@@ -44,7 +44,7 @@ defmodule Exoforge.Std.Database.Store do
 
   defp kv(plugin, action, command) do
     tbl = to_string(command[:table])
-    command = if action == :put, do: JsonColumns.encode(command), else: command
+    command = if action == :put, do: command |> JsonColumns.encode() |> stamp(plugin), else: command
 
     kind = table_kind(plugin, tbl)
 
@@ -129,11 +129,33 @@ defmodule Exoforge.Std.Database.Store do
   defp plan(:kv, action, tbl, command), do: document(action, tbl, command, false)
   defp plan(_missing, action, tbl, command), do: document(action, tbl, command, true)
 
+  ## ---- row stamps ----
+
+  # A write through the extension's code makes the row current: it carries the version of the extension that
+  # wrote it (`Exoforge.VersionStamp`), which is how an older row is told from a newer one on the next read.
+  defp stamp(command, plugin) do
+    case Exoforge.VersionStamp.encode(extension_version(plugin)) do
+      0 -> command
+      stamp -> Map.put(command, :stamp, stamp)
+    end
+  end
+
+  defp extension_version(plugin) do
+    case Exoforge.ExtensionRegistry.fetch_manifest(plugin) do
+      %{version: version} -> version
+      _ -> nil
+    end
+  rescue
+    _ -> nil
+  end
+
   ## ---- typed tables ----
 
   defp resource_put(%{columns: cols, types: types, pk: pk_col}, tbl, command) do
     id = to_string(command[:id])
-    data = command[:data] || %{}
+    # `_if_v` is the stamp the caller read the row at, set by a migration writing a row back: the write only
+    # lands if the row is still at that stamp. It is not a column.
+    {if_v, data} = pop_guard(command[:data] || %{})
     record = Map.put(data, "id", id)
     data_with_pk = Map.put(data, pk_col, id)
 
@@ -151,13 +173,33 @@ defmodule Exoforge.Std.Database.Store do
         end
       end)
 
+    # The stamp rides along only on a table that has the column (typed tables of auto resources do).
+    valid_pairs =
+      case command[:stamp] do
+        stamp when is_integer(stamp) -> if "_v" in cols, do: valid_pairs ++ [{"_v", stamp}], else: valid_pairs
+        _ -> valid_pairs
+      end
+
     if valid_pairs == [] do
       document(:put, tbl, command, true)
     else
       with {:ok, coerced} <- Coerce.pairs(valid_pairs, types) do
-        statements = upsert(tbl, pk_col, Enum.map(coerced, fn {name, value} -> {name, {:param, value}} end))
-        {:ok, statements, fn _ -> {:ok, %{rows: [record], num_rows: 1}} end}
+        statements = upsert(tbl, pk_col, Enum.map(coerced, fn {name, value} -> {name, {:param, value}} end), if_v)
+
+        finish = fn
+          [%{num_rows: 0}] when not is_nil(if_v) -> {:error, :stale}
+          _ -> {:ok, %{rows: [record], num_rows: 1}}
+        end
+
+        {:ok, statements, finish}
       end
+    end
+  end
+
+  defp pop_guard(data) do
+    case Map.pop(data, "_if_v") do
+      {nil, rest} -> Map.pop(rest, :_if_v)
+      found -> found
     end
   end
 
@@ -257,7 +299,7 @@ defmodule Exoforge.Std.Database.Store do
   ## ---- upsert, in the engine's way ----
 
   # `cols` is `[{name, {:param, value} | {:json, text} | {:expr, sql}}]`; returns the statements.
-  defp upsert(tbl, pk, cols) do
+  defp upsert(tbl, pk, cols, if_v \\ nil) do
     names = Enum.map(cols, &elem(&1, 0))
 
     {value_sql, params, _next} =
@@ -273,6 +315,13 @@ defmodule Exoforge.Std.Database.Store do
 
     params = Enum.reverse(params)
 
+    # A guarded write only replaces a row still at the stamp the caller read; the placeholder after the values.
+    {guard_sql, params} =
+      case if_v do
+        nil -> {"", params}
+        stamp -> {" WHERE #{q(tbl)}.#{q("_v")} = #{Dialect.placeholder(length(params) + 1)}", params ++ [stamp]}
+      end
+
     case Dialect.upsert() do
       "on_conflict" ->
         updates =
@@ -283,7 +332,7 @@ defmodule Exoforge.Std.Database.Store do
         conflict =
           if updates == "",
             do: "ON CONFLICT (#{q(pk)}) DO NOTHING",
-            else: "ON CONFLICT (#{q(pk)}) DO UPDATE SET #{updates}"
+            else: "ON CONFLICT (#{q(pk)}) DO UPDATE SET #{updates}#{guard_sql}"
 
         [{insert <> " " <> conflict, params}]
 
@@ -339,7 +388,7 @@ defmodule Exoforge.Std.Database.Store do
 
       {:put, table, id, data} ->
         tbl = to_string(table)
-        command = JsonColumns.encode(%{action: :put, table: tbl, id: id, data: data})
+        command = %{action: :put, table: tbl, id: id, data: data} |> JsonColumns.encode() |> stamp(plugin)
         plan_table_operation(plugin, :put, tbl, command, kinds)
 
       {:delete, table, id} ->

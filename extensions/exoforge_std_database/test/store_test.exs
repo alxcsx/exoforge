@@ -107,6 +107,77 @@ defmodule Exoforge.Std.Database.StoreTest do
     end
   end
 
+  describe "row stamps (the extension version a row was written under)" do
+    defp stamped_plugin(version) do
+      plugin = :"pg_stamp_#{System.unique_integer([:positive])}"
+      on_exit(fn -> Database.reset!(plugin) end)
+
+      resource = %{
+        name: "pets",
+        source: %{table: "pets"},
+        primary_key: "id",
+        columns: [%{name: "id", storage: "text", primary_key: true}, %{name: "label", storage: "text", nullable: true}]
+      }
+
+      assert {:ok, _} = Exoforge.ActionDispatcher.dispatch_internal(:lldb, :apply_schema, %{namespace: plugin, resources: [resource]})
+
+      if version do
+        Exoforge.ExtensionRegistry.register(%Exoforge.Domain.Manifest{
+          id: plugin,
+          name: to_string(plugin),
+          version: version,
+          entry_point: nil,
+          provides: [plugin]
+        })
+      end
+
+      plugin
+    end
+
+    defp put_pet(plugin, id, data), do: exec(plugin, %{action: :put, table: "pets", id: id, data: data}, [])
+    defp get_pet(plugin, id), do: with({:ok, %{rows: [row]}} <- exec(plugin, %{action: :get, table: "pets", id: id}, []), do: row)
+
+    @tag :postgres
+    test "a write carries the version of the extension that made it, and a read returns it" do
+      plugin = stamped_plugin("1.2.0")
+
+      assert {:ok, _} = put_pet(plugin, "rex", %{"label" => "dog"})
+      assert %{"label" => "dog", "_v" => 1_002_000} = get_pet(plugin, "rex")
+
+      assert {:ok, %{rows: [%{"_v" => 1_002_000}]}} = exec(plugin, %{action: :all, table: "pets"}, [])
+    end
+
+    @tag :postgres
+    test "an extension with no version leaves the stamp at 0" do
+      plugin = stamped_plugin(nil)
+
+      assert {:ok, _} = put_pet(plugin, "rex", %{"label" => "dog"})
+      assert %{"_v" => 0} = get_pet(plugin, "rex")
+    end
+
+    @tag :postgres
+    test "a write guarded by the stamp the row was read at is refused when the row has moved on" do
+      plugin = stamped_plugin("1.2.0")
+      assert {:ok, _} = put_pet(plugin, "rex", %{"label" => "dog"})
+
+      # someone read it at 1.0.0 and is writing a migrated copy back; the row is at 1.2.0 now
+      assert {:error, :stale} = put_pet(plugin, "rex", %{"label" => "migrated", "_if_v" => 1_000_000})
+      assert %{"label" => "dog"} = get_pet(plugin, "rex")
+
+      # a guard that matches lets the write through
+      assert {:ok, _} = put_pet(plugin, "rex", %{"label" => "migrated", "_if_v" => 1_002_000})
+      assert %{"label" => "migrated"} = get_pet(plugin, "rex")
+    end
+
+    @tag :postgres
+    test "a guarded write for a row that is not there yet is an ordinary insert" do
+      plugin = stamped_plugin("1.2.0")
+
+      assert {:ok, _} = put_pet(plugin, "new", %{"label" => "x", "_if_v" => 1_000_000})
+      assert %{"label" => "x", "_v" => 1_002_000} = get_pet(plugin, "new")
+    end
+  end
+
   describe "F32: KV operations on resource-migrated tables" do
     @tag :postgres
     test "put, get, all, and delete work on a schema-migrated table without a data column" do
