@@ -1,8 +1,11 @@
 defmodule Exoforge.Std.Lldb.Manager do
   @moduledoc """
-  Core mediator and lifecycle manager for Exoforge multi-tenant database access.
-  Acts as the middleground between PostgreSQL and all plugins.
-  Guarantees that each plugin operates exclusively within its own isolated database/schema.
+  Front door to the driver for every extension, and the owner of provisioning.
+
+  Only provisioning goes through this process: making a namespace the first time it is used, and
+  resetting one. Everything else (queries, transactions, introspection) runs in the CALLING process
+  against the adapter and config this process published at start, so the connection pools do the
+  concurrency and one slow query never queues the queries of other extensions behind it.
   """
   use GenServer
   require Logger
@@ -11,6 +14,8 @@ defmodule Exoforge.Std.Lldb.Manager do
   alias Exoforge.Std.Lldb.Adapters.Postgres
 
   @name __MODULE__
+  @provisioned __MODULE__.Provisioned
+  @runtime {__MODULE__, :runtime}
 
   ## Client API
 
@@ -20,59 +25,68 @@ defmodule Exoforge.Std.Lldb.Manager do
 
   @doc "Ensures a dedicated, isolated database or schema exists for the given plugin."
   def ensure_database(plugin_id) do
-    GenServer.call(@name, {:ensure_database, plugin_id})
+    with {:ok, _clean} <- ready(plugin_id), do: {:ok, %{status: :ready}}
   end
 
   @doc "Executes a SQL statement isolated to the plugin's namespace."
-  def execute(plugin_id, query, args \\ [])
-
-  def execute(plugin_id, query, args) do
-    GenServer.call(@name, {:execute, plugin_id, query, args}, 15_000)
+  def execute(plugin_id, query, args \\ []) do
+    run(plugin_id, fn adapter, clean, config -> adapter.execute(clean, query, args, config) end)
   end
 
   @doc "Runs `statements` (`{sql, args}` pairs) in order in one transaction; all or nothing."
   def transaction(plugin_id, statements) when is_list(statements) do
-    GenServer.call(@name, {:transaction, plugin_id, statements}, 15_000)
+    run(plugin_id, fn adapter, clean, config -> adapter.transaction(clean, statements, config) end)
   end
 
   @doc "Describes a table of the plugin's namespace in engine-neutral terms."
   def introspect(plugin_id, table) do
-    GenServer.call(@name, {:introspect, plugin_id, table}, 15_000)
+    run(plugin_id, fn adapter, clean, config -> adapter.introspect(clean, table, config) end)
   end
 
   @doc "How to write SQL for the active engine."
   def dialect do
-    GenServer.call(@name, :dialect)
+    case runtime() do
+      {adapter, config} -> {:ok, adapter.dialect(config)}
+      nil -> {:error, {:database_error, :manager_not_started}}
+    end
   end
 
   @doc "Returns isolated connection configuration for the plugin."
   def connection_config(plugin_id) do
-    GenServer.call(@name, {:connection_config, plugin_id})
+    with {adapter, config} <- runtime() || {:error, {:database_error, :manager_not_started}} do
+      safely(fn -> adapter.connection_config(Lldb.clean_id(plugin_id), config) end)
+    end
   end
 
   @doc "Lists the columns of a table in the plugin's isolated database."
   def table_columns(plugin_id, table) do
-    GenServer.call(@name, {:table_columns, plugin_id, table}, 15_000)
+    run(plugin_id, fn adapter, clean, config -> adapter.table_columns(clean, table, config) end)
   end
 
   @doc "Dry-run declarative schema plan for an extension's declared resources (applies nothing)."
   def plan_schema(plugin_id, resources \\ nil) do
-    GenServer.call(@name, {:plan_schema, plugin_id, resources}, 15_000)
+    run(plugin_id, fn adapter, clean, config ->
+      if function_exported?(adapter, :plan_schema, 3),
+        do: adapter.plan_schema(clean, resources, config),
+        else: Postgres.plan_schema(clean, resources, config)
+    end)
   end
 
   @doc "Applies the safe changes that bring an extension's tables in line with its declared resources."
   def apply_schema(plugin_id, resources \\ nil) do
-    GenServer.call(@name, {:apply_schema, plugin_id, resources}, 30_000)
+    run(plugin_id, fn adapter, clean, config -> adapter.apply_schema(clean, resources, config) end)
   end
 
   @doc "Drops one table of the plugin's namespace, and its schema history."
   def reset_table(plugin_id, table) do
-    GenServer.call(@name, {:reset_table, plugin_id, table}, 15_000)
+    run(plugin_id, fn adapter, clean, config -> adapter.reset_table(clean, table, config) end)
   end
 
   @doc "Performs a health check of the underlying database system."
   def health_check do
-    GenServer.call(@name, :health_check)
+    with {adapter, config} <- runtime() || {:error, {:database_error, :manager_not_started}} do
+      safely(fn -> adapter.health_check(config) end)
+    end
   end
 
   @doc "Resets/clears the database for the given plugin."
@@ -90,6 +104,52 @@ defmodule Exoforge.Std.Lldb.Manager do
     GenServer.call(@name, {:set_adapter, adapter})
   end
 
+  ## Running in the caller
+
+  # The adapter and config are published once and read by every caller.
+  defp runtime, do: :persistent_term.get(@runtime, nil)
+
+  # Provision on first use, then run in this process. A namespace already known costs one ETS lookup.
+  defp run(plugin_id, fun) do
+    with {:ok, clean} <- ready(plugin_id) do
+      case runtime() do
+        {adapter, config} -> safely(fn -> fun.(adapter, clean, config) end)
+        nil -> {:error, {:database_error, :manager_not_started}}
+      end
+    end
+  end
+
+  # Provisioning is remembered, so a second query for a known database skips the DDL round trip
+  # (M33 Fix 7). A failed provision is not remembered, so the next call retries it.
+  defp ready(plugin_id) do
+    clean = Lldb.clean_id(plugin_id)
+
+    if provisioned?(clean) do
+      {:ok, clean}
+    else
+      case safe_call({:ensure_database, plugin_id}, 30_000) do
+        {:ok, _} -> {:ok, clean}
+        {:error, _} = error -> error
+        other -> {:error, other}
+      end
+    end
+  end
+
+  defp provisioned?(clean) do
+    :ets.member(@provisioned, clean)
+  rescue
+    ArgumentError -> false
+  end
+
+  # The Manager being down is a database error for the caller, not an exit.
+  defp safe_call(message, timeout) do
+    GenServer.call(@name, message, timeout)
+  catch
+    :exit, reason ->
+      Logger.error("[Database] manager unavailable: #{inspect(reason)}")
+      {:error, {:database_error, reason}}
+  end
+
   ## Server Callbacks
 
   @impl true
@@ -97,162 +157,48 @@ defmodule Exoforge.Std.Lldb.Manager do
     config = resolve_config(opts)
     adapter = detect_adapter(config)
 
-    state = %{
-      adapter: adapter,
-      config: config,
-      databases: MapSet.new()
-    }
+    :ets.new(@provisioned, [:set, :public, :named_table, read_concurrency: true])
+    :persistent_term.put(@runtime, {adapter, config})
 
     Logger.info("[Database] Manager initialized using adapter: #{inspect(adapter)}")
-    {:ok, state}
+    {:ok, %{adapter: adapter, config: config}}
   end
 
   @impl true
   def handle_call({:ensure_database, plugin_id}, _from, state) do
     clean = Lldb.clean_id(plugin_id)
 
-    case safely(fn -> state.adapter.ensure_database(clean, state.config) end) do
-      {:ok, result} ->
-        new_dbs = MapSet.put(state.databases, clean)
-        {:reply, {:ok, result}, %{state | databases: new_dbs}}
+    # Two callers can arrive for the same new namespace: the second finds it already made.
+    if provisioned?(clean) do
+      {:reply, {:ok, %{status: :ready}}, state}
+    else
+      case safely(fn -> state.adapter.ensure_database(clean, state.config) end) do
+        {:ok, result} ->
+          :ets.insert(@provisioned, {clean})
+          {:reply, {:ok, result}, state}
 
-      error ->
-        {:reply, error, state}
+        {:error, reason} ->
+          {:reply, {:error, reason}, state}
+
+        other ->
+          {:reply, {:error, other}, state}
+      end
     end
   end
 
-  @impl true
-  def handle_call({:execute, plugin_id, query, args}, _from, state) do
-    clean = Lldb.clean_id(plugin_id)
-    # Ensure the database exists on first use, not on every query (M33 Fix 7): provisioning DDL on
-    # each request was a round trip to the server per query, and the manager already remembers.
-    case ensure_once(clean, state) do
-      {:ok, state} ->
-        result = safely(fn -> state.adapter.execute(clean, query, args, state.config) end)
-        {:reply, result, state}
-
-      {:error, reason, state} ->
-        {:reply, {:error, reason}, state}
-    end
-  end
-
-  @impl true
-  def handle_call({:transaction, plugin_id, statements}, _from, state) do
-    clean = Lldb.clean_id(plugin_id)
-
-    case ensure_once(clean, state) do
-      {:ok, state} ->
-        result = safely(fn -> state.adapter.transaction(clean, statements, state.config) end)
-        {:reply, result, state}
-
-      {:error, reason, state} ->
-        {:reply, {:error, reason}, state}
-    end
-  end
-
-  def handle_call({:introspect, plugin_id, table}, _from, state) do
-    clean = Lldb.clean_id(plugin_id)
-
-    case ensure_once(clean, state) do
-      {:ok, state} ->
-        result = safely(fn -> state.adapter.introspect(clean, table, state.config) end)
-        {:reply, result, state}
-
-      {:error, reason, state} ->
-        {:reply, {:error, reason}, state}
-    end
-  end
-
-  def handle_call(:dialect, _from, state) do
-    {:reply, {:ok, state.adapter.dialect(state.config)}, state}
-  end
-
-  def handle_call({:table_columns, plugin_id, table}, _from, state) do
-    clean = Lldb.clean_id(plugin_id)
-    # Column inspection wants the table to exist; same first-use rule as execute.
-    case ensure_once(clean, state) do
-      {:ok, state} ->
-        result = safely(fn -> state.adapter.table_columns(clean, table, state.config) end)
-        {:reply, result, state}
-
-      {:error, reason, state} ->
-        {:reply, {:error, reason}, state}
-    end
-  end
-
-  @impl true
-  def handle_call({:plan_schema, plugin_id, resources}, _from, state) do
-    clean = Lldb.clean_id(plugin_id)
-
-    case ensure_once(clean, state) do
-      {:ok, state} ->
-        result =
-          safely(fn ->
-            if function_exported?(state.adapter, :plan_schema, 3) do
-              state.adapter.plan_schema(clean, resources, state.config)
-            else
-              Postgres.plan_schema(clean, resources, state.config)
-            end
-          end)
-
-        {:reply, result, state}
-
-      {:error, reason, state} ->
-        {:reply, {:error, reason}, state}
-    end
-  end
-
-  @impl true
-  def handle_call({:apply_schema, plugin_id, resources}, _from, state) do
-    clean = Lldb.clean_id(plugin_id)
-
-    case ensure_once(clean, state) do
-      {:ok, state} ->
-        {:reply, safely(fn -> state.adapter.apply_schema(clean, resources, state.config) end), state}
-
-      {:error, reason, state} ->
-        {:reply, {:error, reason}, state}
-    end
-  end
-
-  def handle_call({:reset_table, plugin_id, table}, _from, state) do
-    clean = Lldb.clean_id(plugin_id)
-
-    case ensure_once(clean, state) do
-      {:ok, state} ->
-        {:reply, safely(fn -> state.adapter.reset_table(clean, table, state.config) end), state}
-
-      {:error, reason, state} ->
-        {:reply, {:error, reason}, state}
-    end
-  end
-
-  def handle_call({:connection_config, plugin_id}, _from, state) do
-    clean = Lldb.clean_id(plugin_id)
-    result = safely(fn -> state.adapter.connection_config(clean, state.config) end)
-    {:reply, result, state}
-  end
-
-  @impl true
-  def handle_call(:health_check, _from, state) do
-    result = safely(fn -> state.adapter.health_check(state.config) end)
-    {:reply, result, state}
-  end
-
-  @impl true
   def handle_call({:reset, plugin_id}, _from, state) do
     clean = Lldb.clean_id(plugin_id)
     result = safely(fn -> state.adapter.reset(clean, state.config) end)
-    {:reply, result, %{state | databases: MapSet.delete(state.databases, clean)}}
+    :ets.delete(@provisioned, clean)
+    {:reply, result, state}
   end
 
-  @impl true
   def handle_call(:list_databases, _from, state) do
-    {:reply, MapSet.to_list(state.databases), state}
+    {:reply, :ets.select(@provisioned, [{{:"$1"}, [], [:"$1"]}]), state}
   end
 
-  @impl true
   def handle_call({:set_adapter, adapter}, _from, state) do
+    :persistent_term.put(@runtime, {adapter, state.config})
     {:reply, :ok, %{state | adapter: adapter}}
   end
 
@@ -273,20 +219,6 @@ defmodule Exoforge.Std.Lldb.Manager do
     :exit, reason ->
       Logger.error("[Database] adapter exit: #{inspect(reason)}")
       {:error, {:database_error, reason}}
-  end
-
-  # Provisioning is remembered, so a second query for a known database skips the DDL round trip
-  # (M33 Fix 7). A failed provision is not remembered, so the next call retries it.
-  defp ensure_once(clean, state) do
-    if MapSet.member?(state.databases, clean) do
-      {:ok, state}
-    else
-      case safely(fn -> state.adapter.ensure_database(clean, state.config) end) do
-        {:ok, _} -> {:ok, %{state | databases: MapSet.put(state.databases, clean)}}
-        {:error, reason} -> {:error, reason, state}
-        other -> {:error, other, state}
-      end
-    end
   end
 
   defp resolve_config(opts) do

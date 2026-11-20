@@ -73,6 +73,7 @@ defmodule Exoforge.Std.Database.DialectTest do
     )
 
     Dialect.reset()
+    start_supervised!(Exoforge.Std.Database.KindCache)
 
     # The dialect is remembered process-wide: forget the fake one so the next test asks the real driver.
     on_exit(fn -> Dialect.reset() end)
@@ -107,6 +108,25 @@ defmodule Exoforge.Std.Database.DialectTest do
     assert delete == "DELETE FROM `scores` WHERE `id` = ?"
     assert insert == "INSERT INTO `scores` (`id`, `data`, `updated_at`) VALUES (?, ?, CURRENT_TIMESTAMP)"
     assert Jason.decode!(json) == %{"score" => 10}
+  end
+
+  test "a document table known to exist is written without creating it again" do
+    command = %{action: :put, table: "scores", id: "p1", data: %{"score" => 10}}
+
+    assert {:ok, _} = Store.run(:player, command)
+    assert {:ok, _} = Store.run(:player, %{command | id: "p2"})
+    assert {:ok, _} = Store.run(:player, %{action: :get, table: "scores", id: "p2"})
+
+    [first, second | _] = transactions()
+    assert Enum.any?(first, fn {sql, _} -> sql =~ "CREATE TABLE IF NOT EXISTS" end)
+    refute Enum.any?(second, fn {sql, _} -> sql =~ "CREATE TABLE" end)
+    assert length(second) == 2
+
+    # one introspection for the table, not one per call
+    assert Enum.count(FakeLldb.calls(), &match?({:introspect, "scores"}, &1)) == 1
+
+    # and the read is a plain select
+    assert {:exec, "SELECT data FROM `scores` WHERE id = ?", ["p2"]} in FakeLldb.calls()
   end
 
   test "nothing of PostgreSQL's syntax appears in what the database layer writes" do

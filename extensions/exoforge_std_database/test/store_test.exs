@@ -15,6 +15,7 @@ defmodule Exoforge.Std.Database.StoreTest do
       start_supervised!(Manager)
     end
 
+    start_supervised!(Exoforge.Std.Database.KindCache)
     Exoforge.ExtensionCase.register_database(Database)
     :ok
   end
@@ -22,6 +23,38 @@ defmodule Exoforge.Std.Database.StoreTest do
   # A key-value command goes to the Store, SQL text to the driver layer.
   defp exec(plugin, %{} = command, _args), do: Store.run(plugin, command)
   defp exec(plugin, sql, args), do: Database.execute(plugin, sql, args)
+
+  describe "what the database layer remembers about a table" do
+    @tag :postgres
+    test "changing the table with SQL is seen at once: a dropped document table is made again" do
+      plugin = :"pg_cache_#{System.unique_integer([:positive])}"
+      on_exit(fn -> Database.reset!(plugin) end)
+
+      assert {:ok, _} = exec(plugin, %{action: :put, table: "notes", id: "a", data: %{"t" => 1}}, [])
+      assert {:ok, %{rows: [%{"t" => 1}]}} = exec(plugin, %{action: :get, table: "notes", id: "a"}, [])
+
+      # the table is known to exist now; dropping it through the database layer must be noticed
+      assert {:ok, _} = Database.execute(plugin, "DROP TABLE notes")
+
+      assert {:ok, _} = exec(plugin, %{action: :put, table: "notes", id: "b", data: %{"t" => 2}}, [])
+      assert {:ok, %{rows: [%{"t" => 2}]}} = exec(plugin, %{action: :get, table: "notes", id: "b"}, [])
+      assert {:ok, %{rows: []}} = exec(plugin, %{action: :get, table: "notes", id: "a"}, [])
+    end
+
+    @tag :postgres
+    test "reset forgets what was known, so the next write starts from nothing" do
+      plugin = :"pg_cache_reset_#{System.unique_integer([:positive])}"
+
+      assert {:ok, _} = exec(plugin, %{action: :put, table: "notes", id: "a", data: %{"t" => 1}}, [])
+      assert :ok = Database.reset!(plugin) |> normalize()
+      assert {:ok, _} = exec(plugin, %{action: :put, table: "notes", id: "b", data: %{"t" => 2}}, [])
+      assert {:ok, %{rows: [%{"t" => 2}]}} = exec(plugin, %{action: :get, table: "notes", id: "b"}, [])
+      Database.reset!(plugin)
+    end
+
+    defp normalize({:ok, _}), do: :ok
+    defp normalize(other), do: other
+  end
 
   describe "typed tables made from logical manifest columns" do
     @tag :postgres

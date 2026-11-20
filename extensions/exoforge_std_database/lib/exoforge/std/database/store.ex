@@ -19,7 +19,7 @@ defmodule Exoforge.Std.Database.Store do
   require Logger
 
   alias Exoforge.ActionDispatcher
-  alias Exoforge.Std.Database.{Coerce, Dialect, JsonColumns}
+  alias Exoforge.Std.Database.{Coerce, Dialect, JsonColumns, KindCache}
 
   @kv_columns ["data", "id", "updated_at"]
 
@@ -46,11 +46,16 @@ defmodule Exoforge.Std.Database.Store do
     tbl = to_string(command[:table])
     command = if action == :put, do: JsonColumns.encode(command), else: command
 
+    kind = table_kind(plugin, tbl)
+
     result =
-      case plan(table_kind(plugin, tbl), action, tbl, command) do
+      case plan(kind, action, tbl, command) do
         {:ok, statements, finish} -> run_statements(plugin, statements, finish)
         {:error, _} = err -> err
       end
+
+    # A document operation on a table that was not there made it: from now on it is known to exist.
+    if kind == :missing and match?({:ok, _}, result), do: KindCache.put(plugin, tbl, :kv)
 
     JsonColumns.decode(command, result)
   end
@@ -74,6 +79,19 @@ defmodule Exoforge.Std.Database.Store do
   ## ---- what kind of table ----
 
   defp table_kind(plugin, tbl) do
+    case KindCache.get(plugin, tbl) do
+      {:ok, kind} ->
+        kind
+
+      :miss ->
+        kind = introspect_kind(plugin, tbl)
+        # A missing table is not remembered: it may be made the next instant.
+        if kind != :missing, do: KindCache.put(plugin, tbl, kind)
+        kind
+    end
+  end
+
+  defp introspect_kind(plugin, tbl) do
     case lldb(:introspect, %{namespace: plugin, table: tbl}) do
       {:ok, %{exists: true, columns: columns, primary_key: primary_key}} ->
         names = Enum.map(columns, & &1.name)
@@ -105,10 +123,11 @@ defmodule Exoforge.Std.Database.Store do
   defp plan(:missing, action, tbl, command) when action in [:put, :get, :all] do
     if declared_resource_table?(tbl),
       do: {:error, {:missing_resource_table, tbl}},
-      else: document(action, tbl, command)
+      else: document(action, tbl, command, true)
   end
 
-  defp plan(_kind, action, tbl, command), do: document(action, tbl, command)
+  defp plan(:kv, action, tbl, command), do: document(action, tbl, command, false)
+  defp plan(_missing, action, tbl, command), do: document(action, tbl, command, true)
 
   ## ---- typed tables ----
 
@@ -133,7 +152,7 @@ defmodule Exoforge.Std.Database.Store do
       end)
 
     if valid_pairs == [] do
-      document(:put, tbl, command)
+      document(:put, tbl, command, true)
     else
       with {:ok, coerced} <- Coerce.pairs(valid_pairs, types) do
         statements = upsert(tbl, pk_col, Enum.map(coerced, fn {name, value} -> {name, {:param, value}} end))
@@ -173,24 +192,25 @@ defmodule Exoforge.Std.Database.Store do
 
   ## ---- key-value (document) tables ----
 
-  defp document(:put, tbl, command) do
+  # `create?` is true when the table is not known to exist: the statement then also makes it.
+  defp document(:put, tbl, command, create?) do
     id = to_string(command[:id])
     data = Jason.encode!(command[:data] || %{})
 
     statements =
-      [{create_document_table(tbl), []}] ++
+      create_first(create?, tbl) ++
         upsert(tbl, "id", [{"id", {:param, id}}, {"data", {:json, data}}, {"updated_at", {:expr, "CURRENT_TIMESTAMP"}}])
 
     {:ok, statements, fn _ -> {:ok, %{rows: [%{"id" => id, "data" => command[:data]}], num_rows: 1}} end}
   end
 
-  defp document(:get, tbl, command) do
+  defp document(:get, tbl, command, create?) do
     id = to_string(command[:id])
     select = "SELECT data FROM #{q(tbl)} WHERE id = #{Dialect.placeholder(1)}"
 
-    {:ok, [{create_document_table(tbl), []}, {select, [id]}],
-     fn [_, result] ->
-       case result do
+    {:ok, create_first(create?, tbl) ++ [{select, [id]}],
+     fn results ->
+       case List.last(results) do
          %{rows: [%{"data" => json_data}]} ->
            data = if is_binary(json_data), do: Jason.decode!(json_data), else: json_data
            {:ok, %{rows: [Map.put(data, "id", id)], num_rows: 1}}
@@ -201,15 +221,17 @@ defmodule Exoforge.Std.Database.Store do
      end}
   end
 
-  defp document(:delete, tbl, command) do
+  defp document(:delete, tbl, command, create?) do
     id = to_string(command[:id])
     delete = "DELETE FROM #{q(tbl)} WHERE id = #{Dialect.placeholder(1)}"
-    {:ok, [{create_document_table(tbl), []}, {delete, [id]}], fn [_, result] -> {:ok, result} end}
+    {:ok, create_first(create?, tbl) ++ [{delete, [id]}], fn results -> {:ok, List.last(results)} end}
   end
 
-  defp document(:all, tbl, _command) do
-    {:ok, [{create_document_table(tbl), []}, {"SELECT id, data FROM #{q(tbl)}", []}],
-     fn [_, %{rows: rows}] ->
+  defp document(:all, tbl, _command, create?) do
+    {:ok, create_first(create?, tbl) ++ [{"SELECT id, data FROM #{q(tbl)}", []}],
+     fn results ->
+       %{rows: rows} = List.last(results)
+
        decoded =
          Enum.map(rows, fn row ->
            data = if is_binary(row["data"]), do: Jason.decode!(row["data"]), else: row["data"]
@@ -220,7 +242,10 @@ defmodule Exoforge.Std.Database.Store do
      end}
   end
 
-  defp document(other, _tbl, _command), do: {:error, {:unknown_action, other}}
+  defp document(other, _tbl, _command, _create?), do: {:error, {:unknown_action, other}}
+
+  defp create_first(true, tbl), do: [{create_document_table(tbl), []}]
+  defp create_first(false, _tbl), do: []
 
   defp create_document_table(tbl) do
     "CREATE TABLE IF NOT EXISTS #{q(tbl)} (" <>

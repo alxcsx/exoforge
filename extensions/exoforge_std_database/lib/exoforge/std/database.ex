@@ -19,7 +19,9 @@ defmodule Exoforge.Std.Database do
   }
 
   alias Exoforge.ActionDispatcher
-  alias Exoforge.Std.Database.Store
+  alias Exoforge.Std.Database.{KindCache, Store}
+
+  def children, do: [KindCache]
 
   ## ---- SERVICE ACTIONS ----
 
@@ -32,7 +34,10 @@ defmodule Exoforge.Std.Database do
     result =
       case operation do
         %{} = command -> Store.run(plugin, command)
-        _ -> lldb(:exec, %{namespace: plugin, operation: operation, arguments: arguments})
+        _ ->
+          result = lldb(:exec, %{namespace: plugin, operation: operation, arguments: arguments})
+          if ddl?(operation), do: KindCache.forget(plugin)
+          result
       end
 
     case result do
@@ -62,11 +67,14 @@ defmodule Exoforge.Std.Database do
   def execute(plugin, %{} = command, _args), do: Store.run(plugin, command)
 
   def execute(plugin, query, args) do
-    lldb(:exec, %{namespace: plugin, operation: query, arguments: args})
+    result = lldb(:exec, %{namespace: plugin, operation: query, arguments: args})
+    if ddl?(query), do: KindCache.forget(plugin)
+    result
   end
 
   @doc "Direct helper to reset/clear a plugin's database."
   def reset!(plugin) do
+    KindCache.forget(plugin)
     lldb(:drop_namespace, %{namespace: plugin})
   end
 
@@ -105,6 +113,10 @@ defmodule Exoforge.Std.Database do
   ## ---- PRIVATE HELPERS ----
 
   defp exec(plugin, command), do: Store.run(plugin, command)
+
+  # A statement that changes tables: what this extension remembers about them is stale.
+  defp ddl?(query) when is_binary(query), do: Regex.match?(~r/^\s*(create|alter|drop|truncate)\b/i, query)
+  defp ddl?(_), do: false
 
   defp lldb(action, payload), do: ActionDispatcher.dispatch_internal(:lldb, action, payload)
 

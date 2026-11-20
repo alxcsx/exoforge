@@ -8,6 +8,15 @@ defmodule Exoforge.Std.LldbTest do
   setup do
     Exoforge.ExtensionCase.start_kernel()
 
+    # As the extension runs them: connections are pooled, one pool per namespace, not opened per call.
+    unless Process.whereis(Exoforge.Std.Lldb.PoolRegistry) do
+      start_supervised!({Registry, keys: :unique, name: Exoforge.Std.Lldb.PoolRegistry})
+    end
+
+    unless Process.whereis(Exoforge.Std.Lldb.PoolSupervisor) do
+      start_supervised!({DynamicSupervisor, name: Exoforge.Std.Lldb.PoolSupervisor, strategy: :one_for_one})
+    end
+
     unless Process.whereis(Manager) do
       start_supervised!(Manager)
     end
@@ -34,6 +43,39 @@ defmodule Exoforge.Std.LldbTest do
 
     test "health_check returns ok status" do
       assert {:ok, %{status: "ok"}} = Manager.health_check()
+    end
+  end
+
+  describe "concurrency" do
+    test "a slow query in one extension does not hold up the queries of another" do
+      for ns <- [:lldb_slow, :lldb_quick], do: Manager.reset(ns)
+      assert {:ok, _} = Manager.execute(:lldb_slow, "SELECT 1")
+      assert {:ok, _} = Manager.execute(:lldb_quick, "SELECT 1")
+
+      slow = Task.async(fn -> Manager.execute(:lldb_slow, "SELECT pg_sleep(1.5)") end)
+      Process.sleep(100)
+
+      {microseconds, result} = :timer.tc(fn -> Manager.execute(:lldb_quick, "SELECT 1 AS one") end)
+
+      assert {:ok, %{rows: [%{"one" => 1}]}} = result
+      # behind a single serial process this would wait the rest of the 1.5 seconds
+      assert microseconds < 500_000, "the quick query waited #{div(microseconds, 1000)} ms behind the slow one"
+
+      assert {:ok, _} = Task.await(slow, 10_000)
+    end
+
+    test "many callers provisioning the same new namespace at once make it once" do
+      ns = :"lldb_race_#{System.unique_integer([:positive])}"
+
+      results =
+        1..12
+        |> Enum.map(fn _ -> Task.async(fn -> Manager.execute(ns, "SELECT 1") end) end)
+        |> Task.await_many(10_000)
+
+      assert Enum.all?(results, &match?({:ok, _}, &1))
+      provisioned = Enum.map(Manager.list_databases(), &to_string/1)
+      assert Lldb.clean_id(ns) in provisioned
+      assert Enum.count(provisioned, &(&1 == Lldb.clean_id(ns))) == 1
     end
   end
 
